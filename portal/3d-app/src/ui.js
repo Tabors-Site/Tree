@@ -825,7 +825,7 @@ export function showLlmAssignerPanel({ client, land, currentNodeId, onClose, onS
   // idempotent server-side (marker on metadata.tutorial.purpose), so
   // only one is ever active at a time. On success the panel closes
   // and the caller's onSpawnTutorial refetches the descriptor — the
-  // new artifact's video screen mounts in the 3D scene.
+  // new matter's video screen mounts in the 3D scene.
   const spawnLink = el.querySelector(".llm-spawn-tutorial");
   spawnLink.addEventListener("click", async (e) => {
     e.preventDefault();
@@ -849,7 +849,7 @@ export function showLlmAssignerPanel({ client, land, currentNodeId, onClose, onS
   });
 
   // Initial mount. The intro YouTube tutorial used to live here as
-  // a popup; it's now a 3D placed artifact (see scene.js video-screen
+  // a popup; it's now 3D placed matter (see scene.js video-screen
   // mesh). The panel is back to its CRUD-only role.
   (async () => {
     await refreshConnections();

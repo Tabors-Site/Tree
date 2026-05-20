@@ -6,9 +6,9 @@
 //
 //   Ruler being           (parented to the requesting user-being via
 //                          parentBeingId; root Rulers have no parent)
-//   ├── Planner being     (being-tree child of Ruler, same homePositionId)
-//   ├── Contractor being  (being-tree child of Ruler, same homePositionId)
-//   └── Foreman being     (being-tree child of Ruler, same homePositionId)
+//   ├── Planner being     (being-tree child of Ruler, same homeSpace)
+//   ├── Contractor being  (being-tree child of Ruler, same homeSpace)
+//   └── Foreman being     (being-tree child of Ruler, same homeSpace)
 //
 // All four live at the same rulership node. The being-tree carries the
 // cognitive hierarchy; the node tree stays clean (no plan/contracts/
@@ -40,8 +40,8 @@
 //     beings: { ruler, planner, contractor, foreman } // beingIds
 //   }
 
-import Node from "../../../seed/models/node.js";
-import log  from "../../../seed/core/log.js";
+import Space from "../../../seed/models/space.js";
+import log  from "../../../seed/system/log.js";
 
 export const NS = "governing";
 
@@ -78,14 +78,14 @@ export const PROMOTED_FROM = {
  * Null parent is reserved for the very root being of the land only;
  * Rulers should always have a parent in the resolved chain.
  */
-export async function promoteToRuler({ nodeId, reason, promotedFrom, parentBeingId = null, identity = null, core }) {
-  if (!nodeId) return null;
+export async function promoteToRuler({ spaceId, reason, promotedFrom, parentBeingId = null, identity = null, core }) {
+  if (!spaceId) return null;
   if (!core?.do) throw new Error("promoteToRuler requires `core` (verb surface)");
   if (!Object.values(PROMOTED_FROM).includes(promotedFrom)) {
     promotedFrom = PROMOTED_FROM.ROOT;
   }
 
-  const node = await Node.findById(nodeId);
+  const node = await Space.findById(spaceId);
   if (!node) return null;
 
   const existing = node.metadata instanceof Map
@@ -133,11 +133,11 @@ export async function promoteToRuler({ nodeId, reason, promotedFrom, parentBeing
   // createBeingWithHome handles both the parentBeingId stamp on the
   // new being AND the $addToSet into the parent's children list, so
   // no separate link write is needed here.
-  const { createBeingWithHome } = await import("../../../seed/core/identity.js");
+  const { createBeingWithHome } = await import("../../../seed/being/identity.js");
   const rulerCreated = await createBeingWithHome({
-    operatingMode: "ai",
+    operatingMode: "llm",
     role:          "ruler",
-    homeNodeId:    String(nodeId),
+    homeSpace:     String(spaceId),
     parentBeingId: effectiveParentBeingId,
   });
   const rulerBeingId = String(rulerCreated.being._id);
@@ -149,9 +149,9 @@ export async function promoteToRuler({ nodeId, reason, promotedFrom, parentBeing
   const innerBeings = {};
   for (const role of INNER_ROLES) {
     const innerCreated = await createBeingWithHome({
-      operatingMode: "ai",
+      operatingMode: "llm",
       role,
-      homeNodeId:    String(nodeId),
+      homeSpace:     String(spaceId),
       parentBeingId: rulerBeingId,
     });
     innerBeings[role] = String(innerCreated.being._id);
@@ -183,23 +183,23 @@ export async function promoteToRuler({ nodeId, reason, promotedFrom, parentBeing
     data: {
       summon: {
         "@ruler*":      { requires: {} },
-        "@planner*":    { requires: { role: ["ruler", "planner", "contractor", "foreman"], homeInDomain: String(nodeId) } },
-        "@contractor*": { requires: { role: ["ruler", "planner", "contractor", "foreman"], homeInDomain: String(nodeId) } },
-        "@foreman*":    { requires: { role: ["ruler", "planner", "contractor", "foreman"], homeInDomain: String(nodeId) } },
+        "@planner*":    { requires: { role: ["ruler", "planner", "contractor", "foreman"], homeInDomain: String(spaceId) } },
+        "@contractor*": { requires: { role: ["ruler", "planner", "contractor", "foreman"], homeInDomain: String(spaceId) } },
+        "@foreman*":    { requires: { role: ["ruler", "planner", "contractor", "foreman"], homeInDomain: String(spaceId) } },
       },
     },
     merge: true,
   }, { identity });
 
   log.info("Governing",
-    `🤴 Node ${String(nodeId).slice(0, 8)} ("${node.name || "?"}") promoted to Ruler ` +
+    `🤴 Space ${String(spaceId).slice(0, 8)} ("${node.name || "?"}") promoted to Ruler ` +
     `(from=${promotedFrom}, parent=${effectiveParentBeingId ? String(effectiveParentBeingId).slice(0, 8) : "none"}) ` +
     `+ spawned ${INNER_ROLES.length} inner beings`);
 
   try {
-    const { hooks } = await import("../../../seed/core/hooks.js");
+    const { hooks } = await import("../../../seed/system/hooks.js");
     hooks.run("governing:rulerPromoted", {
-      nodeId: String(nodeId),
+      spaceId: String(spaceId),
       data: { ...data, beings: { ruler: rulerBeingId, ...innerBeings } },
     }).catch(() => {});
   } catch (err) {
@@ -213,9 +213,9 @@ export async function promoteToRuler({ nodeId, reason, promotedFrom, parentBeing
  * Read the governing record for a node. Returns null if the node has
  * not been promoted.
  */
-export async function readRole(nodeId) {
-  if (!nodeId) return null;
-  const node = await Node.findById(nodeId).select("metadata").lean();
+export async function readRole(spaceId) {
+  if (!spaceId) return null;
+  const node = await Space.findById(spaceId).select("metadata").lean();
   if (!node) return null;
   const meta = node.metadata instanceof Map
     ? Object.fromEntries(node.metadata)
@@ -226,8 +226,8 @@ export async function readRole(nodeId) {
 /**
  * Convenience predicate: has this node been promoted to Ruler?
  */
-export async function isRuler(nodeId) {
-  const record = await readRole(nodeId);
+export async function isRuler(spaceId) {
+  const record = await readRole(spaceId);
   return record?.role === "ruler";
 }
 
@@ -251,18 +251,18 @@ const MAX_RULERS = 256;
 
 export async function walkRulers(rootId) {
   if (!rootId) return [];
-  const Node = (await import("../../../seed/models/node.js")).default;
+  const Space = (await import("../../../seed/models/space.js")).default;
   const out = [];
   const visited = new Set();
 
-  async function visit(nodeId, depth) {
+  async function visit(spaceId, depth) {
     if (out.length >= MAX_RULERS) return;
-    if (!nodeId) return;
-    const idStr = String(nodeId);
+    if (!spaceId) return;
+    const idStr = String(spaceId);
     if (visited.has(idStr)) return;
     visited.add(idStr);
 
-    const node = await Node.findById(idStr).select("_id name metadata children").lean();
+    const node = await Space.findById(idStr).select("_id name metadata children").lean();
     if (!node) return;
     const meta = node.metadata instanceof Map
       ? Object.fromEntries(node.metadata)
@@ -289,7 +289,7 @@ export async function walkRulers(rootId) {
       // non-Ruler nodes to avoid scanning entire trees.
       const childIds = Array.isArray(node.children) ? node.children.map(String) : [];
       for (const cid of childIds) {
-        const child = await Node.findById(cid).select("_id metadata").lean();
+        const child = await Space.findById(cid).select("_id metadata").lean();
         if (!child) continue;
         const cmeta = child.metadata instanceof Map
           ? Object.fromEntries(child.metadata)
@@ -312,22 +312,22 @@ export async function walkRulers(rootId) {
 
 /**
  * Walk upward from a node, return the nearest ancestor (or self) marked
- * as Ruler. Returns the lean Node document, or null if no Ruler found
+ * as Ruler. Returns the lean Space document, or null if no Ruler found
  * before reaching the tree root.
  *
  * Used by callers that need "the Ruler governing this position" — e.g.
  * swarm's resume detection, dispatcher's scope resolution. Bounded
  * 64-depth walk; visited-set guard against cycles.
  */
-export async function findRulerScope(nodeId) {
-  if (!nodeId) return null;
-  const Node = (await import("../../../seed/models/node.js")).default;
+export async function findRulerScope(spaceId) {
+  if (!spaceId) return null;
+  const Space = (await import("../../../seed/models/space.js")).default;
   const visited = new Set();
-  let cursor = String(nodeId);
+  let cursor = String(spaceId);
   for (let i = 0; i < 64; i++) {
     if (!cursor || visited.has(cursor)) break;
     visited.add(cursor);
-    const n = await Node.findById(cursor).select("_id name parent metadata").lean();
+    const n = await Space.findById(cursor).select("_id name parent metadata").lean();
     if (!n) return null;
     const meta = n.metadata instanceof Map
       ? Object.fromEntries(n.metadata)

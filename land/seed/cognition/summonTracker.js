@@ -2,23 +2,23 @@
 //
 // summonTracker.js — write surface for the slim Summon model.
 //
-// Each Summon = one being's wake-and-act through one LLM call. Tool calls
-// during the Summon are Dids keyed by summonId (not arrays on the Summon).
+// Each Summon = one being's wake-and-act through one LLM call. Tool
+// calls during the Summon flow through the four-verb dispatcher, which
+// writes one Did per audited action; the LLM loop does not write a
+// separate tool-call row (no double-counting).
 //
 // Public surface used by the rest of the codebase:
-//   ensureSession / rotateSession / getSessionId   — WS chat session id
+//   ensureSession / rotateSession / getSessionId           — WS chat session id
 //   setActiveSummon / clearActiveSummon / finalizeOpenSummon — socket-side marker
-//   startSummon / finalizeSummon                    — Summon lifecycle writes
-//   appendToolCall                                  — writes a tool-call Did
-//   getActiveSummonForBeing                — descriptor activity lookup
+//   startSummon / finalizeSummon                            — Summon lifecycle writes
+//   getActiveSummonForBeing                                 — descriptor activity lookup
 
-import log from "../core/log.js";
+import log from "../system/log.js";
 import { getLandConfigValue } from "../landConfig.js";
 import { v4 as uuidv4 } from "uuid";
 import Summon from "../models/summon.js";
-import Did from "../models/did.js";
-import { createSession, SESSION_TYPES } from "../session/registry.js";
-import { computeIbpAddressForSummon, invalidateStanceCache } from "./ibpAddress.js";
+import { createSession, SESSION_TYPES } from "./session.js";
+import { computeIbpAddressForSummon, invalidateStanceCache } from "../ibp/addressStorage.js";
 
 export { invalidateStanceCache };
 
@@ -205,85 +205,6 @@ export async function finalizeSummon({ summonId, content, stopped = false } = {}
   );
 
   return updated;
-}
-
-// ─────────────────────────────────────────────────────────────────────────
-// TOOL CALL TRACKING (now writes a Did)
-// ─────────────────────────────────────────────────────────────────────────
-
-function MAX_TOOL_ARG_BYTES() {
-  return Math.max(200, Math.min(Number(getLandConfigValue("chatToolArgBytes")) || 2000, 20000));
-}
-
-function summarizeArgs(args) {
-  if (args == null || typeof args !== "object") return args ?? null;
-  try {
-    const serialized = JSON.stringify(args);
-    const max = MAX_TOOL_ARG_BYTES();
-    if (serialized.length <= max) return args;
-    return { _truncated: true, _bytes: serialized.length, preview: serialized.slice(0, max) };
-  } catch {
-    return { _unserializable: true };
-  }
-}
-
-const MAX_FULL_TOOL_BYTES = 1_000_000;
-function capFullBytes(value, isString = false) {
-  if (value == null) return { value: null, truncated: false };
-  const str = isString ? String(value) : (typeof value === "string" ? value : (() => {
-    try { return JSON.stringify(value); } catch { return "[unserializable]"; }
-  })());
-  if (Buffer.byteLength(str, "utf8") <= MAX_FULL_TOOL_BYTES) {
-    return { value: isString ? str : value, truncated: false };
-  }
-  const chars = Math.floor(MAX_FULL_TOOL_BYTES * 0.9);
-  const sliced = str.slice(0, chars) + "\n... (truncated at 1MB)";
-  return { value: sliced, truncated: true };
-}
-
-/**
- * Record a tool call as a Did with action="tool-call". Resolves beingId
- * (the actor) from the Summon's beingOut — the responder is the one who
- * ran the tool. Fire-and-forget: failures never block the conversation.
- */
-export async function appendToolCall(summonId, { tool, args, result, success, error, ms } = {}) {
-  if (!summonId || !tool) return;
-  let beingId = null;
-  try {
-    const summon = await Summon.findById(summonId).select("beingOut beingIn").lean();
-    beingId = summon?.beingOut || summon?.beingIn || null;
-  } catch {
-    // fall through with null beingId → skip write
-  }
-  if (!beingId) {
-    log.debug("SummonTracker", `appendToolCall: no being resolvable for summon ${summonId}`);
-    return;
-  }
-
-  const fullArgs = capFullBytes(args);
-  const fullResult = capFullBytes(result, true);
-
-  try {
-    await Did.create({
-      _id: uuidv4(),
-      beingId,
-      summonId,
-      action: "tool-call",
-      date: new Date(),
-      toolCall: {
-        name: tool,
-        args: summarizeArgs(args),
-        argsFull: fullArgs.value,
-        result: fullResult.value,
-        truncated: fullArgs.truncated || fullResult.truncated,
-        success: success !== false,
-        error: error ? String(error).slice(0, 500) : null,
-        ms: Number(ms) || 0,
-      },
-    });
-  } catch (err) {
-    log.debug("SummonTracker", `appendToolCall failed for ${summonId}: ${err.message}`);
-  }
 }
 
 // ─────────────────────────────────────────────────────────────────────────

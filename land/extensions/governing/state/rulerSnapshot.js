@@ -17,8 +17,8 @@
 // The snapshot is read-only — no metadata writes here. Pure assembly
 // from existing Pass 1 substrate.
 
-import Node from "../../../seed/models/node.js";
-import log from "../../../seed/core/log.js";
+import Space from "../../../seed/models/space.js";
+import log from "../../../seed/system/log.js";
 import { findRulerScope, NS as ROLE_NS } from "./role.js";
 
 // Decision latency was previously surfaced into the snapshot from
@@ -65,17 +65,17 @@ const LEDGER_TAIL = 3;
 export async function buildRulerSnapshot(rulerNodeId) {
   if (!rulerNodeId) return null;
 
-  const rulerNode = await Node.findById(rulerNodeId).select("_id name parent metadata children").lean();
-  if (!rulerNode) return null;
-  const rulerMeta = rulerNode.metadata instanceof Map
-    ? Object.fromEntries(rulerNode.metadata)
-    : (rulerNode.metadata || {});
+  const rulerSpace = await Space.findById(rulerNodeId).select("_id name parent metadata children").lean();
+  if (!rulerSpace) return null;
+  const rulerMeta = rulerSpace.metadata instanceof Map
+    ? Object.fromEntries(rulerSpace.metadata)
+    : (rulerSpace.metadata || {});
   if (rulerMeta[ROLE_NS]?.role !== "ruler") return null;
 
   const out = {
     scope: {
-      id: String(rulerNode._id),
-      name: rulerNode.name || "(unnamed)",
+      id: String(rulerSpace._id),
+      name: rulerSpace.name || "(unnamed)",
       promotedAt: rulerMeta[ROLE_NS]?.acceptedAt || null,
       promotedFrom: rulerMeta[ROLE_NS]?.promotedFrom || null,
     },
@@ -329,16 +329,16 @@ export async function buildRulerSnapshot(rulerNodeId) {
   // emission-N). The probe re-reads each child's active plan and
   // contracts emissions to get the reasoning text. Run records
   // inherit the plan's slug since that's how appendExecutionRecord
-  // names them. Cost is one Node.findById per emission per child;
+  // names them. Cost is one Space.findById per emission per child;
   // small at reasonable tree depth. If this becomes hot at very
   // deep trees, the optimization is to cache slugs in metadata at
   // emission time so the probe doesn't recompute — but the
   // architectural correctness ships first, the optimization comes
   // when measured.
   try {
-    const childIds = Array.isArray(rulerNode.children) ? rulerNode.children : [];
+    const childIds = Array.isArray(rulerSpace.children) ? rulerSpace.children : [];
     if (childIds.length > 0) {
-      const kids = await Node.find({ _id: { $in: childIds } })
+      const kids = await Space.find({ _id: { $in: childIds } })
         .select("_id name metadata").lean();
       for (const k of kids) {
         const km = k.metadata instanceof Map

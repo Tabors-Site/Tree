@@ -4,18 +4,18 @@
 // governing; the dashboard's plan panel route lives here too.
 //
 // Routes:
-//   GET  /api/v1/governing/plan/:nodeId/panel.html    plan panel fragment
-//   GET  /api/v1/governing/plan/:nodeId               plan node identity
+//   GET  /api/v1/governing/plan/:spaceId/panel.html    plan panel fragment
+//   GET  /api/v1/governing/plan/:spaceId               plan node identity
 //   GET  /api/v1/root/:rootId/governance              dashboard page (HTML)
 //   GET  /api/v1/root/:rootId/governance/stream       SSE live-update stream
 
 import express from "express";
-import { sendOk, sendError, ERR } from "../../seed/core/protocol.js";
+import { sendOk, sendError, ERR } from "../../seed/ibp/protocol.js";
 import authenticate from "../../transports/http/middleware/authenticate.js";
 import { getExtension } from "../loader.js";
-import Node from "../../seed/models/node.js";
-import log from "../../seed/core/log.js";
-import { readPlan } from "./state/planNode.js";
+import Space from "../../seed/models/space.js";
+import log from "../../seed/system/log.js";
+import { readPlan } from "./state/planSpace.js";
 import { renderPlanPanel } from "./pages/planPanel.js";
 import { renderDashboardPage } from "./pages/dashboard.js";
 
@@ -74,18 +74,18 @@ function subscribeDashboard(rootId, res) {
 // ─────────────────────────────────────────────────────────────────────
 
 /**
- * GET /api/v1/governing/plan/:nodeId/panel.html
+ * GET /api/v1/governing/plan/:spaceId/panel.html
  * Server-rendered HTML fragment of the plan panel for this plan-type
  * node. Slot placeholder fetches and swaps it in.
  */
-router.get("/governing/plan/:nodeId/panel.html", authenticate, async (req, res) => {
+router.get("/governing/plan/:spaceId/panel.html", authenticate, async (req, res) => {
   try {
-    const node = await Node.findById(req.params.nodeId).lean();
+    const node = await Space.findById(req.params.spaceId).lean();
     if (!node) return res.status(404).send("");
     const qs = req.query.token ? `?token=${encodeURIComponent(req.query.token)}` : "";
     const out = await renderPlanPanel({
       node,
-      nodeId: String(node._id),
+      spaceId: String(node._id),
       qs,
       isPublicAccess: !!req.query.share || !!req.query.publicShare,
     });
@@ -97,13 +97,13 @@ router.get("/governing/plan/:nodeId/panel.html", authenticate, async (req, res) 
 });
 
 /**
- * GET /api/v1/governing/plan/:nodeId
+ * GET /api/v1/governing/plan/:spaceId
  * Read the plan-type node's identity. For diagnostic / audit views.
  * The active plan content lives on plan-emission-N children.
  */
-router.get("/governing/plan/:nodeId", authenticate, async (req, res) => {
+router.get("/governing/plan/:spaceId", authenticate, async (req, res) => {
   try {
-    const plan = await readPlan(req.params.nodeId);
+    const plan = await readPlan(req.params.spaceId);
     return sendOk(res, { plan });
   } catch (err) {
     return sendError(res, 500, ERR.INTERNAL, err.message);

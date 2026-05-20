@@ -15,17 +15,17 @@
 //
 // Thin wire adapter: parses envelope, strips @being from address,
 // resolves the stance to a target, delegates to `doVerb` in
-// seed/core/verbs.js. Stance authorization, read-only origin checks,
+// seed/ibp/verbs.js. Stance authorization, read-only origin checks,
 // handler dispatch, and the audit Did all happen inside doVerb. See
 // [[project_four_verbs_one_execution]].
 
-import log from "../../../seed/core/log.js";
-import { parseFromSocket, expand, getLandDomain } from "../../../seed/addressing/address.js";
-import { resolveStance } from "../../../seed/addressing/resolver.js";
-import { IbpError, IBP_ERR, isIbpError } from "../../../seed/core/errors.js";
+import log from "../../../seed/system/log.js";
+import { parseFromSocket, expand, getLandDomain } from "../../../seed/ibp/address.js";
+import { resolveStance } from "../../../seed/ibp/resolver.js";
+import { IbpError, IBP_ERR, isIbpError } from "../../../seed/ibp/errors.js";
 import { ackOk, ackError, stripBeingQualifier } from "../envelope.js";
-import { doVerb } from "../../../seed/core/verbs.js";
-import { getOperation, listOperations } from "../../../seed/core/operations.js";
+import { doVerb } from "../../../seed/ibp/verbs.js";
+import { getOperation, listOperations } from "../../../seed/ibp/operations.js";
 
 export async function handleDo(socket, env, ack) {
   const id = env?.id || null;
@@ -71,6 +71,6 @@ export async function handleDo(socket, env, ack) {
       return ackError(ack, id, err.code, err.message, err.detail);
     }
     log.error("IBP", `DO failed: ${err.message}`);
-    return ackError(ack, id, IBP_ERR.INTERNAL, err.message || "Internal portal error");
+    return ackError(ack, id, IBP_ERR.INTERNAL, err.message || "Internal IBP error");
   }
 }

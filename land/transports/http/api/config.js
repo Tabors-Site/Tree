@@ -1,7 +1,7 @@
 import express from "express";
 import { authenticateOptional } from "../middleware/authenticate.js";
-import { sendOk, sendError, ERR } from "../../../seed/core/protocol.js";
-import Node from "../../../seed/models/node.js";
+import { sendOk, sendError, ERR } from "../../../seed/ibp/protocol.js";
+import Space from "../../../seed/models/space.js";
 import { getLandRoot } from "../../../seed/landRoot.js";
 
 const router = express.Router();
@@ -54,43 +54,55 @@ router.get("/land/root", authenticateOptional, async (req, res) => {
   try {
     const landRootCached = await getLandRoot();
     if (!landRootCached) {
-      return sendError(res, 404, ERR.NODE_NOT_FOUND, "Land root not found");
+      return sendError(res, 404, ERR.SPACE_NOT_FOUND, "Land root not found");
     }
 
     // Fetch fresh from DB so we see newly created trees (cache may be stale)
-    const landRoot = await Node.findById(landRootCached._id).select("_id name children").lean();
+    const landRoot = await Space.findById(landRootCached._id).select("_id name children").lean();
 
     const beingId = req.beingId;
     const isAnon = !beingId;
 
     // Fetch all Land root children with the fields we need to filter
-    const children = await Node.find({ _id: { $in: landRoot.children } })
-      .select("_id name systemRole rootOwner contributors visibility llmDefault metadata")
+    const children = await Space.find({ _id: { $in: landRoot.children } })
+      .select("_id name seedSpace rootOwner contributors llmDefault metadata")
       .lean();
+
+    // A child is public if it carries a wildcard SEE permission rule
+    // with empty requires — i.e. stance auth admits anyone.
+    const isPublicSpace = (c) => {
+      const meta = c.metadata instanceof Map ? Object.fromEntries(c.metadata) : (c.metadata || {});
+      const rule = meta.permissions?.see?.["*"];
+      if (!rule) return false;
+      return !rule.requires || Object.keys(rule.requires).length === 0;
+    };
 
     // Filter: anonymous sees only public trees, authenticated sees system + owned + contributing + public
     const visible = children.filter((c) => {
-      if (isAnon) return c.visibility === "public";
-      if (c.systemRole) return true;
+      const pub = isPublicSpace(c);
+      if (isAnon) return pub;
+      if (c.seedSpace) return true;
       if (c.rootOwner && String(c.rootOwner) === String(beingId)) return true;
       if (c.contributors && c.contributors.map(String).includes(String(beingId))) return true;
-      if (c.visibility === "public") return true;
-      return false;
+      return pub;
     });
 
     sendOk(res, {
       _id: landRoot._id,
       name: landRoot.name,
-      children: visible.map((c) => ({
-        _id: c._id,
-        name: c.name,
-        systemRole: isAnon ? null : (c.systemRole || null),
-        rootOwner: c.rootOwner || null,
-        isOwned: !isAnon && c.rootOwner && String(c.rootOwner) === String(beingId),
-        isPublic: c.visibility === "public" || false,
-        queryAvailable: c.visibility === "public" && !!(c.llmDefault && c.llmDefault !== "none"),
-        metadata: c.metadata || null,
-      })),
+      children: visible.map((c) => {
+        const pub = isPublicSpace(c);
+        return {
+          _id: c._id,
+          name: c.name,
+          seedSpace: isAnon ? null : (c.seedSpace || null),
+          rootOwner: c.rootOwner || null,
+          isOwned: !isAnon && c.rootOwner && String(c.rootOwner) === String(beingId),
+          isPublic: pub,
+          queryAvailable: pub && !!(c.llmDefault && c.llmDefault !== "none"),
+          metadata: c.metadata || null,
+        };
+      }),
     });
   } catch (err) {
     sendError(res, 500, ERR.INTERNAL, err.message);

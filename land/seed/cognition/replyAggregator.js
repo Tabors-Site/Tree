@@ -31,7 +31,7 @@
 // elapsed timeout settles the aggregator with `timedOut: true` and the
 // partial replies it had collected so far.
 
-import log from "../core/log.js";
+import log from "../system/log.js";
 
 // ────────────────────────────────────────────────────────────────
 // Public API

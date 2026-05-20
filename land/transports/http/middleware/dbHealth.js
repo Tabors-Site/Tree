@@ -10,8 +10,8 @@
  * The readyState check is in-memory (Mongoose driver state).
  */
 
-import { isDbHealthy } from "../../../seed/core/dbConfig.js";
-import { sendError, ERR } from "../../../seed/core/protocol.js";
+import { isDbHealthy } from "../../../seed/system/dbConfig.js";
+import { sendError, ERR } from "../../../seed/ibp/protocol.js";
 
 export default function dbHealth(req, res, next) {
   if (!isDbHealthy()) {

@@ -12,7 +12,7 @@ import ibp from "./api/ibp.js";
 //   /api/v1/user/*              → ibp:see + ibp:do create-child
 //   /api/v1/node/*              → ibp:see + ibp:do set-meta
 //   /api/v1/root/*              → ibp:see + ibp:do set-meta
-//   /api/v1/.../artifacts/*     → ibp:do create-artifact / set-name / etc.
+//   /api/v1/..../matter/matters/*     → ibp:do create-artifact / set-name / etc.
 //   /api/v1/.../dids            → ibp:see (with dids field)
 //   /api/v1/.../cascade,/flow*  → ibp:do cascade + ibp:see on .flow
 //   /api/v1/user/*/custom-llm   → ibp:do add/update/delete-llm-connection
@@ -28,17 +28,17 @@ import express from "express";
 import path from "path";
 import { fileURLToPath } from "url";
 import rateLimit from "express-rate-limit";
-import { sendOk, sendError, ERR } from "../../seed/core/protocol.js";
+import { sendOk, sendError, ERR } from "../../seed/ibp/protocol.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-import { loadExtensions } from "../../extensions/loader.js";
+import { loadExtensions, registerExtensionManagementOps } from "../../extensions/loader.js";
 
 function notFoundPage(req, res, message = "This page doesn't exist or may have been moved.") {
-  return sendError(res, 404, ERR.NODE_NOT_FOUND, message);
+  return sendError(res, 404, ERR.SPACE_NOT_FOUND, message);
 }
 import { getLandConfigValue } from "../../seed/landConfig.js";
 
-import { DELETED } from "../../seed/core/protocol.js";
+import { DELETED } from "../../seed/space/seedSpaces.js";
 
 const BLOCKED_IDS = new Set([DELETED, "empty", "null", "system"]);
 
@@ -57,7 +57,7 @@ export default async function registerURLRoutes(app, opts = {}) {
     if (BLOCKED_IDS.has(val)) return notFoundPage(req, res);
     next();
   });
-  app.param("nodeId", (req, res, next, val) => {
+  app.param("spaceId", (req, res, next, val) => {
     if (BLOCKED_IDS.has(val)) return notFoundPage(req, res);
     next();
   });
@@ -97,6 +97,13 @@ export default async function registerURLRoutes(app, opts = {}) {
   await ensureLandRoot();
   await initLandConfig();
 
+  // Register the extension-management DO ops (install/uninstall/
+  // enable/disable). Lives in loader.js (not seed) because its
+  // handlers touch loader internals — see registerExtensionManagementOps
+  // for the inversion rationale. Done before loadExtensions so the
+  // ops are present in the registry even if every extension fails.
+  await registerExtensionManagementOps();
+
   // Load extensions (manifests discovered, deps validated, routes wired)
   await loadExtensions(app, mcpServerInstance, {
     getConfigValue: getLandConfigValue,
@@ -110,7 +117,7 @@ export default async function registerURLRoutes(app, opts = {}) {
   app.get("/mcp", authenticateMCP, handleMcpRequest);
   app.delete("/mcp", authenticateMCP, handleMcpRequest);
 
-  // Serve uploaded files (path matches seed/tree/artifacts.js and uploadCleanup.js)
+  // Serve uploaded files (path matches seed/matter/matters.js and uploadCleanup.js)
   const uploadsDir = process.env.UPLOADS_DIR || path.join(__dirname, "../uploads");
   app.use("/api/v1/uploads", express.static(uploadsDir));
 

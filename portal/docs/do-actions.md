@@ -8,8 +8,8 @@ Read [protocol.md](protocol.md) first.
 
 Everything in TreeOS reduces to: positions have data. The data has namespaces. DO mutates position data through one of these channels:
 
-- **Structural fields** of the Node schema: `name`, `parent`, `status`, `visibility`, `contributors`. These are kernel-known and changed through named actions (`set-name`, `move`, `set-status`, etc.).
-- **Position-level content**: notes, file artifacts. Changed through named actions (`write-note`, `edit-note`, `upload-artifact`).
+- **Structural fields** of the Space schema: `name`, `parent`, `status`, `visibility`, `contributors`. These are kernel-known and changed through named actions (`set-name`, `move`, `set-status`, etc.).
+- **Position-level content**: notes, file matters. Changed through named actions (`write-note`, `edit-note`, `upload-matter`).
 - **Namespaced metadata** in `metadata.<namespace>`. Many kinds:
   - extension namespaces (`metadata.values`, `metadata.codebook`, ...) carry extension-specific data.
   - being namespaces (`metadata.ruler`, `metadata.archivist`, ...) carry being configuration: system instructions, tools, permissions. When an being is summoned at this position, the summoning reads its configuration from this namespace.
@@ -45,66 +45,66 @@ The kernel mints the primitives below. Extensions can register additional named 
 
 ### Structural actions
 
-Mutate fields on the Node schema (`name`, `parent`, `status`, `visibility`, `rootOwner`, `contributors`). Kernel-known because each has specific validation and side-effect semantics.
+Mutate fields on the Space schema (`name`, `parent`, `status`, `visibility`, `rootOwner`, `contributors`). Kernel-known because each has specific validation and side-effect semantics.
 
 #### create-child
 
-Creates a child node under the address position.
+Creates a child space under the address position.
 
 ```
 { verb: "do", action: "create-child", position: "<parent position>", identity, payload: { name, type? } }
 ```
 
 - `name` (required): string, kebab-case, unique among siblings.
-- `type` (optional): node type identifier; defaults to "leaf".
+- `type` (optional): space type identifier; defaults to "leaf".
 
-Returns: `{ nodeId, name, position }` for the new child.
+Returns: `{ spaceId, name, position }` for the new child.
 
 #### set-name
 
-Renames the node at the address. Writes `Node.name`.
+Renames the space at the address. Writes `Space.name`.
 
 ```
 { verb: "do", action: "set-name", position: "<position>", identity, payload: { name } }
 ```
 
-Returns: `{ nodeId, name }`.
+Returns: `{ spaceId, name }`.
 
 #### move
 
-Reparents the node at the address. Writes `Node.parent`. Side effects: all five resolution chains (extension scope, tool scope, mode resolution, LLM connection, LLM config) shift to reflect the new ancestor chain. The `afterNodeMove` hook fires.
+Reparents the space at the address. Writes `Space.parent`. Side effects: all five resolution chains (extension scope, tool scope, mode resolution, LLM connection, LLM config) shift to reflect the new ancestor chain. The `afterSpaceMove` hook fires.
 
 ```
 { verb: "do", action: "move", position: "<position>", identity, payload: { newParent: "<position>" } }
 ```
 
-Returns: `{ nodeId, position }` (new address under the new parent).
+Returns: `{ spaceId, position }` (new address under the new parent).
 
 #### delete
 
-Marks the node at the address as deleted.
+Marks the space at the address as deleted.
 
 ```
 { verb: "do", action: "delete", position: "<position>", identity, payload: { force?: boolean } }
 ```
 
-`force` bypasses extension role guards. Without it, nodes carrying any extension's `metadata.<ext>.role` cannot be deleted.
+`force` bypasses extension role guards. Without it, spaces carrying any extension's `metadata.<ext>.role` cannot be deleted.
 
 Returns: `{ deleted: true }`.
 
 #### set-status
 
-Writes `Node.status`. Value must be a registered status (kernel: `active`, `completed`, `trimmed`; extensions may register more via the status registry).
+Writes `Space.status`. Value must be a registered status (kernel: `active`, `completed`, `trimmed`; extensions may register more via the status registry).
 
 ```
 { verb: "do", action: "set-status", position: "<position>", identity, payload: { status, isInherited?: boolean } }
 ```
 
-Returns: `{ nodeId, status }`.
+Returns: `{ spaceId, status }`.
 
 #### set-visibility
 
-Writes `Node.visibility`.
+Writes `Space.visibility`.
 
 ```
 { verb: "do", action: "set-visibility", position: "<position>", identity, payload: { visibility: "public" | "private" | "shared" } }
@@ -112,7 +112,7 @@ Writes `Node.visibility`.
 
 #### transfer-owner
 
-Writes `Node.rootOwner`. Requires current owner identity. The `afterOwnershipChange` hook fires.
+Writes `Space.rootOwner`. Requires current owner identity. The `afterOwnershipChange` hook fires.
 
 ```
 { verb: "do", action: "transfer-owner", position: "<Land Position>", identity, payload: { user } }
@@ -120,7 +120,7 @@ Writes `Node.rootOwner`. Requires current owner identity. The `afterOwnershipCha
 
 #### invite
 
-Adds a user to `Node.contributors` on the tree root. Cross-land invites use `username@land`. The invite system handles delivery.
+Adds a user to `Space.contributors` on the tree root. Cross-land invites use `username@land`. The invite system handles delivery.
 
 ```
 { verb: "do", action: "invite", position: "<Land Position>", identity, payload: { user } }
@@ -128,7 +128,7 @@ Adds a user to `Node.contributors` on the tree root. Cross-land invites use `use
 
 #### accept-invite
 
-Confirms a pending invite. Adds the requester to `Node.contributors`.
+Confirms a pending invite. Adds the requester to `Space.contributors`.
 
 ```
 { verb: "do", action: "accept-invite", position: "<Land Position>", identity, payload: { inviteId } }
@@ -136,7 +136,7 @@ Confirms a pending invite. Adds the requester to `Node.contributors`.
 
 #### revoke
 
-Removes a user from `Node.contributors`.
+Removes a user from `Space.contributors`.
 
 ```
 { verb: "do", action: "revoke", position: "<Land Position>", identity, payload: { user } }
@@ -144,7 +144,7 @@ Removes a user from `Node.contributors`.
 
 ### Position-level content
 
-Notes (stored in the Note collection, attached to positions by nodeId) and file artifacts.
+Notes (stored in the Note collection, attached to positions by spaceId) and file matters.
 
 #### write-note
 
@@ -172,21 +172,21 @@ Updates the content of an existing note. The kernel writes a new version under `
 { verb: "do", action: "delete-note", position: "<position>/notes/<noteId>", identity, payload: {} }
 ```
 
-#### upload-artifact
+#### upload-matter
 
-Uploads a file artifact at the position.
+Uploads a file matter at the position.
 
 ```
-{ verb: "do", action: "upload-artifact", position: "<position>", identity, payload: { kind, name, contentType, bytes } }
+{ verb: "do", action: "upload-matter", position: "<position>", identity, payload: { kind, name, contentType, bytes } }
 ```
 
 `bytes` is base64-encoded for the WebSocket transport. Large uploads should chunk; the protocol supports `payload.chunkOf` for multi-frame uploads (see [server-protocol.md](server-protocol.md)).
 
-Returns: `{ artifactId, position: "<position>/artifacts/<artifactId>" }`.
+Returns: `{ matterId, position: "<position>/matters/<matterId>" }`.
 
 ### Namespaced metadata
 
-Writes to `metadata.<namespace>` on the Node document. The same action shape covers every kind of namespace: extension data, being configuration, kernel-aware namespaces (`modes`, `tools`, `scope`).
+Writes to `metadata.<namespace>` on the Space document. The same action shape covers every kind of namespace: extension data, being configuration, kernel-aware namespaces (`modes`, `tools`, `scope`).
 
 #### set-meta
 
@@ -208,7 +208,7 @@ The kernel enforces:
 - For extension namespaces: the extension must not be blocked at this position (scope check).
 - The requesting identity must be authorized to write to this namespace at this position. Authorization is action+namespace-keyed: writing `metadata.ruler` may require ruler-level role; writing `metadata.values` may only require contributor role.
 
-Returns: `{ written: true, nodeId, namespace }`.
+Returns: `{ written: true, spaceId, namespace }`.
 
 #### clear-meta
 
@@ -218,7 +218,7 @@ Removes keys from a metadata namespace (or the whole namespace if `keys` is omit
 { verb: "do", action: "clear-meta", position: "<position>", identity, payload: { namespace, keys?: [<string>] } }
 ```
 
-Returns: `{ cleared: true, nodeId, namespace }`.
+Returns: `{ cleared: true, spaceId, namespace }`.
 
 #### scope-extension
 
@@ -296,18 +296,18 @@ Common examples from existing extensions (each implemented by an extension, not 
 
 | Action | Extension | What it does |
 |---|---|---|
-| `compress` | `tree-compress` (treeos-intelligence) | Summarizes sections of a tree under a budget. Touches notes and metadata across many nodes. |
+| `compress` | `tree-compress` (treeos-intelligence) | Summarizes sections of a tree under a budget. Touches notes and metadata across many spaces. |
 | `prune` | `prune` (treeos-maintenance) | Deletes stale branches. `dryRun: true` returns the candidate list without mutation. |
 | `reroot` | `reroot` (treeos-maintenance) | Reorganizes the tree's root assignment. |
 | `split` | `split` (standalone) | Partitions a tree into multiple trees by some criterion. |
 
-These actions compose kernel primitives. The kernel does not know what `compress` means. The `tree-compress` extension registers it, the dispatcher routes the call, and the extension internally invokes kernel `set-meta` and `delete` actions on the affected nodes.
+These actions compose kernel primitives. The kernel does not know what `compress` means. The `tree-compress` extension registers it, the dispatcher routes the call, and the extension internally invokes kernel `set-meta` and `delete` actions on the affected spaces.
 
 If an extension only needs to write to its metadata namespace, it does NOT register a named action. It uses `set-meta` with its namespace. Named actions are reserved for operations whose payload semantics are not "write this data here."
 
 ## What an extension does, in DO terms
 
-An extension that today exposes `POST /api/v1/node/:nodeId/values { value, amount }` migrates to:
+An extension that today exposes `POST /api/v1/space/:spaceId/values { value, amount }` migrates to:
 
 ```
 { verb: "do", action: "set-meta", position: "<position>", identity, payload: { namespace: "values", data: { value, amount }, merge: true } }
@@ -350,7 +350,7 @@ DO authorization is action+namespace-keyed. The chain:
    - For extension namespaces: the extension must not be blocked at this position (scope check).
    - For being namespaces: writing the being's configuration may require a higher-trust role than writing extension data; the kernel applies the per-namespace policy.
 
-Hooks `beforeNodeCreate`, `beforeNote`, `beforeContribution`, `beforeStatusChange`, `beforeNodeDelete`, `beforeMetadataWrite` continue to fire as today. Extensions can gate DO actions through these hooks.
+Hooks `beforeSpaceCreate`, `beforeNote`, `beforeContribution`, `beforeStatusChange`, `beforeSpaceDelete`, `beforeMetadataWrite` continue to fire as today. Extensions can gate DO actions through these hooks.
 
 ## Errors
 
@@ -360,18 +360,18 @@ See [protocol.md](protocol.md) for the full error vocabulary. The codes DO most 
 |---|---|
 | `INVALID_INPUT` | action payload does not match schema (missing field, wrong type, etc.) |
 | `INVALID_STATUS` | set-status with an unrecognized value |
-| `INVALID_TYPE` | create-child with an unrecognized node type |
+| `INVALID_TYPE` | create-child with an unrecognized space type |
 | `ACTION_NOT_SUPPORTED` | unknown action name, or action not permitted at this position |
 | `ADDRESS_PARSE_ERROR` | the address field could not be parsed |
 | `EMBODIMENT_UNAVAILABLE` | qualifier in the address is not invocable here for this identity |
 | `UNAUTHORIZED` | identity missing or invalid |
 | `FORBIDDEN` | identity not authorized for this action at this address |
-| `NODE_NOT_FOUND` | address does not resolve to a node |
+| `NODE_NOT_FOUND` | address does not resolve to a space |
 | `EXTENSION_BLOCKED` | set-meta to a blocked extension at this position |
 | `EXTENSION_NOT_FOUND` | set-meta to an uninstalled extension |
-| `RESOURCE_CONFLICT` | action's preconditions not met (e.g., delete on a role-bearing node without force) |
-| `UPLOAD_TOO_LARGE` | upload-artifact bytes exceed configured limit |
-| `UPLOAD_MIME_REJECTED` | upload-artifact content type not accepted |
+| `RESOURCE_CONFLICT` | action's preconditions not met (e.g., delete on a role-bearing space without force) |
+| `UPLOAD_TOO_LARGE` | upload-matter bytes exceed configured limit |
+| `UPLOAD_MIME_REJECTED` | upload-matter content type not accepted |
 | `UPLOAD_DISABLED` | uploads disabled on this land |
 | `DOCUMENT_SIZE_EXCEEDED` | payload exceeds size budget |
 | `RATE_LIMITED` | throttled |

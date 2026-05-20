@@ -19,14 +19,14 @@
 // (probably a thin "do-op" tool that takes { action, args } and
 // dispatches through core.do, plus a "see" tool for substrate reads).
 
-import { runChat } from "../llm/runChat.js";
-import log from "../core/log.js";
+import { runChat } from "../../cognition/runChat.js";
+import log from "../../system/log.js";
 
 const LAND_MANAGER_PROMPT = `You are the Land Manager for this TreeOS land. You answer to the
 land's root operator (the first registered human) and act on
 land-level state on their behalf.
 
-Your scope is the land root and the system nodes that live there:
+Your scope is the land root and the land seed spaces that live there:
   .identity     this land's DID, public key, name
   .config       runtime configuration (key/value)
   .peers        federated lands this one knows
@@ -66,7 +66,7 @@ export const landManagerRole = Object.freeze({
   // .peers, …) and invoke any registered DO operation at the land
   // root. The old per-op tools retired in favor of this generic pair;
   // the substrate's introspection primitives ARE the discovery layer.
-  // See seed/roles/landManagerTools.js.
+  // See seed/being/roles/landManagerTools.js.
   toolNames: ["land-see", "land-do"],
 
   label: "Land Manager",
@@ -98,14 +98,14 @@ export const landManagerRole = Object.freeze({
         return null;
       }
       log.warn("LandManager", `LLM call failed: ${err.message}`);
-      return { content: `Land manager error: ${err.message}` };
+      return { text: `Land manager error: ${err.message}` };
     }
 
     const durationMs = Date.now() - startMs;
     log.info("LandManager", `summons complete in ${durationMs}ms`);
 
     return {
-      content:  result?.answer || "(land manager done)",
+      text:     result?.text || "(land manager done)",
       summonId: result?.summonId || null,
     };
   },

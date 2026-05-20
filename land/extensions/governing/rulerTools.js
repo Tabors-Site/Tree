@@ -25,8 +25,8 @@
 // reaches the Ruler's next turn.
 
 import { z } from "zod";
-import log from "../../seed/core/log.js";
-import Node from "../../seed/models/node.js";
+import log from "../../seed/system/log.js";
+import Space from "../../seed/models/space.js";
 import {
   tryClaim as tryClaimSpawn,
   release as releaseSpawn,
@@ -149,16 +149,16 @@ function formatPlannerSpawnSummary(emission) {
   };
 }
 
-// Resolve the Ruler scope from the calling tool's nodeId. Used by
+// Resolve the Ruler scope from the calling tool's spaceId. Used by
 // spawn-and-await tools to anchor the Planner/Foreman/etc. at the
 // right scope. Walks up via governing.findRulerScope.
-async function resolveRulerScope(nodeId) {
-  if (!nodeId) return null;
+async function resolveRulerScope(spaceId) {
+  if (!spaceId) return null;
   try {
     const { getExtension } = await import("../loader.js");
     const governing = getExtension("governing")?.exports;
     if (!governing?.findRulerScope) return null;
-    return await governing.findRulerScope(nodeId);
+    return await governing.findRulerScope(spaceId);
   } catch {
     return null;
   }
@@ -209,7 +209,7 @@ export default function getRulerTools(core) {
       },
       annotations: { readOnlyHint: false },
       async handler(args) {
-        const { beingId, username, nodeId, rootId, summonId, sessionId } = args;
+        const { beingId, username, spaceId, rootId, summonId, sessionId } = args;
         const briefing = typeof args.briefing === "string" ? args.briefing.trim() : "";
         if (!briefing) return text("governing-hire-planner: briefing is required.");
         if (briefing.length > BRIEFING_CAP) {
@@ -218,7 +218,7 @@ export default function getRulerTools(core) {
         if (!beingId) return text("governing-hire-planner: missing beingId; substrate bug.");
 
         // Resolve the Ruler scope (the scope where the Planner anchors).
-        const ruler = await resolveRulerScope(nodeId);
+        const ruler = await resolveRulerScope(spaceId);
         if (!ruler) {
           return text(
             "governing-hire-planner: no Ruler scope resolvable from current node. " +
@@ -267,15 +267,15 @@ export default function getRulerTools(core) {
         //    deferred to the first governing-emit-plan call). SUMMON
         //    needs a concrete addressee with a unique username, so
         //    creation moves earlier in the lifecycle.
-        const { ensurePlanAtScope } = await import("./state/planNode.js");
-        const planNode = await ensurePlanAtScope({
+        const { ensurePlanAtScope } = await import("./state/planSpace.js");
+        const planSpace = await ensurePlanAtScope({
           scopeNodeId: String(ruler._id),
           beingId,
           summonId,
           sessionId,
           core: _core,
         });
-        if (!planNode) {
+        if (!planSpace) {
           releaseSpawn(claim.key);
           return text(JSON.stringify({
             ok: false,
@@ -290,9 +290,9 @@ export default function getRulerTools(core) {
         //    shorthand `@planner` would also work at the plan node but
         //    the per-instance username is unambiguous regardless of
         //    addressing position.
-        const Node = (await import("../../seed/models/node.js")).default;
+        const Space = (await import("../../seed/models/space.js")).default;
         const Being = (await import("../../seed/models/being.js")).default;
-        const planNodeFull = await Node.findById(planNode._id)
+        const planNodeFull = await Space.findById(planSpace._id)
           .select("metadata").lean();
         const planBeings = planNodeFull?.metadata instanceof Map
           ? planNodeFull.metadata.get("beings")
@@ -324,7 +324,7 @@ export default function getRulerTools(core) {
         //    both sides; fall back to "ruler" as a defensive default
         //    if metadata is somehow incomplete (shouldn't happen — the
         //    governing extension's promote path stamps it).
-        const rulerNodeFull = await Node.findById(ruler._id)
+        const rulerNodeFull = await Space.findById(ruler._id)
           .select("metadata").lean();
         const rulerBeings = rulerNodeFull?.metadata instanceof Map
           ? rulerNodeFull.metadata.get("beings")
@@ -336,7 +336,7 @@ export default function getRulerTools(core) {
         const rulerUsername = rulerBeing?.name || "ruler";
 
         // 4. Build stances. Path uses UUID for stability across renames.
-        const { getLandDomain } = await import("../../seed/addressing/address.js");
+        const { getLandDomain } = await import("../../seed/ibp/address.js");
         const landDomain = getLandDomain();
         const stancePath = `${landDomain}/${ruler._id}`;
         const rulerStance = `${stancePath}@${rulerUsername}`;
@@ -351,7 +351,6 @@ export default function getRulerTools(core) {
         const message = {
           from:            rulerStance,
           content:         briefing,
-          intent:          "chat",
           correlation,
           rootCorrelation,
           priority:        3, // INTERACTIVE — user-initiated, ahead of background
@@ -364,9 +363,9 @@ export default function getRulerTools(core) {
         //    is the Planner stance for the reply's `from` field. The
         //    response handler re-fires the existing governing hook so
         //    the Ruler wakeup path stays unchanged.
-        const { appendToInbox } = await import("../../seed/scheduler/inbox.js");
-        const { attachHandoff, wake } = await import("../../seed/scheduler/scheduler.js");
-        const { hooks } = await import("../../seed/core/hooks.js");
+        const { appendToInbox } = await import("../../seed/cognition/inbox.js");
+        const { attachHandoff, wake } = await import("../../seed/cognition/scheduler.js");
+        const { hooks } = await import("../../seed/system/hooks.js");
         const startMs = Date.now();
 
         try {
@@ -382,7 +381,7 @@ export default function getRulerTools(core) {
 
         attachHandoff(plannerBeingId, correlation, {
           identity:           { beingId, username },
-          resolved:           { being: "planner", nodeId: String(ruler._id), zone: "tree" },
+          resolved:           { being: "planner", spaceId: String(ruler._id), zone: "tree" },
           responseFromStance: plannerStance,
           onResponse: async (responseEntry) => {
             try { releaseSpawn(claim.key); } catch {}
@@ -490,7 +489,7 @@ export default function getRulerTools(core) {
       },
       annotations: { readOnlyHint: false },
       async handler(args) {
-        const { beingId, username, nodeId, rootId, summonId, sessionId } = args;
+        const { beingId, username, spaceId, rootId, summonId, sessionId } = args;
         if (!beingId) return text("governing-hire-contractor: missing beingId; substrate bug.");
 
         const briefing = typeof args.briefing === "string" ? args.briefing.trim() : "";
@@ -498,7 +497,7 @@ export default function getRulerTools(core) {
           return text(`governing-hire-contractor: briefing exceeds ${BRIEFING_CAP} chars; trim.`);
         }
 
-        const ruler = await resolveRulerScope(nodeId);
+        const ruler = await resolveRulerScope(spaceId);
         if (!ruler) {
           return text("governing-hire-contractor: no Ruler scope resolvable. Surface as substrate bug.");
         }
@@ -592,15 +591,15 @@ export default function getRulerTools(core) {
 
         // 1. Materialize contracts trio + Contractor being. SUMMON
         //    requires a concrete addressee with a unique username.
-        const { ensureContractsNode } = await import("./state/contractsNode.js");
-        const contractsNode = await ensureContractsNode({
+        const { ensureContractsNode } = await import("./state/contractsSpace.js");
+        const contractsSpace = await ensureContractsNode({
           scopeNodeId: String(ruler._id),
           beingId,
           summonId,
           sessionId,
           core: _core,
         });
-        if (!contractsNode) {
+        if (!contractsSpace) {
           releaseSpawn(claim.key);
           return text(JSON.stringify({
             ok: false,
@@ -611,9 +610,9 @@ export default function getRulerTools(core) {
         }
 
         // 2. Resolve Contractor being + username at the contracts node.
-        const Node = (await import("../../seed/models/node.js")).default;
+        const Space = (await import("../../seed/models/space.js")).default;
         const Being = (await import("../../seed/models/being.js")).default;
-        const contractsNodeFull = await Node.findById(contractsNode._id)
+        const contractsNodeFull = await Space.findById(contractsSpace._id)
           .select("metadata").lean();
         const contractBeings = contractsNodeFull?.metadata instanceof Map
           ? contractsNodeFull.metadata.get("beings")
@@ -641,7 +640,7 @@ export default function getRulerTools(core) {
         }
 
         // 3. Resolve Ruler being's username for the SUMMON `from` stance.
-        const rulerNodeFull = await Node.findById(ruler._id)
+        const rulerNodeFull = await Space.findById(ruler._id)
           .select("metadata").lean();
         const rulerBeings = rulerNodeFull?.metadata instanceof Map
           ? rulerNodeFull.metadata.get("beings")
@@ -653,7 +652,7 @@ export default function getRulerTools(core) {
         const rulerUsername = rulerBeing?.name || "ruler";
 
         // 4. Build stances + SUMMON envelope.
-        const { getLandDomain } = await import("../../seed/addressing/address.js");
+        const { getLandDomain } = await import("../../seed/ibp/address.js");
         const landDomain = getLandDomain();
         const stancePath = `${landDomain}/${ruler._id}`;
         const rulerStance = `${stancePath}@${rulerUsername}`;
@@ -665,7 +664,6 @@ export default function getRulerTools(core) {
         const message = {
           from:            rulerStance,
           content:         contractorMessage,
-          intent:          "chat",
           correlation,
           rootCorrelation,
           priority:        3, // INTERACTIVE
@@ -675,9 +673,9 @@ export default function getRulerTools(core) {
         // 5. Append + handoff + wake. Handoff onResponse re-fires the
         //    existing governing:contractorCompleted hook so the Ruler
         //    wake-up path stays unchanged.
-        const { appendToInbox } = await import("../../seed/scheduler/inbox.js");
-        const { attachHandoff, wake } = await import("../../seed/scheduler/scheduler.js");
-        const { hooks } = await import("../../seed/core/hooks.js");
+        const { appendToInbox } = await import("../../seed/cognition/inbox.js");
+        const { attachHandoff, wake } = await import("../../seed/cognition/scheduler.js");
+        const { hooks } = await import("../../seed/system/hooks.js");
         const startMs = Date.now();
 
         try {
@@ -693,7 +691,7 @@ export default function getRulerTools(core) {
 
         attachHandoff(contractorBeingId, correlation, {
           identity:           { beingId, username },
-          resolved:           { being: "contractor", nodeId: String(ruler._id), zone: "tree" },
+          resolved:           { being: "contractor", spaceId: String(ruler._id), zone: "tree" },
           responseFromStance: contractorStance,
           onResponse: async (responseEntry) => {
             try { releaseSpawn(claim.key); } catch {}
@@ -789,12 +787,12 @@ export default function getRulerTools(core) {
       },
       annotations: { readOnlyHint: false },
       async handler(args) {
-        const { beingId, username, nodeId, rootId, summonId, sessionId } = args;
+        const { beingId, username, spaceId, rootId, summonId, sessionId } = args;
         const wakeupReason = typeof args.wakeupReason === "string" ? args.wakeupReason.trim() : "";
         if (!wakeupReason) return text("governing-route-to-foreman: wakeupReason is required.");
         if (!beingId) return text("governing-route-to-foreman: missing beingId; substrate bug.");
 
-        const ruler = await resolveRulerScope(nodeId);
+        const ruler = await resolveRulerScope(spaceId);
         if (!ruler) {
           return text(
             "governing-route-to-foreman: no Ruler scope resolvable. " +
@@ -824,15 +822,15 @@ export default function getRulerTools(core) {
 
         // 1. Materialize execution trio + Foreman being. SUMMON
         //    requires a concrete addressee with a unique username.
-        const { ensureExecutionNode } = await import("./state/executionNode.js");
-        const executionNode = await ensureExecutionNode({
+        const { ensureExecutionNode } = await import("./state/executionSpace.js");
+        const executionSpace = await ensureExecutionNode({
           scopeNodeId: String(ruler._id),
           beingId,
           summonId,
           sessionId,
           core: _core,
         });
-        if (!executionNode) {
+        if (!executionSpace) {
           releaseSpawn(claim.key);
           return text(JSON.stringify({
             ok: false,
@@ -842,9 +840,9 @@ export default function getRulerTools(core) {
         }
 
         // 2. Resolve Foreman being + username.
-        const Node = (await import("../../seed/models/node.js")).default;
+        const Space = (await import("../../seed/models/space.js")).default;
         const Being = (await import("../../seed/models/being.js")).default;
-        const executionNodeFull = await Node.findById(executionNode._id)
+        const executionNodeFull = await Space.findById(executionSpace._id)
           .select("metadata").lean();
         const execBeings = executionNodeFull?.metadata instanceof Map
           ? executionNodeFull.metadata.get("beings")
@@ -871,7 +869,7 @@ export default function getRulerTools(core) {
         }
 
         // 3. Resolve Ruler being's username for the `from` stance.
-        const rulerNodeFull = await Node.findById(ruler._id)
+        const rulerNodeFull = await Space.findById(ruler._id)
           .select("metadata").lean();
         const rulerBeings = rulerNodeFull?.metadata instanceof Map
           ? rulerNodeFull.metadata.get("beings")
@@ -883,7 +881,7 @@ export default function getRulerTools(core) {
         const rulerUsername = rulerBeing?.name || "ruler";
 
         // 4. Build stances + SUMMON envelope.
-        const { getLandDomain } = await import("../../seed/addressing/address.js");
+        const { getLandDomain } = await import("../../seed/ibp/address.js");
         const landDomain = getLandDomain();
         const stancePath = `${landDomain}/${ruler._id}`;
         const rulerStance = `${stancePath}@${rulerUsername}`;
@@ -898,7 +896,6 @@ export default function getRulerTools(core) {
         const message = {
           from:            rulerStance,
           content:         foremanMessage,
-          intent:          "chat",
           correlation,
           rootCorrelation,
           priority:        3, // INTERACTIVE
@@ -908,9 +905,9 @@ export default function getRulerTools(core) {
         // 5. Append + handoff + wake. Handoff onResponse re-fires the
         //    existing governing:foremanRouted hook so the Ruler wake-up
         //    path stays unchanged.
-        const { appendToInbox } = await import("../../seed/scheduler/inbox.js");
-        const { attachHandoff, wake } = await import("../../seed/scheduler/scheduler.js");
-        const { hooks } = await import("../../seed/core/hooks.js");
+        const { appendToInbox } = await import("../../seed/cognition/inbox.js");
+        const { attachHandoff, wake } = await import("../../seed/cognition/scheduler.js");
+        const { hooks } = await import("../../seed/system/hooks.js");
         const startMs = Date.now();
 
         try {
@@ -926,7 +923,7 @@ export default function getRulerTools(core) {
 
         attachHandoff(foremanBeingId, correlation, {
           identity:           { beingId, username },
-          resolved:           { being: "foreman", nodeId: String(ruler._id), zone: "tree" },
+          resolved:           { being: "foreman", spaceId: String(ruler._id), zone: "tree" },
           responseFromStance: foremanStance,
           onResponse: async (responseEntry) => {
             try { releaseSpawn(claim.key); } catch {}
@@ -1043,7 +1040,7 @@ export default function getRulerTools(core) {
     // ─────────────────────────────────────────────────────────────────
     {
       name: "governing-revise-plan",
-      verb: "do",
+      verb: "summon",
       description:
         "Archive the currently-ratified plan and hire a Planner to " +
         "draft a replacement. Use when the instruction from above " +
@@ -1058,7 +1055,7 @@ export default function getRulerTools(core) {
       },
       annotations: { readOnlyHint: false },
       async handler(args) {
-        const { beingId, username, nodeId, rootId, summonId, sessionId } = args;
+        const { beingId, username, spaceId, rootId, summonId, sessionId } = args;
         const revisionReason = typeof args.revisionReason === "string" ? args.revisionReason.trim() : "";
         if (!revisionReason) return text("governing-revise-plan: revisionReason is required.");
         if (revisionReason.length > REASON_CAP) {
@@ -1066,7 +1063,7 @@ export default function getRulerTools(core) {
         }
         if (!beingId) return text("governing-revise-plan: missing beingId; substrate bug.");
 
-        const ruler = await resolveRulerScope(nodeId);
+        const ruler = await resolveRulerScope(spaceId);
         if (!ruler) {
           return text("governing-revise-plan: no Ruler scope resolvable. Surface as substrate bug.");
         }
@@ -1136,15 +1133,15 @@ export default function getRulerTools(core) {
         // The reply path is substrate-based: plannerRole.summon calls
         // emitReplyToAsker, which wakes the Ruler with the revision
         // emission visible in its next snapshot.
-        const { ensurePlanAtScope } = await import("./state/planNode.js");
-        const planNode = await ensurePlanAtScope({
+        const { ensurePlanAtScope } = await import("./state/planSpace.js");
+        const planSpace = await ensurePlanAtScope({
           scopeNodeId: String(ruler._id),
           beingId,
           summonId,
           sessionId,
           core: _core,
         });
-        if (!planNode) {
+        if (!planSpace) {
           releaseSpawn(claim.key);
           return text(JSON.stringify({
             ok: false,
@@ -1153,9 +1150,9 @@ export default function getRulerTools(core) {
             note: "Could not materialize the plan trio for revision. Substrate bug.",
           }, null, 2));
         }
-        const NodeModel = (await import("../../seed/models/node.js")).default;
+        const NodeModel = (await import("../../seed/models/space.js")).default;
         const BeingModel = (await import("../../seed/models/being.js")).default;
-        const planNodeFull = await NodeModel.findById(planNode._id).select("metadata").lean();
+        const planNodeFull = await NodeModel.findById(planSpace._id).select("metadata").lean();
         const planBeings = planNodeFull?.metadata instanceof Map
           ? planNodeFull.metadata.get("beings")
           : planNodeFull?.metadata?.beings;
@@ -1188,7 +1185,7 @@ export default function getRulerTools(core) {
           : null;
         const rulerUsername = rulerBeing?.name || "ruler";
 
-        const { getLandDomain } = await import("../../seed/addressing/address.js");
+        const { getLandDomain } = await import("../../seed/ibp/address.js");
         const landDomain = getLandDomain();
         const stancePath = `${landDomain}/${ruler._id}`;
         const rulerStance = `${stancePath}@${rulerUsername}`;
@@ -1199,7 +1196,6 @@ export default function getRulerTools(core) {
         const message = {
           from:            rulerStance,
           content:         briefing,
-          intent:          "chat",
           correlation,
           rootCorrelation,
           activeRole:      "planner",
@@ -1207,9 +1203,9 @@ export default function getRulerTools(core) {
           sentAt:          new Date().toISOString(),
         };
 
-        const { appendToInbox } = await import("../../seed/scheduler/inbox.js");
-        const { attachHandoff, wake } = await import("../../seed/scheduler/scheduler.js");
-        const { hooks } = await import("../../seed/core/hooks.js");
+        const { appendToInbox } = await import("../../seed/cognition/inbox.js");
+        const { attachHandoff, wake } = await import("../../seed/cognition/scheduler.js");
+        const { hooks } = await import("../../seed/system/hooks.js");
         const startMs = Date.now();
         try {
           await appendToInbox(String(ruler._id), plannerBeingId, message);
@@ -1223,7 +1219,7 @@ export default function getRulerTools(core) {
         }
         attachHandoff(plannerBeingId, correlation, {
           identity:   { beingId, username },
-          resolved:   { being: "planner", nodeId: String(ruler._id), zone: "tree" },
+          resolved:   { being: "planner", spaceId: String(ruler._id), zone: "tree" },
           onResponse: async (responseEntry) => {
             try { releaseSpawn(claim.key); } catch {}
             try {
@@ -1330,10 +1326,10 @@ export default function getRulerTools(core) {
       schema: {},
       annotations: { readOnlyHint: false },
       async handler(args) {
-        const { beingId, username, nodeId, rootId, summonId, sessionId } = args;
+        const { beingId, username, spaceId, rootId, summonId, sessionId } = args;
         if (!beingId) return text("governing-dispatch-execution: missing beingId; substrate bug.");
 
-        const ruler = await resolveRulerScope(nodeId);
+        const ruler = await resolveRulerScope(spaceId);
         if (!ruler) {
           return text("governing-dispatch-execution: no Ruler scope resolvable. Surface as substrate bug.");
         }
@@ -1439,7 +1435,7 @@ export default function getRulerTools(core) {
         // Resolve the parent Ruler's being username for the SUMMON
         // `from` stance. Sub-Rulers will reply UP through emitReplyToAsker
         // which reads message.from on their incoming SUMMON.
-        const NodeModel = (await import("../../seed/models/node.js")).default;
+        const NodeModel = (await import("../../seed/models/space.js")).default;
         const BeingModel = (await import("../../seed/models/being.js")).default;
         const rulerNodeFull = await NodeModel.findById(ruler._id).select("metadata name").lean();
         const rulerBeings = rulerNodeFull?.metadata instanceof Map
@@ -1450,7 +1446,7 @@ export default function getRulerTools(core) {
           ? await BeingModel.findById(rulerBeingIdAtScope).select("name").lean()
           : null;
         const rulerUsername = rulerBeing?.name || "ruler";
-        const { getLandDomain } = await import("../../seed/addressing/address.js");
+        const { getLandDomain } = await import("../../seed/ibp/address.js");
         const landDomain = getLandDomain();
         const rulerStance = `${landDomain}/${ruler._id}@${rulerUsername}`;
 
@@ -1461,8 +1457,8 @@ export default function getRulerTools(core) {
         // is automatic via the parent-walk substrate reads; no
         // explicit pass needed.
         const { promoteToRuler, PROMOTED_FROM } = await import("./state/role.js");
-        const { appendToInbox } = await import("../../seed/scheduler/inbox.js");
-        const { wake } = await import("../../seed/scheduler/scheduler.js");
+        const { appendToInbox } = await import("../../seed/cognition/inbox.js");
+        const { wake } = await import("../../seed/cognition/scheduler.js");
         const { writeLineage } = await import("./state/lineage.js");
         const { randomUUID } = await import("crypto");
         const rootCorrelation = args.rootSummonId || summonId || `${spawnId}-root`;
@@ -1476,15 +1472,15 @@ export default function getRulerTools(core) {
             || `step-${i + 1}`;
           const stepBody = step.spec || step.name || JSON.stringify(step);
           try {
-            const childNode = new NodeModel({
+            const childSpace = new NodeModel({
               name: stepName,
               type: "ruler",
               parent: ruler._id,
             });
-            await childNode.save();
+            await childSpace.save();
 
             await promoteToRuler({
-              nodeId: String(childNode._id),
+              spaceId: String(childSpace._id),
               promotedFrom: PROMOTED_FROM.BRANCH_DISPATCH,
               reason: `dispatched by ${rulerUsername} for: ${stepName}`,
               // Sub-Ruler is a being-child of THIS Ruler. parentBeingId
@@ -1499,7 +1495,7 @@ export default function getRulerTools(core) {
             // sits in the parent's decomposition.
             try {
               await writeLineage({
-                subRulerNodeId:  String(childNode._id),
+                subRulerNodeId:  String(childSpace._id),
                 parentRulerId:   String(ruler._id),
                 parentStepIndex: i + 1,
                 core: _core,
@@ -1509,7 +1505,7 @@ export default function getRulerTools(core) {
             }
 
             // Resolve the new sub-Ruler being.
-            const childFull = await NodeModel.findById(childNode._id).select("metadata").lean();
+            const childFull = await NodeModel.findById(childSpace._id).select("metadata").lean();
             const childBeings = childFull?.metadata instanceof Map
               ? childFull.metadata.get("beings")
               : childFull?.metadata?.beings;
@@ -1528,27 +1524,26 @@ export default function getRulerTools(core) {
               `(governing-hire-planner), draft contracts (governing-hire-contractor), or dispatch ` +
               `execution (governing-dispatch-execution). Reply when your work settles.`;
 
-            await appendToInbox(String(childNode._id), String(subRulerBeingId), {
+            await appendToInbox(String(childSpace._id), String(subRulerBeingId), {
               from:            rulerStance,
               content:         briefing,
-              intent:          "chat",
               correlation,
               rootCorrelation,
               activeRole:      "ruler",
               priority:        3, // INTERACTIVE
               sentAt:          new Date().toISOString(),
             });
-            wake(String(subRulerBeingId), String(childNode._id));
+            wake(String(subRulerBeingId), String(childSpace._id));
 
             dispatched.push({
-              subRulerNodeId: String(childNode._id),
+              subRulerNodeId: String(childSpace._id),
               subRulerBeingId: String(subRulerBeingId),
               stepName,
               stepIndex: i + 1,
               correlation,
             });
             log.info("Governing",
-              `🌱 sub-Ruler "${stepName}" dispatched at ${String(childNode._id).slice(0, 8)} ` +
+              `🌱 sub-Ruler "${stepName}" dispatched at ${String(childSpace._id).slice(0, 8)} ` +
               `(${i + 1}/${steps.length})`);
           } catch (err) {
             log.warn("Governing",
@@ -1561,7 +1556,7 @@ export default function getRulerTools(core) {
 
         // Fire dashboard SSE so the governance panel re-renders.
         try {
-          const { hooks } = await import("../../seed/core/hooks.js");
+          const { hooks } = await import("../../seed/system/hooks.js");
           hooks.run("governing:swarmDispatched", {
             spawnId,
             rulerNodeId: String(ruler._id),
@@ -1631,7 +1626,7 @@ export default function getRulerTools(core) {
       },
       annotations: { readOnlyHint: false },
       async handler(args) {
-        const { beingId, nodeId } = args;
+        const { beingId, spaceId } = args;
         const reason = typeof args.reason === "string" ? args.reason.trim() : "";
         if (!reason) return text("governing-ratify-plan: reason is required for audit.");
         if (reason.length > REASON_CAP) {
@@ -1639,7 +1634,7 @@ export default function getRulerTools(core) {
         }
         if (!beingId) return text("governing-ratify-plan: missing beingId; substrate bug.");
 
-        const ruler = await resolveRulerScope(nodeId);
+        const ruler = await resolveRulerScope(spaceId);
         if (!ruler) {
           return text("governing-ratify-plan: no Ruler scope resolvable.");
         }
@@ -1765,11 +1760,11 @@ export default function getRulerTools(core) {
       },
       annotations: { readOnlyHint: false },
       async handler(args) {
-        const { nodeId } = args;
+        const { spaceId } = args;
         const reason = typeof args.reason === "string" ? args.reason.trim() : "";
         if (!reason) return text("governing-archive-plan: reason is required.");
 
-        const ruler = await resolveRulerScope(nodeId);
+        const ruler = await resolveRulerScope(spaceId);
         if (!ruler) {
           return text("governing-archive-plan: no Ruler scope resolvable. Surface as substrate bug.");
         }
@@ -1888,7 +1883,7 @@ export default function getRulerTools(core) {
     // ─────────────────────────────────────────────────────────────────
     {
       name: "governing-resume-execution",
-      verb: "do",
+      verb: "summon",
       description:
         "Resume execution after a pause. Emits a SUMMON to the Foreman " +
         "(fire-and-forget) to decide next steps given the execution-record's " +
@@ -1902,12 +1897,12 @@ export default function getRulerTools(core) {
       },
       annotations: { readOnlyHint: false },
       async handler(args) {
-        const { beingId, username, nodeId, rootId, summonId, sessionId } = args;
+        const { beingId, username, spaceId, rootId, summonId, sessionId } = args;
         const reason = typeof args.reason === "string" ? args.reason.trim() : "";
         if (!reason) return text("governing-resume-execution: reason is required.");
         if (!beingId) return text("governing-resume-execution: missing beingId; substrate bug.");
 
-        const ruler = await resolveRulerScope(nodeId);
+        const ruler = await resolveRulerScope(spaceId);
         if (!ruler) {
           return text("governing-resume-execution: no Ruler scope resolvable.");
         }
@@ -1921,15 +1916,15 @@ export default function getRulerTools(core) {
           if (governing?.readActiveExecutionRecord) {
             const record = await governing.readActiveExecutionRecord(ruler._id);
             if (record?._recordNodeId && record.status === "paused") {
-              const NodeModel = (await import("../../seed/models/node.js")).default;
-              const recNode = await NodeModel.findById(record._recordNodeId);
-              if (recNode) {
-                const meta = recNode.metadata instanceof Map
-                  ? recNode.metadata.get("governing")
-                  : recNode.metadata?.governing;
+              const NodeModel = (await import("../../seed/models/space.js")).default;
+              const recSpace = await NodeModel.findById(record._recordNodeId);
+              if (recSpace) {
+                const meta = recSpace.metadata instanceof Map
+                  ? recSpace.metadata.get("governing")
+                  : recSpace.metadata?.governing;
                 const exec = meta?.execution || {};
                 // Phase 3 migration: verb-surface write, atomic merge.
-                await _core.do(recNode, "set-meta", {
+                await _core.do(recSpace, "set-meta", {
                   namespace: "governing",
                   data: {
                     execution: {
@@ -1972,15 +1967,15 @@ export default function getRulerTools(core) {
         // ensure execution node + Foreman being, build stances, append
         // to inbox, attach handoff that releases the claim and fires
         // `governing:foremanRouted` for dashboard SSE on settle.
-        const { ensureExecutionNode } = await import("./state/executionNode.js");
-        const executionNode = await ensureExecutionNode({
+        const { ensureExecutionNode } = await import("./state/executionSpace.js");
+        const executionSpace = await ensureExecutionNode({
           scopeNodeId: String(ruler._id),
           beingId,
           summonId,
           sessionId,
           core: _core,
         });
-        if (!executionNode) {
+        if (!executionSpace) {
           releaseSpawn(claim.key);
           return text(JSON.stringify({
             ok: false,
@@ -1988,9 +1983,9 @@ export default function getRulerTools(core) {
             error: "ensure-execution-failed",
           }, null, 2));
         }
-        const NodeModel = (await import("../../seed/models/node.js")).default;
+        const NodeModel = (await import("../../seed/models/space.js")).default;
         const BeingModel = (await import("../../seed/models/being.js")).default;
-        const execNodeFull = await NodeModel.findById(executionNode._id).select("metadata").lean();
+        const execNodeFull = await NodeModel.findById(executionSpace._id).select("metadata").lean();
         const execBeings = execNodeFull?.metadata instanceof Map
           ? execNodeFull.metadata.get("beings")
           : execNodeFull?.metadata?.beings;
@@ -2013,7 +2008,7 @@ export default function getRulerTools(core) {
           : null;
         const rulerUsername = rulerBeing?.name || "ruler";
 
-        const { getLandDomain } = await import("../../seed/addressing/address.js");
+        const { getLandDomain } = await import("../../seed/ibp/address.js");
         const landDomain = getLandDomain();
         const rulerStance = `${landDomain}/${ruler._id}@${rulerUsername}`;
 
@@ -2024,7 +2019,6 @@ export default function getRulerTools(core) {
           from:            rulerStance,
           content:         `Wakeup: resume-requested\n\nReason: ${reason}\n\n` +
                            "Read the execution-stack snapshot, decide what's next given the unpaused state.",
-          intent:          "chat",
           correlation,
           rootCorrelation,
           activeRole:      "foreman",
@@ -2032,9 +2026,9 @@ export default function getRulerTools(core) {
           sentAt:          new Date().toISOString(),
         };
 
-        const { appendToInbox } = await import("../../seed/scheduler/inbox.js");
-        const { attachHandoff, wake } = await import("../../seed/scheduler/scheduler.js");
-        const { hooks } = await import("../../seed/core/hooks.js");
+        const { appendToInbox } = await import("../../seed/cognition/inbox.js");
+        const { attachHandoff, wake } = await import("../../seed/cognition/scheduler.js");
+        const { hooks } = await import("../../seed/system/hooks.js");
         const startMs = Date.now();
         try {
           await appendToInbox(String(ruler._id), foremanBeingId, message);
@@ -2048,7 +2042,7 @@ export default function getRulerTools(core) {
         }
         attachHandoff(foremanBeingId, correlation, {
           identity:   { beingId, username },
-          resolved:   { being: "foreman", nodeId: String(ruler._id), zone: "tree" },
+          resolved:   { being: "foreman", spaceId: String(ruler._id), zone: "tree" },
           onResponse: async (responseEntry) => {
             try { releaseSpawn(claim.key); } catch {}
             try {
@@ -2130,15 +2124,15 @@ export default function getRulerTools(core) {
       schema: {},
       annotations: { readOnlyHint: true },
       async handler(args) {
-        const { nodeId } = args;
-        if (!nodeId) return text("governing-read-plan-detail: missing nodeId.");
+        const { spaceId } = args;
+        if (!spaceId) return text("governing-read-plan-detail: missing spaceId.");
         try {
           const { getExtension } = await import("../loader.js");
           const governing = getExtension("governing")?.exports;
           if (!governing?.readActivePlanEmission) {
             return text("governing-read-plan-detail: governing.readActivePlanEmission unavailable.");
           }
-          const emission = await governing.readActivePlanEmission(nodeId);
+          const emission = await governing.readActivePlanEmission(spaceId);
           if (!emission) {
             return text(JSON.stringify({ ok: true, emission: null, message: "No active plan emission at this scope." }));
           }
@@ -2179,7 +2173,7 @@ export default function getRulerTools(core) {
       },
       annotations: { readOnlyHint: false },
       async handler(args) {
-        const { nodeId, beingId, username } = args;
+        const { spaceId, beingId, username } = args;
         const reason = typeof args.reason === "string" ? args.reason.trim() : "";
         if (!reason) return text("governing-convene-court: reason is required.");
 
@@ -2188,8 +2182,8 @@ export default function getRulerTools(core) {
         // decision register; the register still records the Ruler's
         // turn-level choice.
         try {
-          if (nodeId) {
-            const node = await Node.findById(nodeId);
+          if (spaceId) {
+            const node = await Space.findById(spaceId);
             if (node) {
               const meta = node.metadata instanceof Map
                 ? node.metadata.get("governing")
@@ -2208,9 +2202,9 @@ export default function getRulerTools(core) {
               }, { identity: { beingId, name: username } });
             }
           }
-          const { hooks } = await import("../../seed/core/hooks.js");
+          const { hooks } = await import("../../seed/system/hooks.js");
           hooks.run("governing:courtConvened", {
-            rulerNodeId: nodeId ? String(nodeId) : null,
+            rulerNodeId: spaceId ? String(spaceId) : null,
             reason,
           }).catch(() => {});
         } catch (err) {

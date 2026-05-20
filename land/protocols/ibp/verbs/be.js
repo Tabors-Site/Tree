@@ -18,13 +18,13 @@
 // For release/switch/token-reclaim the address is the held stance.
 //
 // Thin wire adapter: extracts envelope fields, delegates to `beVerb`
-// in seed/core/verbs.js. The auth-being role (seed/roles/auth.js)
+// in seed/ibp/verbs.js. The auth-being role (seed/being/roles/auth.js)
 // runs there. See [[project_four_verbs_one_execution]].
 
-import log from "../../../seed/core/log.js";
-import { IbpError, IBP_ERR, isIbpError } from "../../../seed/core/errors.js";
+import log from "../../../seed/system/log.js";
+import { IbpError, IBP_ERR, isIbpError } from "../../../seed/ibp/errors.js";
 import { ackOk, ackError } from "../envelope.js";
-import { beVerb } from "../../../seed/core/verbs.js";
+import { beVerb } from "../../../seed/ibp/verbs.js";
 
 export async function handleBe(socket, env, ack) {
   const id = env?.id || null;
@@ -52,6 +52,6 @@ export async function handleBe(socket, env, ack) {
       return ackError(ack, id, err.code, err.message, err.detail);
     }
     log.error("IBP", `BE failed: ${err.message}`);
-    return ackError(ack, id, IBP_ERR.INTERNAL, err.message || "Internal portal error");
+    return ackError(ack, id, IBP_ERR.INTERNAL, err.message || "Internal IBP error");
   }
 }

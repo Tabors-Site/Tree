@@ -3,7 +3,7 @@
 
 import { test, describe } from "node:test";
 import { strict as assert } from "node:assert";
-import { resolvePipelineKey } from "../seed/llm/sessionKeys.js";
+import { resolvePipelineKey } from "../seed/cognition/session.js";
 
 // ─────────────────────────────────────────────────────────────────────────
 // resolvePipelineKey — runChat / OrchestratorRuntime stanceless pipeline

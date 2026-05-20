@@ -14,7 +14,7 @@ Read [being-summoned.md](being-summoned.md) first. The envelope only makes sense
   correlation: <id>,
   inReplyTo?:  <correlation id>,
   attachments?: [
-    { kind: "node-link" | "artifact-ref" | "blob" | "structured", ... }
+    { kind: "space-link" | "matter-ref" | "blob" | "structured", ... }
   ],
   sentAt:      <ISO8601 timestamp>
 }
@@ -82,9 +82,9 @@ A SUMMON with `inReplyTo` is not structurally different from one without; the fi
 
 Optional structured payloads alongside content. Kinds:
 
-- `node-link`: `{ kind: "node-link", position: "<position>" }` references another place. The receiver can SEE it.
-- `artifact-ref`: `{ kind: "artifact-ref", position: "<position>/notes/<id>" }` references specific artifact bytes.
-- `blob`: `{ kind: "blob", contentType, data }` inline binary. Use sparingly; prefer artifact-ref for large content.
+- `space-link`: `{ kind: "space-link", position: "<position>" }` references another place. The receiver can SEE it.
+- `matter-ref`: `{ kind: "matter-ref", position: "<position>/notes/<id>" }` references specific matter bytes.
+- `blob`: `{ kind: "blob", contentType, data }` inline binary. Use sparingly; prefer matter-ref for large content.
 - `structured`: `{ kind: "structured", schema: <name>, data: <object> }` typed data the being knows how to interpret (e.g., a plan-card response).
 
 ### sentAt

@@ -28,8 +28,8 @@
 
 import express from "express";
 import { dispatchIbp } from "../../../protocols/ibp/protocol.js";
-import { verifyIncoming } from "../../../protocols/ibp/canopy/dispatch.js";
-import { decodeToken } from "../../../seed/core/identity.js";
+import { verifyIncoming } from "../../../protocols/canopy/dispatch.js";
+import { decodeToken } from "../../../seed/being/identity.js";
 
 const router = express.Router();
 
@@ -107,7 +107,7 @@ const ERR_HTTP_MAP = {
   UNAUTHORIZED:        401,
   FORBIDDEN:           403,
   SESSION_EXPIRED:     403,
-  NODE_NOT_FOUND:      404,
+  SPACE_NOT_FOUND:      404,
   USER_NOT_FOUND:      404,
   ROLE_UNAVAILABLE:    404,
   VERB_NOT_SUPPORTED:  405,

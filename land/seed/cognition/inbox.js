@@ -3,7 +3,7 @@
 // Inbox primitives.
 //
 // The inbox is per-being-per-position metadata, stored under
-// `metadata.inbox.<beingId>` on the Node document. The kernel treats
+// `metadata.inbox.<beingId>` on the Space document. The kernel treats
 // `inbox` as a reserved namespace: it cannot be written through DO
 // set-meta (see actions/set-meta.js), only through these primitives,
 // which SUMMON uses.
@@ -24,7 +24,7 @@
 //
 // Each inbox entry:
 //   {
-//     from, content, intent, correlation, inReplyTo?, attachments?, sentAt,
+//     from, content, correlation, inReplyTo?, attachments?, sentAt,
 //     priority:    number   (LLM_PRIORITY-compatible: lower = higher precedence)
 //     rootCorrelation: string  (originating user message correlation, propagated through reply chains)
 //     activeRole: string | null  (the role the receiver should act in for this
@@ -39,7 +39,7 @@
 //     summonId?:   <id of the Summon record this message was processed into>,
 //   }
 //
-// Operations are atomic against the Node document. No read-modify-write
+// Operations are atomic against the Space document. No read-modify-write
 // races: $push appends and $set updates individual flags by array index.
 //
 // **Keying.** Keyed by beingId (the canonical Being._id) rather than role
@@ -47,7 +47,7 @@
 // have separate inboxes; the role name doesn't unique-identify a being.
 
 import { randomUUID } from "crypto";
-import Node from "../models/node.js";
+import Space from "../models/space.js";
 
 const INBOX_NS = "inbox";
 
@@ -59,16 +59,16 @@ const DEFAULT_PRIORITY = 1;
 /**
  * Append a message to a being's inbox at this position.
  *
- * @param {string} nodeId
+ * @param {string} spaceId
  * @param {string} beingId   the receiver Being's _id
- * @param {object} message   SUMMON envelope payload (from, content, intent, ...)
+ * @param {object} message   SUMMON envelope payload (from, content, correlation, ...)
  *                           Optional new fields:
  *                             priority:        number, lower = higher precedence
  *                             rootCorrelation: string, originating message id
  * @returns {Promise<{ messageId, sentAt }>}
  */
-export async function appendToInbox(nodeId, beingId, message) {
-  if (!nodeId) throw new Error("appendToInbox requires nodeId");
+export async function appendToInbox(spaceId, beingId, message) {
+  if (!spaceId) throw new Error("appendToInbox requires spaceId");
   if (!beingId) throw new Error("appendToInbox requires beingId");
   if (!message || typeof message !== "object") throw new Error("appendToInbox requires a message object");
 
@@ -85,7 +85,6 @@ export async function appendToInbox(nodeId, beingId, message) {
   const entry = {
     from:            message.from || null,
     content:         message.content ?? null,
-    intent:          message.intent || "chat",
     correlation:     messageId,
     rootCorrelation,
     priority,
@@ -103,8 +102,8 @@ export async function appendToInbox(nodeId, beingId, message) {
 
   // Atomic $push to the per-being bucket. Mongo creates the path if it
   // does not yet exist on the metadata Map.
-  await Node.updateOne(
-    { _id: nodeId },
+  await Space.updateOne(
+    { _id: spaceId },
     { $push: { [`metadata.${INBOX_NS}.${beingId}`]: entry } },
   );
 
@@ -114,7 +113,7 @@ export async function appendToInbox(nodeId, beingId, message) {
 /**
  * Read a being's inbox at this position.
  *
- * @param {string} nodeId
+ * @param {string} spaceId
  * @param {string} beingId
  * @param {object} [options]
  * @param {string} [options.since]      ISO8601; only entries with sentAt >= since
@@ -122,9 +121,9 @@ export async function appendToInbox(nodeId, beingId, message) {
  * @param {number} [options.limit]      cap on entries returned
  * @returns {Promise<Array<object>>}
  */
-export async function readInbox(nodeId, beingId, options = {}) {
-  if (!nodeId || !beingId) return [];
-  const node = await Node.findById(nodeId)
+export async function readInbox(spaceId, beingId, options = {}) {
+  if (!spaceId || !beingId) return [];
+  const node = await Space.findById(spaceId)
     .select(`metadata.${INBOX_NS}.${beingId}`)
     .lean();
   if (!node) return [];
@@ -142,7 +141,7 @@ export async function readInbox(nodeId, beingId, options = {}) {
 /**
  * Mark messages as consumed after a summoning processes them.
  *
- * @param {string}   nodeId
+ * @param {string}   spaceId
  * @param {string}   beingId
  * @param {string[]} correlationIds   ids of entries being consumed
  * @param {object}   [opts]
@@ -156,8 +155,8 @@ export async function readInbox(nodeId, beingId, options = {}) {
  *
  * @returns {Promise<{ consumed: number }>}
  */
-export async function markInboxConsumed(nodeId, beingId, correlationIds, opts = {}) {
-  if (!nodeId || !beingId || !Array.isArray(correlationIds) || correlationIds.length === 0) {
+export async function markInboxConsumed(spaceId, beingId, correlationIds, opts = {}) {
+  if (!spaceId || !beingId || !Array.isArray(correlationIds) || correlationIds.length === 0) {
     return { consumed: 0 };
   }
   let responseId = null;
@@ -170,7 +169,7 @@ export async function markInboxConsumed(nodeId, beingId, correlationIds, opts = 
   }
 
   const consumedAt = new Date().toISOString();
-  const node = await Node.findById(nodeId)
+  const node = await Space.findById(spaceId)
     .select(`metadata.${INBOX_NS}.${beingId}`)
     .lean();
   const bucket = readMetaPath(node, [INBOX_NS, beingId]);
@@ -190,7 +189,7 @@ export async function markInboxConsumed(nodeId, beingId, correlationIds, opts = 
   });
 
   if (consumed === 0) return { consumed: 0 };
-  await Node.updateOne({ _id: nodeId }, { $set: updates });
+  await Space.updateOne({ _id: spaceId }, { $set: updates });
   return { consumed };
 }
 
@@ -202,13 +201,13 @@ export async function markInboxConsumed(nodeId, beingId, correlationIds, opts = 
  *
  * Returns `null` when the inbox has nothing actionable.
  *
- * @param {string} nodeId
+ * @param {string} spaceId
  * @param {string} beingId
  * @returns {Promise<null | { entry: object, index: number }>}
  */
-export async function pickNextEntry(nodeId, beingId) {
-  if (!nodeId || !beingId) return null;
-  const node = await Node.findById(nodeId)
+export async function pickNextEntry(spaceId, beingId) {
+  if (!spaceId || !beingId) return null;
+  const node = await Space.findById(spaceId)
     .select(`metadata.${INBOX_NS}.${beingId}`)
     .lean();
   const bucket = readMetaPath(node, [INBOX_NS, beingId]);
@@ -238,16 +237,16 @@ export async function pickNextEntry(nodeId, beingId) {
  *
  * Returns the count of entries cancelled.
  *
- * @param {string} nodeId
+ * @param {string} spaceId
  * @param {string} beingId
  * @param {string} rootCorrelation
  * @returns {Promise<{ cancelled: number, correlations: string[] }>}
  */
-export async function cancelByRootCorrelation(nodeId, beingId, rootCorrelation) {
-  if (!nodeId || !beingId || !rootCorrelation) {
+export async function cancelByRootCorrelation(spaceId, beingId, rootCorrelation) {
+  if (!spaceId || !beingId || !rootCorrelation) {
     return { cancelled: 0, correlations: [] };
   }
-  const node = await Node.findById(nodeId)
+  const node = await Space.findById(spaceId)
     .select(`metadata.${INBOX_NS}.${beingId}`)
     .lean();
   const bucket = readMetaPath(node, [INBOX_NS, beingId]);
@@ -263,7 +262,7 @@ export async function cancelByRootCorrelation(nodeId, beingId, rootCorrelation) 
     correlations.push(entry.correlation);
   });
   if (correlations.length === 0) return { cancelled: 0, correlations: [] };
-  await Node.updateOne({ _id: nodeId }, { $set: updates });
+  await Space.updateOne({ _id: spaceId }, { $set: updates });
   return { cancelled: correlations.length, correlations };
 }
 
@@ -276,15 +275,15 @@ export async function cancelByRootCorrelation(nodeId, beingId, rootCorrelation) 
  * Index is required because correlation lookup would race with concurrent
  * appends; the scheduler already knows the index from pickNextEntry.
  *
- * @param {string} nodeId
+ * @param {string} spaceId
  * @param {string} beingId
  * @param {number} index    array index returned by pickNextEntry
  */
-export async function markSummoned(nodeId, beingId, index) {
-  if (!nodeId || !beingId || !Number.isInteger(index) || index < 0) return;
+export async function markSummoned(spaceId, beingId, index) {
+  if (!spaceId || !beingId || !Number.isInteger(index) || index < 0) return;
   const summonedAt = new Date().toISOString();
-  await Node.updateOne(
-    { _id: nodeId },
+  await Space.updateOne(
+    { _id: spaceId },
     { $set: { [`metadata.${INBOX_NS}.${beingId}.${index}.summonedAt`]: summonedAt } },
   );
 }
@@ -300,9 +299,9 @@ export async function markSummoned(nodeId, beingId, index) {
  * conversations from the Chat collection) when it builds the renderer-side
  * "busy / talking to / queue" surface.
  */
-export async function getInboxSummary(nodeId) {
-  if (!nodeId) return {};
-  const node = await Node.findById(nodeId).select(`metadata.${INBOX_NS}`).lean();
+export async function getInboxSummary(spaceId) {
+  if (!spaceId) return {};
+  const node = await Space.findById(spaceId).select(`metadata.${INBOX_NS}`).lean();
   if (!node) return {};
   const inbox = readMetaPath(node, [INBOX_NS]);
   if (!inbox || typeof inbox !== "object") return {};

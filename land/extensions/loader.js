@@ -6,11 +6,11 @@ import fs from "fs";
 import path from "path";
 import crypto from "crypto";
 import { fileURLToPath, pathToFileURL } from "url";
-import { buildCoreServices } from "../seed/core/services.js";
-import { setExtensionToolResolver } from "../seed/llm/runChat.js";
-import { hooks } from "../seed/core/hooks.js";
-import { registerToolOwner, getToolOwner } from "../seed/tree/extensionScope.js";
-import log from "../seed/core/log.js";
+import { buildCoreServices } from "../seed/services.js";
+import { setExtensionToolResolver } from "../seed/cognition/runChat.js";
+import { hooks } from "../seed/system/hooks.js";
+import { getToolOwner } from "../seed/space/extensionScope.js";
+import log from "../seed/system/log.js";
 
 /** Convert a file path to a URL string for dynamic import (Windows compat) */
 function toImportURL(filePath) {
@@ -328,7 +328,7 @@ function getDisabledExtensions(configFn) {
 let AVAILABLE_SERVICES = new Set();
 
 const AVAILABLE_MODELS = new Set([
-  "Being", "Node", "Did", "Artifact",
+  "Being", "Space", "Did", "Matter",
 ]);
 
 function validateNeeds(manifest, core) {
@@ -508,9 +508,9 @@ function buildScopedCore(manifest, fullCore) {
     scoped.beingMetadata = fullCore.beingMetadata;
   }
 
-  // Artifact metadata: always available (extensions tag artifacts in their namespace)
-  if (fullCore.artifactMetadata) {
-    scoped.artifactMetadata = fullCore.artifactMetadata;
+  // Matter metadata: always available (extensions tag matter in their namespace)
+  if (fullCore.matterMetadata) {
+    scoped.matterMetadata = fullCore.matterMetadata;
   }
 
   // Auth strategy binding: wrap registerStrategy to auto-inject extension name.
@@ -906,81 +906,12 @@ export async function loadExtensions(app, mcpServer, opts = {}) {
         log.verbose("Extensions", `${manifest.name}: raw webhook registered`);
       }
 
-      // Wire MCP tools and register in tool resolver
+      // Wire MCP tools and register in the tool resolver. Same path
+      // the kernel uses for its own tools — see registerToolBundle in
+      // seed/system/tools.js.
       if (instance.tools && mcpServer) {
-        const { registerToolDef } = await import("../seed/core/tools.js");
-        const { zodToJsonSchema } = await import("zod-to-json-schema");
-        const { z } = await import("zod");
-
-        for (const tool of instance.tools) {
-          // Reject duplicate tool names across extensions
-          const existingOwner = getToolOwner(tool.name);
-          if (existingOwner) {
-            log.error("Loader", `Tool "${tool.name}" from "${manifest.name}" conflicts with "${existingOwner}". Skipped.`);
-            continue;
-          }
-          registerToolOwner(tool.name, manifest.name, tool.annotations?.readOnlyHint ?? false);
-          try {
-            if (tool.handler) {
-              // IMPORTANT: register via registerTool() with a pre-built
-              // passthrough zod object so the SDK does NOT strip context
-              // fields that the MCP HTTP layer injects on every call
-              // (beingId, rootId, nodeId, summonId, sessionId). The shorthand
-              // server.tool() wraps raw shapes in a strict z.object which
-              // silently drops unknown fields, leaving every tool handler
-              // blind to its own position in the tree. This broke tools
-              // across every extension, not just code-workspace.
-              //
-              // Accepts both raw shape ({ key: z.string() }) and already-
-              // built zod schemas.
-              const { z } = await import("zod");
-              let inputSchema;
-              if (tool.schema && typeof tool.schema === "object" && !tool.schema._def && !tool.schema._zod) {
-                // raw shape → wrap in passthrough
-                inputSchema = z.object(tool.schema).passthrough();
-              } else if (tool.schema && typeof tool.schema.passthrough === "function") {
-                // already a zod object → ensure passthrough
-                inputSchema = tool.schema.passthrough();
-              } else {
-                // unknown shape — let the SDK deal with it
-                inputSchema = tool.schema;
-              }
-
-              mcpServer.registerTool(
-                tool.name,
-                {
-                  description: tool.description,
-                  inputSchema,
-                  annotations: tool.annotations || undefined,
-                },
-                tool.handler,
-              );
-            }
-          } catch (toolErr) {
-            log.warn("Extensions", `${manifest.name}: tool "${tool.name}" MCP registration failed: ${toolErr.message}`);
-          }
-
-          // Convert Zod schema to JSON Schema for OpenAI function calling format
-          let jsonSchema;
-          try {
-            // tool.schema is { key: z.string(), ... } - wrap in z.object first
-            const zodObj = z.object(tool.schema);
-            jsonSchema = zodToJsonSchema(zodObj);
-            delete jsonSchema.$schema; // OpenAI doesn't want this
-          } catch {
-            // Fallback: already JSON Schema or plain object
-            jsonSchema = tool.schema;
-          }
-
-          registerToolDef(tool.name, {
-            type: "function",
-            function: {
-              name: tool.name,
-              description: tool.description,
-              parameters: jsonSchema,
-            },
-          }, { verb: tool.verb });
-        }
+        const { registerToolBundle } = await import("../seed/system/tools.js");
+        await registerToolBundle(instance.tools, { ownerExt: manifest.name, mcpServer });
       }
 
       // Register models from manifest (add to core.models so other extensions can use them)
@@ -1012,7 +943,7 @@ export async function loadExtensions(app, mcpServer, opts = {}) {
 
       // Register session types
       if (manifest.provides?.sessionTypes) {
-        const { registerSessionType } = await import("../seed/session/registry.js");
+        const { registerSessionType } = await import("../seed/cognition/session.js");
         for (const [key, value] of Object.entries(manifest.provides.sessionTypes)) {
           registerSessionType(key, value);
         }
@@ -1033,7 +964,7 @@ export async function loadExtensions(app, mcpServer, opts = {}) {
       // Either form accepted; both register under the extension owner so
       // unload cleans them up. See seed/seeds.js for recipe shape.
       if (instance.seeds || manifest.provides?.seeds) {
-        const { registerSeed } = await import("../seed/core/seeds.js");
+        const { registerSeed } = await import("../seed/system/seeds.js");
         const namespace = (localName) => `${manifest.name}:${localName}`;
         // Path 1: returned from init
         if (Array.isArray(instance.seeds)) {
@@ -1073,7 +1004,7 @@ export async function loadExtensions(app, mcpServer, opts = {}) {
       // Idempotent — re-registering replaces this extension's prior rules.
       if (manifest.provides?.defaultPermissions) {
         try {
-          const { registerDefaultPermissions } = await import("../seed/core/defaultPermissions.js");
+          const { registerDefaultPermissions } = await import("../seed/ibp/defaultPermissions.js");
           registerDefaultPermissions(manifest.name, manifest.provides.defaultPermissions);
         } catch (err) {
           log.warn("Extensions", `default-permissions registration failed for "${manifest.name}": ${err.message}`);
@@ -1104,7 +1035,7 @@ export async function loadExtensions(app, mcpServer, opts = {}) {
   // includes the installed extension list (used by `.well-known/treeos-portal`
   // discovery + future cross-land introspection).
   try {
-    const { setExtensionNamesProvider } = await import("../protocols/ibp/canopy/identity.js");
+    const { setExtensionNamesProvider } = await import("../protocols/canopy/identity.js");
     setExtensionNamesProvider(getLoadedExtensionNames);
   } catch {}
 
@@ -1129,19 +1060,18 @@ export async function loadExtensions(app, mcpServer, opts = {}) {
 // Hook listen validation
 // ---------------------------------------------------------------------------
 
-// Mirror of the CORE_HOOKS list in seed/hooks.js plus afterBoot which
+// Mirror of the CORE_HOOKS list in seed/system/hooks.js plus afterBoot which
 // isn't in that list but is fired by startup.js after all extensions
 // initialize. Kept here so we don't import across the seed boundary for
 // one list.
 const CORE_HOOKS_VALID = new Set([
-  "beforeArtifact", "afterArtifact", "beforeDid",
-  "beforeNodeCreate", "afterNodeCreate",
-  "beforeStatusChange", "afterStatusChange", "beforeNodeDelete",
+  "beforeMatter", "afterMatter", "beforeDid",
+  "beforeSpaceCreate", "afterSpaceCreate", "beforeSpaceDelete",
   "enrichContext", "onCascade", "onDocumentPressure",
   "beforeLLMCall", "afterLLMCall", "beforeToolCall", "afterToolCall",
   "beforeResponse", "beforeRegister", "afterRegister",
-  "afterSessionCreate", "afterSessionEnd", "afterNavigate", "onNodeNavigate",
-  "afterNodeMove", "afterMetadataWrite", "afterScopeChange", "afterOwnershipChange", "afterBoot",
+  "afterSessionCreate", "afterSessionEnd",
+  "afterSpaceMove", "afterMetadataWrite", "afterScopeChange", "afterOwnershipChange", "afterBoot",
   "onTreeTripped", "onTreeRevived", "onCompress",
 ]);
 
@@ -1385,7 +1315,7 @@ export function getExtension(name) {
  * or when the lookup fails.
  *
  * This is the principled way for one extension to reach into another:
- *   const cw = await core.scope.getExtensionAtScope("code-workspace", nodeId);
+ *   const cw = await core.scope.getExtensionAtScope("code-workspace", spaceId);
  *   if (!cw?.exports?.someApi) return; // not active here
  *   await cw.exports.someApi(...);
  *
@@ -1400,18 +1330,18 @@ export function getExtension(name) {
  * Extensions reaching across should migrate to this helper over time.
  *
  * @param {string} name    extension name
- * @param {string} nodeId  the tree position whose scope governs
+ * @param {string} spaceId  the tree position whose scope governs
  * @returns {object|null}  the extension instance, or null when blocked/missing
  */
-export async function getExtensionAtScope(name, nodeId) {
-  if (!name || !nodeId) return null;
+export async function getExtensionAtScope(name, spaceId) {
+  if (!name || !spaceId) return null;
   const entry = loaded.get(name);
   if (!entry) return null;
   try {
     const { isExtensionBlockedAtNode } = await import(
-      "../seed/tree/extensionScope.js"
+      "../seed/space/extensionScope.js"
     );
-    const blocked = await isExtensionBlockedAtNode(name, nodeId);
+    const blocked = await isExtensionBlockedAtNode(name, spaceId);
     if (blocked) return null;
   } catch {
     // If scope resolution fails (e.g., node not found), be
@@ -1570,6 +1500,100 @@ export function getBootReport() {
 }
 
 /**
+ * Register the four extension-management DO ops with the kernel
+ * operations registry. The handlers live here (in the loader, not in
+ * seed) because they touch loader-internal state: extension directory
+ * writes, the disabledExtensions sync file. Seed never imports from
+ * the loader; the dependency points outward — call this once at boot
+ * from startup.js after the kernel operations are loaded.
+ *
+ * Registered ops (all under `ownerExtension: "kernel"`):
+ *   install-extension     write extension files to disk
+ *   uninstall-extension   remove an extension directory
+ *   disable-extension     add to disabledExtensions config list
+ *   enable-extension      remove from disabledExtensions config list
+ */
+export async function registerExtensionManagementOps() {
+  const { registerOperation } = await import("../seed/ibp/operations.js");
+  const { getLandConfigValue, setLandConfigValue } = await import("../seed/landConfig.js");
+
+  const EXT_NAME_RE = /^[a-z0-9-]+$/i;
+
+  registerOperation("install-extension", {
+    targets: ["node"],
+    ownerExtension: "kernel",
+    handler: async ({ params }) => {
+      const { name, version, manifest, files } = params || {};
+      if (!name || !Array.isArray(files) || files.length === 0) {
+        throw new Error("install-extension: `name` and `files` are required");
+      }
+      if (!EXT_NAME_RE.test(name)) {
+        throw new Error("install-extension: invalid extension name");
+      }
+      const result = await installExtensionFiles(name, files);
+      return {
+        installed:    true,
+        name,
+        version:      version || manifest?.version || "unknown",
+        filesWritten: result.filesWritten,
+        note:         "Restart the land to load the extension.",
+      };
+    },
+  });
+
+  registerOperation("uninstall-extension", {
+    targets: ["node"],
+    ownerExtension: "kernel",
+    handler: async ({ params }) => {
+      const { name } = params || {};
+      if (!name || !EXT_NAME_RE.test(name)) {
+        throw new Error("uninstall-extension: invalid extension name");
+      }
+      const extDir = path.join(__dirname, name);
+      if (!fs.existsSync(extDir)) {
+        throw new Error(`uninstall-extension: extension "${name}" not found on disk`);
+      }
+      fs.rmSync(extDir, { recursive: true, force: true });
+      return { uninstalled: true, name, note: "Restart the land to unload." };
+    },
+  });
+
+  registerOperation("disable-extension", {
+    targets: ["node"],
+    ownerExtension: "kernel",
+    handler: async ({ params }) => {
+      const { name } = params || {};
+      if (!name || !EXT_NAME_RE.test(name)) {
+        throw new Error("disable-extension: invalid extension name");
+      }
+      const current = getLandConfigValue("disabledExtensions") || [];
+      if (!current.includes(name)) {
+        current.push(name);
+        syncDisabledFile(current);
+        await setLandConfigValue("disabledExtensions", current);
+      }
+      return { disabled: true, name, disabledExtensions: current };
+    },
+  });
+
+  registerOperation("enable-extension", {
+    targets: ["node"],
+    ownerExtension: "kernel",
+    handler: async ({ params }) => {
+      const { name } = params || {};
+      if (!name || !EXT_NAME_RE.test(name)) {
+        throw new Error("enable-extension: invalid extension name");
+      }
+      const current = getLandConfigValue("disabledExtensions") || [];
+      const updated = current.filter((n) => n !== name);
+      await setLandConfigValue("disabledExtensions", updated);
+      syncDisabledFile(updated);
+      return { enabled: true, name, disabledExtensions: updated };
+    },
+  });
+}
+
+/**
  * Get all loaded manifests (for /protocol endpoint).
  */
 export function getLoadedManifests() {
@@ -1674,21 +1698,21 @@ export async function uninstallExtension(name) {
         mcpServerInstance.removeToolsByOwner(name, getToolOwner);
       }
       // Remove from tool definition registry
-      const { unregisterToolsForExtension } = await import("../seed/core/tools.js");
+      const { unregisterToolsForExtension } = await import("../seed/system/tools.js");
       unregisterToolsForExtension(name, getToolOwner);
     } catch {}
     try {
-      const { unregisterSeedsFromExtension } = await import("../seed/core/seeds.js");
+      const { unregisterSeedsFromExtension } = await import("../seed/system/seeds.js");
       unregisterSeedsFromExtension(name);
     } catch {}
     try {
-      const { clearToolOwnersForExtension } = await import("../seed/tree/extensionScope.js");
+      const { clearToolOwnersForExtension } = await import("../seed/space/extensionScope.js");
       clearToolOwnersForExtension(name);
     } catch {}
     // Drop this extension's default permission rules from the registry
     // so authorize stops consulting them post-uninstall.
     try {
-      const { unregisterDefaultPermissions } = await import("../seed/core/defaultPermissions.js");
+      const { unregisterDefaultPermissions } = await import("../seed/ibp/defaultPermissions.js");
       unregisterDefaultPermissions(name);
     } catch {}
   }
@@ -1697,7 +1721,7 @@ export async function uninstallExtension(name) {
   // confined. Without this, the confined set still references it and the
   // resolution chain treats a missing extension as blocked at every node.
   try {
-    const { loadConfinedExtensions } = await import("../seed/tree/extensionScope.js");
+    const { loadConfinedExtensions } = await import("../seed/space/extensionScope.js");
     await loadConfinedExtensions();
   } catch {}
 
@@ -1998,7 +2022,7 @@ export async function installExtension(name, version) {
   // scope: "confined" in its manifest. Without this, the confined set is stale
   // until restart and the extension resolves as global (active everywhere).
   try {
-    const { loadConfinedExtensions } = await import("../seed/tree/extensionScope.js");
+    const { loadConfinedExtensions } = await import("../seed/space/extensionScope.js");
     await loadConfinedExtensions();
   } catch {}
 
@@ -2065,7 +2089,7 @@ export async function disableExtension(name) {
 
   // Unregister hooks belonging to this extension
   try {
-    const { hooks } = await import("../seed/core/hooks.js");
+    const { hooks } = await import("../seed/system/hooks.js");
     hooks.unregister(name);
   } catch {}
 
@@ -2156,29 +2180,29 @@ export function getRegisteredJobs() {
  * Called from startup.js after DB connect.
  */
 export async function runExtensionMigrations() {
-  let Node;
+  let Space;
   try {
-    Node = (await import("../seed/models/node.js")).default;
+    Space = (await import("../seed/models/space.js")).default;
   } catch {
-    log.warn("Extensions", "Cannot run migrations: Node model not available");
+    log.warn("Extensions", "Cannot run migrations: Space model not available");
     return;
   }
 
   // Find the .extensions system node once, so per-extension queries are scoped correctly.
   // Without this, a user-created tree node named the same as an extension would be matched.
-  const { SYSTEM_ROLE } = await import("../seed/core/protocol.js");
-  const extensionsParent = await Node.findOne({ systemRole: SYSTEM_ROLE.EXTENSIONS }).select("_id").lean();
+  const { SEED_SPACE } = await import("../seed/ibp/protocol.js");
+  const extensionsParent = await Space.findOne({ seedSpace: SEED_SPACE.EXTENSIONS }).select("_id").lean();
 
   for (const [name, { manifest, instance }] of loaded) {
     const targetVersion = manifest.provides?.schemaVersion;
     if (!targetVersion) continue; // No schema versioning declared
 
     // Get current version from the extension's child node under .extensions
-    const extNode = extensionsParent
-      ? await Node.findOne({ parent: extensionsParent._id, name }).lean()
+    const extSpace = extensionsParent
+      ? await Space.findOne({ parent: extensionsParent._id, name }).lean()
       : null;
 
-    const meta = extNode?.metadata instanceof Map ? Object.fromEntries(extNode.metadata) : (extNode?.metadata || {});
+    const meta = extSpace?.metadata instanceof Map ? Object.fromEntries(extSpace.metadata) : (extSpace?.metadata || {});
     const currentVersion = meta.schemaVersion || 0;
 
     if (currentVersion >= targetVersion) continue; // Up to date
@@ -2212,8 +2236,8 @@ export async function runExtensionMigrations() {
       }
 
       // Update stored version
-      if (ran > 0 && extNode) {
-        await Node.findByIdAndUpdate(extNode._id, {
+      if (ran > 0 && extSpace) {
+        await Space.findByIdAndUpdate(extSpace._id, {
           $set: { "metadata.schemaVersion": targetVersion },
         });
         log.verbose("Extensions", `${name}: schema updated to v${targetVersion} (${ran} migration(s))`);

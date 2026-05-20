@@ -3,7 +3,7 @@
 // Extension Seeds — scaffolded shapes a land can plant.
 //
 // A `seed` is a declared recipe an extension provides: "if you plant me
-// at a node, I will create this structure (nodes, beings, artifacts,
+// at a space, I will create this structure (spaces, beings, matters,
 // metadata) to bootstrap whatever the extension does." A land grows
 // only the populations its operators plant.
 //
@@ -29,9 +29,9 @@
 // **Plant lifecycle:**
 //
 //   plant   → recipe.scaffold runs; creates structure; stamps
-//             metadata.seeds.<plantedSeedId> on the target node with
+//             metadata.seeds.<plantedSeedId> on the target space with
 //             { name, plantedAt, plantedBy, plantedThings }
-//   listed  → readSeedsPlantedAt(nodeId) returns the namespace blob
+//   listed  → readSeedsPlantedAt(spaceId) returns the namespace blob
 //   unplant → walks plantedThings (in reverse) and deletes them; clears
 //             the metadata entry
 //
@@ -39,8 +39,8 @@
 // lookup so unregisterFromExtension at unload time stays clean.
 
 import { v4 as uuidv4 } from "uuid";
-import log from "./log.js";
-import Node from "../models/node.js";
+import log from "../system/log.js";
+import Space from "../models/space.js";
 
 const SEEDS = new Map();             // name → recipe
 const SEED_OWNER = new Map();        // name → owning extension
@@ -144,26 +144,37 @@ export function listSeeds() {
 // ─────────────────────────────────────────────────────────────────────
 
 /**
- * Plant a seed at a node. Runs the recipe's `scaffold` function with the
- * kernel's core services and stamps the result on the target node's
- * metadata.seeds namespace.
+ * Plant a seed at a space. Runs the recipe's `scaffold` function with
+ * the kernel's core services and stamps the result on the target
+ * space's metadata.seeds namespace.
  *
  * @param {object} args
  * @param {string} args.name - registered seed name
- * @param {string} args.atNodeId - target node id (the seed's plant point)
+ * @param {string} args.atNodeId - target space id (the seed's plant point)
  * @param {object} args.identity - { beingId, username } of the planter
  * @param {object} args.core - core services bundle (passed to recipe)
+ * @param {object} [args.params] - plant-time configuration the operator
+ *   passes through to the seed (e.g. projectPath for a code workspace,
+ *   theme for a UI extension). Free-shape object; the seed defines its
+ *   schema in prose. Persisted on the planted-seed metadata record so
+ *   unplant + re-plant can audit what was configured.
  * @returns {Promise<{ plantedSeedId, plantedThings }>} on success
- * @throws when the seed isn't registered or the target node doesn't exist
+ * @throws when the seed isn't registered or the target space doesn't exist
  */
-export async function plantSeed({ name, atNodeId, identity, core }) {
+export async function plantSeed({ name, atNodeId, identity, core, params = {} }) {
   const recipe = SEEDS.get(name);
   if (!recipe) throw new Error(`Seed "${name}" not registered`);
   if (!atNodeId) throw new Error("plantSeed requires atNodeId");
   if (!identity?.beingId) throw new Error("plantSeed requires identity.beingId");
 
-  const target = await Node.findById(atNodeId).select("_id name").lean();
-  if (!target) throw new Error(`Target node ${String(atNodeId).slice(0, 8)} not found`);
+  const target = await Space.findById(atNodeId).select("_id name").lean();
+  if (!target) throw new Error(`Target space ${String(atNodeId).slice(0, 8)} not found`);
+
+  // Defensive copy so the recipe cannot mutate the caller's params.
+  // Reject obviously dangerous shapes (non-object, null, array).
+  const safeParams = (params && typeof params === "object" && !Array.isArray(params))
+    ? { ...params }
+    : {};
 
   const plantedSeedId = uuidv4();
   const plantedAt = new Date().toISOString();
@@ -173,6 +184,7 @@ export async function plantSeed({ name, atNodeId, identity, core }) {
     plantedSeedId,
     identity,
     core,
+    params: safeParams,
   };
 
   let plantedThings;
@@ -183,19 +195,21 @@ export async function plantSeed({ name, atNodeId, identity, core }) {
     throw err;
   }
 
-  // Stamp the planted-seed record on the target node. metadata.seeds
-  // is a namespace blob keyed by plantedSeedId.
-  const { setExtMeta, getExtMeta } = await import("../tree/extensionMetadata.js");
-  const node = await Node.findById(atNodeId);
-  if (node) {
-    const existing = (await getExtMeta(node, "seeds")) || {};
+  // Stamp the planted-seed record on the target space. metadata.seeds
+  // is a namespace blob keyed by plantedSeedId. Params land here too so
+  // an audit / re-plant can see what the operator configured.
+  const { setExtMeta, getExtMeta } = await import("../space/extensionMetadata.js");
+  const space = await Space.findById(atNodeId);
+  if (space) {
+    const existing = (await getExtMeta(space, "seeds")) || {};
     existing[plantedSeedId] = {
       name,
       plantedAt,
       plantedBy: String(identity.beingId),
+      params: safeParams,
       plantedThings: plantedThings || null,
     };
-    await setExtMeta(node, "seeds", existing);
+    await setExtMeta(space, "seeds", existing);
   }
 
   log.info("Seeds",
@@ -206,16 +220,16 @@ export async function plantSeed({ name, atNodeId, identity, core }) {
 }
 
 /**
- * Read the planted-seed entries on a node. Returns an array of
+ * Read the planted-seed entries on a space. Returns an array of
  * { plantedSeedId, name, plantedAt, plantedBy, plantedThings } records.
  */
-export async function listPlantedAt(nodeId) {
-  if (!nodeId) return [];
-  const node = await Node.findById(nodeId).select("_id metadata").lean();
-  if (!node) return [];
-  const meta = node.metadata instanceof Map
-    ? node.metadata.get("seeds")
-    : node.metadata?.seeds;
+export async function listPlantedAt(spaceId) {
+  if (!spaceId) return [];
+  const space = await Space.findById(spaceId).select("_id metadata").lean();
+  if (!space) return [];
+  const meta = space.metadata instanceof Map
+    ? space.metadata.get("seeds")
+    : space.metadata?.seeds;
   if (!meta || typeof meta !== "object") return [];
   return Object.entries(meta).map(([plantedSeedId, entry]) => ({
     plantedSeedId,
@@ -233,11 +247,11 @@ export async function unplantSeed({ atNodeId, plantedSeedId, identity, core }) {
   if (!atNodeId || !plantedSeedId) {
     throw new Error("unplantSeed requires atNodeId and plantedSeedId");
   }
-  const node = await Node.findById(atNodeId);
-  if (!node) throw new Error(`Target node ${String(atNodeId).slice(0, 8)} not found`);
+  const space = await Space.findById(atNodeId);
+  if (!space) throw new Error(`Target space ${String(atNodeId).slice(0, 8)} not found`);
 
-  const { getExtMeta, setExtMeta } = await import("../tree/extensionMetadata.js");
-  const seeds = (await getExtMeta(node, "seeds")) || {};
+  const { getExtMeta, setExtMeta } = await import("../space/extensionMetadata.js");
+  const seeds = (await getExtMeta(space, "seeds")) || {};
   const entry = seeds[plantedSeedId];
   if (!entry) throw new Error(`Planted seed ${plantedSeedId.slice(0, 8)} not found at ${String(atNodeId).slice(0, 8)}`);
 
@@ -261,7 +275,7 @@ export async function unplantSeed({ atNodeId, plantedSeedId, identity, core }) {
   }
 
   delete seeds[plantedSeedId];
-  await setExtMeta(node, "seeds", seeds);
+  await setExtMeta(space, "seeds", seeds);
 
   log.info("Seeds",
     `🪦 unplanted ${plantedSeedId.slice(0, 8)} ("${entry.name}") from ${String(atNodeId).slice(0, 8)}`);

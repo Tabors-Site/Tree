@@ -1,6 +1,6 @@
-import log from "../../../seed/core/log.js";
-import { getLandConfigValue } from "../../../seed/landConfig.js";
-import { SEED_VERSION } from "../../../seed/core/version.js";
+import log from "../../seed/system/log.js";
+import { getLandConfigValue } from "../../seed/landConfig.js";
+import { SEED_VERSION } from "../../seed/system/version.js";
 import crypto from "crypto";
 import fs from "fs";
 import path from "path";
@@ -25,7 +25,7 @@ function cleanDomain(raw) {
 // getLandUrl moved to seed/landConfig.js (it's a seed-level fact about
 // this land, not a canopy concern). Re-exported here so existing callers
 // continue to import it from this module.
-export { getLandUrl } from "../../../seed/landConfig.js";
+export { getLandUrl } from "../../seed/landConfig.js";
 
 /**
  * Get or create the land identity (keypair + metadata).

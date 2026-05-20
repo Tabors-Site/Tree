@@ -16,9 +16,9 @@
 // without crashing.
 //
 // Matches the same inversion pattern already used by the schedule
-// emitter (see seed/scheduler/schedule.js setScheduleEmitter).
+// emitter (see seed/cognition/wakeSchedule.js setScheduleEmitter).
 
-import log from "./log.js";
+import log from "../system/log.js";
 
 // The single wire event name for all IBP traffic in both directions
 // (see [[project_ibp_summon_unified_event]], [[project_ibp_wire_shape]]).

@@ -27,7 +27,7 @@ There is no fifth verb. Anything that does not fit one of the four does not belo
 
 IBP distinguishes data from beings. **Data is mutable. Beings are not.** This is an architectural commitment, not a convention.
 
-Data is fully mutable through DO. The protocol provides direct mechanisms for changing what data holds: node structure, notes, artifacts, namespaced metadata. DO targets positions because positions are where data persists.
+Data is fully mutable through DO. The protocol provides direct mechanisms for changing what data holds: space structure, notes, matters, namespaced metadata. DO targets positions because positions are where data persists.
 
 Beings are not mutable. They are summoned executors: when addressed, they wake, read the world (their position's data, plus the extension source code that defines them), act according to their own interpretation, and end. Between summonings they do not exist as anything you can write to. There is nothing at a stance to mutate.
 
@@ -62,7 +62,7 @@ Two categories of things are addressable in IBP. Position and Stance. Everything
 
 | Concept | Form | What it names |
 |---|---|---|
-| **Position** | `<land>/<path>` | A place in the world. The land domain plus `/` plus the path. Examples: `treeos.ai/` (Land Position), `treeos.ai/~tabor` (home), `treeos.ai/flappybird/chapter-1` (a tree node). Accepted by SEE and DO. |
+| **Position** | `<land>/<path>` | A place in the world. The land domain plus `/` plus the path. Examples: `treeos.ai/` (Land Position), `treeos.ai/~tabor` (home), `treeos.ai/flappybird/chapter-1` (a tree space). Accepted by SEE and DO. |
 | **Stance** | `<position>@<being>` | A being at a position. `treeos.ai/flappybird@ruler`, `treeos.ai/@auth`. Accepted by SEE, required by SUMMON and BE. |
 
 ### Structural vocabulary. Not addressable on its own.
@@ -79,7 +79,7 @@ Two categories of things are addressable in IBP. Position and Stance. Everything
 | `treeos.ai/` | domain plus trailing slash, Land Position | SEE, DO |
 | `treeos.ai/flappybird` | domain plus path, deeper Position | SEE, DO |
 | `treeos.ai/@auth` | Land Position plus being, Stance at the Land Position | SUMMON, BE |
-| `treeos.ai/flappybird@ruler` | deeper Position plus being, Stance at node | SEE, SUMMON, BE |
+| `treeos.ai/flappybird@ruler` | deeper Position plus being, Stance at space | SEE, SUMMON, BE |
 
 ## Envelopes
 
@@ -153,7 +153,7 @@ Exactly one of `position` or `stance` must be present. One-shot returns a Positi
 
 The presence of `stance` (rather than `position`) augments the descriptor with being-specific fields (inbox, honored intents, response mode, conversations for that being). With `position`, the descriptor describes the place alone with the union of beings invocable there.
 
-Artifact reads use a path suffix:
+Matter reads use a path suffix:
 
 ```
 { verb: "see", position: "<position>/notes/<noteId>", identity }
@@ -189,8 +189,8 @@ DO accepts `position` only. There is no `stance` form. The world is data at posi
 
 The kernel mints a small set of primitive actions; extensions can register additional named DO actions on top. The kernel primitives, grouped by what part of position data they modify:
 
-- **Structural actions** write Node-schema fields: `create-child`, `rename`, `move`, `delete`, `change-status`, `set-visibility`, `transfer-owner`, `invite`, `accept-invite`, `revoke`.
-- **Position-level content**: `write-note`, `edit-note`, `delete-note`, `upload-artifact`.
+- **Structural actions** write Space-schema fields: `create-child`, `rename`, `move`, `delete`, `change-status`, `set-visibility`, `transfer-owner`, `invite`, `accept-invite`, `revoke`.
+- **Position-level content**: `write-note`, `edit-note`, `delete-note`, `upload-matter`.
 - **Namespaced metadata**: `set-meta` and `clear-meta` are the generic writes; `scope-extension` and `assign-llm-slot` are named conveniences over specific namespaces with kernel-aware semantics.
 - **Land-level operations** (targeted at `<land>/`): `install-extension`, `enable-extension`, `disable-extension`, `uninstall-extension`, `publish-extension`, `set-config`, `set-llm-connection`, `remove-llm-connection`.
 
@@ -300,7 +300,7 @@ Arrival permissions live at the land's root position under `metadata.beings.arri
 
 What each field means:
 
-- **`see.allowed_visibility`** lists Node `visibility` values that arrivals may SEE. The `visibility` field already exists on the Node schema; arrivals get filtered access to positions whose visibility matches. `["public"]` is the common open setting. `[]` denies all SEE.
+- **`see.allowed_visibility`** lists Space `visibility` values that arrivals may SEE. The `visibility` field already exists on the Space schema; arrivals get filtered access to positions whose visibility matches. `["public"]` is the common open setting. `[]` denies all SEE.
 - **`do.allowed_actions`** is a list of action names (`["write-note", "set-meta"]`) or the wildcard `"*"`. Empty list denies all DO.
 - **`talk.allowed_targets`** lists being names arrivals can SUMMON to. `["@auth", "@guide"]` permits the auth-being and a public guide; `"*"` permits any being.
 - **`be.allowed_operations`** lists which BE operations are honored. `["register", "claim"]` is the default; a closed land may narrow it.
@@ -351,6 +351,8 @@ Per request the kernel resolves the acting stance at the addressed land (arrival
 Phase 5 ships two real stances at the protocol level. Additional stance vocabularies are future work.
 
 - **arrival**. Unauthenticated requester. Default permissions: SEE positions with `visibility: "public"`, BE register and claim. Nothing else. Configurable per land via `metadata.beings.arrival.permissions`.
+
+
 - **owner**. Authenticated requester who owns the addressed scope (existing `resolveTreeAccess.write` semantics). Default permissions: SEE everything, DO everything, SUMMON anything, all BE operations. This is what land owners have at their own lands.
 
 Authenticated requesters who are not owners of the addressed scope fall through to the existing access checks (contributors via `resolveTreeAccess`, visibility filters on SEE). They do not yet have a named protocol stance; introducing `member`, `guest`, `contributor`, `moderator` as configurable stances is Phase 7 work.
@@ -404,20 +406,20 @@ Error codes are unified with the land's existing semantic error vocabulary in `s
 | `UNAUTHORIZED` | Missing or invalid identity token. SEE/DO/SUMMON reject; BE register/claim do not. |
 | `FORBIDDEN` | Identity is not authorized at this address or for this action. |
 | `SESSION_EXPIRED` | Identity token expired; client should re-claim. |
-| `NODE_NOT_FOUND` | Address resolved but the node does not exist (or was deleted). |
+| `NODE_NOT_FOUND` | Address resolved but the space does not exist (or was deleted). |
 | `USER_NOT_FOUND` | BE claim on a username that does not exist. |
-| `NOTE_NOT_FOUND` | SEE on a note artifact that does not exist. |
+| `NOTE_NOT_FOUND` | SEE on a note matter that does not exist. |
 | `TREE_NOT_FOUND` | Root address does not resolve to a known tree. |
 | `EXTENSION_NOT_FOUND` | DO set-meta naming an extension namespace whose extension is not installed on the land. |
 | `EXTENSION_BLOCKED` | DO set-meta naming an extension namespace whose extension is blocked at this position by scope. |
 | `INVALID_INPUT` | Generic schema or parse failure on the request body. |
 | `INVALID_STATUS` | DO change-status with an unrecognized status value. |
-| `INVALID_TYPE` | DO create-child with an unrecognized node type. |
+| `INVALID_TYPE` | DO create-child with an unrecognized space type. |
 | `RATE_LIMITED` | Throttled. |
-| `RESOURCE_CONFLICT` | BE register with a username already taken; DO action's preconditions not met (e.g., delete on a role-bearing node without force); concurrent edit collision. |
+| `RESOURCE_CONFLICT` | BE register with a username already taken; DO action's preconditions not met (e.g., delete on a role-bearing space without force); concurrent edit collision. |
 | `TIMEOUT` | Sync SUMMON exceeded time budget; DO action timed out internally. |
-| `UPLOAD_TOO_LARGE` | DO upload-artifact bytes exceed configured limit. |
-| `UPLOAD_MIME_REJECTED` | DO upload-artifact content type not accepted. |
+| `UPLOAD_TOO_LARGE` | DO upload-matter bytes exceed configured limit. |
+| `UPLOAD_MIME_REJECTED` | DO upload-matter content type not accepted. |
 | `UPLOAD_DISABLED` | Uploads disabled on this land. |
 | `DOCUMENT_SIZE_EXCEEDED` | SUMMON content or DO payload exceeds size budget. |
 | `LLM_TIMEOUT` | Sync SUMMON summoning's LLM call timed out. |
@@ -456,8 +458,8 @@ IBP intentionally does not specify:
 - **How a being thinks.** That is the being.
 - **How coordination works.** A Ruler firing-and-forgetting background work uses hooks and fire-and-forget primitives; the protocol sees only individual SUMMON deliveries.
 - **Whether responses stream.** Sync responses may stream chunks within an ack, but the protocol does not require it; that is a transport detail.
-- **What an address means semantically.** The stance / IBP Address grammar (see [ibp-address.md](ibp-address.md)) defines the syntax; resolving a stance to a node + being is the land's job; what a being at that stance is for is the being's job.
-- **What a position is structurally.** That is the Node schema in the kernel.
+- **What an address means semantically.** The stance / IBP Address grammar (see [ibp-address.md](ibp-address.md)) defines the syntax; resolving a stance to a space + being is the land's job; what a being at that stance is for is the being's job.
+- **What a position is structurally.** That is the Space schema in the kernel.
 
 IBP does message delivery to beings and operations on the world from be-ers. Everything that is not those two things lives somewhere else.
 

@@ -151,14 +151,14 @@ export function listWorkerTypeRegistrations() {
  * then dispatch book-workspace's typed Worker (note-creating) even
  * though code-workspace is the active workspace here.
  */
-export async function findActiveWorkspaceAtScope(nodeId) {
-  if (!nodeId) return null;
+export async function findActiveWorkspaceAtScope(spaceId) {
+  if (!spaceId) return null;
   if (REGISTRY.size === 0) return null;
   try {
     const { getBlockedExtensionsAtNode } = await import(
-      "../../../seed/tree/extensionScope.js"
+      "../../../seed/space/extensionScope.js"
     );
-    const { allowed } = await getBlockedExtensionsAtNode(nodeId);
+    const { allowed } = await getBlockedExtensionsAtNode(spaceId);
     if (!allowed || allowed.size === 0) return null;
     for (const name of REGISTRY.keys()) {
       if (allowed.has(name)) return name;
@@ -191,8 +191,8 @@ export async function findActiveWorkspaceAtScope(nodeId) {
  * this presence-based check restores Ruler-takeover at workspace
  * positions without depending on classifier mode picks.
  */
-export async function shouldGovernAtScope(nodeId) {
-  if (!nodeId) return false;
+export async function shouldGovernAtScope(spaceId) {
+  if (!spaceId) return false;
 
   // Case 2: no workspaces registered → governing-alone land. Every
   // tree-zone message routes through the Ruler. Cheap check up front
@@ -204,9 +204,9 @@ export async function shouldGovernAtScope(nodeId) {
   // check the `allowed` set for any registered workspace name.
   try {
     const { getBlockedExtensionsAtNode } = await import(
-      "../../../seed/tree/extensionScope.js"
+      "../../../seed/space/extensionScope.js"
     );
-    const { allowed } = await getBlockedExtensionsAtNode(nodeId);
+    const { allowed } = await getBlockedExtensionsAtNode(spaceId);
     if (!allowed || allowed.size === 0) return false;
     for (const name of REGISTRY.keys()) {
       if (allowed.has(name)) return true;

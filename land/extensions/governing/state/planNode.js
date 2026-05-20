@@ -13,8 +13,8 @@
 // findGoverningPlanChain, DEFAULT_BUDGET, PLAN_NS) are preserved because
 // they read substrate state and don't depend on the trio shape.
 
-import Node from "../../../seed/models/node.js";
-import log from "../../../seed/core/log.js";
+import Space from "../../../seed/models/space.js";
+import log from "../../../seed/system/log.js";
 
 export const PLAN_NS = "plan";
 
@@ -37,7 +37,7 @@ export async function createPlanNode({ parentNodeId, core: _core } = {}) {
     log.warn("Governing", "createPlanNode is retired; plans are artifacts authored by the Planner being. Caller should be updated.");
   }
   if (!parentNodeId) return null;
-  return Node.findById(parentNodeId).lean();
+  return Space.findById(parentNodeId).lean();
 }
 
 let _warnedEnsure = false;
@@ -47,7 +47,7 @@ export async function ensurePlanAtScope({ scopeNodeId, core: _core } = {}) {
     log.warn("Governing", "ensurePlanAtScope is retired; Planner being is spawned by promoteToRuler. Caller should read metadata.beings.planner instead.");
   }
   if (!scopeNodeId) return null;
-  return Node.findById(scopeNodeId).lean();
+  return Space.findById(scopeNodeId).lean();
 }
 
 // ─────────────────────────────────────────────────────────────────────
@@ -55,9 +55,9 @@ export async function ensurePlanAtScope({ scopeNodeId, core: _core } = {}) {
 // unaffected by the trio-node retirement.
 // ─────────────────────────────────────────────────────────────────────
 
-export async function readPlan(nodeId) {
-  if (!nodeId) return null;
-  const node = await Node.findById(nodeId).select("metadata").lean();
+export async function readPlan(spaceId) {
+  if (!spaceId) return null;
+  const node = await Space.findById(spaceId).select("metadata").lean();
   if (!node) return null;
   const meta = node.metadata instanceof Map
     ? Object.fromEntries(node.metadata)
@@ -77,14 +77,14 @@ export async function appendLedger(_nodeId, _entry) {
   return null;
 }
 
-export async function findGoverningPlan(nodeId) {
+export async function findGoverningPlan(spaceId) {
   // Walks up looking for a node carrying metadata.beings.planner. That
   // node IS the rulership; its Planner being authors the plans.
-  if (!nodeId) return null;
-  let cursor = String(nodeId);
+  if (!spaceId) return null;
+  let cursor = String(spaceId);
   for (let i = 0; i < 64; i++) {
     if (!cursor) return null;
-    const n = await Node.findById(cursor).select("_id parent metadata").lean();
+    const n = await Space.findById(cursor).select("_id parent metadata").lean();
     if (!n) return null;
     const meta = n.metadata instanceof Map
       ? Object.fromEntries(n.metadata)
@@ -96,15 +96,15 @@ export async function findGoverningPlan(nodeId) {
   return null;
 }
 
-export async function findGoverningPlanChain(nodeId) {
+export async function findGoverningPlanChain(spaceId) {
   // Returns the chain of governing rulership nodes from this node up to
   // root. Each entry is a node that hosts a Planner being.
-  if (!nodeId) return [];
+  if (!spaceId) return [];
   const chain = [];
-  let cursor = String(nodeId);
+  let cursor = String(spaceId);
   for (let i = 0; i < 64; i++) {
     if (!cursor) break;
-    const n = await Node.findById(cursor).select("_id parent metadata").lean();
+    const n = await Space.findById(cursor).select("_id parent metadata").lean();
     if (!n) break;
     const meta = n.metadata instanceof Map
       ? Object.fromEntries(n.metadata)

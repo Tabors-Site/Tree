@@ -35,7 +35,7 @@
 // "failed" on the branch-complete payload to force a retry); callers
 // preserve that contract.
 
-import log from "../../../seed/core/log.js";
+import log from "../../../seed/system/log.js";
 
 const PHASE_ORDER = { pre: 0, main: 1, post: 2 };
 
@@ -115,7 +115,7 @@ export async function runValidators(scope, payload) {
   if (!Array.isArray(list) || list.length === 0) return;
 
   // Stable sort by phase then order. Array.prototype.sort is stable in
-  // modern Node, so ties preserve registration order.
+  // modern Space, so ties preserve registration order.
   const sorted = [...list].sort((a, b) => {
     const pd = (PHASE_ORDER[a.phase] ?? 1) - (PHASE_ORDER[b.phase] ?? 1);
     if (pd !== 0) return pd;

@@ -1,29 +1,20 @@
 // TreeOS Seed . AGPL-3.0 . https://treeos.ai . Tabor Holly
-// Land configuration. Single source of truth for all runtime settings.
-// Stored in the .config system node's metadata Map.
-// Every getLandConfigValue and setLandConfigValue in the entire system
-// flows through this file.
+//
+// Land configuration. Single source of truth for runtime settings.
+// Stored in the .config land seed space's metadata Map. Every
+// getLandConfigValue / setLandConfigValue in the system flows through
+// here.
 
-import log from "./core/log.js";
-import Node from "./models/node.js";
-import { SYSTEM_ROLE } from "./core/protocol.js";
+import log from "./system/log.js";
+import Space from "./models/space.js";
+import { SEED_SPACE } from "./space/seedSpaces.js";
 
 let configCache = null;
 let initialized = false;
 let cachedLandUrl = null;
 
-// ─────────────────────────────────────────────────────────────────────────
-// LAND URL
-// ─────────────────────────────────────────────────────────────────────────
-
-/**
- * Full base URL for this land — e.g. "http://localhost:3000" or
- * "https://treeos.ai". Derived from LAND_DOMAIN + PORT, with
- * TREE_FRONTEND_DOMAIN as an explicit override.
- *
- * The port suffix is only appended for local domains; public domains
- * sit behind reverse proxies that handle ports.
- */
+// Derived from LAND_DOMAIN + PORT, with TREE_FRONTEND_DOMAIN as override.
+// Port suffix only for local domains; public domains sit behind proxies.
 export function getLandUrl() {
   if (cachedLandUrl) return cachedLandUrl;
   if (process.env.TREE_FRONTEND_DOMAIN) {
@@ -48,18 +39,10 @@ export function getLandUrl() {
   return cachedLandUrl;
 }
 
-// ─────────────────────────────────────────────────────────────────────────
-// PROTECTED KEYS
-// ─────────────────────────────────────────────────────────────────────────
-
 const PROTECTED_KEYS = new Set([
   "seedVersion",
   "disabledExtensions",
 ]);
-
-// ─────────────────────────────────────────────────────────────────────────
-// KEY / VALUE VALIDATION
-// ─────────────────────────────────────────────────────────────────────────
 
 const CONFIG_KEY_RE = /^[a-zA-Z][a-zA-Z0-9_]{0,63}$/;
 const DANGEROUS_KEYS = new Set(["__proto__", "constructor", "prototype", "toString", "valueOf", "hasOwnProperty"]);
@@ -84,39 +67,27 @@ function validateValue(value) {
   }
 }
 
-// ─────────────────────────────────────────────────────────────────────────
-// BOOT-TIME ENV FALLBACK
-// ─────────────────────────────────────────────────────────────────────────
-
+// Keys allowed to fall back to process.env before initLandConfig() runs.
 const BOOT_ENV_KEYS = new Set([
   "socketMaxBufferSize", "socketPingTimeout", "socketPingInterval", "socketConnectTimeout",
   "maxConnectionsPerIp", "LAND_NAME", "landUrl", "HORIZON_URL",
 ]);
 
-// ─────────────────────────────────────────────────────────────────────────
-// SAFE DEEP COPY
-// ─────────────────────────────────────────────────────────────────────────
-// Every value returned from getLandConfigValue is a deep copy.
-// Callers cannot pollute the cache by mutating returned arrays or objects.
-
+// Every returned value is a deep copy so callers can't pollute the cache.
 function deepCopy(value) {
   if (value === null || typeof value !== "object") return value;
   try {
     return JSON.parse(JSON.stringify(value));
   } catch {
-    return value; // non-serializable primitive, return as-is
+    return value;
   }
 }
 
-// ─────────────────────────────────────────────────────────────────────────
-// LOAD
-// ─────────────────────────────────────────────────────────────────────────
-
 async function loadConfigFromDb() {
   try {
-    const configNode = await Node.findOne({ systemRole: SYSTEM_ROLE.CONFIG }).lean();
+    const configNode = await Space.findOne({ seedSpace: SEED_SPACE.CONFIG }).lean();
     if (!configNode || !configNode.metadata) {
-      log.warn("Land", "No .config system node found or metadata is empty. Using empty config.");
+      log.warn("Land", "No .config land seed space found or metadata is empty. Using empty config.");
       configCache = {};
       return;
     }
@@ -124,15 +95,14 @@ async function loadConfigFromDb() {
       ? Object.fromEntries(configNode.metadata)
       : { ...configNode.metadata };
 
-    // Sanitize loaded keys: strip any that would fail validation (manual DB edits,
-    // corruption, or proto pollution attempts injected directly into MongoDB).
+    // Strip keys that would fail validation (manual DB edits, proto
+    // pollution injected directly into MongoDB, Mongoose lean() leaks).
     const clean = {};
     for (const [k, v] of Object.entries(raw)) {
       if (DANGEROUS_KEYS.has(k)) {
         log.warn("Land", `Dangerous config key "${k}" found in DB. Skipped.`);
         continue;
       }
-      // Skip Mongoose internal fields that leak through lean()
       if (k.startsWith("$") || k.startsWith("_")) continue;
       clean[k] = v;
     }
@@ -143,14 +113,6 @@ async function loadConfigFromDb() {
   }
 }
 
-// ─────────────────────────────────────────────────────────────────────────
-// GET
-// ─────────────────────────────────────────────────────────────────────────
-
-/**
- * Get a config value. Returns a deep copy. Callers cannot mutate the cache.
- * Before init, falls back to process.env for known boot-time keys only.
- */
 export function getLandConfigValue(key) {
   if (configCache && key in configCache && configCache[key] != null) {
     return deepCopy(configCache[key]);
@@ -161,14 +123,6 @@ export function getLandConfigValue(key) {
   return null;
 }
 
-// ─────────────────────────────────────────────────────────────────────────
-// SET
-// ─────────────────────────────────────────────────────────────────────────
-
-/**
- * Set a config value. Validates key and value. Writes to DB atomically.
- * Verifies the .config node exists (protects against silent no-op on deleted node).
- */
 export async function setLandConfigValue(key, value, { internal } = {}) {
   validateKey(key);
   if (PROTECTED_KEYS.has(key) && !internal) {
@@ -176,15 +130,15 @@ export async function setLandConfigValue(key, value, { internal } = {}) {
   }
   validateValue(value);
 
-  const result = await Node.updateOne(
-    { systemRole: SYSTEM_ROLE.CONFIG },
+  const result = await Space.updateOne(
+    { seedSpace: SEED_SPACE.CONFIG },
     { $set: { [`metadata.${key}`]: value } }
   );
 
-  // If no document matched, the .config node doesn't exist. This is a critical
-  // system integrity issue. Fail loud instead of silently updating only the cache.
+  // No matched document means .config is gone — fail loud rather than
+  // silently updating only the cache.
   if (result.matchedCount === 0) {
-    throw new Error("Config write failed: .config system node not found. Land may need repair.");
+    throw new Error("Config write failed: .config land seed space not found. Land may need repair.");
   }
 
   if (!configCache) configCache = {};
@@ -193,27 +147,20 @@ export async function setLandConfigValue(key, value, { internal } = {}) {
   log.verbose("Land", `Config set: ${key}`);
 }
 
-/**
- * Delete a config key from .config node and cache.
- */
 export async function deleteLandConfigValue(key, { internal } = {}) {
   validateKey(key);
   if (PROTECTED_KEYS.has(key) && !internal) {
     throw new Error(`Config key "${key}" is protected and cannot be deleted manually`);
   }
 
-  await Node.updateOne(
-    { systemRole: SYSTEM_ROLE.CONFIG },
+  await Space.updateOne(
+    { seedSpace: SEED_SPACE.CONFIG },
     { $unset: { [`metadata.${key}`]: 1 } }
   );
 
   if (configCache) delete configCache[key];
   log.verbose("Land", `Config deleted: ${key}`);
 }
-
-// ─────────────────────────────────────────────────────────────────────────
-// DEFAULTS (every configurable key and its factory value)
-// ─────────────────────────────────────────────────────────────────────────
 
 export const CONFIG_DEFAULTS = {
   // Identity
@@ -232,36 +179,55 @@ export const CONFIG_DEFAULTS = {
   llmMaxConcurrent: 20,
   failoverTimeout: 15,
   landLlmConnection: null,
-  maxSystemPromptChars: 32000,
   maxMessageContentBytes: 32768,
   carryMessages: 4,
+  llmClientCacheTtl: 300,
+  maxConnectionsPerUser: 15,
+  dnsLookupTimeout: 5000,
 
-  // Sessions and rate limiting
+  // Conversation compression
+  conversationCompression: true,
+  compressionThreshold: 20,
+  compressionKeep: 8,
+
+  // Summon content limits
+  maxChatContentBytes: 100000,
+  chatToolArgBytes: 2000,
+
+  // Sessions
   sessionTTL: 900,
   staleSessionTimeout: 1800,
   maxSessions: 10000,
-  chatRateLimit: 10,
-  chatRateWindowMs: 60000,
-  maxChatMessageChars: 5000,
   maxConnectionsPerIp: 20,
   maxConversationSessions: 50000,
   maxScopedSessions: 20000,
-  maxAiContextEntries: 10000,
   staleConversationTimeout: 1800,
-  requestQueueMaxDepth: 100,
 
-  // Data limits
-  artifactMaxChars: 5000,
+  // Matter limits
+  matterMaxChars: 5000,
+  maxMatterPerNode: 1000,
+  matterQueryLimit: 5000,
+  matterSearchLimit: 500,
   maxDocumentSizeBytes: 14680064,
   maxUploadBytes: 104857600,
   uploadEnabled: true,
   allowedMimeTypes: null,
 
-  // Tree and navigation
-  treeSummaryMaxDepth: 4,
-  treeSummaryMaxNodes: 60,
+  // Space tree, ancestor cache, integrity
+  maxChildrenPerSpace: 1000,
+  maxContributorsPerSpace: 500,
   ancestorCacheTTL: 30000,
+  ancestorCacheMaxEntries: 50000,
+  ancestorCacheMaxDepth: 100,
   integrityCheckInterval: 86400000,
+
+  // Structural mutation locks
+  spaceLockTimeoutMs: 30000,
+  spaceLockWaitMs:    5000,
+
+  // Metadata namespace limits (per-namespace, all three primitive maps)
+  metadataNamespaceMaxBytes: 524288,
+  metadataMaxNestingDepth:   8,
 
   // Cascade
   cascadeEnabled: false,
@@ -285,47 +251,50 @@ export const CONFIG_DEFAULTS = {
   hookCircuitHalfOpenMs: 300000,
   hookChainTimeoutMs: 15000,
 
-  // Tools and modes
+  // Tools, modes, MCP
   toolCircuitThreshold: 5,
   maxRegisteredTools: 500,
   maxRegisteredModes: 200,
-  maxOrchestrators: 10,
   maxExtensionIndexes: 20,
+  maxMcpClients: 5000,
+  mcpConnectTimeout: 10000,
+  mcpStaleTimeout: 3600000,
 
-  // Circuit breaker
+  // Did (audit) queries
+  didQueryLimit: 5000,
+
+  // Scheduler backpressure. Only summonsPerSecond is enforced today
+  // (token-bucket in cognition/scheduler.js). InboxDepth + MaxAgeSeconds
+  // are declared so operator config lands in lockstep with the planned
+  // inbox-pressure + stale-entry sweeps.
+  summonInboxDepth:    100,
+  summonsPerSecond:    10,
+  summonMaxAgeSeconds: 3600,
+
+  // Circuit breaker (space tree health)
   treeCircuitEnabled: false,
-  maxTreeNodes: 10000,
+  maxTreeSpaces: 10000,
   maxTreeMetadataBytes: 1073741824,
   maxTreeErrorRate: 100,
-  circuitNodeWeight: 0.4,
+  circuitSpaceWeight: 0.4,
   circuitDensityWeight: 0.3,
   circuitErrorWeight: 0.3,
   circuitCheckInterval: 3600000,
+  circuitFlowScanLimit: 5000,
 
-  // Retention
+  // Retention + cleanup
   summonRetentionDays: 90,
   didRetentionDays: 365,
+  retentionCleanupInterval: 86400000,
+  uploadCleanupInterval: 21600000,
+  uploadGracePeriodMs:   3600000,
+  uploadCleanupBatchSize: 1000,
 
-  // Orchestration — 45 min default. Compound code-workspace swarms (full
-  // multi-branch projects) can legitimately run 20-30 min on a 27B local
-  // model; the old 19-min ceiling was killing legitimate work. Individual
-  // CLI calls or quick chats finish in seconds; this only matters for
-  // long builds. Operators can crank higher via:
-  //   treeos config set apiOrchestrationTimeout 3600000
-  apiOrchestrationTimeout: 45 * 60 * 1000,
-
-  // Protected (shown but cannot be modified via public API)
+  // Protected (shown but not modifiable via public API)
   seedVersion: null,
   disabledExtensions: [],
 };
 
-// ─────────────────────────────────────────────────────────────────────────
-// QUERY
-// ─────────────────────────────────────────────────────────────────────────
-
-/**
- * Get all config values. Deep copy. Callers cannot pollute the cache.
- */
 export function getAllLandConfig() {
   if (!configCache) return {};
   try {
@@ -335,11 +304,8 @@ export function getAllLandConfig() {
   }
 }
 
-/**
- * Get the full config picture: every known key with its effective value,
- * default value, and whether it's been explicitly set in the DB.
- * Used by the land-manager to show operators the complete state.
- */
+// Every known key with its effective value, default, and whether it's
+// overridden in the DB. Used by land-manager to show full state.
 export function getConfigWithDefaults() {
   const dbValues = getAllLandConfig();
   const result = {};
@@ -353,7 +319,6 @@ export function getConfigWithDefaults() {
     };
   }
 
-  // Include any DB keys not in CONFIG_DEFAULTS (extension-written config, etc.)
   for (const [key, value] of Object.entries(dbValues)) {
     if (!(key in result)) {
       result[key] = { value, default: null, custom: true };
@@ -363,24 +328,14 @@ export function getConfigWithDefaults() {
   return result;
 }
 
-// ─────────────────────────────────────────────────────────────────────────
-// INIT / RELOAD
-// ─────────────────────────────────────────────────────────────────────────
-
-/**
- * Initialize the config cache from DB. Call after ensureLandRoot().
- * After this runs, process.env fallback is disabled.
- */
+// Call once after ensureLandRoot(). After this runs, env fallback is disabled.
 export async function initLandConfig() {
   await loadConfigFromDb();
   initialized = true;
   log.verbose("Land", `Config loaded from .config node (${Object.keys(configCache).length} keys)`);
 }
 
-/**
- * Reload config from DB without restarting. Use when another process
- * may have modified .config directly (migration, manual repair).
- */
+// For when another process modifies .config directly (migration, manual repair).
 export async function reloadLandConfig() {
   await loadConfigFromDb();
   log.info("Land", `Config reloaded from .config node (${Object.keys(configCache).length} keys)`);

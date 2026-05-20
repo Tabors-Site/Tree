@@ -6,9 +6,9 @@
 // on module load. Same surface extensions use; no special treatment.
 //
 // Current set:
-//   create-child            (polymorphic over node/being/artifact)
-//   create-artifact, create-being
-//   set-name                (polymorphic over node/being/artifact)
+//   create-child            (polymorphic over node/being/matter)
+//   create-matter, create-being
+//   set-name                (polymorphic over node/being/matter)
 //   set-type                (node)
 //   set-parent              (node)
 //   delete-node             (node)
@@ -30,16 +30,16 @@
 // [[project_everything_is_substrate]].
 
 import { registerOperation } from "./operations.js";
-import { setExtMeta, mergeExtMeta }            from "../tree/extensionMetadata.js";
-import { setBeingMeta, mergeBeingMeta }        from "../tree/beingMetadata.js";
-import { setArtifactMeta, mergeArtifactMeta }  from "../tree/artifactMetadata.js";
-import { createNode, editNodeName, editNodeType, deleteNodeBranch, updateParentRelationship } from "../tree/treeManagement.js";
-import { resolveTreeAccess } from "../tree/treeAccess.js";
-import { getLandDomain } from "../addressing/address.js";
+import { setExtMeta, mergeExtMeta }            from "../space/extensionMetadata.js";
+import { setBeingMeta, mergeBeingMeta }        from "../being/beingMetadata.js";
+import { setMatterMeta, mergeMatterMeta }      from "../matter/matterMetadata.js";
+import { createSpace, editSpaceName, editSpaceType, deleteSpaceBranch, updateParentRelationship } from "../space/spaceManagement.js";
+import { resolveSpaceAccess } from "../space/spaceFetch.js";
+import { getLandDomain } from "../ibp/address.js";
 import { IbpError, IBP_ERR, mapPatternsToIbpError } from "./errors.js";
 import Being    from "../models/being.js";
-import Artifact from "../models/artifact.js";
-import Node     from "../models/node.js";
+import Matter   from "../models/matter.js";
+import Space     from "../models/space.js";
 
 let _registered = false;
 
@@ -55,84 +55,75 @@ export function registerKernelOperations() {
   // create-child is polymorphic: the target's kind determines the kind
   // of the child created. Symmetric across all three substrate primitives.
   //
-  //   Node     target → creates a child Node     (existing IBP path)
+  //   Space    target → creates a child Space    (existing IBP path)
   //   Being    target → creates a child Being    (being-tree child;
   //                       generates username + password, places at
   //                       parent's home position unless overridden,
   //                       atomically links into parent.children)
-  //   Artifact target → creates a child Artifact (artifact-tree child;
-  //                       inherits parent's nodeId, atomically links
+  //   Matter   target → creates a child Matter   (matter-tree child;
+  //                       inherits parent's spaceId, atomically links
   //                       into parent.children)
   //
-  // For spawning Beings or Artifacts where the parent is a Node (root of
-  // a being-tree / artifact-tree at that node), use the dedicated
-  // create-being / create-artifact operations.
+  // For spawning Beings or Matter where the parent is a Space (root of
+  // a being-tree / matter-tree at that space), use the dedicated
+  // create-being / create-matter operations.
   registerOperation("create-child", {
-    targets: ["node", "being", "artifact"],
+    targets: ["node", "being", "matter"],
     ownerExtension: "kernel",
     handler: async ({ target, params, identity }) => {
       const kind = detectTargetKind(target);
-      if (kind === "being")    return createBeingChild({ parentBeing: target, params, identity });
-      if (kind === "artifact") return createArtifactChild({ parentArtifact: target, params, identity });
+      if (kind === "being")  return createBeingChild({ parentBeing: target, params, identity });
+      if (kind === "matter") return createMatterChild({ parentMatter: target, params, identity });
       return createNodeChild({ target, params, identity, kind });
     },
   });
 
-  // create-artifact: spawn a new artifact at a Node (root of the
-  // artifact-tree at that node, parentArtifactId: null). For child
-  // artifacts under an existing artifact, use create-child.
-  registerOperation("create-artifact", {
+  // create-matter: spawn new matter at a Space (root of the matter-tree
+  // at that space, parentMatterId: null). For child matter under existing
+  // matter, use create-child.
+  registerOperation("create-matter", {
     targets: ["node"],
     ownerExtension: "kernel",
     handler: async ({ target, params, identity }) => {
-      const nodeId = targetIdOf(target);
-      const artifact = await Artifact.create({
-        nodeId,
+      const spaceId = targetIdOf(target);
+      const matter = await Matter.create({
+        spaceId,
         beingId: identity?.beingId || params.beingId || null,
         name:    params.name || null,
         content: params.content ?? null,
         origin:  params.origin || "ibp",
-        parentArtifactId: null,
+        parentMatterId: null,
         metadata: params.metadata
           ? new Map(Object.entries(params.metadata))
           : new Map(),
       });
-      return artifact;
+      return matter;
     },
   });
 
-  // create-being: spawn a top-level being at a Node (parentBeingId: null).
-  // Most beings should be created via create-child off an existing being
-  // (humans → Rulers → inner beings). This op covers root cases (the
-  // user-being itself is created by auth, not this op; root Rulers in
-  // some boot paths use this).
-  registerOperation("create-being", {
-    targets: ["node"],
-    ownerExtension: "kernel",
-    handler: async ({ target, params, identity: _identity }) => {
-      const nodeId = targetIdOf(target);
-      const { createBeingWithHome } = await import("./identity.js");
-      const { being } = await createBeingWithHome({
-        operatingMode: params.operatingMode || "ai",
-        role:          params.role || null,
-        homeNodeId:    nodeId,
-        parentBeingId: null,
-        name:          params.name,
-        password:      params.password,
-      });
-      return being;
-    },
-  });
+  // create-being moved to BE 2026-05-20. Creating a being is an
+  // identity operation, not a state mutation on space or matter, so
+  // it belongs on the BE verb. Callers now use:
+  //
+  //   await core.be("create-being", {
+  //     name, password, operatingMode, role,
+  //     homeSpace | homeParent, parentBeingId?,
+  //   })
+  //
+  // The handler lives on the auth-being's `createBeing` method (see
+  // seed/being/roles/auth.js). Per the philosophy notes: BE acts on
+  // the being calling it, and identity creation is the BE side of the
+  // grammar.
 
   // Field-update operations follow `set-<field>` pattern, parallel to
   // set-meta. Polymorphic across target kinds.
   //
-  //   Node     target → mutates Node.name (existing rename path)
+  //   Space     target → mutates Space.name (existing rename path)
   //   Being    target → mutates Being.name (unique-indexed; throws
   //                       USERNAME_TAKEN on collision)
-  //   Artifact target → mutates Artifact.name (new field; nullable)
+  //   Matter   target → mutates Matter.name (new field; nullable)
   registerOperation("set-name", {
-    targets: ["node", "being", "artifact"],
+    targets: ["node", "being", "matter"],
     ownerExtension: "kernel",
     handler: async ({ target, params, identity }) => {
       const { name } = params || {};
@@ -152,20 +143,20 @@ export function registerKernelOperations() {
         return { beingId: String(target._id), name };
       }
 
-      if (kind === "artifact") {
-        await Artifact.updateOne({ _id: target._id }, { $set: { name } });
-        return { artifactId: String(target._id), name };
+      if (kind === "matter") {
+        await Matter.updateOne({ _id: target._id }, { $set: { name } });
+        return { matterId: String(target._id), name };
       }
 
       if (kind === "stance") return renameAtStance({ resolved: target, name, identity });
 
-      // Mongoose Node doc path: call the seed primitive directly.
-      await editNodeName({
-        nodeId: String(target._id),
+      // Mongoose Space doc path: call the seed primitive directly.
+      await editSpaceName({
+        spaceId: String(target._id),
         newName: name,
         beingId: identity?.beingId || null,
       });
-      return { nodeId: String(target._id), name };
+      return { spaceId: String(target._id), name };
     },
   });
 
@@ -174,7 +165,7 @@ export function registerKernelOperations() {
   // <ext>:set-<field> ops for state transitions. See
   // [[project_substrate_as_universal_workspace]] for the framing.
 
-  // set-type: change a Node's type field. Used by editType HTTP route
+  // set-type: change a Space's type field. Used by editType HTTP route
   // and any caller that needs to mutate the type taxonomy at a node.
   registerOperation("set-type", {
     targets: ["node"],
@@ -184,13 +175,13 @@ export function registerKernelOperations() {
       if (!type || typeof type !== "string") {
         throw new Error("set-type: `type` is required");
       }
-      const nodeId = targetIdOf(target);
-      await editNodeType({
-        nodeId,
+      const spaceId = targetIdOf(target);
+      await editSpaceType({
+        spaceId,
         newType: type,
         beingId: identity?.beingId || null,
       });
-      return { nodeId, type };
+      return { spaceId, type };
     },
   });
 
@@ -202,34 +193,34 @@ export function registerKernelOperations() {
     targets: ["node"],
     ownerExtension: "kernel",
     handler: async ({ target, params: _params, identity }) => {
-      const nodeId = targetIdOf(target);
-      const deleted = await deleteNodeBranch(nodeId, identity?.beingId || null);
-      return { deletedNodeId: String(deleted?._id || nodeId) };
+      const spaceId = targetIdOf(target);
+      const deleted = await deleteSpaceBranch(spaceId, identity?.beingId || null);
+      return { deletedNodeId: String(deleted?._id || spaceId) };
     },
   });
 
-  // delete-artifact: remove an artifact (and its child artifacts via
-  // the seed primitive's cascade). The target is the Artifact doc (or
-  // a `{ _id }` envelope). The kernel primitive enforces the ownership
-  // gate — caller must be the artifact's author or the containing
-  // tree's rootOwner — so passing internal:true is only safe for
-  // kernel-internal callers acting on substrate they manage.
-  registerOperation("delete-artifact", {
-    targets: ["artifact"],
+  // delete-matter: remove matter (and its child matter via the seed
+  // primitive's cascade). The target is the Matter doc (or a `{ _id }`
+  // envelope). The kernel primitive enforces the ownership gate —
+  // caller must be the matter's author or the containing tree's
+  // rootOwner — so passing internal:true is only safe for kernel-
+  // internal callers acting on substrate they manage.
+  registerOperation("delete-matter", {
+    targets: ["matter"],
     ownerExtension: "kernel",
     handler: async ({ target, params: _params, identity, summonCtx }) => {
-      const artifactId = String(target?._id || target?.artifactId || target);
-      if (!artifactId) throw new Error("delete-artifact: artifactId required");
-      const { deleteArtifactAndFile } = await import("../tree/artifacts.js");
+      const matterId = String(target?._id || target?.matterId || target);
+      if (!matterId) throw new Error("delete-matter: matterId required");
+      const { deleteMatterAndFile } = await import("../matter/matters.js");
       const beingId = identity?.beingId
-        || (await Artifact.findById(artifactId).select("beingId").lean())?.beingId;
-      await deleteArtifactAndFile({
-        artifactId,
+        || (await Matter.findById(matterId).select("beingId").lean())?.beingId;
+      await deleteMatterAndFile({
+        matterId,
         beingId:   String(beingId || ""),
         summonId:  summonCtx?.summonId || null,
         sessionId: summonCtx?.sessionId || null,
       });
-      return { removed: true, artifactId };
+      return { removed: true, matterId };
     },
   });
 
@@ -244,19 +235,19 @@ export function registerKernelOperations() {
       if (!parentId || typeof parentId !== "string") {
         throw new Error("set-parent: `parentId` is required");
       }
-      const nodeId = targetIdOf(target);
+      const spaceId = targetIdOf(target);
       const result = await updateParentRelationship(
-        nodeId,
+        spaceId,
         parentId,
         identity?.beingId || null,
       );
-      return result || { nodeId, parentId };
+      return result || { spaceId, parentId };
     },
   });
 
-  // Unified set-meta. Accepts a Mongoose Node / Being / Artifact doc,
+  // Unified set-meta. Accepts a Mongoose Space / Being / Matter doc,
   // or (from the IBP wire path) a resolved stance that carries `.chain`
-  // and `.nodeId`. Detects which and routes to the appropriate seed
+  // and `.spaceId`. Detects which and routes to the appropriate seed
   // primitive.
   //
   // The merge flag is the safe default (true): partial writes don't
@@ -265,7 +256,7 @@ export function registerKernelOperations() {
   //
   // Reserved namespaces (e.g. "inbox") rejected for all target kinds.
   registerOperation("set-meta", {
-    targets: ["node", "being", "artifact"],
+    targets: ["node", "being", "matter"],
     ownerExtension: "kernel",
     handler: async ({ target, params, identity }) => {
       const { namespace, data, merge = true } = params || {};
@@ -286,23 +277,31 @@ export function registerKernelOperations() {
         await op(target, namespace, data);
         return { written: true, beingId: String(target._id), namespace, kind: "being" };
       }
-      if (kind === "artifact") {
-        const op = merge !== false ? mergeArtifactMeta : setArtifactMeta;
+      if (kind === "matter") {
+        const op = merge !== false ? mergeMatterMeta : setMatterMeta;
         await op(target, namespace, data);
-        return { written: true, artifactId: String(target._id), namespace, kind: "artifact" };
+        return { written: true, matterId: String(target._id), namespace, kind: "matter" };
       }
       if (kind === "stance") return setMetaAtStance({ resolved: target, namespace, data, merge, identity });
-      // kind === "node": Mongoose Node doc passed directly (extension path).
+      // kind === "node": Mongoose Space doc passed directly (extension path).
       const op = merge !== false ? mergeExtMeta : setExtMeta;
       await op(target, namespace, data);
-      return { written: true, nodeId: String(target._id), namespace, kind: "node" };
+      return { written: true, spaceId: String(target._id), namespace, kind: "node" };
     },
   });
 
-  // plant-seed: invoke a registered seed recipe at the target node. The
-  // recipe scaffolds the structure (Ruler beings, sub-domain nodes,
-  // starter artifacts, metadata) on the target. See seed/seeds.js and
-  // memory `extension-seeds`. params: { name } — the seed to plant.
+  // plant-seed: invoke a registered seed recipe at the target node.
+  // The recipe scaffolds the structure (Ruler beings, sub-domain
+  // nodes, starter matter, metadata) on the target. See
+  // seed/space/seeds.js and memory `extension-seeds`.
+  //
+  // params:
+  //   name   — required. The seed's registered name.
+  //   params — optional. Plant-time configuration the operator passes
+  //            to the seed (free-shape object: projectPath for a code
+  //            workspace, theme for a UI extension, etc.). The seed
+  //            defines its own schema in prose; the kernel just
+  //            threads the object through to the scaffold ctx.
   registerOperation("plant-seed", {
     targets: ["node"],
     ownerExtension: "kernel",
@@ -311,18 +310,22 @@ export function registerKernelOperations() {
       if (!name || typeof name !== "string") {
         throw new Error("plant-seed: `name` is required (the seed's registered name)");
       }
-      const nodeId = targetIdOf(target);
-      if (!nodeId) throw new Error("plant-seed: target must resolve to a node id");
-      const { plantSeed } = await import("./seeds.js");
-      const { getCoreServices } = await import("./services.js");
+      const spaceId = targetIdOf(target);
+      if (!spaceId) throw new Error("plant-seed: target must resolve to a node id");
+      const { plantSeed } = await import("../space/seeds.js");
+      const { getCoreServices } = await import("../services.js");
       const core = getCoreServices();
+      const seedParams = (params?.params && typeof params.params === "object" && !Array.isArray(params.params))
+        ? params.params
+        : {};
       const { plantedSeedId, plantedThings } = await plantSeed({
         name,
-        atNodeId: nodeId,
+        atNodeId: spaceId,
         identity,
         core,
+        params: seedParams,
       });
-      return { planted: true, plantedSeedId, name, nodeId, plantedThings };
+      return { planted: true, plantedSeedId, name, spaceId, plantedThings };
     },
   });
 
@@ -332,21 +335,21 @@ export function registerKernelOperations() {
   //
   // Target: the node the signal arrives at. Payload carries the signal
   // content + source. See [[project_cascade]] for the architecture and
-  // seed/tree/cascade.js for the delivery semantics.
+  // seed/space/cascade.js for the delivery semantics.
   registerOperation("cascade", {
     targets: ["node"],
     ownerExtension: "kernel",
     handler: async ({ target, params, identity: _identity }) => {
-      const nodeId = targetIdOf(target);
+      const spaceId = targetIdOf(target);
       const { payload = {}, source, signalId, depth } = params || {};
       const { v4: uuidv4 } = await import("uuid");
-      const { deliverCascade } = await import("../tree/cascade.js");
+      const { deliverCascade } = await import("../space/cascade.js");
       const sid = signalId || uuidv4();
       const result = await deliverCascade({
-        nodeId,
+        spaceId,
         signalId: sid,
         payload,
-        source: source || nodeId,
+        source: source || spaceId,
         depth: depth || 0,
       });
       return { signalId: sid, result };
@@ -359,7 +362,7 @@ export function registerKernelOperations() {
   //
   // Target: the Being that owns the connection. Connection records are
   // stored in the LlmConnection collection, indexed by beingId. The ops
-  // wrap the seed/llm/connections.js helpers; the IBP grammar gives
+  // wrap the seed/cognition/connections.js helpers; the IBP grammar gives
   // them a single dispatch surface.
 
   registerOperation("add-llm-connection", {
@@ -370,7 +373,7 @@ export function registerKernelOperations() {
       if (!name || !baseUrl || !model) {
         throw new Error("add-llm-connection: `name`, `baseUrl`, and `model` are required");
       }
-      const { addLlmConnection, assignConnection } = await import("../llm/connections.js");
+      const { addLlmConnection, assignConnection } = await import("../cognition/connections.js");
       const beingId = String(target._id);
       const connection = await addLlmConnection(beingId, {
         name, baseUrl, apiKey: apiKey || "none", model,
@@ -395,7 +398,7 @@ export function registerKernelOperations() {
       if (!baseUrl || !model) {
         throw new Error("update-llm-connection: `baseUrl` and `model` are required");
       }
-      const { updateLlmConnection } = await import("../llm/connections.js");
+      const { updateLlmConnection } = await import("../cognition/connections.js");
       const connection = await updateLlmConnection(
         String(target._id), connectionId,
         { name, baseUrl, apiKey, model },
@@ -410,20 +413,20 @@ export function registerKernelOperations() {
     handler: async ({ target, params }) => {
       const { connectionId } = params || {};
       if (!connectionId) throw new Error("delete-llm-connection: `connectionId` is required");
-      const { deleteLlmConnection } = await import("../llm/connections.js");
+      const { deleteLlmConnection } = await import("../cognition/connections.js");
       await deleteLlmConnection(String(target._id), connectionId);
       return { removed: true, connectionId };
     },
   });
 
   // Bind an LLM slot to a connection (or unbind by passing null).
-  // Polymorphic across Being and Node targets — the resolution chain
+  // Polymorphic across Being and Space targets — the resolution chain
   // walks both, so slot assignment lives at both:
   //
   //   Being target → Being.llmDefault (slot="main") or
   //                  Being.metadata.userLlm.slots.<slot>
-  //   Node  target → Node.llmDefault  (slot="main") or
-  //                  Node.metadata.llm.slots.<slot>
+  //   Space  target → Space.llmDefault  (slot="main") or
+  //                  Space.metadata.llm.slots.<slot>
   registerOperation("assign-llm-slot", {
     targets: ["being", "node"],
     ownerExtension: "kernel",
@@ -431,13 +434,13 @@ export function registerKernelOperations() {
       const { slot, connectionId } = params || {};
       if (!slot) throw new Error("assign-llm-slot: `slot` is required");
       const kind = detectTargetKind(target);
-      const { assignConnection, assignNodeConnection } = await import("../llm/connections.js");
+      const { assignConnection, assignNodeConnection } = await import("../cognition/connections.js");
       if (kind === "being") {
         return assignConnection(String(target._id), slot, connectionId || null);
       }
-      const nodeId = targetIdOf(target);
-      if (!nodeId) throw new Error("assign-llm-slot: target must resolve to a node id");
-      return assignNodeConnection(nodeId, slot, connectionId || null, {
+      const spaceId = targetIdOf(target);
+      if (!spaceId) throw new Error("assign-llm-slot: target must resolve to a node id");
+      return assignNodeConnection(spaceId, slot, connectionId || null, {
         ownerBeingId: identity?.beingId || null,
       });
     },
@@ -452,102 +455,20 @@ export function registerKernelOperations() {
   // extension's installed-state isn't bound to a particular node; the
   // target lets stance authorization gate who can install.
 
-  const EXT_NAME_RE = /^[a-z0-9-]+$/i;
-
-  // Install: write extension files to disk. Loader picks them up on
-  // restart. Payload: { name, version?, manifest?, files: [{path,content}] }
-  registerOperation("install-extension", {
-    targets: ["node"],
-    ownerExtension: "kernel",
-    handler: async ({ params }) => {
-      const { name, version, manifest, files } = params || {};
-      if (!name || !Array.isArray(files) || files.length === 0) {
-        throw new Error("install-extension: `name` and `files` are required");
-      }
-      if (!EXT_NAME_RE.test(name)) {
-        throw new Error("install-extension: invalid extension name");
-      }
-      const { installExtensionFiles } = await import("../../extensions/loader.js");
-      const result = await installExtensionFiles(name, files);
-      return {
-        installed: true,
-        name,
-        version: version || manifest?.version || "unknown",
-        filesWritten: result.filesWritten,
-        note: "Restart the land to load the extension.",
-      };
-    },
-  });
-
-  // Uninstall: remove an extension directory. Loader unmounts on next boot.
-  registerOperation("uninstall-extension", {
-    targets: ["node"],
-    ownerExtension: "kernel",
-    handler: async ({ params }) => {
-      const { name } = params || {};
-      if (!name || !EXT_NAME_RE.test(name)) {
-        throw new Error("uninstall-extension: invalid extension name");
-      }
-      const fs = await import("fs");
-      const path = await import("path");
-      const { fileURLToPath } = await import("url");
-      const __dirname = path.dirname(fileURLToPath(import.meta.url));
-      const extDir = path.join(__dirname, "../extensions", name);
-      if (!fs.existsSync(extDir)) {
-        throw new Error(`uninstall-extension: extension "${name}" not found on disk`);
-      }
-      fs.rmSync(extDir, { recursive: true, force: true });
-      return { uninstalled: true, name, note: "Restart the land to unload." };
-    },
-  });
-
-  // Enable / disable an extension by toggling its membership in the
-  // land's `disabledExtensions` config list. Loader honors the list
-  // on next boot.
-  registerOperation("disable-extension", {
-    targets: ["node"],
-    ownerExtension: "kernel",
-    handler: async ({ params }) => {
-      const { name } = params || {};
-      if (!name || !EXT_NAME_RE.test(name)) {
-        throw new Error("disable-extension: invalid extension name");
-      }
-      const { getLandConfigValue, setLandConfigValue } = await import("../landConfig.js");
-      const current = getLandConfigValue("disabledExtensions") || [];
-      if (!current.includes(name)) {
-        current.push(name);
-        const { syncDisabledFile } = await import("../../extensions/loader.js");
-        syncDisabledFile(current);
-        await setLandConfigValue("disabledExtensions", current);
-      }
-      return { disabled: true, name, disabledExtensions: current };
-    },
-  });
-
-  registerOperation("enable-extension", {
-    targets: ["node"],
-    ownerExtension: "kernel",
-    handler: async ({ params }) => {
-      const { name } = params || {};
-      if (!name || !EXT_NAME_RE.test(name)) {
-        throw new Error("enable-extension: invalid extension name");
-      }
-      const { getLandConfigValue, setLandConfigValue } = await import("../landConfig.js");
-      const current = getLandConfigValue("disabledExtensions") || [];
-      const updated = current.filter((n) => n !== name);
-      await setLandConfigValue("disabledExtensions", updated);
-      const { syncDisabledFile } = await import("../../extensions/loader.js");
-      syncDisabledFile(updated);
-      return { enabled: true, name, disabledExtensions: updated };
-    },
-  });
+  // Extension management ops (install / uninstall / enable / disable)
+  // are NOT registered here. They live in extensions/loader.js because
+  // their handlers touch loader-internal state (filesystem writes,
+  // disabledExtensions sync file). Seed must not import from the loader,
+  // so the dependency points the other way: the loader calls
+  // registerExtensionManagementOps() at boot. See
+  // [[CLAUDE.md]] — "Seed never imports from extensions."
 
   // ────────────────────────────────────────────────────────────────
-  // Land config — flat key/value store on the .config system node.
+  // Land config — flat key/value store on the .config land seed space.
   // ────────────────────────────────────────────────────────────────
   //
   // Land config is one of the meta-positions ([[project_meta_positions]]):
-  // `<land>/.config` resolves to the SYSTEM_ROLE.CONFIG node. Reads go
+  // `<land>/.config` resolves to the SEED_SPACE.CONFIG node. Reads go
   // through `ibp:see` on that address (returns the cached config snapshot);
   // writes go through these DO ops which wrap the kernel's
   // setLandConfigValue helper. The helper handles cache invalidation,
@@ -556,7 +477,7 @@ export function registerKernelOperations() {
   registerOperation("set-config", {
     targets: ["node"],
     ownerExtension: "kernel",
-    handler: async ({ params }) => {
+    handler: async ({ params, scaffold }) => {
       const { key, value } = params || {};
       if (!key || typeof key !== "string") {
         throw new Error("set-config: `key` is required");
@@ -564,8 +485,12 @@ export function registerKernelOperations() {
       if (value === undefined) {
         throw new Error("set-config: `value` is required (use delete-config to remove)");
       }
+      // Scaffold flows (migrations, first-boot bootstrap) are permitted
+      // to write PROTECTED_KEYS (seedVersion, disabledExtensions). Being
+      // calls never carry scaffold and stay subject to the protected-key
+      // gate in landConfig.js.
       const { setLandConfigValue } = await import("../landConfig.js");
-      await setLandConfigValue(key, value);
+      await setLandConfigValue(key, value, { internal: scaffold === true });
       return { key, value };
     },
   });
@@ -573,13 +498,13 @@ export function registerKernelOperations() {
   registerOperation("delete-config", {
     targets: ["node"],
     ownerExtension: "kernel",
-    handler: async ({ params }) => {
+    handler: async ({ params, scaffold }) => {
       const { key } = params || {};
       if (!key || typeof key !== "string") {
         throw new Error("delete-config: `key` is required");
       }
       const { deleteLandConfigValue } = await import("../landConfig.js");
-      await deleteLandConfigValue(key);
+      await deleteLandConfigValue(key, { internal: scaffold === true });
       return { deleted: true, key };
     },
   });
@@ -594,8 +519,8 @@ const RESERVED_SET_META_NS = new Set([
  * Detect what the target argument is. Returns one of:
  *   "stance"   — resolved stance from the IBP wire (carries `.chain`)
  *   "being"    — Mongoose Being doc
- *   "artifact" — Mongoose Artifact doc
- *   "node"     — Mongoose Node doc OR anything else (default; covers
+ *   "matter"   — Mongoose Matter doc
+ *   "node"     — Mongoose Space doc OR anything else (default; covers
  *                plain `{ _id }` shapes and raw string ids that the
  *                node primitives already handle)
  *
@@ -609,20 +534,20 @@ function detectTargetKind(target) {
   if (target && typeof target === "object" && Array.isArray(target.chain)) return "stance";
   const modelName = target?.constructor?.modelName;
   if (modelName === "Being")    return "being";
-  if (modelName === "Artifact") return "artifact";
+  if (modelName === "Matter")   return "matter";
   return "node";
 }
 
 /**
  * Best-effort id extraction across the target shapes the dispatcher
- * accepts (Mongoose doc, plain `{_id}` shape, IBP wire `{nodeId}`
+ * accepts (Mongoose doc, plain `{_id}` shape, IBP wire `{spaceId}`
  * envelope, raw string id).
  */
 function targetIdOf(target) {
   if (typeof target === "string") return target;
   if (!target || typeof target !== "object") return null;
   if (target._id) return String(target._id);
-  if (target.nodeId) return String(target.nodeId);
+  if (target.spaceId) return String(target.spaceId);
   if (target.id) return String(target.id);
   return null;
 }
@@ -632,18 +557,18 @@ function targetIdOf(target) {
 // ────────────────────────────────────────────────────────────────
 //
 // When an op's target arrives from the IBP wire, it's a resolved stance
-// (carries `.chain`, `.nodeId`, `.isLandRoot`, `.isHomeRoot`, etc.). The
-// inline node/being/artifact branches above handle Mongoose-doc shapes
+// (carries `.chain`, `.spaceId`, `.isLandRoot`, `.isHomeRoot`, etc.). The
+// inline node/being/matter branches above handle Mongoose-doc shapes
 // that internal callers pass; these helpers handle the wire shape.
 //
 // They do three things the inline paths don't:
 //   1. Stance-specific gating (can't create-child at the land root;
 //      home roots only by the home's being).
-//   2. Tree-ownership + circuit-breaker check via resolveTreeAccess.
+//   2. Tree-ownership + circuit-breaker check via resolveSpaceAccess.
 //   3. Map kernel-internal Error messages to IBP error codes so the
 //      wire ack carries a precise code instead of generic INTERNAL.
 //
-// Note: the verb-level Stance Authorization gate in seed/core/verbs.js
+// Note: the verb-level Stance Authorization gate in seed/ibp/verbs.js
 // runs before these — they're the second layer covering tree-ownership
 // (which authorize() doesn't know about) and shape-conversion (kernel
 // helper Errors → IbpError on the wire).
@@ -651,12 +576,12 @@ function targetIdOf(target) {
 const KERNEL_ERROR_PATTERNS = {
   createChild: [
     [/cancelled by extension/i,        IBP_ERR.FORBIDDEN],
-    [/system nodes|reserved|invalid/i, IBP_ERR.INVALID_INPUT],
-    [/not found/i,                     IBP_ERR.NODE_NOT_FOUND],
+    [/land seed spaces|reserved|invalid/i, IBP_ERR.INVALID_INPUT],
+    [/not found/i,                     IBP_ERR.SPACE_NOT_FOUND],
   ],
   rename: [
-    [/system nodes/i,                              IBP_ERR.FORBIDDEN],
-    [/not found/i,                                 IBP_ERR.NODE_NOT_FOUND],
+    [/land seed spaces/i,                              IBP_ERR.FORBIDDEN],
+    [/not found/i,                                 IBP_ERR.SPACE_NOT_FOUND],
     [/cannot|reserved|invalid|characters|empty/i,  IBP_ERR.INVALID_INPUT],
   ],
   setMeta: [
@@ -674,16 +599,16 @@ async function createNodeChild({ target, params, identity, kind }) {
     throw new IbpError(IBP_ERR.INVALID_INPUT, "`name` is required");
   }
 
-  // Mongoose Node doc path: trust the caller, parent is the doc itself.
+  // Mongoose Space doc path: trust the caller, parent is the doc itself.
   if (kind !== "stance") {
     try {
-      const newNode = await createNode({
+      const newSpace = await createSpace({
         name,
         type,
         parentId: target?._id ? String(target._id) : null,
         beingId,
       });
-      return shapeNewNode(newNode);
+      return shapeNewNode(newSpace);
     } catch (err) {
       throw mapPatternsToIbpError(err, KERNEL_ERROR_PATTERNS.createChild);
     }
@@ -701,43 +626,43 @@ async function createNodeChild({ target, params, identity, kind }) {
       throw new IbpError(IBP_ERR.FORBIDDEN, "Cannot create a tree root in another being's home");
     }
     try {
-      const newNode = await createNode({ name, type, isRoot: true, beingId });
-      return shapeNewNode(newNode);
+      const newSpace = await createSpace({ name, type, isRoot: true, beingId });
+      return shapeNewNode(newSpace);
     } catch (err) {
       throw mapPatternsToIbpError(err, KERNEL_ERROR_PATTERNS.createChild);
     }
   }
-  if (!target.nodeId) {
-    throw new IbpError(IBP_ERR.NODE_NOT_FOUND, "Resolved position has no nodeId");
+  if (!target.spaceId) {
+    throw new IbpError(IBP_ERR.SPACE_NOT_FOUND, "Resolved position has no spaceId");
   }
   try {
-    const newNode = await createNode({ name, type, parentId: target.nodeId, beingId });
-    return shapeNewNode(newNode);
+    const newSpace = await createSpace({ name, type, parentId: target.spaceId, beingId });
+    return shapeNewNode(newSpace);
   } catch (err) {
     throw mapPatternsToIbpError(err, KERNEL_ERROR_PATTERNS.createChild);
   }
 }
 
-function shapeNewNode(newNode) {
+function shapeNewNode(newSpace) {
   return {
-    nodeId:   String(newNode._id),
-    name:     newNode.name,
-    position: `${getLandDomain()}/${String(newNode._id)}`,
+    spaceId:   String(newSpace._id),
+    name:     newSpace.name,
+    position: `${getLandDomain()}/${String(newSpace._id)}`,
   };
 }
 
 async function renameAtStance({ resolved, name, identity }) {
   const beingId = identity?.beingId || null;
-  if (!resolved.nodeId) {
-    throw new IbpError(IBP_ERR.NODE_NOT_FOUND, "Resolved address has no nodeId");
+  if (!resolved.spaceId) {
+    throw new IbpError(IBP_ERR.SPACE_NOT_FOUND, "Resolved address has no spaceId");
   }
-  const access = await resolveTreeAccess(resolved.nodeId, beingId);
+  const access = await resolveSpaceAccess(resolved.spaceId, beingId);
   if (!access?.ok || access.write !== true) {
     throw new IbpError(IBP_ERR.FORBIDDEN, "Not authorized to rename at this place");
   }
   try {
-    await editNodeName({ nodeId: resolved.nodeId, newName: name, beingId });
-    return { nodeId: String(resolved.nodeId), name };
+    await editSpaceName({ spaceId: resolved.spaceId, newName: name, beingId });
+    return { spaceId: String(resolved.spaceId), name };
   } catch (err) {
     throw mapPatternsToIbpError(err, KERNEL_ERROR_PATTERNS.rename);
   }
@@ -745,16 +670,16 @@ async function renameAtStance({ resolved, name, identity }) {
 
 async function setMetaAtStance({ resolved, namespace, data, merge, identity }) {
   const beingId = identity?.beingId || null;
-  if (!resolved.nodeId) {
-    throw new IbpError(IBP_ERR.NODE_NOT_FOUND, "Resolved address has no nodeId");
+  if (!resolved.spaceId) {
+    throw new IbpError(IBP_ERR.SPACE_NOT_FOUND, "Resolved address has no spaceId");
   }
-  const access = await resolveTreeAccess(resolved.nodeId, beingId);
+  const access = await resolveSpaceAccess(resolved.spaceId, beingId);
   if (!access?.ok || access.write !== true) {
     throw new IbpError(IBP_ERR.FORBIDDEN, "Not authorized to write metadata at this place");
   }
-  const node = await Node.findById(resolved.nodeId);
+  const node = await Space.findById(resolved.spaceId);
   if (!node) {
-    throw new IbpError(IBP_ERR.NODE_NOT_FOUND, "Node disappeared between resolve and write");
+    throw new IbpError(IBP_ERR.SPACE_NOT_FOUND, "Space disappeared between resolve and write");
   }
   try {
     if (merge === false) {
@@ -762,7 +687,7 @@ async function setMetaAtStance({ resolved, namespace, data, merge, identity }) {
     } else {
       await mergeExtMeta(node, namespace, data);
     }
-    return { written: true, nodeId: String(node._id), namespace, kind: "node" };
+    return { written: true, spaceId: String(node._id), namespace, kind: "node" };
   } catch (err) {
     throw mapPatternsToIbpError(err, KERNEL_ERROR_PATTERNS.setMeta);
   }

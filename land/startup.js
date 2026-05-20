@@ -1,72 +1,37 @@
-import mongoose from "./seed/core/dbConfig.js";
-import { getLandIdentity, getLandUrl } from "./protocols/ibp/canopy/identity.js";
+import mongoose from "./seed/system/dbConfig.js";
+import { getLandIdentity, getLandUrl } from "./protocols/canopy/identity.js";
 import { ensureLandRoot } from "./seed/landRoot.js";
 import { initLandConfig, getLandConfigValue } from "./seed/landConfig.js";
 import { startExtensionJobs, getLoadedManifests, runExtensionMigrations, getLoadedExtensionNames, getBootReport } from "./extensions/loader.js";
-import { startUploadCleanup } from "./seed/tree/uploadCleanup.js";
-import { startRetentionJob } from "./seed/tree/dataRetention.js";
-import { getBlockedExtensionsAtNode } from "./seed/tree/extensionScope.js";
-import { hooks } from "./seed/core/hooks.js";
+import { startUploadCleanup } from "./seed/matter/uploadCleanup.js";
+import { startRetentionJob } from "./seed/system/dataRetention.js";
+import { getBlockedExtensionsAtNode } from "./seed/space/extensionScope.js";
+import { hooks } from "./seed/system/hooks.js";
 import { syncExtensionsToTree } from "./seed/landRoot.js";
 import { spawn } from "child_process";
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
-import log from "./seed/core/log.js";
-import { SYSTEM_ROLE } from "./seed/core/protocol.js";
+import log from "./seed/system/log.js";
+import { SEED_SPACE } from "./seed/space/seedSpaces.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 /**
- * Register an array of kernel-shipped tool definitions with both the
- * MCP server (so handlers can be invoked) and the tool registry (so
- * the LLM can list them). Mirrors the dual registration the extension
- * loader does for extension tools.
+ * Register kernel-shipped tool definitions through the same path
+ * extensions use. Thin wrapper that hands the bundle to
+ * `registerToolBundle` with `ownerExt: "kernel"`. See
+ * seed/system/tools.js for the unified registration logic.
  */
 async function registerKernelTools(tools) {
-  if (!Array.isArray(tools) || tools.length === 0) return;
   const { mcpServerInstance } = await import("./protocols/mcp/server.js");
-  const { registerToolDef } = await import("./seed/core/tools.js");
-  const { z }               = await import("zod");
-  const { zodToJsonSchema } = await import("zod-to-json-schema");
-
-  for (const tool of tools) {
-    try {
-      // MCP handler — passthrough so beingId/name injected by the
-      // middleware survive zod's strip step.
-      const inputSchema = z.object(tool.schema).passthrough();
-      mcpServerInstance.registerTool(
-        tool.name,
-        {
-          description: tool.description,
-          inputSchema,
-          annotations: tool.annotations || undefined,
-        },
-        tool.handler,
-      );
-
-      // Tool registry def for the LLM's tool listing.
-      const jsonSchema = zodToJsonSchema(z.object(tool.schema));
-      delete jsonSchema.$schema;
-      registerToolDef(tool.name, {
-        type: "function",
-        function: {
-          name:        tool.name,
-          description: tool.description,
-          parameters:  jsonSchema,
-        },
-      }, { verb: tool.verb });
-
-      log.verbose("KernelTools", `registered "${tool.name}" (${tool.verb})`);
-    } catch (err) {
-      log.error("KernelTools", `failed to register "${tool.name}": ${err.message}`);
-    }
-  }
+  const { registerToolBundle } = await import("./seed/system/tools.js");
+  await registerToolBundle(tools, { ownerExt: "kernel", mcpServer: mcpServerInstance });
 }
 
 export function onListen() {
   const land = getLandIdentity();
-  log.info("Land", "Initializing Tree Land Node...");
+  log.info("Land", "Initializing Tree Land Space...");
   log.info("Land", `Domain: ${land.domain}`);
   log.info("Land", `Name: ${land.name}`);
   log.verbose("Land", `Land ID: ${land.landId}`);
@@ -76,7 +41,7 @@ export function onListen() {
     log.info("Land", "MongoDB connected");
 
     // Index verification (before anything else, after DB connection)
-    const { ensureIndexes } = await import("./seed/tree/indexes.js");
+    const { ensureIndexes } = await import("./seed/system/indexes.js");
     await ensureIndexes();
 
     await ensureLandRoot();
@@ -87,17 +52,17 @@ export function onListen() {
     // kicks off the disk walk detached so a multi-thousand-file scan
     // does not block boot. Subsequent boots reconcile incrementally.
     // See [[project_seed_source_system_node]].
-    const { ensureSourceTree } = await import("./seed/core/source.js");
+    const { ensureSourceTree } = await import("./seed/space/source.js");
     await ensureSourceTree();
 
     // Seed default stance permissions (arrival, owner) and BE config flags
     // on the land root if not already present. Idempotent; does not
     // overwrite operator configuration.
-    const { seedDefaultStancePermissions } = await import("./seed/core/authorize.js");
+    const { seedDefaultStancePermissions } = await import("./seed/ibp/authorize.js");
     await seedDefaultStancePermissions();
 
     // Run seed migrations (after config is loaded, before extensions)
-    const { runSeedMigrations } = await import("./seed/migrations/runner.js");
+    const { runSeedMigrations } = await import("./seed/system/migrations/runner.js");
     await runSeedMigrations();
 
     // Ensure the land's system beings (auth, llm-assigner, land-manager,
@@ -105,19 +70,19 @@ export function onListen() {
     // runs every boot, creates only what's missing. Must come after
     // the 0.3.0 migration so the Being model is populated before we
     // add to it.
-    const { ensureSystemBeings } = await import("./seed/core/systemBeings.js");
+    const { ensureSystemBeings } = await import("./seed/being/systemBeings.js");
     const { getLandRootId } = await import("./seed/landRoot.js");
     await ensureSystemBeings(getLandRootId());
 
     // Register kernel-shipped role specs into the role registry so
     // SUMMON can dispatch to them. Auth and llm-assigner are BE-only
-    // and routed via LAND_BEINGS in seed/core/verbs.js — they don't
+    // and routed via LAND_BEINGS in seed/ibp/verbs.js — they don't
     // need a role registration. Land-manager IS summonable (LLM-driven
     // operator dialog), so its role spec enters the registry here,
     // along with its two generic tools (land-see, land-do).
-    const { registerRole } = await import("./seed/roles/registry.js");
-    const { landManagerRole } = await import("./seed/roles/landManager.js");
-    const { landManagerTools } = await import("./seed/roles/tools/landManagerTools.js");
+    const { registerRole } = await import("./seed/being/roles/registry.js");
+    const { landManagerRole } = await import("./seed/being/roles/landManager.js");
+    const { landManagerTools } = await import("./seed/being/roles/tools/landManagerTools.js");
     registerRole("land-manager", landManagerRole, "kernel");
     await registerKernelTools(landManagerTools);
 
@@ -125,17 +90,17 @@ export function onListen() {
     // and `llm-assigner:complete-tutorial`) — they live with the role,
     // not in the kernel ops registry. Same shape an extension would
     // use; just shipped in seed.
-    const { registerLlmAssignerOps } = await import("./seed/roles/llmAssignerOps.js");
+    const { registerLlmAssignerOps } = await import("./seed/being/roles/llmAssignerOps.js");
     registerLlmAssignerOps();
 
     // Tree integrity check (before extensions load, after migrations)
-    const { checkIntegrity } = await import("./seed/tree/integrityCheck.js");
+    const { checkIntegrity } = await import("./seed/system/integrityCheck.js");
     await checkIntegrity({ repair: true });
 
     // Apply land config to kernel settings
     try {
       const { getLandConfigValue } = await import("./seed/landConfig.js");
-      const { setKernelConfig } = await import("./seed/llm/runChat.js");
+      const { setKernelConfig } = await import("./seed/cognition/runChat.js");
 
       // Kernel config keys: read from land .config node, apply to runtime
       const KERNEL_CONFIG = {
@@ -149,13 +114,13 @@ export function onListen() {
         toolResultMaxBytes:      { setter: setKernelConfig },
         maxConversationSessions: { setter: setKernelConfig },
         staleConversationTimeout:{ setter: setKernelConfig },
-        carryMessages:           { load: () => import("./seed/llm/runChat.js").then(m => m.setCarryMessages) },
-        maxRegisteredTools:      { load: () => import("./seed/core/tools.js").then(m => m.setMaxTools) },
-        sessionTTL:              { load: () => import("./seed/session/registry.js").then(m => (v) => m.setSessionTTL(v * 1000)) },
-        staleSessionTimeout:     { load: () => import("./seed/session/registry.js").then(m => (v) => m.setStaleTimeout(v * 1000)) },
-        maxSessions:             { load: () => import("./seed/session/registry.js").then(m => m.setMaxSessions) },
-        llmClientCacheTtl:       { load: () => import("./seed/llm/llmClient.js").then(m => (v) => m.setClientCacheTtl(v * 1000)) },
-        maxConnectionsPerUser:   { load: () => import("./seed/llm/connections.js").then(m => m.setMaxConnectionsPerUser) },
+        carryMessages:           { load: () => import("./seed/cognition/runChat.js").then(m => m.setCarryMessages) },
+        maxRegisteredTools:      { load: () => import("./seed/system/tools.js").then(m => m.setMaxTools) },
+        sessionTTL:              { load: () => import("./seed/cognition/session.js").then(m => (v) => m.setSessionTTL(v * 1000)) },
+        staleSessionTimeout:     { load: () => import("./seed/cognition/session.js").then(m => (v) => m.setStaleTimeout(v * 1000)) },
+        maxSessions:             { load: () => import("./seed/cognition/session.js").then(m => m.setMaxSessions) },
+        llmClientCacheTtl:       { load: () => import("./seed/cognition/llmClient.js").then(m => (v) => m.setClientCacheTtl(v * 1000)) },
+        maxConnectionsPerUser:   { load: () => import("./seed/cognition/connections.js").then(m => m.setMaxConnectionsPerUser) },
       };
 
       for (const [key, cfg] of Object.entries(KERNEL_CONFIG)) {
@@ -175,16 +140,16 @@ export function onListen() {
     } catch {}
 
     // Ensure .extensions system node exists (for lands created before this feature)
-    const Node = (await import("./seed/models/node.js")).default;
-    const extNode = await Node.findOne({ systemRole: SYSTEM_ROLE.EXTENSIONS });
-    if (!extNode) {
+    const Space = (await import("./seed/models/space.js")).default;
+    const extSpace = await Space.findOne({ seedSpace: SEED_SPACE.EXTENSIONS });
+    if (!extSpace) {
       const { getLandRoot } = await import("./seed/landRoot.js");
       const landRoot = await getLandRoot();
       if (landRoot) {
-        const newExtNode = new Node({
+        const newExtNode = new Space({
           name: ".extensions",
           parent: landRoot._id,
-          systemRole: SYSTEM_ROLE.EXTENSIONS,
+          seedSpace: SEED_SPACE.EXTENSIONS,
           children: [],
           contributors: [],
         });
@@ -196,15 +161,15 @@ export function onListen() {
     }
 
     // Ensure .flow system node exists (for lands created before cascade)
-    const flowNode = await Node.findOne({ systemRole: SYSTEM_ROLE.FLOW });
+    const flowNode = await Space.findOne({ seedSpace: SEED_SPACE.FLOW });
     if (!flowNode) {
       const { getLandRoot } = await import("./seed/landRoot.js");
       const landRoot = await getLandRoot();
       if (landRoot) {
-        const newFlowNode = new Node({
+        const newFlowNode = new Space({
           name: ".flow",
           parent: landRoot._id,
-          systemRole: SYSTEM_ROLE.FLOW,
+          seedSpace: SEED_SPACE.FLOW,
           children: [],
           contributors: [],
         });
@@ -218,7 +183,7 @@ export function onListen() {
     await syncExtensionsToTree(getLoadedManifests());
 
     // Load confined extensions set from .extensions registry before any scope resolution
-    const { loadConfinedExtensions, setExtensionInstanceLookup } = await import("./seed/tree/extensionScope.js");
+    const { loadConfinedExtensions, setExtensionInstanceLookup } = await import("./seed/space/extensionScope.js");
     await loadConfinedExtensions();
 
     // Register the loader's instance lookup with the kernel so
@@ -239,8 +204,8 @@ export function onListen() {
 
     // Wire spatial extension scoping into hook system
     // Hooks only need blocked set (restricted extensions still fire hooks, just with limited tools)
-    hooks.setScopeResolver(async (nodeId) => {
-      const { blocked } = await getBlockedExtensionsAtNode(nodeId);
+    hooks.setScopeResolver(async (spaceId) => {
+      const { blocked } = await getBlockedExtensionsAtNode(spaceId);
       return blocked;
     });
 
@@ -249,15 +214,15 @@ export function onListen() {
     startRetentionJob();
 
     // Periodic tree integrity check (daily by default)
-    const { startIntegrityJob } = await import("./seed/tree/integrityCheck.js");
+    const { startIntegrityJob } = await import("./seed/system/integrityCheck.js");
     startIntegrityJob();
 
     // Tree circuit breaker (only if treeCircuitEnabled)
-    const { startCircuitJob } = await import("./seed/tree/treeCircuit.js");
+    const { startCircuitJob } = await import("./seed/space/spaceCircuit.js");
     startCircuitJob();
 
     // Cascade result cleanup (configurable, default: every 6 hours)
-    const { cleanupExpiredResults } = await import("./seed/tree/cascade.js");
+    const { cleanupExpiredResults } = await import("./seed/space/cascade.js");
     const cascadeCleanupMs = Number(getLandConfigValue("cascadeCleanupInterval")) || 6 * 60 * 60 * 1000;
     const cascadeCleanupTimer = setInterval(() => cleanupExpiredResults().catch(() => {}), cascadeCleanupMs);
     cascadeCleanupTimer.unref();
@@ -276,9 +241,9 @@ export function onListen() {
     // block boot; logged inside the helpers.
     (async () => {
       try {
-        const { syncToolsToSubstrate }      = await import("./seed/core/tools.js");
-        const { syncRolesToSubstrate }      = await import("./seed/roles/registry.js");
-        const { syncOperationsToSubstrate } = await import("./seed/core/operations.js");
+        const { syncToolsToSubstrate }      = await import("./seed/system/tools.js");
+        const { syncRolesToSubstrate }      = await import("./seed/being/roles/registry.js");
+        const { syncOperationsToSubstrate } = await import("./seed/ibp/operations.js");
         const [t, r, o] = await Promise.all([
           syncToolsToSubstrate(),
           syncRolesToSubstrate(),
@@ -292,6 +257,19 @@ export function onListen() {
         log.warn("RegistryMirror", `registry sync failed: ${err.message}`);
       }
     })();
+
+    // Tool-description audit. Walks every registered role's declared
+    // tools and logs misconfigurations loudly before the first LLM
+    // call. The same gap will block a summon at runtime via
+    // assertAllToolsResolve in buildPrompt.js; this surfaces it at
+    // boot so the operator sees it without waiting for a user to
+    // trigger the broken role.
+    try {
+      const { auditToolDescriptions } = await import("./seed/system/tools.js");
+      await auditToolDescriptions();
+    } catch (err) {
+      log.warn("Tools", `tool-description audit failed: ${err.message}`);
+    }
 
     hooks.run("afterBoot", {}).catch(() => {});
     printReady();

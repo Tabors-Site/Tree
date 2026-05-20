@@ -8,7 +8,7 @@
  * Extensions enforce their own limits (tier gates, storage quotas) via hooks.
  */
 import { getLandConfigValue } from "../../../seed/landConfig.js";
-import { sendError, ERR } from "../../../seed/core/protocol.js";
+import { sendError, ERR } from "../../../seed/ibp/protocol.js";
 
 export default function preUploadCheck(req, res, next) {
   const contentType = req.headers["content-type"] || "";

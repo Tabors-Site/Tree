@@ -2,7 +2,7 @@
 //
 // Holds the per-socket subscription registry and exposes emitters that
 // push descriptor updates to subscribers. Subscriptions are keyed by
-// nodeId — the leaf node of the addressed Position. When kernel state
+// spaceId — the leaf node of the addressed Position. When kernel state
 // changes (metadata writes, node create/delete, status changes, note
 // writes), call the emitters and live SEE subscribers see the update.
 //
@@ -10,25 +10,25 @@
 // socket's subscription set on the socket itself and prune on the
 // `disconnect` event.
 
-import log from "../../seed/core/log.js";
+import log from "../../seed/system/log.js";
 import { IBP_EVENT, SEE_PUSH } from "./events.js";
 
-// nodeId -> Set<socket>
+// spaceId -> Set<socket>
 const _subscribers = new Map();
 
-// socket.id -> Set<nodeId>   (so we can clean up on disconnect)
+// socket.id -> Set<spaceId>   (so we can clean up on disconnect)
 const _socketSubs = new Map();
 
 /**
  * Register a subscription. The socket will receive descriptor events
- * for the given nodeId until disconnect or explicit unsubscribe.
+ * for the given spaceId until disconnect or explicit unsubscribe.
  *
  * @param {Socket} socket
- * @param {string} nodeId  the leaf node of the addressed position
+ * @param {string} spaceId  the leaf node of the addressed position
  */
-export function subscribePosition(socket, nodeId) {
-  if (!socket || !nodeId) return;
-  const key = String(nodeId);
+export function subscribePosition(socket, spaceId) {
+  if (!socket || !spaceId) return;
+  const key = String(spaceId);
   let bucket = _subscribers.get(key);
   if (!bucket) {
     bucket = new Set();
@@ -48,9 +48,9 @@ export function subscribePosition(socket, nodeId) {
 /**
  * Drop a subscription. Idempotent.
  */
-export function unsubscribePosition(socket, nodeId) {
-  if (!socket || !nodeId) return;
-  const key = String(nodeId);
+export function unsubscribePosition(socket, spaceId) {
+  if (!socket || !spaceId) return;
+  const key = String(spaceId);
   const bucket = _subscribers.get(key);
   if (bucket) {
     bucket.delete(socket);
@@ -81,7 +81,7 @@ function cleanupSocket(socket) {
 // ─────────────────────────────────────────────────────────────────────
 //
 // All three live-SEE pushes ride the unified `ibp` event with
-// `{ verb: "see", payload: { kind, nodeId, data } }`. The kind tag
+// `{ verb: "see", payload: { kind, spaceId, data } }`. The kind tag
 // distinguishes patch vs replace vs invalidate; the client routes by
 // envelope.verb and payload.kind.
 
@@ -90,33 +90,33 @@ function cleanupSocket(socket) {
  * an optimization; today's path uses an invalidate to let the client
  * re-fetch via SEE, which keeps the substrate simple.
  */
-export function emitPositionPatch(nodeId, patch) {
-  _pushSee(nodeId, SEE_PUSH.PATCH, patch);
+export function emitPositionPatch(spaceId, patch) {
+  _pushSee(spaceId, SEE_PUSH.PATCH, patch);
 }
 
 /**
  * Emit a full descriptor replace. Cheaper for the server than computing
  * a precise patch; heavier on the wire.
  */
-export function emitPositionReplace(nodeId, descriptor) {
-  _pushSee(nodeId, SEE_PUSH.REPLACE, descriptor);
+export function emitPositionReplace(spaceId, descriptor) {
+  _pushSee(spaceId, SEE_PUSH.REPLACE, descriptor);
 }
 
 /**
  * Tell subscribers to drop and re-fetch. Use as a fallback when patches
  * are too expensive or state has changed too much to diff.
  */
-export function emitPositionInvalidate(nodeId, reason) {
-  _pushSee(nodeId, SEE_PUSH.INVALIDATE, { reason });
+export function emitPositionInvalidate(spaceId, reason) {
+  _pushSee(spaceId, SEE_PUSH.INVALIDATE, { reason });
 }
 
-function _pushSee(nodeId, kind, data) {
-  if (!nodeId) return;
-  const bucket = _subscribers.get(String(nodeId));
+function _pushSee(spaceId, kind, data) {
+  if (!spaceId) return;
+  const bucket = _subscribers.get(String(spaceId));
   if (!bucket || bucket.size === 0) return;
   const envelope = {
     verb:    "see",
-    payload: { kind, nodeId: String(nodeId), data },
+    payload: { kind, spaceId: String(spaceId), data },
   };
   for (const socket of bucket) {
     try {
@@ -131,8 +131,8 @@ function _pushSee(nodeId, kind, data) {
 // Diagnostics
 // ─────────────────────────────────────────────────────────────────────
 
-export function getSubscriberCount(nodeId) {
-  return _subscribers.get(String(nodeId))?.size || 0;
+export function getSubscriberCount(spaceId) {
+  return _subscribers.get(String(spaceId))?.size || 0;
 }
 
 export function getTotalSubscriptions() {

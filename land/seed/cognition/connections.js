@@ -15,10 +15,10 @@
  *   - Connection IDs validated as strings before querying
  */
 
-import log from "../core/log.js";
+import log from "../system/log.js";
 import Being from "../models/being.js";
 import LlmConnection from "../models/llmConnection.js";
-import Node from "../models/node.js";
+import Space from "../models/space.js";
 import { clearBeingClientCache } from "./llmClient.js";
 import crypto from "crypto";
 import { getLandConfigValue } from "../landConfig.js";
@@ -404,7 +404,7 @@ export async function deleteLlmConnection(beingId, connectionId) {
   }
 
   // Clear tree assignments pointing to deleted connection (batched)
-  await Node.updateMany(
+  await Space.updateMany(
     { llmDefault: connectionId },
     { $set: { llmDefault: null } },
   );
@@ -412,7 +412,7 @@ export async function deleteLlmConnection(beingId, connectionId) {
   // Clear extension slots on nodes in one pass per slot
   const extSlots = getAllRootLlmSlots().filter(s => s !== "default");
   for (const slot of extSlots) {
-    await Node.updateMany(
+    await Space.updateMany(
       { [`metadata.llm.slots.${slot}`]: connectionId },
       { $set: { [`metadata.llm.slots.${slot}`]: null } },
     );
@@ -452,9 +452,9 @@ export async function assignConnection(beingId, slot, connectionId) {
 }
 
 /**
- * Node-scope counterpart to `assignConnection`. Writes the tree-level
+ * Space-scope counterpart to `assignConnection`. Writes the tree-level
  * step of the LLM resolution chain (see [[project_node_being_llm_chain]]
- * and seed/llm/llmClient.js).
+ * and seed/cognition/llmClient.js).
  *
  * "main" goes to `node.llmDefault`; every other slot writes to
  * `node.metadata.llm.slots.<slot>`. Pass `connectionId: null` to clear.
@@ -464,7 +464,7 @@ export async function assignConnection(beingId, slot, connectionId) {
  * (the DO operation handler) is responsible for owner-of-tree checks
  * via stance authorization before reaching this function.
  */
-export async function assignNodeConnection(nodeId, slot, connectionId, { ownerBeingId } = {}) {
+export async function assignNodeConnection(spaceId, slot, connectionId, { ownerBeingId } = {}) {
   if (!isValidUserSlot(slot)) {
     throw new Error("Invalid assignment slot: " + slot);
   }
@@ -480,20 +480,20 @@ export async function assignNodeConnection(nodeId, slot, connectionId, { ownerBe
 
   if (slot === "main") {
     if (safeConnId) {
-      await Node.updateOne({ _id: nodeId }, { $set: { llmDefault: safeConnId } });
+      await Space.updateOne({ _id: spaceId }, { $set: { llmDefault: safeConnId } });
     } else {
-      await Node.updateOne({ _id: nodeId }, { $set: { llmDefault: null } });
+      await Space.updateOne({ _id: spaceId }, { $set: { llmDefault: null } });
     }
   } else {
     const path = `metadata.llm.slots.${slot}`;
     if (safeConnId) {
-      await Node.updateOne({ _id: nodeId }, { $set: { [path]: safeConnId } });
+      await Space.updateOne({ _id: spaceId }, { $set: { [path]: safeConnId } });
     } else {
-      await Node.updateOne({ _id: nodeId }, { $unset: { [path]: "" } });
+      await Space.updateOne({ _id: spaceId }, { $unset: { [path]: "" } });
     }
   }
 
-  return { nodeId: String(nodeId), slot, connectionId: safeConnId };
+  return { spaceId: String(spaceId), slot, connectionId: safeConnId };
 }
 
 // ─────────────────────────────────────────────────────────────────────────

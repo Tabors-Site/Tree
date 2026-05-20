@@ -9,9 +9,9 @@
 // was authenticated; re-checking the being on every tool call would
 // be redundant and slow.
 
-import log from "../../../seed/core/log.js";
-import { decodeToken } from "../../../seed/core/identity.js";
-import { sendError, ERR } from "../../../seed/core/protocol.js";
+import log from "../../../seed/system/log.js";
+import { decodeToken } from "../../../seed/being/identity.js";
+import { sendError, ERR } from "../../../seed/ibp/protocol.js";
 
 export default function authenticateMCP(req, res, next) {
   const token = req.headers["x-internal-token"];

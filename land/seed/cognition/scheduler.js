@@ -32,11 +32,12 @@
 // resumes them is on the roadmap.
 
 import { randomUUID } from "crypto";
-import log from "../core/log.js";
+import log from "../system/log.js";
 import Being from "../models/being.js";
 import { pickNextEntry, markSummoned, markInboxConsumed, readInbox } from "./inbox.js";
-import { getRole } from "../roles/registry.js";
-import { pushIbp } from "../core/pushChannel.js";
+import { getRole } from "../being/roles/registry.js";
+import { pushIbp } from "../ibp/pushChannel.js";
+import { getLandConfigValue } from "../landConfig.js";
 
 // Per-being scheduler state.
 //
@@ -44,16 +45,29 @@ import { pushIbp } from "../core/pushChannel.js";
 //     running:        boolean,         // true while runLoop is processing
 //     controller:     AbortController, // signal for the current Summon
 //     currentRoot:    string | null,   // rootCorrelation of the running Summon
-//     wakeQueue:      Set<nodeId>,     // positions known to have pending work
+//     wakeQueue:      Set<spaceId>,     // positions known to have pending work
 //   }
 const _state = new Map();
 
-// Backpressure defaults. Lands override per-being via Being metadata.
-const DEFAULT_BACKPRESSURE = Object.freeze({
-  maxInboxDepth:        100,   // entries; soft cap, scheduler keeps draining
-  summonsPerSecond:     10,    // simple token bucket; refill at this rate
-  maxAgeSeconds:        3600,  // pending entries older than this get logged
-});
+// Backpressure defaults. Per-being overrides live on Being.metadata.scheduler
+// (not yet wired); land-wide overrides come from .config. Each accessor
+// reads at use time so live `treeos config set` propagates immediately.
+//
+// Currently only summonsPerSecond is enforced (token bucket in _checkRate).
+// summonInboxDepth + summonMaxAgeSeconds are declared so the planned
+// inbox-pressure + stale-entry sweeps land without another config pass.
+function CFG_INBOX_DEPTH() {
+  const v = Number(getLandConfigValue("summonInboxDepth"));
+  return Number.isFinite(v) && v > 0 ? v : 100;
+}
+function CFG_SUMMONS_PER_SECOND() {
+  const v = Number(getLandConfigValue("summonsPerSecond"));
+  return Number.isFinite(v) && v > 0 ? v : 10;
+}
+function CFG_MAX_AGE_SECONDS() {
+  const v = Number(getLandConfigValue("summonMaxAgeSeconds"));
+  return Number.isFinite(v) && v > 0 ? v : 3600;
+}
 
 // Token bucket per being for the summons-rate limit. Created lazily.
 //
@@ -84,12 +98,12 @@ const _cognitionMode = new Map();
  * Calls are cheap; SUMMON handlers can fire this without awaiting.
  *
  * @param {string} beingId
- * @param {string} nodeId   position whose inbox just received the entry
+ * @param {string} spaceId   position whose inbox just received the entry
  */
-export function wake(beingId, nodeId) {
-  if (!beingId || !nodeId) return;
+export function wake(beingId, spaceId) {
+  if (!beingId || !spaceId) return;
   const state = _ensureState(beingId);
-  state.wakeQueue.add(String(nodeId));
+  state.wakeQueue.add(String(spaceId));
   if (!state.running) {
     state.running = true;
     // Fire and forget — runLoop owns its own error handling.
@@ -148,7 +162,7 @@ export function getCurrentRootCorrelation(beingId) {
  * the user originated (via Summon.find({ beingIn: user, "endMessage.time": null })
  * and walking rootCorrelation), then calls this to halt the chain
  * cascade in one sweep. Pending inbox entries get cleaned separately
- * via cancelByRootCorrelation per (nodeId, beingId).
+ * via cancelByRootCorrelation per (spaceId, beingId).
  *
  * @param {Iterable<string>} rootCorrelations
  * @param {string} [reason]
@@ -220,26 +234,26 @@ async function runLoop(beingId) {
     // pending in the inbox and the human responds by emitting a
     // new SUMMON, not by scheduler processing.
     while (state.wakeQueue.size > 0) {
-      // Take a snapshot of nodeIds to check this iteration. Wakes
+      // Take a snapshot of spaceIds to check this iteration. Wakes
       // landing during the iteration get picked up on the next round.
-      const nodeIds = Array.from(state.wakeQueue);
+      const spaceIds = Array.from(state.wakeQueue);
       state.wakeQueue.clear();
 
       let processedAny = false;
-      for (const nodeId of nodeIds) {
+      for (const spaceId of spaceIds) {
         // Drain THIS node's queue before moving on. Priority is enforced
         // by pickNextEntry, which always returns the current top.
         let safetyCounter = 1000; // hard cap so a runaway producer can't loop forever
         while (safetyCounter-- > 0) {
           if (!_checkRate(beingId)) {
-            // Rate-limited — put nodeId back so we revisit on the next wake.
-            state.wakeQueue.add(nodeId);
+            // Rate-limited — put spaceId back so we revisit on the next wake.
+            state.wakeQueue.add(spaceId);
             log.warn("Scheduler", `being ${beingId.slice(0, 8)} rate-limited; deferring`);
             break;
           }
-          const picked = await pickNextEntry(nodeId, beingId);
+          const picked = await pickNextEntry(spaceId, beingId);
           if (!picked) break;
-          const result = await processEntry(beingId, nodeId, picked);
+          const result = await processEntry(beingId, spaceId, picked);
           processedAny = true;
           // Humans: entries stay pending; we've notified observers
           // and shouldn't re-pick the same entry forever.
@@ -256,14 +270,14 @@ async function runLoop(beingId) {
   }
 }
 
-async function processEntry(beingId, nodeId, picked) {
+async function processEntry(beingId, spaceId, picked) {
   const { entry, index } = picked;
   const state = _state.get(beingId);
   const controller = new AbortController();
   state.controller = controller;
   state.currentRoot = entry.rootCorrelation || entry.correlation || null;
 
-  await markSummoned(nodeId, beingId, index);
+  await markSummoned(spaceId, beingId, index);
 
   // Resolve the receiver Being + the active role for THIS summon.
   //
@@ -283,7 +297,7 @@ async function processEntry(beingId, nodeId, picked) {
     toBeing = await Being.findById(beingId);
     if (!toBeing) {
       log.warn("Scheduler", `being ${beingId.slice(0, 8)} not found; marking entry consumed and skipping`);
-      await markInboxConsumed(nodeId, beingId, [entry.correlation]);
+      await markInboxConsumed(spaceId, beingId, [entry.correlation]);
       return;
     }
     // Cache cognition mode on first encounter so future wakes for this
@@ -299,7 +313,7 @@ async function processEntry(beingId, nodeId, picked) {
     if (toBeing.operatingMode === "human") {
       state.controller = null;
       state.currentRoot = null;
-      await _notifyHumanObservers(beingId, nodeId, state);
+      await _notifyHumanObservers(beingId, spaceId, state);
       return { humanBreakNode: true };
     }
     if (entry.activeRole) {
@@ -308,7 +322,7 @@ async function processEntry(beingId, nodeId, picked) {
         log.warn("Scheduler",
           `entry's activeRole "${entry.activeRole}" not carried by being ${beingId.slice(0, 8)} ` +
           `(roles: ${carried.join(", ") || "none"}); consuming without summon`);
-        await markInboxConsumed(nodeId, beingId, [entry.correlation]);
+        await markInboxConsumed(spaceId, beingId, [entry.correlation]);
         return;
       }
       activeRole = entry.activeRole;
@@ -318,13 +332,13 @@ async function processEntry(beingId, nodeId, picked) {
     role = activeRole ? getRole(activeRole) : null;
   } catch (err) {
     log.error("Scheduler", `resolution failed for being ${beingId.slice(0, 8)}: ${err.message}`);
-    await markInboxConsumed(nodeId, beingId, [entry.correlation]);
+    await markInboxConsumed(spaceId, beingId, [entry.correlation]);
     return;
   }
 
   if (!role) {
     log.warn("Scheduler", `no role registered for "${activeRole}" of being ${beingId.slice(0, 8)}; consuming without summon`);
-    await markInboxConsumed(nodeId, beingId, [entry.correlation]);
+    await markInboxConsumed(spaceId, beingId, [entry.correlation]);
     return;
   }
 
@@ -336,14 +350,13 @@ async function processEntry(beingId, nodeId, picked) {
   // shape; the scheduler reconstructs the parts it needs from stored
   // data).
   const summonCtx = {
-    nodeId,
+    spaceId,
     being:      activeRole,                      // legacy field name; carries the active role
     activeRole,                                  // canonical
     toBeing,
     message: {
       from:           entry.from,
       content:        entry.content,
-      intent:         entry.intent,
       correlation:    entry.correlation,
       rootCorrelation: entry.rootCorrelation || entry.correlation,
       activeRole,
@@ -355,7 +368,7 @@ async function processEntry(beingId, nodeId, picked) {
     resolved: {
       being:      activeRole,
       activeRole,
-      nodeId,
+      spaceId,
     },
     identity: null, // populated by the caller-side enqueue path (set below if attached)
     signal:   controller.signal,
@@ -377,8 +390,7 @@ async function processEntry(beingId, nodeId, picked) {
     if (result && typeof result === "object") {
       responseEntry = {
         from:        handoff?.responseFromStance || null,
-        content:     result.content,
-        intent:      result.intent || summonCtx.message.intent,
+        content:     result.text ?? result.content ?? "",
         correlation: result.correlation || randomUUID(),
         inReplyTo:   entry.correlation,
         sentAt:      new Date().toISOString(),
@@ -399,7 +411,7 @@ async function processEntry(beingId, nodeId, picked) {
     }
   } finally {
     try {
-      await markInboxConsumed(nodeId, beingId, [entry.correlation], {
+      await markInboxConsumed(spaceId, beingId, [entry.correlation], {
         responseId: responseEntry?.correlation || null,
         summonId:   responseEntry?.summonId    || null,
       });
@@ -455,8 +467,8 @@ export function attachHandoff(beingId, correlation, handoff) {
  * Direction (server → client) is implicit. The client routes on
  * envelope.verb and uses payload.correlation / payload.inReplyTo.
  */
-async function _notifyHumanObservers(beingId, nodeId, state) {
-  const entries = await readInbox(nodeId, beingId, { unconsumed: true });
+async function _notifyHumanObservers(beingId, spaceId, state) {
+  const entries = await readInbox(spaceId, beingId, { unconsumed: true });
   if (!entries.length) return;
   if (!state.humanNotified) state.humanNotified = new Set();
   for (const entry of entries) {
@@ -485,7 +497,7 @@ function _ensureState(beingId) {
 }
 
 function _checkRate(beingId) {
-  const cap = DEFAULT_BACKPRESSURE.summonsPerSecond;
+  const cap = CFG_SUMMONS_PER_SECOND();
   const now = Date.now();
   let bucket = _rate.get(beingId);
   if (!bucket) {

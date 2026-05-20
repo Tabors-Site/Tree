@@ -5,17 +5,17 @@
  * One shared cache for the kernel's hottest path: walking parent chains.
  * Five resolution chains (extension scope, tool scope, mode, LLM connection, LLM config)
  * plus auth and ownership all walk the same parent hierarchy. Without caching,
- * a tree 20 nodes deep means dozens of database queries before the AI does anything.
+ * a tree 20 spaces deep means dozens of database queries before the AI does anything.
  *
  * With caching, one walk serves all chains. Shared ancestors are shared entries.
  * The cache stores structural and configuration data that changes rarely:
- * metadata, systemRole, rootOwner, contributors, parent. It does NOT store
+ * metadata, seedSpace, rootOwner, contributors, parent. It does NOT store
  * notes, note content, or user-specific permission decisions.
  *
  * Invalidation:
  *   moveNode / deleteNode:  invalidateAll() (rare operations, full clear)
- *   setExtMeta / setOwner:  invalidateNode(nodeId) + all entries containing it
- *   addContributor:         invalidateNode(nodeId) only
+ *   setExtMeta / setOwner:  invalidateSpace(spaceId) + all entries containing it
+ *   addContributor:         invalidateSpace(spaceId) only
  *
  * Consistency within one message: snapshotAncestors() returns a deep copy.
  * The conversation loop snapshots once at message start. All resolution chains
@@ -28,14 +28,15 @@
  *   - Stats reset at 1B to prevent overflow.
  */
 
-import log from "../core/log.js";
-import Node from "../models/node.js";
+import log from "../system/log.js";
+import Space from "../models/space.js";
 import { getLandConfigValue } from "../landConfig.js";
-import { ERR, SYSTEM_OWNER } from "../core/protocol.js";
+import { ERR } from "../ibp/protocol.js";
+import { SEED_BEING } from "../space/seedSpaces.js";
 
 // ── Cache storage ──
 
-const _cache = new Map(); // nodeId -> { ancestors: [...], cachedAt: number }
+const _cache = new Map(); // spaceId -> { ancestors: [...], cachedAt: number }
 function MAX_ENTRIES() { return Number(getLandConfigValue("ancestorCacheMaxEntries")) || 50000; }
 function MAX_DEPTH() { return Math.max(10, Math.min(Number(getLandConfigValue("ancestorCacheMaxDepth")) || 100, 500)); }
 const STATS_RESET = 1_000_000_000; // reset counters before overflow
@@ -46,9 +47,9 @@ let _misses = 0;
 let _invalidations = 0;
 let _evictions = 0;
 
-// Fields to cache per ancestor node. These are what the resolution chains read.
+// Fields to cache per ancestor space. These are what the resolution chains read.
 // name included for buildPathString (avoids 50 sequential DB queries on deep trees).
-const ANCESTOR_FIELDS = "name metadata parent systemRole rootOwner contributors";
+const ANCESTOR_FIELDS = "name metadata parent seedSpace rootOwner contributors";
 
 function getTTL() {
   const configured = getLandConfigValue("ancestorCacheTTL");
@@ -59,18 +60,18 @@ function getTTL() {
 // ── Core functions ──
 
 /**
- * Get the ancestor chain from a node to root.
+ * Get the ancestor chain from a space to root.
  * Returns cached chain if fresh, otherwise walks from DB and caches.
  *
- * Each ancestor is a lean object with: _id, metadata, parent, systemRole, rootOwner, contributors.
- * The array is ordered from the node itself to root (or the last non-system node).
+ * Each ancestor is a lean object with: _id, metadata, parent, seedSpace, rootOwner, contributors.
+ * The array is ordered from the space itself to root (or the last non-land seed space).
  *
- * @param {string} nodeId
- * @returns {Promise<Array<object>|null>} null if the starting node doesn't exist
+ * @param {string} spaceId
+ * @returns {Promise<Array<object>|null>} null if the starting space doesn't exist
  */
-export async function getAncestorChain(nodeId) {
-  if (!nodeId) return null;
-  const id = String(nodeId);
+export async function getAncestorChain(spaceId) {
+  if (!spaceId) return null;
+  const id = String(spaceId);
   const ttl = getTTL();
 
   // Check cache
@@ -118,17 +119,17 @@ function cacheEntry(id, ancestors) {
 
 /**
  * Walk the parent chain from the database.
- * Returns null if the starting node doesn't exist.
+ * Returns null if the starting space doesn't exist.
  */
-async function walkFromDb(nodeId, ttl) {
+async function walkFromDb(spaceId, ttl) {
   const ancestors = [];
-  let cursor = nodeId;
+  let cursor = spaceId;
   const visited = new Set();
 
   while (cursor && !visited.has(cursor)) {
     visited.add(cursor);
     if (ancestors.length > MAX_DEPTH()) {
-      log.warn("AncestorCache", `Chain depth exceeded ${MAX_DEPTH()} for ${nodeId}. Possible circular ref.`);
+      log.warn("AncestorCache", `Chain depth exceeded ${MAX_DEPTH()} for ${spaceId}. Possible circular ref.`);
       break;
     }
 
@@ -145,9 +146,9 @@ async function walkFromDb(nodeId, ttl) {
       _cache.delete(String(cursor));
     }
 
-    const n = await Node.findById(cursor).select(ANCESTOR_FIELDS).lean();
+    const n = await Space.findById(cursor).select(ANCESTOR_FIELDS).lean();
     if (!n) {
-      // Node not found. Return what we have if any, null if starting node.
+      // Space not found. Return what we have if any, null if starting space.
       return ancestors.length > 0 ? ancestors : null;
     }
 
@@ -158,13 +159,13 @@ async function walkFromDb(nodeId, ttl) {
       name: n.name || null,
       metadata: meta,
       parent: n.parent ? String(n.parent) : null,
-      systemRole: n.systemRole || null,
+      seedSpace: n.seedSpace || null,
       rootOwner: n.rootOwner ? String(n.rootOwner) : null,
       contributors: (n.contributors || []).map(String),
     });
 
-    // Stop at system nodes (they're the boundary)
-    if (n.systemRole) break;
+    // Stop at land seed spaces (they're the boundary)
+    if (n.seedSpace) break;
 
     cursor = n.parent;
   }
@@ -177,11 +178,11 @@ async function walkFromDb(nodeId, ttl) {
  * Returns a deep copy. All resolution chains for one message
  * read from this snapshot. The live cache can change underneath.
  *
- * @param {string} nodeId
+ * @param {string} spaceId
  * @returns {Promise<Array<object>|null>}
  */
-export async function snapshotAncestors(nodeId) {
-  const chain = await getAncestorChain(nodeId);
+export async function snapshotAncestors(spaceId) {
+  const chain = await getAncestorChain(spaceId);
   if (!chain) return null;
   // Deep copy: metadata objects are plain (not Maps), so JSON roundtrip works.
   // Lean documents from Mongoose are pure JSON-safe objects.
@@ -210,9 +211,9 @@ export function resolveExtensionScopeFromChain(ancestors, confinedExtensions) {
   const allowed = new Set();
 
   // First pass: accumulate blocked[], restricted{}, and allowed[]
-  for (const node of ancestors) {
-    if (node.systemRole) break;
-    const extConfig = node.metadata?.extensions;
+  for (const space of ancestors) {
+    if (space.seedSpace) break;
+    const extConfig = space.metadata?.extensions;
     if (extConfig?.blocked && Array.isArray(extConfig.blocked)) {
       for (const name of extConfig.blocked) blocked.add(name);
     }
@@ -243,44 +244,44 @@ export function resolveExtensionScopeFromChain(ancestors, confinedExtensions) {
 
 /**
  * Resolve tree access from a cached ancestor chain.
- * Returns the same shape as resolveTreeAccess().
+ * Returns the same shape as resolveSpaceAccess().
  *
- * @param {string} startNodeId - the node being accessed
+ * @param {string} startNodeId - the space being accessed
  * @param {string} beingId - the user requesting access
  * @param {Array<object>} ancestors - from getAncestorChain or snapshotAncestors
  */
-export function resolveTreeAccessFromChain(startNodeId, beingId, ancestors) {
+export function resolveSpaceAccessFromChain(startNodeId, beingId, ancestors) {
   if (!ancestors || ancestors.length === 0) {
-    return { ok: false, error: ERR.NODE_NOT_FOUND, message: "Node not found." };
+    return { ok: false, error: ERR.SPACE_NOT_FOUND, message: "Space not found." };
   }
 
   let isContributor = false;
   let ownerNode = null;
 
-  for (const node of ancestors) {
-    if (node.systemRole) {
+  for (const space of ancestors) {
+    if (space.seedSpace) {
       // SOURCE is a traversable system tree (live mirror of
       // land/extensions + land/seed, see code-workspace/source.js).
       // Treat .source itself as the root of its subtree so everything
       // beneath it is navigable. Read-only by default — canWrite is
       // gated on the code-workspace writeMode metadata at the tool
       // handler level, not here.
-      if (node.systemRole === "source") {
-        ownerNode = node;
+      if (space.seedSpace === "source") {
+        ownerNode = space;
         break;
       }
-      // Every other system role is an impassable boundary.
-      return { ok: false, error: ERR.INVALID_TREE, message: "Invalid tree: reached system node boundary" };
+      // Every other seed role is an impassable boundary.
+      return { ok: false, error: ERR.INVALID_TREE, message: "Invalid tree: reached land seed space boundary" };
     }
 
     // Accumulate contributors
-    if (!isContributor && beingId && node.contributors?.some(id => id === beingId)) {
+    if (!isContributor && beingId && space.contributors?.some(id => id === beingId)) {
       isContributor = true;
     }
 
     // First rootOwner found is the ownership boundary
-    if (node.rootOwner && node.rootOwner !== SYSTEM_OWNER) {
-      ownerNode = node;
+    if (space.rootOwner && space.rootOwner !== SEED_BEING) {
+      ownerNode = space;
       break;
     }
   }
@@ -291,7 +292,7 @@ export function resolveTreeAccessFromChain(startNodeId, beingId, ancestors) {
 
   // .source is a land-owned system tree. Everyone on the land can read it.
   // Writes are gated elsewhere (code-workspace write-mode check).
-  if (ownerNode.systemRole === "source") {
+  if (ownerNode.seedSpace === "source") {
     return {
       ok: true,
       rootId: ownerNode._id,
@@ -323,11 +324,11 @@ export function resolveTreeAccessFromChain(startNodeId, beingId, ancestors) {
 // ── Invalidation ──
 
 /**
- * Invalidate a specific node and all cache entries that contain it as an ancestor.
+ * Invalidate a specific space and all cache entries that contain it as an ancestor.
  * Snapshots keys before deletion to avoid iterate-and-delete.
  */
-export function invalidateNode(nodeId) {
-  const id = String(nodeId);
+export function invalidateSpace(spaceId) {
+  const id = String(spaceId);
   _invalidations++;
 
   // Remove direct entry

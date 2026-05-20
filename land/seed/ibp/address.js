@@ -35,7 +35,7 @@
 //     /<uuid-a>/<uuid-b>           full chain, ids
 //     /<uuid-b>                    leaf only, id
 //   All four resolve to the same node. The parser accepts any form; the
-//   server resolves to a canonical nodeId and returns BOTH forms (the
+//   server resolves to a canonical spaceId and returns BOTH forms (the
 //   id chain and the name chain) in the Position Description so the
 //   portal can render either.
 //
@@ -432,10 +432,10 @@ export function toHttpRoute(stance) {
 // client's address bar or socket bootstrap.
 // ─────────────────────────────────────────────────────────────────────
 
-// `IbpError` lives in seed/core/errors.js so the parser doesn't need to
+// `IbpError` lives in seed/ibp/errors.js so the parser doesn't need to
 // know about wire-error wrapping. The server helpers import it locally;
 // the pure parser throws plain Error objects with .code + .paInput.
-import { IbpError, IBP_ERR } from "../core/errors.js";
+import { IbpError, IBP_ERR } from "../ibp/errors.js";
 
 // Cache the land's bare domain. Derived from process.env.LAND_DOMAIN
 // with a localhost fallback. Stripped of protocol/port because an IBP

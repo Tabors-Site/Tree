@@ -37,7 +37,7 @@ export default {
 
   needs: {
     services: ["llm", "session"],        // Core services required
-    models: ["Node", "User"],            // Core models required
+    models: ["Space", "User"],            // Core models required
     middleware: ["resolveTreeAccess"],    // Core middleware required
     extensions: ["understanding"],       // Other extensions required
   },
@@ -66,9 +66,18 @@ export default {
         { name: "my-ext:afterProcess", data: "{ result, userId }", description: "Fired after processing completes" },
       ],
       listens: [                        // Hooks this extension handles
-        "afterArtifact", "enrichContext", // Core hooks
+        "afterMatter", "enrichContext", // Core hooks
         "gateway:beforeDispatch",        // Another extension's hook
       ],
+    },
+    defaultPermissions: {               // Stance-auth Layer 3 contributions.
+      // Default permission rules the extension contributes to the
+      // authorize walk. The kernel checks these AFTER per-position
+      // rules (Layer 2) and BEFORE default-deny. Keys are the same
+      // shape as metadata.permissions entries.
+      "do:my-ext:run":      { requires: { owner: true } },
+      "do:my-ext:read-only":{ requires: {} },                 // anyone
+      "summon:@my-coach":   { requires: { homeInDomain: true } },
     },
   },
 };
@@ -93,16 +102,16 @@ export default {
 | `ownership` | Tree ownership | `addContributor`, `removeContributor`, `transferOwnership` |
 | `tree` | Tree infrastructure | `getAncestorChain`, `checkIntegrity`, `isTreeAlive` |
 | `cascade` | Signal propagation | `deliverCascade` |
-| `metadata` | Node metadata | `getExtMeta`, `readNs`, `setExtMeta`, `mergeExtMeta`, `incExtMeta`, `pushExtMeta`, `addToExtMetaSet`, `batchSetExtMeta`, `unsetExtMeta` |
+| `metadata` | Space metadata | `getExtMeta`, `readNs`, `setExtMeta`, `mergeExtMeta`, `incExtMeta`, `pushExtMeta`, `addToExtMetaSet`, `batchSetExtMeta`, `unsetExtMeta` |
 | `beingMetadata` | Being metadata (humans and AI beings) | `getBeingMeta`, `readBeingNs`, `setBeingMeta`, `mergeBeingMeta`, `incBeingMeta`, `pushBeingMeta`, `addToBeingMetaSet`, `batchSetBeingMeta`, `unsetBeingMeta` |
-| `artifactMetadata` | Artifact metadata | `getArtifactMeta`, `readArtifactNs`, `setArtifactMeta`, `mergeArtifactMeta`, `incArtifactMeta`, `pushArtifactMeta`, `addToArtifactMetaSet`, `batchSetArtifactMeta`, `unsetArtifactMeta` |
+| `matterMetadata` | Matter metadata | `getMatterMeta`, `readMatterNs`, `setMatterMeta`, `mergeMatterMeta`, `incMatterMeta`, `pushMatterMeta`, `addToMatterMetaSet`, `batchSetMatterMeta`, `unsetMatterMeta` |
 | `protocol` | Error codes, constants | `sendOk`, `sendError`, `ERR`, `WS`, `CASCADE` |
 | `websocket` | Real-time events | `emitToUser`, `registerSocketHandler` |
 | `mcp` | MCP connections | `connectToMCP`, `closeMCPClient` |
 | `auth` | Authentication | `resolveTreeAccess`, `createUser` |
 | `modes` | AI mode registry | `registerMode`, `setDefaultMode` |
 | `orchestrators` | Orchestrator registry | `register`, `get` |
-| `nodeLocks` | Per-node locking | `acquireNodeLock`, `releaseNodeLock` |
+| `spaceLocks` | Per-space locking | `acquireSpaceLock`, `releaseSpaceLock` |
 
 ### Dependency chains
 
@@ -114,9 +123,9 @@ Extensions load in topological order. If extension A depends on extension B (`ne
 
 ### hooks and modes are always available
 
-`core.hooks`, `core.modes`, `core.metadata`, `core.beingMetadata`, and `core.artifactMetadata` are injected into every scoped core regardless of declaration. You never need to declare them. They are core infrastructure available to all extensions.
+`core.hooks`, `core.modes`, `core.metadata`, `core.beingMetadata`, and `core.matterMetadata` are injected into every scoped core regardless of declaration. You never need to declare them. They are core infrastructure available to all extensions.
 
-The three metadata modules mirror each other. Every namespaced operation that works on a node also works on a being and on an artifact, with the function name carrying the target type (`setExtMeta` / `setBeingMeta` / `setArtifactMeta`, and so on). Pick the module that matches the document you are tagging. They are functionally peer modules, not a hierarchy.
+The three metadata modules mirror each other. Every namespaced operation that works on a space also works on a being and on a matter, with the function name carrying the target type (`setExtMeta` / `setBeingMeta` / `setMatterMeta`, and so on). Pick the module that matches the document you are tagging. They are functionally peer modules, not a hierarchy.
 
 ### Extension-provided services
 
@@ -189,11 +198,11 @@ export async function init(core) {
         name: "my-tool",
         description: "What it does",
         schema: {
-          nodeId: z.string().describe("Target node ID"),
+          spaceId: z.string().describe("Target space ID"),
           userId: z.string().describe("Injected by server. Ignore."),
         },
         annotations: { readOnlyHint: false, destructiveHint: false },
-        handler: async ({ nodeId, userId }) => {
+        handler: async ({ spaceId, userId }) => {
           return { content: [{ type: "text", text: "Done" }] };
         },
       },
@@ -349,7 +358,7 @@ export default {
   name: "my-orchestrator",
   version: "1.0.0",
   description: "Custom tree conversation flow",
-  needs: { models: ["Node", "User"] },
+  needs: { models: ["Space", "User"] },
   provides: { orchestrator: { bigMode: "tree" } },
 };
 
@@ -358,7 +367,7 @@ export async function init(core) {
   return {
     orchestrator: {
       bigMode: "tree",
-      async handle({ visitorId, message, socket, userId, sessionId, rootId, nodeId, mode, ...ctx }) {
+      async handle({ visitorId, message, socket, userId, sessionId, rootId, spaceId, mode, ...ctx }) {
         // You have full control. Run LLM calls, use tools, navigate the tree.
         const { content } = await core.conversation.processMessage({
           userId,
@@ -366,7 +375,7 @@ export async function init(core) {
           message,
           mode,         // resolved mode key (e.g. "tree:respond")
           rootId,
-          nodeId,
+          spaceId,
           sessionId,
           socket,       // for streaming to client
         });
@@ -393,8 +402,8 @@ The `handle` function receives:
 | `userId` | string | Authenticated user ID |
 | `username` | string | Username |
 | `sessionId` | string | Session ID (zone:rootId:userId) |
-| `rootId` | string | Tree root node ID |
-| `nodeId` | string | Current node ID |
+| `rootId` | string | Tree root space ID |
+| `spaceId` | string | Current space ID |
 | `mode` | string | Resolved mode key |
 
 Return value: `{ response, navigatedTo, ... }`. The response is sent to the client.
@@ -427,7 +436,7 @@ Return value: `{ response, navigatedTo, ... }`. The response is sent to the clie
 
 | Service | Key | Always Available |
 |---------|-----|-----------------|
-| Models | `core.models.{User,Node,Contribution,Note}` | Yes |
+| Models | `core.models.{User,Space,Did,Matter}` | Yes |
 | Auth | `core.auth.resolveTreeAccess` | Yes |
 | Contributions | `core.contributions.logContribution` | Yes |
 | Sessions | `core.session.*` | Yes |
@@ -441,7 +450,7 @@ Return value: `{ response, navigatedTo, ... }`. The response is sent to the clie
 | Orchestrators | `core.orchestrators.*` | Yes |
 | Ownership | `core.ownership.*` | Yes |
 | Tree | `core.tree.*` | Yes |
-| Node Locks | `core.nodeLocks.*` | Yes |
+| Space Locks | `core.spaceLocks.*` | Yes |
 | Metadata | `core.metadata.*` (namespace-enforced, 7 functions) | Yes (always injected) |
 | User Metadata | `core.beingMetadata.*` (6 functions) | Yes (always injected) |
 | Scope | `core.scope.*` | Yes |
@@ -458,7 +467,7 @@ import log from "../../seed/log.js";
 
 log.info("MyExt", "Job started");           // Level 1: always shown. Jobs, lifecycle.
 log.verbose("MyExt", "Processing tree X");   // Level 2: normal operations. Pipeline steps.
-log.debug("MyExt", "Placed item Y on node"); // Level 3: internal details. Individual operations.
+log.debug("MyExt", "Placed item Y on space"); // Level 3: internal details. Individual operations.
 log.warn("MyExt", "Retry failed, skipping"); // Always shown. Recoverable issues.
 log.error("MyExt", "Fatal:", err.message);   // Always shown. Broken operations.
 ```
@@ -488,7 +497,7 @@ provides: {
 ```
 
 Endpoint placeholders are resolved automatically by the CLI:
-- `:nodeId` resolves from the current position in the tree
+- `:spaceId` resolves from the current position in the tree
 - `:rootId` resolves from the active tree
 - `:userId` resolves from the logged in user
 - `:version` resolves to "latest"
@@ -501,7 +510,7 @@ The hook system is an open pub/sub bus. Core fires kernel hooks. Extensions can 
 ```js
 export async function init(core) {
   // Listen to a core hook
-  core.hooks.register("enrichContext", async ({ context, node, meta }) => {
+  core.hooks.register("enrichContext", async ({ context, space, meta }) => {
     const myData = meta["my-extension"] || {};
     if (Object.keys(myData).length > 0) context.myData = myData;
   }, "my-extension");
@@ -520,24 +529,22 @@ export async function init(core) {
 
 | Hook | Data shape | Type | Purpose |
 |------|-----------|------|---------|
-| `beforeArtifact` | `{ nodeId, content, beingId, origin, metadata }` | before | Modify artifact data before save. Origin is one of "ibp", "filesystem", "web", "cross-land". |
-| `afterArtifact` | `{ artifact, nodeId, beingId, origin, sizeKB, deltaKB, action, chatId, sessionId }` | after | React after artifact create/edit/delete. |
-| `beforeContribution` | `{ nodeId, nodeVersion, action, userId }` | before | Modify contribution metadata. Prestige uses this to tag nodeVersion. |
-| `afterNodeCreate` | `{ node, userId }` | after | Initialize extension data on new nodes. |
-| `beforeStatusChange` | `{ node, status, userId }` | before | Validate or intercept status changes. |
-| `afterStatusChange` | `{ node, status, userId }` | after | React after status saved. |
-| `beforeNodeDelete` | `{ node, userId }` | before | Clean up extension data before deletion. |
-| `enrichContext` | `{ context, node, meta }` | enrich | Inject extension data into AI context. |
+| `beforeMatter` | `{ spaceId, content, beingId, origin, metadata }` | before | Modify matter data before save. Origin is one of "ibp", "filesystem", "web", "cross-land". |
+| `afterMatter` | `{ matter, spaceId, beingId, origin, sizeKB, deltaKB, action, chatId, sessionId }` | after | React after matter create/edit/delete. |
+| `beforeContribution` | `{ spaceId, spaceVersion, action, userId }` | before | Modify contribution metadata. Prestige uses this to tag spaceVersion. |
+| `afterSpaceCreate` | `{ space, userId }` | after | Initialize extension data on new spaces. |
+| `beforeSpaceDelete` | `{ space, userId }` | before | Clean up extension data before deletion. |
+| `enrichContext` | `{ context, space, meta }` | enrich | Inject extension data into AI context. |
 | `beforeRegister` | `{ username, password }` | before | Validate or modify registration. |
 | `afterRegister` | `{ user }` | after | Initialize user data after registration. |
-| `onCascade` | `{ node, nodeId, signalId, writeContext, source, depth, cascadeConfig }` | cascade | Fires when content is written at a cascade-enabled node or when a signal is delivered externally. Handler results are written to .flow. |
+| `onCascade` | `{ space, spaceId, signalId, writeContext, source, depth, cascadeConfig }` | cascade | Fires when content is written at a cascade-enabled space or when a signal is delivered externally. Handler results are written to .flow. |
 
 ### Cascade hooks
 
-`onCascade` is different from other hooks. It fires through the same hook system but handler return values become visible results stored in the `.flow` system node. This is the communication primitive. Extensions use it to react to signals, propagate to children, or deliver across lands.
+`onCascade` is different from other hooks. It fires through the same hook system but handler return values become visible results stored in the `.flow` system space. This is the communication primitive. Extensions use it to react to signals, propagate to children, or deliver across lands.
 
 ```js
-core.hooks.register("onCascade", async ({ node, nodeId, signalId, writeContext, source, depth }) => {
+core.hooks.register("onCascade", async ({ space, spaceId, signalId, writeContext, source, depth }) => {
   // React to the signal
   // Optionally propagate to children via deliverCascade
   // Return value is written as result to .flow
@@ -545,8 +552,8 @@ core.hooks.register("onCascade", async ({ node, nodeId, signalId, writeContext, 
 ```
 
 Two entry points trigger onCascade:
-- **checkCascade** (kernel-internal): called on note writes and status changes. The kernel originates.
-- **deliverCascade** (extension-external): called by extensions to deliver to other nodes. Never blocked.
+- **checkCascade** (kernel-internal): called on matter writes and status changes. The kernel originates.
+- **deliverCascade** (extension-external): called by extensions to deliver to other spaces. Never blocked.
 
 ### Extension hooks (examples)
 
@@ -574,26 +581,26 @@ Extensions define their own hooks using the `extName:hookName` naming convention
 
 ### Structural mutations in hooks
 
-If your hook handler creates, moves, or deletes nodes, acquire a node lock via `core.nodeLocks.acquireNodeLock`. Release in a `finally` block. The kernel does not know which hooks do structural work. Extensions that do take responsibility.
+If your hook handler creates, moves, or deletes spaces, acquire a space lock via `core.spaceLocks.acquireSpaceLock`. Release in a `finally` block. The kernel does not know which hooks do structural work. Extensions that do take responsibility.
 
 ```js
-core.hooks.register("afterArtifact", async ({ nodeId }) => {
-  const lock = await core.nodeLocks.acquireNodeLock(parentId, sessionId);
+core.hooks.register("afterMatter", async ({ spaceId }) => {
+  const lock = await core.spaceLocks.acquireSpaceLock(parentId, sessionId);
   try {
-    await createNode({ name: "Child", parentId, beingId });
+    await createSpace({ name: "Child", parentId, beingId });
   } finally {
-    core.nodeLocks.releaseNodeLock(parentId, sessionId);
+    core.spaceLocks.releaseSpaceLock(parentId, sessionId);
   }
 }, "my-ext");
 ```
 
-Node locks are short-lived, in-memory, sorted-acquisition (prevents deadlocks), and TTL-expiring (prevents permanent locks on crash). The integrity check repairs on boot if a crash left orphaned state.
+Space locks are short-lived, in-memory, sorted-acquisition (prevents deadlocks), and TTL-expiring (prevents permanent locks on crash). The integrity check repairs on boot if a crash left orphaned state.
 
 ## Data Migrations
 
-Extensions store data in `node.metadata` and `user.metadata`. This data is freeform. No schema validation at the DB layer. This is intentional: it keeps the system flexible.
+Extensions store data in `space.metadata` and `user.metadata`. This data is freeform. No schema validation at the DB layer. This is intentional: it keeps the system flexible.
 
-But over time, extensions change. A v1 extension stores `metadata.myExt = { count: 5 }`. Version 2 restructures to `metadata.myExt = { stats: { count: 5, total: 100 } }`. Existing nodes in the database still have the v1 shape. Without migrations, the extension breaks on old data.
+But over time, extensions change. A v1 extension stores `metadata.myExt = { count: 5 }`. Version 2 restructures to `metadata.myExt = { stats: { count: 5, total: 100 } }`. Existing spaces in the database still have the v1 shape. Without migrations, the extension breaks on old data.
 
 **Every extension that writes to metadata should declare a schema version and provide migrations.** This is not optional for production extensions. It is what protects user data over years of updates.
 
@@ -611,20 +618,20 @@ provides: {
 In `migrations.js`:
 
 ```js
-import Node from "../../db/models/node.js";
+import Space from "../../db/models/space.js";
 
 export default [
   {
     version: 1,
     async up() {
       // v0 -> v1: move flat values into nested structure
-      const nodes = await Node.find({ "metadata.myExt": { $exists: true } }).select("metadata");
-      for (const node of nodes) {
-        const old = node.metadata.get("myExt");
+      const spaces = await Space.find({ "metadata.myExt": { $exists: true } }).select("metadata");
+      for (const space of spaces) {
+        const old = space.metadata.get("myExt");
         if (old && !old.stats) {
-          node.metadata.set("myExt", { stats: { count: old.count || 0 } });
-          node.markModified("metadata");
-          await node.save();
+          space.metadata.set("myExt", { stats: { count: old.count || 0 } });
+          space.markModified("metadata");
+          await space.save();
         }
       }
     },
@@ -633,14 +640,14 @@ export default [
     version: 2,
     async up() {
       // v1 -> v2: add total field with default
-      const nodes = await Node.find({ "metadata.myExt.stats": { $exists: true } }).select("metadata");
-      for (const node of nodes) {
-        const data = node.metadata.get("myExt");
+      const spaces = await Space.find({ "metadata.myExt.stats": { $exists: true } }).select("metadata");
+      for (const space of spaces) {
+        const data = space.metadata.get("myExt");
         if (data?.stats && data.stats.total === undefined) {
           data.stats.total = 0;
-          node.metadata.set("myExt", data);
-          node.markModified("metadata");
-          await node.save();
+          space.metadata.set("myExt", data);
+          space.markModified("metadata");
+          await space.save();
         }
       }
     },
@@ -651,7 +658,7 @@ export default [
 ### How it works
 
 1. The loader reads `schemaVersion` from your manifest (e.g. `2`)
-2. It checks the `.extensions` system node for your extension's stored version (e.g. `1`)
+2. It checks the `.extensions` system space for your extension's stored version (e.g. `1`)
 3. If stored < declared, it loads your `migrations.js` and runs pending migrations in order
 4. After all migrations succeed, it updates the stored version to match
 5. If a migration fails, it stops and logs the error. Your extension still loads but data may be inconsistent.
@@ -661,7 +668,7 @@ export default [
 - **Migrations run once.** The stored version tracks what has run. Re-running boot does not re-run old migrations.
 - **Migrations run at boot, before your extension's `init()`.** Your code can assume the data is at the current version.
 - **Never delete migrations.** Someone upgrading from v1 to v5 needs all intermediate migrations.
-- **Test migrations on real data.** A migration that works on 10 nodes might fail on 10,000.
+- **Test migrations on real data.** A migration that works on 10 spaces might fail on 10,000.
 - **Version 0 is implicit.** If you never declared schemaVersion before, existing data is version 0.
 - **User metadata follows the same pattern.** Use `User.find()` in migrations to update user data.
 
@@ -744,11 +751,11 @@ export default [
 ];
 ```
 
-On boot, the loader checks each extension's stored schema version (in the .extensions system node) against the declared version, and runs pending migrations in order.
+On boot, the loader checks each extension's stored schema version (in the .extensions system space) against the declared version, and runs pending migrations in order.
 
-## .extensions System Node
+## .extensions System Space
 
-Each loaded extension is mirrored as a child node under the `.extensions` system node:
+Each loaded extension is mirrored as a child space under the `.extensions` system space:
 
 ```
 Land Root
@@ -768,7 +775,7 @@ Set `DISABLED_EXTENSIONS` env var (comma-separated):
 DISABLED_EXTENSIONS=solana,billing,scripts
 ```
 
-Or use the CLI (god tier): `treeos ext disable solana`
+Or use the CLI: `treeos ext disable solana`
 
 Both sources are merged. Disabled extensions are skipped during loading.
 
@@ -792,34 +799,34 @@ export async function init(core) {
 
 Jobs are auto-started after DB connect via `startExtensionJobs()`.
 
-## Per-Node Data Storage (metadata)
+## Per-Space Data Storage (metadata)
 
-Extensions MUST store per-node data in `node.metadata` under their extension name.
-Do NOT add fields to the core Node schema. Use `core.metadata` from the services bundle:
+Extensions MUST store per-space data in `space.metadata` under their extension name.
+Do NOT add fields to the core Space schema. Use `core.metadata` from the services bundle:
 
 ```js
 // In init(core) or any function with core in scope:
 
 // Read
-const data = core.metadata.getExtMeta(node, "my-extension");  // returns {} if empty
+const data = core.metadata.getExtMeta(space, "my-extension");  // returns {} if empty
 
 // Write (full replace, needs document)
-await core.metadata.setExtMeta(node, "my-extension", { wallets: {}, config: {} });
+await core.metadata.setExtMeta(space, "my-extension", { wallets: {}, config: {} });
 
 // Partial update (shallow merge, needs document)
-await core.metadata.mergeExtMeta(node, "my-extension", { lastSync: new Date() });
+await core.metadata.mergeExtMeta(space, "my-extension", { lastSync: new Date() });
 
 // Atomic increment (by ID or document, no read-modify-write)
-await core.metadata.incExtMeta(nodeId, "my-extension", "counter", 1);
+await core.metadata.incExtMeta(spaceId, "my-extension", "counter", 1);
 
 // Atomic capped array push (by ID or document)
-await core.metadata.pushExtMeta(nodeId, "my-extension", "history", { ts: Date.now() }, 50);
+await core.metadata.pushExtMeta(spaceId, "my-extension", "history", { ts: Date.now() }, 50);
 
 // Atomic multi-field set (by ID or document)
-await core.metadata.batchSetExtMeta(nodeId, "my-extension", { a: 1, b: 2, c: 3 });
+await core.metadata.batchSetExtMeta(spaceId, "my-extension", { a: 1, b: 2, c: 3 });
 
 // Remove namespace entirely (on uninstall or cleanup)
-await core.metadata.unsetExtMeta(nodeId, "my-extension");
+await core.metadata.unsetExtMeta(spaceId, "my-extension");
 ```
 
 For files outside `init()` (core.js, tools.js, routes.js), receive metadata through a configure pattern:
@@ -852,35 +859,35 @@ Convention:
 - Data is `Mixed` type, so use plain objects and arrays (no Mongoose subdocument features)
 - The helpers handle `markModified("metadata")` automatically
 - Reading metadata from core code (e.g. treeData) should use:
-  `(node.metadata instanceof Map ? node.metadata.get("name") : node.metadata?.name)`
+  `(space.metadata instanceof Map ? space.metadata.get("name") : space.metadata?.name)`
 
-### Scaffolding Nodes (the `role` convention)
+### Scaffolding Spaces (the `role` convention)
 
-Extensions that create a tree structure on install (food, fitness, recovery, kb, etc.) MUST set a `role` field in their metadata namespace on every scaffolded node:
+Extensions that create a tree structure on install (food, fitness, recovery, kb, etc.) MUST set a `role` field in their metadata namespace on every scaffolded space:
 
 ```js
-await core.metadata.setExtMeta(logNode, "food", { role: "log" });
-await core.metadata.setExtMeta(mealsNode, "food", { role: "meals" });
-await core.metadata.setExtMeta(profileNode, "food", { role: "profile" });
+await core.metadata.setExtMeta(logSpace, "food", { role: "log" });
+await core.metadata.setExtMeta(mealsSpace, "food", { role: "meals" });
+await core.metadata.setExtMeta(profileSpace, "food", { role: "profile" });
 ```
 
-The `role` field is the structural marker. It means "this node is load-bearing for my extension." TreeOS base registers a generic `beforeNodeDelete` hook that checks every node being deleted. If any extension namespace in the node's metadata contains a `role` field, the delete is cancelled with a message naming the extension and role.
+The `role` field is the structural marker. It means "this space is load-bearing for my extension." TreeOS base registers a generic `beforeSpaceDelete` hook that checks every space being deleted. If any extension namespace in the space's metadata contains a `role` field, the delete is cancelled with a message naming the extension and role.
 
-The handler does not know what food is. It does not know what fitness is. It sees `metadata.food.role = "log"` and knows that node is structural to something. Any extension that scaffolds nodes and sets `role` on them gets delete protection automatically.
+The handler does not know what food is. It does not know what fitness is. It sees `metadata.food.role = "log"` and knows that space is structural to something. Any extension that scaffolds spaces and sets `role` on them gets delete protection automatically.
 
-When looking up scaffolded nodes at runtime, query by role, not by name or stored ID:
+When looking up scaffolded spaces at runtime, query by role, not by name or stored ID:
 
 ```js
-const children = await Node.find({ parent: rootId }).select("_id name metadata").lean();
-const nodes = {};
+const children = await Space.find({ parent: rootId }).select("_id name metadata").lean();
+const spaces = {};
 for (const child of children) {
   const meta = child.metadata?.get?.("food") || child.metadata?.food;
-  if (meta?.role) nodes[meta.role] = { id: String(child._id), name: child.name };
+  if (meta?.role) spaces[meta.role] = { id: String(child._id), name: child.name };
 }
-// nodes.log, nodes.meals, nodes.profile — found by role, not name
+// spaces.log, spaces.meals, spaces.profile — found by role, not name
 ```
 
-This makes scaffolded trees resilient to renames (users can rename nodes freely) while protecting against accidental deletion. Users who truly want to delete a structural node can use `--force` to bypass the hook.
+This makes scaffolded trees resilient to renames (users can rename spaces freely) while protecting against accidental deletion. Users who truly want to delete a structural space can use `--force` to bypass the hook.
 
 ### Reaching other extensions
 
@@ -922,7 +929,7 @@ export default {
   emoji: "🔬",
   label: "Research",
   bigMode: "tree",
-  toolNames: ["web-search", "summarize", "create-new-node-branch"],
+  toolNames: ["web-search", "summarize", "create-new-space-branch"],
   buildSystemPrompt({ username, rootId, currentNodeId }) {
     return `You are a research agent for ${username}. Search the web and place findings into the tree.`;
   },
@@ -947,7 +954,7 @@ Modes cannot override core modes. The conversation system routes to custom modes
 
 ## Mode Naming Convention
 
-Extensions that register AI modes should follow suffix conventions. The tree-orchestrator uses these suffixes for automatic routing when a user is at an extension's node. No per-extension routing code needed.
+Extensions that register AI modes should follow suffix conventions. The tree-orchestrator uses these suffixes for automatic routing when a user is at an extension's space. No per-extension routing code needed.
 
 **Standard suffixes:**
 
@@ -962,7 +969,7 @@ Extensions that register AI modes should follow suffix conventions. The tree-orc
 
 Not every extension uses all six. Use what fits your domain.
 
-**How it works:** When the orchestrator detects an extension at the current node (Level 1), it calls `getModesOwnedBy(extName)` to get all registered modes. It matches the user's message against standard intent patterns and picks the mode with the matching suffix. If no suffix matches, it falls to the node's `modes.respond` default (usually `:log` or `:tell`).
+**How it works:** When the orchestrator detects an extension at the current space (Level 1), it calls `getModesOwnedBy(extName)` to get all registered modes. It matches the user's message against standard intent patterns and picks the mode with the matching suffix. If no suffix matches, it falls to the space's `modes.respond` default (usually `:log` or `:tell`).
 
 **Examples:**
 ```
@@ -975,64 +982,64 @@ kb:tell, kb:ask, kb:review
 
 **Custom routing:** Extensions with complex internal routing (food's macro parsing, KB's tell/ask detection) can export `handleMessage(message, ctx)` from their init return. The orchestrator calls `handleMessage` first. Suffix matching is the fallback for extensions without it. Convention with override.
 
-## Per-Node Tool Customization
+## Per-Space Tool Customization
 
-Any node can allow or block specific MCP tools. This lets you create branches with different AI capabilities without writing code.
+Any space can allow or block specific MCP tools. This lets you create branches with different AI capabilities without writing code.
 
 **How it works:** Tools are resolved in three layers:
 1. Mode base tools (what the active mode defines)
 2. Extension tools (what extensions inject via the loader)
-3. Node config (`metadata.tools.allowed[]` / `metadata.tools.blocked[]`)
+3. Space config (`metadata.tools.allowed[]` / `metadata.tools.blocked[]`)
 
-Node config inherits from parent to child. A tool blocked at a parent stays blocked for all descendants unless explicitly re-allowed.
+Space config inherits from parent to child. A tool blocked at a parent stays blocked for all descendants unless explicitly re-allowed.
 
 **API:**
 ```
-GET  /api/v1/node/:nodeId/tools          Shows effective tools, base, added, blocked, inheritance chain
-POST /api/v1/node/:nodeId/tools          Set { allowed: [...], blocked: [...] }
+GET  /api/v1/space/:spaceId/tools          Shows effective tools, base, added, blocked, inheritance chain
+POST /api/v1/space/:spaceId/tools          Set { allowed: [...], blocked: [...] }
 ```
 
 **CLI:**
 ```
-tools                            Show effective tools at current node
-tools-allow execute-shell        Add a tool to this node
-tools-block delete-node-branch   Block a tool at this node
+tools                            Show effective tools at current space
+tools-allow execute-shell        Add a tool to this space
+tools-block delete-space-branch   Block a tool at this space
 tools-clear                      Remove all local config (inherit from parent)
 ```
 
 **Examples:**
 - DevOps branch: `tools-allow execute-shell` gives AI shell access on one branch only
-- Archive branch: `tools-block delete-node-branch` prevents deletion
-- Read-only branch: `tools-block create-new-node-branch delete-node-branch edit-node-status`
+- Archive branch: `tools-block delete-space-branch` prevents deletion
+- Read-only branch: `tools-block create-new-space-branch delete-space-branch edit-space-status`
 
 **From extension code:**
 ```js
 // Allow a tool programmatically (use core.metadata, never import directly)
-const tools = core.metadata.getExtMeta(node, "tools") || {};
+const tools = core.metadata.getExtMeta(space, "tools") || {};
 tools.allowed = [...(tools.allowed || []), "my-custom-tool"];
-await core.metadata.setExtMeta(node, "tools", tools);
+await core.metadata.setExtMeta(space, "tools", tools);
 ```
 
-## Per-Node Mode Overrides
+## Per-Space Mode Overrides
 
-Any node can override which AI mode handles a specific intent. This lets different branches think differently.
+Any space can override which AI mode handles a specific intent. This lets different branches think differently.
 
 **How it works:** Mode resolution has three layers:
-1. Per-node override in `metadata.modes[intent]`
+1. Per-space override in `metadata.modes[intent]`
 2. Default mapping for the zone (e.g., `tree:respond`)
 3. Big mode fallback
 
 **API:**
 ```
-GET  /api/v1/node/:nodeId/modes          Shows overrides and available modes
-POST /api/v1/node/:nodeId/modes          Set { intent: "respond", modeKey: "custom:formal" }
-POST /api/v1/node/:nodeId/modes          Clear: { intent: "respond", clear: true }
+GET  /api/v1/space/:spaceId/modes          Shows overrides and available modes
+POST /api/v1/space/:spaceId/modes          Set { intent: "respond", modeKey: "custom:formal" }
+POST /api/v1/space/:spaceId/modes          Clear: { intent: "respond", clear: true }
 ```
 
 **CLI:**
 ```
 modes                                Show current overrides and available modes
-mode-set respond custom:formal       Override respond intent at this node
+mode-set respond custom:formal       Override respond intent at this space
 mode-clear respond                   Clear one override
 mode-clear                           Clear all overrides
 ```
@@ -1042,9 +1049,9 @@ mode-clear                           Clear all overrides
 - Journal branch: `mode-set respond custom:reflective` for introspective responses
 - Training branch: `mode-set navigate custom:guided` for step-by-step navigation
 
-## Per-Node Extension Scoping
+## Per-Space Extension Scoping
 
-Any node can block or restrict entire extensions. This is the broadest capability control. When an extension is blocked at a node, all its tools, hooks, modes, and metadata writes are suppressed at that position and all descendants.
+Any space can block or restrict entire extensions. This is the broadest capability control. When an extension is blocked at a space, all its tools, hooks, modes, and metadata writes are suppressed at that position and all descendants.
 
 **Three access levels:**
 
@@ -1054,23 +1061,23 @@ Any node can block or restrict entire extensions. This is the broadest capabilit
 | **restricted "read"** | read-only tools only | all fire | all resolve | allowed |
 | **blocked** | none | skipped | skipped | rejected |
 
-**Storage:** `node.metadata.extensions = { blocked: ["solana"], restricted: { "food": "read" } }`
+**Storage:** `space.metadata.extensions = { blocked: ["solana"], restricted: { "food": "read" } }`
 
 **Inheritance:** walks parent chain, accumulates. A child never unblocks what a parent blocked.
 
 **API:**
 ```
-GET  /api/v1/node/:nodeId/extensions          Show blocked/restricted with inheritance chain
-POST /api/v1/node/:nodeId/extensions          Set { blocked: [...], restricted: { "ext": "read" } }
+GET  /api/v1/space/:spaceId/extensions          Show blocked/restricted with inheritance chain
+POST /api/v1/space/:spaceId/extensions          Set { blocked: [...], restricted: { "ext": "read" } }
 GET  /api/v1/root/:rootId/extensions?tree=1   Tree-wide block map
 POST /api/v1/root/:rootId/extensions          Set at tree root
 ```
 
 **CLI:**
 ```
-ext-scope                         Show what's active/blocked/restricted at current node
+ext-scope                         Show what's active/blocked/restricted at current space
 ext-scope -t                      Tree-wide view of all blocks across branches
-ext-block solana scripts          Block extensions at current node
+ext-block solana scripts          Block extensions at current space
 ext-allow solana                  Remove from block list
 ext-restrict food read            Restrict to read-only tools
 ```
@@ -1081,14 +1088,14 @@ Extensions should check spatial scope before running AI conversations:
 
 ```js
 // In your route handler (core.scope is always available):
-if (await core.scope.isExtensionBlockedAtNode("my-extension", rootId)) {
+if (await core.scope.isExtensionBlockedAtSpace("my-extension", rootId)) {
   return res.status(403).json({ error: "This extension is blocked on this branch." });
 }
 ```
 
 **How restricted "read" works:**
 
-Every MCP tool declares `readOnlyHint` in its annotations. When an extension is restricted to "read" at a node, the kernel filters its tools to only those with `readOnlyHint: true`. The extension's hooks still fire (it can observe) but it can only read, not write. This lets two extensions coexist on a tree where each can see the other's data but not modify it.
+Every MCP tool declares `readOnlyHint` in its annotations. When an extension is restricted to "read" at a space, the kernel filters its tools to only those with `readOnlyHint: true`. The extension's hooks still fire (it can observe) but it can only read, not write. This lets two extensions coexist on a tree where each can see the other's data but not modify it.
 
 **Example: Health tree with fitness and food:**
 
@@ -1104,7 +1111,7 @@ The fitness coach can reference nutrition data while planning workouts. The food
 
 ### Confined extensions
 
-Extensions can declare `scope: "confined"` in their manifest. Confined extensions are inactive everywhere by default. They must be explicitly allowed at a position via `metadata.extensions.allowed[]`. Use `ext-allow solana` to activate a confined extension at the current node and below. Use `ext-unallow solana` to remove access. Confined scope is for dangerous extensions (shell, solana, scripts) that should only exist where explicitly permitted.
+Extensions can declare `scope: "confined"` in their manifest. Confined extensions are inactive everywhere by default. They must be explicitly allowed at a position via `metadata.extensions.allowed[]`. Use `ext-allow solana` to activate a confined extension at the current space and below. Use `ext-unallow solana` to remove access. Confined scope is for dangerous extensions (shell, solana, scripts) that should only exist where explicitly permitted.
 
 ```js
 export default {
@@ -1118,7 +1125,7 @@ The resolution chain handles confined extensions in one walk. If a confined exte
 
 **CLI:**
 ```
-ext-allow solana              Allow confined extension at this node
+ext-allow solana              Allow confined extension at this space
 ext-unallow solana            Remove confined extension access
 ```
 
@@ -1137,11 +1144,11 @@ provides: {
       command: "wallet [action] [args...]",
       description: "Solana wallet. Actions: create, send, swap.",
       method: "GET",
-      endpoint: "/node/:nodeId/values/solana",
+      endpoint: "/space/:spaceId/values/solana",
       subcommands: {
-        "create": { method: "POST", endpoint: "/node/:nodeId/values/solana", description: "Create wallet" },
-        "send": { method: "POST", endpoint: "/node/:nodeId/0/values/solana/send", args: ["amount", "destination"], description: "Send SOL" },
-        "swap": { method: "POST", endpoint: "/node/:nodeId/0/values/solana/transaction", args: ["inputMint", "outputMint", "amountUi"], description: "Swap tokens" },
+        "create": { method: "POST", endpoint: "/space/:spaceId/values/solana", description: "Create wallet" },
+        "send": { method: "POST", endpoint: "/space/:spaceId/0/values/solana/send", args: ["amount", "destination"], description: "Send SOL" },
+        "swap": { method: "POST", endpoint: "/space/:spaceId/0/values/solana/transaction", args: ["inputMint", "outputMint", "amountUi"], description: "Swap tokens" },
       },
     },
   ],
@@ -1152,7 +1159,7 @@ No action = default GET. Unknown action shows available subcommands. Missing req
 
 ## Per-User Data Storage (metadata)
 
-Same pattern as per-node metadata. Use `core.beingMetadata` (always available, no declaration needed):
+Same pattern as per-space metadata. Use `core.beingMetadata` (always available, no declaration needed):
 
 ```js
 // Read
@@ -1169,7 +1176,7 @@ await core.beingMetadata.batchSetBeingMeta(userId, "energy", { available: 95, la
 await core.beingMetadata.unsetBeingMeta(userId, "old-extension");
 ```
 
-Convention: namespace key matches your manifest name. Same rules as node metadata.
+Convention: namespace key matches your manifest name. Same rules as space metadata.
 
 ## Inter-Extension Communication
 
@@ -1275,11 +1282,80 @@ setRunChat(async (opts) => {
 
 `userHasLlm` checks the full resolution chain: user connections, user assignments, and land default. Returns false only when there is truly no LLM anywhere. The check does not bypass the land fallback.
 
-**Injecting into enrichContext without guarding.** Every enrichContext handler should check if relevant data exists before injecting. If your extension has no data for this node, return early. Do not inject empty objects. Do not run database queries on every context build unless you have data to contribute.
+**Injecting into enrichContext without guarding.** Every enrichContext handler should check if relevant data exists before injecting. If your extension has no data for this space, return early. Do not inject empty objects. Do not run database queries on every context build unless you have data to contribute.
 
-**Writing to metadata without the kernel API.** Direct `node.metadata.set()` or `Node.updateOne({ $set: ... })` bypasses namespace ownership, document size guards, and the afterMetadataWrite hook. Always use `core.metadata.*` functions. The kernel provides atomic operations for every pattern: `incExtMeta` for counters, `pushExtMeta` for capped arrays, `batchSetExtMeta` for multi-field writes, `unsetExtMeta` for cleanup. There is no reason to use direct MongoDB for metadata.
+**Writing to metadata without the kernel API.** Direct `space.metadata.set()` or `Space.updateOne({ $set: ... })` bypasses namespace ownership, document size guards, and the afterMetadataWrite hook. Always use `core.metadata.*` functions. The kernel provides atomic operations for every pattern: `incExtMeta` for counters, `pushExtMeta` for capped arrays, `batchSetExtMeta` for multi-field writes, `unsetExtMeta` for cleanup. There is no reason to use direct MongoDB for metadata.
 
 **Missing LLM_PRIORITY on background calls.** Every LLM call needs a priority. BACKGROUND for hooks and jobs. INTERACTIVE for user-triggered tools. GATEWAY for external channels. Without priority, background extensions compete with human chat.
+
+## Stance Authorization Defaults (Layer 3)
+
+The kernel gates every verb (`see` / `do` / `summon` / `be`) through stance
+authorization. The walk has three layers:
+
+| Layer | Source | When it matches |
+|---|---|---|
+| **Layer 2** | `metadata.permissions.<verb>.<keyParts>` on the target or any ancestor | First match on the parent walk wins |
+| **Layer 3** | `provides.defaultPermissions` on installed extensions | When no Layer 2 rule matches |
+| **Layer 5** | default deny | When nothing else matched |
+
+**Why Layer 3 matters.** Per-position rules (Layer 2) require operators
+to write a `set-meta` on every space that needs the rule. Layer 3 lets
+an extension ship sensible defaults that apply everywhere the extension
+is installed, with no per-position write. The land operator can still
+override at any specific position via Layer 2.
+
+### How to contribute defaults
+
+Declare them in your manifest:
+
+```js
+provides: {
+  defaultPermissions: {
+    // DO actions. Key shape matches metadata.permissions.do.<action>
+    // (or .<action>:<namespace> for set-meta/clear-meta).
+    "do:my-ext:run":          { requires: { owner: true } },
+    "do:my-ext:read-only":    { requires: {} },          // anyone
+    "do:set-meta:my-ext":     { requires: { contributor: true } },
+
+    // SUMMON. Key shape matches metadata.permissions.summon.@<role>.
+    // Use prefix wildcards for role families.
+    "summon:@my-coach":       { requires: { homeInDomain: true } },
+    "summon:@my-worker*":     { requires: { contributor: true } },
+  },
+},
+```
+
+The loader picks these up at boot and feeds them into the kernel's
+default-permission registry. Uninstalling the extension removes its
+defaults automatically; reinstalling re-registers them.
+
+### `requires` shape
+
+Each rule has a `requires` object whose entries are checked against
+the caller's stance properties (derived from their Being + relation
+to the target):
+
+| Property | Meaning |
+|---|---|
+| `owner: true` | Caller is the target tree's rootOwner |
+| `contributor: true` | Caller is in target tree's `contributors[]` |
+| `arrival: false` | Caller has identity (not anonymous arrival) |
+| `homeAtPosition: true` | Caller's `homeSpace` is the target |
+| `homeInDomain: "<spaceId>"` | The named space is in the caller's home ancestry |
+| `positionInHomeDomain: true` | The target is inside the caller's home subtree |
+| `role: "<role-name>"` | Caller's active role matches |
+| `homeOnThisLand: true` | Caller is not federated from another land |
+
+`requires: {}` admits every stance (used for "anyone can do this"
+rules). All entries must pass for the rule to allow.
+
+### Picking specificity
+
+If multiple extensions ship a rule for the same key, the first installed
+wins (kernel doesn't merge). Use namespaced action prefixes
+(`do:my-ext:*`) so your rules don't collide with another extension's
+defaults.
 
 ## Security Model
 
@@ -1306,7 +1382,7 @@ export default {
   type: "extension",             // default if omitted
   version: "1.0.0",
   builtFor: "FarmOS",            // "seed" (universal), bundle name, or OS name
-  description: "Track crop yields per node",
+  description: "Track crop yields per space",
   needs: { extensions: ["farm-core@>=1.0.0"] },
   provides: { routes: true, tools: true },
 };

@@ -27,7 +27,7 @@
  */
 
 import mongoose from "mongoose";
-import log from "../core/log.js";
+import log from "../log.js";
 
 export default async function migrate() {
   const coll = mongoose.connection.collection("nodes");

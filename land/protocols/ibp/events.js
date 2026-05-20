@@ -30,16 +30,16 @@
 //
 //   verb: "see"     → payload is a live-update envelope keyed by `kind`:
 //                     { kind: "patch"|"replace"|"invalidate",
-//                       nodeId, data }
+//                       spaceId, data }
 //                     `data` carries the descriptor delta (patch) or the
 //                     full descriptor (replace) or just the reason
 //                     (invalidate).
 
-// The wire event name lives in seed/core/pushChannel.js (the seed-side
+// The wire event name lives in seed/ibp/pushChannel.js (the seed-side
 // wire boundary). Re-exported here so protocol-side adapters that own
 // the receive end can speak of `IBP_EVENT` symmetrically with seed-side
 // pushers, without seed having to import from protocols.
-export { IBP_EVENT } from "../../seed/core/pushChannel.js";
+export { IBP_EVENT } from "../../seed/ibp/pushChannel.js";
 
 /**
  * SEE push payload kinds. Used inside the `ibp` envelope when verb=see

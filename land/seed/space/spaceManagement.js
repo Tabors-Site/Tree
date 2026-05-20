@@ -1,242 +1,311 @@
 // TreeOS Seed . AGPL-3.0 . https://treeos.ai . Tabor Holly
+//
+// Space management — create, rename, retype, move, delete, revive.
+//
+// Naming rules (one source of truth in `assertValidSpaceName`):
+//
+//   - 1 to 80 characters
+//   - first character: ASCII letter or digit
+//   - rest: letters, digits, dot, underscore, hyphen
+//
+// Everything else is rejected. This keeps every space addressable in a
+// URL path without encoding — no slashes, no spaces, no HTML, no @ /
+// ~ / ? / # prefixes that the IBP address grammar reserves. System
+// spaces (dot-prefixed) bypass these rules via `createSystemSpace`
+// because the kernel owns them.
+
 import mongoose from "mongoose";
-import Node from "../models/node.js";
-import { logDid } from "./dids.js";
-import { containsHtml } from "../core/utils.js";
+
+import Space from "../models/space.js";
 import Being from "../models/being.js";
-import { createArtifact } from "./artifacts.js";
-import { resolveTreeAccess } from "./treeAccess.js";
-import { isDescendant } from "./treeFetch.js";
-import { hooks } from "../core/hooks.js";
+import { logDid } from "./dids.js";
+import { createMatter } from "../matter/matters.js";
+import { resolveSpaceAccess, isDescendant } from "./spaceFetch.js";
+import { acquireSpaceLock, releaseSpaceLock, acquireMultiple, releaseMultiple } from "./spaceLocks.js";
+import { invalidateAll, invalidateSpace } from "./ancestorCache.js";
+import { hooks } from "../system/hooks.js";
 import { getLandRootId } from "../landRoot.js";
-import { invalidateAll, invalidateNode } from "./ancestorCache.js";
-import log from "../core/log.js";
-import { DELETED, ARTIFACT_ORIGIN, ERR, ProtocolError, SYSTEM_OWNER } from "../core/protocol.js";
-import { acquireNodeLock, releaseNodeLock, acquireMultiple, releaseMultiple } from "./nodeLocks.js";
 import { getLandConfigValue } from "../landConfig.js";
+import log from "../system/log.js";
+import { ERR, ProtocolError } from "../ibp/protocol.js";
+import { DELETED, SEED_BEING } from "./seedSpaces.js";
+import { MATTER_ORIGIN } from "../matter/origins.js";
 
-async function getBeingOrThrow(beingId) {
-  if (!beingId) {
-    throw new Error("User ID is required");
+// ─────────────────────────────────────────────────────────────────────────
+// VALIDATION
+// ─────────────────────────────────────────────────────────────────────────
+
+const SPACE_NAME_MAX = 80;
+const SPACE_TYPE_MAX = 32;
+// Letter or digit start, then letter / digit / dot / underscore / hyphen.
+// No slashes, no spaces, no HTML, no IBP-address sigils (@ ~ # ?).
+const SPACE_NAME_RE = /^[A-Za-z0-9][A-Za-z0-9._-]*$/;
+const SPACE_TYPE_RE = /^[A-Za-z0-9][A-Za-z0-9._-]*$/;
+
+/**
+ * Validate (and trim) a space name. Throws on rejection. Returns the
+ * trimmed name on success.
+ */
+function assertValidSpaceName(raw) {
+  if (typeof raw !== "string") throw new Error("Space name must be a string");
+  const name = raw.trim();
+  if (!name) throw new Error("Space name is required");
+  if (name.length > SPACE_NAME_MAX) {
+    throw new Error(`Space name must be ${SPACE_NAME_MAX} characters or fewer`);
   }
-
-  const user = await Being.findById(beingId);
-  if (!user) {
-    throw new Error("User not found");
+  if (!SPACE_NAME_RE.test(name)) {
+    throw new Error(
+      "Space name must contain only letters, digits, dot, underscore, or hyphen, " +
+      "and must start with a letter or digit",
+    );
   }
-
-  return user;
+  return name;
 }
 
-export async function createNode({
-  name,
-  parentId = null,
-  isRoot = false,
-  beingId,
-  type = null,
-  note = null,
-  metadata = null,
-  validatedUser = null,
-  summonId = null,
-  sessionId = null,
-} = {}) {
-  if (!name || typeof name !== "string" || !name.trim()) {
-    throw new Error("Node name is required");
+/**
+ * Validate (and trim) a space type. Null is allowed (untyped space).
+ * Returns the normalized type (string or null).
+ */
+function assertValidSpaceType(raw) {
+  if (raw === null || raw === undefined) return null;
+  if (typeof raw !== "string") throw new Error("Space type must be a string or null");
+  const type = raw.trim();
+  if (!type) return null;
+  if (type.length > SPACE_TYPE_MAX) {
+    throw new Error(`Space type must be ${SPACE_TYPE_MAX} characters or fewer`);
   }
-  name = name.trim();
-  if (name.length > 150) {
-    throw new Error("Node name must be 150 characters or fewer");
+  if (!SPACE_TYPE_RE.test(type)) {
+    throw new Error(
+      "Space type must contain only letters, digits, dot, underscore, or hyphen, " +
+      "and must start with a letter or digit",
+    );
   }
-  if (containsHtml(name)) {
-    throw new Error("Node name cannot contain HTML tags");
-  }
-  if (name.startsWith(".")) {
-    throw new Error("Node names cannot start with a dot");
-  }
-  if (name.startsWith("@")) {
-    throw new Error("Node names cannot start with @");
-  }
-  if (name === "~" || name.startsWith("~/")) {
-    throw new Error("Node names cannot be ~ (reserved for home)");
-  }
-  if (name.startsWith("/")) {
-    throw new Error("Node names cannot start with / (reserved for path separator)");
-  }
-  if (!isRoot && !parentId) {
-    throw new Error("Non-root nodes require a parentId");
-  }
-  const user = validatedUser ?? (await getBeingOrThrow(beingId));
+  return type;
+}
 
-  // beforeNodeCreate: extensions can modify or cancel.
-  // parentType included so extensions can validate parent-child type compatibility.
+async function getBeingOrThrow(beingId) {
+  if (!beingId) throw new Error("beingId is required");
+  const being = await Being.findById(beingId);
+  if (!being) throw new Error("Being not found");
+  return being;
+}
+
+/**
+ * Reject if a non-deleted sibling at `parentId` already carries `name`.
+ *
+ * Two spaces with the same name at the same parent would silently
+ * collide on every path-based lookup — `treeos.ai/foo/bar` resolves to
+ * whichever the resolver hits first. Names are case-sensitive
+ * (matching URL-path behavior); "Foo" and "foo" can coexist as
+ * siblings even though that's usually a bad idea.
+ *
+ * Pass `excludeSpaceId` for renames so the space whose name we're
+ * changing doesn't count itself as a collision.
+ */
+async function assertNameAvailableAt(parentId, name, { excludeSpaceId = null } = {}) {
+  if (!parentId) return;
+  const q = { parent: parentId, name };
+  if (excludeSpaceId) q._id = { $ne: excludeSpaceId };
+  const conflict = await Space.findOne(q).select("_id").lean();
+  if (conflict) {
+    throw new ProtocolError(409, ERR.RESOURCE_CONFLICT,
+      `A space named "${name}" already exists at this position`);
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// CREATE
+// ─────────────────────────────────────────────────────────────────────────
+
+/**
+ * Create a space.
+ *
+ *   - `isRoot: true` plants a new tree under the land root, with the
+ *     caller as `rootOwner`.
+ *   - `isRoot: false` requires `parentId` and creates a child of that
+ *     space (which must not be a land seed space).
+ *
+ * Initial matter content can be planted via `note` (creates one
+ * IBP-origin Matter on the new space).
+ *
+ * Hooks: `beforeSpaceCreate` may modify or cancel; `afterSpaceCreate`
+ * is awaited only for root creation so navigation can update its index
+ * before the response returns.
+ */
+export async function createSpace({
+  name,
+  parentId       = null,
+  isRoot         = false,
+  beingId,
+  type           = null,
+  note           = null,
+  metadata       = null,
+  validatedBeing = null,
+  summonId       = null,
+  sessionId      = null,
+} = {}) {
+  name = assertValidSpaceName(name);
+  type = assertValidSpaceType(type);
+
+  if (!isRoot && !parentId) throw new Error("Non-root spaces require a parentId");
+
+  const being = validatedBeing ?? (await getBeingOrThrow(beingId));
+
+  // beforeSpaceCreate: extensions may modify or cancel. Pass parent
+  // type so extensions can validate parent/child type compatibility.
   let parentType = null;
   if (parentId) {
-    const parentDoc = await Node.findById(parentId).select("type").lean();
+    const parentDoc = await Space.findById(parentId).select("type").lean();
     parentType = parentDoc?.type || null;
   }
-  const hookData = { name, type, parentId, parentType, isRoot, beingId, metadata: metadata || new Map() };
-  const hookResult = await hooks.run("beforeNodeCreate", hookData);
+  const hookData = {
+    name, type, parentId, parentType, isRoot,
+    beingId: being._id,
+    metadata: metadata || new Map(),
+  };
+  const hookResult = await hooks.run("beforeSpaceCreate", hookData);
   if (hookResult.cancelled) {
     const code = hookResult.timedOut ? ERR.HOOK_TIMEOUT : ERR.HOOK_CANCELLED;
-    throw new ProtocolError(500, code, hookResult.reason || "Node creation blocked");
+    throw new ProtocolError(500, code, hookResult.reason || "Space creation blocked");
   }
-  // Apply any modifications from hooks
-  name = hookData.name;
-  type = hookData.type;
+  // Hooks may have edited name/type; re-validate before save.
+  name = assertValidSpaceName(hookData.name);
+  type = assertValidSpaceType(hookData.type);
 
-  const newNode = new Node({
+  // Name must be unique among siblings at the target parent so
+  // path-based fetching (`/foo/bar/baz`) resolves unambiguously.
+  const siblingParentId = isRoot ? getLandRootId() : parentId;
+  await assertNameAvailableAt(siblingParentId, name);
+
+  const newSpace = new Space({
     name,
     type,
-    children: [],
-    parent: isRoot ? getLandRootId() : (parentId || null),
-    rootOwner: isRoot ? user._id : null,
+    children:     [],
+    parent:       isRoot ? getLandRootId() : (parentId || null),
+    rootOwner:    isRoot ? being._id : null,
     contributors: [],
-    metadata: hookData.metadata instanceof Map ? hookData.metadata : new Map(),
+    metadata:     hookData.metadata instanceof Map ? hookData.metadata : new Map(),
   });
+  await newSpace.save();
 
-  await newNode.save();
-
-  // Structural mutation: lock the parent while adding to its children[]
+  // Structural mutation: lock the parent while adding to its children[].
   const lockTarget = isRoot ? getLandRootId() : parentId;
   if (lockTarget) {
-    const locked = await acquireNodeLock(lockTarget, sessionId);
-    if (!locked) throw new ProtocolError(409, ERR.RESOURCE_CONFLICT, "Parent node is being modified");
+    const locked = await acquireSpaceLock(lockTarget, sessionId);
+    if (!locked) throw new ProtocolError(409, ERR.RESOURCE_CONFLICT, "Parent space is being modified");
   }
   try {
-    // Children cap: prevent any single node from accumulating unbounded children.
-    // Wide nodes cause memory spikes on every parent query (the entire children
-    // array loads into memory). Default 1000, configurable via maxChildrenPerNode.
-    const maxChildren = parseInt(getLandConfigValue("maxChildrenPerNode") || "1000", 10);
+    // Children cap: a wide space loads its entire children[] on every
+    // parent query, so we cap one space's children to prevent memory
+    // spikes. Default 1000; configurable via `maxChildrenPerSpace`.
+    const maxChildren = parseInt(getLandConfigValue("maxChildrenPerSpace") || "1000", 10);
 
     if (isRoot) {
       const landRootId = getLandRootId();
       if (landRootId) {
-        const landRoot = await Node.findById(landRootId).select("children").lean();
+        const landRoot = await Space.findById(landRootId).select("children").lean();
         if (landRoot?.children?.length >= maxChildren) {
-          throw new ProtocolError(400, ERR.INVALID_INPUT, `Land root has reached the maximum of ${maxChildren} children`);
+          throw new ProtocolError(400, ERR.INVALID_INPUT,
+            `Land root has reached the maximum of ${maxChildren} children`);
         }
-        await Node.findByIdAndUpdate(landRootId, { $addToSet: { children: newNode._id } });
+        await Space.findByIdAndUpdate(landRootId, { $addToSet: { children: newSpace._id } });
       }
     } else if (parentId) {
-      const parentNode = await Node.findById(parentId).select("systemRole children").lean();
-      if (!parentNode) throw new Error("Parent node not found");
-      if (parentNode.systemRole) throw new Error("Cannot create nodes under system nodes");
-      if (parentNode.children?.length >= maxChildren) {
-        throw new ProtocolError(400, ERR.INVALID_INPUT, `Parent node has reached the maximum of ${maxChildren} children`);
+      const parentSpace = await Space.findById(parentId).select("seedSpace children").lean();
+      if (!parentSpace) throw new Error("Parent space not found");
+      if (parentSpace.seedSpace) throw new Error("Cannot create spaces under land seed spaces");
+      if (parentSpace.children?.length >= maxChildren) {
+        throw new ProtocolError(400, ERR.INVALID_INPUT,
+          `Parent space has reached the maximum of ${maxChildren} children`);
       }
+      await Space.findByIdAndUpdate(parentId, { $addToSet: { children: newSpace._id } });
 
-      await Node.findByIdAndUpdate(parentId, { $addToSet: { children: newNode._id } });
-
-      await logDid({
-        beingId: user._id,
-        nodeId: parentId,
-        summonId,
-        sessionId,
-        action: "updateChild",
-        updateChild: {
-          action: "added",
-          childId: newNode._id.toString(),
-        },
-      });
     }
   } finally {
-    if (lockTarget) releaseNodeLock(lockTarget, sessionId);
+    if (lockTarget) releaseSpaceLock(lockTarget, sessionId);
   }
 
+  // Single Did per structural event. The new space's parent linkage is
+  // captured in params.parentId; "all children added under X" reads
+  // through { action: "create", "target.kind": "space", "params.parentId": X }.
   await logDid({
-    beingId: user._id,
-    nodeId: newNode._id,
-    summonId,
-    sessionId,
-    action: "create",
-
+    beingId:  being._id,
+    action:   "create",
+    target:   { kind: "space", id: newSpace._id.toString() },
+    params:   {
+      parentId: isRoot ? getLandRootId() : (parentId || null),
+      name:     newSpace.name,
+      type:     newSpace.type || null,
+      isRoot,
+    },
+    summonId, sessionId,
   });
 
   if (note?.trim()) {
-    await createArtifact({
-      origin: ARTIFACT_ORIGIN.IBP,
-      content: note,
-      beingId: user._id,
-      nodeId: newNode._id,
-      summonId,
-      sessionId,
+    await createMatter({
+      origin:   MATTER_ORIGIN.IBP,
+      content:  note,
+      beingId:  being._id,
+      spaceId:  newSpace._id,
+      summonId, sessionId,
     });
   }
 
-  // afterNodeCreate: await for root creation so navigation extension
-  // updates metadata.nav.roots before the response goes back to the CLI.
-  // Non-root nodes fire-and-forget (hooks are independent reactions).
+  // Root creation awaits afterSpaceCreate so navigation can update
+  // metadata.nav.roots before the caller receives the response.
+  // Non-root creation fires and forgets (hooks are independent).
   if (isRoot) {
-    await hooks.run("afterNodeCreate", { node: newNode, beingId: user._id }).catch(() => {});
+    await hooks.run("afterSpaceCreate", { space: newSpace, beingId: being._id }).catch(() => {});
   } else {
-    hooks.run("afterNodeCreate", { node: newNode, beingId: user._id }).catch(() => {});
+    hooks.run("afterSpaceCreate", { space: newSpace, beingId: being._id }).catch(() => {});
   }
 
-  return newNode;
+  return newSpace;
 }
 
 /**
- * Create a system node (dot-prefixed, no hooks, no contributions).
- * Used by extensions for infrastructure nodes like .intent, .pulse, .rings.
- * These are not user-created content. They are extension infrastructure.
- *
- * Returns the created node. Handles parent linking atomically.
+ * Create a land seed space (dot-prefixed, no hooks, no Did rows).
+ * Bypasses the name validator because dot-prefixed names are reserved
+ * for kernel-owned spaces. Used at boot for .identity, .config, .peers,
+ * .extensions, .flow, .tools, .roles, .operations, .source.
  */
-export async function createSystemNode({ name, parentId, metadata = null }) {
-  if (!name || typeof name !== "string") {
-    throw new Error("System node name is required");
-  }
-  if (!parentId) {
-    throw new Error("System node requires a parent");
-  }
+export async function createSystemSpace({ name, parentId, metadata = null }) {
+  if (!name || typeof name !== "string") throw new Error("Land seed space name is required");
+  if (!parentId) throw new Error("Land seed space requires a parent");
 
   const { v4: uuidv4 } = await import("uuid");
   const id = uuidv4();
 
-  const newNode = new Node({
+  const newSpace = new Space({
     _id: id,
     name,
-    parent: parentId,
-    children: [],
+    parent:       parentId,
+    children:     [],
     contributors: [],
-    metadata: metadata instanceof Map ? metadata : new Map(),
+    metadata:     metadata instanceof Map ? metadata : new Map(),
   });
-  await newNode.save();
-
-  await Node.findByIdAndUpdate(parentId, { $addToSet: { children: id } });
-
-  return newNode;
+  await newSpace.save();
+  await Space.findByIdAndUpdate(parentId, { $addToSet: { children: id } });
+  return newSpace;
 }
 
-export async function createNodeBranch(
-  nodeData,
-  parentId,
-  beingId,
-  summonId = null,
-  sessionId = null,
-) {
-  const user = await getBeingOrThrow(beingId);
-
-  return createNodeBranchInternal(
-    nodeData,
-    parentId,
-    user,
-    summonId,
-    sessionId,
-  );
+/**
+ * Create a space and recursively create its children. Each level
+ * carries the same shape:
+ *
+ *   { name, type?, note?, metadata?, children?: [...] }
+ *
+ * Every level runs the same validation `createSpace` enforces.
+ */
+export async function createSpaceBranch(branchData, parentId, beingId, summonId = null, sessionId = null) {
+  const being = await getBeingOrThrow(beingId);
+  return _createBranch(branchData, parentId, being, summonId, sessionId);
 }
 
-async function createNodeBranchInternal(
-  nodeData,
-  parentId,
-  user,
-  summonId = null,
-  sessionId = null,
-) {
-  const { name, note, type, metadata } = nodeData;
-  const children = Array.isArray(nodeData.children) ? nodeData.children : [];
+async function _createBranch(branchData, parentId, being, summonId, sessionId) {
+  const { name, note, type, metadata } = branchData;
+  const children = Array.isArray(branchData.children) ? branchData.children : [];
 
-  // Callers build metadata. The kernel just passes it through.
   let metadataMap = null;
   if (metadata instanceof Map) {
     metadataMap = metadata;
@@ -244,501 +313,290 @@ async function createNodeBranchInternal(
     metadataMap = new Map(Object.entries(metadata));
   }
 
-  const newNode = await createNode({
-    name,
-    parentId,
-    beingId: user._id,
-    type: type || null,
-    note: note || null,
-    metadata: metadataMap,
-    validatedUser: user,
-    summonId,
-    sessionId,
+  const newSpace = await createSpace({
+    name, parentId,
+    beingId:        being._id,
+    type:           type || null,
+    note:           note || null,
+    metadata:       metadataMap,
+    validatedBeing: being,
+    summonId, sessionId,
   });
 
   let totalCreated = 1;
-
   for (const childData of children) {
-    const childResult = await createNodeBranchInternal(
-      childData,
-      newNode._id,
-      user,
-      summonId,
-      sessionId,
-    );
-    totalCreated += childResult.totalCreated;
+    const result = await _createBranch(childData, newSpace._id, being, summonId, sessionId);
+    totalCreated += result.totalCreated;
   }
-
-  return {
-    rootId: newNode._id,
-    rootName: newNode.name,
-    totalCreated,
-  };
+  return { rootId: newSpace._id, rootName: newSpace.name, totalCreated };
 }
 
-export async function deleteNodeBranch(
-  nodeId,
-  beingId,
-  summonId = null,
-  sessionId = null,
-) {
-  const nodeToDelete = await Node.findById(nodeId);
-  if (!nodeToDelete) throw new Error("Node not found");
-  const access = await resolveTreeAccess(nodeId, beingId);
-  if (!access.isOwner || (!access.isRoot && !!nodeToDelete.rootOwner)) {
-    throw new Error("Invalid delete attempt. Must be owner and not root.");
-  }
-  if (nodeToDelete.rootOwner && nodeToDelete.rootOwner !== SYSTEM_OWNER) {
-    throw new Error("Root nodes can only be retired on root view");
-  }
-  if (nodeToDelete.parent === DELETED) {
-    throw new Error("Node has already been deleted");
-  }
-  // beforeNodeDelete hook (before hooks can cancel)
-  const hookResult = await hooks.run("beforeNodeDelete", { node: nodeToDelete, beingId });
-  if (hookResult.cancelled) {
-    const code = hookResult.timedOut ? ERR.HOOK_TIMEOUT : ERR.HOOK_CANCELLED;
-    throw new ProtocolError(500, code, hookResult.reason || "Node deletion blocked");
+// ─────────────────────────────────────────────────────────────────────────
+// RENAME / RETYPE
+// ─────────────────────────────────────────────────────────────────────────
+
+export async function editSpaceName({ spaceId, newName, beingId, summonId = null, sessionId = null }) {
+  newName = assertValidSpaceName(newName);
+
+  const space = await Space.findById(spaceId);
+  if (!space)           throw new Error("Space not found");
+  if (space.seedSpace) throw new Error("Cannot modify land seed spaces");
+
+  // Reject collision with a sibling under the same parent. Skip the
+  // check when the name isn't actually changing (re-saving same name).
+  if (space.name !== newName) {
+    await assertNameAvailableAt(space.parent, newName, { excludeSpaceId: spaceId });
   }
 
+  const oldName = space.name;
+  await Space.findByIdAndUpdate(spaceId, { $set: { name: newName } });
 
-  const oldParent = nodeToDelete.parent;
-  const lockIds = [nodeId.toString(), oldParent && oldParent !== DELETED ? oldParent.toString() : null].filter(Boolean);
-  const locked = await acquireMultiple(lockIds, sessionId);
-  if (!locked) throw new ProtocolError(409, ERR.RESOURCE_CONFLICT, "Nodes are being modified");
-  try {
-    nodeToDelete.rootOwner = beingId;
-    nodeToDelete.parent = DELETED;
-    await nodeToDelete.save();
-
-    if (oldParent && oldParent !== DELETED) {
-      await Node.findByIdAndUpdate(oldParent, {
-        $pull: { children: nodeId },
-      });
-
-      await logDid({
-        beingId,
-        nodeId: oldParent.toString(),
-        summonId,
-        sessionId,
-        action: "updateChild",
-        updateChild: {
-          action: "removed",
-          childId: nodeId.toString(),
-        },
-      });
-    }
-  } finally {
-    releaseMultiple(lockIds, sessionId);
-  }
   await logDid({
     beingId,
-    nodeId: nodeId,
-    summonId,
-    sessionId,
-    action: "branchLifecycle",
-
-    branchLifecycle: {
-      action: "retired",
-      fromParentId: oldParent?.toString() ?? null,
-    },
+    action:   "edit",
+    target:   { kind: "space", id: spaceId.toString() },
+    params:   { name: { old: oldName, new: newName } },
+    summonId, sessionId,
   });
-  invalidateNode(nodeId); // Deleted node and entries containing it
-  return nodeToDelete;
+
+  return { space, oldName, newName };
 }
 
+export async function editSpaceType({ spaceId, newType, beingId, summonId = null, sessionId = null }) {
+  newType = assertValidSpaceType(newType);
+
+  const space = await Space.findById(spaceId);
+  if (!space)           throw new Error("Space not found");
+  if (space.seedSpace) throw new Error("Cannot modify land seed spaces");
+
+  const oldType = space.type;
+  await Space.findByIdAndUpdate(spaceId, { $set: { type: newType } });
+
+  await logDid({
+    beingId,
+    action:   "edit",
+    target:   { kind: "space", id: spaceId.toString() },
+    params:   { type: { old: oldType, new: newType } },
+    summonId, sessionId,
+  });
+
+  return { space, oldType, newType };
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// MOVE
+// ─────────────────────────────────────────────────────────────────────────
+
+/**
+ * Move a space to a new parent.
+ *
+ *   - Same tree: caller must have write access (owner or contributor).
+ *   - Cross-tree: caller must own BOTH tree roots.
+ *
+ * Runs the three structural writes ($pull from old parent, $set parent,
+ * $addToSet on new parent) under a transaction when MongoDB is a
+ * replica set; falls back to sequential ops on standalone with a
+ * verbose warning.
+ *
+ * Pass `opts.skipCacheInvalidation` for batched moves so the caller
+ * can invalidate once at the end.
+ */
 export async function updateParentRelationship(
-  nodeChildId,
-  nodeNewParentId,
-  beingId,
-  summonId = null,
-  sessionId = null,
-  opts = {},
+  childId, newParentId, beingId,
+  summonId = null, sessionId = null, opts = {},
 ) {
-  const nodeChild = await Node.findById(nodeChildId);
-  if (!nodeChild) throw new Error("Child node not found");
-  if (nodeChild.rootOwner && nodeChild.rootOwner !== SYSTEM_OWNER) throw new Error("Cannot change root's parent");
-  if (nodeChild.parent.toString() === nodeNewParentId.toString()) {
-    throw new Error("Node already has this parent");
+  const child = await Space.findById(childId);
+  if (!child) throw new Error("Child space not found");
+  if (child.rootOwner && child.rootOwner !== SEED_BEING) {
+    throw new Error("Cannot change a tree root's parent");
+  }
+  if (child.parent.toString() === newParentId.toString()) {
+    throw new Error("Space already has this parent");
   }
 
-  const oldParentId = nodeChild.parent; // ✅ safe
-  const oldParent = oldParentId ? await Node.findById(oldParentId) : null;
-  const nodeNewParent = await Node.findById(nodeNewParentId);
+  const oldParentId = child.parent;
+  const oldParent   = oldParentId ? await Space.findById(oldParentId) : null;
+  const newParent   = await Space.findById(newParentId);
 
-  if (!nodeNewParent) throw new Error("New parent node not found");
-  if (nodeNewParent.systemRole) throw new Error("Cannot move into a system node");
-  if (await isDescendant(nodeChildId, nodeNewParentId)) {
-    throw new Error("Cannot move a node into its own descendant");
+  if (!newParent)           throw new Error("New parent space not found");
+  if (newParent.seedSpace) throw new Error("Cannot move into a land seed space");
+  if (await isDescendant(childId, newParentId)) {
+    throw new Error("Cannot move a space into its own descendant");
   }
 
-  // Resolve tree access for both nodes
-  const childAccess = await resolveTreeAccess(nodeChildId, beingId);
-  const newParentAccess = await resolveTreeAccess(nodeNewParentId, beingId);
+  // Authorization. Same tree → write access. Cross-tree → both-roots ownership.
+  const childAccess     = await resolveSpaceAccess(childId,     beingId);
+  const newParentAccess = await resolveSpaceAccess(newParentId, beingId);
 
-  // CASE 1: Same tree → user must have write access (owner OR contributor)
   if (childAccess.rootId === newParentAccess.rootId) {
-    if (!childAccess.canWrite) {
-      throw new Error("Must be owner or contributor");
-    }
-  }
-
-  // CASE 2: Different trees → user must own BOTH roots
-  else {
+    if (!childAccess.canWrite) throw new Error("Must be owner or contributor");
+  } else {
     if (!childAccess.isOwner || !newParentAccess.isOwner) {
-      throw new Error(
-        "Cannot move nodes across trees unless you own both roots",
-      );
+      throw new Error("Cannot move spaces across trees unless you own both roots");
     }
   }
 
+  // Lock all three spaces in sorted order (deadlock prevention).
+  const lockIds = [childId, oldParentId, newParentId].filter(Boolean).map(String);
+  const locked  = await acquireMultiple(lockIds, sessionId);
+  if (!locked) throw new ProtocolError(409, ERR.RESOURCE_CONFLICT, "Spaces are being modified by another operation");
 
-  // Structural lock: lock all three involved nodes to prevent concurrent moves/deletes
-  const lockIds = [nodeChildId, oldParentId, nodeNewParentId].filter(Boolean).map(String);
-  const locked = await acquireMultiple(lockIds, sessionId);
-  if (!locked) throw new ProtocolError(409, ERR.RESOURCE_CONFLICT, "Nodes are being modified by another operation");
-
-  // The three core operations ($pull, $set parent, $addToSet) must be atomic.
-  // Use a MongoDB transaction if available (replica set). Falls back to
-  // sequential ops on standalone MongoDB with a warning.
-  // Three core operations. Use transaction if replica set available, otherwise sequential.
-  // Probe with a lightweight operation first to detect standalone MongoDB.
+  // Try a transaction (replica set). Fall back to sequential on standalone.
   let session = null;
   try {
     session = await mongoose.startSession();
     session.startTransaction();
-    // Probe: if this fails, we're on standalone MongoDB
-    await Node.findOne({}).limit(1).session(session).lean();
+    await Space.findOne({}).limit(1).session(session).lean(); // probe
   } catch {
-    if (session) { try { await session.abortTransaction(); } catch {} try { session.endSession(); } catch {} }
+    if (session) {
+      try { await session.abortTransaction(); } catch {}
+      try { session.endSession(); } catch {}
+    }
     session = null;
-    log.verbose("Tree", "MongoDB transactions not available. Node move runs without atomicity guarantees.");
+    log.verbose("Space", "MongoDB transactions unavailable; move runs without atomicity guarantees");
   }
-
   const txOpts = session ? { session } : {};
 
   try {
-    // Remove from old parent
     if (oldParent) {
-      await Node.findByIdAndUpdate(oldParent._id, { $pull: { children: nodeChildId } }, txOpts);
+      await Space.findByIdAndUpdate(oldParent._id, { $pull: { children: childId } }, txOpts);
     }
-
-    // Update parent field
-    await Node.findByIdAndUpdate(nodeChildId, { $set: { parent: nodeNewParentId } }, txOpts);
-
-    // Add to new parent
-    await Node.findByIdAndUpdate(nodeNewParentId, { $addToSet: { children: nodeChildId } }, txOpts);
+    await Space.findByIdAndUpdate(childId,     { $set:      { parent:   newParentId } }, txOpts);
+    await Space.findByIdAndUpdate(newParentId, { $addToSet: { children: childId    } }, txOpts);
 
     if (session) await session.commitTransaction();
   } catch (err) {
-    if (session) {
-      try { await session.abortTransaction(); } catch {}
-    }
+    if (session) { try { await session.abortTransaction(); } catch {} }
     releaseMultiple(lockIds, sessionId);
     throw err;
   } finally {
     if (session) session.endSession();
   }
 
-  // Contributions logged outside the transaction (audit trail, not structural)
-  if (oldParent) {
-    await logDid({
-      beingId,
-      nodeId: oldParent._id.toString(),
-      summonId,
-      sessionId,
-      action: "updateChild",
-      updateChild: { action: "removed", childId: nodeChildId.toString() },
-    });
-  }
-
+  // Single Did per structural event. The child's perspective is the
+  // canonical view; the parent-side mutation is derivable from
+  // params.oldParentId / params.newParentId.
   await logDid({
     beingId,
-    nodeId: nodeChildId,
-    summonId,
-    sessionId,
-    action: "updateParent",
-    updateParent: {
+    action:   "move",
+    target:   { kind: "space", id: childId.toString() },
+    params:   {
       oldParentId: oldParentId ? oldParentId.toString() : null,
-      newParentId: nodeNewParentId.toString(),
+      newParentId: newParentId.toString(),
     },
+    summonId, sessionId,
   });
 
-  await logDid({
-    beingId,
-    nodeId: nodeNewParentId.toString(),
-    summonId,
-    sessionId,
-    action: "updateChild",
-    updateChild: { action: "added", childId: nodeChildId.toString() },
-  });
-
-  // Caller can skip cache invalidation for batched moves (e.g., reroot apply).
-  // The caller is responsible for calling invalidateAll() once after the batch.
-  if (!opts.skipCacheInvalidation) {
-    invalidateAll();
-  }
+  if (!opts.skipCacheInvalidation) invalidateAll();
   releaseMultiple(lockIds, sessionId);
 
-  hooks.run("afterNodeMove", { nodeId: nodeChildId.toString(), oldParentId: oldParentId.toString(), newParentId: nodeNewParentId.toString(), beingId }).catch(() => {});
-
-  return { nodeChild, nodeNewParent };
-}
-export async function editNodeName({
-  nodeId,
-  newName,
-  beingId,
-  summonId = null,
-  sessionId = null,
-}) {
-  if (!newName || typeof newName !== "string" || !newName.trim()) {
-    throw new Error("Node name cannot be empty");
-  }
-  newName = newName.trim();
-  if (newName.length > 150) {
-    throw new Error("Node name must be 150 characters or fewer");
-  }
-  if (containsHtml(newName)) {
-    throw new Error("Node name cannot contain HTML tags");
-  }
-  if (newName.startsWith(".")) {
-    throw new Error("Node names cannot start with a dot");
-  }
-  if (newName.startsWith("/")) {
-    throw new Error("Node names cannot start with a /");
-  }
-  if (newName.startsWith("@")) {
-    throw new Error("Node names cannot start with @");
-  }
-  if (newName === "~" || newName.startsWith("~/")) {
-    throw new Error("Node names cannot be ~ (reserved for home)");
-  }
-  if (newName.includes("/")) {
-    throw new Error("Node names cannot contain / (reserved for path separator)");
-  }
-  const node = await Node.findById(nodeId);
-  if (!node) {
-    throw new Error("Node not found");
-  }
-  if (node.systemRole) throw new Error("Cannot modify system nodes");
-
-  const oldName = node.name;
-  await Node.findByIdAndUpdate(nodeId, { $set: { name: newName } });
-
-  await logDid({
+  hooks.run("afterSpaceMove", {
+    spaceId:     childId.toString(),
+    oldParentId: oldParentId.toString(),
+    newParentId: newParentId.toString(),
     beingId,
-    nodeId,
-    action: "editName",
-    summonId,
-    sessionId,
+  }).catch(() => {});
 
-    editName: {
-      oldName,
-      newName,
-    },
-  });
-
-  return { node, oldName, newName };
+  return { child, newParent };
 }
 
-export async function reviveNodeBranch({
-  deletedNodeId,
-  targetParentId,
-  beingId,
-}) {
-  const deletedNode = await Node.findById(deletedNodeId);
-  if (!deletedNode) throw new Error("Deleted node not found");
-
-  const targetParent = await Node.findById(targetParentId);
-  if (!targetParent) throw new Error("Target parent node not found");
-
-  if (deletedNode.parent !== DELETED) {
-    throw new Error("Node is not deleted and cannot be revived");
-  }
-
-  if (targetParent.parent === DELETED) {
-    throw new Error("Cannot revive into a deleted branch");
-  }
-
-  if (targetParent.systemRole) {
-    throw new Error("Cannot revive into a system node");
-  }
-
-  if (await isDescendant(deletedNodeId, targetParentId)) {
-    throw new Error("Cannot revive a node into its own descendant");
-  }
-
-  // Lock BEFORE access check to prevent TOCTOU race
-  const lockIds = [deletedNodeId.toString(), targetParentId.toString()];
-  const locked = await acquireMultiple(lockIds, beingId);
-  if (!locked) throw new ProtocolError(409, ERR.RESOURCE_CONFLICT, "Nodes are being modified");
-  try {
-    // Access check inside lock window
-    const deletedAccess = await resolveTreeAccess(deletedNodeId, beingId);
-    const targetAccess = await resolveTreeAccess(targetParentId, beingId);
-    if (!deletedAccess.isOwner || !targetAccess.isOwner) {
-      throw new Error("You must own both branches to revive a node");
-    }
-    deletedNode.parent = targetParentId;
-    deletedNode.rootOwner = null;
-    await deletedNode.save();
-
-    await Node.findByIdAndUpdate(targetParentId, { $addToSet: { children: deletedNodeId } });
-
-    await logDid({
-      beingId,
-      nodeId: targetParentId,
-      action: "updateChild",
-      updateChild: { action: "added", childId: deletedNodeId.toString() },
-    });
-    await logDid({
-      beingId,
-      nodeId: deletedNodeId,
-      action: "branchLifecycle",
-      branchLifecycle: { action: "revived", fromParentId: DELETED, toParentId: targetParentId.toString() },
-    });
-
-    invalidateAll();
-    return { revivedNode: deletedNodeId, newParent: targetParentId };
-  } finally {
-    releaseMultiple(lockIds);
-  }
-}
-export async function reviveNodeBranchAsRoot({
-  deletedNodeId,
-  beingId,
-}) {
-  const deletedNode = await Node.findById(deletedNodeId);
-  if (!deletedNode) throw new Error("Deleted node not found");
-
-  if (deletedNode.parent !== DELETED) {
-    throw new Error("Node is not deleted and cannot be revived");
-  }
-
-  if (!deletedNode.rootOwner) {
-    throw new Error("Deleted node has no root owner and cannot be revived");
-  }
-
-  // Lock BEFORE access check to prevent TOCTOU race
-  const landRootId = getLandRootId();
-  const lockIds = [deletedNodeId.toString(), landRootId].filter(Boolean);
-  const locked = await acquireMultiple(lockIds, beingId);
-  if (!locked) throw new ProtocolError(409, ERR.RESOURCE_CONFLICT, "Nodes are being modified");
-  try {
-    // Access check inside lock window
-    const access = await resolveTreeAccess(deletedNodeId, beingId);
-    if (!access.isOwner) {
-      throw new Error("Only the owner can revive this branch as a root");
-    }
-    deletedNode.parent = landRootId;
-    deletedNode.rootOwner = beingId;
-    await deletedNode.save();
-
-    hooks.run("afterOwnershipChange", { nodeId: deletedNodeId, action: "setOwner", targetUserId: beingId }).catch(() => {});
-
-    if (landRootId) {
-      await Node.findByIdAndUpdate(landRootId, { $addToSet: { children: deletedNodeId } });
-    }
-
-    await logDid({
-      beingId,
-      nodeId: deletedNodeId,
-      action: "branchLifecycle",
-      branchLifecycle: { action: "revivedAsRoot" },
-    });
-
-    invalidateAll();
-    return { revivedRoot: deletedNodeId };
-  } finally {
-    releaseMultiple(lockIds);
-  }
-}
-
-export async function editNodeType({
-  nodeId,
-  newType,
-  beingId,
-  summonId = null,
-  sessionId = null,
-}) {
-  if (newType !== null) {
-    if (typeof newType !== "string") {
-      throw new Error("Type must be a string or null");
-    }
-    newType = newType.trim();
-    if (!newType) {
-      newType = null;
-    } else {
-      if (newType.length > 50) {
-        throw new Error("Type must be 50 characters or fewer");
-      }
-      if (containsHtml(newType)) {
-        throw new Error("Type cannot contain HTML tags");
-      }
-      if (newType.startsWith(".")) {
-        throw new Error("Type cannot start with a dot");
-      }
-      if (newType.startsWith("/")) {
-        throw new Error("Type cannot start with a /");
-      }
-      if (newType.startsWith("@")) {
-        throw new Error("Type cannot start with @");
-      }
-    }
-  }
-
-  const node = await Node.findById(nodeId);
-  if (!node) throw new Error("Node not found");
-  if (node.systemRole) throw new Error("Cannot modify system nodes");
-
-  const oldType = node.type;
-  await Node.findByIdAndUpdate(nodeId, { $set: { type: newType } });
-
-  await logDid({
-    beingId,
-    nodeId,
-    action: "editType",
-    summonId,
-    sessionId,
-    editType: { oldType, newType },
-  });
-
-  return { node, oldType, newType };
-}
+// ─────────────────────────────────────────────────────────────────────────
+// DELETE / REVIVE
+// ─────────────────────────────────────────────────────────────────────────
 
 /**
- * Reorder a node's children array.
- * Must contain the exact same IDs as the current children, just in a different order.
- * Atomic $set. Did logged.
+ * Soft-delete a space. Sets the space's `parent` to DELETED and stamps
+ * its `rootOwner` so the deleted-revive extension can restore it later.
+ * Root spaces (tree anchors) can only be retired from root view.
+ */
+export async function deleteSpaceBranch(spaceId, beingId, summonId = null, sessionId = null) {
+  const spaceToDelete = await Space.findById(spaceId);
+  if (!spaceToDelete) throw new Error("Space not found");
+
+  const access = await resolveSpaceAccess(spaceId, beingId);
+  if (!access.isOwner || (!access.isRoot && !!spaceToDelete.rootOwner)) {
+    throw new Error("Must be owner and not root");
+  }
+  if (spaceToDelete.rootOwner && spaceToDelete.rootOwner !== SEED_BEING) {
+    throw new Error("Root spaces can only be retired from root view");
+  }
+  if (spaceToDelete.parent === DELETED) {
+    throw new Error("Space has already been deleted");
+  }
+
+  const hookResult = await hooks.run("beforeSpaceDelete", { space: spaceToDelete, beingId });
+  if (hookResult.cancelled) {
+    const code = hookResult.timedOut ? ERR.HOOK_TIMEOUT : ERR.HOOK_CANCELLED;
+    throw new ProtocolError(500, code, hookResult.reason || "Space deletion blocked");
+  }
+
+  const oldParent = spaceToDelete.parent;
+  const lockIds = [
+    spaceId.toString(),
+    oldParent && oldParent !== DELETED ? oldParent.toString() : null,
+  ].filter(Boolean);
+
+  const locked = await acquireMultiple(lockIds, sessionId);
+  if (!locked) throw new ProtocolError(409, ERR.RESOURCE_CONFLICT, "Spaces are being modified");
+
+  try {
+    spaceToDelete.rootOwner = beingId;
+    spaceToDelete.parent    = DELETED;
+    await spaceToDelete.save();
+
+    if (oldParent && oldParent !== DELETED) {
+      await Space.findByIdAndUpdate(oldParent, { $pull: { children: spaceId } });
+    }
+  } finally {
+    releaseMultiple(lockIds, sessionId);
+  }
+
+  await logDid({
+    beingId,
+    action:   "remove",
+    target:   { kind: "space", id: spaceId.toString() },
+    params:   { fromParentId: oldParent?.toString() ?? null },
+    summonId, sessionId,
+  });
+
+  invalidateSpace(spaceId);
+  return spaceToDelete;
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// REORDER
+// ─────────────────────────────────────────────────────────────────────────
+
+/**
+ * Reorder a space's children. The new order must contain exactly the
+ * same IDs as the current `children`, just in a different sequence.
+ * Atomic `$set`. Did logged.
  */
 export async function reorderChildren({
-  nodeId,
-  children: newOrder,
-  beingId,
-  summonId = null,
-  sessionId = null,
+  spaceId, children: newOrder,
+  beingId, summonId = null, sessionId = null,
 }) {
   if (!Array.isArray(newOrder)) throw new Error("children must be an array");
 
-  const node = await Node.findById(nodeId);
-  if (!node) throw new Error("Node not found");
-  if (node.systemRole) throw new Error("Cannot modify system nodes");
+  const space = await Space.findById(spaceId);
+  if (!space)           throw new Error("Space not found");
+  if (space.seedSpace) throw new Error("Cannot modify land seed spaces");
 
-  const currentSet = new Set(node.children.map(String));
-  const newSet = new Set(newOrder.map(String));
-  if (currentSet.size !== newSet.size || ![...currentSet].every(id => newSet.has(id))) {
+  const currentSet = new Set(space.children.map(String));
+  const newSet     = new Set(newOrder.map(String));
+  if (currentSet.size !== newSet.size || ![...currentSet].every((id) => newSet.has(id))) {
     throw new Error("Reorder must contain the same children IDs");
   }
 
-  await Node.updateOne({ _id: nodeId }, { $set: { children: newOrder } });
+  await Space.updateOne({ _id: spaceId }, { $set: { children: newOrder } });
 
   await logDid({
     beingId,
-    nodeId,
-    action: "reorder",
-    summonId,
-    sessionId,
+    action:   "reorder",
+    target:   { kind: "space", id: spaceId.toString() },
+    params:   { children: newOrder.map(String) },
+    summonId, sessionId,
   });
 
-  return { node };
+  return { space };
 }

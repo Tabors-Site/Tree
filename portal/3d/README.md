@@ -8,7 +8,7 @@ Read [portal/docs/protocol.md](../docs/protocol.md) first. Nothing here is new p
 
 ## The architectural property this rests on
 
-IBP commits to data, not presentation. A Position Description is JSON describing what is at a position: children, artifacts, beings, governance, lineage. The protocol does not say how to render it. The flat Portal renders it as forms and panels. The 3D Portal renders it as scenes and objects. Future clients (VR, AR, voice-only, accessibility-focused) render it however makes sense for their medium.
+IBP commits to data, not presentation. A Position Description is JSON describing what is at a position: children, matters, beings, governance, lineage. The protocol does not say how to render it. The flat Portal renders it as forms and panels. The 3D Portal renders it as scenes and objects. Future clients (VR, AR, voice-only, accessibility-focused) render it however makes sense for their medium.
 
 This is not a workaround. It is the architecture working. The same property that lets one client render two different stances of the same position differently lets two different clients render the same Position Description differently.
 
@@ -77,6 +77,8 @@ Example: a `rulership-tree` extension declares a `basic-court` seed. Planting it
 
 Invocation is a DO action: `do plant-seed { extension, seedName }` at the target position. The kernel routes to the extension; the extension does its work using existing primitives (create-child, set-meta, register-being).
 
+
+
 In 3D this looks like growing a tree. In the flat Portal it looks like a structured set of new children appearing.
 
 ### 3. Being placement hints
@@ -123,7 +125,7 @@ These deserve thought before the 3D client starts in earnest. Not blockers; desi
 - **Camera persistence across scene transitions.** Do you walk through a door and re-spawn at the entrance of the new scene, or carry orientation through? Probably entrance-spawn for clarity.
 - **Multi-user presence in the same scene.** Two users at the same position both inhabit its scene. Do they see each other's avatars? When? Pass 1 may be single-user; multi-user comes when federation and presence broadcast are designed.
 - **Voice latency and quality.** Browser STT/TTS is mediocre. May want server-side STT routing through the inbox-tts pattern. Out of scope for MVP; flagged for later.
-- **Asset model.** Where do 3D models for positions, beings, objects live? Extensions provide them? Land owners upload them? The protocol can serve them as artifacts via SEE. Asset management is a real subsystem.
+- **Asset model.** Where do 3D models for positions, beings, objects live? Extensions provide them? Land owners upload them? The protocol can serve them as matters via SEE. Asset management is a real subsystem.
 
 ## Filing this here
 

@@ -1,43 +1,127 @@
 // TreeOS Seed . AGPL-3.0 . https://treeos.ai . Tabor Holly
 /**
- * Tree Integrity Check (fsck for TreeOS)
+ * Tree-shaped primitive integrity check (fsck for TreeOS).
  *
- * The tree structure is stored redundantly: parent points up, children[] points down.
- * If they disagree, every system built on the tree fails silently. The ancestor cache
- * trusts parent. The tree summary trusts children[]. Resolution chains trust both.
+ * Three substrate primitives carry a dual-pointer tree:
  *
- * This module verifies consistency and auto-repairs where safe:
- *   - parent says A but A's children[] missing this node: add to children[]
- *   - children[] includes ID but that node doesn't exist: remove phantom ref
- *   - children[] includes ID but that node's parent points elsewhere: fix children[]
- *   - node has no parent and isn't system/root: soft-delete as orphan
+ *   Space   parent           + children[]
+ *   Matter  parentMatterId   + children[]
+ *   Being   parentBeingId    + children[]
  *
- * Runs at boot, daily, and on demand via core.tree.checkIntegrity().
+ * If parent and children disagree, every system built on the tree fails
+ * silently. This module verifies pointer-agreement across all three
+ * and auto-repairs where safe.
  *
- * Streams nodes via cursor to avoid loading entire collection into memory.
- * Progress logged every 10K nodes on large lands.
+ * The pointer-agreement algorithm is uniform across primitives:
+ *   - parent says A but A's children[] missing this: add to children[]
+ *   - children[] includes ID but that record doesn't exist: remove
+ *   - children[] includes ID but child's parent points elsewhere: remove
+ *
+ * Orphan handling (no parent, not a root) is primitive-specific:
+ *   - Space orphan  → parent = DELETED (soft-delete via parent sentinel)
+ *   - Matter orphan → spaceId + beingId = DELETED (matter's soft-delete)
+ *   - Being orphan  → no auto-repair (beings are durable identities;
+ *                     log loudly, leave to the operator)
+ *
+ * Streams via cursor (memory-bounded on large lands). Progress logged
+ * every 10K records.
+ *
+ * Runs at boot, daily, and on demand via core.system.checkIntegrity().
  */
 
-import log from "../core/log.js";
-import Node from "../models/node.js";
-import { invalidateAll } from "./ancestorCache.js";
+import log from "./log.js";
+import Space from "../models/space.js";
+import Matter from "../models/matter.js";
+import Being from "../models/being.js";
+import { invalidateAll } from "../space/ancestorCache.js";
 import { getLandConfigValue } from "../landConfig.js";
-import { SYSTEM_ROLE, DELETED } from "../core/protocol.js";
+import { SEED_SPACE, DELETED } from "../space/seedSpaces.js";
 
-const MAX_DETAILS = 500; // cap report details to prevent unbounded memory
-const PROGRESS_INTERVAL = 10000; // log progress every N nodes
+const MAX_DETAILS = 500;
+const PROGRESS_INTERVAL = 10000;
+
+// ────────────────────────────────────────────────────────────────
+// Primitive descriptors
+// ────────────────────────────────────────────────────────────────
+//
+// Each entry tells the generic walker how to read parent/children
+// pointers and how to repair orphans for that primitive. Adding a
+// fourth tree-shaped primitive is one new entry here plus an import.
+
+const PRIMITIVES = [
+  {
+    label:        "Space",
+    Model:        Space,
+    parentField:  "parent",
+    selectFields: "_id parent children seedSpace name",
+    findLandRoot: (records) => {
+      for (const [id, r] of records) {
+        if (r.raw.seedSpace === SEED_SPACE.LAND_ROOT) return id;
+      }
+      return null;
+    },
+    isRoot:       (doc, landRootId) =>
+      doc.seedSpace === SEED_SPACE.LAND_ROOT || String(doc._id) === landRootId,
+    softDeleteOrphan: async (id) => {
+      await Space.updateOne({ _id: id }, { $set: { parent: DELETED } });
+    },
+  },
+  {
+    label:        "Matter",
+    Model:        Matter,
+    parentField:  "parentMatterId",
+    selectFields: "_id parentMatterId children name spaceId beingId",
+    findLandRoot: () => null,
+    // Matter is root-shaped when parentMatterId is null AND it isn't
+    // already soft-deleted (spaceId !== DELETED).
+    isRoot:       (doc) => !doc.parentMatterId && doc.spaceId !== DELETED,
+    softDeleteOrphan: async (id) => {
+      await Matter.updateOne({ _id: id }, { $set: { spaceId: DELETED, beingId: DELETED } });
+    },
+  },
+  {
+    label:        "Being",
+    Model:        Being,
+    parentField:  "parentBeingId",
+    selectFields: "_id parentBeingId children name",
+    findLandRoot: () => null,
+    // The single root being has parentBeingId === null.
+    isRoot:       (doc) => !doc.parentBeingId,
+    // Beings are durable identities; log orphans but do not auto-
+    // repair. Operator decides whether to re-parent or remove.
+    softDeleteOrphan: null,
+  },
+];
 
 /**
- * Run a full integrity check on the tree.
- * Returns a report of what was found and fixed.
+ * Run a full integrity check across every tree-shaped primitive.
  *
  * @param {object} [opts]
- * @param {boolean} [opts.repair=true] - auto-repair safe inconsistencies
+ * @param {boolean} [opts.repair=true]  - auto-repair safe inconsistencies
  * @param {boolean} [opts.silent=false] - suppress log output
- * @returns {Promise<{ checked: number, issues: number, repaired: number, orphans: string[], details: string[] }>}
+ * @returns {Promise<{ duration, byPrimitive: { [label]: report } }>}
  */
 export async function checkIntegrity({ repair = true, silent = false } = {}) {
   const startMs = Date.now();
+  const byPrimitive = {};
+
+  for (const def of PRIMITIVES) {
+    byPrimitive[def.label] = await checkOnePrimitive(def, { repair, silent });
+  }
+
+  // Any repair on the Space tree means ancestor caches must drop.
+  if (byPrimitive.Space?.repaired > 0) invalidateAll();
+
+  return {
+    duration: Date.now() - startMs,
+    byPrimitive,
+  };
+}
+
+/**
+ * One primitive's integrity pass.
+ */
+async function checkOnePrimitive(def, { repair, silent }) {
   const report = {
     checked: 0,
     issues: 0,
@@ -46,170 +130,143 @@ export async function checkIntegrity({ repair = true, silent = false } = {}) {
     details: [],
     durationMs: 0,
   };
+  const startMs = Date.now();
+  const addDetail = (msg) => { if (report.details.length < MAX_DETAILS) report.details.push(msg); };
 
-  function addDetail(msg) {
-    if (report.details.length < MAX_DETAILS) report.details.push(msg);
-  }
-
-  // Build lookup maps using cursor (stream, don't load all at once)
-  // Map<nodeId, { parent, children: Set<string>, systemRole, name }>
-  const nodeMap = new Map();
-
-  const cursor = Node.find({}).select("_id parent children systemRole name").lean().cursor();
-  for await (const n of cursor) {
-    const id = String(n._id);
-    nodeMap.set(id, {
-      parent: n.parent ? String(n.parent) : null,
-      children: new Set((n.children || []).map(String)),
-      systemRole: n.systemRole || null,
-      name: n.name || id,
+  // Stream all records into an in-memory map. The cross-check between
+  // parent and children[] requires both halves visible at once, so we
+  // pay the memory cost (bounded by collection size). For very large
+  // collections this can become two passes (one to map, one to scan);
+  // not yet warranted.
+  const records = new Map();
+  const cursor = def.Model.find({}).select(def.selectFields).lean().cursor();
+  for await (const r of cursor) {
+    const id = String(r._id);
+    records.set(id, {
+      parent:   r[def.parentField] ? String(r[def.parentField]) : null,
+      children: new Set((r.children || []).map(String)),
+      raw:      r,
     });
   }
+  report.checked = records.size;
 
-  report.checked = nodeMap.size;
-
-  // Find the land root
-  let landRootId = null;
-  for (const [id, node] of nodeMap) {
-    if (node.systemRole === SYSTEM_ROLE.LAND_ROOT) {
-      landRootId = id;
-      break;
-    }
-  }
+  // Resolve land-root id once (Space-only; others return null).
+  const landRootId = def.findLandRoot(records);
 
   let processed = 0;
-
-  for (const [nodeId, node] of nodeMap) {
+  for (const [id, rec] of records) {
     processed++;
     if (!silent && processed % PROGRESS_INTERVAL === 0) {
-      log.verbose("Integrity", `Progress: ${processed}/${report.checked} nodes checked...`);
+      log.verbose("Integrity", `[${def.label}] progress: ${processed}/${report.checked}`);
     }
 
-    // 1. Check: if node has a parent, parent's children[] should include this node
-    if (node.parent) {
-      const parent = nodeMap.get(node.parent);
+    // Skip already-soft-deleted records. Space uses parent=DELETED;
+    // Matter uses spaceId=DELETED. Being has no soft-delete state.
+    if (rec.parent === DELETED) continue;
+    if (def.label === "Matter" && rec.raw.spaceId === DELETED) continue;
+
+    // ── 1. Parent must exist and list this record in its children[] ──
+    if (rec.parent) {
+      const parent = records.get(rec.parent);
 
       if (!parent) {
-        // Parent doesn't exist. Soft-delete immediately (don't leave as orphan for next boot).
         report.issues++;
-        report.orphans.push(nodeId);
-        addDetail(`${node.name} (${nodeId}): parent ${node.parent} does not exist`);
+        report.orphans.push(id);
+        addDetail(`[${def.label}] ${rec.raw.name || id}: parent ${rec.parent} does not exist`);
 
-        if (repair) {
-          await Node.updateOne({ _id: nodeId }, { $set: { parent: DELETED } });
+        if (repair && def.softDeleteOrphan) {
+          await def.softDeleteOrphan(id);
           report.repaired++;
-          if (!silent) log.warn("Integrity", `Repaired: soft-deleted orphan ${node.name} (dangling parent ${node.parent})`);
+          if (!silent) log.warn("Integrity", `[${def.label}] soft-deleted ${id} (dangling parent ${rec.parent})`);
         }
-      } else if (!parent.children.has(nodeId)) {
-        // Parent exists but doesn't list this node as a child
+      } else if (!parent.children.has(id)) {
         report.issues++;
-        addDetail(`${node.name} (${nodeId}): parent ${parent.name} missing this node in children[]`);
+        addDetail(`[${def.label}] ${rec.raw.name || id}: parent missing this in children[]`);
 
         if (repair) {
-          await Node.updateOne({ _id: node.parent }, { $addToSet: { children: nodeId } });
+          await def.Model.updateOne({ _id: rec.parent }, { $addToSet: { children: id } });
           report.repaired++;
-          if (!silent) log.warn("Integrity", `Repaired: added ${node.name} to ${parent.name}'s children[]`);
+          if (!silent) log.warn("Integrity", `[${def.label}] added ${id} to parent's children[]`);
         }
       }
-    } else if (!node.systemRole && nodeId !== landRootId) {
-      // No parent, not a system node, not land root. Orphan.
-      report.orphans.push(nodeId);
-      addDetail(`${node.name} (${nodeId}): orphan node (no parent, not system)`);
+    } else if (!def.isRoot(rec.raw, landRootId)) {
+      report.orphans.push(id);
+      addDetail(`[${def.label}] ${rec.raw.name || id}: orphan (no parent, not a root)`);
 
-      if (repair) {
-        await Node.updateOne({ _id: nodeId }, { $set: { parent: DELETED } });
+      if (repair && def.softDeleteOrphan) {
+        await def.softDeleteOrphan(id);
         report.repaired++;
-        if (!silent) log.warn("Integrity", `Repaired: soft-deleted orphan ${node.name} (${nodeId})`);
+        if (!silent) log.warn("Integrity", `[${def.label}] soft-deleted orphan ${id}`);
       }
     }
 
-    // 2. Check: every ID in children[] should point to an existing node whose parent points back
-    if (node.children.size > 0) {
+    // ── 2. children[] must point at records whose parent points back ──
+    if (rec.children.size > 0) {
       const phantoms = [];
       const mispointed = [];
 
-      for (const cid of node.children) {
-        const child = nodeMap.get(cid);
-
+      for (const cid of rec.children) {
+        const child = records.get(cid);
         if (!child) {
           phantoms.push(cid);
-        } else if (child.parent !== nodeId) {
-          mispointed.push({ childId: cid, childName: child.name, actualParent: child.parent });
+        } else if (child.parent !== id) {
+          mispointed.push({ id: cid, name: child.raw.name, actualParent: child.parent });
         }
       }
 
       if (phantoms.length > 0) {
         report.issues += phantoms.length;
-        addDetail(`${node.name} (${nodeId}): ${phantoms.length} phantom child reference(s)`);
-
+        addDetail(`[${def.label}] ${rec.raw.name || id}: ${phantoms.length} phantom child reference(s)`);
         if (repair) {
-          await Node.updateOne(
-            { _id: nodeId },
-            { $pullAll: { children: phantoms } },
-          );
+          await def.Model.updateOne({ _id: id }, { $pullAll: { children: phantoms } });
           report.repaired += phantoms.length;
-          if (!silent) log.warn("Integrity", `Repaired: removed ${phantoms.length} phantom children from ${node.name}`);
+          if (!silent) log.warn("Integrity", `[${def.label}] removed ${phantoms.length} phantom children from ${id}`);
         }
       }
 
       if (mispointed.length > 0) {
         report.issues += mispointed.length;
         for (const m of mispointed) {
-          addDetail(`${node.name} (${nodeId}): child ${m.childName} (${m.childId}) parent points to ${m.actualParent} instead`);
+          addDetail(`[${def.label}] ${rec.raw.name || id}: child ${m.name || m.id} parent points to ${m.actualParent}`);
         }
-
         if (repair) {
-          const mispointedIds = mispointed.map(m => m.childId);
-          await Node.updateOne(
-            { _id: nodeId },
-            { $pullAll: { children: mispointedIds } },
-          );
+          await def.Model.updateOne({ _id: id }, { $pullAll: { children: mispointed.map((m) => m.id) } });
           report.repaired += mispointed.length;
-          if (!silent) log.warn("Integrity", `Repaired: removed ${mispointed.length} mispointed children from ${node.name}`);
+          if (!silent) log.warn("Integrity", `[${def.label}] removed ${mispointed.length} mispointed children from ${id}`);
         }
       }
-    }
-  }
-
-  // After any repairs, invalidate the ancestor cache
-  if (report.repaired > 0) {
-    invalidateAll();
-  }
-
-  report.durationMs = Date.now() - startMs;
-
-  if (!silent) {
-    if (report.issues === 0) {
-      log.verbose("Integrity", `Tree integrity check: ${report.checked} nodes, no issues (${report.durationMs}ms)`);
-    } else {
-      log.warn("Integrity",
-        `Tree integrity check: ${report.checked} nodes, ${report.issues} issues, ${report.repaired} repaired, ${report.orphans.length} orphans (${report.durationMs}ms)`
-      );
     }
   }
 
   if (report.details.length >= MAX_DETAILS) {
     report.details.push(`... (capped at ${MAX_DETAILS} details)`);
   }
+  report.durationMs = Date.now() - startMs;
+
+  if (!silent) {
+    if (report.issues === 0) {
+      log.verbose("Integrity", `[${def.label}] ${report.checked} records, no issues (${report.durationMs}ms)`);
+    } else {
+      log.warn("Integrity",
+        `[${def.label}] ${report.checked} records, ${report.issues} issues, ` +
+        `${report.repaired} repaired, ${report.orphans.length} orphans (${report.durationMs}ms)`);
+    }
+  }
 
   return report;
 }
 
 /**
- * Start the periodic integrity check job.
- * Default: once per day (86400000ms). Configurable via integrityCheckInterval.
+ * Start the periodic integrity job. Default: once per day.
+ * Configurable via integrityCheckInterval (ms).
  */
 export function startIntegrityJob() {
-  const interval = parseInt(
-    getLandConfigValue("integrityCheckInterval") || "86400000", 10
-  );
-
+  const interval = parseInt(getLandConfigValue("integrityCheckInterval") || "86400000", 10);
   const timer = setInterval(() => {
-    checkIntegrity({ repair: true, silent: false }).catch(err => {
+    checkIntegrity({ repair: true, silent: false }).catch((err) => {
       log.error("Integrity", `Periodic check failed: ${err.message}`);
     });
   }, interval);
-
   if (timer.unref) timer.unref();
   return timer;
 }

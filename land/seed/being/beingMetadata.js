@@ -10,7 +10,7 @@
  * used by all 35+ callers.
  */
 
-import { guardMetadataWrite } from "./documentGuard.js";
+import { guardMetadataWrite } from "../space/documentGuard.js";
 import { getLandConfigValue } from "../landConfig.js";
 import Being from "../models/being.js";
 
@@ -58,7 +58,7 @@ export function getBeingMeta(user, key) {
  * Like getBeingMeta but returns `null` when the namespace is unset
  * instead of an empty object. Use when callers distinguish "never written"
  * from "empty state" (e.g. `if (readBeingNs(being, "billing")) { ... }`).
- * Mirrors readNs on the Node module.
+ * Mirrors readNs on the Space module.
  */
 export function readBeingNs(user, key) {
   if (!user || !user.metadata) return null;
@@ -70,7 +70,7 @@ export function readBeingNs(user, key) {
  * Set a namespace on a being's metadata (full replace).
  * Atomic at the MongoDB layer: `$set` on `metadata.<key>` only. Two concurrent
  * writes to different namespaces on the same being do not clobber each other.
- * Mirrors setExtMeta semantics on the Node module.
+ * Mirrors setExtMeta semantics on the Space module.
  *
  * Accepts a being document OR a beingId string. When passed a document, the
  * in-memory `metadata` Map is also updated so subsequent reads on the same
@@ -144,7 +144,7 @@ export async function setBeingMeta(user, key, data) {
 /**
  * Shallow merge into a being's metadata namespace.
  * Uses atomic MongoDB $set on individual keys to avoid read-modify-write races.
- * Returns true on success, false on no-op. Mirrors mergeExtMeta on the Node module.
+ * Returns true on success, false on no-op. Mirrors mergeExtMeta on the Space module.
  *
  *   await mergeBeingMeta(beingId, "energy", { available: 95, lastUsed: Date.now() });
  *   // Atomically sets metadata.energy.available and metadata.energy.lastUsed without

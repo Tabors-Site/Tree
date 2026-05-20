@@ -14,8 +14,8 @@
 import { getLandDomain } from "./address.js";
 import { DESCRIPTOR_VERSION } from "./descriptor.js";
 import { getLandConfigValue, getLandUrl } from "../landConfig.js";
-import { listRoles } from "../roles/registry.js";
-import { listSeeds } from "../core/seeds.js";
+import { listRoles } from "../being/roles/registry.js";
+import { listSeeds } from "../space/seeds.js";
 
 // The version of the IBP wire protocol this build implements. Bumps
 // when the envelope, address grammar, or verb contract changes in a
@@ -25,7 +25,7 @@ export const IBP_PROTOCOL_VERSION = "1.0";
 // Code-cognition system beings that live at the land root. Hardcoded
 // here because they're addressable via BE without going through the
 // role registry (which is shaped around SUMMON-honoring roles). The
-// dispatcher in seed/core/verbs.js routes BE calls to these directly.
+// dispatcher in seed/ibp/verbs.js routes BE calls to these directly.
 const SYSTEM_BE_BEINGS = ["auth", "llm-assigner"];
 
 export function buildDiscovery() {
@@ -35,24 +35,23 @@ export function buildDiscovery() {
   // Merge two sources: the live role registry (SUMMON-honoring roles
   // registered by the kernel + extensions) and the canonical system
   // beings (BE-only — auth, llm-assigner). Dedupe + sort.
-  const roles = Array.from(new Set([
-    ...listRoles(),
-    ...SYSTEM_BE_BEINGS,
-  ])).sort();
+  const roles = Array.from(
+    new Set([...listRoles(), ...SYSTEM_BE_BEINGS]),
+  ).sort();
 
   return {
-    name:                       getLandConfigValue("LAND_NAME") || "Unnamed Land",
-    land:                       getLandDomain(),
-    protocolVersion:            IBP_PROTOCOL_VERSION,
+    name: getLandConfigValue("LAND_NAME") || "Unnamed Land",
+    land: getLandDomain(),
+    protocolVersion: IBP_PROTOCOL_VERSION,
     descriptorVersionSupported: [DESCRIPTOR_VERSION],
-    ws:                         wsUrl,
-    auth:                       { method: "bearer" },
+    ws: wsUrl,
+    auth: { method: "bearer" },
     roles,
     // Plantable seed catalog. Operators see what scaffolds are installed
     // on this land and can plant one through a DO `plant-seed` call. Same
     // listing shape as `core.seeds.list()`.
-    seeds:                      listSeeds(),
-    supportedVerbs:             ["see", "do", "summon", "be"],
-    capabilities:               [],
+    seeds: listSeeds(),
+    supportedVerbs: ["see", "do", "summon", "be"],
+    capabilities: [],
   };
 }

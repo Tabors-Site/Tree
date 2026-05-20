@@ -1,4 +1,4 @@
-# Zones — land, home, node
+# Zones — land, home, space
 
 Every position in the TreeOS Portal belongs to one of three zone types. The zone determines the top-level chrome the portal renders. The position within the zone determines what the body shows.
 
@@ -11,7 +11,7 @@ Every position in the TreeOS Portal belongs to one of three zone types. The zone
 - **Public trees** — anything ext-allow'd at land scope, browsable by visitors.
 - **Land-level beings** — beings invocable on the land itself (`@citizen`, `@oracle` for public knowledge, `@merchant` if there's a marketplace, custom land-defined beings).
 - **Available extensions** — what this land hosts that users can install on their trees.
-- **Source data** — public files / artifacts shared at land scope.
+- **Source data** — public files / matters shared at land scope.
 - **Land metadata** — who runs it, what's its operating policy, registration status, economy (if any).
 - **Visitors-from-elsewhere registry** — beings on other lands who've registered themselves as accessible here (Pass 5 federation).
 
@@ -69,8 +69,8 @@ The home zone is the most-visited part of the portal for any given user. Buildin
 
 Depends heavily on what's at the position. The Position Description describes it; the portal renders accordingly. Possible surfaces:
 
-- **Governance state** if the node is a Ruler scope: plan / contracts / runs / workers / flags / lifecycle pill.
-- **Artifact content** if the node has notes or files: rendered as markdown / images / code per the artifact `kind`.
+- **Governance state** if the space is a Ruler scope: plan / contracts / runs / workers / flags / lifecycle pill.
+- **Matter content** if the space has notes or files: rendered as markdown / images / code per the matter `kind`.
 - **Children** for navigation deeper into the tree.
 - **Siblings** for sideways movement.
 - **Lineage breadcrumb** upward.
@@ -102,7 +102,7 @@ Special case. Most-used surface in the system once people are coordinating. Layo
 │                  │  Flags                                       │
 │                  │  (none pending)                              │
 ├──────────────────┴──────────────────────────────────────────────┤
-│ Artifact: tagay-story-brief.md           (chat panel) ──→       │
+│ Matter: tagay-story-brief.md             (chat panel) ──→       │
 │ The story of Tagay and Egay opens with...                       │
 │ ...                                                             │
 ├──────────────────────────────────────────────────────────────────┤
@@ -114,7 +114,7 @@ Three columns + bottom chat + lifecycle chip in the header. Real-time updates vi
 
 ### The Worker leaf renderer
 
-When the position is a leaf with artifact content, the artifact takes center stage. Sidebar shows the spec that produced it (for accountability + reading the spec against the output). Chat panel invokable to discuss / refine.
+When the position is a leaf with matter content, the matter takes center stage. Sidebar shows the spec that produced it (for accountability + reading the spec against the output). Chat panel invokable to discuss / refine.
 
 ### The intermediate-Ruler scope renderer
 
@@ -125,7 +125,7 @@ A Ruler with sub-Ruler children. Governance panel collapsed (smaller); child tre
 - Ruler scopes: `@ruler` (the user can coordinate the scope)
 - Worker leaves: `@worker` (rare — usually the user observes via `@archivist`)
 - Plan / contracts / runs trio-children: `@archivist` (read-only inspection)
-- Custom node types: per the Position Description's `beings:` field
+- Custom space types: per the Position Description's `beings:` field
 
 ## Cross-zone shared chrome
 
@@ -141,21 +141,23 @@ The only chrome difference is the body — what fills the main view and which si
 
 ## Switching zones
 
-Address-bar typing handles cross-zone moves transparently. Typing `/` jumps to the land zone of the current land. Typing `~` jumps to the user's home. Typing a path jumps to a node.
+Address-bar typing handles cross-zone moves transparently. Typing `/` jumps to the land zone of the current land. Typing `~` jumps to the user's home. Typing a path jumps to a space.
 
 Visual cues distinguish the zones — different background tint, different sidebar shape. Doesn't have to be loud; just enough that the user knows which zone they're in at a glance.
+
+
 
 ## Why three and not more
 
 These three carve at real architectural joints:
 
 - **Land zone**: the server's public-facing surface. Discovery + economy. Anyone may visit.
-- **Home zone**: a user's private root. Personal authority + accumulated artifacts.
+- **Home zone**: a user's private root. Personal authority + accumulated matters.
 - **Tree zone**: everywhere else — every position inside any tree, any user's home, any land-public tree. The recursive workspace.
 
-Four would over-specify (tree zone covers a lot of different node types but the BROWSER chrome stays the same; the Position Description varies the BODY). Two would conflate land and home (both are "roots" but their privacy + content differ enough).
+Four would over-specify (tree zone covers a lot of different space types but the BROWSER chrome stays the same; the Position Description varies the BODY). Two would conflate land and home (both are "roots" but their privacy + content differ enough).
 
-The three-zone split makes the address bar predictable: type `/` you're in land, `~` you're in home, a path you're in node. The portal knows which chrome to draw before the Position Description arrives.
+The three-zone split makes the address bar predictable: type `/` you're in land, `~` you're in home, a path you're in space. The portal knows which chrome to draw before the Position Description arrives.
 
 ## Open question: ZONE for cross-land federation
 

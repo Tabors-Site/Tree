@@ -5,7 +5,7 @@
  * On boot, checks the seed version stored in .config against the current
  * SEED_VERSION. If they differ, runs every migration between the two versions
  * in order. Migrations can add config defaults, rename metadata keys,
- * restructure system nodes, update indexes.
+ * restructure land seed spaces, update indexes.
  *
  * Same pattern as extension schema migrations in the loader.
  *
@@ -21,9 +21,9 @@
  *   - Discovery errors surfaced (not swallowed)
  */
 
-import log from "../core/log.js";
-import { SEED_VERSION } from "../core/version.js";
-import { getLandConfigValue, setLandConfigValue } from "../landConfig.js";
+import log from "../log.js";
+import { SEED_VERSION } from "../version.js";
+import { getLandConfigValue } from "../../landConfig.js";
 import fs from "fs";
 import path from "path";
 import { fileURLToPath, pathToFileURL } from "url";
@@ -165,8 +165,23 @@ export async function runSeedMigrations() {
     }
   }
 
-  // Update stored version
-  await setLandConfigValue("seedVersion", currentVersion, { internal: true });
+  // Update stored version. Migrations run pre-being during boot, so the
+  // write goes through the kernel-access gate's scaffold path. The
+  // scaffold flag lets set-config write seedVersion (a protected key)
+  // the same way an in-being call cannot.
+  const Space = (await import("../../models/space.js")).default;
+  const { SEED_SPACE } = await import("../../space/seedSpaces.js");
+  const { doVerb } = await import("../../ibp/verbs.js");
+  const configNode = await Space.findOne({ seedSpace: SEED_SPACE.CONFIG });
+  if (!configNode) {
+    throw new Error("Cannot persist seedVersion: .config land seed space not found");
+  }
+  await doVerb(
+    configNode,
+    "set-config",
+    { key: "seedVersion", value: currentVersion },
+    { scaffold: true },
+  );
 
   if (ran > 0) {
     log.info("Seed", `${ran} migration(s) applied. Seed is now at ${currentVersion}`);

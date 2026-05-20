@@ -24,9 +24,9 @@
 // On every other land, a different auth-being can be installed by an
 // extension. The contract above is what the protocol layer expects.
 
-import log from "../core/log.js";
-import { hooks } from "../core/hooks.js";
-import Being from "../models/being.js";
+import log from "../../system/log.js";
+import { hooks } from "../../system/hooks.js";
+import Being from "../../models/being.js";
 import {
   createBeingWithHome,
   createFirstBeing,
@@ -34,18 +34,18 @@ import {
   findBeingByName,
   verifyPassword,
   generateToken,
-} from "../core/identity.js";
-import { getLandRootId } from "../landRoot.js";
-import { IbpError, IBP_ERR } from "../core/errors.js";
-import { getLandDomain } from "../addressing/address.js";
+} from "../identity.js";
+import { getLandRootId } from "../../landRoot.js";
+import { IbpError, IBP_ERR } from "../../ibp/errors.js";
+import { getLandDomain } from "../../ibp/address.js";
 
 const TREEOS_AUTH_WELCOME =
   "Welcome to TreeOS. This land is open to anyone who wants to inhabit it. Pick a username and password; you will receive an identity token immediately and start at your home.";
 
 export const authBeing = Object.freeze({
   name: "auth",
-  description: "The land's welcome character. Processes register, claim, release, and switch.",
-  honoredOperations: ["register", "claim", "release", "switch"],
+  description: "The land's welcome character. Processes register, claim, release, switch, and create-being.",
+  honoredOperations: ["register", "claim", "release", "switch", "create-being"],
   policy: {
     registrationOpen: true,
     credentialTypes: ["password"],
@@ -65,21 +65,25 @@ export const authBeing = Object.freeze({
     }
 
     // ── First-being bootstrap ──
-    // The very first registration on a fresh land creates the root
-    // being: it carries the admin role and parentBeingId null. Every
-    // subsequent being chains back to this root through parentBeingId.
-    // Right after, ensureSystemBeings spawns auth + land-manager +
-    // citizen as the root's children so the being-tree is intact
-    // before any other registration flows through.
+    // The seed-being already exists (created by ensureLandRoot at
+    // boot). The very first human registration parents under the
+    // seed-being, becoming the land's root operator. Every subsequent
+    // human registration parents under @auth, which itself parents
+    // under the seed-being. The chain walks human → auth → seed-being
+    // → null.
     //
     // Bypasses beforeRegister hook intentionally: on first boot the
     // hook listeners (email verification, invite-code checks) aren't
     // loaded yet, and the land needs an operator before anything else.
     const first = await isFirstBeing();
     if (first) {
+      const { findSeedBeing } = await import("../systemBeings.js");
+      const seedBeing = await findSeedBeing();
       let being;
       try {
-        being = await createFirstBeing(name, password);
+        being = await createFirstBeing(name, password, {
+          parentBeingId: seedBeing ? String(seedBeing._id) : null,
+        });
       } catch (err) {
         throw mapKernelError(err);
       }
@@ -89,7 +93,7 @@ export const authBeing = Object.freeze({
       // not block on these writes.
       (async () => {
         try {
-          const { ensureSystemBeings } = await import("../core/systemBeings.js");
+          const { ensureSystemBeings } = await import("../being/systemBeings.js");
           await ensureSystemBeings(getLandRootId());
         } catch (err) {
           log.warn("auth-being", `post-first-register system-being setup failed: ${err.message}`);
@@ -121,14 +125,14 @@ export const authBeing = Object.freeze({
     // become being-tree children of the auth-being. The auth-being
     // is itself a child of the root being, so the chain walks
     // human → auth → root → null.
-    const authParent = await Being.findOne({ name: "auth", operatingMode: "ai" })
+    const authParent = await Being.findOne({ name: "auth", operatingMode: "scripted" })
       .select("_id").lean();
     const parentBeingId = authParent ? String(authParent._id) : null;
 
     let being;
     try {
       // Use the home-creating primitive so the human gets a home
-      // territory Node at registration. The home is the user's
+      // territory Space at registration. The home is the user's
       // tree-root; their personal node hierarchy grows from there.
       const result = await createBeingWithHome({
         operatingMode: "human",
@@ -212,6 +216,82 @@ export const authBeing = Object.freeze({
     // Switch is purely a client-coordination signal. The server has
     // no per-session state to update.
     return { active: to, from };
+  },
+
+  // create-being: spawn a being under an existing parent in the being
+  // tree. BE rather than DO because creating a being is an identity
+  // operation, not a state mutation on space or matter. Identity is
+  // BE's domain (see philosophy notes: BE acts on the being calling
+  // it; identity creation belongs here).
+  //
+  // The caller's beingId defaults the new being's parentBeingId
+  // (lineage captures "who created whom"). Explicit parentBeingId in
+  // the payload overrides. Stance authorization runs in the verb
+  // dispatcher before this method is invoked.
+  async createBeing(payload, ctx) {
+    const {
+      name,
+      password,
+      operatingMode = "llm",
+      role          = null,
+      homeSpace     = null,
+      homeParent    = null,
+      llmDefault    = null,
+      isRemote      = false,
+      homeLand      = null,
+    } = payload || {};
+
+    if (operatingMode !== "human" && operatingMode !== "llm" && operatingMode !== "scripted" && operatingMode !== "mixed") {
+      throw new IbpError(
+        IBP_ERR.INVALID_INPUT,
+        `invalid operatingMode "${operatingMode}"; must be "human" | "llm" | "scripted" | "mixed"`,
+      );
+    }
+    if (operatingMode !== "human" && !role) {
+      throw new IbpError(IBP_ERR.INVALID_INPUT, "non-human beings require a `role`");
+    }
+    if (!homeSpace && !homeParent) {
+      throw new IbpError(
+        IBP_ERR.INVALID_INPUT,
+        "create-being requires `homeSpace` (existing) or `homeParent` (creates new)",
+      );
+    }
+
+    // Lineage default: the caller is the being doing the creation.
+    // The being-tree captures who created whom; null is reserved for
+    // the land's root being only.
+    const parentBeingId =
+      payload?.parentBeingId
+      || ctx?.identity?.beingId
+      || null;
+
+    let being;
+    try {
+      const result = await createBeingWithHome({
+        operatingMode,
+        role,
+        name,
+        password,
+        homeSpace,
+        homeParent,
+        parentBeingId,
+        llmDefault,
+        isRemote,
+        homeLand,
+      });
+      being = result.being;
+    } catch (err) {
+      throw mapKernelError(err);
+    }
+
+    return {
+      beingId:       String(being._id),
+      name:          being.name,
+      beingAddress:  `${getLandDomain()}/@${being.name}`,
+      operatingMode: being.operatingMode,
+      roles:         being.roles || [],
+      parentBeingId: being.parentBeingId ? String(being.parentBeingId) : null,
+    };
   },
 });
 

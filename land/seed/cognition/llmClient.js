@@ -21,13 +21,13 @@
 // the host via `allowedLlmDomains` in land config.
 
 import OpenAI from "openai";
-import log from "../core/log.js";
+import log from "../system/log.js";
 import crypto from "crypto";
 import Being from "../models/being.js";
-import Node from "../models/node.js";
+import Space from "../models/space.js";
 import LlmConnection from "../models/llmConnection.js";
 import { getLandConfigValue } from "../landConfig.js";
-import { getAncestorChain } from "../tree/ancestorCache.js";
+import { getAncestorChain } from "../space/ancestorCache.js";
 import { getNodeLlmAssignments, getBeingLlmAssignments } from "./assignments.js";
 import { resolveAndValidateHost, hostInAllowedLlmDomains, getEncryptionKey } from "./connections.js";
 
@@ -343,13 +343,13 @@ async function walkBeingChain(rootBeing) {
 //   - LOCKDOWN sentinel if any ancestor locks out
 //   - { connectionId, enforced } at the first hit
 //   - null if no node in the chain assigns anything
-async function nodeChainResolve(nodeId, slot) {
-  if (!nodeId) return null;
+async function nodeChainResolve(spaceId, slot) {
+  if (!spaceId) return null;
   let chain;
   try {
-    chain = await getAncestorChain(nodeId);
+    chain = await getAncestorChain(spaceId);
   } catch {
-    const single = await Node.findById(nodeId).select("llmDefault metadata").lean();
+    const single = await Space.findById(spaceId).select("llmDefault metadata").lean();
     chain = single ? [single] : [];
   }
   let firstHit = null;
@@ -394,11 +394,11 @@ function beingChainResolve(beingChain, slot) {
  *
  * @param {object} opts
  * @param {string} [opts.beingId]  the being making the call
- * @param {string} [opts.nodeId]   the position (current node)
+ * @param {string} [opts.spaceId]   the position (current node)
  * @param {string} [opts.slot]     role-slot name (defaults to "main")
  * @returns {Promise<string|null>} connectionId, or null for noLlm
  */
-export async function resolveLlmConnection({ beingId = null, nodeId = null, slot = "main" } = {}) {
+export async function resolveLlmConnection({ beingId = null, spaceId = null, slot = "main" } = {}) {
   // Load the being and its ancestor chain together.
   const being = beingId
     ? await Being.findById(beingId)
@@ -409,13 +409,13 @@ export async function resolveLlmConnection({ beingId = null, nodeId = null, slot
   const beingChain = await walkBeingChain(being);
 
   // Walk both trees collecting lockout / enforcement / first-hit.
-  const nodeHit  = await nodeChainResolve(nodeId, slot);
+  const nodeHit  = await nodeChainResolve(spaceId, slot);
   const beingHit = beingChainResolve(beingChain, slot);
 
   // Layer 1: Lockout wins over everything.
   if (nodeHit === LOCKDOWN || beingHit === LOCKDOWN) return null;
 
-  // Layer 2: Enforcement wins over preferOwn. Node enforcement beats
+  // Layer 2: Enforcement wins over preferOwn. Space enforcement beats
   // being enforcement when both apply (position-first philosophy).
   if (nodeHit?.enforced)  return nodeHit.connectionId;
   if (beingHit?.enforced) return beingHit.connectionId;
@@ -433,7 +433,7 @@ export async function resolveLlmConnection({ beingId = null, nodeId = null, slot
 }
 
 /**
- * @deprecated Use `resolveLlmConnection({ beingId, nodeId, slot })` instead.
+ * @deprecated Use `resolveLlmConnection({ beingId, spaceId, slot })` instead.
  * Kept as a thin shim for legacy callers that pass a `role` spec and only
  * have the tree root. Routes through `resolveLlmConnection` without a
  * beingId so the being-step is skipped — preserves the original
@@ -442,7 +442,7 @@ export async function resolveLlmConnection({ beingId = null, nodeId = null, slot
 export async function resolveRootLlmForRole(rootId, role) {
   if (!rootId) return null;
   return resolveLlmConnection({
-    nodeId: rootId,
+    spaceId: rootId,
     slot:   role?.llmSlot || "main",
   });
 }

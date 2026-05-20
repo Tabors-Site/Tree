@@ -1,15 +1,15 @@
-# NEVER MODIFY THE SEED WHEN BUILDING EXTENSIONS. ALL EXTENSIONS MUST BE OUTSIDE AND ONLY DEPENDENT FROM KERNEL THE KERNEL. IT CAN NOT AND DOES NOT ADAPT. IT IS THE SEED
+# NEVER MODIFY THE SEED_BEING WHEN BUILDING EXTENSIONS. ALL EXTENSIONS MUST BE OUTSIDE AND ONLY DEPENDENT FROM KERNEL THE KERNEL. IT CAN NOT AND DOES NOT ADAPT. IT IS THE SEED_BEING
 
 ## TREAT WHOLE DIRECTORY AS READ ONLY UNLESS YOU ARE WORKING WITH TABOR HOLLY
 
-# AND USE ALL APPROPRIATE HOOKS/TOOLS/ETC SEED PROVIDES TO TAKE MOST DIRECT DATA PATH TO MAKE WHAT IS NEEDED with extensions.
+# AND USE ALL APPROPRIATE HOOKS/TOOLS/ETC SEED_BEING PROVIDES TO TAKE MOST DIRECT DATA PATH TO MAKE WHAT IS NEEDED with extensions.
 
 
 # The Seed
 
 The kernel is called the seed. You plant it on a land. It grows trees.
 
-Six models (Node, Being, Artifact, Contribution, Chat, LlmConnection), a conversation loop, a hook system, a cascade engine, an extension loader, and a response protocol. Remove every extension and the seed still boots. It defines the data contract that extensions build on, the resolution chains that determine what happens at every position, and the communication primitive that makes signals visible. Three models carry extensible metadata Maps (Node, Being, Artifact). The others have fixed schemas.
+Six models (Node, Being, Matter, Contribution, Chat, LlmConnection), a conversation loop, a hook system, a cascade engine, an extension loader, and a response protocol. Remove every extension and the seed still boots. It defines the data contract that extensions build on, the resolution chains that determine what happens at every position, and the communication primitive that makes signals visible. Three models carry extensible metadata Maps (Node, Being, Matter). The others have fixed schemas.
 
 
 ## Four Primitives
@@ -18,10 +18,10 @@ Everything in the seed serves one of four primitives. Everything else is emergen
 
 | Primitive | What it is | Key files |
 |-----------|-----------|-----------|
-| **Structure** | Six models. Node, Being, and Artifact carry extensible metadata Maps. Contribution, Chat, LlmConnection are fixed. | models/*.js |
+| **Structure** | Six models. Node, Being, and Matter carry extensible metadata Maps. Contribution, Chat, LlmConnection are fixed. | models/*.js |
 | **Intelligence** | Conversation loop, two entry points (`runChat`, `runOrchestration`), LLM/tool/mode/position resolution, time and position injection | llm/conversation.js, modes/registry.js, ws/mcp.js |
 | **Extensibility** | Extension loader, open hook system, pub/sub, spatial scoping, five registries | hooks.js, extensions/loader.js, tree/extensionScope.js |
-| **Communication** | Cascade signals, .flow system node, visible results, response protocol | tree/cascade.js, protocol.js |
+| **Communication** | Cascade signals, .flow land seed space, visible results, response protocol | tree/cascade.js, protocol.js |
 
 ## Schemas
 
@@ -35,23 +35,23 @@ Type is free-form. The kernel validates format (string, max 50 chars, no HTML). 
 
 ### Being (10 fields, excluding _id)
 
-username, operatingMode (human|ai), password, isAdmin, role, homePositionId, llmSlot, isRemote, homeLand, metadata (Map)
+username, operatingMode (human|llm|script), password, isAdmin, role, homeSpace, llmSlot, isRemote, homeLand, metadata (Map)
 
-The unified identity type. `operatingMode: "human"` authenticates with a password and is driven by input devices. `operatingMode: "ai"` is driven by an LLM through chainsteps; `role` names the template (ruler, planner, foreman, worker, auth, ...). Every being has a `homePositionId` pointing at the Node it lives at. `llmSlot` is the LLM that drives AI cognition or backs human AI assistance, falling through the resolution chain to position/tree/land defaults. `isAdmin` gates authorization (private IP bypass, admin route gates). `isRemote` and `homeLand` are identity fields the auth layer checks on every request. Extensions store energy budgets, API keys, per-extension LLM slot assignments, storage usage, and preferences in metadata.
+The unified identity type. `operatingMode: "human"` authenticates with a password and is driven by input devices. `operatingMode: "llm"` is driven by an LLM through chainsteps. `operatingMode: "script"` is driven by deterministic code with no LLM in the loop (auth, llm-assigner). `role` names the template (ruler, planner, foreman, worker, auth, ...). Every being has a `homeSpace` pointing at the Space it lives at. `llmSlot` is the LLM that drives cognition for `llm` beings or backs human AI assistance, falling through the resolution chain to position/tree/land defaults. `isRemote` and `homeLand` are identity fields the auth layer checks on every request. Extensions store energy budgets, API keys, per-extension LLM slot assignments, storage usage, and preferences in metadata.
 
-### Artifact (7 fields, excluding _id)
+### Matter (7 fields, excluding _id)
 
 nodeId, beingId, origin (ibp|filesystem|web|cross-land), content (shape varies by origin), createdAt, updatedAt, metadata (Map)
 
-A thing that lives inside a node. `origin` names the system the underlying representation comes from, which determines how the artifact is fetched, stored, kept in sync, and addressed. `ibp` is TreeOS native; `content` is a string of text (or null for a metadata-only object). `filesystem` bridges to a file on disk; `content` is `{ path, size, mimeType, originalName }`. `web` bridges to a URL; `content` is `{ url, fetchedAt?, cache? }`. `cross-land` bridges to an artifact on another land; `content` is `{ land, artifactRef }`. Future origins (git, database, stream, service) plug in as new bridging patterns. Extensions tag artifacts via metadata using their own namespace. `beforeArtifact`/`afterArtifact` hooks fire on every write.
+A thing that lives inside a node. `origin` names the system the underlying representation comes from, which determines how the matter is fetched, stored, kept in sync, and addressed. `ibp` is TreeOS native; `content` is a string of text (or null for a metadata-only object). `filesystem` bridges to a file on disk; `content` is `{ path, size, mimeType, originalName }`. `web` bridges to a URL; `content` is `{ url, fetchedAt?, cache? }`. `cross-land` bridges to a matter on another land; `content` is `{ land, matterRef }`. Future origins (git, database, stream, service) plug in as new bridging patterns. Extensions tag matters via metadata using their own namespace. `beforeMatter`/`afterMatter` hooks fire on every write.
 
 ### Supporting Models
 
-Node, Being, and Artifact are the data contract. The seed also owns models for kernel operations:
+Node, Being, and Matter are the data contract. The seed also owns models for kernel operations:
 
 | Model | Purpose |
 |-------|---------|
-| Artifact | A thing that lives inside a node. Replaces the older Note model. Seven fields: origin (ibp/filesystem/web/cross-land), content (shape varies by origin), beingId, nodeId, metadata (Map), createdAt, updatedAt. Subsumes what were previously notes, files, and metadata-only objects. beforeArtifact/afterArtifact hooks fire on every write. |
+| Matter | A thing that lives inside a node. Replaces the older Note model. Seven fields: origin (ibp/filesystem/web/cross-land), content (shape varies by origin), beingId, nodeId, metadata (Map), createdAt, updatedAt. Subsumes what were previously notes, files, and metadata-only objects. beforeMatter/afterMatter hooks fire on every write. |
 | Contribution | Audit trail. Core action shapes + extensionData for everything else. |
 | AIChat | Conversation sessions. The conversation loop is kernel. |
 | LLMConnection | LLM endpoint storage. The resolution chain is kernel. |
@@ -70,13 +70,13 @@ Navigation determines the AI's behavior zone. Structural, not interpretive. Dete
 
 Zones are kernel. Sub-modes within zones are extensions. The treeos extension registers navigate, structure, edit, respond, librarian, and others. A different extension could register completely different modes. The kernel provides fallback modes (the floor) when no extension registers anything.
 
-## Six System Nodes
+## Six Land Seed Spaces
 
-Created at boot by `ensureLandRoot()`. They hold infrastructure state, not user content. Every boot verifies all six exist. Missing nodes are recreated (recovery from partial boot failures). System nodes with wrong parents are repaired automatically.
+Created at boot by `ensureLandRoot()`. They hold infrastructure state, not user content. Every boot verifies all six exist. Missing nodes are recreated (recovery from partial boot failures). Land seed spaces with wrong parents are repaired automatically.
 
 | Node | systemRole | Purpose |
 |------|-----------|---------|
-| Land Root | land-root | Top of everything. Parent of all trees and system nodes. |
+| Land Root | land-root | Top of everything. Parent of all trees and land seed spaces. |
 | .identity | identity | Land UUID, domain, Ed25519 public key for Canopy federation signing. |
 | .config | config | All runtime configuration as metadata keys. CLI, API, or AI writable. |
 | .peers | peers | Canopy federation peer list. |
@@ -152,7 +152,7 @@ Three orthogonal axes, each evolves independently: **WHERE** (noun + preposition
 
 ## Extension APIs (core services bundle)
 
-Extensions receive `core` in `init(core)`. The full metadata toolkit, tree/artifact CRUD, scope checking, and mode management are all available through the services bundle. Extensions should never call MongoDB directly for metadata operations.
+Extensions receive `core` in `init(core)`. The full metadata toolkit, tree/matter CRUD, scope checking, and mode management are all available through the services bundle. Extensions should never call MongoDB directly for metadata operations.
 
 ### Node Metadata (core.metadata)
 
@@ -192,9 +192,9 @@ await core.metadata.unsetExtMeta(nodeId, "old-extension");
 
 `core.tree.createNode`, `core.tree.createNodeBranch`, `core.tree.deleteNodeBranch`, `core.tree.updateParentRelationship`, `core.tree.editNodeName`, `core.tree.editNodeType`. Stable API through the services bundle. Path changes don't break extensions.
 
-### Artifacts CRUD (core.artifacts)
+### Matters CRUD (core.matters)
 
-`core.artifacts.createArtifact`, `core.artifacts.editArtifact`, `core.artifacts.deleteArtifactAndFile`, `core.artifacts.transferArtifact`, `core.artifacts.getArtifacts`. Programmatic artifact creation without direct seed imports. createArtifact takes `{ origin, content, beingId, nodeId, file?, metadata? }`. Origin defaults to `"ibp"` (TreeOS-native text or metadata-only object); pass a multer file plus `origin: "filesystem"` for uploads.
+`core.matters.createMatter`, `core.matters.editMatter`, `core.matters.deleteMatterAndFile`, `core.matters.transferMatter`, `core.matters.getMatters`. Programmatic matter creation without direct seed imports. createMatter takes `{ origin, content, beingId, nodeId, file?, metadata? }`. Origin defaults to `"ibp"` (TreeOS-native text or metadata-only object); pass a multer file plus `origin: "filesystem"` for uploads.
 
 ### Being Metadata (core.beingMetadata)
 
@@ -214,25 +214,25 @@ Same pattern as node metadata, applied to beings (humans and AI beings alike). N
 
 `mergeBeingMeta` and all atomic writes accept a being document OR a beingId string. `setBeingMeta` is the historical exception: it mutates the in-memory document and relies on the caller to `await being.save()`. Prefer `mergeBeingMeta` or `batchSetBeingMeta` for new code so writes are atomic at the kernel boundary.
 
-### Artifact Metadata (core.artifactMetadata)
+### Matter Metadata (core.matterMetadata)
 
-Same pattern as node and being metadata, applied to artifacts. Nine functions.
+Same pattern as node and being metadata, applied to matters. Nine functions.
 
 | Function | Operation | Use Case |
 |----------|-----------|----------|
-| `getArtifactMeta(artifact, extName)` | Read namespace | Returns `{}` when unset |
-| `readArtifactNs(artifact, extName)` | Read namespace, null on miss | Distinguish "never written" from "empty" |
-| `setArtifactMeta(artifact, extName, data)` | Atomic $set | Replace entire namespace |
-| `mergeArtifactMeta(artifact, extName, partial)` | Atomic per-key $set | Update specific keys without clobbering others |
-| `incArtifactMeta(artifact, extName, key, amount)` | Atomic $inc | Counters (revisions, view counts) |
-| `pushArtifactMeta(artifact, extName, key, item, maxLength)` | Atomic $push + $slice | Capped history (review rounds, edits) |
-| `addToArtifactMetaSet(artifact, extName, key, item)` | Atomic $addToSet | Tags, contributors, deduplicated lists |
-| `batchSetArtifactMeta(artifact, extName, fields)` | Atomic multi-field $set | Set multiple keys at once (embedding + model + ts) |
-| `unsetArtifactMeta(artifact, extName)` | Atomic $unset | Remove namespace entirely. Document shrinks. |
+| `getMatterMeta(matter, extName)` | Read namespace | Returns `{}` when unset |
+| `readMatterNs(matter, extName)` | Read namespace, null on miss | Distinguish "never written" from "empty" |
+| `setMatterMeta(matter, extName, data)` | Atomic $set | Replace entire namespace |
+| `mergeMatterMeta(matter, extName, partial)` | Atomic per-key $set | Update specific keys without clobbering others |
+| `incMatterMeta(matter, extName, key, amount)` | Atomic $inc | Counters (revisions, view counts) |
+| `pushMatterMeta(matter, extName, key, item, maxLength)` | Atomic $push + $slice | Capped history (review rounds, edits) |
+| `addToMatterMetaSet(matter, extName, key, item)` | Atomic $addToSet | Tags, contributors, deduplicated lists |
+| `batchSetMatterMeta(matter, extName, fields)` | Atomic multi-field $set | Set multiple keys at once (embedding + model + ts) |
+| `unsetMatterMeta(matter, extName)` | Atomic $unset | Remove namespace entirely. Document shrinks. |
 
-All write functions accept an artifact document OR an artifactId string. Artifacts inherit spatial scope from the node they live on, so there is no per-artifact extension-blocked check; the kernel filters blocked extensions out of hooks and tool resolution upstream.
+All write functions accept a matter document OR a matterId string. Matters inherit spatial scope from the node they live on, so there is no per-matter extension-blocked check; the kernel filters blocked extensions out of hooks and tool resolution upstream.
 
-The three modules are functional peers. Every operation on a node has a same-shaped operation on a being and on an artifact; pick the module that matches the document you are tagging.
+The three modules are functional peers. Every operation on a node has a same-shaped operation on a being and on a matter; pick the module that matches the document you are tagging.
 
 ### Extension Scope (core.scope)
 
@@ -288,12 +288,10 @@ Two rules, no exceptions. Before hooks run sequential because they can cancel. A
 | Hook | Type | Purpose |
 |------|------|---------|
 | beforeNodeCreate | before | Gate node creation. Enforce naming, child limits, compliance. |
-| beforeArtifact | before | Modify artifact data before save. Payload: `{ nodeId, content, beingId, origin, metadata }`. Extensions write to hookData.metadata. |
-| afterArtifact | after | React to artifact create/edit/delete. Payload: `{ artifact, nodeId, beingId, origin, sizeKB, action, chatId, sessionId }`. |
+| beforeMatter | before | Modify matter data before save. Payload: `{ nodeId, content, beingId, origin, metadata }`. Extensions write to hookData.metadata. |
+| afterMatter | after | React to matter create/edit/delete. Payload: `{ matter, nodeId, beingId, origin, sizeKB, action, chatId, sessionId }`. |
 | beforeContribution | before | Modify contribution data. Extensions add to extensionData via hook. |
 | afterNodeCreate | after | Initialize extension data |
-| beforeStatusChange | before | Validate, intercept |
-| afterStatusChange | after | React to status changes |
 | beforeNodeDelete | before | Cleanup extension data |
 | enrichContext | sequential | Inject extension data into AI context |
 | beforeLLMCall | before | Before LLM API call. Cancel if quota exhausted. |
@@ -333,7 +331,7 @@ Five ownership mutation functions in `seed/tree/ownership.js`, all chain-validat
 | removeOwner | Owner above or admin can revoke. Section falls back to next owner up. |
 | transferOwnership | Current owner or admin can transfer. |
 
-All reject on system nodes. Extensions use `core.ownership.*`.
+All reject on land seed spaces. Extensions use `core.ownership.*`.
 
 ## Cascade
 
@@ -364,11 +362,11 @@ WebSocket: Named constants in `WS` object. Kernel events only. Extension events 
 
 Cascade: Named constants in `CASCADE` object. Six statuses.
 
-Shared vocabulary: `NODE_STATUS` (active, completed, trimmed), `SYSTEM_ROLE` (land-root, identity, config, peers, extensions, flow), `ARTIFACT_ORIGIN` (ibp, filesystem, web, cross-land), `DELETED` sentinel. Every file that references these values imports from protocol.js. Typo in a constant fails at import. Typo in a string fails silently.
+Shared vocabulary: `NODE_STATUS` (active, completed, trimmed), `SEED_SPACE` (land-root, identity, config, peers, extensions, flow), `MATTER_ORIGIN` (ibp, filesystem, web, cross-land), `DELETED` sentinel. Every file that references these values imports from protocol.js. Typo in a constant fails at import. Typo in a string fails silently.
 
 ## Config
 
-Runtime config stored in .config system node. Readable and writable via CLI (`treeos config set`), API, or AI.
+Runtime config stored in .config land seed space. Readable and writable via CLI (`treeos config set`), API, or AI.
 
 | Key | Default | Purpose |
 |-----|---------|---------|
@@ -379,7 +377,7 @@ Runtime config stored in .config system node. Readable and writable via CLI (`tr
 | maxToolIterations | 15 | Tool calls per message |
 | maxConversationMessages | 30 | Context window size |
 | landLlmConnection | null | LLM connection ID. Fallback for users without their own. Admin creates a connection, sets this to its ID. All users get AI. Override by setting your own. |
-| artifactMaxChars | 5000 | Max characters per ibp-origin artifact |
+| matterMaxChars | 5000 | Max characters per ibp-origin matter |
 | treeSummaryMaxDepth | 4 | How deep AI sees the tree |
 | treeSummaryMaxNodes | 60 | How many nodes AI sees |
 | carryMessages | 4 | Messages carried across mode switch |
@@ -408,10 +406,10 @@ Runtime config stored in .config system node. Readable and writable via CLI (`tr
 | ancestorCacheTTL | 30000 | Milliseconds before cached ancestor chains expire |
 | integrityCheckInterval | 86400000 | Milliseconds between periodic tree integrity checks (24h) |
 | treeCircuitEnabled | false | Master switch for tree circuit breaker |
-| maxTreeNodes | 10000 | Node count threshold for health equation |
+| maxTreeSpaces | 10000 | Space count threshold for health equation |
 | maxTreeMetadataBytes | 1073741824 | Total metadata size threshold (1GB) |
 | maxTreeErrorRate | 100 | Errors per hour threshold |
-| circuitNodeWeight | 0.4 | Weight of node count in health equation |
+| circuitSpaceWeight | 0.4 | Weight of space count in health equation |
 | circuitDensityWeight | 0.3 | Weight of metadata density |
 | circuitErrorWeight | 0.3 | Weight of error rate |
 | circuitCheckInterval | 3600000 | Health check interval (1 hour) |
@@ -468,13 +466,16 @@ These keys are configurable via `treeos config set` but most lands never need to
 |-----|---------|---------------|
 | metadataNamespaceMaxBytes | 524288 | Max bytes per metadata namespace (512KB) |
 | metadataMaxNestingDepth | 5 | Max nesting depth for extension metadata values |
-| maxArtifactsPerNode | 1000 | Max artifacts per node |
-| maxContributorsPerNode | 500 | Max contributors[] entries per node |
+| maxMattersPerNode | 1000 | Max matters per node |
+| maxContributorsPerSpace | 500 | Max contributors[] entries per space |
 | maxConnectionsPerUser | 15 | Max custom LLM connections per user |
-| artifactQueryLimit | 5000 | Max artifacts returned per query |
-| artifactSearchLimit | 500 | Max artifacts returned per search query |
+| matterQueryLimit | 5000 | Max matters returned per query |
+| matterSearchLimit | 500 | Max matters returned per search query |
 | didQueryLimit | 5000 | Max Did rows returned per query |
 | subtreeNodeCap | 10000 | Max node IDs collected in subtree traversal |
+| summonInboxDepth | 100 | Per-being inbox depth before backpressure (planned enforcement) |
+| summonsPerSecond | 10 | Per-being token-bucket refill rate (enforced) |
+| summonMaxAgeSeconds | 3600 | Age threshold for pending inbox entries (planned enforcement) |
 
 **Tree data queries (AI context):**
 
@@ -482,12 +483,12 @@ These keys are configurable via `treeos config set` but most lands never need to
 |-----|---------|---------------|
 | treeAncestorDepth | 50 | Max ancestor chain depth |
 | treeDidsPerNode | 500 | Max Did rows loaded per node in tree context |
-| treeArtifactsPerNode | 100 | Max artifacts loaded per node |
+| treeMattersPerNode | 100 | Max matters loaded per node |
 | treeMaxChildrenResolve | 200 | Max children name-resolved per node |
 | treeAllDataDepth | 20 | Max recursion depth in full tree export |
 | treeSearchResultLimit | 10 | Max search results returned in tree context |
-| treeSummaryRecentArtifacts | 3 | Recent artifacts shown per node in tree summary |
-| treeSummaryPreviewChars | 200 | Characters of artifact content shown in preview |
+| treeSummaryRecentMatters | 3 | Recent matters shown per node in tree summary |
+| treeSummaryPreviewChars | 200 | Characters of matter content shown in preview |
 | chatContributionQueryLimit | 2000 | Max contributions linked per chat finalization |
 | summonHistoryMaxSessions | 50 | Max sessions returned per summon history query |
 | summonHistoryMaxSummonsPerSession | 200 | Max chain steps loaded per session |
@@ -611,10 +612,10 @@ Defaults to OFF (`treeCircuitEnabled: false`).
 | Per-namespace cap | metadataNamespaceMaxBytes (default 512KB) per extension namespace on nodes, users, and contribution extensionData. Configurable. 20 extensions at 512KB = 10MB, under the 14MB ceiling. |
 | Namespace key length | Max 50 chars for metadata namespace keys in setExtMeta. Same cap as node type. |
 | Metadata nesting depth | Max 5 levels deep in setExtMeta. Deeper structures must be flattened by the extension. Prevents expensive deep queries. |
-| Artifact count per node | maxArtifactsPerNode (default 1000) checked in createArtifact before write. Prevents runaway loops from flooding a node. Configurable. |
+| Matter count per node | maxMattersPerNode (default 1000) checked in createMatter before write. Prevents runaway loops from flooding a node. Configurable. |
 | Contribution extensionData cap | 512KB per contribution extensionData field. Same cap as setExtMeta. Prevents buggy extensions from writing 5MB per contribution. |
 | .flow partitioning | Daily partition nodes prevent unbounded growth. flowMaxResultsPerDay cap with circular overwrite. Retention deletes entire partitions by date. |
-| Ownership chain | rootOwner/contributor mutations validate the parent chain. Only resolved owner or admin can modify. System nodes always rejected. transferOwnership uses bulkWrite for atomic two-op transfer. |
+| Ownership chain | rootOwner/contributor mutations validate the parent chain. Only resolved owner or admin can modify. Land seed spaces always rejected. transferOwnership uses bulkWrite for atomic two-op transfer. |
 | Node locks | Structural mutations (move, delete, transfer ownership) acquire short-lived in-memory locks. Reads and scoped writes proceed without locking. Sorted acquisition prevents deadlocks. 30s TTL expiry prevents permanent locks on crash. |
 | Tree circuit breaker | Health equation monitors node count, metadata density, error rate. Score > 1.0 trips the tree. No AI, no writes, no cascade. Read access stays. Extensions revive. Defaults to off. |
 | Ancestor cache | Shared cache for parent chain walks. One walk serves all five resolution chains. Snapshot per message for consistency. moveNode clears entire cache. deleteNode clears entries containing the deleted node. Metadata/ownership changes clear the affected node and descendants. |
@@ -659,7 +660,7 @@ Defaults to OFF (`treeCircuitEnabled: false`).
 | Auth error logging | authenticateOptional logs all JWT failures, strategy failures, and pipeline errors at debug level. Zero silent catch blocks. |
 | Atomic metadata writes | setExtMeta uses MongoDB $set on the specific namespace key. mergeExtMeta uses $set on individual keys within a namespace. Concurrent writes to different namespaces on the same node do not clobber. Concurrent merges to the same namespace preserve all keys. |
 | DB health check | Before each tool call, the conversation loop checks database readyState. If unreachable, the tool result tells the AI "database unavailable" so it responds to the user instead of retrying blindly. |
-| Boot recovery | ensureLandRoot verifies all six system nodes exist every boot. Missing nodes recreated with correct defaults. Nodes with wrong parent repaired. Orphan root adoption errors isolated per root (one failure doesn't skip the rest). Partial first-boot crashes leave a recoverable state, not a bricked land. |
+| Boot recovery | ensureLandRoot verifies all six land seed spaces exist every boot. Missing nodes recreated with correct defaults. Nodes with wrong parent repaired. Orphan root adoption errors isolated per root (one failure doesn't skip the rest). Partial first-boot crashes leave a recoverable state, not a bricked land. |
 | Extension sync atomicity | syncExtensionsToTree uses atomic $addToSet per child instead of in-memory push + single save. If one save fails, the tree is consistent. Integrity check repairs any stragglers. |
 | Config key validation | Config keys must match `^[a-zA-Z][a-zA-Z0-9_]{0,63}$`. Dots rejected (prevent nested MongoDB path injection). `__proto__`, `constructor`, `prototype` rejected (prevent prototype pollution). |
 | Config value size cap | 64KB per config value. Prevents a 10MB string from bloating the .config node and every cache load. |

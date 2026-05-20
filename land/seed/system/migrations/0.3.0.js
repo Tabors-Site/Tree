@@ -11,31 +11,31 @@
  *    created lazily by their extensions and are NOT part of this
  *    migration.
  *
- * 2. Every migrated being also gets a home territory Node: a real Node
+ * 2. Every migrated being also gets a home territory Space: a real Space
  *    owned by the being, parented under the land root, that becomes
  *    their home in the world. `Being.homePositionId` points at it.
- *    The address shorthand `/~<username>` resolves through this Node
+ *    The address shorthand `/~<username>` resolves through this Space
  *    once the address grammar updates.
  *
  *    Existing user-owned tree roots stay where they are (children of
  *    the land root). They remain accessible by direct path; the home
- *    Node is initially empty and the user can build inside it. A
+ *    Space is initially empty and the user can build inside it. A
  *    future pass may move user trees inside their home territory; for
  *    now structural shape stays compatible.
  *
  * Non-destructive:
  *   - Legacy `users` collection is untouched.
- *   - Idempotent: if a Being row or home Node already exists, skip the
+ *   - Idempotent: if a Being row or home Space already exists, skip the
  *     duplicate creation; re-runs are safe.
  *   - The first admin's `isAdmin` flag carries forward.
  */
 
 import mongoose from "mongoose";
 import { v4 as uuidv4 } from "uuid";
-import log from "../core/log.js";
-import Being from "../models/being.js";
-import Node from "../models/node.js";
-import { getLandRootId } from "../landRoot.js";
+import log from "../log.js";
+import Being from "../../models/being.js";
+import Space from "../../models/space.js";
+import { getLandRootId } from "../../landRoot.js";
 
 export default async function migrate() {
   const usersColl = mongoose.connection.collection("users");
@@ -84,20 +84,20 @@ export default async function migrate() {
         skipped++;
       }
 
-      // Step 2: home territory Node. Create one if the being doesn't
-      // already have a homePositionId pointing at a real Node.
+      // Step 2: home territory Space. Create one if the being doesn't
+      // already have a homePositionId pointing at a real Space.
       let homeNodeId = existing?.homePositionId || null;
       if (homeNodeId) {
-        const homeStillExists = await Node.findById(homeNodeId).select("_id").lean();
+        const homeStillExists = await Space.findById(homeNodeId).select("_id").lean();
         if (!homeStillExists) homeNodeId = null;
       }
 
       if (!homeNodeId) {
         const homeName = `~${u.name}`;
-        // Direct insert through Mongoose so afterNodeCreate hooks fire
-        // (position auto-placement etc.). Mirrors createNode but uses
+        // Direct insert through Mongoose so afterSpaceCreate hooks fire
+        // (position auto-placement etc.). Mirrors createSpace but uses
         // direct create to keep migration self-contained.
-        const homeNode = await Node.create({
+        const homeSpace = await Space.create({
           _id: uuidv4(),
           name: homeName,
           type: "home-territory",
@@ -106,15 +106,15 @@ export default async function migrate() {
           contributors: [],
           status: "active",
         });
-        // Wire the home Node id back onto the being.
+        // Wire the home Space id back onto the being.
         await mongoose.connection.collection("beings").updateOne(
           { _id: beingId },
-          { $set: { homePositionId: String(homeNode._id) } },
+          { $set: { homePositionId: String(homeSpace._id) } },
         );
         // Add to the land root's children list so navigation works.
-        await Node.updateOne(
+        await Space.updateOne(
           { _id: landRootId },
-          { $addToSet: { children: String(homeNode._id) } },
+          { $addToSet: { children: String(homeSpace._id) } },
         );
         homesCreated++;
       }

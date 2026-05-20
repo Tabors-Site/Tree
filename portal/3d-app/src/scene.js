@@ -64,13 +64,13 @@ const VISUAL_PYRAMID = {
 };
 
 export class Scene {
-  constructor({ onGaze, onEnter, onBeingProximity, onBeingActivate, onArtifactEnded, onArtifactPlaybackTick, isInputBlocked } = {}) {
+  constructor({ onGaze, onEnter, onBeingProximity, onBeingActivate, onMatterEnded, onMatterPlaybackTick, isInputBlocked } = {}) {
     this.onGaze = onGaze || (() => {});
     this.onEnter = onEnter || (() => {});
     this.onBeingProximity = onBeingProximity || (() => {});
     this.onBeingActivate = onBeingActivate || (() => {});
-    this.onArtifactEnded = onArtifactEnded || (() => {});
-    this.onArtifactPlaybackTick = onArtifactPlaybackTick || (() => {});
+    this.onMatterEnded = onMatterEnded || (() => {});
+    this.onMatterPlaybackTick = onMatterPlaybackTick || (() => {});
     this.isInputBlocked = isInputBlocked || isTypingInUI;
     // Every being mesh by being. Proximity fires per-being; speech
     // bubbles anchor to the mesh for that being.
@@ -87,7 +87,7 @@ export class Scene {
 
     // CSS3DRenderer sits behind the WebGL canvas (pointer-events:none
     // so it doesn't block the 3D gaze raycast) and renders DOM elements
-    // — iframes for video artifacts, anchors for web pages — at real
+    // — iframes for video matter, anchors for web pages — at real
     // 3D positions. Two renderers, one scene/camera. The CSS renderer's
     // DOM elements (CSS3DObject) live in the scene tree alongside
     // meshes; we resize + render them in lockstep.
@@ -281,18 +281,18 @@ export class Scene {
       this.world.add(mesh);
     });
 
-    // Place artifacts (notes, plan emissions, etc.) at their server
+    // Place matter (notes, plan emissions, etc.) at their server
     // coords, falling back to a tight ring around the player when no
-    // placement is set. Each artifact is a small glowing cube whose
+    // placement is set. Each matter is a small glowing cube whose
     // userData carries a preview the gaze label can show on hover.
-    this._artifactMeshes = new Map();
-    const artifacts = desc?.artifacts || [];
+    this._matterMeshes = new Map();
+    const matters = desc?.matters || [];
     if (!arrival) {
-      artifacts.forEach((art, i) => {
-        const id = art.artifactId || art.noteId || `art-${i}`;
-        const isVideo = art?.content?.contentType === "video/youtube";
+      matters.forEach((mt, i) => {
+        const id = mt.matterId || `mt-${i}`;
+        const isVideo = mt?.content?.contentType === "video/youtube";
         let x, z;
-        const serverCoords = art.position?.coords;
+        const serverCoords = mt.position?.coords;
         if (serverCoords && typeof serverCoords.x === "number") {
           x = serverCoords.x;
           z = serverCoords.y;
@@ -310,20 +310,20 @@ export class Scene {
           x = Math.cos(angle) * radius;
           z = Math.sin(angle) * radius;
         }
-        const mesh = this._makeArtifactMesh(art);
+        const mesh = this._makeMatterMesh(mt);
         mesh.position.set(x, 0, z);
         // Preserve existing userData (the video mesh has iframe + ids).
         mesh.userData = Object.assign({
-          kind: "artifact",
-          artifactKind: isVideo ? "video" : (art.kind || "note"),
+          kind: "matter",
+          matterKind: isVideo ? "video" : (mt.kind || "ibp"),
           ref: id,
-          artifactId: id,
-          label: artifactLabel(art),
-          preview: art.preview || "",
-          fullContentRef: art.fullContentRef || null,
+          matterId: id,
+          label: matterLabel(mt),
+          preview: mt.preview || "",
+          fullContentRef: mt.fullContentRef || null,
         }, mesh.userData || {});
         this.world.add(mesh);
-        this._artifactMeshes.set(id, mesh);
+        this._matterMeshes.set(id, mesh);
       });
     }
 
@@ -792,14 +792,14 @@ export class Scene {
     return group;
   }
 
-  // Dispatch on artifact content type. Web/video artifacts get a real
+  // Dispatch on matter content type. Web/video matter gets a real
   // 3D screen (CSS3DObject wrapping an iframe); everything else falls
-  // back to the default glowing cube. Gaze hover shows the artifact's
+  // back to the default glowing cube. Gaze hover shows the matter's
   // preview / label.
-  _makeArtifactMesh(artifact) {
-    const contentType = artifact?.content?.contentType || null;
-    if (contentType === "video/youtube" && artifact?.content?.videoId) {
-      return this._makeVideoScreenMesh(artifact);
+  _makeMatterMesh(matter) {
+    const contentType = matter?.content?.contentType || null;
+    if (contentType === "video/youtube" && matter?.content?.videoId) {
+      return this._makeVideoScreenMesh(matter);
     }
     const color = 0xb0e0c0;
     const cube = new THREE.Mesh(
@@ -815,7 +815,7 @@ export class Scene {
   // A free-standing video screen — flat WebGL backing + a CSS3D iframe
   // running the YouTube IFrame Player API. Sized in world units; sits
   // on a thin frame so it reads as "a thing sitting on the ground".
-  _makeVideoScreenMesh(artifact) {
+  _makeVideoScreenMesh(matter) {
     const W = 6.4; // ~16:9 at 6.4 × 3.6 world units
     const H = 3.6;
 
@@ -842,7 +842,7 @@ export class Scene {
     // src (enablejsapi=1) so YT.Player(id) wraps it cleanly.
     // Source resolution is 1920×1080 so the CSS3D rasterization stays
     // crisp when the player walks up to the screen.
-    const iframeId = `yt-${artifact.artifactId || Math.random().toString(36).slice(2)}`;
+    const iframeId = `yt-${matter.matterId || Math.random().toString(36).slice(2)}`;
     const iframe = document.createElement("iframe");
     iframe.id     = iframeId;
     iframe.width  = "1920";
@@ -852,7 +852,7 @@ export class Scene {
     iframe.style.border        = "0";
     iframe.style.pointerEvents = "auto";
     iframe.src =
-      `https://www.youtube.com/embed/${encodeURIComponent(artifact.content.videoId)}` +
+      `https://www.youtube.com/embed/${encodeURIComponent(matter.content.videoId)}` +
       `?enablejsapi=1&autoplay=1&mute=1&modestbranding=1&rel=0`;
 
     const css = new CSS3DObject(iframe);
@@ -864,14 +864,14 @@ export class Scene {
 
     group.userData.iframe      = iframe;
     group.userData.iframeId    = iframeId;
-    group.userData.videoId     = artifact.content.videoId;
-    group.userData.artifactId  = artifact.artifactId;
+    group.userData.videoId     = matter.content.videoId;
+    group.userData.matterId    = matter.matterId;
     group.userData.isVideoMesh = true;
 
-    // Resume position lives in the artifact's substrate metadata so it
+    // Resume position lives in the matter's substrate metadata so it
     // survives across browsers/devices. Persisted by emitPlaybackTick →
     // llm-assigner:save-playback DO.
-    const resumeAt = Number(artifact?.metadata?.tutorial?.playbackSeconds);
+    const resumeAt = Number(matter?.metadata?.tutorial?.playbackSeconds);
 
     // Attach the Player API once it's ready so we can listen for ENDED
     // and tick the current time back to the substrate.
@@ -899,12 +899,12 @@ export class Scene {
             if (e.data === S.ENDED) {
               this._stopPlaybackTick(group);
               try {
-                this.onArtifactEnded({
-                  artifactId: group.userData.artifactId,
-                  videoId:    group.userData.videoId,
+                this.onMatterEnded({
+                  matterId: group.userData.matterId,
+                  videoId:  group.userData.videoId,
                 });
               } catch (err) {
-                console.warn("[3D] onArtifactEnded handler threw:", err);
+                console.warn("[3D] onMatterEnded handler threw:", err);
               }
               return;
             }
@@ -934,8 +934,8 @@ export class Scene {
     try {
       const t = player?.getCurrentTime?.();
       if (!Number.isFinite(t) || t < 0) return;
-      this.onArtifactPlaybackTick({
-        artifactId:  group.userData.artifactId,
+      this.onMatterPlaybackTick({
+        matterId:    group.userData.matterId,
         currentTime: t,
       });
     } catch (err) {
@@ -1514,20 +1514,20 @@ function beingUserData(b) {
   };
 }
 
-// Short, single-line label for an artifact's hover tag. Prefer the
-// artifact's own name (always set by the server), then a preview snippet,
-// then a generic kind word. We truncate so a long preview doesn't fill
-// the screen.
-function artifactLabel(art) {
-  const name = (art.name || "").trim();
+// Short, single-line label for matter's hover tag. Prefer the matter's
+// own name (always set by the server), then a preview snippet, then a
+// generic kind word. We truncate so a long preview doesn't fill the
+// screen.
+function matterLabel(mt) {
+  const name = (mt.name || "").trim();
   if (name) return name;
-  const preview = (art.preview || "").replace(/\s+/g, " ").trim();
+  const preview = (mt.preview || "").replace(/\s+/g, " ").trim();
   if (preview) {
     const max = 80;
     return preview.length > max ? preview.slice(0, max) + "..." : preview;
   }
-  if (art?.content?.contentType === "video/youtube") return "video";
-  return (art.kind || "note").toLowerCase();
+  if (mt?.content?.contentType === "video/youtube") return "video";
+  return (mt.kind || "ibp").toLowerCase();
 }
 
 // Walk the group and apply an emissive intensity to all child materials.

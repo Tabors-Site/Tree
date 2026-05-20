@@ -11,16 +11,16 @@
  *   - TOCTOU guard: re-stat before delete rejects files touched between check and delete
  *   - Async I/O throughout (no event loop blocking)
  *   - Per-cycle deletion cap prevents one run from blocking for minutes
- *   - Artifact query uses lean projection (path only), not full documents
+ *   - Matter query uses lean projection (path only), not full documents
  */
 
 import fs from "fs/promises";
 import fsSync from "fs";
 import path from "path";
-import log from "../core/log.js";
-import Artifact from "../models/artifact.js";
+import log from "../system/log.js";
+import Matter from "../models/matter.js";
 import { getLandConfigValue } from "../landConfig.js";
-import { ARTIFACT_ORIGIN } from "../core/protocol.js";
+import { MATTER_ORIGIN } from "../matter/origins.js";
 import { fileURLToPath } from "url";
 
 const __filename = fileURLToPath(import.meta.url);
@@ -60,9 +60,9 @@ export async function cleanOrphanedUploads({ graceMs = DEFAULT_GRACE_MS } = {}) 
   // the path field holds the basename in the uploads folder.
   const referencedFiles = new Set();
 
-  const artifactCursor = Artifact.find({ origin: ARTIFACT_ORIGIN.FILESYSTEM }).select("content").lean().cursor();
-  for await (const artifact of artifactCursor) {
-    const p = artifact?.content?.path;
+  const matterCursor = Matter.find({ origin: MATTER_ORIGIN.FILESYSTEM }).select("content").lean().cursor();
+  for await (const matter of matterCursor) {
+    const p = matter?.content?.path;
     if (p) referencedFiles.add(p);
   }
 
@@ -75,11 +75,11 @@ export async function cleanOrphanedUploads({ graceMs = DEFAULT_GRACE_MS } = {}) 
   try {
     const mongoose = (await import("mongoose")).default;
     for (const [name, model] of Object.entries(mongoose.models)) {
-      if (name === "Artifact") continue; // already checked above
+      if (name === "Matter") continue; // already checked above
       const paths = model.schema?.paths || {};
       if (!paths.origin || !paths.content) continue;
       try {
-        const cursor = model.find({ origin: ARTIFACT_ORIGIN.FILESYSTEM }).select("content").lean().cursor();
+        const cursor = model.find({ origin: MATTER_ORIGIN.FILESYSTEM }).select("content").lean().cursor();
         for await (const doc of cursor) {
           const p = doc?.content?.path;
           if (p) referencedFiles.add(p);

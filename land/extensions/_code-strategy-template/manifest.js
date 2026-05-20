@@ -12,7 +12,7 @@ export default {
 
   needs: {
     services: [],
-    models: ["Node", "Artifact"],
+    models: ["Space", "Matter"],
     extensions: ["code-workspace"],
   },
 

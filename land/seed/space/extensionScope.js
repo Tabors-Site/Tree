@@ -5,26 +5,26 @@
  * Two modes per extension:
  *
  * Global (default): Active everywhere. Block to remove at specific positions.
- *   Storage: node.metadata.extensions.blocked[] accumulates up the parent chain.
+ *   Storage: space.metadata.extensions.blocked[] accumulates up the parent chain.
  *
  * Confined: Active nowhere. Allow to add at specific positions.
- *   Storage: node.metadata.extensions.allowed[] walked up the parent chain.
+ *   Storage: space.metadata.extensions.allowed[] walked up the parent chain.
  *   If not found in allowed[], the extension is treated as blocked.
  *   If found, it's active (but can still be blocked further down).
  *
  * The manifest declares scope: "confined" for dangerous or specialized extensions.
- * The .extensions system node stores scope on each extension's registry node.
+ * The .extensions land seed space stores scope on each extension's registry space.
  *
  * Resolution: is this extension confined? If yes, walk up looking for allowed[].
  * If not found, blocked. If found, continue to normal blocked[] check.
  * Same ancestor cache. Same snapshot. Zero new queries. One check per confined extension.
  */
 
-import log from "../core/log.js";
-import Node from "../models/node.js";
-import { SYSTEM_ROLE } from "../core/protocol.js";
+import log from "../system/log.js";
+import Space from "../models/space.js";
+import { SEED_SPACE } from "../space/seedSpaces.js";
 import { getAncestorChain, resolveExtensionScopeFromChain, invalidateAll as clearAncestorCache } from "./ancestorCache.js";
-import { hooks } from "../core/hooks.js";
+import { hooks } from "../system/hooks.js";
 
 // ─────────────────────────────────────────────────────────────────────────
 // CONFINED EXTENSIONS REGISTRY
@@ -51,15 +51,15 @@ export function setExtensionInstanceLookup(fn) {
 }
 
 /**
- * Load confined extension names from .extensions system node.
+ * Load confined extension names from .extensions land seed space.
  * Called once during extension loading, after syncExtensionsToTree.
  */
 export async function loadConfinedExtensions() {
   try {
-    const extNode = await Node.findOne({ systemRole: SYSTEM_ROLE.EXTENSIONS }).select("children").lean();
-    if (!extNode) return;
+    const extSpace = await Space.findOne({ seedSpace: SEED_SPACE.EXTENSIONS }).select("children").lean();
+    if (!extSpace) return;
 
-    const children = await Node.find({ _id: { $in: extNode.children } })
+    const children = await Space.find({ _id: { $in: extSpace.children } })
       .select("name metadata")
       .lean();
 
@@ -93,13 +93,13 @@ export function isExtensionConfined(extName) {
 // ─────────────────────────────────────────────────────────────────────────
 
 /**
- * Check if an extension is blocked at a node position.
+ * Check if an extension is blocked at a space position.
  * Handles both global (blocked[]) and confined (allowed[]) modes.
  */
-export async function isExtensionBlockedAtNode(extName, nodeId) {
+export async function isExtensionBlockedAtNode(extName, spaceId) {
   if (!extName || typeof extName !== "string") return false;
-  if (!nodeId) return false;
-  const { blocked } = await getBlockedExtensionsAtNode(nodeId);
+  if (!spaceId) return false;
+  const { blocked } = await getBlockedExtensionsAtNode(spaceId);
   return blocked.has(extName);
 }
 
@@ -111,7 +111,7 @@ export async function isExtensionBlockedAtNode(extName, nodeId) {
  *
  * This is the principled way for one extension to reach into another:
  *
- *   const cw = await core.scope.getExtensionAtScope("code-workspace", nodeId);
+ *   const cw = await core.scope.getExtensionAtScope("code-workspace", spaceId);
  *   if (!cw?.exports?.someApi) return; // not active here
  *   await cw.exports.someApi(...);
  *
@@ -122,17 +122,17 @@ export async function isExtensionBlockedAtNode(extName, nodeId) {
  * callable through getExtension(...).exports" hole.
  *
  * @param {string} extName  extension name
- * @param {string} nodeId   the tree position whose scope governs
+ * @param {string} spaceId   the tree position whose scope governs
  * @returns {object|null}   the extension's loaded instance, or null
  */
-export async function getExtensionAtScope(extName, nodeId) {
-  if (!extName || !nodeId) return null;
+export async function getExtensionAtScope(extName, spaceId) {
+  if (!extName || !spaceId) return null;
   if (typeof _extensionInstanceLookup !== "function") return null;
   try {
-    const blocked = await isExtensionBlockedAtNode(extName, nodeId);
+    const blocked = await isExtensionBlockedAtNode(extName, spaceId);
     if (blocked) return null;
   } catch {
-    // If scope resolution fails (e.g., node not found), be
+    // If scope resolution fails (e.g., space not found), be
     // conservative — return null. Callers that genuinely need the
     // instance without scope can use the loader's getExtension.
     return null;
@@ -145,12 +145,12 @@ export async function getExtensionAtScope(extName, nodeId) {
 }
 
 /**
- * Get blocked and restricted extensions at a node position.
+ * Get blocked and restricted extensions at a space position.
  * Confined extensions not found in allowed[] are added to the blocked set.
  */
-export async function getBlockedExtensionsAtNode(nodeId) {
-  if (!nodeId) return { blocked: new Set(), restricted: new Map(), allowed: new Set() };
-  const ancestors = await getAncestorChain(nodeId);
+export async function getBlockedExtensionsAtNode(spaceId) {
+  if (!spaceId) return { blocked: new Set(), restricted: new Map(), allowed: new Set() };
+  const ancestors = await getAncestorChain(spaceId);
   if (!ancestors) return { blocked: new Set(), restricted: new Map(), allowed: new Set() };
   return resolveExtensionScopeFromChain(ancestors, _confinedExtensions);
 }
@@ -165,9 +165,9 @@ export function clearScopeCache() {
 /**
  * Clear cache and fire afterScopeChange hook.
  */
-export function notifyScopeChange({ nodeId, blocked, restricted, allowed, beingId } = {}) {
+export function notifyScopeChange({ spaceId, blocked, restricted, allowed, beingId } = {}) {
   clearAncestorCache();
-  hooks.run("afterScopeChange", { nodeId, blocked, restricted, allowed, beingId })
+  hooks.run("afterScopeChange", { spaceId, blocked, restricted, allowed, beingId })
     .catch(err => log.debug("Scope", `afterScopeChange hook error: ${err.message}`));
 }
 
@@ -303,7 +303,7 @@ export function clearModeOwnersForExtension(extName) {
 }
 
 /**
- * Check if a mode is blocked at a node position.
+ * Check if a mode is blocked at a space position.
  */
 export function isModeBlockedByScope(modeKey, blockedExtensions) {
   if (!blockedExtensions || blockedExtensions.size === 0) return false;

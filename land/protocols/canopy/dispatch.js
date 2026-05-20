@@ -13,8 +13,8 @@
 //
 // See [[project_canopy_folds_into_ibp]].
 
-import log from "../../../seed/core/log.js";
-import { getLandDomain } from "../../../seed/addressing/address.js";
+import log from "../../seed/system/log.js";
+import { getLandDomain } from "../../seed/ibp/address.js";
 import { signData, verifySignedData } from "./identity.js";
 import { getPeerByDomain, getPeerBaseUrl } from "./peers.js";
 

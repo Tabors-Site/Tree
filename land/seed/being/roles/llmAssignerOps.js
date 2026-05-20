@@ -3,44 +3,44 @@
 // llm-assigner DO operations.
 //
 // The llm-assigner being is programmatic but acts on substrate through
-// the same DO surface an LLM-driven being would use. These two ops are
-// its tools — `create-artifact` and `delete-artifact` (the kernel
-// primitives) wrapped with the tutorial-marker logic so the being can
-// spawn / consume its own intro artifact.
+// the same DO surface an LLM-driven being would use. These ops are its
+// tools — `create-matter` and `delete-matter` (the kernel primitives)
+// wrapped with the tutorial-marker logic so the being can spawn /
+// consume its own intro matter.
 //
 // Naming convention: ops owned by a role use the `<role>:<action>`
 // prefix, same shape extensions use. ownerExtension is set to the
 // role name so the registry tracks who shipped them.
 //
-// First demonstration of the artifact-crossing-worlds shape: the
-// artifact's origin is `web` and its content is just a YouTube URL —
-// substrate holds the reference + lifecycle; the bytes live on the
-// web; the 3D portal renders it as a real placed object next to the
-// llm-assigner being.
+// First demonstration of the matter-crossing-worlds shape: the matter's
+// origin is `web` and its content is just a YouTube URL — substrate
+// holds the reference + lifecycle; the bytes live on the web; the 3D
+// portal renders it as a real placed object next to the llm-assigner
+// being.
 
-import log from "../core/log.js";
-import Being from "../models/being.js";
-import Artifact from "../models/artifact.js";
-import { registerOperation } from "../core/operations.js";
+import log from "../../system/log.js";
+import Being from "../../models/being.js";
+import Matter from "../../models/matter.js";
+import { registerOperation } from "../../ibp/operations.js";
 import {
   LLM_ASSIGNER_TUTORIAL_MARK,
   LLM_ASSIGNER_TUTORIAL_URL,
   LLM_ASSIGNER_TUTORIAL_VIDEO_ID,
-} from "../core/systemBeings.js";
+} from "../systemBeings.js";
 
 const OWNER = "llm-assigner";
 
 export function registerLlmAssignerOps() {
-  // Spawn the intro tutorial artifact at the addressed node (typically
-  // the land root). Idempotent: returns the existing artifact when
-  // one with the marker is already present.
+  // Spawn the intro tutorial matter at the addressed space (typically
+  // the land root). Idempotent: returns the existing matter when one
+  // with the marker is already present.
   registerOperation("llm-assigner:start-tutorial", {
     targets: ["node"],
     ownerExtension: OWNER,
     handler: async ({ target }) => {
-      log.info("llm-assigner", `start-tutorial hit at node=${String(target?._id || target?.nodeId || "?").slice(0, 8)}`);
-      const nodeId = String(target?._id || target?.nodeId || target);
-      if (!nodeId || nodeId === "[object Object]") {
+      log.info("llm-assigner", `start-tutorial hit at node=${String(target?._id || target?.spaceId || "?").slice(0, 8)}`);
+      const spaceId = String(target?._id || target?.spaceId || target);
+      if (!spaceId || spaceId === "[object Object]") {
         throw new Error("llm-assigner:start-tutorial: node target required");
       }
 
@@ -51,24 +51,24 @@ export function registerLlmAssignerOps() {
       }
 
       // Idempotent — return the existing one if it's already there.
-      const existing = await Artifact.findOne({
+      const existing = await Matter.findOne({
         beingId: String(llmAssigner._id),
-        nodeId,
+        spaceId,
         "metadata.tutorial.purpose": LLM_ASSIGNER_TUTORIAL_MARK,
       }).select("_id").lean();
       if (existing) {
         return {
-          artifactId: String(existing._id),
-          videoId:    LLM_ASSIGNER_TUTORIAL_VIDEO_ID,
-          url:        LLM_ASSIGNER_TUTORIAL_URL,
-          created:    false,
+          matterId: String(existing._id),
+          videoId:  LLM_ASSIGNER_TUTORIAL_VIDEO_ID,
+          url:      LLM_ASSIGNER_TUTORIAL_URL,
+          created:  false,
         };
       }
 
       // Authored by the llm-assigner being so the eventual deletion
       // passes the ownership gate.
-      const artifact = await Artifact.create({
-        nodeId,
+      const matter = await Matter.create({
+        spaceId,
         beingId: String(llmAssigner._id),
         name:    "Setting up an LLM connection",
         origin:  "web",
@@ -78,108 +78,108 @@ export function registerLlmAssignerOps() {
           videoId:     LLM_ASSIGNER_TUTORIAL_VIDEO_ID,
           title:       "Setting up an LLM connection",
         },
-        parentArtifactId: null,
+        parentMatterId: null,
         metadata: new Map([
           ["tutorial", { purpose: LLM_ASSIGNER_TUTORIAL_MARK }],
         ]),
       });
 
       log.info("llm-assigner",
-        `spawned tutorial artifact ${String(artifact._id).slice(0, 8)} at ${nodeId.slice(0, 8)}`);
+        `spawned tutorial matter ${String(matter._id).slice(0, 8)} at ${spaceId.slice(0, 8)}`);
 
       return {
-        artifactId: String(artifact._id),
-        videoId:    LLM_ASSIGNER_TUTORIAL_VIDEO_ID,
-        url:        LLM_ASSIGNER_TUTORIAL_URL,
-        created:    true,
+        matterId: String(matter._id),
+        videoId:  LLM_ASSIGNER_TUTORIAL_VIDEO_ID,
+        url:      LLM_ASSIGNER_TUTORIAL_URL,
+        created:  true,
       };
     },
   });
 
-  // Persist YouTube playback position on the tutorial artifact so a
-  // page reload or navigation away/back resumes at the right spot.
+  // Persist YouTube playback position on the tutorial matter so a page
+  // reload or navigation away/back resumes at the right spot.
   // Idempotent overwrite; the marker check keeps this op scoped to the
   // llm-assigner tutorial only.
   registerOperation("llm-assigner:save-playback", {
-    targets: ["artifact", "node"],
+    targets: ["matter", "node"],
     ownerExtension: OWNER,
     handler: async ({ target, params }) => {
-      log.info("llm-assigner", `save-playback hit: artifactId=${params?.artifactId} t=${params?.currentTime}`);
-      const artifactId = String(
-        params?.artifactId || target?._id || target?.artifactId || target,
+      log.info("llm-assigner", `save-playback hit: matterId=${params?.matterId} t=${params?.currentTime}`);
+      const matterId = String(
+        params?.matterId || target?._id || target?.matterId || target,
       );
       const currentTime = Number(params?.currentTime);
-      if (!artifactId || artifactId === "[object Object]") {
-        throw new Error("llm-assigner:save-playback: artifactId required");
+      if (!matterId || matterId === "[object Object]") {
+        throw new Error("llm-assigner:save-playback: matterId required");
       }
       if (!Number.isFinite(currentTime) || currentTime < 0) {
         throw new Error("llm-assigner:save-playback: currentTime (number, seconds) required");
       }
 
-      const artifact = await Artifact.findById(artifactId).lean();
-      if (!artifact) throw new Error(`Artifact ${artifactId} not found`);
+      const matter = await Matter.findById(matterId).lean();
+      if (!matter) throw new Error(`Matter ${matterId} not found`);
 
       const llmAssigner = await Being.findOne({ name: "llm-assigner" })
         .select("_id").lean();
-      const tutorialMeta = artifact.metadata instanceof Map
-        ? artifact.metadata.get("tutorial")
-        : artifact.metadata?.tutorial;
+      const tutorialMeta = matter.metadata instanceof Map
+        ? matter.metadata.get("tutorial")
+        : matter.metadata?.tutorial;
       if (
-        String(artifact.beingId) !== String(llmAssigner?._id) ||
+        String(matter.beingId) !== String(llmAssigner?._id) ||
         tutorialMeta?.purpose !== LLM_ASSIGNER_TUTORIAL_MARK
       ) {
-        throw new Error("llm-assigner:save-playback only writes to llm-assigner tutorial artifacts");
+        throw new Error("llm-assigner:save-playback only writes to llm-assigner tutorial matter");
       }
 
       const nextMeta = { ...(tutorialMeta || {}), playbackSeconds: currentTime };
-      await Artifact.updateOne(
-        { _id: artifactId },
+      await Matter.updateOne(
+        { _id: matterId },
         { $set: { "metadata.tutorial": nextMeta } },
       );
-      return { saved: true, artifactId, currentTime };
+      return { saved: true, matterId, currentTime };
     },
   });
 
-  // Consume the tutorial artifact when the user finishes watching.
+  // Consume the tutorial matter when the user finishes watching.
   // Verifies the marker so the op stays narrowly scoped; calls
-  // `deleteArtifactAndFile` internally acting as llm-assigner so the
+  // `deleteMatterAndFile` internally acting as llm-assigner so the
   // ownership gate (author or root-owner) passes.
   registerOperation("llm-assigner:complete-tutorial", {
-    targets: ["artifact", "node"],
+    targets: ["matter", "node"],
     ownerExtension: OWNER,
     handler: async ({ target, params }) => {
-      log.info("llm-assigner", `complete-tutorial hit: artifactId=${params?.artifactId}`);
-      const artifactId = String(
-        params?.artifactId || target?._id || target?.artifactId || target,
+      log.info("llm-assigner", `complete-tutorial hit: matterId=${params?.matterId}`);
+      const matterId = String(
+        params?.matterId || target?._id || target?.matterId || target,
       );
-      if (!artifactId || artifactId === "[object Object]") {
-        throw new Error("llm-assigner:complete-tutorial: artifactId required");
+      if (!matterId || matterId === "[object Object]") {
+        throw new Error("llm-assigner:complete-tutorial: matterId required");
       }
 
-      const artifact = await Artifact.findById(artifactId).lean();
-      if (!artifact) throw new Error(`Artifact ${artifactId} not found`);
+      const matter = await Matter.findById(matterId).lean();
+      if (!matter) throw new Error(`Matter ${matterId} not found`);
 
       const llmAssigner = await Being.findOne({ name: "llm-assigner" })
         .select("_id").lean();
-      const tutorialMeta = artifact.metadata instanceof Map
-        ? artifact.metadata.get("tutorial")
-        : artifact.metadata?.tutorial;
+      const tutorialMeta = matter.metadata instanceof Map
+        ? matter.metadata.get("tutorial")
+        : matter.metadata?.tutorial;
       if (
-        String(artifact.beingId) !== String(llmAssigner?._id) ||
+        String(matter.beingId) !== String(llmAssigner?._id) ||
         tutorialMeta?.purpose !== LLM_ASSIGNER_TUTORIAL_MARK
       ) {
-        throw new Error("llm-assigner:complete-tutorial only consumes llm-assigner tutorial artifacts");
+        throw new Error("llm-assigner:complete-tutorial only consumes llm-assigner tutorial matter");
       }
 
-      const { deleteArtifactAndFile } = await import("../tree/artifacts.js");
-      await deleteArtifactAndFile({
-        artifactId,
+      const { deleteMatterAndFile } = await import("../matter/matters.js");
+      await deleteMatterAndFile({
+        matterId,
         beingId: String(llmAssigner._id),
       });
 
       log.info("llm-assigner",
-        `consumed tutorial artifact ${String(artifactId).slice(0, 8)}`);
-      return { consumed: true, artifactId };
+        `consumed tutorial matter ${String(matterId).slice(0, 8)}`);
+      return { consumed: true, matterId };
     },
   });
 

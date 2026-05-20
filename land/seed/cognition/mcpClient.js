@@ -3,7 +3,7 @@
 // MCP client lifecycle.
 //
 // Outbound MCP connections — what the AI runtime uses when an LLM tool
-// call resolves to an MCP server. Lives in seed/llm/ because the
+// call resolves to an MCP server. Lives in seed/cognition/ because the
 // connection cache is per-conversation LLM-stack state.
 //
 // Each conversation gets one MCP client. The cache key — `cacheKey` —
@@ -32,7 +32,7 @@
 // MCP clients live until the stale sweep reaps them or a pipeline
 // owner calls closeMCPClient explicitly.
 
-import log from "../core/log.js";
+import log from "../system/log.js";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 

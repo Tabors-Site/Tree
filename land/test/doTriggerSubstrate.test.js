@@ -30,22 +30,21 @@
 import { test, describe, beforeEach, afterEach } from "node:test";
 import { strict as assert } from "node:assert";
 import { mock } from "node:test";
-import { echoEmbodiment } from "../seed/roles/echo.js";
+import { echoEmbodiment } from "../seed/being/roles/echo.js";
 
 // In-memory inbox bucket: beingId -> entries[]. The subscription
 // registry's appendToInbox writes here; the scheduler's pickNextEntry
 // reads from here.
 const fakeBucket = new Map();
 
-mock.module("../seed/scheduler/inbox.js", {
+mock.module("../seed/cognition/inbox.js", {
   namedExports: {
-    appendToInbox: async (nodeId, beingId, message) => {
+    appendToInbox: async (spaceId, beingId, message) => {
       const sentAt = message.sentAt || new Date().toISOString();
       const correlation = message.correlation;
       const entry = {
         from:            message.from,
         content:         message.content,
-        intent:          message.intent,
         correlation,
         rootCorrelation: message.rootCorrelation || correlation,
         priority:        message.priority ?? 4,
@@ -114,13 +113,13 @@ mock.module("../seed/models/being.js", {
   },
 });
 
-mock.module("../seed/roles/registry.js", {
+mock.module("../seed/being/roles/registry.js", {
   namedExports: {
     getRole: (name) => name === "echo" ? echoEmbodiment : null,
   },
 });
 
-mock.module("../seed/addressing/address.js", {
+mock.module("../seed/ibp/address.js", {
   namedExports: { getLandDomain: () => "treeos.ai" },
 });
 
@@ -128,14 +127,14 @@ mock.module("../seed/landRoot.js", {
   namedExports: { getLandRootId: () => "land-root-id" },
 });
 
-mock.module("../seed/tree/ancestorCache.js", {
+mock.module("../seed/space/ancestorCache.js", {
   namedExports: {
     getAncestorChain: async () => [],   // empty chain — only "everywhere" scope used here
   },
 });
 
-const { subscribe, emitToSubscribers, _resetAll: resetSubscriptions } = await import("../seed/scheduler/subscriptions.js");
-const { attachHandoff, _resetAll: resetScheduler } = await import("../seed/scheduler/scheduler.js");
+const { subscribe, emitToSubscribers, _resetAll: resetSubscriptions } = await import("../seed/cognition/subscriptions.js");
+const { attachHandoff, _resetAll: resetScheduler } = await import("../seed/cognition/scheduler.js");
 
 beforeEach(() => {
   resetSubscriptions();
@@ -164,16 +163,16 @@ describe("DO-trigger substrate — single subscriber", () => {
     // consumed. We capture the response on a handoff for any payload
     // we get back so we can assert on the shape.
     let received = null;
-    subscribe("b1", { event: "afterArtifact", scope: { everywhere: true } });
+    subscribe("b1", { event: "afterMatter", scope: { everywhere: true } });
 
     // Mock a DO firing. The subscription registry will:
     //   1. Match the subscription
     //   2. appendToInbox at land root (subscriber-side, b1's bucket)
     //   3. wake(b1, land-root-id) — the scheduler picks it up
-    await emitToSubscribers("afterArtifact", {
-      nodeId: "n1",
+    await emitToSubscribers("afterMatter", {
+      spaceId: "n1",
       action: "add",
-      artifact: { _id: "art-1", origin: "web" },
+      matter: { _id: "art-1", origin: "web" },
     });
 
     // Attach a handoff so we can observe what echo's reply (if any)
@@ -190,20 +189,19 @@ describe("DO-trigger substrate — single subscriber", () => {
     const bucket = fakeBucket.get("b1") || [];
     assert.equal(bucket.length, 1, "one inbox entry landed");
     assert.equal(bucket[0].consumed, true, "scheduler consumed the entry");
-    assert.equal(bucket[0].intent, "do-trigger");
-    assert.equal(bucket[0].content.event, "afterArtifact");
+    assert.equal(bucket[0].content.event, "afterMatter");
     assert.equal(bucket[0].content.action, "add");
-    assert.equal(bucket[0].content.artifactId, "art-1");
+    assert.equal(bucket[0].content.matterId, "art-1");
   });
 });
 
 describe("DO-trigger substrate — multiple subscribers", () => {
   test("event fans out to every matching subscriber's inbox + each gets processed", async () => {
-    subscribe("b1", { event: "afterArtifact", scope: { everywhere: true } });
-    subscribe("b2", { event: "afterArtifact", scope: { everywhere: true } });
-    subscribe("b3", { event: "afterArtifact", scope: { everywhere: true } });
+    subscribe("b1", { event: "afterMatter", scope: { everywhere: true } });
+    subscribe("b2", { event: "afterMatter", scope: { everywhere: true } });
+    subscribe("b3", { event: "afterMatter", scope: { everywhere: true } });
 
-    await emitToSubscribers("afterArtifact", { nodeId: "n1", action: "add" });
+    await emitToSubscribers("afterMatter", { spaceId: "n1", action: "add" });
 
     await waitUntil(() => {
       return ["b1", "b2", "b3"].every((b) => {
@@ -223,14 +221,14 @@ describe("DO-trigger substrate — multiple subscribers", () => {
 describe("DO-trigger substrate — non-matching subscriptions stay quiet", () => {
   test("filter mismatch → no inbox write, no scheduler wake", async () => {
     subscribe("b1", {
-      event: "afterArtifact",
+      event: "afterMatter",
       scope: { everywhere: true },
       filter: { origin: "web" },
     });
 
     // Event with origin "ibp" — filter rejects.
-    await emitToSubscribers("afterArtifact", {
-      nodeId: "n1",
+    await emitToSubscribers("afterMatter", {
+      spaceId: "n1",
       action: "add",
       origin: "ibp",
     });
@@ -250,16 +248,16 @@ describe("DO-trigger substrate — priority field propagates to the inbox", () =
     // narrower thing the substrate composition needs to guarantee: the
     // subscription's priority value reaches the inbox unchanged.
     subscribe("b1", {
-      event: "afterArtifact",
+      event: "afterMatter",
       scope: { everywhere: true },
       priority: 1,  // HUMAN
     });
     subscribe("b2", {
-      event: "afterArtifact",
+      event: "afterMatter",
       scope: { everywhere: true },
       priority: 4,  // BACKGROUND
     });
-    await emitToSubscribers("afterArtifact", { nodeId: "n1", action: "add" });
+    await emitToSubscribers("afterMatter", { spaceId: "n1", action: "add" });
     await waitUntil(() => {
       const b1 = fakeBucket.get("b1") || [];
       const b2 = fakeBucket.get("b2") || [];

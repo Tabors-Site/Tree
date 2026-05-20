@@ -22,8 +22,8 @@
 // original flags stay distinct in the queue so courts can read each
 // individual emission.
 
-import Node from "../../../seed/models/node.js";
-import log from "../../../seed/core/log.js";
+import Space from "../../../seed/models/space.js";
+import log from "../../../seed/system/log.js";
 import { NS } from "./role.js";
 
 // The five kinds carve at real joints surfaced by the MS Paint test.
@@ -118,7 +118,7 @@ export async function appendFlag({
     return null;
   }
 
-  const node = await Node.findById(rulerNodeId);
+  const node = await Space.findById(rulerNodeId);
   if (!node) return null;
   const meta = node.metadata instanceof Map
     ? node.metadata.get(NS)
@@ -183,7 +183,7 @@ export async function appendFlag({
   // (and any future court adjudicator) picks up new flags without
   // polling. Fire-and-forget; subscribers handle their own errors.
   try {
-    const { hooks } = await import("../../../seed/core/hooks.js");
+    const { hooks } = await import("../../../seed/system/hooks.js");
     hooks.run("governing:flagAppended", {
       rulerNodeId: String(rulerNodeId),
       flagId: flag.id,
@@ -204,7 +204,7 @@ export async function appendFlag({
  */
 export async function readPendingIssues(rulerNodeId) {
   if (!rulerNodeId) return [];
-  const node = await Node.findById(rulerNodeId).select("metadata").lean();
+  const node = await Space.findById(rulerNodeId).select("metadata").lean();
   if (!node) return [];
   const meta = node.metadata instanceof Map
     ? node.metadata.get(NS)
@@ -224,7 +224,7 @@ export async function readPendingIssues(rulerNodeId) {
 export async function markFlagResolved({ rulerNodeId, flagId, resolution, identity = null, core }) {
   if (!core?.do) throw new Error("markFlagResolved requires `core` (verb surface)");
   if (!rulerNodeId || !flagId) return null;
-  const node = await Node.findById(rulerNodeId);
+  const node = await Space.findById(rulerNodeId);
   if (!node) return null;
   const meta = node.metadata instanceof Map
     ? node.metadata.get(NS)

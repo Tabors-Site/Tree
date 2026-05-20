@@ -1,52 +1,27 @@
 // TreeOS Seed . AGPL-3.0 . https://treeos.ai . Tabor Holly
 //
-// Registry mirror.
+// Registry mirror. Syncs in-memory registries (tools, roles, ops) into
+// the substrate as children of .tools / .roles / .operations so SEE can
+// introspect them.
 //
-// Bridges in-memory runtime registries (tool defs, role specs, DO
-// operations) into the substrate by syncing their contents as children
-// of dedicated system Nodes (`.tools`, `.roles`, `.operations`).
-//
-// Why: per [[project_meta_positions]], every meta-position is a real
-// Node row. SEE on `<land>/.tools` goes through the standard descriptor
-// pipeline; the children Nodes name the registered tools. No resolver,
-// no synthetic addresses.
-//
-// Sync is one-way: registry → substrate. The registry stays the source
-// of truth for runtime lookups (fast, in-memory); the substrate mirror
-// is for SEE introspection and audit trails.
-//
-// Timing: most registrations happen at boot, before ensureLandRoot has
-// even run. `syncRegistryToSubstrate` is idempotent and safe to call
-// many times; startup.js invokes it once after extensions load. For
-// runtime hot-load registrations (later), each registry fires a
-// targeted sync to add/remove a single child.
+// One-way: the registry is the runtime source of truth; the substrate
+// mirror exists only for introspection.
 
 import { v4 as uuidv4 } from "uuid";
-import Node from "../models/node.js";
-import log from "../core/log.js";
+import Space from "../models/space.js";
+import log from "../system/log.js";
 
-/**
- * Sync a registry to its corresponding `.<name>` system node. The system
- * node must already exist (created in ensureLandRoot).
- *
- * @param {object} opts
- * @param {string} opts.systemRole - SYSTEM_ROLE.<TOOLS|ROLES|OPERATIONS> value
- * @param {Array<{ name, metadata? }>} opts.items - items to mirror as children
- * @param {string} [opts.itemType="resource"] - Node.type for each mirror node
- * @returns {Promise<{ created: number, removed: number, kept: number }>}
- */
-export async function syncRegistryToSubstrate({ systemRole, items, itemType = "resource" }) {
-  if (!systemRole) throw new Error("syncRegistryToSubstrate requires systemRole");
+export async function syncRegistryToSubstrate({ seedSpace, items, itemType = "resource" }) {
+  if (!seedSpace) throw new Error("syncRegistryToSubstrate requires seedSpace");
   if (!Array.isArray(items)) items = [];
 
-  const parent = await Node.findOne({ systemRole });
+  const parent = await Space.findOne({ seedSpace });
   if (!parent) {
-    log.warn("RegistryMirror", `system node for ${systemRole} not found; skipping sync`);
+    log.warn("RegistryMirror", `land seed space for ${seedSpace} not found; skipping sync`);
     return { created: 0, removed: 0, kept: 0 };
   }
 
-  // Existing children of this system node (the previous mirror state).
-  const existingChildren = await Node.find({
+  const existingChildren = await Space.find({
     parent: parent._id,
     type: itemType,
   }).select("_id name metadata").lean();
@@ -58,13 +33,11 @@ export async function syncRegistryToSubstrate({ systemRole, items, itemType = "r
   let removed = 0;
   let kept = 0;
 
-  // Add or update each desired item.
   for (const item of items) {
     const existing = existingByName.get(item.name);
     if (existing) {
-      // Item already mirrored. Refresh metadata if it changed.
       if (item.metadata) {
-        await Node.updateOne(
+        await Space.updateOne(
           { _id: existing._id },
           { $set: { metadata: item.metadata } },
         );
@@ -72,8 +45,7 @@ export async function syncRegistryToSubstrate({ systemRole, items, itemType = "r
       kept++;
       continue;
     }
-    // Add new child Node.
-    const child = await Node.create({
+    const child = await Space.create({
       _id: uuidv4(),
       name: item.name,
       type: itemType,
@@ -82,18 +54,17 @@ export async function syncRegistryToSubstrate({ systemRole, items, itemType = "r
       contributors: [],
       ...(item.metadata ? { metadata: item.metadata } : {}),
     });
-    await Node.updateOne(
+    await Space.updateOne(
       { _id: parent._id },
       { $addToSet: { children: child._id } },
     );
     created++;
   }
 
-  // Remove children that no longer exist in the registry.
   for (const [name, c] of existingByName) {
     if (desiredByName.has(name)) continue;
-    await Node.deleteOne({ _id: c._id });
-    await Node.updateOne(
+    await Space.deleteOne({ _id: c._id });
+    await Space.updateOne(
       { _id: parent._id },
       { $pull: { children: c._id } },
     );
@@ -103,22 +74,19 @@ export async function syncRegistryToSubstrate({ systemRole, items, itemType = "r
   return { created, removed, kept };
 }
 
-/**
- * Add (or refresh) a single mirror child Node. Used for runtime
- * registrations that happen after boot. Idempotent.
- */
-export async function addRegistryChild({ systemRole, name, metadata = null, itemType = "resource" }) {
+// Idempotent single-child add/refresh for runtime registrations.
+export async function addRegistryChild({ seedSpace, name, metadata = null, itemType = "resource" }) {
   if (!name) return null;
-  const parent = await Node.findOne({ systemRole });
+  const parent = await Space.findOne({ seedSpace });
   if (!parent) return null;
-  const existing = await Node.findOne({ parent: parent._id, name, type: itemType }).select("_id").lean();
+  const existing = await Space.findOne({ parent: parent._id, name, type: itemType }).select("_id").lean();
   if (existing) {
     if (metadata) {
-      await Node.updateOne({ _id: existing._id }, { $set: { metadata } });
+      await Space.updateOne({ _id: existing._id }, { $set: { metadata } });
     }
     return existing._id;
   }
-  const child = await Node.create({
+  const child = await Space.create({
     _id: uuidv4(),
     name,
     type: itemType,
@@ -127,24 +95,21 @@ export async function addRegistryChild({ systemRole, name, metadata = null, item
     contributors: [],
     ...(metadata ? { metadata } : {}),
   });
-  await Node.updateOne(
+  await Space.updateOne(
     { _id: parent._id },
     { $addToSet: { children: child._id } },
   );
   return child._id;
 }
 
-/**
- * Remove a mirror child Node by name. Idempotent.
- */
-export async function removeRegistryChild({ systemRole, name, itemType = "resource" }) {
+export async function removeRegistryChild({ seedSpace, name, itemType = "resource" }) {
   if (!name) return false;
-  const parent = await Node.findOne({ systemRole });
+  const parent = await Space.findOne({ seedSpace });
   if (!parent) return false;
-  const child = await Node.findOne({ parent: parent._id, name, type: itemType }).select("_id").lean();
+  const child = await Space.findOne({ parent: parent._id, name, type: itemType }).select("_id").lean();
   if (!child) return false;
-  await Node.deleteOne({ _id: child._id });
-  await Node.updateOne(
+  await Space.deleteOne({ _id: child._id });
+  await Space.updateOne(
     { _id: parent._id },
     { $pull: { children: child._id } },
   );

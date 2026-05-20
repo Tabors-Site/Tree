@@ -1,15 +1,15 @@
 // TreeOS Seed . AGPL-3.0 . https://treeos.ai . Tabor Holly
 import Being from "../models/being.js";
-import Node from "../models/node.js";
+import Space from "../models/space.js";
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
 import crypto from "crypto";
 import { v4 as uuidv4 } from "uuid";
-import { escapeRegex } from "./utils.js";
+import { escapeRegex } from "../system/utils.js";
 import { getLandConfigValue } from "../landConfig.js";
 import { getLandRootId } from "../landRoot.js";
-import { ERR, ProtocolError } from "./protocol.js";
-import log from "./log.js";
+import { ERR, ProtocolError } from "../ibp/protocol.js";
+import log from "../system/log.js";
 
 import path from "path";
 import { fileURLToPath } from "url";
@@ -53,20 +53,20 @@ export async function isFirstBeing() {
 }
 
 /**
- * Create the first being on a fresh land. Race-resilient: two
- * concurrent first-run registrations both pass isFirstBeing(); the
- * earliest insertion wins. (Previously this stamped an admin flag;
- * isAdmin retired 2026-05-18 — permissions come from stance
- * authorization + role permissions, not a per-being boolean.)
+ * Create the first human being on a fresh land. The seed-being already
+ * exists by this point (planted by ensureLandRoot); callers pass its
+ * id as opts.parentBeingId so the first human's being-tree parent is
+ * the seed-being. Race-resilient: two concurrent first-run
+ * registrations both pass isFirstBeing(); the earliest insertion wins.
  */
-export async function createFirstBeing(username, password) {
-  return createBeing(username, password);
+export async function createFirstBeing(username, password, opts = {}) {
+  return createBeing(username, password, opts);
 }
 
 /**
  * Create a being. Defaults to operatingMode="human" with a chosen
- * password. AI being creation calls this with opts.operatingMode="ai"
- * (typically with an auto-generated password) and opts.role/homePositionId.
+ * password. LLM-driven being creation calls this with opts.operatingMode="llm"
+ * (typically with an auto-generated password) and opts.role/homeSpace.
  *
  * Password is hashed via Being schema's pre-save hook.
  */
@@ -105,12 +105,13 @@ export async function createBeing(name, password, opts = {}) {
     operatingMode: opts.operatingMode || "human",
     roles:       rolesList,
     defaultRole,
-    // Being-tree parent. null is reserved for the land's single root
-    // being (the first human who registers during setup). Every other
-    // being chains back to that root through parentBeingId: auth and
-    // land-manager are root's children, subsequent humans register
-    // under the auth-being, Rulers are children of the being that
-    // promoted them, and inner beings (Planner/Contractor/Foreman)
+    // Being-tree parent. parentBeingId: null is reserved for the
+    // seed-being (the substrate's first identity, created during
+    // ensureLandRoot). Every other being chains back to it: the four
+    // land-system beings (auth, llm-assigner, land-manager, citizen)
+    // and the first human all parent under the seed-being. Subsequent
+    // humans register under @auth. Rulers are children of the being
+    // that promoted them; inner beings (Planner/Contractor/Foreman)
     // are children of their Ruler.
     //
     // The caller is responsible for $addToSet on parent.children
@@ -119,11 +120,11 @@ export async function createBeing(name, password, opts = {}) {
     // does it inline for human registrations, and governing's
     // promoteToRuler does it for Ruler / inner-being spawns.
     parentBeingId: opts.parentBeingId || null,
-    homePositionId: opts.homePositionId || null,
+    homeSpace: opts.homeSpace || null,
     // Every being starts "at home" — current position defaults to their
     // home unless the caller explicitly overrides. Navigation events
     // update this field via the position accessors in conversation.js.
-    currentPositionId: opts.currentPositionId || opts.homePositionId || null,
+    currentSpace: opts.currentSpace || opts.homeSpace || null,
     llmDefault: opts.llmDefault || null,
     isRemote: opts.isRemote || false,
     homeLand: opts.homeLand || null,
@@ -323,9 +324,9 @@ export async function findBeingByName(name) {
 //
 //   - Human registration: operatingMode="human", homeParent=land root.
 //     Creates the human's tree-root home territory.
-//   - System beings (auth, land-manager, citizen): homeNodeId=land root.
+//   - System beings (auth, land-manager, citizen): homeSpace=land root.
 //     No new node — the being just lives at the land root.
-//   - Ruler promotion: homeNodeId=the ruler-scope node. Existing node,
+//   - Ruler promotion: homeSpace=the ruler-scope space. Existing space,
 //     no rootOwner change. beings.ruler.beingId stamped on it.
 //   - Trio members (Planner, Contractor, Foreman): homeParent=ruler scope,
 //     homeName/Type=role-specific. Fresh child node created; the role
@@ -334,24 +335,24 @@ export async function findBeingByName(name) {
 //
 // Atomic: rolls back the home node if being creation fails. The home
 // node's rootOwner is set when the being is a human (the home is a
-// real tree root); for AI beings it stays inherited (the home is a
-// structural sub-node within someone else's tree).
+// real tree root); for non-human beings it stays inherited (the home
+// is a structural sub-node within someone else's tree).
 // ─────────────────────────────────────────────────────────────────────────
 
 /**
- * Create a being and place it in the world at a home Node.
+ * Create a being and place it in the world at a home Space.
  *
  * @param {object} opts
- * @param {"human"|"ai"} opts.operatingMode   required
+ * @param {"human"|"llm"|"scripted"|"mixed"} opts.operatingMode   required
  * @param {string} [opts.name]            required for human; auto-generated for ai if missing
  * @param {string} [opts.password]            required for human; auto-generated for ai if missing
  * @param {string} [opts.role]                required for ai
  * @param {string} [opts.llmDefault]
- * @param {string} [opts.homeNodeId]          use this existing Node as the home
- * @param {string} [opts.homeParent]          OR create a new child under this Node
+ * @param {string} [opts.homeSpace]           use this existing Space as the home
+ * @param {string} [opts.homeParent]          OR create a new child under this Space
  * @param {string} [opts.homeName]            name for the new home (defaults derived)
  * @param {string} [opts.homeType]            type for the new home (defaults derived)
- * @param {object} [opts.homeMetadata]        initial metadata for the new home Node
+ * @param {object} [opts.homeMetadata]        initial metadata for the new home Space
  * @param {function} [opts.scaffolding]       async ({being, home}) => {} for extra structure
  * @param {boolean} [opts.isRemote=false]
  * @param {string} [opts.homeLand=null]
@@ -362,7 +363,11 @@ export async function createBeingWithHome(opts) {
     operatingMode,
     role         = null,
     llmDefault   = null,
-    homeNodeId   = null,
+    // `homeSpace` matches the schema field on Being. The caller passes
+    // an existing Space's id and the being's `homeSpace` field is set
+    // to it. Use `homeParent` instead to create a fresh child Space
+    // under an existing parent.
+    homeSpace    = null,
     homeParent   = null,
     homeName     = null,
     homeType     = null,
@@ -382,40 +387,40 @@ export async function createBeingWithHome(opts) {
   if (!name && username) name = username;
 
   // ── Validate mode + required fields ──
-  if (operatingMode !== "human" && operatingMode !== "ai") {
-    throw new Error("createBeingWithHome requires operatingMode='human' or 'ai'");
+  if (operatingMode !== "human" && operatingMode !== "llm" && operatingMode !== "scripted" && operatingMode !== "mixed") {
+    throw new Error("createBeingWithHome requires operatingMode='human' | 'llm' | 'scripted' | 'mixed'");
   }
-  if (operatingMode === "ai" && !role) {
-    throw new Error("createBeingWithHome: AI beings require a role");
+  if (operatingMode !== "human" && !role) {
+    throw new Error("createBeingWithHome: non-human beings require a role");
   }
-  if (!homeNodeId && !homeParent) {
-    throw new Error("createBeingWithHome requires either homeNodeId or homeParent");
+  if (!homeSpace && !homeParent) {
+    throw new Error("createBeingWithHome requires either homeSpace or homeParent");
   }
 
-  // ── Resolve identity (auto-fill for AI) ──
+  // ── Resolve identity (auto-fill for non-human beings) ──
   if (!name) {
-    if (operatingMode === "ai") name = await generateUniqueName(role);
+    if (operatingMode !== "human") name = await generateUniqueName(role);
     else throw new ProtocolError(400, ERR.INVALID_INPUT, "Name is required");
   }
   if (!password) {
-    if (operatingMode === "ai") password = crypto.randomBytes(32).toString("hex");
+    if (operatingMode !== "human") password = crypto.randomBytes(32).toString("hex");
     else throw new ProtocolError(400, ERR.INVALID_INPUT, "Password is required");
   }
 
-  // ── Resolve the home Node ──
+  // ── Resolve the home Space ──
   // Two paths:
-  //   A. homeNodeId: use an existing Node as the home. No structural
+  //   A. homeSpace: use an existing Space as the home. No structural
   //      change to the tree.
-  //   B. homeParent: create a new child Node under the given parent.
+  //   B. homeParent: create a new child Space under the given parent.
   //      Defaults for name/type come from the operating mode + role.
-  let homeNode = null;
+  let home = null;
   let createdNewHome = false;
 
-  if (homeNodeId) {
-    homeNode = await Node.findById(homeNodeId);
-    if (!homeNode) throw new Error(`createBeingWithHome: home node ${homeNodeId} not found`);
+  if (homeSpace) {
+    home = await Space.findById(homeSpace);
+    if (!home) throw new Error(`createBeingWithHome: home space ${homeSpace} not found`);
   } else {
-    const parent = await Node.findById(homeParent).select("_id").lean();
+    const parent = await Space.findById(homeParent).select("_id").lean();
     if (!parent) throw new Error(`createBeingWithHome: home parent ${homeParent} not found`);
 
     const resolvedName = homeName
@@ -423,7 +428,7 @@ export async function createBeingWithHome(opts) {
     const resolvedType = homeType
       || (operatingMode === "human" ? "home-territory" : `${role}-home`);
 
-    homeNode = await Node.create({
+    home = await Space.create({
       _id:          uuidv4(),
       name:         resolvedName,
       type:         resolvedType,
@@ -432,9 +437,9 @@ export async function createBeingWithHome(opts) {
       contributors: [],
       ...(homeMetadata ? { metadata: homeMetadata } : {}),
     });
-    await Node.updateOne(
+    await Space.updateOne(
       { _id: homeParent },
-      { $addToSet: { children: homeNode._id } },
+      { $addToSet: { children: home._id } },
     );
     createdNewHome = true;
   }
@@ -445,7 +450,7 @@ export async function createBeingWithHome(opts) {
     being = await createBeing(name, password, {
       operatingMode,
       role,
-      homePositionId: String(homeNode._id),
+      homeSpace: String(home._id),
       llmDefault,
       isRemote,
       homeLand,
@@ -454,10 +459,10 @@ export async function createBeingWithHome(opts) {
   } catch (err) {
     if (createdNewHome) {
       try {
-        await Node.deleteOne({ _id: homeNode._id });
-        await Node.updateOne(
+        await Space.deleteOne({ _id: home._id });
+        await Space.updateOne(
           { _id: homeParent },
-          { $pull: { children: homeNode._id } },
+          { $pull: { children: home._id } },
         );
       } catch (rollbackErr) {
         log.warn("auth", `createBeingWithHome rollback failed: ${rollbackErr.message}`);
@@ -468,14 +473,15 @@ export async function createBeingWithHome(opts) {
 
   // ── Wire ownership on newly-created home nodes ──
   // Human home territories are tree roots (rootOwner = the being).
-  // AI being homes are structural sub-nodes within someone else's tree;
-  // they inherit access from the parent and leave rootOwner null.
+  // Non-human being homes are structural sub-nodes within someone
+  // else's tree; they inherit access from the parent and leave
+  // rootOwner null.
   if (createdNewHome && operatingMode === "human") {
-    await Node.updateOne(
-      { _id: homeNode._id },
+    await Space.updateOne(
+      { _id: home._id },
       { $set: { rootOwner: being._id } },
     );
-    homeNode.rootOwner = being._id;
+    home.rootOwner = being._id;
   }
 
   // ── Link into the being-tree parent's children list ──
@@ -488,14 +494,15 @@ export async function createBeingWithHome(opts) {
     );
   }
 
-  // ── Register the being home on the home Node ──
+  // ── Register the being home on the home Space ──
   // Skipped for humans — humans aren't surfaced as beings at their
-  // own home. AI beings register under their role so the descriptor /
-  // authorize / SUMMON can resolve the specific being instance.
-  if (operatingMode === "ai" && role) {
+  // own home. Non-human beings register under their role so the
+  // descriptor / authorize / SUMMON can resolve the specific being
+  // instance.
+  if (operatingMode !== "human" && role) {
     try {
-      const { mergeExtMeta } = await import("../tree/extensionMetadata.js");
-      await mergeExtMeta(homeNode, "beings", {
+      const { mergeExtMeta } = await import("../space/extensionMetadata.js");
+      await mergeExtMeta(home, "beings", {
         [role]: {
           beingId:     String(being._id),
           installedAt: new Date().toISOString(),
@@ -510,29 +517,29 @@ export async function createBeingWithHome(opts) {
   // ── Optional scaffolding (caller-supplied initial structure) ──
   if (typeof scaffolding === "function") {
     try {
-      await scaffolding({ being, home: homeNode });
+      await scaffolding({ being, home });
     } catch (err) {
       log.warn("auth", `createBeingWithHome scaffolding callback failed: ${err.message}`);
     }
   }
 
-  return { being, home: homeNode };
+  return { being, home: homeSpace };
 }
 
 // ─────────────────────────────────────────────────────────────────────────
 // LEGACY HOME-TERRITORY HELPER
 //
 // Kept for the migration path; new callers should use
-// createBeingWithHome instead. Creates a home Node for an already-
+// createBeingWithHome instead. Creates a home Space for an already-
 // existing being.
 // ─────────────────────────────────────────────────────────────────────────
 
 export async function createHomeTerritory(being, opts = {}) {
   if (!being?._id) throw new Error("createHomeTerritory requires a being");
 
-  // Idempotent: if the being already has a real home Node, return it.
-  if (being.homePositionId) {
-    const existing = await Node.findById(being.homePositionId).lean();
+  // Idempotent: if the being already has a real home Space, return it.
+  if (being.homeSpace) {
+    const existing = await Space.findById(being.homeSpace).lean();
     if (existing) return existing;
   }
 
@@ -545,7 +552,7 @@ export async function createHomeTerritory(being, opts = {}) {
   const name = opts.name || `~${being.name}`;
   const type = opts.type || "home-territory";
 
-  const home = await Node.create({
+  const home = await Space.create({
     _id: uuidv4(),
     name,
     type,
@@ -555,15 +562,15 @@ export async function createHomeTerritory(being, opts = {}) {
     status: "active",
   });
 
-  // Link parent's children list (mirrors createNode's behavior).
-  await Node.updateOne({ _id: parentId }, { $addToSet: { children: home._id } });
+  // Link parent's children list (mirrors createSpace's behavior).
+  await Space.updateOne({ _id: parentId }, { $addToSet: { children: home._id } });
 
-  // Wire the home Node back onto the being.
+  // Wire the home Space back onto the being.
   await Being.updateOne(
     { _id: being._id },
-    { $set: { homePositionId: String(home._id) } },
+    { $set: { homeSpace: String(home._id) } },
   );
-  being.homePositionId = String(home._id);
+  being.homeSpace = String(home._id);
 
   return home;
 }

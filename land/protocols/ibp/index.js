@@ -1,25 +1,27 @@
 // IBP (Inter-Being Protocol) — boot entry point.
 //
-// IBP is core, peer to seed/, routes/, extensions/. It carries Portal
+// IBP is core, peer to seed/, transports/, extensions/. It carries IBP
 // Addresses as its native address primitive. IBP is the Land's second
 // protocol surface alongside the legacy HTTP API.
 //
 // Boot ordering (called from server.js):
 //   1. initIBPHttp(app) . BEFORE the catch-all 404 handler. Registers the
-//      single bootstrap route GET /.well-known/treeos-portal.
+//      single bootstrap route GET /.well-known/treeos-portal. (The route
+//      name is a stable public contract from the Portal client era; the
+//      payload it returns is the IBP discovery descriptor.)
 //   2. initIBPWS(io)   . AFTER initWebSocketServer() returns the io.
-//      Attaches portal:* event handlers onto every authenticated socket.
+//      Attaches ibp:* event handlers onto every authenticated socket.
 //
 // Both must be called for IBP to be fully alive on a Land.
 
-import log from "../../seed/core/log.js";
+import log from "../../seed/system/log.js";
 import { registerIbpBootstrap } from "./bootstrap-route.js";
 import { attachIbpHandlers } from "./protocol.js";
-import { hooks } from "../../seed/core/hooks.js";
-import Node from "../../seed/models/node.js";
+import { hooks } from "../../seed/system/hooks.js";
+import Space from "../../seed/models/space.js";
 import { emitPositionInvalidate } from "./live.js";
-import { emitToSubscribers } from "../../seed/scheduler/subscriptions.js";
-import { startTickLoop as startScheduleTick } from "../../seed/scheduler/schedule.js";
+import { emitToSubscribers } from "../../seed/cognition/subscriptions.js";
+import { startTickLoop as startScheduleTick } from "../../seed/cognition/wakeSchedule.js";
 
 // Kernel-signal-to-live-emit bridge. When kernel events touch data that
 // the Position Description reads, invalidate subscribers so they refetch.
@@ -33,36 +35,33 @@ function wireLiveHooks() {
 
   // Placement metadata changed on a node: invalidate the node's own
   // descriptor and its parent's (which lists this node as a child).
-  hooks.register("afterMetadataWrite", async ({ nodeId, extName }) => {
-    if (!nodeId || !PLACEMENT_NAMESPACES.has(extName)) return;
-    emitPositionInvalidate(nodeId, `metadata:${extName}`);
+  hooks.register("afterMetadataWrite", async ({ spaceId, extName }) => {
+    if (!spaceId || !PLACEMENT_NAMESPACES.has(extName)) return;
+    emitPositionInvalidate(spaceId, `metadata:${extName}`);
     try {
-      const n = await Node.findById(nodeId).select("parent").lean();
+      const n = await Space.findById(spaceId).select("parent").lean();
       if (n?.parent) emitPositionInvalidate(n.parent, `child-metadata:${extName}`);
     } catch { /* defensive */ }
-  }, "portal-live");
+  }, "ibp-live");
 
   // Structural changes: new/removed/moved children change the parent's
-  // descriptor. Status changes change the child's own descriptor.
-  hooks.register("afterNodeCreate", async ({ node }) => {
+  // descriptor. Matter writes change the affected position's content.
+  hooks.register("afterSpaceCreate", async ({ node }) => {
     if (node?.parent) emitPositionInvalidate(node.parent, "child-created");
-  }, "portal-live");
-  hooks.register("afterNodeDelete", async ({ node }) => {
+  }, "ibp-live");
+  hooks.register("afterSpaceDelete", async ({ node }) => {
     if (node?.parent) emitPositionInvalidate(node.parent, "child-deleted");
-  }, "portal-live");
-  hooks.register("afterStatusChange", async ({ nodeId }) => {
-    if (nodeId) emitPositionInvalidate(nodeId, "status-changed");
-  }, "portal-live");
-  hooks.register("afterArtifact", async ({ nodeId }) => {
-    if (nodeId) emitPositionInvalidate(nodeId, "note-changed");
-  }, "portal-live");
+  }, "ibp-live");
+  hooks.register("afterMatter", async ({ spaceId }) => {
+    if (spaceId) emitPositionInvalidate(spaceId, "matter-changed");
+  }, "ibp-live");
 
   // Chainstep state changes: every tool call shifts the "activity" field
-  // for the being whose chainstep just ran. Invalidate the bound nodeId
+  // for the being whose chainstep just ran. Invalidate the bound spaceId
   // so subscribers re-fetch and see the new activity entry.
-  hooks.register("afterToolCall", async ({ nodeId, toolName }) => {
-    if (nodeId) emitPositionInvalidate(nodeId, `tool:${toolName || "unknown"}`);
-  }, "portal-live");
+  hooks.register("afterToolCall", async ({ spaceId, toolName }) => {
+    if (spaceId) emitPositionInvalidate(spaceId, `tool:${toolName || "unknown"}`);
+  }, "ibp-live");
 
   // DO-trigger fan-out. The three substrate write events fan out
   // through the subscription registry: any being subscribed to one of
@@ -72,11 +71,10 @@ function wireLiveHooks() {
   // whether to act. This is the universal bridge between Mode 2
   // (anonymous code emitting DOs) and Mode 1 (beings reacting to
   // substrate changes through summons).
-  hooks.register("afterArtifact",      (payload) => emitToSubscribers("afterArtifact",      payload), "portal-subscriptions");
-  hooks.register("afterStatusChange",  (payload) => emitToSubscribers("afterStatusChange",  payload), "portal-subscriptions");
-  hooks.register("afterMetadataWrite", (payload) => emitToSubscribers("afterMetadataWrite", payload), "portal-subscriptions");
+  hooks.register("afterMatter",        (payload) => emitToSubscribers("afterMatter",        payload), "ibp-subscriptions");
+  hooks.register("afterMetadataWrite", (payload) => emitToSubscribers("afterMetadataWrite", payload), "ibp-subscriptions");
 
-  log.info("IBP", "live SEE hooks wired (afterMetadataWrite, afterNode*, afterStatusChange, afterNote, afterToolCall); DO-trigger subscriptions wired (afterArtifact, afterStatusChange, afterMetadataWrite)");
+  log.info("IBP", "live SEE hooks wired (afterMetadataWrite, afterSpace*, afterMatter, afterToolCall); DO-trigger subscriptions wired (afterMatter, afterMetadataWrite)");
 }
 
 /**
@@ -106,25 +104,25 @@ export function initIBPWS(io) {
   startScheduleTick();
 }
 
-// Re-exports for convenience — anything that wants to USE the Portal
-// primitives (e.g. eventually emit portal:event frames from within a Speak
+// Re-exports for convenience — anything that wants to USE the IBP
+// primitives (e.g. eventually emit ibp:event frames from within a Speak
 // handler) can import them through this module.
-export { parseFromSocket, parseWithContext, format, canonical, getLandDomain } from "../../seed/addressing/address.js";
-export { resolveStance } from "../../seed/addressing/resolver.js";
-export { buildDescriptor } from "../../seed/addressing/descriptor.js";
-export { buildDiscovery, IBP_PROTOCOL_VERSION } from "../../seed/addressing/discovery.js";
-export { DESCRIPTOR_VERSION } from "../../seed/addressing/descriptor.js";
-export { IbpError, IBP_ERR, isIbpError } from "../../seed/core/errors.js";
+export { parseFromSocket, parseWithContext, format, canonical, getLandDomain } from "../../seed/ibp/address.js";
+export { resolveStance } from "../../seed/ibp/resolver.js";
+export { buildDescriptor } from "../../seed/ibp/descriptor.js";
+export { buildDiscovery, IBP_PROTOCOL_VERSION } from "../../seed/ibp/discovery.js";
+export { DESCRIPTOR_VERSION } from "../../seed/ibp/descriptor.js";
+export { IbpError, IBP_ERR, isIbpError } from "../../seed/ibp/errors.js";
 // Inbox primitives that role templates need (cancel sweeps, etc.). Append
 // and read are deliberately not re-exported — only SUMMON should write
 // the inbox; role templates either let the scheduler consume entries or
 // emit follow-up SUMMONs.
-export { cancelByRootCorrelation, pickNextEntry } from "../../seed/scheduler/inbox.js";
+export { cancelByRootCorrelation, pickNextEntry } from "../../seed/cognition/inbox.js";
 // Scheduler controls that role templates may invoke when interpreting
 // cancel SUMMONs or when coordinating with other beings.
-export { wake, abortCurrent, getCurrentRootCorrelation, getStats as getSchedulerStats } from "../../seed/scheduler/scheduler.js";
+export { wake, abortCurrent, getCurrentRootCorrelation, getStats as getSchedulerStats } from "../../seed/cognition/scheduler.js";
 // Reply aggregation pattern for fanout (Foreman → Workers, etc.).
-export { aggregate } from "../../seed/scheduler/replyAggregator.js";
+export { aggregate } from "../../seed/cognition/replyAggregator.js";
 // Subscription registry — extensions declare DO-trigger interest so
 // their beings get summoned when matching substrate writes happen.
 export {
@@ -134,7 +132,7 @@ export {
   getMatchingSubscribers,
   emitToSubscribers,
   getStats as getSubscriptionStats,
-} from "../../seed/scheduler/subscriptions.js";
+} from "../../seed/cognition/subscriptions.js";
 // Schedule registry — extensions declare wake cadences so their
 // beings get scheduled-wake SUMMONs on intervals. Default emitter is
 // Mode 2 (@system sender); embodied flavor swaps via setEmitter.
@@ -145,4 +143,4 @@ export {
   setEmitter as setScheduleEmitter,
   resetEmitter as resetScheduleEmitter,
   getStats as getScheduleStats,
-} from "../../seed/scheduler/schedule.js";
+} from "../../seed/cognition/wakeSchedule.js";

@@ -31,8 +31,8 @@
 // untouched — what changes is the sub-Ruler's own plan/contracts trio,
 // not its origin record.
 
-import Node from "../../../seed/models/node.js";
-import log from "../../../seed/core/log.js";
+import Space from "../../../seed/models/space.js";
+import log from "../../../seed/system/log.js";
 
 const NS = "governing";
 
@@ -58,7 +58,7 @@ export async function writeLineage({
   if (!core?.do) throw new Error("writeLineage requires `core` (verb surface)");
   if (!subRulerNodeId || !parentRulerId) return null;
 
-  const node = await Node.findById(subRulerNodeId);
+  const node = await Space.findById(subRulerNodeId);
   if (!node) return null;
 
   const existingMeta = node.metadata instanceof Map
@@ -100,7 +100,7 @@ export async function writeLineage({
  */
 export async function readLineage(subRulerNodeId) {
   if (!subRulerNodeId) return null;
-  const node = await Node.findById(subRulerNodeId).select("_id metadata").lean();
+  const node = await Space.findById(subRulerNodeId).select("_id metadata").lean();
   if (!node) return null;
   const meta = node.metadata instanceof Map
     ? node.metadata.get(NS)
@@ -123,10 +123,10 @@ export async function readLineage(subRulerNodeId) {
 export async function inferLineageFromParent(subRulerNodeId) {
   if (!subRulerNodeId) return null;
 
-  const sub = await Node.findById(subRulerNodeId).select("_id name parent").lean();
+  const sub = await Space.findById(subRulerNodeId).select("_id name parent").lean();
   if (!sub?.parent) return null;
 
-  const parent = await Node.findById(sub.parent).select("_id metadata").lean();
+  const parent = await Space.findById(sub.parent).select("_id metadata").lean();
   if (!parent) return null;
   const parentMeta = parent.metadata instanceof Map
     ? Object.fromEntries(parent.metadata)

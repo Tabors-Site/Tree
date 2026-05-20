@@ -7,7 +7,7 @@
 //   1. Derive the acting stance's properties (Layer 2 — stanceProperties.js).
 //      Owner / contributor relations, role, home position relations,
 //      operating mode, federation status — all computed from Layer 1
-//      data (Being + Node fields).
+//      data (Being + Space fields).
 //
 //   2. Look up the applicable permission rule for this verb at the target
 //      position (Layer 3 — metadata.permissions on the position, walking
@@ -33,33 +33,40 @@
 // member). That fallback gets removed once governing's lifecycle has
 // stamped the new-shape rules everywhere.
 
-import Node from "../models/node.js";
+import Space from "../models/space.js";
 import { getLandRootId } from "../landRoot.js";
-import { getAncestorChain } from "../tree/ancestorCache.js";
-import { deriveStanceProperties } from "../addressing/stanceProperties.js";
+import { getAncestorChain } from "../space/ancestorCache.js";
+import { deriveStanceProperties } from "../ibp/stanceProperties.js";
 import { lookupDefault } from "./defaultPermissions.js";
 import { IBP_ERR } from "./errors.js";
 
 // ─────────────────────────────────────────────────────────────────────
-// Legacy defaults (kept for startup's seedDefaultStancePermissions).
-// The new authorize flow does NOT read these directly; it reads the
-// metadata.permissions shape. These constants stay exported so the
-// transition migration can populate the old-shape rows as fallback
-// while new lifecycle code writes the new shape.
+// Default layer-2 stance permissions written on the land root.
+//
+// Seeded at boot by seedDefaultStancePermissions(); operators can
+// override per-position with their own rules (closer rule wins on the
+// ancestor walk). These map the legacy "arrival is restricted, anyone
+// else can act" semantics into the unified rule shape:
+//
+//   metadata.permissions.<verb>.<keyParts> = { requires: { ... } }
+//
+// `requires: { arrival: false }` admits every authenticated stance and
+// denies arrival. `requires: {}` admits everyone (arrival included).
 // ─────────────────────────────────────────────────────────────────────
 
-export const DEFAULT_ARRIVAL_PERMISSIONS = Object.freeze({
-  see:    Object.freeze({ allowed_visibility: ["public"] }),
-  do:     Object.freeze({ allowed_actions: [] }),
-  summon: Object.freeze({ allowed_targets: [] }),
-  be:     Object.freeze({ allowed_operations: ["register", "claim"] }),
-});
-
-export const DEFAULT_OWNER_PERMISSIONS = Object.freeze({
-  see:    Object.freeze({ allowed_visibility: "*" }),
-  do:     Object.freeze({ allowed_actions: "*" }),
-  summon: Object.freeze({ allowed_targets: "*" }),
-  be:     Object.freeze({ allowed_operations: ["register", "claim", "release", "switch"] }),
+const LAND_ROOT_DEFAULT_PERMISSIONS = Object.freeze({
+  // Default SEE / DO / SUMMON: any authenticated being.
+  see:    { "*": { requires: { arrival: false } } },
+  do:     { "*": { requires: { arrival: false } } },
+  summon: { "*": { requires: { arrival: false } } },
+  // BE: arrival can register/claim (so anyone can sign up); only
+  // authenticated callers can release/switch their own session.
+  be: {
+    register: { requires: {} },
+    claim:    { requires: {} },
+    release:  { requires: { arrival: false } },
+    switch:   { requires: { arrival: false } },
+  },
 });
 
 // ─────────────────────────────────────────────────────────────────────
@@ -72,7 +79,7 @@ export const DEFAULT_OWNER_PERMISSIONS = Object.freeze({
  * @param {object} args
  * @param {object|null} args.identity { beingId, username } if authenticated
  * @param {"see"|"do"|"summon"|"be"} args.verb
- * @param {object} args.target     { kind, value, nodeId?, visibility?, being?, isDiscovery? }
+ * @param {object} args.target     { kind, value, spaceId?, being?, isDiscovery? }
  * @param {string} [args.action]   DO action name
  * @param {string} [args.namespace] set-meta namespace
  * @param {string} [args.intent]   SUMMON intent
@@ -82,10 +89,10 @@ export const DEFAULT_OWNER_PERMISSIONS = Object.freeze({
 export async function authorize(args) {
   const { identity, verb, target } = args;
   const beingId = identity?.beingId || null;
-  const nodeId  = target?.nodeId || null;
+  const spaceId  = target?.spaceId || null;
 
   // ── Layer 2: derive stance properties ──
-  const props = await deriveStanceProperties({ beingId, targetNodeId: nodeId });
+  const props = await deriveStanceProperties({ beingId, targetSpace: spaceId });
   const stanceLabel = stanceLabelFromProps(props);
 
   // BE bootstrap exception: register/claim from arrival are always
@@ -110,12 +117,12 @@ export async function authorize(args) {
   }
 
   // ── Layer 3: walk the parent chain looking for a matching rule ──
-  const matched = await findMatchingRule({ nodeId, verb, keyParts });
+  const matched = await findMatchingRule({ spaceId, verb, keyParts });
   if (matched) {
     return evaluateRequires(matched.rule, props, stanceLabel, matched.source);
   }
 
-  // ── Tier 5: extension-default registry ──
+  // ── Layer 4: extension-default registry ──
   const fullKey = `${verb}:${keyParts.join(":")}`;
   let defaultRule = lookupDefault(fullKey);
   if (!defaultRule) {
@@ -129,11 +136,7 @@ export async function authorize(args) {
     return evaluateRequires(defaultRule, props, stanceLabel, "extension-default");
   }
 
-  // ── Legacy fallback (transitional) ──
-  const legacy = await legacyAuthorize(args, props);
-  if (legacy) return legacy;
-
-  // ── Tier 6: default deny ──
+  // ── Layer 5: default deny ──
   return {
     ok: false,
     stance: stanceLabel,
@@ -173,8 +176,8 @@ function buildKeyParts(args) {
 // Layer 3: rule lookup
 // ─────────────────────────────────────────────────────────────────────
 
-async function findMatchingRule({ nodeId, verb, keyParts }) {
-  if (!nodeId) {
+async function findMatchingRule({ spaceId, verb, keyParts }) {
+  if (!spaceId) {
     const landRootId = getLandRootId();
     if (!landRootId) return null;
     return matchOnNode(landRootId, verb, keyParts);
@@ -182,13 +185,13 @@ async function findMatchingRule({ nodeId, verb, keyParts }) {
 
   let chain;
   try {
-    chain = await getAncestorChain(nodeId);
+    chain = await getAncestorChain(spaceId);
   } catch {
     chain = null;
   }
   const path = Array.isArray(chain) && chain.length
     ? chain.map((n) => String(n._id))
-    : [String(nodeId)];
+    : [String(spaceId)];
 
   for (const id of path) {
     const match = await matchOnNode(id, verb, keyParts);
@@ -197,8 +200,8 @@ async function findMatchingRule({ nodeId, verb, keyParts }) {
   return null;
 }
 
-async function matchOnNode(nodeId, verb, keyParts) {
-  const node = await Node.findById(nodeId).select("metadata").lean();
+async function matchOnNode(spaceId, verb, keyParts) {
+  const node = await Space.findById(spaceId).select("metadata").lean();
   const meta = node?.metadata;
   if (!meta) return null;
   const perms = meta instanceof Map ? meta.get("permissions") : meta.permissions;
@@ -220,7 +223,7 @@ async function matchOnNode(nodeId, verb, keyParts) {
     }
   }
   if (!bestRule) return null;
-  return { rule: bestRule, source: `${nodeId}:${bestKey}` };
+  return { rule: bestRule, source: `${spaceId}:${bestKey}` };
 }
 
 // ─────────────────────────────────────────────────────────────────────
@@ -281,7 +284,7 @@ function evaluateRequires(rule, props, stanceLabel, source) {
 function compareRequirement(propName, expected, props) {
   const actual = props[propName];
 
-  // Home-relation properties accept a string nodeId as the expected
+  // Home-relation properties accept a string spaceId as the expected
   // value, in which case the comparator interprets it as "this
   // specific node must be in the home's ancestor chain" (or, for
   // positionInHomeDomain, in the target's ancestor chain). Without
@@ -311,144 +314,42 @@ function stanceLabelFromProps(props) {
 }
 
 // ─────────────────────────────────────────────────────────────────────
-// Legacy fallback (old-shape metadata.beings.<stance>.permissions)
-// ─────────────────────────────────────────────────────────────────────
-
-async function legacyAuthorize(args, props) {
-  const stance = props.arrival ? "arrival" : (props.owner ? "owner" : "member");
-  const permissions = await loadLegacyStancePermissions(stance);
-  if (!permissions) return null;
-  switch (args.verb) {
-    case "see":    return legacyDecideSee(stance, permissions, args);
-    case "do":     return legacyDecideDo(stance, permissions, args);
-    case "summon": return legacyDecideSummon(stance, permissions, args);
-    case "be":     return legacyDecideBe(stance, permissions, args);
-    default:       return null;
-  }
-}
-
-async function loadLegacyStancePermissions(stance) {
-  if (stance === "arrival") return (await readLandStanceMeta("arrival")) || DEFAULT_ARRIVAL_PERMISSIONS;
-  if (stance === "owner")   return (await readLandStanceMeta("owner"))   || DEFAULT_OWNER_PERMISSIONS;
-  // "member" (and any other authenticated non-owner): the legacy decide
-  // functions short-circuit to allow for this stance without consulting
-  // permissions. Returning an empty object engages that short-circuit
-  // path instead of falling through to default-deny. Without this an
-  // authenticated being who is not the owner gets FORBIDDEN on every
-  // SEE / DO / SUMMON / BE because no Tier-5 default-permission rule
-  // covers their stance and the kernel has no implicit member-allow.
-  if (stance === "member") return {};
-  return null;
-}
-
-async function readLandStanceMeta(stanceName) {
-  const landRootId = getLandRootId();
-  if (!landRootId) return null;
-  const root = await Node.findById(landRootId)
-    .select(`metadata.beings.${stanceName}.permissions`)
-    .lean();
-  const path = root?.metadata?.beings;
-  if (!path) return null;
-  const stance = path instanceof Map ? path.get(stanceName) : path[stanceName];
-  if (!stance) return null;
-  return stance.permissions || null;
-}
-
-function legacyDecideSee(stance, permissions, { target }) {
-  if (stance === "member") return { ok: true, stance };
-  const rule = permissions.see?.allowed_visibility;
-  if (rule === "*") return { ok: true, stance };
-  if (!Array.isArray(rule) || rule.length === 0) {
-    return { ok: false, stance, reason: "stance not permitted to SEE" };
-  }
-  if (target?.isDiscovery) return { ok: true, stance };
-  const v = target?.visibility;
-  if (!v) return { ok: true, stance };
-  return rule.includes(v)
-    ? { ok: true, stance }
-    : { ok: false, stance, reason: `visibility "${v}" not in allowed list` };
-}
-
-function legacyDecideDo(stance, permissions, { action }) {
-  if (stance === "owner") return { ok: true, stance };
-  if (stance === "member") return { ok: true, stance };
-  const rule = permissions.do?.allowed_actions;
-  if (rule === "*") return { ok: true, stance };
-  if (!Array.isArray(rule) || rule.length === 0) {
-    return { ok: false, stance, reason: "stance not permitted to DO" };
-  }
-  if (!action) return { ok: false, stance, reason: "DO requires an action" };
-  return rule.includes(action)
-    ? { ok: true, stance }
-    : { ok: false, stance, reason: `action "${action}" not in allowed list` };
-}
-
-function legacyDecideSummon(stance, permissions, { target }) {
-  if (stance === "owner") return { ok: true, stance };
-  if (stance === "member") return { ok: true, stance };
-  const rule = permissions.summon?.allowed_targets;
-  if (rule === "*") return { ok: true, stance };
-  if (!Array.isArray(rule) || rule.length === 0) {
-    return { ok: false, stance, reason: "stance not permitted to SUMMON" };
-  }
-  const targetBeing = target?.being;
-  if (!targetBeing) return { ok: false, stance, reason: "SUMMON requires a target being" };
-  const targetTag = `@${targetBeing}`;
-  return rule.includes(targetTag) || rule.includes(targetBeing)
-    ? { ok: true, stance }
-    : { ok: false, stance, reason: `role "${targetTag}" not in allowed list` };
-}
-
-function legacyDecideBe(stance, permissions, { operation }) {
-  if (stance === "arrival" && (operation === "register" || operation === "claim")) {
-    return { ok: true, stance };
-  }
-  if (stance === "owner") return { ok: true, stance };
-  if (stance === "member") return { ok: true, stance };
-  const rule = permissions.be?.allowed_operations;
-  if (!Array.isArray(rule) || rule.length === 0) {
-    return { ok: false, stance, reason: "stance not permitted to BE" };
-  }
-  if (!operation) return { ok: false, stance, reason: "BE requires an operation" };
-  return rule.includes(operation)
-    ? { ok: true, stance }
-    : { ok: false, stance, reason: `operation "${operation}" not in allowed list` };
-}
-
-// ─────────────────────────────────────────────────────────────────────
 // Seed defaults on land boot
 // ─────────────────────────────────────────────────────────────────────
 
 /**
- * Ensure the land root has explicit default stance permissions written
- * to its metadata. Idempotent. Writes the legacy shape during the
- * transition so the legacy fallback in authorize() has data; a future
- * pass writes the new metadata.permissions shape at the land root with
- * equivalent rules.
+ * Plant the kernel's default stance-permission rules on the land root.
+ * Idempotent. Writes the unified layer-2 rule shape that the authorize
+ * walk reads at every verb call:
+ *
+ *   metadata.permissions.<verb>.<keyParts> = { requires: { ... } }
+ *
+ * The defaults preserve the historical semantics: any authenticated
+ * being can act at the land root (any verb, any keyParts); arrival
+ * can only BE register/claim. Per-position rules at sub-positions
+ * override these via the ancestor walk picking the nearest match.
  */
 export async function seedDefaultStancePermissions() {
   const landRootId = getLandRootId();
   if (!landRootId) return { seeded: false, reason: "land root not initialized" };
 
-  const root = await Node.findById(landRootId).select("metadata").lean();
-  const existing = root?.metadata?.beings;
+  const root = await Space.findById(landRootId).select("metadata").lean();
+  const meta = root?.metadata;
+  const permsRoot = meta instanceof Map ? meta.get("permissions") : meta?.permissions;
 
   const updates = {};
-  const hasArrival = existing instanceof Map
-    ? !!existing.get("arrival")
-    : !!existing?.arrival;
-  const hasOwner = existing instanceof Map
-    ? !!existing.get("owner")
-    : !!existing?.owner;
 
-  if (!hasArrival) {
-    updates["metadata.beings.arrival"] = { permissions: DEFAULT_ARRIVAL_PERMISSIONS };
-  }
-  if (!hasOwner) {
-    updates["metadata.beings.owner"] = { permissions: DEFAULT_OWNER_PERMISSIONS };
+  // Seed each verb's bucket only if it isn't already populated. We do
+  // not overwrite operator customizations.
+  for (const [verb, bucket] of Object.entries(LAND_ROOT_DEFAULT_PERMISSIONS)) {
+    const existingVerb = permsRoot?.[verb];
+    if (existingVerb && Object.keys(existingVerb).length > 0) continue;
+    updates[`metadata.permissions.${verb}`] = bucket;
   }
 
-  const auth = root?.metadata?.auth;
+  // Land-level BE config flags (register/claim toggles for operators
+  // who want to lock the land down).
+  const auth = meta instanceof Map ? meta.get("auth") : meta?.auth;
   const hasAuth = auth instanceof Map ? auth.size > 0 : !!auth;
   if (!hasAuth) {
     updates["metadata.auth"] = { register_enabled: true, claim_enabled: true };
@@ -457,7 +358,7 @@ export async function seedDefaultStancePermissions() {
   if (Object.keys(updates).length === 0) {
     return { seeded: false, reason: "defaults already present" };
   }
-  await Node.updateOne({ _id: landRootId }, { $set: updates });
+  await Space.updateOne({ _id: landRootId }, { $set: updates });
   return { seeded: true, fields: Object.keys(updates) };
 }
 
@@ -468,7 +369,7 @@ export async function seedDefaultStancePermissions() {
 export async function getAuthConfig() {
   const landRootId = getLandRootId();
   if (!landRootId) return { register_enabled: true, claim_enabled: true };
-  const root = await Node.findById(landRootId).select("metadata.auth").lean();
+  const root = await Space.findById(landRootId).select("metadata.auth").lean();
   const auth = root?.metadata?.auth;
   const get = (key, fallback) => {
     if (auth instanceof Map) return auth.has(key) ? auth.get(key) : fallback;

@@ -18,18 +18,45 @@ import { getLandConfigValue } from "../landConfig.js";
 // in a way that clients must opt into. The IBP discovery payload lists
 // this in `descriptorVersionSupported`.
 export const DESCRIPTOR_VERSION = "1.0";
-import Node from "../models/node.js";
+import Space from "../models/space.js";
 import { getLandRootId } from "../landRoot.js";
 // NODE_STATUS retired 2026-05-18 — status is domain-specific extension
 // metadata, not a universal kernel field. Descriptor queries no longer
 // filter on a node-level status.
-import { getArtifacts } from "../tree/artifacts.js";
-import Artifact from "../models/artifact.js";
-import { resolveTreeAccess } from "../tree/treeAccess.js";
-import { getInboxSummary } from "../scheduler/inbox.js";
-import { getRole, listRoles } from "../roles/registry.js";
-import { getExtension } from "../../extensions/loader.js";
-import { getActiveSummonForBeing } from "../llm/summonTracker.js";
+import { getMatters } from "../matter/matters.js";
+import Matter from "../models/matter.js";
+import { resolveSpaceAccess } from "../space/spaceFetch.js";
+import { getInboxSummary } from "../cognition/inbox.js";
+import { getRole, listRoles } from "../being/roles/registry.js";
+import { getActiveSummonForBeing } from "../cognition/summonTracker.js";
+
+// Deriver registry. Extensions that contribute derived descriptor
+// fields (the `models` and `scenes` extensions, today) register their
+// functions here at init time via core.descriptor.registerDeriver().
+// The descriptor reads from its own registry, never reaching into
+// extension code directly. Keeping this seed-side preserves the
+// kernel-doesn't-import-extensions rule. See [[CLAUDE.md]] rules.
+const _derivers = new Map();
+
+export function registerDescriptorDeriver(kind, fn) {
+  if (typeof kind !== "string" || !kind) {
+    throw new Error("registerDescriptorDeriver: kind must be a non-empty string");
+  }
+  if (typeof fn !== "function") {
+    throw new Error(`registerDescriptorDeriver("${kind}"): fn must be a function`);
+  }
+  _derivers.set(kind, fn);
+}
+
+export function unregisterDescriptorDeriver(kind) {
+  return _derivers.delete(kind);
+}
+
+function callDeriver(kind, ...args) {
+  const fn = _derivers.get(kind);
+  if (typeof fn !== "function") return null;
+  try { return fn(...args); } catch { return null; }
+}
 import Did from "../models/did.js";
 
 // ─────────────────────────────────────────────────────────────────────
@@ -53,13 +80,12 @@ function readModelsNs(metadata) {
   return metadata.models || null;
 }
 
-// Use the models extension's derivation if available (it knows how to
-// fall back to governing.role and other extension namespaces). Without
-// the extension installed, return the raw models namespace.
+// Use the models deriver when registered (it knows how to fall back
+// to governing.role and other extension namespaces). Without it,
+// return the raw models namespace.
 function effectiveModel(meta) {
-  const ext = getExtension("models");
-  const fn = ext?.exports?.deriveModel;
-  if (typeof fn === "function") return fn(meta);
+  const derived = callDeriver("models", meta);
+  if (derived) return derived;
   const raw = readModelsNs(meta);
   return raw?.model ? { model: raw.model, scale: raw.scale ?? 1 } : null;
 }
@@ -67,9 +93,8 @@ function effectiveModel(meta) {
 // Same idea for scenes — derive the per-node doorway/sceneType from
 // explicit metadata.scenes plus fallbacks (e.g. governing.role).
 function effectiveScene(meta) {
-  const ext = getExtension("scenes");
-  const fn = ext?.exports?.deriveScene;
-  if (typeof fn === "function") return fn(meta);
+  const derived = callDeriver("scenes", meta);
+  if (derived) return derived;
   const raw = (meta instanceof Map ? meta.get("scenes") : meta?.scenes) || {};
   return {
     doorway:   raw.doorway === true,
@@ -104,24 +129,21 @@ function beingPlacement(parentMeta, beingName) {
   return out;
 }
 
-function artifactPlacement(parentMeta, ref) {
+function matterPlacement(parentMeta, ref) {
   const pos = readPositionNs(parentMeta);
   const mod = readModelsNs(parentMeta);
   const out = {};
-  const coords = pos?.artifacts?.[ref];
+  const coords = pos?.matters?.[ref];
   if (coords) out.position = { coords };
-  const m = mod?.artifacts?.[ref];
+  const m = mod?.matters?.[ref];
   if (m?.model) out.model = { model: m.model, scale: m.scale ?? 1 };
   return out;
 }
 
-async function resolveSceneBlock(nodeId) {
-  if (!nodeId) return null;
+async function resolveSceneBlock(spaceId) {
+  if (!spaceId) return null;
   try {
-    const scenes = getExtension("scenes");
-    const fn = scenes?.exports?.getScene;
-    if (typeof fn !== "function") return null;
-    return await fn(nodeId);
+    return await callDeriver("scene-block", spaceId);
   } catch {
     return null;
   }
@@ -152,7 +174,7 @@ async function resolveSceneBlock(nodeId) {
 //
 // Workers, Planners, Contractors, Foremen are NOT listed here for a
 // rulership — they live at their own positions (plan child node,
-// contract child node, leaf artifact positions) and surface through
+// contract child space, leaf matter positions) and surface through
 // those positions' descriptors. The renderer composes them visually
 // because they're inline children of the rulership.
 // ─────────────────────────────────────────────────────────────────────
@@ -173,8 +195,8 @@ const BEING_PRESENTATION = {
   planner:    { label: "Planner",    description: "Drafts plans for this scope.",                modeKey: "tree:governing-planner", icon: "\u{1F4DD}", invocableBy: "owner"  },
   contractor: { label: "Contractor", description: "Issues contracts for this scope.",            modeKey: "tree:governing-contractor", icon: "\u{1F4DC}", invocableBy: "owner" },
   foreman:    { label: "Foreman",    description: "Dispatches execution for this scope.",        modeKey: "tree:governing-foreman", icon: "\u{1F4CB}", invocableBy: "owner" },
-  worker:     { label: "Worker",     description: "Produces artifacts.",                         modeKey: "tree:governing-worker-build", icon: "\u{1F528}", invocableBy: "owner" },
-  archivist:  { label: "Archivist",  description: "Read-only inspection of artifacts.",          modeKey: "tree:archivist",        icon: "\u{1F4DA}", invocableBy: "anyone" },
+  worker:     { label: "Worker",     description: "Produces matter.",                            modeKey: "tree:governing-worker-build", icon: "\u{1F528}", invocableBy: "owner" },
+  archivist:  { label: "Archivist",  description: "Read-only inspection of matter.",             modeKey: "tree:archivist",        icon: "\u{1F4DA}", invocableBy: "anyone" },
 };
 
 function beingsForTreeNode(node, { writeAllowed, authorizedHere }) {
@@ -198,7 +220,7 @@ function beingsForTreeNode(node, { writeAllowed, authorizedHere }) {
       label: name, description: "", modeKey: `tree:${name}`, icon: "\u{1F464}", invocableBy: "owner",
     };
     // The home record may carry a `scopeRulerId` (governing's lifecycle
-    // writes it). The Planner chainstep is bound to the Ruler's nodeId
+    // writes it). The Planner chainstep is bound to the Ruler's spaceId
     // even though the Planner's home is at the plan trio. Carrying the
     // scopeRulerId lets activity derivation look up the chainstep in
     // the right place. Renderer-only field, ignored by clients that
@@ -229,7 +251,7 @@ function beingsForTreeNode(node, { writeAllowed, authorizedHere }) {
 // Activity derivation
 //
 // For each being at a position, derive an `activity` object from the
-// latest active chainstep (Chat doc) bound to (nodeId, modeKey). When
+// latest active chainstep (Chat doc) bound to (spaceId, modeKey). When
 // no chainstep is active the being is idle and activity is null.
 //
 // Today the Chat document persists: startMessage, toolCalls[]. Thinking
@@ -252,29 +274,28 @@ function truncate(s, n) {
 
 // Convert a Summon document into an activity object the descriptor
 // surfaces for the being whose Summon it is. Returns null when no
-// Summon is given. Tool-call surface reads Dids keyed by summonId.
+// Summon is given. The latest Did keyed by summonId names what the
+// being is currently doing.
 async function summonToActivity(summon) {
   if (!summon) return null;
-  let lastCall = null;
+  let lastDid = null;
   try {
-    const lastDid = await Did.findOne({ summonId: summon._id, action: "tool-call" })
+    lastDid = await Did.findOne({ summonId: summon._id })
       .sort({ date: -1 })
-      .select("toolCall date")
+      .select("action params date")
       .lean();
-    if (lastDid?.toolCall) lastCall = lastDid;
   } catch {
-    // skip — descriptor never blocks on tool-call lookup
+    // skip . descriptor never blocks on Did lookup
   }
   const target = await inferActivityTarget(summon);
 
-  if (lastCall) {
-    const tc = lastCall.toolCall;
+  if (lastDid) {
     return {
-      kind:        tc.success === false ? "tool-result" : "tool-called",
-      content:     truncate(`${tc.name}(${summarizeArgs(tc.args)})`, ACTIVITY_CONTENT_CAP),
+      kind:        "acting",
+      content:     truncate(`${lastDid.action}(${summarizeArgs(lastDid.params)})`, ACTIVITY_CONTENT_CAP),
       chainstepId: String(summon._id),
       target,
-      ts:          lastCall.date,
+      ts:          lastDid.date,
     };
   }
 
@@ -304,7 +325,7 @@ async function inferActivityTarget(summon) {
     return null;
   }
   if (!parent || !parent.activeRole || !parent.beingOut) return null;
-  // Without aiContext/treeContext we no longer have a (nodeId, modeKey)
+  // Without aiContext/treeContext we no longer have a (spaceId, modeKey)
   // tuple to hand the renderer. Surface the parent being + role so the
   // 3D portal can map "which mesh is this being" via its descriptor entry.
   return {
@@ -335,16 +356,16 @@ async function buildLandDescriptor(resolved, { identity } = {}) {
   // When the backing extension is missing, the entry stays in the
   // descriptor (so 3D clients still see the slot) but is non-invocable.
   const isRegistered = (beingName) => !!getRole(beingName);
-  // Artifacts at the land root. The llm-assigner intro tutorial is the
+  // Matter at the land root. The llm-assigner intro tutorial is the
   // seeded example (web-origin, points at a YouTube URL).
   const landRootId = getLandRootId();
-  const artifacts = landRootId ? await readLandRootArtifacts(landRootId) : [];
+  const matters = landRootId ? await readLandRootMatters(landRootId) : [];
   return {
     address: {
       land: landDomain,
       path: "/",
       being: resolved.being || null,
-      nodeId: null,
+      spaceId: null,
       beingId: null,
       chain: [],
       pathByNames: "/",
@@ -356,7 +377,7 @@ async function buildLandDescriptor(resolved, { identity } = {}) {
     isHomeRoot: false,
     // Beings whose home is the land root. All four are real Being rows
     // (created by ensureSystemBeings). With the resolver now exposing
-    // landRootId as the nodeId for land-root stances, the SUMMON inbox
+    // landRootId as the spaceId for land-root stances, the SUMMON inbox
     // sits on the land-root node like any other position — so these
     // beings are addressable via both BE (auth, llm-assigner — code
     // cognition) and SUMMON (land-manager, citizen — LLM-driven once
@@ -406,7 +427,7 @@ async function buildLandDescriptor(resolved, { identity } = {}) {
     // Public trees at land scope. Populated from the user-root nodes
     // directly under the land root with visibility === "public".
     children,
-    artifacts,
+    matters,
     land: {
       name: getLandConfigValue("LAND_NAME") || "Unnamed Land",
       operator: null,
@@ -445,7 +466,7 @@ async function buildHomeDescriptor(resolved, { identity } = {}) {
       land: landDomain,
       path: homePath,
       being: resolved.being || null,
-      nodeId: null,
+      spaceId: null,
       beingId: resolved.beingId,
       chain: resolved.chain,
       pathByNames: homePath,
@@ -471,7 +492,7 @@ async function buildHomeDescriptor(resolved, { identity } = {}) {
       },
     ],
     children,
-    artifacts: [],
+    matters: [],
     identity: identity
       ? {
           beingId: identity.beingId,
@@ -495,9 +516,9 @@ async function buildHomeDescriptor(resolved, { identity } = {}) {
 
 async function buildTreeDescriptor(resolved, { identity } = {}) {
   const landDomain = getLandDomain();
-  const node = resolved.leafNode;
+  const node = resolved.leafSpace;
   if (!node) {
-    throw new Error("Resolved node missing leafNode reference");
+    throw new Error("Resolved node missing leafSpace reference");
   }
 
   // Build the two convenience path strings from the chain.
@@ -511,8 +532,8 @@ async function buildTreeDescriptor(resolved, { identity } = {}) {
     c.path = `${pathByNames}/${c.name}`;
   }
 
-  // Notes attached to this node, as artifact previews.
-  const artifacts = await listArtifacts(node._id);
+  // Matter attached to this space, as previews.
+  const matters = await listMatters(node._id);
 
   // Lineage walk: parent chain back up to and including the tree root.
   // The chain we already have is the path-segments chain; lineage may
@@ -534,7 +555,7 @@ async function buildTreeDescriptor(resolved, { identity } = {}) {
   let authorizedHere = false;
   if (identity?.beingId) {
     try {
-      const access = await resolveTreeAccess(node._id, identity.beingId);
+      const access = await resolveSpaceAccess(node._id, identity.beingId);
       writeAllowed = access?.ok && access?.write === true;
       authorizedHere = access?.ok === true;
     } catch {
@@ -551,7 +572,7 @@ async function buildTreeDescriptor(resolved, { identity } = {}) {
       land: landDomain,
       path: pathByNames,
       being: resolved.being || null,
-      nodeId: node._id,
+      spaceId: node._id,
       beingId: resolved.beingId || null,
       chain: resolved.chain,
       pathByNames,
@@ -571,7 +592,7 @@ async function buildTreeDescriptor(resolved, { identity } = {}) {
     // field on the ruler's entry rather than as their own beings.
     beings: await buildBeings(node._id, beingsForTreeNode(node, { writeAllowed, authorizedHere })),
     children,
-    artifacts,
+    matters,
     lineage,
     siblings,
     scene,
@@ -600,17 +621,17 @@ async function listChildren(parentId, { exclude } = {}) {
   if (!parentId) return [];
   const query = {
     parent: parentId,
-    systemRole: null,
+    seedSpace: null,
   };
   if (exclude) query._id = { $ne: exclude };
-  const nodes = await Node.find(query)
+  const nodes = await Space.find(query)
     .select("_id name type dateCreated metadata")
     .sort({ dateCreated: 1 })
     .limit(500)
     .lean();
   return nodes.map((n) => ({
     name:      n.name,
-    nodeId:    n._id,
+    spaceId:    n._id,
     type:      n.type || null,
     summary:   null,
     noteCount: 0,
@@ -618,28 +639,28 @@ async function listChildren(parentId, { exclude } = {}) {
   }));
 }
 
-async function listArtifacts(nodeId) {
-  if (!nodeId) return [];
+async function listMatters(spaceId) {
+  if (!spaceId) return [];
   try {
-    const result = await getArtifacts({ nodeId, limit: 50 });
-    const artifacts = Array.isArray(result?.artifacts) ? result.artifacts : [];
-    // Artifact placement lives on the parent node's position/models
-    // namespaces, keyed by artifact id.
-    const parent = await Node.findById(nodeId).select("metadata").lean();
+    const result = await getMatters({ spaceId, limit: 50 });
+    const matters = Array.isArray(result?.matters) ? result.matters : [];
+    // Matter placement lives on the parent space's position/models
+    // namespaces, keyed by matter id.
+    const parent = await Space.findById(spaceId).select("metadata").lean();
     const parentMetadata = parent?.metadata || null;
-    return artifacts.map((a) => {
-      const isText = typeof a.content === "string";
+    return matters.map((m) => {
+      const isText = typeof m.content === "string";
       return {
-        kind: "artifact",
-        artifactId: a._id,
-        origin: a.origin || "ibp",
-        preview: isText ? a.content.slice(0, 400) : null,
-        previewBytes: isText ? Buffer.byteLength(a.content, "utf8") : 0,
-        totalBytes: isText ? Buffer.byteLength(a.content, "utf8") : 0,
-        createdAt: a.createdAt,
-        byUsername: a.name || null,
-        fullContentRef: `/api/v1/node/${nodeId}/artifacts/${a._id}`,
-        ...artifactPlacement(parentMetadata, String(a._id)),
+        kind: "matter",
+        matterId: m._id,
+        origin: m.origin || "ibp",
+        preview: isText ? m.content.slice(0, 400) : null,
+        previewBytes: isText ? Buffer.byteLength(m.content, "utf8") : 0,
+        totalBytes: isText ? Buffer.byteLength(m.content, "utf8") : 0,
+        createdAt: m.createdAt,
+        byUsername: m.name || null,
+        fullContentRef: `/api/v1/node/${spaceId}/matters/${m._id}`,
+        ...matterPlacement(parentMetadata, String(m._id)),
       };
     });
   } catch {
@@ -651,7 +672,7 @@ function buildLineage(resolved) {
   // Top-down: each entry shows what to display in a breadcrumb.
   const landDomain = getLandDomain();
   const lineage = [
-    { path: "/", name: landDomain, nodeId: null },
+    { path: "/", name: landDomain, spaceId: null },
   ];
   // The chain already walks from the first segment to the leaf. Each
   // intermediate entry becomes a breadcrumb step. We accumulate the path
@@ -663,7 +684,7 @@ function buildLineage(resolved) {
     lineage.push({
       path:   prefix,
       name:   seg.name,
-      nodeId: seg.id,
+      spaceId: seg.id,
     });
   }
   return lineage;
@@ -676,18 +697,20 @@ function buildLineage(resolved) {
 /**
  * List public sections of the land.
  *
- * A "public tree" is any node marked `visibility: "public"` — it can
- * sit at any depth, not just under the land root. Any section of any
- * tree can be made public; the section's root is whatever node carries
- * the `public` marker. System nodes (`.extensions`, `.flow`, etc.) are
- * filtered out.
+ * A "public tree" is any space whose stance-auth rules carry a SEE
+ * permission keyed at the universal wildcard — i.e. it has the field
+ * `metadata.permissions.see.*`. The layer-2 authorize walk picks this
+ * rule up for any caller; whether arrival passes depends on the rule's
+ * `requires`. A rule with `requires: {}` admits everyone, which is what
+ * the migration writes for previously-public spaces. Land seed spaces
+ * (`.extensions`, `.flow`, etc.) are filtered out.
  *
  * Returned in the Position Description `children` shape.
  */
 async function listPublicTrees() {
-  const trees = await Node.find({
-    systemRole: null,
-    visibility: "public",
+  const trees = await Space.find({
+    seedSpace: null,
+    "metadata.permissions.see.*": { $exists: true },
   })
     .select("_id name type dateCreated metadata")
     .sort({ dateCreated: -1 })
@@ -697,37 +720,37 @@ async function listPublicTrees() {
   return trees.map((t) => ({
     name:      t.name,
     path:      `/${t.name}`, // human-readable path; ids form is `/${t._id}`
-    nodeId:    t._id,
+    spaceId:    t._id,
     type:      t.type || null,
-    summary:   null, // future: pull from artifacts/metadata
-    noteCount: 0,    // future: count via artifacts index
+    summary:   null, // future: pull from matters/metadata
+    noteCount: 0,    // future: count via matters index
     ...childPlacement(t.metadata),
   }));
 }
 
-// Read artifacts attached to the land root. Slim shape the 3D portal
-// renders directly: id, name (the artifact's own name), beingId (so
+// Read matter attached to the land root. Slim shape the 3D portal
+// renders directly: id, name (the matter's own name), beingId (so
 // clients can filter by which being authored it), origin (so they know
 // whether to embed an iframe, fetch a file, etc.), and the content blob.
 //
-// Queries the Artifact model directly instead of getArtifacts() because
-// that helper populates beingId and overwrites the artifact's `name` field
-// with the being's name. The land-root descriptor needs the artifact's
+// Queries the Matter model directly instead of getMatters() because
+// that helper populates beingId and overwrites the matter's `name` field
+// with the being's name. The land-root descriptor needs the matter's
 // real name.
-async function readLandRootArtifacts(landRootId) {
-  const list = await Artifact.find({ nodeId: String(landRootId) })
+async function readLandRootMatters(landRootId) {
+  const list = await Matter.find({ spaceId: String(landRootId) })
     .sort({ createdAt: -1 })
     .limit(50)
     .lean();
-  return list.map((a) => ({
-    artifactId: String(a._id),
-    name:       a.name || null,
-    beingId:    a.beingId ? String(a.beingId) : null,
-    origin:     a.origin || "ibp",
-    content:    a.content || null,
-    metadata:   a.metadata instanceof Map
-      ? Object.fromEntries(a.metadata)
-      : (a.metadata || {}),
+  return list.map((m) => ({
+    matterId:   String(m._id),
+    name:       m.name || null,
+    beingId:    m.beingId ? String(m.beingId) : null,
+    origin:     m.origin || "ibp",
+    content:    m.content || null,
+    metadata:   m.metadata instanceof Map
+      ? Object.fromEntries(m.metadata)
+      : (m.metadata || {}),
   }));
 }
 
@@ -735,39 +758,48 @@ async function readLandRootArtifacts(landRootId) {
  * List the being's tree-root nodes. A being-tree-root is a node where:
  *   - parent === landRootId
  *   - rootOwner === beingId
- *   - systemRole is null
+ *   - seedSpace is null
  *
- * Visibility is NOT filtered here — a being's home view shows all of
- * their trees (public and private). When another identity browses
- * someone else's home, stance authorization gates access.
+ * A being's home view shows every tree they own; stance authorization
+ * gates what other identities see when they browse the same listing.
  */
 async function listUserTrees(beingId, username) {
   const landRootId = getLandRootId();
   if (!landRootId || !beingId || !username) return [];
-  const trees = await Node.find({
+  const trees = await Space.find({
     parent: landRootId,
     rootOwner: beingId,
-    systemRole: null,
+    seedSpace: null,
   })
-    .select("_id name type dateCreated visibility metadata")
+    .select("_id name type dateCreated metadata")
     .sort({ dateCreated: -1 })
     .limit(500)
     .lean();
 
-  return trees.map((t) => ({
-    name: t.name,
-    // Canonical land-level path. A being-owned root tree lives at the
-    // land root (parent === landRootId), so its address is /<name>.
-    // The home view is a listing surface; entering a tree takes you
-    // to the tree's own address, not to a home-prefixed sub-path.
-    path:       `/${t.name}`,
-    nodeId:     t._id,
-    type:       t.type || null,
-    visibility: t.visibility || "private",
-    summary:    null,
-    noteCount:  0,
-    ...childPlacement(t.metadata),
-  }));
+  return trees.map((t) => {
+    const perms = t.metadata instanceof Map ? t.metadata.get("permissions") : t.metadata?.permissions;
+    // A SEE rule keyed at "*" means the tree exposes itself through
+    // stance auth at the universal level. Whether arrival actually
+    // passes depends on the rule's requires; if requires is empty,
+    // anyone can SEE.
+    const seeWildcard = perms?.see?.["*"];
+    const isPublic = !!seeWildcard
+      && (!seeWildcard.requires || Object.keys(seeWildcard.requires).length === 0);
+    return {
+      name: t.name,
+      // Canonical land-level path. A being-owned root tree lives at the
+      // land root (parent === landRootId), so its address is /<name>.
+      // The home view is a listing surface; entering a tree takes you
+      // to the tree's own address, not to a home-prefixed sub-path.
+      path:      `/${t.name}`,
+      spaceId:    t._id,
+      type:      t.type || null,
+      isPublic,
+      summary:   null,
+      noteCount: 0,
+      ...childPlacement(t.metadata),
+    };
+  });
 }
 
 // ─────────────────────────────────────────────────────────────────────
@@ -785,21 +817,21 @@ async function listUserTrees(beingId, username) {
  *     (or null if the being is not registered yet)
  *   - inbox: { total, unconsumed, recent } from getInboxSummary
  */
-async function buildBeings(nodeId, entries) {
+async function buildBeings(spaceId, entries) {
   // Inbox is keyed by recipient beingId (the receiving Being's _id). Each
   // descriptor entry's _activeSummonLookupBeingId is the canonical home-record
   // beingId, so it doubles as the inbox lookup key.
-  const inboxByBeing = await getInboxSummary(nodeId);
+  const inboxByBeing = await getInboxSummary(spaceId);
   // Per-being placement lives on the parent node (where the being is
   // listed): metadata.position.beings.<being>, metadata.models.beings.<...>.
   let parentMetadata = null;
-  if (nodeId) {
-    const parent = await Node.findById(nodeId).select("metadata").lean();
+  if (spaceId) {
+    const parent = await Space.findById(spaceId).select("metadata").lean();
     parentMetadata = parent?.metadata || null;
   }
   // Look up the live Summon for each being in parallel. The slim Summon
   // shape carries beingOut directly, so _activeSummonLookupBeingId is the
-  // only working path. (The legacy nodeId+modeKey fallbacks queried
+  // only working path. (The legacy spaceId+modeKey fallbacks queried
   // aiContext/treeContext, which no longer exist on Summon.)
   const activities = await Promise.all(
     entries.map(async (e) => {

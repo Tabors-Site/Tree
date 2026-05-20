@@ -10,7 +10,7 @@
 // federation protocol. Liveness becomes a periodic `ibp:see <peer>/.identity`
 // when the wire-protocol federation slice lands.
 
-import log from "../../../seed/core/log.js";
+import log from "../../seed/system/log.js";
 import LandPeer from "./models/landPeer.js";
 
 /**

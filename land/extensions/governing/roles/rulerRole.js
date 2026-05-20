@@ -4,23 +4,26 @@
 // Every meaningful interaction at that scope passes through the
 // Ruler: user messages, sub-being replies (Planner emitted plan,
 // Foreman finished dispatch, etc.). Both paths run through the same
-// role.summon; the substrate carries the distinction (a reply-summon
+// summon dispatch; the substrate carries the distinction (a reply
 // has `inReplyTo` set).
 //
-// The Ruler is responsible for the COHERENCE of its scope. It is not
-// merely a switch that picks a downstream role; it is the being that
-// holds the scope together — when sub-Rulers dispatch, when
+// The Ruler holds the COHERENCE of its scope. It is the being that
+// keeps the work adding up — when sub-Rulers dispatch, when
 // contracts conflict, when execution stalls, the judgment lives
 // here.
 //
-// This file carries BOTH dispatch (summon, honoredIntents, …) AND
-// LLM behavior (prompt, tools, modeKey, …) — see memory
-// `role-subsumes-mode`.
+// The role file declares what the Ruler IS. Seed handles the rest:
+//   - permissions derived from canSee/canDo/canSummon/canBe
+//   - respondMode/triggerOn default ("async" / ["message"])
+//   - summon wrapped with seed/cognition/defaultSummon
+//   - system prompt assembled by seed/cognition/buildPrompt
+//
+// See [[project_role_subsumes_mode]], [[project_ibp_universal_grammar]].
 
-import log from "../../../seed/core/log.js";
-import { runChat } from "../../../seed/llm/runChat.js";
-import { renderRulerSnapshot } from "../state/rulerSnapshot.js";
-import { findChainInitialCaller, emitReplyToStance } from "./_shared.js";
+// See-resolvers used by `role.see` (ruler-snapshot, ancestor-contracts,
+// ancestor-plan, ruler-lineage) register in extensions/governing/
+// seeResolvers.js. Governing's init() runs the registration before any
+// summon fires.
 
 // ────────────────────────────────────────────────────────────────
 // Ruler LLM prompt body — inlined from former modes/ruler.js
@@ -487,182 +490,84 @@ than a right decision after a single read of governing-read-plan-detail.`;
 // The role template
 // ────────────────────────────────────────────────────────────────
 
-export const rulerRole = Object.freeze({
-  // Dispatch contract
+export const rulerRole = {
   name: "ruler",
-  // Permissions belong to role identity (see memory
-  // `role-permissions-not-envelope`). The Ruler reads state, writes
-  // decisions (ratify/archive/pause/resume), and summons sub-beings
-  // (Planner, Contractor, Foreman). All three verbs.
-  permissions: ["see", "do", "summon"],
-  // Async: the Ruler's processing involves at least one LLM call
-  // (possibly several when tools spawn sub-summons). ACK accepted
-  // immediately; scheduler delivers the synthesis via handoff.
-  respondMode: "async",
-  triggerOn: ["message"],
 
-  // LLM behavior contract — role.name ("ruler") is the identity.
-  emoji: "👑",
-  label: "Ruler",
-  // Top-level Rulers typically pick one tool per turn; sub-Rulers may
-  // chain through the entire lifecycle in one turn.
+  // On reply-wakes, synthesis routes to the chain-opening asker (the
+  // user-being at entry-scope, parent Ruler at sub-scope) rather than
+  // to the immediate sub-being sender. The default summon dispatcher
+  // honors this. See memory [[project_card_is_a_summon]].
+  replyTo: "chain-initial",
+
+  // Preloaded blocks the assembler inlines between the message body
+  // and the capability list. Resolvers registered above.
+  see: [
+    "ruler-lineage",
+    "ancestor-plan",
+    "ancestor-contracts",
+    "ruler-snapshot",
+  ],
+
+  // Exploratory SEE — tools the LLM may invoke to read further.
+  canSee: [
+    "governing-read-plan-detail",
+    "governing-read-pending-issues",
+  ],
+
+  // DO actions — pure state mutations the Ruler writes directly
+  // without waking another being. ratify-plan flips the approval
+  // ledger; archive-plan discards; pause-execution sets a flag.
+  canDo: [
+    "governing-ratify-plan",
+    "governing-archive-plan",
+    "governing-pause-execution",
+  ],
+
+  // SUMMON targets. Every tool here wakes another being. The handler
+  // takes care of being lifecycle (create-if-needed, then wake) so
+  // the Ruler does not think in BE+SUMMON; it thinks "I need a
+  // Planner to plan this" and one tool delivers.
+  //
+  //   hire-planner       create-or-reuse a Planner, wake with brief
+  //   hire-contractor    create-or-reuse a Contractor, wake with brief
+  //   revise-plan        archive prior + wake Planner with revision
+  //   dispatch-execution fan out sub-Ruler SUMMONs per plan step
+  //   route-to-foreman   wake the Foreman with a question
+  //   resume-execution   clear pause + wake the Foreman to advance
+  //   convene-court      wake a court (Pass 2)
+  //   respond-directly   wake the chain-initial caller with the
+  //                      Ruler's own answer (the "no delegation"
+  //                      path used when the snapshot supplies the
+  //                      answer without waking anyone else)
+  canSummon: [
+    "governing-hire-planner",
+    "governing-hire-contractor",
+    "governing-revise-plan",
+    "governing-dispatch-execution",
+    "governing-route-to-foreman",
+    "governing-resume-execution",
+    "governing-convene-court",
+    "governing-respond-directly",
+  ],
+
+  // No canBe. The Ruler does not directly create beings. SUMMON tools
+  // encapsulate being lifecycle: hire-planner creates a Planner if
+  // none exists at scope then wakes it; route-to-foreman uses the
+  // persistent Foreman. The Ruler thinks in summons, not in identity
+  // creation.
+
+  // LLM loop config. Top-level Rulers typically pick one tool per turn;
+  // sub-Rulers may chain through a full lifecycle in one turn.
   maxMessagesBeforeLoop: 20,
   preserveContextOnLoop: true,
   maxToolCallsPerStep: 5,
-  toolNames: [
-    "governing-hire-planner",
-    "governing-ratify-plan",
-    "governing-hire-contractor",
-    "governing-dispatch-execution",
-    "governing-route-to-foreman",
-    "governing-respond-directly",
-    "governing-revise-plan",
-    "governing-archive-plan",
-    "governing-pause-execution",
-    "governing-resume-execution",
-    "governing-read-plan-detail",
-    "governing-read-pending-issues",
-    "governing-convene-court",
-  ],
-  async buildSystemPrompt(ctx) {
-    // username intentionally NOT destructured. The Ruler's cognition
-    // is uniform across all scopes — every instruction comes from
-    // "above" regardless of whether that's a user, a parent Ruler, or
-    // a future authority. Leaking username into the prompt breaks
-    // that uniformity; the translation layer handles user-facing
-    // rendering separately.
-    const { currentNodeId, rootId } = ctx;
-    const e = ctx.enrichedContext || {};
-    const scopeNodeId = currentNodeId || rootId;
 
-    let snapshotBlock = "";
-    try {
-      snapshotBlock = await renderRulerSnapshot(scopeNodeId);
-    } catch {
-      // Never let snapshot failure prevent the Ruler from running.
-    }
+  // The Ruler's voice. The assembler prepends identity + preloaded see
+  // + capability list, appends [Time]. The body is the load-bearing
+  // text about coherence and responsibility.
+  prompt: () => RULER_PROMPT_BODY,
+};
 
-    // Ancestor governance context — surfaces parent-Ruler contracts
-    // and the sub-Ruler lineage block when this Ruler is a sub-Ruler.
-    const ancestorBlocks = [
-      e.governingLineage,
-      e.governingParentPlan,
-      e.governingContracts,
-    ].filter(Boolean).join("\n\n");
-
-    const prelude = ancestorBlocks ? `${ancestorBlocks}\n\n` : "";
-    const stateBlock = snapshotBlock ? `${snapshotBlock}\n\n` : "";
-
-    return prelude + stateBlock + RULER_PROMPT_BODY.trim();
-  },
-
-  // Summon function — kernel scheduler invokes this on inbox arrival.
-  async summon(message, ctx) {
-    const startMs = Date.now();
-    const scopeNodeId = ctx.nodeId || ctx.resolved?.nodeId;
-    if (!scopeNodeId) {
-      log.warn("Ruler", "summon without scopeNodeId; returning empty");
-      return { content: "Internal error: no scope." };
-    }
-
-    // Detect fresh turn vs reply from sub-being. Informational for
-    // logging; downstream behavior is the same — read snapshot,
-    // decide, act. Replies carry inReplyTo.
-    const isReply = !!message.inReplyTo;
-    const senderHint = message.from || "(unknown sender)";
-    log.info("Ruler",
-      `👑 summons at ${String(scopeNodeId).slice(0, 8)} ` +
-      `(role=${ctx.activeRole}, ${isReply ? `reply from ${senderHint}` : `from ${senderHint}`}, ` +
-      `correlation=${message.correlation?.slice(0, 8) || "?"})`);
-
-    const messageBody = isReply
-      ? buildReplyContextMessage(message)
-      : String(message.content || "");
-
-    let result;
-    try {
-      result = await runChat({
-        being:    ctx.toBeing,
-        envelope: { ...message, content: messageBody },
-        role:     rulerRole,
-        signal:   ctx.signal,
-      });
-    } catch (err) {
-      if (ctx.signal?.aborted) {
-        log.info("Ruler", `summon aborted (${err.message})`);
-        return null;
-      }
-      log.warn("Ruler", `LLM call failed: ${err.message}`);
-      return { content: `Ruler error: ${err.message}` };
-    }
-
-    const durationMs = Date.now() - startMs;
-    const answer = result?.answer || "(no response)";
-    log.info("Ruler",
-      `👑 summons complete at ${String(scopeNodeId).slice(0, 8)} in ${durationMs}ms`);
-
-    // Emit reply-SUMMON to the chain-initial caller on reply-wakes
-    // (the asker who opened this Ruler's chain — user-being at
-    // entry-scope, parent Ruler at sub-scope). Approval gates and
-    // status updates use the same primitive; content shape
-    // distinguishes them. See memory `card-is-a-summon`.
-    if (isReply) {
-      const rulerBeingId = String(ctx.toBeing?._id || "");
-      const rootCorrelation = message.rootCorrelation || message.correlation;
-      const askerStance = await findChainInitialCaller(
-        scopeNodeId,
-        rulerBeingId,
-        rootCorrelation,
-      );
-      if (askerStance) {
-        await emitReplyToStance({
-          askerStance,
-          fromNodeId:      scopeNodeId,
-          fromBeing:       ctx.toBeing,
-          fromRoleName:    ctx.toBeing?.name || "ruler",
-          exitText:        answer,
-          rootCorrelation,
-        });
-      } else {
-        log.warn("Ruler",
-          `no chain-initial caller resolvable at ${String(scopeNodeId).slice(0, 8)} ` +
-          `(root=${rootCorrelation?.slice(0, 8) || "?"}); reply dropped`);
-      }
-    }
-
-    return {
-      content:  answer,
-      intent:   "chat",
-      summonId: result?.summonId || null,
-    };
-  },
-});
-
-// ────────────────────────────────────────────────────────────────
-// Helpers
-// ────────────────────────────────────────────────────────────────
-
-// Build a synthesis-friendly message body for a reply-summon. The
-// Ruler's LLM reads this alongside the snapshot (which already
-// reflects the completed work). The body's job is to name what just
-// finished so the Ruler frames synthesis as "continuing in-progress
-// work" rather than "answering a fresh question."
-function buildReplyContextMessage(message) {
-  const sender = message.from || "(sub-being)";
-  const exitText = typeof message.content === "string"
-    ? message.content
-    : JSON.stringify(message.content);
-  const intent = message.intent || "chat";
-
-  return [
-    `[wakeup] ${sender} replied with intent="${intent}":`,
-    "",
-    exitText,
-    "",
-    `Read your snapshot for the current state and decide the next step.`,
-  ].join("\n");
-}
-
-// renderRulerSnapshot is re-exported for downstream role files that
-// want the same snapshot view.
-export { renderRulerSnapshot };
+// renderRulerSnapshot is re-exported for downstream callers (the
+// seeResolvers registration, dashboards, anyone wanting the same view).
+export { renderRulerSnapshot } from "../state/rulerSnapshot.js";

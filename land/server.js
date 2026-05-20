@@ -7,17 +7,17 @@ import mongoose from "mongoose";
 import registerURLRoutes from "./transports/http/handler.js";
 import { initWebSocketServer } from "./transports/ws/websocket.js";
 import { initIBPHttp, initIBPWS } from "./protocols/ibp/index.js";
-import { sendOk, sendError, ERR } from "./seed/core/protocol.js";
+import { sendOk, sendError, ERR } from "./seed/ibp/protocol.js";
 import { getExtension } from "./extensions/loader.js";
 import securityHeaders from "./transports/http/middleware/securityHeaders.js";
 import { onListen } from "./startup.js";
-import { getLandUrl } from "./protocols/ibp/canopy/identity.js";
-import log from "./seed/core/log.js";
+import { getLandUrl } from "./protocols/canopy/identity.js";
+import log from "./seed/system/log.js";
 
 function notFoundPage(req, res, message = "This page doesn't exist or may have been moved.") {
   const fn = getExtension("html-rendering")?.exports?.notFoundPage;
   if (fn) return fn(req, res, message);
-  return sendError(res, 404, ERR.NODE_NOT_FOUND, message);
+  return sendError(res, 404, ERR.SPACE_NOT_FOUND, message);
 }
 
 // Raw-body webhook slot. Extensions that need raw body (Stripe signature verification)
@@ -145,7 +145,7 @@ async function shutdown(signal) {
 
   // Close all MCP clients (these hold connections open)
   try {
-    const { mcpClients, closeMCPClient } = await import("./seed/llm/mcpClient.js");
+    const { mcpClients, closeMCPClient } = await import("./seed/cognition/mcpClient.js");
     for (const [cacheKey] of mcpClients) {
       try { closeMCPClient(cacheKey); } catch {}
     }

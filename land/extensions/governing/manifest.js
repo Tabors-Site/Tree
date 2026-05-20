@@ -85,7 +85,7 @@ export default {
 
   needs: {
     services: ["hooks", "metadata", "tree"],
-    models: ["Node"],
+    models: ["Space"],
     extensions: [],
   },
 

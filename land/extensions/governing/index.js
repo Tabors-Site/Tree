@@ -14,7 +14,7 @@
 // Pass 1; the LLM-driven retry-vs-escalate / court-convening logic
 // lands in Pass 2.
 
-import log from "../../seed/core/log.js";
+import log from "../../seed/system/log.js";
 // Single-source role specs. Each role file carries BOTH dispatch
 // (summon, honoredIntents, …) AND LLM behavior (buildSystemPrompt,
 // toolNames, permissions, …) in one frozen spec. Roles are the unit
@@ -25,7 +25,7 @@ import { plannerRole } from "./roles/plannerRole.js";
 import { contractorRole } from "./roles/contractorRole.js";
 import { foremanRole } from "./roles/foremanRole.js";
 import { allWorkerRoles } from "./roles/workerRoles.js";
-import { registerRole } from "../../seed/roles/registry.js";
+import { registerRole } from "../../seed/being/roles/registry.js";
 import {
   WORKER_TYPES,
   DEFAULT_WORKER_TYPE,
@@ -73,7 +73,7 @@ import { promoteToRuler, readRole, isRuler, findRulerScope, walkRulers, PROMOTED
 import { buildDashboardData, isTreeGoverned } from "./state/dashboardData.js";
 import { findLCA, ancestorChain, isAncestorOrSelf, validateScopeAuthority } from "./state/lca.js";
 import { setContracts, readContracts, readScopedContracts, readApprovalsAtRuler, readActiveContractsEmission } from "./state/contracts.js";
-import { ensureContractsNode } from "./state/contractsNode.js";
+import { ensureContractsNode } from "./state/contractsSpace.js";
 import {
   ensurePlanAtScope,
   createPlanNode,
@@ -84,7 +84,7 @@ import {
   findGoverningPlanChain,
   DEFAULT_BUDGET,
   NS as PLAN_NS,
-} from "./state/planNode.js";
+} from "./state/planSpace.js";
 import {
   appendPlanApproval,
   readPlanApprovalsAtRuler,
@@ -104,7 +104,7 @@ import {
 import {
   ensureExecutionNode,
   findExecutionNode,
-} from "./state/executionNode.js";
+} from "./state/executionSpace.js";
 import {
   appendExecutionRecord,
   appendExecutionApproval,
@@ -221,8 +221,16 @@ export {
 };
 
 export async function init(core) {
-  // Each role spec carries dispatch + LLM behavior in one frozen
-  // object. runChat consumes role specs directly; no mode registry.
+  // See-resolvers: register before role specs are exercised so the
+  // prompt assembler can resolve names in role.see. Idempotent and
+  // safe to call once per boot.
+  const { registerGoverningSeeResolvers } = await import("./seeResolvers.js");
+  registerGoverningSeeResolvers();
+
+  // Each role spec declares what it IS (capabilities, prompt body,
+  // replyTo); the registry derives permissions, defaults respondMode
+  // and triggerOn, and wraps the default summon dispatcher when no
+  // custom summon is provided.
   registerRole("ruler",      rulerRole,      "governing");
   registerRole("planner",    plannerRole,    "governing");
   registerRole("contractor", contractorRole, "governing");
@@ -231,7 +239,7 @@ export async function init(core) {
     registerRole(spec.name, role, "governing");
   }
   log.verbose("Governing",
-    "Registered roles (with mode-mirror): ruler, planner, contractor, foreman, " +
+    "Registered roles: ruler, planner, contractor, foreman, " +
     "worker-{build,refine,review,integrate}");
 
   // Tools: emission tools (governing-emit-plan, governing-emit-contracts),
@@ -289,9 +297,9 @@ export async function init(core) {
       treeos.exports.registerSlot(
         "node-detail-sections",
         "governing-plan",
-        ({ node, nodeId, qs }) => {
+        ({ node, spaceId, qs }) => {
           if (node?.type !== "plan") return "";
-          const id = `plan-panel-${String(nodeId).slice(0, 8)}`;
+          const id = `plan-panel-${String(spaceId).slice(0, 8)}`;
           return `
             <div id="${id}" data-slot="node-detail-sections" data-ext="governing">
               <div style="padding:12px;color:rgba(255,255,255,0.4);font-size:11px;">Loading plan…</div>
@@ -299,7 +307,7 @@ export async function init(core) {
             <script>
               (async function() {
                 try {
-                  var res = await fetch("/api/v1/governing/plan/${nodeId}/panel.html${qs || ""}", { credentials: "include" });
+                  var res = await fetch("/api/v1/governing/plan/${spaceId}/panel.html${qs || ""}", { credentials: "include" });
                   if (res.ok) {
                     var html = await res.text();
                     var el = document.getElementById("${id}");
@@ -346,7 +354,7 @@ export async function init(core) {
 
     async function runGoverningBackfill() {
       try {
-        const Node = (await import("../../seed/models/node.js")).default;
+        const Space = (await import("../../seed/models/space.js")).default;
 
         // Backfill being homes on the four kinds of governing structural
         // nodes: Ruler, plan trio (Planner), contracts trio (Contractor),
@@ -399,10 +407,10 @@ export async function init(core) {
             } } }),
           },
         ];
-        const { createBeingWithHome } = await import("../../seed/core/identity.js");
+        const { createBeingWithHome } = await import("../../seed/being/identity.js");
         const counts = {};
         for (const { nodeType, beingRole, permissions } of BACKFILLS) {
-          const nodes = await Node.find({ "metadata.governing.role": nodeType })
+          const nodes = await Space.find({ "metadata.governing.role": nodeType })
             .select("_id metadata")
             .lean();
           let written = 0;
@@ -414,7 +422,7 @@ export async function init(core) {
             const permsPresent = !!existingPerms?.summon?.[`@${beingRole}*`];
             if (beingPresent && permsPresent) continue;     // fully migrated
             const gov = meta instanceof Map ? meta.get("governing") : meta?.governing;
-            const fresh = await Node.findById(n._id);
+            const fresh = await Space.findById(n._id);
             if (!fresh) continue;
             // The node already exists (this is a backfill). Place the
             // being via the unified primitive if missing, then stamp
@@ -422,9 +430,9 @@ export async function init(core) {
             // so partial-migrated nodes get topped up.
             if (!beingPresent) {
               await createBeingWithHome({
-                operatingMode: "ai",
+                operatingMode: "llm",
                 role:          beingRole,
-                homeNodeId:    String(fresh._id),
+                homeSpace:     String(fresh._id),
               });
               // Phase 3 migration: verb-surface merge into beings ns.
               // Backfill runs at boot with no caller identity; pass
@@ -471,10 +479,10 @@ export async function init(core) {
 
     core.hooks.register(
       "enrichContext",
-      async ({ context, nodeId }) => {
-        if (!context || !nodeId) return;
+      async ({ context, spaceId }) => {
+        if (!context || !spaceId) return;
         try {
-          const all = await readContracts(nodeId);
+          const all = await readContracts(spaceId);
           if (Array.isArray(all) && all.length > 0) {
             context.governingContracts = formatGoverningContracts(all);
           }
@@ -482,7 +490,7 @@ export async function init(core) {
           log.debug("Governing", `enrichContext contracts skipped: ${err.message}`);
         }
         try {
-          const lineage = await readLineage(nodeId);
+          const lineage = await readLineage(spaceId);
           if (lineage?.parentRulerId) {
             const parts = [
               "## SUB-RULER LINEAGE",
@@ -506,14 +514,14 @@ export async function init(core) {
           log.debug("Governing", `enrichContext lineage skipped: ${err.message}`);
         }
         try {
-          const lineage = await readLineage(nodeId);
+          const lineage = await readLineage(spaceId);
           if (lineage?.parentRulerId && lineage?.parentPlanEmissionId) {
-            const NodeModel = (await import("../../seed/models/node.js")).default;
-            const emissionNode = await NodeModel.findById(lineage.parentPlanEmissionId)
+            const NodeModel = (await import("../../seed/models/space.js")).default;
+            const emissionSpace = await NodeModel.findById(lineage.parentPlanEmissionId)
               .select("_id metadata").lean();
-            const meta = emissionNode?.metadata instanceof Map
-              ? emissionNode.metadata.get("governing")
-              : emissionNode?.metadata?.governing;
+            const meta = emissionSpace?.metadata instanceof Map
+              ? emissionSpace.metadata.get("governing")
+              : emissionSpace?.metadata?.governing;
             const emission = meta?.emission;
             if (emission) {
               context.governingParentPlan = formatParentPlanEmission(emission, lineage);
@@ -537,7 +545,7 @@ export async function init(core) {
         // the workspace owner names the shape of its production
         // work. The Planner reads these and adapts.
         try {
-          const ws = await findActiveWorkspaceAtScope(nodeId);
+          const ws = await findActiveWorkspaceAtScope(spaceId);
           if (ws) {
             const registrations = (typeof listWorkerTypeRegistrations === "function"
               ? listWorkerTypeRegistrations()
@@ -615,15 +623,15 @@ export async function init(core) {
   // for that root. The dashboard's client-side bootstrap refetches
   // the page fragment in response.
   //
-  // Resolve-rootId helper: walk up from a nodeId to the tree root by
+  // Resolve-rootId helper: walk up from a spaceId to the tree root by
   // following `.parent` chains. Returns null on degenerate trees.
   // Cached per turn would be a future optimization; for now the
   // ~5-step walk per event is cheap enough.
-  async function resolveRootForNode(nodeId) {
-    if (!nodeId) return null;
+  async function resolveRootForNode(spaceId) {
+    if (!spaceId) return null;
     try {
-      const NodeModel = (await import("../../seed/models/node.js")).default;
-      let cursor = String(nodeId);
+      const NodeModel = (await import("../../seed/models/space.js")).default;
+      let cursor = String(spaceId);
       const visited = new Set();
       for (let i = 0; i < 64; i++) {
         if (visited.has(cursor)) return null;
@@ -665,7 +673,7 @@ export async function init(core) {
         try {
           // Payload field varies per hook; try the common ones.
           const candidateNodeId =
-            payload?.nodeId ||
+            payload?.spaceId ||
             payload?.rulerNodeId ||
             payload?.recordNodeId ||
             payload?.scopeNodeId ||
@@ -744,9 +752,9 @@ export async function init(core) {
   // directly; for now both paths reach the same handler (appendFlag).
   // ────────────────────────────────────────────────────────────────────
   if (typeof core.do?.registerOperation === "function") {
-    // Helper: extract a nodeId from whatever target shape arrived.
+    // Helper: extract a spaceId from whatever target shape arrived.
     const idOf = (t) =>
-      (t && typeof t === "object" && (t._id || t.nodeId)) || t || null;
+      (t && typeof t === "object" && (t._id || t.spaceId)) || t || null;
 
     // Operation names are bare. The loader's scoped registerOperation
     // wrapper auto-prepends "governing:" and stamps ownerExtension. The

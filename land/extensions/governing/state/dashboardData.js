@@ -15,8 +15,8 @@
 // is single-level; the dashboard wants the recursive tree on one
 // page).
 
-import log from "../../../seed/core/log.js";
-import Node from "../../../seed/models/node.js";
+import log from "../../../seed/system/log.js";
+import Space from "../../../seed/models/space.js";
 import { walkRulers, readRole } from "./role.js";
 import { buildRulerSnapshot } from "./rulerSnapshot.js";
 import {
@@ -69,8 +69,8 @@ export async function buildDashboardData(rootId) {
   // empty state rather than crashing.
   let treeName = null;
   try {
-    const rootNode = await Node.findById(rootId).select("_id name").lean();
-    treeName = rootNode?.name || null;
+    const rootSpace = await Space.findById(rootId).select("_id name").lean();
+    treeName = rootSpace?.name || null;
   } catch (err) {
     log.debug("Governing/Dashboard", `root read skipped: ${err.message}`);
   }

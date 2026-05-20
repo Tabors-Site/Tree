@@ -6,14 +6,14 @@ Read [being-summoned.md](being-summoned.md) and [message-envelope.md](message-en
 
 ## Where the inbox lives
 
-The inbox is per-being-per-position metadata, stored under the well-known namespace `metadata.inbox` on the position's node.
+The inbox is per-being-per-position metadata, stored under the well-known namespace `metadata.inbox` on the position's space.
 
 Although `metadata` is the same Map that extensions use, the inbox is **not an extension namespace.** The kernel knows about `metadata.inbox` the same way it knows about `metadata.modes` and `metadata.tools`. It is part of the protocol's commitment, not optional.
 
-A node may host multiple beings (one per being invocable at that position). Each being gets its own inbox bucket:
+A space may host multiple beings (one per being invocable at that position). Each being gets its own inbox bucket:
 
 ```
-node.metadata.inbox = {
+space.metadata.inbox = {
   "ruler": [<message>, <message>, ...],
   "worker": [<message>, ...],
   "archivist": [<message>, ...]
@@ -52,14 +52,16 @@ Each entry is a complete message envelope plus protocol-side bookkeeping:
 The kernel exposes three operations for inbox access. Extensions and beings use these; direct Map manipulation is not supported.
 
 ```
-appendToInbox(nodeId, being, message) -> { messageId }
-readInbox(nodeId, being, options?) -> [<entry>, ...]
-markInboxConsumed(nodeId, being, correlationIds, responseId?) -> void
+appendToInbox(spaceId, being, message) -> { messageId }
+readInbox(spaceId, being, options?) -> [<entry>, ...]
+markInboxConsumed(spaceId, being, correlationIds, responseId?) -> void
 ```
 
 ### appendToInbox
 
 Atomic. Writes one message into the being's bucket and fires the inbox-write event the kernel uses to drive summoning. Used by the SUMMON handler and by any system code that wants to deliver a message (cascade-deliver, completion hooks, scheduler).
+
+
 
 ### readInbox
 
@@ -150,7 +152,7 @@ client -> ibp:summon { stance: ..., message: { intent: "chat", ... } }
 client <- ack { response: { ...response message... } }
 ```
 
-Use sync for beings that respond fast: Workers producing direct artifacts, Oracles answering queries, simple chat beings.
+Use sync for beings that respond fast: Workers producing direct matters, Oracles answering queries, simple chat beings.
 
 ### async
 
@@ -243,7 +245,7 @@ This makes the inbox visible in the portal UI. A chat thread is just a rendered 
 - **Not a queue with workers.** It is a record. The being is summoned to read it, not a worker picking up jobs.
 - **Not a message bus.** Messages are delivered to specific positions, not broadcast.
 - **Not transactional.** Append is atomic; consumption is the being's responsibility; there is no rollback.
-- **Not encrypted at rest by default.** The inbox is part of the node record and lives under the same access controls. Extensions like sealed-transport may layer encryption on top.
+- **Not encrypted at rest by default.** The inbox is part of the space record and lives under the same access controls. Extensions like sealed-transport may layer encryption on top.
 
 ## See also
 

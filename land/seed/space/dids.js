@@ -1,122 +1,163 @@
 // TreeOS Seed . AGPL-3.0 . https://treeos.ai . Tabor Holly
-// Did read and write. The audit trail of IBP DO emissions.
 //
-// Replaces the older contributions.js. `logDid` is now `logDid`;
-// hook `beforeContribution` is now `beforeDid`. The `wasAi` field is gone —
-// derive from `Being.findById(beingId).operatingMode === "ai"` when needed.
+// Did read and write. The audit trail of IBP verb emissions.
+//
+// One row per audited action: a being did something. Generic over the
+// operation registry — `verb` is do or be; `action` is the operation
+// or sub-event name; `target` discriminates space / matter / being /
+// land / stance; `params` and `result` carry input and output.
+//
+// Tracked by default. Operations opt out via `spec.skipAudit`; the
+// dispatcher also accepts `opts.skipAudit` for kernel-trusted batches.
 
-import log from "../core/log.js";
+import log from "../system/log.js";
 import Did from "../models/did.js";
-import { hooks } from "../core/hooks.js";
-import { ERR, ProtocolError } from "../core/protocol.js";
+import { hooks } from "../system/hooks.js";
+import { ERR, ProtocolError } from "../ibp/protocol.js";
 import { getLandConfigValue } from "../landConfig.js";
-import { resolveTreeAccess } from "./treeAccess.js";
+import { resolveSpaceAccess } from "./spaceFetch.js";
 
 // ─────────────────────────────────────────────────────────────────────────
-// WRITE (audit trail recording)
+// WRITE
 // ─────────────────────────────────────────────────────────────────────────
 
-function MAX_EXTENSION_DATA_BYTES() { return Math.max(1024, Math.min(Number(getLandConfigValue("metadataNamespaceMaxBytes")) || 524288, 2 * 1024 * 1024)); }
+function MAX_PAYLOAD_BYTES() {
+  const raw = Number(getLandConfigValue("metadataNamespaceMaxBytes")) || 524288;
+  return Math.max(1024, Math.min(raw, 2 * 1024 * 1024));
+}
 const MAX_ACTION_LENGTH = 100;
-const DANGEROUS_KEYS = new Set(["__proto__", "constructor", "prototype"]);
+const VALID_VERBS = new Set(["do", "be"]);
+const VALID_TARGET_KINDS = new Set(["space", "matter", "being", "land", "stance"]);
 
 /**
- * Log a Did record (audit trail of a DO verb emission).
- * Core action shapes are typed fields. Everything else goes to extensionData.
- * The `beforeDid` hook lets extensions modify or cancel.
+ * Log a Did record.
+ *
+ * @param {object} params
+ * @param {string} params.beingId   actor (SEED_BEING for scaffold flows)
+ * @param {string} params.action    operation or sub-event name
+ * @param {string} [params.verb="do"]   "do" | "be"
+ * @param {{kind:string,id:string}|null} [params.target]  what was acted on
+ * @param {*} [params.params]       input payload (any JSON; clipped on cap)
+ * @param {*} [params.result]       output payload (any JSON; clipped on cap)
+ * @param {string|null} [params.summonId]   correlation
+ * @param {string|null} [params.sessionId]  correlation
+ * @param {string|null} [params.homeLand]   federation provenance
+ * @param {boolean} [params.wasRemote=false] federation provenance
+ *
+ * The `beforeDid` hook receives a mutable view of these fields and may
+ * cancel the write or enrich the payload before insert.
  */
-export async function logDid(params) {
+export async function logDid(input) {
+  if (!input || typeof input !== "object") {
+    throw new Error("logDid requires a params object");
+  }
   const {
-    beingId, nodeId, action,
+    beingId,
+    verb = "do",
+    action,
+    target = null,
+    params = null,
+    result = null,
     summonId = null,
     sessionId = null,
-    statusEdited, editName, editType, artifactAction,
-    updateChild, updateParent, branchLifecycle,
-    wasRemote = false, homeLand = null,
-    ...extensionRest
-  } = params;
+    homeLand = null,
+    wasRemote = false,
+  } = input;
 
-  if (!beingId || !nodeId || !action) {
-    throw new Error("logDid requires beingId, nodeId, and action");
+  if (!beingId || !action) {
+    throw new Error("logDid requires beingId and action");
   }
   if (typeof action !== "string" || action.length > MAX_ACTION_LENGTH) {
     throw new Error(`logDid: action must be a string under ${MAX_ACTION_LENGTH} chars`);
   }
+  if (!VALID_VERBS.has(verb)) {
+    throw new Error(`logDid: verb must be one of ${[...VALID_VERBS].join("|")}`);
+  }
 
-  // beforeDid hook: extensions can modify or cancel
-  const hookData = { nodeId, action, beingId, ...extensionRest };
+  let normalizedTarget = null;
+  if (target && typeof target === "object") {
+    if (target.kind && !VALID_TARGET_KINDS.has(target.kind)) {
+      throw new Error(`logDid: target.kind must be one of ${[...VALID_TARGET_KINDS].join("|")}`);
+    }
+    if (target.kind || target.id) {
+      normalizedTarget = {
+        kind: target.kind || null,
+        id:   target.id != null ? String(target.id) : null,
+      };
+    }
+  }
+
+  // beforeDid hook . extensions can modify or cancel. The hook sees a
+  // mutable view; only `params` and `result` are conventionally mutated
+  // for enrichment. Cancellations short-circuit the write.
+  const hookData = {
+    beingId, verb, action,
+    target:   normalizedTarget,
+    params, result,
+    summonId, sessionId, homeLand, wasRemote,
+  };
   const hookResult = await hooks.run("beforeDid", hookData);
   if (hookResult.cancelled) {
     const code = hookResult.timedOut ? ERR.HOOK_TIMEOUT : ERR.HOOK_CANCELLED;
     throw new ProtocolError(500, code, `Did cancelled: ${hookResult.reason || "extension"}`);
   }
 
-  // Build extensionData from rest params + hook additions
-  const extData = {};
-  let hasExtData = false;
-  const coreKeys = new Set(["nodeId", "action", "beingId"]);
+  const cappedParams = capPayload(hookData.params, "params");
+  const cappedResult = capPayload(hookData.result, "result");
+  const truncated    = cappedParams.truncated || cappedResult.truncated;
 
-  for (const [k, v] of Object.entries(extensionRest)) {
-    if (v == null || DANGEROUS_KEYS.has(k)) continue;
-    extData[k] = v;
-    hasExtData = true;
-  }
-  for (const [k, v] of Object.entries(hookData)) {
-    if (coreKeys.has(k) || v == null || DANGEROUS_KEYS.has(k)) continue;
-    if (!(k in extData)) {
-      extData[k] = v;
-      hasExtData = true;
-    }
-  }
-
-  const extensionData = hasExtData ? extData : undefined;
-
-  // Size guard (catches circular refs too)
-  if (extensionData) {
-    let size;
-    try {
-      size = Buffer.byteLength(JSON.stringify(extensionData), "utf8");
-    } catch {
-      throw new Error("Did extensionData is not serializable");
-    }
-    if (size > MAX_EXTENSION_DATA_BYTES()) {
-      throw new Error(`Did extensionData exceeds ${MAX_EXTENSION_DATA_BYTES() / 1024}KB limit (${Math.round(size / 1024)}KB)`);
-    }
-  }
-
-  // Build doc with only defined fields (avoids storing nulls in MongoDB)
-  const doc = { beingId, nodeId, action, date: new Date() };
-  if (summonId) doc.summonId = summonId;
-  if (sessionId) doc.sessionId = sessionId;
-  if (statusEdited) doc.statusEdited = statusEdited;
-  if (editName) doc.editName = editName;
-  if (editType) doc.editType = editType;
-  if (artifactAction) doc.artifactAction = artifactAction;
-  if (updateChild) doc.updateChild = updateChild;
-  if (updateParent) doc.updateParent = updateParent;
-  if (branchLifecycle) doc.branchLifecycle = branchLifecycle;
-  if (wasRemote) doc.wasRemote = true;
-  if (homeLand) doc.homeLand = homeLand;
-  if (extensionData) doc.extensionData = extensionData;
+  const doc = {
+    beingId,
+    verb,
+    action,
+    target:    hookData.target || normalizedTarget,
+    params:    cappedParams.value,
+    result:    cappedResult.value,
+    truncated,
+    summonId,
+    sessionId,
+    homeLand:  hookData.homeLand ?? homeLand,
+    wasRemote: Boolean(hookData.wasRemote ?? wasRemote),
+    date:      new Date(),
+  };
 
   try {
     await Did.create(doc);
   } catch (err) {
-    log.error("DB", `Did save failed (${action} on ${nodeId}): ${err.message}`);
+    log.error("DB", `Did save failed (${action}): ${err.message}`);
     throw new Error("Failed to log Did");
   }
 }
 
+function capPayload(value, label) {
+  if (value == null) return { value: null, truncated: false };
+  let serialized;
+  try {
+    serialized = JSON.stringify(value);
+  } catch {
+    return { value: { _unserializable: true, _label: label }, truncated: true };
+  }
+  const max = MAX_PAYLOAD_BYTES();
+  if (Buffer.byteLength(serialized, "utf8") <= max) {
+    return { value, truncated: false };
+  }
+  return {
+    value: {
+      _truncated: true,
+      _bytes:     Buffer.byteLength(serialized, "utf8"),
+      preview:    serialized.slice(0, Math.floor(max * 0.9)),
+    },
+    truncated: true,
+  };
+}
+
 // ─────────────────────────────────────────────────────────────────────────
-// READ (audit trail queries)
+// READ
 // ─────────────────────────────────────────────────────────────────────────
 
 function MAX_QUERY_LIMIT() { return Math.max(1, Math.min(Number(getLandConfigValue("didQueryLimit")) || 5000, 50000)); }
 const MAX_DATE_SPAN_MS = 365 * 24 * 60 * 60 * 1000;
 
-/**
- * Validate and clamp a date range. Returns the query filter object or {}.
- */
 function buildDateFilter(startDate, endDate) {
   const filter = {};
   const start = startDate ? Date.parse(startDate) : NaN;
@@ -135,25 +176,28 @@ function buildDateFilter(startDate, endDate) {
 }
 
 /**
- * Get the Did log for a node.
- * If actorId is provided, verifies the caller has access to the node's tree.
- * Kernel-internal callers (hooks, migrations) can omit actorId.
+ * Get the Did log for a space.
+ * If beingId is provided, verifies the caller has access to the space's tree.
+ * Kernel-internal callers (hooks, migrations) can omit beingId.
  */
-export async function getDids({ nodeId, limit, offset, startDate, endDate, actorId }) {
-  if (!nodeId) throw new Error("Missing required parameter: nodeId");
+export async function getDids({ spaceId, limit, offset, startDate, endDate, beingId }) {
+  if (!spaceId) throw new Error("Missing required parameter: spaceId");
 
-  if (actorId) {
-    const access = await resolveTreeAccess(nodeId, actorId);
-    if (!access.ok) throw new ProtocolError(404, ERR.NODE_NOT_FOUND, "Node not found");
+  if (beingId) {
+    const access = await resolveSpaceAccess(spaceId, beingId);
+    if (!access.ok) throw new ProtocolError(404, ERR.SPACE_NOT_FOUND, "Space not found");
   }
 
-  const query = { nodeId, ...buildDateFilter(startDate, endDate) };
+  const query = {
+    "target.kind": "space",
+    "target.id":   String(spaceId),
+    ...buildDateFilter(startDate, endDate),
+  };
   const safeLimit = Math.min(Math.max(Number(limit) || 100, 1), MAX_QUERY_LIMIT());
   const safeOffset = Math.max(0, Number(offset) || 0);
 
   const dids = await Did.find(query)
     .populate("beingId", "name")
-    .populate("nodeId", "name")
     .sort({ date: -1 })
     .skip(safeOffset)
     .limit(safeLimit)
@@ -173,7 +217,6 @@ export async function getDidsByBeing(beingId, limit, startDate, endDate) {
 
   const dids = await Did.find(query)
     .populate("beingId", "name")
-    .populate("nodeId", "name")
     .sort({ date: -1 })
     .limit(safeLimit)
     .lean();

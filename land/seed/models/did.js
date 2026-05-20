@@ -1,75 +1,77 @@
 // TreeOS Seed . AGPL-3.0 . https://treeos.ai . Tabor Holly
 //
-// Did — the persistent log of IBP DO emissions. Past tense: a Did is a thing
-// that was done.
+// Did . the persistent log of IBP verb emissions. Past tense: a Did
+// is a thing that was done.
 //
-// One row per executed action: a being did something at a position. The
-// schema mirrors the DO envelope. `beingId` is the actor (envelope identity),
-// `nodeId` is the target position, `action` is the action name, and the
-// sub-shapes (statusEdited, editName, editType, artifactAction, updateChild,
-// updateParent, branchLifecycle) carry typed payloads for kernel-named
-// actions. Extension-defined actions stash their payload in `extensionData`.
+// One row per audited action. Generic over the operation registry:
+// `verb` names which verb emitted the row (do | be); `action` carries
+// the operation name; `target` names what was acted on (space, matter,
+// being, land, stance). Inputs land in `params`, outputs in `result`.
 //
-// Pairs with Summon ↔ SUMMON: SUMMON emits Summon records that bind beingIn/beingOut;
-// DO emits Did records that record who-did-what-where. Together they make
-// the kernel-recorded activity surface queryable end to end.
+// Tracked by default for every DO and BE call. Operations opt out via
+// `spec.skipAudit: true`; in-process callers can pass `opts.skipAudit`
+// for kernel-trusted batches.
 //
-// Replaces the older Contribution model. `wasAi` is gone — derive from
-// `Being.findById(beingId).operatingMode === "ai"` when needed.
+// Paired with Summon: Summon records bind beingIn / beingOut (the
+// wake-and-act); Did records record who-did-what-where. Together they
+// make every kernel-recorded action queryable end to end.
 
 import mongoose from "mongoose";
 import { v4 as uuidv4 } from "uuid";
 
 const DidSchema = new mongoose.Schema({
-  _id: { type: String, default: uuidv4 },
-  beingId: { type: String, ref: "Being", required: true },
-  nodeId: { type: String, ref: "Node" },
-  summonId: { type: String, ref: "Summon" },
-  sessionId: { type: String, index: true },
+  _id:  { type: String, default: uuidv4 },
+  date: { type: Date,   default: Date.now },
 
-  // Action type (DO action name)
+  // Actor. Always required. SEED_BEING is the sentinel for pre-being
+  // scaffold flows (server boot, migrations, first-time-boot writes).
+  beingId: { type: String, ref: "Being", required: true },
+
+  // Which verb emitted this row. DO covers operations; BE covers
+  // identity actions (register / claim / release / switch and any
+  // be-being's honoredOperations). SEE writes no Dids by design
+  // (observation is not doing).
+  verb:   { type: String, enum: ["do", "be"], default: "do", index: true },
+
+  // The operation or sub-event name. Operations register a `didAction`
+  // (defaults to the operation name); helpers can write their own
+  // kebab-case event names ("edit-name", "child-added", "branch-retired").
   action: { type: String, required: true },
 
-  // Date
-  date: { type: Date, default: Date.now },
+  // What was acted on. `kind` discriminates the substrate primitive;
+  // `id` carries its identifier. May be absent for actions that have no
+  // single positional target (multi-being ops, land-level config).
+  target: {
+    kind: { type: String, enum: ["space", "matter", "being", "land", "stance"] },
+    id:   { type: String },
+    _id:  false,
+  },
 
-  // ── Core action data (protocol-level operations, only the relevant one is set) ──
-  statusEdited: { type: String },
-  editName: { type: { oldName: String, newName: String, _id: false } },
-  editType: { type: { oldType: String, newType: String, _id: false } },
-  artifactAction: { type: { action: { type: String, enum: ["add", "remove", "edit"] }, artifactId: { type: String, ref: "Artifact" }, content: String, _id: false } },
-  updateChild: { type: { action: { type: String, enum: ["added", "removed"] }, childId: { type: String, ref: "Node" }, _id: false } },
-  updateParent: { type: { oldParentId: { type: String, ref: "Node" }, newParentId: { type: String, ref: "Node" }, _id: false } },
-  branchLifecycle: { type: { action: { type: String, enum: ["retired", "revived", "revivedAsRoot"] }, fromParentId: { type: String, ref: "Node" }, toParentId: { type: String, ref: "Node" }, _id: false } },
+  // Free-form input and output payloads. Capped at logDid write time
+  // (see seed/space/dids.js); oversized values are clipped and the
+  // `truncated` flag is set.
+  params:    { type: mongoose.Schema.Types.Mixed, default: null },
+  result:    { type: mongoose.Schema.Types.Mixed, default: null },
+  truncated: { type: Boolean, default: false },
 
-  // Tool call invocation — one Did per MCP tool the responder ran during
-  // a Summon. action="tool-call". args/result capped (see appendToolCall).
-  toolCall: { type: {
-    name:     { type: String, required: true },
-    args:     { type: mongoose.Schema.Types.Mixed, default: null },
-    argsFull: { type: mongoose.Schema.Types.Mixed, default: null },
-    result:   { type: String, default: null },
-    truncated:{ type: Boolean, default: false },
-    success:  { type: Boolean, default: true },
-    error:    { type: String, default: null },
-    ms:       { type: Number, default: 0 },
-    _id: false,
-  } },
+  // Correlation. summonId binds the row to a wake; sessionId binds it
+  // to a transport session (WS chat, CLI run, HTTP request).
+  summonId:  { type: String, ref: "Summon", default: null },
+  sessionId: { type: String, default: null, index: true },
 
-  // Canopy federation
+  // Federation provenance. Set when the originating verb arrived from
+  // another land via canopy.
+  homeLand:  { type: String, default: null },
   wasRemote: { type: Boolean, default: false },
-  homeLand: { type: String },
-
-  // Extension data (Mixed, any extension can attach metadata via ...rest params)
-  extensionData: { type: mongoose.Schema.Types.Mixed },
 });
 
-// Query indexes
-DidSchema.index({ beingId: 1, date: -1 }); // a being's action history
-DidSchema.index({ nodeId: 1, date: -1 });  // a node's action history
-DidSchema.index({ summonId: 1 }, { sparse: true }); // finalizeSummon: Did.find({ summonId })
+DidSchema.index({ beingId: 1, date: -1 });                            // a being's action history
+DidSchema.index({ "target.kind": 1, "target.id": 1, date: -1 }, { sparse: true }); // a target's action history
+DidSchema.index({ summonId: 1 }, { sparse: true });                   // chain / activity lookup
+DidSchema.index({ verb: 1, action: 1, date: -1 });                    // "every register, newest first"
 
-// Retention: kernel deletes Did rows older than didRetentionDays (default 365, 0 = forever)
+// Retention: kernel sweeps Did rows older than didRetentionDays
+// (land config, default 365; 0 disables sweep).
 
 const Did = mongoose.model("Did", DidSchema, "dids");
 export default Did;

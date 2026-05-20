@@ -13,7 +13,7 @@
 //
 //   land-see   →  SEE on any position on this land. Reads the .config,
 //                 .extensions, .peers, .operations, .roles, .tools, …
-//                 system nodes to enumerate current state.
+//                 land seed spaces to enumerate current state.
 //
 //   land-do    →  Invoke a registered DO operation at the land root.
 //                 `set-config` / `delete-config` / `install-extension` /
@@ -26,9 +26,9 @@
 // install an extension or write config get FORBIDDEN.
 
 import { z } from "zod";
-import { seeVerb, doVerb } from "../../core/verbs.js";
-import { getLandDomain } from "../../addressing/address.js";
-import { getLandRootId } from "../../landRoot.js";
+import { seeVerb, doVerb } from "../../../ibp/verbs.js";
+import { getLandDomain } from "../../../ibp/address.js";
+import { getLandRootId } from "../../../landRoot.js";
 
 export const landManagerTools = [
   {
@@ -46,7 +46,7 @@ export const landManagerTools = [
     schema: {
       address: z.string().describe(
         "Position address to read. Examples: " +
-        "'.config', '.extensions', 'treeos.ai/.operations', 'treeos.ai/<nodeId>'. " +
+        "'.config', '.extensions', 'treeos.ai/.operations', 'treeos.ai/<spaceId>'. " +
         "Relative addresses (starting with '.') resolve against this land's root.",
       ),
       beingId: z.string().describe("Injected by server. Ignore."),
@@ -94,7 +94,7 @@ export const landManagerTools = [
       if (!landRootId) {
         return { content: [{ type: "text", text: "Error: land root not initialized." }] };
       }
-      const target = { _id: landRootId, nodeId: landRootId, chain: [] };
+      const target = { _id: landRootId, spaceId: landRootId, chain: [] };
       try {
         const result = await doVerb(target, action, args || {}, {
           identity: beingId ? { beingId, name } : null,

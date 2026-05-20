@@ -1,20 +1,17 @@
 // TreeOS governing — typed Worker roles.
 //
 // Four typed workers — build, refine, review, integrate. Each is a
-// distinct cognitive shape the Planner picks per leaf step. The role
-// definition carries BOTH dispatch (summon, honoredIntents, …) AND
-// LLM behavior (buildSystemPrompt, toolNames, modeKey, …) in one
-// frozen spec. See memory `role-subsumes-mode`.
+// distinct cognitive shape the Planner picks per leaf step. Workers
+// are SEE + DO: they read their leaf context and write artifacts at
+// scope. No SUMMON (Workers do not delegate; sub-Ruler dispatch is
+// the Foreman's job). No reply emission (replyTo omitted) — the
+// Foreman's dispatch loop awaits the summon's return value directly
+// via attachHandoff; Workers just return their content and the
+// aggregator counts the reply.
 //
 // Worker beings are materialized lazily at the execution node when
-// the Foreman first needs them. Foreman dispatches workers via
-// SUMMON + handoff: each worker SUMMON gets an `attachHandoff` whose
-// `onResponse` feeds an `aggregate()` collector. Workers just return
-// their content; the scheduler invokes the handoff; the aggregator
-// counts the reply, and the Foreman continues.
+// the Foreman first needs them.
 
-import log from "../../../seed/core/log.js";
-import { runChat } from "../../../seed/llm/runChat.js";
 import { buildWorkerPrompt, WORKER_BASE_CONFIG } from "./workerBase.js";
 
 // ─────────────────────────────────────────────────────────────────────
@@ -176,77 +173,43 @@ Rules of Integrate:
 // Typed-worker registry
 // ─────────────────────────────────────────────────────────────────────
 const TYPED_WORKERS = [
-  { name: "worker-build",     emoji: "🔨", label: "Build Worker",     body: BUILD_BODY     },
-  { name: "worker-refine",    emoji: "🪓", label: "Refine Worker",    body: REFINE_BODY    },
-  { name: "worker-review",    emoji: "🔍", label: "Review Worker",    body: REVIEW_BODY    },
-  { name: "worker-integrate", emoji: "🧵", label: "Integrate Worker", body: INTEGRATE_BODY },
+  { name: "worker-build",     body: BUILD_BODY     },
+  { name: "worker-refine",    body: REFINE_BODY    },
+  { name: "worker-review",    body: REVIEW_BODY    },
+  { name: "worker-integrate", body: INTEGRATE_BODY },
 ];
 
-function makeWorkerRole({ name, emoji, label, body }) {
-  // Self-reference closed over by summon so runChat receives the role
-  // spec directly. `role` is fully assigned by the time summon executes.
-  const role = {
-    // Dispatch contract
+// WORKER_BASE_TOOLS carries `governing-flag-issue` (DO — writes a
+// flag to the Ruler's pending-issues queue). Workspace extensions
+// extend this list with workspace-add-file etc. when they specialize
+// a worker for their domain.
+function makeWorkerRole({ name, body }) {
+  return {
     name,
-    // Worker reads its leaf-step context and writes artifacts at scope.
-    // SEE + DO. No SUMMON — Workers don't delegate; sub-Ruler dispatch
-    // is Foreman's responsibility.
-    permissions: ["see", "do"],
-    respondMode: "async",
-    triggerOn: ["message"],
 
-    // LLM behavior contract — role.name is the identity.
+    // No replyTo — Workers return content directly. The Foreman's
+    // dispatch loop attaches a handoff that captures the return.
+
+    // Workers read what their spec gives them; no preloaded see
+    // blocks needed (the dispatch message body carries the leaf
+    // specs the Foreman packaged).
+    see: [],
+
+    canSee: [],
+
+    // Single DO tool by default (governing-flag-issue). Workspace
+    // workers override by extending canDo through their own role
+    // registration.
+    canDo: ["governing-flag-issue"],
+
+    // LLM loop config inherited from WORKER_BASE_CONFIG (maxMessages,
+    // maxToolCalls, etc.).
     ...WORKER_BASE_CONFIG,
-    emoji,
-    label,
-    buildSystemPrompt(ctx) {
-      return buildWorkerPrompt(ctx, { typeLabel: label, body });
-    },
 
-    // Summon function — kernel scheduler invokes this on inbox arrival.
-    async summon(message, ctx) {
-      const startMs = Date.now();
-      const workNodeId = ctx.nodeId || ctx.resolved?.nodeId;
-      if (!workNodeId) {
-        log.warn(`Worker/${name}`, "summon without nodeId; returning empty");
-        return { content: `Internal error: no work node.` };
-      }
-      log.info(`Worker/${name}`,
-        `${emoji} summons at ${String(workNodeId).slice(0, 8)} ` +
-        `(from=${message.from || "?"}, correlation=${message.correlation?.slice(0, 8) || "?"})`);
-
-      let result;
-      try {
-        result = await runChat({
-          being:    ctx.toBeing,
-          envelope: message,
-          role,
-          signal:   ctx.signal,
-        });
-      } catch (err) {
-        if (ctx.signal?.aborted) {
-          log.info(`Worker/${name}`, `summon aborted (${err.message})`);
-          return null;
-        }
-        log.warn(`Worker/${name}`, `LLM call failed: ${err.message}`);
-        return { content: `${name} error: ${err.message}` };
-      }
-
-      const exitText = result?.answer || `(${name} done)`;
-      const durationMs = Date.now() - startMs;
-      log.info(`Worker/${name}`,
-        `${emoji} summons complete at ${String(workNodeId).slice(0, 8)} in ${durationMs}ms`);
-
-      // Just return. The dispatcher (Foreman, or the user's socket via
-      // the verb handler) receives this through its handoff.
-      return {
-        content:  exitText,
-        intent:   "chat",
-        summonId: result?.summonId || null,
-      };
+    prompt(ctx) {
+      return buildWorkerPrompt(ctx, { typeLabel: name, body });
     },
   };
-  return Object.freeze(role);
 }
 
 export const workerRoles = TYPED_WORKERS.map((spec) => ({

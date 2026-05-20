@@ -34,14 +34,14 @@
 // today we mirror legacy behavior to keep dispatch parity.
 
 import { randomUUID } from "crypto";
-import log from "../../../seed/core/log.js";
-import { runChat } from "../../../seed/llm/runChat.js";
-import Node from "../../../seed/models/node.js";
+import log from "../../../seed/system/log.js";
+import { runChat } from "../../../seed/cognition/runChat.js";
+import Space from "../../../seed/models/space.js";
 import Being from "../../../seed/models/being.js";
-import { appendToInbox } from "../../../seed/scheduler/inbox.js";
-import { wake, attachHandoff } from "../../../seed/scheduler/scheduler.js";
-import { aggregate } from "../../../seed/scheduler/replyAggregator.js";
-import { getLandDomain } from "../../../seed/addressing/address.js";
+import { appendToInbox } from "../../../seed/cognition/inbox.js";
+import { wake, attachHandoff } from "../../../seed/cognition/scheduler.js";
+import { aggregate } from "../../../seed/cognition/replyAggregator.js";
+import { getLandDomain } from "../../../seed/ibp/address.js";
 import { emitReplyToAsker, readMetaPath } from "./_shared.js";
 import { renderExecutionStack } from "../state/executionStack.js";
 
@@ -83,7 +83,7 @@ ignored when your read of the stack differs.
 
 If your snapshot doesn't carry enough detail about a specific
 sub-Ruler's failure, call foreman-read-branch-detail with that
-sub-Ruler's nodeId before deciding. That tool does not end your turn.
+sub-Ruler's spaceId before deciding. That tool does not end your turn.
 
 READING WORKER TYPE IN FAILURES
 
@@ -148,7 +148,7 @@ Cross-reference against the plan's leaf specs:
     right call so the plan can be revised.
 
 If the artifact-evidence block lacks detail on a specific child you
-need to verify, call get-node-notes with that child's nodeId before
+need to verify, call get-node-notes with that child's spaceId before
 you decide. get-node-notes does not end your turn. Use it freely.
 
 Freeze terminalStatus picks:
@@ -311,82 +311,69 @@ your reasoning.`;
 // Role template entry point
 // ────────────────────────────────────────────────────────────────
 
-export const foremanRole = Object.freeze({
-  // Dispatch contract
+export const foremanRole = {
   name: "foreman",
-  // Foreman reads execution state, writes branch transitions
-  // (mark-failed, freeze, advance), and summons workers / sub-Rulers
-  // for retries, escalations, and dispatch. All three verbs.
-  permissions: ["see", "do", "summon"],
-  respondMode: "async",
-  triggerOn: ["message"],
 
-  // LLM behavior contract — role.name ("foreman") is the identity.
-  emoji: "🔧",
-  label: "Foreman",
-  maxMessagesBeforeLoop: 6,
-  preserveContextOnLoop: true,
-  // 2-3 calls so foreman-read-branch-detail can run before the
-  // decision tool when the snapshot summary isn't enough.
-  maxToolCallsPerStep: 3,
-  toolNames: [
-    // Step-level decisions
-    "foreman-retry-branch",
+  // Custom summon (defined below) — the Foreman routes by message
+  // content shape: structured dispatch payloads run runDispatch (plan
+  // fan-out); everything else runs runJudgment (retry / escalate /
+  // freeze / pause / resume decisions). The seed registry detects the
+  // custom summon and skips the default-summon wrap.
+  //
+  // Both paths reply to the asker (the Ruler) via emitReplyToAsker.
+  // replyTo is documentary here; the custom summon handles emission
+  // directly rather than going through the dispatcher's reply step.
+  replyTo: "asker",
+
+  // Preloaded blocks. The Foreman's primary state view is the
+  // execution-stack snapshot (pending/running/done counts, recent
+  // transitions, stuck branches).
+  see: ["ruler-lineage", "ancestor-plan", "ancestor-contracts", "execution-stack"],
+
+  canSee: [
+    "foreman-read-branch-detail",
+    "get-node-notes",
+    "get-node",
+  ],
+
+  // Pure state mutations on the execution record.
+  canDo: [
     "foreman-mark-failed",
     "foreman-freeze-record",
-    // Stack-op decisions
     "foreman-cancel-subtree",
     "foreman-propagate-cancel-to-children",
     "foreman-pause-frame",
     "foreman-resume-frame",
-    "foreman-advance-step",
-    // Batch judgment for multi-failure waves
     "foreman-judge-batch",
-    // Meta decisions
+    "foreman-advance-step",
+  ],
+
+  // Tools that wake another being.
+  //   retry-branch        wakes a Worker (or sub-Ruler) to retry the step
+  //   escalate-to-ruler   wakes the Ruler with the Foreman's diagnosis
+  //   respond-directly    wakes the asker with the Foreman's own answer
+  canSummon: [
+    "foreman-retry-branch",
     "foreman-escalate-to-ruler",
     "foreman-respond-directly",
-    // Inspection (does not end the turn)
-    "foreman-read-branch-detail",
-    // Tree-state inspection (read-only, used to verify artifacts)
-    "get-node-notes",
-    "get-node",
   ],
-  async buildSystemPrompt(ctx) {
-    // username intentionally not destructured. The Foreman's cognition
-    // is uniform across all scopes — every wakeup comes from "the
-    // Ruler at this scope" regardless of what authority sits above.
-    const { currentNodeId, rootId } = ctx;
-    const e = ctx.enrichedContext || {};
-    const scopeNodeId = currentNodeId || rootId;
 
-    let snapshotBlock = "";
-    try {
-      snapshotBlock = await renderExecutionStack(scopeNodeId);
-    } catch {
-      // No snapshot: Foreman still runs.
-    }
+  // LLM loop config. 2-3 calls so read-branch-detail can run before
+  // the decision tool when the snapshot summary is not enough.
+  maxMessagesBeforeLoop: 6,
+  preserveContextOnLoop: true,
+  maxToolCallsPerStep: 3,
 
-    const ancestorBlocks = [
-      e.governingLineage,
-      e.governingParentPlan,
-      e.governingContracts,
-    ].filter(Boolean).join("\n\n");
+  prompt: () => FOREMAN_PROMPT_BODY,
 
-    const prelude = ancestorBlocks ? `${ancestorBlocks}\n\n` : "";
-    const stateBlock = snapshotBlock ? `${snapshotBlock}\n\n` : "";
-
-    return prelude + stateBlock + FOREMAN_PROMPT_BODY.trim();
-  },
+  // Custom dispatch. Routes by message content shape.
   async summon(message, ctx) {
-    const executionNodeId = ctx.nodeId || ctx.resolved?.nodeId;
+    const executionNodeId = ctx.spaceId || ctx.resolved?.spaceId;
     if (!executionNodeId) {
-      log.warn("Foreman", "summon without nodeId; returning empty");
-      return { content: "Internal error: no execution node." };
+      log.warn("Foreman", "summon without spaceId; returning empty");
+      return { text: "Internal error: no execution node." };
     }
 
-    // Route by content shape. Dispatch requests carry a structured
-    // payload `{ kind: "dispatch-plan", ... }`; everything else is a
-    // judgment wakeup.
     const isDispatch =
       typeof message.content === "object"
       && message.content !== null
@@ -397,7 +384,7 @@ export const foremanRole = Object.freeze({
     }
     return await runJudgment(message, ctx, executionNodeId);
   },
-});
+};
 
 // ────────────────────────────────────────────────────────────────
 // Judgment path — same shape as Planner/Contractor
@@ -430,10 +417,10 @@ async function runJudgment(message, ctx, executionNodeId) {
       originalMessage: message,
       exitText:        `Foreman error: ${err.message}`,
     });
-    return { content: `Foreman error: ${err.message}` };
+    return { text: `Foreman error: ${err.message}` };
   }
 
-  const exitText = result?.answer || "(judgment recorded)";
+  const exitText = result?.text || "(judgment recorded)";
   log.info("Foreman",
     `🔧 judgment complete at ${String(executionNodeId).slice(0, 8)} in ${Date.now() - startMs}ms`);
 
@@ -447,8 +434,7 @@ async function runJudgment(message, ctx, executionNodeId) {
   });
 
   return {
-    content:  exitText,
-    intent:   "chat",
+    text:     exitText,
     summonId: result?.summonId || null,
   };
 }
@@ -465,21 +451,21 @@ async function runDispatch(message, ctx, executionNodeId) {
 
   // ── Resolve Ruler scope. The execution node carries scopeRulerId
   //    in its governing metadata (stamped at ensureExecutionNode time).
-  const executionNode = await Node.findById(executionNodeId).select("metadata").lean();
-  const governing = readMetaPath(executionNode, ["governing"]);
+  const executionSpace = await Space.findById(executionNodeId).select("metadata").lean();
+  const governing = readMetaPath(executionSpace, ["governing"]);
   const rulerNodeId = governing?.scopeRulerId;
   if (!rulerNodeId) {
     log.warn("Foreman",
       `dispatch: execution node ${String(executionNodeId).slice(0, 8)} ` +
       `has no scopeRulerId; cannot resolve plan`);
-    return { content: "dispatch failed: no ruler scope" };
+    return { text: "dispatch failed: no ruler scope" };
   }
 
   // ── Read the active plan emission from substrate.
   const govExt = await loadGoverningExports();
   if (!govExt?.readActivePlanEmission) {
     log.warn("Foreman", "dispatch: governing.readActivePlanEmission unavailable");
-    return { content: "dispatch failed: governing helpers missing" };
+    return { text: "dispatch failed: governing helpers missing" };
   }
   const planEmission = await govExt.readActivePlanEmission(rulerNodeId);
   if (!planEmission?.steps?.length) {
@@ -489,7 +475,7 @@ async function runDispatch(message, ctx, executionNodeId) {
       ok: false,
       reason: "no plan emission",
     });
-    return { content: "no plan emission to dispatch" };
+    return { text: "no plan emission to dispatch" };
   }
 
   // Hydrate stepIndex onto each step (1-based) — matches legacy.
@@ -554,8 +540,7 @@ async function runDispatch(message, ctx, executionNodeId) {
   });
 
   return {
-    content: `dispatch complete (${durationMs}ms)`,
-    intent:  "chat",
+    text: `dispatch complete (${durationMs}ms)`,
   };
 }
 
@@ -612,7 +597,6 @@ async function dispatchLeafBatch({ group, executionNodeId, rulerNodeId, ctx, all
   await appendToInbox(executionNodeId, String(workerBeing._id), {
     from:            foremanStance,
     content:         messageBody,
-    intent:          "chat",
     correlation,
     rootCorrelation,
     activeRole:      workerRoleName,
@@ -701,8 +685,8 @@ async function dispatchBranchStep({ group, executionNodeId, rulerNodeId, ctx, pl
 async function ensureWorkerBeing({ executionNodeId, workerRoleName }) {
   // Read existing — metadata.beings.<workerRoleName>.beingId at the
   // execution node tells us if one's already materialized.
-  const execNode = await Node.findById(executionNodeId).select("metadata").lean();
-  const beings = readMetaPath(execNode, ["beings"]);
+  const execSpace = await Space.findById(executionNodeId).select("metadata").lean();
+  const beings = readMetaPath(execSpace, ["beings"]);
   const existingId = beings?.[workerRoleName]?.beingId;
   if (existingId) {
     return await Being.findById(existingId);
@@ -713,18 +697,18 @@ async function ensureWorkerBeing({ executionNodeId, workerRoleName }) {
   // same node carrying different roles; multi-being-at-one-node is
   // exactly this pattern (see project-multi-being-domain-node).
   try {
-    const { createBeingWithHome } = await import("../../../seed/core/identity.js");
+    const { createBeingWithHome } = await import("../../../seed/being/identity.js");
     const { being } = await createBeingWithHome({
-      operatingMode: "ai",
+      operatingMode: "llm",
       role:          workerRoleName,
-      homeNodeId:    String(executionNodeId),
+      homeSpace:     String(executionNodeId),
     });
     if (being?._id) {
       // Stamp metadata.beings.<workerRoleName> so future dispatches
       // find this instance instead of creating duplicates.
-      const node = await Node.findById(executionNodeId);
+      const node = await Space.findById(executionNodeId);
       if (node) {
-        const { mergeExtMeta } = await import("../../../seed/tree/extensionMetadata.js");
+        const { mergeExtMeta } = await import("../../../seed/space/extensionMetadata.js");
         await mergeExtMeta(node, "beings", {
           [workerRoleName]: {
             beingId:     String(being._id),

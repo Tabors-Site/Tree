@@ -13,8 +13,8 @@
 // swarm-completed).
 
 import { z } from "zod";
-import Node from "../../seed/models/node.js";
-import log from "../../seed/core/log.js";
+import Space from "../../seed/models/space.js";
+import log from "../../seed/system/log.js";
 import {
   FLAG_KINDS,
   readPendingIssues,
@@ -38,17 +38,17 @@ const FIELD_CAP = 200;
  * promotion), so the resolve typically lands on the caller's own
  * node id.
  */
-async function resolveRulerForFlag(nodeId) {
-  if (!nodeId) return null;
+async function resolveRulerForFlag(spaceId) {
+  if (!spaceId) return null;
   try {
     const { getExtension } = await import("../loader.js");
     const governing = getExtension("governing")?.exports;
     if (governing?.findRulerScope) {
-      return await governing.findRulerScope(nodeId);
+      return await governing.findRulerScope(spaceId);
     }
   } catch {}
   // Fall back: read the node directly and check if it's a Ruler.
-  const direct = await Node.findById(nodeId).select("_id name metadata").lean();
+  const direct = await Space.findById(spaceId).select("_id name metadata").lean();
   if (!direct) return null;
   const meta = direct.metadata instanceof Map
     ? Object.fromEntries(direct.metadata)
@@ -150,9 +150,9 @@ export default function getFlagTools(_core) {
       },
       annotations: { readOnlyHint: false },
       async handler(args) {
-        const { beingId, nodeId, role: roleName } = args;
-        if (!nodeId) {
-          return text("governing-flag-issue: no nodeId in context; substrate bug.");
+        const { beingId, spaceId, role: roleName } = args;
+        if (!spaceId) {
+          return text("governing-flag-issue: no spaceId in context; substrate bug.");
         }
 
         // Validate fields explicitly so we can return phrased errors
@@ -189,10 +189,10 @@ export default function getFlagTools(_core) {
           }
         }
 
-        const ruler = await resolveRulerForFlag(nodeId);
+        const ruler = await resolveRulerForFlag(spaceId);
         if (!ruler) {
           return text(
-            `governing-flag-issue: no Ruler scope resolvable from ${String(nodeId).slice(0, 8)}. ` +
+            `governing-flag-issue: no Ruler scope resolvable from ${String(spaceId).slice(0, 8)}. ` +
             `Flags attach to a Ruler scope's queue; if you're running outside a Ruler scope, ` +
             `this is a substrate bug — surface it.`,
           );
@@ -214,7 +214,7 @@ export default function getFlagTools(_core) {
           localChoice,
           blocking: !!args.blocking,
           proposedResolution: proposedResolution || null,
-          sourceWorkerScopeId: nodeId,
+          sourceWorkerScopeId: spaceId,
           sourceWorkerType: workerType,
         }, {
           identity: beingId ? { beingId } : null,
@@ -266,14 +266,14 @@ export default function getFlagTools(_core) {
       schema: {},
       annotations: { readOnlyHint: true },
       async handler(args) {
-        const { nodeId } = args;
-        if (!nodeId) {
-          return text("governing-read-pending-issues: no nodeId in context.");
+        const { spaceId } = args;
+        if (!spaceId) {
+          return text("governing-read-pending-issues: no spaceId in context.");
         }
-        const ruler = await resolveRulerForFlag(nodeId);
+        const ruler = await resolveRulerForFlag(spaceId);
         if (!ruler) {
           return text(
-            `governing-read-pending-issues: no Ruler scope at ${String(nodeId).slice(0, 8)}.`,
+            `governing-read-pending-issues: no Ruler scope at ${String(spaceId).slice(0, 8)}.`,
           );
         }
         const flags = await readPendingIssues(ruler._id);

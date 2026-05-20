@@ -14,8 +14,8 @@
 // kick it back to the Ruler?
 
 import { z } from "zod";
-import log from "../../seed/core/log.js";
-import Node from "../../seed/models/node.js";
+import log from "../../seed/system/log.js";
+import Space from "../../seed/models/space.js";
 import {
   tryClaim as tryClaimSpawn,
   release as releaseSpawn,
@@ -88,10 +88,10 @@ export default function getForemanTools(_core) {
         let priorRetries = 0;
         let branchSpec = "";
         try {
-          const recNode = await Node.findById(recordNodeId).select("metadata").lean();
-          const meta = recNode?.metadata instanceof Map
-            ? Object.fromEntries(recNode.metadata)
-            : (recNode?.metadata || {});
+          const recSpace = await Space.findById(recordNodeId).select("metadata").lean();
+          const meta = recSpace?.metadata instanceof Map
+            ? Object.fromEntries(recSpace.metadata)
+            : (recSpace?.metadata || {});
           const stepStatuses = meta?.governing?.execution?.stepStatuses || [];
           const step = stepStatuses.find((s) => s?.stepIndex === stepIndex);
           if (step?.type === "branch" && Array.isArray(step.branches)) {
@@ -158,7 +158,7 @@ export default function getForemanTools(_core) {
         // and re-runs its cycle. Its decisions (revise plan, retry,
         // etc.) are the sub-Ruler's own. The handoff fires
         // `governing:branchRetried` for dashboard SSE on settle.
-        const NodeModel = (await import("../../seed/models/node.js")).default;
+        const NodeModel = (await import("../../seed/models/space.js")).default;
         const BeingModel = (await import("../../seed/models/being.js")).default;
         const branchNodeFull = await NodeModel.findById(branchScopeId).select("metadata").lean();
         const branchBeings = branchNodeFull?.metadata instanceof Map
@@ -177,7 +177,7 @@ export default function getForemanTools(_core) {
 
         // Build the Foreman's stance (who's sending the retry SUMMON).
         // Foreman lives at the parent Ruler's execution scope; use that.
-        const { getLandDomain } = await import("../../seed/addressing/address.js");
+        const { getLandDomain } = await import("../../seed/ibp/address.js");
         const landDomain = getLandDomain();
         const foremanStance = `${landDomain}/${branchScopeId}@foreman`;
 
@@ -187,7 +187,6 @@ export default function getForemanTools(_core) {
         const message = {
           from:            foremanStance,
           content:         briefing,
-          intent:          "chat",
           correlation,
           rootCorrelation,
           activeRole:      "ruler",
@@ -195,9 +194,9 @@ export default function getForemanTools(_core) {
           sentAt:          new Date().toISOString(),
         };
 
-        const { appendToInbox } = await import("../../seed/scheduler/inbox.js");
-        const { attachHandoff, wake } = await import("../../seed/scheduler/scheduler.js");
-        const { hooks } = await import("../../seed/core/hooks.js");
+        const { appendToInbox } = await import("../../seed/cognition/inbox.js");
+        const { attachHandoff, wake } = await import("../../seed/cognition/scheduler.js");
+        const { hooks } = await import("../../seed/system/hooks.js");
         const startMs = Date.now();
         try {
           await appendToInbox(String(branchScopeId), branchRulerBeingId, message);
@@ -211,7 +210,7 @@ export default function getForemanTools(_core) {
         }
         attachHandoff(branchRulerBeingId, correlation, {
           identity:   { beingId, username },
-          resolved:   { being: "ruler", nodeId: String(branchScopeId), zone: "tree" },
+          resolved:   { being: "ruler", spaceId: String(branchScopeId), zone: "tree" },
           onResponse: async (responseEntry) => {
             try { releaseSpawn(claim.key); } catch {}
             try {
@@ -477,7 +476,7 @@ export default function getForemanTools(_core) {
         try {
           const { getExtension } = await import("../loader.js");
           const governing = getExtension("governing")?.exports;
-          const node = await Node.findById(subRulerNodeId).select("_id name").lean();
+          const node = await Space.findById(subRulerNodeId).select("_id name").lean();
           if (!node) return text(`foreman-read-branch-detail: node ${subRulerNodeId.slice(0, 8)} not found.`);
           const plan = governing?.readActivePlanEmission
             ? await governing.readActivePlanEmission(subRulerNodeId)

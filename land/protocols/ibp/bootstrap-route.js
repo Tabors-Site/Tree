@@ -19,9 +19,9 @@
 // of DNS — a public lookup.
 
 import cors from "cors";
-import { getLandDomain } from "../../seed/addressing/address.js";
-import { IBP_PROTOCOL_VERSION } from "../../seed/addressing/discovery.js";
-import { getLandUrl } from "./canopy/identity.js";
+import { getLandDomain } from "../../seed/ibp/address.js";
+import { IBP_PROTOCOL_VERSION } from "../../seed/ibp/discovery.js";
+import { getLandUrl } from "../canopy/identity.js";
 import { getLandConfigValue } from "../../seed/landConfig.js";
 
 // Permissive route-level CORS just for the bootstrap. Wins over the

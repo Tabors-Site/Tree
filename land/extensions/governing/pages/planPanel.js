@@ -10,10 +10,10 @@
  * panel. Recursive. Self similar.
  *
  * Inline edit: click pencil on a row, textarea opens for title + spec
- * (if applicable), save PATCHes /api/v1/plan/node/:nodeId/steps/:stepId.
+ * (if applicable), save PATCHes /api/v1/plan/node/:spaceId/steps/:stepId.
  */
 
-import { NS } from "../state/planNode.js";
+import { NS } from "../state/planSpace.js";
 
 function esc(s) {
   return String(s == null ? "" : s)
@@ -71,8 +71,8 @@ function renderStepRow(step, ctx) {
     const childEntry = step.childNodeId
       ? childrenIndex.get(String(step.childNodeId)) || null
       : childrenIndex.get(step.title) || null;
-    const childLink = childEntry?.nodeId
-      ? `/api/v1/node/${childEntry.nodeId}?html${qs ? "&" + qs.slice(1) : ""}`
+    const childLink = childEntry?.spaceId
+      ? `/api/v1/node/${childEntry.spaceId}?html${qs ? "&" + qs.slice(1) : ""}`
       : null;
     const childHasPlan = childEntry?.hasPlan;
 
@@ -214,13 +214,13 @@ async function readRollupFromExecutionRecord(rulerNodeId) {
   }
 }
 
-async function readStepsFromExecutionRecord(planNode) {
-  if (!planNode?.parent) return { steps: [], countBuckets: {} };
+async function readStepsFromExecutionRecord(planSpace) {
+  if (!planSpace?.parent) return { steps: [], countBuckets: {} };
   try {
     const { getExtension } = await import("../../loader.js");
     const governing = getExtension("governing")?.exports;
     if (!governing?.readActiveExecutionRecord) return { steps: [], countBuckets: {} };
-    const record = await governing.readActiveExecutionRecord(planNode.parent);
+    const record = await governing.readActiveExecutionRecord(planSpace.parent);
     if (!record) return { steps: [], countBuckets: {} };
 
     const out = [];
@@ -259,7 +259,7 @@ async function readStepsFromExecutionRecord(planNode) {
   }
 }
 
-export async function renderPlanPanel({ node, nodeId, qs, isPublicAccess }) {
+export async function renderPlanPanel({ node, spaceId, qs, isPublicAccess }) {
   try {
     if (!node) return "";
 
@@ -273,16 +273,16 @@ export async function renderPlanPanel({ node, nodeId, qs, isPublicAccess }) {
     // childNodeId targets.
     const childrenIndex = new Map();
     try {
-      const Node = (await import("../../../seed/models/node.js")).default;
-      const rulerNode = await Node.findById(node.parent).select("_id children").lean();
-      if (rulerNode && Array.isArray(rulerNode.children) && rulerNode.children.length > 0) {
-        const kids = await Node.find({ _id: { $in: rulerNode.children } })
+      const Space = (await import("../../../seed/models/space.js")).default;
+      const rulerSpace = await Space.findById(node.parent).select("_id children").lean();
+      if (rulerSpace && Array.isArray(rulerSpace.children) && rulerSpace.children.length > 0) {
+        const kids = await Space.find({ _id: { $in: rulerSpace.children } })
           .select("_id name metadata.governing")
           .lean();
         for (const k of kids) {
           const kgov = k.metadata instanceof Map ? k.metadata.get("governing") : k.metadata?.governing;
           const hasPlan = kgov?.role === "ruler";
-          const entry = { nodeId: String(k._id), hasPlan };
+          const entry = { spaceId: String(k._id), hasPlan };
           childrenIndex.set(String(k._id), entry);
           childrenIndex.set(k.name, entry);
         }
@@ -348,7 +348,7 @@ export async function renderPlanPanel({ node, nodeId, qs, isPublicAccess }) {
               }
               t.disabled = true;
               try {
-                var res = await fetch("/api/v1/plan/node/${nodeId}/steps/" + encodeURIComponent(stepId), {
+                var res = await fetch("/api/v1/plan/node/${spaceId}/steps/" + encodeURIComponent(stepId), {
                   method: "PATCH",
                   headers: {"Content-Type":"application/json"},
                   body: JSON.stringify(patch),

@@ -45,7 +45,7 @@ The first verb. Read-only path. Smallest risk.
 - `see treeos.ai/.discovery` returns the four-verb capability set.
 - `see treeos.ai/` returns land zone with public trees.
 - `see treeos.ai/~tabor` returns home zone with tabor's trees + inbox preview.
-- `see treeos.ai/~tabor/test-tree` returns tree zone with governance + artifacts + beings.
+- `see treeos.ai/~tabor/test-tree` returns tree zone with governance + matters + beings.
 - Live SEE: open subscription, mutate the position via a manual setExtMeta, observe patch frame arriving.
 
 **Estimate:** 2 to 3 days.
@@ -67,7 +67,7 @@ Mutation path. Three or four named actions prove the dispatcher pattern; `set-me
 
 **Verification:**
 
-- `do create-child position: "<home>/test-tree" { name: "test-tree" }` creates a child node.
+- `do create-child position: "<home>/test-tree" { name: "test-tree" }` creates a child space.
 - `do rename position: "<position>" { name: "renamed-tree" }` renames it.
 - `do change-status position: "<position>" { status: "completed" }` flips status.
 - `do set-meta position: "<position>" { namespace: "values", data: { compassion: 7 } }` writes namespaced metadata.
@@ -82,9 +82,9 @@ The hardest piece. Inbox kernel helpers, summoning triggers, sync respond-mode f
 **Work:**
 
 1. Build [land/ibp/inbox.js](land/ibp/inbox.js):
-   - `appendToInbox(nodeId, being, message)`
-   - `readInbox(nodeId, being, options)`
-   - `markInboxConsumed(nodeId, being, correlationIds, responseId)`
+   - `appendToInbox(spaceId, being, message)`
+   - `readInbox(spaceId, being, options)`
+   - `markInboxConsumed(spaceId, being, correlationIds, responseId)`
 2. Build [land/ibp/verbs/talk.js](land/ibp/verbs/talk.js):
    - Envelope validation.
    - Address + being resolution.
@@ -145,7 +145,7 @@ Phase 5 wired BE but left per-verb auth checks ad-hoc. Phase 5.5 builds the infr
    - Reads `metadata.beings.<stance>.permissions` at the land root.
    - Returns allow or deny with the stance that was checked.
 2. Apply the simple permission shape (NOT a glob/prefix DSL):
-   - `see: { allowed_visibility: [...] }` — list of Node `visibility` values arrivals may SEE.
+   - `see: { allowed_visibility: [...] }` — list of Space `visibility` values arrivals may SEE.
    - `do: { allowed_actions: [...] | "*" }` — list of action names or wildcard.
    - `summon: { allowed_targets: ["@being", ...] | "*" }` — list of being names or wildcard.
    - `be: { allowed_operations: [...] }` — which BE ops the stance can call.
@@ -200,7 +200,7 @@ Now that the protocol stack is complete, finish the portal app shell against it.
 
 1. Land zone renderer (public trees, beings, discovery cards).
 2. Home zone renderer (tree grid, beings list, recent inbox).
-3. Tree zone renderer (governance panel, artifacts, beings panel with inbox, children, chat panel).
+3. Tree zone renderer (governance panel, matters, beings panel with inbox, children, chat panel).
 4. Tree navigator sidebar.
 5. Multi-tab support.
 6. Address-bar parser fully wired (autocomplete from descriptor `beings[]`).

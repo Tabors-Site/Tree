@@ -6,7 +6,7 @@ import {
 } from "./users.js";
 import authenticate from "./middleware/authenticate.js";
 import rateLimit from "express-rate-limit";
-import { sendError, ERR } from "../../seed/core/protocol.js";
+import { sendError, ERR } from "../../seed/ibp/protocol.js";
 
 const registerLimiter = rateLimit({
   windowMs: 60 * 60 * 1000,

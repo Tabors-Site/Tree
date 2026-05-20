@@ -8,7 +8,7 @@ Position Description is to IBP what HTML is to HTTP: the response shape the clie
 
 The descriptor describes **what is at the addressed position**, with being-specific augmentation when the address has a qualifier. Recall the terminology:
 
-- **Position**: `<land>/<path>`. The slash is always present. The path may be empty (`treeos.ai/`, the Land Position), `~user...` (a home), or any tree node (`treeos.ai/flappybird/chapter-1`). A position is the actual place in the world.
+- **Position**: `<land>/<path>`. The slash is always present. The path may be empty (`treeos.ai/`, the Land Position), `~user...` (a home), or any tree space (`treeos.ai/flappybird/chapter-1`). A position is the actual place in the world.
 - **Stance**: `<position>@<being>`. A being at a position. `treeos.ai/flappybird@ruler`.
 - **IBP Address**: `<stance> :: <stance>`. `tabor :: treeos.ai/flappybird@ruler`. Names the relationship between two stances. Used in UI and being-to-being framing; the verb envelope carries only the "to" side.
 
@@ -16,12 +16,12 @@ There are two things addressable in the world: a position (a place) and a stance
 
 SEE accepts either an unqualified position or a qualified one:
 
-- **Unqualified** (`see treeos.ai/flappybird`): the descriptor describes the position. Children, artifacts, lineage, governance, the list of beings invocable here. Being-specific fields reflect the union of all invocable beings so the user can pick.
+- **Unqualified** (`see treeos.ai/flappybird`): the descriptor describes the position. Children, matters, lineage, governance, the list of beings invocable here. Being-specific fields reflect the union of all invocable beings so the user can pick.
 - **Qualified** (`see treeos.ai/flappybird@ruler`): the descriptor is augmented with the named being's specific data. That being's inbox, its honored intents, its response mode, its open conversations. The base position fields remain the same.
 
 Same position with different being qualifiers returns different augmented descriptors. The Ruler-augmented descriptor at /flappybird emphasizes governance state. The Historian-augmented descriptor emphasizes accumulated history. The Oracle-augmented descriptor emphasizes synthesis. Same position, same base shape, different augmentation.
 
-The descriptor is **filtered by the requesting identity**. Which beings appear in the `beings` list, what data is visible in `governance` or `artifacts`, what panels are populated, all depend on what the requesting identity is permitted to see at this position. The descriptor is named "Position Description" because the requester-plus-addressed-position together form an implicit stance relationship even when the address itself is unqualified.
+The descriptor is **filtered by the requesting identity**. Which beings appear in the `beings` list, what data is visible in `governance` or `matters`, what panels are populated, all depend on what the requesting identity is permitted to see at this position. The descriptor is named "Position Description" because the requester-plus-addressed-position together form an implicit stance relationship even when the address itself is unqualified.
 
 ## Top-level shape
 
@@ -35,7 +35,7 @@ The descriptor is **filtered by the requesting identity**. Which beings appear i
     "land": "treeos.ai",
     "path": "/flappybird/chapter-1",        // the form the request used (verbatim)
     "being": "ruler",                  // the being the request asked for
-    "nodeId": "<uuid-b>",                   // leaf node id (canonical, stable across renames)
+    "spaceId": "<uuid-b>",                  // leaf space id (canonical, stable across renames)
     "userId": "<uuid|null>",                // user-owner of this scope, when applicable
 
     // Full chain — BOTH representations, top-down (land root → leaf).
@@ -104,9 +104,9 @@ The descriptor is **filtered by the requesting identity**. Which beings appear i
     // ...
   ],
 
-  // Artifact content at this position (notes, files, etc.) if any.
-  // Lists what's CURRENTLY at this node, not what's planned.
-  "artifacts": [
+  // Matter content at this position (notes, files, etc.) if any.
+  // Lists what's CURRENTLY at this space, not what's planned.
+  "matters": [
     {
       "kind": "note" | "file" | "image" | "code" | "custom",
       "name": "main-prose",
@@ -116,7 +116,7 @@ The descriptor is **filtered by the requesting identity**. Which beings appear i
       "totalBytes": 12894,
       "createdAt": "2026-05-15T10:38:00Z",
       "byBeing": "<being that produced it>",
-      "fullContentRef": "/api/v1/node/<nodeId>/notes/<noteId>"  // portal fetches on demand
+      "fullContentRef": "/api/v1/space/<spaceId>/notes/<noteId>"  // portal fetches on demand
     },
     // ...
   ],
@@ -173,7 +173,7 @@ The descriptor is **filtered by the requesting identity**. Which beings appear i
         {
           "key": "outline-panel",
           "title": "Book outline",
-          "renderRef": "/api/v1/ext/book-workspace/panel/outline?nodeId=<id>",
+          "renderRef": "/api/v1/ext/book-workspace/panel/outline?spaceId=<id>",
           "kind": "html-fragment" | "json-tree" | "json-list" | "custom"
         }
       ]
@@ -300,22 +300,22 @@ User's tree root. Personal space.
 
 ### Tree zone (`zone: "tree"`)
 
-A stance inside a tree. The richest shape: governance + artifacts + children + everything.
+A stance inside a tree. The richest shape: governance + matters + children + everything.
 
-The full union above is the example. Most tree-zone stances will have governance + children + maybe artifacts. Worker leaves have artifacts + maybe blocked-status. Intermediate Ruler stances have governance + children.
+The full union above is the example. Most tree-zone stances will have governance + children + maybe matters. Worker leaves have matters + maybe blocked-status. Intermediate Ruler stances have governance + children.
 
 ## How the portal uses each field
 
 | Field | Portal surface |
 |---|---|
 | `address` | Address bar shows it. Tab title uses path + being. |
-| `zone` | Determines top-level chrome (land discovery / home dashboard / node renderer). |
+| `zone` | Determines top-level chrome (land discovery / home dashboard / space renderer). |
 | `beings` | Address-bar autocomplete on `@`. Chat-panel invoke dropdown. Each being's inbox drives a chat-panel preview. |
 | `beings[].honoredIntents` | Portal-side intent picker for SUMMON. Disables intents the being refuses. |
 | `beings[].respondMode` | Portal-side rendering choice: sync (block UI for response) vs async (background panel + notification on response). |
 | `beings[].inbox` | Preview of recent messages. Click expands to full conversation view. |
 | `children` | Tree navigator. Click-to-navigate. |
-| `artifacts` | Main view body. Renders each by `kind`. Notes as markdown, files as appropriate, images as images. |
+| `matters` | Main view body. Renders each by `kind`. Notes as markdown, files as appropriate, images as images. |
 | `governance` | Governance panel: plans, contracts, runs, workers, flags. Lifecycle pill in header. |
 | `extensions` | Extension panels. Each surface renders its panel alongside main view. |
 | `conversations` | Chat panel. Restored threads on page load. Click to focus a thread keyed by rootCorrelation. |
@@ -331,7 +331,7 @@ The full union above is the example. Most tree-zone stances will have governance
 - **Live updates.** Live SEE streams RFC 6902 patches. New plan emission patches `governance.plan.active`. New inbox message patches `beings[].inbox`. No re-fetching.
 - **Being-aware rendering.** The same position fetched as `@ruler` vs `@archivist` returns different subsets of the same shape. The portal strips DO/SUMMON write surfaces in archivist mode. The land does not render two variants; it returns the same descriptor with different `beings[].available` and `identity.writeAllowed`.
 - **Federation.** A portal session can navigate across lands; each land returns the same descriptor shape; no per-land rendering quirks.
-- **Extensibility.** Adding a new artifact `kind` or extension `surface` does not require a rewrite. It adds a field the portal recognizes.
+- **Extensibility.** Adding a new matter `kind` or extension `surface` does not require a rewrite. It adds a field the portal recognizes.
 
 ## What the server returns when the stance does not resolve
 

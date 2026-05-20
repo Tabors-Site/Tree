@@ -25,7 +25,7 @@ Two architectural commitments make this different from the web:
 
 1. **Identity-first.** You can't open the portal anonymously. Every session starts signed in as a being at some land. Every action has an actor. The accountability chain TreeOS depends on starts in the portal's root surface.
 
-2. **Stance-aware addressing.** Web URLs locate resources. IBP Addresses (IBPAs) locate STANCES (positions interpreted through beings). The same node viewed @ruler vs @historian renders differently — same data, different lens, different tools.
+2. **Stance-aware addressing.** Web URLs locate resources. IBP Addresses (IBPAs) locate STANCES (positions interpreted through beings). The same space viewed @ruler vs @historian renders differently — same data, different lens, different tools.
 
 ## Addressing in TreeOS
 
@@ -35,7 +35,7 @@ Two categories of things are addressable in IBP. Position and Stance. Everything
 
 | Concept | Form | Example |
 |---|---|---|
-| **Position** | `<land>/<path>` | `treeos.ai/` (root), `treeos.ai/~tabor` (home), `treeos.ai/flappybird/chapter-1` (tree node) |
+| **Position** | `<land>/<path>` | `treeos.ai/` (root), `treeos.ai/~tabor` (home), `treeos.ai/flappybird/chapter-1` (tree space) |
 | **Stance** | `<position>@<being>` | `treeos.ai/flappybird@ruler`, `treeos.ai/@auth` |
 
 ### Structural vocabulary. Not addressable on its own.
@@ -52,7 +52,7 @@ Two categories of things are addressable in IBP. Position and Stance. Everything
 | `treeos.ai/` | domain plus trailing slash, Land Position | SEE, DO |
 | `treeos.ai/flappybird` | domain plus path, deeper Position | SEE, DO |
 | `treeos.ai/@auth` | Land Position plus being, Stance at the Land Position | SUMMON, BE |
-| `treeos.ai/flappybird@ruler` | deeper Position plus being, Stance at node | SEE, SUMMON, BE |
+| `treeos.ai/flappybird@ruler` | deeper Position plus being, Stance at space | SEE, SUMMON, BE |
 
 A **Stance** is one side of a bridge: a being at a position. An **IBP Address** joins two stances through a **bridge** (`::`), naming who's addressing whom.
 
@@ -76,7 +76,7 @@ See [docs/ibp-address.md](docs/ibp-address.md) for the full grammar.
 Lands no longer return HTML pages for each URL. They return **Position Descriptions** — structured JSON describing what's at a position. The portal knows how to render TreeOS-shaped data:
 
 - governance state (plans, contracts, runs, workers, flags) at Ruler scopes
-- artifact content at Worker leaves
+- matter content at Worker leaves
 - child positions for navigation
 - beings invocable at this position
 - extension-contributed panels
@@ -90,7 +90,7 @@ See [docs/position-description.md](docs/position-description.md) for the JSON sh
 
 - **Land zone** (`server/`) — public root of a server. Discovery surface: public trees, available extensions, land-level beings, source data.
 - **Home zone** (`server/~user`) — user's personal space. Private tree, configured beings, accumulated history.
-- **Tree zone** (`server/<zone>/<path>`) — specific position inside a tree. Governance, artifacts, children, beings invocable here.
+- **Tree zone** (`server/<zone>/<path>`) — specific position inside a tree. Governance, matters, children, beings invocable here.
 
 The zone determines the chrome the portal renders; the position determines the content.
 
@@ -119,9 +119,9 @@ For domains outside TreeOS (regular HTTP sites), the portal can present the doma
 ## How this relates to TreeOS itself
 
 The Land server (existing TreeOS server in `../land/`) is the backend. It already has:
-- the node tree
+- the space tree
 - the governing extension (Ruler / Planner / Contractor / Foreman / Worker)
-- workspaces (book-workspace, code-workspace) that produce artifacts
+- workspaces (book-workspace, code-workspace) that produce matters
 - a WebSocket layer for live events
 - legacy HTTP routes and an HTML dashboard surface
 

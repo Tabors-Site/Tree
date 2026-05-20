@@ -6,8 +6,8 @@
  * on lands created before the versioning system.
  */
 
-import log from "../core/log.js";
-import { getLandConfigValue, setLandConfigValue } from "../landConfig.js";
+import log from "../log.js";
+import { getLandConfigValue, setLandConfigValue } from "../../landConfig.js";
 
 const DEFAULTS = {
   cascadeEnabled: false,

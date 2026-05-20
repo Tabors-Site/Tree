@@ -4,19 +4,15 @@
 // domains based on the ratified plan. The Ruler hires the Contractor
 // via SUMMON after the plan is ratified; the Contractor reads the
 // plan, emits contract artifacts via `governing-emit-contracts`, and
-// replies to the Ruler.
+// exits. The default summon dispatcher emits the reply back to the
+// Ruler (replyTo: "asker").
 //
 // LCA correctness is the load-bearing rule. Every contract has a
 // scope (global, shared:[A,B], local:[A]). The LCA of named
 // consumers must sit at or above the Contractor's emission position.
 //
-// This file carries BOTH dispatch (summon, honoredIntents, …) AND
-// LLM behavior (prompt, tools, modeKey, …) — see memory
-// `role-subsumes-mode`.
-
-import log from "../../../seed/core/log.js";
-import { runChat } from "../../../seed/llm/runChat.js";
-import { emitReplyToAsker } from "./_shared.js";
+// See-resolvers (ruler-lineage, ancestor-plan, ancestor-contracts)
+// live in extensions/governing/seeResolvers.js.
 
 const CONTRACTOR_PROMPT_BODY = `You are a Contractor. The Ruler at this scope has
 ratified a plan and hired you to draft the contracts that will govern
@@ -244,94 +240,31 @@ rejected. The point isn't ceremony emission for its own sake; it's
 making the architectural state explicit so future passes (courts,
 reputation) have something to read.`;
 
-export const contractorRole = Object.freeze({
-  // Dispatch contract
+export const contractorRole = {
   name: "contractor",
-  // Contractor reads plan emission + drafts contracts. SEE for plan
-  // inspection; DO for the emit-contracts tool write. No SUMMON
-  // (Contractor doesn't delegate; the Ruler hires it and reads back).
-  permissions: ["see", "do"],
-  respondMode: "async",
-  triggerOn: ["message"],
 
-  // LLM behavior contract — role.name ("contractor") is the identity.
-  emoji: "📜",
-  label: "Contractor",
+  // On completion, emit the contracts emission back to the Ruler.
+  replyTo: "asker",
+
+  // Preloaded blocks.
+  see: ["ruler-lineage", "ancestor-plan", "ancestor-contracts"],
+
+  // SEE tools for plan inspection.
+  canSee: ["get-tree-context"],
+
+  // DO tools — the emission writes contract matter at the scope's
+  // contracts node.
+  canDo: ["governing-emit-contracts"],
+
+  // Architectural exit gate. The Contractor's turn cannot end without
+  // the emission landing. runChat re-prompts the LLM if it tries to
+  // terminate without firing this tool.
+  exit: { requires: "governing-emit-contracts" },
+
+  // LLM loop config. Contractor is one-shot: read, emit, exit.
   maxMessagesBeforeLoop: 6,
   preserveContextOnLoop: false,
   maxToolCallsPerStep: 1,
-  toolNames: [
-    "get-tree-context",
-    "governing-emit-contracts",
-  ],
-  buildSystemPrompt(ctx) {
-    // username intentionally not destructured — every hiring
-    // instruction comes from "the Ruler at this scope" regardless of
-    // what authority sits above that Ruler.
-    const e = ctx.enrichedContext || {};
-    const parentBlocks = [
-      e.governingLineage,
-      e.governingParentPlan,
-      e.governingContracts,
-    ].filter(Boolean).join("\n\n");
-    const prelude = parentBlocks ? `${parentBlocks}\n\n` : "";
-    return prelude + CONTRACTOR_PROMPT_BODY.trim();
-  },
 
-  // Summon function — kernel scheduler invokes this on inbox arrival.
-  async summon(message, ctx) {
-    const startMs = Date.now();
-    const contractsNodeId = ctx.nodeId || ctx.resolved?.nodeId;
-    if (!contractsNodeId) {
-      log.warn("Contractor", "summon without nodeId; returning empty");
-      return { content: "Internal error: no contracts node." };
-    }
-    log.info("Contractor",
-      `📜 summons at ${String(contractsNodeId).slice(0, 8)} ` +
-      `(from=${message.from || "?"}, correlation=${message.correlation?.slice(0, 8) || "?"})`);
-
-    let result;
-    try {
-      result = await runChat({
-        being:    ctx.toBeing,
-        envelope: message,
-        role:     contractorRole,
-        signal:   ctx.signal,
-      });
-    } catch (err) {
-      if (ctx.signal?.aborted) {
-        log.info("Contractor", `summon aborted (${err.message})`);
-        return null;
-      }
-      log.warn("Contractor", `LLM call failed: ${err.message}`);
-      await emitReplyToAsker({
-        fromNodeId:      contractsNodeId,
-        fromBeing:       ctx.toBeing,
-        fromRoleName:    ctx.toBeing?.name || "contractor",
-        originalMessage: message,
-        exitText:        `Contractor error: ${err.message}`,
-      });
-      return { content: `Contractor error: ${err.message}` };
-    }
-
-    const exitText = result?.answer || "(contracts emitted)";
-    const durationMs = Date.now() - startMs;
-    log.info("Contractor",
-      `📜 summons complete at ${String(contractsNodeId).slice(0, 8)} in ${durationMs}ms`);
-
-    // Reply to whoever asked (Ruler in the normal chain).
-    await emitReplyToAsker({
-      fromNodeId:      contractsNodeId,
-      fromBeing:       ctx.toBeing,
-      fromRoleName:    ctx.toBeing?.name || "contractor",
-      originalMessage: message,
-      exitText,
-    });
-
-    return {
-      content:  exitText,
-      intent:   "chat",
-      summonId: result?.summonId || null,
-    };
-  },
-});
+  prompt: () => CONTRACTOR_PROMPT_BODY,
+};

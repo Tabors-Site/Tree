@@ -11,12 +11,12 @@
 // stopSession handlers retired 2026-05-19 along with the orchestrator
 // era ([[project_tree_orchestrator_deleted]]).
 
-import log from "../../seed/core/log.js";
+import log from "../../seed/system/log.js";
 import { Server } from "socket.io";
-import { decodeToken } from "../../seed/core/identity.js";
-import { hooks as _hooks } from "../../seed/core/hooks.js";  // reserved for future
+import { decodeToken } from "../../seed/being/identity.js";
+import { hooks as _hooks } from "../../seed/system/hooks.js";  // reserved for future
 import { getLandConfigValue } from "../../seed/landConfig.js";
-import { setPushChannel, IBP_EVENT } from "../../seed/core/pushChannel.js";
+import { setPushChannel, IBP_EVENT } from "../../seed/ibp/pushChannel.js";
 
 // Transport-private socket events. These are NOT protocol surface —
 // they're socket.io handshake / UI-side coordination that lives at the
@@ -104,7 +104,7 @@ export function initWebSocketServer(httpServer, originPolicy) {
 
   // Register this transport as the land's push channel. Seed callers
   // (services bundle, IBP verbs, async SUMMON reply path) reach the
-  // socket layer through seed/core/pushChannel.js rather than importing
+  // socket layer through seed/ibp/pushChannel.js rather than importing
   // from this file — that keeps the dependency direction
   // transports → seed and lets a no-WS run (CLI-only, tests) no-op
   // cleanly.

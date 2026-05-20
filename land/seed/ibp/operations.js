@@ -10,7 +10,7 @@
 // See [[project_seed_four_verbs_only]] memory for the architectural
 // commitment.
 
-import log from "./log.js";
+import log from "../system/log.js";
 
 const REGISTRY = new Map();
 
@@ -24,14 +24,14 @@ const EXT_NAME_RE    = /^[a-z][a-z0-9-]*:[a-z][a-z0-9-]*$/;
 const MAX_REGISTERED = 500;
 
 // Target kinds an operation may declare it accepts.
-const VALID_TARGETS = new Set(["node", "being", "artifact", "land", "stance", "position"]);
+const VALID_TARGETS = new Set(["node", "being", "matter", "land", "stance", "position"]);
 
 /**
  * Register a DO operation.
  *
  * @param {string} name - "<action>" for kernel ops, "<ext>:<action>" for extensions
  * @param {object} spec
- * @param {string[]} spec.targets - target kinds the op accepts: node|being|artifact|land|stance|position
+ * @param {string[]} spec.targets - target kinds the op accepts: node|being|matter|land|stance|position
  * @param {Function} spec.handler - async ({ target, params, identity, summonCtx }) => result
  * @param {object} [spec.schema] - payload validation (Zod / JSON schema). Currently stored only; enforcement is on the roadmap.
  * @param {string} [spec.didAction] - name written into the Did. Defaults to operation name.
@@ -166,8 +166,8 @@ export function listOperations(filter = {}) {
  * at boot end after extensions register; idempotent.
  */
 export async function syncOperationsToSubstrate() {
-  const { SYSTEM_ROLE } = await import("./protocol.js");
-  const { syncRegistryToSubstrate } = await import("../tree/registryMirror.js");
+  const { SEED_SPACE } = await import("./protocol.js");
+  const { syncRegistryToSubstrate } = await import("../system/registryMirror.js");
   const items = [];
   for (const op of REGISTRY.values()) {
     items.push({
@@ -182,5 +182,5 @@ export async function syncOperationsToSubstrate() {
       ]),
     });
   }
-  return syncRegistryToSubstrate({ systemRole: SYSTEM_ROLE.OPERATIONS, items });
+  return syncRegistryToSubstrate({ seedSpace: SEED_SPACE.OPERATIONS, items });
 }

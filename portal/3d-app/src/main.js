@@ -68,8 +68,8 @@ async function main() {
     onEnter: (target) => onEnter(target),
     onBeingProximity: (being, inRange, distance) => onBeingProximity(being, inRange, distance),
     onBeingActivate: (being) => onBeingActivate(being),
-    onArtifactEnded: (info) => onArtifactEnded(info),
-    onArtifactPlaybackTick: (info) => onArtifactPlaybackTick(info),
+    onMatterEnded: (info) => onMatterEnded(info),
+    onMatterPlaybackTick: (info) => onMatterPlaybackTick(info),
     isInputBlocked: isGameplayInputBlocked,
   });
   state.scene.setLandTimezone(state.discovery.timezone || null);
@@ -238,16 +238,16 @@ function handleSummon(entry) {
   state.scene.showBeingMessage(being, text);
 }
 
-// An in-world video artifact reached its end. Fire the role-owned
-// consume op; the descriptor refetch will drop the mesh. Currently
-// only the llm-assigner tutorial uses this — the op verifies the
-// artifact carries its marker before deleting.
-async function onArtifactEnded({ artifactId }) {
-  if (!state.client || !artifactId) return;
+// In-world video matter reached its end. Fire the role-owned consume
+// op; the descriptor refetch will drop the mesh. Currently only the
+// llm-assigner tutorial uses this — the op verifies the matter carries
+// its marker before deleting.
+async function onMatterEnded({ matterId }) {
+  if (!state.client || !matterId) return;
   const land = state.discovery?.land;
   if (!land) return;
   try {
-    await state.client.do(`${land}/`, "llm-assigner:complete-tutorial", { artifactId });
+    await state.client.do(`${land}/`, "llm-assigner:complete-tutorial", { matterId });
   } catch (err) {
     console.warn("[3D] llm-assigner:complete-tutorial failed:", err?.code || err?.message || err);
   }
@@ -255,24 +255,24 @@ async function onArtifactEnded({ artifactId }) {
 
 // Periodic playback-position update from the in-world video screen.
 // Fires every 5s while playing, on pause, and at unmount/navigate.
-// Persists to artifact.metadata.tutorial.playbackSeconds via a DO op
+// Persists to matter.metadata.tutorial.playbackSeconds via a DO op
 // so revisits resume at the saved point across browsers and devices.
-async function onArtifactPlaybackTick({ artifactId, currentTime }) {
-  if (!state.client?.connected || !artifactId) return;
+async function onMatterPlaybackTick({ matterId, currentTime }) {
+  if (!state.client?.connected || !matterId) return;
   const land = state.discovery?.land;
   if (!land) return;
   try {
     await state.client.do(`${land}/`, "llm-assigner:save-playback",
-      { artifactId, currentTime });
+      { matterId, currentTime });
   } catch (err) {
     console.warn("[3D] save-playback failed:",
       err?.code || "", err?.message || err);
   }
 }
 
-// Spawn the llm-assigner intro tutorial artifact at the land root.
+// Spawn the llm-assigner intro tutorial matter at the land root.
 // The DO op is idempotent server-side (marker on metadata.tutorial.purpose)
-// so calling it twice returns the existing artifact instead of creating
+// so calling it twice returns the existing matter instead of creating
 // a duplicate. We ALWAYS re-render after the call — even when `created`
 // is false, the descriptor needs to refresh so the mesh shows for the
 // current session (a fresh tab won't have rendered it yet).
@@ -296,7 +296,7 @@ async function spawnLlmAssignerTutorial() {
   const result = await state.client.do(`${land}/`, "llm-assigner:start-tutorial", {});
 
   // Always re-fetch — even when created:false, the live descriptor
-  // for this client may not have the artifact yet.
+  // for this client may not have the matter yet.
   if (state.currentAddress) {
     const desc = await state.client.see(state.currentAddress);
     state.descriptor = desc;
@@ -446,7 +446,7 @@ function openLlmAssignerPanel() {
     currentNodeId: state.descriptor?.address?.nodeId || null,
     onClose:       () => {},
     // Link in the panel: fires the llm-assigner:start-tutorial DO,
-    // then re-fetches the descriptor so the new artifact's 3D video
+    // then re-fetches the descriptor so the new matter's 3D video
     // screen appears in the scene. Server-side marker enforces
     // one-at-a-time (idempotent).
     onSpawnTutorial: spawnLlmAssignerTutorial,
@@ -521,7 +521,6 @@ async function sendSummon(b, text) {
   const message = {
     from: fromStance,
     content: text,
-    intent: "chat",
     correlation,
   };
   try {

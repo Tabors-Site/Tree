@@ -2,13 +2,13 @@
 /**
  * Cascade: The Nervous System
  *
- * When content is written at a node that has metadata.cascade configured
+ * When content is written at a space that has metadata.cascade configured
  * and cascadeEnabled is true in .config, the kernel fires onCascade.
  * The first cascade event is always local: somebody wrote something at
  * a position marked for cascade. Extensions then propagate outward.
  *
  * The kernel checks two booleans on every content write (note, status change):
- *   1. Does this node have metadata.cascade.enabled = true?
+ *   1. Does this space have metadata.cascade.enabled = true?
  *   2. Is cascadeEnabled = true in .config?
  * If both yes, fire onCascade with the write context.
  *
@@ -18,13 +18,30 @@
  * The kernel never blocks inbound. Results are always written.
  */
 
-import log from "../core/log.js";
-import Node from "../models/node.js";
-import { hooks } from "../core/hooks.js";
+import log from "../system/log.js";
+import Space from "../models/space.js";
+import { hooks } from "../system/hooks.js";
 import { getLandConfigValue } from "../landConfig.js";
-import { CASCADE, SYSTEM_ROLE } from "../core/protocol.js";
+import { SEED_SPACE } from "../space/seedSpaces.js";
 import { v4 as uuidv4 } from "uuid";
 import { checkWriteSize, estimateWriteSize } from "./documentGuard.js";
+
+// Cascade result statuses written into the .flow partitions and used by
+// the tree health equation (spaceCircuit.js) to count rejections + failures.
+// SUCCEEDED  handler ran and returned a result
+// FAILED     handler threw
+// REJECTED   pre-handler gate rejected (rate limit, depth cap, payload size, etc.)
+// QUEUED     handler deferred (extension queued the work for later)
+// PARTIAL    handler completed some subset of the work
+// AWAITING   handler is waiting on an external signal before completing
+export const CASCADE = Object.freeze({
+  SUCCEEDED: "succeeded",
+  FAILED:    "failed",
+  REJECTED:  "rejected",
+  QUEUED:    "queued",
+  PARTIAL:   "partial",
+  AWAITING:  "awaiting",
+});
 
 // Track the maximum depth seen per signalId. Prevents extensions from
 // resetting depth to 0 to bypass the maxDepth guard.
@@ -49,31 +66,31 @@ function trackSignalDepth(signalId, depth) {
 }
 
 /**
- * Check if cascade should fire for a content write at a node.
- * Called by afterArtifact and afterStatusChange hooks in the kernel.
+ * Check if cascade should fire for a content write at a space.
+ * Called from the afterMatter hook in the kernel.
  *
- * @param {string} nodeId - the node where content was written
- * @param {object} writeContext - what was written (note data, status change, etc.)
+ * @param {string} spaceId - the space where content was written
+ * @param {object} writeContext - what was written (matter data, metadata, etc.)
  */
-export async function checkCascade(nodeId, writeContext) {
+export async function checkCascade(spaceId, writeContext) {
   // Check global enable
   const enabled = getLandConfigValue("cascadeEnabled");
   if (enabled === false || enabled === "false") return;
 
-  // Load node and check cascade config
-  const node = await Node.findById(nodeId).select("name metadata children systemRole").lean();
-  if (!node || node.systemRole) return;
+  // Load space and check cascade config
+  const space = await Space.findById(spaceId).select("name metadata children seedSpace").lean();
+  if (!space || space.seedSpace) return;
 
-  const meta = node.metadata instanceof Map ? Object.fromEntries(node.metadata) : (node.metadata || {});
+  const meta = space.metadata instanceof Map ? Object.fromEntries(space.metadata) : (space.metadata || {});
   const cascadeConfig = meta.cascade;
   if (!cascadeConfig?.enabled) return;
 
-  // Rate limit: count signals from this node in the current minute
+  // Rate limit: count signals from this space in the current minute
   const rateLimit = parseInt(getLandConfigValue("cascadeRateLimit") || "60", 10);
-  const recentCount = await countRecentSignals(nodeId);
+  const recentCount = await countRecentSignals(spaceId);
   if (recentCount >= rateLimit) {
     const signalId = uuidv4();
-    const result = { status: CASCADE.REJECTED, source: nodeId, payload: { reason: "rate_limited", count: recentCount, limit: rateLimit }, timestamp: new Date(), signalId };
+    const result = { status: CASCADE.REJECTED, source: spaceId, payload: { reason: "rate_limited", count: recentCount, limit: rateLimit }, timestamp: new Date(), signalId };
     await writeResult(signalId, result);
     return { signalId, result };
   }
@@ -82,25 +99,25 @@ export async function checkCascade(nodeId, writeContext) {
   const signalId = uuidv4();
 
   const hookData = {
-    node,
-    nodeId,
+    space,
+    spaceId,
     signalId,
     writeContext,
     cascadeConfig,
-    source: nodeId,
+    source: spaceId,
     depth: 0,
   };
 
   try {
     await hooks.run("onCascade", hookData);
   } catch (err) {
-    log.warn("Cascade", `onCascade failed at ${node.name}: ${err.message}`);
+    log.warn("Cascade", `onCascade failed at ${space.name}: ${err.message}`);
   }
 
   // Write result to .flow (the guarantee: something always gets recorded)
   const result = {
     status: hookData._resultStatus || CASCADE.SUCCEEDED,
-    source: nodeId,
+    source: spaceId,
     payload: hookData._resultPayload || writeContext,
     timestamp: new Date(),
     signalId,
@@ -112,28 +129,28 @@ export async function checkCascade(nodeId, writeContext) {
 }
 
 /**
- * Propagate a cascade signal to a target node.
- * Called by extensions that want to deliver a signal to another node
- * (children, siblings, remote nodes). This is the "arrival" path.
+ * Propagate a cascade signal to a target space.
+ * Called by extensions that want to deliver a signal to another space
+ * (children, siblings, remote spaces). This is the "arrival" path.
  *
  * The kernel never blocks inbound. Always accepts. Always writes a result.
  *
  * @param {object} opts
- * @param {string} opts.nodeId - target node
+ * @param {string} opts.spaceId - target space
  * @param {string} opts.signalId - ties back to the original cascade chain
  * @param {object} opts.payload - signal data
- * @param {string} opts.source - originating nodeId
+ * @param {string} opts.source - originating spaceId
  * @param {number} opts.depth - current propagation depth
  */
-export async function deliverCascade({ nodeId, signalId, payload = {}, source, depth = 0 }) {
+export async function deliverCascade({ spaceId, signalId, payload = {}, source, depth = 0 }) {
   // Per-signal delivery rate limit: cap total deliveries per signalId.
-  // Prevents a single cascade from flooding thousands of nodes.
+  // Prevents a single cascade from flooding thousands of spaces.
   const maxDeliveriesPerSignal = parseInt(getLandConfigValue("cascadeMaxDeliveriesPerSignal") || "500", 10);
   if (signalId) {
     const entry = _signalDepths.get(signalId);
     const deliveries = (entry?.deliveries || 0) + 1;
     if (deliveries > maxDeliveriesPerSignal) {
-      const result = { status: CASCADE.REJECTED, source: nodeId, payload: { reason: "delivery limit exceeded", deliveries, max: maxDeliveriesPerSignal }, timestamp: new Date(), signalId };
+      const result = { status: CASCADE.REJECTED, source: spaceId, payload: { reason: "delivery limit exceeded", deliveries, max: maxDeliveriesPerSignal }, timestamp: new Date(), signalId };
       await writeResult(signalId, result);
       return result;
     }
@@ -146,12 +163,12 @@ export async function deliverCascade({ nodeId, signalId, payload = {}, source, d
   try {
     payloadBytes = Buffer.byteLength(JSON.stringify(payload), "utf8");
   } catch {
-    const result = { status: CASCADE.REJECTED, source: nodeId, payload: { reason: "payload_not_serializable" }, timestamp: new Date(), signalId };
+    const result = { status: CASCADE.REJECTED, source: spaceId, payload: { reason: "payload_not_serializable" }, timestamp: new Date(), signalId };
     await writeResult(signalId, result);
     return result;
   }
   if (payloadBytes > maxPayloadBytes) {
-    const result = { status: CASCADE.REJECTED, source: nodeId, payload: { reason: "payload_too_large", size: payloadBytes, max: maxPayloadBytes }, timestamp: new Date(), signalId };
+    const result = { status: CASCADE.REJECTED, source: spaceId, payload: { reason: "payload_too_large", size: payloadBytes, max: maxPayloadBytes }, timestamp: new Date(), signalId };
     await writeResult(signalId, result);
     return result;
   }
@@ -159,59 +176,59 @@ export async function deliverCascade({ nodeId, signalId, payload = {}, source, d
   // Check depth limit
   const maxDepth = parseInt(getLandConfigValue("cascadeMaxDepth") || "50", 10);
   if (depth > maxDepth) {
-    const result = { status: CASCADE.REJECTED, source: nodeId, payload: { reason: "depth limit exceeded", depth, maxDepth }, timestamp: new Date(), signalId };
+    const result = { status: CASCADE.REJECTED, source: spaceId, payload: { reason: "depth limit exceeded", depth, maxDepth }, timestamp: new Date(), signalId };
     await writeResult(signalId, result);
     return result;
   }
 
   // Depth regression guard: prevent extensions from resetting depth to bypass maxDepth
   if (signalId && !trackSignalDepth(signalId, depth)) {
-    const result = { status: CASCADE.REJECTED, source: nodeId, payload: { reason: "depth regression detected", depth }, timestamp: new Date(), signalId };
+    const result = { status: CASCADE.REJECTED, source: spaceId, payload: { reason: "depth regression detected", depth }, timestamp: new Date(), signalId };
     await writeResult(signalId, result);
     return result;
   }
 
-  // Load target node
-  const node = await Node.findById(nodeId).select("name metadata children systemRole").lean();
-  if (!node) {
-    const result = { status: CASCADE.FAILED, source: nodeId, payload: { reason: "node not found" }, timestamp: new Date(), signalId };
+  // Load target space
+  const space = await Space.findById(spaceId).select("name metadata children seedSpace").lean();
+  if (!space) {
+    const result = { status: CASCADE.FAILED, source: spaceId, payload: { reason: "space not found" }, timestamp: new Date(), signalId };
     await writeResult(signalId, result);
     return result;
   }
-  if (node.systemRole) {
-    const result = { status: CASCADE.REJECTED, source: nodeId, payload: { reason: "system nodes do not cascade" }, timestamp: new Date(), signalId };
+  if (space.seedSpace) {
+    const result = { status: CASCADE.REJECTED, source: spaceId, payload: { reason: "land seed spaces do not cascade" }, timestamp: new Date(), signalId };
     await writeResult(signalId, result);
     return result;
   }
 
   // Circuit breaker: reject signals to tripped trees
-  const nodeMeta = node.metadata instanceof Map ? Object.fromEntries(node.metadata) : (node.metadata || {});
+  const nodeMeta = space.metadata instanceof Map ? Object.fromEntries(space.metadata) : (space.metadata || {});
   if (nodeMeta.circuit?.tripped) {
-    const result = { status: CASCADE.REJECTED, source: nodeId, payload: { reason: "tree circuit breaker tripped" }, timestamp: new Date(), signalId };
+    const result = { status: CASCADE.REJECTED, source: spaceId, payload: { reason: "tree circuit breaker tripped" }, timestamp: new Date(), signalId };
     await writeResult(signalId, result);
     return result;
   }
 
-  // Check node's cascade config
+  // Check space's cascade config
   const meta = nodeMeta;
   const cascadeConfig = meta.cascade;
 
   // Never block inbound. Fire onCascade regardless of local cascade config.
-  // The config controls whether THIS node originates cascades, not whether it receives them.
+  // The config controls whether THIS space originates cascades, not whether it receives them.
   let result;
   try {
-    const hookData = { node, nodeId, signalId, payload, source, depth, cascadeConfig };
+    const hookData = { space, spaceId, signalId, payload, source, depth, cascadeConfig };
     await hooks.run("onCascade", hookData);
     result = {
       status: hookData._resultStatus || CASCADE.SUCCEEDED,
-      source: nodeId,
+      source: spaceId,
       payload: hookData._resultPayload || payload,
       timestamp: new Date(),
       signalId,
       extName: hookData._resultExtName || null,
     };
   } catch (err) {
-    result = { status: CASCADE.FAILED, source: nodeId, payload: { reason: err.message }, timestamp: new Date(), signalId };
+    result = { status: CASCADE.FAILED, source: spaceId, payload: { reason: err.message }, timestamp: new Date(), signalId };
   }
 
   await writeResult(signalId, result);
@@ -219,14 +236,14 @@ export async function deliverCascade({ nodeId, signalId, payload = {}, source, d
 }
 
 /**
- * Count cascade signals from a specific node in the last minute.
+ * Count cascade signals from a specific space in the last minute.
  * Reads today's .flow partition and counts results where source matches.
  */
-async function countRecentSignals(nodeId) {
-  const flowNode = await Node.findOne({ systemRole: SYSTEM_ROLE.FLOW }).select("_id").lean();
+async function countRecentSignals(spaceId) {
+  const flowNode = await Space.findOne({ seedSpace: SEED_SPACE.FLOW }).select("_id").lean();
   if (!flowNode) return 0;
   const today = todayPartitionName();
-  const partition = await Node.findOne({ parent: flowNode._id, name: today }).select("metadata").lean();
+  const partition = await Space.findOne({ parent: flowNode._id, name: today }).select("metadata").lean();
   if (!partition) return 0;
   const results = partition.metadata instanceof Map
     ? partition.metadata.get("results") || {}
@@ -236,34 +253,34 @@ async function countRecentSignals(nodeId) {
   for (const entries of Object.values(results)) {
     const arr = Array.isArray(entries) ? entries : [entries];
     for (const r of arr) {
-      if (r.source === nodeId && new Date(r.timestamp).getTime() > oneMinuteAgo) count++;
+      if (r.source === spaceId && new Date(r.timestamp).getTime() > oneMinuteAgo) count++;
     }
   }
   return count;
 }
 
 // ── .flow Partitioning ──
-// Results are stored in daily partition nodes under .flow.
+// Results are stored in daily partition spaces under .flow.
 // Each partition is a child of .flow named by date (YYYY-MM-DD).
 // This prevents any single document from growing unbounded.
-// Retention deletes entire partition nodes older than resultTTL.
+// Retention deletes entire partition spaces older than resultTTL.
 
 function todayPartitionName() {
   return new Date().toISOString().slice(0, 10); // "2026-03-25"
 }
 
 /**
- * Get or create today's partition node under .flow.
+ * Get or create today's partition space under .flow.
  * Creates the partition on first cascade write of the day.
  */
 async function getOrCreatePartition() {
   const today = todayPartitionName();
-  const flowNode = await Node.findOne({ systemRole: SYSTEM_ROLE.FLOW }).select("_id").lean();
+  const flowNode = await Space.findOne({ seedSpace: SEED_SPACE.FLOW }).select("_id").lean();
   if (!flowNode) return null;
 
   // Atomic upsert: prevents duplicate partitions when concurrent cascade
   // writes hit the midnight boundary simultaneously.
-  const partition = await Node.findOneAndUpdate(
+  const partition = await Space.findOneAndUpdate(
     { parent: flowNode._id, name: today },
     {
       $setOnInsert: {
@@ -279,7 +296,7 @@ async function getOrCreatePartition() {
   );
 
   // Ensure .flow's children includes this partition (idempotent)
-  await Node.updateOne(
+  await Space.updateOne(
     { _id: flowNode._id },
     { $addToSet: { children: partition._id } },
   );
@@ -314,7 +331,7 @@ function findOldestResultKey(results) {
  * Runs asynchronously after writes to avoid racing on the count check.
  */
 async function trimPartitionIfNeeded(partitionId, maxPerDay) {
-  const doc = await Node.findById(partitionId).select("metadata").lean();
+  const doc = await Space.findById(partitionId).select("metadata").lean();
   if (!doc) return;
   const results = doc.metadata instanceof Map
     ? doc.metadata.get("results") || {}
@@ -328,7 +345,7 @@ async function trimPartitionIfNeeded(partitionId, maxPerDay) {
     const oldestKey = findOldestResultKey(results);
     if (!oldestKey) break;
     delete results[oldestKey];
-    await Node.updateOne(
+    await Space.updateOne(
       { _id: partitionId },
       { $unset: { [`metadata.results.${oldestKey}`]: 1 } },
     );
@@ -352,11 +369,11 @@ async function writeResult(signalId, result) {
   try {
     const partitionId = await getOrCreatePartition();
     if (!partitionId) {
-      log.error("Cascade", "No .flow system node found. Cannot write result.");
+      log.error("Cascade", "No .flow land seed space found. Cannot write result.");
       return;
     }
 
-    const partition = await Node.findById(partitionId).select("metadata").lean();
+    const partition = await Space.findById(partitionId).select("metadata").lean();
     if (!partition) return;
 
     // Hard cap: reject writes when signal key count exceeds per-day cap.
@@ -383,7 +400,7 @@ async function writeResult(signalId, result) {
       // Partition over size limit. Drop oldest result synchronously, then recheck.
       const oldestKey = findOldestResultKey(results);
       if (oldestKey) {
-        await Node.updateOne(
+        await Space.updateOne(
           { _id: partitionId },
           { $unset: { [`metadata.results.${oldestKey}`]: 1 } },
         );
@@ -400,7 +417,7 @@ async function writeResult(signalId, result) {
     }
 
     // Write the result.
-    await Node.findByIdAndUpdate(
+    await Space.findByIdAndUpdate(
       partitionId,
       { $push: { [`metadata.results.${signalId}`]: result } },
       { upsert: false },
@@ -415,11 +432,11 @@ async function writeResult(signalId, result) {
  * Searches across all partitions (most recent first).
  */
 export async function getCascadeResults(signalId) {
-  const flowNode = await Node.findOne({ systemRole: SYSTEM_ROLE.FLOW }).select("_id children").lean();
+  const flowNode = await Space.findOne({ seedSpace: SEED_SPACE.FLOW }).select("_id children").lean();
   if (!flowNode) return [];
 
   // Search partitions newest first
-  const partitions = await Node.find({ parent: flowNode._id })
+  const partitions = await Space.find({ parent: flowNode._id })
     .select("metadata")
     .sort({ name: -1 })
     .lean();
@@ -438,10 +455,10 @@ export async function getCascadeResults(signalId) {
  * Get all recent cascade results across partitions.
  */
 export async function getAllCascadeResults(limit = 50) {
-  const flowNode = await Node.findOne({ systemRole: SYSTEM_ROLE.FLOW }).select("_id").lean();
+  const flowNode = await Space.findOne({ seedSpace: SEED_SPACE.FLOW }).select("_id").lean();
   if (!flowNode) return {};
 
-  const partitions = await Node.find({ parent: flowNode._id })
+  const partitions = await Space.find({ parent: flowNode._id })
     .select("metadata")
     .sort({ name: -1 })
     .lean();
@@ -472,19 +489,19 @@ export async function getAllCascadeResults(limit = 50) {
 }
 
 /**
- * Clean up expired partition nodes from .flow based on resultTTL config.
- * Deletes entire partition nodes older than the cutoff. No scanning individual keys.
+ * Clean up expired partition spaces from .flow based on resultTTL config.
+ * Deletes entire partition spaces older than the cutoff. No scanning individual keys.
  */
 export async function cleanupExpiredResults() {
   const ttl = parseInt(getLandConfigValue("resultTTL") || "604800", 10);
   const cutoff = new Date(Date.now() - ttl * 1000);
   const cutoffDate = cutoff.toISOString().slice(0, 10); // "2026-03-18"
 
-  const flowNode = await Node.findOne({ systemRole: SYSTEM_ROLE.FLOW }).select("_id children").lean();
+  const flowNode = await Space.findOne({ seedSpace: SEED_SPACE.FLOW }).select("_id children").lean();
   if (!flowNode) return 0;
 
   // Find partitions older than cutoff (partition name is date string, lexicographic compare works)
-  const expired = await Node.find({
+  const expired = await Space.find({
     parent: flowNode._id,
     name: { $lt: cutoffDate },
   }).select("_id name");
@@ -494,13 +511,13 @@ export async function cleanupExpiredResults() {
   const expiredIds = expired.map(p => p._id);
 
   // Remove from .flow children
-  await Node.updateOne(
+  await Space.updateOne(
     { _id: flowNode._id },
     { $pullAll: { children: expiredIds } },
   );
 
-  // Delete partition nodes
-  await Node.deleteMany({ _id: { $in: expiredIds } });
+  // Delete partition spaces
+  await Space.deleteMany({ _id: { $in: expiredIds } });
 
   log.verbose("Cascade", `Cleaned ${expired.length} expired partition(s) from .flow: ${expired.map(p => p.name).join(", ")}`);
   return expired.length;

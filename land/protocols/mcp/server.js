@@ -11,9 +11,9 @@
  */
 
 import crypto from "crypto";
-import log from "../../seed/core/log.js";
-import { resolveTreeAccess } from "../../seed/tree/treeAccess.js";
-import { getToolOwner, isExtensionBlockedAtNode, isToolReadOnly } from "../../seed/tree/extensionScope.js";
+import log from "../../seed/system/log.js";
+import { resolveSpaceAccess } from "../../seed/space/spaceFetch.js";
+import { getToolOwner, isExtensionBlockedAtNode, isToolReadOnly } from "../../seed/space/extensionScope.js";
 
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
@@ -28,7 +28,7 @@ import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/
 // Registrations are captured as { kind, name, ... } so replay can dispatch
 // to either tool() (shorthand, raw shape) or registerTool() (config form
 // with a pre-built zod schema including passthrough). Callers in the
-// loader use registerTool so context fields like beingId/rootId/nodeId
+// loader use registerTool so context fields like beingId/rootId/spaceId
 // survive the MCP SDK's zod strip.
 const _toolRegistrations = []; // [{ kind: "tool"|"registerTool", ...fields }]
 
@@ -60,7 +60,7 @@ class ToolRegistryProxy {
    * annotations } config object and a handler. The inputSchema may be
    * a pre-built zod object (e.g. passthrough) so unknown fields survive
    * validation. This is how the loader registers extension tools so
-   * every handler can see its MCP context (beingId/rootId/nodeId).
+   * every handler can see its MCP context (beingId/rootId/spaceId).
    */
   registerTool(name, config, handler) {
     _toolRegistrations.push({ kind: "registerTool", name, config, handler });
@@ -244,27 +244,27 @@ async function handleMcpRequest(req, res) {
 
       // Inject position context from the conversation session.
       // These are primitives: where the action is coming from.
-      // Tools can override nodeId for specific actions (navigate elsewhere),
+      // Tools can override spaceId for specific actions (navigate elsewhere),
       // but the default is always the current position.
       if (req.beingId) {
         try {
-          const { getCurrentNodeId, getRootId } = await import("../../seed/beingPosition.js");
+          const { getCurrentSpace, getRootId } = await import("../../seed/being/position.js");
           const beingRootId = getRootId(req.beingId);
-          const beingNodeId = getCurrentNodeId(req.beingId);
+          const beingSpaceId = getCurrentSpace(req.beingId);
           if (!requestArgs.rootId && beingRootId) requestArgs.rootId = beingRootId;
-          if (!requestArgs.nodeId && beingNodeId) requestArgs.nodeId = beingNodeId;
+          if (!requestArgs.spaceId && beingSpaceId) requestArgs.spaceId = beingSpaceId;
         } catch {}
       }
 
-      const nodeId = requestArgs.nodeId ?? requestArgs.rootId ?? requestArgs.parentNodeID ?? requestArgs.parentId ?? requestArgs.rootNodeId;
+      const spaceId = requestArgs.spaceId ?? requestArgs.rootId ?? requestArgs.parentNodeID ?? requestArgs.parentId ?? requestArgs.rootNodeId;
 
       // Tree access check. Read-only tools (annotation readOnlyHint: true)
       // only need canRead; write tools need canWrite. Without this split a
       // read-only tool like get-node-notes was being rejected with
-      // "Invalid nodeId, or you are not in this tree" whenever the user had
+      // "Invalid spaceId, or you are not in this tree" whenever the user had
       // read-only access to the tree — which is wrong and spammed the log.
-      if (nodeId && req.beingId) {
-        const access = await resolveTreeAccess(nodeId, req.beingId);
+      if (spaceId && req.beingId) {
+        const access = await resolveSpaceAccess(spaceId, req.beingId);
         const readOnly = toolName ? isToolReadOnly(toolName) : false;
         const allowed = readOnly ? (access.canRead || access.canWrite) : access.canWrite;
         if (!allowed) {
@@ -273,18 +273,18 @@ async function handleMcpRequest(req, res) {
             error: {
               code: -32602,
               message: readOnly
-                ? `Read access denied for node ${nodeId}.`
-                : `Write access denied for node ${nodeId} (tool "${toolName}" requires write).`,
+                ? `Read access denied for node ${spaceId}.`
+                : `Write access denied for node ${spaceId} (tool "${toolName}" requires write).`,
             },
           });
         }
       }
 
       // Spatial scoping check
-      if (nodeId && toolName) {
+      if (spaceId && toolName) {
         const ownerExt = getToolOwner(toolName);
         if (ownerExt) {
-          const blocked = await isExtensionBlockedAtNode(ownerExt, nodeId);
+          const blocked = await isExtensionBlockedAtNode(ownerExt, spaceId);
           if (blocked) {
             return res.status(403).json({
               jsonrpc: "2.0", id: req.body.id,

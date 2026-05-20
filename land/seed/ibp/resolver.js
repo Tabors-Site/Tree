@@ -3,7 +3,7 @@
 // IBP Address resolves to stance.
 //
 // Resolution turns a parsed stance into the concrete substrate facts a
-// verb handler needs: which Node is being addressed, which tree contains
+// verb handler needs: which Space is being addressed, which tree contains
 // it, which being (if any) is invoked, and the top-down path the client
 // can use for breadcrumb-style rendering. Positions are flat node-IDs;
 // flags on the result describe what kind of position the leaf is
@@ -12,25 +12,25 @@
 // Result shape:
 //   {
 //     isLandRoot, isHomeRoot — flags describing leaf semantics
-//     nodeId, rootId         — substrate handles (rootId = enclosing tree)
+//     spaceId, rootId         — substrate handles (rootId = enclosing tree)
 //     chain                  — [{ name, id }] top-down (land root → leaf)
 //     leafName, leafId       — convenience: last entry of chain
 //     beingId, name          — populated when the address names a being
 //                              (the @being qualifier or a "/~user" home)
 //     being                  — the raw @label from the stance
-//     leafNode               — optional pass-through Node doc (descriptor
+//     leafSpace               — optional pass-through Space doc (descriptor
 //                              builders use it to avoid a refetch)
 //   }
 //
 // Per [[project_zones_retired]] the "zone" concept is gone; every
 // address resolves to a node and callers branch on positional flags.
 
-import { IbpError, IBP_ERR } from "../core/errors.js";
+import { IbpError, IBP_ERR } from "../ibp/errors.js";
 import { getLandDomain } from "./address.js";
 import Being from "../models/being.js";
-import Node from "../models/node.js";
+import Space from "../models/space.js";
 import { getLandRootId } from "../landRoot.js";
-import { resolveRootNode } from "../tree/treeFetch.js";
+import { resolveRootSpace } from "../space/spaceFetch.js";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -51,7 +51,7 @@ export async function resolveStance(stance, opts = {}) {
   const stanceLand = stance.land || localLand;
   if (requireLandMatch && stanceLand !== localLand) {
     throw new IbpError(
-      IBP_ERR.NODE_NOT_FOUND,
+      IBP_ERR.SPACE_NOT_FOUND,
       `Land "${stanceLand}" is not served by this server`,
       { stanceLand, serverLand: localLand },
     );
@@ -60,16 +60,16 @@ export async function resolveStance(stance, opts = {}) {
   const path = stance.path || "/";
   const being = stance.being || null;
 
-  // Land root: path is "/". The land root IS a Node (the systemRole:
+  // Land root: path is "/". The land root IS a Space (the seedSpace:
   // LAND_ROOT row created by ensureLandRoot), so we surface its id as
-  // nodeId. That makes beings whose home is the land root —
+  // spaceId. That makes beings whose home is the land root —
   // land-manager, llm-assigner, auth, citizen — summonable: the inbox
   // sits on the land-root node like any other position.
   if (path === "/") {
     const landRootId = getLandRootId();
     return base({
       isLandRoot: true,
-      nodeId:     landRootId,
+      spaceId:     landRootId,
       leafId:     landRootId,
       being,
     });
@@ -149,12 +149,12 @@ function base(over = {}) {
     beingId:    null,
     name:       null,
     rootId:     null,
-    nodeId:     null,
+    spaceId:     null,
     chain:      [],
     leafName:   null,
     leafId:     null,
     being:      null,
-    leafNode:   null,
+    leafSpace:   null,
     ...over,
   };
 }
@@ -175,28 +175,28 @@ async function walkNodePath({ segments, ownerFilter, contextBeing, being }) {
     : [];
 
   let currentParent = landRootId;
-  let leafNode = null;
+  let leafSpace = null;
 
   for (let i = 0; i < segments.length; i++) {
     const seg = segments[i];
     const isFirst = i === 0;
     const baseQuery = {
       parent:     currentParent,
-      systemRole: null,
+      seedSpace: null,
       ...(isFirst ? ownerFilter : {}),
     };
 
     const fields = "_id name type status parent rootOwner contributors visibility metadata";
     let node = null;
     if (UUID_RE.test(seg)) {
-      node = await Node.findOne({ ...baseQuery, _id: seg }).select(fields).lean();
+      node = await Space.findOne({ ...baseQuery, _id: seg }).select(fields).lean();
     }
     if (!node) {
-      node = await Node.findOne({ ...baseQuery, name: seg }).select(fields).lean();
+      node = await Space.findOne({ ...baseQuery, name: seg }).select(fields).lean();
     }
     if (!node) {
       throw new IbpError(
-        IBP_ERR.NODE_NOT_FOUND,
+        IBP_ERR.SPACE_NOT_FOUND,
         `Segment "${seg}" not found at depth ${i} of path`,
         { segment: seg, depth: i, parent: currentParent },
       );
@@ -204,28 +204,28 @@ async function walkNodePath({ segments, ownerFilter, contextBeing, being }) {
 
     chain.push({ name: node.name, id: node._id });
     currentParent = node._id;
-    leafNode = node;
+    leafSpace = node;
   }
 
   // The enclosing tree root. Walk up to the nearest node with rootOwner;
   // a node may itself be a root.
   let rootId = null;
   try {
-    const treeRoot = await resolveRootNode(leafNode._id);
+    const treeRoot = await resolveRootSpace(leafSpace._id);
     rootId = treeRoot?._id || null;
   } catch {
-    rootId = leafNode.rootOwner ? leafNode._id : null;
+    rootId = leafSpace.rootOwner ? leafSpace._id : null;
   }
 
   return base({
     beingId:  contextBeing?._id || null,
     name:     contextBeing?.name || null,
     rootId,
-    nodeId:   leafNode._id,
+    spaceId:   leafSpace._id,
     chain,
-    leafName: leafNode.name,
-    leafId:   leafNode._id,
+    leafName: leafSpace.name,
+    leafId:   leafSpace._id,
     being,
-    leafNode,
+    leafSpace,
   });
 }

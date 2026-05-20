@@ -11,11 +11,11 @@
 //   - set or clear the browser cookie on the response
 //   - translate the IBP ack shape into HTTP status + JSON body
 
-import log from "../../seed/core/log.js";
-import { sendOk, sendError, ERR } from "../../seed/core/protocol.js";
+import log from "../../seed/system/log.js";
+import { sendOk, sendError, ERR } from "../../seed/ibp/protocol.js";
 import { getLandConfigValue } from "../../seed/landConfig.js";
 import { dispatchIbp } from "../../protocols/ibp/protocol.js";
-import { getLandDomain } from "../../seed/addressing/address.js";
+import { getLandDomain } from "../../seed/ibp/address.js";
 
 function cookieDomain(req) {
   const host = (req.hostname || req.headers?.host || "").replace(/:\d+$/, "");
@@ -201,7 +201,7 @@ const ERR_HTTP_MAP = {
   UNAUTHORIZED:         401,
   FORBIDDEN:            403,
   SESSION_EXPIRED:      403,
-  NODE_NOT_FOUND:       404,
+  SPACE_NOT_FOUND:       404,
   USER_NOT_FOUND:       404,
   ROLE_UNAVAILABLE:     404,
   VERB_NOT_SUPPORTED:   405,

@@ -17,13 +17,13 @@
 import { test, describe, beforeEach, afterEach } from "node:test";
 import { strict as assert } from "node:assert";
 import { mock } from "node:test";
-import { echoEmbodiment } from "../seed/roles/echo.js";
+import { echoEmbodiment } from "../seed/being/roles/echo.js";
 
 // Same inbox + Being stubs the scheduler.test.js uses. Kept local rather
 // than shared so the two test files stay independently runnable.
 const fakeBucket = new Map();
 
-mock.module("../seed/scheduler/inbox.js", {
+mock.module("../seed/cognition/inbox.js", {
   namedExports: {
     pickNextEntry: async (_nodeId, beingId) => {
       const bucket = fakeBucket.get(beingId) || [];
@@ -77,13 +77,13 @@ mock.module("../seed/models/being.js", {
 // Stub the registry to return the REAL echoEmbodiment. Importing the
 // real registry.js would pull in bridge.js (which imports the LLM
 // conversation layer and Mongo), defeating the no-DB premise.
-mock.module("../seed/roles/registry.js", {
+mock.module("../seed/being/roles/registry.js", {
   namedExports: {
     getRole: (name) => name === "echo" ? echoEmbodiment : null,
   },
 });
 
-const { wake, attachHandoff, _resetAll } = await import("../seed/scheduler/scheduler.js");
+const { wake, attachHandoff, _resetAll } = await import("../seed/cognition/scheduler.js");
 
 beforeEach(() => {
   _resetAll();
@@ -91,11 +91,10 @@ beforeEach(() => {
 });
 afterEach(() => _resetAll());
 
-function makeEntry({ correlation, content = "hello", intent = "chat", priority = 1 } = {}) {
+function makeEntry({ correlation, content = "hello", priority = 1 } = {}) {
   return {
     from:           "treeos.ai/@asker",
     content,
-    intent,
     correlation,
     rootCorrelation: correlation,
     priority,
@@ -121,7 +120,7 @@ async function waitUntil(pred, budgetMs = 1000, stepMs = 5) {
 }
 
 describe("echo through substrate — happy path", () => {
-  test("chat intent produces an echo: <content> reply", async () => {
+  test("produces an echo: <content> reply", async () => {
     fakeBucket.set("echo-1", [makeEntry({ correlation: "m1", content: "hello world" })]);
     let received = null;
     attachHandoff("echo-1", "m1", {
@@ -131,23 +130,9 @@ describe("echo through substrate — happy path", () => {
     wake("echo-1", "node-1");
     await waitUntil(() => received !== null);
     assert.equal(received.content, "echo: hello world");
-    assert.equal(received.intent, "chat");
     assert.equal(received.inReplyTo, "m1");
     assert.equal(received.from, "treeos.ai/@echo");
     assert.equal(fakeBucket.get("echo-1")[0].consumed, true);
-  });
-
-  test("query intent echoes back with the same intent", async () => {
-    fakeBucket.set("echo-1", [makeEntry({ correlation: "q1", content: "what?", intent: "query" })]);
-    let received = null;
-    attachHandoff("echo-1", "q1", {
-      responseFromStance: "treeos.ai/@echo",
-      onResponse: (entry) => { received = entry; },
-    });
-    wake("echo-1", "node-1");
-    await waitUntil(() => received !== null);
-    assert.equal(received.content, "echo: what?");
-    assert.equal(received.intent, "query");
   });
 
   test("non-string content is JSON-stringified before echoing", async () => {

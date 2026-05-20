@@ -7,14 +7,14 @@
 //   2. Extension auth strategies (api-keys, custom schemes).
 //   3. Reject (or pass through for `authenticateOptional`).
 //
-// JWT verification lives in seed/core/identity.js so every transport
+// JWT verification lives in seed/being/identity.js so every transport
 // (HTTP middleware, WS, IBP adapter, MCP) shares one source of truth.
 
-import log from "../../../seed/core/log.js";
-import { verifyTokenStrict } from "../../../seed/core/identity.js";
-import { resolveTreeAccess } from "../../../seed/tree/treeAccess.js";
-import { authStrategies } from "../../../seed/core/services.js";
-import { sendError, ERR } from "../../../seed/core/protocol.js";
+import log from "../../../seed/system/log.js";
+import { verifyTokenStrict } from "../../../seed/being/identity.js";
+import { resolveSpaceAccess } from "../../../seed/space/spaceFetch.js";
+import { authStrategies } from "../../../seed/services.js";
+import { sendError, ERR } from "../../../seed/ibp/protocol.js";
 
 function extractToken(req) {
   const authHeader = req.headers.authorization;
@@ -118,7 +118,7 @@ export async function authenticateOptional(req, res, next) {
 // ────────────────────────────────────────────────────────────────────
 
 const TREE_ACCESS_ERRORS = {
-  [ERR.NODE_NOT_FOUND]: { http: 404, code: ERR.NODE_NOT_FOUND },
+  [ERR.SPACE_NOT_FOUND]: { http: 404, code: ERR.SPACE_NOT_FOUND },
   [ERR.INVALID_INPUT]:  { http: 400, code: ERR.INVALID_INPUT },
   [ERR.INVALID_TREE]:   { http: 400, code: ERR.INVALID_TREE },
 };
@@ -126,13 +126,13 @@ const TREE_ACCESS_ERRORS = {
 /**
  * Resolve tree access for the request. Sends error response and returns
  * `false` if access is denied or the node doesn't exist. Returns `true`
- * on success or when no nodeId is present (nothing to check).
+ * on success or when no spaceId is present (nothing to check).
  */
 async function attachTreeAccess(req, res) {
-  const nodeId = req.body?.nodeId || req.params?.nodeId || req.query?.nodeId;
-  if (!nodeId) return true;
+  const spaceId = req.body?.spaceId || req.params?.spaceId || req.query?.spaceId;
+  if (!spaceId) return true;
 
-  const access = await resolveTreeAccess(nodeId, req.beingId);
+  const access = await resolveSpaceAccess(spaceId, req.beingId);
   if (!access.ok) {
     const mapped = TREE_ACCESS_ERRORS[access.error] || { http: 500, code: ERR.INTERNAL };
     sendError(res, mapped.http, mapped.code, access.message);

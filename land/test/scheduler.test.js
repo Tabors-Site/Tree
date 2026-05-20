@@ -25,9 +25,9 @@ let summonImpl = async (message, ctx) => ({ content: `default for ${message.corr
 function freshBucket(beingId, entries) { fakeBucket.set(beingId, entries); }
 function setSummonImpl(fn) { summonImpl = fn; summonCalls = []; }
 
-mock.module("../seed/scheduler/inbox.js", {
+mock.module("../seed/cognition/inbox.js", {
   namedExports: {
-    pickNextEntry: async (nodeId, beingId) => {
+    pickNextEntry: async (spaceId, beingId) => {
       const bucket = fakeBucket.get(beingId) || [];
       let bestIdx = -1, bestPriority = Infinity;
       for (let i = 0; i < bucket.length; i++) {
@@ -39,11 +39,11 @@ mock.module("../seed/scheduler/inbox.js", {
       if (bestIdx < 0) return null;
       return { entry: bucket[bestIdx], index: bestIdx };
     },
-    markSummoned: async (nodeId, beingId, index) => {
+    markSummoned: async (spaceId, beingId, index) => {
       const bucket = fakeBucket.get(beingId) || [];
       if (bucket[index]) bucket[index].summonedAt = new Date().toISOString();
     },
-    markInboxConsumed: async (nodeId, beingId, correlationIds) => {
+    markInboxConsumed: async (spaceId, beingId, correlationIds) => {
       const bucket = fakeBucket.get(beingId) || [];
       const set = new Set(correlationIds);
       for (const e of bucket) {
@@ -54,7 +54,7 @@ mock.module("../seed/scheduler/inbox.js", {
       }
       return { consumed: set.size };
     },
-    readInbox: async (nodeId, beingId, options = {}) => {
+    readInbox: async (spaceId, beingId, options = {}) => {
       const bucket = fakeBucket.get(beingId) || [];
       let entries = bucket;
       if (options.unconsumed) entries = entries.filter((e) => !e.consumed);
@@ -75,7 +75,7 @@ mock.module("../seed/models/being.js", {
       username:    `user-${id}`,
       roles:       [fakeBeingRole],
       defaultRole: fakeBeingRole,
-      operatingMode: humanBeings.has(id) ? "human" : "ai",
+      operatingMode: humanBeings.has(id) ? "human" : "llm",
     }),
   },
 });
@@ -84,7 +84,7 @@ mock.module("../seed/models/being.js", {
 // booting the real WS server. Tests inspect `humanEmits` to verify
 // being-room delivery.
 const humanEmits = [];
-mock.module("../seed/core/pushChannel.js", {
+mock.module("../seed/ibp/pushChannel.js", {
   namedExports: {
     IBP_EVENT: "ibp",
     pushIbp: (beingId, envelope) => {
@@ -103,7 +103,7 @@ mock.module("../seed/core/pushChannel.js", {
   },
 });
 
-mock.module("../seed/roles/registry.js", {
+mock.module("../seed/being/roles/registry.js", {
   namedExports: {
     getRole: () => ({
       name: fakeBeingRole,
@@ -118,7 +118,7 @@ mock.module("../seed/roles/registry.js", {
   },
 });
 
-const { wake, abortCurrent, getCurrentRootCorrelation, attachHandoff, _resetAll, getStats } = await import("../seed/scheduler/scheduler.js");
+const { wake, abortCurrent, getCurrentRootCorrelation, attachHandoff, _resetAll, getStats } = await import("../seed/cognition/scheduler.js");
 
 beforeEach(() => {
   _resetAll();
@@ -135,7 +135,6 @@ function makeEntry(correlation, priority = 1, extras = {}) {
   return {
     from: "treeos.ai/@asker",
     content: `c-${correlation}`,
-    intent: "chat",
     correlation,
     rootCorrelation: extras.rootCorrelation || correlation,
     priority,

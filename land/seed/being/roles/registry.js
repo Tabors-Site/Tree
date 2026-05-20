@@ -3,37 +3,45 @@
 // Role registry.
 //
 // A **role** is the unit of behavior a being carries when summoned.
-// One concept, one registration. The role definition combines:
+// The role definition declares what the role uniquely IS; seed fills
+// in everything derivable.
 //
-//   **Dispatch contract** (kernel calls these when a SUMMON lands):
-//     - honoredIntents: SUMMON intents accepted ("chat" | "place" |
-//       "query" | "be"). Mismatched intents → INVALID_INTENT.
-//     - respondMode: "sync" | "async" | "none".
-//     - triggerOn: ["message"]; "hook" / "schedule" on the roadmap.
-//     - summon(message, ctx): the function the kernel invokes.
+// What the role file writes:
+//   name             - kebab-case identifier
+//   see              - preloaded resolver names (resolved into prompt at build)
+//   canSee           - SEE tool names the LLM may call
+//   canDo            - DO tool names the LLM may call
+//   canSummon        - SUMMON tool names (beings the role may wake)
+//   canBe            - BE tool names (being shapes the role may create)
+//   prompt           - () => prompt body string
+//   replyTo          - optional: "asker" | "chain-initial" reply mode
 //
-//   **Behavior contract** (what the LLM does when the role runs an
-//   LLM call inside summon). All optional — non-LLM roles (auth-
-//   being, echo) omit these:
-//     - buildSystemPrompt(ctx): async function returning the prompt.
-//     - toolNames: array of tool names the LLM may call.
-//     - emoji, label: presentation metadata.
-//     - maxMessagesBeforeLoop, preserveContextOnLoop, maxToolCallsPerStep:
-//       LLM loop config.
-//     - timeoutMs, maxRetries, llmSlot: optional per-role LLM budget.
+// What seed derives at registration:
+//   permissions      - union of verbs implied by canSee / canDo / canSummon / canBe
+//   respondMode      - "async" by default
+//   triggerOn        - ["message"] by default
+//   summon           - auto-wrapped with defaultSummon when not provided
+//   buildSystemPrompt - auto-assembled via seed/cognition/buildPrompt when not provided
 //
-// Roles are the unit. Mode is gone. See [[project_role_subsumes_mode]]
-// and [[project_ibp_universal_grammar]] for the architectural lock.
+// Roles with custom dispatch attach their own `summon` and seed leaves
+// it alone. Roles with custom prompt assembly attach
+// `buildSystemPrompt` and the assembler is skipped. The defaults
+// cover the common case; opt-in covers the rest.
+//
+// See [[project_role_subsumes_mode]], [[project_ibp_universal_grammar]],
+// [[project_role_permissions_not_envelope]].
 
 import { echoEmbodiment } from "./echo.js";
-import log from "../core/log.js";
+import log from "../../system/log.js";
 
 // The role registry seeded with kernel-default roles. Extensions add
-// their own via registerRole. governing's promoteToRuler is the
-// reference example — Ruler/Planner/Contractor/Foreman/Worker.
+// their own via registerRole.
 const REGISTRY = new Map([
   ["echo", echoEmbodiment],
 ]);
+
+const VALID_PERMISSIONS = new Set(["see", "do", "summon", "be"]);
+const VALID_REPLY_MODES = new Set(["asker", "chain-initial"]);
 
 export function getRole(name) {
   if (!name) return null;
@@ -45,24 +53,14 @@ export function listRoles() {
 }
 
 /**
- * Register a role. Extensions ship LLM-driven, code-driven, human, or
- * hybrid roles. The single source of truth: a role carries its dispatch
- * contract AND its LLM-behavior contract.
- *
- * Dispatch fields (required): respondMode, triggerOn, summon.
- * Permissions (required): which IBP verbs the role fires.
- * Behavior fields (optional, for LLM-driven roles): buildSystemPrompt,
- * toolNames, emoji, label, plus LLM loop config (maxMessagesBeforeLoop,
- * maxToolCallsPerStep, timeoutMs, maxRetries, llmSlot).
- *
- * Idempotent — re-registering the same name replaces the prior def.
+ * Register a role. The role file declares what the role IS (name,
+ * capabilities, prompt body); seed defaults the rest and wraps the
+ * default summon dispatcher when not provided.
  *
  * @param {string} name
  * @param {object} def
- * @param {string} [extName] — owning extension; defaults to "role-registry"
+ * @param {string} [extName] - owning extension; defaults to "role-registry"
  */
-const VALID_PERMISSIONS = new Set(["see", "do", "summon", "be"]);
-
 export function registerRole(name, def, extName = "role-registry") {
   if (!name || typeof name !== "string") {
     throw new Error("registerRole requires a non-empty name");
@@ -70,36 +68,57 @@ export function registerRole(name, def, extName = "role-registry") {
   if (!def || typeof def !== "object") {
     throw new Error(`registerRole("${name}") requires a definition object`);
   }
-  const required = ["respondMode", "triggerOn", "summon"];
-  for (const k of required) {
-    if (def[k] === undefined) {
-      throw new Error(`registerRole("${name}") missing required field: ${k}`);
-    }
-  }
 
-  // Permissions — roles declare which IBP verbs they fire. The runChat
-  // tool filter narrows the LLM-visible tool set to tools whose verb
-  // is in this list. Permissions are role identity (see memory
-  // `role-permissions-not-envelope`); envelopes never narrow them.
-  // REQUIRED: every role declares its permissions. No permissive
-  // default — same shape principle as tool defs.
-  if (!Array.isArray(def.permissions)) {
+  // Validate replyTo when present.
+  if (def.replyTo !== undefined && def.replyTo !== null && !VALID_REPLY_MODES.has(def.replyTo)) {
     throw new Error(
-      `registerRole("${name}") missing required field: permissions ` +
-      `(array of "see"|"do"|"summon"|"be")`,
+      `registerRole("${name}") invalid replyTo "${def.replyTo}"; ` +
+      `must be one of ${[...VALID_REPLY_MODES].join("|")}`,
     );
   }
-  for (const p of def.permissions) {
-    if (!VALID_PERMISSIONS.has(p)) {
-      throw new Error(
-        `registerRole("${name}") permissions must be a subset of [see, do, summon, be], got "${p}"`,
-      );
-    }
-  }
-  const permissions = [...new Set(def.permissions)];
 
-  REGISTRY.set(name, Object.freeze({ name, ...def, permissions }));
-  log.verbose("Roles", `Registered role "${name}" (${extName})`);
+  // Derive permissions from canSee/canDo/canSummon/canBe. Role files
+  // declare what they can do; the verb permissions fall out. Authors
+  // never write permissions[] directly — the registry computes it.
+  const derived = derivePermissions(def);
+  // Allow explicit override only if the role has a code-cognition
+  // shape that wants permissions seed cannot derive (e.g., a role
+  // with no canX fields that still needs SUMMON permission to emit).
+  // Most roles never set this.
+  const permissions =
+    Array.isArray(def.permissions) && def.permissions.length > 0
+      ? validatePermissions(name, def.permissions)
+      : derived;
+
+  // Default dispatch contract. Roles needing sync override; roles with
+  // non-message triggers (scheduled, hook-fired) override.
+  const respondMode = def.respondMode || "async";
+  const triggerOn   = Array.isArray(def.triggerOn) && def.triggerOn.length > 0
+    ? def.triggerOn
+    : ["message"];
+
+  // Build the final role spec. summon and buildSystemPrompt are wired
+  // lazily because they depend on seed/cognition modules; importing
+  // them at module top would create a load-order cycle with runChat.
+  // The lazy refs resolve at first call.
+  const spec = {
+    name,
+    ...def,
+    permissions,
+    respondMode,
+    triggerOn,
+  };
+
+  // Auto-wrap with defaultSummon when no custom summon is provided.
+  if (typeof spec.summon !== "function") {
+    spec.summon = makeLazyDefaultSummon(spec);
+  }
+
+  REGISTRY.set(name, Object.freeze(spec));
+  log.verbose("Roles",
+    `Registered role "${name}" (${extName}) ` +
+    `[verbs: ${permissions.join("/")}, ` +
+    `summon: ${typeof def.summon === "function" ? "custom" : "default"}]`);
 }
 
 /**
@@ -109,30 +128,86 @@ export function unregisterRole(name) {
   return REGISTRY.delete(name);
 }
 
+// ────────────────────────────────────────────────────────────────────
+// Derivation helpers
+// ────────────────────────────────────────────────────────────────────
+
+function derivePermissions(def) {
+  const verbs = new Set();
+  if (hasEntries(def.canSee))    verbs.add("see");
+  if (hasEntries(def.canDo))     verbs.add("do");
+  if (hasEntries(def.canSummon)) verbs.add("summon");
+  if (hasEntries(def.canBe))     verbs.add("be");
+  // Roles with preloaded see content also need SEE permission.
+  if (hasEntries(def.see))       verbs.add("see");
+  return [...verbs];
+}
+
+function hasEntries(field) {
+  if (!field) return false;
+  if (Array.isArray(field)) return field.length > 0;
+  if (typeof field === "object") {
+    return Object.values(field).some(
+      (v) => Array.isArray(v) ? v.length > 0 : Boolean(v),
+    );
+  }
+  return false;
+}
+
+function validatePermissions(name, list) {
+  const seen = new Set();
+  for (const p of list) {
+    if (!VALID_PERMISSIONS.has(p)) {
+      throw new Error(
+        `registerRole("${name}") permissions must be a subset of ` +
+        `[see, do, summon, be], got "${p}"`,
+      );
+    }
+    seen.add(p);
+  }
+  return [...seen];
+}
+
+// Lazy default-summon wiring. Avoids a circular import: defaultSummon
+// imports runChat, runChat imports the registry. The closure resolves
+// defaultSummon on first invocation.
+function makeLazyDefaultSummon(role) {
+  let cached = null;
+  return async (message, ctx) => {
+    if (!cached) {
+      const mod = await import("../../cognition/defaultSummon.js");
+      cached = mod.defaultSummon;
+    }
+    return cached({ message, ctx, role });
+  };
+}
+
 /**
  * Sync the role registry into `<land>/.roles` as child Nodes. One child
- * per role; metadata mirrors the role's surface (permissions, label,
- * emoji, toolNames). Called at boot end after extensions register;
- * idempotent.
+ * per role; metadata mirrors the role's surface. Called at boot end
+ * after extensions register; idempotent.
  */
 export async function syncRolesToSubstrate() {
-  const { SYSTEM_ROLE } = await import("../core/protocol.js");
-  const { syncRegistryToSubstrate } = await import("../tree/registryMirror.js");
+  const { SEED_SPACE } = await import("../../ibp/protocol.js");
+  const { syncRegistryToSubstrate } = await import("../../system/registryMirror.js");
   const items = [];
   for (const [name, role] of REGISTRY) {
     items.push({
       name,
       metadata: new Map([
         ["role", {
-          permissions:  role.permissions || [],
-          respondMode:  role.respondMode  || null,
-          triggerOn:    role.triggerOn    || [],
-          toolNames:    role.toolNames    || [],
-          label:        role.label        || name,
-          emoji:        role.emoji        || null,
+          permissions: role.permissions || [],
+          respondMode: role.respondMode  || null,
+          triggerOn:   role.triggerOn    || [],
+          canSee:      role.canSee       || [],
+          canDo:       role.canDo        || [],
+          canSummon:   role.canSummon    || [],
+          canBe:       role.canBe        || [],
+          see:         role.see          || [],
+          replyTo:     role.replyTo      || null,
         }],
       ]),
     });
   }
-  return syncRegistryToSubstrate({ systemRole: SYSTEM_ROLE.ROLES, items });
+  return syncRegistryToSubstrate({ seedSpace: SEED_SPACE.ROLES, items });
 }

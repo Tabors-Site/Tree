@@ -14,20 +14,20 @@
 // for queries that legitimately want governing-X semantics; LCA
 // is a structural query that wants exact ancestry).
 
-import Node from "../../../seed/models/node.js";
-import log from "../../../seed/core/log.js";
+import Space from "../../../seed/models/space.js";
+import log from "../../../seed/system/log.js";
 
 const MAX_DEPTH = 64; // paranoia cap; real trees nest much shallower
 
 /**
  * Build the root-first ancestor chain for a node. Returns
- * [rootId, ..., parentId, nodeId]. Empty array if the node does not
+ * [rootId, ..., parentId, spaceId]. Empty array if the node does not
  * exist or the chain hits a cycle.
  */
-export async function ancestorChain(nodeId) {
+export async function ancestorChain(spaceId) {
   const chain = [];
   const visited = new Set();
-  let cursor = String(nodeId || "");
+  let cursor = String(spaceId || "");
   for (let i = 0; i < MAX_DEPTH; i++) {
     if (!cursor) break;
     if (visited.has(cursor)) {
@@ -36,7 +36,7 @@ export async function ancestorChain(nodeId) {
     }
     visited.add(cursor);
     chain.unshift(cursor);
-    const node = await Node.findById(cursor).select("parent").lean();
+    const node = await Space.findById(cursor).select("parent").lean();
     if (!node?.parent) break;
     cursor = String(node.parent);
   }
@@ -45,7 +45,7 @@ export async function ancestorChain(nodeId) {
 
 /**
  * Find the lowest common ancestor of N node ids. Returns the LCA's
- * nodeId as a string, or null if the nodes do not share an ancestor
+ * spaceId as a string, or null if the nodes do not share an ancestor
  * (different trees) or any node is missing.
  *
  * For one node, returns that node. For zero nodes, returns null.

@@ -2,14 +2,14 @@
 //
 // Envelope: { id, verb: "see", address, payload: { live?: boolean }, identity? }
 //
-// Thin glue: delegates to `seeVerb` in seed/core/verbs.js for the
+// Thin glue: delegates to `seeVerb` in seed/ibp/verbs.js for the
 // descriptor, then subscribes the socket to live updates when the
 // payload asks for them. See [[project_four_verbs_one_execution]].
 
-import log from "../../../seed/core/log.js";
-import { IbpError, IBP_ERR, isIbpError } from "../../../seed/core/errors.js";
+import log from "../../../seed/system/log.js";
+import { IbpError, IBP_ERR, isIbpError } from "../../../seed/ibp/errors.js";
 import { ackOk, ackError } from "../envelope.js";
-import { seeVerb } from "../../../seed/core/verbs.js";
+import { seeVerb } from "../../../seed/ibp/verbs.js";
 import { subscribePosition } from "../live.js";
 
 export async function handleSee(socket, env, ack) {
@@ -27,8 +27,8 @@ export async function handleSee(socket, env, ack) {
     // Wire-layer concern: live updates need a socket to push patches
     // through. In-process callers of seeVerb don't have one, so the
     // subscription stays here rather than in the seed verb.
-    if (payload?.live === true && socket?.id && descriptor?.address?.nodeId) {
-      subscribePosition(socket, descriptor.address.nodeId);
+    if (payload?.live === true && socket?.id && descriptor?.address?.spaceId) {
+      subscribePosition(socket, descriptor.address.spaceId);
     }
 
     return ackOk(ack, id, descriptor);

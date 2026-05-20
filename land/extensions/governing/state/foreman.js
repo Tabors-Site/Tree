@@ -31,9 +31,9 @@
 // records which record is active at any moment, with supersedes refs
 // preserving the audit chain.
 
-import Node from "../../../seed/models/node.js";
-import log from "../../../seed/core/log.js";
-import { ensureExecutionNode, findExecutionNode } from "./executionNode.js";
+import Space from "../../../seed/models/space.js";
+import log from "../../../seed/system/log.js";
+import { ensureExecutionNode, findExecutionNode } from "./executionSpace.js";
 
 const NS = "governing";
 
@@ -97,7 +97,7 @@ export function parseExecutionRef(ref) {
  * Counts existing execution-record children and increments.
  */
 async function nextRecordOrdinal(executionNodeId) {
-  const count = await Node.countDocuments({
+  const count = await Space.countDocuments({
     parent: executionNodeId,
     type: "execution-record",
   });
@@ -190,11 +190,11 @@ export async function appendExecutionRecord({
   if (!rulerNodeId || !planEmissionRef) return null;
 
   // Ensure the execution-node parent exists.
-  let executionNode = await findExecutionNode(rulerNodeId);
-  if (!executionNode) {
-    executionNode = await ensureExecutionNode({ scopeNodeId: rulerNodeId, beingId, core });
+  let executionSpace = await findExecutionNode(rulerNodeId);
+  if (!executionSpace) {
+    executionSpace = await ensureExecutionNode({ scopeNodeId: rulerNodeId, beingId, core });
   }
-  if (!executionNode) {
+  if (!executionSpace) {
     log.warn("Governing", `appendExecutionRecord: no execution-node resolvable at ${String(rulerNodeId).slice(0, 8)}`);
     return null;
   }
@@ -217,7 +217,7 @@ export async function appendExecutionRecord({
     }
   }
 
-  const ordinal = await nextRecordOrdinal(executionNode._id);
+  const ordinal = await nextRecordOrdinal(executionSpace._id);
   // Run records inherit their slug from the plan emission they're
   // dispatching. A run named after the plan it executes makes the
   // tree readable: "runs/single-react-component-canvas-toolbar"
@@ -233,7 +233,7 @@ export async function appendExecutionRecord({
   // Phase 3 migration: verb-surface create. Fires kernel hooks + Did.
   let recordNode = null;
   try {
-    recordNode = await core.do(executionNode._id, "create-child", {
+    recordNode = await core.do(executionSpace._id, "create-child", {
       name: recordName,
       type: "execution-record",
       beingId,
@@ -243,19 +243,19 @@ export async function appendExecutionRecord({
   }
 
   if (!recordNode) {
-    const { default: NodeModel } = await import("../../../seed/models/node.js");
+    const { default: NodeModel } = await import("../../../seed/models/space.js");
     const { v4: uuid } = await import("uuid");
     recordNode = await NodeModel.create({
       _id: uuid(),
       name: recordName,
       type: "execution-record",
-      parent: executionNode._id,
+      parent: executionSpace._id,
       children: [],
       contributors: [],
       status: "active",
     });
     await NodeModel.updateOne(
-      { _id: executionNode._id },
+      { _id: executionSpace._id },
       { $addToSet: { children: recordNode._id } },
     );
   }
@@ -278,7 +278,7 @@ export async function appendExecutionRecord({
     // Phase 3 migration ([[project_seed_four_verbs_only]]): verb-surface
     // write. merge:true preserves other NS keys atomically; no manual
     // read-spread-write.
-    const node = await Node.findById(recordNode._id);
+    const node = await Space.findById(recordNode._id);
     if (node) {
       await core.do(node, "set-meta", {
         namespace: NS,
@@ -296,7 +296,7 @@ export async function appendExecutionRecord({
   }
 
   // Append executionApproval on the Ruler.
-  const executionRef = buildExecutionRef(executionNode._id, recordNode._id);
+  const executionRef = buildExecutionRef(executionSpace._id, recordNode._id);
   let approvalRef = null;
   try {
     approvalRef = await appendExecutionApproval({
@@ -340,7 +340,7 @@ export async function appendExecutionApproval({
 }) {
   if (!rulerNodeId || !executionRef) return null;
   if (!core?.do) throw new Error("appendExecutionApproval requires `core` (verb surface)");
-  const node = await Node.findById(rulerNodeId);
+  const node = await Space.findById(rulerNodeId);
   if (!node) return null;
 
   const meta = node.metadata instanceof Map
@@ -370,7 +370,7 @@ export async function appendExecutionApproval({
   // Fire the ratification hook for Pass 2 court listeners and the
   // dashboard. Mirrors governing:planRatified / contractRatified.
   try {
-    const { hooks } = await import("../../../seed/core/hooks.js");
+    const { hooks } = await import("../../../seed/system/hooks.js");
     hooks.run("governing:executionRatified", {
       rulerNodeId: String(rulerNodeId),
       executionRef: String(executionRef),
@@ -392,7 +392,7 @@ export async function appendExecutionApproval({
  */
 export async function readExecutionApprovalsAtRuler(rulerNodeId) {
   if (!rulerNodeId) return [];
-  const node = await Node.findById(rulerNodeId).select("_id metadata").lean();
+  const node = await Space.findById(rulerNodeId).select("_id metadata").lean();
   if (!node) return [];
   const meta = node.metadata instanceof Map
     ? node.metadata.get(NS)
@@ -437,7 +437,7 @@ export async function readActiveExecutionRecord(rulerNodeId) {
   if (!active?.executionRef) return null;
   const parsed = parseExecutionRef(active.executionRef);
   if (!parsed) return null;
-  const node = await Node.findById(parsed.recordId).select("_id metadata").lean();
+  const node = await Space.findById(parsed.recordId).select("_id metadata").lean();
   if (!node) return null;
   const meta = node.metadata instanceof Map
     ? node.metadata.get(NS)
@@ -472,7 +472,7 @@ export async function updateStepStatus({
 }) {
   if (!recordNodeId || typeof stepIndex !== "number" || !updates) return null;
   if (!core?.do) throw new Error("updateStepStatus requires `core` (verb surface)");
-  const node = await Node.findById(recordNodeId);
+  const node = await Space.findById(recordNodeId);
   if (!node) return null;
 
   const meta = node.metadata instanceof Map
@@ -588,7 +588,7 @@ export async function freezeExecutionRecord({
 }) {
   if (!recordNodeId) return null;
   if (!core?.do) throw new Error("freezeExecutionRecord requires `core` (verb surface)");
-  const node = await Node.findById(recordNodeId);
+  const node = await Space.findById(recordNodeId);
   if (!node) return null;
 
   const meta = node.metadata instanceof Map
@@ -624,7 +624,7 @@ export async function freezeExecutionRecord({
     const hookName = hookMap[nextStatus];
     if (hookName) {
       try {
-        const { hooks } = await import("../../../seed/core/hooks.js");
+        const { hooks } = await import("../../../seed/system/hooks.js");
         hooks.run(hookName, {
           recordNodeId: String(recordNodeId),
           priorStatus,

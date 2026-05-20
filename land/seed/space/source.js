@@ -3,43 +3,44 @@
 // .source — the seed's own source tree as substrate.
 //
 // At boot, seed walks the land/ directory and plants a recursive
-// filesystem-origin artifact tree under the `.source` system node.
-// Each directory becomes a folder-artifact; each file becomes a
-// file-artifact; parent-child relationships are captured through
-// parentArtifactId so the artifact tree faithfully mirrors disk.
+// filesystem-origin matter tree under the `.source` land seed space.
+// Each directory becomes a folder-matter; each file becomes a
+// file-matter; parent-child relationships are captured through
+// parentMatterId so the matter tree faithfully mirrors disk.
 //
 // The codebase becomes substrate-native at the right layer: the AI
 // (or any being) running inside the land can SEE its own implementation
 // through the same protocol it uses for every other position.
 //
 // Read-only sync direction. The substrate cannot mutate seed files
-// through verbs — DO operations against `.source` artifacts reject with
+// through verbs — DO operations against `.source` matters reject with
 // ORIGIN_READ_ONLY (gate lives in ibp/verbs/do.js). The kernel's
-// reconciliation walk uses direct Artifact saves and bypasses the
-// public createArtifact path because that path also (correctly)
-// refuses to author into system nodes.
+// reconciliation walk uses direct Matter saves and bypasses the
+// public createMatter path because that path also (correctly)
+// refuses to author into land seed spaces.
 //
 // See [[project_seed_source_system_node]] (decision 2026-05-19) and
 // [[project_substrate_as_universal_workspace]] (the canonical proof
-// case for parentArtifactId).
+// case for parentMatterId).
 
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
 
-import log from "./log.js";
-import Artifact from "../models/artifact.js";
-import Node from "../models/node.js";
-import { ARTIFACT_ORIGIN, SYSTEM_OWNER, SYSTEM_ROLE } from "./protocol.js";
+import log from "../system/log.js";
+import Matter from "../models/matter.js";
+import Space from "../models/space.js";
+import { MATTER_ORIGIN } from "../matter/origins.js";
+import { SEED_SPACE, SEED_BEING } from "./seedSpaces.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname  = path.dirname(__filename);
 
-// Default root: the land/ directory (one level above seed/). The
+// Default root: the land/ directory (two levels above seed/system/).
 // SOURCE_TREE_ROOT env var overrides for tests or non-standard layouts.
-const DEFAULT_SOURCE_ROOT = path.resolve(__dirname, "..");
+const DEFAULT_SOURCE_ROOT = path.resolve(__dirname, "../..");
 
-// Entries skipped during the walk. Build artifacts, dependency trees,
+// Entries skipped during the walk. Build matters, dependency trees,
 // runtime data, secrets, and OS noise. The list is conservative; the
 // goal is a mirror of source-controlled code, not the full disk.
 const DEFAULT_IGNORE = new Set([
@@ -71,7 +72,7 @@ const DEFAULT_IGNORE = new Set([
 const DEFAULT_MAX_FILE_BYTES = 50 * 1024 * 1024; // 50 MB
 
 // Cached source node id, looked up at boot and reused for the read-only
-// DO gate (ibp/verbs/do.js calls isSourceNodeId).
+// DO gate (ibp/verbs/do.js calls isSourceSpaceId).
 let sourceNodeIdCache = null;
 
 // ────────────────────────────────────────────────────────────────────
@@ -79,11 +80,11 @@ let sourceNodeIdCache = null;
 // ────────────────────────────────────────────────────────────────────
 
 /**
- * Bootstrap the `.source` artifact tree. Idempotent. Verifies the
- * `.source` system node exists, then kicks off a reconciliation walk
+ * Bootstrap the `.source` matter tree. Idempotent. Verifies the
+ * `.source` land seed space exists, then kicks off a reconciliation walk
  * **detached** so boot is not blocked by a multi-thousand-file scan.
  *
- * Call after ensureLandRoot() so the system node already exists.
+ * Call after ensureLandRoot() so the land seed space already exists.
  *
  * @param {object} [opts]
  * @param {string} [opts.rootPath]    - directory to mirror (default land/)
@@ -95,12 +96,12 @@ export async function ensureSourceTree(opts = {}) {
   const ignore   = opts.ignore   || DEFAULT_IGNORE;
   const detached = opts.detached !== false;
 
-  const sourceNode = await Node.findOne({ systemRole: SYSTEM_ROLE.SOURCE }).select("_id").lean();
-  if (!sourceNode) {
-    log.warn("Source", `.source system node missing; cannot populate source tree`);
+  const sourceSpace = await Space.findOne({ seedSpace: SEED_SPACE.SOURCE }).select("_id").lean();
+  if (!sourceSpace) {
+    log.warn("Source", `.source land seed space missing; cannot populate source tree`);
     return null;
   }
-  sourceNodeIdCache = String(sourceNode._id);
+  sourceNodeIdCache = String(sourceSpace._id);
 
   if (!fs.existsSync(rootPath)) {
     log.warn("Source", `source root not found on disk: ${rootPath}`);
@@ -123,8 +124,8 @@ export async function ensureSourceTree(opts = {}) {
 }
 
 /**
- * Reconcile the substrate artifact tree against the disk tree rooted
- * at rootPath. Creates artifacts for new entries, updates ones whose
+ * Reconcile the substrate matter tree against the disk tree rooted
+ * at rootPath. Creates matters for new entries, updates ones whose
  * size or mtime changed, removes ones whose disk entry vanished, and
  * leaves identical ones alone. Always safe to re-run.
  *
@@ -133,36 +134,36 @@ export async function ensureSourceTree(opts = {}) {
 export async function syncSourceTree({ rootPath, ignore = DEFAULT_IGNORE } = {}) {
   const targetPath = rootPath || process.env.SOURCE_TREE_ROOT || DEFAULT_SOURCE_ROOT;
 
-  const sourceNode = await Node.findOne({ systemRole: SYSTEM_ROLE.SOURCE }).select("_id").lean();
-  if (!sourceNode) throw new Error(".source system node not found");
-  const sourceNodeId = String(sourceNode._id);
+  const sourceSpace = await Space.findOne({ seedSpace: SEED_SPACE.SOURCE }).select("_id").lean();
+  if (!sourceSpace) throw new Error(".source land seed space not found");
+  const sourceNodeId = String(sourceSpace._id);
   sourceNodeIdCache = sourceNodeId;
 
   const stats = { created: 0, updated: 0, removed: 0, kept: 0 };
 
-  // Root artifact for targetPath. One root per .source node: lookup by
-  // (nodeId, parentArtifactId: null, origin: filesystem).
-  let rootArtifact = await Artifact.findOne({
-    nodeId: sourceNodeId,
-    parentArtifactId: null,
-    origin: ARTIFACT_ORIGIN.FILESYSTEM,
+  // Root matter for targetPath. One root per .source node: lookup by
+  // (spaceId, parentMatterId: null, origin: filesystem).
+  let rootMatter = await Matter.findOne({
+    spaceId: sourceNodeId,
+    parentMatterId: null,
+    origin: MATTER_ORIGIN.FILESYSTEM,
   });
 
   const rootName = path.basename(targetPath) || "/";
-  if (!rootArtifact) {
-    rootArtifact = await createSourceArtifact({
-      nodeId: sourceNodeId,
-      parentArtifactId: null,
+  if (!rootMatter) {
+    rootMatter = await createSourceMatter({
+      spaceId: sourceNodeId,
+      parentMatterId: null,
       name: rootName,
       diskPath: targetPath,
       kind: "directory",
     });
     stats.created++;
-  } else if (rootArtifact.content?.path !== targetPath || rootArtifact.name !== rootName) {
+  } else if (rootMatter.content?.path !== targetPath || rootMatter.name !== rootName) {
     // Source root moved on disk or renamed; update in place.
-    rootArtifact.name = rootName;
-    rootArtifact.content = { ...rootArtifact.content, path: targetPath, kind: "directory" };
-    await rootArtifact.save();
+    rootMatter.name = rootName;
+    rootMatter.content = { ...rootMatter.content, path: targetPath, kind: "directory" };
+    await rootMatter.save();
     stats.updated++;
   } else {
     stats.kept++;
@@ -170,7 +171,7 @@ export async function syncSourceTree({ rootPath, ignore = DEFAULT_IGNORE } = {})
 
   await reconcileChildren({
     diskPath: targetPath,
-    parentArtifactId: String(rootArtifact._id),
+    parentMatterId: String(rootMatter._id),
     sourceNodeId,
     ignore,
     stats,
@@ -180,28 +181,28 @@ export async function syncSourceTree({ rootPath, ignore = DEFAULT_IGNORE } = {})
 }
 
 /**
- * Cached lookup of the .source system node id. Returns null before
+ * Cached lookup of the .source land seed space id. Returns null before
  * ensureSourceTree has run, or if the node has not been created.
- * Used by the DO gate to deny writes against .source artifacts.
+ * Used by the DO gate to deny writes against .source matters.
  */
-export function getSourceNodeId() {
+export function getSourceSpaceId() {
   return sourceNodeIdCache;
 }
 
 /**
- * Truthy if the given nodeId is the .source system node. Synchronous
+ * Truthy if the given spaceId is the .source land seed space. Synchronous
  * after ensureSourceTree has primed the cache.
  */
-export function isSourceNodeId(nodeId) {
-  if (!sourceNodeIdCache || !nodeId) return false;
-  return String(nodeId) === sourceNodeIdCache;
+export function isSourceSpaceId(spaceId) {
+  if (!sourceNodeIdCache || !spaceId) return false;
+  return String(spaceId) === sourceNodeIdCache;
 }
 
 // ────────────────────────────────────────────────────────────────────
 // RECONCILIATION
 // ────────────────────────────────────────────────────────────────────
 
-async function reconcileChildren({ diskPath, parentArtifactId, sourceNodeId, ignore, stats }) {
+async function reconcileChildren({ diskPath, parentMatterId, sourceNodeId, ignore, stats }) {
   let entries;
   try {
     entries = await fs.promises.readdir(diskPath, { withFileTypes: true });
@@ -220,9 +221,9 @@ async function reconcileChildren({ diskPath, parentArtifactId, sourceNodeId, ign
   }
 
   // Existing mirrored children for this parent.
-  const existing = await Artifact.find({
-    parentArtifactId,
-    origin: ARTIFACT_ORIGIN.FILESYSTEM,
+  const existing = await Matter.find({
+    parentMatterId,
+    origin: MATTER_ORIGIN.FILESYSTEM,
   }).select("_id name content").lean();
   const existingByName = new Map(existing.map(a => [a.name, a]));
 
@@ -232,40 +233,40 @@ async function reconcileChildren({ diskPath, parentArtifactId, sourceNodeId, ign
     const ex = existingByName.get(name);
 
     if (entry.isDirectory()) {
-      let artifactId;
+      let matterId;
       if (!ex) {
-        const created = await createSourceArtifact({
-          nodeId: sourceNodeId,
-          parentArtifactId,
+        const created = await createSourceMatter({
+          spaceId: sourceNodeId,
+          parentMatterId,
           name,
           diskPath: full,
           kind: "directory",
         });
-        artifactId = String(created._id);
+        matterId = String(created._id);
         stats.created++;
       } else if (ex.content?.kind !== "directory") {
         // Type changed (file became dir). Drop the old subtree and recreate.
-        await removeArtifactSubtree(ex._id, stats);
-        const created = await createSourceArtifact({
-          nodeId: sourceNodeId,
-          parentArtifactId,
+        await removeMatterSubtree(ex._id, stats);
+        const created = await createSourceMatter({
+          spaceId: sourceNodeId,
+          parentMatterId,
           name,
           diskPath: full,
           kind: "directory",
         });
-        artifactId = String(created._id);
+        matterId = String(created._id);
         stats.created++;
       } else {
         // Refresh path if the rootPath shifted under us.
         if (ex.content?.path !== full) {
-          await Artifact.updateOne({ _id: ex._id }, { $set: { content: { ...ex.content, path: full, kind: "directory" } } });
+          await Matter.updateOne({ _id: ex._id }, { $set: { content: { ...ex.content, path: full, kind: "directory" } } });
           stats.updated++;
         } else {
           stats.kept++;
         }
-        artifactId = String(ex._id);
+        matterId = String(ex._id);
       }
-      await reconcileChildren({ diskPath: full, parentArtifactId: artifactId, sourceNodeId, ignore, stats });
+      await reconcileChildren({ diskPath: full, parentMatterId: matterId, sourceNodeId, ignore, stats });
       continue;
     }
 
@@ -289,9 +290,9 @@ async function reconcileChildren({ diskPath, parentArtifactId, sourceNodeId, ign
     };
 
     if (!ex) {
-      await createSourceArtifact({
-        nodeId: sourceNodeId,
-        parentArtifactId,
+      await createSourceMatter({
+        spaceId: sourceNodeId,
+        parentMatterId,
         name,
         diskPath: full,
         kind: "file",
@@ -302,10 +303,10 @@ async function reconcileChildren({ diskPath, parentArtifactId, sourceNodeId, ign
       });
       stats.created++;
     } else if (ex.content?.kind !== "file") {
-      await removeArtifactSubtree(ex._id, stats);
-      await createSourceArtifact({
-        nodeId: sourceNodeId,
-        parentArtifactId,
+      await removeMatterSubtree(ex._id, stats);
+      await createSourceMatter({
+        spaceId: sourceNodeId,
+        parentMatterId,
         name,
         diskPath: full,
         kind: "file",
@@ -316,7 +317,7 @@ async function reconcileChildren({ diskPath, parentArtifactId, sourceNodeId, ign
       });
       stats.created++;
     } else if (contentChanged(ex.content, desiredContent)) {
-      await Artifact.updateOne(
+      await Matter.updateOne(
         { _id: ex._id },
         { $set: { content: desiredContent } },
       );
@@ -326,29 +327,29 @@ async function reconcileChildren({ diskPath, parentArtifactId, sourceNodeId, ign
     }
   }
 
-  // Remove substrate artifacts whose disk entry vanished.
+  // Remove substrate matters whose disk entry vanished.
   for (const [name, ex] of existingByName) {
     if (onDisk.has(name)) continue;
-    await removeArtifactSubtree(ex._id, stats);
+    await removeMatterSubtree(ex._id, stats);
   }
 }
 
-async function removeArtifactSubtree(rootId, stats) {
+async function removeMatterSubtree(rootId, stats) {
   const toDelete = [];
   const stack = [String(rootId)];
   while (stack.length) {
     const id = stack.pop();
     toDelete.push(id);
-    const kids = await Artifact.find({ parentArtifactId: id }).select("_id").lean();
+    const kids = await Matter.find({ parentMatterId: id }).select("_id").lean();
     for (const k of kids) stack.push(String(k._id));
   }
   if (toDelete.length === 0) return;
   // Detach from any parent.children arrays before deleting the docs.
-  await Artifact.updateMany(
+  await Matter.updateMany(
     { children: { $in: toDelete } },
     { $pull: { children: { $in: toDelete } } },
   );
-  await Artifact.deleteMany({ _id: { $in: toDelete } });
+  await Matter.deleteMany({ _id: { $in: toDelete } });
   stats.removed += toDelete.length;
 }
 
@@ -366,11 +367,11 @@ function contentChanged(prev, next) {
 }
 
 // ────────────────────────────────────────────────────────────────────
-// AUTHORING (kernel-internal; bypasses createArtifact's system-node gate)
+// AUTHORING (kernel-internal; bypasses createMatter's system-node gate)
 // ────────────────────────────────────────────────────────────────────
 
-async function createSourceArtifact({
-  nodeId, parentArtifactId, name, diskPath, kind,
+async function createSourceMatter({
+  spaceId, parentMatterId, name, diskPath, kind,
   size = null, mtime = null, mimeType = null, oversize = false,
 }) {
   const content = { path: diskPath, kind };
@@ -379,25 +380,25 @@ async function createSourceArtifact({
   if (mimeType != null) content.mimeType = mimeType;
   if (oversize)         content.oversize = true;
 
-  const artifact = new Artifact({
-    nodeId,
-    parentArtifactId,
-    beingId: SYSTEM_OWNER,
+  const matter = new Matter({
+    spaceId,
+    parentMatterId,
+    beingId: SEED_BEING,
     name,
-    origin: ARTIFACT_ORIGIN.FILESYSTEM,
+    origin: MATTER_ORIGIN.FILESYSTEM,
     content,
     metadata: new Map([["source", { readOnly: true }]]),
   });
-  await artifact.save();
+  await matter.save();
 
-  if (parentArtifactId) {
-    await Artifact.updateOne(
-      { _id: parentArtifactId },
-      { $addToSet: { children: artifact._id } },
+  if (parentMatterId) {
+    await Matter.updateOne(
+      { _id: parentMatterId },
+      { $addToSet: { children: matter._id } },
     );
   }
 
-  return artifact;
+  return matter;
 }
 
 // ────────────────────────────────────────────────────────────────────

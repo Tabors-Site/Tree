@@ -12,7 +12,7 @@
 //   { kind: "seed", name: "coder:governing-coder", label: "coder",
 //     description: "Bootstrap a code-project rulership..." }
 //
-// Today only the "seed" kind exists; future kinds (artifact templates,
+// Today only the "seed" kind exists; future kinds (matter templates,
 // summons, tools) drop into the same shape without touching the hotbar.
 
 const SLOT_COUNT = 9;

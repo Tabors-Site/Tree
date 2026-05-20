@@ -16,32 +16,32 @@ import { mock } from "node:test";
 // objects with `_id` to mirror the real Mongoose lean() shape.
 let fakeAncestorChain = [];
 
-mock.module("../seed/tree/ancestorCache.js", {
+mock.module("../seed/space/ancestorCache.js", {
   namedExports: {
     getAncestorChain: async (_nodeId) => fakeAncestorChain.map((id) => ({ _id: id })),
   },
 });
 
 // In-memory inbox + scheduler stubs. The emit helper exercises both.
-const appendCalls = [];   // { nodeId, beingId, message }
-const wakeCalls = [];     // { beingId, nodeId }
+const appendCalls = [];   // { spaceId, beingId, message }
+const wakeCalls = [];     // { beingId, spaceId }
 
-mock.module("../seed/scheduler/inbox.js", {
+mock.module("../seed/cognition/inbox.js", {
   namedExports: {
-    appendToInbox: async (nodeId, beingId, message) => {
-      appendCalls.push({ nodeId, beingId, message });
+    appendToInbox: async (spaceId, beingId, message) => {
+      appendCalls.push({ spaceId, beingId, message });
       return { messageId: message.correlation, sentAt: message.sentAt };
     },
   },
 });
 
-mock.module("../seed/scheduler/scheduler.js", {
+mock.module("../seed/cognition/scheduler.js", {
   namedExports: {
-    wake: (beingId, nodeId) => { wakeCalls.push({ beingId, nodeId }); },
+    wake: (beingId, spaceId) => { wakeCalls.push({ beingId, spaceId }); },
   },
 });
 
-mock.module("../seed/addressing/address.js", {
+mock.module("../seed/ibp/address.js", {
   namedExports: { getLandDomain: () => "treeos.ai" },
 });
 
@@ -57,7 +57,7 @@ const {
   emitToSubscribers,
   getStats,
   _resetAll,
-} = await import("../seed/scheduler/subscriptions.js");
+} = await import("../seed/cognition/subscriptions.js");
 
 beforeEach(() => {
   _resetAll();
@@ -73,25 +73,25 @@ afterEach(() => _resetAll());
 
 describe("subscribe — validation", () => {
   test("requires beingId", () => {
-    assert.throws(() => subscribe(null, { event: "afterArtifact", scope: { everywhere: true } }), /beingId/);
+    assert.throws(() => subscribe(null, { event: "afterMatter", scope: { everywhere: true } }), /beingId/);
   });
 
   test("requires event", () => {
     assert.throws(() => subscribe("b1", { scope: { everywhere: true } }), /event/);
   });
 
-  test("requires scope with one of everywhere|nodeId|ancestor", () => {
-    assert.throws(() => subscribe("b1", { event: "afterArtifact" }), /scope/);
-    assert.throws(() => subscribe("b1", { event: "afterArtifact", scope: {} }), /scope/);
+  test("requires scope with one of everywhere|spaceId|ancestor", () => {
+    assert.throws(() => subscribe("b1", { event: "afterMatter" }), /scope/);
+    assert.throws(() => subscribe("b1", { event: "afterMatter", scope: {} }), /scope/);
   });
 
   test("returns a subscription id", () => {
-    const id = subscribe("b1", { event: "afterArtifact", scope: { everywhere: true } });
+    const id = subscribe("b1", { event: "afterMatter", scope: { everywhere: true } });
     assert.ok(typeof id === "string" && id.length > 0);
   });
 
   test("uses caller-supplied id when provided", () => {
-    const id = subscribe("b1", { id: "fixed-id", event: "afterArtifact", scope: { everywhere: true } });
+    const id = subscribe("b1", { id: "fixed-id", event: "afterMatter", scope: { everywhere: true } });
     assert.equal(id, "fixed-id");
   });
 });
@@ -102,7 +102,7 @@ describe("subscribe — validation", () => {
 
 describe("unsubscribe", () => {
   test("removes a previously registered subscription", () => {
-    const id = subscribe("b1", { event: "afterArtifact", scope: { everywhere: true } });
+    const id = subscribe("b1", { event: "afterMatter", scope: { everywhere: true } });
     assert.equal(unsubscribe(id), true);
     assert.equal(unsubscribe(id), false);
   });
@@ -112,9 +112,9 @@ describe("unsubscribe", () => {
   });
 
   test("unsubscribeAllForBeing removes every subscription for a being", () => {
-    subscribe("b1", { event: "afterArtifact", scope: { everywhere: true } });
-    subscribe("b1", { event: "afterStatusChange", scope: { nodeId: "n1" } });
-    subscribe("b2", { event: "afterArtifact", scope: { everywhere: true } });
+    subscribe("b1", { event: "afterMatter", scope: { everywhere: true } });
+    subscribe("b1", { event: "afterMetadataWrite", scope: { spaceId: "n1" } });
+    subscribe("b2", { event: "afterMatter", scope: { everywhere: true } });
     assert.equal(unsubscribeAllForBeing("b1"), 2);
     assert.equal(getStats().beingsWithSubscriptions, 1);
   });
@@ -125,43 +125,43 @@ describe("unsubscribe", () => {
 // ────────────────────────────────────────────────────────────────
 
 describe("getMatchingSubscribers — scope", () => {
-  test("everywhere matches any nodeId on the event", async () => {
-    subscribe("b1", { event: "afterArtifact", scope: { everywhere: true } });
-    const matches = await getMatchingSubscribers("afterArtifact", { nodeId: "any-node" });
+  test("everywhere matches any spaceId on the event", async () => {
+    subscribe("b1", { event: "afterMatter", scope: { everywhere: true } });
+    const matches = await getMatchingSubscribers("afterMatter", { spaceId: "any-node" });
     assert.equal(matches.length, 1);
   });
 
-  test("exact nodeId matches only the same id", async () => {
-    subscribe("b1", { event: "afterArtifact", scope: { nodeId: "target" } });
-    assert.equal((await getMatchingSubscribers("afterArtifact", { nodeId: "target" })).length, 1);
-    assert.equal((await getMatchingSubscribers("afterArtifact", { nodeId: "other" })).length, 0);
+  test("exact spaceId matches only the same id", async () => {
+    subscribe("b1", { event: "afterMatter", scope: { spaceId: "target" } });
+    assert.equal((await getMatchingSubscribers("afterMatter", { spaceId: "target" })).length, 1);
+    assert.equal((await getMatchingSubscribers("afterMatter", { spaceId: "other" })).length, 0);
   });
 
-  test("ancestor matches when payload.nodeId has scope.ancestor in its chain", async () => {
+  test("ancestor matches when payload.spaceId has scope.ancestor in its chain", async () => {
     fakeAncestorChain = ["leaf-id", "mid-id", "root-id"];
-    subscribe("b1", { event: "afterArtifact", scope: { ancestor: "mid-id" } });
-    const matches = await getMatchingSubscribers("afterArtifact", { nodeId: "leaf-id" });
+    subscribe("b1", { event: "afterMatter", scope: { ancestor: "mid-id" } });
+    const matches = await getMatchingSubscribers("afterMatter", { spaceId: "leaf-id" });
     assert.equal(matches.length, 1);
   });
 
-  test("ancestor matches when payload.nodeId IS the scope (self counts)", async () => {
+  test("ancestor matches when payload.spaceId IS the scope (self counts)", async () => {
     fakeAncestorChain = ["self-id", "parent-id"];
-    subscribe("b1", { event: "afterArtifact", scope: { ancestor: "self-id" } });
-    const matches = await getMatchingSubscribers("afterArtifact", { nodeId: "self-id" });
+    subscribe("b1", { event: "afterMatter", scope: { ancestor: "self-id" } });
+    const matches = await getMatchingSubscribers("afterMatter", { spaceId: "self-id" });
     assert.equal(matches.length, 1);
   });
 
   test("ancestor does not match when scope is outside the chain", async () => {
     fakeAncestorChain = ["leaf-id", "mid-id"];
-    subscribe("b1", { event: "afterArtifact", scope: { ancestor: "unrelated" } });
-    const matches = await getMatchingSubscribers("afterArtifact", { nodeId: "leaf-id" });
+    subscribe("b1", { event: "afterMatter", scope: { ancestor: "unrelated" } });
+    const matches = await getMatchingSubscribers("afterMatter", { spaceId: "leaf-id" });
     assert.equal(matches.length, 0);
   });
 
   test("different events don't cross-fire", async () => {
-    subscribe("b1", { event: "afterArtifact",     scope: { everywhere: true } });
-    subscribe("b2", { event: "afterStatusChange", scope: { everywhere: true } });
-    const matches = await getMatchingSubscribers("afterStatusChange", { nodeId: "n1" });
+    subscribe("b1", { event: "afterMatter",     scope: { everywhere: true } });
+    subscribe("b2", { event: "afterMetadataWrite", scope: { everywhere: true } });
+    const matches = await getMatchingSubscribers("afterMetadataWrite", { spaceId: "n1" });
     assert.equal(matches.length, 1);
     assert.equal(matches[0].beingId, "b2");
   });
@@ -174,36 +174,36 @@ describe("getMatchingSubscribers — scope", () => {
 describe("getMatchingSubscribers — filter", () => {
   test("equality filter narrows matches", async () => {
     subscribe("b1", {
-      event: "afterArtifact",
+      event: "afterMatter",
       scope: { everywhere: true },
       filter: { origin: "web" },
     });
-    assert.equal((await getMatchingSubscribers("afterArtifact", { nodeId: "n1", origin: "web" })).length, 1);
-    assert.equal((await getMatchingSubscribers("afterArtifact", { nodeId: "n1", origin: "ibp" })).length, 0);
+    assert.equal((await getMatchingSubscribers("afterMatter", { spaceId: "n1", origin: "web" })).length, 1);
+    assert.equal((await getMatchingSubscribers("afterMatter", { spaceId: "n1", origin: "ibp" })).length, 0);
   });
 
   test("array filter is any-of", async () => {
     subscribe("b1", {
-      event: "afterArtifact",
+      event: "afterMatter",
       scope: { everywhere: true },
       filter: { origin: ["web", "filesystem"] },
     });
-    assert.equal((await getMatchingSubscribers("afterArtifact", { nodeId: "n1", origin: "filesystem" })).length, 1);
-    assert.equal((await getMatchingSubscribers("afterArtifact", { nodeId: "n1", origin: "ibp" })).length, 0);
+    assert.equal((await getMatchingSubscribers("afterMatter", { spaceId: "n1", origin: "filesystem" })).length, 1);
+    assert.equal((await getMatchingSubscribers("afterMatter", { spaceId: "n1", origin: "ibp" })).length, 0);
   });
 
   test("dot-path filter reaches nested fields", async () => {
     subscribe("b1", {
-      event: "afterArtifact",
+      event: "afterMatter",
       scope: { everywhere: true },
-      filter: { "artifact.origin": "web" },
+      filter: { "matter.origin": "web" },
     });
     assert.equal(
-      (await getMatchingSubscribers("afterArtifact", { nodeId: "n1", artifact: { origin: "web" } })).length,
+      (await getMatchingSubscribers("afterMatter", { spaceId: "n1", matter: { origin: "web" } })).length,
       1,
     );
     assert.equal(
-      (await getMatchingSubscribers("afterArtifact", { nodeId: "n1", artifact: { origin: "ibp" } })).length,
+      (await getMatchingSubscribers("afterMatter", { spaceId: "n1", matter: { origin: "ibp" } })).length,
       0,
     );
   });
@@ -215,12 +215,12 @@ describe("getMatchingSubscribers — filter", () => {
 
 describe("emitToSubscribers", () => {
   test("appends one SUMMON per matching subscriber and wakes each", async () => {
-    subscribe("b1", { event: "afterArtifact", scope: { everywhere: true } });
-    subscribe("b2", { event: "afterArtifact", scope: { everywhere: true } });
-    const emitted = await emitToSubscribers("afterArtifact", {
-      nodeId: "n1",
+    subscribe("b1", { event: "afterMatter", scope: { everywhere: true } });
+    subscribe("b2", { event: "afterMatter", scope: { everywhere: true } });
+    const emitted = await emitToSubscribers("afterMatter", {
+      spaceId: "n1",
       action: "add",
-      artifact: { _id: "a1", origin: "web" },
+      matter: { _id: "a1", origin: "web" },
     });
     assert.equal(emitted, 2);
     assert.equal(appendCalls.length, 2);
@@ -229,58 +229,55 @@ describe("emitToSubscribers", () => {
     assert.deepEqual(beings, new Set(["b1", "b2"]));
   });
 
-  test("envelope carries do-trigger intent + rendered content", async () => {
-    subscribe("b1", { event: "afterArtifact", scope: { everywhere: true } });
-    await emitToSubscribers("afterArtifact", {
-      nodeId: "n1",
+  test("envelope carries rendered trigger content", async () => {
+    subscribe("b1", { event: "afterMatter", scope: { everywhere: true } });
+    await emitToSubscribers("afterMatter", {
+      spaceId: "n1",
       action: "add",
-      artifact: { _id: "a1", origin: "web" },
+      matter: { _id: "a1", origin: "web" },
     });
     const env = appendCalls[0].message;
-    assert.equal(env.intent, "do-trigger");
-    assert.equal(env.content.event, "afterArtifact");
-    assert.equal(env.content.nodeId, "n1");
+    assert.equal(env.content.event, "afterMatter");
+    assert.equal(env.content.spaceId, "n1");
     assert.equal(env.content.action, "add");
-    assert.equal(env.content.artifactId, "a1");
-    assert.equal(env.content.artifactOrigin, "web");
+    assert.equal(env.content.matterId, "a1");
+    assert.equal(env.content.matterOrigin, "web");
     assert.ok(env.correlation, "correlation generated");
     assert.equal(env.priority, 4, "default priority is BACKGROUND");
   });
 
-  test("custom intent + priority flow through", async () => {
+  test("custom priority flows through", async () => {
     subscribe("b1", {
-      event: "afterArtifact",
+      event: "afterMatter",
       scope: { everywhere: true },
-      intent: "scout-wake",
       priority: 1,
     });
-    await emitToSubscribers("afterArtifact", { nodeId: "n1", action: "add" });
-    assert.equal(appendCalls[0].message.intent, "scout-wake");
+    await emitToSubscribers("afterMatter", { spaceId: "n1", action: "add" });
     assert.equal(appendCalls[0].message.priority, 1);
   });
 
   test("sender is the doer when payload.beingId is set", async () => {
-    subscribe("b1", { event: "afterArtifact", scope: { everywhere: true } });
-    await emitToSubscribers("afterArtifact", { nodeId: "n1", beingId: "doer-99" });
+    subscribe("b1", { event: "afterMatter", scope: { everywhere: true } });
+    await emitToSubscribers("afterMatter", { spaceId: "n1", beingId: "doer-99" });
     assert.match(appendCalls[0].message.from, /^treeos\.ai\/@<being:doer-99>$/);
   });
 
   test("sender falls back to @system when no doer", async () => {
-    subscribe("b1", { event: "afterArtifact", scope: { everywhere: true } });
-    await emitToSubscribers("afterArtifact", { nodeId: "n1" });
+    subscribe("b1", { event: "afterMatter", scope: { everywhere: true } });
+    await emitToSubscribers("afterMatter", { spaceId: "n1" });
     assert.equal(appendCalls[0].message.from, "treeos.ai/@system");
   });
 
   test("zero matches → zero emissions, returns 0", async () => {
-    subscribe("b1", { event: "afterArtifact", scope: { nodeId: "elsewhere" } });
-    const emitted = await emitToSubscribers("afterArtifact", { nodeId: "n1" });
+    subscribe("b1", { event: "afterMatter", scope: { spaceId: "elsewhere" } });
+    const emitted = await emitToSubscribers("afterMatter", { spaceId: "n1" });
     assert.equal(emitted, 0);
     assert.equal(appendCalls.length, 0);
   });
 
   test("rootCorrelation propagated from payload when present", async () => {
-    subscribe("b1", { event: "afterArtifact", scope: { everywhere: true } });
-    await emitToSubscribers("afterArtifact", { nodeId: "n1", rootCorrelation: "root-x" });
+    subscribe("b1", { event: "afterMatter", scope: { everywhere: true } });
+    await emitToSubscribers("afterMatter", { spaceId: "n1", rootCorrelation: "root-x" });
     assert.equal(appendCalls[0].message.rootCorrelation, "root-x");
   });
 });
@@ -295,28 +292,28 @@ describe("coalesceMs — batching", () => {
   const W = 30;
 
   test("coalesceMs=0 (default) emits immediately, one per event", async () => {
-    subscribe("b1", { event: "afterArtifact", scope: { everywhere: true } });
-    await emitToSubscribers("afterArtifact", { nodeId: "n1", action: "add" });
-    await emitToSubscribers("afterArtifact", { nodeId: "n1", action: "remove" });
+    subscribe("b1", { event: "afterMatter", scope: { everywhere: true } });
+    await emitToSubscribers("afterMatter", { spaceId: "n1", action: "add" });
+    await emitToSubscribers("afterMatter", { spaceId: "n1", action: "remove" });
     assert.equal(appendCalls.length, 2, "two events → two summons");
   });
 
   test("coalesceMs>0 defers emit and batches events landing in the window", async () => {
     subscribe("b1", {
-      event: "afterArtifact",
+      event: "afterMatter",
       scope: { everywhere: true },
       coalesceMs: W,
     });
-    await emitToSubscribers("afterArtifact", { nodeId: "n1", action: "add" });
-    await emitToSubscribers("afterArtifact", { nodeId: "n1", action: "edit" });
-    await emitToSubscribers("afterArtifact", { nodeId: "n1", action: "remove" });
+    await emitToSubscribers("afterMatter", { spaceId: "n1", action: "add" });
+    await emitToSubscribers("afterMatter", { spaceId: "n1", action: "edit" });
+    await emitToSubscribers("afterMatter", { spaceId: "n1", action: "remove" });
     // Nothing emitted yet — still inside the window.
     assert.equal(appendCalls.length, 0);
     // Wait past the window.
     await new Promise((r) => setTimeout(r, W + 10));
     assert.equal(appendCalls.length, 1, "one batched summon");
     const env = appendCalls[0].message;
-    assert.equal(env.content.event, "afterArtifact");
+    assert.equal(env.content.event, "afterMatter");
     assert.equal(env.content.coalesced, true);
     assert.equal(env.content.batchSize, 3);
     assert.equal(env.content.events.length, 3);
@@ -327,15 +324,15 @@ describe("coalesceMs — batching", () => {
 
   test("second batch opens after the first flushes", async () => {
     subscribe("b1", {
-      event: "afterArtifact",
+      event: "afterMatter",
       scope: { everywhere: true },
       coalesceMs: W,
     });
-    await emitToSubscribers("afterArtifact", { nodeId: "n1", action: "first" });
+    await emitToSubscribers("afterMatter", { spaceId: "n1", action: "first" });
     await new Promise((r) => setTimeout(r, W + 10));
     // First batch flushed.
     assert.equal(appendCalls.length, 1);
-    await emitToSubscribers("afterArtifact", { nodeId: "n1", action: "second" });
+    await emitToSubscribers("afterMatter", { spaceId: "n1", action: "second" });
     // Second window opens; nothing emitted yet.
     assert.equal(appendCalls.length, 1);
     await new Promise((r) => setTimeout(r, W + 10));
@@ -345,16 +342,16 @@ describe("coalesceMs — batching", () => {
 
   test("different subscriptions have independent coalesce windows", async () => {
     subscribe("b1", {
-      event: "afterArtifact",
+      event: "afterMatter",
       scope: { everywhere: true },
       coalesceMs: W,
     });
     subscribe("b2", {
-      event: "afterArtifact",
+      event: "afterMatter",
       scope: { everywhere: true },
       coalesceMs: W,
     });
-    await emitToSubscribers("afterArtifact", { nodeId: "n1" });
+    await emitToSubscribers("afterMatter", { spaceId: "n1" });
     await new Promise((r) => setTimeout(r, W + 10));
     assert.equal(appendCalls.length, 2, "each being got their own batched SUMMON");
     const beings = new Set(appendCalls.map((c) => c.beingId));
@@ -366,9 +363,9 @@ describe("coalesceMs — batching", () => {
   });
 
   test("coalesced and non-coalesced subscribers to same event don't interfere", async () => {
-    subscribe("b1", { event: "afterArtifact", scope: { everywhere: true } }); // immediate
-    subscribe("b2", { event: "afterArtifact", scope: { everywhere: true }, coalesceMs: W });
-    await emitToSubscribers("afterArtifact", { nodeId: "n1", action: "add" });
+    subscribe("b1", { event: "afterMatter", scope: { everywhere: true } }); // immediate
+    subscribe("b2", { event: "afterMatter", scope: { everywhere: true }, coalesceMs: W });
+    await emitToSubscribers("afterMatter", { spaceId: "n1", action: "add" });
     // b1 immediate, b2 pending.
     assert.equal(appendCalls.length, 1);
     assert.equal(appendCalls[0].beingId, "b1");
@@ -381,11 +378,11 @@ describe("coalesceMs — batching", () => {
 
   test("unsubscribe during pending window cancels the emit", async () => {
     const id = subscribe("b1", {
-      event: "afterArtifact",
+      event: "afterMatter",
       scope: { everywhere: true },
       coalesceMs: W,
     });
-    await emitToSubscribers("afterArtifact", { nodeId: "n1" });
+    await emitToSubscribers("afterMatter", { spaceId: "n1" });
     assert.equal(getStats().pendingCoalesce, 1);
     unsubscribe(id);
     assert.equal(getStats().pendingCoalesce, 0, "pending state cleared on unsubscribe");
@@ -394,8 +391,8 @@ describe("coalesceMs — batching", () => {
   });
 
   test("_resetAll cancels pending coalesce timers", async () => {
-    subscribe("b1", { event: "afterArtifact", scope: { everywhere: true }, coalesceMs: W });
-    await emitToSubscribers("afterArtifact", { nodeId: "n1" });
+    subscribe("b1", { event: "afterMatter", scope: { everywhere: true }, coalesceMs: W });
+    await emitToSubscribers("afterMatter", { spaceId: "n1" });
     assert.equal(getStats().pendingCoalesce, 1);
     _resetAll();
     assert.equal(getStats().pendingCoalesce, 0);
@@ -410,14 +407,14 @@ describe("coalesceMs — batching", () => {
 
 describe("getStats", () => {
   test("reports counts accurately", () => {
-    subscribe("b1", { event: "afterArtifact", scope: { everywhere: true } });
-    subscribe("b1", { event: "afterStatusChange", scope: { nodeId: "n1" } });
-    subscribe("b2", { event: "afterArtifact", scope: { everywhere: true } });
+    subscribe("b1", { event: "afterMatter", scope: { everywhere: true } });
+    subscribe("b1", { event: "afterMetadataWrite", scope: { spaceId: "n1" } });
+    subscribe("b2", { event: "afterMatter", scope: { everywhere: true } });
     const stats = getStats();
     assert.equal(stats.totalSubscriptions, 3);
     assert.equal(stats.beingsWithSubscriptions, 2);
-    assert.ok(stats.eventsWatched.includes("afterArtifact"));
-    assert.ok(stats.eventsWatched.includes("afterStatusChange"));
+    assert.ok(stats.eventsWatched.includes("afterMatter"));
+    assert.ok(stats.eventsWatched.includes("afterMetadataWrite"));
     assert.equal(stats.pendingCoalesce, 0);
   });
 });

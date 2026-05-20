@@ -14,22 +14,22 @@ import { mock } from "node:test";
 const appendCalls = [];
 const wakeCalls = [];
 
-mock.module("../seed/scheduler/inbox.js", {
+mock.module("../seed/cognition/inbox.js", {
   namedExports: {
-    appendToInbox: async (nodeId, beingId, message) => {
-      appendCalls.push({ nodeId, beingId, message });
+    appendToInbox: async (spaceId, beingId, message) => {
+      appendCalls.push({ spaceId, beingId, message });
       return { messageId: message.correlation, sentAt: message.sentAt };
     },
   },
 });
 
-mock.module("../seed/scheduler/scheduler.js", {
+mock.module("../seed/cognition/scheduler.js", {
   namedExports: {
-    wake: (beingId, nodeId) => { wakeCalls.push({ beingId, nodeId }); },
+    wake: (beingId, spaceId) => { wakeCalls.push({ beingId, spaceId }); },
   },
 });
 
-mock.module("../seed/addressing/address.js", {
+mock.module("../seed/ibp/address.js", {
   namedExports: { getLandDomain: () => "treeos.ai" },
 });
 
@@ -46,7 +46,7 @@ const {
   resetEmitter,
   getStats,
   _resetAll,
-} = await import("../seed/scheduler/schedule.js");
+} = await import("../seed/cognition/wakeSchedule.js");
 
 beforeEach(() => {
   _resetAll();
@@ -171,18 +171,17 @@ describe("default emitter", () => {
     schedule("b1", { intervalMs: 500 });
     await runOnce(Date.now() + 10_000);
     assert.equal(appendCalls.length, 1);
-    assert.equal(appendCalls[0].nodeId, "land-root-id");
+    assert.equal(appendCalls[0].spaceId, "land-root-id");
     assert.equal(appendCalls[0].beingId, "b1");
     assert.equal(wakeCalls.length, 1);
     assert.equal(wakeCalls[0].beingId, "b1");
-    assert.equal(wakeCalls[0].nodeId, "land-root-id");
+    assert.equal(wakeCalls[0].spaceId, "land-root-id");
   });
 
-  test("envelope: intent=scheduled-wake, sender=@scheduler, default content", async () => {
+  test("envelope: sender=@scheduler, default content shape", async () => {
     schedule("b1", { intervalMs: 500 });
     await runOnce(Date.now() + 10_000);
     const env = appendCalls[0].message;
-    assert.equal(env.intent, "scheduled-wake");
     assert.equal(env.from, "treeos.ai/@scheduler");
     assert.deepEqual(env.content, { kind: "scheduled-wake" });
     assert.equal(env.priority, 4, "default BACKGROUND priority");
@@ -191,16 +190,14 @@ describe("default emitter", () => {
       "each scheduled wake is its own root");
   });
 
-  test("custom intent + priority + content flow through", async () => {
+  test("custom priority + content flow through", async () => {
     schedule("b1", {
       intervalMs: 500,
-      intent: "compress-tick",
       priority: 2,
       content: { kind: "compress", batchHint: 10 },
     });
     await runOnce(Date.now() + 10_000);
     const env = appendCalls[0].message;
-    assert.equal(env.intent, "compress-tick");
     assert.equal(env.priority, 2);
     assert.deepEqual(env.content, { kind: "compress", batchHint: 10 });
   });

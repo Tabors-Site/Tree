@@ -27,8 +27,8 @@
 // the snapshot. The Foreman gets what it can; what it can't see, it
 // can probe with foreman-read-branch-detail.
 
-import Node from "../../../seed/models/node.js";
-import log from "../../../seed/core/log.js";
+import Space from "../../../seed/models/space.js";
+import log from "../../../seed/system/log.js";
 import { NS as ROLE_NS } from "./role.js";
 import { readActivePlanEmission } from "./planApprovals.js";
 import { readActiveExecutionRecord } from "./foreman.js";
@@ -56,7 +56,7 @@ const FAILURE_RENDER_CAP = 5;
 async function buildFrame(rulerNodeId, depth) {
   if (!rulerNodeId) return null;
 
-  const node = await Node.findById(rulerNodeId).select("_id name metadata children").lean();
+  const node = await Space.findById(rulerNodeId).select("_id name metadata children").lean();
   if (!node) return null;
   const meta = node.metadata instanceof Map
     ? Object.fromEntries(node.metadata)
@@ -205,8 +205,8 @@ async function walkDown(rulerNodeId, depth, framesOut) {
   // tree's actual children with role=ruler when childNodeId is absent
   // (e.g., orphaned sub-Rulers from older runs).
   try {
-    const rulerNode = await Node.findById(rulerNodeId).select("children").lean();
-    if (!rulerNode?.children?.length) return;
+    const rulerSpace = await Space.findById(rulerNodeId).select("children").lean();
+    if (!rulerSpace?.children?.length) return;
 
     // Collect known sub-Ruler IDs from stepStatuses (more authoritative).
     const knownSubRulerIds = new Set();
@@ -221,8 +221,8 @@ async function walkDown(rulerNodeId, depth, framesOut) {
     // (rulers that the parent's stepStatuses don't reference) still
     // exist in the tree and may have their own work; the Foreman should
     // see them.
-    const childIds = rulerNode.children.map(String);
-    const kids = await Node.find({ _id: { $in: childIds } })
+    const childIds = rulerSpace.children.map(String);
+    const kids = await Space.find({ _id: { $in: childIds } })
       .select("_id metadata").lean();
     for (const k of kids) {
       const km = k.metadata instanceof Map
@@ -251,7 +251,7 @@ async function walkUp(rulerNodeId) {
   const lineage = await readLineage(rulerNodeId);
   if (!lineage?.parentRulerId) return null;
 
-  const parent = await Node.findById(lineage.parentRulerId)
+  const parent = await Space.findById(lineage.parentRulerId)
     .select("_id name").lean();
   if (!parent) return null;
 
@@ -713,7 +713,7 @@ export async function buildArtifactEvidence(rulerNodeId) {
   if (!rulerNodeId) return null;
   let node;
   try {
-    node = await Node.findById(rulerNodeId)
+    node = await Space.findById(rulerNodeId)
       .select("_id name type children")
       .lean();
   } catch (err) {
@@ -725,8 +725,8 @@ export async function buildArtifactEvidence(rulerNodeId) {
   // Probe the Ruler scope's own notes. getNotes returns { notes: [...] }.
   let scopeNotes = [];
   try {
-    const { getArtifacts } = await import("../../../seed/tree/artifacts.js");
-    const got = await getArtifacts({ nodeId: String(node._id), limit: 50 });
+    const { getArtifacts } = await import("../../../seed/matter/matters.js");
+    const got = await getArtifacts({ spaceId: String(node._id), limit: 50 });
     scopeNotes = Array.isArray(got?.artifacts) ? got.artifacts : [];
   } catch (err) {
     log.debug("Governing/Evidence", `scope notes fetch failed: ${err.message}`);
@@ -740,18 +740,18 @@ export async function buildArtifactEvidence(rulerNodeId) {
   try {
     if (childIds.length > 0) {
       const probeIds = childIds.slice(0, EVIDENCE_CHILDREN_RENDER_CAP * 2);
-      const childNodes = await Node.find({ _id: { $in: probeIds } })
+      const childNodes = await Space.find({ _id: { $in: probeIds } })
         .select("_id name type")
         .lean();
       const byId = new Map(childNodes.map((c) => [String(c._id), c]));
-      const { getArtifacts } = await import("../../../seed/tree/artifacts.js");
+      const { getArtifacts } = await import("../../../seed/matter/matters.js");
       for (const cid of probeIds) {
         const c = byId.get(cid);
         if (!c) continue;
         let noteCount = 0;
         let firstNotePreview = null;
         try {
-          const got = await getArtifacts({ nodeId: cid, limit: 5 });
+          const got = await getArtifacts({ spaceId: cid, limit: 5 });
           const notes = Array.isArray(got?.artifacts) ? got.artifacts : [];
           noteCount = notes.length;
           // getNotes orders DESC by createdAt — most recent first.
@@ -765,7 +765,7 @@ export async function buildArtifactEvidence(rulerNodeId) {
           }
         } catch {}
         childRows.push({
-          nodeId: cid,
+          spaceId: cid,
           name: c.name || "(unnamed)",
           type: c.type || null,
           noteCount,

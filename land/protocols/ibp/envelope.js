@@ -17,13 +17,13 @@
 //   SEE     { live?: boolean, ... }
 //   DO      { action: string, args?: object, ... }
 //   SUMMON  { message, from?, inReplyTo?, rootCorrelation?, priority?,
-//             intent?, activeRole?, correlation? }
+//             activeRole?, correlation? }
 //   BE      { op: "register"|"claim"|"release"|"switch", ...credentials }
 //
 // `identity` is the caller's auth token (when applicable). Verb handlers
 // read it from the parsed envelope, no per-verb-field destructuring.
 
-import { IbpError, IBP_ERR } from "../../seed/core/errors.js";
+import { IbpError, IBP_ERR } from "../../seed/ibp/errors.js";
 
 const EMBODIMENT_SUFFIX = /@[a-z][a-z0-9-]*$/i;
 const VALID_VERBS = new Set(["see", "do", "summon", "be"]);
@@ -90,7 +90,7 @@ export function parseUnifiedEnvelope(msg) {
       if (addressKind !== "position" && addressKind !== "stance") {
         throw new IbpError(
           IBP_ERR.INVALID_INPUT,
-          `ibp SEE address must be a position or stance, e.g. "${address}/" for the land root or "${address}/<nodeId>" for a node. ` +
+          `ibp SEE address must be a position or stance, e.g. "${address}/" for the land root or "${address}/<spaceId>" for a node. ` +
           `Got bare-land "${address}".`,
         );
       }
@@ -101,7 +101,7 @@ export function parseUnifiedEnvelope(msg) {
         throw new IbpError(
           IBP_ERR.INVALID_INPUT,
           `ibp DO address must be a position. Use "${address}/" to target the land root ` +
-          `(e.g. for set-config / install-extension), or "${address}/<nodeId>" for a specific node. ` +
+          `(e.g. for set-config / install-extension), or "${address}/<spaceId>" for a specific node. ` +
           `Got bare-land "${address}".`,
         );
       }

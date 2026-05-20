@@ -4,20 +4,20 @@
 // Services the host land doesn't have get no-op stubs so extensions always
 // have a safe interface to call.
 
-import log from "./log.js";
-import { hooks as hooksModule } from "./hooks.js";
+import log from "./system/log.js";
+import { hooks as hooksModule } from "./system/hooks.js";
 // Mode registry retired 2026-05-18. Roles are the unit of behavior; the
 // mode/role split was implementation drift. See [[project_role_subsumes_mode]]
 // and [[project_ibp_universal_grammar]].
-import { registerSeed, unregisterSeed, getSeed, listSeeds, plantSeed, unplantSeed, listPlantedAt } from "./seeds.js";
-import Being from "../models/being.js";
-import Node from "../models/node.js";
-import Did from "../models/did.js";
-import Artifact from "../models/artifact.js";
+import { registerSeed, unregisterSeed, getSeed, listSeeds, plantSeed, unplantSeed, listPlantedAt } from "./space/seeds.js";
+import Being from "./models/being.js";
+import Space from "./models/space.js";
+import Did from "./models/did.js";
+import Matter from "./models/matter.js";
 
-import { logDid } from "../tree/dids.js";
-import { resolveTreeAccess } from "../tree/treeAccess.js";
-import { createBeing, createFirstBeing, verifyPassword, generateToken, isFirstBeing, findBeingByName } from "./identity.js";
+import { logDid } from "./space/dids.js";
+import { resolveSpaceAccess } from "./space/spaceFetch.js";
+import { createBeing, createFirstBeing, verifyPassword, generateToken, isFirstBeing, findBeingByName } from "./being/identity.js";
 
 import {
   createSession, endSession, registerSession,
@@ -26,73 +26,74 @@ import {
   getSession, getSessionsForBeing,
   setSessionAbort, abortSession, clearSessionAbort,
   SESSION_TYPES, registerSessionType,
-} from "../session/registry.js";
+} from "./cognition/session.js";
 
 import {
   startSummon, finalizeSummon,
   ensureSession as ensureChatSession,
-} from "../llm/summonTracker.js";
+} from "./cognition/summonTracker.js";
 
 import {
   processMessage, switchRole, runChat,
   getCurrentRole,
   registerFailoverResolver, LLM_PRIORITY,
-} from "../llm/runChat.js";
+} from "./cognition/runChat.js";
 import {
   getClientForBeing, resolveRootLlmForRole, beingHasLlm,
-} from "../llm/llmClient.js";
+} from "./cognition/llmClient.js";
 import {
-  getRootId, setCurrentNodeId, getCurrentNodeId,
-} from "../beingPosition.js";
-import { connectToMCP, closeMCPClient, getMCPClient, MCP_SERVER_URL } from "../llm/mcpClient.js";
-import { registerRootLlmSlot, registerBeingLlmSlot } from "../llm/connections.js";
-import { emitNavigate, emitToBeing, emitToBeingRoom, registerSocketHandler, unregisterSocketHandler, getIO, getHttpServer } from "./pushChannel.js";
-import { ok, error, sendOk, sendError, ERR, CASCADE } from "./protocol.js";
-import { getExtMeta, readNs, setExtMeta, mergeExtMeta, incExtMeta, pushExtMeta, addToExtMetaSet, batchSetExtMeta, unsetExtMeta } from "../tree/extensionMetadata.js";
-import { getBeingMeta, readBeingNs, setBeingMeta, mergeBeingMeta, incBeingMeta, pushBeingMeta, addToBeingMetaSet, batchSetBeingMeta, unsetBeingMeta } from "../tree/beingMetadata.js";
-import { getArtifactMeta, readArtifactNs, setArtifactMeta, mergeArtifactMeta, incArtifactMeta, pushArtifactMeta, addToArtifactMetaSet, batchSetArtifactMeta, unsetArtifactMeta } from "../tree/artifactMetadata.js";
-import { deliverCascade } from "../tree/cascade.js";
-import { isBeingRoot, getLandRootId } from "../landRoot.js";
-import { createNode, createNodeBranch, deleteNodeBranch, updateParentRelationship, editNodeName, editNodeType } from "../tree/treeManagement.js";
-import { createArtifact, editArtifact, deleteArtifactAndFile, transferArtifact, getArtifacts } from "../tree/artifacts.js";
-import { isExtensionBlockedAtNode, getBlockedExtensionsAtNode, getExtensionAtScope, isToolReadOnly, getToolOwner } from "../tree/extensionScope.js";
+  getRootId, setCurrentSpace, getCurrentSpace,
+} from "./being/position.js";
+import { connectToMCP, closeMCPClient, getMCPClient, MCP_SERVER_URL } from "./cognition/mcpClient.js";
+import { registerRootLlmSlot, registerBeingLlmSlot } from "./cognition/connections.js";
+import { emitNavigate, emitToBeing, emitToBeingRoom, registerSocketHandler, unregisterSocketHandler, getIO, getHttpServer } from "./ibp/pushChannel.js";
+import { ok, error, sendOk, sendError, ERR } from "./ibp/protocol.js";
+import { CASCADE } from "./space/cascade.js";
+import { getExtMeta, readNs, setExtMeta, mergeExtMeta, incExtMeta, pushExtMeta, addToExtMetaSet, batchSetExtMeta, unsetExtMeta } from "./space/extensionMetadata.js";
+import { getBeingMeta, readBeingNs, setBeingMeta, mergeBeingMeta, incBeingMeta, pushBeingMeta, addToBeingMetaSet, batchSetBeingMeta, unsetBeingMeta } from "./being/beingMetadata.js";
+import { getMatterMeta, readMatterNs, setMatterMeta, mergeMatterMeta, incMatterMeta, pushMatterMeta, addToMatterMetaSet, batchSetMatterMeta, unsetMatterMeta } from "./matter/matterMetadata.js";
+import { deliverCascade } from "./space/cascade.js";
+import { isBeingRoot, getLandRootId } from "./landRoot.js";
+import { createSpace, createSpaceBranch, deleteSpaceBranch, updateParentRelationship, editSpaceName, editSpaceType } from "./space/spaceManagement.js";
+import { createMatter, editMatter, deleteMatterAndFile, transferMatter, getMatters } from "./matter/matters.js";
+import { isExtensionBlockedAtNode, getBlockedExtensionsAtNode, getExtensionAtScope, isToolReadOnly, getToolOwner } from "./space/extensionScope.js";
 import {
   addContributor, removeContributor,
   setOwner, removeOwner, transferOwnership,
-} from "../tree/ownership.js";
+} from "./space/ownership.js";
 import {
   getAncestorChain, snapshotAncestors,
-  invalidateNode, invalidateAll, getCacheStats,
-} from "../tree/ancestorCache.js";
-import { checkIntegrity } from "../tree/integrityCheck.js";
-import { checkTreeHealth, tripTree, reviveTree, isTreeAlive } from "../tree/treeCircuit.js";
+  invalidateSpace, invalidateAll, getCacheStats,
+} from "./space/ancestorCache.js";
+import { checkIntegrity } from "./system/integrityCheck.js";
+import { checkTreeHealth, tripTree, reviveTree, isTreeAlive } from "./space/spaceCircuit.js";
 import {
-  acquireNodeLock, releaseNodeLock, acquireMultiple, releaseMultiple,
-  isNodeLocked, getLockStats as getNodeLockStats,
-} from "../tree/nodeLocks.js";
+  acquireSpaceLock, releaseSpaceLock, acquireMultiple, releaseMultiple,
+  isSpaceLocked, getLockStats as getSpaceLockStats,
+} from "./space/spaceLocks.js";
 
 // IBP substrate (sibling layer to seed/, peer of canopy/ and routes/).
 // Re-exposed through core.ibp so extensions reach SUMMON/inbox/scheduler
 // primitives without importing from ibp/* directly.
-import { wake, abortCurrent, attachHandoff, getCurrentRootCorrelation } from "../scheduler/scheduler.js";
-import { cancelByRootCorrelation as inboxCancelByRootCorrelation } from "../scheduler/inbox.js";
-import { aggregate as ibpAggregate } from "../scheduler/replyAggregator.js";
+import { wake, abortCurrent, attachHandoff, getCurrentRootCorrelation } from "./cognition/scheduler.js";
+import { cancelByRootCorrelation as inboxCancelByRootCorrelation } from "./cognition/inbox.js";
+import { aggregate as ibpAggregate } from "./cognition/replyAggregator.js";
 import {
   subscribe as ibpSubscribe,
   unsubscribe as ibpUnsubscribe,
   unsubscribeAllForBeing as ibpUnsubscribeAllForBeing,
-} from "../scheduler/subscriptions.js";
+} from "./cognition/subscriptions.js";
 import {
   schedule as ibpSchedule,
   unschedule as ibpUnschedule,
   unscheduleAllForBeing as ibpUnscheduleAllForBeing,
   setEmitter as ibpSetScheduleEmitter,
   resetEmitter as ibpResetScheduleEmitter,
-} from "../scheduler/schedule.js";
+} from "./cognition/wakeSchedule.js";
 import {
   registerRole as ibpRegisterRole,
   unregisterRole as ibpUnregisterRole,
-} from "../roles/registry.js";
+} from "./being/roles/registry.js";
 // Bridge-being factory retired 2026-05-18. Bridge beings were the
 // stopgap that routed SUMMONs to old mode keys. With roles as the unit
 // of behavior, every summonable being declares its own role spec via
@@ -100,10 +101,11 @@ import {
 
 // The four-verb dispatcher. See [[project_seed_four_verbs_only]] memory
 // for the architectural commitment.
-import { doVerb, seeVerb, summonVerb, beVerb } from "./verbs.js";
+import { doVerb, seeVerb, summonVerb, beVerb } from "./ibp/verbs.js";
+import { registerDescriptorDeriver, unregisterDescriptorDeriver } from "./ibp/descriptor.js";
 // Side-effect import. Registers kernel DO operations with the
-// registry on load. See seed/coreOperations.js for the current set.
-import "./coreOperations.js";
+// registry on load. See seed/ibp/coreOperations.js for the current set.
+import "./ibp/coreOperations.js";
 
 // ---------------------------------------------------------------------------
 // Auth strategy registry (extensions register additional auth methods)
@@ -149,7 +151,7 @@ export function buildCoreServices({ loadedExtensions = new Map(), overrides = {}
     //
     // Long-term, these are the ONLY public surface for substrate
     // operations. Today they coexist additively with the legacy
-    // per-target helpers below (core.metadata, core.tree, core.artifacts,
+    // per-target helpers below (core.metadata, core.tree, core.matters,
     // etc.). New extension code should prefer the verbs; existing
     // helpers retire as callers migrate.
     //
@@ -164,8 +166,12 @@ export function buildCoreServices({ loadedExtensions = new Map(), overrides = {}
 
     // --- Always-available services ---
     dids: { logDid },
+    descriptor: {
+      registerDeriver:   registerDescriptorDeriver,
+      unregisterDeriver: unregisterDescriptorDeriver,
+    },
     auth: {
-      resolveTreeAccess,
+      resolveSpaceAccess,
       createBeing, verifyPassword, generateToken, isFirstBeing, findBeingByName,
       registerStrategy: (name, handler, extName = "unknown") => {
         if (!_allowedStrategyExtensions.has(extName)) {
@@ -197,14 +203,14 @@ export function buildCoreServices({ loadedExtensions = new Map(), overrides = {}
     llm: {
       getClientForBeing, resolveRootLlmForRole, beingHasLlm,
       processMessage, switchRole, getRootId, runChat,
-      setCurrentNodeId, getCurrentNodeId, getCurrentRole,
+      setCurrentSpace, getCurrentSpace, getCurrentRole,
       registerRootLlmSlot, registerBeingLlmSlot, registerFailoverResolver,
       LLM_PRIORITY,
     },
 
     mcp: { connectToMCP, closeMCPClient, getMCPClient, MCP_SERVER_URL },
 
-    // Push channel — proxies from seed/core/pushChannel.js that route to
+    // Push channel — proxies from seed/ibp/pushChannel.js that route to
     // the registered transport (today: WebSocket via initWebSocketServer).
     // No-op when no transport has registered. Named `websocket` for
     // back-compat with extension callers; the channel itself is
@@ -218,7 +224,7 @@ export function buildCoreServices({ loadedExtensions = new Map(), overrides = {}
     // [[project_tree_orchestrator_deleted]].
 
     // --- Shared models (core protocol, always available) ---
-    models: { Being, Node, Did, Artifact },
+    models: { Being, Space, Did, Matter },
 
     // --- Hook system ---
     hooks: hooksModule,
@@ -227,7 +233,7 @@ export function buildCoreServices({ loadedExtensions = new Map(), overrides = {}
     // Extensions declare seeds via init() return { seeds: [...] } or
     // manifest.provides.seeds; the loader registers them. Operators plant
     // a seed at a node to bootstrap the extension's structure (Ruler,
-    // beings, sub-domain nodes, starter artifacts). See memory
+    // beings, sub-domain nodes, starter matter). See memory
     // `extension-seeds`.
     seeds: {
       register: registerSeed,
@@ -244,27 +250,27 @@ export function buildCoreServices({ loadedExtensions = new Map(), overrides = {}
 
     // --- Tree infrastructure (cache, integrity, circuit breaker, CRUD) ---
     tree: {
-      getAncestorChain, snapshotAncestors, invalidateNode, invalidateAll, getCacheStats,
+      getAncestorChain, snapshotAncestors, invalidateSpace, invalidateAll, getCacheStats,
       checkIntegrity,
       checkTreeHealth, tripTree, reviveTree, isTreeAlive,
-      createNode, createNodeBranch, deleteNodeBranch, updateParentRelationship, editNodeName, editNodeType,
+      createSpace, createSpaceBranch, deleteSpaceBranch, updateParentRelationship, editSpaceName, editSpaceType,
       isBeingRoot, getLandRootId,
     },
 
-    // --- Artifacts (programmatic artifact CRUD) ---
-    artifacts: { createArtifact, editArtifact, deleteArtifactAndFile, transferArtifact, getArtifacts },
+    // --- Matter (programmatic matter CRUD) ---
+    matters: { createMatter, editMatter, deleteMatterAndFile, transferMatter, getMatters },
 
-    // --- Node locks (structural mutation locks, tier 3 only) ---
-    nodeLocks: { acquireNodeLock, releaseNodeLock, acquireMultiple, releaseMultiple, isNodeLocked, getStats: getNodeLockStats },
+    // --- Space locks (structural mutation locks, tier 3 only) ---
+    spaceLocks: { acquireSpaceLock, releaseSpaceLock, acquireMultiple, releaseMultiple, isSpaceLocked, getStats: getSpaceLockStats },
 
-    // --- Node metadata (namespace-enforced read/write for extension data on nodes) ---
+    // --- Space metadata (namespace-enforced read/write for extension data on nodes) ---
     metadata: { getExtMeta, readNs, setExtMeta, mergeExtMeta, incExtMeta, pushExtMeta, addToExtMetaSet, batchSetExtMeta, unsetExtMeta },
 
     // --- Being metadata (namespace-enforced read/write for extension data on beings) ---
     beingMetadata: { getBeingMeta, readBeingNs, setBeingMeta, mergeBeingMeta, incBeingMeta, pushBeingMeta, addToBeingMetaSet, batchSetBeingMeta, unsetBeingMeta },
 
-    // --- Artifact metadata (namespace-enforced read/write for extension data on artifacts) ---
-    artifactMetadata: { getArtifactMeta, readArtifactNs, setArtifactMeta, mergeArtifactMeta, incArtifactMeta, pushArtifactMeta, addToArtifactMetaSet, batchSetArtifactMeta, unsetArtifactMeta },
+    // --- Matter metadata (namespace-enforced read/write for extension data on matter) ---
+    matterMetadata: { getMatterMeta, readMatterNs, setMatterMeta, mergeMatterMeta, incMatterMeta, pushMatterMeta, addToMatterMetaSet, batchSetMatterMeta, unsetMatterMeta },
 
     // --- Extension scope (check blocked/allowed status at positions) ---
     //

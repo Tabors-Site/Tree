@@ -3,13 +3,13 @@
 // DO-trigger subscription registry.
 //
 // One of two coexisting paths that wake beings (the other being direct
-// being-to-being SUMMONs). When a DO action lands at a position — an
-// artifact write, a status change, a metadata write — the substrate's
+// being-to-being SUMMONs). When a DO action lands at a position — a
+// matter write, a status change, a metadata write — the substrate's
 // post-DO hooks emit SUMMONs to every subscriber whose interest covers
-// the affected position and event shape. The SUMMON's `intent` is
-// `do-trigger`; the receiving being's role template interprets the
-// content (a small envelope describing what changed) and decides
-// whether to act.
+// the affected position and event shape. The SUMMON's content carries
+// a small envelope describing what changed (event name, action,
+// space/matter ids); the receiving being's role template interprets
+// the content and decides whether to act.
 //
 // **Why this layer exists.** Without it, infrastructure code (Mode 2:
 // pure DOs without a perspective) is isolated from beings that care
@@ -23,16 +23,16 @@
 //   {
 //     id:            string,                  // generated when subscribe() returns
 //     beingId:       string,                  // who gets summoned
-//     event:         "afterArtifact"          // hook name to match
-//                  | "afterStatusChange"
-//                  | "afterMetadataWrite",
+//     event:         "afterMatter"            // hook name to match
+//                  | "afterMetadataWrite",    // extensions express
+//                                              // status-like changes via
+//                                              // afterMetadataWrite +
+//                                              // a namespace filter
 //     scope:         { everywhere: true }     // any node in the land
-//                  | { nodeId: "<id>" }       // exact match
-//                  | { ancestor: "<id>" },    // payload.nodeId has this ancestor
+//                  | { spaceId: "<id>" }       // exact match
+//                  | { ancestor: "<id>" },    // payload.spaceId has this ancestor
 //     filter:        { <key>: <value> }       // payload field-equality, optional
 //                  | { <key>: [v1, v2, ...] },// any-of match, optional
-//     intent:        "do-trigger"             // SUMMON intent on emission
-//                  | "<custom>",              //   (default: "do-trigger")
 //     priority:      number,                  // SUMMON priority; default BACKGROUND (4)
 //     coalesceMs:    number,                  // 0 (default) = immediate emit per event;
 //                                             // N > 0 = batch matching events landing in
@@ -47,11 +47,11 @@
 // plus extension-init re-registration is enough.
 
 import { randomUUID } from "crypto";
-import log from "../core/log.js";
-import { getAncestorChain } from "../tree/ancestorCache.js";
+import log from "../system/log.js";
+import { getAncestorChain } from "../space/ancestorCache.js";
 import { appendToInbox } from "./inbox.js";
 import { wake } from "./scheduler.js";
-import { getLandDomain } from "../addressing/address.js";
+import { getLandDomain } from "../ibp/address.js";
 import { getLandRootId } from "../landRoot.js";
 
 // beingId -> Map<subscriptionId, subscription>
@@ -71,7 +71,7 @@ const _index = new Map();
 //     events:      Array<payload-summary>  // collected within the window
 //     firstAt:     ms                       // when the window opened
 //     senderStance:string                   // computed at first event
-//     targetNodeId:string                   // computed at first event
+//     targetSpace:string                   // computed at first event
 //     rootCorrelation:string|null
 //     eventName:   string
 //   }
@@ -102,8 +102,8 @@ export function subscribe(beingId, sub) {
   if (!sub.scope || typeof sub.scope !== "object") {
     throw new Error("subscription.scope is required");
   }
-  if (!sub.scope.everywhere && !sub.scope.nodeId && !sub.scope.ancestor) {
-    throw new Error("subscription.scope must specify everywhere|nodeId|ancestor");
+  if (!sub.scope.everywhere && !sub.scope.spaceId && !sub.scope.ancestor) {
+    throw new Error("subscription.scope must specify everywhere|spaceId|ancestor");
   }
 
   const id = sub.id || randomUUID();
@@ -113,7 +113,6 @@ export function subscribe(beingId, sub) {
     event:      sub.event,
     scope:      sub.scope,
     filter:     sub.filter || null,
-    intent:     sub.intent || "do-trigger",
     priority:   Number.isFinite(sub.priority) ? Number(sub.priority) : 4, // BACKGROUND
     coalesceMs: Number.isFinite(sub.coalesceMs) && sub.coalesceMs > 0 ? Number(sub.coalesceMs) : 0,
   };
@@ -211,15 +210,15 @@ export function getStats() {
  * Walks ancestor chains when needed (cached via `getAncestorChain`).
  *
  * @param {string} eventName
- * @param {object} payload   the hook payload — must include `nodeId` when
- *                           subscriptions use scope.nodeId or scope.ancestor
+ * @param {object} payload   the hook payload — must include `spaceId` when
+ *                           subscriptions use scope.spaceId or scope.ancestor
  * @returns {Promise<Array<subscription>>}
  */
 export async function getMatchingSubscribers(eventName, payload) {
   const eventSet = _byEvent.get(eventName);
   if (!eventSet || eventSet.size === 0) return [];
 
-  const nodeId = payload?.nodeId ? String(payload.nodeId) : null;
+  const spaceId = payload?.spaceId ? String(payload.spaceId) : null;
 
   // Pre-compute the ancestor chain for the payload's node once per
   // call; reuse it across every ancestor-scoped subscription this
@@ -229,20 +228,20 @@ export async function getMatchingSubscribers(eventName, payload) {
   let ancestorChainIds = null;
   async function ancestorIdSet() {
     if (ancestorChainIds !== null) return ancestorChainIds;
-    if (!nodeId) {
+    if (!spaceId) {
       ancestorChainIds = new Set();
       return ancestorChainIds;
     }
     try {
-      const chain = await getAncestorChain(nodeId);
+      const chain = await getAncestorChain(spaceId);
       ancestorChainIds = new Set(
         (Array.isArray(chain) ? chain : []).map((n) => String(n?._id)).filter(Boolean),
       );
       // The node itself counts as ancestor=self for scope.ancestor checks.
-      ancestorChainIds.add(nodeId);
+      ancestorChainIds.add(spaceId);
     } catch (err) {
-      log.debug("Subscriptions", `ancestor chain lookup failed for ${nodeId.slice(0, 8)}: ${err.message}`);
-      ancestorChainIds = new Set([nodeId]);
+      log.debug("Subscriptions", `ancestor chain lookup failed for ${spaceId.slice(0, 8)}: ${err.message}`);
+      ancestorChainIds = new Set([spaceId]);
     }
     return ancestorChainIds;
   }
@@ -257,7 +256,7 @@ export async function getMatchingSubscribers(eventName, payload) {
       matches.push(sub);
       continue;
     }
-    if (sub.scope.nodeId && nodeId && String(sub.scope.nodeId) === nodeId) {
+    if (sub.scope.spaceId && spaceId && String(sub.scope.spaceId) === spaceId) {
       matches.push(sub);
       continue;
     }
@@ -280,7 +279,7 @@ export async function getMatchingSubscribers(eventName, payload) {
  * its normal priority order.
  *
  * Sender is the doing being when payload.beingId is present, else a
- * synthetic system stance `<land>/@system`. The receiver's role
+ * synthetic seed-being stance `<land>/@seed-being`. The receiver's role
  * template can inspect the sender to distinguish code-driven
  * (anonymous) events from being-driven ones.
  *
@@ -298,8 +297,8 @@ export async function emitToSubscribers(eventName, payload, options = {}) {
   let emitted = 0;
   for (const sub of matches) {
     try {
-      const targetNodeId = _inboxNodeIdForSubscriber(sub, payload);
-      if (!targetNodeId) {
+      const targetSpace = _inboxNodeIdForSubscriber(sub, payload);
+      if (!targetSpace) {
         log.debug("Subscriptions",
           `skipping ${eventName} → being ${sub.beingId.slice(0, 8)}: no resolvable inbox node`);
         continue;
@@ -313,23 +312,22 @@ export async function emitToSubscribers(eventName, payload, options = {}) {
           eventName,
           event:           eventContent,
           senderStance,
-          targetNodeId,
+          targetSpace,
           rootCorrelation,
         });
         // Counted as "handled" but the actual emit lands later.
         emitted++;
       } else {
         const correlation = randomUUID();
-        await appendToInbox(targetNodeId, sub.beingId, {
+        await appendToInbox(targetSpace, sub.beingId, {
           from:            senderStance,
           content:         eventContent,
-          intent:          sub.intent,
           correlation,
           rootCorrelation: rootCorrelation || correlation,
           priority:        sub.priority,
           sentAt:          new Date().toISOString(),
         });
-        wake(sub.beingId, targetNodeId);
+        wake(sub.beingId, targetSpace);
         emitted++;
       }
     } catch (err) {
@@ -353,7 +351,7 @@ function _enqueueCoalesce(sub, ctx) {
     events:          [ctx.event],
     firstAt:         Date.now(),
     senderStance:    ctx.senderStance,
-    targetNodeId:    ctx.targetNodeId,
+    targetSpace:    ctx.targetSpace,
     rootCorrelation: ctx.rootCorrelation,
     eventName:       ctx.eventName,
     timer:           null,
@@ -386,16 +384,15 @@ async function _flushCoalesce(sub) {
     lastAt:    new Date().toISOString(),
   };
   try {
-    await appendToInbox(pending.targetNodeId, sub.beingId, {
+    await appendToInbox(pending.targetSpace, sub.beingId, {
       from:            pending.senderStance,
       content,
-      intent:          sub.intent,
       correlation,
       rootCorrelation: pending.rootCorrelation || correlation,
       priority:        sub.priority,
       sentAt:          new Date().toISOString(),
     });
-    wake(sub.beingId, pending.targetNodeId);
+    wake(sub.beingId, pending.targetSpace);
   } catch (err) {
     log.warn("Subscriptions",
       `coalesced emit ${pending.eventName} → being ${sub.beingId.slice(0, 8)} failed: ${err.message}`);
@@ -420,7 +417,7 @@ function _matchesFilter(filter, payload) {
 }
 
 // Dot-path read so filters can reach into nested payload fields
-// (e.g. "content.origin" to match an artifact's origin).
+// (e.g. "content.origin" to match a matter's origin).
 function _readPath(obj, path) {
   if (!obj || typeof obj !== "object" || !path) return undefined;
   if (!path.includes(".")) return obj[path];
@@ -442,16 +439,16 @@ function _senderStanceForPayload(payload) {
     // role templates can resolve to username if they need display.
     return `${domain}/@<being:${payload.beingId}>`;
   }
-  return `${domain}/@system`;
+  return `${domain}/@seed-being`;
 }
 
 function _inboxNodeIdForSubscriber(sub, payload) {
   // Deliver to the subscriber's home position when known so the inbox
   // ends up at a single well-defined place per being. Fallback to the
-  // event's nodeId (the affected node) and ultimately the land root.
+  // event's spaceId (the affected node) and ultimately the land root.
   return (
     payload?.subscriberHomeId
-    || payload?.nodeId
+    || payload?.spaceId
     || getLandRootId()
     || null
   );
@@ -460,14 +457,14 @@ function _inboxNodeIdForSubscriber(sub, payload) {
 function _renderTriggerContent(eventName, payload) {
   // Compact, predictable envelope the receiving role template parses.
   // Keep this stable — role templates will pattern-match on `event`
-  // and the payload fields. Trim what's likely large (full artifact
+  // and the payload fields. Trim what's likely large (full matter
   // content) to references only.
   const out = { event: eventName };
-  if (payload?.nodeId)          out.nodeId          = String(payload.nodeId);
+  if (payload?.spaceId)          out.spaceId          = String(payload.spaceId);
   if (payload?.beingId)         out.actorBeingId    = String(payload.beingId);
   if (payload?.action)          out.action          = payload.action;
-  if (payload?.artifact?._id)   out.artifactId      = String(payload.artifact._id);
-  if (payload?.artifact?.origin) out.artifactOrigin = payload.artifact.origin;
+  if (payload?.matter?._id)     out.matterId        = String(payload.matter._id);
+  if (payload?.matter?.origin)  out.matterOrigin   = payload.matter.origin;
   if (payload?.origin)          out.origin          = payload.origin;
   if (payload?.extName)         out.extName         = payload.extName;
   if (payload?.fromStatus)      out.fromStatus      = payload.fromStatus;
@@ -479,7 +476,7 @@ function _renderTriggerContent(eventName, payload) {
 
 function _scopeLabel(scope) {
   if (scope.everywhere) return "everywhere";
-  if (scope.nodeId) return `node:${String(scope.nodeId).slice(0, 8)}`;
+  if (scope.spaceId) return `node:${String(scope.spaceId).slice(0, 8)}`;
   if (scope.ancestor) return `ancestor:${String(scope.ancestor).slice(0, 8)}`;
   return "?";
 }

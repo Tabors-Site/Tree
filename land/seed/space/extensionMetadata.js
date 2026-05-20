@@ -1,22 +1,22 @@
 // TreeOS Seed . AGPL-3.0 . https://treeos.ai . Tabor Holly
-import { hooks } from "../core/hooks.js";
+import { hooks } from "../system/hooks.js";
 import { guardMetadataWrite } from "./documentGuard.js";
-import { invalidateNode } from "./ancestorCache.js";
-import Node from "../models/node.js";
+import { invalidateSpace } from "./ancestorCache.js";
+import Space from "../models/space.js";
 import { getLandConfigValue } from "../landConfig.js";
 
 /**
- * Helpers for extensions to store per-node data in node.metadata.
+ * Helpers for extensions to store per-space data in space.metadata.
  *
  * Convention: each extension gets a namespace key matching its manifest name.
- * e.g. node.metadata.get('my-extension')
+ * e.g. space.metadata.get('my-extension')
  *
- * Spatial extension scoping: if an extension is blocked at a node
+ * Spatial extension scoping: if an extension is blocked at a space
  * (via metadata.extensions.blocked), writes are silently skipped.
  * Core namespaces (tools, modes, extensions, cascade) are never blocked.
  *
  * Concurrency: setExtMeta uses atomic MongoDB $set on the specific namespace key.
- * Two concurrent writes to different namespaces on the same node do not clobber each other.
+ * Two concurrent writes to different namespaces on the same space do not clobber each other.
  * mergeExtMeta uses $set on individual keys within a namespace for atomic partial updates.
  *
  * Document size guard: every write checks total document size against
@@ -25,10 +25,10 @@ import { getLandConfigValue } from "../landConfig.js";
 
 // Kernel-aware namespaces. Any extension can write to these because they
 // hold protocol-level data referenced by the kernel itself:
-//   - tools, modes, extensions: per-node capability scope
-//   - cascade, llm: per-node behavior configuration
-//   - beings: node-hosted being registry. Which beings of which roles
-//     live at this node (beingIds bound to role names), plus any
+//   - tools, modes, extensions: per-space capability scope
+//   - cascade, llm: per-space behavior configuration
+//   - beings: space-hosted being registry. Which beings of which roles
+//     live at this space (beingIds bound to role names), plus any
 //     role-related config specific to this position (e.g. arrival/
 //     owner/member permission sets, scopeRulerId, etc.). Keyed by
 //     role name on the inside. Multiple extensions legitimately write
@@ -136,17 +136,17 @@ function measureDepth(value, current = 0, seen) {
 }
 
 /**
- * Check if an extension is blocked at this specific node.
- * Only checks the node's own metadata, not the parent chain
+ * Check if an extension is blocked at this specific space.
+ * Only checks the space's own metadata, not the parent chain
  * (parent chain is handled by hooks and tool resolution).
  */
-function isBlockedLocally(node, extName) {
+function isBlockedLocally(space, extName) {
   if (CORE_NAMESPACES.has(extName)) return false;
-  const meta = node.metadata instanceof Map
-    ? node.metadata.get("extensions")
-    : node.metadata?.extensions;
+  const meta = space.metadata instanceof Map
+    ? space.metadata.get("extensions")
+    : space.metadata?.extensions;
   if (!meta?.blocked) return false;
-  // Array.includes is fine here. blocked[] is typically < 10 entries per node.
+  // Array.includes is fine here. blocked[] is typically < 10 entries per space.
   return Array.isArray(meta.blocked) && meta.blocked.includes(extName);
 }
 
@@ -155,28 +155,28 @@ function isBlockedLocally(node, extName) {
 // ─────────────────────────────────────────────────────────────────────────
 
 /**
- * Get an extension's metadata namespace from a node.
+ * Get an extension's metadata namespace from a space.
  * Returns the stored object, or an empty object if nothing exists.
  */
-export function getExtMeta(node, extName) {
-  if (!node || !node.metadata) return {};
-  const data = node.metadata instanceof Map
-    ? node.metadata.get(extName)
-    : node.metadata?.[extName];
+export function getExtMeta(space, extName) {
+  if (!space || !space.metadata) return {};
+  const data = space.metadata instanceof Map
+    ? space.metadata.get(extName)
+    : space.metadata?.[extName];
   return data || {};
 }
 
 /**
  * Like getExtMeta but returns `null` when the namespace is unset
  * instead of an empty object. Use when callers distinguish "never
- * written" from "empty state" (e.g. `if (readNs(node, "swarm"))`
+ * written" from "empty state" (e.g. `if (readNs(space, "swarm"))`
  * style guards). Extensions used to reinvent this function locally
  * in every state module; prefer this shared one.
  */
-export function readNs(node, extName) {
-  if (!node || !node.metadata) return null;
-  if (node.metadata instanceof Map) return node.metadata.get(extName) || null;
-  return node.metadata?.[extName] || null;
+export function readNs(space, extName) {
+  if (!space || !space.metadata) return null;
+  if (space.metadata instanceof Map) return space.metadata.get(extName) || null;
+  return space.metadata?.[extName] || null;
 }
 
 // ─────────────────────────────────────────────────────────────────────────
@@ -184,13 +184,13 @@ export function readNs(node, extName) {
 // ─────────────────────────────────────────────────────────────────────────
 
 /**
- * Set an extension's metadata namespace on a node (full replace).
+ * Set an extension's metadata namespace on a space (full replace).
  * Uses atomic MongoDB $set so concurrent writes to different namespaces
- * on the same node do not clobber each other.
+ * on the same space do not clobber each other.
  *
- * Silently skips if the extension is blocked at this node.
+ * Silently skips if the extension is blocked at this space.
  *
- * @param {object}  node
+ * @param {object}  space
  * @param {string}  extName - the namespace to write to
  * @param {*}       data - the data to store
  * @param {object}  [opts]
@@ -199,51 +199,51 @@ export function readNs(node, extName) {
  *   Set automatically by the scoped core in buildScopedCore().
  *   Direct imports from seed omit this (kernel code, migrations, utilities).
  */
-export async function setExtMeta(node, extName, data, opts) {
+export async function setExtMeta(space, extName, data, opts) {
   validateExtName(extName);
   if (opts?.callerExtName && extName !== opts.callerExtName && !CORE_NAMESPACES.has(extName)) {
     throw new Error(`Namespace violation: "${opts.callerExtName}" cannot write to "${extName}". Extensions can only write to their own namespace.`);
   }
-  if (isBlockedLocally(node, extName)) return false;
+  if (isBlockedLocally(space, extName)) return false;
 
   validateData(extName, data);
 
   // Document size guard: check total document size before writing
-  guardMetadataWrite(node, data, { documentType: "node", documentId: node._id });
+  guardMetadataWrite(space, data, { documentType: "space", documentId: space._id });
 
-  const nodeId = String(node._id);
+  const spaceId = String(space._id);
 
   // Atomic write: MongoDB handles concurrency. No read-modify-write race.
-  await Node.updateOne(
-    { _id: nodeId },
+  await Space.updateOne(
+    { _id: spaceId },
     { $set: { [`metadata.${extName}`]: data } },
   );
 
   // Update in-memory document if caller still holds it
-  if (node.metadata instanceof Map) {
-    node.metadata.set(extName, data);
-  } else if (node.metadata) {
-    node.metadata[extName] = data;
+  if (space.metadata instanceof Map) {
+    space.metadata.set(extName, data);
+  } else if (space.metadata) {
+    space.metadata[extName] = data;
   }
 
-  invalidateNode(nodeId);
-  hooks.run("afterMetadataWrite", { nodeId, extName, data }).catch(() => {});
+  invalidateSpace(spaceId);
+  hooks.run("afterMetadataWrite", { spaceId, extName, data }).catch(() => {});
   return true;
 }
 
 /**
  * Shallow merge into an extension's metadata namespace.
  * Uses atomic $set on individual keys to avoid read-modify-write races.
- * Silently skips if the extension is blocked at this node.
+ * Silently skips if the extension is blocked at this space.
  *
  * Same validation as setExtMeta: size, nesting, namespace key, dangerous keys.
  */
-export async function mergeExtMeta(node, extName, partial, opts) {
+export async function mergeExtMeta(space, extName, partial, opts) {
   validateExtName(extName);
   if (opts?.callerExtName && extName !== opts.callerExtName && !CORE_NAMESPACES.has(extName)) {
     throw new Error(`Namespace violation: "${opts.callerExtName}" cannot write to "${extName}". Extensions can only write to their own namespace.`);
   }
-  if (isBlockedLocally(node, extName)) return false;
+  if (isBlockedLocally(space, extName)) return false;
   if (!partial || typeof partial !== "object" || Array.isArray(partial)) return false;
 
   // Filter dangerous keys from partial
@@ -259,31 +259,31 @@ export async function mergeExtMeta(node, extName, partial, opts) {
   if (Object.keys(safePartial).length === 0) return false;
 
   // Validate the merged result for size and nesting
-  const existing = getExtMeta(node, extName);
+  const existing = getExtMeta(space, extName);
   const merged = { ...existing, ...safePartial };
   validateData(extName, merged);
 
   // Document size guard
-  guardMetadataWrite(node, merged, { documentType: "node", documentId: node._id });
+  guardMetadataWrite(space, merged, { documentType: "space", documentId: space._id });
 
-  const nodeId = String(node._id);
+  const spaceId = String(space._id);
 
   const updates = {};
   for (const [key, value] of Object.entries(safePartial)) {
     updates[`metadata.${extName}.${key}`] = value;
   }
 
-  await Node.updateOne({ _id: nodeId }, { $set: updates });
+  await Space.updateOne({ _id: spaceId }, { $set: updates });
 
   // Update in-memory document
-  if (node.metadata instanceof Map) {
-    node.metadata.set(extName, merged);
-  } else if (node.metadata) {
-    node.metadata[extName] = merged;
+  if (space.metadata instanceof Map) {
+    space.metadata.set(extName, merged);
+  } else if (space.metadata) {
+    space.metadata[extName] = merged;
   }
 
-  invalidateNode(nodeId);
-  hooks.run("afterMetadataWrite", { nodeId, extName, data: safePartial }).catch(() => {});
+  invalidateSpace(spaceId);
+  hooks.run("afterMetadataWrite", { spaceId, extName, data: safePartial }).catch(() => {});
   return true;
 }
 
@@ -300,20 +300,20 @@ function validateAtomicExtName(extName) {
  * Atomic increment on a single key within an extension's metadata namespace.
  * Uses MongoDB $inc. No read-modify-write. No race conditions.
  *
- *   await incExtMeta(node, "my-extension", "counter.daily", 42);
+ *   await incExtMeta(space, "my-extension", "counter.daily", 42);
  *   // Atomically adds 42 to metadata.my-extension.counter.daily
  */
-export async function incExtMeta(node, extName, key, amount = 1) {
-  if (!node || !extName || !key) return false;
+export async function incExtMeta(space, extName, key, amount = 1) {
+  if (!space || !extName || !key) return false;
   validateAtomicExtName(extName);
   if (typeof amount !== "number" || !isFinite(amount)) return false;
   if (DANGEROUS_KEYS.has(key)) return false;
-  const nodeId = String(node._id || node);
-  await Node.updateOne(
-    { _id: nodeId },
+  const spaceId = String(space._id || space);
+  await Space.updateOne(
+    { _id: spaceId },
     { $inc: { [`metadata.${extName}.${key}`]: amount } }
   );
-  invalidateNode(nodeId);
+  invalidateSpace(spaceId);
   return true;
 }
 
@@ -321,11 +321,11 @@ export async function incExtMeta(node, extName, key, amount = 1) {
  * Atomic push to an array within an extension's metadata namespace.
  * Uses MongoDB $push with $slice for a capped circular buffer.
  *
- *   await pushExtMeta(node, "scheduler", "completions", { date, delta }, 50);
+ *   await pushExtMeta(space, "scheduler", "completions", { date, delta }, 50);
  *   // Atomically appends to metadata.scheduler.completions, keeps last 50
  */
-export async function pushExtMeta(node, extName, key, item, maxLength = 100) {
-  if (!node || !extName || !key) return false;
+export async function pushExtMeta(space, extName, key, item, maxLength = 100) {
+  if (!space || !extName || !key) return false;
   validateAtomicExtName(extName);
   if (DANGEROUS_KEYS.has(key)) return false;
   // Cap maxLength to prevent unbounded arrays
@@ -336,12 +336,12 @@ export async function pushExtMeta(node, extName, key, item, maxLength = 100) {
   // Per-item cap: namespace max / safeCap ensures the array can't exceed the namespace limit
   const perItemCap = Math.max(1024, Math.floor(MAX_METADATA_VALUE_BYTES() / safeCap));
   if (itemSize > perItemCap) return false;
-  const nodeId = String(node._id || node);
-  await Node.updateOne(
-    { _id: nodeId },
+  const spaceId = String(space._id || space);
+  await Space.updateOne(
+    { _id: spaceId },
     { $push: { [`metadata.${extName}.${key}`]: { $each: [item], $slice: -safeCap } } }
   );
-  invalidateNode(nodeId);
+  invalidateSpace(spaceId);
   return true;
 }
 
@@ -349,11 +349,11 @@ export async function pushExtMeta(node, extName, key, item, maxLength = 100) {
  * Atomic add-to-set within an extension's metadata namespace.
  * Uses MongoDB $addToSet. No duplicates. No read-modify-write.
  *
- *   await addToExtMetaSet(node, "nav", "trackedRoots", rootId);
+ *   await addToExtMetaSet(space, "nav", "trackedRoots", rootId);
  *   // Atomically adds rootId to metadata.nav.trackedRoots if not already present.
  */
-export async function addToExtMetaSet(node, extName, key, item) {
-  if (!node || !extName || !key) return false;
+export async function addToExtMetaSet(space, extName, key, item) {
+  if (!space || !extName || !key) return false;
   validateAtomicExtName(extName);
   if (DANGEROUS_KEYS.has(key)) return false;
   // Item must be serializable. Size-bound the item against the per-namespace cap
@@ -361,25 +361,25 @@ export async function addToExtMetaSet(node, extName, key, item) {
   let itemSize;
   try { itemSize = Buffer.byteLength(JSON.stringify(item), "utf8"); } catch { return false; }
   if (itemSize > MAX_METADATA_VALUE_BYTES()) return false;
-  const nodeId = String(node._id || node);
-  await Node.updateOne(
-    { _id: nodeId },
+  const spaceId = String(space._id || space);
+  await Space.updateOne(
+    { _id: spaceId },
     { $addToSet: { [`metadata.${extName}.${key}`]: item } },
   );
-  invalidateNode(nodeId);
+  invalidateSpace(spaceId);
   return true;
 }
 
 /**
  * Atomic multi-field set within an extension's metadata namespace.
  * Uses MongoDB $set on individual keys. No read-modify-write.
- * Accepts node document or nodeId string.
+ * Accepts space document or spaceId string.
  *
- *   await batchSetExtMeta(nodeId, "values", { weight: 135, set1: 10, set2: 10, set3: 8 });
+ *   await batchSetExtMeta(spaceId, "values", { weight: 135, set1: 10, set2: 10, set3: 8 });
  *   // Atomically sets metadata.values.weight, metadata.values.set1, etc.
  */
-export async function batchSetExtMeta(node, extName, fields) {
-  if (!node || !extName || !fields || typeof fields !== "object") return false;
+export async function batchSetExtMeta(space, extName, fields) {
+  if (!space || !extName || !fields || typeof fields !== "object") return false;
   validateAtomicExtName(extName);
   // Validate fields: check for dangerous keys, serializable values, total size
   const entries = Object.entries(fields);
@@ -397,29 +397,29 @@ export async function batchSetExtMeta(node, extName, fields) {
     updates[`metadata.${extName}.${key}`] = value;
   }
   if (Object.keys(updates).length === 0) return false;
-  const nodeId = String(node._id || node);
-  await Node.updateOne({ _id: nodeId }, { $set: updates });
-  invalidateNode(nodeId);
+  const spaceId = String(space._id || space);
+  await Space.updateOne({ _id: spaceId }, { $set: updates });
+  invalidateSpace(spaceId);
   return true;
 }
 
 /**
- * Atomic namespace removal from a node's metadata.
+ * Atomic namespace removal from a space's metadata.
  * Uses MongoDB $unset. The key is removed entirely, not set to null.
  * Document shrinks. Namespace is clean.
  *
- *   await unsetExtMeta(nodeId, "gaps");
+ *   await unsetExtMeta(spaceId, "gaps");
  *   // metadata.gaps is gone. getExtMeta returns {}.
  */
-export async function unsetExtMeta(node, extName) {
-  if (!node || !extName) return false;
+export async function unsetExtMeta(space, extName) {
+  if (!space || !extName) return false;
   validateAtomicExtName(extName);
-  const nodeId = String(node._id || node);
-  await Node.updateOne(
-    { _id: nodeId },
+  const spaceId = String(space._id || space);
+  await Space.updateOne(
+    { _id: spaceId },
     { $unset: { [`metadata.${extName}`]: "" } }
   );
-  invalidateNode(nodeId);
+  invalidateSpace(spaceId);
   return true;
 }
 
@@ -428,21 +428,21 @@ export async function unsetExtMeta(node, extName) {
 // ─────────────────────────────────────────────────────────────────────────
 
 /**
- * Find the extension's root node by walking up from any position.
- * Returns the node ID (string) of the nearest ancestor with
+ * Find the extension's root space by walking up from any position.
+ * Returns the space ID (string) of the nearest ancestor with
  * metadata[extName].initialized === true, or null.
  *
  * Walks up the parent chain. Stops at the tree root (rootOwner set)
- * or after 20 levels. Checks the starting node first.
+ * or after 20 levels. Checks the starting space first.
  *
- * @param {string} nodeId - Starting node
+ * @param {string} spaceId - Starting space
  * @param {string} extName - Extension name (e.g. "food", "fitness")
  * @returns {Promise<string|null>}
  */
-export async function findExtensionRoot(nodeId, extName) {
-  if (!nodeId || !extName) return null;
+export async function findExtensionRoot(spaceId, extName) {
+  if (!spaceId || !extName) return null;
 
-  let current = await Node.findById(nodeId).select("_id metadata parent rootOwner").lean();
+  let current = await Space.findById(spaceId).select("_id metadata parent rootOwner").lean();
   let depth = 0;
 
   while (current && depth < 20) {
@@ -455,7 +455,7 @@ export async function findExtensionRoot(nodeId, extName) {
     if (current.rootOwner) return null;
     if (!current.parent) return null;
 
-    current = await Node.findById(current.parent).select("_id metadata parent rootOwner").lean();
+    current = await Space.findById(current.parent).select("_id metadata parent rootOwner").lean();
     depth++;
   }
 

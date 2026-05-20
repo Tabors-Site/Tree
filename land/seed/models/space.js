@@ -1,63 +1,72 @@
 // TreeOS Seed . AGPL-3.0 . https://treeos.ai . Tabor Holly
+//
+// Space — a position in the substrate. Spaces nest as a tree
+// (parent + children). Every other primitive (Being, Matter, Did,
+// Summon) attaches to a Space; the substrate's structural layer is
+// just the Space tree.
+//
+// Twelve fields total. Anything an extension wants to attach lives in
+// metadata, namespaced by extension. See [[project_substrate_as_universal_workspace]].
+
 import mongoose from "mongoose";
 import { v4 as uuidv4 } from "uuid";
-import { SYSTEM_ROLE, DELETED } from "../core/protocol.js";
+import { SEED_SPACE, DELETED } from "../space/seedSpaces.js";
 
-const NodeSchema = new mongoose.Schema({
-  _id: {
-    type: String,
-    default: uuidv4,
-  },
+const SpaceSchema = new mongoose.Schema({
+  _id:  { type: String, default: uuidv4 },
   name: { type: String, required: true },
   type: { type: String, default: null },
-  // status field retired 2026-05-18. Status is domain-specific and
-  // belongs in extension metadata; the kernel doesn't claim a universal
-  // state machine. See [[project_substrate_as_universal_workspace]].
   dateCreated: { type: Date, default: Date.now },
-  // Core LLM assignment: tree-wide default. Extension slots live in metadata.
+
+  // Tree-wide default LLM. Extension slots live in metadata.
   llmDefault: { type: String, ref: "LlmConnection", default: null },
-  children: [{ type: String, ref: "Node" }],
-  parent: { type: String, ref: "Node", default: null },
 
-  rootOwner: { type: String, ref: "Being", default: null }, // set = this is a tree root. null = not a root.
-  contributors: [{ type: String, ref: "Being" }], // write access. Capped at 500 per node in ownership.js.
+  parent:   { type: String, ref: "Space", default: null },
+  children: [{ type: String, ref: "Space" }],
 
-  // Tree visibility (core protocol, used by Canopy federation)
-  visibility: {
+  // rootOwner non-null → this Space is a tree root. Owner-only writes
+  // (rename, move, delete). null → not a root; resolveSpaceAccess walks
+  // up to find the owner. Contributors get write access at any depth;
+  // capped at 500 per Space in space/ownership.js.
+  rootOwner:    { type: String, ref: "Being", default: null },
+  contributors: [{ type: String, ref: "Being" }],
+
+  // Seed-managed Space marker. Non-null values identify positions the
+  // kernel plants and owns (.identity, .config, .source, etc.). User-
+  // created Spaces have seedSpace: null. See seed/space/seedSpaces.js.
+  seedSpace: {
     type: String,
-    enum: ["private", "public"],
-    default: "private",
-  },
-
-  // Land system nodes. If systemRole is set, node is a system node.
-  systemRole: {
-    type: String,
-    enum: [null, ...Object.values(SYSTEM_ROLE)],
+    enum: [null, ...Object.values(SEED_SPACE)],
     default: null,
   },
+
+  // Extension data, namespaced. Each extension writes to its own key
+  // via setExtMeta. The kernel never writes outside reserved namespaces
+  // (extensions, llm, permissions, beings, cascade, etc.).
   metadata: { type: Map, of: mongoose.Schema.Types.Mixed, default: new Map() },
 });
 
-// No virtuals. Extension data lives in metadata. Callers use getExtMeta/setExtMeta.
-// Ownership and contributor mutations live in seed/tree/ownership.js (uses resolveTreeAccess).
+// Soft-delete only. Space deletion sets parent = DELETED in
+// space/spaceManagement.js; the deleted-revive extension can bring
+// Spaces back. The kernel never hard-deletes a Space.
 
-// Node deletion is soft-delete only (parent set to DELETED in treeManagement.js).
-// The deleted-revive extension can bring them back. No hard delete on nodes.
+SpaceSchema.index({ parent: 1 });
+SpaceSchema.index({ rootOwner: 1 });
+SpaceSchema.index({ seedSpace: 1 }, { sparse: true });
 
-NodeSchema.index({ parent: 1 });
-NodeSchema.index({ rootOwner: 1 });
-NodeSchema.index({ systemRole: 1 }, { sparse: true });
+// Public-Space listing. A Space is public iff its layer-2 authorize
+// walk finds a wildcard SEE rule on the Space itself. Sparse so
+// private Spaces (no rule) don't bloat the index.
+SpaceSchema.index({ "metadata.permissions.see.*": 1 }, { sparse: true });
 
 // At most one plan-type child per scope. The "plan governs work at a
 // scope, branches live as siblings under that scope" rule depends on
-// every walk-up primitive resolving to a SINGLE plan; two plan-type
-// children at the same parent splits the system across writers in
-// silent ways (contracts on one plan, steps on another, half the
-// readers see one, half see the other). Database-level invariant so
-// even a buggy code path that bypasses ensurePlanAtScope can't violate
-// it. Partial filter limits the unique constraint to type === "plan";
-// other types of siblings are unaffected.
-NodeSchema.index(
+// every walk-up resolving to a single plan; two plan-type children at
+// the same parent splits the system across writers in silent ways.
+// Database-level invariant — even a buggy code path that bypasses
+// ensurePlanAtScope cannot violate it. partialFilterExpression limits
+// the constraint to type === "plan"; other sibling types are unaffected.
+SpaceSchema.index(
   { parent: 1, type: 1 },
   {
     unique: true,
@@ -66,5 +75,5 @@ NodeSchema.index(
   },
 );
 
-const Node = mongoose.model("Node", NodeSchema);
-export default Node;
+const Space = mongoose.model("Space", SpaceSchema);
+export default Space;

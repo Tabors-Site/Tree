@@ -74,7 +74,7 @@ The body of the current tab. Renders the right-side position's Position Descript
 
 - **Land zone**: discovery grid (trees + extensions + beings + land metadata).
 - **Home zone**: tree grid (the user's projects + notes + active extensions).
-- **Tree zone**: tree-shaped layout with governance panel, artifact body, sibling navigator, lineage breadcrumb.
+- **Tree zone**: tree-shaped layout with governance panel, matter body, sibling navigator, lineage breadcrumb.
 
 See [zones.md](zones.md) for per-zone detail.
 
@@ -84,7 +84,7 @@ The main view subscribes to a position-scoped event stream via the WebSocket. Po
 - new plan emission → governance.plan.active replaced; visual highlight on the change
 - worker started → governance.workers.running gets a new entry; pulse animation
 - worker finished → moves from running to completed; status pill updates
-- artifact note added → artifacts list grows; new note slides in
+- matter note added → matters list grows; new note slides in
 
 The user never refreshes. State is always current.
 
@@ -130,7 +130,7 @@ Chat messages can carry:
 - chainstep sub-bubbles (Planner/Contractor/Foreman exit text inline)
 - plan cards (with accept / revise / cancel actions when applicable)
 - lifecycle chip (persistent "Ruler active — phase: X" while spawns are in flight)
-- artifact previews (when a Worker produces something; click to navigate to it)
+- matter previews (when a Worker produces something; click to navigate to it)
 
 ### Persistence
 
@@ -165,10 +165,10 @@ Visualizes the local tree structure around the current position. Sidebar compone
 
 ### Behaviors
 
-- Click any node → navigate to it.
+- Click any space → navigate to it.
 - Lifecycle pills next to each child (running / completed / stalled / idle).
 - Right-click → contextual actions (open in new tab, switch being, view governance dashboard).
-- Drag a node to a chat thread → references it in the chat message.
+- Drag a space to a chat thread → references it in the chat message.
 - Search inline (Ctrl-F) → fuzzy search across the local tree subgraph.
 
 ### Depth limit

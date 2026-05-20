@@ -8,15 +8,29 @@ Three concerns live at the top level: **what TreeOS is** (seed/), **what convers
 
 ```
 seed/              The kernel. Data shape + registries + hooks. NEVER modify.
-  core/              protocol.js, hooks.js, operations.js, tools.js, services.js,
-                     verbs.js, auth.js, log.js, version.js, ...
-  models/            Mongoose schemas: Node, Being, Artifact, Did, Summon, LlmConnection
-  tree/              createNode, artifacts, dids, registryMirror, cascade, ...
-  llm/               AI conversation runtime
-  being/             Being position helpers
-  migrations/        Versioned schema migrations
-  landRoot.js        This land's root + system nodes
-  landConfig.js      This land's config
+  models/            Mongoose schemas: Space, Being, Matter, Did, Summon, LlmConnection
+  ibp/               Core IBP grammar: verbs, operations, authorize, address,
+                     resolver, descriptor, discovery, errors, protocol/ERR,
+                     pushChannel. Seed-internal; protocols/ibp/ is the wire adapter.
+  being/             Identity: beRegistry, identity, position, systemBeings,
+                     beingMetadata, plus roles/ (registry + built-ins: auth, echo,
+                     landManager, llmAssigner).
+  space/             Tree ops: ancestorCache, ownership, spaceManagement, dids,
+                     cascade, spaceCircuit, extensionMetadata, extensionScope,
+                     documentGuard, seeds, seedRoles.
+  matter/            matters, matterMetadata, origins, uploadCleanup.
+  cognition/         Runtime: runChat, buildPrompt, llmClient, mcpClient,
+                     scheduler, inbox, wakeSchedule, session, subscriptions,
+                     replyAggregator, replyEmission, defaultSummon, assignments,
+                     connections.
+  system/            hooks, log, migrations/, indexes, dbConfig, integrityCheck,
+                     dataRetention, registryMirror, source, tools, utils, version.
+  services.js        Assembles `core` from the domain folders above.
+  landRoot.js        This land's root + system spaces.
+  landConfig.js      This land's config.
+  (Hook registry lives at seed/system/hooks.js; codebase-mirroring source
+   lives at seed/space/source.js — re-exposed through services.js as
+   core.hooks etc.)
 
 protocols/         What conversation over the wire looks like. Never owns transport.
   ibp/               Four-verb protocol (SEE/DO/SUMMON/BE) on stances/positions
@@ -34,7 +48,7 @@ transports/        Thin carriers. Translate transport-shape into protocol envelo
   ws/                Socket.io server; same dispatchIbp the HTTP adapter uses
   cli/               (reserved for the eventual CLI adapter)
 
-extensions/        95 extensions. This is where you build.
+extensions/        Extensions. This is where you build.
 boot.js            Entry point. First-run setup wizard.
 server.js          Express + WebSocket bring-up, graceful shutdown.
 startup.js         Boot sequence: indexes, config, migrations, extensions, jobs.
@@ -48,24 +62,24 @@ startup.js         Boot sequence: indexes, config, migrations, extensions, jobs.
 2. **Extensions import from seed.** One-way dependency.
 3. **Extensions reach each other through `getExtension()` or hooks.** No direct imports between extensions.
 4. **Extension data lives in metadata Maps.** Never in seed schemas.
-5. **Seed schemas never change.** Node has 12 fields. User has 7. The Map grows anything.
+5. **Seed schemas never change.** Space has 12 fields. User has 7. The Map grows anything.
 6. **Zero `getExtension()` calls in seed.** The kernel can't be tricked into loading extension code.
 
 ## Architectural patterns (read before building anything)
 
-**The tree has a grammar.** Four layers parse every message. Resolution (where): nouns are nodes, pronouns are position state, prepositions shift target nodes. Intent (what): tenses are modes (review=past, coach=future, plan=imperative, log=present), negation cancels, conjunctions chain, Qualification (how): adjectives focus, voice frames (active=execute, passive=observe), adverbs/instructions modify behavior, boundaries constrain scope. Planning + Execution: single dispatch, sequential chains, or cross-domain causal routing. Three orthogonal axes evolve independently: WHERE (noun+preposition+pronoun), WHAT (tense+negation+compound), HOW (adjectives+adverbs+voice+boundaries). The grammar debugger shows the full parse tree for every message.
+**The tree has a grammar.** Four layers parse every message. Resolution (where): nouns are spaces, pronouns are position state, prepositions shift target spaces. Intent (what): tenses are modes (review=past, coach=future, plan=imperative, log=present), negation cancels, conjunctions chain, Qualification (how): adjectives focus, voice frames (active=execute, passive=observe), adverbs/instructions modify behavior, boundaries constrain scope. Planning + Execution: single dispatch, sequential chains, or cross-domain causal routing. Three orthogonal axes evolve independently: WHERE (noun+preposition+pronoun), WHAT (tense+negation+compound), HOW (adjectives+adverbs+voice+boundaries). The grammar debugger shows the full parse tree for every message.
 
-**Resolution chains walk the ancestor cache.** Extension scope, tool scope, mode resolution, LLM connection, LLM config, persona resolution, perspective filter resolution. All walk the parent chain from the current node to the root. All use the same cached snapshot per message. One walk serves all chains. The ancestor cache is the performance backbone.
+**Resolution chains walk the ancestor cache.** Extension scope, tool scope, mode resolution, LLM connection, LLM config, persona resolution, perspective filter resolution. All walk the parent chain from the current space to the root. All use the same cached snapshot per message. One walk serves all chains. The ancestor cache is the performance backbone.
 
 **Three zones. Position determines behavior.** `/` (land root) is the land zone: system management, config, users, peers. `~` (user home) is the home zone: personal space, raw ideas, settings. Inside a tree is the tree zone: chat/place/query, full orchestration. Navigate somewhere and the capability surface changes. The AI at each position has different tools, different modes, different context. `cd` is the most important command.
 
 **before hooks intercept. after hooks react.** Before hooks run sequentially because they can cancel. After hooks run in parallel because they react independently. Two overrides: enrichContext and onCascade are sequential because their handlers build cumulative output. Don't make a hook sequential without articulating why handlers depend on each other's output.
 
-**The metadata Map is the real invention.** Twelve schema fields are the bones. The Map is the flesh. Every extension writes to its own namespace. `metadata.values`, `metadata.prestige`, `metadata.cascade`. The schemas never change. The Map grows anything. Two concurrent writes to different namespaces on the same node do not clobber each other because setExtMeta uses atomic `$set` on the specific namespace key.
+**The metadata Map is the real invention.** Twelve schema fields are the bones. The Map is the flesh. Every extension writes to its own namespace. `metadata.values`, `metadata.prestige`, `metadata.cascade`. The schemas never change. The Map grows anything. Two concurrent writes to different namespaces on the same space do not clobber each other because setExtMeta uses atomic `$set` on the specific namespace key.
 
-**Cascade is awareness propagation.** A note written at one node creates awareness at other nodes. The receiving node's AI doesn't just get data. It gets context that changes how it thinks. The perspective filter isn't a data router. It's an attention filter. The codebook isn't compression. It's shared understanding. Cascade is how ideas spread through the tree.
+**Cascade is awareness propagation.** A note written at one space creates awareness at other spaces. The receiving space's AI doesn't just get data. It gets context that changes how it thinks. The perspective filter isn't a data router. It's an attention filter. The codebook isn't compression. It's shared understanding. Cascade is how ideas spread through the tree.
 
-**The tree is not a filesystem.** Nodes aren't files. They're concepts. Parent-child isn't a directory structure. It's how meaning relates to other meaning. When you navigate, you don't change directories. You change what the mind is attending to. The AI at each position thinks from that position's perspective, with that position's tools, modes, and context.
+**The tree is not a filesystem.** Spaces aren't files. They're concepts. Parent-child isn't a directory structure. It's how meaning relates to other meaning. When you navigate, you don't change directories. You change what the mind is attending to. The AI at each position thinks from that position's perspective, with that position's tools, modes, and context.
 
 **The operator always decides.** Extensions suggest. Intent proposes actions. Delegate matches work to humans. Evolve writes specs. Governance shows compatibility. Nothing forces. Nothing auto-installs. Nothing pushes code onto the land. The seed is sovereign. The directory coordinates through exclusion, not injection.
 
@@ -84,7 +98,7 @@ Full reference: `extensions/EXTENSION_FORMAT.md`
 - **Routes** (HTTP endpoints at /api/v1)
 - **Tools** (MCP tools the AI can call)
 - **Modes** (custom AI conversation modes with system prompts)
-- **Hooks** (lifecycle event handlers: beforeArtifact, afterArtifact, enrichContext, etc.)
+- **Hooks** (lifecycle event handlers: beforeMatter, afterMatter, enrichContext, etc.)
 - **Jobs** (background tasks with start/stop)
 - **Orchestrator** (replace the entire conversation flow)
 - **CLI commands** (auto-generated from manifest declarations)
@@ -95,9 +109,9 @@ Full reference: `extensions/EXTENSION_FORMAT.md`
 
 **enrichContext** is how you speak to the AI. The kernel builds the prompt. Your extension injects context through this hook. Always guard: check if relevant data exists before injecting. Never run expensive queries unconditionally.
 
-**setExtMeta** is how you write data. Each extension gets its own namespace in the metadata Map. `setExtMeta(node, "my-extension", data)` writes atomically. You can only write to your own namespace.
+**setExtMeta** is how you write data. Each extension gets its own namespace in the metadata Map. `setExtMeta(space, "my-extension", data)` writes atomically. You can only write to your own namespace.
 
-**registerSlot** is how you add UI to pages. Extensions register HTML fragments for named slots (e.g. `apps-grid`, `user-quick-links`, `user-profile-sections`, `node-detail-sections`). Pages resolve slots by name. Whatever's installed appears. Whatever's not doesn't. Same pattern as hooks, modes, tools. Spatial scoping filters slots per position. Get it from treeos-base exports:
+**registerSlot** is how you add UI to pages. Extensions register HTML fragments for named slots (e.g. `apps-grid`, `user-quick-links`, `user-profile-sections`, `space-detail-sections`). Pages resolve slots by name. Whatever's installed appears. Whatever's not doesn't. Same pattern as hooks, modes, tools. Spatial scoping filters slots per position. Get it from treeos-base exports:
 ```js
 const treeos = getExtension("treeos-base");
 treeos?.exports?.registerSlot?.("apps-grid", "my-ext", (ctx) => {
@@ -105,7 +119,7 @@ treeos?.exports?.registerSlot?.("apps-grid", "my-ext", (ctx) => {
 }, { priority: 50 });
 ```
 
-**emitSlotUpdate** pushes live UI updates via WebSocket. After data changes (afterArtifact, afterMetadataWrite hooks), call `emitSlotUpdate(core, userId, slotName, extName, context)` to re-render a slot fragment and push it to the client without a page refresh.
+**emitSlotUpdate** pushes live UI updates via WebSocket. After data changes (afterMatter, afterMetadataWrite hooks), call `emitSlotUpdate(core, userId, slotName, extName, context)` to re-render a slot fragment and push it to the client without a page refresh.
 
 **inApp query param** is set when pages load inside the app shell iframe. Dashboard pages should skip their own chatbar when `inApp` is truthy because the app shell provides the chat panel. Pass `inApp: !!req.query.inApp` to your renderer and conditionally exclude chatbar HTML/CSS/JS.
 
@@ -121,10 +135,10 @@ Everything in the kernel serves one of four primitives:
 
 | Primitive | What it is |
 |-----------|-----------|
-| **Structure** | Two schemas (Node, User). Nodes in hierarchies. Metadata Maps hold everything else. |
+| **Structure** | Two schemas (Space, User). Spaces in hierarchies. Metadata Maps hold everything else. |
 | **Intelligence** | Conversation loop. LLM, tool, mode, position resolution. The AI thinks at every position. |
 | **Extensibility** | Loader, 29 hooks, five registries. Spatial scoping. Extensions add all capabilities. |
-| **Communication** | Cascade signals, .flow system node, visible results. Signals propagate and get recorded. |
+| **Communication** | Cascade signals, .flow system space, visible results. Signals propagate and get recorded. |
 
 ## Extension ecosystem (95 extensions, 4 bundles)
 
@@ -142,7 +156,7 @@ Everything in the kernel serves one of four primitives:
 
 ## Security
 
-Extensions run in the same Node.js process as the kernel. They can access the filesystem, network, and database. Review all third-party extension code before installing. Three extensions declare `scope: "confined"` (shell, solana, scripts) and are inactive until explicitly allowed at a position.
+Extensions run in the same Space.js process as the kernel. They can access the filesystem, network, and database. Review all third-party extension code before installing. Three extensions declare `scope: "confined"` (shell, solana, scripts) and are inactive until explicitly allowed at a position.
 
 ## CLI
 

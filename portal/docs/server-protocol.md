@@ -93,7 +93,7 @@ Successful ack:
 
 For SEE one-shot: `data` is the Position Description.
 For SEE live: the initial `data` is the descriptor; subsequent frames arrive as separate emits.
-For DO: `data` is action-specific (often `{ written: true }` or `{ nodeId, address }`).
+For DO: `data` is action-specific (often `{ written: true }` or `{ spaceId, address }`).
 For SUMMON sync: `data` is the response message envelope.
 For SUMMON async or none: `data` is `{ status: "accepted" }`.
 For BE: `data` is `{ identityToken, beingAddress }` for register/claim, `{ released: true }` for release, `{ active }` for switch.
@@ -162,7 +162,7 @@ client emits ibp:do { id, action, position: "<position>", identity, payload }
 land responds with ack { id, status: "ok", data: <action-specific> }
 ```
 
-`position` is the only address field. There is no `stance` form. Sequential per identity: the land may serialize DOs from the same identity to avoid races on the same node. The protocol does not require strict ordering across identities.
+`position` is the only address field. There is no `stance` form. Sequential per identity: the land may serialize DOs from the same identity to avoid races on the same space. The protocol does not require strict ordering across identities.
 
 ### Validation chain
 
@@ -172,21 +172,21 @@ land responds with ack { id, status: "ok", data: <action-specific> }
 4. Address-level authorization (`FORBIDDEN` if not authorized at this position). The kernel reads the requester's role from the identity token (not from the address).
 5. Action-level authorization (some actions need `isAdmin`).
 6. Payload schema validation per action (`INVALID_INPUT` if mismatch).
-7. Pre-hooks (`beforeNodeCreate`, etc.) fire and may cancel.
+7. Pre-hooks (`beforeSpaceCreate`, etc.) fire and may cancel.
 8. The mutation executes.
 9. Post-hooks fire.
 10. Live SEE subscribers receive descriptor patches for the affected place(s).
 
 ### Multi-step payloads
 
-For large uploads (`upload-artifact` with megabyte-scale bytes), the action supports chunking:
+For large uploads (`upload-matter` with megabyte-scale bytes), the action supports chunking:
 
 ```
-client emits ibp:do { id, action: "upload-artifact", position, identity, payload: { kind, name, contentType, chunk: 0, totalChunks: 5, bytes: <chunk 0> } }
+client emits ibp:do { id, action: "upload-matter", position, identity, payload: { kind, name, contentType, chunk: 0, totalChunks: 5, bytes: <chunk 0> } }
 land responds with ack { id, status: "ok", data: { chunkAccepted: 0 } }
-client emits ibp:do { id, action: "upload-artifact", payload: { chunk: 1, totalChunks: 5, bytes: <chunk 1>, uploadId: <returned in first ack> } }
+client emits ibp:do { id, action: "upload-matter", payload: { chunk: 1, totalChunks: 5, bytes: <chunk 1>, uploadId: <returned in first ack> } }
 ... and so on
-final chunk: land responds with ack { id, status: "ok", data: { artifactId, position: "<position>/artifacts/<artifactId>" } }
+final chunk: land responds with ack { id, status: "ok", data: { matterId, position: "<position>/matters/<matterId>" } }
 ```
 
 Chunked uploads use a per-upload `uploadId` returned in the first ack and threaded through subsequent chunks.
@@ -346,7 +346,7 @@ The legacy `land/routes/api/*` HTTP routes continue serving traffic during migra
 Each extension migrates its routes in its own pass. When an extension is migrated:
 - Its existing HTTP routes are retired.
 - Its mutations move to `do set-meta` against its namespace.
-- Its reads move into the Position Description or are SEE-fetchable as artifacts.
+- Its reads move into the Position Description or are SEE-fetchable as matters.
 - Its tools (for AI use) keep using the existing tool registry; tools are not protocol verbs.
 
 The legacy WS chat handler (`land/seed/ws/websocket.js`) keeps running until SUMMON is proven and the migration completes. There may be a transition window where both chat handlers run; clients use the new one.

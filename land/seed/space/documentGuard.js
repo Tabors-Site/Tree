@@ -15,8 +15,8 @@
  */
 
 import { getLandConfigValue } from "../landConfig.js";
-import { hooks } from "../core/hooks.js";
-import log from "../core/log.js";
+import { hooks } from "../system/hooks.js";
+import log from "../system/log.js";
 
 const DEFAULT_MAX_BYTES = 14 * 1024 * 1024; // 14MB
 const PRESSURE_THRESHOLD = 0.8; // 80%
@@ -40,7 +40,7 @@ function getMaxBytes() {
  * For lean() documents, works directly on the plain object.
  */
 // BSON overhead factor: BSON encoding adds type headers, key length bytes,
-// and 64-bit floats. For Map-heavy documents like nodes with extension metadata,
+// and 64-bit floats. For Map-heavy documents like spaces with extension metadata,
 // BSON can be 20-30% larger than JSON. Factor of 1.3 prevents the 14MB JSON
 // estimate from becoming 17MB+ BSON, which would exceed MongoDB's 16MB limit.
 const BSON_OVERHEAD_FACTOR = 1.3;
@@ -62,7 +62,7 @@ function estimateDocSize(doc) {
  * @param {object} doc - Mongoose document or lean object
  * @param {number} additionalBytes - estimated size of the incoming write
  * @param {object} [opts]
- * @param {string} [opts.documentType] - "node", "user", or "system"
+ * @param {string} [opts.documentType] - "space", "user", or "system"
  * @param {string} [opts.documentId] - the document's _id
  * @returns {{ ok: boolean, currentSize: number, maxSize: number, headroom: number }}
  */
@@ -74,7 +74,7 @@ export function checkWriteSize(doc, additionalBytes = 0, opts = {}) {
 
   // Fire pressure hook at 80% (async, fire-and-forget)
   if (projectedSize >= maxSize * PRESSURE_THRESHOLD) {
-    const documentType = opts.documentType || "node";
+    const documentType = opts.documentType || "space";
     const documentId = opts.documentId || (doc._id ? String(doc._id) : "unknown");
     hooks.run("onDocumentPressure", {
       documentType,

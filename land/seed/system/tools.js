@@ -68,6 +68,20 @@ export function registerToolDef(name, schema, opts = {}) {
     log.error("Tools", `Tool "${name}" has malformed function schema (missing function.name). Rejected.`);
     return false;
   }
+  // Description is required at registration. Without it, the role-summon
+  // gate (assertAllToolsResolve in buildPrompt.js) would block the role
+  // anyway — better to fail at the registration call so the extension
+  // surfaces the misconfiguration immediately, not at the first summon.
+  if (schema.type === "function") {
+    const desc = schema.function?.description;
+    if (typeof desc !== "string" || !desc.trim()) {
+      throw new Error(
+        `Tool "${name}" registration rejected: function.description must be a ` +
+        `non-empty string. Roles that declare this tool cannot be summoned ` +
+        `without it.`,
+      );
+    }
+  }
   // Verb tag is REQUIRED. Every tool has a shape — internal and protocol
   // share the same set of verbs ([[role-permissions-not-envelope]]).
   // No permissive default; missing or invalid verb rejects registration.
@@ -83,6 +97,107 @@ export function registerToolDef(name, schema, opts = {}) {
   toolDefs[name] = Object.freeze(schema);
   toolVerbs[name] = verb;
   return true;
+}
+
+/**
+ * Register a bundle of tools in one call. Sole entry point for both
+ * kernel-shipped tools (called from startup.js with `ownerExt: "kernel"`)
+ * and extension-shipped tools (called from extensions/loader.js with
+ * `ownerExt: manifest.name`). Each tool object:
+ *
+ *   { name, description, schema, handler, verb, annotations? }
+ *
+ *   - `schema` may be a raw shape (`{ key: z.string() }`) or a
+ *     pre-built zod object. Wrapped in `z.object().passthrough()` for
+ *     the MCP server so it does not strip context fields the MCP HTTP
+ *     middleware injects (beingId, summonId, ...).
+ *   - `verb` is REQUIRED ("see" | "do" | "summon" | "be").
+ *   - Tools without a `handler` are def-only (registered for
+ *     `resolveTools` but not callable via MCP).
+ *
+ * Collisions across namespaces are rejected. The kernel claims its
+ * tools first (under `ownerExt: "kernel"`); any extension trying to
+ * register a tool with the same name is skipped with a log entry.
+ *
+ * `mcpServer` may be null — tools are then registered in the def
+ * registry only (useful for tests or pre-MCP-bring-up paths).
+ */
+export async function registerToolBundle(tools, { ownerExt, mcpServer }) {
+  if (!Array.isArray(tools) || tools.length === 0) return;
+  if (!ownerExt) throw new Error("registerToolBundle: ownerExt is required");
+
+  const { z } = await import("zod");
+  const { zodToJsonSchema } = await import("zod-to-json-schema");
+  const { registerToolOwner, getToolOwner } = await import("../space/extensionScope.js");
+
+  for (const tool of tools) {
+    // Description gate first. Without it, the MCP server would get a
+    // tool the kernel registry will refuse, leaving the two sides
+    // inconsistent. Catch the missing description before any
+    // registration work runs.
+    if (typeof tool.description !== "string" || !tool.description.trim()) {
+      log.error("Tools",
+        `${ownerExt}: tool "${tool.name}" rejected (description must be a ` +
+        `non-empty string). Skipped.`);
+      continue;
+    }
+
+    const existingOwner = getToolOwner(tool.name);
+    if (existingOwner) {
+      log.error("Tools", `Tool "${tool.name}" from "${ownerExt}" conflicts with "${existingOwner}". Skipped.`);
+      continue;
+    }
+    registerToolOwner(tool.name, ownerExt, tool.annotations?.readOnlyHint ?? false);
+
+    // MCP input schema. Wrap raw shapes in passthrough; pass through
+    // pre-built zod objects with .passthrough() to keep injected
+    // context fields (beingId, summonId, spaceId, sessionId).
+    let inputSchema;
+    if (tool.schema && typeof tool.schema === "object" && !tool.schema._def && !tool.schema._zod) {
+      inputSchema = z.object(tool.schema).passthrough();
+    } else if (tool.schema && typeof tool.schema.passthrough === "function") {
+      inputSchema = tool.schema.passthrough();
+    } else {
+      inputSchema = tool.schema;
+    }
+
+    if (tool.handler && mcpServer) {
+      try {
+        mcpServer.registerTool(
+          tool.name,
+          {
+            description: tool.description,
+            inputSchema,
+            annotations: tool.annotations || undefined,
+          },
+          tool.handler,
+        );
+      } catch (err) {
+        log.warn("Tools", `${ownerExt}: MCP register "${tool.name}" failed: ${err.message}`);
+      }
+    }
+
+    // JSON schema for the LLM's function-calling format.
+    let jsonSchema;
+    try {
+      const zodObj = z.object(tool.schema);
+      jsonSchema = zodToJsonSchema(zodObj);
+      delete jsonSchema.$schema;
+    } catch {
+      jsonSchema = tool.schema;
+    }
+
+    registerToolDef(tool.name, {
+      type: "function",
+      function: {
+        name:        tool.name,
+        description: tool.description,
+        parameters:  jsonSchema,
+      },
+    }, { verb: tool.verb });
+
+    log.verbose("Tools", `${ownerExt}: registered "${tool.name}" (${tool.verb})`);
+  }
 }
 
 /**
@@ -161,6 +276,16 @@ export function getToolVerb(name) {
 }
 
 /**
+ * Look up a tool's `description` string. Returns null when the tool is
+ * unregistered or has no description. Used by the prompt assembler to
+ * render canSee / canDo / canSummon / canBe entries with prose.
+ */
+export function getToolDescription(name) {
+  const def = toolDefs[name];
+  return def?.function?.description || null;
+}
+
+/**
  * Get count of registered tools (for diagnostics).
  */
 export function getToolCount() {
@@ -182,9 +307,53 @@ export function listToolNames() {
  * tools) so SEE on `<land>/.tools` reflects current state. Idempotent;
  * subsequent calls reconcile (add new tools, remove gone ones).
  */
+/**
+ * Audit every registered role's declared tools against the registry.
+ * For each role, walk canSee + canDo + canSummon + canBe and verify
+ * each name resolves to a registered description. Misses are logged
+ * loudly so the operator sees them at boot rather than at the first
+ * summon (where the same gap blocks the role via assertAllToolsResolve
+ * in buildPrompt.js).
+ *
+ * Returns { roles: number, missing: { [roleName]: string[] } }. An
+ * empty `missing` map means the tree is wired correctly.
+ */
+export async function auditToolDescriptions() {
+  const { listRoles, getRole } = await import("../being/roles/registry.js");
+  const roleNames = listRoles();
+  const missing = {};
+  let scanned = 0;
+
+  for (const roleName of roleNames) {
+    const role = getRole(roleName);
+    if (!role) continue;
+    scanned++;
+    const declared = [
+      ...(role.canSee    || []),
+      ...(role.canDo     || []),
+      ...(role.canSummon || []),
+      ...(role.canBe     || []),
+    ];
+    const gaps = declared.filter((name) => !toolDefs[name]);
+    if (gaps.length > 0) missing[roleName] = gaps;
+  }
+
+  const missingCount = Object.keys(missing).length;
+  if (missingCount === 0) {
+    log.verbose("Tools", `tool-description audit: ${scanned} role(s) clean`);
+  } else {
+    for (const [roleName, gaps] of Object.entries(missing)) {
+      log.error("Tools",
+        `role "${roleName}" declares ${gaps.length} tool(s) with no registered ` +
+        `description: ${gaps.join(", ")}. Role cannot be summoned until resolved.`);
+    }
+  }
+  return { roles: scanned, missing };
+}
+
 export async function syncToolsToSubstrate() {
-  const { SYSTEM_ROLE } = await import("./protocol.js");
-  const { syncRegistryToSubstrate } = await import("../tree/registryMirror.js");
+  const { SEED_SPACE } = await import("./protocol.js");
+  const { syncRegistryToSubstrate } = await import("../system/registryMirror.js");
   const items = Object.entries(toolDefs).map(([name, def]) => ({
     name,
     metadata: new Map([
@@ -195,5 +364,5 @@ export async function syncToolsToSubstrate() {
       }],
     ]),
   }));
-  return syncRegistryToSubstrate({ systemRole: SYSTEM_ROLE.TOOLS, items });
+  return syncRegistryToSubstrate({ seedSpace: SEED_SPACE.TOOLS, items });
 }

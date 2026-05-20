@@ -9,9 +9,9 @@
 // INTERNAL.
 //
 // `IBP_ERR` is the composition of seed's HTTP-shaped `ERR` codes (from
-// protocol.js) and five IBP-specific codes that describe wire-level
+// protocol.js) and the IBP-specific codes that describe wire-level
 // concerns `ERR` does not cover. Callers reach for an existing `ERR`
-// code first; the five additions exist only for things the substrate
+// code first; these additions exist only for things the substrate
 // cannot express on its own:
 //
 //   ADDRESS_PARSE_ERROR    address string failed to parse
@@ -19,6 +19,10 @@
 //   VERB_NOT_SUPPORTED     address does not support the requested verb
 //   ACTION_NOT_SUPPORTED   DO action unknown or not permitted here
 //   INVALID_INTENT         SUMMON intent not in being's honoredIntents
+//   NOT_A_BEING            verb call lacks a left-stance being identity
+//                          (default kernel-access gate failure)
+//   NOT_A_SEED             verb call claimed the scaffold/seed-plant
+//                          path but did not pass scaffold: true
 
 import { ERR } from "./protocol.js";
 
@@ -28,6 +32,8 @@ const IBP_SPECIFIC = Object.freeze({
   VERB_NOT_SUPPORTED:   "VERB_NOT_SUPPORTED",
   ACTION_NOT_SUPPORTED: "ACTION_NOT_SUPPORTED",
   INVALID_INTENT:       "INVALID_INTENT",
+  NOT_A_BEING:          "NOT_A_BEING",
+  NOT_A_SEED:           "NOT_A_SEED",
 });
 
 export const IBP_ERR = Object.freeze({
@@ -55,12 +61,12 @@ export function isIbpError(e) {
  * pass through unchanged. Otherwise the fallback code is used.
  *
  * Used by DO operation handlers that wrap low-level kernel helpers
- * (createNode, editNodeName, setExtMeta, ...) and want clean
+ * (createSpace, editSpaceName, setExtMeta, ...) and want clean
  * wire-shape errors instead of opaque internal messages.
  *
  *   throw mapPatternsToIbpError(err, [
- *     [/system nodes|reserved/i, IBP_ERR.FORBIDDEN],
- *     [/not found/i,             IBP_ERR.NODE_NOT_FOUND],
+ *     [/land seed spaces|reserved/i, IBP_ERR.FORBIDDEN],
+ *     [/not found/i,             IBP_ERR.SPACE_NOT_FOUND],
  *   ], IBP_ERR.INTERNAL);
  */
 export function mapPatternsToIbpError(err, rules, fallback = IBP_ERR.INTERNAL) {

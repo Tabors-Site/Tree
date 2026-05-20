@@ -21,19 +21,18 @@
 //   node     set-node-llm
 //            Sets metadata.llm.slots[slot] on a node the caller owns
 //            (rootOwner matches). Drives the tree-level resolution
-//            step in seed/llm/llmClient.js.
+//            step in seed/cognition/llmClient.js.
 //
 // Authorization gates here are coarse for now (self / root operator /
 // tree ownership). The deferred stance-authorization framework
 // ([[project_stance_authorization]]) will eventually express these
 // rules uniformly; until then each method checks inline.
 
-import log from "../core/log.js";
-import Being from "../models/being.js";
-import Node from "../models/node.js";
-import { IbpError, IBP_ERR } from "../core/errors.js";
-import { findRootBeing } from "../core/systemBeings.js";
-import { setLandConfigValue } from "../landConfig.js";
+import log from "../../system/log.js";
+import Being from "../../models/being.js";
+import Space from "../../models/space.js";
+import { IbpError, IBP_ERR } from "../../ibp/errors.js";
+import { findRootOperator } from "../systemBeings.js";
 
 export const llmAssignerBeing = Object.freeze({
   name: "llm-assigner",
@@ -66,7 +65,7 @@ export const llmAssignerBeing = Object.freeze({
     if (!model)   throw new IbpError(IBP_ERR.INVALID_INPUT, "`model` is required");
     // apiKey is optional — local LLMs (Ollama, llama.cpp) don't need it.
 
-    const { addLlmConnection } = await import("../llm/connections.js");
+    const { addLlmConnection } = await import("../cognition/connections.js");
     const connection = await addLlmConnection(String(ctx.identity.beingId), { name, baseUrl, model, apiKey });
     return {
       connectionId: String(connection._id),
@@ -88,7 +87,7 @@ export const llmAssignerBeing = Object.freeze({
     const { slot, connectionId } = payload || {};
     if (!slot) throw new IbpError(IBP_ERR.INVALID_INPUT, "`slot` is required");
 
-    const { assignConnection } = await import("../llm/connections.js");
+    const { assignConnection } = await import("../cognition/connections.js");
     return assignConnection(String(ctx.identity.beingId), slot, connectionId || null);
   },
 
@@ -101,7 +100,7 @@ export const llmAssignerBeing = Object.freeze({
     requireAuthenticated(ctx);
     const beingId = String(ctx.identity.beingId);
     const LlmConnection = (await import("../models/llmConnection.js")).default;
-    const { getBeingLlmAssignments } = await import("../llm/assignments.js");
+    const { getBeingLlmAssignments } = await import("../cognition/assignments.js");
 
     const [connections, being] = await Promise.all([
       LlmConnection.find({ beingId }).select("_id name baseUrl model lastUsedAt").lean(),
@@ -122,7 +121,7 @@ export const llmAssignerBeing = Object.freeze({
   /**
    * Delete one of the caller's LLM connections. The kernel cascades
    * the removal: clears Being.llmDefault, every Being.metadata.userLlm
-   * slot pointing at it, and every Node.metadata.llm.slots reference.
+   * slot pointing at it, and every Space.metadata.llm.slots reference.
    *
    * @param {object} payload  { connectionId }
    */
@@ -131,7 +130,7 @@ export const llmAssignerBeing = Object.freeze({
     const { connectionId } = payload || {};
     if (!connectionId) throw new IbpError(IBP_ERR.INVALID_INPUT, "`connectionId` is required");
 
-    const { deleteLlmConnection } = await import("../llm/connections.js");
+    const { deleteLlmConnection } = await import("../cognition/connections.js");
     await deleteLlmConnection(String(ctx.identity.beingId), connectionId);
     return { removed: true, connectionId };
   },
@@ -154,43 +153,57 @@ export const llmAssignerBeing = Object.freeze({
     if (connectionId === undefined) {
       throw new IbpError(IBP_ERR.INVALID_INPUT, "`connectionId` is required (pass null to clear)");
     }
-    await setLandConfigValue("landLlmConnection", connectionId || null, { internal: true });
+    // Route through the verb so this being's identity gates the write
+    // the same way land-manager's set-config call does. landLlmConnection
+    // is not a protected key; no scaffold flag needed.
+    const { SEED_SPACE } = await import("../../space/seedSpaces.js");
+    const { doVerb } = await import("../../ibp/verbs.js");
+    const configNode = await Space.findOne({ seedSpace: SEED_SPACE.CONFIG });
+    if (!configNode) {
+      throw new IbpError(IBP_ERR.INTERNAL, "Land .config seed space not found");
+    }
+    await doVerb(
+      configNode,
+      "set-config",
+      { key: "landLlmConnection", value: connectionId || null },
+      { identity: ctx.identity },
+    );
     return { landLlmConnection: connectionId || null };
   },
 
   // ────────────────────────────────────────────────────────────────
-  // Node-scope operations
+  // Space-scope operations
   // ────────────────────────────────────────────────────────────────
 
   /**
    * Set an LLM slot on a node the caller owns (via rootOwner of the
    * containing tree). Writes metadata.llm.slots[slot] on the node —
    * the tree-level step of the resolution chain in
-   * seed/llm/llmClient.js.
+   * seed/cognition/llmClient.js.
    *
-   * @param {object} payload  { nodeId, slot, connectionId }
+   * @param {object} payload  { spaceId, slot, connectionId }
    *                          connectionId null to clear the slot
    */
   async setNodeLlm(payload, ctx) {
     requireAuthenticated(ctx);
-    const { nodeId, slot, connectionId } = payload || {};
-    if (!nodeId) throw new IbpError(IBP_ERR.INVALID_INPUT, "`nodeId` is required");
+    const { spaceId, slot, connectionId } = payload || {};
+    if (!spaceId) throw new IbpError(IBP_ERR.INVALID_INPUT, "`spaceId` is required");
     if (!slot)   throw new IbpError(IBP_ERR.INVALID_INPUT, "`slot` is required");
 
-    const node = await Node.findById(nodeId);
-    if (!node) throw new IbpError(IBP_ERR.NODE_NOT_FOUND, `Node ${nodeId} not found`);
+    const node = await Space.findById(spaceId);
+    if (!node) throw new IbpError(IBP_ERR.SPACE_NOT_FOUND, `Space ${spaceId} not found`);
 
     // Dispatch through the kernel DO op so the stance-authorization
     // gate runs uniformly (same path the wire-side DO uses). The op's
     // handler routes node targets to assignNodeConnection, which also
     // verifies the connection belongs to the caller before binding.
-    const { doVerb } = await import("../core/verbs.js");
+    const { doVerb } = await import("../ibp/verbs.js");
     const result = await doVerb(node, "assign-llm-slot", { slot, connectionId: connectionId || null }, {
       identity: ctx.identity,
     });
 
     log.verbose("llm-assigner",
-      `node ${nodeId} slot "${slot}" → ${connectionId || "(cleared)"} by being ${ctx.identity.beingId}`);
+      `node ${spaceId} slot "${slot}" → ${connectionId || "(cleared)"} by being ${ctx.identity.beingId}`);
     return result;
   },
 });
@@ -209,14 +222,14 @@ function requireAuthenticated(ctx) {
 }
 
 async function requireRootOperator(ctx) {
-  const root = await findRootBeing();
-  if (!root) {
+  const operator = await findRootOperator();
+  if (!operator) {
     throw new IbpError(
       IBP_ERR.FORBIDDEN,
-      "No root being exists on this land yet. Register the first human via @auth.",
+      "No root operator exists on this land yet. Register the first human via @auth.",
     );
   }
-  if (String(root._id) !== String(ctx.identity.beingId)) {
+  if (String(operator._id) !== String(ctx.identity.beingId)) {
     throw new IbpError(
       IBP_ERR.FORBIDDEN,
       "Only the land's root operator can change land-level LLM configuration.",

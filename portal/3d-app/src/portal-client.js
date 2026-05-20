@@ -143,7 +143,7 @@ export class PortalClient {
    * SUMMON: deliver a message to a being's inbox and wake them.
    *
    * @param {string} stance   "<land>/<path>@<being>" — being qualifier mandatory
-   * @param {object} message  { from, content, intent?, correlation?, inReplyTo?, attachments? }
+   * @param {object} message  { from, content, correlation?, inReplyTo?, attachments? }
    * @param {object} [threading]  optional { rootCorrelation?, priority?, activeRole? }
    */
   async summon(stance, message, threading = {}) {

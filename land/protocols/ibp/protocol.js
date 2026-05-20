@@ -27,14 +27,14 @@
 // before re-entering dispatchIbp on the receiving side. See
 // [[project_canopy_folds_into_ibp]].
 
-import log from "../../seed/core/log.js";
+import log from "../../seed/system/log.js";
 import { handleSee } from "./verbs/see.js";
 import { handleDo } from "./verbs/do.js";
 import { handleSummon } from "./verbs/summon.js";
 import { handleBe } from "./verbs/be.js";
 import { parseUnifiedEnvelope, ackError } from "./envelope.js";
-import { IBP_ERR, isIbpError } from "../../seed/core/errors.js";
-import { getForeignTargetDomain, forwardToPeer } from "./canopy/dispatch.js";
+import { IBP_ERR, isIbpError } from "../../seed/ibp/errors.js";
+import { getForeignTargetDomain, forwardToPeer } from "../canopy/dispatch.js";
 
 const VERB_HANDLERS = {
   see:    handleSee,

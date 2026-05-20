@@ -1,16 +1,16 @@
 // TreeOS Seed . AGPL-3.0 . https://treeos.ai . Tabor Holly
 // llm/runChat.js
 // Conversation state, LLM resolution, tool loop, session management
-import log from "../core/log.js";
-import { hooks } from "../core/hooks.js";
+import log from "../system/log.js";
+import { hooks } from "../system/hooks.js";
 
 import crypto from "crypto";
 import Being from "../models/being.js";
-import Node from "../models/node.js";
-import { snapshotAncestors, resolveExtensionScopeFromChain, getAncestorChain } from "../tree/ancestorCache.js";
-import { isDbHealthy } from "../core/dbConfig.js";
-import { resolveTools } from "../core/tools.js";
-import { getNodeName } from "../tree/treeFetch.js";
+import Space from "../models/space.js";
+import { snapshotAncestors, resolveExtensionScopeFromChain, getAncestorChain } from "../space/ancestorCache.js";
+import { isDbHealthy } from "../system/dbConfig.js";
+import { resolveTools } from "../system/tools.js";
+import { getSpaceName } from "../space/spaceFetch.js";
 import { mcpClients, connectToMCP, MCP_SERVER_URL } from "./mcpClient.js";
 
 // How many recent messages to carry across role switches when the new
@@ -19,9 +19,8 @@ import { mcpClients, connectToMCP, MCP_SERVER_URL } from "./mcpClient.js";
 let CARRY_MESSAGES = 4;
 export function setCarryMessages(n) { CARRY_MESSAGES = Math.max(0, Number(n) || 4); }
 import { getLandConfigValue } from "../landConfig.js";
-import { SYSTEM_OWNER } from "../core/protocol.js";
-import { appendToolCall } from "./summonTracker.js";
-import { signInternalToken } from "../core/identity.js";
+import { SEED_BEING } from "../space/seedSpaces.js";
+import { signInternalToken } from "../being/identity.js";
 
 // ─────────────────────────────────────────────────────────────────────────
 // ROLE-DRIVEN PROMPT + TOOL RESOLUTION
@@ -41,52 +40,72 @@ import { signInternalToken } from "../core/identity.js";
 // ─────────────────────────────────────────────────────────────────────────
 
 /**
- * Build the system prompt for a role at a position. Three layers:
- *   1. [Position] block (always present)
- *   2. role.buildSystemPrompt(ctx) — the domain prompt
- *   3. [Time] block (land timezone)
+ * Build the system prompt for a role at a position.
+ *
+ * Two paths:
+ *
+ *   NEW SHAPE (role.prompt declared) — the seed assembler builds the
+ *   four-section structure ("I am NAME, ROLE at SCOPE, seeing and
+ *   doing this:" + preloaded see + capabilities + role.prompt() body
+ *   + [Time]). See seed/cognition/buildPrompt.js. This is the locked
+ *   shape every role migrates to.
+ *
+ *   LEGACY SHAPE (role.buildSystemPrompt declared) — the role hand-
+ *   assembles its own prompt; seed prepends [Position] and appends
+ *   [Time]. Kept until every role migrates.
+ *
+ * A role declaring both fields uses the new shape (prompt wins).
  */
 async function buildSystemPromptForRole(role, ctx) {
-  if (!role || typeof role.buildSystemPrompt !== "function") {
-    throw new Error(`buildSystemPromptForRole: role "${role?.name || "(unnamed)"}" has no buildSystemPrompt`);
+  if (!role) {
+    throw new Error("buildSystemPromptForRole: no role provided");
+  }
+
+  if (typeof role.prompt === "function") {
+    const { buildPrompt } = await import("./buildPrompt.js");
+    return buildPrompt(role, ctx);
+  }
+
+  if (typeof role.buildSystemPrompt !== "function") {
+    throw new Error(`buildSystemPromptForRole: role "${role?.name || "(unnamed)"}" has neither prompt nor buildSystemPrompt`);
   }
 
   // ── Layer 1: position block ──
   const positionLines = [];
   if (ctx.name) positionLines.push(`User: ${ctx.name}`);
   const rootId = ctx.rootId || null;
-  const currentNodeId = ctx.currentNodeId || ctx.targetNodeId || null;
-  const targetNodeId = ctx.targetNodeId || null;
+  const currentSpace = ctx.currentSpace || ctx.targetSpace || null;
+  const targetSpace = ctx.targetSpace || null;
 
   const idsToResolve = {};
   if (rootId) idsToResolve.root = rootId;
-  if (currentNodeId && currentNodeId !== rootId) idsToResolve.current = currentNodeId;
-  if (targetNodeId && targetNodeId !== rootId && targetNodeId !== currentNodeId) {
-    idsToResolve.target = targetNodeId;
+  if (currentSpace && currentSpace !== rootId) idsToResolve.current = currentSpace;
+  if (targetSpace && targetSpace !== rootId && targetSpace !== currentSpace) {
+    idsToResolve.target = targetSpace;
   }
 
   const names = {};
   try {
     const entries = Object.entries(idsToResolve);
     if (entries.length > 0) {
-      const resolved = await Promise.all(entries.map(([, id]) => getNodeName(id)));
+      const resolved = await Promise.all(entries.map(([, id]) => getSpaceName(id)));
       entries.forEach(([key], i) => { names[key] = resolved[i]; });
     }
   } catch (nameErr) {
-    log.debug("Role", `Node name resolution failed: ${nameErr.message}`);
+    log.debug("Role", `Space name resolution failed: ${nameErr.message}`);
   }
   if (rootId) {
     positionLines.push(names.root ? `Tree: ${names.root} (${rootId})` : `Tree: ${rootId}`);
   }
-  if (currentNodeId && currentNodeId !== rootId) {
+  if (currentSpace && currentSpace !== rootId) {
     positionLines.push(names.current
-      ? `Current node: ${names.current} (${currentNodeId})`
-      : `Current node: ${currentNodeId}`);
+      ? `Current node: ${names.current} (${currentSpace})`
+      : `Current node: ${currentSpace}`);
   }
-  if (targetNodeId && targetNodeId !== rootId && targetNodeId !== currentNodeId) {
+  if (targetSpace && targetSpace !== rootId && targetSpace !== currentSpace) {
     positionLines.push(names.target
-      ? `Target node: ${names.target} (${targetNodeId})`
-      : `Target node: ${targetNodeId}`);
+      ? `Target node: ${names.target} (${targetSpace})`
+      : `Target node: ${targetSpace}`);
   }
   const positionBlock = positionLines.length > 0
     ? `[Position]\n${positionLines.join("\n")}\n\n`
@@ -466,15 +485,15 @@ export function setLlmMaxRetries(n) { LLM_MAX_RETRIES = n; }
 function getRetriesForRole(role) {
   return role?.maxRetries ?? LLM_MAX_RETRIES;
 }
-function getTimeoutForRole(role, nodeMetadata = null) {
-  const meta = nodeMetadata instanceof Map ? Object.fromEntries(nodeMetadata) : (nodeMetadata || {});
-  const nodeTimeout = role?.name ? meta.timeouts?.[role.name] : null;
-  if (nodeTimeout && Number.isFinite(nodeTimeout)) return nodeTimeout;
+function getTimeoutForRole(role, spaceMetadata = null) {
+  const meta = spaceMetadata instanceof Map ? Object.fromEntries(spaceMetadata) : (spaceMetadata || {});
+  const spaceTimeout = role?.name ? meta.timeouts?.[role.name] : null;
+  if (spaceTimeout && Number.isFinite(spaceTimeout)) return spaceTimeout;
   if (role?.timeoutMs && Number.isFinite(role.timeoutMs)) return role.timeoutMs;
   return getLlmTimeout();
 }
 
-// LLM connection resolution lives in seed/llm/llmClient.js. Imported
+// LLM connection resolution lives in seed/cognition/llmClient.js. Imported
 // here for use by the turn engine.
 import {
   getClientForBeing,
@@ -485,8 +504,9 @@ import {
 // SESSION STATE (keyed by ai-chat session key)
 // ─────────────────────────────────────────────────────────────────────────
 //
-// `clientSessionId` is the transport-session identifier built by
-// seed/llm/sessionKeys.js. It identifies a reach — which being, from
+// `clientSessionId` is the transport-session identifier built by the
+// transport layer. The pipeline-key resolver in seed/cognition/session.js
+// identifies a reach — which being, from
 // which device — so the per-tab `sessions` Map below can hold a
 // distinct LLM-conversation buffer for each open window.
 //
@@ -495,28 +515,28 @@ import {
 // entries so their working state doesn't clobber. Position, threading,
 // MCP cache, and async event broadcast all live elsewhere now under
 // first-class identifiers (Being.currentPositionId, ibpAddress,
-// rootSummonId, being-room) — see sessionKeys.js header for the full
+// rootSummonId, being-room) — see seed/cognition/session.js header for the full
 // after-refactor map.
 
 // Each session holds: { messages[], role, _lastActive }.
 //
-// Position state (rootId, currentNodeId) lives separately in
-// seed/beingPosition.js, keyed by beingId, because under the
+// Position state (rootId, currentSpace) lives separately in
+// seed/being/position.js, keyed by beingId, because under the
 // single-context being model a being has one position regardless of
 // which reach (web + CLI) they connect through. Background AI pipelines
 // run AS a specific being and write to THAT being's position.
 const sessions = new Map();
 let MAX_CONVERSATION_SESSIONS = 50000; // hard cap to prevent OOM from leaked sessions
 
-// Position state lives in seed/beingPosition.js. Used internally
+// Position state lives in seed/being/position.js. Used internally
 // by the runChat tool loop and prepareConversation/enrichContext.
-// rootId is derived from currentNodeId on every setCurrentNodeId,
-// so callers only ever set the current node; rootId follows.
+// rootId is derived from currentSpace on every setCurrentSpace, so
+// callers only ever set the current Space; rootId follows.
 import {
   getRootId,
-  setCurrentNodeId,
-  getCurrentNodeId,
-} from "../beingPosition.js";
+  setCurrentSpace,
+  getCurrentSpace,
+} from "../being/position.js";
 
 /**
  * Get or create the conversation session.
@@ -632,7 +652,7 @@ export async function switchRole(clientSessionId, newRole, ctx) {
     ...ctx,
     clientSessionId,
     rootId: getRootId(beingId) || ctx.rootId,
-    currentNodeId: ctx.currentNodeId || getCurrentNodeId(beingId),
+    currentSpace: ctx.currentSpace || getCurrentSpace(beingId),
   });
 
   session.messages = [
@@ -640,7 +660,7 @@ export async function switchRole(clientSessionId, newRole, ctx) {
     ...carriedContext,
   ];
   session.role = newRole;
-  if (ctx.currentNodeId) await setCurrentNodeId(beingId, ctx.currentNodeId);
+  if (ctx.currentSpace) await setCurrentSpace(beingId, ctx.currentSpace);
 
   log.debug("LLM",
     `🔄 Role switch for ${clientSessionId}: ${oldRole?.name || "none"} → ${newRole.name} (carried ${recentMessages.length} messages)`,
@@ -673,7 +693,7 @@ async function ensureSession(clientSessionId, ctx) {
 
   // Self-healing: detect rootId mismatch. If the caller says we're in a
   // different tree than the being thinks, clear messages and re-init.
-  // The position update below (setCurrentNodeId) re-derives rootId from
+  // The position update below (setCurrentSpace) re-derives rootId from
   // the incoming node, so rootId catches up automatically.
   const incomingRootId = ctx.rootId || null;
   const knownRootId = getRootId(beingId);
@@ -683,13 +703,13 @@ async function ensureSession(clientSessionId, ctx) {
     session.role = null;
   }
 
-  // Position update. setCurrentNodeId derives rootId from the chain
+  // Position update. setCurrentSpace derives rootId from the chain
   // and updates both fields atomically. When the caller has only
-  // rootId (no specific currentNodeId), the tree-root itself is the
+  // rootId (no specific currentSpace), the tree-root itself is the
   // position — the being "is at the tree root."
-  const targetNodeId = ctx.currentNodeId || incomingRootId;
-  if (targetNodeId) {
-    await setCurrentNodeId(beingId, targetNodeId);
+  const targetSpace = ctx.currentSpace || incomingRootId;
+  if (targetSpace) {
+    await setCurrentSpace(beingId, targetSpace);
   }
 
   // Role MUST be present. runChat thread it through ctx.role (set
@@ -704,7 +724,7 @@ async function ensureSession(clientSessionId, ctx) {
 
   // Snapshot ancestor chain for consistent resolution within this message.
   // All resolution chains (scope, tools, LLM, config) read from this snapshot.
-  const snapshotNodeId = getCurrentNodeId(beingId) || getRootId(beingId) || ctx.rootId;
+  const snapshotNodeId = getCurrentSpace(beingId) || getRootId(beingId) || ctx.rootId;
   if (snapshotNodeId) {
     session._ancestorSnapshot = await snapshotAncestors(snapshotNodeId);
   }
@@ -718,8 +738,8 @@ async function ensureSession(clientSessionId, ctx) {
  */
 function checkTreeCircuit(session) {
   if (session._ancestorSnapshot) {
-    // The owner node (root) is the last non-system node in the chain
-    const rootAncestor = session._ancestorSnapshot.find(a => a.rootOwner && a.rootOwner !== SYSTEM_OWNER);
+    // The owner node (root) is the last non-land seed space in the chain
+    const rootAncestor = session._ancestorSnapshot.find(a => a.rootOwner && a.rootOwner !== SEED_BEING);
     if (rootAncestor?.metadata?.circuit?.tripped) {
       return {
         content: "This tree is dormant. It exceeded health thresholds and its circuit breaker tripped. Contact the land operator or wait for an extension to revive it.",
@@ -805,7 +825,7 @@ async function prepareConversation(session, ctx, message, clientSessionId) {
       beingId: ctx.beingId,
       clientSessionId,
       rootId: getRootId(ctx.beingId),
-      currentNodeId: getCurrentNodeId(ctx.beingId),
+      currentSpace: getCurrentSpace(ctx.beingId),
     });
 
     session.messages = [
@@ -826,19 +846,19 @@ async function prepareConversation(session, ctx, message, clientSessionId) {
     // checks and are designed to run per-turn.
     let enrichedContext = null;
     try {
-      const posNodeId = getCurrentNodeId(ctx.beingId) || getRootId(ctx.beingId) || ctx.rootId || null;
+      const posNodeId = getCurrentSpace(ctx.beingId) || getRootId(ctx.beingId) || ctx.rootId || null;
       if (posNodeId) {
-        const posNode = await Node.findById(posNodeId).lean();
-        if (posNode) {
-          const meta = posNode.metadata instanceof Map
-            ? Object.fromEntries(posNode.metadata)
-            : (posNode.metadata || {});
+        const posSpace = await Space.findById(posNodeId).lean();
+        if (posSpace) {
+          const meta = posSpace.metadata instanceof Map
+            ? Object.fromEntries(posSpace.metadata)
+            : (posSpace.metadata || {});
           enrichedContext = {};
           await hooks.run("enrichContext", {
             context: enrichedContext,
-            node: posNode,
+            node: posSpace,
             meta,
-            nodeId: posNodeId,
+            spaceId: posNodeId,
             beingId: ctx.beingId,
             sessionId: clientSessionId,
             // Pass the current turn's user message so handlers that want
@@ -858,7 +878,7 @@ async function prepareConversation(session, ctx, message, clientSessionId) {
       beingId: ctx.beingId,
       clientSessionId,
       rootId: getRootId(ctx.beingId),
-      currentNodeId: getCurrentNodeId(ctx.beingId),
+      currentSpace: getCurrentSpace(ctx.beingId),
       enrichedContext: enrichedContext || null,
     });
     if (session.messages.length === 0) {
@@ -1016,11 +1036,11 @@ async function compressConversation(session, threshold, keep) {
 
 /**
  * Resolve per-position LLM config. Three-layer resolution:
- *   1. Node config (metadata.llm.config) - operator override at position
+ *   1. Space config (metadata.llm.config) - operator override at position
  *   2. Mode config (mode object fields) - mode knows its own needs
  *   3. Land globals (the defaults) - safety ceiling
  *
- * Node wins over mode. Mode wins over land. All clamped to safe maximums.
+ * Space wins over mode. Mode wins over land. All clamped to safe maximums.
  */
 const LLM_CONFIG_KEYS = {
   maxToolIterations: 100,
@@ -1037,14 +1057,14 @@ function resolveLlmConfig(ancestors, role) {
   // Layer 1: node config (walk ancestor chain, closest wins)
   if (ancestors && ancestors.length > 0) {
     for (const node of ancestors) {
-      if (node.systemRole) break;
+      if (node.seedSpace) break;
       const llmConfig = node.metadata?.llm?.config;
       if (!llmConfig || typeof llmConfig !== "object") continue;
       for (const [key, maxVal] of Object.entries(LLM_CONFIG_KEYS)) {
         if (config[key] !== undefined) continue;
         const val = llmConfig[key];
         if (typeof val === "number" && isFinite(val) && val > 0) {
-          if (val > maxVal) log.verbose("LLM", `Node LLM config ${key}=${val} clamped to max ${maxVal}`);
+          if (val > maxVal) log.verbose("LLM", `Space LLM config ${key}=${val} clamped to max ${maxVal}`);
           config[key] = Math.min(val, maxVal);
         }
       }
@@ -1077,20 +1097,20 @@ async function resolveToolsForPosition(session, beingId, rolePermissions = null)
   let treeToolConfig = null;
   let blockedExtensions = null;
   let restrictedExtensions = null;
-  const currentNodeId = getCurrentNodeId(beingId) || getRootId(beingId);
-  if (currentNodeId) {
+  const currentSpace = getCurrentSpace(beingId) || getRootId(beingId);
+  if (currentSpace) {
     try {
       // Use the per-message snapshot. Every resolution chain reads from this.
       // Falls back to ancestor cache (still cached, not raw DB) if no snapshot.
       const ancestors = session._ancestorSnapshot
-        || await getAncestorChain(currentNodeId);
+        || await getAncestorChain(currentSpace);
 
       if (ancestors && ancestors.length > 0) {
         // Tool config: walk ancestor chain in memory
         const allowed = new Set();
         const blocked = new Set();
         for (const node of ancestors) {
-          if (node.systemRole) break;
+          if (node.seedSpace) break;
           const meta = node.metadata || {};
           if (meta.tools?.allowed) for (const t of meta.tools.allowed) allowed.add(t);
           if (meta.tools?.blocked) for (const t of meta.tools.blocked) blocked.add(t);
@@ -1103,13 +1123,13 @@ async function resolveToolsForPosition(session, beingId, rolePermissions = null)
         }
 
         // Extension scoping: reuse the same resolution helper that extensionScope.js uses
-        const { getConfinedExtensions } = await import("../tree/extensionScope.js");
+        const { getConfinedExtensions } = await import("../space/extensionScope.js");
         const scope = resolveExtensionScopeFromChain(ancestors, getConfinedExtensions());
         if (scope.blocked.size) blockedExtensions = scope.blocked;
         if (scope.restricted.size) restrictedExtensions = scope.restricted;
       }
     } catch (scopeErr) {
-      log.warn("LLM", `Tool scope resolution failed for node ${currentNodeId}: ${scopeErr.message}`);
+      log.warn("LLM", `Tool scope resolution failed for node ${currentSpace}: ${scopeErr.message}`);
     }
   }
   // Role-based tool resolution: each role declares its own tools.
@@ -1118,7 +1138,7 @@ async function resolveToolsForPosition(session, beingId, rolePermissions = null)
   let tools = resolveToolsForRole(session.role, treeToolConfig, rolePermissions);
   // Filter tools by spatial extension scope (blocked + restricted)
   if (blockedExtensions || restrictedExtensions) {
-    const { filterToolsByScope } = await import("../tree/extensionScope.js");
+    const { filterToolsByScope } = await import("../space/extensionScope.js");
     tools = filterToolsByScope(tools, blockedExtensions, restrictedExtensions);
   }
   return { tools, blockedExtensions, restrictedExtensions };
@@ -1165,7 +1185,7 @@ async function callLLM(openai, MODEL, session, tools, ctx, clientEntry, clientSe
   const llmHookData = {
     beingId: ctx.beingId, rootId: ctx.rootId, role: session.role?.name,
     model: MODEL, messageCount: session.messages.length, hasTools: tools.length > 0,
-    messages: session.messages, nodeId: getCurrentNodeId(ctx.beingId) || ctx.rootId || null,
+    messages: session.messages, spaceId: getCurrentSpace(ctx.beingId) || ctx.rootId || null,
     summonId: _llmChatId,
     sessionId: _llmSessionId,
     parentSummonId: _llmParentChatId,
@@ -1575,7 +1595,7 @@ async function executeTool(toolCall, session, ctx, client, clientSessionId) {
   //                      pendingPlan, pendingSwarmPlan) key on this
   //   sessionId      — chat-record-level session group for UI nesting
   //   rootId         — tree root the call originates from
-  //   nodeId         — current node position (per-being)
+  //   spaceId         — current node position (per-being)
   args.beingId = ctx.beingId;
   // summonId / sessionId travel from the call site through ctx so mcp/server.js
   // can stop doing Map lookups. The sender is the authority — we always know
@@ -1599,7 +1619,7 @@ async function executeTool(toolCall, session, ctx, client, clientSessionId) {
   else if (clientSessionId && !args.ibpAddress) args.ibpAddress = clientSessionId;
   if (ctx.rootId && !args.rootId) args.rootId = ctx.rootId;
   // Pinned position wins. When a turn is dispatched with an explicit
-  // ctx.currentNodeId (Worker-at-Ruler-scope, sub-Ruler turn, branch
+  // ctx.currentSpace (Worker-at-Ruler-scope, sub-Ruler turn, branch
   // dispatch, etc.) tool calls land at THAT node — even if the user
   // navigates somewhere else mid-turn and the being's position state
   // shifts. Without this pin, a sub-Ruler's Worker writes into the
@@ -1607,8 +1627,8 @@ async function executeTool(toolCall, session, ctx, client, clientSessionId) {
   // because position is per-being and shared between user-driven turns
   // and dispatch-driven turns.
   // Falls back to being-position state for unpinned turns (regular chat).
-  const _curNode = ctx.currentNodeId || getCurrentNodeId(ctx.beingId) || ctx.rootId || null;
-  if (_curNode && !args.nodeId) args.nodeId = _curNode;
+  const _curNode = ctx.currentSpace || getCurrentSpace(ctx.beingId) || ctx.rootId || null;
+  if (_curNode && !args.spaceId) args.spaceId = _curNode;
 
   // Tool circuit breaker: if this tool has failed too many times in this session, skip it.
   // The tool disappears from the AI's perspective. It adapts by using other tools.
@@ -1625,7 +1645,7 @@ async function executeTool(toolCall, session, ctx, client, clientSessionId) {
   }
 
   // beforeToolCall: extensions can modify args or cancel. summonId +
-  // sessionId + nodeId let forensics correlate the tool call to its
+  // sessionId + spaceId let forensics correlate the tool call to its
   // originating chat step and the tree node whose signalInbox
   // should be snapshotted for signal diffing.
   const _toolChatId = ctx?.summonId || null;
@@ -1635,7 +1655,7 @@ async function executeTool(toolCall, session, ctx, client, clientSessionId) {
     beingId: ctx.beingId, rootId: ctx.rootId, role: session.role?.name,
     summonId: _toolChatId,
     sessionId: _toolSessionId,
-    nodeId: getCurrentNodeId(ctx.beingId) || ctx.rootId || null,
+    spaceId: getCurrentSpace(ctx.beingId) || ctx.rootId || null,
   };
   const hookResult = await hooks.run("beforeToolCall", hookData);
   if (hookResult.cancelled) {
@@ -1724,7 +1744,7 @@ async function executeTool(toolCall, session, ctx, client, clientSessionId) {
       beingId: ctx.beingId, rootId: ctx.rootId, role: session.role?.name,
       summonId: _toolChatId,
       sessionId: _toolSessionId,
-      nodeId: getCurrentNodeId(ctx.beingId) || ctx.rootId || null,
+      spaceId: getCurrentSpace(ctx.beingId) || ctx.rootId || null,
     }).catch(() => {});
 
     // Return the full result text too so the chat record can store it
@@ -1757,7 +1777,7 @@ async function executeTool(toolCall, session, ctx, client, clientSessionId) {
       beingId: ctx.beingId, rootId: ctx.rootId, role: session.role?.name,
       summonId: _toolChatId,
       sessionId: _toolSessionId,
-      nodeId: getCurrentNodeId(ctx.beingId) || ctx.rootId || null,
+      spaceId: getCurrentSpace(ctx.beingId) || ctx.rootId || null,
     }).catch(() => {});
 
     return {
@@ -1810,7 +1830,7 @@ async function finalizeResponse(session, openai, MODEL, response, isInternal, is
   return {
     success: true,
     content: finalAnswer,
-    answer: finalAnswer,
+    text:    finalAnswer,
     _internal,
   };
 }
@@ -1847,7 +1867,7 @@ export async function processMessage(clientSessionId, message, ctx) {
   // Query constraint: when readOnly is set, only tools registered with readOnlyHint
   // are available. Write tools are filtered before the role's LLM fires.
   if (ctx.readOnly) {
-    const { isToolReadOnly } = await import("../tree/extensionScope.js");
+    const { isToolReadOnly } = await import("../space/extensionScope.js");
     tools = tools.filter(t => {
       const name = t.function?.name || t.name;
       return name && isToolReadOnly(name);
@@ -1855,7 +1875,7 @@ export async function processMessage(clientSessionId, message, ctx) {
   }
 
   // Phase 5b: Resolve LLM config. Three layers: node > role > land globals.
-  // Node config walks metadata.llm.config on ancestors. Role declares its own needs.
+  // Space config walks metadata.llm.config on ancestors. Role declares its own needs.
   // Stored on session so callLLM and executeTool can read overrides.
   session._nodeLlmConfig = resolveLlmConfig(session._ancestorSnapshot, role);
 
@@ -1874,6 +1894,13 @@ export async function processMessage(clientSessionId, message, ctx) {
     null;
   let toolCallsThisStep = 0;
   let continueReason = null;
+
+  // Exit-enforcement: when role.exit.requires names a tool, the loop
+  // cannot terminate until that tool has fired at least once. Tracked
+  // through the loop; checked at the natural-conclusion break point
+  // below. See [[project_role_exit_requires]].
+  const requiredExitTool = role?.exit?.requires || null;
+  const firedTools = new Set();
 
   while (iterations < maxIterations) {
     if (ctx.signal?.aborted) throw new Error("Request cancelled");
@@ -1914,40 +1941,40 @@ export async function processMessage(clientSessionId, message, ctx) {
     if (quirk?.earlyReturn) return quirk.earlyReturn;
     if (quirk?.breakLoop) break;
 
-    // No tool calls: parse internal response or break
+    // No tool calls: parse internal response or break.
+    //
+    // Exit gate: if the role declares `exit.requires` and the named
+    // tool has not yet fired, the LLM tried to end the turn before
+    // doing its required work. Push a corrective system message and
+    // re-enter the loop. maxIterations caps the retry budget so a
+    // stubborn model cannot loop forever.
     if (!assistantMessage.tool_calls?.length) {
+      if (requiredExitTool && !firedTools.has(requiredExitTool)) {
+        session.messages.push({
+          role: "system",
+          content:
+            `You have not yet called \`${requiredExitTool}\`. ` +
+            `Your turn cannot end until that tool fires. Call it now.`,
+        });
+        log.verbose("RunChat",
+          `exit-gate: ${role.name} produced terminal text without calling ` +
+          `${requiredExitTool}; nudging back into the loop (iteration ${iterations}/${maxIterations})`);
+        continue;
+      }
       if (isInternal) return parseInternalResponse(assistantMessage.content, isCustom, MODEL, resolvedConnectionId);
       break;
     }
 
-    // Execute tool calls
+    // Execute tool calls. Each tool that mutates substrate flows through
+    // the four-verb dispatcher, which writes the audit Did. The LLM loop
+    // itself does not persist a per-tool-call row.
     const toolResults = [];
     for (const toolCall of assistantMessage.tool_calls) {
       if (ctx.signal?.aborted) throw new Error("Request cancelled");
-      const _toolStart = Date.now();
       const toolResult = await executeTool(toolCall, session, ctx, client, clientSessionId);
-      const _toolMs = Date.now() - _toolStart;
       toolResults.push(toolResult);
       toolCallsThisStep++;
-
-      // Persist the tool call on the active Chat record so the step
-      // trace is visible in chat history (CLI `chats` and dashboard).
-      // Fire-and-forget: the user already got the tool result via the
-      // tool_result message, this is just audit/history logging.
-      try {
-        const _appendChatId = ctx?.summonId || null;
-        if (_appendChatId) {
-          appendToolCall(_appendChatId, {
-            tool: toolResult.tool,
-            args: toolResult.args,
-            result: toolResult.result,
-            success: toolResult.success,
-            error: toolResult.error,
-            ms: _toolMs,
-          });
-        }
-      } catch {}
-
+      firedTools.add(toolCall.function?.name);
     }
 
     // Bounded step: if the mode wants step-bounded tool calls, break the
@@ -2007,7 +2034,7 @@ export async function processMessage(clientSessionId, message, ctx) {
     return {
       success: true,
       content: "",
-      answer: "",
+      text:    "",
       _internal,
       _continue: continueReason === "tool-cap",
       _continueReason: continueReason,
@@ -2075,12 +2102,12 @@ export function getCurrentRole(sessionKey) {
  *              currentPositionId, homePositionId, llmDefault.
  *   envelope — the SUMMON envelope that woke this summon. Carries
  *              from (asker stance), content, ibpAddress, correlation,
- *              inReplyTo, rootCorrelation, priority, intent.
+ *              inReplyTo, rootCorrelation, priority.
  *   role     — the active role spec from ibp/roles/registry.js
  *              (buildSystemPrompt, toolNames, permissions, name).
  *   signal   — AbortController.signal from the scheduler.
  *
- * Derives beingId/beingOut/username/message/nodeId/llmPriority/
+ * Derives beingId/beingOut/username/message/spaceId/llmPriority/
  * parentSummonId from the structured inputs and runs one LLM call.
  *
  * See [[project_ibp_universal_grammar]] for the architectural lock.
@@ -2110,16 +2137,16 @@ export async function runChat({ being, envelope, role, signal = null } = {}) {
   const message  = typeof envelope.content === "string"
     ? envelope.content
     : JSON.stringify(envelope.content);
-  const nodeId   = being.currentPositionId || being.homePositionId || null;
+  const spaceId   = being.currentPositionId || being.homePositionId || null;
   const rootId   = null;
   const llmPriority    = envelope.priority || null;
   const parentSummonId = envelope.inReplyTo || null;
 
   const { connectToMCP, getMCPClient, MCP_SERVER_URL } = await import("./mcpClient.js");
   const { startSummon, finalizeSummon } = await import("./summonTracker.js");
-  const { setSessionAbort, clearSessionAbort } = await import("../session/registry.js");
-  const { resolvePipelineKey } = await import("./sessionKeys.js");
-  const { computeIbpAddressForSummon } = await import("./ibpAddress.js");
+  const { setSessionAbort, clearSessionAbort } = await import("../cognition/session.js");
+  const { resolvePipelineKey } = await import("./session.js");
+  const { computeIbpAddressForSummon } = await import("../ibp/addressStorage.js");
 
   // Eagerly compute the IBP Address for being-to-being conversations
   // so it can serve as the MCP client cache key. When beingOut is set
@@ -2129,7 +2156,7 @@ export async function runChat({ being, envelope, role, signal = null } = {}) {
   const _eagerIbpAddress = beingOut
     ? await computeIbpAddressForSummon({
         askerBeingId:    beingId,
-        askerPosition:   getCurrentNodeId(beingId) || null,
+        askerPosition:   getCurrentSpace(beingId) || null,
         addresseeBeingId: beingOut,
       })
     : null;
@@ -2165,8 +2192,8 @@ export async function runChat({ being, envelope, role, signal = null } = {}) {
   // 2. Set position. rootId is derived from the current node, so
   // callers only set the node; the tree-root follows. When only
   // rootId is known, treat it as the position itself.
-  const targetNodeId = nodeId || rootId;
-  if (targetNodeId) await setCurrentNodeId(beingId, targetNodeId);
+  const targetSpace = spaceId || rootId;
+  if (targetSpace) await setCurrentSpace(beingId, targetSpace);
 
   // 3. Switch role only if different. Role state lives on the
   // conversation entry (keyed by mcpCacheKey: IBP Address or
@@ -2175,7 +2202,7 @@ export async function runChat({ being, envelope, role, signal = null } = {}) {
   const currentRole = getCurrentRole(mcpCacheKey);
   if (currentRole?.name !== role.name) {
     try {
-      await switchRole(sessionKey, role, { username, beingId, mcpCacheKey, currentNodeId: getCurrentNodeId(beingId) });
+      await switchRole(sessionKey, role, { username, beingId, mcpCacheKey, currentSpace: getCurrentSpace(beingId) });
     } catch (err) {
       log.warn("RunChat", `Role switch to ${role.name} failed: ${err.message}`);
     }
@@ -2189,10 +2216,10 @@ export async function runChat({ being, envelope, role, signal = null } = {}) {
       beingIn:       beingId,                                       // asker
       beingOut,                                                     // responder
       // Asker stance position: the asker's CURRENT navigated position
-      // (per Being.currentPositionId / seed/beingPosition.js cache),
+      // (per Being.currentPositionId / seed/being/position.js cache),
       // with rootId as fallback. The Summon's IBP Address is computed
       // from this stance plus the addressee's stance.
-      askerPosition: getCurrentNodeId(beingId) || rootId || null,
+      askerPosition: getCurrentSpace(beingId) || rootId || null,
       message,
       activeRole:    role.name,
       llmProvider: {
@@ -2218,7 +2245,7 @@ export async function runChat({ being, envelope, role, signal = null } = {}) {
       username,
       beingId,
       rootId,
-      currentNodeId: getCurrentNodeId(beingId),
+      currentSpace: getCurrentSpace(beingId),
       summonId:     chat?._id || null,
       rootSummonId: chat?._id || null,   // runChat creates one root Summon; summonId === rootSummonId
       sessionId,
@@ -2244,14 +2271,14 @@ export async function runChat({ being, envelope, role, signal = null } = {}) {
   }
 
   const stopped = abortSignal.aborted;
-  let answer = stopped ? null : (result?.content || result?.answer || "No response.");
+  let text = stopped ? null : (result?.content || result?.answer || "No response.");
 
   // 6. beforeResponse hook: extensions clean/modify the response before delivery.
-  if (answer && !stopped) {
+  if (text && !stopped) {
     try {
-      const hookData = { content: answer, beingId, rootId, role: role.name };
+      const hookData = { content: text, beingId, rootId, role: role.name };
       await hooks.run("beforeResponse", hookData);
-      answer = hookData.content;
+      text = hookData.content;
     } catch {}
   }
 
@@ -2259,7 +2286,7 @@ export async function runChat({ being, envelope, role, signal = null } = {}) {
   if (chat) {
     try {
       const internal = result?._internal || {};
-      await finalizeSummon({ summonId: chat._id, content: stopped ? null : answer, stopped, role: internal.role || role.name });
+      await finalizeSummon({ summonId: chat._id, content: stopped ? null : text, stopped, role: internal.role || role.name });
     } catch {}
   }
 
@@ -2267,7 +2294,7 @@ export async function runChat({ being, envelope, role, signal = null } = {}) {
   if (abort) clearSessionAbort(sessionKey);
 
   return {
-    answer,
+    text,
     summonId: chat?._id || null,
     role:     role.name,
     sessionKey,

@@ -36,7 +36,7 @@
  */
 
 import mongoose from "mongoose";
-import log from "../core/log.js";
+import log from "../log.js";
 
 export default async function migrate() {
   const db = mongoose.connection.db;
@@ -150,7 +150,7 @@ export default async function migrate() {
   }
 
   // ── Step 5: ensure new indexes ──────────────────────────────────────
-  // The Artifact schema declares indexes on (nodeId, createdAt -1),
+  // The Artifact schema declares indexes on (spaceId, createdAt -1),
   // (beingId, createdAt -1), and (origin). Mongoose will sync them on
   // first model use, but explicitly trigger now so the migration leaves
   // the database in the expected shape.

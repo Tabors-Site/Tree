@@ -15,13 +15,13 @@
 // See project_contracts_node_architecture.md for the trio model and
 // state/contracts.js for the contracts-side implementation this mirrors.
 
-import Node from "../../../seed/models/node.js";
-import log from "../../../seed/core/log.js";
+import Space from "../../../seed/models/space.js";
+import log from "../../../seed/system/log.js";
 
 const NS = "governing";
 
 /**
- * Build a planRef string. Same shape as contractRef: "<nodeId>:<seq>".
+ * Build a planRef string. Same shape as contractRef: "<spaceId>:<seq>".
  * The seq is the plan node's metadata.plan._writeSeq at the moment of
  * approval, which uniquely identifies that draft of the plan.
  */
@@ -50,7 +50,7 @@ export function parsePlanRef(ref) {
  * "init" via buildPlanRef.
  */
 async function readPlanWriteSeq(planNodeId) {
-  const node = await Node.findById(planNodeId).select("_id metadata").lean();
+  const node = await Space.findById(planNodeId).select("_id metadata").lean();
   if (!node) return null;
   const meta = node.metadata instanceof Map
     ? node.metadata.get("plan")
@@ -77,7 +77,7 @@ export async function appendPlanApproval({
 }) {
   if (!rulerNodeId || !planNodeId) return null;
   if (!core?.do) throw new Error("appendPlanApproval requires `core` (verb surface)");
-  const node = await Node.findById(rulerNodeId);
+  const node = await Space.findById(rulerNodeId);
   if (!node) return null;
 
   const writeSeq = await readPlanWriteSeq(planNodeId);
@@ -111,7 +111,7 @@ export async function appendPlanApproval({
   // can observe plan approvals the same way they observe contract
   // approvals. Mirrors the governing:contractRatified pattern.
   try {
-    const { hooks } = await import("../../../seed/core/hooks.js");
+    const { hooks } = await import("../../../seed/system/hooks.js");
     hooks.run("governing:planRatified", {
       rulerNodeId: String(rulerNodeId),
       planNodeId: String(planNodeId),
@@ -132,11 +132,11 @@ export async function appendPlanApproval({
  * of approval entries or empty array. Mirrors readApprovalLedger for
  * contracts.
  */
-export function readPlanApprovalLedger(rulerNode) {
-  if (!rulerNode) return [];
-  const meta = rulerNode.metadata instanceof Map
-    ? rulerNode.metadata.get(NS)
-    : rulerNode.metadata?.[NS];
+export function readPlanApprovalLedger(rulerSpace) {
+  if (!rulerSpace) return [];
+  const meta = rulerSpace.metadata instanceof Map
+    ? rulerSpace.metadata.get(NS)
+    : rulerSpace.metadata?.[NS];
   return Array.isArray(meta?.planApprovals) ? meta.planApprovals : [];
 }
 
@@ -146,7 +146,7 @@ export function readPlanApprovalLedger(rulerNode) {
  */
 export async function readPlanApprovalsAtRuler(rulerNodeId) {
   if (!rulerNodeId) return [];
-  const node = await Node.findById(rulerNodeId).select("_id metadata").lean();
+  const node = await Space.findById(rulerNodeId).select("_id metadata").lean();
   if (!node) return [];
   return readPlanApprovalLedger(node);
 }
@@ -225,7 +225,7 @@ export async function readActivePlanEmission(rulerNodeId) {
       `readActivePlanEmission(${String(rulerNodeId).slice(0, 8)}): unparseable planRef "${active.planRef}"`);
     return null;
   }
-  const node = await Node.findById(parsed.planNodeId).select("_id type metadata").lean();
+  const node = await Space.findById(parsed.planNodeId).select("_id type metadata").lean();
   if (!node) {
     log.warn("Governing",
       `readActivePlanEmission(${String(rulerNodeId).slice(0, 8)}): planRef points at missing node ${String(parsed.planNodeId).slice(0, 8)}`);
@@ -264,7 +264,7 @@ export async function readPendingPlanEmission(rulerNodeId) {
   if (!latest || latest.status !== "pending" || !latest.planRef) return null;
   const parsed = parsePlanRef(latest.planRef);
   if (!parsed) return null;
-  const node = await Node.findById(parsed.planNodeId).select("_id type metadata").lean();
+  const node = await Space.findById(parsed.planNodeId).select("_id type metadata").lean();
   if (!node) return null;
   const meta = node.metadata instanceof Map
     ? node.metadata.get(NS)

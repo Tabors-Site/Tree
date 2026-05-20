@@ -10,7 +10,7 @@ Two categories of things are addressable in IBP: a **Position** (a place) and a 
 
 | Concept | Form | Example | Answer to |
 |---|---|---|---|
-| **Position** | `<land>/<path>` | `treeos.ai/` (root), `treeos.ai/~tabor` (home), `treeos.ai/flappybird/chapter-1` (tree node) | "Where in the world?" |
+| **Position** | `<land>/<path>` | `treeos.ai/` (root), `treeos.ai/~tabor` (home), `treeos.ai/flappybird/chapter-1` (tree space) | "Where in the world?" |
 | **Stance** | `<position>@<being>` | `treeos.ai/flappybird@ruler`, `treeos.ai/@auth` | "Which being at the place?" |
 
 ### Structural vocabulary. Not addressable on its own.
@@ -31,7 +31,7 @@ The conceptual shift from the web: a URL says *"this resource, fetched."* An IBP
 | `treeos.ai/` | domain plus trailing slash, Land Position | SEE, DO |
 | `treeos.ai/flappybird` | domain plus path, deeper Position | SEE, DO |
 | `treeos.ai/@auth` | Land Position plus being, Stance at the Land Position | SUMMON, BE |
-| `treeos.ai/flappybird@ruler` | deeper Position plus being, Stance at node | SEE, SUMMON, BE |
+| `treeos.ai/flappybird@ruler` | deeper Position plus being, Stance at space | SEE, SUMMON, BE |
 
 ## Full grammar
 
@@ -44,12 +44,12 @@ Land                  := Domain | Domain ":" Port
 Path                  := Segment ("/" Segment)*  | "~" UserSlug ("/" Segment)*  | ""
 Being            := "@" Identifier
 Domain                := Host (DNS-style; tld optional for local lands)
-Segment               := url-safe identifier (node-name OR node-id uuid)
+Segment               := url-safe identifier (space-name OR space-id uuid)
 UserSlug              := url-safe identifier (the user's home identity)
 Identifier            := [a-z][a-z0-9-]*
 ```
 
-A Position requires the Land followed by `/`. The Path after the slash may be empty (the Land Position), start with `~` (a home), or be one or more segments (a tree node).
+A Position requires the Land followed by `/`. The Path after the slash may be empty (the Land Position), start with `~` (a home), or be one or more segments (a tree space).
 
 ## The bridge form (two-sided, symmetric)
 
@@ -109,7 +109,7 @@ For Pass 1, the left stance is almost always the signed-in user's `<land>/@<user
 
 ## The single-stance form (no bridge)
 
-When the user is viewing artifact content with no interactive intent — read-only inspection — the input is just a Stance, not an IBP Address:
+When the user is viewing matter content with no interactive intent — read-only inspection — the input is just a Stance, not an IBP Address:
 
 ```
 treeos.ai/projectA/chapter-1@historian
@@ -138,7 +138,7 @@ The being on either side of a bridge brings its own capability surface:
 
 - **Human being** (`@<username>` — usually at the Land Position `/`). The human brings *everything they are* — their full life experience, all the modes and tools available to them as a person, plus any account-level settings (LLM config, identity roster, permissions on this land). The default left-side stance for a signed-in human is `<land>/@<username>` — the human inhabits the Land at its root. A human CAN appear at deeper positions (`treeos.ai/flappybird@tabor`); the path then provides context about *where on the land they're operating from*, beyond just "user." For Pass 1 the focus is the default `/` case.
 
-- **AI being** (`@<being>` — at any node). The AI brings whatever it's programmed with at that position: enabled tools, the mode/orchestration script, the rulership scope, system instructions, memory window, extension surfaces invocable at this position. None of that is intrinsic to the being label; it's whatever the land has wired up under that label at that scope. `@ruler` at one node can have a completely different toolset from `@ruler` at another — same kind, different instance, different configuration.
+- **AI being** (`@<being>` — at any space). The AI brings whatever it's programmed with at that position: enabled tools, the mode/orchestration script, the rulership scope, system instructions, memory window, extension surfaces invocable at this position. None of that is intrinsic to the being label; it's whatever the land has wired up under that label at that scope. `@ruler` at one space can have a completely different toolset from `@ruler` at another — same kind, different instance, different configuration.
 
 So when you read a stance, the `@<label>` is the being. The land tells human from AI by whether the label matches a registered username or a configured being kind. What that being can *do* at the position is determined by:
 - Human → the human's account + the land's rules for users at this position.
@@ -156,9 +156,9 @@ The three zone markers, taken literally:
 
 - `/` IS the land zone (the slash alone — the server's public root)
 - `~` (or `~user`) IS the home zone (shorthand; expands to `/~user`)
-- `/<node>...` IS a tree zone (one or more segments deep)
+- `/<space>...` IS a tree zone (one or more segments deep)
 
-A node's path can be written in any of FOUR forms, all resolving to the same position:
+A space's path can be written in any of FOUR forms, all resolving to the same position:
 
 | Form | Example | Used when |
 |---|---|---|
@@ -170,14 +170,14 @@ A node's path can be written in any of FOUR forms, all resolving to the same pos
 Both representations (names and ids) and both depths (full chain and leaf only) are first-class — the user switches between them in the address bar. Names are friendlier; ids survive renames. The portal can render either at any moment because the Position Description returns the full chain in BOTH forms.
 
 Each segment is either:
-- a node-name (kebab-case identifier, e.g. `chapter-1`)
-- a node-id (uuid, e.g. `7f3c8a2e-...-...`)
+- a space-name (kebab-case identifier, e.g. `chapter-1`)
+- a space-id (uuid, e.g. `7f3c8a2e-...-...`)
 
 The server resolves whichever form arrives. Mixed segments within one path are allowed (a uuid for the part the user knows stable, a name for the leaf they're naming). The resolver normalizes against the live tree.
 
 Home zone path:
 - `/~user` — home root for `user`
-- `/~user/<subpath>` — node inside the user's tree
+- `/~user/<subpath>` — space inside the user's tree
 
 Tree paths can be arbitrarily deep (`/~tabor/flappy-bird/chapter-1/section-introduction`).
 
@@ -197,7 +197,7 @@ Canonical beings (initial set; extensible):
 - `@ruler` — leadership/governance tools and permissions
 - `@planner` — decomposition planning
 - `@contractor` — vocabulary commitment
-- `@worker` — artifact production
+- `@worker` — matter production
 - `@foreman` — execution judgment
 - `@oracle` — knowledge synthesis, prediction, deep memory
 - `@dreamer` — creative/imaginative cognition
@@ -206,10 +206,12 @@ Canonical beings (initial set; extensible):
 - `@builder` — construction/land editing
 - `@citizen` — normal participant stance
 - `@historian` — archive/memory/history-oriented (read-only)
-- `@archivist` — read-only browsing of artifacts and trace history
+- `@archivist` — read-only browsing of matters and trace history
 - `@swarm` — collective/group-agent cognition
 
 Lands can extend with custom beings. The portal doesn't need to know all beings in advance — it asks the land what's invocable at this position (in the Position Description) and renders the chat-invoke surface accordingly.
+
+
 
 ## Shorthands
 
@@ -222,7 +224,7 @@ When context allows, parts can be omitted. Both sides of a bridge expand the sam
 | `~@dreamer` | `<current-land>/~<current-user>@dreamer` | inside a session, current user's home |
 | `~tabor@dreamer` | `<current-land>/~tabor@dreamer` | inside a land, specific user's home |
 | `/flappybird@ruler` | `<current-land>/flappybird@ruler` | inside a land |
-| `@ruler` | `<current-land><current-path>@ruler` | re-embody current node with different mode |
+| `@ruler` | `<current-land><current-path>@ruler` | re-embody current space with different mode |
 | `flappybird/chapter-1` | `<current-land>/flappybird/chapter-1@<default-being>` | inside a land; being default applies |
 
 ### Left-side shorthands (who you are)
@@ -244,7 +246,7 @@ When the right side omits `@being`, the default is the being most natural for th
 
 - Land zone (`server/`) — `@citizen` (browsing the land)
 - Home zone (`server/~user`) — `@dreamer` or `@builder` (personal creative space; user picks via setting)
-- Tree zone (`server/<path>`) — depends on the node's role. Ruler scopes default to `@ruler`. Worker leaves default to `@worker`. Read-only artifact nodes default to `@archivist`.
+- Tree zone (`server/<path>`) — depends on the space's role. Ruler scopes default to `@ruler`. Worker leaves default to `@worker`. Read-only matter spaces default to `@archivist`.
 
 The Position Description surfaces which beings are invocable at the position (in the `beings:` field); the portal uses that list to populate the address-bar autocomplete.
 
@@ -292,7 +294,7 @@ Each row shows the **display shorthand** (what the user sees) and the **canonica
 | `tabor :: /library/cookbook@oracle` | `treeos.ai/@tabor :: treeos.ai/library/cookbook@oracle` | tabor querying a public oracle at a recipe library |
 | `tabor :: otherland.com/chess-club@citizen` | `treeos.ai/@tabor :: otherland.com/chess-club@citizen` | tabor visiting another land's chess club as a participant |
 | `treeos.ai/flappybird/chapter-1@archivist` | (already canonical, no left side) | single-side: reading chapter-1 without a sender — public observation |
-| `@ruler` | `treeos.ai/@tabor :: treeos.ai/<current-path>@ruler` | re-embody the current node as ruler (shortest possible IBPA — left auto-fills from session identity) |
+| `@ruler` | `treeos.ai/@tabor :: treeos.ai/<current-path>@ruler` | re-embody the current space as ruler (shortest possible IBPA — left auto-fills from session identity) |
 | `treeos.ai/projectA/some-ruler@ruler :: otherland.com/library/the-oracle@oracle` | (already canonical) | Pass 2+: AI being-to-being bridge |
 
 ## Parser semantics
@@ -303,6 +305,8 @@ The `lib/ibp-address.js` parser:
 - expands shorthands when given a context: `parse(input, { currentLand, currentPath, currentUser })`
 - round-trips: `format(parsed) === normalized canonical form`
 - rejects malformed input with structured errors so the address bar can highlight the bad segment
+
+
 
 See [`../../land/seed/addressing/address.js`](../../land/seed/addressing/address.js) for the implementation. The substrate owns the grammar; Portal consumes it via the `@ibp-address` Vite alias.
 

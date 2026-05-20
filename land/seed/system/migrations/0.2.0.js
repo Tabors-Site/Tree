@@ -4,7 +4,7 @@
  *
  * Detects scopes (any node) that have MORE THAN ONE plan-type child.
  * The new unique partial index on (parent, type) where type === "plan"
- * (added in this same change in seed/models/node.js) prevents future
+ * (added in this same change in seed/models/space.js) prevents future
  * duplicates, but pre-existing data from before the index may already
  * violate the invariant. Mongo will silently fail to create the index
  * if duplicates exist; this migration surfaces them so the operator
@@ -20,14 +20,14 @@
  * After cleanup the operator can re-run boot and the index will create
  * successfully.
  */
-import log from "../core/log.js";
-import Node from "../models/node.js";
+import log from "../log.js";
+import Space from "../../models/space.js";
 
 export default async function migrate() {
   let duplicates;
   try {
     // Aggregate: group every plan-type node by its parent, count.
-    duplicates = await Node.aggregate([
+    duplicates = await Space.aggregate([
       { $match: { type: "plan" } },
       { $group: {
         _id: "$parent",
@@ -59,14 +59,14 @@ export default async function migrate() {
 
     let parentName = "(unknown)";
     try {
-      const parentDoc = await Node.findById(parentId).select("name").lean();
+      const parentDoc = await Space.findById(parentId).select("name").lean();
       if (parentDoc?.name) parentName = parentDoc.name;
     } catch {}
 
     const planDetails = [];
     for (const planId of planIds) {
       try {
-        const planDoc = await Node.findById(planId)
+        const planDoc = await Space.findById(planId)
           .select("_id name dateCreated metadata")
           .lean();
         if (!planDoc) {

@@ -9,12 +9,13 @@
  * didRetentionDays: default 365. 0 = keep forever.
  */
 
-import log from "../core/log.js";
+import log from "../system/log.js";
 import { getLandConfigValue } from "../landConfig.js";
 import Summon from "../models/summon.js";
 import Did from "../models/did.js";
-import Node from "../models/node.js";
-import { CASCADE, SYSTEM_ROLE } from "../core/protocol.js";
+import Space from "../models/space.js";
+import { SEED_SPACE } from "../space/seedSpaces.js";
+import { CASCADE } from "../space/cascade.js";
 
 let cleanupTimer = null;
 
@@ -82,12 +83,12 @@ export async function runRetentionCleanup() {
   try {
     const awaitingTimeout = parseInt(getLandConfigValue("awaitingTimeout") || "300", 10);
     const cutoffMs = Date.now() - awaitingTimeout * 1000;
-    const flowNode = await Node.findOne({ systemRole: SYSTEM_ROLE.FLOW }).select("_id").lean();
+    const flowNode = await Space.findOne({ seedSpace: SEED_SPACE.FLOW }).select("_id").lean();
     if (flowNode) {
       const today = new Date().toISOString().slice(0, 10);
       const yesterday = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
 
-      const recentPartitions = await Node.find({
+      const recentPartitions = await Space.find({
         parent: flowNode._id,
         name: { $in: [today, yesterday] },
       }).select("_id metadata");
@@ -104,7 +105,7 @@ export async function runRetentionCleanup() {
             const r = arr[i];
             if (r.status === CASCADE.AWAITING && new Date(r.timestamp).getTime() < cutoffMs) {
               // Atomic update per signal to avoid read-modify-write races with concurrent cascade writes
-              await Node.updateOne(
+              await Space.updateOne(
                 { _id: partition._id },
                 {
                   $set: {

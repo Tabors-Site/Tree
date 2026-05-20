@@ -5,8 +5,8 @@
  * 0.6.0 introduces `ibpAddress` on Chat as the canonical identifier
  * for "the conversation context this chat belongs to." The shape is
  * `<stance> :: <stance>` (canonical sorted), matching the protocol's
- * IBP Address grammar (see /land/seed/addressing/address.js and
- * seed/llm/ibpAddress.js). New chats compute and write it at
+ * IBP Address grammar (see /land/seed/ibp/address.js and
+ * seed/ibp/addressStorage.js). New chats compute and write it at
  * creation time.
  *
  * What this migration does:
@@ -39,7 +39,7 @@
  */
 
 import mongoose from "mongoose";
-import log from "../core/log.js";
+import log from "../log.js";
 
 export default async function migrate() {
   const coll = mongoose.connection.collection("aichats");

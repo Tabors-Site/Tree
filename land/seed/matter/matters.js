@@ -1,10 +1,10 @@
 // TreeOS Seed . AGPL-3.0 . https://treeos.ai . Tabor Holly
 /**
- * Artifact CRUD operations.
+ * Matter CRUD operations.
  *
- * Artifacts are things that live inside a node. The kernel does not
+ * Matter is stuff that lives inside a space. The kernel does not
  * distinguish notes, files, and metadata-only objects as separate
- * categories. Instead an artifact has an `origin` field that names the
+ * categories. Instead matter has an `origin` field that names the
  * system its underlying representation comes from:
  *
  *   ibp        : TreeOS-native content. content is a string (text) or
@@ -12,31 +12,33 @@
  *   filesystem : Bridges to a file on disk. content is { path, size,
  *                mimeType }.
  *   web        : Bridges to a URL. content is { url, fetchedAt?, cache? }.
- *   cross-land : Bridges to an artifact on another TreeOS land.
- *                content is { land, artifactRef }.
+ *   cross-land : Bridges to matter on another TreeOS land.
+ *                content is { land, matterRef }.
  *
- * beforeArtifact/afterArtifact hooks fire on every write. Extensions tag
- * artifacts via hookData.metadata using their own namespace.
+ * beforeMatter/afterMatter hooks fire on every write. Extensions tag
+ * matter via hookData.metadata using their own namespace.
  *
  * File uploads (origin "filesystem") store the file in the uploads/
- * directory. Soft-deleted artifacts have nodeId and beingId set to the
+ * directory. Soft-deleted matter has spaceId and beingId set to the
  * DELETED sentinel.
  */
 
-import log from "../core/log.js";
+import log from "../system/log.js";
 import path from "path";
 import fs from "fs";
-import Artifact from "../models/artifact.js";
-import Node from "../models/node.js";
-import Did from "../models/did.js";
-import { logDid } from "./dids.js";
-import { escapeRegex } from "../core/utils.js";
-import { hooks } from "../core/hooks.js";
-import { getLandConfigValue } from "../landConfig.js";
 import { fileURLToPath } from "url";
-import { resolveRootNode } from "./treeFetch.js";
-import { ARTIFACT_ORIGIN, DELETED, ERR, ProtocolError } from "../core/protocol.js";
-import { incBeingMeta } from "./beingMetadata.js";
+import Matter from "../models/matter.js";
+import Space from "../models/space.js";
+import Did from "../models/did.js";
+import { logDid } from "../space/dids.js";
+import { incBeingMeta } from "../being/beingMetadata.js";
+import { escapeRegex } from "../system/utils.js";
+import { getLandConfigValue } from "../landConfig.js";
+import { resolveRootSpace } from "../space/spaceFetch.js";
+import { hooks } from "../system/hooks.js";
+import { MATTER_ORIGIN } from "./origins.js";
+import { DELETED } from "../space/seedSpaces.js";
+import { ERR, ProtocolError } from "../ibp/protocol.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -50,45 +52,45 @@ if (!fs.existsSync(uploadsFolder)) {
 // CONFIG (all readable via land .config node)
 // ─────────────────────────────────────────────────────────────────────────
 
-function artifactMaxChars()    { return Math.max(100, Number(getLandConfigValue("artifactMaxChars"))    || 5000); }
-function maxArtifactsPerNode() { return Math.max(1,   Number(getLandConfigValue("maxArtifactsPerNode")) || 1000); }
-function artifactQueryLimit()  { return Math.max(1,   Math.min(Number(getLandConfigValue("artifactQueryLimit"))  || 5000, 50000)); }
-function searchQueryLimit()    { return Math.max(1,   Math.min(Number(getLandConfigValue("artifactSearchLimit")) || 500, 10000)); }
+function matterMaxChars()    { return Math.max(100, Number(getLandConfigValue("matterMaxChars"))    || 5000); }
+function maxMatterPerNode()  { return Math.max(1,   Number(getLandConfigValue("maxMatterPerNode")) || 1000); }
+function matterQueryLimit()  { return Math.max(1,   Math.min(Number(getLandConfigValue("matterQueryLimit"))  || 5000, 50000)); }
+function searchQueryLimit()  { return Math.max(1,   Math.min(Number(getLandConfigValue("matterSearchLimit")) || 500, 10000)); }
 
 // ─────────────────────────────────────────────────────────────────────────
 // CONTENT SHAPE HELPERS
 // ─────────────────────────────────────────────────────────────────────────
 
 function isIbpOrigin(origin) {
-  return origin === ARTIFACT_ORIGIN.IBP;
+  return origin === MATTER_ORIGIN.IBP;
 }
 
 function isFilesystemOrigin(origin) {
-  return origin === ARTIFACT_ORIGIN.FILESYSTEM;
+  return origin === MATTER_ORIGIN.FILESYSTEM;
 }
 
-// For ibp artifacts the textual content (if any) lives directly in
+// For ibp matter the textual content (if any) lives directly in
 // `content` as a string. For other origins, callers must derive a
 // human-readable representation from the structured content. This
-// helper returns the searchable / loggable text for an artifact, or
+// helper returns the searchable / loggable text for matter, or
 // an empty string when there is no text representation.
-function ibpText(artifact) {
-  if (!artifact) return "";
-  if (artifact.origin !== ARTIFACT_ORIGIN.IBP) return "";
-  return typeof artifact.content === "string" ? artifact.content : "";
+function ibpText(matter) {
+  if (!matter) return "";
+  if (matter.origin !== MATTER_ORIGIN.IBP) return "";
+  return typeof matter.content === "string" ? matter.content : "";
 }
 
 // ─────────────────────────────────────────────────────────────────────────
 // VALIDATION
 // ─────────────────────────────────────────────────────────────────────────
 
-async function assertArtifactTextWithinLimit(content, _beingId) {
+async function assertMatterTextWithinLimit(content, _beingId) {
   if (!content || typeof content !== "string") return;
   // Admin bypass retired 2026-05-18. Size cap applies to every being;
   // stance-authorization-based exemptions can land here later if needed.
-  const max = artifactMaxChars();
+  const max = matterMaxChars();
   if (content.length > max) {
-    throw new Error(`Artifact exceeds maximum length of ${max} characters`);
+    throw new Error(`Matter exceeds maximum length of ${max} characters`);
   }
 }
 
@@ -112,34 +114,34 @@ function validateDateRange(startDate, endDate) {
 // CREATE
 // ─────────────────────────────────────────────────────────────────────────
 
-async function createArtifact({
-  origin = ARTIFACT_ORIGIN.IBP,
+async function createMatter({
+  origin = MATTER_ORIGIN.IBP,
   content = null,
   beingId,
-  nodeId,
+  spaceId,
   file,
   summonId = null,
   sessionId = null,
   metadata = {},
 }) {
-  if (!Object.values(ARTIFACT_ORIGIN).includes(origin)) {
-    throw new Error(`Invalid artifact origin: ${origin}`);
+  if (!Object.values(MATTER_ORIGIN).includes(origin)) {
+    throw new Error(`Invalid matter origin: ${origin}`);
   }
-  if (!beingId || !nodeId) {
-    throw new Error("Missing required fields: beingId, nodeId");
+  if (!beingId || !spaceId) {
+    throw new Error("Missing required fields: beingId, spaceId");
   }
 
-  const targetNode = await Node.findOne({
-    _id: nodeId,
+  const targetSpace = await Space.findOne({
+    _id: spaceId,
     parent: { $exists: true, $ne: null },
-  }).select("systemRole parent").lean();
-  if (!targetNode) throw new Error("Node not found or deleted");
-  if (targetNode.systemRole) throw new Error("Cannot modify system nodes");
+  }).select("seedSpace parent").lean();
+  if (!targetSpace) throw new Error("Space not found or deleted");
+  if (targetSpace.seedSpace) throw new Error("Cannot modify land seed spaces");
 
-  const max = maxArtifactsPerNode();
-  const count = await Artifact.countDocuments({ nodeId });
+  const max = maxMatterPerNode();
+  const count = await Matter.countDocuments({ spaceId });
   if (count >= max) {
-    throw new Error(`Node has reached the maximum of ${max} artifacts. Delete old artifacts before adding new ones.`);
+    throw new Error(`Space has reached the maximum of ${max} matter entries. Delete old matter before adding new ones.`);
   }
 
   // Build the content payload per-origin. Validates required structure
@@ -155,32 +157,32 @@ async function createArtifact({
     };
   } else if (isIbpOrigin(origin)) {
     if (typeof finalContent === "string") {
-      await assertArtifactTextWithinLimit(finalContent, beingId);
+      await assertMatterTextWithinLimit(finalContent, beingId);
     }
     // null is allowed: metadata-only object.
   }
   // web / cross-land: content shape is the caller's responsibility.
 
   // ── HOOKS ────────────────────────────────────────
-  const hookData = { nodeId, content: finalContent, beingId, origin, metadata: { ...metadata } };
-  const hookResult = await hooks.run("beforeArtifact", hookData);
+  const hookData = { spaceId, content: finalContent, beingId, origin, metadata: { ...metadata } };
+  const hookResult = await hooks.run("beforeMatter", hookData);
   if (hookResult.cancelled) {
     const code = hookResult.timedOut ? ERR.HOOK_TIMEOUT : ERR.HOOK_CANCELLED;
-    throw new ProtocolError(500, code, hookResult.reason || "Artifact creation cancelled by extension");
+    throw new ProtocolError(500, code, hookResult.reason || "Matter creation cancelled by extension");
   }
   finalContent = hookData.content;
 
   // ── SAVE ────────────────────────────────────────
-  const newArtifact = new Artifact({
+  const newMatter = new Matter({
     origin,
     content: finalContent,
     beingId,
-    nodeId,
+    spaceId,
     metadata: hookData.metadata,
   });
-  await newArtifact.save();
+  await newMatter.save();
 
-  // Storage tracking. Size in KB attributed to the artifact owner.
+  // Storage tracking. Size in KB attributed to the matter owner.
   let sizeKB = 0;
   if (isFilesystemOrigin(origin) && file?.size) {
     sizeKB = Math.ceil(file.size / 1024);
@@ -199,42 +201,44 @@ async function createArtifact({
   // the AI walk past blocking errors. After hooks run parallel so
   // awaiting the Promise.all adds no serialization latency beyond
   // the slowest single handler.
-  await hooks.run("afterArtifact", { artifact: newArtifact, nodeId, beingId, origin, sizeKB, action: "create", summonId, sessionId }).catch((err) => {
-    log.warn("Artifacts", `afterArtifact hook chain failed: ${err?.message}`);
+  await hooks.run("afterMatter", { matter: newMatter, spaceId, beingId, origin, sizeKB, action: "create", summonId, sessionId }).catch((err) => {
+    log.warn("Matter", `afterMatter hook chain failed: ${err?.message}`);
   });
 
   import("./cascade.js").then(({ checkCascade }) =>
-    checkCascade(nodeId, { action: "artifact:create", origin, sizeKB, beingId })
+    checkCascade(spaceId, { action: "matter:create", origin, sizeKB, beingId })
   ).catch(() => {});
 
   await logDid({
-    beingId, nodeId, summonId, sessionId,
-    action: "artifact",
-    artifactAction: { action: "add", artifactId: newArtifact._id.toString(), content: isIbpOrigin(origin) ? ibpText(newArtifact) : null },
+    beingId,
+    action: "create",
+    target: { kind: "matter", id: newMatter._id.toString() },
+    params: { spaceId, content: isIbpOrigin(origin) ? ibpText(newMatter) : null },
+    summonId, sessionId,
   });
 
-  return { message: "Artifact created successfully", artifact: newArtifact };
+  return { message: "Matter created successfully", matter: newMatter };
 }
 
 // ─────────────────────────────────────────────────────────────────────────
 // EDIT
 // ─────────────────────────────────────────────────────────────────────────
 
-async function editArtifact({
-  artifactId, content, beingId,
+async function editMatter({
+  matterId, content, beingId,
   lineStart = null, lineEnd = null,
   summonId = null, sessionId = null,
 }) {
-  if (!artifactId || !beingId) throw new Error("Missing required fields");
+  if (!matterId || !beingId) throw new Error("Missing required fields");
 
-  const artifact = await Artifact.findById(artifactId);
-  if (!artifact) throw new Error("Artifact not found");
-  if (artifact.beingId.toString() !== beingId.toString()) throw new Error("Unauthorized");
-  if (!isIbpOrigin(artifact.origin)) {
-    throw new Error(`Cannot edit artifact with origin "${artifact.origin}". Only ibp-origin artifacts have editable text content.`);
+  const matter = await Matter.findById(matterId);
+  if (!matter) throw new Error("Matter not found");
+  if (matter.beingId.toString() !== beingId.toString()) throw new Error("Unauthorized");
+  if (!isIbpOrigin(matter.origin)) {
+    throw new Error(`Cannot edit matter with origin "${matter.origin}". Only ibp-origin matter has editable text content.`);
   }
 
-  const oldContent = ibpText(artifact);
+  const oldContent = ibpText(matter);
   let newContent;
 
   if (lineStart !== null && lineEnd !== null) {
@@ -253,16 +257,16 @@ async function editArtifact({
     newContent = content ?? "";
   }
 
-  await assertArtifactTextWithinLimit(newContent, beingId);
+  await assertMatterTextWithinLimit(newContent, beingId);
 
   if (oldContent === newContent) {
-    return { message: "No changes", artifact };
+    return { message: "No changes", matter };
   }
 
   let finalContent = newContent;
   {
-    const hookData = { nodeId: artifact.nodeId, content: newContent, beingId, origin: artifact.origin, metadata: {} };
-    await hooks.run("beforeArtifact", hookData);
+    const hookData = { spaceId: matter.spaceId, content: newContent, beingId, origin: matter.origin, metadata: {} };
+    await hooks.run("beforeMatter", hookData);
     finalContent = hookData.content;
   }
 
@@ -270,45 +274,47 @@ async function editArtifact({
   const newSizeKB = Math.ceil(Buffer.byteLength(typeof finalContent === "string" ? finalContent : "", "utf8") / 1024);
   const deltaKB = newSizeKB - oldSizeKB;
 
-  artifact.content = finalContent;
-  await artifact.save();
+  matter.content = finalContent;
+  await matter.save();
 
   if (deltaKB !== 0) {
     incBeingMeta(beingId, "storage", "usageKB", deltaKB).catch(() => {});
   }
 
-  // Awaited: see comment in createArtifact above. Callers (tool handlers
+  // Awaited: see comment in createMatter above. Callers (tool handlers
   // on the LLM path) need the syntax validator + cascade signaling
   // complete before they return, or the next turn reads stale state.
-  await hooks.run("afterArtifact", { artifact, nodeId: artifact.nodeId, beingId, origin: artifact.origin, sizeKB: newSizeKB, deltaKB, action: "edit", summonId, sessionId }).catch((err) => {
-    log.warn("Artifacts", `afterArtifact hook chain failed: ${err?.message}`);
+  await hooks.run("afterMatter", { matter, spaceId: matter.spaceId, beingId, origin: matter.origin, sizeKB: newSizeKB, deltaKB, action: "edit", summonId, sessionId }).catch((err) => {
+    log.warn("Matter", `afterMatter hook chain failed: ${err?.message}`);
   });
 
   import("./cascade.js").then(({ checkCascade }) =>
-    checkCascade(artifact.nodeId, { action: "artifact:edit", origin: artifact.origin, deltaKB, beingId })
+    checkCascade(matter.spaceId, { action: "matter:edit", origin: matter.origin, deltaKB, beingId })
   ).catch(() => {});
 
   await logDid({
-    beingId, nodeId: artifact.nodeId, summonId, sessionId,
-    action: "artifact",
-    artifactAction: { action: "edit", artifactId: artifact._id.toString(), content: typeof finalContent === "string" ? finalContent : "" },
+    beingId,
+    action: "edit",
+    target: { kind: "matter", id: matter._id.toString() },
+    params: { spaceId: matter.spaceId, content: typeof finalContent === "string" ? finalContent : "" },
+    summonId, sessionId,
   });
 
-  return { message: "Artifact updated successfully", artifact };
+  return { message: "Matter updated successfully", matter };
 }
 
 // ─────────────────────────────────────────────────────────────────────────
 // READ
 // ─────────────────────────────────────────────────────────────────────────
 
-async function getArtifacts({ nodeId, limit, offset, startDate, endDate }) {
-  if (!nodeId) throw new Error("Missing required parameter: nodeId");
+async function getMatters({ spaceId, limit, offset, startDate, endDate }) {
+  if (!spaceId) throw new Error("Missing required parameter: spaceId");
 
-  const query = { nodeId, ...validateDateRange(startDate, endDate) };
-  const safeLimit = Math.min(Math.max(Number(limit) || 100, 1), artifactQueryLimit());
+  const query = { spaceId, ...validateDateRange(startDate, endDate) };
+  const safeLimit = Math.min(Math.max(Number(limit) || 100, 1), matterQueryLimit());
   const safeOffset = Math.max(0, Number(offset) || 0);
 
-  const artifacts = await Artifact.find(query)
+  const matters = await Matter.find(query)
     .sort({ createdAt: -1 })
     .populate("beingId", "name")
     .skip(safeOffset)
@@ -316,17 +322,17 @@ async function getArtifacts({ nodeId, limit, offset, startDate, endDate }) {
     .lean();
 
   return {
-    artifacts: artifacts.map(a => ({
-      _id:        a._id,
-      origin:     a.origin,
-      content:    a.content,
-      name:       a.name ?? null,                       // artifact's own name
-      authorName: a.beingId?.name ?? null,              // populated from beingId
-      beingId:    a.beingId?._id ? String(a.beingId._id) : null,
-      nodeId:     a.nodeId,
-      metadata:   a.metadata,
-      createdAt:  a.createdAt,
-      updatedAt:  a.updatedAt,
+    matters: matters.map(m => ({
+      _id:        m._id,
+      origin:     m.origin,
+      content:    m.content,
+      name:       m.name ?? null,                       // matter's own name
+      authorName: m.beingId?.name ?? null,              // populated from beingId
+      beingId:    m.beingId?._id ? String(m.beingId._id) : null,
+      spaceId:     m.spaceId,
+      metadata:   m.metadata,
+      createdAt:  m.createdAt,
+      updatedAt:  m.updatedAt,
     })),
   };
 }
@@ -335,28 +341,28 @@ async function getArtifacts({ nodeId, limit, offset, startDate, endDate }) {
 // DELETE
 // ─────────────────────────────────────────────────────────────────────────
 
-async function deleteArtifactAndFile({
-  artifactId, beingId,
+async function deleteMatterAndFile({
+  matterId, beingId,
   summonId = null, sessionId = null,
 }) {
-  const artifact = await Artifact.findById(artifactId);
-  if (!artifact) throw new Error("Artifact not found");
+  const matter = await Matter.findById(matterId);
+  if (!matter) throw new Error("Matter not found");
 
-  const rootNode = await resolveRootNode(artifact.nodeId);
-  const isAuthor = artifact.beingId?.toString() === beingId.toString();
-  const isRootOwner = rootNode.rootOwner?.toString() === beingId.toString();
+  const rootSpace = await resolveRootSpace(matter.spaceId);
+  const isAuthor = matter.beingId?.toString() === beingId.toString();
+  const isRootOwner = rootSpace.rootOwner?.toString() === beingId.toString();
 
   if (!isAuthor && !isRootOwner) {
-    throw new Error("Only the artifact author or the tree owner can delete this artifact");
+    throw new Error("Only the matter author or the tree owner can delete this matter");
   }
 
-  const fileOwnerId = artifact.beingId?.toString();
-  const { nodeId } = artifact;
+  const fileOwnerId = matter.beingId?.toString();
+  const { spaceId } = matter;
   let fileDeleted = false;
   let fileSizeKB = 0;
 
-  if (isFilesystemOrigin(artifact.origin) && artifact.content?.path) {
-    const filePath = path.resolve(uploadsFolder, path.basename(artifact.content.path));
+  if (isFilesystemOrigin(matter.origin) && matter.content?.path) {
+    const filePath = path.resolve(uploadsFolder, path.basename(matter.content.path));
     if (filePath.startsWith(uploadsFolder) && fs.existsSync(filePath)) {
       try {
         const stats = fs.statSync(filePath);
@@ -367,90 +373,96 @@ async function deleteArtifactAndFile({
         if (fsErr.code === "ENOENT") {
           fileDeleted = true;
         } else {
-          log.warn("Artifacts", `File delete failed: ${fsErr.message}`);
+          log.warn("Matter", `File delete failed: ${fsErr.message}`);
         }
       }
     }
-    artifact.content = { ...artifact.content, path: null, deleted: true };
+    matter.content = { ...matter.content, path: null, deleted: true };
   }
-  artifact.nodeId = DELETED;
-  artifact.beingId = DELETED;
-  await artifact.save();
+  matter.spaceId = DELETED;
+  matter.beingId = DELETED;
+  await matter.save();
 
   if (fileDeleted && fileSizeKB > 0 && fileOwnerId && fileOwnerId !== DELETED) {
     incBeingMeta(fileOwnerId, "storage", "usageKB", -fileSizeKB).catch(() => {});
   }
 
   if (fileOwnerId && fileOwnerId !== DELETED) {
-    hooks.run("afterArtifact", {
-      artifact, nodeId, beingId: fileOwnerId,
-      origin: artifact.origin, fileSizeKB,
+    hooks.run("afterMatter", {
+      matter, spaceId, beingId: fileOwnerId,
+      origin: matter.origin, fileSizeKB,
       action: "delete", fileDeleted,
       summonId, sessionId,
     }).catch(() => {});
 
     import("./cascade.js").then(({ checkCascade }) =>
-      checkCascade(nodeId, { action: "artifact:delete", origin: artifact.origin, fileSizeKB, beingId: fileOwnerId })
+      checkCascade(spaceId, { action: "matter:delete", origin: matter.origin, fileSizeKB, beingId: fileOwnerId })
     ).catch(() => {});
   }
 
   await logDid({
-    beingId, nodeId, summonId, sessionId,
-    action: "artifact",
-    artifactAction: { action: "remove", noteId: artifactId.toString(), fileDeleted: fileDeleted || undefined },
+    beingId,
+    action: "remove",
+    target: { kind: "matter", id: matterId.toString() },
+    params: { spaceId, fileDeleted: fileDeleted || undefined },
+    summonId, sessionId,
   });
 
   return {
-    message: isFilesystemOrigin(artifact.origin)
-      ? "File artifact removed and underlying file deleted."
-      : "Artifact removed.",
+    message: isFilesystemOrigin(matter.origin)
+      ? "File matter removed and underlying file deleted."
+      : "Matter removed.",
   };
 }
 
-async function transferArtifact({
-  artifactId, targetNodeId, beingId,
+async function transferMatter({
+  matterId, targetSpace, beingId,
   summonId = null, sessionId = null,
 }) {
-  if (!artifactId || !targetNodeId || !beingId) {
-    throw new Error("Missing required fields: artifactId, targetNodeId, beingId");
+  if (!matterId || !targetSpace || !beingId) {
+    throw new Error("Missing required fields: matterId, targetSpace, beingId");
   }
 
-  const artifact = await Artifact.findById(artifactId);
-  if (!artifact) throw new Error("Artifact not found");
-  if (artifact.nodeId === DELETED) throw new Error("Cannot transfer a deleted artifact");
+  const matter = await Matter.findById(matterId);
+  if (!matter) throw new Error("Matter not found");
+  if (matter.spaceId === DELETED) throw new Error("Cannot transfer deleted matter");
 
-  const rootNode = await resolveRootNode(artifact.nodeId);
-  const isAuthor = artifact.beingId?.toString() === beingId.toString();
-  const isRootOwner = rootNode.rootOwner?.toString() === beingId.toString();
+  const rootSpace = await resolveRootSpace(matter.spaceId);
+  const isAuthor = matter.beingId?.toString() === beingId.toString();
+  const isRootOwner = rootSpace.rootOwner?.toString() === beingId.toString();
   if (!isAuthor && !isRootOwner) {
-    throw new Error("Only the artifact author or the tree owner can transfer this artifact");
+    throw new Error("Only the matter author or the tree owner can transfer this matter");
   }
 
-  const targetNode = await Node.findById(targetNodeId).select("_id").lean();
-  if (!targetNode) throw new Error("Target node not found");
+  const targetSpaceDoc = await Space.findById(targetSpace).select("_id").lean();
+  if (!targetSpaceDoc) throw new Error("Target Space not found");
 
-  const targetRoot = await resolveRootNode(targetNodeId);
-  if (targetRoot._id.toString() !== rootNode._id.toString()) {
-    throw new Error("Cannot transfer artifacts between different trees");
+  const targetRoot = await resolveRootSpace(targetSpace);
+  if (targetRoot._id.toString() !== rootSpace._id.toString()) {
+    throw new Error("Cannot transfer matter between different trees");
   }
 
-  const sourceNodeId = artifact.nodeId;
-  artifact.nodeId = targetNodeId;
-  await artifact.save();
+  const sourceSpaceId = matter.spaceId;
+  matter.spaceId = targetSpace;
+  await matter.save();
 
   await logDid({
-    beingId, nodeId: sourceNodeId, summonId, sessionId,
-    action: "artifact",
-    artifactAction: { action: "remove", noteId: artifactId.toString() },
+    beingId,
+    action: "remove",
+    target: { kind: "matter", id: matterId.toString() },
+    params: { spaceId: sourceSpaceId, reason: "transfer" },
+    summonId, sessionId,
   });
 
   await logDid({
-    beingId, nodeId: targetNodeId, summonId, sessionId,
-    action: "artifact",
-    artifactAction: { action: "add", artifactId: artifactId.toString(), content: isIbpOrigin(artifact.origin) ? ibpText(artifact) : null },
+    beingId,
+    action: "create",
+    target: { kind: "matter", id: matterId.toString() },
+    params: { spaceId: targetSpace, content: isIbpOrigin(matter.origin) ? ibpText(matter) : null, reason: "transfer" },
+    summonId, sessionId,
   });
 
-  return { message: "Artifact transferred successfully", artifactId: artifactId.toString(), from: { nodeId: sourceNodeId }, to: { nodeId: targetNodeId } };
+  return { message: "Matter transferred successfully", matterId: matterId.toString(), from: { spaceId: sourceSpaceId }, to: { spaceId: targetSpace } };
 }
 
 // ─────────────────────────────────────────────────────────────────────────
@@ -458,33 +470,33 @@ async function transferArtifact({
 // ─────────────────────────────────────────────────────────────────────────
 //
 // Read primitives keyed by being rather than by node. Substrate surface
-// for "my artifacts" / "search my artifacts" / "edit history of this
-// artifact." Wire these through IBP DO operations or extension tools
-// when a UI needs them.
+// for "my matter" / "search my matter" / "edit history of this matter."
+// Wire these through IBP DO operations or extension tools when a UI
+// needs them.
 
 /**
- * Every artifact authored by a being, newest first.
+ * Every matter authored by a being, newest first.
  *
  * @param {object} opts
  * @param {string} opts.beingId   author id (required)
  * @param {number} [opts.limit]
  * @param {Date|string} [opts.startDate]
  * @param {Date|string} [opts.endDate]
- * @returns {Promise<{ artifacts }>}
+ * @returns {Promise<{ matters }>}
  */
-async function getAllArtifactsByBeing({ beingId, limit, startDate, endDate } = {}) {
-  if (!beingId) throw new Error("getAllArtifactsByBeing: `beingId` is required");
-  const safeLimit = Math.min(Math.max(Number(limit) || 100, 1), artifactQueryLimit());
-  const artifacts = await Artifact
+async function getAllMatterByBeing({ beingId, limit, startDate, endDate } = {}) {
+  if (!beingId) throw new Error("getAllMatterByBeing: `beingId` is required");
+  const safeLimit = Math.min(Math.max(Number(limit) || 100, 1), matterQueryLimit());
+  const matters = await Matter
     .find({ beingId, ...validateDateRange(startDate, endDate) })
     .sort({ createdAt: -1 })
     .limit(safeLimit)
     .lean();
-  return { artifacts };
+  return { matters };
 }
 
 /**
- * Full-text search across a being's ibp-origin artifacts. Phrases in
+ * Full-text search across a being's ibp-origin matter. Phrases in
  * "double quotes" match as substrings; bare words match whole-word.
  * Other origins (filesystem, web) carry structured content and need
  * origin-specific search through the bridging extension.
@@ -495,29 +507,29 @@ async function getAllArtifactsByBeing({ beingId, limit, startDate, endDate } = {
  * @param {number} [opts.limit]
  * @param {Date|string} [opts.startDate]
  * @param {Date|string} [opts.endDate]
- * @returns {Promise<{ artifacts }>}
+ * @returns {Promise<{ matters }>}
  */
-async function searchArtifactsByBeing({ beingId, query, limit, startDate, endDate } = {}) {
-  if (!beingId) throw new Error("searchArtifactsByBeing: `beingId` is required");
+async function searchMatterByBeing({ beingId, query, limit, startDate, endDate } = {}) {
+  if (!beingId) throw new Error("searchMatterByBeing: `beingId` is required");
   if (!query || typeof query !== "string") {
-    throw new Error("searchArtifactsByBeing: `query` must be a non-empty string");
+    throw new Error("searchMatterByBeing: `query` must be a non-empty string");
   }
 
   const conditions = buildSearchConditions(query);
-  if (conditions.length === 0) return { artifacts: [] };
+  if (conditions.length === 0) return { matters: [] };
 
   const safeLimit = Math.min(Math.max(Number(limit) || 50, 1), searchQueryLimit());
-  const artifacts = await Artifact
+  const matters = await Matter
     .find({
       beingId,
-      origin: ARTIFACT_ORIGIN.IBP,
+      origin: MATTER_ORIGIN.IBP,
       $and: conditions,
       ...validateDateRange(startDate, endDate),
     })
     .sort({ createdAt: -1 })
     .limit(safeLimit)
     .lean();
-  return { artifacts };
+  return { matters };
 }
 
 // Parse a search expression into a list of mongo content-regex
@@ -543,25 +555,25 @@ function buildSearchConditions(expression) {
 }
 
 /**
- * Edit history for an artifact, derived from the Did audit trail.
- * Returns `add` + `edit` Dids oldest-first, each with the editor's
- * being id and name as separate fields (no shadowing).
+ * Lifecycle history for matter, derived from the Did audit trail.
+ * Returns create / edit / remove Dids oldest-first. Edit and create
+ * rows carry content; remove rows carry null content.
  *
  * @param {object} opts
- * @param {string} opts.artifactId  required
+ * @param {string} opts.matterId  required
  * @param {number} [opts.limit]
  * @param {number} [opts.offset]
  */
-async function getArtifactEditHistory({ artifactId, limit = 100, offset = 0 } = {}) {
-  if (!artifactId) throw new Error("getArtifactEditHistory: `artifactId` is required");
+async function getMatterHistory({ matterId, limit = 100, offset = 0 } = {}) {
+  if (!matterId) throw new Error("getMatterHistory: `matterId` is required");
   const safeLimit = Math.min(Math.max(1, Number(limit) || 100), 1000);
   const safeOffset = Math.max(0, Number(offset) || 0);
 
   const dids = await Did
     .find({
-      action: "artifact",
-      "artifactAction.artifactId": artifactId,
-      "artifactAction.action": { $in: ["add", "edit"] },
+      "target.kind": "matter",
+      "target.id":   String(matterId),
+      action:        { $in: ["create", "edit", "remove"] },
     })
     .populate("beingId", "name")
     .sort({ date: 1 })
@@ -574,13 +586,13 @@ async function getArtifactEditHistory({ artifactId, limit = 100, offset = 0 } = 
     authorName: d.beingId?.name ?? null,
     beingId:    d.beingId?._id ? String(d.beingId._id) : null,
     date:       d.date,
-    content:    d.artifactAction?.content ?? null,
-    action:     d.artifactAction?.action ?? null,
+    content:    d.params?.content ?? null,
+    action:     d.action,
   }));
 }
 
 export {
-  createArtifact, editArtifact, getArtifacts, deleteArtifactAndFile,
-  transferArtifact,
-  getAllArtifactsByBeing, searchArtifactsByBeing, getArtifactEditHistory,
+  createMatter, editMatter, getMatters, deleteMatterAndFile,
+  transferMatter,
+  getAllMatterByBeing, searchMatterByBeing, getMatterHistory,
 };

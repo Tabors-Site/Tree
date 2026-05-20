@@ -5,7 +5,7 @@
 // Given an acting being and a target position, compute the derived facts
 // the authorize function compares against permission-rule `requires`.
 // Pure read: this function never writes; it just collects facts from
-// Layer 1 sources (Being row + Node fields + ancestor cache).
+// Layer 1 sources (Being row + Space fields + ancestor cache).
 //
 // All properties are derived from layer-1 data. There is no duplication
 // of state; this is a computed projection.
@@ -19,7 +19,7 @@
 //     // identity-tier markers
 //     arrival,                  // true when no beingId resolves
 //
-//     // ownership-tier markers (relative to targetNodeId)
+//     // ownership-tier markers (relative to targetSpace)
 //     owner,                    // is rootOwner along the chain
 //     contributor,              // is in contributors[] along the chain
 //
@@ -37,8 +37,8 @@
 // stale beingIds (returns arrival shape).
 
 import Being from "../models/being.js";
-import { resolveTreeAccess } from "../tree/treeAccess.js";
-import { getAncestorChain } from "../tree/ancestorCache.js";
+import { resolveSpaceAccess } from "../space/spaceFetch.js";
+import { getAncestorChain } from "../space/ancestorCache.js";
 
 const ARRIVAL_PROPS = Object.freeze({
   beingId:              null,
@@ -53,7 +53,7 @@ const ARRIVAL_PROPS = Object.freeze({
   positionInHomeDomain: false,
   // homeAncestors: the set of nodeIds along the home's ancestor chain
   // (including the home itself). Layer 4's comparator uses this to
-  // resolve scoped checks like `homeInDomain: "<rulership-nodeId>"`
+  // resolve scoped checks like `homeInDomain: "<rulership-spaceId>"`
   // ("is this specific node anywhere in the home's ancestry?").
   homeAncestors:        Object.freeze([]),
   homeOnThisLand:       true,
@@ -63,14 +63,14 @@ const ARRIVAL_PROPS = Object.freeze({
 /**
  * @param {object} args
  * @param {string|null} args.beingId       acting being's id (null = unauthenticated arrival)
- * @param {string|null} args.targetNodeId  the position the verb is acting on (null = land/discovery)
+ * @param {string|null} args.targetSpace  the position the verb is acting on (null = land/discovery)
  * @returns {Promise<object>}              the stance property bag
  */
-export async function deriveStanceProperties({ beingId, targetNodeId }) {
+export async function deriveStanceProperties({ beingId, targetSpace }) {
   if (!beingId) return { ...ARRIVAL_PROPS };
 
   const being = await Being.findById(beingId)
-    .select("name roles defaultRole operatingMode homePositionId isRemote homeLand")
+    .select("name roles defaultRole operatingMode homeSpace isRemote homeLand")
     .lean();
   if (!being) return { ...ARRIVAL_PROPS, beingId };
 
@@ -96,26 +96,26 @@ export async function deriveStanceProperties({ beingId, targetNodeId }) {
   };
 
   // Precompute the home's ancestor chain (as ids) so the comparator
-  // can answer "is <some-nodeId> in this being's home ancestry?" with
+  // can answer "is <some-spaceId> in this being's home ancestry?" with
   // a constant-time membership check. Includes the home itself.
-  if (being.homePositionId) {
+  if (being.homeSpace) {
     try {
-      const homeChain = await getAncestorChain(String(being.homePositionId));
+      const homeChain = await getAncestorChain(String(being.homeSpace));
       if (Array.isArray(homeChain)) {
         props.homeAncestors = homeChain.map((n) => String(n._id));
       } else {
-        props.homeAncestors = [String(being.homePositionId)];
+        props.homeAncestors = [String(being.homeSpace)];
       }
     } catch {
-      props.homeAncestors = [String(being.homePositionId)];
+      props.homeAncestors = [String(being.homeSpace)];
     }
   }
 
-  if (!targetNodeId) return props;
+  if (!targetSpace) return props;
 
   // Ownership relations via the existing tree-access walker.
   try {
-    const access = await resolveTreeAccess(targetNodeId, beingId);
+    const access = await resolveSpaceAccess(targetSpace, beingId);
     if (access?.ok) {
       if (access.isOwner) props.owner = true;
       // The access walker reports canWrite when the user owns OR is a
@@ -127,13 +127,13 @@ export async function deriveStanceProperties({ beingId, targetNodeId }) {
 
   // Home relations. Two directions: home-inside-target's-subtree, and
   // target-inside-home's-subtree. Either or both can be true.
-  if (being.homePositionId) {
-    const homeId = String(being.homePositionId);
-    const targetId = String(targetNodeId);
+  if (being.homeSpace) {
+    const homeId = String(being.homeSpace);
+    const targetId = String(targetSpace);
 
     if (homeId === targetId) props.homeAtPosition = true;
 
-    // homeInDomain: targetNodeId appears in home's ancestor chain.
+    // homeInDomain: targetSpace appears in home's ancestor chain.
     try {
       const homeChain = await getAncestorChain(homeId);
       if (Array.isArray(homeChain)) {
@@ -146,7 +146,7 @@ export async function deriveStanceProperties({ beingId, targetNodeId }) {
       }
     } catch { /* defensive */ }
 
-    // positionInHomeDomain: homePositionId appears in target's ancestor chain.
+    // positionInHomeDomain: homeSpace appears in target's ancestor chain.
     try {
       const targetChain = await getAncestorChain(targetId);
       if (Array.isArray(targetChain)) {
