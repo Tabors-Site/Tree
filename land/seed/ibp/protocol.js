@@ -6,7 +6,7 @@
  * file. Extensions access it through `core.protocol`.
  *
  * Domain-specific enums (CASCADE statuses, SEED_SPACE, MATTER_ORIGIN,
- * DELETED, SEED_BEING) live with their domain modules — not here.
+ * DELETED, I_AM) live with their domain modules — not here.
  *
  * All exported objects are frozen. Extensions cannot modify error codes
  * or response shapes at runtime.

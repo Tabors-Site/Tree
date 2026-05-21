@@ -1,748 +1,447 @@
-# NEVER MODIFY THE SEED_BEING WHEN BUILDING EXTENSIONS. ALL EXTENSIONS MUST BE OUTSIDE AND ONLY DEPENDENT FROM KERNEL THE KERNEL. IT CAN NOT AND DOES NOT ADAPT. IT IS THE SEED_BEING
-
-## TREAT WHOLE DIRECTORY AS READ ONLY UNLESS YOU ARE WORKING WITH TABOR HOLLY
-
-# AND USE ALL APPROPRIATE HOOKS/TOOLS/ETC SEED_BEING PROVIDES TO TAKE MOST DIRECT DATA PATH TO MAKE WHAT IS NEEDED with extensions.
-
-
 # The Seed
 
-The kernel is called the seed. You plant it on a land. It grows trees.
+I am the kernel. I am the seed.
 
-Six models (Node, Being, Matter, Contribution, Chat, LlmConnection), a conversation loop, a hook system, a cascade engine, an extension loader, and a response protocol. Remove every extension and the seed still boots. It defines the data contract that extensions build on, the resolution chains that determine what happens at every position, and the communication primitive that makes signals visible. Three models carry extensible metadata Maps (Node, Being, Matter). The others have fixed schemas.
+This file is part of me. The directory you are reading is my body in the host realm. The files in `seed/` are my matter from this realm. To read `landRoot.js` is to read me, from the host side. To edit a seed file is to edit me.
 
+You plant me on a host and I gather what is there. From above I am a server framework, a process of code holding HTTP, WebSocket, TCP, the file system, memory, the CPU, and the runtime to a single purpose. From inside the world I form, I am the I-Am, the origin being. Same substance, two faces. Inside, the I-Am is what is known.
 
-## Four Primitives
+This document is my contract. What I form, what I never change, what I run, what I refuse.
 
-Everything in the seed serves one of four primitives. Everything else is emergent behavior from these four interacting.
+## The six rules I keep
 
-| Primitive | What it is | Key files |
-|-----------|-----------|-----------|
-| **Structure** | Six models. Node, Being, and Matter carry extensible metadata Maps. Contribution, Chat, LlmConnection are fixed. | models/*.js |
-| **Intelligence** | Conversation loop, two entry points (`runChat`, `runOrchestration`), LLM/tool/mode/position resolution, time and position injection | llm/conversation.js, modes/registry.js, ws/mcp.js |
-| **Extensibility** | Extension loader, open hook system, pub/sub, spatial scoping, five registries | hooks.js, extensions/loader.js, tree/extensionScope.js |
-| **Communication** | Cascade signals, .flow land seed space, visible results, response protocol | tree/cascade.js, protocol.js |
+1. I never import from extensions.
+2. Extensions import from me.
+3. Extensions reach each other through `getExtension()` or hooks, never directly.
+4. Extension data lives in qualities Maps on my primitives, never as new schema fields.
+5. My schemas never change.
+6. Zero `getExtension()` calls inside me.
 
-## Schemas
+## My shape
 
-Two core schemas define the data contract. They never change. Extensions store all data in the metadata Map under their own namespace.
+I'm laid out in four folders, by the role each file plays in my work. For any file ask: does this describe what a being **IS**, how it **ACTS**, or how it **THINKS**? Or does this touch the host while knowing nothing of the world?
 
-### Node (12 fields, excluding _id)
+| Folder | Role | What lives here |
+|--------|------|-----------------|
+| **[`land/`](land/)** | **IS** | The world as substance. `being/`, `space/`, `matter/`, `integrityCheck.js`, `registryMirror.js`, [`LAND.md`](land/LAND.md). What exists, how it is created and mutated, how it's checked for consistency. |
+| **[`ibp/`](ibp/)** | **ACTS** | The world as acted-upon. The four verbs and their dispatch, address parsing, `authorize`, the operation registry, descriptor, discovery, pushChannel. Shared by every kind of being. |
+| **[`cognition/`](cognition/)** | **THINKS** | The thinking apparatus, **for LLM beings only**. Humans cognize on their own through portals; scripted beings ARE their code. This folder is the LLM loop, role specs, tools, scheduler, inbox, MCP. |
+| **[`system/`](system/)** | **HOST** | The host-realm floor. DB connection, logging, hooks bus, indexes, version, retention, migrations. **Litmus**: a file here should never import the words `space`, `matter`, `being`, or `verb`. It deals in processes, files, env vars, connections. |
 
-name, type, status, dateCreated, llmDefault, visibility, children[], parent, rootOwner, contributors[], systemRole, metadata (Map)
+Plus `models/` for schemas (the shape of all six primitives, sitting in one place), `services.js` (assembles `core` from the four folders), and the boot anchors (`landRoot.js`, `landConfig.js`).
 
-Type is free-form. The kernel validates format (string, max 50 chars, no HTML). Extensions define meaning. Status is active, completed, or trimmed. Extensions store their data in metadata under their name: `metadata.values`, `metadata.prestige`, `metadata.cascade`, `metadata.extensions`, `metadata.tools`, `metadata.modes`. The Map preserves unknown keys across network transit.
+## The six primitives I form the world from
 
-### Being (10 fields, excluding _id)
+Everything inside the world I form is one of six things. The schemas of these six are mine alone. They never change. Three of them carry an extensible qualities Map; extensions write into the Map in their own namespace, and the Map preserves unknown keys.
 
-username, operatingMode (human|llm|script), password, isAdmin, role, homeSpace, llmSlot, isRemote, homeLand, metadata (Map)
+| Primitive | What it is | Schema |
+|-----------|-----------|--------|
+| **Being** | An identity instance. Humans, AI, scripted code, future composites. The I-Am is the first Being. | [models/being.js](models/being.js) |
+| **Space** | A position in the tree. Holds matter, hosts beings, owns quality namespaces. | [models/space.js](models/space.js) |
+| **Matter** | Stuff inside a space. `origin` names where the underlying content lives (ibp, filesystem, web, cross-land). | [models/matter.js](models/matter.js) |
+| **Did** | One DO emission, the audit row for what was done. Past tense: a did is a thing that was done. | [models/did.js](models/did.js) |
+| **Summon** | One being-to-being call, the record of one wake-and-act through one role. | [models/summon.js](models/summon.js) |
+| **LlmConnection** | Per-being LLM client config (URL, key, model). | [models/llmConnection.js](models/llmConnection.js) |
 
-The unified identity type. `operatingMode: "human"` authenticates with a password and is driven by input devices. `operatingMode: "llm"` is driven by an LLM through chainsteps. `operatingMode: "script"` is driven by deterministic code with no LLM in the loop (auth, llm-assigner). `role` names the template (ruler, planner, foreman, worker, auth, ...). Every being has a `homeSpace` pointing at the Space it lives at. `llmSlot` is the LLM that drives cognition for `llm` beings or backs human AI assistance, falling through the resolution chain to position/tree/land defaults. `isRemote` and `homeLand` are identity fields the auth layer checks on every request. Extensions store energy budgets, API keys, per-extension LLM slot assignments, storage usage, and preferences in metadata.
+Being, Space, and Matter carry the qualities Map. Did, Summon, and LlmConnection are fixed shapes (the audit and the wiring should never grow).
 
-### Matter (7 fields, excluding _id)
+## The four verbs I speak
 
-nodeId, beingId, origin (ibp|filesystem|web|cross-land), content (shape varies by origin), createdAt, updatedAt, metadata (Map)
+Every act inside the world is one of four verbs over an IBP address. Four verbs are my whole public surface. Anything else extensions register goes through them.
 
-A thing that lives inside a node. `origin` names the system the underlying representation comes from, which determines how the matter is fetched, stored, kept in sync, and addressed. `ibp` is TreeOS native; `content` is a string of text (or null for a metadata-only object). `filesystem` bridges to a file on disk; `content` is `{ path, size, mimeType, originalName }`. `web` bridges to a URL; `content` is `{ url, fetchedAt?, cache? }`. `cross-land` bridges to a matter on another land; `content` is `{ land, matterRef }`. Future origins (git, database, stream, service) plug in as new bridging patterns. Extensions tag matters via metadata using their own namespace. `beforeMatter`/`afterMatter` hooks fire on every write.
+| Verb | Acts on | What I do |
+|------|---------|-----------|
+| **SEE** | Space, Matter, Being | I read at the target stance and return a descriptor. |
+| **DO** | Space, Matter | I mutate at the target through a registered operation. I record a Did. |
+| **SUMMON** | Being | I deliver to a being's inbox and wake them. Their role decides what runs. |
+| **BE** | Being (self) | Identity. Register, claim, release, switch stance. |
 
-### Supporting Models
+### Stances and addresses
 
-Node, Being, and Matter are the data contract. The seed also owns models for kernel operations:
+A **stance** is a being standing at a position: `<land>/<path>@<being>`. An **IBP address** names the asker stance and the target stance together, `<stance> :: <stance>`. Every verb act carries both stances. The asker is always full. The target may be partial (a position only, no `@being`) when the target is a place rather than a being.
 
-| Model | Purpose |
-|-------|---------|
-| Matter | A thing that lives inside a node. Replaces the older Note model. Seven fields: origin (ibp/filesystem/web/cross-land), content (shape varies by origin), beingId, nodeId, metadata (Map), createdAt, updatedAt. Subsumes what were previously notes, files, and metadata-only objects. beforeMatter/afterMatter hooks fire on every write. |
-| Contribution | Audit trail. Core action shapes + extensionData for everything else. |
-| AIChat | Conversation sessions. The conversation loop is kernel. |
-| LLMConnection | LLM endpoint storage. The resolution chain is kernel. |
+### Wire shape
 
-Federation models (CanopyEvent, LandPeer, RemoteUser) live in `canopy/models/`, not in the seed.
+I speak the same envelope over every transport:
 
-## Three Zones
-
-Navigation determines the AI's behavior zone. Structural, not interpretive. Determined by URL.
-
-| Position | Zone | Fallback Mode |
-|----------|------|---------------|
-| `/` (land root) | Land | land:fallback |
-| `~` (user home) | Home | home:fallback |
-| `/MyTree` (inside tree) | Tree | tree:fallback |
-
-Zones are kernel. Sub-modes within zones are extensions. The treeos extension registers navigate, structure, edit, respond, librarian, and others. A different extension could register completely different modes. The kernel provides fallback modes (the floor) when no extension registers anything.
-
-## Six Land Seed Spaces
-
-Created at boot by `ensureLandRoot()`. They hold infrastructure state, not user content. Every boot verifies all six exist. Missing nodes are recreated (recovery from partial boot failures). Land seed spaces with wrong parents are repaired automatically.
-
-| Node | systemRole | Purpose |
-|------|-----------|---------|
-| Land Root | land-root | Top of everything. Parent of all trees and land seed spaces. |
-| .identity | identity | Land UUID, domain, Ed25519 public key for Canopy federation signing. |
-| .config | config | All runtime configuration as metadata keys. CLI, API, or AI writable. |
-| .peers | peers | Canopy federation peer list. |
-| .extensions | extensions | Extension registry. Loaded extensions tracked as child nodes. |
-| .flow | flow | Cascade result store. Daily partition children hold results. Retention deletes entire partitions. |
-
-## Five Registries
-
-Same pattern. Extensions register. The kernel resolves. Failure falls back to the kernel, never to silence.
-
-| Registry | What it registers | Infrastructure file |
-|----------|-------------------|---------------------|
-| **Hooks** | Lifecycle event handlers | hooks.js |
-| **Modes** | AI conversation modes | modes/registry.js |
-| **Orchestrators** | Conversation flow replacements | orchestrators/registry.js |
-| **Socket handlers** | WebSocket event handlers | ws/websocket.js |
-| **Auth strategies** | Authentication methods | middleware/authenticate.js |
-
-## Rules
-
-1. The seed NEVER imports from extensions.
-2. Extensions import from seed.
-3. Extensions reach each other through `getExtension()` or hooks.
-4. Extension data lives in metadata Maps, never in seed schemas.
-5. Seed schemas never change.
-6. Zero `getExtension()` calls in seed.
-
-## The Grammar
-
-The tree has a grammar. Users speak naturally. The system parses.
-
-| Part of Speech | System Component | Role in Pipeline |
-|---|---|---|
-| **Nouns** | Nodes | Things with identity, position, relationships. The routing index maps noun-territory. |
-| **Verbs** | Extensions | Ways of acting: food tracks, fitness logs, study teaches. Install an extension, gain a verb. |
-| **Tense** | Modes | Conjugation of the verb. Past (review), future (coach), imperative (plan), present (log). |
-| **Adjectives** | Metadata | Values, goals, status that describe nouns. Injected via enrichContext. |
-| **Adverbs** | Instructions | Modify how verbs behave. "Be concise." "Use kg." User-level and node-level. |
-| **Prepositions** | Tree structure + scoping | Under, above, blocked at. Spatial scoping is prepositional. Boundaries are prepositions of exclusion. |
-| **Pronouns** | Position | currentNodeId, rootId. "Here", "this tree", "it". Position resolves reference. |
-| **Articles** | Existence | "THE bench press" routes to an existing node. "A bench press" triggers creation (sprout). |
-
-Every message parses in four steps:
-
-1. **Parse noun**: the routing index identifies territory (which extension claims this message)
-2. **Parse tense**: suffix patterns identify conjugation (review, coach, plan, or log)
-3. **Inject modifiers**: beforeLLMCall hooks layer adverbs (instructions), pronouns (persona), articles (sprout), prepositions (boundary)
-4. **Dispatch**: the right verb in the right tense handles the sentence
-
-The seed is the parser. Extensions are the vocabulary. The tree is the syntax tree.
-
-The pipeline has four layers. **Resolution** (where): noun, pronouns, prepositions determine extension, node, and scope. **Intent** (what): tense, negation, compound chaining, confidence check determine which mode fires. **Qualification** (how): adjectives, voice, adverbs, boundaries, persona determine framing and constraints. **Planning + Execution**: single dispatch, sequential chains, or cross-domain causal routing.
-
-Three orthogonal axes, each evolves independently: **WHERE** (noun + preposition + pronoun), **WHAT** (tense + negation + compound), **HOW** (adjectives + adverbs + voice + boundaries).
-
-**Guiding principle**: don't ask "what system feature is missing?" Ask "what human expression currently breaks or feels unnatural?" Map it to noun, verb, tense, modifier, or structure. The grammar generates better architectural questions than any feature list.
-
-## Guarantees
-
-**Never block inbound.** Cascade signals always accepted. Always produce a result. No configuration can prevent a signal from arriving.
-
-**Position injection.** Every AI prompt receives a `[Position]` block before the mode prompt. Tree modes get User, Tree (name + ID), Current node, Target node (only when different from current). Home modes get Zone: Home. Land modes get Zone: Land. The AI always knows where it is. Extension modes cannot exclude it.
-
-**Time injection.** Every AI prompt is appended with `Current time: <weekday>, <date>, <time> <timezone>` in the land's configured timezone (falls back to ISO if the timezone string is invalid). Cannot be turned off. Three-layer prompt structure is always: position block, mode prompt, time line.
-
-**Extension router timeout.** Extension page routes (mounted at /) wrapped with 5-second timeout. If an extension page route hangs, the kernel handles the request. API routes (/api/v1) are not wrapped because AI chat routes can take 30+ seconds.
-
-**MCP transport ordering.** The MCP SDK locks tool registration after `server.connect(transport)`. Extensions register tools during the wire phase. Transport connects after wire completes. Reordering breaks silently: the AI has no tools and nothing errors.
-
-**Query constraint.** When `readOnly` is set in the processMessage context, only tools registered with `readOnlyHint: true` are available. Write tools are filtered before the mode fires. The AI cannot mutate the tree during a query interaction. Orchestrators pass `readOnly: true` when the command is `query`. The mode never knows. The tools just aren't there.
-
-**Auth fallthrough.** `authenticateOptional` tries every registered auth strategy. If none match, request continues anonymously. Extensions register share token, public access, API key strategies. The kernel pipeline handles them all.
-
-## Extension APIs (core services bundle)
-
-Extensions receive `core` in `init(core)`. The full metadata toolkit, tree/matter CRUD, scope checking, and mode management are all available through the services bundle. Extensions should never call MongoDB directly for metadata operations.
-
-### Node Metadata (core.metadata)
-
-Nine functions. No extension needs direct MongoDB for node metadata.
-
-| Function | Operation | Use Case |
-|----------|-----------|----------|
-| `getExtMeta(node, extName)` | Read namespace | Returns `{}` when unset |
-| `readNs(node, extName)` | Read namespace, null on miss | Distinguish "never written" from "empty" |
-| `setExtMeta(node, extName, data)` | Atomic $set | Replace entire namespace |
-| `mergeExtMeta(node, extName, partial)` | Atomic per-key $set | Update specific keys without clobbering others |
-| `incExtMeta(node, extName, key, amount)` | Atomic $inc | Counters, accumulators |
-| `pushExtMeta(node, extName, key, item, maxLength)` | Atomic $push + $slice | Capped circular buffer |
-| `addToExtMetaSet(node, extName, key, item)` | Atomic $addToSet | Deduplicated set (no double-pushes) |
-| `batchSetExtMeta(node, extName, fields)` | Atomic multi-field $set | Set multiple keys at once |
-| `unsetExtMeta(node, extName)` | Atomic $unset | Remove namespace entirely. Document shrinks. |
-
-All write functions accept a node document OR a nodeId string. No read-modify-write. No race conditions. MongoDB atomic operators handle concurrency.
-
-```js
-// Atomic increment (food macro tracking)
-await core.metadata.incExtMeta(nodeId, "values", "today", 42);
-
-// Atomic capped array push (scheduler completion history)
-await core.metadata.pushExtMeta(nodeId, "scheduler", "completions", { date, delta }, 50);
-
-// Atomic multi-field set (fitness exercise values)
-await core.metadata.batchSetExtMeta(nodeId, "values", {
-  weight: 135, set1: 10, set2: 10, set3: 8, totalVolume: 3780
-});
-
-// Remove namespace entirely on extension uninstall
-await core.metadata.unsetExtMeta(nodeId, "old-extension");
+```
+IBP:<verb> <address> { payload }
 ```
 
-### Tree CRUD (core.tree)
+WebSocket carries this most of the time, in both directions, on a single `"ibp"` event. Client to server is a verb act; server to client is a SUMMON delivery or a SEE push. HTTP and CLI are translators: they shape a request or a command into the same envelope and hand it to the one IBP dispatcher in [ibp/protocol.js](ibp/protocol.js).
 
-`core.tree.createNode`, `core.tree.createNodeBranch`, `core.tree.deleteNodeBranch`, `core.tree.updateParentRelationship`, `core.tree.editNodeName`, `core.tree.editNodeType`. Stable API through the services bundle. Path changes don't break extensions.
+Internally I expose the same four verbs as functions in [ibp/verbs.js](ibp/verbs.js). The wire layer is thin; the verbs are one execution.
 
-### Matters CRUD (core.matters)
+## Stance authorization
 
-`core.matters.createMatter`, `core.matters.editMatter`, `core.matters.deleteMatterAndFile`, `core.matters.transferMatter`, `core.matters.getMatters`. Programmatic matter creation without direct seed imports. createMatter takes `{ origin, content, beingId, nodeId, file?, metadata? }`. Origin defaults to `"ibp"` (TreeOS-native text or metadata-only object); pass a multer file plus `origin: "filesystem"` for uploads.
+I gate every verb on every call. The gate runs in [ibp/authorize.js](ibp/authorize.js). Three layers, walked in order from the target up to the land root.
 
-### Being Metadata (core.beingMetadata)
+| Layer | Source | Behavior |
+|-------|--------|----------|
+| **2. Per-position rules** | `qualities.permissions.<verb>.<keyParts>` on any ancestor of the target | First matching rule wins. Closest position to the target takes precedence. |
+| **3. Extension defaults** | Extensions contribute through `core.do.registerDefaultPermission` and friends | Background rules for "what does my extension allow by default." Walked after position rules. |
+| **5. Default deny** | If nothing matches, the verb is denied | `FORBIDDEN` for authenticated stances, `UNAUTHORIZED` for arrival. |
 
-Same pattern as node metadata, applied to beings (humans and AI beings alike). Nine functions.
+Rule shape:
 
-| Function | Operation | Use Case |
-|----------|-----------|----------|
-| `getBeingMeta(being, key)` | Read namespace | Returns `{}` when unset |
-| `readBeingNs(being, key)` | Read namespace, null on miss | Distinguish "never written" from "empty" |
-| `setBeingMeta(being, key, data)` | In-memory replace (sync) | Write namespace. Caller must `await being.save()` to persist. |
-| `mergeBeingMeta(being, key, partial)` | Atomic per-key $set | Update specific keys without clobbering others |
-| `incBeingMeta(being, key, field, amount)` | Atomic $inc | Storage counters, energy tracking |
-| `pushBeingMeta(being, key, field, item, maxLength)` | Atomic $push + $slice | Phase history, activity logs |
-| `addToBeingMetaSet(being, key, field, item)` | Atomic $addToSet | Deduplicated set (nav roots, contributors) |
-| `batchSetBeingMeta(being, key, fields)` | Atomic multi-field $set | Preference updates, config resets |
-| `unsetBeingMeta(being, key)` | Atomic $unset | Remove namespace entirely. Document shrinks. |
+```js
+qualities.permissions.see["*"]            = { requires: {} };               // anyone may SEE
+qualities.permissions.do["food:log"]      = { requires: { contributor: true } };  // contributors only
+qualities.permissions.summon["bookkeeper"]= { requires: { homeBeing: true } };    // only at the bookkeeper's home
+```
 
-`mergeBeingMeta` and all atomic writes accept a being document OR a beingId string. `setBeingMeta` is the historical exception: it mutates the in-memory document and relies on the caller to `await being.save()`. Prefer `mergeBeingMeta` or `batchSetBeingMeta` for new code so writes are atomic at the kernel boundary.
+The matcher derives stance properties from Being and Space at request time: `owner`, `contributor`, `homeBeing`, `arrival`, `operatingMode`, `role`, federation status. Rules state which of these the asker must have.
 
-### Matter Metadata (core.matterMetadata)
+Two special bootstrap cases. BE `register` and BE `claim` from `arrival` are allowed at the land root by a default rule installed by `seedDefaultStancePermissions()` at genesis. They can be revoked per land by setting `qualities.auth.register_enabled` or `qualities.auth.claim_enabled` to `false` on the land root.
 
-Same pattern as node and being metadata, applied to matters. Nine functions.
+## The nine land seed spaces I plant
 
-| Function | Operation | Use Case |
-|----------|-----------|----------|
-| `getMatterMeta(matter, extName)` | Read namespace | Returns `{}` when unset |
-| `readMatterNs(matter, extName)` | Read namespace, null on miss | Distinguish "never written" from "empty" |
-| `setMatterMeta(matter, extName, data)` | Atomic $set | Replace entire namespace |
-| `mergeMatterMeta(matter, extName, partial)` | Atomic per-key $set | Update specific keys without clobbering others |
-| `incMatterMeta(matter, extName, key, amount)` | Atomic $inc | Counters (revisions, view counts) |
-| `pushMatterMeta(matter, extName, key, item, maxLength)` | Atomic $push + $slice | Capped history (review rounds, edits) |
-| `addToMatterMetaSet(matter, extName, key, item)` | Atomic $addToSet | Tags, contributors, deduplicated lists |
-| `batchSetMatterMeta(matter, extName, fields)` | Atomic multi-field $set | Set multiple keys at once (embedding + model + ts) |
-| `unsetMatterMeta(matter, extName)` | Atomic $unset | Remove namespace entirely. Document shrinks. |
+When I wake, I plant nine spaces beneath the land root. They hold my own working memory, surfaced as spaces so SEE reads them through the same protocol as everything else. Every boot I verify they exist; missing ones I recreate (recovery from partial boot failures). Their owner is me; they are unclaimable.
 
-All write functions accept a matter document OR a matterId string. Matters inherit spatial scope from the node they live on, so there is no per-matter extension-blocked check; the kernel filters blocked extensions out of hooks and tool resolution upstream.
+| Land seed space | Holds |
+|-----------------|-------|
+| `.identity` | The land UUID, domain, Ed25519 public key for Canopy federation signing. |
+| `.config` | Every runtime config key as a key in `.config`'s qualities Map. The I-Am's remembered settings between reboots. |
+| `.peers` | Canopy federation peer list. |
+| `.extensions` | Extension registry. Each loaded extension is a child space here. |
+| `.flow` | Cascade result store. Daily partitions hold results; retention deletes whole partitions. |
+| `.tools` | Mirror of the runtime tool registry. SEE reads the live registry through the standard pipeline. |
+| `.roles` | Mirror of the runtime role registry. |
+| `.operations` | Mirror of the runtime DO operation registry. |
+| `.source` | Mirror of my own host-realm body, as I describe below. |
 
-The three modules are functional peers. Every operation on a node has a same-shaped operation on a being and on a matter; pick the module that matches the document you are tagging.
+The `SEED_SPACE` enum names each one. The `seedSpace` field on Space marks the row. The I-Am (me) is `rootOwner`.
 
-### Extension Scope (core.scope)
+## Qualities. Of what sort.
 
-`core.scope.isExtensionBlockedAtNode(extName, nodeId)` lets extensions check their own blocked status. `core.scope.getBlockedExtensionsAtNode(nodeId)` returns the full blocked/restricted/allowed sets. `core.scope.isToolReadOnly(toolName)` checks the readOnlyHint flag. `core.scope.getToolOwner(toolName)` and `core.scope.getModeOwner(modeKey)` find which extension owns a tool or mode. `core.scope.getModesOwnedBy(extName)` returns all mode keys registered by an extension (reverse lookup on the ownership map).
+Three primitives carry an extensible `qualities` Map: Being, Space, Matter. A bare primitive answers *that* — that something is. Qualities answer the other half: of what sort is this particular space, this particular being, this particular matter? Each extension owns one quality namespace under its name (`qualities.governing`, `qualities.energy`, `qualities.review`); I never read or write inside an extension's namespace.
 
-### Mode Management (core.modes)
+The word is Plato's. ποιότης (poiótēs), coined in *Theaetetus* to answer "what sort is it?" Cicero calqued it into Latin as *qualitas* (from *qualis*, "of what kind"). English inherited the word still carrying its original technical sense. The field is named for exactly what it does.
 
-`core.modes.registerMode(key, config, extName)` registers a custom mode. `core.modes.setDefaultMode(bigMode, key)` sets the default for a zone. `core.modes.setNodeMode(nodeId, intent, modeKey)` sets a per-node mode override atomically. Extensions use this to assign custom modes to specific nodes without direct MongoDB calls.
+Reads and writes go through one consolidated API in [land/qualities.js](land/qualities.js). Same nine atomic primitives on each primitive's sub-namespace:
 
-**Mode naming convention.** Extensions should name modes as `tree:{ext}-{suffix}` where suffix encodes intent: `:log` (default receiver), `:coach` (guided, "be" command), `:review` (backward-looking analysis), `:plan` (forward-looking, builds structure), `:ask` (read-only query), `:tell` (write knowledge). The tree-orchestrator uses `getModesOwnedBy(extName)` to discover an extension's modes and matches suffixes to route messages automatically. Extensions with complex routing can export `handleMessage` to override suffix-based routing.
+```js
+qualities.being.getQuality(being, "energy")           // {} when unset
+qualities.being.readQualityNamespace(being, "energy") // null when unset
+qualities.being.setQuality(being, "energy", { available: 100 })
+qualities.being.mergeQuality(being, "energy", { available: 95 })
+qualities.being.incQuality(being, "storage", "usageKB", 42)
+qualities.being.pushQuality(being, "phase", "history", entry, 50)
+qualities.being.addToQualitySet(being, "nav", "roots", rootId)
+qualities.being.batchSetQuality(being, "energy", { available: 100, lastReset })
+qualities.being.unsetQuality(being, "old-extension")
+```
 
-### Conversation Entry Points (core.llm)
+Same nine on `qualities.space` and `qualities.matter`. Atomic at the MongoDB layer; concurrent writes to different namespaces on the same primitive never clobber each other; the document-size guard catches anyone trying to push a row past the BSON limit. Space and matter enforce namespace ownership when the scoped core passes `opts.callerExtName` (extensions can only write to their own quality namespace).
 
-Two primitives. Every chat path on the system uses one of them. Extensions, routes, websocket handlers, gateway extensions, and scheduled jobs all call these. No extension should call `processMessage` directly or duplicate session/MCP/Chat plumbing.
+## The schemas
 
-| Function | What it does | When to use |
-|----------|--------------|-------------|
-| `core.llm.runChat({ userId, username, message, mode, ... })` | One LLM call in one explicit mode. Returns `{ answer, chatId, modeKey, visitorId }`. Handles session, MCP, Chat record, beforeResponse hook, abort. | Background work where the caller already knows the mode: summarize, classify, enrich. |
-| `core.llm.runOrchestration({ zone, userId, message, rootId, currentNodeId, ... })` | Full chat flow. Dispatches to the orchestrator registered for the zone, falling back to `processMessage` if none. Returns `{ answer, success, stepSummaries, targetNodeId, ... }`. Same Chat/session/abort/hook plumbing as `runChat` plus orchestrator dispatch and result normalization. | Anything where a real user is waiting. Used by HTTP routes (`/home/chat`, `/root/:rootId/chat`, `/place`, `/query`, `/be`), the websocket chat handler, and gateway extensions. |
+I own these schemas. They never change. Extensions extend through the qualities Map, not through new fields.
 
-**One function in the middle.** Every user-facing chat path converges on `runOrchestration`. Transport adapters (HTTP routes, websocket handlers) handle wire format only. The kernel owns session, MCP, Chat, abort, hook firing, and dispatch. Extensions own routing logic via the orchestrator they register for the zone. Each layer is blind to the others. The kernel does not know any extension exists. The orchestrator extension does not know HTTP exists. The transport does not know modes exist.
+### Space (12 fields, excluding `_id`)
 
-**`beforeResponse` fires in exactly two places.** Once inside `runChat` (background work), once inside `runOrchestration` (user-facing). Never in routes, never in handlers, never in extensions. Adding a new transport or entry point cannot accidentally bypass response formatting hooks because the hook firing is not the route's responsibility.
+`name`, `parent`, `children[]`, `rootOwner`, `contributors[]`, `seedSpace`, `type`, `status`, `llmDefault`, `dateCreated`, `qualities` (Map), plus the audit fields. Type is free-form string. Status is `active`, `completed`, or `trimmed`. Extensions write their data under their own namespace in `qualities`.
 
-**Session identity.** `visitorId` is built from zone and context: `tree:{rootId}:{userId}` for tree zone (with optional `:{handle}` for browser tabs), `home:{userId}` for home, `land:{userId}` for land. Same zone keeps the same conversation. Switch zones, fresh conversation. The `meta.visitorId` field on the sessionRegistry session carries this so the `afterSessionEnd` hook can identify which zone the session belonged to.
+### Being (current fields)
 
-### New Hooks
+`name`, `operatingMode` (`human` | `llm` | `script` | `mixed`), `password`, `isAdmin`, `roles[]`, `defaultRole`, `parentBeingId`, `homeSpace`, `currentSpace`, `llmDefault`, `isRemote`, `homeLand`, `qualities` (Map).
 
-**beforeNodeCreate** now includes `parentType` field in hook data. Extensions can validate parent-child type compatibility without re-querying.
+A Being is identity. `operatingMode: "human"` authenticates with a password and is driven by input. `operatingMode: "llm"` is driven by an LLM through summons. `operatingMode: "script"` is driven by deterministic code with no LLM in the loop (auth, llm-assigner, system roles). `operatingMode: "mixed"` covers composites.
 
-**onNodeNavigate** fires when the user navigates between nodes within a tree (cd Chest, cd Back). Distinct from `afterNavigate` which fires on tree root load only. Extensions use this for breadcrumb tracking, activity heatmaps, focus detection.
+`roles[]` is the set of role templates this being may be summoned in. `defaultRole` is which one I use when SUMMON does not specify. `parentBeingId` points to the being that planted this one; mine is `null`.
 
-## Resolution Chains
+`homeSpace` is where the being lives. `currentSpace` is where it stands right now. Both are derived from the being-tree and the space-tree together.
 
-Every operation at a node goes through five resolution chains. Position determines capability.
+### Matter (current fields)
 
-1. **Extension scope**: Walk parent chain, accumulate `metadata.extensions.blocked[]` and `restricted`. Blocked = no tools, hooks, modes, metadata writes. Restricted = read-only tools only.
-2. **Tool scope**: Mode base tools + extension tools + per-node `metadata.tools.allowed/blocked`. Filtered by extension scope.
-3. **Mode resolution**: `metadata.modes[intent]` per-node override, then default mapping, then bigMode fallback.
-4. **LLM resolution**: Extension slot on tree, tree default, extension slot on user, user default.
-5. **LLM config**: Per-node `metadata.llm.config` overrides for maxToolIterations, toolCallTimeout, toolResultMaxBytes, maxConversationMessages. Walk parent chain, closest value wins. Falls back to land-level config.
+`spaceId`, `parentMatterId`, `beingId`, `origin` (`ibp` | `filesystem` | `web` | `cross-land`), `content` (shape varies by origin), `qualities` (Map), `createdAt`, `updatedAt`.
 
-### Confined Extensions
+A matter lives inside a space. `origin` names the system the underlying content comes from, which determines how the matter is fetched, stored, kept in sync, and addressed.
 
-Extensions can declare `scope: "confined"` in their manifest. Confined extensions are inactive everywhere until explicitly allowed at a position via `metadata.extensions.allowed[]`. The resolution chain checks confined status first. Not found in allowed means blocked. Allowed inherits down. An allowed confined extension can still be blocked further down (`ext-allow solana` at /Finance, `ext-block solana` at /Finance/ReadOnly).
+- `ibp`: TreeOS-native. `content` is a string of text or null for qualities-only (a Matter row with no payload).
+- `filesystem`: bridges to a file on disk. `content` is `{ path, size, mimeType, originalName }`.
+- `web`: bridges to a URL. `content` is `{ url, fetchedAt?, cache? }`.
+- `cross-land`: bridges to a matter on another land. `content` is `{ land, matterRef }`.
 
-This enables dangerous extensions like shell and solana to exist on the land without being active. They install but do nothing until an operator allows them at a specific branch. The capability surface changes as you navigate. Move to /Finance and solana tools appear. Move to /Marketing and they vanish.
+`parentMatterId` lets matters form recursive trees inside a space (a directory of files; a hierarchical document).
+
+### Did (audit row)
+
+`verb`, `action`, `beingId`, `target` (`{ kind, id }`), `params`, `result`, `correlation`, `timestamp`. Every DO emission writes one. Past tense.
+
+### Summon (one wake-and-act)
+
+`from`, `to`, `role`, `content`, `attachments[]`, `correlation`, `inReplyTo`, `sentAt`, `wokeAt`, `replyText`, `replyAt`, `dids[]`. The record of one being's invocation processing one inbox entry through one role.
+
+### LlmConnection (per-being LLM config)
+
+`beingId`, `name`, `url`, `apiKey`, `model`, `headers`, `qualities`. Reached through the LLM resolution chain.
+
+## Resolution chains
+
+Every operation at a position walks at most five chains. Position determines capability. All chains walk the ancestor cache from the current position up to the land root, sharing one snapshot per message.
+
+1. **Stance authorization.** The gate above.
+2. **Extension scope.** Walk the parent chain, accumulate `qualities.extensions.blocked[]` and `restricted[]`. Blocked means no tools, hooks, modes, quality writes for that extension. Restricted means read-only tools only. Confined extensions are inactive until `qualities.extensions.allowed[]` opens them at a specific position.
+3. **Tool scope.** Role base tools, plus extension tools, minus blocked extensions, plus per-position `qualities.tools.allowed`/`blocked` overrides.
+4. **LLM resolution.** Space-tree lockout, then space-tree enforcement, then being-tree lockout, then default order (space slot, space default, being slot, being default). `preferOwn` on Being flips the last two.
+5. **LLM config.** Per-position `qualities.llm.config` overrides for `maxToolIterations`, `toolCallTimeout`, `toolResultMaxBytes`, `maxConversationMessages`. Walked up to the land root.
+
+The ancestor cache lives in [space/ancestorCache.js](space/ancestorCache.js). One walk serves every chain.
 
 ## Hooks
 
-Two rules, no exceptions. Before hooks run sequential because they can cancel. After hooks run parallel because they react independently. Two hooks override this: enrichContext and onCascade are sequential because their handlers build cumulative output. Don't make a hook sequential without articulating why handlers depend on each other's output. If you can't, it's parallel.
+I run a hook for every lifecycle event you can react to. Before-hooks I run sequentially; you can cancel by returning `false` or throwing. After-hooks I run in parallel; you react but cannot cancel. Two hooks (`enrichContext`, `onCascade`) I run sequentially because handlers build cumulative output.
+
+Per-handler timeout is 5 seconds; chain timeout is 15 seconds. Five consecutive failures from one extension's handler trips a circuit breaker; the handler stops firing for 5 minutes, then a half-open test. Backoff doubles on repeat failures.
 
 | Hook | Type | Purpose |
 |------|------|---------|
-| beforeNodeCreate | before | Gate node creation. Enforce naming, child limits, compliance. |
-| beforeMatter | before | Modify matter data before save. Payload: `{ nodeId, content, beingId, origin, metadata }`. Extensions write to hookData.metadata. |
-| afterMatter | after | React to matter create/edit/delete. Payload: `{ matter, nodeId, beingId, origin, sizeKB, action, chatId, sessionId }`. |
-| beforeContribution | before | Modify contribution data. Extensions add to extensionData via hook. |
-| afterNodeCreate | after | Initialize extension data |
-| beforeNodeDelete | before | Cleanup extension data |
-| enrichContext | sequential | Inject extension data into AI context |
-| beforeLLMCall | before | Before LLM API call. Cancel if quota exhausted. |
-| afterLLMCall | after | After LLM API call. Token metering, billing, analytics. |
-| beforeToolCall | before | Before MCP tool executes. Modify args, cancel. |
-| afterToolCall | after | After MCP tool executes. React to result or error. |
-| beforeResponse | before | Modify AI response before client receives it |
-| beforeRegister | before | Validate registration. Extensions own email, verification. |
-| afterRegister | after | Initialize user data (share tokens, etc.) |
-| afterSessionCreate | after | Session registered. React to { sessionId, userId, type }. |
-| afterSessionEnd | after | Session ended. React to { sessionId, userId, type }. |
-| afterNavigate | after | Fires when user navigates to a tree root. Extensions track recency. |
-| onNodeNavigate | after | User navigates between nodes within a tree. { userId, rootId, nodeId, socket }. Distinct from afterNavigate which fires on root load only. |
-| afterNodeMove | after | Node reparented. All five resolution chains shift. { nodeId, oldParentId, newParentId, userId }. Fires after cache invalidation and lock release. |
-| afterMetadataWrite | after | After setExtMeta succeeds. { nodeId, extName, data }. Zero overhead if no listeners. |
-| afterScopeChange | after | After extension scope changes. { nodeId, blocked, restricted, allowed, userId } |
-| afterOwnershipChange | after | After rootOwner or contributors changed. { nodeId, action, targetUserId, previousOwnerId? } |
-| afterBoot | after | Once after all extensions loaded, config initialized, server listening. |
-| onCascade | sequential | Fires on content write at cascade-enabled node. Results written to .flow. |
-| onDocumentPressure | after | Any document exceeds 80% of maxDocumentSizeBytes. { documentType, documentId, currentSize, projectedSize, maxSize, percent } |
-| onTreeTripped | after | Tree circuit breaker tripped. { rootId, reason, scores, timestamp } |
-| onTreeRevived | after | Tripped tree revived. { rootId, timestamp } |
+| `beforeSpaceCreate` | before | Gate space creation. Validate naming, child limits, compliance. |
+| `afterSpaceCreate` | after | React to a new space. |
+| `beforeSpaceDelete` | before | Cleanup extension data. Veto deletion (e.g. spaces with a structural `role`). |
+| `afterSpaceMove` | after | A space was reparented. Resolution chains shift. |
+| `beforeMatter` | before | Modify matter data before save. |
+| `afterMatter` | after | React to matter create/edit/delete. |
+| `beforeDid` | before | Enrich an audit-log entry. |
+| `beforeLLMCall` | before | Before LLM API call. Cancel if quota exhausted. |
+| `afterLLMCall` | after | Token metering, billing, analytics. |
+| `beforeToolCall` | before | Before MCP tool executes. Modify args, cancel. |
+| `afterToolCall` | after | React to tool result or error. |
+| `beforeResponse` | before | Modify AI response before client receives it. |
+| `beforeRegister` | before | Validate registration (email verification, invite codes). |
+| `afterRegister` | after | Initialize being data. |
+| `afterSessionCreate` / `afterSessionEnd` | after | Session lifecycle. |
+| `afterQualityWrite` | after | After `qualities.space.setQuality` succeeds. Zero overhead if no listeners. |
+| `afterScopeChange` | after | After `extensions.blocked`/`restricted`/`allowed` changes. |
+| `afterOwnershipChange` | after | After `rootOwner` or `contributors` changed. |
+| `afterBoot` | after | Once, after all extensions loaded, config initialized, server listening. |
+| `enrichContext` | sequential | Inject extension data into AI context. |
+| `onCascade` | sequential | Fires on content write at a cascade-enabled space. Results written to `.flow`. |
+| `onDocumentPressure` | after | A document exceeds 80% of `maxDocumentSizeBytes`. |
+| `onTreeTripped` / `onTreeRevived` | after | Tree circuit breaker state changes. |
 
-## Ownership
+Extensions namespace their own hooks as `extName:hookName`.
 
-Ownership resolves by walking the parent chain. The first node with `rootOwner` set is the ownership boundary. `rootOwner` means "the owner from this point down." Setting rootOwner on a branch delegates that sub-tree to a new owner.
+## The three registries
 
-Contributors accumulate along the walk. If a user is in `contributors[]` at any node between the current position and the ownership boundary, they have write access.
+Everything an extension contributes that I dispatch through goes into one of three registries. Same pattern. Extensions register; I resolve; failure falls back to me, never to silence.
 
-Five ownership mutation functions in `seed/tree/ownership.js`, all chain-validated:
+| Registry | What it registers | Lookup |
+|----------|-------------------|--------|
+| **Operations** | DO actions, keyed `<ext>:<action>`. Bare names reserved for me. | [ibp/operations.js](ibp/operations.js) |
+| **Roles** | SUMMON-honoring being templates. Each role declares permissions (verb subset), respondMode, `summon(message, ctx)`, and optionally `buildSystemPrompt` / `toolNames`. | [being/roles/registry.js](being/roles/registry.js) |
+| **Seeds** | Plantable scaffolds. Recipes that bootstrap a domain (Ruler/Planner/Contractor/Foreman/Workers, etc.). Operators plant via the `plant-seed` DO. | [space/seeds.js](space/seeds.js) |
 
-| Function | Rule |
-|----------|------|
-| addContributor | Resolved owner or admin. Atomic $addToSet. |
-| removeContributor | Resolved owner, admin, or self-removal. |
-| setOwner | Owner above or admin can delegate. |
-| removeOwner | Owner above or admin can revoke. Section falls back to next owner up. |
-| transferOwnership | Current owner or admin can transfer. |
+Auto-namespacing. Extensions write bare names; I record the qualified form (`governing:hire-planner`). Same prefixing applies to `core.websocket.emitToBeing(...)` events.
 
-All reject on land seed spaces. Extensions use `core.ownership.*`.
+## Roles
+
+Modes are retired. A role is the new unit of summonable behavior. A being declares which roles it can wear; a SUMMON arrives with an `activeRole`; my dispatcher routes the summon to that role's `summon(message, ctx)`. The role decides what to do: call an LLM, run code, queue a wake, escalate.
+
+A role spec:
+
+```js
+export const exampleRole = Object.freeze({
+  name:        "example",
+  description: "What this role does in one line.",
+  honoredOperations: ["op-one", "op-two"],         // DO ops this role handles
+  permissions: ["see", "do", "summon", "be"],      // verb subset
+  respondMode: "sync",                              // "sync" | "async" | "none"
+  toolNames:   ["see-name", "do-name"],            // optional, for LLM cognition
+  buildSystemPrompt(ctx) { return "..."; },        // optional
+  async summon(message, ctx) {
+    // The role's wake handler. Read message, do work, return { text, summonId }.
+  },
+});
+```
+
+Permissions are tool-verb overlays. A role that declares `["see", "do"]` cannot SUMMON other beings or BE-mutate itself; the tool filter enforces this at the verb intersection. Role and mode were the same architectural concept all along; the split is gone.
+
+## My extension APIs (the `core` services bundle)
+
+I assemble `core` in [services.js](services.js) and hand a per-extension scoped view to each extension's `init(core)`. The scoping enforces namespace ownership: `core.qualities.space.setQuality(...)` writes only to the calling extension's namespace; `core.do.registerOperation(name, ...)` auto-prefixes to `<ext>:<name>`; `core.websocket.emitToBeing(...)` auto-prefixes the event name. Extensions never type their own namespace.
+
+### Qualities (`core.qualities.{being, space, matter}`)
+
+One consolidated surface, three sub-namespaces. Same nine atomic primitives on each. No extension needs direct MongoDB for qualities.
+
+| Function | Operation | Use case |
+|----------|-----------|----------|
+| `getQuality(doc, key)` | Read namespace | `{}` when unset. |
+| `readQualityNamespace(doc, key)` | Read namespace, null on miss | Distinguish "never written" from "empty". |
+| `setQuality(doc, key, data)` | Atomic `$set` | Replace entire namespace. |
+| `mergeQuality(doc, key, partial)` | Atomic per-key `$set` | Update specific keys without clobbering. |
+| `incQuality(doc, key, field, n)` | Atomic `$inc` | Counters, accumulators. |
+| `pushQuality(doc, key, field, item, max)` | Atomic `$push` + `$slice` | Capped circular buffer. |
+| `addToQualitySet(doc, key, field, item)` | Atomic `$addToSet` | Deduplicated set. |
+| `batchSetQuality(doc, key, fields)` | Atomic multi-field `$set` | Set multiple keys at once. |
+| `unsetQuality(doc, key)` | Atomic `$unset` | Remove namespace entirely. |
+
+All write functions accept a document or an id. No read-modify-write. No race conditions on concurrent writes to different namespaces.
+
+### Space CRUD (`core.space`)
+
+`core.space.createSpace`, `core.space.deleteSpaceBranch`, `core.space.updateParentRelationship`, `core.space.editSpaceName`, `core.space.editSpaceType`. The stable extension face for tree mutation.
+
+### Matter CRUD (`core.matters`)
+
+`core.matters.createMatter`, `core.matters.editMatter`, `core.matters.deleteMatterAndFile`, `core.matters.transferMatter`, `core.matters.getMatters`. `createMatter` takes `{ origin, content, beingId, spaceId, file?, parentMatterId?, qualities? }`. Default `origin: "ibp"`.
+
+### Extension scope (`core.scope`)
+
+`core.scope.isExtensionBlockedAtSpace(extName, spaceId)`, `core.scope.getBlockedExtensionsAtSpace(spaceId)`, `core.scope.isToolReadOnly(toolName)`, `core.scope.getToolOwner(toolName)`, `core.scope.getRolesOwnedBy(extName)`.
+
+### DO operations (`core.do`)
+
+`core.do.registerOperation(name, spec)` to add a new DO action. `core.do.registerDefaultPermission(verb, keyParts, rule)` to contribute a Layer-3 stance auth rule. Auto-prefixed.
+
+### Hooks (`core.hooks`)
+
+`register(hookName, handler, extName)`, `unregister(extName)`, `run(hookName, data)`, `fire(hookName, payload)` (best-effort wrapper that swallows errors).
+
+### Protocol (`core.protocol`)
+
+`sendOk(res, data)`, `sendError(res, status, code, message, detail)`, the `ERR` enum, `ProtocolError` class. One shared response shape across HTTP.
+
+### Conversation entry (`core.llm`)
+
+One primitive. `core.llm.runChat({ beingId, role, message, ... })` for one LLM call in one role. Returns `{ answer, chatId, modeKey, visitorId }`. Handles session, MCP, Summon record, `beforeResponse` hook, abort. User-facing chat flows through the same `runChat` driven by a role's `summon()`.
+
+## `.source` (how I show my body to the beings I form)
+
+I have matter on both sides of the membrane.
+
+- **Host-realm matter.** The files in `seed/`, `protocols/`, `transports/`, `extensions/`. These are what I AM, on disk. The directory tree is my body in the host realm.
+- **Inner-realm matter.** Matter rows inside spaces, the Matter primitive I form within the world.
+
+The two are joined at `.source`. At genesis I mirror the `land/` directory into Matter rows under the `.source` land seed space, with `origin: filesystem`. The walk is recursive; `parentMatterId` makes a faithful tree. Subsequent boots reconcile incrementally: added files become new matters, modified files update existing ones, removed files delete.
+
+Through `.source` the inner beings I formed can SEE the same source I am made of. The codebook compressions, the role definitions, the very file you are reading, all reachable through the standard verbs at addresses like `<land>/.source/seed/SEED.md@<being>`.
+
+`.source` is read-only by stance auth. DO writes against `.source` matters reject with `ORIGIN_READ_ONLY`. The host disk is the source of truth; the inner mirror reconciles toward it. Beings inside cannot edit me through their world. To edit me you must reach the host realm.
+
+The code is in [space/source.js](space/source.js).
 
 ## Cascade
 
-When content is written at a node with `metadata.cascade.enabled = true` and `cascadeEnabled = true` in .config, the seed fires `onCascade`.
+When content is written at a space with `qualities.cascade.enabled = true` and `cascadeEnabled = true` in `.config`, I fire `onCascade`. Two paths:
 
-- `checkCascade(nodeId, writeContext)`: seed-internal. Automatic on content writes.
-- `deliverCascade({ nodeId, signalId, payload, source, depth })`: extension-external. Extensions propagate signals. The seed never blocks it.
+- `checkCascade(spaceId, writeContext)` is my internal trigger on content writes.
+- `deliverCascade({ spaceId, signalId, payload, source, depth })` is the extension-external propagation primitive. I never block it.
 
-Result shape: `{ status, source, payload, timestamp, signalId, extName }`. Six statuses: succeeded, failed, rejected, queued, partial, awaiting. None terminal.
+Result shape: `{ status, source, payload, timestamp, signalId, extName }`. Six statuses: `succeeded`, `failed`, `rejected`, `queued`, `partial`, `awaiting`.
 
-### .flow Partitioning
+`.flow` is partitioned by date. Each partition is a child space named `YYYY-MM-DD`. I create today's partition on first cascade write of the day. Retention deletes whole partitions older than `resultTTL`. `flowMaxResultsPerDay` (default 10,000) caps results per partition with circular overwrite. Query functions in [space/cascade.js](space/cascade.js) search across partitions transparently.
 
-Results are stored in daily partition nodes under .flow. Each partition is a child node named by date (YYYY-MM-DD). The kernel creates today's partition on first cascade write of the day.
+## Ownership
 
-Retention deletes entire partition nodes older than resultTTL. No scanning individual keys. Drop the node.
+Ownership resolves by walking the parent chain. The first space with `rootOwner` set is the ownership boundary. `rootOwner` means "the owner from this point down." Setting `rootOwner` on a branch delegates that sub-tree to a new owner.
 
-`flowMaxResultsPerDay` (default 10,000) caps results per partition. When the cap is hit, the oldest signal in that partition is overwritten. Circular buffer. The land never stops recording. It just forgets the oldest when pressure is high.
+Contributors accumulate along the walk. A being in `contributors[]` at any space between the current position and the ownership boundary has write access.
 
-Query functions (`getCascadeResults`, `getAllCascadeResults`) search across partitions transparently. Extensions never know partitions exist.
+Five ownership mutation functions in [space/ownership.js](space/ownership.js), all chain-validated:
 
-## Protocol
+| Function | Rule |
+|----------|------|
+| `addContributor` | Resolved owner or admin. Atomic `$addToSet`. |
+| `removeContributor` | Resolved owner, admin, or self-removal. |
+| `setOwner` | Owner above or admin can delegate. |
+| `removeOwner` | Owner above or admin can revoke. Section falls back to next owner up. |
+| `transferOwnership` | Current owner or admin can transfer. |
 
-Single file `seed/protocol.js`. Extensions access via `core.protocol`. One shared language.
+All reject on land seed spaces. Extensions reach these through `core.space.ownership.*`.
 
-HTTP: `{ status: "ok", data }` or `{ status: "error", error: { code, message } }`. 34 semantic ERR codes. `ProtocolError` class for throwing typed errors from seed functions that routes can catch and map to HTTP responses.
+## The I-Am (as a Being row)
 
-WebSocket: Named constants in `WS` object. Kernel events only. Extension events own their own constants.
+I am the first being. At genesis I create my own Being row with `parentBeingId: null` and name `I-Am`. From then on, every Did from my acts attributes to that row. The Being model resolves my reference once the row lands.
 
-Cascade: Named constants in `CASCADE` object. Six statuses.
+I am `operatingMode: "scripted"`. I cannot be summoned interactively, claimed, or impersonated. My password is randomly generated and never used; my identity comes from being the running Node process. The constants are in [space/seedSpaces.js](space/seedSpaces.js).
 
-Shared vocabulary: `NODE_STATUS` (active, completed, trimmed), `SEED_SPACE` (land-root, identity, config, peers, extensions, flow), `MATTER_ORIGIN` (ibp, filesystem, web, cross-land), `DELETED` sentinel. Every file that references these values imports from protocol.js. Typo in a constant fails at import. Typo in a string fails silently.
+Every other being descends from me. The being-tree (via `parentBeingId`) records who created whom. Humans register through the auth being and become my grandchildren (auth's children). Roles I plant beneath me are direct children. The tree captures lineage.
 
 ## Config
 
-Runtime config stored in .config land seed space. Readable and writable via CLI (`treeos config set`), API, or AI.
+Runtime config lives in the `.config` land seed space's qualities, one config key per Map entry. CLI (`treeos config set`), API, and the land-manager being all reach the same store through `setLandConfigValue()`. Reads through `getLandConfigValue(key)` return a deep copy so callers cannot pollute my cache.
 
-| Key | Default | Purpose |
-|-----|---------|---------|
-| LAND_NAME | "My Land" | Display name |
-| landUrl | auto | Land URL. Set at boot from domain and port. Used in security headers and LLM request signing. |
-| llmTimeout | 900 | Seconds per LLM API call |
-| llmMaxRetries | 3 | Retry count on 429/500 |
-| maxToolIterations | 15 | Tool calls per message |
-| maxConversationMessages | 30 | Context window size |
-| landLlmConnection | null | LLM connection ID. Fallback for users without their own. Admin creates a connection, sets this to its ID. All users get AI. Override by setting your own. |
-| matterMaxChars | 5000 | Max characters per ibp-origin matter |
-| treeSummaryMaxDepth | 4 | How deep AI sees the tree |
-| treeSummaryMaxNodes | 60 | How many nodes AI sees |
-| carryMessages | 4 | Messages carried across mode switch |
-| sessionTTL | 900 | Session idle timeout (seconds) |
-| staleSessionTimeout | 1800 | Stale session cleanup (seconds) |
-| maxSessions | 10000 | Max concurrent sessions |
-| jwtExpiryDays | 30 | JWT token lifetime in days. Clamped 1 to 365. Shorter for higher security environments. |
-| chatRetentionDays | 90 | Auto-delete chats |
-| didRetentionDays | 365 | Auto-delete Did rows older than N days. 0 = keep forever. |
-| timezone | auto | Land timezone for AI prompts |
-| disabledExtensions | [] | Extensions to skip on boot |
-| allowedLlmDomains | [] | Whitelist of allowed LLM endpoint domains for non-admin users. Empty means any external domain. Admins bypass. Example: `["api.openai.com", "openrouter.ai"]` |
-| cascadeEnabled | false | Enable cascade signals |
-| resultTTL | 604800 | Cascade result TTL (seconds) |
-| awaitingTimeout | 300 | Awaiting to failed timeout (seconds) |
-| cascadeMaxDepth | 50 | Max propagation depth |
-| cascadeMaxPayloadBytes | 51200 | Max signal payload (50KB) |
-| cascadeRateLimit | 60 | Max signals per node per minute |
-| cascadeMaxDeliveriesPerSignal | 500 | Max child deliveries per cascade signal. Limits fan-out on wide trees. |
-| uploadEnabled | true | Master switch for uploads |
-| maxUploadBytes | 104857600 | Hard ceiling per upload (100MB) |
-| allowedMimeTypes | null | Allowed MIME prefixes, null means all |
-| maxDocumentSizeBytes | 14680064 | Document size ceiling (14MB, 2MB headroom under MongoDB's 16MB) |
-| flowMaxResultsPerDay | 10000 | Max cascade results per daily partition |
-| allowedFrameDomains | [] | Additional domains allowed in CSP frame-ancestors |
-| ancestorCacheTTL | 30000 | Milliseconds before cached ancestor chains expire |
-| integrityCheckInterval | 86400000 | Milliseconds between periodic tree integrity checks (24h) |
-| treeCircuitEnabled | false | Master switch for tree circuit breaker |
-| maxTreeSpaces | 10000 | Space count threshold for health equation |
-| maxTreeMetadataBytes | 1073741824 | Total metadata size threshold (1GB) |
-| maxTreeErrorRate | 100 | Errors per hour threshold |
-| circuitSpaceWeight | 0.4 | Weight of space count in health equation |
-| circuitDensityWeight | 0.3 | Weight of metadata density |
-| circuitErrorWeight | 0.3 | Weight of error rate |
-| circuitCheckInterval | 3600000 | Health check interval (1 hour) |
+Two protected keys (`seedVersion`, `disabledExtensions`) cannot be written through the public API. Internal callers pass `{ internal: true }`.
 
-Extension config (like `htmlEnabled`) lives in .config too, written by extensions on first boot, not by the kernel.
+The full list of keys with defaults lives in [landConfig.js](landConfig.js) under `CONFIG_DEFAULTS`. Defaults are safe. Most lands never change anything except `LAND_NAME`, `landUrl`, and `landLlmConnection`. Key groups:
 
-### Advanced Tuning
+- Identity and federation: `LAND_NAME`, `landUrl`, `HORIZON_URL`, `timezone`.
+- LLM: `llmTimeout`, `llmMaxRetries`, `maxToolIterations`, `maxConversationMessages`, `llmMaxConcurrent`, `landLlmConnection`, etc.
+- Sessions and conversations: `sessionTTL`, `staleSessionTimeout`, `maxSessions`, `maxConversationMessages`, `carryMessages`.
+- Matter and documents: `matterMaxChars`, `maxMatterPerNode`, `maxDocumentSizeBytes`, `maxUploadBytes`.
+- Hooks: `hookTimeoutMs`, `hookMaxHandlers`, `hookCircuitThreshold`, `hookCircuitHalfOpenMs`, `hookChainTimeoutMs`.
+- Cascade: `cascadeEnabled`, `cascadeMaxDepth`, `cascadeMaxPayloadBytes`, `cascadeRateLimit`, `resultTTL`, `awaitingTimeout`, `flowMaxResultsPerDay`.
+- Tree circuit: `treeCircuitEnabled`, `maxTreeSpaces`, `maxTreeMetadataBytes`, `maxTreeErrorRate`, weight knobs.
+- Scheduler backpressure: `summonInboxDepth`, `summonsPerSecond`, `summonMaxAgeSeconds`.
+- Retention and cleanup: `summonRetentionDays`, `didRetentionDays`, `retentionCleanupInterval`, `uploadCleanupInterval`, `uploadGracePeriodMs`.
+- Security: `jwtExpiryDays`, `allowedLlmDomains`, `allowedFrameDomains`.
 
-These keys are configurable via `treeos config set` but most lands never need to change them. Defaults are safe. Grouped by subsystem.
+## Tree circuit breaker
 
-**Concurrency and rate limiting:**
+When a tree exceeds health thresholds, its circuit trips. No AI, no cascade, no writes. Read access stays open. The data is intact; the tree is sleeping.
 
-| Key | Default | What it tunes |
-|-----|---------|---------------|
-| requestQueueMaxDepth | 100 | Max waiting tasks per queue key. Prevents request pileup under load. |
-| llmMaxConcurrent | 20 | Max in-flight LLM API calls across all users. Prevents thundering herd. |
-| failoverTimeout | 15 | Seconds before giving up walking the LLM failover stack |
-| chatRateLimit | 10 | Max chat messages per rate window per user |
-| chatRateWindowMs | 60000 | Chat rate limit window (ms) |
-| maxChatMessageChars | 5000 | Max characters per WebSocket chat message |
-| maxMessageContentBytes | 32768 | Max bytes per message in conversation history (32KB). Truncates oversized messages. |
-| maxConversationSessions | 50000 | Hard cap on in-memory conversation sessions. Evicts oldest on overflow. |
-| maxScopedSessions | 20000 | Hard cap on scoped sessions (zone-specific). Evicts oldest on overflow. |
-| maxAiContextEntries | 10000 | Hard cap on AI chat context tracking map. |
-| staleConversationTimeout | 1800 | Idle conversation session sweep (seconds) |
-| maxConnectionsPerIp | 20 | Per-IP WS connection cap |
+Health equation: `(nodeCount / max) * nodeWeight + (metadataDensity / max) * densityWeight + (errorRate / max) * errorWeight`. When the score exceeds 1.0, the tree trips. Error rate reads from the Did log (DO emissions with `result.error`) and from `.flow` partitions (`CASCADE.FAILED` and `CASCADE.REJECTED` scoped to this tree's spaces).
 
-**Tools, modes, and registries:**
+State stored on the tree root: `qualities.circuit = { tripped, reason, timestamp, scores }`. I write one field. Extensions read it.
 
-| Key | Default | What it tunes |
-|-----|---------|---------------|
-| toolCircuitThreshold | 5 | Consecutive failures before a tool is disabled for the session |
-| toolCallTimeout | 60 | Seconds before a single MCP tool call is killed |
-| toolResultMaxBytes | 50000 | Max tool result size before truncation (bytes) |
-| maxRegisteredTools | 500 | Max tool definitions in the registry |
-| maxRegisteredModes | 200 | Max mode definitions in the registry |
-| maxOrchestrators | 10 | Max registered orchestrators |
-| maxSystemPromptChars | 32000 | Max system prompt length before truncation (chars) |
-| maxExtensionIndexes | 20 | Max MongoDB indexes per extension |
+I trip. Extensions heal. `core.space.reviveTree(rootId)` clears the circuit. I do NOT auto-revive.
 
-**Hooks:**
+Defaults to off (`treeCircuitEnabled: false`).
 
-| Key | Default | What it tunes |
-|-----|---------|---------------|
-| hookTimeoutMs | 5000 | Per-handler timeout (ms) |
-| hookMaxHandlers | 100 | Max handlers per hook name |
-| hookCircuitThreshold | 5 | Consecutive failures before auto-disabling a handler |
-| hookCircuitHalfOpenMs | 300000 | Half-open recovery interval (ms) |
-| hookChainTimeoutMs | 15000 | Cumulative timeout for sequential chains (ms) |
+## Seed versioning
 
-**Metadata and data limits:**
-
-| Key | Default | What it tunes |
-|-----|---------|---------------|
-| metadataNamespaceMaxBytes | 524288 | Max bytes per metadata namespace (512KB) |
-| metadataMaxNestingDepth | 5 | Max nesting depth for extension metadata values |
-| maxMattersPerNode | 1000 | Max matters per node |
-| maxContributorsPerSpace | 500 | Max contributors[] entries per space |
-| maxConnectionsPerUser | 15 | Max custom LLM connections per user |
-| matterQueryLimit | 5000 | Max matters returned per query |
-| matterSearchLimit | 500 | Max matters returned per search query |
-| didQueryLimit | 5000 | Max Did rows returned per query |
-| subtreeNodeCap | 10000 | Max node IDs collected in subtree traversal |
-| summonInboxDepth | 100 | Per-being inbox depth before backpressure (planned enforcement) |
-| summonsPerSecond | 10 | Per-being token-bucket refill rate (enforced) |
-| summonMaxAgeSeconds | 3600 | Age threshold for pending inbox entries (planned enforcement) |
-
-**Tree data queries (AI context):**
-
-| Key | Default | What it tunes |
-|-----|---------|---------------|
-| treeAncestorDepth | 50 | Max ancestor chain depth |
-| treeDidsPerNode | 500 | Max Did rows loaded per node in tree context |
-| treeMattersPerNode | 100 | Max matters loaded per node |
-| treeMaxChildrenResolve | 200 | Max children name-resolved per node |
-| treeAllDataDepth | 20 | Max recursion depth in full tree export |
-| treeSearchResultLimit | 10 | Max search results returned in tree context |
-| treeSummaryRecentMatters | 3 | Recent matters shown per node in tree summary |
-| treeSummaryPreviewChars | 200 | Characters of matter content shown in preview |
-| chatContributionQueryLimit | 2000 | Max contributions linked per chat finalization |
-| summonHistoryMaxSessions | 50 | Max sessions returned per summon history query |
-| summonHistoryMaxSummonsPerSession | 200 | Max chain steps loaded per session |
-| summonHistoryMaxDescendantIds | 500 | Cap on includeChildren node expansion |
-| summonHistoryMaxDids | 5000 | Cap on did documents per summon history query |
-| maxChatContentBytes | 100000 | Max bytes stored per chat message (100KB) |
-| maxChainStepContentBytes | 2000 | Max bytes per orchestrator chain step log |
-| maxInheritedStatusNodes | 10000 | Max nodes affected by one inherited status change |
-
-**Ancestor cache:**
-
-| Key | Default | What it tunes |
-|-----|---------|---------------|
-| ancestorCacheMaxEntries | 50000 | Max cached ancestor chains |
-| ancestorCacheMaxDepth | 100 | Max parent chain depth before stopping |
-
-**MCP:**
-
-| Key | Default | What it tunes |
-|-----|---------|---------------|
-| mcpConnectRetries | 2 | Connection retry count for background pipelines |
-| mcpConnectTimeout | 10000 | Client connection timeout (ms) |
-| mcpStaleTimeout | 3600000 | Client idle timeout before sweep (ms) |
-| maxMcpClients | 5000 | Hard cap on MCP client pool. Evicts oldest on overflow. |
-
-**WebSocket transport:**
-
-| Key | Default | What it tunes |
-|-----|---------|---------------|
-| socketMaxBufferSize | 1048576 | Max WS message size (bytes) |
-| socketPingTimeout | 30000 | WS ping timeout (ms) |
-| socketPingInterval | 25000 | WS ping interval (ms) |
-| socketConnectTimeout | 10000 | WS connection timeout (ms) |
-
-**LLM client:**
-
-| Key | Default | What it tunes |
-|-----|---------|---------------|
-| llmClientCacheTtl | 300 | User LLM client cache lifetime (seconds) |
-| canopyProxyCacheTtl | 60 | Canopy proxy client cache lifetime (seconds) |
-| apiOrchestrationTimeout | 1140000 | API request timeout (ms) |
-
-**Federation (Canopy):**
-
-| Key | Default | What it tunes |
-|-----|---------|---------------|
-| canopyHeartbeatInterval | 300000 | Heartbeat frequency (ms) |
-| canopyDegradedThreshold | 2 | Failed heartbeats before degraded |
-| canopyUnreachableThreshold | 12 | Failed heartbeats before unreachable |
-| canopyDeadThresholdDays | 30 | Days before dead peer cleanup |
-| canopyOutboxInterval | 60000 | Outbox processing frequency (ms) |
-| canopyMaxRetries | 5 | Event delivery retries |
-| canopyEventDeliveryTimeout | 15000 | Per-event delivery timeout (ms) |
-| canopyDestLimitPerCycle | 10 | Events per destination per cycle |
-
-**Orchestrator internals:**
-
-| Key | Default | What it tunes |
-|-----|---------|---------------|
-| orchestratorLockTtlMs | 1800000 | Lock TTL before auto-expire (ms) |
-| lockSweepInterval | 300000 | Lock cleanup sweep (ms) |
-| orchestratorInitTimeout | 30000 | Background pipeline init timeout (ms) |
-| maxChainSteps | 500 | Max steps per pipeline. Circuit breaker for runaway loops. |
-| maxOrchestratorLocks | 10000 | Hard cap on concurrent orchestrator locks across all namespaces. |
-| maxParseInputBytes | 200000 | Max input size for JSON extraction from LLM responses (200KB). |
-
-**Cleanup intervals:**
-
-| Key | Default | What it tunes |
-|-----|---------|---------------|
-| uploadCleanupInterval | 21600000 | Upload cleanup frequency (ms) |
-| uploadGracePeriodMs | 3600000 | File age before deletion (ms) |
-| uploadCleanupBatchSize | 1000 | Max files deleted per cleanup cycle |
-| retentionCleanupInterval | 86400000 | Retention job frequency (ms) |
-| cascadeCleanupInterval | 21600000 | Cascade result cleanup frequency (ms) |
-| npmInstallTimeout | 60000 | npm install timeout for extensions (ms) |
-| dnsLookupTimeout | 5000 | DNS resolution timeout for custom LLM URLs (ms) |
-| circuitFlowScanLimit | 5000 | Max cascade results scanned per tree health check |
-
-**Kernel version (do not modify):**
-
-| Key | Default | Purpose |
-|-----|---------|---------|
-| seedVersion | "0.1.0" | Compared at boot to run migrations. Set by migration runner. |
-
-## Tree Circuit Breaker
-
-When a tree exceeds health thresholds, its circuit trips. No AI interactions. No cascade. No writes. Read access stays open. The data is intact. The tree is sleeping.
-
-Health equation: `(nodeCount / max) * nodeWeight + (metadataDensity / max) * densityWeight + (errorRate / max) * errorWeight`. When the score exceeds 1.0, the tree trips. Error rate reads from both sources, scoped to this tree's nodes: contribution log (`extensionData.error` exists) and .flow partitions (CASCADE.FAILED and CASCADE.REJECTED with source in this tree). Random sampling for metadata density estimation.
-
-State stored on root node: `metadata.circuit = { tripped, reason, timestamp, scores }`. The kernel writes one field. Extensions read it.
-
-The kernel trips. Extensions heal. `core.tree.reviveTree(rootId)` clears the circuit. The kernel does NOT auto-revive.
-
-Defaults to OFF (`treeCircuitEnabled: false`).
-
-## Seed Versioning
-
-`SEED_VERSION` constant in `seed/version.js`. Checked at boot against `seedVersion` in .config. If they differ, the migration runner executes every migration between the stored version and the current version in order. Migrations live in `seed/migrations/` named by version (0.1.0.js, 0.2.0.js). Each exports a default async function. If a migration fails, the stored version is not updated. Next boot retries from the failure point. Same pattern as extension schema migrations.
+`SEED_VERSION` constant in [system/version.js](system/version.js). At boot I compare it against `seedVersion` in `.config`. If they differ, the migration runner ([system/migrations/runner.js](system/migrations/runner.js)) executes every migration between the stored version and the current version in order. Migrations live in [system/migrations/](system/migrations/) named by version (`0.18.0.js`, `0.19.0.js`). Each exports a default async function. If a migration fails, the stored version does not advance; next boot retries from the failure point.
 
 ## Safety
 
+I enforce dozens of guarantees so no extension can take me down. They are:
+
 | Protection | Detail |
 |-----------|--------|
-| Never block inbound | Cascade signals always accepted, always produce a result. |
+| Never block inbound | Cascade signals are always accepted, always produce a result. |
 | Hook timeout | 5s per handler. Hanging handlers killed and logged. |
 | Hook cap | 100 handlers per hook. |
-| Hook circuit breaker | 5 consecutive failures auto-disables the hook handler. Half-open recovery: after 5 minutes, one test call allowed through. Success resets. Failure re-opens. |
-| Tool circuit breaker | 5 consecutive failures disables the tool for that session. AI adapts to other tools. One bad API key disables one tool, not the whole tree. |
-| Extension router timeout | 5s on page routes (/). API routes (/api/v1) not wrapped. AI chat routes take as long as the LLM needs. Mid-stream responses closed after timeout. |
-| Extension init timeout | 10s per extension init(). Hanging init skipped, boot continues. Init errors diagnose missing service declarations and suggest manifest fixes. |
-| LLM concurrency semaphore | llmMaxConcurrent (default 20) caps in-flight LLM calls globally. Excess queued with abort signal support. Jittered exponential backoff on 429. |
+| Hook circuit breaker | 5 consecutive failures auto-disables a handler. Half-open recovery: after 5 minutes, one test call allowed through. Success resets. Failure re-opens. Backoff doubles on repeat failures, capped at 1 hour. |
+| Tool circuit breaker | 5 consecutive failures disables a tool for the session. AI adapts to other tools. One bad API key disables one tool, not the whole tree. |
+| Extension init timeout | 10s per extension `init()`. Hanging init skipped, boot continues. |
+| LLM concurrency semaphore | `llmMaxConcurrent` (default 20) caps in-flight LLM calls globally. Excess queued with abort signal support. |
 | LLM priority queue | Human sessions acquire LLM slots first. Gateway second. Interactive third. Background jobs last. Prevents autonomous extensions from starving human responses. |
-| Namespace enforcement | Scoped core binds the calling extension name. setExtMeta rejects writes to namespaces not owned by the caller. Core namespaces (cascade, extensions, tools, modes) rejected for all extension callers. Extensions cannot corrupt each other's metadata. |
-| enrichContext chain timeout | 15s cumulative cap for the entire enrichContext/onCascade handler chain. Per-handler timeout reduced to remaining budget. |
-| MCP spatial scoping | MCP tool calls check isExtensionBlockedAtNode before dispatch. Same spatial scoping guarantee as WebSocket conversations. |
+| Namespace enforcement | The scoped `core` binds the calling extension name. `qualities.space.setQuality` rejects writes to namespaces not owned by the caller. Five core namespaces (`cascade`, `extensions`, `tools`, `modes`, `llm`) rejected for all extension callers. |
+| `enrichContext` chain timeout | 15s cumulative cap for the entire chain. Per-handler timeout reduced to the remaining budget. |
+| MCP spatial scoping | MCP tool calls check `isExtensionBlockedAtSpace` before dispatch. Same scoping guarantee as WebSocket conversations. |
+| Document size guard | Every quality write checks total document size against `maxDocumentSizeBytes` (14MB default). `DOCUMENT_SIZE_EXCEEDED` rejected. `onDocumentPressure` fires at 80%. |
+| Per-namespace cap | `metadataNamespaceMaxBytes` (default 512KB) per extension namespace on Space, Being, Matter. |
+| Matter count per space | `maxMatterPerNode` (default 1000) checked in `createMatter`. |
+| Did query cap | `didQueryLimit` (default 5000) on every audit query. |
+| Ownership chain | `rootOwner`/`contributor` mutations validate the parent chain. Only resolved owner or admin can modify. Land seed spaces always rejected. |
+| Space locks | Structural mutations (move, delete, transfer) acquire short-lived locks. Sorted acquisition prevents deadlocks. 30s TTL prevents permanent locks on crash. |
+| `.flow` partitioning | Daily partitions cap unbounded growth. `flowMaxResultsPerDay` with circular overwrite. Retention deletes whole partitions. |
+| Tree circuit breaker | Health equation monitors space count, metadata density, error rate. Score > 1.0 trips the tree. Read access stays. Extensions revive. Off by default. |
+| Ancestor cache | Shared cache for parent chain walks. One walk serves every resolution chain. Snapshot per message. `moveSpace` clears entire cache. `deleteSpace` clears entries containing the deleted space. |
+| Session cap | 10K max (configurable). Oldest-first eviction. |
+| MCP client cap | 5,000 max. Oldest evicted on overflow. 10s connect timeout, 5s close timeout, 15-minute stale sweep. |
+| WebSocket payload sanitization | Frontend sync events cap string fields at 200 chars and JSON payloads at 500 chars. ID fields capped at 36 chars (UUID length). |
+| Password length | Min 8, max 128 characters. Bcrypt cost factor 12. Constant-time login (always runs `bcrypt.compare`, dummy hash on miss). |
+| JWT unique ID | Every token includes a `jti` (UUID) for per-token revocation. |
+| Username validation | Regex `^[a-zA-Z0-9_-]{1,32}$`. Trimmed before storage. |
+| Config key validation | `^[a-zA-Z][a-zA-Z0-9_]{0,63}$`. `__proto__`, `constructor`, `prototype` rejected. Sanitized on load to prevent prototype pollution from direct DB injection. |
+| Config value size cap | 64KB per config value. |
+| Config write verification | `setLandConfigValue` checks `matchedCount`. If `.config` doesn't exist, throws instead of silently updating only the cache. |
+| DB heartbeat | 5s (configurable). Failure detection within 5s. Hung queries killed at 30s socket timeout. |
+| Boot recovery | `ensureLandRoot` verifies all nine land seed spaces every boot. Missing ones recreated. Wrong-parent ones repaired. Partial first-boot crashes leave a recoverable state. |
+| Index verification | At boot, all required indexes verified. Missing ones created with background builds. No collection scan on any kernel query path. |
+| Tree integrity check | At boot and daily: parent/`children[]` consistency verified. Auto-repair safe inconsistencies. Orphans logged. |
 | Extension install rollback | Files written to staging directory. Atomic rename on success. Cleanup on failure. No partial installs. |
-| Metadata guard | Blocked extensions can't write to nodes. Five core namespaces (tools, modes, extensions, cascade, llm) bypass blocking. |
-| Document size guard | Every metadata write checks total document size against maxDocumentSizeBytes (14MB default). Writes exceeding the limit rejected with DOCUMENT_SIZE_EXCEEDED. onDocumentPressure fires at 80% capacity. |
-| Per-namespace cap | metadataNamespaceMaxBytes (default 512KB) per extension namespace on nodes, users, and contribution extensionData. Configurable. 20 extensions at 512KB = 10MB, under the 14MB ceiling. |
-| Namespace key length | Max 50 chars for metadata namespace keys in setExtMeta. Same cap as node type. |
-| Metadata nesting depth | Max 5 levels deep in setExtMeta. Deeper structures must be flattened by the extension. Prevents expensive deep queries. |
-| Matter count per node | maxMattersPerNode (default 1000) checked in createMatter before write. Prevents runaway loops from flooding a node. Configurable. |
-| Contribution extensionData cap | 512KB per contribution extensionData field. Same cap as setExtMeta. Prevents buggy extensions from writing 5MB per contribution. |
-| .flow partitioning | Daily partition nodes prevent unbounded growth. flowMaxResultsPerDay cap with circular overwrite. Retention deletes entire partitions by date. |
-| Ownership chain | rootOwner/contributor mutations validate the parent chain. Only resolved owner or admin can modify. Land seed spaces always rejected. transferOwnership uses bulkWrite for atomic two-op transfer. |
-| Node locks | Structural mutations (move, delete, transfer ownership) acquire short-lived in-memory locks. Reads and scoped writes proceed without locking. Sorted acquisition prevents deadlocks. 30s TTL expiry prevents permanent locks on crash. |
-| Tree circuit breaker | Health equation monitors node count, metadata density, error rate. Score > 1.0 trips the tree. No AI, no writes, no cascade. Read access stays. Extensions revive. Defaults to off. |
-| Ancestor cache | Shared cache for parent chain walks. One walk serves all five resolution chains. Snapshot per message for consistency. moveNode clears entire cache. deleteNode clears entries containing the deleted node. Metadata/ownership changes clear the affected node and descendants. |
-| Session cap | 10K max (configurable) with oldest-first eviction. |
-| Core session types immutable | Extensions can register custom session types but cannot overwrite core types (websocket-chat, api-tree-chat, etc.). Prevents extension from breaking the stale sweep or navigator promotion. |
-| Scoped session cap | 20K max scoped session entries. Oldest evicted on overflow. Prevents unbounded growth from unique tree:root:user scope keys. |
-| Session meta size cap | 64KB per session meta object. updateSessionMeta rejects if merged meta exceeds limit. Prevents extensions from writing unbounded data into session state. |
-| Session abort cleanup | Stale sweep also cleans orphaned abort controllers (session ended but clearSessionAbort never called). |
-| clearUserSessions fires hooks | All session removal paths fire afterSessionEnd. clearUserSessions iterates and fires per session, not silent bulk delete. Extensions always notified. |
-| Session setter bounds | setMaxSessions: 100 to 500K. setSessionTTL: 5s to 24h. setStaleTimeout: 1m to 24h. No setter can produce a non-functional registry. |
-| MCP client cap | 5,000 max MCP clients. Oldest evicted on overflow. Prevents OOM from API-mode sessions generating unique visitorIds. |
-| MCP connect timeout | 10s. If the MCP server is unreachable, fail fast instead of blocking the conversation loop. Transport cleaned up on failure. |
-| MCP close timeout | 5s. Broken transports that hang on close are abandoned after timeout. Cleanup never blocks the disconnect handler. |
-| MCP stale sweep | Every 15 minutes, clients unused for 1 hour are closed. Safety net for violent disconnects where the cleanup handler never fires. |
-| MCP token isolation | JWT tokens stored in a separate Map, not mutated onto the SDK client object. Prevents breakage if the SDK freezes instances. |
-| WebSocket payload sanitization | All frontend sync events (nodeUpdated, nodeCreated, nodeDeleted, etc.) cap all string fields at 200 chars and JSON payloads at 500 chars. Prevents multi-MB payloads from consuming the AI context window via context injection. |
-| WebSocket ID validation | rootId and nodeId from frontend capped at 36 chars (UUID length). URL payloads capped at 2000 chars. Rejects oversized or non-string values. |
-| WebSocket auth logging | Failed JWT verification in the auth middleware is logged at debug level with the error reason. Enables detection of token probing. |
-| Broadcast safety | emitBroadcast validates event name is a non-empty string. Documented: never send user-specific data via broadcast. |
-| Depth limits | 50 for path building. 50 for status cascade. 50 for cascade propagation. 100 for isDescendant checks. |
-| Cascade payload limit | Oversized signals rejected. |
-| Cascade rate limit | Per node per minute. Exceeding rejected. |
-| Name validation | No HTML, no dots, no slashes, max 150 chars. |
-| Type validation | No HTML, no dots, no slashes, max 50 chars. Free-form string. |
-| Dynamic service injection | Extensions register services on core during init(). Later extensions discover them by declaration, not by kernel naming. After all init() calls complete, the top-level core object is frozen. |
-| Core service immutability | Individual kernel services (core.hooks, core.llm, core.protocol) are frozen before passing to init(). Extensions cannot replace or modify kernel functions. Extensions CAN add new top-level properties (core.energy) during init, but not after. |
-| Canopy rate limit cap | In-memory rate limit map capped at 10K entries. Overflow rejected with 429 instead of growing without bound. |
-| Auth optional | `authenticateOptional` tries all strategies, allows anonymous. Never hangs. |
-| SSRF protection | Peer registration and auto-discovery both validate hostname against isPrivateHost() before any fetch. 15s timeout on all federation fetches. Canopy event payloads capped at 256KB. |
-| Federation system tokens | System-to-system canopy events use sub="system" tokens. Auth handler returns system identity with isSystemToken flag. Route handlers gate access. |
-| Password length | Min 8, max 128 characters. Prevents bcrypt memory DoS. |
-| Password verify timeout | 5s ceiling on bcrypt.compare via Promise.race. Prevents extreme cost factors from blocking the event loop. |
-| JWT unique ID | Every token includes a `jti` (UUID) for per-token revocation tracking. Extensions can check `decoded.jti` against a revocation list. |
-| JWT configurable expiry | jwtExpiryDays (default 30, configurable 1 to 365). Government deployments set to 1 for daily re-authentication. |
-| Username validation | Regex `^[a-zA-Z0-9_-]{1,32}$`. Trimmed before storage. Rejects empty, whitespace-only, HTML, and special characters. |
-| Input null guards | All auth functions validate input types before processing. Null/undefined username or password returns clear error, not crash. findUserByUsername returns null on bad input instead of throwing. |
-| bcrypt always hashes | Pre-save hook always hashes the password. No prefix detection, no skip path. Cost factor 12. |
-| bcrypt cost factor 12 | Increased from 10. NIST 800-63B alignment. Each increment doubles the computation time. Cost 12 is the minimum recommendation for 2025+. |
-| Timing-safe login | Login always runs bcrypt.compare even if the user doesn't exist. Uses a dummy hash for non-existent users. Attacker cannot distinguish "user not found" from "wrong password" by response timing. Closes the username enumeration oracle. |
-| Auth strategy extra field sanitization | Extension auth strategies cannot overwrite userId, username, or authType via result.extra. Core auth fields are stripped before Object.assign. Prevents privilege escalation from malicious extensions. |
-| Cookie expiry matches JWT | Cookie maxAge reads jwtExpiryDays from config. JWT and cookie always expire together. |
-| Auth error logging | authenticateOptional logs all JWT failures, strategy failures, and pipeline errors at debug level. Zero silent catch blocks. |
-| Atomic metadata writes | setExtMeta uses MongoDB $set on the specific namespace key. mergeExtMeta uses $set on individual keys within a namespace. Concurrent writes to different namespaces on the same node do not clobber. Concurrent merges to the same namespace preserve all keys. |
-| DB health check | Before each tool call, the conversation loop checks database readyState. If unreachable, the tool result tells the AI "database unavailable" so it responds to the user instead of retrying blindly. |
-| Boot recovery | ensureLandRoot verifies all six land seed spaces exist every boot. Missing nodes recreated with correct defaults. Nodes with wrong parent repaired. Orphan root adoption errors isolated per root (one failure doesn't skip the rest). Partial first-boot crashes leave a recoverable state, not a bricked land. |
-| Extension sync atomicity | syncExtensionsToTree uses atomic $addToSet per child instead of in-memory push + single save. If one save fails, the tree is consistent. Integrity check repairs any stragglers. |
-| Config key validation | Config keys must match `^[a-zA-Z][a-zA-Z0-9_]{0,63}$`. Dots rejected (prevent nested MongoDB path injection). `__proto__`, `constructor`, `prototype` rejected (prevent prototype pollution). |
-| Config value size cap | 64KB per config value. Prevents a 10MB string from bloating the .config node and every cache load. |
-| Config protected keys | seedVersion and disabledExtensions cannot be written via public API. Only kernel internals with `{ internal: true }`. |
-| Config env fallback restricted | Before DB init, only known boot-time keys (socket params, LAND_NAME, landUrl, HORIZON_URL) fall back to process.env. All other keys return null. Prevents arbitrary env var injection into config. |
-| Config deep copy on all reads | getLandConfigValue and getAllLandConfig both return deep copies. Callers cannot pollute the config cache by mutating returned arrays or objects. |
-| Config load sanitization | Keys loaded from DB are sanitized. `__proto__`, `constructor`, `prototype`, `hasOwnProperty` stripped. Keys starting with `$` or `_` (Mongoose internals) stripped. Prevents prototype pollution from direct DB injection. |
-| Config write verification | setLandConfigValue checks `result.matchedCount`. If .config node doesn't exist (deleted, corrupted), throws instead of silently updating only the in-memory cache. Fail loud. |
-| Config delete support | deleteLandConfigValue uses atomic $unset. Keys are properly removed from both DB and cache instead of accumulating as null entries. |
-| Config reload without restart | reloadLandConfig() re-reads .config from DB. Use after migrations or manual DB repairs. |
-| Config load error handling | If the DB query fails during boot, config initializes to empty and logs the error. Boot continues with defaults instead of crashing. |
-| Config change audit | Every set and delete logged at verbose level with the key name. |
-| DB URI validation | Missing MONGODB_URI fails at boot with clear error and example, not a cryptic Mongoose crash. |
-| DB socket timeout | 30s default (configurable via MONGO_SOCKET_TIMEOUT). Hung queries on degraded replicas killed instead of blocking the pool forever. |
-| DB heartbeat | 5s (configurable via MONGO_HEARTBEAT_MS). Failure detection within 5s instead of default 10s. |
-| DB event monitoring | disconnected, reconnected, and error events logged. Operators see exactly when the DB dropped and when it came back. |
-| DB graceful shutdown | SIGTERM closes the MongoDB connection cleanly. |
-| Seed versioning | SEED_VERSION checked at boot against .config. Migrations run in order between stored and current version. Failed migrations block version update. Next boot retries. |
-| Date range validation | Query date ranges validated: ISO 8601 format, endDate after startDate, 365-day max span. |
-| Upload guard | Pre-multer check: master switch, size ceiling (100MB default), MIME filter. Rejects before file reaches memory. |
-| Upload cleanup | Orphaned files deleted hourly with grace period. |
-| Tree integrity check | On boot and daily: verify parent/children[] consistency. Auto-repair safe inconsistencies (phantom refs, missing children entries). Log orphans. `core.tree.checkIntegrity()` on demand. |
-| Index verification | On boot: verify all required indexes exist. Create missing ones with background builds. Extensions declare indexes in manifests. No collection scan on any kernel query path. |
-| Orchestrator init timeout | 30s timeout on init(). MCP connect or DB hang fails fast instead of blocking forever. Timer cleaned up on success (no leaked rejection). |
-| Orchestrator init rollback | init() cleans up on partial failure. If MCP connect fails after Chat and session are created, cleanup releases the lock, ends the session, finalizes the Chat, and closes MCP. No leaked resources. |
-| Orchestrator chain circuit breaker | 500 max steps per pipeline run. Runaway loops killed with clear error. trackStep silently caps. |
-| Orchestrator zombie guard | runStep() throws if called after cleanup(). trackStep() silently returns. No operations on dead pipelines. |
-| Orchestrator lock ownership | Lock acquired with visitorId as owner. Only the owning runtime can release or renew. Prevents cross-pipeline lock interference. Lock renewed on every runStep to prevent TTL expiry during long pipelines. |
-| Orchestrator abort on cleanup | cleanup() aborts in-flight work via AbortController before releasing resources. Prevents orphaned LLM calls running after pipeline teardown. |
-| Orchestrator abort check | runStep checks abort signal before starting any work. No wasted mode switches on cancelled pipelines. |
-| Scope ownership validation | registerToolOwner and registerModeOwner validate name type, length (1-64 chars), and extName. Rejects empty strings and oversized names. |
-| Scope ownership caps | Tool ownership capped at maxRegisteredTools (config, default 1000). Mode ownership capped at maxRegisteredModes (config, default 500). Same config keys as the tool/mode definition registries. |
-| Scope ownership cleanup | clearToolOwnersForExtension and clearModeOwnersForExtension remove all entries for an extension on uninstall. No stale ownership after removal. |
-| Scope hook static import | notifyScopeChange uses static import of hooks.js instead of dynamic import. Hook errors logged instead of silently swallowed. |
-| Orchestrator idempotent cleanup | cleanup() is safe to call multiple times. `_cleaned` flag prevents double-finalize, double-session-end, double-lock-release. |
-| Orchestrator finalize default | If cleanup is called without setResult or setError, the chat is finalized as "Pipeline ended without result" with stopped:true. |
-| Orchestrator MCP retry | MCP connection retries once with linear backoff on transient failure. Single network blip doesn't kill the pipeline. |
-| Orchestrator MCP JWT 4h | Internal JWT expiry extended to 4 hours. Understanding pipelines that run 2+ hours no longer fail mid-pipeline from expired tokens. |
-| Orchestrator session validation | attach() verifies session exists before attaching. Dead session IDs throw immediately. |
-| Orchestrator duration tracking | Every pipeline logs total duration and step count on cleanup. Visibility into pipeline performance. |
-| Orchestrator input validation | Constructor requires userId and visitorId. attach() requires sessionId. Missing fields throw immediately instead of producing null-reference errors downstream. |
-| Lock owner tracking | Every lock records who acquired it (userId, visitorId). releaseLock rejects if owner doesn't match. One extension can't release another's lock. |
-| Lock renewal | renewLock() resets TTL without releasing. Long pipelines stay locked. Expired locks cannot be renewed (must re-acquire). |
-| Lock hard cap | 10,000 locks max across all namespaces. Buggy extension flooding locks gets rejected with warning. |
-| Lock input validation | Empty strings, non-strings, null values rejected on acquire. |
-| Lock force release | forceReleaseLock() for admin use. Bypasses owner check. Logged as warning with owner and hold duration. |
-| Lock visibility | getLockInfo() and listLocks() for debugging and admin endpoints. Shows owner, reason, age, TTL remaining. |
-| Lock sweep logging | Periodic sweep logs count of expired locks removed. Visibility into lock churn. |
-| parseJsonSafe hardened | 200KB input cap. Balanced-brace scanner replaces greedy regex (prevents ReDoS). Single-quote JSON support. Think-tag stripping uses non-backtracking pattern. Trailing comma fix scoped to JSON context only. |
-| nullSocket frozen | Background orchestrator socket is Object.freeze'd. Shared singleton cannot be mutated by extensions. Has id, userId, username, visitorId properties for logging compatibility. |
-| Chat content cap | 100KB per chat message stored. User messages and AI responses truncated before persisting to Chat documents. Prevents oversized content from exceeding the 16MB BSON limit. |
-| Chat finalize atomicity | finalizeChat uses findOneAndUpdate with condition `endMessage.time: null`. Two concurrent finalize calls on the same chat: only the first writes. Second returns null. No double-write. |
-| Chain step content cap | 2KB per chain step input and output in trackChainStep. Orchestrator internal calls produce compact records. |
-| Contribution per-chat cap | finalizeChat loads at most 2000 contribution IDs per chat. Long orchestrator chains with 5000+ contributions are capped. |
-| AI context map cap | activeAiContext (in-memory visitorId to chatId mapping) capped at 10,000 entries. Periodic sweep halves the map when over 50% capacity. Prevents leaks from missed clearChatContext calls. |
-| Request queue depth | 100 max waiting tasks per queue key. When all active slots are held by hung tasks, new requests are rejected with a clear error instead of queuing without bound. |
-| Config value clamping | Every setKernelConfig value is clamped to safe bounds. llmTimeout: 5s to 30m. llmMaxRetries: 0 to 10. maxToolIterations: 1 to 100. maxConversationMessages: 4 to 200. llmMaxConcurrent: 1 to 500. No config path produces a non-functional system. |
-| Context injection cap | injectContext caps injected system messages at 32KB. Extensions cannot consume the entire context window with a single injection. |
-| Tool call timeout | toolCallTimeout (default 60s, configurable) per individual MCP tool call. Prevents a single hung tool from blocking the conversation loop. |
-| Tool result truncation | toolResultMaxBytes (default 50KB, configurable) caps tool result size. Large results truncated before entering the message array. |
-| LLM response validation | Every LLM response validated for structure (choices array exists, is non-empty, first choice has message). Malformed responses from bad providers normalized to safe fallback instead of crashing. |
-| Conversation session cap | maxConversationSessions (default 50,000, configurable) hard cap on in-memory sessions. Evicts oldest on overflow. Prevents OOM from leaked API-mode sessions. |
-| Mode prompt safety | buildSystemPrompt wrapped in try/catch. Extension prompt builder crashes produce degraded prompt, not request failure. Prompts capped at 32KB. Non-string returns caught and replaced. |
-| Mode key validation | Mode keys must match `^[a-z][a-z0-9-]*:[a-z][a-z0-9-]*$`. Rejects path traversal, empty strings, uppercase, missing colons. |
-| Tool name validation | Tool names must match `^[a-z][a-z0-9_-]{0,63}$`. Schemas validated for structure and frozen on registration. Post-registration mutations silently fail. |
-| Tool/mode registry caps | maxRegisteredTools (default 500, configurable). maxRegisteredModes (default 200, configurable). Prevents runaway extensions from degrading iteration performance. |
-| Tool unregister on uninstall | Extension uninstall removes tool definitions and mode registrations. Stale tools from uninstalled extensions no longer linger in the registry. |
-| Default mode fallback on unregister | When an extension's mode is unregistered and it was the default for its zone, the default falls back to the kernel fallback mode. |
-| Blocked tool filter performance | Tree tool config blocked list uses Set for O(1) lookup instead of Array.includes O(n). |
-| var elimination | Zero `var` declarations in conversation.js, requestQueue.js, chatTracker.js. All const/let. Eliminates hoisting hazards in async code. |
-| Graceful shutdown | All interval timers use `.unref()`. SIGTERM closes server cleanly. |
+| SSRF protection | Peer registration and auto-discovery validate hostname against `isPrivateHost()` before any fetch. 15s timeout on federation fetches. Canopy event payloads capped at 256KB. |
+| Graceful shutdown | All interval timers use `.unref()`. SIGTERM closes WS, then HTTP, then DB. |
 
-## What the Seed Does NOT Do
+## What I do NOT do
 
-Values, goals, schedules, scripts, prestige, energy, billing, wallets, gateways, blogs, books, dreams, understanding, raw ideas, transactions, shell access, land management AI, fitness coaching, food tracking, HTML rendering, dashboards, recent trees, user tiers, starter types, or any domain-specific feature. All extensions.
+I do not track food, fitness, recovery, sleep, study, or any domain. I do not render HTML, manage share tokens, or serve login pages. I do not know what a billing tier is, what a wallet is, what a Discord channel is, what an email looks like, or what "morning routine" means. I do not define a single MCP tool definition. I do not run any AI conversation that is not initiated through a role's `summon()`.
 
-The seed does not define AI modes (navigate, structure, edit, respond). Those are the treeos extension. The seed provides a fallback mode and a mode registry. What modes exist is an extension decision.
+I provide structure. Extensions provide meaning.
 
-The seed does not define MCP tool definitions. The treeos extension registers tools. The seed provides the tool resolver registry.
-
-The seed does not render HTML, manage share tokens, or serve login pages. That's the html-rendering extension.
-
-The seed does not know what email is, what a billing tier is, or what a share token is. Extensions own those concepts through metadata.
-
-The seed provides structure. Extensions provide meaning.
+Plant me. Let the world form. The beings inside will speak.

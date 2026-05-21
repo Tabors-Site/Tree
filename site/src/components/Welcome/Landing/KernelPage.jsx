@@ -557,9 +557,9 @@ const KernelPage = () => {
               </p>
             </div>
             <div style={{marginBottom: 24}}>
-              <div style={{color: "#4ade80", fontSize: "0.9rem", fontWeight: 600, marginBottom: 8}}>core.tree</div>
+              <div style={{color: "#4ade80", fontSize: "0.9rem", fontWeight: 600, marginBottom: 8}}>core.space</div>
               <p style={{fontSize: "0.8rem", color: "#888"}}>
-                createNode, createNodeBranch, deleteNodeBranch, updateParentRelationship, editNodeName, editNodeType.
+                createSpace, createSpaceBranch, deleteSpaceBranch, updateParentRelationship, editSpaceName, editSpaceType.
                 Plus cache management, integrity check, and circuit breaker.
               </p>
             </div>

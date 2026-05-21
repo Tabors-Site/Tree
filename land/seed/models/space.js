@@ -6,11 +6,11 @@
 // just the Space tree.
 //
 // Twelve fields total. Anything an extension wants to attach lives in
-// metadata, namespaced by extension. See [[project_substrate_as_universal_workspace]].
+// `qualities`, namespaced by extension. See seed/land/qualities.js.
 
 import mongoose from "mongoose";
 import { v4 as uuidv4 } from "uuid";
-import { SEED_SPACE, DELETED } from "../space/seedSpaces.js";
+import { SEED_SPACE, DELETED } from "../land/space/seedSpaces.js";
 
 const SpaceSchema = new mongoose.Schema({
   _id:  { type: String, default: uuidv4 },
@@ -18,7 +18,7 @@ const SpaceSchema = new mongoose.Schema({
   type: { type: String, default: null },
   dateCreated: { type: Date, default: Date.now },
 
-  // Tree-wide default LLM. Extension slots live in metadata.
+  // Tree-wide default LLM. Extension slots live in qualities.llm.
   llmDefault: { type: String, ref: "LlmConnection", default: null },
 
   parent:   { type: String, ref: "Space", default: null },
@@ -33,17 +33,21 @@ const SpaceSchema = new mongoose.Schema({
 
   // Seed-managed Space marker. Non-null values identify positions the
   // kernel plants and owns (.identity, .config, .source, etc.). User-
-  // created Spaces have seedSpace: null. See seed/space/seedSpaces.js.
+  // created Spaces have seedSpace: null. See seed/land/space/seedSpaces.js.
   seedSpace: {
     type: String,
     enum: [null, ...Object.values(SEED_SPACE)],
     default: null,
   },
 
-  // Extension data, namespaced. Each extension writes to its own key
-  // via setExtMeta. The kernel never writes outside reserved namespaces
-  // (extensions, llm, permissions, beings, cascade, etc.).
-  metadata: { type: Map, of: mongoose.Schema.Types.Mixed, default: new Map() },
+  // Qualities. What kind a space is. Plato's ποιότης / qualitas: the
+  // answer to "of what sort is this?" Each extension writes to its
+  // own quality namespace via
+  // `qualities.space.setQuality(space, "<extName>", ...)` from
+  // seed/land/qualities.js. The kernel reserves a small set of
+  // namespaces for its own use (extensions, llm, permissions, beings,
+  // cascade); extensions can only write to their own.
+  qualities: { type: Map, of: mongoose.Schema.Types.Mixed, default: new Map() },
 });
 
 // Soft-delete only. Space deletion sets parent = DELETED in
@@ -57,7 +61,7 @@ SpaceSchema.index({ seedSpace: 1 }, { sparse: true });
 // Public-Space listing. A Space is public iff its layer-2 authorize
 // walk finds a wildcard SEE rule on the Space itself. Sparse so
 // private Spaces (no rule) don't bloat the index.
-SpaceSchema.index({ "metadata.permissions.see.*": 1 }, { sparse: true });
+SpaceSchema.index({ "qualities.permissions.see.*": 1 }, { sparse: true });
 
 // At most one plan-type child per scope. The "plan governs work at a
 // scope, branches live as siblings under that scope" rule depends on

@@ -64,7 +64,7 @@ const BeingSchema = new mongoose.Schema({
 
   // ── Roles ──
   // A Being carries one or more role names referencing templates in
-  // seed/being/roles/registry.js. Identity is durable on this record;
+  // seed/cognition/roles/registry.js. Identity is durable on this record;
   // role composes per summon. A Being acting in multiple roles is one
   // Being using different capacities, not many Beings.
   //
@@ -77,20 +77,20 @@ const BeingSchema = new mongoose.Schema({
 
   // ── Being tree ──
   // Beings form a recursive tree parallel to the Space tree. Every
-  // land has exactly one root: the I-am, created by
+  // land has exactly one root: the I_AM, created by
   // ensureLandRoot() at boot, identified by parentBeingId: null.
   //
   // Every other Being chains back to it:
   //   - System beings (auth, llm-assigner, land-manager) are children
-  //     of the I-am.
-  //   - The first human registers under the I-am and becomes
+  //     of the I_AM.
+  //   - The first human registers under the I_AM and becomes
   //     the root operator. Subsequent humans register under the
   //     auth-being.
   //   - When any being promotes a Space to Ruler, the new Ruler is a
   //     child of the invoking being. The Ruler then spawns
   //     Planner / Contractor / Foreman as its own children.
   //
-  // null parent is reserved for the I-am. All create-being /
+  // null parent is reserved for the I_AM. All create-being /
   // create-child calls require a parent.
   //
   // Being-tree parent/child is independent of homeSpace: multiple
@@ -135,10 +135,13 @@ const BeingSchema = new mongoose.Schema({
   isRemote: { type: Boolean, default: false },
   homeLand: { type: String, default: null },
 
-  // ── Extension data ──
-  // Same Map-of-Mixed pattern Space uses. Extensions write to their
-  // own namespace via getBeingMeta / setBeingMeta.
-  metadata: { type: Map, of: mongoose.Schema.Types.Mixed, default: new Map() },
+  // ── Qualities ──
+  // What kind a being is. Plato's ποιότης / qualitas: the answer to
+  // "of what sort is this?" Each extension writes to its own quality
+  // namespace via `qualities.being.setQuality(being, "<extName>", ...)`
+  // from seed/land/qualities.js. Same Map-of-Mixed pattern Space and
+  // Matter use.
+  qualities: { type: Map, of: mongoose.Schema.Types.Mixed, default: new Map() },
 }, {
   timestamps: true,
 });
@@ -163,9 +166,8 @@ BeingSchema.methods.comparePassword = async function (candidatePassword) {
   return bcrypt.compare(candidatePassword, this.password);
 };
 
-// Extension data lives in metadata. Callers use getBeingMeta /
-// setBeingMeta from seed/being/beingMetadata.js or getExtMeta /
-// setExtMeta from seed/space/extensionMetadata.js.
+// Extension data lives in `qualities`. Callers use
+// `qualities.being.setQuality` (etc.) from seed/land/qualities.js.
 
 const Being = mongoose.model("Being", BeingSchema, "beings");
 export default Being;

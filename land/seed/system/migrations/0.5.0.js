@@ -11,7 +11,7 @@
  *   - A "role" is the template the being follows (still defined in
  *     portal/roles/registry.js as the role-template registry).
  *   - The metadata at a position is a residence index: beings live
- *     here. The natural name is `metadata.beings`.
+ *     here. The natural name is `qualities.beings`.
  *
  * The data shape is unchanged:
  *
@@ -34,8 +34,8 @@ export default async function migrate() {
   // Only touch documents that actually have metadata.beings. The
   // filter keeps this fast on fresh lands and idempotent on re-runs.
   const result = await coll.updateMany(
-    { "metadata.embodiments": { $exists: true } },
-    { $rename: { "metadata.embodiments": "metadata.beings" } },
+    { "qualities.embodiments": { $exists: true } },
+    { $rename: { "qualities.embodiments": "qualities.beings" } },
   );
   if (result.modifiedCount > 0) {
     log.info("Seed/0.5.0",

@@ -30,17 +30,18 @@
 // [[project_everything_is_substrate]].
 
 import { registerOperation } from "./operations.js";
-import { setExtMeta, mergeExtMeta }            from "../space/extensionMetadata.js";
-import { setBeingMeta, mergeBeingMeta }        from "../being/beingMetadata.js";
-import { setMatterMeta, mergeMatterMeta }      from "../matter/matterMetadata.js";
-import { createSpace, editSpaceName, editSpaceType, deleteSpaceBranch, updateParentRelationship } from "../space/spaceManagement.js";
-import { resolveSpaceAccess } from "../space/spaceFetch.js";
+;
+;
+;
+import { createSpace, editSpaceName, editSpaceType, deleteSpaceBranch, updateParentRelationship } from "../land/space/spaceManagement.js";
+import { resolveSpaceAccess } from "../land/space/spaceFetch.js";
 import { getLandDomain } from "../ibp/address.js";
 import { IbpError, IBP_ERR, mapPatternsToIbpError } from "./errors.js";
 import Being    from "../models/being.js";
 import Matter   from "../models/matter.js";
 import Space     from "../models/space.js";
 
+import { qualities } from "../land/qualities.js";
 let _registered = false;
 
 /**
@@ -95,8 +96,8 @@ export function registerKernelOperations() {
         content: params.content ?? null,
         origin:  params.origin || "ibp",
         parentMatterId: null,
-        metadata: params.metadata
-          ? new Map(Object.entries(params.metadata))
+        metadata: params.qualities
+          ? new Map(Object.entries(params.qualities))
           : new Map(),
       });
       // _didTarget hints the dispatcher to name the new matter (not the
@@ -119,7 +120,7 @@ export function registerKernelOperations() {
   //   })
   //
   // The handler lives on the auth-being's `createBeing` method (see
-  // seed/being/roles/auth.js). Per the philosophy notes: BE acts on
+  // seed/cognition/roles/auth.js). Per the philosophy notes: BE acts on
   // the being calling it, and identity creation is the BE side of the
   // grammar.
 
@@ -223,7 +224,7 @@ export function registerKernelOperations() {
     handler: async ({ target, params: _params, identity, summonCtx }) => {
       const matterId = String(target?._id || target?.matterId || target);
       if (!matterId) throw new Error("delete-matter: matterId required");
-      const { deleteMatterAndFile } = await import("../matter/matters.js");
+      const { deleteMatterAndFile } = await import("../land/matter/matters.js");
       const beingId = identity?.beingId
         || (await Matter.findById(matterId).select("beingId").lean())?.beingId;
       await deleteMatterAndFile({
@@ -287,18 +288,18 @@ export function registerKernelOperations() {
       const kind = detectTargetKind(target);
 
       if (kind === "being") {
-        const op = merge !== false ? mergeBeingMeta : setBeingMeta;
+        const op = merge !== false ? qualities.being.mergeQuality : qualities.being.setQuality;
         await op(target, namespace, data);
         return { written: true, beingId: String(target._id), namespace, kind: "being" };
       }
       if (kind === "matter") {
-        const op = merge !== false ? mergeMatterMeta : setMatterMeta;
+        const op = merge !== false ? qualities.matter.mergeQuality : qualities.matter.setQuality;
         await op(target, namespace, data);
         return { written: true, matterId: String(target._id), namespace, kind: "matter" };
       }
       if (kind === "stance") return setMetaAtStance({ resolved: target, namespace, data, merge, identity });
       // kind === "space": Mongoose Space doc passed directly (extension path).
-      const op = merge !== false ? mergeExtMeta : setExtMeta;
+      const op = merge !== false ? qualities.space.mergeQuality : qualities.space.setQuality;
       await op(target, namespace, data);
       return { written: true, spaceId: String(target._id), namespace, kind: "space" };
     },
@@ -307,7 +308,7 @@ export function registerKernelOperations() {
   // plant-seed: invoke a registered seed recipe at the target space.
   // The recipe scaffolds the structure (Ruler beings, sub-domain
   // nodes, starter matter, metadata) on the target. See
-  // seed/space/seeds.js and memory `extension-seeds`.
+  // seed/land/space/seeds.js and memory `extension-seeds`.
   //
   // params:
   //   name   — required. The seed's registered name.
@@ -326,7 +327,7 @@ export function registerKernelOperations() {
       }
       const spaceId = targetIdOf(target);
       if (!spaceId) throw new Error("plant-seed: target must resolve to a space id");
-      const { plantSeed } = await import("../space/seeds.js");
+      const { plantSeed } = await import("../land/space/seeds.js");
       const { getCoreServices } = await import("../services.js");
       const core = getCoreServices();
       const seedParams = (params?.params && typeof params.params === "object" && !Array.isArray(params.params))
@@ -349,7 +350,7 @@ export function registerKernelOperations() {
   //
   // Target: the space the signal arrives at. Payload carries the signal
   // content + source. See [[project_cascade]] for the architecture and
-  // seed/space/cascade.js for the delivery semantics.
+  // seed/land/space/cascade.js for the delivery semantics.
   registerOperation("cascade", {
     targets: ["space"],
     ownerExtension: "kernel",
@@ -357,7 +358,7 @@ export function registerKernelOperations() {
       const spaceId = targetIdOf(target);
       const { payload = {}, source, signalId, depth } = params || {};
       const { v4: uuidv4 } = await import("uuid");
-      const { deliverCascade } = await import("../space/cascade.js");
+      const { deliverCascade } = await import("../land/space/cascade.js");
       const sid = signalId || uuidv4();
       const result = await deliverCascade({
         spaceId,
@@ -438,9 +439,9 @@ export function registerKernelOperations() {
   // walks both, so slot assignment lives at both:
   //
   //   Being target → Being.llmDefault (slot="main") or
-  //                  Being.metadata.userLlm.slots.<slot>
+  //                  Being.qualities.userLlm.slots.<slot>
   //   Space  target → Space.llmDefault  (slot="main") or
-  //                  Space.metadata.llm.slots.<slot>
+  //                  Space.qualities.llm.slots.<slot>
   registerOperation("assign-llm-slot", {
     targets: ["being", "space"],
     ownerExtension: "kernel",
@@ -701,9 +702,9 @@ async function setMetaAtStance({ resolved, namespace, data, merge, identity }) {
   }
   try {
     if (merge === false) {
-      await setExtMeta(space, namespace, data);
+      await qualities.space.setQuality(space, namespace, data);
     } else {
-      await mergeExtMeta(space, namespace, data);
+      await qualities.space.mergeQuality(space, namespace, data);
     }
     return { written: true, spaceId: String(space._id), namespace, kind: "space" };
   } catch (err) {

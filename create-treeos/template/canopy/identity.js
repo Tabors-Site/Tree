@@ -25,13 +25,13 @@ function cleanDomain(raw) {
 
 /**
  * Get the full base URL for this land (e.g. "http://localhost:3000" or "https://treeos.ai").
- * Derived from LAND_DOMAIN + PORT. Falls back to TREE_FRONTEND_DOMAIN for backward compat.
+ * Derived from LAND_DOMAIN + PORT. LAND_PUBLIC_URL overrides the whole
+ * value for reverse-proxy deploys where the constructed URL would be wrong.
  */
 export function getLandUrl() {
   if (cachedLandUrl) return cachedLandUrl;
-  // Backward compat: if TREE_FRONTEND_DOMAIN is set explicitly, use it
-  if (process.env.TREE_FRONTEND_DOMAIN) {
-    cachedLandUrl = process.env.TREE_FRONTEND_DOMAIN.replace(/\/+$/, "");
+  if (process.env.LAND_PUBLIC_URL) {
+    cachedLandUrl = process.env.LAND_PUBLIC_URL.replace(/\/+$/, "");
     return cachedLandUrl;
   }
   const domain = cleanDomain(process.env.LAND_DOMAIN || "localhost");

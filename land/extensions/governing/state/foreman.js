@@ -15,12 +15,12 @@
 //
 // Architecture:
 //
-//   ruler-node
-//   ├── plan-node (Planner's surface)
+//   ruler-space
+//   ├── plan-space (Planner's surface)
 //   │   └── plan-emission-N (immutable plan draft)
-//   ├── contracts-node (Contractor's surface)
+//   ├── contracts-space (Contractor's surface)
 //   │   └── contracts-emission-M (immutable contracts draft)
-//   ├── execution-node (Foreman's surface)
+//   ├── execution-space (Foreman's surface)
 //   │   ├── execution-record-1 (mutable while running, frozen at
 //   │   │                       completion/supersession)
 //   │   └── execution-record-N (current — tied to plan-emission-N)
@@ -93,7 +93,7 @@ export function parseExecutionRef(ref) {
 }
 
 /**
- * Compute the next execution-record ordinal under an execution-node.
+ * Compute the next execution-record ordinal under an execution-space.
  * Counts existing execution-record children and increments.
  */
 async function nextRecordOrdinal(executionSpaceId) {
@@ -161,8 +161,8 @@ function buildInitialStepStatuses(planEmission) {
 }
 
 /**
- * Create a new execution-record child node under the Ruler's
- * execution-node, initialize its stepStatuses from the active plan
+ * Create a new execution-record child space under the Ruler's
+ * execution-space, initialize its stepStatuses from the active plan
  * emission, and append an executionApproval entry to the Ruler.
  *
  * Idempotent for the same ordinal: if a record at the next ordinal
@@ -189,13 +189,13 @@ export async function appendExecutionRecord({
   const authIdentity = identity || (beingId ? { beingId } : null);
   if (!rulerSpaceId || !planEmissionRef) return null;
 
-  // Ensure the execution-node parent exists.
+  // Ensure the execution-space parent exists.
   let executionSpace = await findExecutionNode(rulerSpaceId);
   if (!executionSpace) {
     executionSpace = await ensureExecutionNode({ scopeSpaceId: rulerSpaceId, beingId, core });
   }
   if (!executionSpace) {
-    log.warn("Governing", `appendExecutionRecord: no execution-node resolvable at ${String(rulerSpaceId).slice(0, 8)}`);
+    log.warn("Governing", `appendExecutionRecord: no execution-space resolvable at ${String(rulerSpaceId).slice(0, 8)}`);
     return null;
   }
 
@@ -221,7 +221,7 @@ export async function appendExecutionRecord({
   // Run records inherit their slug from the plan emission they're
   // dispatching. A run named after the plan it executes makes the
   // tree readable: "runs/single-react-component-canvas-toolbar"
-  // tells you what was attempted without expanding the node. Falls
+  // tells you what was attempted without expanding the space. Falls
   // back to "record-N" when planEmission has no reasoning.
   const { slugifyEmission } = await import("./slugifyEmission.js");
   const planSlug = slugifyEmission(planEmission?.reasoning, ordinal);
@@ -279,8 +279,8 @@ export async function appendExecutionRecord({
     // write. merge:true preserves other NS keys atomically; no manual
     // read-spread-write.
     const space = await Space.findById(recordNode._id);
-    if (node) {
-      await core.do(node, "set-meta", {
+    if (space) {
+      await core.do(space, "set-meta", {
         namespace: NS,
         data: {
           role: "execution-record",
@@ -343,9 +343,9 @@ export async function appendExecutionApproval({
   const space = await Space.findById(rulerSpaceId);
   if (!space) return null;
 
-  const meta = space.metadata instanceof Map
-    ? space.metadata.get(NS)
-    : space.metadata?.[NS];
+  const meta = space.qualities instanceof Map
+    ? space.qualities.get(NS)
+    : space.qualities?.[NS];
   const existing = Array.isArray(meta?.executionApprovals) ? meta.executionApprovals : [];
 
   const { v4: uuid } = await import("uuid");
@@ -361,7 +361,7 @@ export async function appendExecutionApproval({
 
   // Phase 3 migration: verb-surface write. merge:true atomically adds
   // executionApprovals without clobbering other NS keys.
-  await core.do(node, "set-meta", {
+  await core.do(space, "set-meta", {
     namespace: NS,
     data: { executionApprovals: [...existing, entry] },
     merge: true,
@@ -394,9 +394,9 @@ export async function readExecutionApprovalsAtRuler(rulerSpaceId) {
   if (!rulerSpaceId) return [];
   const space = await Space.findById(rulerSpaceId).select("_id metadata").lean();
   if (!space) return [];
-  const meta = space.metadata instanceof Map
-    ? space.metadata.get(NS)
-    : space.metadata?.[NS];
+  const meta = space.qualities instanceof Map
+    ? space.qualities.get(NS)
+    : space.qualities?.[NS];
   return Array.isArray(meta?.executionApprovals) ? meta.executionApprovals : [];
 }
 
@@ -425,8 +425,8 @@ export async function readActiveExecutionApproval(rulerSpaceId) {
 /**
  * Read the active execution-record at a Ruler scope. Walks the
  * approvals ledger to find the active executionRef, resolves to the
- * record node, returns the execution payload. Carries the record
- * node id and the approval id as `_recordNodeId` and `_approvalRef`
+ * record space, returns the execution payload. Carries the record
+ * space id and the approval id as `_recordNodeId` and `_approvalRef`
  * for callers that need them (e.g., supersession bookkeeping).
  *
  * Returns null when no execution-record is active (fresh Ruler before
@@ -439,9 +439,9 @@ export async function readActiveExecutionRecord(rulerSpaceId) {
   if (!parsed) return null;
   const space = await Space.findById(parsed.recordId).select("_id metadata").lean();
   if (!space) return null;
-  const meta = space.metadata instanceof Map
-    ? space.metadata.get(NS)
-    : space.metadata?.[NS];
+  const meta = space.qualities instanceof Map
+    ? space.qualities.get(NS)
+    : space.qualities?.[NS];
   if (meta?.role !== "execution-record" || !meta?.execution) return null;
   return {
     ...meta.execution,
@@ -475,9 +475,9 @@ export async function updateStepStatus({
   const space = await Space.findById(recordNodeId);
   if (!space) return null;
 
-  const meta = space.metadata instanceof Map
-    ? space.metadata.get(NS)
-    : space.metadata?.[NS];
+  const meta = space.qualities instanceof Map
+    ? space.qualities.get(NS)
+    : space.qualities?.[NS];
   if (meta?.role !== "execution-record" || !meta?.execution) return null;
 
   const execution = { ...meta.execution };
@@ -506,7 +506,7 @@ export async function updateStepStatus({
   execution.stepStatuses = stepStatuses;
 
   // Phase 3 migration: verb-surface write with atomic merge.
-  await core.do(node, "set-meta", {
+  await core.do(space, "set-meta", {
     namespace: NS,
     data: { execution },
     merge: true,
@@ -591,9 +591,9 @@ export async function freezeExecutionRecord({
   const space = await Space.findById(recordNodeId);
   if (!space) return null;
 
-  const meta = space.metadata instanceof Map
-    ? space.metadata.get(NS)
-    : space.metadata?.[NS];
+  const meta = space.qualities instanceof Map
+    ? space.qualities.get(NS)
+    : space.qualities?.[NS];
   if (meta?.role !== "execution-record" || !meta?.execution) return null;
 
   const priorStatus = meta.execution.status;
@@ -605,7 +605,7 @@ export async function freezeExecutionRecord({
 
   // Phase 3 migration: verb-surface write of the terminal execution
   // status. merge:true preserves siblings atomically.
-  await core.do(node, "set-meta", {
+  await core.do(space, "set-meta", {
     namespace: NS,
     data: { execution },
     merge: true,

@@ -7,12 +7,12 @@
 //   2. Extension auth strategies (api-keys, custom schemes).
 //   3. Reject (or pass through for `authenticateOptional`).
 //
-// JWT verification lives in seed/being/identity.js so every transport
+// JWT verification lives in seed/land/being/identity.js so every transport
 // (HTTP middleware, WS, IBP adapter, MCP) shares one source of truth.
 
 import log from "../../../seed/system/log.js";
-import { verifyTokenStrict } from "../../../seed/being/identity.js";
-import { resolveSpaceAccess } from "../../../seed/space/spaceFetch.js";
+import { verifyTokenStrict } from "../../../seed/land/being/identity.js";
+import { resolveSpaceAccess } from "../../../seed/land/space/spaceFetch.js";
 import { authStrategies } from "../../../seed/services.js";
 import { sendError, ERR } from "../../../seed/ibp/protocol.js";
 
@@ -125,7 +125,7 @@ const TREE_ACCESS_ERRORS = {
 
 /**
  * Resolve tree access for the request. Sends error response and returns
- * `false` if access is denied or the node doesn't exist. Returns `true`
+ * `false` if access is denied or the space doesn't exist. Returns `true`
  * on success or when no spaceId is present (nothing to check).
  */
 async function attachTreeAccess(req, res) {

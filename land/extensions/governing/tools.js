@@ -3,7 +3,7 @@
 // Phase 2 prototype: governing-emit-plan. The Planner emits the
 // structured plan for this Ruler scope via a single tool call. The
 // args carry the full plan structure (reasoning, typed steps, branch
-// rationale); the server materializes a plan-emission child node
+// rationale); the server materializes a plan-emission child space
 // under the plan trio member and records a planApproval entry on the
 // Ruler. This replaces the [[BRANCHES]] text-and-parser path for
 // plans, but only the EMISSION half — dispatch still reads
@@ -145,16 +145,16 @@ function validatePlanArgs(args) {
 /**
  * Resolve the Ruler scope to anchor this plan emission. Caller's
  * currentSpace is the natural anchor: in the prototype, the Planner
- * runs at the Ruler scope, so the current node IS the Ruler. Defensive:
- * if the current node lacks the ruler role, walk up via findRulerScope.
+ * runs at the Ruler scope, so the current space IS the Ruler. Defensive:
+ * if the current space lacks the ruler role, walk up via findRulerScope.
  */
 async function resolveRuler(spaceId) {
   if (!spaceId) return null;
   const direct = await Space.findById(spaceId).select("_id name parent metadata").lean();
   if (!direct) return null;
-  const meta = direct.metadata instanceof Map
-    ? Object.fromEntries(direct.metadata)
-    : (direct.metadata || {});
+  const meta = direct.qualities instanceof Map
+    ? Object.fromEntries(direct.qualities)
+    : (direct.qualities || {});
   if (meta?.governing?.role === "ruler") return direct;
 
   // Walk up.
@@ -170,7 +170,7 @@ async function resolveRuler(spaceId) {
 
 /**
  * Find the plan trio member under a Ruler. Phase 1 stamps governing
- * role "plan" on this node, so the probe is direct: type=plan child
+ * role "plan" on this space, so the probe is direct: type=plan child
  * with that role. Returns null if absent (caller should call
  * governing.ensurePlanAtScope first; the Ruler cycle does this in
  * runRulerCycle).
@@ -183,7 +183,7 @@ async function findPlanTrioMember(rulerSpaceId) {
 }
 
 /**
- * Compute the next emission ordinal for naming the child node
+ * Compute the next emission ordinal for naming the child space
  * "emission-N". Counts existing plan-emission children and increments.
  */
 async function nextEmissionOrdinal(planSpaceId) {
@@ -195,9 +195,9 @@ async function nextEmissionOrdinal(planSpaceId) {
 }
 
 /**
- * Create the plan-emission child node under the plan trio member.
+ * Create the plan-emission child space under the plan trio member.
  * Carries the structured emission in metadata.governing.emission.
- * Returns the created node.
+ * Returns the created space.
  */
 async function createPlanEmission({ planSpaceId, ordinal, payload, beingId, identity = null, core }) {
   const authIdentity = identity || (beingId ? { beingId } : null);
@@ -240,7 +240,7 @@ async function createPlanEmission({ planSpaceId, ordinal, payload, beingId, iden
   }
 
   // Stamp governing role + the structured emission. Role marker makes
-  // this node structural for the kernel's beforeSpaceDelete guard. The
+  // this space structural for the kernel's beforeSpaceDelete guard. The
   // structured plan nests up to 7 levels (governing → emission →
   // steps[] → step → branches[] → branch); kernel default depth cap
   // is 8 to accommodate this and similar coordination shapes.
@@ -248,8 +248,8 @@ async function createPlanEmission({ planSpaceId, ordinal, payload, beingId, iden
     // Phase 3 migration: verb-surface write. merge:true keeps siblings
     // atomically; no manual read-spread-write needed.
     const space = await Space.findById(created._id);
-    if (node) {
-      await core.do(node, "set-meta", {
+    if (space) {
+      await core.do(space, "set-meta", {
         namespace: "governing",
         data: {
           role: "plan-emission",
@@ -270,8 +270,8 @@ async function createPlanEmission({ planSpaceId, ordinal, payload, beingId, iden
 
 // Resolve a list of consumer scope names (the strings the Contractor
 // uses inside scope tags, e.g. "frontend", "backend") to the matching
-// child node ids under the Ruler scope. Names match either by exact
-// node name (case-insensitive) or by the legacy swarm `path` field
+// child space ids under the Ruler scope. Names match either by exact
+// space name (case-insensitive) or by the legacy swarm `path` field
 // when the branch was dispatched with a custom path. Returns an array
 // the same length as `names` with nullable entries for unresolved.
 async function resolveConsumerNodeIds(rulerSpaceId, names) {
@@ -281,9 +281,9 @@ async function resolveConsumerNodeIds(rulerSpaceId, names) {
     .lean();
   const lookup = new Map();
   for (const k of kids) {
-    const md = k.metadata instanceof Map
-      ? Object.fromEntries(k.metadata)
-      : (k.metadata || {});
+    const md = k.qualities instanceof Map
+      ? Object.fromEntries(k.qualities)
+      : (k.qualities || {});
     if (k.name) lookup.set(String(k.name).toLowerCase(), String(k._id));
     const swarmPath = md.swarm?.path;
     if (typeof swarmPath === "string" && swarmPath) {
@@ -428,7 +428,7 @@ export default function getGoverningTools(core) {
         "Single-branch is rejected — if only one delegation is needed, use a leaf with a " +
         "domain-shaped spec and let the worker self-promote if it compounds. Be as " +
         "thorough as the work warrants; padding and repetition are rejected. The server " +
-        "materializes a plan-emission child node under this Ruler's plan node and records " +
+        "materializes a plan-emission child space under this Ruler's plan space and records " +
         "a planApproval entry. Returns {ok, emissionId, planRef}. After this tool succeeds, " +
         "you are done — exit.",
       schema: {
@@ -459,7 +459,7 @@ export default function getGoverningTools(core) {
             "sub-Ruler's own Planner picks types for its child plan.",
           ),
           branches: z.array(z.object({
-            name: z.string().describe("Sub-domain name. Becomes the directory/node name. Lowercase-kebab preferred."),
+            name: z.string().describe("Sub-domain name. Becomes the directory/space name. Lowercase-kebab preferred."),
             spec: z.string().describe("Concrete description of what this sub-domain owns end-to-end."),
           })).optional().describe(
             "Required for branch steps. 2+ entries. Each entry becomes a sub-Ruler.",
@@ -490,7 +490,7 @@ export default function getGoverningTools(core) {
         const ruler = await resolveRuler(spaceId);
         if (!ruler) {
           return text(
-            `governing-emit-plan: no Ruler scope resolvable from current node ${String(spaceId).slice(0, 8)}. ` +
+            `governing-emit-plan: no Ruler scope resolvable from current space ${String(spaceId).slice(0, 8)}. ` +
             `The Ruler should self-promote before the Planner is dispatched; if you see this from inside ` +
             `a Planner cycle, it is a substrate bug — surface it.`,
           );
@@ -499,7 +499,7 @@ export default function getGoverningTools(core) {
         // Locate the plan trio member, creating it lazily if absent.
         // Trio creation is lazy by design: a Ruler scope without any
         // emissions has no trio nodes hanging around. The first
-        // governing-emit-plan call materializes the "plans" node, the
+        // governing-emit-plan call materializes the "plans" space, the
         // first governing-emit-contracts call materializes "contracts",
         // and the first dispatch-execution materializes "runs".
         let planSpace = await findPlanTrioMember(ruler._id);
@@ -514,7 +514,7 @@ export default function getGoverningTools(core) {
               });
             }
           } catch (err) {
-            log.warn("Governing", `governing-emit-plan: lazy plan-node creation failed: ${err.message}`);
+            log.warn("Governing", `governing-emit-plan: lazy plan-space creation failed: ${err.message}`);
           }
         }
         if (!planSpace) {
@@ -536,7 +536,7 @@ export default function getGoverningTools(core) {
 
         // Diagnostic: surface the validated emission shape before the
         // stamp so we can verify in logs what the model actually
-        // emitted (vs. what landed on the node). If the stamp throws
+        // emitted (vs. what landed on the space). If the stamp throws
         // silently, this log is the only record of the model's intent.
         const branchStepCount = payload.steps.filter((s) => s.type === "branch").length;
         const leafStepCount = payload.steps.filter((s) => s.type === "leaf").length;
@@ -573,19 +573,19 @@ export default function getGoverningTools(core) {
           core,
         });
 
-        // Verify the stamp actually landed by re-reading the node.
+        // Verify the stamp actually landed by re-reading the space.
         // If the kernel's depth guard rejected it (still happening
         // despite the cap bump?), we surface that explicitly here.
         try {
           const verify = await Space.findById(emissionSpace._id).select("_id metadata").lean();
-          const verifyMeta = verify?.metadata instanceof Map
-            ? Object.fromEntries(verify.metadata)
-            : (verify?.metadata || {});
+          const verifyMeta = verify?.qualities instanceof Map
+            ? Object.fromEntries(verify.qualities)
+            : (verify?.qualities || {});
           const stampedSteps = verifyMeta?.governing?.emission?.steps?.length;
           if (typeof stampedSteps !== "number") {
             log.warn("Governing",
               `⚠️  emission-${ordinal} stamp NOT visible after write at ${String(emissionSpace._id).slice(0, 8)}; ` +
-              `metadata.governing keys=${Object.keys(verifyMeta?.governing || {}).join(",") || "(none)"}`);
+              `qualities.governing keys=${Object.keys(verifyMeta?.governing || {}).join(",") || "(none)"}`);
           } else {
             log.info("Governing",
               `✅ emission-${ordinal} stamped at ${String(emissionSpace._id).slice(0, 8)} ` +
@@ -674,8 +674,8 @@ export default function getGoverningTools(core) {
     // contract set as a whole), then a `contracts[]` array where each
     // entry is a single contract with kind/name/scope/details/rationale.
     // Server validates the shape, resolves `scope.shared`/`scope.local`
-    // names to consumer node IDs (for LCA validation), and persists via
-    // governing.setContracts which writes the contracts node and the
+    // names to consumer space IDs (for LCA validation), and persists via
+    // governing.setContracts which writes the contracts space and the
     // Ruler's contractApprovals ledger atomically.
     //
     // Idempotent: if every emitted contract is structurally identical
@@ -766,13 +766,13 @@ export default function getGoverningTools(core) {
         const ruler = await resolveRuler(spaceId);
         if (!ruler) {
           return text(
-            `governing-emit-contracts: no Ruler scope resolvable from current node ${String(spaceId).slice(0, 8)}. ` +
+            `governing-emit-contracts: no Ruler scope resolvable from current space ${String(spaceId).slice(0, 8)}. ` +
             `Surface as substrate bug.`,
           );
         }
 
         // Translate structured contracts → setContracts shape. Resolve
-        // scope.shared / scope.local consumer names to node ids so LCA
+        // scope.shared / scope.local consumer names to space ids so LCA
         // validation runs in setContracts. For scope: "global" no
         // resolution needed.
         const incoming = [];
@@ -825,7 +825,7 @@ export default function getGoverningTools(core) {
             core,
             // Inheritance declaration form: child scope inherits parent
             // contracts. The emission still materializes a ratified
-            // node + approval entry so dispatch-execution sees the
+            // space + approval entry so dispatch-execution sees the
             // gated state as satisfied and Pass 2 courts have a signed
             // record of the inheritance decision.
             inheritsFrom: validation.value.inheritsFrom || null,

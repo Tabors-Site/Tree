@@ -61,7 +61,7 @@ Start from Ruler outward. Each step uses the substrate already built
    dispatch logic from `tree-orchestrator/dispatch.js`:
    - Walks plan steps.
    - For each leaf-group: SUMMONs the typed worker beings in parallel.
-   - Uses `core.ibp.aggregate({ correlations: [...], minReplies: N })`
+   - Uses `core.declare.aggregate({ correlations: [...], minReplies: N })`
      to wait for replies.
    - Synthesizes outcome; emits next step's SUMMONs (sub-Ruler for
      branch steps, next leaf-group otherwise).
@@ -75,7 +75,7 @@ Start from Ruler outward. Each step uses the substrate already built
    loading the relevant substrate (active plan emission, contracts
    emission, execution record) for synthesis.
 7. **Wire-up in `governing/index.js`** — register new roles via
-   `core.ibp.registerRole`. Old `modes/` registrations stay for the
+   `core.declare.registerRole`. Old `modes/` registrations stay for the
    migration window so legacy callers keep working until flip.
 8. **Flip the dispatch path**: `rulerTools.js`'s `hire-planner` etc.
    already emit SUMMONs to the planner role. Foreman's dispatch
@@ -89,14 +89,14 @@ Start from Ruler outward. Each step uses the substrate already built
 
 ## What the substrate already provides (so this rewrite is bounded)
 
-- `core.ibp.registerRole(name, def)` — register the role template
-- `core.ibp.aggregate({ correlations, minReplies, timeoutMs })` —
+- `core.declare.registerRole(name, def)` — register the role template
+- `core.declare.aggregate({ correlations, minReplies, timeoutMs })` —
   wait-for-N-replies primitive for the Foreman→Workers fanout
-- `core.ibp.schedule(beingId, opts)` — scheduled-wake registry (not
+- `core.declare.schedule(beingId, opts)` — scheduled-wake registry (not
   used heavily by governing, but available)
-- `core.ibp.cancelByRootCorrelation(nodeId, beingId, rootCorrelation)`
+- `core.declare.cancelByRootCorrelation(nodeId, beingId, rootCorrelation)`
   + scheduler `abortCurrent(beingId)` — cancellation cascade
-- `core.ibp.subscribe(beingId, opts)` — DO-trigger subscriptions if
+- `core.declare.subscribe(beingId, opts)` — DO-trigger subscriptions if
   any role wants to react to substrate writes
 - `Being.roles[]` + `defaultRole` + envelope.activeRole — role-
   composition kernel-level (per identity-durable-role-composable memo)

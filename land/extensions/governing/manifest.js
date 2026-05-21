@@ -4,7 +4,7 @@ export default {
   builtFor: "TreeOS",
   description:
     "The coordination glue of TreeOS. Governing is what makes a tree a " +
-    "tree — the substrate that turns a node with sub-work into a " +
+    "tree — the substrate that turns a space with sub-work into a " +
     "coordinated domain, and a workspace extension into something that " +
     "can handle projects requiring multiple branches working together. " +
     "Without governing, a tree is a folder structure; with governing, " +
@@ -50,11 +50,11 @@ export default {
     "worker type per leaf, and workspace extensions can specialize the " +
     "Worker base for domain-specific tools and validators. " +
     "\n\n" +
-    "Self-promotion lifecycle. A node promotes itself to Ruler when it " +
+    "Self-promotion lifecycle. A space promotes itself to Ruler when it " +
     "takes responsibility for a domain. Three uniform call sites: root " +
-    "node on user request arrival, branch node on sub-Ruler dispatch, " +
+    "space on user request arrival, branch space on sub-Ruler dispatch, " +
     "Worker mid-build on scope undershoot (the work turned out compound, " +
-    "the Worker emits sub-branches and its own node retroactively " +
+    "the Worker emits sub-branches and its own space retroactively " +
     "becomes a Ruler). Same function, same metadata write, same " +
     'lifecycle event at every depth. metadata.governing.role = "ruler" ' +
     "plus an acceptedAt ISO timestamp. Approval ledgers " +
@@ -121,7 +121,7 @@ export default {
 
     hooks: {
       // Lifecycle events workspaces and future courts subscribe to.
-      // governing:rulerPromoted fires when a node self-promotes via
+      // governing:rulerPromoted fires when a space self-promotes via
       // promoteToRuler at any depth (root, sub-Ruler, leaf-becoming-
       // compound). governing:contractRatified fires when a Ruler
       // ratifies the Contractor's emission. governing:roleAssigned

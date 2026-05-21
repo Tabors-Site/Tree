@@ -33,11 +33,11 @@ function wireLiveHooks() {
   if (_hooksWired) return;
   _hooksWired = true;
 
-  // Placement metadata changed on a node: invalidate the node's own
-  // descriptor and its parent's (which lists this node as a child).
-  hooks.register("afterMetadataWrite", async ({ spaceId, extName }) => {
+  // Placement metadata changed on a space: invalidate the space's own
+  // descriptor and its parent's (which lists this space as a child).
+  hooks.register("afterQualityWrite", async ({ spaceId, extName }) => {
     if (!spaceId || !PLACEMENT_NAMESPACES.has(extName)) return;
-    emitPositionInvalidate(spaceId, `metadata:${extName}`);
+    emitPositionInvalidate(spaceId, `qualities:${extName}`);
     try {
       const n = await Space.findById(spaceId).select("parent").lean();
       if (n?.parent) emitPositionInvalidate(n.parent, `child-metadata:${extName}`);
@@ -46,11 +46,11 @@ function wireLiveHooks() {
 
   // Structural changes: new/removed/moved children change the parent's
   // descriptor. Matter writes change the affected position's content.
-  hooks.register("afterSpaceCreate", async ({ node }) => {
-    if (node?.parent) emitPositionInvalidate(node.parent, "child-created");
+  hooks.register("afterSpaceCreate", async ({ space }) => {
+    if (space?.parent) emitPositionInvalidate(space.parent, "child-created");
   }, "ibp-live");
-  hooks.register("afterSpaceDelete", async ({ node }) => {
-    if (node?.parent) emitPositionInvalidate(node.parent, "child-deleted");
+  hooks.register("afterSpaceDelete", async ({ space }) => {
+    if (space?.parent) emitPositionInvalidate(space.parent, "child-deleted");
   }, "ibp-live");
   hooks.register("afterMatter", async ({ spaceId }) => {
     if (spaceId) emitPositionInvalidate(spaceId, "matter-changed");
@@ -72,7 +72,7 @@ function wireLiveHooks() {
   // (anonymous code emitting DOs) and Mode 1 (beings reacting to
   // substrate changes through summons).
   hooks.register("afterMatter",        (payload) => emitToSubscribers("afterMatter",        payload), "ibp-subscriptions");
-  hooks.register("afterMetadataWrite", (payload) => emitToSubscribers("afterMetadataWrite", payload), "ibp-subscriptions");
+  hooks.register("afterQualityWrite", (payload) => emitToSubscribers("afterQualityWrite", payload), "ibp-subscriptions");
 
   log.info("IBP", "live SEE hooks wired (afterMetadataWrite, afterSpace*, afterMatter, afterToolCall); DO-trigger subscriptions wired (afterMatter, afterMetadataWrite)");
 }

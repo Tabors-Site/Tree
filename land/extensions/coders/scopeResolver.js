@@ -5,7 +5,7 @@
 // path stays within it.
 //
 // **projectPath resolution.** The path is stamped on the coders-
-// rulership space as `metadata.coders.projectPath`. The helper walks
+// rulership space as `qualities.coders.projectPath`. The helper walks
 // up the ancestor chain from the caller's spaceId until it finds an
 // ancestor with that field. Sub-Ruler spaces inherit the path from
 // their parent rulership; a sub-Ruler at /myproject/frontend gets the
@@ -29,7 +29,7 @@ const MAX_ANCESTOR_DEPTH = 20;
 
 /**
  * Walk up from `spaceId` looking for an ancestor whose
- * `metadata.coders.projectPath` is set. Returns `{ projectPath,
+ * `qualities.coders.projectPath` is set. Returns `{ projectPath,
  * rulershipSpaceId }` or `null` if no ancestor declares it.
  *
  * @param {string} spaceId
@@ -42,9 +42,9 @@ export async function resolveCoderScope(spaceId) {
   while (currentId && depth < MAX_ANCESTOR_DEPTH) {
     const space = await Space.findById(currentId).select("_id parent metadata").lean();
     if (!space) return null;
-    const meta = space.metadata instanceof Map
-      ? space.metadata.get("coders")
-      : space.metadata?.coders;
+    const meta = space.qualities instanceof Map
+      ? space.qualities.get("coders")
+      : space.qualities?.coders;
     if (meta && typeof meta.projectPath === "string" && meta.projectPath.length > 0) {
       return {
         projectPath: meta.projectPath,

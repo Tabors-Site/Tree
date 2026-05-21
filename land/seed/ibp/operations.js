@@ -167,7 +167,7 @@ export function listOperations(filter = {}) {
  */
 export async function syncOperationsToSubstrate() {
   const { SEED_SPACE } = await import("./protocol.js");
-  const { syncRegistryToSubstrate } = await import("../system/registryMirror.js");
+  const { syncRegistryToSubstrate } = await import("../land/registryMirror.js");
   const items = [];
   for (const op of REGISTRY.values()) {
     items.push({

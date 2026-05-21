@@ -12,7 +12,7 @@
 //
 //   2. **Dispatch** (content.kind === "dispatch-plan"): walk plan
 //      steps, fan out SUMMONs per leaf-batch and per branch-step,
-//      aggregate replies via `core.ibp.aggregate`, settle, reply to
+//      aggregate replies via `core.declare.aggregate`, settle, reply to
 //      Ruler. Absorbs the work `dispatchSwarmPlan` did inside the
 //      orchestrator.
 //
@@ -136,10 +136,10 @@ look at the ARTIFACT EVIDENCE block in your wakeup payload. It lists:
   • any pending blocking flags Workers refused on.
 
 Cross-reference against the plan's leaf specs:
-  • If a leaf spec promised "a research-notes node", look for a child
+  • If a leaf spec promised "a research-notes space", look for a child
     named research-notes (or close to it). No matching child = the
-    Worker said done but the node was never created.
-  • If a leaf spec promised "the chapter prose on the chapter node",
+    Worker said done but the space was never created.
+  • If a leaf spec promised "the chapter prose on the chapter space",
     look at the Ruler scope's own notes. Zero notes on the scope =
     the prose was never written.
   • If a leaf is marked "blocked" with a contract-conflict reason,
@@ -148,8 +148,8 @@ Cross-reference against the plan's leaf specs:
     right call so the plan can be revised.
 
 If the artifact-evidence block lacks detail on a specific child you
-need to verify, call get-node-notes with that child's spaceId before
-you decide. get-node-notes does not end your turn. Use it freely.
+need to verify, call get-space-notes with that child's spaceId before
+you decide. get-space-notes does not end your turn. Use it freely.
 
 Freeze terminalStatus picks:
   • "completed" — every leaf's promised artifact is present AND no
@@ -332,8 +332,8 @@ export const foremanRole = {
 
   canSee: [
     "foreman-read-branch-detail",
-    "get-node-notes",
-    "get-node",
+    "get-space-notes",
+    "get-space",
   ],
 
   // Pure state mutations on the execution record.
@@ -371,7 +371,7 @@ export const foremanRole = {
     const executionSpaceId = ctx.spaceId || ctx.resolved?.spaceId;
     if (!executionSpaceId) {
       log.warn("Foreman", "summon without spaceId; returning empty");
-      return { text: "Internal error: no execution node." };
+      return { text: "Internal error: no execution space." };
     }
 
     const isDispatch =
@@ -449,14 +449,14 @@ async function runDispatch(message, ctx, executionSpaceId) {
     `🚦 dispatch summons at ${String(executionSpaceId).slice(0, 8)} ` +
     `(from=${message.from || "?"}, correlation=${message.correlation?.slice(0, 8) || "?"})`);
 
-  // ── Resolve Ruler scope. The execution node carries scopeRulerId
+  // ── Resolve Ruler scope. The execution space carries scopeRulerId
   //    in its governing metadata (stamped at ensureExecutionNode time).
   const executionSpace = await Space.findById(executionSpaceId).select("metadata").lean();
   const governing = readMetaPath(executionSpace, ["governing"]);
   const rulerSpaceId = governing?.scopeRulerId;
   if (!rulerSpaceId) {
     log.warn("Foreman",
-      `dispatch: execution node ${String(executionSpaceId).slice(0, 8)} ` +
+      `dispatch: execution space ${String(executionSpaceId).slice(0, 8)} ` +
       `has no scopeRulerId; cannot resolve plan`);
     return { text: "dispatch failed: no ruler scope" };
   }
@@ -569,7 +569,7 @@ async function dispatchLeafBatch({ group, executionSpaceId, rulerSpaceId, ctx, a
     return;
   }
 
-  // Ensure the typed worker being exists at the execution node.
+  // Ensure the typed worker being exists at the execution space.
   const workerBeing = await ensureWorkerBeing({
     executionSpaceId,
     workerRoleName,
@@ -666,7 +666,7 @@ async function dispatchBranchStep({ group, executionSpaceId, rulerSpaceId, ctx, 
     `dispatching ${branches.length} sub-Ruler(s)`);
 
   // Future: ensure sub-Ruler nodes exist, promote each to Ruler if
-  // not already, SUMMON the @ruler at each sub-Ruler node with a
+  // not already, SUMMON the @ruler at each sub-Ruler space with a
   // briefing carrying the branch spec. Aggregate replies via
   // aggregate({ correlations, minReplies: N }) with one correlation
   // per sub-Ruler. For now this leaves a structural stub — the
@@ -679,12 +679,12 @@ async function dispatchBranchStep({ group, executionSpaceId, rulerSpaceId, ctx, 
 }
 
 // ────────────────────────────────────────────────────────────────
-// Ensure a typed-worker being at the execution node
+// Ensure a typed-worker being at the execution space
 // ────────────────────────────────────────────────────────────────
 
 async function ensureWorkerBeing({ executionSpaceId, workerRoleName }) {
   // Read existing — metadata.beings.<workerRoleName>.beingId at the
-  // execution node tells us if one's already materialized.
+  // execution space tells us if one's already materialized.
   const execSpace = await Space.findById(executionSpaceId).select("metadata").lean();
   const beings = readMetaPath(execSpace, ["beings"]);
   const existingId = beings?.[workerRoleName]?.beingId;
@@ -693,23 +693,23 @@ async function ensureWorkerBeing({ executionSpaceId, workerRoleName }) {
   }
 
   // Create lazily via createBeingWithHome — homed at the execution
-  // node (the workshop). Other typed workers can coexist at the
-  // same node carrying different roles; multi-being-at-one-node is
-  // exactly this pattern (see project-multi-being-domain-node).
+  // space (the workshop). Other typed workers can coexist at the
+  // same space carrying different roles; multi-being-at-one-space is
+  // exactly this pattern (see project-multi-being-domain-space).
   try {
-    const { createBeingWithHome } = await import("../../../seed/being/identity.js");
+    const { createBeingWithHome } = await import("../../../seed/land/being/identity.js");
     const { being } = await createBeingWithHome({
       operatingMode: "llm",
       role:          workerRoleName,
       homeSpace:     String(executionSpaceId),
     });
     if (being?._id) {
-      // Stamp metadata.beings.<workerRoleName> so future dispatches
+      // Stamp qualities.beings.<workerRoleName> so future dispatches
       // find this instance instead of creating duplicates.
       const space = await Space.findById(executionSpaceId);
-      if (node) {
-        const { mergeExtMeta } = await import("../../../seed/space/extensionMetadata.js");
-        await mergeExtMeta(node, "beings", {
+      if (space) {
+        const { qualities } = await import("../../../seed/land/qualities.js");
+        await qualities.space.mergeQuality(space, "beings", {
           [workerRoleName]: {
             beingId:     String(being._id),
             installedBy: "foreman-dispatch",

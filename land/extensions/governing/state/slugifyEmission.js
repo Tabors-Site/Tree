@@ -1,12 +1,12 @@
 // slugifyEmission. Turn an emission's reasoning headline (or any short
-// text) into a kebab-case slug suitable for a node name. Drops common
+// text) into a kebab-case slug suitable for a space name. Drops common
 // stopwords, takes the first 4-6 meaningful words, and lowercases.
 //
 // Why slugs instead of "emission-N":
 //   - Walking the tree page-by-page tells you what each emission is
 //     about without expanding it.
 //   - The numeric ordinal stays in metadata.governing.ordinal for
-//     ordering; the visible node name is descriptive.
+//     ordering; the visible space name is descriptive.
 //   - No new LLM call needed; the data already exists in the
 //     reasoning field the role just produced.
 //

@@ -14,11 +14,12 @@
 // scheduled. One central tick walking a shared registry stays cheap
 // and inspectable — getStats() always says exactly what's scheduled.
 //
-// **Two-mode neutrality.** The default emitter writes SUMMONs as
-// `<land>/@scheduler` (synthesized system stance, Mode 2 flavor).
-// Lands that want the embodied flavor (Mode 1) install a scheduler-
-// being extension that calls `setEmitter()` to swap in its own
-// dispatcher — the registry doesn't change.
+// **Two-mode neutrality.** The default emitter writes SUMMONs as the
+// I_AM (`<land>/<landRoot>@I_AM`). The subscriber declared a
+// cadence; the I_AM holds the declaration and emits the SUMMON when
+// the tick fires. Lands that want an embodied scheduler-being install
+// an extension that calls `setEmitter()` to swap in a Being-row-backed
+// dispatcher; the registry shape doesn't change.
 //
 // **Schedule shape:**
 //
@@ -40,10 +41,11 @@
 
 import { randomUUID } from "crypto";
 import log from "../system/log.js";
-import { appendToInbox } from "./inbox.js";
-import { wake } from "./scheduler.js";
+import { summonByResolved } from "../ibp/verbs.js";
 import { getLandDomain } from "../ibp/address.js";
 import { getLandRootId } from "../landRoot.js";
+import { I_AM } from "../land/space/seedSpaces.js";
+import { iAmIdentity } from "../land/being/landBeings.js";
 
 const MIN_INTERVAL_MS = 250;
 const DEFAULT_TICK_MS = 1000;
@@ -207,7 +209,7 @@ export async function runOnce(nowMs) {
 /**
  * Swap the default emitter. Used by the embodied scheduler-being
  * extension to route scheduled wakes through itself (Mode 1) instead
- * of the synthesized @I-am sender (Mode 2).
+ * of the synthesized @I_AM sender (Mode 2).
  *
  * @param {function(entry, nowMs): Promise<void>} fn
  */
@@ -251,20 +253,33 @@ export function _resetAll() {
 // ────────────────────────────────────────────────────────────────
 
 async function _defaultEmitter(entry, nowMs) {
-  const sender = `${getLandDomain() || "land"}/@scheduler`;
-  const correlation = randomUUID();
+  // Every scheduled wake is a SUMMON emitted by the I_AM acting on
+  // the subscriber's standing declaration. The from-stance is the
+  // I_AM at the land root; the receiving role can inspect the
+  // content payload to learn the cadence context.
   const spaceId = getLandRootId() || null;
   if (!spaceId) {
     log.debug("Schedule", `skipping wake for being ${entry.beingId.slice(0, 8)}: land root not initialized`);
     return;
   }
-  await appendToInbox(spaceId, entry.beingId, {
-    from:            sender,
-    content:         entry.content,
-    correlation,
-    rootCorrelation: correlation,  // each scheduled wake is its own root
-    priority:        entry.priority,
-    sentAt:          new Date(nowMs).toISOString(),
+  const identity = await iAmIdentity();
+  if (!identity) {
+    log.debug("Schedule", `skipping wake for being ${entry.beingId.slice(0, 8)}: I_AM identity not yet available`);
+    return;
+  }
+  const correlation = randomUUID();
+  const sender = `${getLandDomain() || "land"}/${spaceId}@${I_AM}`;
+  await summonByResolved({
+    toBeingId:    entry.beingId,
+    inboxSpaceId: spaceId,
+    identity,
+    message: {
+      from:            sender,
+      content:         entry.content,
+      correlation,
+      rootCorrelation: correlation,
+      priority:        entry.priority,
+      sentAt:          new Date(nowMs).toISOString(),
+    },
   });
-  wake(entry.beingId, spaceId);
 }

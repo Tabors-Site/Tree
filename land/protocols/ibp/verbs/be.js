@@ -18,7 +18,7 @@
 // For release/switch/token-reclaim the address is the held stance.
 //
 // Thin wire adapter: extracts envelope fields, delegates to `beVerb`
-// in seed/ibp/verbs.js. The auth-being role (seed/being/roles/auth.js)
+// in seed/ibp/verbs.js. The auth-being role (seed/cognition/roles/auth.js)
 // runs there. See [[project_four_verbs_one_execution]].
 
 import log from "../../../seed/system/log.js";

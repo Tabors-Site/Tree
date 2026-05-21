@@ -728,9 +728,9 @@ function layoutRulershipMinimap(rulers, allVitals) {
   for (const [d, list] of byDepth) {
     const usable = WIDTH - PADDING_X * 2;
     const step = usable / Math.max(list.length, 1);
-    list.forEach((node, i) => {
-      node.x = PADDING_X + step * i + step / 2;
-      node.y = 28 + d * ROW_H;
+    list.forEach((space, i) => {
+      space.x = PADDING_X + step * i + step / 2;
+      space.y = 28 + d * ROW_H;
     });
   }
   // Flat array sorted by depth for rendering
@@ -776,7 +776,7 @@ function renderMinimap(rulers, allVitals) {
     if (wFailed > 0) counts.push(`<text x="${(n.x - 26).toFixed(1)}" y="${(n.y + 2).toFixed(1)}" fill="#f87171" font-size="9" font-weight="700">${wFailed}✗</text>`);
     const title = `${esc(n.entry.rulerName || idShort)} · ${stateKey}`;
     return `
-      <a href="#ruler-${esc(String(n.entry.rulerSpaceId))}" class="gov-minimap-node" data-state="${stateKey}">
+      <a href="#ruler-${esc(String(n.entry.rulerSpaceId))}" class="gov-minimap-space" data-state="${stateKey}">
         <title>${title}</title>
         <circle cx="${n.x.toFixed(1)}" cy="${n.y.toFixed(1)}" r="11" />
         <text class="gov-minimap-emoji" x="${n.x.toFixed(1)}" y="${(n.y + 4).toFixed(1)}" text-anchor="middle">👑</text>

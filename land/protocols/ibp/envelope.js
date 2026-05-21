@@ -90,7 +90,7 @@ export function parseUnifiedEnvelope(msg) {
       if (addressKind !== "position" && addressKind !== "stance") {
         throw new IbpError(
           IBP_ERR.INVALID_INPUT,
-          `ibp SEE address must be a position or stance, e.g. "${address}/" for the land root or "${address}/<spaceId>" for a node. ` +
+          `ibp SEE address must be a position or stance, e.g. "${address}/" for the land root or "${address}/<spaceId>" for a space. ` +
           `Got bare-land "${address}".`,
         );
       }
@@ -101,7 +101,7 @@ export function parseUnifiedEnvelope(msg) {
         throw new IbpError(
           IBP_ERR.INVALID_INPUT,
           `ibp DO address must be a position. Use "${address}/" to target the land root ` +
-          `(e.g. for set-config / install-extension), or "${address}/<spaceId>" for a specific node. ` +
+          `(e.g. for set-config / install-extension), or "${address}/<spaceId>" for a specific space. ` +
           `Got bare-land "${address}".`,
         );
       }

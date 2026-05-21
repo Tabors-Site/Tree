@@ -52,38 +52,54 @@ The gathering falls into two bundles.
 
 ### IBP, four verbs over six primitives
 
-Inside the land, every act is one of four verbs over an IBP address (`<land>/<path>@<being>`):
+Every act inside the land is one being, in one **stance**, using one verb. A stance is a being standing at a position: `<land>/<path>@<being>`. An **IBP address** names the asker stance and the target stance together, `<stance> :: <stance>`, so every act carries who is acting and where, and where they are reaching. The left stance is always full; the right may be just a position when the target is a place, not a being.
 
-| Verb | Acts on |
-|------|---------|
-| **SEE** | Read a position, return a descriptor. |
-| **DO** | Mutate at a target through a registered operation. Audited as a Did. |
-| **SUMMON** | Wake a being. Deliver an entry to its inbox. Its role decides what to do. |
-| **BE** | Identity. Register, claim, release, switch stance. |
+Four verbs make up the whole public surface. Each verb acts on its own kind of thing.
+
+| Verb | Acts on | What it does |
+|------|---------|--------------|
+| **SEE** | Space, Matter, Being | Read at the target stance, return a descriptor. |
+| **DO** | Space, Matter | Mutate at the target through a registered operation. Audited as a Did. |
+| **SUMMON** | Being | Deliver to a being's inbox. Its role decides what to do. |
+| **BE** | Being (self) | Identity. Register, claim, release, switch stance. |
 
 Six primitives carry the world:
 
 | Primitive | What it is |
 |-----------|-----------|
 | **Being** | An identity instance. Humans, AI, scripted beings, future composites. The I-Am is the first being. |
-| **Space** | A position in the tree. Holds matter, hosts beings, owns metadata. |
+| **Space** | A position in the tree. Holds matter, hosts beings, owns quality namespaces. |
 | **Matter** | Stuff inside a space. `origin` names where it lives (ibp, filesystem, web, cross-land). |
 | **Did** | One DO emission, the audit row. |
 | **Summon** | One being-to-being call, the record of one wake-and-act. |
 | **LlmConnection** | Per-being LLM client config. |
 
-The seed schemas never change. Everything new lives in the per-primitive metadata Map. The four verbs are the only public surface; every operation is registered through them.
+The seed schemas never change. Everything new lives in the per-primitive `qualities` Map, the open extension-defined layer that answers "of what sort is this particular space, matter, or being?" The four verbs are the only public surface; every operation is registered through them. Stance authorization sits at the gate on every verb, walking the ancestor chain from target up to root to decide whether the asker stance is allowed.
+
+See [`seed/philosophy/`](seed/philosophy/) for the IBP diagrams. See [`seed/land/LAND.md`](seed/land/LAND.md) "Qualities" for why the field is named that way, the constitutive (schema) vs characterizing (qualities) layer test, and the rule for where any new property belongs.
 
 ## What's Inside
 
+IBP is the protocol. WebSocket is the channel it speaks on most of the time. A single `"ibp"` event carries every verb in both directions, asker to target and back. HTTP and CLI are translators: they take a request path or a command line, shape it into the same verb envelope, and hand it to the one IBP dispatch. There is no separate HTTP API or WebSocket API. There is one protocol, arriving by different doors.
+
 ```
-seed/         What TreeOS IS. Six models, four verbs, hooks, the I-Am.
-protocols/    What conversation over the wire looks like. IBP, canopy, MCP.
-transports/   Thin carriers. WebSocket today, HTTP and CLI shims beside it.
-extensions/   Everything optional. The land boots without any of them.
-boot.js       Operator's wizard. First-run setup.
-server.js     The senses. HTTP and WebSocket channels.
-genesis.js    The body. The unfolding that forms the world inside.
+seed/             What TreeOS IS. Four folders, four roles.
+  land/           IS     space, matter, being, and the world they make
+  ibp/            ACTS   the four verbs and their dispatch
+  cognition/      THINKS the LLM-being apparatus (humans cognize on
+                         their own; scripts ARE code; this is for AI)
+  system/         HOST   db, log, hooks, indexes (knows nothing of the world)
+  models/         the schemas for all 6 primitives
+  services.js     assembles `core` for extensions
+  landRoot.js     plants the land root + nine land seed spaces
+  landConfig.js   remembered settings across reboots
+
+protocols/        The IBP grammar over stances. Canopy (land-to-land) and MCP sit beside it.
+transports/       Carriers that translate into IBP. WebSocket is the main channel; HTTP and CLI are shims.
+extensions/       Everything optional. The land boots without any of them.
+boot.js           Operator's wizard. First-run setup.
+server.js         The senses. Opens the channels the world reaches through.
+genesis.js        The body. The unfolding that forms the world inside.
 ```
 
 Dependency direction: `transports/` to `protocols/` to `seed/`. Extensions sit beside the three and consume them. Seed never imports from protocols or transports.
@@ -113,13 +129,13 @@ Then restart with `npm start`.
 1. Seed never imports from extensions.
 2. Extensions import from seed.
 3. Extensions reach each other through `getExtension()` or hooks.
-4. Extension data on spaces and beings lives in metadata Maps, never as new schema fields. Extensions can create their own models for separate collections.
+4. Extension data on spaces and beings lives in qualities Maps, never as new schema fields. Extensions can create their own models for separate collections.
 5. Seed schemas never change.
 6. Zero `getExtension()` calls in seed.
 
 ## For Builders
 
-Your data survives configuration changes. Extension data lives in the metadata Map on every space, being, and matter row. Mongoose does not drop unknown keys inside a Mixed map. That one detail is what makes everything below possible.
+Your data survives configuration changes. Extension data lives in the qualities Map on every space, being, and matter row. Mongoose does not drop unknown keys inside a Mixed map. That one detail is what makes everything below possible.
 
 Run the full stack for six months. Fitness tracking, food logging, cascade signals flowing between trees, intelligence extensions analyzing patterns, dreams running at 3am. Then switch to minimal profile (`node boot.js --setup`, pick Minimal). Restart. Eight extensions load. The rest go silent. Your server is light. Your LLM bill drops to zero idle cost.
 
@@ -127,7 +143,7 @@ Three months later, switch back to full. Restart. Every extension finds its data
 
 This works because:
 
-- Extension data is stored in the metadata Map, not in extension code.
+- Extension data is stored in the qualities Map, not in extension code.
 - The `.treeos-profile` controls what LOADS, not what EXISTS.
 - MongoDB keeps every key in the Map whether the extension is loaded or not.
 - Extensions read their namespace on boot. If the data is there, they resume. If not, they initialize.
@@ -136,7 +152,7 @@ Build a full OS distribution. Test it. Strip it to the kernel. Build a different
 
 Extensions with custom models (their own MongoDB collections) survive too. The collections stay in the database whether the extension is loaded or not. Reload the extension and the data is there.
 
-**Trust model.** Extensions run in the same Node.js process as the seed. The seed enforces metadata namespace isolation, spatial scoping, and circuit breakers. This protects against bugs, not against deliberately malicious code. Review extension code before installing. Same trust model as npm packages and Linux kernel modules.
+**Trust model.** Extensions run in the same Node.js process as the seed. The seed enforces quality namespace isolation, spatial scoping, and circuit breakers. This protects against bugs, not against deliberately malicious code. Review extension code before installing. Same trust model as npm packages and Linux kernel modules.
 
 ## Learn More
 

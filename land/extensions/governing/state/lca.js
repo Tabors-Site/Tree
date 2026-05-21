@@ -1,6 +1,6 @@
 // LCA correctness for governing contracts.
 //
-// findLCA walks the parent chain for each named node, then finds the
+// findLCA walks the parent chain for each named space, then finds the
 // deepest common ancestor across all chains. Used by the Contractor's
 // scope validation: a contract's scope can name consumers across
 // multiple sub-Rulers, but the LCA of those consumers MUST sit at or
@@ -20,8 +20,8 @@ import log from "../../../seed/system/log.js";
 const MAX_DEPTH = 64; // paranoia cap; real trees nest much shallower
 
 /**
- * Build the root-first ancestor chain for a node. Returns
- * [rootId, ..., parentId, spaceId]. Empty array if the node does not
+ * Build the root-first ancestor chain for a space. Returns
+ * [rootId, ..., parentId, spaceId]. Empty array if the space does not
  * exist or the chain hits a cycle.
  */
 export async function ancestorChain(spaceId) {
@@ -37,18 +37,18 @@ export async function ancestorChain(spaceId) {
     visited.add(cursor);
     chain.unshift(cursor);
     const space = await Space.findById(cursor).select("parent").lean();
-    if (!node?.parent) break;
+    if (!space?.parent) break;
     cursor = String(space.parent);
   }
   return chain;
 }
 
 /**
- * Find the lowest common ancestor of N node ids. Returns the LCA's
+ * Find the lowest common ancestor of N space ids. Returns the LCA's
  * spaceId as a string, or null if the nodes do not share an ancestor
- * (different trees) or any node is missing.
+ * (different trees) or any space is missing.
  *
- * For one node, returns that node. For zero nodes, returns null.
+ * For one space, returns that space. For zero nodes, returns null.
  */
 export async function findLCA(nodeIds) {
   if (!Array.isArray(nodeIds)) return null;
@@ -98,7 +98,7 @@ export async function isAncestorOrSelf(ancestorId, descendantId) {
  * validate true; the caller should not invoke this function for them.
  * For zero or one consumer the result is trivially valid.
  *
- * Caller maps scope names (e.g. branch names like "frontend") to node
+ * Caller maps scope names (e.g. branch names like "frontend") to space
  * ids before calling. governing has no opinion about how scope names
  * resolve to nodes; that mapping lives in the dispatch layer.
  */

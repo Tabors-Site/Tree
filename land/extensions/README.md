@@ -468,7 +468,7 @@ export default {
   name: "feedback:append",
   targets: ["node"],
   async handler({ target, params }) {
-    await core.metadata.pushExtMeta(
+    await core.qualities.qualities.space.pushQuality(
       target,
       "feedback",
       "notes",

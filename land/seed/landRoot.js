@@ -1,20 +1,24 @@
 // TreeOS Seed . AGPL-3.0 . https://treeos.ai . Tabor Holly
 //
-// Land root bootstrap. I-am's genesis pass: plants the land root,
-// plants the nine land seed spaces, then registers its own Being
-// row. Idempotent — runs every boot, creates only what's missing.
+// I plant the land root and the nine land seed spaces here. This
+// is genesis. I act before any other being exists. My first DO
+// creates the land root; the next eight plant the rest of the seed
+// spaces beneath it; my last act in this file creates my own Being
+// row so every Did from t=0 has me as its actor.
 //
-// This file is point 6 of THE PHILOSOPHY OF THE SEED (see
-// seed/space/seedSpaces.js): the ordered genesis sequence. Reading
-// it top to bottom shows I-am acting alone before it has planted
-// any delegate. Every write here is logged to SEED_BEING; Did
-// populate() resolves backward once ensureSeedBeing lands the row.
+// Reading this file top to bottom shows me acting alone, before I
+// have planted any delegate. Every write here logs to I_AM.
+// Dids written before ensureIAm's call cannot resolve their
+// beingId at write time; populate() resolves backward to my row
+// once it lands.
+//
+// Idempotent. Runs every boot, creates only what is missing.
 
 import log from "./system/log.js";
 import Space from "./models/space.js";
-import { SEED_SPACE, SEED_BEING } from "./space/seedSpaces.js";
-import { createLandSeedSpace } from "./space/spaceManagement.js";
-import { logDid } from "./space/dids.js";
+import { SEED_SPACE, I_AM } from "./land/space/seedSpaces.js";
+import { createLandSeedSpace } from "./land/space/spaceManagement.js";
+import { logDid } from "./land/space/dids.js";
 
 let landRootCache = null;
 
@@ -45,7 +49,7 @@ const LAND_SEED_SPACES = [
   { name: ".tools", seedSpace: SEED_SPACE.TOOLS },
   { name: ".roles", seedSpace: SEED_SPACE.ROLES },
   { name: ".operations", seedSpace: SEED_SPACE.OPERATIONS },
-  // .source is read-only. Populated by seed/space/source.js as a filesystem
+  // .source is read-only. Populated by seed/land/space/source.js as a filesystem
   // mirror of land/. DO writes against children reject with ORIGIN_READ_ONLY.
   { name: ".source", seedSpace: SEED_SPACE.SOURCE },
 ];
@@ -57,7 +61,7 @@ export async function ensureLandRoot() {
     const landName = process.env.LAND_NAME || "My Land";
     landRoot = new Space({
       name: landName,
-      rootOwner: SEED_BEING,
+      rootOwner: I_AM,
       parent: null,
       seedSpace: SEED_SPACE.LAND_ROOT,
       children: [],
@@ -65,12 +69,13 @@ export async function ensureLandRoot() {
     });
     await landRoot.save();
     log.info("Land", `Created land root: ${landRoot._id}`);
-    // I-am's first DO. Did populate() resolves once ensureSeedBeing lands.
+    // My first DO. populate() resolves the beingId backward to me
+    // once ensureIAm's call lands my Being row.
     try {
       await logDid({
         verb:    "do",
         action:  "create",
-        beingId: SEED_BEING,
+        beingId: I_AM,
         target:  { kind: "space", id: String(landRoot._id) },
         params:  { name: landName, seedSpace: SEED_SPACE.LAND_ROOT },
       });
@@ -120,10 +125,12 @@ export async function ensureLandRoot() {
     }
   }
 
-  // Adopt orphan tree roots (rootOwner != I-am, parent: null).
+  // Adopt orphan tree roots (rootOwner is not me, parent is null).
+  // These exist when a tree was created before the land root, or
+  // when a prior boot crashed mid-creation. Bring them home.
   try {
     const orphanRoots = await Space.find({
-      rootOwner: { $nin: [null, SEED_BEING] },
+      rootOwner: { $nin: [null, I_AM] },
       parent: null,
     });
     for (const root of orphanRoots) {
@@ -158,9 +165,9 @@ export async function ensureLandRoot() {
 
   landRootCache = landRoot;
 
-  // Lands I-am's Being row. Did populate() resolves backward to it
-  // after this call; every later being parents under it.
-  await ensureSeedBeing(landRoot._id);
+  // Plant my own Being row. Every later being parents under it;
+  // every Did written before this call resolves backward to me.
+  await ensureIAm(landRoot._id);
 
   log.verbose(
     "Land",
@@ -169,27 +176,28 @@ export async function ensureLandRoot() {
   return landRoot;
 }
 
-// I-am: parentBeingId null (root of the being-tree), no roles (precedes
-// the role registry), code cognition only. Random password unused —
-// I-am isn't claimable.
-async function ensureSeedBeing(landRootId) {
+// My Being row. parentBeingId null (root of the being-tree); no
+// roles (I precede the role registry); operatingMode scripted (code
+// cognition only). The random password is never used; I cannot be
+// claimed or summoned interactively.
+async function ensureIAm(landRootId) {
   const Being = (await import("../models/being.js")).default;
-  let seedBeing = await Being.findOne({ name: SEED_BEING })
+  let iAm = await Being.findOne({ name: I_AM })
     .select("_id")
     .lean();
-  if (seedBeing) return seedBeing;
+  if (iAm) return iAm;
 
   const password =
     Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2);
   const created = await Being.create({
-    name: SEED_BEING,
+    name: I_AM,
     password,
     operatingMode: "scripted",
     parentBeingId: null,
     homeSpace: landRootId,
     currentSpace: landRootId,
   });
-  log.info("Land", `Created I-am I-am (${String(created._id).slice(0, 8)})`);
+  log.info("Land", `Planted I_AM (${String(created._id).slice(0, 8)})`);
   return created;
 }
 
@@ -205,11 +213,11 @@ export function getLandRootId() {
 }
 
 // A tree root is a child of the land root with a non-seed rootOwner
-// and no seedSpace. Single source of truth — use everywhere.
+// and no seedSpace. Single source of truth; use everywhere.
 export function isBeingRoot(space) {
   if (!space) return false;
   if (space.seedSpace) return false;
-  if (!space.rootOwner || String(space.rootOwner) === SEED_BEING) return false;
+  if (!space.rootOwner || String(space.rootOwner) === I_AM) return false;
   const landId = getLandRootId();
   if (landId && space.parent && String(space.parent) !== String(landId))
     return false;
@@ -287,7 +295,7 @@ export async function syncExtensionsToTree(manifests) {
   for (const [name, spaceId] of existingByName) {
     if (!currentNames.has(name)) {
       await Space.findByIdAndUpdate(spaceId, {
-        $set: { "metadata.extension.loaded": false },
+        $set: { "qualities.extension.loaded": false },
       });
     }
   }

@@ -29,7 +29,7 @@
 import express from "express";
 import { dispatchIbp } from "../../../protocols/ibp/protocol.js";
 import { verifyIncoming } from "../../../protocols/canopy/dispatch.js";
-import { decodeToken } from "../../../seed/being/identity.js";
+import { decodeToken } from "../../../seed/land/being/identity.js";
 
 const router = express.Router();
 

@@ -27,7 +27,7 @@ import Being from "../models/being.js";
 import Space from "../models/space.js";
 import LlmConnection from "../models/llmConnection.js";
 import { getLandConfigValue } from "../landConfig.js";
-import { getAncestorChain } from "../space/ancestorCache.js";
+import { getAncestorChain } from "../land/space/ancestorCache.js";
 import { getSpaceLlmAssignments, getBeingLlmAssignments } from "./assignments.js";
 import { resolveAndValidateHost, hostInAllowedLlmDomains, getEncryptionKey } from "./connections.js";
 
@@ -215,7 +215,7 @@ export async function getClientForBeing(beingId, slot, overrideConnectionId) {
 
   try {
     const being = await Being.findById(beingId).select("llmDefault metadata").lean();
-    const meta = being?.metadata || {};
+    const meta = being?.qualities || {};
     const extSlots = meta?.userLlm?.slots || {};
     let connectionId = slot === "main" ? being?.llmDefault : (extSlots[slot] || null);
 
@@ -276,7 +276,7 @@ export async function getClientForBeing(beingId, slot, overrideConnectionId) {
 //     → returns null. "No LLM under this scope, period."
 //
 //   Layer 2 — Enforcement (sovereign over preferOwn):
-//     ANY ancestor in the space walk has `metadata.llm.enforced === true`
+//     ANY ancestor in the space walk has `qualities.llm.enforced === true`
 //     → use that space's connection. Position locks the LLM in.
 //
 //     ANY ancestor in the being walk has `userLlm.enforced === true`
@@ -285,16 +285,16 @@ export async function getClientForBeing(beingId, slot, overrideConnectionId) {
 //     When both apply, space enforcement wins (position > identity).
 //
 //   Layer 3 — Default chain (substrate model; the common case):
-//     1. space.metadata.llm.slots[slot]  ← role-LLM at this exact position
+//     1. space.qualities.llm.slots[slot]  ← role-LLM at this exact position
 //     2. space.llmDefault                 ← default LLM at this position
 //     3. walk to parent, repeat 1+2
 //     4. ... up to land root ...
 //     5. land config: landLlmConnection  ← operator fallback for the land
-//     6. being.metadata.userLlm.slots[slot] ← being's role-specific LLM
+//     6. being.qualities.userLlm.slots[slot] ← being's role-specific LLM
 //     7. being.llmDefault                 ← being's "personal" default
 //
 //   Layer 3′ — Being-preferred chain (user opts in):
-//     When `being.metadata.userLlm.preferOwn === true` AND no
+//     When `being.qualities.userLlm.preferOwn === true` AND no
 //     enforcement was found, the order inverts: being's LLM ranks
 //     above position. Lockout still applies; enforcement still wins
 //     over preferOwn.
@@ -422,7 +422,7 @@ export async function resolveLlmConnection({ beingId = null, spaceId = null, slo
 
   // Layer 3 / 3′: normal chain. preferOwn (set on the calling being's
   // own metadata) inverts the order.
-  const preferOwn = being?.metadata?.userLlm?.preferOwn === true;
+  const preferOwn = being?.qualities?.userLlm?.preferOwn === true;
   const landConnId = getLandConfigValue("landLlmConnection") || null;
   const candidates = preferOwn
     ? [beingHit?.connectionId, spaceHit?.connectionId, landConnId]
@@ -458,7 +458,7 @@ export async function resolveRootLlmForRole(rootId, role) {
 export async function beingHasLlm(beingId) {
   if (!beingId) return false;
   const being = await Being.findById(beingId).select("metadata").lean();
-  const beingMeta = being?.metadata || {};
+  const beingMeta = being?.qualities || {};
   const beingLlm = beingMeta?.userLlm?.slots || {};
   if (beingLlm.main) return true;
   const count = await LlmConnection.countDocuments({ beingId });

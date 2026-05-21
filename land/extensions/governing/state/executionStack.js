@@ -51,16 +51,16 @@ const FAILURE_RENDER_CAP = 5;
  * Compute one frame's data for the execution-stack snapshot. Reads
  * the active plan emission (for step descriptors) and the active
  * execution-record (for step statuses + failures). Returns null if
- * the node isn't a Ruler or has no active execution-record.
+ * the space isn't a Ruler or has no active execution-record.
  */
 async function buildFrame(rulerSpaceId, depth) {
   if (!rulerSpaceId) return null;
 
   const space = await Space.findById(rulerSpaceId).select("_id name metadata children").lean();
   if (!space) return null;
-  const meta = space.metadata instanceof Map
-    ? Object.fromEntries(space.metadata)
-    : (space.metadata || {});
+  const meta = space.qualities instanceof Map
+    ? Object.fromEntries(space.qualities)
+    : (space.qualities || {});
   if (meta[ROLE_NS]?.role !== "ruler") return null;
 
   const record = await readActiveExecutionRecord(rulerSpaceId);
@@ -225,9 +225,9 @@ async function walkDown(rulerSpaceId, depth, framesOut) {
     const kids = await Space.find({ _id: { $in: childIds } })
       .select("_id metadata").lean();
     for (const k of kids) {
-      const km = k.metadata instanceof Map
-        ? Object.fromEntries(k.metadata)
-        : (k.metadata || {});
+      const km = k.qualities instanceof Map
+        ? Object.fromEntries(k.qualities)
+        : (k.qualities || {});
       if (km[ROLE_NS]?.role !== "ruler") continue;
       await walkDown(k._id, depth + 1, framesOut);
       if (framesOut.length >= MAX_FRAMES) break;
@@ -435,7 +435,7 @@ function computeResumeAnchors(frames) {
 
 /**
  * Top-level: build the full execution-stack snapshot anchored at a
- * Ruler scope. Returns null when the node isn't a Ruler.
+ * Ruler scope. Returns null when the space isn't a Ruler.
  *
  * The snapshot's "anchor" is the Foreman's CURRENT scope. That frame
  * lands at depth 0; sub-frames descend; parent context (if any) lives
@@ -691,7 +691,7 @@ export async function renderExecutionStack(rulerSpaceId) {
 //
 // The Foreman's stack snapshot tells it WHAT THE STATUSES SAY. The
 // artifact-evidence block tells it WHAT'S ACTUALLY ON THE TREE — note
-// counts at the Ruler scope, child-node names with their own note
+// counts at the Ruler scope, child-space names with their own note
 // counts, and any pending blocking flags. Without this block the
 // Foreman judges only against step.status (which the dispatcher writes)
 // and never against tree reality (notes / children / artifacts).
@@ -704,20 +704,20 @@ const EVIDENCE_CHILDREN_RENDER_CAP = 16;
 const EVIDENCE_FLAGS_RENDER_CAP = 5;
 
 /**
- * Probe the Ruler scope node + its children + its pending flags and
+ * Probe the Ruler scope space + its children + its pending flags and
  * build a compact data structure the Foreman can scan.
  *
- * Returns null when the node isn't found.
+ * Returns null when the space isn't found.
  */
 export async function buildArtifactEvidence(rulerSpaceId) {
   if (!rulerSpaceId) return null;
-  let node;
+  let space;
   try {
-    node = await Space.findById(rulerSpaceId)
+    space = await Space.findById(rulerSpaceId)
       .select("_id name type children")
       .lean();
   } catch (err) {
-    log.debug("Governing/Evidence", `node lookup failed: ${err.message}`);
+    log.debug("Governing/Evidence", `space lookup failed: ${err.message}`);
     return null;
   }
   if (!space) return null;
@@ -725,7 +725,7 @@ export async function buildArtifactEvidence(rulerSpaceId) {
   // Probe the Ruler scope's own notes. getNotes returns { notes: [...] }.
   let scopeNotes = [];
   try {
-    const { getArtifacts } = await import("../../../seed/matter/matters.js");
+    const { getArtifacts } = await import("../../../seed/land/matter/matters.js");
     const got = await getArtifacts({ spaceId: String(space._id), limit: 50 });
     scopeNotes = Array.isArray(got?.artifacts) ? got.artifacts : [];
   } catch (err) {
@@ -744,7 +744,7 @@ export async function buildArtifactEvidence(rulerSpaceId) {
         .select("_id name type")
         .lean();
       const byId = new Map(childNodes.map((c) => [String(c._id), c]));
-      const { getArtifacts } = await import("../../../seed/matter/matters.js");
+      const { getArtifacts } = await import("../../../seed/land/matter/matters.js");
       for (const cid of probeIds) {
         const c = byId.get(cid);
         if (!c) continue;
@@ -826,7 +826,7 @@ export function formatArtifactEvidence(evidence) {
   lines.push("ARTIFACT EVIDENCE AT THIS SCOPE");
   lines.push("=================================================================");
   lines.push("");
-  lines.push(`Ruler scope: ${evidence.rulerName} (${evidence.rulerType || "node"})`);
+  lines.push(`Ruler scope: ${evidence.rulerName} (${evidence.rulerType || "space"})`);
   lines.push("");
 
   // Scope-level notes.
@@ -841,8 +841,8 @@ export function formatArtifactEvidence(evidence) {
   lines.push("");
 
   // Children. A scope-decomposed plan often promises child nodes per
-  // leaf (a chapter-outline node, a research-notes node, a works-cited
-  // node). If those names are missing here, the Worker that "did" the
+  // leaf (a chapter-outline space, a research-notes space, a works-cited
+  // space). If those names are missing here, the Worker that "did" the
   // step didn't actually create what it promised.
   if (evidence.totalChildren > 0) {
     lines.push(`Child nodes under this scope: ${evidence.totalChildren}` +
@@ -883,10 +883,10 @@ export function formatArtifactEvidence(evidence) {
   }
 
   lines.push("READ THIS BEFORE YOU FREEZE: a step marked done WITHOUT a");
-  lines.push("matching note or child node above is a status lie — the Worker's");
+  lines.push("matching note or child space above is a status lie — the Worker's");
   lines.push("turn ended but the promised artifact does not exist. If the plan");
-  lines.push("promised a 'chapter-1-outline' node and there's no child by that");
-  lines.push("name, do NOT freeze the record as completed. Use get-node-notes");
+  lines.push("promised a 'chapter-1-outline' space and there's no child by that");
+  lines.push("name, do NOT freeze the record as completed. Use get-space-notes");
   lines.push("on specific children to verify deeper, then freeze as 'partial'");
   lines.push("or escalate to the Ruler.");
   return lines.join("\n");

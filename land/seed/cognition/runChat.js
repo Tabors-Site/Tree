@@ -7,10 +7,10 @@ import { hooks } from "../system/hooks.js";
 import crypto from "crypto";
 import Being from "../models/being.js";
 import Space from "../models/space.js";
-import { snapshotAncestors, resolveExtensionScopeFromChain, getAncestorChain } from "../space/ancestorCache.js";
+import { snapshotAncestors, resolveExtensionScopeFromChain, getAncestorChain } from "../land/space/ancestorCache.js";
 import { isDbHealthy } from "../system/dbConfig.js";
-import { resolveTools } from "../system/tools.js";
-import { getSpaceName } from "../space/spaceFetch.js";
+import { resolveTools } from "../cognition/tools.js";
+import { getSpaceName } from "../land/space/spaceFetch.js";
 import { mcpClients, connectToMCP, MCP_SERVER_URL } from "./mcpClient.js";
 
 // How many recent messages to carry across role switches when the new
@@ -19,8 +19,8 @@ import { mcpClients, connectToMCP, MCP_SERVER_URL } from "./mcpClient.js";
 let CARRY_MESSAGES = 4;
 export function setCarryMessages(n) { CARRY_MESSAGES = Math.max(0, Number(n) || 4); }
 import { getLandConfigValue } from "../landConfig.js";
-import { SEED_BEING } from "../space/seedSpaces.js";
-import { signInternalToken } from "../being/identity.js";
+import { I_AM } from "../land/space/seedSpaces.js";
+import { signInternalToken } from "../land/being/identity.js";
 
 // ─────────────────────────────────────────────────────────────────────────
 // ROLE-DRIVEN PROMPT + TOOL RESOLUTION
@@ -521,22 +521,22 @@ import {
 // Each session holds: { messages[], role, _lastActive }.
 //
 // Position state (rootId, currentSpace) lives separately in
-// seed/being/position.js, keyed by beingId, because under the
+// seed/land/being/position.js, keyed by beingId, because under the
 // single-context being model a being has one position regardless of
 // which reach (web + CLI) they connect through. Background AI pipelines
 // run AS a specific being and write to THAT being's position.
 const sessions = new Map();
 let MAX_CONVERSATION_SESSIONS = 50000; // hard cap to prevent OOM from leaked sessions
 
-// Position state lives in seed/being/position.js. Used internally
+// Position state lives in seed/land/being/position.js. Used internally
 // by the runChat tool loop and prepareConversation/enrichContext.
 // rootId is derived from currentSpace on every setCurrentSpace, so
 // callers only ever set the current Space; rootId follows.
 import {
-  getRootId,
+  getSpaceRootId,
   setCurrentSpace,
   getCurrentSpace,
-} from "../being/position.js";
+} from "../land/being/position.js";
 
 /**
  * Get or create the conversation session.
@@ -651,7 +651,7 @@ export async function switchRole(clientSessionId, newRole, ctx) {
   const systemPrompt = await buildSystemPromptForRole(newRole, {
     ...ctx,
     clientSessionId,
-    rootId: getRootId(beingId) || ctx.rootId,
+    rootId: getSpaceRootId(beingId) || ctx.rootId,
     currentSpace: ctx.currentSpace || getCurrentSpace(beingId),
   });
 
@@ -696,7 +696,7 @@ async function ensureSession(clientSessionId, ctx) {
   // The position update below (setCurrentSpace) re-derives rootId from
   // the incoming space, so rootId catches up automatically.
   const incomingRootId = ctx.rootId || null;
-  const knownRootId = getRootId(beingId);
+  const knownRootId = getSpaceRootId(beingId);
   if (knownRootId && incomingRootId && knownRootId !== incomingRootId) {
     log.debug("LLM", `Root mismatch for ${clientSessionId}: being=${knownRootId}, ctx=${incomingRootId}. Clearing.`);
     session.messages = [];
@@ -724,7 +724,7 @@ async function ensureSession(clientSessionId, ctx) {
 
   // Snapshot ancestor chain for consistent resolution within this message.
   // All resolution chains (scope, tools, LLM, config) read from this snapshot.
-  const snapshotNodeId = getCurrentSpace(beingId) || getRootId(beingId) || ctx.rootId;
+  const snapshotNodeId = getCurrentSpace(beingId) || getSpaceRootId(beingId) || ctx.rootId;
   if (snapshotNodeId) {
     session._ancestorSnapshot = await snapshotAncestors(snapshotNodeId);
   }
@@ -739,8 +739,8 @@ async function ensureSession(clientSessionId, ctx) {
 function checkTreeCircuit(session) {
   if (session._ancestorSnapshot) {
     // The owner space (root) is the last non-land seed space in the chain
-    const rootAncestor = session._ancestorSnapshot.find(a => a.rootOwner && a.rootOwner !== SEED_BEING);
-    if (rootAncestor?.metadata?.circuit?.tripped) {
+    const rootAncestor = session._ancestorSnapshot.find(a => a.rootOwner && a.rootOwner !== I_AM);
+    if (rootAncestor?.qualities?.circuit?.tripped) {
       return {
         content: "This tree is dormant. It exceeded health thresholds and its circuit breaker tripped. Contact the land operator or wait for an extension to revive it.",
         role: session.role?.name || null,
@@ -759,7 +759,7 @@ function checkTreeCircuit(session) {
 async function resolveLLMClient(ctx, session, clientSessionId) {
   // Resolve LLM client for this user. Role-driven slot override: when
   // role.llmSlot is set and the tree has llmAssignments for it, use that.
-  const rootId = getRootId(ctx?.beingId) || ctx.rootId;
+  const rootId = getSpaceRootId(ctx?.beingId) || ctx.rootId;
   const roleConnectionId =
     ctx.rootLlmConnectionId ||
     (rootId ? await resolveRootLlmForRole(rootId, session.role) : null);
@@ -824,7 +824,7 @@ async function prepareConversation(session, ctx, message, clientSessionId) {
       name: ctx.name,
       beingId: ctx.beingId,
       clientSessionId,
-      rootId: getRootId(ctx.beingId),
+      rootId: getSpaceRootId(ctx.beingId),
       currentSpace: getCurrentSpace(ctx.beingId),
     });
 
@@ -846,13 +846,13 @@ async function prepareConversation(session, ctx, message, clientSessionId) {
     // checks and are designed to run per-turn.
     let enrichedContext = null;
     try {
-      const posNodeId = getCurrentSpace(ctx.beingId) || getRootId(ctx.beingId) || ctx.rootId || null;
+      const posNodeId = getCurrentSpace(ctx.beingId) || getSpaceRootId(ctx.beingId) || ctx.rootId || null;
       if (posNodeId) {
         const posSpace = await Space.findById(posNodeId).lean();
         if (posSpace) {
-          const meta = posSpace.metadata instanceof Map
-            ? Object.fromEntries(posSpace.metadata)
-            : (posSpace.metadata || {});
+          const meta = posSpace.qualities instanceof Map
+            ? Object.fromEntries(posSpace.qualities)
+            : (posSpace.qualities || {});
           enrichedContext = {};
           await hooks.run("enrichContext", {
             context: enrichedContext,
@@ -877,7 +877,7 @@ async function prepareConversation(session, ctx, message, clientSessionId) {
       name: ctx.name,
       beingId: ctx.beingId,
       clientSessionId,
-      rootId: getRootId(ctx.beingId),
+      rootId: getSpaceRootId(ctx.beingId),
       currentSpace: getCurrentSpace(ctx.beingId),
       enrichedContext: enrichedContext || null,
     });
@@ -1058,7 +1058,7 @@ function resolveLlmConfig(ancestors, role) {
   if (ancestors && ancestors.length > 0) {
     for (const space of ancestors) {
       if (space.seedSpace) break;
-      const llmConfig = space.metadata?.llm?.config;
+      const llmConfig = space.qualities?.llm?.config;
       if (!llmConfig || typeof llmConfig !== "object") continue;
       for (const [key, maxVal] of Object.entries(LLM_CONFIG_KEYS)) {
         if (config[key] !== undefined) continue;
@@ -1097,7 +1097,7 @@ async function resolveToolsForPosition(session, beingId, rolePermissions = null)
   let treeToolConfig = null;
   let blockedExtensions = null;
   let restrictedExtensions = null;
-  const currentSpace = getCurrentSpace(beingId) || getRootId(beingId);
+  const currentSpace = getCurrentSpace(beingId) || getSpaceRootId(beingId);
   if (currentSpace) {
     try {
       // Use the per-message snapshot. Every resolution chain reads from this.
@@ -1111,7 +1111,7 @@ async function resolveToolsForPosition(session, beingId, rolePermissions = null)
         const blocked = new Set();
         for (const space of ancestors) {
           if (space.seedSpace) break;
-          const meta = space.metadata || {};
+          const meta = space.qualities || {};
           if (meta.tools?.allowed) for (const t of meta.tools.allowed) allowed.add(t);
           if (meta.tools?.blocked) for (const t of meta.tools.blocked) blocked.add(t);
         }
@@ -1123,7 +1123,7 @@ async function resolveToolsForPosition(session, beingId, rolePermissions = null)
         }
 
         // Extension scoping: reuse the same resolution helper that extensionScope.js uses
-        const { getConfinedExtensions } = await import("../space/extensionScope.js");
+        const { getConfinedExtensions } = await import("../land/space/extensionScope.js");
         const scope = resolveExtensionScopeFromChain(ancestors, getConfinedExtensions());
         if (scope.blocked.size) blockedExtensions = scope.blocked;
         if (scope.restricted.size) restrictedExtensions = scope.restricted;
@@ -1138,7 +1138,7 @@ async function resolveToolsForPosition(session, beingId, rolePermissions = null)
   let tools = resolveToolsForRole(session.role, treeToolConfig, rolePermissions);
   // Filter tools by spatial extension scope (blocked + restricted)
   if (blockedExtensions || restrictedExtensions) {
-    const { filterToolsByScope } = await import("../space/extensionScope.js");
+    const { filterToolsByScope } = await import("../land/space/extensionScope.js");
     tools = filterToolsByScope(tools, blockedExtensions, restrictedExtensions);
   }
   return { tools, blockedExtensions, restrictedExtensions };
@@ -1821,7 +1821,7 @@ async function finalizeResponse(session, openai, MODEL, response, isInternal, is
   // Internal tracking (for Chat finalization, never sent to client)
   const _internal = {
     role: session.role?.name,
-    rootId: getRootId(ctx.beingId),
+    rootId: getSpaceRootId(ctx.beingId),
     isCustom,
     model: MODEL,
     connectionId: resolvedConnectionId || null,
@@ -1867,7 +1867,7 @@ export async function processMessage(clientSessionId, message, ctx) {
   // Query constraint: when readOnly is set, only tools registered with readOnlyHint
   // are available. Write tools are filtered before the role's LLM fires.
   if (ctx.readOnly) {
-    const { isToolReadOnly } = await import("../space/extensionScope.js");
+    const { isToolReadOnly } = await import("../land/space/extensionScope.js");
     tools = tools.filter(t => {
       const name = t.function?.name || t.name;
       return name && isToolReadOnly(name);
@@ -2026,7 +2026,7 @@ export async function processMessage(clientSessionId, message, ctx) {
   if (continueReason === "tool-cap" || continueReason === "place-done") {
     const _internal = {
       role: session.role?.name,
-      rootId: getRootId(ctx.beingId),
+      rootId: getSpaceRootId(ctx.beingId),
       isCustom,
       model: MODEL,
       connectionId: resolvedConnectionId || null,
@@ -2216,7 +2216,7 @@ export async function runChat({ being, envelope, role, signal = null } = {}) {
       beingIn:       beingId,                                       // asker
       beingOut,                                                     // responder
       // Asker stance position: the asker's CURRENT navigated position
-      // (per Being.currentPositionId / seed/being/position.js cache),
+      // (per Being.currentPositionId / seed/land/being/position.js cache),
       // with rootId as fallback. The Summon's IBP Address is computed
       // from this stance plus the addressee's stance.
       askerPosition: getCurrentSpace(beingId) || rootId || null,

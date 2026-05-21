@@ -96,7 +96,7 @@ function flagContentHash(payload) {
  * @param {string} args.rulerSpaceId   the scope receiving the flag
  * @param {object} args.payload       the flag content (kind, artifactContext, localChoice, blocking, proposedResolution?)
  * @param {string} [args.beingId]      Worker's user id (for audit)
- * @param {string} [args.sourceWorkerScopeId] the node id where the Worker ran
+ * @param {string} [args.sourceWorkerScopeId] the space id where the Worker ran
  * @param {string} [args.sourceWorkerType]    "build" | "refine" | "review" | "integrate"
  */
 export async function appendFlag({
@@ -120,9 +120,9 @@ export async function appendFlag({
 
   const space = await Space.findById(rulerSpaceId);
   if (!space) return null;
-  const meta = space.metadata instanceof Map
-    ? space.metadata.get(NS)
-    : space.metadata?.[NS];
+  const meta = space.qualities instanceof Map
+    ? space.qualities.get(NS)
+    : space.qualities?.[NS];
   if (meta?.role !== "ruler") {
     log.warn("Governing/Flags",
       `appendFlag: ${String(rulerSpaceId).slice(0, 8)} is not a Ruler scope (role=${meta?.role || "(none)"})`);
@@ -167,7 +167,7 @@ export async function appendFlag({
   // through one dispatcher path. merge:true preserves other keys in NS
   // atomically (better than the previous read-spread-write pattern,
   // which would clobber concurrent writes to sibling keys).
-  await core.do(node, "set-meta", {
+  await core.do(space, "set-meta", {
     namespace: NS,
     data: { pendingContractIssues: queue },
     merge: true,
@@ -206,9 +206,9 @@ export async function readPendingIssues(rulerSpaceId) {
   if (!rulerSpaceId) return [];
   const space = await Space.findById(rulerSpaceId).select("metadata").lean();
   if (!space) return [];
-  const meta = space.metadata instanceof Map
-    ? space.metadata.get(NS)
-    : space.metadata?.[NS];
+  const meta = space.qualities instanceof Map
+    ? space.qualities.get(NS)
+    : space.qualities?.[NS];
   if (meta?.role !== "ruler") return [];
   const queue = Array.isArray(meta?.pendingContractIssues)
     ? meta.pendingContractIssues
@@ -226,9 +226,9 @@ export async function markFlagResolved({ rulerSpaceId, flagId, resolution, ident
   if (!rulerSpaceId || !flagId) return null;
   const space = await Space.findById(rulerSpaceId);
   if (!space) return null;
-  const meta = space.metadata instanceof Map
-    ? space.metadata.get(NS)
-    : space.metadata?.[NS];
+  const meta = space.qualities instanceof Map
+    ? space.qualities.get(NS)
+    : space.qualities?.[NS];
   if (meta?.role !== "ruler") return null;
   const queue = Array.isArray(meta?.pendingContractIssues)
     ? meta.pendingContractIssues
@@ -251,7 +251,7 @@ export async function markFlagResolved({ rulerSpaceId, flagId, resolution, ident
   if (!mutated) return null;
   // Phase 3 migration: verb-surface write, atomic merge of the resolved
   // flag back into the queue. See appendFlag for the rationale.
-  await core.do(node, "set-meta", {
+  await core.do(space, "set-meta", {
     namespace: NS,
     data: { pendingContractIssues: next },
     merge: true,

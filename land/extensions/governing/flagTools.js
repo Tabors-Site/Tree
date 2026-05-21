@@ -34,9 +34,9 @@ const FIELD_CAP = 200;
 /**
  * Resolve the Ruler scope to attach the flag to. The flag's owning
  * Ruler is the nearest Ruler scope at or above the caller's current
- * node. Workers run at their own scope (which IS a Ruler scope after
+ * space. Workers run at their own scope (which IS a Ruler scope after
  * promotion), so the resolve typically lands on the caller's own
- * node id.
+ * space id.
  */
 async function resolveRulerForFlag(spaceId) {
   if (!spaceId) return null;
@@ -47,12 +47,12 @@ async function resolveRulerForFlag(spaceId) {
       return await governing.findRulerScope(spaceId);
     }
   } catch {}
-  // Fall back: read the node directly and check if it's a Ruler.
+  // Fall back: read the space directly and check if it's a Ruler.
   const direct = await Space.findById(spaceId).select("_id name metadata").lean();
   if (!direct) return null;
-  const meta = direct.metadata instanceof Map
-    ? Object.fromEntries(direct.metadata)
-    : (direct.metadata || {});
+  const meta = direct.qualities instanceof Map
+    ? Object.fromEntries(direct.qualities)
+    : (direct.qualities || {});
   return meta?.governing?.role === "ruler" ? direct : null;
 }
 

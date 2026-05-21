@@ -10,7 +10,7 @@
 // be redundant and slow.
 
 import log from "../../../seed/system/log.js";
-import { decodeToken } from "../../../seed/being/identity.js";
+import { decodeToken } from "../../../seed/land/being/identity.js";
 import { sendError, ERR } from "../../../seed/ibp/protocol.js";
 
 export default function authenticateMCP(req, res, next) {

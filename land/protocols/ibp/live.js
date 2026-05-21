@@ -2,8 +2,8 @@
 //
 // Holds the per-socket subscription registry and exposes emitters that
 // push descriptor updates to subscribers. Subscriptions are keyed by
-// spaceId — the leaf node of the addressed Position. When kernel state
-// changes (metadata writes, node create/delete, status changes, note
+// spaceId — the leaf space of the addressed Position. When kernel state
+// changes (metadata writes, space create/delete, status changes, note
 // writes), call the emitters and live SEE subscribers see the update.
 //
 // Subscription cleanup is automatic on socket disconnect: we stash the
@@ -24,7 +24,7 @@ const _socketSubs = new Map();
  * for the given spaceId until disconnect or explicit unsubscribe.
  *
  * @param {Socket} socket
- * @param {string} spaceId  the leaf node of the addressed position
+ * @param {string} spaceId  the leaf space of the addressed position
  */
 export function subscribePosition(socket, spaceId) {
   if (!socket || !spaceId) return;

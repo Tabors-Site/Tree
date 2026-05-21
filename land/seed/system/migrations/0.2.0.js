@@ -73,9 +73,9 @@ export default async function migrate() {
           planDetails.push(`  - ${planId} (NOT FOUND)`);
           continue;
         }
-        const meta = planDoc.metadata instanceof Map
-          ? planDoc.metadata.get("plan")
-          : planDoc.metadata?.plan;
+        const meta = planDoc.qualities instanceof Map
+          ? planDoc.qualities.get("plan")
+          : planDoc.qualities?.plan;
         const stepCount = Array.isArray(meta?.steps) ? meta.steps.length : 0;
         const branchCount = Array.isArray(meta?.steps)
           ? meta.steps.filter((s) => s?.kind === "branch").length

@@ -2,14 +2,14 @@
 //
 // Registers the four coordination modes (Planner, Contractor, Worker,
 // Foreman) and exposes the role lifecycle API for callers that need
-// to promote a node to Ruler at any depth. Workspaces (code-workspace,
+// to promote a space to Ruler at any depth. Workspaces (code-workspace,
 // book-workspace, etc.) consume governing for coordination and may
 // specialize the Worker base mode by registering their own
 // domain-specific Worker variant.
 //
-// The trio is now a quartet at every Ruler scope: plan-node
-// (Planner's emission surface), contracts-node (Contractor's surface),
-// execution-node (Foreman's surface), all under the Ruler. The
+// The trio is now a quartet at every Ruler scope: plan-space
+// (Planner's emission surface), contracts-space (Contractor's surface),
+// execution-space (Foreman's surface), all under the Ruler. The
 // Foreman role's reasoning surface is structurally registered in
 // Pass 1; the LLM-driven retry-vs-escalate / court-convening logic
 // lands in Pass 2.
@@ -25,7 +25,7 @@ import { plannerRole } from "./roles/plannerRole.js";
 import { contractorRole } from "./roles/contractorRole.js";
 import { foremanRole } from "./roles/foremanRole.js";
 import { allWorkerRoles } from "./roles/workerRoles.js";
-import { registerRole } from "../../seed/being/roles/registry.js";
+import { registerRole } from "../../seed/cognition/roles/registry.js";
 import {
   WORKER_TYPES,
   DEFAULT_WORKER_TYPE,
@@ -295,13 +295,13 @@ export async function init(core) {
     const treeos = getExtension("treeos-base");
     if (treeos?.exports?.registerSlot) {
       treeos.exports.registerSlot(
-        "node-detail-sections",
+        "space-detail-sections",
         "governing-plan",
-        ({ node, spaceId, qs }) => {
-          if (node?.type !== "plan") return "";
+        ({ space, spaceId, qs }) => {
+          if (space?.type !== "plan") return "";
           const id = `plan-panel-${String(spaceId).slice(0, 8)}`;
           return `
-            <div id="${id}" data-slot="node-detail-sections" data-ext="governing">
+            <div id="${id}" data-slot="space-detail-sections" data-ext="governing">
               <div style="padding:12px;color:rgba(255,255,255,0.4);font-size:11px;">Loading plan…</div>
             </div>
             <script>
@@ -333,9 +333,9 @@ export async function init(core) {
   // readContracts already walks the ancestor chain via ruler-role
   // markers; we just format and inject.
   if (core?.hooks?.register) {
-    // One-time backfill on boot: every node that has been promoted to
+    // One-time backfill on boot: every space that has been promoted to
     // Ruler in a prior session may be missing the explicit
-    // `metadata.beings.ruler` home declaration that the descriptor
+    // `qualities.beings.ruler` home declaration that the descriptor
     // now reads. Promotion happens in promoteToRuler going forward, but
     // existing rulers wouldn't have it. Walk the rulers and merge the
     // home record where it's missing.
@@ -358,20 +358,20 @@ export async function init(core) {
 
         // Backfill being homes on the four kinds of governing structural
         // nodes: Ruler, plan trio (Planner), contracts trio (Contractor),
-        // execution node (Foreman). For each kind we query by governing
+        // execution space (Foreman). For each kind we query by governing
         // role marker and add the matching beings entry where it
         // does not already exist.
         // Each backfill entry carries a `permissions(scopeSpaceId)`
-        // function that produces the SUMMON rule for the node. Trio
+        // function that produces the SUMMON rule for the space. Trio
         // rules use the scopeRulerId (read from the existing
         // governing metadata) as the homeInDomain bound, so beings
         // from other rulerships can't address this trio's inner being.
         // Ruler nodes get an open rule (anyone can address the Ruler).
-        // Each backfill entry distinguishes the node's structural
+        // Each backfill entry distinguishes the space's structural
         // marker (`nodeType`, queried against metadata.governing.role)
         // from the role assigned to the being that lives there
         // (`beingRole`). They happen to match here because governing
-        // has a 1:1 mapping between node kinds and being roles, but
+        // has a 1:1 mapping between space kinds and being roles, but
         // the field names stay explicit so other extensions with
         // different mappings can reuse the pattern.
         const BACKFILLS = [
@@ -407,15 +407,15 @@ export async function init(core) {
             } } }),
           },
         ];
-        const { createBeingWithHome } = await import("../../seed/being/identity.js");
+        const { createBeingWithHome } = await import("../../seed/land/being/identity.js");
         const counts = {};
         for (const { nodeType, beingRole, permissions } of BACKFILLS) {
-          const nodes = await Space.find({ "metadata.governing.role": nodeType })
+          const nodes = await Space.find({ "qualities.governing.role": nodeType })
             .select("_id metadata")
             .lean();
           let written = 0;
           for (const n of nodes) {
-            const meta = n.metadata;
+            const meta = n.qualities;
             const emb = meta instanceof Map ? meta.get("beings") : meta?.embodiments;
             const existingPerms = meta instanceof Map ? meta.get("permissions") : meta?.permissions;
             const beingPresent = !!emb?.[beingRole]?.beingId;
@@ -424,7 +424,7 @@ export async function init(core) {
             const gov = meta instanceof Map ? meta.get("governing") : meta?.governing;
             const fresh = await Space.findById(n._id);
             if (!fresh) continue;
-            // The node already exists (this is a backfill). Place the
+            // The space already exists (this is a backfill). Place the
             // being via the unified primitive if missing, then stamp
             // permission rules if missing. Each merge is independent
             // so partial-migrated nodes get topped up.
@@ -452,8 +452,8 @@ export async function init(core) {
             if (!permsPresent && typeof permissions === "function") {
               // The trio backfills want scopeRulerId; ruler backfills
               // ignore it. For trio nodes the scopeRulerId is on the
-              // node's governing metadata. For ruler nodes the scope
-              // IS the node itself — passing the node id as scopeId
+              // space's governing metadata. For ruler nodes the scope
+              // IS the space itself — passing the space id as scopeId
               // produces the open ruler rule (which doesn't consult it).
               const scopeId = gov?.scopeRulerId || String(fresh._id);
               await core.do(fresh, "set-meta", {
@@ -519,9 +519,9 @@ export async function init(core) {
             const NodeModel = (await import("../../seed/models/space.js")).default;
             const emissionSpace = await NodeModel.findById(lineage.parentPlanEmissionId)
               .select("_id metadata").lean();
-            const meta = emissionSpace?.metadata instanceof Map
-              ? emissionSpace.metadata.get("governing")
-              : emissionSpace?.metadata?.governing;
+            const meta = emissionSpace?.qualities instanceof Map
+              ? emissionSpace.qualities.get("governing")
+              : emissionSpace?.qualities?.governing;
             const emission = meta?.emission;
             if (emission) {
               context.governingParentPlan = formatParentPlanEmission(emission, lineage);
@@ -559,7 +559,7 @@ export async function init(core) {
             // its hints yet). Workspace-declared hints below override.
             const FALLBACK_HINTS = {
               "book-workspace":
-                "Prose artifacts. Workers write text as NOTES on tree nodes (create-node-note), not as files.",
+                "Prose artifacts. Workers write text as NOTES on tree nodes (create-space-note), not as files.",
               "code-workspace":
                 "Code artifacts. Workers create + edit FILES via workspace-add-file / workspace-edit-file.",
             };
@@ -618,7 +618,7 @@ export async function init(core) {
   }
 
   // Governance dashboard SSE broadcasts. Subscribe to every governing
-  // lifecycle event; on each, resolve the affected node's tree root
+  // lifecycle event; on each, resolve the affected space's tree root
   // and broadcast a `update` SSE frame to every dashboard subscriber
   // for that root. The dashboard's client-side bootstrap refetches
   // the page fragment in response.
@@ -822,7 +822,7 @@ export async function init(core) {
     core.do.registerOperation("ratify-plan", {
       targets: ["space"],
       handler: async ({ target, params }) => {
-        // target is the Ruler node; params.planSpaceId is the plan
+        // target is the Ruler space; params.planSpaceId is the plan
         // emission being ratified. Status defaults to "approved".
         return appendPlanApproval({
           rulerSpaceId: idOf(target),
@@ -904,15 +904,15 @@ export async function init(core) {
       buildDashboardData, isTreeGoverned,
       // LCA / scope authority
       findLCA, ancestorChain, isAncestorOrSelf, validateScopeAuthority,
-      // Contracts (trio: contracts-type node holds emissions, Ruler holds
+      // Contracts (trio: contracts-type space holds emissions, Ruler holds
       // approval ledger). See project_contracts_node_architecture.
       setContracts: bindCore(setContracts), readContracts, readScopedContracts, readApprovalsAtRuler,
-      // Trio member ensure-fns. Each scaffolds a child node + role/mode/
+      // Trio member ensure-fns. Each scaffolds a child space + role/mode/
       // being/permissions metadata writes through the verb surface.
       readActiveContractsEmission,
       ensureContractsNode: bindCore(ensureContractsNode),
       // Plan trio member primitive (Phase F absorbed from the plan
-      // extension). governing now owns plan-type node creation +
+      // extension). governing now owns plan-type space creation +
       // role/mode stamping directly, parallel to contracts-type and
       // execution-type. Plan-emission ring records (immutable per
       // Planner invocation) live as children; the Ruler's planApprovals
@@ -944,7 +944,7 @@ export async function init(core) {
       // weren't threaded (current branch-swarm path).
       writeLineage: bindCore(writeLineage), readLineage, inferLineageFromParent,
       // Foreman quartet member. ensureExecutionNode materializes the
-      // execution-node child of a Ruler; appendExecutionRecord creates
+      // execution-space child of a Ruler; appendExecutionRecord creates
       // a new execution-record tied to a plan emission (with optional
       // contracts emission ref) and writes the executionApproval
       // ledger entry. updateStepStatus / freezeExecutionRecord are

@@ -14,11 +14,11 @@
 // resolved against metadata.coders.projectPath on the rulership.
 //
 // The `coder:governing-coder` seed plants the governance quartet at
-// the target node and tags the workspace; coder beings materialize
+// the target space and tags the workspace; coder beings materialize
 // lazily on first dispatch.
 
 import log from "../../seed/system/log.js";
-import { registerRole } from "../../seed/being/roles/registry.js";
+import { registerRole } from "../../seed/cognition/roles/registry.js";
 import { registerWorkspaceWorkerTypes } from "../governing/state/workerTypeRegistry.js";
 import { allCoderRoles } from "./roles/coderRole.js";
 import getCodersTools from "./tools.js";

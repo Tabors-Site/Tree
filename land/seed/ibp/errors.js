@@ -61,7 +61,7 @@ export function isIbpError(e) {
  * pass through unchanged. Otherwise the fallback code is used.
  *
  * Used by DO operation handlers that wrap low-level kernel helpers
- * (createSpace, editSpaceName, setExtMeta, ...) and want clean
+ * (createSpace, editSpaceName, setQuality, ...) and want clean
  * wire-shape errors instead of opaque internal messages.
  *
  *   throw mapPatternsToIbpError(err, [

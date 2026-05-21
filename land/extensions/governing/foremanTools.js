@@ -65,7 +65,7 @@ export default function getForemanTools(_core) {
         "coordinate. Use foreman-retry-branch for single, decisive " +
         "judgments inside your turn.",
       schema: {
-        recordNodeId: z.string().describe("The execution-record's node id (from your snapshot)."),
+        recordNodeId: z.string().describe("The execution-record's space id (from your snapshot)."),
         stepIndex: z.number().int().describe("The 1-based step index containing the branch."),
         branchName: z.string().describe("The branch name to retry."),
         reason: z.string().describe("Your judgment — why this retry has a chance of succeeding."),
@@ -89,9 +89,9 @@ export default function getForemanTools(_core) {
         let branchSpec = "";
         try {
           const recSpace = await Space.findById(recordNodeId).select("metadata").lean();
-          const meta = recSpace?.metadata instanceof Map
-            ? Object.fromEntries(recSpace.metadata)
-            : (recSpace?.metadata || {});
+          const meta = recSpace?.qualities instanceof Map
+            ? Object.fromEntries(recSpace.qualities)
+            : (recSpace?.qualities || {});
           const stepStatuses = meta?.governing?.execution?.stepStatuses || [];
           const step = stepStatuses.find((s) => s?.stepIndex === stepIndex);
           if (step?.type === "branch" && Array.isArray(step.branches)) {
@@ -161,9 +161,9 @@ export default function getForemanTools(_core) {
         const NodeModel = (await import("../../seed/models/space.js")).default;
         const BeingModel = (await import("../../seed/models/being.js")).default;
         const branchNodeFull = await NodeModel.findById(branchScopeId).select("metadata").lean();
-        const branchBeings = branchNodeFull?.metadata instanceof Map
-          ? branchNodeFull.metadata.get("beings")
-          : branchNodeFull?.metadata?.beings;
+        const branchBeings = branchNodeFull?.qualities instanceof Map
+          ? branchNodeFull.qualities.get("beings")
+          : branchNodeFull?.qualities?.beings;
         const branchRulerBeingId = branchBeings?.ruler?.beingId || null;
         if (!branchRulerBeingId) {
           releaseSpawn(claim.key);
@@ -477,7 +477,7 @@ export default function getForemanTools(_core) {
           const { getExtension } = await import("../loader.js");
           const governing = getExtension("governing")?.exports;
           const space = await Space.findById(subRulerNodeId).select("_id name").lean();
-          if (!space) return text(`foreman-read-branch-detail: node ${subRulerNodeId.slice(0, 8)} not found.`);
+          if (!space) return text(`foreman-read-branch-detail: space ${subRulerNodeId.slice(0, 8)} not found.`);
           const plan = governing?.readActivePlanEmission
             ? await governing.readActivePlanEmission(subRulerNodeId)
             : null;

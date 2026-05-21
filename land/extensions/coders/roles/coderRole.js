@@ -12,14 +12,14 @@
 // — the Foreman's dispatch loop awaits the summon's return value via
 // attachHandoff; coders just return their summary content.
 //
-// Coder beings are materialized lazily at the execution node when the
+// Coder beings are materialized lazily at the execution space when the
 // Foreman first needs them. Each role's being is keyed by role name in
 // metadata.beings (coder-build, coder-refine, coder-review,
 // coder-integrate).
 //
 // Filesystem-matter tools (coders-read-file, coders-list-files,
 // coders-write-file) ship with this extension. Paths are scoped to
-// `metadata.coders.projectPath` on the rulership space; see
+// `qualities.coders.projectPath` on the rulership space; see
 // scopeResolver.js. The four roles get different tool grants based on
 // their cognitive shape — Review has no write, Build defaults to
 // 'create' mode, Refine and Integrate use 'overwrite'.

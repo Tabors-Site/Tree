@@ -1,20 +1,20 @@
 // TreeOS Seed . AGPL-3.0 . https://treeos.ai . Tabor Holly
-/**
- * Index Verification
- *
- * Mongoose creates schema-declared indexes lazily (autoIndex). On boot
- * the kernel still verifies the index set explicitly: it adds any
- * compound / partial indexes that aren't expressible as a single schema
- * declaration, and it surfaces failures so the operator knows when an
- * index never materialized.
- *
- * The schema-declared indexes (see each model file) are NOT redeclared
- * here — Mongoose owns those. This module covers only what's outside
- * the schemas: cross-collection query patterns and compound keys.
- *
- * Extensions can declare their own indexes via the loader's
- * ensureExtensionIndexes path. They cannot touch kernel collections.
- */
+//
+// The index floor every query stands on.
+//
+// Mongoose creates schema-declared indexes lazily (autoIndex). At
+// genesis I verify the set explicitly and add the compound / partial
+// indexes that don't fit a single schema declaration. Failures surface
+// loudly so the operator knows when an index never materialized.
+//
+// Schema-declared indexes (see each model file) are NOT redeclared
+// here; Mongoose owns those. This module covers what sits outside the
+// schemas: cross-collection query patterns and compound keys.
+//
+// Extensions declare their own indexes through `ensureExtensionIndexes`
+// (called by the loader during the wire phase). They cannot touch the
+// kernel's collections, cannot enforce uniqueness on shared ones, and
+// are capped per-extension to keep one runaway from degrading writes.
 
 import log from "./log.js";
 import mongoose from "mongoose";
@@ -135,11 +135,7 @@ export async function ensureIndexes() {
 
 /**
  * Ensure extension-declared indexes exist. Called by the loader during
- * the wire phase.
- *
- * Extensions cannot create indexes on kernel collections. Capped at
- * MAX_EXTENSION_INDEXES per extension. Unique indexes are rejected
- * (extensions cannot enforce uniqueness on shared collections).
+ * the wire phase. Header above describes the safety rails.
  *
  * @param {Array<{ collection: string, fields: object, options?: object }>} indexes
  * @param {string} extName - for logging

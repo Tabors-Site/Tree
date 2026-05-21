@@ -3,7 +3,7 @@
 // Inbox primitives.
 //
 // The inbox is per-being-per-position metadata, stored under
-// `metadata.inbox.<beingId>` on the Space document. The kernel treats
+// `qualities.inbox.<beingId>` on the Space document. The kernel treats
 // `inbox` as a reserved namespace: it cannot be written through DO
 // set-meta (see actions/set-meta.js), only through these primitives,
 // which SUMMON uses.
@@ -104,7 +104,7 @@ export async function appendToInbox(spaceId, beingId, message) {
   // does not yet exist on the metadata Map.
   await Space.updateOne(
     { _id: spaceId },
-    { $push: { [`metadata.${INBOX_NS}.${beingId}`]: entry } },
+    { $push: { [`qualities.${INBOX_NS}.${beingId}`]: entry } },
   );
 
   return { messageId, sentAt };
@@ -124,7 +124,7 @@ export async function appendToInbox(spaceId, beingId, message) {
 export async function readInbox(spaceId, beingId, options = {}) {
   if (!spaceId || !beingId) return [];
   const space = await Space.findById(spaceId)
-    .select(`metadata.${INBOX_NS}.${beingId}`)
+    .select(`qualities.${INBOX_NS}.${beingId}`)
     .lean();
   if (!space) return [];
 
@@ -170,7 +170,7 @@ export async function markInboxConsumed(spaceId, beingId, correlationIds, opts =
 
   const consumedAt = new Date().toISOString();
   const space = await Space.findById(spaceId)
-    .select(`metadata.${INBOX_NS}.${beingId}`)
+    .select(`qualities.${INBOX_NS}.${beingId}`)
     .lean();
   const bucket = readMetaPath(space, [INBOX_NS, beingId]);
   if (!Array.isArray(bucket)) return { consumed: 0 };
@@ -180,7 +180,7 @@ export async function markInboxConsumed(spaceId, beingId, correlationIds, opts =
   let consumed = 0;
   bucket.forEach((entry, i) => {
     if (!idSet.has(entry.correlation) || entry.consumed) return;
-    const base = `metadata.${INBOX_NS}.${beingId}.${i}`;
+    const base = `qualities.${INBOX_NS}.${beingId}.${i}`;
     updates[`${base}.consumed`]   = true;
     updates[`${base}.consumedAt`] = consumedAt;
     if (responseId) updates[`${base}.responseId`] = responseId;
@@ -208,7 +208,7 @@ export async function markInboxConsumed(spaceId, beingId, correlationIds, opts =
 export async function pickNextEntry(spaceId, beingId) {
   if (!spaceId || !beingId) return null;
   const space = await Space.findById(spaceId)
-    .select(`metadata.${INBOX_NS}.${beingId}`)
+    .select(`qualities.${INBOX_NS}.${beingId}`)
     .lean();
   const bucket = readMetaPath(space, [INBOX_NS, beingId]);
   if (!Array.isArray(bucket) || bucket.length === 0) return null;
@@ -247,7 +247,7 @@ export async function cancelByRootCorrelation(spaceId, beingId, rootCorrelation)
     return { cancelled: 0, correlations: [] };
   }
   const space = await Space.findById(spaceId)
-    .select(`metadata.${INBOX_NS}.${beingId}`)
+    .select(`qualities.${INBOX_NS}.${beingId}`)
     .lean();
   const bucket = readMetaPath(space, [INBOX_NS, beingId]);
   if (!Array.isArray(bucket)) return { cancelled: 0, correlations: [] };
@@ -258,7 +258,7 @@ export async function cancelByRootCorrelation(spaceId, beingId, rootCorrelation)
   bucket.forEach((entry, i) => {
     if (!entry || entry.consumed || entry.cancelledAt) return;
     if (entry.rootCorrelation !== rootCorrelation) return;
-    updates[`metadata.${INBOX_NS}.${beingId}.${i}.cancelledAt`] = cancelledAt;
+    updates[`qualities.${INBOX_NS}.${beingId}.${i}.cancelledAt`] = cancelledAt;
     correlations.push(entry.correlation);
   });
   if (correlations.length === 0) return { cancelled: 0, correlations: [] };
@@ -284,7 +284,7 @@ export async function markSummoned(spaceId, beingId, index) {
   const summonedAt = new Date().toISOString();
   await Space.updateOne(
     { _id: spaceId },
-    { $set: { [`metadata.${INBOX_NS}.${beingId}.${index}.summonedAt`]: summonedAt } },
+    { $set: { [`qualities.${INBOX_NS}.${beingId}.${index}.summonedAt`]: summonedAt } },
   );
 }
 
@@ -301,7 +301,7 @@ export async function markSummoned(spaceId, beingId, index) {
  */
 export async function getInboxSummary(spaceId) {
   if (!spaceId) return {};
-  const space = await Space.findById(spaceId).select(`metadata.${INBOX_NS}`).lean();
+  const space = await Space.findById(spaceId).select(`qualities.${INBOX_NS}`).lean();
   if (!space) return {};
   const inbox = readMetaPath(space, [INBOX_NS]);
   if (!inbox || typeof inbox !== "object") return {};
@@ -338,7 +338,7 @@ export async function getInboxSummary(spaceId) {
 // handles both shapes.
 function readMetaPath(space, path) {
   if (!space) return undefined;
-  let cursor = space.metadata;
+  let cursor = space.qualities;
   for (const key of path) {
     if (cursor instanceof Map) {
       cursor = cursor.get(key);

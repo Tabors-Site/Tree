@@ -35,7 +35,7 @@ import { randomUUID } from "crypto";
 import log from "../system/log.js";
 import Being from "../models/being.js";
 import { pickNextEntry, markSummoned, markInboxConsumed, readInbox } from "./inbox.js";
-import { getRole } from "../being/roles/registry.js";
+import { getRole } from "../cognition/roles/registry.js";
 import { pushIbp } from "../ibp/pushChannel.js";
 import { getLandConfigValue } from "../landConfig.js";
 
@@ -49,7 +49,7 @@ import { getLandConfigValue } from "../landConfig.js";
 //   }
 const _state = new Map();
 
-// Backpressure defaults. Per-being overrides live on Being.metadata.scheduler
+// Backpressure defaults. Per-being overrides live on Being.qualities.scheduler
 // (not yet wired); land-wide overrides come from .config. Each accessor
 // reads at use time so live `treeos config set` propagates immediately.
 //

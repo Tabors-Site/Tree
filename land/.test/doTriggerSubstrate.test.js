@@ -30,7 +30,7 @@
 import { test, describe, beforeEach, afterEach } from "node:test";
 import { strict as assert } from "node:assert";
 import { mock } from "node:test";
-import { echoEmbodiment } from "../seed/being/roles/echo.js";
+import { echoEmbodiment } from "../seed/cognition/roles/echo.js";
 
 // In-memory inbox bucket: beingId -> entries[]. The subscription
 // registry's appendToInbox writes here; the scheduler's pickNextEntry
@@ -113,7 +113,7 @@ mock.module("../seed/models/being.js", {
   },
 });
 
-mock.module("../seed/being/roles/registry.js", {
+mock.module("../seed/cognition/roles/registry.js", {
   namedExports: {
     getRole: (name) => name === "echo" ? echoEmbodiment : null,
   },
@@ -127,7 +127,7 @@ mock.module("../seed/landRoot.js", {
   namedExports: { getLandRootId: () => "land-root-id" },
 });
 
-mock.module("../seed/space/ancestorCache.js", {
+mock.module("../seed/land/space/ancestorCache.js", {
   namedExports: {
     getAncestorChain: async () => [],   // empty chain — only "everywhere" scope used here
   },

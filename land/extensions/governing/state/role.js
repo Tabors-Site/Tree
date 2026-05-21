@@ -1,8 +1,8 @@
 // Governing role lifecycle (substrate-as-universal-workspace shape).
 //
-// promoteToRuler is the single function that records a node taking on
+// promoteToRuler is the single function that records a space taking on
 // ruler authority for a domain. After this rewrite, it ALSO spawns the
-// full governing being family at the rulership node:
+// full governing being family at the rulership space:
 //
 //   Ruler being           (parented to the requesting user-being via
 //                          parentBeingId; root Rulers have no parent)
@@ -10,8 +10,8 @@
 //   ├── Contractor being  (being-tree child of Ruler, same homeSpace)
 //   └── Foreman being     (being-tree child of Ruler, same homeSpace)
 //
-// All four live at the same rulership node. The being-tree carries the
-// cognitive hierarchy; the node tree stays clean (no plan/contracts/
+// All four live at the same rulership space. The being-tree carries the
+// cognitive hierarchy; the space tree stays clean (no plan/contracts/
 // execution trio nodes anymore). Plans/contracts/executions become
 // artifacts authored by their owning beings (Planner authors plans,
 // etc.) . see [[project_substrate_as_universal_workspace]] for the
@@ -19,15 +19,15 @@
 //
 // promoteToRuler is called at every depth uniformly:
 //
-//   1. Root node, on user request arrival. Orchestrator promotes the
+//   1. Root space, on user request arrival. Orchestrator promotes the
 //      root before dispatching a Planner.
-//   2. Branch node, on sub-Ruler dispatch. Branch IS a sub-Ruler, not a
+//   2. Branch space, on sub-Ruler dispatch. Branch IS a sub-Ruler, not a
 //      Worker pretending to coordinate.
-//   3. Worker mid-build, on scope undershoot. Worker's own node
+//   3. Worker mid-build, on scope undershoot. Worker's own space
 //      promotes retroactively and its sub-branches dispatch under the
 //      new Ruler.
 //
-// Idempotent. A second promote on a node already marked as ruler
+// Idempotent. A second promote on a space already marked as ruler
 // returns the existing record without changing acceptedAt or re-
 // spawning beings.
 //
@@ -56,9 +56,9 @@ export const PROMOTED_FROM = {
 };
 
 /**
- * Promote a node to Ruler AND spawn the inner-being family at the same
- * node parented to the Ruler being. Idempotent: a second call on an
- * already-promoted node returns the existing record without re-spawning.
+ * Promote a space to Ruler AND spawn the inner-being family at the same
+ * space parented to the Ruler being. Idempotent: a second call on an
+ * already-promoted space returns the existing record without re-spawning.
  *
  * Returns the governing metadata record after the write (including the
  * beings map with the four governing beingIds).
@@ -71,7 +71,7 @@ export const PROMOTED_FROM = {
  *      parent Ruler's beingId here so the sub-Ruler is its child.
  *   2. `identity.beingId` — when called through core.do, this is the
  *      requesting being; the Ruler becomes its child. Matches "if I
- *      promote a node, the Ruler is my child."
+ *      promote a space, the Ruler is my child."
  *   3. `delegateToHigherBeing.beingId` — root Ruler fallback to the
  *      tree's rootOwner (the human who spawned the tree).
  *
@@ -88,9 +88,9 @@ export async function promoteToRuler({ spaceId, reason, promotedFrom, parentBein
   const space = await Space.findById(spaceId);
   if (!space) return null;
 
-  const existing = space.metadata instanceof Map
-    ? space.metadata.get(NS)
-    : space.metadata?.[NS];
+  const existing = space.qualities instanceof Map
+    ? space.qualities.get(NS)
+    : space.qualities?.[NS];
 
   if (existing?.role === "ruler" && existing?.acceptedAt) {
     // Already promoted. Idempotent return.
@@ -113,14 +113,14 @@ export async function promoteToRuler({ spaceId, reason, promotedFrom, parentBein
     data.delegateToHigherBeing = { beingId: String(space.rootOwner) };
   }
 
-  // 1. Stamp governing role on the node.
+  // 1. Stamp governing role on the space.
   await core.do(space, "set-meta", {
     namespace: NS,
     data,
     merge: false,
   }, { identity });
 
-  // 2. Spawn the Ruler being at this node. Parent chain prefers explicit
+  // 2. Spawn the Ruler being at this space. Parent chain prefers explicit
   //    parentBeingId (sub-Ruler dispatch), then the requesting being
   //    (identity.beingId from the verb surface), then the tree's
   //    delegate higher being (rootOwner for root rulerships).
@@ -133,7 +133,7 @@ export async function promoteToRuler({ spaceId, reason, promotedFrom, parentBein
   // createBeingWithHome handles both the parentBeingId stamp on the
   // new being AND the $addToSet into the parent's children list, so
   // no separate link write is needed here.
-  const { createBeingWithHome } = await import("../../../seed/being/identity.js");
+  const { createBeingWithHome } = await import("../../../seed/land/being/identity.js");
   const rulerCreated = await createBeingWithHome({
     operatingMode: "llm",
     role:          "ruler",
@@ -143,9 +143,9 @@ export async function promoteToRuler({ spaceId, reason, promotedFrom, parentBein
   const rulerBeingId = String(rulerCreated.being._id);
 
   // 3. Spawn each inner being (Planner, Contractor, Foreman) as a
-  //    being-tree child of the Ruler. All live at the SAME node . no
+  //    being-tree child of the Ruler. All live at the SAME space . no
   //    more trio child nodes. The being tree carries the cognitive
-  //    hierarchy; the node tree stays clean.
+  //    hierarchy; the space tree stays clean.
   const innerBeings = {};
   for (const role of INNER_ROLES) {
     const innerCreated = await createBeingWithHome({
@@ -157,7 +157,7 @@ export async function promoteToRuler({ spaceId, reason, promotedFrom, parentBein
     innerBeings[role] = String(innerCreated.being._id);
   }
 
-  // 4. Record the spawned beings on the node's governing namespace so
+  // 4. Record the spawned beings on the space's governing namespace so
   //    descriptor lookups / queries can find them by role without
   //    walking the being tree every time.
   const beingsRegistry = {
@@ -172,10 +172,10 @@ export async function promoteToRuler({ spaceId, reason, promotedFrom, parentBein
     merge: true,
   }, { identity });
 
-  // 5. Stance permissions at the rulership node.
+  // 5. Stance permissions at the rulership space.
   //
   //    @ruler is the open entry point — humans, federated visitors,
-  //    any being authorized at this node can summon. Inner beings
+  //    any being authorized at this space can summon. Inner beings
   //    (planner / contractor / foreman) are protected: only beings of
   //    governing roles whose home is within this rulership's subtree
   //    can summon them.
@@ -211,21 +211,21 @@ export async function promoteToRuler({ spaceId, reason, promotedFrom, parentBein
 }
 
 /**
- * Read the governing record for a node. Returns null if the node has
+ * Read the governing record for a space. Returns null if the space has
  * not been promoted.
  */
 export async function readRole(spaceId) {
   if (!spaceId) return null;
   const space = await Space.findById(spaceId).select("metadata").lean();
   if (!space) return null;
-  const meta = space.metadata instanceof Map
-    ? Object.fromEntries(space.metadata)
-    : (space.metadata || {});
+  const meta = space.qualities instanceof Map
+    ? Object.fromEntries(space.qualities)
+    : (space.qualities || {});
   return meta[NS] || null;
 }
 
 /**
- * Convenience predicate: has this node been promoted to Ruler?
+ * Convenience predicate: has this space been promoted to Ruler?
  */
 export async function isRuler(spaceId) {
   const record = await readRole(spaceId);
@@ -233,7 +233,7 @@ export async function isRuler(spaceId) {
 }
 
 /**
- * Walk DOWN from a root node, collecting every Ruler scope in the
+ * Walk DOWN from a root space, collecting every Ruler scope in the
  * subtree. Returns a flat ordered list with depth attached, in
  * tree-walk order (parents before children, depth-first). The root
  * appears at depth=0 if it's itself a Ruler.
@@ -265,9 +265,9 @@ export async function walkRulers(rootId) {
 
     const space = await Space.findById(idStr).select("_id name metadata children").lean();
     if (!space) return;
-    const meta = space.metadata instanceof Map
-      ? Object.fromEntries(space.metadata)
-      : (space.metadata || {});
+    const meta = space.qualities instanceof Map
+      ? Object.fromEntries(space.qualities)
+      : (space.qualities || {});
     if (meta[NS]?.role === "ruler") {
       out.push({
         depth,
@@ -292,9 +292,9 @@ export async function walkRulers(rootId) {
       for (const cid of childIds) {
         const child = await Space.findById(cid).select("_id metadata").lean();
         if (!child) continue;
-        const cmeta = child.metadata instanceof Map
-          ? Object.fromEntries(child.metadata)
-          : (child.metadata || {});
+        const cmeta = child.qualities instanceof Map
+          ? Object.fromEntries(child.qualities)
+          : (child.qualities || {});
         if (cmeta[NS]?.role === "ruler") {
           await visit(cid, 1);
         }
@@ -312,7 +312,7 @@ export async function walkRulers(rootId) {
 }
 
 /**
- * Walk upward from a node, return the nearest ancestor (or self) marked
+ * Walk upward from a space, return the nearest ancestor (or self) marked
  * as Ruler. Returns the lean Space document, or null if no Ruler found
  * before reaching the tree root.
  *
@@ -330,9 +330,9 @@ export async function findRulerScope(spaceId) {
     visited.add(cursor);
     const n = await Space.findById(cursor).select("_id name parent metadata").lean();
     if (!n) return null;
-    const meta = n.metadata instanceof Map
-      ? Object.fromEntries(n.metadata)
-      : (n.metadata || {});
+    const meta = n.qualities instanceof Map
+      ? Object.fromEntries(n.qualities)
+      : (n.qualities || {});
     if (meta[NS]?.role === "ruler") return n;
     if (!n.parent) return null;
     cursor = String(n.parent);

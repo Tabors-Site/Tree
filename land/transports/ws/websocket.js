@@ -13,7 +13,7 @@
 
 import log from "../../seed/system/log.js";
 import { Server } from "socket.io";
-import { decodeToken } from "../../seed/being/identity.js";
+import { decodeToken } from "../../seed/land/being/identity.js";
 import { hooks as _hooks } from "../../seed/system/hooks.js";  // reserved for future
 import { getLandConfigValue } from "../../seed/landConfig.js";
 import { setPushChannel, IBP_EVENT } from "../../seed/ibp/pushChannel.js";

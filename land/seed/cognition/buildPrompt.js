@@ -54,9 +54,9 @@
 // the LLM needs to know its frame of reference for this turn.
 
 import log from "../system/log.js";
-import { getToolDescription } from "../system/tools.js";
+import { getToolDescription } from "../cognition/tools.js";
 import { resolveSeeList, registerSeeResolver } from "./seeResolvers.js";
-import { getSpaceName } from "../space/spaceFetch.js";
+import { getSpaceName } from "../land/space/spaceFetch.js";
 
 // ────────────────────────────────────────────────────────────────────
 // The assembler

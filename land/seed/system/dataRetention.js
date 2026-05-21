@@ -1,21 +1,26 @@
 // TreeOS Seed . AGPL-3.0 . https://treeos.ai . Tabor Holly
-/**
- * Kernel data retention cleanup.
- * Runs at configured interval (default daily).
- * Deletes old Summon and Did records based on land config.
- * Sweeps timed-out AWAITING cascade signals.
- *
- * summonRetentionDays: default 90. 0 = keep forever.
- * didRetentionDays: default 365. 0 = keep forever.
- */
+//
+// Periodic forgetting.
+//
+// Summons and Dids accumulate forever otherwise. I sweep both on a
+// cadence (default daily), deleting rows older than the configured
+// retention window. The configured zero means "keep forever":
+//
+//   summonRetentionDays  default 90,  0 to keep forever
+//   didRetentionDays     default 365, 0 to keep forever
+//
+// AWAITING cascade signals get their own short sweep. A signal stuck
+// in AWAITING past `awaitingTimeout` seconds transitions to FAILED
+// with reason "timeout". Only recent partitions are scanned because
+// older AWAITINGs are already gone via the resultTTL cleanup.
 
-import log from "../system/log.js";
+import log from "./log.js";
 import { getLandConfigValue } from "../landConfig.js";
 import Summon from "../models/summon.js";
 import Did from "../models/did.js";
 import Space from "../models/space.js";
-import { SEED_SPACE } from "../space/seedSpaces.js";
-import { CASCADE } from "../space/cascade.js";
+import { SEED_SPACE } from "../land/space/seedSpaces.js";
+import { CASCADE } from "../land/space/cascade.js";
 
 let cleanupTimer = null;
 
@@ -94,9 +99,9 @@ export async function runRetentionCleanup() {
       }).select("_id metadata");
 
       for (const partition of recentPartitions) {
-        const results = partition.metadata instanceof Map
-          ? partition.metadata.get("results") || {}
-          : partition.metadata?.results || {};
+        const results = partition.qualities instanceof Map
+          ? partition.qualities.get("results") || {}
+          : partition.qualities?.results || {};
 
         // Find AWAITING signals that have timed out and transition them atomically
         for (const [signalId, entries] of Object.entries(results)) {
@@ -109,8 +114,8 @@ export async function runRetentionCleanup() {
                 { _id: partition._id },
                 {
                   $set: {
-                    [`metadata.results.${signalId}.${i}.status`]: CASCADE.FAILED,
-                    [`metadata.results.${signalId}.${i}.payload.reason`]: "timeout",
+                    [`qualities.results.${signalId}.${i}.status`]: CASCADE.FAILED,
+                    [`qualities.results.${signalId}.${i}.payload.reason`]: "timeout",
                   },
                 },
               );

@@ -9,7 +9,7 @@
 // via attachHandoff; Workers just return their content and the
 // aggregator counts the reply.
 //
-// Worker beings are materialized lazily at the execution node when
+// Worker beings are materialized lazily at the execution space when
 // the Foreman first needs them.
 
 import { buildWorkerPrompt, WORKER_BASE_CONFIG } from "./workerBase.js";

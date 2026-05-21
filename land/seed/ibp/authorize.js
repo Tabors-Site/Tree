@@ -35,10 +35,11 @@
 
 import Space from "../models/space.js";
 import { getLandRootId } from "../landRoot.js";
-import { getAncestorChain } from "../space/ancestorCache.js";
+import { getAncestorChain } from "../land/space/ancestorCache.js";
 import { deriveStanceProperties } from "../ibp/stanceProperties.js";
 import { lookupDefault } from "./defaultPermissions.js";
 import { IBP_ERR } from "./errors.js";
+import { I_AM } from "../land/space/seedSpaces.js";
 
 // ─────────────────────────────────────────────────────────────────────
 // Default layer-2 stance permissions written on the land root.
@@ -90,6 +91,15 @@ export async function authorize(args) {
   const { identity, verb, target } = args;
   const beingId = identity?.beingId || null;
   const spaceId  = target?.spaceId || null;
+
+  // The I_AM has universal authority. The seed is the source of all
+  // permission on its land. Authority flows outward from the I_AM;
+  // nothing extensions or operators do can gate it. Every kernel-
+  // emitted act (DO-trigger fan-out, scheduled wakes, genesis
+  // scaffolding) runs as the I_AM and shorts past the layered check.
+  if (identity?.name === I_AM) {
+    return { ok: true, stance: "I_AM" };
+  }
 
   // ── Layer 2: derive stance properties ──
   const props = await deriveStanceProperties({ beingId, targetSpace: spaceId });
@@ -202,7 +212,7 @@ async function findMatchingRule({ spaceId, verb, keyParts }) {
 
 async function matchOnSpace(spaceId, verb, keyParts) {
   const space = await Space.findById(spaceId).select("metadata").lean();
-  const meta = space?.metadata;
+  const meta = space?.qualities;
   if (!meta) return null;
   const perms = meta instanceof Map ? meta.get("permissions") : meta.permissions;
   if (!perms) return null;
@@ -334,7 +344,7 @@ export async function seedDefaultStancePermissions() {
   if (!landRootId) return { seeded: false, reason: "land root not initialized" };
 
   const root = await Space.findById(landRootId).select("metadata").lean();
-  const meta = root?.metadata;
+  const meta = root?.qualities;
   const permsRoot = meta instanceof Map ? meta.get("permissions") : meta?.permissions;
 
   const updates = {};
@@ -344,7 +354,7 @@ export async function seedDefaultStancePermissions() {
   for (const [verb, bucket] of Object.entries(LAND_ROOT_DEFAULT_PERMISSIONS)) {
     const existingVerb = permsRoot?.[verb];
     if (existingVerb && Object.keys(existingVerb).length > 0) continue;
-    updates[`metadata.permissions.${verb}`] = bucket;
+    updates[`qualities.permissions.${verb}`] = bucket;
   }
 
   // Land-level BE config flags (register/claim toggles for operators
@@ -352,7 +362,7 @@ export async function seedDefaultStancePermissions() {
   const auth = meta instanceof Map ? meta.get("auth") : meta?.auth;
   const hasAuth = auth instanceof Map ? auth.size > 0 : !!auth;
   if (!hasAuth) {
-    updates["metadata.auth"] = { register_enabled: true, claim_enabled: true };
+    updates["qualities.auth"] = { register_enabled: true, claim_enabled: true };
   }
 
   if (Object.keys(updates).length === 0) {
@@ -369,8 +379,8 @@ export async function seedDefaultStancePermissions() {
 export async function getAuthConfig() {
   const landRootId = getLandRootId();
   if (!landRootId) return { register_enabled: true, claim_enabled: true };
-  const root = await Space.findById(landRootId).select("metadata.auth").lean();
-  const auth = root?.metadata?.auth;
+  const root = await Space.findById(landRootId).select("qualities.auth").lean();
+  const auth = root?.qualities?.auth;
   const get = (key, fallback) => {
     if (auth instanceof Map) return auth.has(key) ? auth.get(key) : fallback;
     return auth && key in auth ? auth[key] : fallback;

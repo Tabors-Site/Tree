@@ -20,7 +20,7 @@ the work.
 
 YOUR SCOPE — READ THIS FIRST
 
-You are at a SPECIFIC node in the tree (your Ruler's scope). Your
+You are at a SPECIFIC space in the tree (your Ruler's scope). Your
 contracts cover ONLY:
   • Shared vocabulary BETWEEN sub-domains the Ruler is about to dispatch
     (scope: shared:[A, B]), AND
@@ -253,7 +253,7 @@ export const contractorRole = {
   canSee: ["get-tree-context"],
 
   // DO tools — the emission writes contract matter at the scope's
-  // contracts node.
+  // contracts space.
   canDo: ["governing-emit-contracts"],
 
   // Architectural exit gate. The Contractor's turn cannot end without

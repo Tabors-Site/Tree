@@ -103,7 +103,7 @@ mock.module("../seed/ibp/pushChannel.js", {
   },
 });
 
-mock.module("../seed/being/roles/registry.js", {
+mock.module("../seed/cognition/roles/registry.js", {
   namedExports: {
     getRole: () => ({
       name: fakeBeingRole,

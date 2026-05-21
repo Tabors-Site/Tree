@@ -32,7 +32,7 @@ Everything in seed serves one of six:
 | **Summon** | One being's wake-and-act through one LLM call. | `seed/models/summon.js` |
 | **LlmConnection** | Per-being LLM client config (URL, key, model). | `seed/models/llmConnection.js` |
 
-Schemas never change. Extensions never add fields. Everything new lives in metadata.
+Schemas never change. Extensions never add fields. Everything new lives in `qualities` (the open per-primitive Map; see [land/seed/land/LAND.md](land/seed/land/LAND.md) "Qualities" for why the field is named that way and the rule for where any new property belongs).
 
 ## The four verbs
 
@@ -78,9 +78,9 @@ Several primitives were renamed in 2026-05. Code, comments, and git history mix 
 
 **Three metadata buckets, peer not nested:**
 
-- **Space.metadata.\<ns\>** — extension data at a space. `metadata.beings.<roleName>` records which beings of which roles live at this space.
-- **Being.metadata.\<ns\>** — identity-bearing data per Being (auth email, energy balance, etc.). Persists across role changes. Write via `setBeingMeta`.
-- **Matter.metadata.\<ns\>** — data about specific matter. Write via `setMatterMeta`.
+- **Space.qualities.\<ns\>** — extension data at a space. `qualities.beings.<roleName>` records which beings of which roles live at this space.
+- **Being.qualities.\<ns\>** — identity-bearing data per Being (auth email, energy balance, etc.). Persists across role changes. Write via `qualities.being.setQuality`.
+- **Matter.qualities.\<ns\>** — data about specific matter. Write via `qualities.matter.setQuality`.
 
 **The `@` qualifier in a Stance always names a Being, not a Role.** `@king-bob` is a specific being; `@auth` is the auth-being's name (which happens to match its role).
 
@@ -88,38 +88,57 @@ Several primitives were renamed in 2026-05. Code, comments, and git history mix 
 
 ```
 land/
-├── seed/                       The kernel. No imports from protocols/ or transports/.
-│   ├── models/                   Mongoose schemas: being, space, matter, did, summon, llmConnection
-│   ├── ibp/                      Core IBP grammar (verbs, operations, authorize, address, resolver,
-│   │                             descriptor, discovery, errors, protocol/ERR). Seed-internal — the
-│   │                             wire layer in protocols/ibp/ is a thin envelope adapter.
-│   ├── being/                    Identity. beRegistry, identity, position, systemBeings,
-│   │                             beingMetadata, and roles/ (registry + built-ins: auth, echo,
-│   │                             landManager, llmAssigner)
-│   ├── space/                    Tree operations. ancestorCache, ownership, spaceManagement,
-│   │                             spaceFetch, spaceLocks, spaceCircuit, dids, cascade,
-│   │                             extensionMetadata, extensionScope, documentGuard,
-│   │                             source, seeds, seedSpaces (SEED_SPACE/SEED_BEING/DELETED)
-│   ├── matter/                   matters, matterMetadata, origins (MATTER_ORIGIN),
-│   │                             uploadCleanup
-│   ├── cognition/                Runtime. runChat, buildPrompt, llmClient, mcpClient,
-│   │                             scheduler, inbox, wakeSchedule, session, subscriptions,
-│   │                             replyAggregator, replyEmission, defaultSummon, assignments,
-│   │                             connections
-│   ├── system/                   hooks, log, migrations/, indexes, dbConfig, integrityCheck,
-│   │                             dataRetention, registryMirror, tools, utils, version
-│   ├── services.js               Assembles the `core` services bundle handed to every extension.
-│   ├── landRoot.js               This land's root + system spaces.
-│   ├── landConfig.js             This land's config.
+├── seed/                       The kernel. Four folders, four roles. NEVER modify.
+│   │
+│   ├── land/         IS    — The world as substance. What exists.
+│   │   ├── being/                 Identity ops: identity, position, landBeings,
+│   │   │                          beingMetadata, beRegistry.
+│   │   ├── space/                 Tree ops: spaceManagement, ancestorCache,
+│   │   │                          ownership, cascade, spaceCircuit, spaceFetch,
+│   │   │                          spaceLocks, dids, documentGuard,
+│   │   │                          extensionMetadata, extensionScope, seeds,
+│   │   │                          seedSpaces (SEED_SPACE/SEED_BEING/DELETED),
+│   │   │                          source.
+│   │   ├── matter/                matters, matterMetadata, origins
+│   │   │                          (MATTER_ORIGIN), uploadCleanup.
+│   │   ├── integrityCheck.js      fsck for tree-shaped primitives.
+│   │   ├── registryMirror.js      Surfaces runtime registries as child
+│   │   │                          Spaces under .tools / .roles / .operations.
+│   │   └── LAND.md                Philosophy of space/matter/being.
+│   │
+│   ├── ibp/         ACTS  — The world as acted-upon. Four verbs and dispatch.
+│   │                             verbs, operations, authorize, address,
+│   │                             resolver, descriptor, discovery,
+│   │                             pushChannel, stanceProperties,
+│   │                             defaultPermissions, errors, protocol/ERR.
+│   │                             Wire layer in protocols/ibp/ is a thin envelope adapter.
+│   │
+│   ├── cognition/   THINKS — The world as thought, for LLM beings only.
+│   │                             Humans cognize in their own heads (out-of-band,
+│   │                             through portals); scripted beings ARE their
+│   │                             code. This folder is the apparatus AI beings
+│   │                             use when an LLM is in the loop:
+│   │                             runChat, buildPrompt, llmClient, mcpClient,
+│   │                             scheduler, inbox, wakeSchedule, session,
+│   │                             subscriptions, replyAggregator, defaultSummon,
+│   │                             assignments, connections, summonTracker,
+│   │                             seeResolvers, tools.js, roles/ (registry +
+│   │                             built-ins: auth, echo, landManager, llmAssigner).
+│   │
+│   ├── system/      HOST  — The host-realm floor. Knows nothing of the world.
+│   │                             dbConfig, log, hooks, indexes, version,
+│   │                             dataRetention, utils, migrations/.
+│   │                             Litmus: a file here should never import
+│   │                             the words space, matter, being, or verb.
+│   │
+│   ├── models/                   Mongoose schemas for all 6 primitives:
+│   │                             being, space, matter, did, summon, llmConnection.
+│   ├── services.js               Assembles `core` from the four folders above.
+│   ├── landRoot.js               Plants the land root + the nine land seed spaces.
+│   ├── landConfig.js             This land's remembered settings.
 │   ├── philosophy/               Diagrams of the IBP grammar (jpgs).
-│   ├── SEED.md                   Kernel internals doc.
-│   └── LICENSE
-│
-│   Notable kernel surfaces inside the subfolders:
-│   - [seed/system/hooks.js](land/seed/system/hooks.js): hook registry, circuit breaker,
-│     typo detection. Re-exported through [seed/services.js](land/seed/services.js) as `core.hooks`.
-│   - [seed/space/source.js](land/seed/space/source.js): mirrors land/ into substrate as
-│     matter under `.source` so beings can SEE and reason about the codebase.
+│   ├── SEED.md                   Kernel internals doc (first-person, the I-Am).
+│   └── LICENSE                   AGPL-3.0 with a preamble naming the seed.
 │
 ├── protocols/                  Wire shapes. Never own transport.
 │   ├── ibp/                      Four-verb protocol (SEE/DO/SUMMON/BE)
@@ -153,15 +172,17 @@ cli/                            CLI package
 portal/3d-app/                  3D IBP client (Three.js + Vite)
 ```
 
+**Placement rule for seed/.** For any file, ask: does this describe what a being **IS**, how it **ACTS**, or how it **THINKS**? → `land/` / `ibp/` / `cognition/`. Does it touch the host while knowing nothing of the world? → `system/`. Schemas live in `models/` (shape vs behavior is a separate axis).
+
 ## Three registries
 
 Every extension capability flows through one of three:
 
 1. **Operations** ([seed/ibp/operations.js](land/seed/ibp/operations.js)) — DO actions. Extensions register under `<ext>:<action>`; bare names reserved for the kernel. Schema validation declared but not enforced yet (roadmap).
 
-2. **Roles** ([seed/being/roles/registry.js](land/seed/being/roles/registry.js)) — SUMMON-honoring beings. Each role declares `permissions` (subset of see/do/summon/be), `respondMode` (sync/async/none), `summon(message, ctx)`, and optionally `buildSystemPrompt` / `toolNames` for LLM cognition.
+2. **Roles** ([seed/cognition/roles/registry.js](land/seed/cognition/roles/registry.js)) — SUMMON-honoring beings. Each role declares `permissions` (subset of see/do/summon/be), `respondMode` (sync/async/none), `summon(message, ctx)`, and optionally `buildSystemPrompt` / `toolNames` for LLM cognition.
 
-3. **Seeds** ([seed/space/seeds.js](land/seed/space/seeds.js)) — plantable scaffolds. Recipes that bootstrap a domain (Ruler/Planner/Contractor + workers, etc.). Operators plant via the `plant-seed` DO op.
+3. **Seeds** ([seed/land/space/seeds.js](land/seed/land/space/seeds.js)) — plantable scaffolds. Recipes that bootstrap a domain (Ruler/Planner/Contractor + workers, etc.). Operators plant via the `plant-seed` DO op.
 
 The loader auto-namespaces everything. Extensions write bare names (`"hire-planner"`); the kernel records the qualified form (`"governing:hire-planner"`). The same prefixing applies to push-channel events emitted via `core.websocket.emitToBeing(...)`.
 
@@ -197,7 +218,7 @@ See [extensions/EXTENSION_FORMAT.md](land/extensions/EXTENSION_FORMAT.md) for th
 
 **Scoped core.** The loader builds a per-extension view of the core services bundle:
 - `core.do.registerOperation(name, spec)` — auto-prefixes to `<ext>:<name>`; rejects mismatched prefixes.
-- `core.metadata.setExtMeta(space, ns, data)` — namespace-locked to the extension.
+- `core.qualities.qualities.space.setQuality(space, ns, data)` — namespace-locked to the extension.
 - `core.websocket.emitToBeing(beingId, event, payload)` — auto-prefixes the event name.
 
 Extensions never type their own namespace. The framing makes namespace-impersonation a structural impossibility.
@@ -207,11 +228,11 @@ Extensions never type their own namespace. The framing makes namespace-impersona
 One gate on every verb ([seed/ibp/authorize.js](land/seed/ibp/authorize.js)). Layers:
 
 1. **Layer 1: facts.** Stance properties derived from Being and Space (owner / contributor / role / home relation / operating mode / federation status).
-2. **Layer 2: per-position rules.** Walk the ancestor chain looking for `metadata.permissions.<verb>.<keyParts>` rules that match.
+2. **Layer 2: per-position rules.** Walk the ancestor chain looking for `qualities.permissions.<verb>.<keyParts>` rules that match.
 3. **Layer 3: extension defaults.** Registry of default permission rules contributed by installed extensions.
 4. **Layer 4: legacy fallback + default deny.** No match → reject with `FORBIDDEN` (or `UNAUTHORIZED` when there's no identity).
 
-BE register/claim from arrival is the bootstrap exception, gated by land-level `register_enabled` / `claim_enabled` flags on `metadata.auth`.
+BE register/claim from arrival is the bootstrap exception, gated by land-level `register_enabled` / `claim_enabled` flags on `qualities.auth`.
 
 ## LLM Resolution Chain
 
@@ -225,7 +246,7 @@ Space-tree lockout      (space.llmDefault === "none" anywhere in ancestor chain)
         Space slot → Space default → Being slot → Being default
 ```
 
-Slots are role names. `"main"` maps to `Being.llmDefault` / `Space.llmDefault`; others live under `metadata.userLlm.slots.<slot>` (being) or `metadata.llm.slots.<slot>` (space).
+Slots are role names. `"main"` maps to `Being.llmDefault` / `Space.llmDefault`; others live under `qualities.userLlm.slots.<slot>` (being) or `qualities.llm.slots.<slot>` (space).
 
 ## Hooks
 
@@ -252,7 +273,7 @@ Two rules, no exceptions. **Before** hooks run sequentially because they can can
 | afterRegister | after | Initialize being data. |
 | afterSessionCreate | after | React to new session. |
 | afterSessionEnd | after | React to session end. |
-| afterMetadataWrite | after | After setExtMeta succeeds. |
+| afterQualityWrite | after | After qualities.space.setQuality succeeds. |
 | afterScopeChange | after | After extension blocking/restriction changes. |
 | afterOwnershipChange | after | After rootOwner or contributors changed. |
 | afterBoot | after | Once after all extensions + config + server are ready. |
@@ -262,7 +283,7 @@ Two rules, no exceptions. **Before** hooks run sequentially because they can can
 
 ## Cascade
 
-A note at one space creates awareness at related spaces. Fires `onCascade` when content is written at a space with `metadata.cascade.enabled = true`. Results land in the `.flow` system space. Six statuses: `succeeded`, `failed`, `rejected`, `queued`, `partial`, `awaiting`. Config: `cascadeEnabled`, `resultTTL`, `awaitingTimeout`, `cascadeMaxDepth`. See [seed/space/cascade.js](land/seed/space/cascade.js).
+A note at one space creates awareness at related spaces. Fires `onCascade` when content is written at a space with `qualities.cascade.enabled = true`. Results land in the `.flow` system space. Six statuses: `succeeded`, `failed`, `rejected`, `queued`, `partial`, `awaiting`. Config: `cascadeEnabled`, `resultTTL`, `awaitingTimeout`, `cascadeMaxDepth`. See [seed/space/cascade.js](land/seed/space/cascade.js).
 
 ## Response Protocol
 
@@ -296,7 +317,7 @@ Plus five IBP-specific codes: `ADDRESS_PARSE_ERROR`, `ROLE_UNAVAILABLE`, `VERB_N
 1. **Seed never imports from extensions.** The kernel doesn't know extensions exist.
 2. **Seed never imports from protocols/ or transports/.** Dependency direction is downward.
 3. **Extensions reach each other through `getExtension()` or hooks.** No direct imports between extensions.
-4. **Extension data lives in metadata Maps.** Never in seed schemas.
+4. **Extension data lives in qualities Maps.** Never in seed schemas.
 5. **Seed schemas never change.** The Map grows anything new.
 6. **Zero `getExtension()` calls in seed.** The kernel can't be tricked into loading extension code.
 
@@ -306,15 +327,15 @@ Plus five IBP-specific codes: `ADDRESS_PARSE_ERROR`, `ROLE_UNAVAILABLE`, `VERB_N
 
 **enrichContext is how extensions speak to the AI.** Sequential hook; handlers build cumulative output. Guard every handler — check if relevant data exists before injecting. Never run expensive queries unconditionally.
 
-**setExtMeta for all metadata writes.** Extensions can only write to their own namespace; the loader enforces this on the scoped core. Direct Map manipulation is reserved for atomic MongoDB operations that can't go through read-modify-write.
+**qualities.space.setQuality for all metadata writes.** Extensions can only write to their own namespace; the loader enforces this on the scoped core. Direct Map manipulation is reserved for atomic MongoDB operations that can't go through read-modify-write.
 
-**`role` field marks structural spaces.** Extensions that scaffold a tree shape MUST set `metadata.<extName>.role` on every scaffolded space. The base `beforeSpaceDelete` guard cancels deletion of any space with a role in any namespace. `--force` bypasses.
+**`role` field marks structural spaces.** Extensions that scaffold a tree shape MUST set `qualities.<extName>.role` on every scaffolded space. The base `beforeSpaceDelete` guard cancels deletion of any space with a role in any namespace. `--force` bypasses.
 
 **LLM_PRIORITY on every LLM call.** `HUMAN` for direct user actions, `GATEWAY` for external channels, `INTERACTIVE` for tool-loop steps, `BACKGROUND` for compression / dreams / cron. Without priority tags, background extensions starve human responses.
 
 **Confined scope for dangerous extensions.** Declare `scope: "confined"` in the manifest. Inactive everywhere by default; operators run `ext-allow` at specific positions to activate.
 
-**Substrate as memory.** Beings are stateless across summons. Everything persistent lives in public substrate — matter and metadata at positions, observable to any being with permission. Don't invent a `metadata.<role>.workingState` namespace.
+**Substrate as memory.** Beings are stateless across summons. Everything persistent lives in public substrate — matter and metadata at positions, observable to any being with permission. Don't invent a `qualities.<role>.workingState` namespace.
 
 ## Conventions
 

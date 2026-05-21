@@ -38,7 +38,7 @@ const NS = "governing";
 
 /**
  * Write the lineage stamp on a sub-Ruler. Idempotent: if a lineage
- * record already exists at this node, the stamp is preserved (origin
+ * record already exists at this space, the stamp is preserved (origin
  * doesn't change across re-runs). Set `force: true` to overwrite, e.g.
  * when a court orders a re-parent or the parent's plan was revised in
  * a way that requires re-stamping.
@@ -61,9 +61,9 @@ export async function writeLineage({
   const space = await Space.findById(subRulerNodeId);
   if (!space) return null;
 
-  const existingMeta = space.metadata instanceof Map
-    ? space.metadata.get(NS)
-    : space.metadata?.[NS];
+  const existingMeta = space.qualities instanceof Map
+    ? space.qualities.get(NS)
+    : space.qualities?.[NS];
   if (!force && existingMeta?.lineage?.parentRulerId) {
     return existingMeta.lineage;
   }
@@ -80,7 +80,7 @@ export async function writeLineage({
   try {
     // Phase 3 migration ([[project_seed_four_verbs_only]]): verb-surface
     // write. merge:true preserves other governing keys at NS atomically.
-    await core.do(node, "set-meta", {
+    await core.do(space, "set-meta", {
       namespace: NS,
       data: { lineage },
       merge: true,
@@ -102,9 +102,9 @@ export async function readLineage(subRulerNodeId) {
   if (!subRulerNodeId) return null;
   const space = await Space.findById(subRulerNodeId).select("_id metadata").lean();
   if (!space) return null;
-  const meta = space.metadata instanceof Map
-    ? space.metadata.get(NS)
-    : space.metadata?.[NS];
+  const meta = space.qualities instanceof Map
+    ? space.qualities.get(NS)
+    : space.qualities?.[NS];
   return meta?.lineage || null;
 }
 
@@ -128,9 +128,9 @@ export async function inferLineageFromParent(subRulerNodeId) {
 
   const parent = await Space.findById(sub.parent).select("_id metadata").lean();
   if (!parent) return null;
-  const parentMeta = parent.metadata instanceof Map
-    ? Object.fromEntries(parent.metadata)
-    : (parent.metadata || {});
+  const parentMeta = parent.qualities instanceof Map
+    ? Object.fromEntries(parent.qualities)
+    : (parent.qualities || {});
   if (parentMeta[NS]?.role !== "ruler") return null;
 
   // Read parent's active plan emission via governing.readActivePlanEmission.

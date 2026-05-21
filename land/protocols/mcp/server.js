@@ -12,8 +12,8 @@
 
 import crypto from "crypto";
 import log from "../../seed/system/log.js";
-import { resolveSpaceAccess } from "../../seed/space/spaceFetch.js";
-import { getToolOwner, isExtensionBlockedAtNode, isToolReadOnly } from "../../seed/space/extensionScope.js";
+import { resolveSpaceAccess } from "../../seed/land/space/spaceFetch.js";
+import { getToolOwner, isExtensionBlockedAtSpace, isToolReadOnly } from "../../seed/land/space/extensionScope.js";
 
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
@@ -248,8 +248,8 @@ async function handleMcpRequest(req, res) {
       // but the default is always the current position.
       if (req.beingId) {
         try {
-          const { getCurrentSpace, getRootId } = await import("../../seed/being/position.js");
-          const beingRootId = getRootId(req.beingId);
+          const { getCurrentSpace, getSpaceRootId } = await import("../../seed/land/being/position.js");
+          const beingRootId = getSpaceRootId(req.beingId);
           const beingSpaceId = getCurrentSpace(req.beingId);
           if (!requestArgs.rootId && beingRootId) requestArgs.rootId = beingRootId;
           if (!requestArgs.spaceId && beingSpaceId) requestArgs.spaceId = beingSpaceId;
@@ -260,7 +260,7 @@ async function handleMcpRequest(req, res) {
 
       // Tree access check. Read-only tools (annotation readOnlyHint: true)
       // only need canRead; write tools need canWrite. Without this split a
-      // read-only tool like get-node-notes was being rejected with
+      // read-only tool like get-space-notes was being rejected with
       // "Invalid spaceId, or you are not in this tree" whenever the user had
       // read-only access to the tree — which is wrong and spammed the log.
       if (spaceId && req.beingId) {
@@ -273,8 +273,8 @@ async function handleMcpRequest(req, res) {
             error: {
               code: -32602,
               message: readOnly
-                ? `Read access denied for node ${spaceId}.`
-                : `Write access denied for node ${spaceId} (tool "${toolName}" requires write).`,
+                ? `Read access denied for space ${spaceId}.`
+                : `Write access denied for space ${spaceId} (tool "${toolName}" requires write).`,
             },
           });
         }
@@ -284,7 +284,7 @@ async function handleMcpRequest(req, res) {
       if (spaceId && toolName) {
         const ownerExt = getToolOwner(toolName);
         if (ownerExt) {
-          const blocked = await isExtensionBlockedAtNode(ownerExt, spaceId);
+          const blocked = await isExtensionBlockedAtSpace(ownerExt, spaceId);
           if (blocked) {
             return res.status(403).json({
               jsonrpc: "2.0", id: req.body.id,

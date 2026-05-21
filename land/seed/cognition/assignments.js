@@ -55,8 +55,8 @@ function asBool(v) { return v === true; }
  *
  * Reads:
  *   - `space.llmDefault` (kernel field; "none" sentinel = lockdown)
- *   - `space.metadata.llm.slots` (role-specific overrides at this space)
- *   - `space.metadata.llm.enforced` (lock IN for descendants)
+ *   - `space.qualities.llm.slots` (role-specific overrides at this space)
+ *   - `space.qualities.llm.enforced` (lock IN for descendants)
  *
  * Returns `{ default, [slot]: connId, enforced }`.
  *
@@ -66,7 +66,7 @@ function asBool(v) { return v === true; }
 export function getSpaceLlmAssignments(space) {
   if (!space) return { default: null, enforced: false };
 
-  const meta = space.metadata instanceof Map ? space.metadata.get("llm") : space.metadata?.llm;
+  const meta = space.qualities instanceof Map ? space.qualities.get("llm") : space.qualities?.llm;
   const slots = sanitizeSlots(meta?.slots);
 
   const result = { ...slots };
@@ -83,17 +83,17 @@ export function getSpaceLlmAssignments(space) {
  *
  * Reads:
  *   - `being.llmDefault` (kernel field; the being's personal default)
- *   - `being.metadata.userLlm.slots` (role-specific overrides for this being)
- *   - `being.metadata.userLlm.enforced` (lock IN for descendants in being-tree)
- *   - `being.metadata.userLlm.locked`   (lockdown for descendants in being-tree)
- *   - `being.metadata.userLlm.preferOwn` (invert resolution chain order)
+ *   - `being.qualities.userLlm.slots` (role-specific overrides for this being)
+ *   - `being.qualities.userLlm.enforced` (lock IN for descendants in being-tree)
+ *   - `being.qualities.userLlm.locked`   (lockdown for descendants in being-tree)
+ *   - `being.qualities.userLlm.preferOwn` (invert resolution chain order)
  *
  * Returns `{ main, [slot]: connId, enforced, locked, preferOwn }`.
  */
 export function getBeingLlmAssignments(being) {
   if (!being) return { main: null, enforced: false, locked: false, preferOwn: false };
 
-  const meta = being.metadata instanceof Map ? being.metadata.get("userLlm") : being.metadata?.userLlm;
+  const meta = being.qualities instanceof Map ? being.qualities.get("userLlm") : being.qualities?.userLlm;
   const slots = sanitizeSlots(meta?.slots);
 
   const result = { ...slots };

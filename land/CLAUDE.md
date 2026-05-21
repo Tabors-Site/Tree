@@ -7,52 +7,59 @@ This is a TreeOS land. An operating system for AI agents. You are inside a runni
 Three concerns live at the top level: **what TreeOS is** (seed/), **what conversation over the wire looks like** (protocols/), and **how it gets carried** (transports/). Plus extensions.
 
 ```
-seed/              The kernel. Data shape + registries + hooks. NEVER modify.
-  models/            Mongoose schemas: Space, Being, Matter, Did, Summon, LlmConnection
-  ibp/               Core IBP grammar: verbs, operations, authorize, address,
-                     resolver, descriptor, discovery, errors, protocol/ERR,
-                     pushChannel. Seed-internal; protocols/ibp/ is the wire adapter.
-  being/             Identity: beRegistry, identity, position, landBeings,
-                     beingMetadata, plus roles/ (registry + built-ins: auth, echo,
-                     landManager, llmAssigner).
-  space/             Tree ops: ancestorCache, ownership, spaceManagement, dids,
-                     cascade, spaceCircuit, extensionMetadata, extensionScope,
-                     documentGuard, seeds, seedRoles.
-  matter/            matters, matterMetadata, origins, uploadCleanup.
-  cognition/         Runtime: runChat, buildPrompt, llmClient, mcpClient,
-                     scheduler, inbox, wakeSchedule, session, subscriptions,
-                     replyAggregator, replyEmission, defaultSummon, assignments,
-                     connections.
-  system/            hooks, log, migrations/, indexes, dbConfig, integrityCheck,
-                     dataRetention, registryMirror, source, tools, utils, version.
-  services.js        Assembles `core` from the domain folders above.
-  landRoot.js        This land's root + system spaces.
+seed/              The kernel. Four folders, four roles. NEVER modify.
+
+  land/         IS    — the world as substance. space/, matter/, being/,
+                       integrityCheck.js, registryMirror.js, LAND.md.
+  ibp/          ACTS  — the world as acted-upon. SEE/DO/SUMMON/BE, address,
+                       authorize, operations, descriptor, discovery,
+                       pushChannel, resolver, stanceProperties.
+  cognition/    THINKS — the world as thought, for LLM beings. The thinking
+                       apparatus LLM beings use. Humans cognize on their own
+                       (out-of-band, in their own heads) and route through
+                       portals; scripted beings ARE their code, no apparatus
+                       needed. This folder only matters when an LLM is in
+                       the loop: runChat, buildPrompt, llmClient, mcpClient,
+                       scheduler, inbox, wakeSchedule, session, subscriptions,
+                       replyAggregator, defaultSummon, assignments,
+                       connections, tools.js, roles/.
+  system/       HOST  — the host-realm floor. dbConfig, log, hooks,
+                       indexes, version, retention, migrations/, utils.
+                       Knows nothing of space/matter/being/verb by name.
+
+  models/            Mongoose schemas for all 6 primitives:
+                     being, space, matter, did, summon, llmConnection.
+  services.js        Assembles `core` from the four folders above.
+  landRoot.js        This land's root + the nine land seed spaces.
   landConfig.js      This land's config.
-  (Hook registry lives at seed/system/hooks.js; codebase-mirroring source
-   lives at seed/space/source.js — re-exposed through services.js as
-   core.hooks etc.)
-
-protocols/         What conversation over the wire looks like. Never owns transport.
-  ibp/               Four-verb protocol (SEE/DO/SUMMON/BE) on stances/positions
-  canopy/            Federation protocol between lands
-  mcp/               MCP adapter for AI tool execution
-
-transports/        Thin carriers. Translate transport-shape into protocol envelopes.
-  http/              Express handlers; canonical /ibp/<verb>/<addr> adapter
-    handler.js         Main router; wires middleware + extension routes
-    api/ibp.js         The single IBP HTTP adapter (every op derivable)
-    api/config.js      Horizon proxies + /land/root (deferred surface)
-    auth.js users.js   Auth shims into IBP BE verb
-    canopy.js          Federation transport routes
-    middleware/        authenticate, dbHealth, securityHeaders, ...
-  ws/                Socket.io server; same dispatchIbp the HTTP adapter uses
-  cli/               (reserved for the eventual CLI adapter)
-
-extensions/        Extensions. This is where you build.
-boot.js            Entry point. First-run setup wizard.
-server.js          Express + WebSocket bring-up, graceful shutdown.
-genesis.js         Boot sequence: indexes, config, migrations, extensions, jobs.
+  SEED.md            Kernel internals doc (first-person, from the I-Am).
+  LICENSE            AGPL-3.0 with a preamble naming the seed.
 ```
+
+**Placement rule.** For any seed file, ask: does this describe what a being **IS**, how it **ACTS**, or how it **THINKS**? → `land/` / `ibp/` / `cognition/`. Does it touch the host while knowing nothing of the world? → `system/`. Schemas live in `models/` (shape vs behavior is a separate axis).
+
+protocols/ What conversation over the wire looks like. Never owns transport.
+ibp/ Four-verb protocol (SEE/DO/SUMMON/BE) on stances/positions
+canopy/ Federation protocol between lands
+mcp/ MCP adapter for AI tool execution
+
+transports/ Thin carriers. Translate transport-shape into protocol envelopes.
+http/ Express handlers; canonical /ibp/<verb>/<addr> adapter
+handler.js Main router; wires middleware + extension routes
+api/ibp.js The single IBP HTTP adapter (every op derivable)
+api/config.js Horizon proxies + /land/root (deferred surface)
+auth.js users.js Auth shims into IBP BE verb
+canopy.js Federation transport routes
+middleware/ authenticate, dbHealth, securityHeaders, ...
+ws/ Socket.io server; same dispatchIbp the HTTP adapter uses
+cli/ (reserved for the eventual CLI adapter)
+
+extensions/ Extensions. This is where you build.
+boot.js Entry point. First-run setup wizard.
+server.js Express + WebSocket bring-up, graceful shutdown.
+genesis.js Boot sequence: indexes, config, migrations, extensions, jobs.
+
+````
 
 **The dependency direction.** transports → protocols → seed. Extensions sit beside the three and consume them. seed never imports from protocols or transports; protocols never import from transports.
 
@@ -61,7 +68,7 @@ genesis.js         Boot sequence: indexes, config, migrations, extensions, jobs.
 1. **Seed never imports from extensions.** The kernel does not know extensions exist.
 2. **Extensions import from seed.** One-way dependency.
 3. **Extensions reach each other through `getExtension()` or hooks.** No direct imports between extensions.
-4. **Extension data lives in metadata Maps.** Never in seed schemas.
+4. **Extension data lives in the `qualities` Map.** Never in seed schemas. See [seed/land/LAND.md](seed/land/LAND.md) "Qualities" for why the field is named that way and the constitutive-vs-characterizing test for where any new property belongs.
 5. **Seed schemas never change.** Space has 12 fields. User has 7. The Map grows anything.
 6. **Zero `getExtension()` calls in seed.** The kernel can't be tricked into loading extension code.
 
@@ -75,7 +82,7 @@ genesis.js         Boot sequence: indexes, config, migrations, extensions, jobs.
 
 **before hooks intercept. after hooks react.** Before hooks run sequentially because they can cancel. After hooks run in parallel because they react independently. Two overrides: enrichContext and onCascade are sequential because their handlers build cumulative output. Don't make a hook sequential without articulating why handlers depend on each other's output.
 
-**The metadata Map is the real invention.** Twelve schema fields are the bones. The Map is the flesh. Every extension writes to its own namespace. `metadata.values`, `metadata.prestige`, `metadata.cascade`. The schemas never change. The Map grows anything. Two concurrent writes to different namespaces on the same space do not clobber each other because setExtMeta uses atomic `$set` on the specific namespace key.
+**The `qualities` Map is the real invention.** The schema fields are the bones — kernel-defined, closed, constitutive. The Map is the flesh — extension-defined, open, characterizing. Every extension writes to its own namespace: `qualities.values`, `qualities.prestige`, `qualities.cascade`. The schemas never change. The Map grows anything. Two concurrent writes to different namespaces on the same primitive do not clobber each other because `qualities.{being,space,matter}.setQuality` uses atomic `$set` on the specific namespace key. Full rationale (why "qualities" not "metadata", the test for where new properties belong) lives in [seed/land/LAND.md](seed/land/LAND.md) "Qualities".
 
 **Cascade is awareness propagation.** A note written at one space creates awareness at other spaces. The receiving space's AI doesn't just get data. It gets context that changes how it thinks. The perspective filter isn't a data router. It's an attention filter. The codebook isn't compression. It's shared understanding. Cascade is how ideas spread through the tree.
 
@@ -87,7 +94,7 @@ genesis.js         Boot sequence: indexes, config, migrations, extensions, jobs.
 
 ```bash
 cp -r extensions/_template extensions/my-extension
-```
+````
 
 Edit `manifest.js` to declare what you need and what you provide. Edit `index.js` to register hooks, tools, roles, operations, and seeds. The loader handles the rest.
 
@@ -113,14 +120,20 @@ Full reference: `extensions/EXTENSION_FORMAT.md`
 
 **enrichContext** is how you speak to the AI. The kernel builds the prompt. Your extension injects context through this hook. Always guard: check if relevant data exists before injecting. Never run expensive queries unconditionally.
 
-**setExtMeta** is how you write data. Each extension gets its own namespace in the metadata Map. `setExtMeta(space, "my-extension", data)` writes atomically. You can only write to your own namespace.
+**`qualities.{being,space,matter}.setQuality`** is how you write data. Each extension gets its own namespace in the `qualities` Map. `core.qualities.space.setQuality(space, "my-extension", data)` writes atomically. You can only write to your own namespace. Same nine atomic primitives (`setQuality`, `mergeQuality`, `incQuality`, `pushQuality`, `addToQualitySet`, `batchSetQuality`, `unsetQuality`, `getQuality`, `readQualityNamespace`) on each sub-namespace.
 
 **registerSlot** is how you add UI to pages. Extensions register HTML fragments for named slots (e.g. `apps-grid`, `user-quick-links`, `user-profile-sections`, `space-detail-sections`). Pages resolve slots by name. Whatever's installed appears. Whatever's not doesn't. Same pattern as hooks, modes, tools. Spatial scoping filters slots per position. Get it from treeos-base exports:
+
 ```js
 const treeos = getExtension("treeos-base");
-treeos?.exports?.registerSlot?.("apps-grid", "my-ext", (ctx) => {
-  return `<div class="app-card">...</div>`;
-}, { priority: 50 });
+treeos?.exports?.registerSlot?.(
+  "apps-grid",
+  "my-ext",
+  (ctx) => {
+    return `<div class="app-card">...</div>`;
+  },
+  { priority: 50 },
+);
 ```
 
 **emitSlotUpdate** pushes live UI updates via WebSocket. After data changes (afterMatter, afterMetadataWrite hooks), call `emitSlotUpdate(core, userId, slotName, extName, context)` to re-render a slot fragment and push it to the client without a page refresh.
@@ -137,14 +150,14 @@ treeos?.exports?.registerSlot?.("apps-grid", "my-ext", (ctx) => {
 
 Everything in the kernel serves one of six primitives (one per Mongoose schema):
 
-| Primitive | What it is |
-|-----------|-----------|
-| **Being** | An identity instance. Carries roles, parents under another being, homes at a space. Humans, AI, scripted-cognition, future composites. The I-am — the Node process itself — is a Being too; the kernel is the first being, not a faceless layer beneath them. |
-| **Space** | A position in the tree. Holds matter, hosts beings, owns metadata namespaces. |
-| **Matter** | Stuff inside a space. `origin` field names where it actually lives (ibp, filesystem, web, cross-land). |
-| **Did** | One DO emission. The audit trail. Past tense — "a did is a thing that was done." |
-| **Summon** | One being-to-being call. The record of one wake-and-act, whatever cognition the receiving being has — LLM, scripted code, human reply, future composite. The kernel doesn't care which; the protocol is the same. |
-| **LlmConnection** | Per-being LLM client config (URL, key, model). |
+| Primitive         | What it is                                                                                                                                                                                                                                                    |
+| ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Being**         | An identity instance. Carries roles, parents under another being, homes at a space. Humans, AI, scripted-cognition, future composites. The I-am — the Node process itself — is a Being too; the kernel is the first being, not a faceless layer beneath them. |
+| **Space**         | A position in the tree. Holds matter, hosts beings, owns quality namespaces.                                                                                                                                                                                  |
+| **Matter**        | Stuff inside a space. `origin` field names where it actually lives (ibp, filesystem, web, cross-land).                                                                                                                                                        |
+| **Did**           | One DO emission. The audit trail. Past tense — "a did is a thing that was done."                                                                                                                                                                              |
+| **Summon**        | One being-to-being call. The record of one wake-and-act, whatever cognition the receiving being has — LLM, scripted code, human reply, future composite. The kernel doesn't care which; the protocol is the same.                                             |
+| **LlmConnection** | Per-being LLM client config (URL, key, model).                                                                                                                                                                                                                |
 
 ## Security
 

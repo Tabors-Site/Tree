@@ -26,23 +26,23 @@
 //   SEE    → writes NO Did. Observation is not doing.
 //
 // Actor attribution. A being acting from its own stance names itself in
-// the Did. SEED_BEING is the actor only when the internal server is
+// the Did. I_AM is the actor only when the internal server is
 // doing the operation instead of a being in the world that is birthed
 // from the seed — pre-being scaffold flows (server boot, migrations,
 // landRoot bootstrap before any being exists). A being who triggers a
 // seed plant is the actor (their identity wins); the seed's recipe is
 // the call shape, not a separate actor. See [[project_seed_being_actor]]
-// and the SEED_BEING comment in seed/space/seedSpaces.js.
+// and the I_AM comment in seed/land/space/seedSpaces.js.
 // ─────────────────────────────────────────────────────────────────────
 
 import { randomUUID } from "crypto";
 import log from "../system/log.js";
 import { getOperation, registerOperation, unregisterOperation, unregisterOperationsFromExtension, listOperations } from "./operations.js";
-import { logDid } from "../space/dids.js";
+import { logDid } from "../land/space/dids.js";
 import { ERR, ProtocolError } from "./protocol.js";
-import { MATTER_ORIGIN } from "../matter/origins.js";
-import { SEED_BEING } from "../space/seedSpaces.js";
-import { isSourceSpaceId } from "../space/source.js";
+import { MATTER_ORIGIN } from "../land/matter/origins.js";
+import { I_AM } from "../land/space/seedSpaces.js";
+import { isSourceSpaceId } from "../land/space/source.js";
 import { parseWithContext, expand, getLandDomain } from "../ibp/address.js";
 import { resolveStance } from "../ibp/resolver.js";
 import { buildDescriptor } from "../ibp/descriptor.js";
@@ -50,17 +50,17 @@ import { buildDiscovery } from "../ibp/discovery.js";
 import { IbpError, IBP_ERR } from "./errors.js";
 import { authorize, getAuthConfig } from "./authorize.js";
 import { appendToInbox, markInboxConsumed } from "../cognition/inbox.js";
-import { getRole } from "../being/roles/registry.js";
-import { authBeing } from "../being/roles/auth.js";
-import { llmAssignerBeing } from "../being/roles/llmAssigner.js";
-import { registerBeBeing, getBeBeing } from "../being/beRegistry.js";
+import { getRole } from "../cognition/roles/registry.js";
+import { authBeing } from "../cognition/roles/auth.js";
+import { llmAssignerBeing } from "../cognition/roles/llmAssigner.js";
+import { registerBeHandler, getBeHandler } from "../land/being/beRegistry.js";
 
 // Kernel pre-registration. The two kernel BE-honoring beings register
 // at module load so the dispatcher below can find them. Extensions add
-// their own BE-honoring beings via registerBeBeing (e.g. a court-
+// their own BE-honoring beings via registerBeHandler (e.g. a court-
 // being's convene/rule, a treasurer-being's transfer/freeze).
-registerBeBeing("auth",         authBeing,         "kernel");
-registerBeBeing("llm-assigner", llmAssignerBeing,  "kernel");
+registerBeHandler("auth",         authBeing,         "kernel");
+registerBeHandler("llm-assigner", llmAssignerBeing,  "kernel");
 import { attachHandoff, wake } from "../cognition/scheduler.js";
 
 /**
@@ -84,7 +84,7 @@ import { attachHandoff, wake } from "../cognition/scheduler.js";
  *                                    bootstrap (landRoot creation, migrations,
  *                                    first-time-boot config writes): the stance
  *                                    auth gate is skipped and the audit Did is
- *                                    attributed to SEED_BEING. With identity
+ *                                    attributed to I_AM. With identity
  *                                    set, scaffold is just a planting marker.
  *                                    The being is the actor, stance auth runs
  *                                    against their stance, and the audit row
@@ -166,23 +166,23 @@ export async function doVerb(target, operation, params = {}, opts = {}) {
       // Audit actor: identity wins. A being who calls a verb is the
       // actor on that verb's Did. This is uniform — there is no
       // "internal" vs "external" act; there is only "which being
-      // did it." The I-am is just the first being, and it
+      // did it." The I_AM is just the first being, and it
       // acts the same way every other being acts.
       //
       // When `opts.identity` is absent and `opts.scaffold` is set,
-      // the I-am is the doer. This is the I-am acting
+      // the I_AM is the doer. This is the I_AM acting
       // directly: during boot, during the recipe a planted seed
       // runs, during reboot reconciliation. The Did names it the
       // same way it would name any other being doing the same op.
       //
       // The trigger Did for plant-seed names the being who called
       // it (an operator, a Ruler, whoever); the materialization
-      // Dids the I-am writes from inside the plant recipe
-      // name the I-am. The audit chain is continuous: a
-      // human triggers, the I-am scaffolds, beings the seed-
+      // Dids the I_AM writes from inside the plant recipe
+      // name the I_AM. The audit chain is continuous: a
+      // human triggers, the I_AM scaffolds, beings the seed-
       // being planted go on to act, and every link names a doer.
       const actorBeingId = opts.identity?.beingId
-        || (opts.scaffold === true ? SEED_BEING : null);
+        || (opts.scaffold === true ? I_AM : null);
       await logDid({
         verb:     "do",
         action:   op.didAction,
@@ -337,9 +337,9 @@ export async function summonVerb(stance, message, opts = {}) {
   if (!toBeing && resolved.spaceId) {
     const Space = (await import("../models/space.js")).default;
     const targetSpace = await Space.findById(resolved.spaceId).select("metadata").lean();
-    const emb = targetSpace?.metadata instanceof Map
-      ? targetSpace.metadata.get("beings")
-      : targetSpace?.metadata?.beings;
+    const emb = targetSpace?.qualities instanceof Map
+      ? targetSpace.qualities.get("beings")
+      : targetSpace?.qualities?.beings;
     const homeBeingId = emb?.[qualifier]?.beingId || null;
     if (homeBeingId) toBeing = await Being.findById(homeBeingId);
   }
@@ -376,7 +376,72 @@ export async function summonVerb(stance, message, opts = {}) {
     );
   }
 
-  // Stance Authorization gate.
+  return _dispatchSummon({
+    resolved, toBeing, activeRole, role, validatedMessage,
+    identity, onResponse, onError,
+  });
+}
+
+/**
+ * Sister entry for kernel-internal callers that already have a resolved
+ * target (DO-trigger fan-out, scheduled-wake tick). Skips the parse +
+ * resolve step. Auth still runs through `authorize`; callers acting as
+ * the I_AM pass it cleanly via the universal-authority check.
+ *
+ * Only SUMMONs make SUMMONs. This is the single sanctioned entry for
+ * those internal paths. Direct `appendToInbox` + `wake` calls bypass
+ * the SUMMON envelope contract and are forbidden.
+ *
+ * @param {object} args
+ * @param {string} args.toBeingId       receiver Being _id
+ * @param {string} args.inboxSpaceId    space where the inbox lives
+ * @param {object} args.message         SUMMON envelope (from, content, correlation, ...)
+ * @param {string} [args.activeRole]    overrides toBeing.defaultRole
+ * @param {object} args.identity        asker identity, typically the I_AM
+ * @returns {Promise<{ status: "accepted", messageId: string } | object>}
+ */
+export async function summonByResolved(args) {
+  const {
+    toBeingId, inboxSpaceId, message, activeRole: roleOverride,
+    identity, onResponse, onError,
+  } = args || {};
+  if (!toBeingId)    throw new IbpError(IBP_ERR.INVALID_INPUT, "summonByResolved requires toBeingId");
+  if (!inboxSpaceId) throw new IbpError(IBP_ERR.INVALID_INPUT, "summonByResolved requires inboxSpaceId");
+
+  const validatedMessage = validateSummonMessage(message);
+
+  const Being = (await import("../models/being.js")).default;
+  const toBeing = await Being.findById(toBeingId);
+  if (!toBeing) {
+    throw new IbpError(IBP_ERR.USER_NOT_FOUND, `No being with id ${toBeingId}`);
+  }
+
+  const activeRole = roleOverride || validatedMessage.activeRole || toBeing.defaultRole || toBeing.name;
+  const role = getRole(activeRole);
+  if (!role) {
+    throw new IbpError(
+      IBP_ERR.ROLE_UNAVAILABLE,
+      `Role template "${activeRole}" for being @${toBeing.name} is not registered`,
+    );
+  }
+
+  return _dispatchSummon({
+    resolved: { spaceId: inboxSpaceId, leafId: inboxSpaceId, being: activeRole },
+    toBeing, activeRole, role, validatedMessage,
+    identity, onResponse, onError,
+  });
+}
+
+// The shared dispatch tail: auth, inbox write, role dispatch.
+// Both summonVerb (after parse/resolve) and summonByResolved (kernel-
+// internal, already resolved) end here. This is the single place an
+// inbox grows. SUMMON does not write a Did; the Summon model records
+// delivery and any DO/BE rows the receiving being emits carry the
+// summonId for correlation.
+async function _dispatchSummon({
+  resolved, toBeing, activeRole, role, validatedMessage,
+  identity, onResponse, onError,
+}) {
   const decision = await authorize({
     identity,
     verb:   "summon",
@@ -390,7 +455,6 @@ export async function summonVerb(stance, message, opts = {}) {
     );
   }
 
-  // Resolve inbox-attach space.
   const inboxNodeId = resolved.spaceId || toBeing.homeSpace || null;
   if (!inboxNodeId) {
     throw new IbpError(
@@ -402,23 +466,16 @@ export async function summonVerb(stance, message, opts = {}) {
   const recipientBeingId = String(toBeing._id);
   const { messageId, sentAt } = await appendToInbox(inboxNodeId, recipientBeingId, validatedMessage);
 
-  // SUMMON does not write a Did. Delivery is recorded by the Summon
-  // record (model: summon.js); the actions the summoned being performs
-  // in response are themselves DO / BE rows carrying summonId for
-  // correlation. Querying "what happened in this summon" reads Did by
-  // summonId; querying "the summon itself" reads the Summon model.
-
   const summonCtx = {
     spaceId:     inboxNodeId,
-    being:      activeRole,                  // legacy field name; carries the active role
-    activeRole,                              // canonical
-    toBeing,                                 // resolved being instance (receiver)
+    being:      activeRole,
+    activeRole,
+    toBeing,
     message:    { ...validatedMessage, correlation: messageId, sentAt, activeRole },
     resolved,
     identity,
   };
 
-  // Sync respond-mode: run summoning inline, return the response.
   if (role.respondMode === "sync") {
     let responseEntry = null;
     if (role.triggerOn.includes("message")) {
@@ -437,8 +494,6 @@ export async function summonVerb(stance, message, opts = {}) {
     return responseEntry;
   }
 
-  // Async respond-mode: register handoff (scheduler calls onResponse/onError
-  // when summoning completes), wake, return accepted.
   if (role.respondMode === "async") {
     const responseFromStance = `${pathOfResolved(resolved)}@${toBeing.name}`;
     attachHandoff(recipientBeingId, messageId, {
@@ -465,7 +520,6 @@ export async function summonVerb(stance, message, opts = {}) {
     return { status: "accepted", messageId };
   }
 
-  // none: ack accepted; nothing else to do.
   await markInboxConsumed(inboxNodeId, recipientBeingId, [messageId]);
   return { status: "accepted", messageId };
 }
@@ -493,9 +547,9 @@ export async function summonVerb(stance, message, opts = {}) {
 // Returns the auth-being's operation result (typically { identityToken, beingAddress, ... }).
 // ────────────────────────────────────────────────────────────────────
 
-// BE-being lookup is registry-driven now (seed/being/beRegistry.js).
+// BE-being lookup is registry-driven now (seed/land/being/beRegistry.js).
 // Kernel pre-registers auth and llm-assigner at module load above;
-// extensions add their own via registerBeBeing.
+// extensions add their own via registerBeHandler.
 
 export async function beVerb(operation, payload = {}, opts = {}) {
   if (typeof operation !== "string" || !operation.length) {
@@ -574,9 +628,9 @@ export async function beVerb(operation, payload = {}, opts = {}) {
   // addresses default to @auth (the welcome character). The registry
   // returns the being's spec; extensions can register their own
   // BE-honoring beings (court, treasurer, federation, etc.) via
-  // seed/being/beRegistry.js.
+  // seed/land/being/beRegistry.js.
   const beingName = extractBeingFromAddress(address, addressKind) || "auth";
-  const role = getBeBeing(beingName);
+  const role = getBeHandler(beingName);
   if (!role) {
     throw new IbpError(
       IBP_ERR.ROLE_UNAVAILABLE,
@@ -626,7 +680,7 @@ async function writeBeDid({ operation, identity, authResult, payload, beingName 
     if (!actorBeingId && authResult && typeof authResult === "object") {
       actorBeingId = authResult.userId || authResult.beingId || null;
     }
-    if (!actorBeingId) actorBeingId = SEED_BEING;
+    if (!actorBeingId) actorBeingId = I_AM;
 
     const safeResult = authResult && typeof authResult === "object"
       ? { beingAddress: authResult.beingAddress || null, note: authResult.note || null }

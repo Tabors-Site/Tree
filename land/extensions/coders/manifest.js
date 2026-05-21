@@ -30,7 +30,7 @@ export default {
     tools: true,
     jobs: false,
 
-    // Plantable seed. Operators plant `coder:governing-coder` at a node
+    // Plantable seed. Operators plant `coder:governing-coder` at a space
     // to bootstrap a rulership with a coder worker attached. See
     // seeds/governingCoder.js for the recipe.
     seeds: {

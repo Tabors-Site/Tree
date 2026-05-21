@@ -16,7 +16,7 @@ import { mock } from "node:test";
 // objects with `_id` to mirror the real Mongoose lean() shape.
 let fakeAncestorChain = [];
 
-mock.module("../seed/space/ancestorCache.js", {
+mock.module("../seed/land/space/ancestorCache.js", {
   namedExports: {
     getAncestorChain: async (_nodeId) => fakeAncestorChain.map((id) => ({ _id: id })),
   },
@@ -113,7 +113,7 @@ describe("unsubscribe", () => {
 
   test("unsubscribeAllForBeing removes every subscription for a being", () => {
     subscribe("b1", { event: "afterMatter", scope: { everywhere: true } });
-    subscribe("b1", { event: "afterMetadataWrite", scope: { spaceId: "n1" } });
+    subscribe("b1", { event: "afterQualityWrite", scope: { spaceId: "n1" } });
     subscribe("b2", { event: "afterMatter", scope: { everywhere: true } });
     assert.equal(unsubscribeAllForBeing("b1"), 2);
     assert.equal(getStats().beingsWithSubscriptions, 1);
@@ -160,8 +160,8 @@ describe("getMatchingSubscribers — scope", () => {
 
   test("different events don't cross-fire", async () => {
     subscribe("b1", { event: "afterMatter",     scope: { everywhere: true } });
-    subscribe("b2", { event: "afterMetadataWrite", scope: { everywhere: true } });
-    const matches = await getMatchingSubscribers("afterMetadataWrite", { spaceId: "n1" });
+    subscribe("b2", { event: "afterQualityWrite", scope: { everywhere: true } });
+    const matches = await getMatchingSubscribers("afterQualityWrite", { spaceId: "n1" });
     assert.equal(matches.length, 1);
     assert.equal(matches[0].beingId, "b2");
   });
@@ -408,13 +408,13 @@ describe("coalesceMs — batching", () => {
 describe("getStats", () => {
   test("reports counts accurately", () => {
     subscribe("b1", { event: "afterMatter", scope: { everywhere: true } });
-    subscribe("b1", { event: "afterMetadataWrite", scope: { spaceId: "n1" } });
+    subscribe("b1", { event: "afterQualityWrite", scope: { spaceId: "n1" } });
     subscribe("b2", { event: "afterMatter", scope: { everywhere: true } });
     const stats = getStats();
     assert.equal(stats.totalSubscriptions, 3);
     assert.equal(stats.beingsWithSubscriptions, 2);
     assert.ok(stats.eventsWatched.includes("afterMatter"));
-    assert.ok(stats.eventsWatched.includes("afterMetadataWrite"));
+    assert.ok(stats.eventsWatched.includes("afterQualityWrite"));
     assert.equal(stats.pendingCoalesce, 0);
   });
 });

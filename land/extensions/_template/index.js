@@ -15,28 +15,30 @@ export async function init(core) {
   // log.verbose("MyExt", "init starting");
 
   // ───────────────────────────────────────────────────────────────
-  // METADATA — extension data lives in metadata Maps, never in
-  // seed schemas. Each extension writes to its own namespace; the
-  // scoped core enforces that boundary.
+  // QUALITIES — extension data lives in the qualities Map on each
+  // primitive (Space, Being, Matter), under your extension's name.
+  // The kernel never writes inside your namespace; the scoped core
+  // refuses writes to anyone else's. Same nine methods on each
+  // primitive's qualities namespace.
   // ───────────────────────────────────────────────────────────────
   //
-  // Space metadata:
-  //   const data = core.metadata.getExtMeta(space, "my-extension");
-  //   await core.metadata.setExtMeta(spaceId, "my-extension", { key: "value" });
-  //   await core.metadata.mergeExtMeta(spaceId, "my-extension", { extraKey: "value" });
-  //   await core.metadata.incExtMeta(spaceId, "my-extension", "counter", 1);
-  //   await core.metadata.pushExtMeta(spaceId, "my-extension", "history", item, 50);
-  //   await core.metadata.batchSetExtMeta(spaceId, "my-extension", { a: 1, b: 2 });
-  //   await core.metadata.unsetExtMeta(spaceId, "my-extension");
+  // Space qualities:
+  //   const data = core.qualities.space.getQuality(space, "my-extension");
+  //   await core.qualities.space.setQuality(spaceId, "my-extension", { key: "value" });
+  //   await core.qualities.space.mergeQuality(spaceId, "my-extension", { extraKey: "value" });
+  //   await core.qualities.space.incQuality(spaceId, "my-extension", "counter", 1);
+  //   await core.qualities.space.pushQuality(spaceId, "my-extension", "history", item, 50);
+  //   await core.qualities.space.batchSetQuality(spaceId, "my-extension", { a: 1, b: 2 });
+  //   await core.qualities.space.unsetQuality(spaceId, "my-extension");
   //
-  // Being metadata (per-being data; persists across role changes):
-  //   const prefs = core.beingMetadata.getBeingMeta(being, "my-extension");
-  //   await core.beingMetadata.setBeingMeta(beingId, "my-extension", { ... });
-  //   await core.beingMetadata.incBeingMeta(beingId, "my-extension", "visits", 1);
+  // Being qualities (per-being data; persists across role changes):
+  //   const prefs = core.qualities.being.getQuality(being, "my-extension");
+  //   await core.qualities.being.setQuality(beingId, "my-extension", { ... });
+  //   await core.qualities.being.incQuality(beingId, "my-extension", "visits", 1);
   //
-  // Matter metadata (per-piece-of-matter data):
-  //   const tags = core.matterMetadata.getMatterMeta(matter, "my-extension");
-  //   await core.matterMetadata.setMatterMeta(matterId, "my-extension", { ... });
+  // Matter qualities (per-piece-of-matter data):
+  //   const tags = core.qualities.matter.getQuality(matter, "my-extension");
+  //   await core.qualities.matter.setQuality(matterId, "my-extension", { ... });
 
   // ───────────────────────────────────────────────────────────────
   // HOOKS — react to substrate events. Always available; no needs
@@ -65,7 +67,7 @@ export async function init(core) {
   // core.do.registerOperation("log-meal", {
   //   targets: ["space"],
   //   handler: async ({ target, params, identity }) => {
-  //     await core.metadata.mergeExtMeta(target._id, "my-extension", {
+  //     await core.qualities.space.mergeQuality(target._id, "my-extension", {
   //       lastMeal: params.text,
   //     });
   //     return { logged: true };
@@ -81,7 +83,7 @@ export async function init(core) {
   // see below) before any being is summoned in this role.
   // ───────────────────────────────────────────────────────────────
   //
-  // core.ibp.registerRole("my-role", {
+  // core.declare.registerRole("my-role", {
   //   name:       "my-role",
   //   canSee:     ["my-extension:read-status"],
   //   canDo:      ["my-extension:log-meal"],
@@ -99,7 +101,7 @@ export async function init(core) {
   // receiving role's summon handler interprets the event.
   // ───────────────────────────────────────────────────────────────
   //
-  // core.ibp.subscribe(beingId, {
+  // core.declare.subscribe(beingId, {
   //   event:    "afterMatter",
   //   scope:    { ancestor: someSpaceId },     // | { everywhere: true } | { spaceId }
   //   filter:   { origin: "web" },             // optional payload equality / any-of
@@ -113,7 +115,7 @@ export async function init(core) {
   // a scheduler-being extension to swap in an embodied emitter.
   // ───────────────────────────────────────────────────────────────
   //
-  // core.ibp.schedule(beingId, {
+  // core.declare.schedule(beingId, {
   //   intervalMs: 60_000 * 30,                  // every 30 minutes
   //   content:    { event: "tick" },
   //   priority:   4,
@@ -135,7 +137,7 @@ export async function init(core) {
   // ───────────────────────────────────────────────────────────────
   // SEEDS — plantable scaffolds. Register a recipe here (or via
   // the manifest's provides.seeds path) and the operator plants
-  // it with `core.do(node, "plant-seed", { name: "my-ext:my-seed" })`.
+  // it with `core.do(space, "plant-seed", { name: "my-ext:my-seed" })`.
   // ───────────────────────────────────────────────────────────────
   //
   // core.seeds.register("my-seed", {

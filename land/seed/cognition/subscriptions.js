@@ -24,7 +24,7 @@
 //     id:            string,                  // generated when subscribe() returns
 //     beingId:       string,                  // who gets summoned
 //     event:         "afterMatter"            // hook name to match
-//                  | "afterMetadataWrite",    // extensions express
+//                  | "afterQualityWrite",    // extensions express
 //                                              // status-like changes via
 //                                              // afterMetadataWrite +
 //                                              // a namespace filter
@@ -48,11 +48,12 @@
 
 import { randomUUID } from "crypto";
 import log from "../system/log.js";
-import { getAncestorChain } from "../space/ancestorCache.js";
-import { appendToInbox } from "./inbox.js";
-import { wake } from "./scheduler.js";
+import { getAncestorChain } from "../land/space/ancestorCache.js";
+import { summonByResolved } from "../ibp/verbs.js";
 import { getLandDomain } from "../ibp/address.js";
 import { getLandRootId } from "../landRoot.js";
+import { I_AM } from "../land/space/seedSpaces.js";
+import { iAmIdentity } from "../land/being/landBeings.js";
 
 // beingId -> Map<subscriptionId, subscription>
 const _byBeing = new Map();
@@ -279,8 +280,8 @@ export async function getMatchingSubscribers(eventName, payload) {
  * its normal priority order.
  *
  * Sender is the doing being when payload.beingId is present, else
- * the I-am's stance `<land>/@I-am`. The receiver's role
- * template can inspect the sender to distinguish I-am-emitted
+ * the I_AM's stance `<land>/@I_AM`. The receiver's role
+ * template can inspect the sender to distinguish I_AM-emitted
  * events (substrate-internal triggers like .source sync) from
  * other-being-emitted ones (explicit acts by named beings).
  *
@@ -292,6 +293,15 @@ export async function emitToSubscribers(eventName, payload, options = {}) {
   const matches = await getMatchingSubscribers(eventName, payload);
   if (matches.length === 0) return 0;
 
+  // Every DO-trigger SUMMON is emitted by the I_AM acting on a
+  // subscriber's standing declaration. The original DO actor lives
+  // in the SUMMON's content payload (`actorBeingId`), not in
+  // `from`. Position carries where the triggering DO happened.
+  const identity = await iAmIdentity();
+  if (!identity) {
+    log.debug("Subscriptions", `skipping ${eventName}: I_AM identity not yet available`);
+    return 0;
+  }
   const senderStance = _senderStanceForPayload(payload);
   const rootCorrelation = payload?.rootCorrelation || payload?.summonId || null;
 
@@ -307,7 +317,7 @@ export async function emitToSubscribers(eventName, payload, options = {}) {
       const eventContent = _renderTriggerContent(eventName, payload);
       if (sub.coalesceMs > 0) {
         // Coalescing path: append this event to the subscription's
-        // pending batch. If no window is open, open one — when it
+        // pending batch. If no window is open, open one. When it
         // expires, ONE SUMMON fires with content.events = [...].
         _enqueueCoalesce(sub, {
           eventName,
@@ -316,19 +326,17 @@ export async function emitToSubscribers(eventName, payload, options = {}) {
           targetSpace,
           rootCorrelation,
         });
-        // Counted as "handled" but the actual emit lands later.
         emitted++;
       } else {
-        const correlation = randomUUID();
-        await appendToInbox(targetSpace, sub.beingId, {
-          from:            senderStance,
-          content:         eventContent,
-          correlation,
-          rootCorrelation: rootCorrelation || correlation,
-          priority:        sub.priority,
-          sentAt:          new Date().toISOString(),
+        await _emitOne({
+          inboxSpaceId: targetSpace,
+          toBeingId:    sub.beingId,
+          priority:     sub.priority,
+          senderStance,
+          content:      eventContent,
+          rootCorrelation,
+          identity,
         });
-        wake(sub.beingId, targetSpace);
         emitted++;
       }
     } catch (err) {
@@ -337,6 +345,26 @@ export async function emitToSubscribers(eventName, payload, options = {}) {
     }
   }
   return emitted;
+}
+
+// Single-SUMMON delivery. The verb runs auth (the I_AM passes
+// universally) and dispatches through the standard inbox + role
+// path. There is no direct appendToInbox + wake bypass.
+async function _emitOne({ inboxSpaceId, toBeingId, priority, senderStance, content, rootCorrelation, identity }) {
+  const correlation = randomUUID();
+  await summonByResolved({
+    toBeingId,
+    inboxSpaceId,
+    identity,
+    message: {
+      from:            senderStance,
+      content,
+      correlation,
+      rootCorrelation: rootCorrelation || correlation,
+      priority,
+      sentAt:          new Date().toISOString(),
+    },
+  });
 }
 
 // Open or extend a coalesce window for a subscription. Same-subscription
@@ -370,10 +398,8 @@ async function _flushCoalesce(sub) {
   const pending = _pendingCoalesce.get(sub.id);
   if (!pending) return;
   _pendingCoalesce.delete(sub.id);
-  // Verify the subscription is still registered. If it was removed
-  // mid-window, drop the batch silently.
+  // Subscription removed mid-window: drop the batch silently.
   if (!_index.has(sub.id)) return;
-  const correlation = randomUUID();
   // Single SUMMON whose content carries the batch. Receivers know
   // `events` is a list when coalesceMs > 0 was configured.
   const content = {
@@ -385,15 +411,17 @@ async function _flushCoalesce(sub) {
     lastAt:    new Date().toISOString(),
   };
   try {
-    await appendToInbox(pending.targetSpace, sub.beingId, {
-      from:            pending.senderStance,
+    const identity = await iAmIdentity();
+    if (!identity) return;
+    await _emitOne({
+      inboxSpaceId: pending.targetSpace,
+      toBeingId:    sub.beingId,
+      priority:     sub.priority,
+      senderStance: pending.senderStance,
       content,
-      correlation,
-      rootCorrelation: pending.rootCorrelation || correlation,
-      priority:        sub.priority,
-      sentAt:          new Date().toISOString(),
+      rootCorrelation: pending.rootCorrelation,
+      identity,
     });
-    wake(sub.beingId, pending.targetSpace);
   } catch (err) {
     log.warn("Subscriptions",
       `coalesced emit ${pending.eventName} → being ${sub.beingId.slice(0, 8)} failed: ${err.message}`);
@@ -431,16 +459,17 @@ function _readPath(obj, path) {
 }
 
 function _senderStanceForPayload(payload) {
+  // Every kernel-emitted SUMMON has the I_AM as its asker. The
+  // subscriber registered an interest; the I_AM holds that
+  // declaration and emits the SUMMON when a matching DO fires.
+  // The position carries where the DO happened, so the receiver
+  // can see "the I_AM, standing at this space, is summoning you."
+  // The original DO actor lives in the SUMMON's content payload as
+  // `actorBeingId`; receivers that need to know who acted read it
+  // from there.
   const domain = getLandDomain() || "land";
-  // The doing being (if known) is the most informative sender. Code-
-  // driven DOs (no beingId) land as the synthesized system stance.
-  if (payload?.beingId) {
-    // We don't have the doer's username synchronously here. Use the
-    // beingId as a stable identifier in the stance; receiver-side
-    // role templates can resolve to username if they need display.
-    return `${domain}/@<being:${payload.beingId}>`;
-  }
-  return `${domain}/@I-am`;
+  const position = payload?.spaceId ? `/${payload.spaceId}` : "";
+  return `${domain}${position}@${I_AM}`;
 }
 
 function _inboxNodeIdForSubscriber(sub, payload) {

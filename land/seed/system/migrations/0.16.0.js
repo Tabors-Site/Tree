@@ -7,7 +7,7 @@
  * and reply-emission helpers. Receivers distinguish trigger kinds (chat
  * vs do-trigger vs scheduled-wake) by inspecting the content shape.
  *
- * Inbox entries live in `metadata.inbox.entries` on space documents.
+ * Inbox entries live in `qualities.inbox.entries` on space documents.
  * This migration removes the `intent` key from every entry on every
  * space. Summon documents carry no `intent` column, so nothing to do
  * there.
@@ -34,8 +34,8 @@ export default async function migrate() {
   // Strip metadata.inbox.entries[].intent from every space carrying inbox entries.
   // $unset on a nested array element with a wildcard ($[]) is supported.
   const res = await spaces.updateMany(
-    { "metadata.inbox.entries": { $exists: true, $type: "array" } },
-    { $unset: { "metadata.inbox.entries.$[].intent": "" } },
+    { "qualities.inbox.entries": { $exists: true, $type: "array" } },
+    { $unset: { "qualities.inbox.entries.$[].intent": "" } },
   );
   if (res.modifiedCount > 0) {
     log.info("Seed/0.16.0",

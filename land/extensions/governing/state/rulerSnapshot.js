@@ -60,16 +60,16 @@ const LEDGER_TAIL = 3;
  * Ruler mode's buildSystemPrompt to render its prompt-block; also
  * usable by court tooling and dashboards.
  *
- * Returns null if the node isn't a Ruler.
+ * Returns null if the space isn't a Ruler.
  */
 export async function buildRulerSnapshot(rulerSpaceId) {
   if (!rulerSpaceId) return null;
 
   const rulerSpace = await Space.findById(rulerSpaceId).select("_id name parent metadata children").lean();
   if (!rulerSpace) return null;
-  const rulerMeta = rulerSpace.metadata instanceof Map
-    ? Object.fromEntries(rulerSpace.metadata)
-    : (rulerSpace.metadata || {});
+  const rulerMeta = rulerSpace.qualities instanceof Map
+    ? Object.fromEntries(rulerSpace.qualities)
+    : (rulerSpace.qualities || {});
   if (rulerMeta[ROLE_NS]?.role !== "ruler") return null;
 
   const out = {
@@ -341,9 +341,9 @@ export async function buildRulerSnapshot(rulerSpaceId) {
       const kids = await Space.find({ _id: { $in: childIds } })
         .select("_id name metadata").lean();
       for (const k of kids) {
-        const km = k.metadata instanceof Map
-          ? Object.fromEntries(k.metadata)
-          : (k.metadata || {});
+        const km = k.qualities instanceof Map
+          ? Object.fromEntries(k.qualities)
+          : (k.qualities || {});
         if (km[ROLE_NS]?.role !== "ruler") continue;
         let subPlanOrdinal = null;
         let subPlanSlug = null;

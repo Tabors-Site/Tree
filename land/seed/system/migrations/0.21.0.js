@@ -8,7 +8,7 @@
  * the system-being canon 2026-05-20.
  *
  * This migration deletes the leftover Being row by name and scrubs the
- * `metadata.beings.citizen` entry from the land root. Idempotent.
+ * `qualities.beings.citizen` entry from the land root. Idempotent.
  */
 
 import mongoose from "mongoose";
@@ -33,8 +33,8 @@ export default async function migrate() {
   let metaScrubbed = 0;
   if (names.has("spaces")) {
     const result = await db.collection("spaces").updateMany(
-      { "metadata.beings.citizen": { $exists: true } },
-      { $unset: { "metadata.beings.citizen": "" } },
+      { "qualities.beings.citizen": { $exists: true } },
+      { $unset: { "qualities.beings.citizen": "" } },
     );
     metaScrubbed = result.modifiedCount || 0;
   }

@@ -23,11 +23,11 @@ import { getLandRootId } from "../landRoot.js";
 // NODE_STATUS retired 2026-05-18 — status is domain-specific extension
 // metadata, not a universal kernel field. Descriptor queries no longer
 // filter on a space-level status.
-import { getMatters } from "../matter/matters.js";
+import { getMatters } from "../land/matter/matters.js";
 import Matter from "../models/matter.js";
-import { resolveSpaceAccess } from "../space/spaceFetch.js";
+import { resolveSpaceAccess } from "../land/space/spaceFetch.js";
 import { getInboxSummary } from "../cognition/inbox.js";
-import { getRole, listRoles } from "../being/roles/registry.js";
+import { getRole, listRoles } from "../cognition/roles/registry.js";
 import { getActiveSummonForBeing } from "../cognition/summonTracker.js";
 
 // Deriver registry. Extensions that contribute derived descriptor
@@ -208,7 +208,7 @@ function beingsForTreeSpace(space, { writeAllowed, authorizedHere }) {
   // member). We treat any entry NOT in the well-known stance set as a
   // being-home — letting future extensions register their own beings
   // without changing this filter.
-  const beingHomes = readNsFrom(space?.metadata, "beings");
+  const beingHomes = readNsFrom(space?.qualities, "beings");
   if (!beingHomes) return beings;
   const STANCE_NAMES = new Set(["arrival", "owner", "member"]);
   const names = beingHomes instanceof Map
@@ -624,7 +624,7 @@ async function listChildren(parentId, { exclude } = {}) {
     type:      n.type || null,
     summary:   null,
     noteCount: 0,
-    ...childPlacement(n.metadata),
+    ...childPlacement(n.qualities),
   }));
 }
 
@@ -636,7 +636,7 @@ async function listMatters(spaceId) {
     // Matter placement lives on the parent space's position/models
     // namespaces, keyed by matter id.
     const parent = await Space.findById(spaceId).select("metadata").lean();
-    const parentMetadata = parent?.metadata || null;
+    const parentMetadata = parent?.qualities || null;
     return matters.map((m) => {
       const isText = typeof m.content === "string";
       return {
@@ -688,7 +688,7 @@ function buildLineage(resolved) {
  *
  * A "public tree" is any space whose stance-auth rules carry a SEE
  * permission keyed at the universal wildcard — i.e. it has the field
- * `metadata.permissions.see.*`. The layer-2 authorize walk picks this
+ * `qualities.permissions.see.*`. The layer-2 authorize walk picks this
  * rule up for any caller; whether arrival passes depends on the rule's
  * `requires`. A rule with `requires: {}` admits everyone, which is what
  * the migration writes for previously-public spaces. Land seed spaces
@@ -699,7 +699,7 @@ function buildLineage(resolved) {
 async function listPublicTrees() {
   const trees = await Space.find({
     seedSpace: null,
-    "metadata.permissions.see.*": { $exists: true },
+    "qualities.permissions.see.*": { $exists: true },
   })
     .select("_id name type dateCreated metadata")
     .sort({ dateCreated: -1 })
@@ -713,7 +713,7 @@ async function listPublicTrees() {
     type:      t.type || null,
     summary:   null, // future: pull from matters/metadata
     noteCount: 0,    // future: count via matters index
-    ...childPlacement(t.metadata),
+    ...childPlacement(t.qualities),
   }));
 }
 
@@ -737,9 +737,9 @@ async function readLandRootMatters(landRootId) {
     beingId:    m.beingId ? String(m.beingId) : null,
     origin:     m.origin || "ibp",
     content:    m.content || null,
-    metadata:   m.metadata instanceof Map
-      ? Object.fromEntries(m.metadata)
-      : (m.metadata || {}),
+    metadata:   m.qualities instanceof Map
+      ? Object.fromEntries(m.qualities)
+      : (m.qualities || {}),
   }));
 }
 
@@ -766,7 +766,7 @@ async function listUserTrees(beingId, username) {
     .lean();
 
   return trees.map((t) => {
-    const perms = t.metadata instanceof Map ? t.metadata.get("permissions") : t.metadata?.permissions;
+    const perms = t.qualities instanceof Map ? t.qualities.get("permissions") : t.qualities?.permissions;
     // A SEE rule keyed at "*" means the tree exposes itself through
     // stance auth at the universal level. Whether arrival actually
     // passes depends on the rule's requires; if requires is empty,
@@ -786,7 +786,7 @@ async function listUserTrees(beingId, username) {
       isPublic,
       summary:   null,
       noteCount: 0,
-      ...childPlacement(t.metadata),
+      ...childPlacement(t.qualities),
     };
   });
 }
@@ -816,7 +816,7 @@ async function buildBeings(spaceId, entries) {
   let parentMetadata = null;
   if (spaceId) {
     const parent = await Space.findById(spaceId).select("metadata").lean();
-    parentMetadata = parent?.metadata || null;
+    parentMetadata = parent?.qualities || null;
   }
   // Look up the live Summon for each being in parallel. The slim Summon
   // shape carries beingOut directly, so _activeSummonLookupBeingId is the

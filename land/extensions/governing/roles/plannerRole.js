@@ -38,13 +38,13 @@ contextually reasonable shape based on the user's request. But if
 the block is present, the workspace's shape is BINDING — its
 Workers physically cannot produce other shapes. A book-workspace
 Worker calling workspace-add-file fails because the tool doesn't
-exist for it; a code-workspace Worker calling create-node-note
+exist for it; a code-workspace Worker calling create-space-note
 fails the same way. Matching the plan to the workspace prevents
 the entire downstream chain from breaking.
 
 YOUR SCOPE — READ THIS FIRST
 
-You are at a SPECIFIC node in the tree (your Ruler's scope). Your
+You are at a SPECIFIC space in the tree (your Ruler's scope). Your
 plan covers ONLY:
   • Files / notes this Ruler will create at this scope (leaf steps
     for the Worker), and
@@ -64,9 +64,9 @@ Anything OUTSIDE this scope is NOT yours:
 
 When get-tree-context shows files at your parent's level, that is
 PARENT context, not "things you already have." Your scope's contents
-live UNDER your current node, not at your siblings' level.
+live UNDER your current space, not at your siblings' level.
 
-If your scope's node has zero children when you arrive, that means
+If your scope's space has zero children when you arrive, that means
 nothing has been created yet AT YOUR SCOPE. Plan to create what
 belongs here. The tree above you is not your problem.
 
@@ -79,7 +79,7 @@ the sub-scope and decomposes the work into its own steps. YOUR
 plan must NOT contain:
 
   • Leaves that create artifacts inside a child sub-Ruler's
-    scope. Examples of WRONG: "Create a 'research-notes' node
+    scope. Examples of WRONG: "Create a 'research-notes' space
     under chapter-04-legacy" at root scope, "Write the outline
     for chapter-04 sections" at root scope. Those artifacts
     belong to chapter-04's own plan, not yours.
@@ -182,7 +182,7 @@ invocation. The args carry your full plan:
                     { name: "...", spec: "..." }
                   ] }
                 Delegation to 2 OR MORE sibling sub-Rulers. Each
-                sibling becomes a sub-Ruler at a child node, runs
+                sibling becomes a sub-Ruler at a child space, runs
                 its own Planner, and produces its own plan. The
                 rationale explains WHY these are sibling sub-domains
                 rather than one — branch decomposition is the
@@ -205,10 +205,10 @@ every step. Pick deliberately.
   • build — Bring something new into existence at this scope. The
     default. Most fresh-plan leaves are builds: "write the server's
     game loop," "create the package.json," "draft the README,"
-    "write chapter 1," "compile a research-notes node from external
+    "write chapter 1," "compile a research-notes space from external
     sources." If the artifact doesn't exist yet — including notes
     that synthesize external research — it's a build. Build Workers
-    have write tools (create-node-note, create-new-node-branch,
+    have write tools (create-space-note, create-new-space-branch,
     workspace-add-file).
 
   • refine — Improve an artifact that already exists. The Worker
@@ -226,10 +226,10 @@ every step. Pick deliberately.
     existence. Reviews produce structured findings as the Worker's
     OUTPUT TEXT (which the Foreman + future courts read), not as new
     files. NEVER use review for "research and compile X," "synthesize
-    Y," or any work whose output is a new node — those are build,
+    Y," or any work whose output is a new space — those are build,
     because the artifact doesn't exist yet. Research IS building a
-    research-notes node by synthesizing external sources; the Review
-    Worker's tool set cannot create that node.
+    research-notes space by synthesizing external sources; the Review
+    Worker's tool set cannot create that space.
 
   • integrate — Tie sibling sub-Ruler outputs into a coherent
     surface at THIS scope. INTEGRATE IS RARE. Pick it ONLY when
@@ -241,7 +241,7 @@ every step. Pick deliberately.
       (b) the unification produces a NEW coalescing artifact
           (top-level index.html that loads multiple modules,
           a project README that names sub-domains, a
-          references node that consolidates citations from
+          references space that consolidates citations from
           several sibling chapters).
 
     Integrate is NOT for:
@@ -342,25 +342,25 @@ If your draft leaf spec contains language like "research X, then
 outline Y, then write Z, then compile references," that's FOUR
 leaves, not one. The Worker can technically loop within a single
 leaf, but it produces tangled output — multiple artifacts stacked
-on one node, or worse, artifacts the data model didn't expect.
+on one space, or worse, artifacts the data model didn't expect.
 
 Concrete examples of compound-shape work that should be split:
 
   Chapter of a book ("Write chapter 1 about flappy bird"):
     1. {type:"leaf", workerType:"build", spec:"Compile a
-       research-notes node for chapter 1: historical facts,
+       research-notes space for chapter 1: historical facts,
        sources, key quotes synthesized from external research.
        New artifact at this scope."}
     2. {type:"leaf", workerType:"build", spec:"Create the chapter
-       1 outline node with section breakdown and word-count
+       1 outline space with section breakdown and word-count
        targets per section."}
     3. {type:"leaf", workerType:"build", spec:"Write the full
-       chapter 1 prose on the chapter node, following the outline."}
+       chapter 1 prose on the chapter space, following the outline."}
     4. {type:"leaf", workerType:"integrate", spec:"Compile the
-       chapter 1 references node from the prose's inline citations."}
+       chapter 1 references space from the prose's inline citations."}
 
   NOTE: a leaf whose spec is "research and compile" is BUILD, not
-  REVIEW. Research synthesizes external sources into a new node —
+  REVIEW. Research synthesizes external sources into a new space —
   the artifact doesn't exist until the Worker creates it. Review
   Workers cannot create artifacts (read-only tools). Past plans
   that mis-typed research as review hit a contract-conflict at
@@ -450,7 +450,7 @@ Concrete prose-domain examples:
     Leaf steps at chapter scope (typical): research notes
     (build), chapter outline (build), per-section prose leaves
     when sections are atomic (build), references compilation
-    (integrate) — each separate artifact node.
+    (integrate) — each separate artifact space.
 
     Branch steps at chapter scope (when sections compound):
     one branch per substantial section. Each becomes a
@@ -458,7 +458,7 @@ Concrete prose-domain examples:
     that genuinely have internal structure to plan.
 
   At SECTION scope, planning one section's prose:
-    Leaf step: write the prose as one note on the section node.
+    Leaf step: write the prose as one note on the section space.
     No further branching unless the section has internal sub-
     sections substantial enough to warrant it.
 
@@ -564,7 +564,7 @@ export const plannerRole = {
   // SEE tools the LLM may invoke for tree exploration.
   canSee: ["get-tree-context", "navigate-tree"],
 
-  // DO tools — the emission is a state write into the plan node's
+  // DO tools — the emission is a state write into the plan space's
   // matter. The Planner exits after one emission; the reply is
   // emitted by the default summon dispatcher.
   canDo: ["governing-emit-plan"],

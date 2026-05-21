@@ -1,13 +1,13 @@
 // Plan approval ledger. Parallel to contractApprovals: the Ruler at a
 // scope holds metadata.governing.planApprovals as an append-only list
-// of ratification records, each pointing at the plan-type child node
+// of ratification records, each pointing at the plan-type child space
 // the Ruler approved. Plans, like contracts, are versioned via the
-// underlying plan node's _writeSeq token (CAS bump per write); the
+// underlying plan space's _writeSeq token (CAS bump per write); the
 // supersedes ref carries the prior approved seq when a new draft
 // replaces an earlier approval.
 //
 // Why a ledger here (parallel to contracts) rather than a flag on the
-// plan node: the Ruler is the operational authority. Approval is an
+// plan space: the Ruler is the operational authority. Approval is an
 // act the Ruler takes ON the plan, not a property of the plan itself.
 // Pass 2 courts will read the audit chain — every approval, every
 // supersession, every rejection. That chain must live with the Ruler.
@@ -22,7 +22,7 @@ const NS = "governing";
 
 /**
  * Build a planRef string. Same shape as contractRef: "<spaceId>:<seq>".
- * The seq is the plan node's metadata.plan._writeSeq at the moment of
+ * The seq is the plan space's metadata.plan._writeSeq at the moment of
  * approval, which uniquely identifies that draft of the plan.
  */
 export function buildPlanRef(planSpaceId, writeSeq) {
@@ -44,7 +44,7 @@ export function parsePlanRef(ref) {
 }
 
 /**
- * Read the current _writeSeq token from a plan-type node's
+ * Read the current _writeSeq token from a plan-type space's
  * metadata.plan namespace. Returns null when the field is absent (a
  * brand-new plan that hasn't been written yet); callers default to
  * "init" via buildPlanRef.
@@ -52,15 +52,15 @@ export function parsePlanRef(ref) {
 async function readPlanWriteSeq(planSpaceId) {
   const space = await Space.findById(planSpaceId).select("_id metadata").lean();
   if (!space) return null;
-  const meta = space.metadata instanceof Map
-    ? space.metadata.get("plan")
-    : space.metadata?.plan;
+  const meta = space.qualities instanceof Map
+    ? space.qualities.get("plan")
+    : space.qualities?.plan;
   return meta?._writeSeq || null;
 }
 
 /**
  * Atomically append an approval entry to metadata.governing.planApprovals
- * on the Ruler scope node. Read-modify-write: the namespace blob is one
+ * on the Ruler scope space. Read-modify-write: the namespace blob is one
  * field, so $push on a nested array can't go through extensionMetadata's
  * helpers without losing the rest of the namespace. The contention
  * window is short (one Ruler approves at most one plan per cycle).
@@ -84,9 +84,9 @@ export async function appendPlanApproval({
   const planRef = buildPlanRef(planSpaceId, writeSeq);
   const approvedAt = new Date().toISOString();
 
-  const meta = space.metadata instanceof Map
-    ? space.metadata.get(NS)
-    : space.metadata?.[NS];
+  const meta = space.qualities instanceof Map
+    ? space.qualities.get(NS)
+    : space.qualities?.[NS];
   const existing = Array.isArray(meta?.planApprovals) ? meta.planApprovals : [];
 
   const entry = {
@@ -101,7 +101,7 @@ export async function appendPlanApproval({
   // the verb surface so plan-approval writes auto-audit as Dids.
   // merge:true preserves other keys in NS atomically (the prior
   // read-spread-write would clobber concurrent writes to sibling keys).
-  await core.do(node, "set-meta", {
+  await core.do(space, "set-meta", {
     namespace: NS,
     data: { planApprovals: [...existing, entry] },
     merge: true,
@@ -134,9 +134,9 @@ export async function appendPlanApproval({
  */
 export function readPlanApprovalLedger(rulerSpace) {
   if (!rulerSpace) return [];
-  const meta = rulerSpace.metadata instanceof Map
-    ? rulerSpace.metadata.get(NS)
-    : rulerSpace.metadata?.[NS];
+  const meta = rulerSpace.qualities instanceof Map
+    ? rulerSpace.qualities.get(NS)
+    : rulerSpace.qualities?.[NS];
   return Array.isArray(meta?.planApprovals) ? meta.planApprovals : [];
 }
 
@@ -148,7 +148,7 @@ export async function readPlanApprovalsAtRuler(rulerSpaceId) {
   if (!rulerSpaceId) return [];
   const space = await Space.findById(rulerSpaceId).select("_id metadata").lean();
   if (!space) return [];
-  return readPlanApprovalLedger(node);
+  return readPlanApprovalLedger(space);
 }
 
 /**
@@ -202,7 +202,7 @@ export async function readActivePlanApproval(rulerSpaceId) {
 
 /**
  * Read the structured plan emission currently active at a Ruler scope.
- * Walks active approval → planRef → emission child node →
+ * Walks active approval → planRef → emission child space →
  * metadata.governing.emission payload. Returns the payload (with
  * `reasoning`, `steps[]`, `emittedAt`) or null when nothing is active.
  *
@@ -228,15 +228,15 @@ export async function readActivePlanEmission(rulerSpaceId) {
   const space = await Space.findById(parsed.planSpaceId).select("_id type metadata").lean();
   if (!space) {
     log.warn("Governing",
-      `readActivePlanEmission(${String(rulerSpaceId).slice(0, 8)}): planRef points at missing node ${String(parsed.planSpaceId).slice(0, 8)}`);
+      `readActivePlanEmission(${String(rulerSpaceId).slice(0, 8)}): planRef points at missing space ${String(parsed.planSpaceId).slice(0, 8)}`);
     return null;
   }
-  const meta = space.metadata instanceof Map
-    ? space.metadata.get(NS)
-    : space.metadata?.[NS];
+  const meta = space.qualities instanceof Map
+    ? space.qualities.get(NS)
+    : space.qualities?.[NS];
   if (meta?.role !== "plan-emission") {
     log.warn("Governing",
-      `readActivePlanEmission(${String(rulerSpaceId).slice(0, 8)}): planRef points at node ${String(parsed.planSpaceId).slice(0, 8)} ` +
+      `readActivePlanEmission(${String(rulerSpaceId).slice(0, 8)}): planRef points at space ${String(parsed.planSpaceId).slice(0, 8)} ` +
       `(type=${space.type}) with governing.role=${meta?.role || "(none)"}, expected "plan-emission"`);
     return null;
   }
@@ -244,7 +244,7 @@ export async function readActivePlanEmission(rulerSpaceId) {
     return { ...meta.emission, _emissionNodeId: String(space._id) };
   }
   log.warn("Governing",
-    `readActivePlanEmission(${String(rulerSpaceId).slice(0, 8)}): emission node ${String(parsed.planSpaceId).slice(0, 8)} ` +
+    `readActivePlanEmission(${String(rulerSpaceId).slice(0, 8)}): emission space ${String(parsed.planSpaceId).slice(0, 8)} ` +
     `has role=plan-emission but no metadata.governing.emission payload (likely depth-cap rejection during stamp)`);
   return null;
 }
@@ -266,9 +266,9 @@ export async function readPendingPlanEmission(rulerSpaceId) {
   if (!parsed) return null;
   const space = await Space.findById(parsed.planSpaceId).select("_id type metadata").lean();
   if (!space) return null;
-  const meta = space.metadata instanceof Map
-    ? space.metadata.get(NS)
-    : space.metadata?.[NS];
+  const meta = space.qualities instanceof Map
+    ? space.qualities.get(NS)
+    : space.qualities?.[NS];
   if (meta?.role !== "plan-emission" || !meta?.emission) return null;
   return { ...meta.emission, _emissionNodeId: String(space._id), _planRef: latest.planRef };
 }

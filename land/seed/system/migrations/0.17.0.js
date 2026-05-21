@@ -40,7 +40,7 @@ export default async function migrate() {
   // Use $set with a path that doesn't overwrite other permissions.see entries.
   const ruleRes = await spaces.updateMany(
     { visibility: "public" },
-    { $set: { "metadata.permissions.see.*": { requires: {} } } },
+    { $set: { "qualities.permissions.see.*": { requires: {} } } },
   );
   if (ruleRes.modifiedCount > 0) {
     log.info("Seed/0.17.0",

@@ -41,7 +41,7 @@ const router = express.Router();
 
 /**
  * GET /api/v1/land/root
- * Returns the Land root node with children visible to the requesting user:
+ * Returns the Land root space with children visible to the requesting user:
  *   - System nodes (.identity, .config, .peers)
  *   - Trees the user owns
  *   - Trees the user contributes to
@@ -71,7 +71,7 @@ router.get("/land/root", authenticateOptional, async (req, res) => {
     // A child is public if it carries a wildcard SEE permission rule
     // with empty requires — i.e. stance auth admits anyone.
     const isPublicSpace = (c) => {
-      const meta = c.metadata instanceof Map ? Object.fromEntries(c.metadata) : (c.metadata || {});
+      const meta = c.qualities instanceof Map ? Object.fromEntries(c.qualities) : (c.qualities || {});
       const rule = meta.permissions?.see?.["*"];
       if (!rule) return false;
       return !rule.requires || Object.keys(rule.requires).length === 0;
@@ -100,7 +100,7 @@ router.get("/land/root", authenticateOptional, async (req, res) => {
           isOwned: !isAnon && c.rootOwner && String(c.rootOwner) === String(beingId),
           isPublic: pub,
           queryAvailable: pub && !!(c.llmDefault && c.llmDefault !== "none"),
-          metadata: c.metadata || null,
+          metadata: c.qualities || null,
         };
       }),
     });

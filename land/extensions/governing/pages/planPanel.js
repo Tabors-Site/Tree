@@ -3,14 +3,14 @@
  *
  * Replaces the old swarm only plan panel. This one renders every step
  * kind (write, edit, branch, chapter, test, probe, note, plus any
- * extension defined kind via a generic fallback). Mounted on the node
- * detail page when the node has a non empty metadata.plan.steps.
+ * extension defined kind via a generic fallback). Mounted on the space
+ * detail page when the space has a non empty metadata.plan.steps.
  *
- * Branch kind steps link through to their child node's own plan
+ * Branch kind steps link through to their child space's own plan
  * panel. Recursive. Self similar.
  *
  * Inline edit: click pencil on a row, textarea opens for title + spec
- * (if applicable), save PATCHes /api/v1/plan/node/:spaceId/steps/:stepId.
+ * (if applicable), save PATCHes /api/v1/plan/space/:spaceId/steps/:stepId.
  */
 
 import { NS } from "../state/planSpace.js";
@@ -24,8 +24,8 @@ function esc(s) {
     .replace(/'/g, "&#39;");
 }
 
-function readPlanMeta(node) {
-  const meta = space.metadata instanceof Map ? space.metadata.get(NS) : space.metadata?.[NS];
+function readPlanMeta(space) {
+  const meta = space.qualities instanceof Map ? space.qualities.get(NS) : space.qualities?.[NS];
   return meta || null;
 }
 
@@ -82,8 +82,8 @@ function renderStepRow(step, ctx) {
         ${childHasPlan && childLink
           ? `<a class="pp-btn pp-child" href="${childLink}">▸ Open plan</a>`
           : (childLink
-              ? `<a class="pp-btn pp-child-empty" href="${childLink}">▸ Open node</a>`
-              : `<span class="pp-meta">no child node</span>`)}
+              ? `<a class="pp-btn pp-child-empty" href="${childLink}">▸ Open space</a>`
+              : `<span class="pp-meta">no child space</span>`)}
       </div>`;
 
     return `
@@ -163,7 +163,7 @@ function renderStepRow(step, ctx) {
 /**
  * Resolve plan steps + count summary for the panel from the active
  * execution-record at the parent Ruler scope. The panel mounts on a
- * plan-type node; that node's parent is the Ruler. The Ruler holds
+ * plan-type space; that space's parent is the Ruler. The Ruler holds
  * the executionApprovals ledger pointing at the active record, whose
  * stepStatuses[] is the source of truth for status display.
  *
@@ -259,17 +259,17 @@ async function readStepsFromExecutionRecord(planSpace) {
   }
 }
 
-export async function renderPlanPanel({ node, spaceId, qs, isPublicAccess }) {
+export async function renderPlanPanel({ space, spaceId, qs, isPublicAccess }) {
   try {
     if (!space) return "";
 
-    const { steps, countBuckets } = await readStepsFromExecutionRecord(node);
+    const { steps, countBuckets } = await readStepsFromExecutionRecord(space);
     if (steps.length === 0) return "";
 
     // Pre index direct children by BOTH _id and name so branch / chapter
     // rows can resolve their "open plan" links quickly. The plan-type
-    // node is a sibling of the Ruler's other children; we look at the
-    // RULER's children (the plan node's siblings) to find branch
+    // space is a sibling of the Ruler's other children; we look at the
+    // RULER's children (the plan space's siblings) to find branch
     // childSpaceId targets.
     const childrenIndex = new Map();
     try {
@@ -280,7 +280,7 @@ export async function renderPlanPanel({ node, spaceId, qs, isPublicAccess }) {
           .select("_id name metadata.governing")
           .lean();
         for (const k of kids) {
-          const kgov = k.metadata instanceof Map ? k.metadata.get("governing") : k.metadata?.governing;
+          const kgov = k.qualities instanceof Map ? k.qualities.get("governing") : k.qualities?.governing;
           const hasPlan = kgov?.role === "ruler";
           const entry = { spaceId: String(k._id), hasPlan };
           childrenIndex.set(String(k._id), entry);
@@ -348,7 +348,7 @@ export async function renderPlanPanel({ node, spaceId, qs, isPublicAccess }) {
               }
               t.disabled = true;
               try {
-                var res = await fetch("/api/v1/plan/node/${spaceId}/steps/" + encodeURIComponent(stepId), {
+                var res = await fetch("/api/v1/plan/space/${spaceId}/steps/" + encodeURIComponent(stepId), {
                   method: "PATCH",
                   headers: {"Content-Type":"application/json"},
                   body: JSON.stringify(patch),
@@ -364,7 +364,7 @@ export async function renderPlanPanel({ node, spaceId, qs, isPublicAccess }) {
       </script>`;
 
     return `
-      <section class="plan-panel" data-slot="node-detail-sections" data-ext="plan">
+      <section class="plan-panel" data-slot="space-detail-sections" data-ext="plan">
         <h2 class="pp-title">Plan <span class="pp-version">${esc(version)}</span>
           <span class="pp-meta">· ${steps.length} step${steps.length === 1 ? "" : "s"}</span>
           ${archivedLabel}

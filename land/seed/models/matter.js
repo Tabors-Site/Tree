@@ -12,7 +12,8 @@
 // storage, synchronization, addressing, and transfer.
 //
 //   ibp        — TreeOS native. content is a string (text) or null
-//                (metadata-only object). Always in sync; TreeOS owns it.
+//                (a Matter row carrying only qualities, no payload).
+//                Always in sync; TreeOS owns it.
 //   filesystem — Bridges to a file on disk. content is { path, size,
 //                mimeType }. Bytes live outside TreeOS.
 //   web        — Bridges to a URL. content is { url, fetchedAt?, cache? }.
@@ -24,11 +25,11 @@
 // Future origins (git, database, stream, service) plug in as new
 // bridging patterns. Schema does not change; origin enum extends and
 // renderers / fetchers handle the new origin. See origins.js for the
-// canonical enum and seed/matter/matters.js for CRUD.
+// canonical enum and seed/land/matter/matters.js for CRUD.
 
 import mongoose from "mongoose";
 import { v4 as uuidv4 } from "uuid";
-import { MATTER_ORIGIN } from "../matter/origins.js";
+import { MATTER_ORIGIN } from "../land/matter/origins.js";
 
 const MatterSchema = new mongoose.Schema({
   _id: { type: String, default: uuidv4 },
@@ -42,7 +43,7 @@ const MatterSchema = new mongoose.Schema({
   beingId: { type: String, ref: "Being", required: true },
 
   // Human-readable identifier. Used by set-name and by filesystem-
-  // origin mirroring (the file's name). Optional — pure-metadata
+  // origin mirroring (the file's name). Optional — pure-qualities
   // Matter may not need one. Capped at the same length as Space.name.
   name: { type: String, default: null },
 
@@ -52,7 +53,7 @@ const MatterSchema = new mongoose.Schema({
   // parentMatterId: null; descendants chain through parentMatterId.
   // Enables filesystem-origin folder-and-file structures, recursive
   // emission/step hierarchies for governing, etc. See
-  // [[project_substrate_as_universal_workspace]].
+  // workspace.
   parentMatterId: { type: String, ref: "Matter", default: null, index: true },
   children:       [{ type: String, ref: "Matter" }],
 
@@ -68,10 +69,15 @@ const MatterSchema = new mongoose.Schema({
   },
 
   // Content shape varies by origin (see origins.js). Optional so Matter
-  // can be a pure metadata-only object (origin "ibp" with no content).
+  // can be a row carrying only qualities (origin "ibp" with no payload).
   content: { type: mongoose.Schema.Types.Mixed, default: null },
 
-  metadata: {
+  // Qualities. What kind a matter is. Plato's ποιότης / qualitas:
+  // the answer to "of what sort is this?" Each extension writes to
+  // its own quality namespace via
+  // `qualities.matter.setQuality(matter, "<extName>", ...)` from
+  // seed/land/qualities.js.
+  qualities: {
     type: Map,
     of: mongoose.Schema.Types.Mixed,
     default: () => new Map(),
@@ -81,7 +87,7 @@ const MatterSchema = new mongoose.Schema({
   updatedAt: { type: Date, default: Date.now },
 });
 
-// Extensions tag Matter via metadata, each in its own namespace.
+// Extensions tag Matter via `qualities`, each in its own namespace.
 // maxMatterPerSpace (land config, default 1000) checked in createMatter
 // before write. Retention: kernel soft-deletes Matter when its spaceId
 // is set to the DELETED sentinel.

@@ -1,16 +1,15 @@
 // TreeOS Seed . AGPL-3.0 . https://treeos.ai . Tabor Holly
-// Database connection. Every query in the system flows through this.
-// Connection state is monitored. Transitions are logged. isDbHealthy()
-// is the single source of truth for DB availability across the kernel.
+//
+// My connection to MongoDB.
+//
+// Every read and write in the world I form goes through Mongoose,
+// which goes through this connection. The connection's state is the
+// land's lifeline; transitions are logged loudly so the operator
+// sees exactly when the DB dropped and when it came back.
+// isDbHealthy() is the single source of truth for DB availability.
 
 import log from "./log.js";
 import mongoose from "mongoose";
-import path from "path";
-import { fileURLToPath } from "url";
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-
 
 const mongooseUri = process.env.MONGODB_URI;
 
@@ -20,31 +19,21 @@ if (!mongooseUri) {
   process.exit(1);
 }
 
-// ─────────────────────────────────────────────────────────────────────────
-// CONNECTION OPTIONS
-// ─────────────────────────────────────────────────────────────────────────
-
 const connectionOptions = {
-  // How long to wait for initial server selection (boot-time).
-  // 5s default. Cloud databases may need 15-30s.
+  // Initial server selection (boot-time). 5s default; cloud DBs may need 15-30s.
   serverSelectionTimeoutMS: Number(process.env.MONGO_SELECTION_TIMEOUT) || 5000,
 
-  // Connection pool. Default pool is 10, which exhausts at 100 concurrent users.
+  // Connection pool. Default 10 exhausts at 100 concurrent users.
   maxPoolSize: Number(process.env.MONGO_MAX_POOL_SIZE) || 50,
   minPoolSize: Number(process.env.MONGO_MIN_POOL_SIZE) || 5,
 
-  // Per-socket timeout. If a query takes longer than this, the socket is killed.
-  // Prevents hung queries on degraded replicas from blocking the pool forever.
+  // Per-socket timeout. Hung queries on degraded replicas get killed
+  // instead of blocking the pool forever.
   socketTimeoutMS: Number(process.env.MONGO_SOCKET_TIMEOUT) || 30000,
 
-  // How often the driver pings the server to detect failures.
-  // Lower = faster failure detection. Higher = less network overhead.
+  // Failure detection cadence. Lower = faster detection, more overhead.
   heartbeatFrequencyMS: Number(process.env.MONGO_HEARTBEAT_MS) || 5000,
 };
-
-// ─────────────────────────────────────────────────────────────────────────
-// CONNECT
-// ─────────────────────────────────────────────────────────────────────────
 
 mongoose
   .connect(mongooseUri, connectionOptions)
@@ -55,13 +44,9 @@ mongoose
     process.exit(1);
   });
 
-// ─────────────────────────────────────────────────────────────────────────
-// CONNECTION EVENT MONITORING
-// ─────────────────────────────────────────────────────────────────────────
-// These fire after the initial connection succeeds. They cover the entire
-// lifetime of the process. Every state transition is logged so operators
-// see exactly when the DB dropped and when it came back.
-
+// Lifetime event monitoring. These fire after the initial connection
+// succeeds and cover the rest of the process. Every transition logs
+// so the operator can see DB-side disruption clearly.
 mongoose.connection.on("disconnected", () => {
   log.error("DB", "MongoDB disconnected. Queries will fail until reconnected.");
 });
@@ -74,23 +59,15 @@ mongoose.connection.on("error", (err) => {
   log.error("DB", `MongoDB connection error: ${err.message}`);
 });
 
-// Close cleanly on process termination
 process.on("SIGTERM", () => {
   mongoose.connection.close(false).then(() => {
     log.verbose("DB", "MongoDB connection closed (SIGTERM)");
   });
 });
 
-// ─────────────────────────────────────────────────────────────────────────
-// HEALTH CHECK
-// ─────────────────────────────────────────────────────────────────────────
-
-/**
- * Check if the database connection is healthy.
- * Returns true if MongoDB is connected and responsive.
- * The conversation loop checks this before entering the tool loop.
- * readyState: 0 = disconnected, 1 = connected, 2 = connecting, 3 = disconnecting
- */
+// readyState: 0 disconnected, 1 connected, 2 connecting, 3 disconnecting.
+// The conversation loop checks this before entering the tool loop so a
+// tool result can tell the AI "database unavailable" instead of hanging.
 export function isDbHealthy() {
   return mongoose.connection.readyState === 1;
 }

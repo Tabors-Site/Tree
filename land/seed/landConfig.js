@@ -1,32 +1,35 @@
 // TreeOS Seed . AGPL-3.0 . https://treeos.ai . Tabor Holly
 //
-// Land configuration. Single source of truth for runtime settings.
-// Stored in the .config land seed space's metadata Map. Every
-// getLandConfigValue / setLandConfigValue in the system flows through
-// here.
+// My remembered settings, across reboots.
 //
-// Lives in seed/, same reason landRoot does. Config values are
-// matter on a space the seed formed — stored in the metadata Map
-// of the .config land seed space at boot. These helpers are the
-// seed reading and writing its own remembered settings across
-// reboots. The land contains code peers around the seed (protocols,
-// transports, extensions, the boot files) but the configuration of
-// the runtime IS the seed's, and it lives where the seed runs.
+// At genesis I plant the `.config` land seed space and write the
+// boot-time settings into its metadata Map. Every later boot, I
+// read that Map back through `initLandConfig()` and the values are
+// who I am operationally on this land. `getLandConfigValue(key)`
+// and `setLandConfigValue(key, value)` are the only sanctioned
+// paths in or out; every caller in the system flows through them.
+//
+// The land contains code peers around me (protocols, transports,
+// extensions, the boot files) but the configuration of the runtime
+// is mine, and it lives where I run.
 
 import log from "./system/log.js";
 import Space from "./models/space.js";
-import { SEED_SPACE } from "./space/seedSpaces.js";
+import { SEED_SPACE } from "./land/space/seedSpaces.js";
 
 let configCache = null;
 let initialized = false;
 let cachedLandUrl = null;
 
-// Derived from LAND_DOMAIN + PORT, with TREE_FRONTEND_DOMAIN as override.
+// The land's public connection URL. Other lands, browsers, and the
+// IBP discovery endpoint all reach me at this URL. Derived from
+// LAND_DOMAIN + PORT; LAND_PUBLIC_URL overrides the whole value for
+// reverse-proxy deploys where the constructed URL would be wrong.
 // Port suffix only for local domains; public domains sit behind proxies.
 export function getLandUrl() {
   if (cachedLandUrl) return cachedLandUrl;
-  if (process.env.TREE_FRONTEND_DOMAIN) {
-    cachedLandUrl = process.env.TREE_FRONTEND_DOMAIN.replace(/\/+$/, "");
+  if (process.env.LAND_PUBLIC_URL) {
+    cachedLandUrl = process.env.LAND_PUBLIC_URL.replace(/\/+$/, "");
     return cachedLandUrl;
   }
   const raw = process.env.LAND_DOMAIN || "localhost";
@@ -94,14 +97,14 @@ function deepCopy(value) {
 async function loadConfigFromDb() {
   try {
     const configNode = await Space.findOne({ seedSpace: SEED_SPACE.CONFIG }).lean();
-    if (!configNode || !configNode.metadata) {
+    if (!configNode || !configNode.qualities) {
       log.warn("Land", "No .config land seed space found or metadata is empty. Using empty config.");
       configCache = {};
       return;
     }
-    const raw = configNode.metadata instanceof Map
-      ? Object.fromEntries(configNode.metadata)
-      : { ...configNode.metadata };
+    const raw = configNode.qualities instanceof Map
+      ? Object.fromEntries(configNode.qualities)
+      : { ...configNode.qualities };
 
     // Strip keys that would fail validation (manual DB edits, proto
     // pollution injected directly into MongoDB, Mongoose lean() leaks).
@@ -140,10 +143,10 @@ export async function setLandConfigValue(key, value, { internal } = {}) {
 
   const result = await Space.updateOne(
     { seedSpace: SEED_SPACE.CONFIG },
-    { $set: { [`metadata.${key}`]: value } }
+    { $set: { [`qualities.${key}`]: value } }
   );
 
-  // No matched document means .config is gone — fail loud rather than
+  // No matched document means .config is gone. Fail loud rather than
   // silently updating only the cache.
   if (result.matchedCount === 0) {
     throw new Error("Config write failed: .config land seed space not found. Land may need repair.");
@@ -163,7 +166,7 @@ export async function deleteLandConfigValue(key, { internal } = {}) {
 
   await Space.updateOne(
     { seedSpace: SEED_SPACE.CONFIG },
-    { $unset: { [`metadata.${key}`]: 1 } }
+    { $unset: { [`qualities.${key}`]: 1 } }
   );
 
   if (configCache) delete configCache[key];

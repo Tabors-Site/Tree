@@ -230,21 +230,21 @@ h5 { color: rgba(255,255,255,0.55); font-size: 11px; text-transform: uppercase; 
   height: auto;
   max-height: 280px;
 }
-.gov-minimap-node circle {
+.gov-minimap-space circle {
   fill: rgba(120,120,130,0.3);
   stroke: rgba(255,255,255,0.4);
   stroke-width: 1.5;
   transition: stroke 0.18s, fill 0.18s, r 0.18s;
 }
-.gov-minimap-node:hover circle { stroke: #fff; r: 13; }
-.gov-minimap-node text.gov-minimap-emoji { font-size: 11px; pointer-events: none; }
-.gov-minimap-node[data-state="idle"] circle { fill: rgba(120,120,130,0.3); stroke: rgba(255,255,255,0.4); }
-.gov-minimap-node[data-state="plan"] circle { fill: rgba(59,130,246,0.4); stroke: #60a5fa; }
-.gov-minimap-node[data-state="contracts"] circle { fill: rgba(139,92,246,0.4); stroke: #c084fc; }
-.gov-minimap-node[data-state="dispatch"] circle { fill: rgba(34,197,94,0.4); stroke: #4ade80; }
-.gov-minimap-node[data-state="running"] circle { fill: rgba(251,146,60,0.5); stroke: #fb923c; animation: govPulse 1.6s ease-in-out infinite; }
-.gov-minimap-node[data-state="completed"] circle { fill: rgba(34,197,94,0.3); stroke: rgba(34,197,94,0.75); }
-.gov-minimap-node[data-state="failed"] circle { fill: rgba(239,68,68,0.4); stroke: #f87171; }
+.gov-minimap-space:hover circle { stroke: #fff; r: 13; }
+.gov-minimap-space text.gov-minimap-emoji { font-size: 11px; pointer-events: none; }
+.gov-minimap-space[data-state="idle"] circle { fill: rgba(120,120,130,0.3); stroke: rgba(255,255,255,0.4); }
+.gov-minimap-space[data-state="plan"] circle { fill: rgba(59,130,246,0.4); stroke: #60a5fa; }
+.gov-minimap-space[data-state="contracts"] circle { fill: rgba(139,92,246,0.4); stroke: #c084fc; }
+.gov-minimap-space[data-state="dispatch"] circle { fill: rgba(34,197,94,0.4); stroke: #4ade80; }
+.gov-minimap-space[data-state="running"] circle { fill: rgba(251,146,60,0.5); stroke: #fb923c; animation: govPulse 1.6s ease-in-out infinite; }
+.gov-minimap-space[data-state="completed"] circle { fill: rgba(34,197,94,0.3); stroke: rgba(34,197,94,0.75); }
+.gov-minimap-space[data-state="failed"] circle { fill: rgba(239,68,68,0.4); stroke: #f87171; }
 .gov-minimap-legend {
   display: flex;
   gap: 12px;

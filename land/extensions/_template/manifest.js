@@ -60,7 +60,7 @@ export default {
     jobs: false,                    // or "./jobs.js"
 
     // Plantable seeds. An operator plants a seed at a position with
-    // `core.do(node, "plant-seed", { name: "<ext>:<seed>" })`.
+    // `core.do(space, "plant-seed", { name: "<ext>:<seed>" })`.
     // Each recipe file exports { plant(ctx) } and the loader auto-
     // namespaces the seed name with the extension.
     seeds: {
@@ -87,7 +87,7 @@ export default {
         // { name: "my-ext:something", data: "{ field }", description: "What it means" },
       ],
       listens: [
-        // "afterMatter", "afterMetadataWrite", "enrichContext",
+        // "afterMatter", "afterQualityWrite", "enrichContext",
       ],
     },
 

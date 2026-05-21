@@ -14,8 +14,8 @@
 import { getLandDomain } from "./address.js";
 import { DESCRIPTOR_VERSION } from "./descriptor.js";
 import { getLandConfigValue, getLandUrl } from "../landConfig.js";
-import { listRoles } from "../being/roles/registry.js";
-import { listSeeds } from "../space/seeds.js";
+import { listRoles } from "../cognition/roles/registry.js";
+import { listSeeds } from "../land/space/seeds.js";
 
 // The version of the IBP wire protocol this build implements. Bumps
 // when the envelope, address grammar, or verb contract changes in a

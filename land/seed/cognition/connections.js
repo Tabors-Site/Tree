@@ -63,9 +63,9 @@ const BLOCKED_HOSTS = new Set([
   "localhost",
   "0.0.0.0",
   "[::1]",
-  "metadata.google.internal",
+  "qualities.google.internal",
   "169.254.169.254",
-  "metadata.internal",
+  "qualities.internal",
 ]);
 
 // Auto-block this land's own hostname to prevent SSRF loops
@@ -364,7 +364,7 @@ export async function updateLlmConnection(beingId, connectionId, { name, baseUrl
   );
 
   // Bust cache if this connection is currently assigned
-  const userLlmMeta = being.metadata instanceof Map ? being.metadata.get("userLlm") : being.metadata?.userLlm;
+  const userLlmMeta = being.qualities instanceof Map ? being.qualities.get("userLlm") : being.qualities?.userLlm;
   const userSlots = userLlmMeta?.slots || {};
   if (being.llmDefault === connectionId || Object.values(userSlots).includes(connectionId)) {
     clearBeingClientCache(beingId);
@@ -390,11 +390,11 @@ export async function deleteLlmConnection(beingId, connectionId) {
     if (being.llmDefault === connectionId) {
       updates.llmDefault = null;
     }
-    const beingLlmMeta = being.metadata instanceof Map ? being.metadata.get("userLlm") : being.metadata?.userLlm;
+    const beingLlmMeta = being.qualities instanceof Map ? being.qualities.get("userLlm") : being.qualities?.userLlm;
     const beingSlots = beingLlmMeta?.slots || {};
     for (const [s, val] of Object.entries(beingSlots)) {
       if (val === connectionId) {
-        updates[`metadata.userLlm.slots.${s}`] = null;
+        updates[`qualities.userLlm.slots.${s}`] = null;
       }
     }
     if (Object.keys(updates).length > 0) {
@@ -413,8 +413,8 @@ export async function deleteLlmConnection(beingId, connectionId) {
   const extSlots = getAllRootLlmSlots().filter(s => s !== "default");
   for (const slot of extSlots) {
     await Space.updateMany(
-      { [`metadata.llm.slots.${slot}`]: connectionId },
-      { $set: { [`metadata.llm.slots.${slot}`]: null } },
+      { [`qualities.llm.slots.${slot}`]: connectionId },
+      { $set: { [`qualities.llm.slots.${slot}`]: null } },
     );
   }
 
@@ -441,7 +441,7 @@ export async function assignConnection(beingId, slot, connectionId) {
     });
   } else {
     await Being.findByIdAndUpdate(beingId, {
-      $set: { [`metadata.userLlm.slots.${slot}`]: safeConnId },
+      $set: { [`qualities.userLlm.slots.${slot}`]: safeConnId },
     });
   }
 
@@ -457,7 +457,7 @@ export async function assignConnection(beingId, slot, connectionId) {
  * and seed/cognition/llmClient.js).
  *
  * "main" goes to `space.llmDefault`; every other slot writes to
- * `space.metadata.llm.slots.<slot>`. Pass `connectionId: null` to clear.
+ * `space.qualities.llm.slots.<slot>`. Pass `connectionId: null` to clear.
  *
  * Connection ownership is verified through the caller's identity: the
  * connection must belong to a being the caller can resolve. The caller
@@ -485,7 +485,7 @@ export async function assignSpaceConnection(spaceId, slot, connectionId, { owner
       await Space.updateOne({ _id: spaceId }, { $set: { llmDefault: null } });
     }
   } else {
-    const path = `metadata.llm.slots.${slot}`;
+    const path = `qualities.llm.slots.${slot}`;
     if (safeConnId) {
       await Space.updateOne({ _id: spaceId }, { $set: { [path]: safeConnId } });
     } else {

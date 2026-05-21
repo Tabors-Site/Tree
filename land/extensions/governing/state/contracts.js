@@ -1,6 +1,6 @@
 // Governing contracts API. Symmetric with plan emissions and
 // execution records: each Contractor invocation produces a
-// `contracts-emission-N` child node under the contracts trio
+// `contracts-emission-N` child space under the contracts trio
 // member, immutable, with the contracts the Ruler ratified at that
 // emission. The Ruler's metadata.governing.contractApprovals ledger
 // holds ONE entry per emission (matching planApprovals /
@@ -8,12 +8,12 @@
 //
 // Trio shape per Ruler scope:
 //
-//   ruler-node
-//   ├── plan-node
+//   ruler-space
+//   ├── plan-space
 //   │   └── plan-emission-N        (Planner's ring records)
-//   ├── contracts-node
+//   ├── contracts-space
 //   │   └── contracts-emission-N   (Contractor's ring records)
-//   └── execution-node
+//   └── execution-space
 //       └── execution-record-N     (Foreman's ring records)
 //
 // Each emission is immutable bark; the Ruler's per-role approval
@@ -81,7 +81,7 @@ async function nextEmissionOrdinal(contractsSpaceId) {
 }
 
 /**
- * Create a contracts-emission-N child node under the contracts trio
+ * Create a contracts-emission-N child space under the contracts trio
  * member. Stamps role + the structured emission payload.
  */
 async function createContractsEmission({ contractsSpaceId, ordinal, payload, beingId, identity = null, core }) {
@@ -123,8 +123,8 @@ async function createContractsEmission({ contractsSpaceId, ordinal, payload, bei
     // Phase 3 migration ([[project_seed_four_verbs_only]]): verb-surface
     // write. merge:true preserves NS atomically.
     const space = await Space.findById(created._id);
-    if (node) {
-      await core.do(node, "set-meta", {
+    if (space) {
+      await core.do(space, "set-meta", {
         namespace: NS,
         data: {
           role: "contracts-emission",
@@ -149,7 +149,7 @@ async function createContractsEmission({ contractsSpaceId, ordinal, payload, bei
 /**
  * Append ONE approval entry to metadata.governing.contractApprovals on
  * the Ruler scope. Symmetric with planApprovals/executionApprovals:
- * one entry per emission, references the emission node id.
+ * one entry per emission, references the emission space id.
  */
 async function appendApproval({
   rulerSpaceId,
@@ -170,9 +170,9 @@ async function appendApproval({
   const space = await Space.findById(rulerSpaceId);
   if (!space) return null;
 
-  const meta = space.metadata instanceof Map
-    ? space.metadata.get(NS)
-    : space.metadata?.[NS];
+  const meta = space.qualities instanceof Map
+    ? space.qualities.get(NS)
+    : space.qualities?.[NS];
   const existing = Array.isArray(meta?.contractApprovals) ? meta.contractApprovals : [];
 
   const { v4: uuid } = await import("uuid");
@@ -193,7 +193,7 @@ async function appendApproval({
 
   // Phase 3 migration: verb-surface write. merge:true preserves NS atomically.
   if (!core?.do) throw new Error("appendApproval requires `core` (verb surface)");
-  await core.do(node, "set-meta", {
+  await core.do(space, "set-meta", {
     namespace: NS,
     data: { contractApprovals: [...existing, entry] },
     merge: true,
@@ -206,9 +206,9 @@ async function appendApproval({
  */
 function readApprovalLedger(rulerSpace) {
   if (!rulerSpace) return [];
-  const meta = rulerSpace.metadata instanceof Map
-    ? rulerSpace.metadata.get(NS)
-    : rulerSpace.metadata?.[NS];
+  const meta = rulerSpace.qualities instanceof Map
+    ? rulerSpace.qualities.get(NS)
+    : rulerSpace.qualities?.[NS];
   return Array.isArray(meta?.contractApprovals) ? meta.contractApprovals : [];
 }
 
@@ -219,7 +219,7 @@ function readApprovalLedger(rulerSpace) {
 async function readActiveContractApproval(rulerSpaceId) {
   const space = await Space.findById(rulerSpaceId).select("_id metadata").lean();
   if (!space) return null;
-  const ledger = readApprovalLedger(node);
+  const ledger = readApprovalLedger(space);
   if (!ledger.length) return null;
   const supersededSet = new Set();
   for (const entry of ledger) {
@@ -239,7 +239,7 @@ async function readActiveContractApproval(rulerSpaceId) {
 /**
  * Read the active contracts emission at a Ruler scope. Walks the
  * approval ledger to find the active contractsRef, resolves to the
- * emission node, returns the emission payload (with `_emissionNodeId`
+ * emission space, returns the emission payload (with `_emissionNodeId`
  * + `_approvalId` for callers that need the refs).
  */
 export async function readActiveContractsEmission(rulerSpaceId) {
@@ -247,9 +247,9 @@ export async function readActiveContractsEmission(rulerSpaceId) {
   if (!active?.contractsRef) return null;
   const space = await Space.findById(active.contractsRef).select("_id metadata").lean();
   if (!space) return null;
-  const meta = space.metadata instanceof Map
-    ? space.metadata.get(NS)
-    : space.metadata?.[NS];
+  const meta = space.qualities instanceof Map
+    ? space.qualities.get(NS)
+    : space.qualities?.[NS];
   if (meta?.role !== "contracts-emission" || !meta?.emission) return null;
   return {
     ...meta.emission,
@@ -270,10 +270,10 @@ export async function readActiveContractsEmission(rulerSpaceId) {
  *   2. Validate each contract via LCA when consumerNodeIds are present.
  *   3. Compute the contract set's structural fingerprint. If it
  *      matches the active emission's, skip — idempotent re-emission.
- *   4. Create a contracts-emission-N child node with the accepted
+ *   4. Create a contracts-emission-N child space with the accepted
  *      contracts in metadata.governing.emission.
  *   5. Append a single contractApproval entry to the Ruler scope,
- *      referencing the emission node id, with supersedes chain to
+ *      referencing the emission space id, with supersedes chain to
  *      the prior active approval.
  *   6. Fire governing:contractRatified.
  *
@@ -293,7 +293,7 @@ export async function setContracts({
   // Inheritance declaration form. When inheritsFrom is set, the
   // emission represents "this child scope's contracts are the parent's"
   // rather than a list of new commitments. contracts may be empty.
-  // The emission still materializes a node + approval ledger entry so
+  // The emission still materializes a space + approval ledger entry so
   // dispatch-execution sees a ratified state and Pass 2 courts have a
   // signed record of the inheritance decision.
   inheritsFrom = null,
@@ -377,7 +377,7 @@ export async function setContracts({
 
   // Materialize the new emission. Inheritance declarations carry an
   // empty contracts array plus inheritsFrom/parentContractsApplied
-  // metadata so the emission node is self-describing.
+  // metadata so the emission space is self-describing.
   const ordinal = await nextEmissionOrdinal(contractsSpace._id);
   const payload = {
     ordinal,
@@ -403,7 +403,7 @@ export async function setContracts({
   // Append the approval ledger entry. Supersedes the prior active.
   // Inheritance declarations get the inheritedFrom/parentContractsApplied
   // fields stamped on the approval entry too, so Pass 2 courts can read
-  // the inheritance commitment without dereferencing the emission node.
+  // the inheritance commitment without dereferencing the emission space.
   const approvalEntry = await appendApproval({
     rulerSpaceId: scopeSpaceId,
     contractsEmissionNodeId: emissionSpace._id,
@@ -447,7 +447,7 @@ export async function setContracts({
 // ─────────────────────────────────────────────────────────────────────
 
 /**
- * Read all contracts in force at a node's position. Walks up Ruler
+ * Read all contracts in force at a space's position. Walks up Ruler
  * scopes; for each Ruler, reads the active contracts emission;
  * returns the union of contract entries.
  *
@@ -467,9 +467,9 @@ export async function readContracts(spaceId) {
     visited.add(cursor);
     const space = await Space.findById(cursor).select("_id parent metadata").lean();
     if (!space) break;
-    const meta = space.metadata instanceof Map
-      ? Object.fromEntries(space.metadata)
-      : (space.metadata || {});
+    const meta = space.qualities instanceof Map
+      ? Object.fromEntries(space.qualities)
+      : (space.qualities || {});
     const isRuler = meta[NS]?.role === "ruler";
     if (isRuler) {
       const emission = await readActiveContractsEmission(cursor);
@@ -525,5 +525,5 @@ export async function readApprovalsAtRuler(rulerSpaceId) {
   if (!rulerSpaceId) return [];
   const space = await Space.findById(rulerSpaceId).select("_id metadata").lean();
   if (!space) return [];
-  return readApprovalLedger(node);
+  return readApprovalLedger(space);
 }

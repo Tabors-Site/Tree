@@ -30,7 +30,7 @@ import { getLandDomain } from "./address.js";
 import Being from "../models/being.js";
 import Space from "../models/space.js";
 import { getLandRootId } from "../landRoot.js";
-import { resolveRootSpace } from "../space/spaceFetch.js";
+import { resolveRootSpace } from "../land/space/spaceFetch.js";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 

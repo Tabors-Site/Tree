@@ -102,9 +102,9 @@ export default {
 | `ownership` | Tree ownership | `addContributor`, `removeContributor`, `transferOwnership` |
 | `tree` | Tree infrastructure | `getAncestorChain`, `checkIntegrity`, `isTreeAlive` |
 | `cascade` | Signal propagation | `deliverCascade` |
-| `metadata` | Space metadata | `getExtMeta`, `readNs`, `setExtMeta`, `mergeExtMeta`, `incExtMeta`, `pushExtMeta`, `addToExtMetaSet`, `batchSetExtMeta`, `unsetExtMeta` |
-| `beingMetadata` | Being metadata (humans and AI beings) | `getBeingMeta`, `readBeingNs`, `setBeingMeta`, `mergeBeingMeta`, `incBeingMeta`, `pushBeingMeta`, `addToBeingMetaSet`, `batchSetBeingMeta`, `unsetBeingMeta` |
-| `matterMetadata` | Matter metadata | `getMatterMeta`, `readMatterNs`, `setMatterMeta`, `mergeMatterMeta`, `incMatterMeta`, `pushMatterMeta`, `addToMatterMetaSet`, `batchSetMatterMeta`, `unsetMatterMeta` |
+| `metadata` | Space metadata | `qualities.space.getQuality`, `readNs`, `qualities.space.setQuality`, `qualities.space.mergeQuality`, `qualities.space.incQuality`, `qualities.space.pushQuality`, `qualities.space.addToQualitySet`, `qualities.space.batchSetQuality`, `qualities.space.unsetQuality` |
+| `beingMetadata` | Being metadata (humans and AI beings) | `qualities.being.getQuality`, `readBeingNs`, `qualities.being.setQuality`, `mergeBeingMeta`, `incBeingMeta`, `pushBeingMeta`, `addToBeingMetaSet`, `batchSetBeingMeta`, `unsetBeingMeta` |
+| `matterMetadata` | Matter metadata | `qualities.matter.getQuality`, `readMatterNs`, `qualities.matter.setQuality`, `mergeMatterMeta`, `incMatterMeta`, `pushMatterMeta`, `addToMatterMetaSet`, `batchSetMatterMeta`, `unsetMatterMeta` |
 | `protocol` | Error codes, constants | `sendOk`, `sendError`, `ERR`, `WS`, `CASCADE` |
 | `websocket` | Real-time events | `emitToUser`, `registerSocketHandler` |
 | `mcp` | MCP connections | `connectToMCP`, `closeMCPClient` |
@@ -123,9 +123,9 @@ Extensions load in topological order. If extension A depends on extension B (`ne
 
 ### hooks and modes are always available
 
-`core.hooks`, `core.modes`, `core.metadata`, `core.beingMetadata`, and `core.matterMetadata` are injected into every scoped core regardless of declaration. You never need to declare them. They are core infrastructure available to all extensions.
+`core.hooks`, `core.modes`, `core.qualities`, `core.beingMetadata`, and `core.matterMetadata` are injected into every scoped core regardless of declaration. You never need to declare them. They are core infrastructure available to all extensions.
 
-The three metadata modules mirror each other. Every namespaced operation that works on a space also works on a being and on a matter, with the function name carrying the target type (`setExtMeta` / `setBeingMeta` / `setMatterMeta`, and so on). Pick the module that matches the document you are tagging. They are functionally peer modules, not a hierarchy.
+The three metadata modules mirror each other. Every namespaced operation that works on a space also works on a being and on a matter, with the function name carrying the target type (`qualities.space.setQuality` / `qualities.being.setQuality` / `qualities.matter.setQuality`, and so on). Pick the module that matches the document you are tagging. They are functionally peer modules, not a hierarchy.
 
 ### Extension-provided services
 
@@ -449,9 +449,9 @@ Return value: `{ response, navigatedTo, ... }`. The response is sent to the clie
 | Modes | `core.modes.*` | Yes (always injected) |
 | Orchestrators | `core.orchestrators.*` | Yes |
 | Ownership | `core.ownership.*` | Yes |
-| Tree | `core.tree.*` | Yes |
+| Space | `core.space.*` | Yes |
 | Space Locks | `core.spaceLocks.*` | Yes |
-| Metadata | `core.metadata.*` (namespace-enforced, 7 functions) | Yes (always injected) |
+| Metadata | `core.qualities.*` (namespace-enforced, 7 functions) | Yes (always injected) |
 | User Metadata | `core.beingMetadata.*` (6 functions) | Yes (always injected) |
 | Scope | `core.scope.*` | Yes |
 | Cascade | `core.cascade.*` | Yes |
@@ -598,9 +598,9 @@ Space locks are short-lived, in-memory, sorted-acquisition (prevents deadlocks),
 
 ## Data Migrations
 
-Extensions store data in `space.metadata` and `user.metadata`. This data is freeform. No schema validation at the DB layer. This is intentional: it keeps the system flexible.
+Extensions store data in `space.qualities` and `user.qualities`. This data is freeform. No schema validation at the DB layer. This is intentional: it keeps the system flexible.
 
-But over time, extensions change. A v1 extension stores `metadata.myExt = { count: 5 }`. Version 2 restructures to `metadata.myExt = { stats: { count: 5, total: 100 } }`. Existing spaces in the database still have the v1 shape. Without migrations, the extension breaks on old data.
+But over time, extensions change. A v1 extension stores `qualities.myExt = { count: 5 }`. Version 2 restructures to `qualities.myExt = { stats: { count: 5, total: 100 } }`. Existing spaces in the database still have the v1 shape. Without migrations, the extension breaks on old data.
 
 **Every extension that writes to metadata should declare a schema version and provide migrations.** This is not optional for production extensions. It is what protects user data over years of updates.
 
@@ -625,11 +625,11 @@ export default [
     version: 1,
     async up() {
       // v0 -> v1: move flat values into nested structure
-      const spaces = await Space.find({ "metadata.myExt": { $exists: true } }).select("metadata");
+      const spaces = await Space.find({ "qualities.myExt": { $exists: true } }).select("metadata");
       for (const space of spaces) {
-        const old = space.metadata.get("myExt");
+        const old = space.qualities.get("myExt");
         if (old && !old.stats) {
-          space.metadata.set("myExt", { stats: { count: old.count || 0 } });
+          space.qualities.set("myExt", { stats: { count: old.count || 0 } });
           space.markModified("metadata");
           await space.save();
         }
@@ -640,12 +640,12 @@ export default [
     version: 2,
     async up() {
       // v1 -> v2: add total field with default
-      const spaces = await Space.find({ "metadata.myExt.stats": { $exists: true } }).select("metadata");
+      const spaces = await Space.find({ "qualities.myExt.stats": { $exists: true } }).select("metadata");
       for (const space of spaces) {
-        const data = space.metadata.get("myExt");
+        const data = space.qualities.get("myExt");
         if (data?.stats && data.stats.total === undefined) {
           data.stats.total = 0;
-          space.metadata.set("myExt", data);
+          space.qualities.set("myExt", data);
           space.markModified("metadata");
           await space.save();
         }
@@ -801,32 +801,32 @@ Jobs are auto-started after DB connect via `startExtensionJobs()`.
 
 ## Per-Space Data Storage (metadata)
 
-Extensions MUST store per-space data in `space.metadata` under their extension name.
-Do NOT add fields to the core Space schema. Use `core.metadata` from the services bundle:
+Extensions MUST store per-space data in `space.qualities` under their extension name.
+Do NOT add fields to the core Space schema. Use `core.qualities` from the services bundle:
 
 ```js
 // In init(core) or any function with core in scope:
 
 // Read
-const data = core.metadata.getExtMeta(space, "my-extension");  // returns {} if empty
+const data = core.qualities.qualities.space.getQuality(space, "my-extension");  // returns {} if empty
 
 // Write (full replace, needs document)
-await core.metadata.setExtMeta(space, "my-extension", { wallets: {}, config: {} });
+await core.qualities.qualities.space.setQuality(space, "my-extension", { wallets: {}, config: {} });
 
 // Partial update (shallow merge, needs document)
-await core.metadata.mergeExtMeta(space, "my-extension", { lastSync: new Date() });
+await core.qualities.qualities.space.mergeQuality(space, "my-extension", { lastSync: new Date() });
 
 // Atomic increment (by ID or document, no read-modify-write)
-await core.metadata.incExtMeta(spaceId, "my-extension", "counter", 1);
+await core.qualities.qualities.space.incQuality(spaceId, "my-extension", "counter", 1);
 
 // Atomic capped array push (by ID or document)
-await core.metadata.pushExtMeta(spaceId, "my-extension", "history", { ts: Date.now() }, 50);
+await core.qualities.qualities.space.pushQuality(spaceId, "my-extension", "history", { ts: Date.now() }, 50);
 
 // Atomic multi-field set (by ID or document)
-await core.metadata.batchSetExtMeta(spaceId, "my-extension", { a: 1, b: 2, c: 3 });
+await core.qualities.qualities.space.batchSetQuality(spaceId, "my-extension", { a: 1, b: 2, c: 3 });
 
 // Remove namespace entirely (on uninstall or cleanup)
-await core.metadata.unsetExtMeta(spaceId, "my-extension");
+await core.qualities.qualities.space.unsetQuality(spaceId, "my-extension");
 ```
 
 For files outside `init()` (core.js, tools.js, routes.js), receive metadata through a configure pattern:
@@ -835,17 +835,17 @@ For files outside `init()` (core.js, tools.js, routes.js), receive metadata thro
 // In core.js:
 let _metadata = null;
 export function configure({ metadata }) { _metadata = metadata; }
-// Then use _metadata.getExtMeta, _metadata.setExtMeta, etc.
+// Then use _metadata.qualities.space.getQuality, _metadata.qualities.space.setQuality, etc.
 
 // In index.js init(core):
 import { configure } from "./core.js";
-configure({ metadata: core.metadata });
+configure({ metadata: core.qualities });
 ```
 
 User metadata follows the same pattern via `core.beingMetadata`:
 
 ```js
-const prefs = core.beingMetadata.getBeingMeta(user, "my-extension");
+const prefs = core.beingMetadata.qualities.being.getQuality(user, "my-extension");
 await core.beingMetadata.incBeingMeta(userId, "my-extension", "visits", 1);
 await core.beingMetadata.batchSetBeingMeta(userId, "my-extension", { theme: "dark" });
 ```
@@ -859,21 +859,21 @@ Convention:
 - Data is `Mixed` type, so use plain objects and arrays (no Mongoose subdocument features)
 - The helpers handle `markModified("metadata")` automatically
 - Reading metadata from core code (e.g. treeData) should use:
-  `(space.metadata instanceof Map ? space.metadata.get("name") : space.metadata?.name)`
+  `(space.qualities instanceof Map ? space.qualities.get("name") : space.qualities?.name)`
 
 ### Scaffolding Spaces (the `role` convention)
 
 Extensions that create a tree structure on install (food, fitness, recovery, kb, etc.) MUST set a `role` field in their metadata namespace on every scaffolded space:
 
 ```js
-await core.metadata.setExtMeta(logSpace, "food", { role: "log" });
-await core.metadata.setExtMeta(mealsSpace, "food", { role: "meals" });
-await core.metadata.setExtMeta(profileSpace, "food", { role: "profile" });
+await core.qualities.qualities.space.setQuality(logSpace, "food", { role: "log" });
+await core.qualities.qualities.space.setQuality(mealsSpace, "food", { role: "meals" });
+await core.qualities.qualities.space.setQuality(profileSpace, "food", { role: "profile" });
 ```
 
 The `role` field is the structural marker. It means "this space is load-bearing for my extension." TreeOS base registers a generic `beforeSpaceDelete` hook that checks every space being deleted. If any extension namespace in the space's metadata contains a `role` field, the delete is cancelled with a message naming the extension and role.
 
-The handler does not know what food is. It does not know what fitness is. It sees `metadata.food.role = "log"` and knows that space is structural to something. Any extension that scaffolds spaces and sets `role` on them gets delete protection automatically.
+The handler does not know what food is. It does not know what fitness is. It sees `qualities.food.role = "log"` and knows that space is structural to something. Any extension that scaffolds spaces and sets `role` on them gets delete protection automatically.
 
 When looking up scaffolded spaces at runtime, query by role, not by name or stored ID:
 
@@ -881,7 +881,7 @@ When looking up scaffolded spaces at runtime, query by role, not by name or stor
 const children = await Space.find({ parent: rootId }).select("_id name metadata").lean();
 const spaces = {};
 for (const child of children) {
-  const meta = child.metadata?.get?.("food") || child.metadata?.food;
+  const meta = child.qualities?.get?.("food") || child.qualities?.food;
   if (meta?.role) spaces[meta.role] = { id: String(child._id), name: child.name };
 }
 // spaces.log, spaces.meals, spaces.profile — found by role, not name
@@ -989,7 +989,7 @@ Any space can allow or block specific MCP tools. This lets you create branches w
 **How it works:** Tools are resolved in three layers:
 1. Mode base tools (what the active mode defines)
 2. Extension tools (what extensions inject via the loader)
-3. Space config (`metadata.tools.allowed[]` / `metadata.tools.blocked[]`)
+3. Space config (`qualities.tools.allowed[]` / `qualities.tools.blocked[]`)
 
 Space config inherits from parent to child. A tool blocked at a parent stays blocked for all descendants unless explicitly re-allowed.
 
@@ -1014,10 +1014,10 @@ tools-clear                      Remove all local config (inherit from parent)
 
 **From extension code:**
 ```js
-// Allow a tool programmatically (use core.metadata, never import directly)
-const tools = core.metadata.getExtMeta(space, "tools") || {};
+// Allow a tool programmatically (use core.qualities, never import directly)
+const tools = core.qualities.qualities.space.getQuality(space, "tools") || {};
 tools.allowed = [...(tools.allowed || []), "my-custom-tool"];
-await core.metadata.setExtMeta(space, "tools", tools);
+await core.qualities.qualities.space.setQuality(space, "tools", tools);
 ```
 
 ## Per-Space Mode Overrides
@@ -1025,7 +1025,7 @@ await core.metadata.setExtMeta(space, "tools", tools);
 Any space can override which AI mode handles a specific intent. This lets different branches think differently.
 
 **How it works:** Mode resolution has three layers:
-1. Per-space override in `metadata.modes[intent]`
+1. Per-space override in `qualities.modes[intent]`
 2. Default mapping for the zone (e.g., `tree:respond`)
 3. Big mode fallback
 
@@ -1061,7 +1061,7 @@ Any space can block or restrict entire extensions. This is the broadest capabili
 | **restricted "read"** | read-only tools only | all fire | all resolve | allowed |
 | **blocked** | none | skipped | skipped | rejected |
 
-**Storage:** `space.metadata.extensions = { blocked: ["solana"], restricted: { "food": "read" } }`
+**Storage:** `space.qualities.extensions = { blocked: ["solana"], restricted: { "food": "read" } }`
 
 **Inheritance:** walks parent chain, accumulates. A child never unblocks what a parent blocked.
 
@@ -1111,7 +1111,7 @@ The fitness coach can reference nutrition data while planning workouts. The food
 
 ### Confined extensions
 
-Extensions can declare `scope: "confined"` in their manifest. Confined extensions are inactive everywhere by default. They must be explicitly allowed at a position via `metadata.extensions.allowed[]`. Use `ext-allow solana` to activate a confined extension at the current space and below. Use `ext-unallow solana` to remove access. Confined scope is for dangerous extensions (shell, solana, scripts) that should only exist where explicitly permitted.
+Extensions can declare `scope: "confined"` in their manifest. Confined extensions are inactive everywhere by default. They must be explicitly allowed at a position via `qualities.extensions.allowed[]`. Use `ext-allow solana` to activate a confined extension at the current space and below. Use `ext-unallow solana` to remove access. Confined scope is for dangerous extensions (shell, solana, scripts) that should only exist where explicitly permitted.
 
 ```js
 export default {
@@ -1163,10 +1163,10 @@ Same pattern as per-space metadata. Use `core.beingMetadata` (always available, 
 
 ```js
 // Read
-const energy = core.beingMetadata.getBeingMeta(user, "energy");  // returns {} if empty
+const energy = core.beingMetadata.qualities.being.getQuality(user, "energy");  // returns {} if empty
 
 // Write (sync, caller must save)
-core.beingMetadata.setBeingMeta(user, "energy", { available: { amount: 100 } });
+core.beingMetadata.qualities.being.setQuality(user, "energy", { available: { amount: 100 } });
 await user.save();
 
 // Atomic operations (by ID or document, no need to save)
@@ -1284,7 +1284,7 @@ setRunChat(async (opts) => {
 
 **Injecting into enrichContext without guarding.** Every enrichContext handler should check if relevant data exists before injecting. If your extension has no data for this space, return early. Do not inject empty objects. Do not run database queries on every context build unless you have data to contribute.
 
-**Writing to metadata without the kernel API.** Direct `space.metadata.set()` or `Space.updateOne({ $set: ... })` bypasses namespace ownership, document size guards, and the afterMetadataWrite hook. Always use `core.metadata.*` functions. The kernel provides atomic operations for every pattern: `incExtMeta` for counters, `pushExtMeta` for capped arrays, `batchSetExtMeta` for multi-field writes, `unsetExtMeta` for cleanup. There is no reason to use direct MongoDB for metadata.
+**Writing to metadata without the kernel API.** Direct `space.qualities.set()` or `Space.updateOne({ $set: ... })` bypasses namespace ownership, document size guards, and the afterQualityWrite hook. Always use `core.qualities.*` functions. The kernel provides atomic operations for every pattern: `qualities.space.incQuality` for counters, `qualities.space.pushQuality` for capped arrays, `qualities.space.batchSetQuality` for multi-field writes, `qualities.space.unsetQuality` for cleanup. There is no reason to use direct MongoDB for metadata.
 
 **Missing LLM_PRIORITY on background calls.** Every LLM call needs a priority. BACKGROUND for hooks and jobs. INTERACTIVE for user-triggered tools. GATEWAY for external channels. Without priority, background extensions compete with human chat.
 
@@ -1295,7 +1295,7 @@ authorization. The walk has three layers:
 
 | Layer | Source | When it matches |
 |---|---|---|
-| **Layer 2** | `metadata.permissions.<verb>.<keyParts>` on the target or any ancestor | First match on the parent walk wins |
+| **Layer 2** | `qualities.permissions.<verb>.<keyParts>` on the target or any ancestor | First match on the parent walk wins |
 | **Layer 3** | `provides.defaultPermissions` on installed extensions | When no Layer 2 rule matches |
 | **Layer 5** | default deny | When nothing else matched |
 

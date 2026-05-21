@@ -9,7 +9,7 @@ import { fileURLToPath, pathToFileURL } from "url";
 import { buildCoreServices } from "../seed/services.js";
 import { setExtensionToolResolver } from "../seed/cognition/runChat.js";
 import { hooks } from "../seed/system/hooks.js";
-import { getToolOwner } from "../seed/space/extensionScope.js";
+import { getToolOwner } from "../seed/land/space/extensionScope.js";
 import log from "../seed/system/log.js";
 
 /** Convert a file path to a URL string for dynamic import (Windows compat) */
@@ -499,8 +499,8 @@ function buildScopedCore(manifest, fullCore) {
   }
 
   // Metadata: always available (every extension reads/writes metadata)
-  if (fullCore.metadata) {
-    scoped.metadata = fullCore.metadata;
+  if (fullCore.qualities) {
+    scoped.qualities = fullCore.qualities;
   }
 
   // Being metadata: always available (extensions store per-being state)
@@ -619,19 +619,28 @@ function buildScopedCore(manifest, fullCore) {
     };
   }
 
-  // Metadata binding: enforce namespace ownership.
-  // Extensions can only write to their own namespace (matching manifest name)
-  // or core namespaces (cascade, extensions, tools, modes).
-  // getExtMeta is unbound (read any namespace). setExtMeta and mergeExtMeta
-  // pass callerExtName so the kernel rejects cross-namespace writes.
-  if (scoped.metadata) {
+  // Qualities binding: enforce namespace ownership on space + matter.
+  // Extensions can only write to their own quality namespace (matching
+  // manifest name). Reads are unbound (any namespace is readable). The
+  // kernel rejects cross-namespace writes when callerExtName is set on
+  // the call, so we bind it here for the extension's scoped view.
+  // Being qualities don't enforce ownership at this layer (beings can
+  // carry data from many sources).
+  if (scoped.qualities) {
     const extName = manifest.name;
-    const origSet = scoped.metadata.setExtMeta;
-    const origMerge = scoped.metadata.mergeExtMeta;
-    scoped.metadata = {
-      ...scoped.metadata,
-      setExtMeta: (node, ns, data) => origSet(node, ns, data, { callerExtName: extName }),
-      mergeExtMeta: (node, ns, partial) => origMerge(node, ns, partial, { callerExtName: extName }),
+    const wrapWrites = (primitive) => {
+      const origSet   = primitive.setQuality;
+      const origMerge = primitive.mergeQuality;
+      return {
+        ...primitive,
+        setQuality:   (doc, ns, data)    => origSet(doc, ns, data, { callerExtName: extName }),
+        mergeQuality: (doc, ns, partial) => origMerge(doc, ns, partial, { callerExtName: extName }),
+      };
+    };
+    scoped.qualities = {
+      being:  scoped.qualities.being,
+      space:  wrapWrites(scoped.qualities.space),
+      matter: wrapWrites(scoped.qualities.matter),
     };
   }
 
@@ -908,9 +917,9 @@ export async function loadExtensions(app, mcpServer, opts = {}) {
 
       // Wire MCP tools and register in the tool resolver. Same path
       // the kernel uses for its own tools — see registerToolBundle in
-      // seed/system/tools.js.
+      // seed/cognition/tools.js.
       if (instance.tools && mcpServer) {
-        const { registerToolBundle } = await import("../seed/system/tools.js");
+        const { registerToolBundle } = await import("../seed/cognition/tools.js");
         await registerToolBundle(instance.tools, { ownerExt: manifest.name, mcpServer });
       }
 
@@ -1071,7 +1080,7 @@ const CORE_HOOKS_VALID = new Set([
   "beforeLLMCall", "afterLLMCall", "beforeToolCall", "afterToolCall",
   "beforeResponse", "beforeRegister", "afterRegister",
   "afterSessionCreate", "afterSessionEnd",
-  "afterSpaceMove", "afterMetadataWrite", "afterScopeChange", "afterOwnershipChange", "afterBoot",
+  "afterSpaceMove", "afterQualityWrite", "afterScopeChange", "afterOwnershipChange", "afterBoot",
   "onTreeTripped", "onTreeRevived", "onCompress",
 ]);
 
@@ -1338,13 +1347,13 @@ export async function getExtensionAtScope(name, spaceId) {
   const entry = loaded.get(name);
   if (!entry) return null;
   try {
-    const { isExtensionBlockedAtNode } = await import(
-      "../seed/space/extensionScope.js"
+    const { isExtensionBlockedAtSpace } = await import(
+      "../seed/land/space/extensionScope.js"
     );
-    const blocked = await isExtensionBlockedAtNode(name, spaceId);
+    const blocked = await isExtensionBlockedAtSpace(name, spaceId);
     if (blocked) return null;
   } catch {
-    // If scope resolution fails (e.g., node not found), be
+    // If scope resolution fails (e.g., space not found), be
     // conservative and return null rather than handing back the
     // instance. Callers can fall back to the legacy getExtension
     // for kernel-internal cases where scope doesn't apply.
@@ -1603,8 +1612,8 @@ export function getLoadedManifests() {
 /**
  * Find the domain extension that owns a tree root.
  *
- * A "domain extension" marks its home node with
- * `metadata.<extName>.initialized = true` during setup — that's the
+ * A "domain extension" marks its home space with
+ * `qualities.<extName>.initialized = true` during setup — that's the
  * convention food, fitness, book-workspace, code-workspace and others
  * already follow. This helper walks that marker and returns the matching
  * loaded extension name. Returns null when the root isn't owned by any
@@ -1698,7 +1707,7 @@ export async function uninstallExtension(name) {
         mcpServerInstance.removeToolsByOwner(name, getToolOwner);
       }
       // Remove from tool definition registry
-      const { unregisterToolsForExtension } = await import("../seed/system/tools.js");
+      const { unregisterToolsForExtension } = await import("../seed/cognition/tools.js");
       unregisterToolsForExtension(name, getToolOwner);
     } catch {}
     try {
@@ -1706,7 +1715,7 @@ export async function uninstallExtension(name) {
       unregisterSeedsFromExtension(name);
     } catch {}
     try {
-      const { clearToolOwnersForExtension } = await import("../seed/space/extensionScope.js");
+      const { clearToolOwnersForExtension } = await import("../seed/land/space/extensionScope.js");
       clearToolOwnersForExtension(name);
     } catch {}
     // Drop this extension's default permission rules from the registry
@@ -1719,9 +1728,9 @@ export async function uninstallExtension(name) {
 
   // Refresh confined extensions set. The removed extension might have been
   // confined. Without this, the confined set still references it and the
-  // resolution chain treats a missing extension as blocked at every node.
+  // resolution chain treats a missing extension as blocked at every space.
   try {
-    const { loadConfinedExtensions } = await import("../seed/space/extensionScope.js");
+    const { loadConfinedExtensions } = await import("../seed/land/space/extensionScope.js");
     await loadConfinedExtensions();
   } catch {}
 
@@ -2022,7 +2031,7 @@ export async function installExtension(name, version) {
   // scope: "confined" in its manifest. Without this, the confined set is stale
   // until restart and the extension resolves as global (active everywhere).
   try {
-    const { loadConfinedExtensions } = await import("../seed/space/extensionScope.js");
+    const { loadConfinedExtensions } = await import("../seed/land/space/extensionScope.js");
     await loadConfinedExtensions();
   } catch {}
 
@@ -2189,7 +2198,7 @@ export async function runExtensionMigrations() {
   }
 
   // Find the .extensions land seed space once, so per-extension queries are scoped correctly.
-  // Without this, a user-created tree node named the same as an extension would be matched.
+  // Without this, a user-created tree space named the same as an extension would be matched.
   const { SEED_SPACE } = await import("../seed/ibp/protocol.js");
   const extensionsParent = await Space.findOne({ seedSpace: SEED_SPACE.EXTENSIONS }).select("_id").lean();
 
@@ -2197,12 +2206,12 @@ export async function runExtensionMigrations() {
     const targetVersion = manifest.provides?.schemaVersion;
     if (!targetVersion) continue; // No schema versioning declared
 
-    // Get current version from the extension's child node under .extensions
+    // Get current version from the extension's child space under .extensions
     const extSpace = extensionsParent
       ? await Space.findOne({ parent: extensionsParent._id, name }).lean()
       : null;
 
-    const meta = extSpace?.metadata instanceof Map ? Object.fromEntries(extSpace.metadata) : (extSpace?.metadata || {});
+    const meta = extSpace?.qualities instanceof Map ? Object.fromEntries(extSpace.qualities) : (extSpace?.qualities || {});
     const currentVersion = meta.schemaVersion || 0;
 
     if (currentVersion >= targetVersion) continue; // Up to date
@@ -2238,7 +2247,7 @@ export async function runExtensionMigrations() {
       // Update stored version
       if (ran > 0 && extSpace) {
         await Space.findByIdAndUpdate(extSpace._id, {
-          $set: { "metadata.schemaVersion": targetVersion },
+          $set: { "qualities.schemaVersion": targetVersion },
         });
         log.verbose("Extensions", `${name}: schema updated to v${targetVersion} (${ran} migration(s))`);
       }

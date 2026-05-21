@@ -74,7 +74,7 @@ export default async function migrate() {
           llmDefault:    u.llmDefault || null,
           isRemote:      !!u.isRemote,
           homeLand:      u.homeLand || null,
-          metadata:      u.metadata || {},
+          metadata:      u.qualities || {},
           createdAt:     u.createdAt || new Date(),
           updatedAt:     u.updatedAt || new Date(),
         };

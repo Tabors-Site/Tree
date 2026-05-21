@@ -1,30 +1,33 @@
 // TreeOS Seed . AGPL-3.0 . https://treeos.ai . Tabor Holly
-//
-// Registry mirror. Syncs in-memory registries (tools, roles, ops) into
-// the substrate as children of .tools / .roles / .operations so SEE can
-// introspect them.
-//
-// One-way: the registry is the runtime source of truth; the substrate
-// mirror exists only for introspection.
+//I tic, not a functional break.
 
 import { v4 as uuidv4 } from "uuid";
 import Space from "../models/space.js";
-import log from "../system/log.js";
+import log from "./log.js";
 
-export async function syncRegistryToSubstrate({ seedSpace, items, itemType = "resource" }) {
+export async function syncRegistryToSubstrate({
+  seedSpace,
+  items,
+  itemType = "resource",
+}) {
   if (!seedSpace) throw new Error("syncRegistryToSubstrate requires seedSpace");
   if (!Array.isArray(items)) items = [];
 
   const parent = await Space.findOne({ seedSpace });
   if (!parent) {
-    log.warn("RegistryMirror", `land seed space for ${seedSpace} not found; skipping sync`);
+    log.warn(
+      "RegistryMirror",
+      `land seed space for ${seedSpace} not found; skipping sync`,
+    );
     return { created: 0, removed: 0, kept: 0 };
   }
 
   const existingChildren = await Space.find({
     parent: parent._id,
     type: itemType,
-  }).select("_id name metadata").lean();
+  })
+    .select("_id name metadata")
+    .lean();
 
   const existingByName = new Map(existingChildren.map((c) => [c.name, c]));
   const desiredByName = new Map(items.map((it) => [it.name, it]));
@@ -64,10 +67,7 @@ export async function syncRegistryToSubstrate({ seedSpace, items, itemType = "re
   for (const [name, c] of existingByName) {
     if (desiredByName.has(name)) continue;
     await Space.deleteOne({ _id: c._id });
-    await Space.updateOne(
-      { _id: parent._id },
-      { $pull: { children: c._id } },
-    );
+    await Space.updateOne({ _id: parent._id }, { $pull: { children: c._id } });
     removed++;
   }
 
@@ -75,11 +75,22 @@ export async function syncRegistryToSubstrate({ seedSpace, items, itemType = "re
 }
 
 // Idempotent single-child add/refresh for runtime registrations.
-export async function addRegistryChild({ seedSpace, name, metadata = null, itemType = "resource" }) {
+export async function addRegistryChild({
+  seedSpace,
+  name,
+  metadata = null,
+  itemType = "resource",
+}) {
   if (!name) return null;
   const parent = await Space.findOne({ seedSpace });
   if (!parent) return null;
-  const existing = await Space.findOne({ parent: parent._id, name, type: itemType }).select("_id").lean();
+  const existing = await Space.findOne({
+    parent: parent._id,
+    name,
+    type: itemType,
+  })
+    .select("_id")
+    .lean();
   if (existing) {
     if (metadata) {
       await Space.updateOne({ _id: existing._id }, { $set: { metadata } });
@@ -102,11 +113,21 @@ export async function addRegistryChild({ seedSpace, name, metadata = null, itemT
   return child._id;
 }
 
-export async function removeRegistryChild({ seedSpace, name, itemType = "resource" }) {
+export async function removeRegistryChild({
+  seedSpace,
+  name,
+  itemType = "resource",
+}) {
   if (!name) return false;
   const parent = await Space.findOne({ seedSpace });
   if (!parent) return false;
-  const child = await Space.findOne({ parent: parent._id, name, type: itemType }).select("_id").lean();
+  const child = await Space.findOne({
+    parent: parent._id,
+    name,
+    type: itemType,
+  })
+    .select("_id")
+    .lean();
   if (!child) return false;
   await Space.deleteOne({ _id: child._id });
   await Space.updateOne(

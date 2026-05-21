@@ -41,14 +41,14 @@ export default async function migrate() {
   const res = await spaces.updateMany(
     {
       $or: [
-        { "metadata.beings.arrival.permissions": { $exists: true } },
-        { "metadata.beings.owner.permissions":   { $exists: true } },
+        { "qualities.beings.arrival.permissions": { $exists: true } },
+        { "qualities.beings.owner.permissions":   { $exists: true } },
       ],
     },
     {
       $unset: {
-        "metadata.beings.arrival.permissions": "",
-        "metadata.beings.owner.permissions":   "",
+        "qualities.beings.arrival.permissions": "",
+        "qualities.beings.owner.permissions":   "",
       },
     },
   );

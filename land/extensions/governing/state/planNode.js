@@ -1,12 +1,12 @@
-// Trio-node primitive RETIRED 2026-05-18.
+// Trio-space primitive RETIRED 2026-05-18.
 //
 // In the new shape ([[project_substrate_as_universal_workspace]]), the
-// Planner being lives at the rulership node alongside Ruler, Contractor,
-// Foreman. There is no separate plan-typed child node. Plans become
-// artifacts authored by the Planner being, NOT children of a plan-node.
+// Planner being lives at the rulership space alongside Ruler, Contractor,
+// Foreman. There is no separate plan-typed child space. Plans become
+// artifacts authored by the Planner being, NOT children of a plan-space.
 //
 // This file used to export createPlanNode + ensurePlanAtScope. They are
-// now no-ops that return the rulership node itself, for any legacy
+// now no-ops that return the rulership space itself, for any legacy
 // caller that still references them during the governing rewrite.
 //
 // READ helpers (readPlan, initPlan, appendLedger, findGoverningPlan,
@@ -25,8 +25,8 @@ export const DEFAULT_BUDGET = {
 
 /**
  * RETIRED. In the new shape the Planner is a being-tree child of the
- * Ruler at the same node; there is no plan-typed child node. Returns
- * the existing scope node so callers that chain on the result don't
+ * Ruler at the same space; there is no plan-typed child space. Returns
+ * the existing scope space so callers that chain on the result don't
  * crash during the rewrite. Logs a deprecation warning the first time
  * each caller hits this.
  */
@@ -52,16 +52,16 @@ export async function ensurePlanAtScope({ scopeSpaceId, core: _core } = {}) {
 
 // ─────────────────────────────────────────────────────────────────────
 // Read helpers (preserved). These operate on substrate state and are
-// unaffected by the trio-node retirement.
+// unaffected by the trio-space retirement.
 // ─────────────────────────────────────────────────────────────────────
 
 export async function readPlan(spaceId) {
   if (!spaceId) return null;
   const space = await Space.findById(spaceId).select("metadata").lean();
   if (!space) return null;
-  const meta = space.metadata instanceof Map
-    ? Object.fromEntries(space.metadata)
-    : (space.metadata || {});
+  const meta = space.qualities instanceof Map
+    ? Object.fromEntries(space.qualities)
+    : (space.qualities || {});
   return meta[PLAN_NS] || null;
 }
 
@@ -78,17 +78,17 @@ export async function appendLedger(_nodeId, _entry) {
 }
 
 export async function findGoverningPlan(spaceId) {
-  // Walks up looking for a node carrying metadata.beings.planner. That
-  // node IS the rulership; its Planner being authors the plans.
+  // Walks up looking for a space carrying metadata.beings.planner. That
+  // space IS the rulership; its Planner being authors the plans.
   if (!spaceId) return null;
   let cursor = String(spaceId);
   for (let i = 0; i < 64; i++) {
     if (!cursor) return null;
     const n = await Space.findById(cursor).select("_id parent metadata").lean();
     if (!n) return null;
-    const meta = n.metadata instanceof Map
-      ? Object.fromEntries(n.metadata)
-      : (n.metadata || {});
+    const meta = n.qualities instanceof Map
+      ? Object.fromEntries(n.qualities)
+      : (n.qualities || {});
     if (meta?.beings?.planner?.beingId) return n;
     if (!n.parent) return null;
     cursor = String(n.parent);
@@ -97,8 +97,8 @@ export async function findGoverningPlan(spaceId) {
 }
 
 export async function findGoverningPlanChain(spaceId) {
-  // Returns the chain of governing rulership nodes from this node up to
-  // root. Each entry is a node that hosts a Planner being.
+  // Returns the chain of governing rulership nodes from this space up to
+  // root. Each entry is a space that hosts a Planner being.
   if (!spaceId) return [];
   const chain = [];
   let cursor = String(spaceId);
@@ -106,9 +106,9 @@ export async function findGoverningPlanChain(spaceId) {
     if (!cursor) break;
     const n = await Space.findById(cursor).select("_id parent metadata").lean();
     if (!n) break;
-    const meta = n.metadata instanceof Map
-      ? Object.fromEntries(n.metadata)
-      : (n.metadata || {});
+    const meta = n.qualities instanceof Map
+      ? Object.fromEntries(n.qualities)
+      : (n.qualities || {});
     if (meta?.beings?.planner?.beingId) chain.push(n);
     if (!n.parent) break;
     cursor = String(n.parent);

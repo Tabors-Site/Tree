@@ -194,7 +194,7 @@ wants advanced next:
     "yes", "continue"), call:
     → governing-dispatch-execution
     Spawns recursive sub-Ruler dispatch: each plan step becomes a
-    sub-Ruler at a child node, summoned with its step's spec.
+    sub-Ruler at a child space, summoned with its step's spec.
 
   awaiting: "user-resume"
     Execution is paused. If the message from above indicates intent

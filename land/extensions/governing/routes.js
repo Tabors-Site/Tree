@@ -5,7 +5,7 @@
 //
 // Routes:
 //   GET  /api/v1/governing/plan/:spaceId/panel.html    plan panel fragment
-//   GET  /api/v1/governing/plan/:spaceId               plan node identity
+//   GET  /api/v1/governing/plan/:spaceId               plan space identity
 //   GET  /api/v1/root/:rootId/governance              dashboard page (HTML)
 //   GET  /api/v1/root/:rootId/governance/stream       SSE live-update stream
 
@@ -40,7 +40,7 @@ export function resolveHtmlAuth() {
 // an update frame to every subscriber of that rootId.
 //
 // Hooks in governing/index.js's init() call broadcastGovernanceUpdate
-// after resolving the affected node up to its root. The dashboard
+// after resolving the affected space up to its root. The dashboard
 // page's client-side bootstrap script refetches its HTML fragment on
 // each update event and replaces the DOM.
 // ─────────────────────────────────────────────────────────────────────
@@ -76,7 +76,7 @@ function subscribeDashboard(rootId, res) {
 /**
  * GET /api/v1/governing/plan/:spaceId/panel.html
  * Server-rendered HTML fragment of the plan panel for this plan-type
- * node. Slot placeholder fetches and swaps it in.
+ * space. Slot placeholder fetches and swaps it in.
  */
 router.get("/governing/plan/:spaceId/panel.html", authenticate, async (req, res) => {
   try {
@@ -84,7 +84,7 @@ router.get("/governing/plan/:spaceId/panel.html", authenticate, async (req, res)
     if (!space) return res.status(404).send("");
     const qs = req.query.token ? `?token=${encodeURIComponent(req.query.token)}` : "";
     const out = await renderPlanPanel({
-      node,
+      space,
       spaceId: String(space._id),
       qs,
       isPublicAccess: !!req.query.share || !!req.query.publicShare,
@@ -98,7 +98,7 @@ router.get("/governing/plan/:spaceId/panel.html", authenticate, async (req, res)
 
 /**
  * GET /api/v1/governing/plan/:spaceId
- * Read the plan-type node's identity. For diagnostic / audit views.
+ * Read the plan-type space's identity. For diagnostic / audit views.
  * The active plan content lives on plan-emission-N children.
  */
 router.get("/governing/plan/:spaceId", authenticate, async (req, res) => {

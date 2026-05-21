@@ -17,7 +17,7 @@
 import { test, describe, beforeEach, afterEach } from "node:test";
 import { strict as assert } from "node:assert";
 import { mock } from "node:test";
-import { echoEmbodiment } from "../seed/being/roles/echo.js";
+import { echoEmbodiment } from "../seed/cognition/roles/echo.js";
 
 // Same inbox + Being stubs the scheduler.test.js uses. Kept local rather
 // than shared so the two test files stay independently runnable.
@@ -77,7 +77,7 @@ mock.module("../seed/models/being.js", {
 // Stub the registry to return the REAL echoEmbodiment. Importing the
 // real registry.js would pull in bridge.js (which imports the LLM
 // conversation layer and Mongo), defeating the no-DB premise.
-mock.module("../seed/being/roles/registry.js", {
+mock.module("../seed/cognition/roles/registry.js", {
   namedExports: {
     getRole: (name) => name === "echo" ? echoEmbodiment : null,
   },

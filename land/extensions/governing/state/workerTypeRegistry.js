@@ -155,10 +155,10 @@ export async function findActiveWorkspaceAtScope(spaceId) {
   if (!spaceId) return null;
   if (REGISTRY.size === 0) return null;
   try {
-    const { getBlockedExtensionsAtNode } = await import(
-      "../../../seed/space/extensionScope.js"
+    const { getBlockedExtensionsAtSpace } = await import(
+      "../../../seed/land/space/extensionScope.js"
     );
-    const { allowed } = await getBlockedExtensionsAtNode(spaceId);
+    const { allowed } = await getBlockedExtensionsAtSpace(spaceId);
     if (!allowed || allowed.size === 0) return null;
     for (const name of REGISTRY.keys()) {
       if (allowed.has(name)) return name;
@@ -203,10 +203,10 @@ export async function shouldGovernAtScope(spaceId) {
   // Walk the ancestor chain via the kernel's scope resolver and
   // check the `allowed` set for any registered workspace name.
   try {
-    const { getBlockedExtensionsAtNode } = await import(
-      "../../../seed/space/extensionScope.js"
+    const { getBlockedExtensionsAtSpace } = await import(
+      "../../../seed/land/space/extensionScope.js"
     );
-    const { allowed } = await getBlockedExtensionsAtNode(spaceId);
+    const { allowed } = await getBlockedExtensionsAtSpace(spaceId);
     if (!allowed || allowed.size === 0) return false;
     for (const name of REGISTRY.keys()) {
       if (allowed.has(name)) return true;

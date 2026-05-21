@@ -23,7 +23,7 @@ const DidSchema = new mongoose.Schema({
   _id:  { type: String, default: uuidv4 },
   date: { type: Date,   default: Date.now },
 
-  // Actor. Always required. SEED_BEING is the sentinel for pre-being
+  // Actor. Always required. I_AM is the sentinel for pre-being
   // scaffold flows (server boot, migrations, first-time-boot writes).
   beingId: { type: String, ref: "Being", required: true },
 
@@ -52,7 +52,7 @@ const DidSchema = new mongoose.Schema({
   },
 
   // Free-form input and output payloads. Capped at logDid write time
-  // (see seed/space/dids.js); oversized values are clipped and the
+  // (see seed/land/space/dids.js); oversized values are clipped and the
   // `truncated` flag is set.
   params:    { type: mongoose.Schema.Types.Mixed, default: null },
   result:    { type: mongoose.Schema.Types.Mixed, default: null },

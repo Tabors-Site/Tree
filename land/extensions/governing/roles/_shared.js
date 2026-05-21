@@ -21,9 +21,9 @@ export {
  * Mongoose lean() returns metadata as a plain object whose entries may
  * be nested Maps depending on driver version.
  */
-export function readMetaPath(node, path) {
+export function readMetaPath(space, path) {
   if (!space) return undefined;
-  let cursor = space.metadata;
+  let cursor = space.qualities;
   for (const key of path) {
     if (cursor instanceof Map) cursor = cursor.get(key);
     else if (cursor && typeof cursor === "object") cursor = cursor[key];

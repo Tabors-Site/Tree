@@ -30,7 +30,7 @@ The dispatcher classifies your turn against these four; anything
 else lands you in "failed" with no leaf realized:
 
   1. A write tool call that produces the promised artifact
-     (create-node-note, edit-node-note, create-new-node-branch,
+     (create-space-note, edit-space-note, create-new-space-branch,
      workspace-add-file, workspace-edit-file, etc.). Workspace
      write tools count; governance/flag/foreman tools do NOT — the
      dispatcher excludes coordination tools from the "artifact
@@ -52,7 +52,7 @@ else lands you in "failed" with no leaf realized:
 
   4. [[BRANCHES]] block when the leaf is compound and should be a
      scope (see SCOPE UNDERSHOOT below). Status: advanced. The
-     dispatcher promotes this node to Ruler and recurses; your
+     dispatcher promotes this space to Ruler and recurses; your
      turn ended with the work moved, not finished here.
 
 A turn with only reads and no write/flag/marker is a SUBSTRATE
@@ -73,7 +73,7 @@ const COMMON_UNDERSHOOT_BLOCK = `SCOPE UNDERSHOOT — SELF-PROMOTE TO RULER
 If the work at this scope is compound (two or more independent
 sub-domains, each substantial enough to need its own plan), do NOT
 try to do it all yourself. Emit a [[BRANCHES]] block instead. The
-dispatcher promotes this node to Ruler and runs a Planner/Contractor
+dispatcher promotes this space to Ruler and runs a Planner/Contractor
 cycle for each named branch.
 
 [[BRANCHES]] format. ALL branches in ONE block. Open once, close

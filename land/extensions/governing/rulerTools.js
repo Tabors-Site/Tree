@@ -44,7 +44,7 @@ const REASON_CAP = 2000;
 // Build the concise summary returned to the Ruler after the
 // Contractor emits. Mirrors formatPlannerSpawnSummary's role: the
 // full contract details live in metadata.governing.emission on the
-// contracts-emission node; the Ruler reads counts/kinds/names.
+// contracts-emission space; the Ruler reads counts/kinds/names.
 function formatContractorSpawnSummary(emission) {
   if (!emission) {
     return {
@@ -221,7 +221,7 @@ export default function getRulerTools(core) {
         const ruler = await resolveRulerScope(spaceId);
         if (!ruler) {
           return text(
-            "governing-hire-planner: no Ruler scope resolvable from current node. " +
+            "governing-hire-planner: no Ruler scope resolvable from current space. " +
             "runRulerTurn should promote before tool calls reach here; surface as substrate bug.",
           );
         }
@@ -287,16 +287,16 @@ export default function getRulerTools(core) {
 
         // 2. Resolve the Planner being and its addressable username.
         //    Username is the canonical SUMMON qualifier; the role
-        //    shorthand `@planner` would also work at the plan node but
+        //    shorthand `@planner` would also work at the plan space but
         //    the per-instance username is unambiguous regardless of
         //    addressing position.
         const Space = (await import("../../seed/models/space.js")).default;
         const Being = (await import("../../seed/models/being.js")).default;
         const planNodeFull = await Space.findById(planSpace._id)
           .select("metadata").lean();
-        const planBeings = planNodeFull?.metadata instanceof Map
-          ? planNodeFull.metadata.get("beings")
-          : planNodeFull?.metadata?.beings;
+        const planBeings = planNodeFull?.qualities instanceof Map
+          ? planNodeFull.qualities.get("beings")
+          : planNodeFull?.qualities?.beings;
         const plannerBeingId = planBeings?.planner?.beingId || null;
         if (!plannerBeingId) {
           releaseSpawn(claim.key);
@@ -326,9 +326,9 @@ export default function getRulerTools(core) {
         //    governing extension's promote path stamps it).
         const rulerNodeFull = await Space.findById(ruler._id)
           .select("metadata").lean();
-        const rulerBeings = rulerNodeFull?.metadata instanceof Map
-          ? rulerNodeFull.metadata.get("beings")
-          : rulerNodeFull?.metadata?.beings;
+        const rulerBeings = rulerNodeFull?.qualities instanceof Map
+          ? rulerNodeFull.qualities.get("beings")
+          : rulerNodeFull?.qualities?.beings;
         const rulerBeingIdAtScope = rulerBeings?.ruler?.beingId || null;
         const rulerBeing = rulerBeingIdAtScope
           ? await Being.findById(rulerBeingIdAtScope).select("name").lean()
@@ -609,14 +609,14 @@ export default function getRulerTools(core) {
           }, null, 2));
         }
 
-        // 2. Resolve Contractor being + username at the contracts node.
+        // 2. Resolve Contractor being + username at the contracts space.
         const Space = (await import("../../seed/models/space.js")).default;
         const Being = (await import("../../seed/models/being.js")).default;
         const contractsNodeFull = await Space.findById(contractsSpace._id)
           .select("metadata").lean();
-        const contractBeings = contractsNodeFull?.metadata instanceof Map
-          ? contractsNodeFull.metadata.get("beings")
-          : contractsNodeFull?.metadata?.beings;
+        const contractBeings = contractsNodeFull?.qualities instanceof Map
+          ? contractsNodeFull.qualities.get("beings")
+          : contractsNodeFull?.qualities?.beings;
         const contractorBeingId = contractBeings?.contractor?.beingId || null;
         if (!contractorBeingId) {
           releaseSpawn(claim.key);
@@ -642,9 +642,9 @@ export default function getRulerTools(core) {
         // 3. Resolve Ruler being's username for the SUMMON `from` stance.
         const rulerNodeFull = await Space.findById(ruler._id)
           .select("metadata").lean();
-        const rulerBeings = rulerNodeFull?.metadata instanceof Map
-          ? rulerNodeFull.metadata.get("beings")
-          : rulerNodeFull?.metadata?.beings;
+        const rulerBeings = rulerNodeFull?.qualities instanceof Map
+          ? rulerNodeFull.qualities.get("beings")
+          : rulerNodeFull?.qualities?.beings;
         const rulerBeingIdAtScope = rulerBeings?.ruler?.beingId || null;
         const rulerBeing = rulerBeingIdAtScope
           ? await Being.findById(rulerBeingIdAtScope).select("name").lean()
@@ -844,9 +844,9 @@ export default function getRulerTools(core) {
         const Being = (await import("../../seed/models/being.js")).default;
         const executionNodeFull = await Space.findById(executionSpace._id)
           .select("metadata").lean();
-        const execBeings = executionNodeFull?.metadata instanceof Map
-          ? executionNodeFull.metadata.get("beings")
-          : executionNodeFull?.metadata?.beings;
+        const execBeings = executionNodeFull?.qualities instanceof Map
+          ? executionNodeFull.qualities.get("beings")
+          : executionNodeFull?.qualities?.beings;
         const foremanBeingId = execBeings?.foreman?.beingId || null;
         if (!foremanBeingId) {
           releaseSpawn(claim.key);
@@ -871,9 +871,9 @@ export default function getRulerTools(core) {
         // 3. Resolve Ruler being's username for the `from` stance.
         const rulerNodeFull = await Space.findById(ruler._id)
           .select("metadata").lean();
-        const rulerBeings = rulerNodeFull?.metadata instanceof Map
-          ? rulerNodeFull.metadata.get("beings")
-          : rulerNodeFull?.metadata?.beings;
+        const rulerBeings = rulerNodeFull?.qualities instanceof Map
+          ? rulerNodeFull.qualities.get("beings")
+          : rulerNodeFull?.qualities?.beings;
         const rulerBeingIdAtScope = rulerBeings?.ruler?.beingId || null;
         const rulerBeing = rulerBeingIdAtScope
           ? await Being.findById(rulerBeingIdAtScope).select("name").lean()
@@ -1153,9 +1153,9 @@ export default function getRulerTools(core) {
         const NodeModel = (await import("../../seed/models/space.js")).default;
         const BeingModel = (await import("../../seed/models/being.js")).default;
         const planNodeFull = await NodeModel.findById(planSpace._id).select("metadata").lean();
-        const planBeings = planNodeFull?.metadata instanceof Map
-          ? planNodeFull.metadata.get("beings")
-          : planNodeFull?.metadata?.beings;
+        const planBeings = planNodeFull?.qualities instanceof Map
+          ? planNodeFull.qualities.get("beings")
+          : planNodeFull?.qualities?.beings;
         const plannerBeingId = planBeings?.planner?.beingId || null;
         if (!plannerBeingId) {
           releaseSpawn(claim.key);
@@ -1176,9 +1176,9 @@ export default function getRulerTools(core) {
           }, null, 2));
         }
         const rulerNodeFull = await NodeModel.findById(ruler._id).select("metadata").lean();
-        const rulerBeings = rulerNodeFull?.metadata instanceof Map
-          ? rulerNodeFull.metadata.get("beings")
-          : rulerNodeFull?.metadata?.beings;
+        const rulerBeings = rulerNodeFull?.qualities instanceof Map
+          ? rulerNodeFull.qualities.get("beings")
+          : rulerNodeFull?.qualities?.beings;
         const rulerBeingIdAtScope = rulerBeings?.ruler?.beingId || null;
         const rulerBeing = rulerBeingIdAtScope
           ? await BeingModel.findById(rulerBeingIdAtScope).select("name").lean()
@@ -1438,9 +1438,9 @@ export default function getRulerTools(core) {
         const NodeModel = (await import("../../seed/models/space.js")).default;
         const BeingModel = (await import("../../seed/models/being.js")).default;
         const rulerNodeFull = await NodeModel.findById(ruler._id).select("metadata name").lean();
-        const rulerBeings = rulerNodeFull?.metadata instanceof Map
-          ? rulerNodeFull.metadata.get("beings")
-          : rulerNodeFull?.metadata?.beings;
+        const rulerBeings = rulerNodeFull?.qualities instanceof Map
+          ? rulerNodeFull.qualities.get("beings")
+          : rulerNodeFull?.qualities?.beings;
         const rulerBeingIdAtScope = rulerBeings?.ruler?.beingId || null;
         const rulerBeing = rulerBeingIdAtScope
           ? await BeingModel.findById(rulerBeingIdAtScope).select("name").lean()
@@ -1450,7 +1450,7 @@ export default function getRulerTools(core) {
         const landDomain = getLandDomain();
         const rulerStance = `${landDomain}/${ruler._id}@${rulerUsername}`;
 
-        // For each plan step, create a child node at this Ruler's
+        // For each plan step, create a child space at this Ruler's
         // scope, promote it to a sub-Ruler (which creates the sub-
         // Ruler being via promoteToRuler), and SUMMON the sub-Ruler
         // with the step's spec as the briefing. Contracts inheritance
@@ -1506,9 +1506,9 @@ export default function getRulerTools(core) {
 
             // Resolve the new sub-Ruler being.
             const childFull = await NodeModel.findById(childSpace._id).select("metadata").lean();
-            const childBeings = childFull?.metadata instanceof Map
-              ? childFull.metadata.get("beings")
-              : childFull?.metadata?.beings;
+            const childBeings = childFull?.qualities instanceof Map
+              ? childFull.qualities.get("beings")
+              : childFull?.qualities?.beings;
             const subRulerBeingId = childBeings?.ruler?.beingId || null;
             if (!subRulerBeingId) {
               failures.push({ stepName, error: "sub-ruler-being-missing" });
@@ -1672,7 +1672,7 @@ export default function getRulerTools(core) {
           }, null, 2));
         }
 
-        // Parse the pending ref to recover the emission node, then
+        // Parse the pending ref to recover the emission space, then
         // append an "approved" entry that supersedes the pending one.
         // The latest-non-superseded after this write is the new approved
         // entry, so readActivePlanApproval / readActivePlanEmission
@@ -1919,9 +1919,9 @@ export default function getRulerTools(core) {
               const NodeModel = (await import("../../seed/models/space.js")).default;
               const recSpace = await NodeModel.findById(record._recordNodeId);
               if (recSpace) {
-                const meta = recSpace.metadata instanceof Map
-                  ? recSpace.metadata.get("governing")
-                  : recSpace.metadata?.governing;
+                const meta = recSpace.qualities instanceof Map
+                  ? recSpace.qualities.get("governing")
+                  : recSpace.qualities?.governing;
                 const exec = meta?.execution || {};
                 // Phase 3 migration: verb-surface write, atomic merge.
                 await _core.do(recSpace, "set-meta", {
@@ -1964,7 +1964,7 @@ export default function getRulerTools(core) {
         }
 
         // SUMMON the Foreman via inbox. Same pattern as route-to-foreman:
-        // ensure execution node + Foreman being, build stances, append
+        // ensure execution space + Foreman being, build stances, append
         // to inbox, attach handoff that releases the claim and fires
         // `governing:foremanRouted` for dashboard SSE on settle.
         const { ensureExecutionNode } = await import("./state/executionSpace.js");
@@ -1986,9 +1986,9 @@ export default function getRulerTools(core) {
         const NodeModel = (await import("../../seed/models/space.js")).default;
         const BeingModel = (await import("../../seed/models/being.js")).default;
         const execNodeFull = await NodeModel.findById(executionSpace._id).select("metadata").lean();
-        const execBeings = execNodeFull?.metadata instanceof Map
-          ? execNodeFull.metadata.get("beings")
-          : execNodeFull?.metadata?.beings;
+        const execBeings = execNodeFull?.qualities instanceof Map
+          ? execNodeFull.qualities.get("beings")
+          : execNodeFull?.qualities?.beings;
         const foremanBeingId = execBeings?.foreman?.beingId || null;
         if (!foremanBeingId) {
           releaseSpawn(claim.key);
@@ -1999,9 +1999,9 @@ export default function getRulerTools(core) {
           }, null, 2));
         }
         const rulerNodeFull = await NodeModel.findById(ruler._id).select("metadata").lean();
-        const rulerBeings = rulerNodeFull?.metadata instanceof Map
-          ? rulerNodeFull.metadata.get("beings")
-          : rulerNodeFull?.metadata?.beings;
+        const rulerBeings = rulerNodeFull?.qualities instanceof Map
+          ? rulerNodeFull.qualities.get("beings")
+          : rulerNodeFull?.qualities?.beings;
         const rulerBeingIdAtScope = rulerBeings?.ruler?.beingId || null;
         const rulerBeing = rulerBeingIdAtScope
           ? await BeingModel.findById(rulerBeingIdAtScope).select("name").lean()
@@ -2184,13 +2184,13 @@ export default function getRulerTools(core) {
         try {
           if (spaceId) {
             const space = await Space.findById(spaceId);
-            if (node) {
-              const meta = space.metadata instanceof Map
-                ? space.metadata.get("governing")
-                : space.metadata?.governing;
+            if (space) {
+              const meta = space.qualities instanceof Map
+                ? space.qualities.get("governing")
+                : space.qualities?.governing;
               const existingPending = Array.isArray(meta?.courtPending) ? meta.courtPending : [];
               // Phase 3 migration: verb-surface merge, atomic.
-              await _core.do(node, "set-meta", {
+              await _core.do(space, "set-meta", {
                 namespace: "governing",
                 data: {
                   courtPending: [

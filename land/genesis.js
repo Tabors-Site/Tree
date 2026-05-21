@@ -67,9 +67,9 @@ import {
   getLoadedExtensionNames,
   getBootReport,
 } from "./extensions/loader.js";
-import { startUploadCleanup } from "./seed/matter/uploadCleanup.js";
+import { startUploadCleanup } from "./seed/land/matter/uploadCleanup.js";
 import { startRetentionJob } from "./seed/system/dataRetention.js";
-import { getBlockedExtensionsAtNode } from "./seed/space/extensionScope.js";
+import { getBlockedExtensionsAtSpace } from "./seed/land/space/extensionScope.js";
 import { hooks } from "./seed/system/hooks.js";
 import { syncExtensionsToTree } from "./seed/landRoot.js";
 import { spawn } from "child_process";
@@ -77,7 +77,7 @@ import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
 import log from "./seed/system/log.js";
-import { SEED_SPACE } from "./seed/space/seedSpaces.js";
+import { SEED_SPACE } from "./seed/land/space/seedSpaces.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -85,11 +85,11 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
  * Register kernel-shipped tool definitions through the same path
  * extensions use. Thin wrapper that hands the bundle to
  * `registerToolBundle` with `ownerExt: "kernel"`. See
- * seed/system/tools.js for the unified registration logic.
+ * seed/cognition/tools.js for the unified registration logic.
  */
 async function registerKernelTools(tools) {
   const { mcpServerInstance } = await import("./protocols/mcp/server.js");
-  const { registerToolBundle } = await import("./seed/system/tools.js");
+  const { registerToolBundle } = await import("./seed/cognition/tools.js");
   await registerToolBundle(tools, {
     ownerExt: "kernel",
     mcpServer: mcpServerInstance,
@@ -114,11 +114,11 @@ export function genesis() {
     await initLandConfig();
 
     // Mirror the land/ directory into space and matter under `.source`.
-    // Primes the source-node id cache for the read-only DO gate, then
+    // Primes the source-space id cache for the read-only DO gate, then
     // kicks off the disk walk detached so a multi-thousand-file scan
     // does not block boot. Subsequent boots reconcile incrementally.
     // See [[project_seed_source_system_node]].
-    const { ensureSourceTree } = await import("./seed/space/source.js");
+    const { ensureSourceTree } = await import("./seed/land/space/source.js");
     await ensureSourceTree();
 
     // Seed default stance permissions (arrival, owner) and BE config flags
@@ -140,7 +140,7 @@ export function genesis() {
     // their own acts run. Idempotent; runs every boot, creates only
     // what's missing. Must come after migrations so the Being model
     // shape is current before we write into it.
-    const { ensureLandBeings } = await import("./seed/being/landBeings.js");
+    const { ensureLandBeings } = await import("./seed/land/being/landBeings.js");
     const { getLandRootId } = await import("./seed/landRoot.js");
     await ensureLandBeings(getLandRootId());
 
@@ -150,11 +150,11 @@ export function genesis() {
     // need a role registration. Land-manager IS summonable (LLM-driven
     // operator dialog), so its role spec enters the registry here,
     // along with its two generic tools (land-see, land-do).
-    const { registerRole } = await import("./seed/being/roles/registry.js");
+    const { registerRole } = await import("./seed/cognition/roles/registry.js");
     const { landManagerRole } =
-      await import("./seed/being/roles/landManager.js");
+      await import("./seed/cognition/roles/landManager.js");
     const { landManagerTools } =
-      await import("./seed/being/roles/tools/landManagerTools.js");
+      await import("./seed/cognition/roles/tools/landManagerTools.js");
     registerRole("land-manager", landManagerRole, "kernel");
     await registerKernelTools(landManagerTools);
 
@@ -163,11 +163,11 @@ export function genesis() {
     // not in the kernel ops registry. Same shape an extension would
     // use; just shipped in seed.
     const { registerLlmAssignerOps } =
-      await import("./seed/being/roles/llmAssignerOps.js");
+      await import("./seed/cognition/roles/llmAssignerOps.js");
     registerLlmAssignerOps();
 
     // Tree integrity check (before extensions load, after migrations)
-    const { checkIntegrity } = await import("./seed/system/integrityCheck.js");
+    const { checkIntegrity } = await import("./seed/land/integrityCheck.js");
     await checkIntegrity({ repair: true });
 
     // The I-Am hands its remembered settings (from .config) down to
@@ -196,7 +196,7 @@ export function genesis() {
         },
         maxRegisteredTools: {
           load: () =>
-            import("./seed/system/tools.js").then((m) => m.setMaxTools),
+            import("./seed/cognition/tools.js").then((m) => m.setMaxTools),
         },
         sessionTTL: {
           load: () =>
@@ -293,7 +293,7 @@ export function genesis() {
     // Confined extensions must be known before any scope resolution
     // walks the ancestor chain, or queries during this window race.
     const { loadConfinedExtensions, setExtensionInstanceLookup } =
-      await import("./seed/space/extensionScope.js");
+      await import("./seed/land/space/extensionScope.js");
     await loadConfinedExtensions();
 
     // Register the loader's instance lookup with the kernel so
@@ -315,7 +315,7 @@ export function genesis() {
     // Hooks only need the blocked set — restricted extensions still
     // fire hooks, just with limited tools.
     hooks.setScopeResolver(async (spaceId) => {
-      const { blocked } = await getBlockedExtensionsAtNode(spaceId);
+      const { blocked } = await getBlockedExtensionsAtSpace(spaceId);
       return blocked;
     });
 
@@ -324,14 +324,14 @@ export function genesis() {
     startRetentionJob();
 
     const { startIntegrityJob } =
-      await import("./seed/system/integrityCheck.js");
+      await import("./seed/land/integrityCheck.js");
     startIntegrityJob();
 
     // Gated by treeCircuitEnabled.
-    const { startCircuitJob } = await import("./seed/space/spaceCircuit.js");
+    const { startCircuitJob } = await import("./seed/land/space/spaceCircuit.js");
     startCircuitJob();
 
-    const { cleanupExpiredResults } = await import("./seed/space/cascade.js");
+    const { cleanupExpiredResults } = await import("./seed/land/space/cascade.js");
     const cascadeCleanupMs =
       Number(getLandConfigValue("cascadeCleanupInterval")) ||
       6 * 60 * 60 * 1000;
@@ -358,9 +358,9 @@ export function genesis() {
     // block boot; logged inside the helpers.
     (async () => {
       try {
-        const { syncToolsToSubstrate } = await import("./seed/system/tools.js");
+        const { syncToolsToSubstrate } = await import("./seed/cognition/tools.js");
         const { syncRolesToSubstrate } =
-          await import("./seed/being/roles/registry.js");
+          await import("./seed/cognition/roles/registry.js");
         const { syncOperationsToSubstrate } =
           await import("./seed/ibp/operations.js");
         const [t, r, o] = await Promise.all([
@@ -386,7 +386,7 @@ export function genesis() {
     // boot so the operator sees it without waiting for a user to
     // trigger the broken role.
     try {
-      const { auditToolDescriptions } = await import("./seed/system/tools.js");
+      const { auditToolDescriptions } = await import("./seed/cognition/tools.js");
       await auditToolDescriptions();
     } catch (err) {
       log.warn("Tools", `tool-description audit failed: ${err.message}`);

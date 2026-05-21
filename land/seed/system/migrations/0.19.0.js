@@ -11,7 +11,7 @@
  * Idempotent. No-op for fresh installs (nothing carries "script").
  * For lands that ran 0.15.0 (which introduced "script"), the
  * affected beings are the system beings (auth, llm-assigner, citizen)
- * plus the I-am and any custom code-driven beings extensions
+ * plus the I_AM and any custom code-driven beings extensions
  * registered with operatingMode: "script". All move to "scripted" in
  * one updateMany.
  */

@@ -38,7 +38,7 @@ function notFoundPage(req, res, message = "This page doesn't exist or may have b
 }
 import { getLandConfigValue } from "../../seed/landConfig.js";
 
-import { DELETED } from "../../seed/space/seedSpaces.js";
+import { DELETED } from "../../seed/land/space/seedSpaces.js";
 
 const BLOCKED_IDS = new Set([DELETED, "empty", "null", "system"]);
 
@@ -117,7 +117,7 @@ export default async function registerURLRoutes(app, opts = {}) {
   app.get("/mcp", authenticateMCP, handleMcpRequest);
   app.delete("/mcp", authenticateMCP, handleMcpRequest);
 
-  // Serve uploaded files (path matches seed/matter/matters.js and uploadCleanup.js)
+  // Serve uploaded files (path matches seed/land/matter/matters.js and uploadCleanup.js)
   const uploadsDir = process.env.UPLOADS_DIR || path.join(__dirname, "../uploads");
   app.use("/api/v1/uploads", express.static(uploadsDir));
 

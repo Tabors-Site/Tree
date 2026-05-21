@@ -86,9 +86,9 @@ export default {
 
     // Read the materialized governance beings for the return payload.
     const spaceLean = await Space.findById(rootSpaceId).select("metadata").lean();
-    const beingsMeta = spaceLean?.metadata instanceof Map
-      ? spaceLean.metadata.get("beings")
-      : spaceLean?.metadata?.beings;
+    const beingsMeta = spaceLean?.qualities instanceof Map
+      ? spaceLean.qualities.get("beings")
+      : spaceLean?.qualities?.beings;
 
     log.info("Coders",
       `📜 governing-coder rulership at ${String(rootSpaceId).slice(0, 8)} ` +
