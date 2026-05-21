@@ -65,14 +65,14 @@ export function onListen() {
     const { runSeedMigrations } = await import("./seed/system/migrations/runner.js");
     await runSeedMigrations();
 
-    // Ensure the land's system beings (auth, llm-assigner, land-manager,
-    // citizen) exist as real Being rows at the land root. Idempotent —
-    // runs every boot, creates only what's missing. Must come after
-    // the 0.3.0 migration so the Being model is populated before we
-    // add to it.
-    const { ensureSystemBeings } = await import("./seed/being/systemBeings.js");
+    // Ensure the land's system beings (auth, llm-assigner, land-manager)
+    // exist as real Being rows at the land root. Idempotent — runs
+    // every boot, creates only what's missing. Must come after the
+    // 0.3.0 migration so the Being model is populated before we add
+    // to it.
+    const { ensureLandBeings } = await import("./seed/being/landBeings.js");
     const { getLandRootId } = await import("./seed/landRoot.js");
-    await ensureSystemBeings(getLandRootId());
+    await ensureLandBeings(getLandRootId());
 
     // Register kernel-shipped role specs into the role registry so
     // SUMMON can dispatch to them. Auth and llm-assigner are BE-only

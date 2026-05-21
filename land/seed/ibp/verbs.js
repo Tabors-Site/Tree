@@ -9,6 +9,31 @@
 // core.see / core.do / core.summon / core.be directly. See
 // [[project_four_verbs_one_execution]] and [[project_seed_four_verbs_only]]
 // for the architectural commitment.
+//
+// ─────────────────────────────────────────────────────────────────────
+// Did philosophy. The Did model is the audit log of verb emissions, but
+// only two verbs emit ACTIONS that need their own row:
+//
+//   DO     → writes a Did. One row per operation invocation (the unit
+//            of substrate mutation).
+//   BE     → writes a Did. One row per identity operation.
+//   SUMMON → writes NO Did. A summon is delivery to a being's inbox,
+//            not an action on the substrate. The Summon record
+//            (model: summon.js) is the audit row for the delivery.
+//            The actions the summoned being performs in response are
+//            themselves DO / BE rows carrying summonId for correlation.
+//            "What happened during this summon" → Did.find({ summonId }).
+//   SEE    → writes NO Did. Observation is not doing.
+//
+// Actor attribution. A being acting from its own stance names itself in
+// the Did. SEED_BEING is the actor only when the internal server is
+// doing the operation instead of a being in the world that is birthed
+// from the seed — pre-being scaffold flows (server boot, migrations,
+// landRoot bootstrap before any being exists). A being who triggers a
+// seed plant is the actor (their identity wins); the seed's recipe is
+// the call shape, not a separate actor. See [[project_seed_being_actor]]
+// and the SEED_BEING comment in seed/space/seedSpaces.js.
+// ─────────────────────────────────────────────────────────────────────
 
 import { randomUUID } from "crypto";
 import log from "../system/log.js";
@@ -138,10 +163,28 @@ export async function doVerb(target, operation, params = {}, opts = {}) {
   const shouldAudit = !op.skipAudit && !opts.skipAudit;
   if (shouldAudit) {
     try {
-      // Audit actor: the being if one is acting, otherwise SEED_BEING
-      // for pre-being scaffold (server boot, migrations). A being
-      // planting a seed passes identity AND scaffold; identity wins
-      // here so the planter is correctly named in the audit row.
+      // Audit actor: identity wins. A being who calls a verb is the
+      // actor on that verb's Did — including when the verb is
+      // plant-seed (the being is doing the planting, gated by their
+      // stance auth at the call site). The seed-being is the actor
+      // only when there is no identity and scaffold is set.
+      //
+      // SEED_BEING fires in exactly the cases where the internal
+      // server is doing the operation instead of a being in the
+      // world that is birthed from the seed:
+      //
+      //   (a) the server itself running — boot writes after the
+      //       seed-being has been created (landRoot reconciliation,
+      //       migrations, source-tree sync).
+      //   (b) the internal `core.do` / `core.be` / `core.summon`
+      //       calls a seed's plant function fires from inside its
+      //       recipe. The trigger Did (the being calling plant-seed)
+      //       names the requester; the materialization Dids that
+      //       follow name the seed.
+      //
+      // Before the seed-being exists at all (its own Being.create
+      // during ensureLandRoot), Dids are suppressed via opts.skipAudit
+      // at the call site — there is no actor to name yet.
       const actorBeingId = opts.identity?.beingId
         || (opts.scaffold === true ? SEED_BEING : null);
       await logDid({
@@ -362,6 +405,12 @@ export async function summonVerb(stance, message, opts = {}) {
 
   const recipientBeingId = String(toBeing._id);
   const { messageId, sentAt } = await appendToInbox(inboxNodeId, recipientBeingId, validatedMessage);
+
+  // SUMMON does not write a Did. Delivery is recorded by the Summon
+  // record (model: summon.js); the actions the summoned being performs
+  // in response are themselves DO / BE rows carrying summonId for
+  // correlation. Querying "what happened in this summon" reads Did by
+  // summonId; querying "the summon itself" reads the Summon model.
 
   const summonCtx = {
     spaceId:     inboxNodeId,
@@ -820,20 +869,19 @@ function isReadMostlyOrigin(origin) {
 }
 
 /**
- * Best-effort audit target for the Did. Most DO operations target a
- * substrate primitive (space, matter, being); the dispatcher infers
- * (kind, id) from the call shape so the audit row carries a queryable
- * `target.kind` + `target.id`.
+ * Audit target for the Did. The result is authoritative about what was
+ * just created / edited / removed; we consult it before the call's
+ * target so the Did names the substrate event (the new space, the
+ * edited matter, the removed being), not the call shape.
  *
  * Lookup order:
- *   1. result._didTarget       (operation handler hint: { kind, id })
- *   2. result._didSpaceId      (legacy hint, treated as space target)
- *   3. target._didKind / target._id  (Mongoose doc + explicit kind hint)
- *   4. target.spaceId   → space
- *   5. target.matterId  → matter
- *   6. target.beingId   → being
- *   7. target.id        (generic; kind unknown)
- *   8. target as string (raw id; kind unknown)
+ *   1. result._didTarget          (explicit handler hint: { kind, id })
+ *   2. result.spaceId / matterId / beingId  (typed entity id on result)
+ *   3. target._didKind + target._id  (Mongoose doc + explicit hint)
+ *   4. target.spaceId / matterId / beingId  (envelope-like target)
+ *   5. target._id                 (Mongoose doc, kind guessed as space)
+ *   6. target.id                  (generic, kind unknown)
+ *   7. target as string           (raw id, kind unknown)
  *
  * Returns null when nothing is resolvable; the Did is still written
  * (target itself is optional in the schema).
@@ -843,18 +891,18 @@ function resolveAuditTarget(target, result) {
     if (result._didTarget && result._didTarget.id) {
       return { kind: result._didTarget.kind || null, id: String(result._didTarget.id) };
     }
-    if (result._didSpaceId) {
-      return { kind: "space", id: String(result._didSpaceId) };
-    }
+    if (result.spaceId)  return { kind: "space",  id: String(result.spaceId) };
+    if (result.matterId) return { kind: "matter", id: String(result.matterId) };
+    if (result.beingId)  return { kind: "being",  id: String(result.beingId) };
   }
   if (target && typeof target === "object") {
     if (target._didKind && target._id) {
       return { kind: target._didKind, id: String(target._id) };
     }
-    if (target._id) return { kind: "space", id: String(target._id) };
     if (target.spaceId)  return { kind: "space",  id: String(target.spaceId) };
     if (target.matterId) return { kind: "matter", id: String(target.matterId) };
     if (target.beingId)  return { kind: "being",  id: String(target.beingId) };
+    if (target._id) return { kind: "space", id: String(target._id) };
     if (target.id) return { kind: null, id: String(target.id) };
   }
   if (typeof target === "string") return { kind: null, id: target };

@@ -81,8 +81,8 @@ const BeingSchema = new mongoose.Schema({
   // ensureLandRoot() at boot, identified by parentBeingId: null.
   //
   // Every other Being chains back to it:
-  //   - System beings (auth, llm-assigner, land-manager, citizen) are
-  //     children of the seed-being.
+  //   - System beings (auth, llm-assigner, land-manager) are children
+  //     of the seed-being.
   //   - The first human registers under the seed-being and becomes
   //     the root operator. Subsequent humans register under the
   //     auth-being.

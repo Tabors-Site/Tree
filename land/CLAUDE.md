@@ -12,7 +12,7 @@ seed/              The kernel. Data shape + registries + hooks. NEVER modify.
   ibp/               Core IBP grammar: verbs, operations, authorize, address,
                      resolver, descriptor, discovery, errors, protocol/ERR,
                      pushChannel. Seed-internal; protocols/ibp/ is the wire adapter.
-  being/             Identity: beRegistry, identity, position, systemBeings,
+  being/             Identity: beRegistry, identity, position, landBeings,
                      beingMetadata, plus roles/ (registry + built-ins: auth, echo,
                      landManager, llmAssigner).
   space/             Tree ops: ancestorCache, ownership, spaceManagement, dids,

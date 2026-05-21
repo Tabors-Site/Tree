@@ -70,6 +70,7 @@ export function registerKernelOperations() {
   registerOperation("create-child", {
     targets: ["node", "being", "matter"],
     ownerExtension: "kernel",
+    didAction: "create",
     handler: async ({ target, params, identity }) => {
       const kind = detectTargetKind(target);
       if (kind === "being")  return createBeingChild({ parentBeing: target, params, identity });
@@ -84,6 +85,7 @@ export function registerKernelOperations() {
   registerOperation("create-matter", {
     targets: ["node"],
     ownerExtension: "kernel",
+    didAction: "create",
     handler: async ({ target, params, identity }) => {
       const spaceId = targetIdOf(target);
       const matter = await Matter.create({
@@ -97,7 +99,13 @@ export function registerKernelOperations() {
           ? new Map(Object.entries(params.metadata))
           : new Map(),
       });
-      return matter;
+      // _didTarget hints the dispatcher to name the new matter (not the
+      // parent space the call addressed) as the substrate-event target.
+      return {
+        matter,
+        matterId: String(matter._id),
+        _didTarget: { kind: "matter", id: String(matter._id) },
+      };
     },
   });
 
@@ -125,6 +133,7 @@ export function registerKernelOperations() {
   registerOperation("set-name", {
     targets: ["node", "being", "matter"],
     ownerExtension: "kernel",
+    didAction: "edit",
     handler: async ({ target, params, identity }) => {
       const { name } = params || {};
       if (!name || typeof name !== "string") {
@@ -170,6 +179,7 @@ export function registerKernelOperations() {
   registerOperation("set-type", {
     targets: ["node"],
     ownerExtension: "kernel",
+    didAction: "edit",
     handler: async ({ target, params, identity }) => {
       const { type } = params || {};
       if (!type || typeof type !== "string") {
@@ -192,6 +202,7 @@ export function registerKernelOperations() {
   registerOperation("delete-node", {
     targets: ["node"],
     ownerExtension: "kernel",
+    didAction: "remove",
     handler: async ({ target, params: _params, identity }) => {
       const spaceId = targetIdOf(target);
       const deleted = await deleteSpaceBranch(spaceId, identity?.beingId || null);
@@ -208,6 +219,7 @@ export function registerKernelOperations() {
   registerOperation("delete-matter", {
     targets: ["matter"],
     ownerExtension: "kernel",
+    didAction: "remove",
     handler: async ({ target, params: _params, identity, summonCtx }) => {
       const matterId = String(target?._id || target?.matterId || target);
       if (!matterId) throw new Error("delete-matter: matterId required");
@@ -230,6 +242,7 @@ export function registerKernelOperations() {
   registerOperation("set-parent", {
     targets: ["node"],
     ownerExtension: "kernel",
+    didAction: "move",
     handler: async ({ target, params, identity }) => {
       const { parentId } = params || {};
       if (!parentId || typeof parentId !== "string") {
@@ -258,6 +271,7 @@ export function registerKernelOperations() {
   registerOperation("set-meta", {
     targets: ["node", "being", "matter"],
     ownerExtension: "kernel",
+    didAction: "edit",
     handler: async ({ target, params, identity }) => {
       const { namespace, data, merge = true } = params || {};
       if (!namespace || typeof namespace !== "string") {
@@ -644,10 +658,14 @@ async function createNodeChild({ target, params, identity, kind }) {
 }
 
 function shapeNewNode(newSpace) {
+  const spaceId = String(newSpace._id);
   return {
-    spaceId:   String(newSpace._id),
+    spaceId,
     name:     newSpace.name,
-    position: `${getLandDomain()}/${String(newSpace._id)}`,
+    position: `${getLandDomain()}/${spaceId}`,
+    // _didTarget hints the dispatcher to name the new space (not the
+    // parent the call addressed) as the substrate-event target.
+    _didTarget: { kind: "space", id: spaceId },
   };
 }
 

@@ -29,8 +29,12 @@ const DidSchema = new mongoose.Schema({
 
   // Which verb emitted this row. DO covers operations; BE covers
   // identity actions (register / claim / release / switch and any
-  // be-being's honoredOperations). SEE writes no Dids by design
-  // (observation is not doing).
+  // be-being's honoredOperations). SUMMON and SEE write no Dids by
+  // design: SEE is observation (not doing); SUMMON is delivery to a
+  // being's inbox, and the actions that being performs in response
+  // are themselves DO / BE rows carrying summonId for correlation.
+  // The Summon record (model: summon.js) is the audit row for the
+  // delivery itself.
   verb:   { type: String, enum: ["do", "be"], default: "do", index: true },
 
   // The operation or sub-event name. Operations register a `didAction`

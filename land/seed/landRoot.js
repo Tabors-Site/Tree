@@ -3,6 +3,14 @@
 // Land root bootstrap. Creates the land root and every land seed space
 // on first boot, and recreates anything missing on subsequent boots
 // (recovery from partial failures, manual deletion). Idempotent.
+//
+// The folder structure is land/seed/ — seed is inside land. The land
+// is the container; the seed is what makes things inside it. The
+// land doesn't generate anything on its own — it holds what the seed
+// makes. This file is the seed at first boot reaching out and
+// materializing its container's foundation: the root space, the seed
+// spaces beneath it, the seed-being. Everything the land will ever
+// contain begins here.
 
 import log from "./system/log.js";
 import Space from "./models/space.js";
@@ -11,27 +19,35 @@ import { SEED_SPACE, SEED_BEING } from "./space/seedSpaces.js";
 let landRootCache = null;
 
 const SYSTEM_NODES = [
-  { name: ".identity", seedSpace: SEED_SPACE.IDENTITY, buildMetadata: () => {
-    const domain = process.env.LAND_DOMAIN || "localhost";
-    return new Map([["domain", domain]]);
-  }},
-  { name: ".config", seedSpace: SEED_SPACE.CONFIG, buildMetadata: () => {
-    const name = process.env.LAND_NAME || "My Land";
-    const domain = process.env.LAND_DOMAIN || "localhost";
-    return new Map([
-      ["LAND_NAME", name],
-      ["landUrl", `http://${domain}:${process.env.PORT || 3000}`],
-    ]);
-  }},
+  {
+    name: ".identity",
+    seedSpace: SEED_SPACE.IDENTITY,
+    buildMetadata: () => {
+      const domain = process.env.LAND_DOMAIN || "localhost";
+      return new Map([["domain", domain]]);
+    },
+  },
+  {
+    name: ".config",
+    seedSpace: SEED_SPACE.CONFIG,
+    buildMetadata: () => {
+      const name = process.env.LAND_NAME || "My Land";
+      const domain = process.env.LAND_DOMAIN || "localhost";
+      return new Map([
+        ["LAND_NAME", name],
+        ["landUrl", `http://${domain}:${process.env.PORT || 3000}`],
+      ]);
+    },
+  },
   { name: ".peers", seedSpace: SEED_SPACE.PEERS },
   { name: ".extensions", seedSpace: SEED_SPACE.EXTENSIONS },
   { name: ".flow", seedSpace: SEED_SPACE.FLOW },
-  { name: ".tools",      seedSpace: SEED_SPACE.TOOLS },
-  { name: ".roles",      seedSpace: SEED_SPACE.ROLES },
+  { name: ".tools", seedSpace: SEED_SPACE.TOOLS },
+  { name: ".roles", seedSpace: SEED_SPACE.ROLES },
   { name: ".operations", seedSpace: SEED_SPACE.OPERATIONS },
   // .source is read-only. Populated by seed/space/source.js as a filesystem
   // mirror of land/. DO writes against children reject with ORIGIN_READ_ONLY.
-  { name: ".source",     seedSpace: SEED_SPACE.SOURCE },
+  { name: ".source", seedSpace: SEED_SPACE.SOURCE },
 ];
 
 export async function ensureLandRoot() {
@@ -68,7 +84,10 @@ export async function ensureLandRoot() {
         await node.save();
         log.info("Land", `Created land seed space: ${def.name}`);
       } catch (err) {
-        log.error("Land", `Failed to create ${def.name}: ${err.message}. Boot continues.`);
+        log.error(
+          "Land",
+          `Failed to create ${def.name}: ${err.message}. Boot continues.`,
+        );
         continue;
       }
     }
@@ -76,8 +95,13 @@ export async function ensureLandRoot() {
     // Repair: a land seed space found at the wrong parent (manual DB
     // edit, corruption) gets moved back under the land root.
     if (node.parent && node.parent.toString() !== landRoot._id.toString()) {
-      log.warn("Land", `Land seed space ${def.name} has wrong parent. Repairing.`);
-      await Space.findByIdAndUpdate(node._id, { $set: { parent: landRoot._id } });
+      log.warn(
+        "Land",
+        `Land seed space ${def.name} has wrong parent. Repairing.`,
+      );
+      await Space.findByIdAndUpdate(node._id, {
+        $set: { parent: landRoot._id },
+      });
     }
 
     const childIds = landRoot.children.map(String);
@@ -100,14 +124,23 @@ export async function ensureLandRoot() {
         landRoot.children.push(root._id);
         childrenChanged = true;
       } catch (err) {
-        log.error("Land", `Failed to migrate orphan root ${root._id}: ${err.message}`);
+        log.error(
+          "Land",
+          `Failed to migrate orphan root ${root._id}: ${err.message}`,
+        );
       }
     }
     if (orphanRoots.length > 0) {
-      log.info("Land", `Adopted ${orphanRoots.length} orphan tree root(s) under land root`);
+      log.info(
+        "Land",
+        `Adopted ${orphanRoots.length} orphan tree root(s) under land root`,
+      );
     }
   } catch (err) {
-    log.error("Land", `Orphan root adoption failed: ${err.message}. Some trees may be parentless.`);
+    log.error(
+      "Land",
+      `Orphan root adoption failed: ${err.message}. Some trees may be parentless.`,
+    );
   }
 
   if (childrenChanged) {
@@ -116,11 +149,19 @@ export async function ensureLandRoot() {
 
   landRootCache = landRoot;
 
-  // The seed-being is the kernel's first Being row so every scaffold-time
-  // Did from this point forward attributes to a real Being.
+  // The server is made from the seed. Up to this point in boot, the
+  // seed has materialized the land root and its seed spaces with no
+  // being to audit the writes against. ensureSeedBeing creates the
+  // Being row that carries the seed's identity going forward — the
+  // root of the being-tree, the actor named whenever the internal
+  // server (or a planted seed's recipe) does substrate work. Every
+  // human being birthed from this land descends from this one.
   await ensureSeedBeing(landRoot._id);
 
-  log.verbose("Land", `Land root verified: ${landRoot._id} (${landRoot.children.length} children)`);
+  log.verbose(
+    "Land",
+    `Land root verified: ${landRoot._id} (${landRoot.children.length} children)`,
+  );
   return landRoot;
 }
 
@@ -129,19 +170,22 @@ export async function ensureLandRoot() {
 // or summoned interactively, so the random password is never used.
 async function ensureSeedBeing(landRootId) {
   const Being = (await import("../models/being.js")).default;
-  let seedBeing = await Being.findOne({ name: SEED_BEING }).select("_id").lean();
+  let seedBeing = await Being.findOne({ name: SEED_BEING })
+    .select("_id")
+    .lean();
   if (seedBeing) return seedBeing;
 
-  const password = Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2);
+  const password =
+    Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2);
   const created = await Being.create({
-    name:          SEED_BEING,
+    name: SEED_BEING,
     password,
     operatingMode: "scripted",
-    roles:         ["seed-being"],
-    defaultRole:   "seed-being",
+    roles: ["seed-being"],
+    defaultRole: "seed-being",
     parentBeingId: null,
-    homeSpace:     landRootId,
-    currentSpace:  landRootId,
+    homeSpace: landRootId,
+    currentSpace: landRootId,
   });
   log.info("Land", `Created seed-being (${String(created._id).slice(0, 8)})`);
   return created;
@@ -165,7 +209,8 @@ export function isBeingRoot(node) {
   if (node.seedSpace) return false;
   if (!node.rootOwner || String(node.rootOwner) === SEED_BEING) return false;
   const landId = getLandRootId();
-  if (landId && node.parent && String(node.parent) !== String(landId)) return false;
+  if (landId && node.parent && String(node.parent) !== String(landId))
+    return false;
   return true;
 }
 
@@ -178,7 +223,9 @@ export async function syncExtensionsToTree(manifests) {
 
   const existingChildren = await Space.find({
     _id: { $in: extSpace.children },
-  }).select("_id name").lean();
+  })
+    .select("_id name")
+    .lean();
 
   const existingByName = new Map();
   for (const c of existingChildren) existingByName.set(c.name, c._id);
@@ -189,19 +236,19 @@ export async function syncExtensionsToTree(manifests) {
     currentNames.add(manifest.name);
 
     const extensionMeta = {
-      version:     manifest.version     || "0.0.0",
+      version: manifest.version || "0.0.0",
       description: manifest.description || null,
-      type:        manifest.type        || null,
-      scope:       manifest.scope === "confined" ? "confined" : "open",
-      needs:       manifest.needs       || {},
-      optional:    manifest.optional    || {},
-      provides:    {
-        routes:        !!manifest.provides?.routes,
-        tools:         !!manifest.provides?.tools,
-        jobs:          !!manifest.provides?.jobs,
-        models:        Object.keys(manifest.provides?.models        || {}),
+      type: manifest.type || null,
+      scope: manifest.scope === "confined" ? "confined" : "open",
+      needs: manifest.needs || {},
+      optional: manifest.optional || {},
+      provides: {
+        routes: !!manifest.provides?.routes,
+        tools: !!manifest.provides?.tools,
+        jobs: !!manifest.provides?.jobs,
+        models: Object.keys(manifest.provides?.models || {}),
         energyActions: Object.keys(manifest.provides?.energyActions || {}),
-        sessionTypes:  Object.keys(manifest.provides?.sessionTypes  || {}),
+        sessionTypes: Object.keys(manifest.provides?.sessionTypes || {}),
       },
     };
     const metadata = new Map([["extension", extensionMeta]]);
@@ -221,9 +268,14 @@ export async function syncExtensionsToTree(manifests) {
           metadata,
         });
         await child.save();
-        await Space.findByIdAndUpdate(extSpace._id, { $addToSet: { children: child._id } });
+        await Space.findByIdAndUpdate(extSpace._id, {
+          $addToSet: { children: child._id },
+        });
       } catch (err) {
-        log.error("Land", `Failed to sync extension node "${manifest.name}": ${err.message}`);
+        log.error(
+          "Land",
+          `Failed to sync extension node "${manifest.name}": ${err.message}`,
+        );
       }
     }
   }

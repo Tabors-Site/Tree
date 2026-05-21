@@ -26,7 +26,7 @@ import {
   LLM_ASSIGNER_TUTORIAL_MARK,
   LLM_ASSIGNER_TUTORIAL_URL,
   LLM_ASSIGNER_TUTORIAL_VIDEO_ID,
-} from "../systemBeings.js";
+} from "../landBeings.js";
 
 const OWNER = "llm-assigner";
 

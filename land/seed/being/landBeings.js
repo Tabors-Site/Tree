@@ -4,19 +4,28 @@
 //
 // Every land has a small set of AI beings that live at the land root
 // itself, not at any tree: the auth-being (handles BE register/claim/
-// release), the land-manager (conversational admin interface), and citizen
-// (read-only browsing). These need to exist as real Being rows in the
-// beings table so the descriptor can surface them and the address
-// grammar can resolve `<land>/@<username>` to them.
+// release/switch), the llm-assigner (configures LLM connections), and
+// the land-manager (conversational admin interface). These need to
+// exist as real Being rows in the beings table so the descriptor can
+// surface them and the address grammar can resolve `<land>/@<username>`
+// to them.
+//
+// These are beings in the world that are birthed from the seed. They
+// have their own identities, their own summon paths, their own
+// stances — the seed birthed them and now they act as themselves,
+// not as the seed. Anything they do attributes to their own beingId,
+// not SEED_BEING. The distinction matters: the seed-being is the
+// internal server acting; these are first-class participants the
+// substrate addresses by name.
 //
 // Being-tree parenting: every land has exactly ONE seed-being at the
 // root of the being-tree (the only Being with parentBeingId: null).
 // It is created during ensureLandRoot() — see seed/landRoot.js.
-// System beings (auth, llm-assigner, land-manager, citizen) and every
-// human are children of the seed-being. Walking parentBeingId from any
-// being eventually reaches the seed-being, then null.
+// System beings (auth, llm-assigner, land-manager) and every human are
+// children of the seed-being. Walking parentBeingId from any being
+// eventually reaches the seed-being, then null.
 //
-// `ensureSystemBeings(landRootId)` runs at boot after the seed-being
+// `ensureLandBeings(landRootId)` runs at boot after the seed-being
 // exists. Idempotent — safe to call on every boot. The drift
 // reconciler also keeps existing system beings' parentBeingId pointed
 // at the current seed-being.
@@ -59,7 +68,7 @@ export async function findRootOperator() {
     .lean();
 }
 
-const SYSTEM_BEINGS = [
+const LAND_BEINGS = [
   {
     name: "auth",
     role: "auth",
@@ -78,12 +87,6 @@ const SYSTEM_BEINGS = [
     operatingMode: "llm",
     description: "Conversational interface for land-level administration (extensions, config, peers). Carries no authority of its own; its writes are gated by the caller's stance — root operator, or owner / contributor on the land root.",
   },
-  {
-    name: "citizen",
-    role: "citizen",
-    operatingMode: "scripted",
-    description: "Read-only browsing of the land's public surface.",
-  },
 ];
 
 /**
@@ -98,21 +101,21 @@ const SYSTEM_BEINGS = [
  * that already booted past first-ensure still re-run this idempotently
  * to backfill drift.
  */
-export async function ensureSystemBeings(landRootId) {
+export async function ensureLandBeings(landRootId) {
   if (!landRootId) {
-    log.warn("SystemBeings", "ensureSystemBeings called without a landRootId");
+    log.warn("LandBeings", "ensureLandBeings called without a landRootId");
     return { created: 0, existing: 0, deferred: false };
   }
 
   const landRoot = await Space.findById(landRootId);
   if (!landRoot) {
-    log.warn("SystemBeings", `land root ${String(landRootId).slice(0, 8)} not found; skipping`);
+    log.warn("LandBeings", `land root ${String(landRootId).slice(0, 8)} not found; skipping`);
     return { created: 0, existing: 0, deferred: false };
   }
 
   const seedBeing = await findSeedBeing();
   if (!seedBeing) {
-    log.info("SystemBeings", "no seed-being yet; deferring system-being setup until ensureLandRoot() runs");
+    log.info("LandBeings", "no seed-being yet; deferring system-being setup until ensureLandRoot() runs");
     return { created: 0, existing: 0, deferred: true };
   }
   const rootBeingId = String(seedBeing._id);
@@ -120,7 +123,7 @@ export async function ensureSystemBeings(landRootId) {
   let created = 0;
   let existing = 0;
 
-  for (const spec of SYSTEM_BEINGS) {
+  for (const spec of LAND_BEINGS) {
     try {
       // Look up by username (the canonical identifier per land).
       const existingBeing = await Being.findOne({ name: spec.name })
@@ -173,21 +176,21 @@ export async function ensureSystemBeings(landRootId) {
         parentBeingId: rootBeingId,
       });
       created++;
-      log.info("SystemBeings", `created ${spec.role} being (name=${spec.name})`);
+      log.info("LandBeings", `created ${spec.role} being (name=${spec.name})`);
     } catch (err) {
-      log.error("SystemBeings", `failed to ensure ${spec.role} being: ${err.message}`);
+      log.error("LandBeings", `failed to ensure ${spec.role} being: ${err.message}`);
     }
   }
 
   if (created > 0 || existing > 0) {
-    log.info("SystemBeings", `system beings ensured: ${created} created, ${existing} already present (parent=${rootBeingId.slice(0, 8)})`);
+    log.info("LandBeings", `system beings ensured: ${created} created, ${existing} already present (parent=${rootBeingId.slice(0, 8)})`);
   }
   return { created, existing, deferred: false };
 }
 
 // Marker for the llm-assigner intro tutorial matter. Used by the
 // being's start-tutorial / complete-tutorial BE ops to find + verify
-// its own matters. Kept here next to the SYSTEM_BEINGS definition so
+// its own matters. Kept here next to the LAND_BEINGS definition so
 // system-being conventions live in one place.
 export const LLM_ASSIGNER_TUTORIAL_MARK = "llm-assigner-intro";
 export const LLM_ASSIGNER_TUTORIAL_URL  = "https://www.youtube.com/watch?v=_cXGZXdiVgw";

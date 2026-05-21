@@ -6,8 +6,8 @@ import jwt from "jsonwebtoken";
 import crypto from "crypto";
 import { v4 as uuidv4 } from "uuid";
 import { escapeRegex } from "../system/utils.js";
-import { getLandConfigValue } from "../landConfig.js";
-import { getLandRootId } from "../landRoot.js";
+import { getLandConfigValue } from "../system/landConfig.js";
+import { getLandRootId } from "../system/landRoot.js";
 import { ERR, ProtocolError } from "../ibp/protocol.js";
 import log from "../system/log.js";
 
@@ -15,7 +15,10 @@ import path from "path";
 import { fileURLToPath } from "url";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
-if (!process.env.JWT_SECRET) throw new Error("JWT_SECRET is required. Run the setup wizard or add it to .env");
+if (!process.env.JWT_SECRET)
+  throw new Error(
+    "JWT_SECRET is required. Run the setup wizard or add it to .env",
+  );
 const JWT_SECRET = process.env.JWT_SECRET;
 
 // ─────────────────────────────────────────────────────────────────────────
@@ -27,18 +30,34 @@ const MIN_PASSWORD = 8;
 const MAX_PASSWORD = 128;
 
 function validateName(name) {
-  if (!name || typeof name !== "string") throw new ProtocolError(400, ERR.INVALID_INPUT, "Name is required");
+  if (!name || typeof name !== "string")
+    throw new ProtocolError(400, ERR.INVALID_INPUT, "Name is required");
   const trimmed = name.trim();
   if (!BEING_NAME_RE.test(trimmed)) {
-    throw new ProtocolError(400, ERR.INVALID_INPUT, "Name may only contain letters, numbers, hyphens, and underscores (1-32 chars)");
+    throw new ProtocolError(
+      400,
+      ERR.INVALID_INPUT,
+      "Name may only contain letters, numbers, hyphens, and underscores (1-32 chars)",
+    );
   }
   return trimmed;
 }
 
 function validatePassword(password) {
-  if (!password || typeof password !== "string") throw new ProtocolError(400, ERR.INVALID_INPUT, "Password is required");
-  if (password.length < MIN_PASSWORD) throw new ProtocolError(400, ERR.INVALID_INPUT, `Password must be at least ${MIN_PASSWORD} characters`);
-  if (password.length > MAX_PASSWORD) throw new ProtocolError(400, ERR.INVALID_INPUT, `Password must be ${MAX_PASSWORD} characters or fewer`);
+  if (!password || typeof password !== "string")
+    throw new ProtocolError(400, ERR.INVALID_INPUT, "Password is required");
+  if (password.length < MIN_PASSWORD)
+    throw new ProtocolError(
+      400,
+      ERR.INVALID_INPUT,
+      `Password must be at least ${MIN_PASSWORD} characters`,
+    );
+  if (password.length > MAX_PASSWORD)
+    throw new ProtocolError(
+      400,
+      ERR.INVALID_INPUT,
+      `Password must be ${MAX_PASSWORD} characters or fewer`,
+    );
 }
 
 // ─────────────────────────────────────────────────────────────────────────
@@ -80,7 +99,8 @@ export async function createBeing(name, password, opts = {}) {
   const existing = await Being.findOne({
     name: { $regex: `^${escapeRegex(name)}$`, $options: "i" },
   });
-  if (existing) throw new ProtocolError(409, ERR.RESOURCE_CONFLICT, "Name already taken");
+  if (existing)
+    throw new ProtocolError(409, ERR.RESOURCE_CONFLICT, "Name already taken");
 
   // Roles + defaultRole replace the legacy static `role` field.
   // - `opts.role` (singular) is the canonical input today: AI beings
@@ -103,7 +123,7 @@ export async function createBeing(name, password, opts = {}) {
     name,
     password,
     operatingMode: opts.operatingMode || "human",
-    roles:       rolesList,
+    roles: rolesList,
     defaultRole,
     // Being-tree parent. parentBeingId: null is reserved for the
     // seed-being (the substrate's first identity, created during
@@ -132,7 +152,8 @@ export async function createBeing(name, password, opts = {}) {
   try {
     await being.save();
   } catch (err) {
-    if (err.code === 11000) throw new ProtocolError(409, ERR.RESOURCE_CONFLICT, "Name already taken");
+    if (err.code === 11000)
+      throw new ProtocolError(409, ERR.RESOURCE_CONFLICT, "Name already taken");
     throw err;
   }
   return being;
@@ -144,7 +165,9 @@ export async function createBeing(name, password, opts = {}) {
  * extensions that scaffold AI beings (governing → ruler/planner/...).
  */
 export async function generateUniqueName(role, opts = {}) {
-  const base = String(role || "being").replace(/[^a-z0-9-]/gi, "").slice(0, 24);
+  const base = String(role || "being")
+    .replace(/[^a-z0-9-]/gi, "")
+    .slice(0, 24);
   const attempts = opts.attempts || 8;
   for (let i = 0; i < attempts; i++) {
     const bits = 4 + i;
@@ -152,7 +175,9 @@ export async function generateUniqueName(role, opts = {}) {
     const candidate = `${base}${suffix}`;
     const clash = await Being.findOne({
       name: { $regex: `^${escapeRegex(candidate)}$`, $options: "i" },
-    }).select("_id").lean();
+    })
+      .select("_id")
+      .lean();
     if (!clash) return candidate;
   }
   // Last resort: full UUID slice
@@ -177,7 +202,10 @@ export async function verifyPassword(being, password) {
     return await Promise.race([
       bcrypt.compare(password, being.password),
       new Promise((_, reject) => {
-        timer = setTimeout(() => reject(new Error("Password verification timed out")), BCRYPT_TIMEOUT_MS);
+        timer = setTimeout(
+          () => reject(new Error("Password verification timed out")),
+          BCRYPT_TIMEOUT_MS,
+        );
       }),
     ]);
   } finally {
@@ -205,8 +233,8 @@ export function generateToken(being) {
   return jwt.sign(
     {
       beingId: being._id,
-      name:    being.name,
-      jti:     crypto.randomUUID(),
+      name: being.name,
+      jti: crypto.randomUUID(),
     },
     JWT_SECRET,
     { expiresIn },
@@ -231,11 +259,16 @@ export function generateToken(being) {
  * @param {string} [args.clientSessionId]  optional correlation tag
  * @param {string} [args.expiresIn]        default "24h"
  */
-export function signInternalToken({ beingId, name, clientSessionId, expiresIn = "24h" }) {
+export function signInternalToken({
+  beingId,
+  name,
+  clientSessionId,
+  expiresIn = "24h",
+}) {
   if (!beingId) throw new Error("signInternalToken: `beingId` is required");
   const payload = {
     beingId: String(beingId),
-    name:    name || null,
+    name: name || null,
   };
   if (clientSessionId) payload.clientSessionId = clientSessionId;
   return jwt.sign(payload, JWT_SECRET, { expiresIn });
@@ -256,9 +289,9 @@ export function decodeToken(token) {
     const decoded = jwt.verify(token, JWT_SECRET);
     return {
       beingId: decoded.beingId,
-      name:    decoded.name,
-      iat:     decoded.iat,
-      jti:     decoded.jti,
+      name: decoded.name,
+      iat: decoded.iat,
+      jti: decoded.jti,
     };
   } catch {
     return null;
@@ -286,19 +319,21 @@ export async function verifyTokenStrict(token, { loadBeing = true } = {}) {
     .lean();
   if (!being) return null;
 
-  const authMeta = being.metadata instanceof Map
-    ? being.metadata.get("auth")
-    : being.metadata?.auth;
+  const authMeta =
+    being.metadata instanceof Map
+      ? being.metadata.get("auth")
+      : being.metadata?.auth;
   if (authMeta?.tokensInvalidBefore) {
-    const invalidBefore = new Date(authMeta.tokensInvalidBefore).getTime() / 1000;
+    const invalidBefore =
+      new Date(authMeta.tokensInvalidBefore).getTime() / 1000;
     if (decoded.iat && decoded.iat < invalidBefore) return null;
   }
 
   return {
     beingId: decoded.beingId,
-    name:    decoded.name,
-    jwt:     token,
-    being:   loadBeing ? being : null,
+    name: decoded.name,
+    jwt: token,
+    being: loadBeing ? being : null,
   };
 }
 
@@ -361,20 +396,20 @@ export async function findBeingByName(name) {
 export async function createBeingWithHome(opts) {
   const {
     operatingMode,
-    role         = null,
-    llmDefault   = null,
+    role = null,
+    llmDefault = null,
     // `homeSpace` matches the schema field on Being. The caller passes
     // an existing Space's id and the being's `homeSpace` field is set
     // to it. Use `homeParent` instead to create a fresh child Space
     // under an existing parent.
-    homeSpace    = null,
-    homeParent   = null,
-    homeName     = null,
-    homeType     = null,
+    homeSpace = null,
+    homeParent = null,
+    homeName = null,
+    homeType = null,
     homeMetadata = null,
-    scaffolding  = null,
-    isRemote     = false,
-    homeLand     = null,
+    scaffolding = null,
+    isRemote = false,
+    homeLand = null,
     // Being-tree parent ([[project_substrate_as_universal_workspace]]).
     // When set, the new being is placed as a being-tree child of this
     // parent. Atomic update of parent.children handled by the caller
@@ -387,14 +422,23 @@ export async function createBeingWithHome(opts) {
   if (!name && username) name = username;
 
   // ── Validate mode + required fields ──
-  if (operatingMode !== "human" && operatingMode !== "llm" && operatingMode !== "scripted" && operatingMode !== "mixed") {
-    throw new Error("createBeingWithHome requires operatingMode='human' | 'llm' | 'scripted' | 'mixed'");
+  if (
+    operatingMode !== "human" &&
+    operatingMode !== "llm" &&
+    operatingMode !== "scripted" &&
+    operatingMode !== "mixed"
+  ) {
+    throw new Error(
+      "createBeingWithHome requires operatingMode='human' | 'llm' | 'scripted' | 'mixed'",
+    );
   }
   if (operatingMode !== "human" && !role) {
     throw new Error("createBeingWithHome: non-human beings require a role");
   }
   if (!homeSpace && !homeParent) {
-    throw new Error("createBeingWithHome requires either homeSpace or homeParent");
+    throw new Error(
+      "createBeingWithHome requires either homeSpace or homeParent",
+    );
   }
 
   // ── Resolve identity (auto-fill for non-human beings) ──
@@ -403,8 +447,10 @@ export async function createBeingWithHome(opts) {
     else throw new ProtocolError(400, ERR.INVALID_INPUT, "Name is required");
   }
   if (!password) {
-    if (operatingMode !== "human") password = crypto.randomBytes(32).toString("hex");
-    else throw new ProtocolError(400, ERR.INVALID_INPUT, "Password is required");
+    if (operatingMode !== "human")
+      password = crypto.randomBytes(32).toString("hex");
+    else
+      throw new ProtocolError(400, ERR.INVALID_INPUT, "Password is required");
   }
 
   // ── Resolve the home Space ──
@@ -412,28 +458,33 @@ export async function createBeingWithHome(opts) {
   //   A. homeSpace: use an existing Space as the home. No structural
   //      change to the tree.
   //   B. homeParent: create a new child Space under the given parent.
-  //      Defaults for name/type come from the operating mode + role.
+  //      Defaults for name/type come from the operating role.
   let home = null;
   let createdNewHome = false;
 
   if (homeSpace) {
     home = await Space.findById(homeSpace);
-    if (!home) throw new Error(`createBeingWithHome: home space ${homeSpace} not found`);
+    if (!home)
+      throw new Error(`createBeingWithHome: home space ${homeSpace} not found`);
   } else {
     const parent = await Space.findById(homeParent).select("_id").lean();
-    if (!parent) throw new Error(`createBeingWithHome: home parent ${homeParent} not found`);
+    if (!parent)
+      throw new Error(
+        `createBeingWithHome: home parent ${homeParent} not found`,
+      );
 
-    const resolvedName = homeName
-      || (operatingMode === "human" ? `~${name}` : `${role}-home`);
-    const resolvedType = homeType
-      || (operatingMode === "human" ? "home-territory" : `${role}-home`);
+    const resolvedName =
+      homeName || (operatingMode === "human" ? `~${name}` : `${role}-home`);
+    const resolvedType =
+      homeType ||
+      (operatingMode === "human" ? "home-territory" : `${role}-home`);
 
     home = await Space.create({
-      _id:          uuidv4(),
-      name:         resolvedName,
-      type:         resolvedType,
-      parent:       homeParent,
-      rootOwner:    null,                  // set below for humans only
+      _id: uuidv4(),
+      name: resolvedName,
+      type: resolvedType,
+      parent: homeParent,
+      rootOwner: null, // set below for humans only
       contributors: [],
       ...(homeMetadata ? { metadata: homeMetadata } : {}),
     });
@@ -465,7 +516,10 @@ export async function createBeingWithHome(opts) {
           { $pull: { children: home._id } },
         );
       } catch (rollbackErr) {
-        log.warn("auth", `createBeingWithHome rollback failed: ${rollbackErr.message}`);
+        log.warn(
+          "auth",
+          `createBeingWithHome rollback failed: ${rollbackErr.message}`,
+        );
       }
     }
     throw err;
@@ -504,13 +558,16 @@ export async function createBeingWithHome(opts) {
       const { mergeExtMeta } = await import("../space/extensionMetadata.js");
       await mergeExtMeta(home, "beings", {
         [role]: {
-          beingId:     String(being._id),
+          beingId: String(being._id),
           installedAt: new Date().toISOString(),
           installedBy: "createBeingWithHome",
         },
       });
     } catch (err) {
-      log.warn("auth", `createBeingWithHome: failed to register ${role} home: ${err.message}`);
+      log.warn(
+        "auth",
+        `createBeingWithHome: failed to register ${role} home: ${err.message}`,
+      );
     }
   }
 
@@ -519,7 +576,10 @@ export async function createBeingWithHome(opts) {
     try {
       await scaffolding({ being, home });
     } catch (err) {
-      log.warn("auth", `createBeingWithHome scaffolding callback failed: ${err.message}`);
+      log.warn(
+        "auth",
+        `createBeingWithHome scaffolding callback failed: ${err.message}`,
+      );
     }
   }
 
@@ -563,7 +623,10 @@ export async function createHomeTerritory(being, opts = {}) {
   });
 
   // Link parent's children list (mirrors createSpace's behavior).
-  await Space.updateOne({ _id: parentId }, { $addToSet: { children: home._id } });
+  await Space.updateOne(
+    { _id: parentId },
+    { $addToSet: { children: home._id } },
+  );
 
   // Wire the home Space back onto the being.
   await Being.updateOne(

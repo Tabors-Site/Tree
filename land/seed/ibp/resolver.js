@@ -63,8 +63,8 @@ export async function resolveStance(stance, opts = {}) {
   // Land root: path is "/". The land root IS a Space (the seedSpace:
   // LAND_ROOT row created by ensureLandRoot), so we surface its id as
   // spaceId. That makes beings whose home is the land root —
-  // land-manager, llm-assigner, auth, citizen — summonable: the inbox
-  // sits on the land-root node like any other position.
+  // land-manager, llm-assigner, auth — summonable: the inbox sits on
+  // the land-root node like any other position.
   if (path === "/") {
     const landRootId = getLandRootId();
     return base({

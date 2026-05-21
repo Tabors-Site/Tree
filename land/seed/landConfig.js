@@ -4,6 +4,14 @@
 // Stored in the .config land seed space's metadata Map. Every
 // getLandConfigValue / setLandConfigValue in the system flows through
 // here.
+//
+// Lives in seed/, same reason landRoot does. The land holds what the
+// seed makes; config is one of those things. The .config space
+// exists because the seed planted it, and these helpers are the
+// seed reading and writing its own remembered settings across
+// reboots. There is no "land layer" beneath; the land is the
+// container, the seed is the maker, this file is the maker
+// remembering.
 
 import log from "./system/log.js";
 import Space from "./models/space.js";

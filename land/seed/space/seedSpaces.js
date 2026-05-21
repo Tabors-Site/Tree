@@ -46,19 +46,36 @@ export const SEED_SPACE = Object.freeze({
 // DELETED — placed in `parent` and (for matter) `beingId` when a space
 //           is soft-deleted. The deleted-revive extension can bring
 //           spaces back; matter stays soft-deleted.
-// SEED_BEING — the seed's identity. One sentinel covering both
-//              meanings:
+// SEED_BEING — the seed's identity. The server is made from the seed;
+//              every operation the seed performs in the world is the
+//              seed-being's. This covers two distinct surfaces:
+//
+//                1. The internal server itself — boot, migrations,
+//                   ensureLandRoot, scaffold writes that materialize
+//                   the land before any other being exists. The
+//                   server is the seed running; its work is the
+//                   seed-being's work.
+//
+//                2. Seeds that beings plant (extension-seeds). When
+//                   an operator or being calls plant-seed, the
+//                   trigger is theirs (their Did) but the internal
+//                   verb calls the seed's recipe fires — the actual
+//                   materialization — are again the seed-being's
+//                   work. Same concept; same attribution.
+//
+//              The principle: SEED_BEING is the actor wherever the
+//              internal server is doing the operation instead of a
+//              being in the world that is birthed from the seed. A
+//              being acting from its own stance is named in audit;
+//              the seed acting on the substrate is SEED_BEING.
+//
+//              The same sentinel carries two field meanings:
 //                rootOwner: SEED_BEING  → "this space is the seed's"
-//                beingId:   SEED_BEING  → "the seed acted here" (Did
-//                                          rows written by scaffold
-//                                          flows — seed plants, first
-//                                          boot bootstrap, migrations
-//                                          — where no being identity
-//                                          exists yet)
-//              Value matches the kebab-case convention used for the
-//              other land-system being names (auth, llm-assigner,
-//              land-manager, citizen). Aligns with the synthetic
-//              stance `<land>/@seed-being`.
+//                beingId:   SEED_BEING  → "the seed acted here"
+//
+//              Kebab-case to match the other land-system being names
+//              (auth, llm-assigner, land-manager). Aligns with the
+//              synthetic stance `<land>/@seed-being`.
 
 export const DELETED = "deleted";
 export const SEED_BEING = "seed-being";

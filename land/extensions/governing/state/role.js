@@ -174,10 +174,11 @@ export async function promoteToRuler({ spaceId, reason, promotedFrom, parentBein
 
   // 5. Stance permissions at the rulership node.
   //
-  //    @ruler is the open entry point — humans, citizens, federated
-  //    visitors can all summon. Inner beings (planner / contractor /
-  //    foreman) are protected: only beings of governing roles whose
-  //    home is within this rulership's subtree can summon them.
+  //    @ruler is the open entry point — humans, federated visitors,
+  //    any being authorized at this node can summon. Inner beings
+  //    (planner / contractor / foreman) are protected: only beings of
+  //    governing roles whose home is within this rulership's subtree
+  //    can summon them.
   await core.do(node, "set-meta", {
     namespace: "permissions",
     data: {

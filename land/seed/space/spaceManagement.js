@@ -18,7 +18,6 @@ import mongoose from "mongoose";
 
 import Space from "../models/space.js";
 import Being from "../models/being.js";
-import { logDid } from "./dids.js";
 import { createMatter } from "../matter/matters.js";
 import { resolveSpaceAccess, isDescendant } from "./spaceFetch.js";
 import { acquireSpaceLock, releaseSpaceLock, acquireMultiple, releaseMultiple } from "./spaceLocks.js";
@@ -225,21 +224,10 @@ export async function createSpace({
     if (lockTarget) releaseSpaceLock(lockTarget, sessionId);
   }
 
-  // Single Did per structural event. The new space's parent linkage is
-  // captured in params.parentId; "all children added under X" reads
-  // through { action: "create", "target.kind": "space", "params.parentId": X }.
-  await logDid({
-    beingId:  being._id,
-    action:   "create",
-    target:   { kind: "space", id: newSpace._id.toString() },
-    params:   {
-      parentId: isRoot ? getLandRootId() : (parentId || null),
-      name:     newSpace.name,
-      type:     newSpace.type || null,
-      isRoot,
-    },
-    summonId, sessionId,
-  });
+  // Did audit is the dispatcher's job (one Did per verb emission).
+  // Helpers no longer write Dids; the wrapping op's handler returns
+  // _didTarget hinting at the new space so the dispatcher names the
+  // substrate event (not the call's parent target).
 
   if (note?.trim()) {
     await createMatter({
@@ -351,14 +339,6 @@ export async function editSpaceName({ spaceId, newName, beingId, summonId = null
   const oldName = space.name;
   await Space.findByIdAndUpdate(spaceId, { $set: { name: newName } });
 
-  await logDid({
-    beingId,
-    action:   "edit",
-    target:   { kind: "space", id: spaceId.toString() },
-    params:   { name: { old: oldName, new: newName } },
-    summonId, sessionId,
-  });
-
   return { space, oldName, newName };
 }
 
@@ -371,14 +351,6 @@ export async function editSpaceType({ spaceId, newType, beingId, summonId = null
 
   const oldType = space.type;
   await Space.findByIdAndUpdate(spaceId, { $set: { type: newType } });
-
-  await logDid({
-    beingId,
-    action:   "edit",
-    target:   { kind: "space", id: spaceId.toString() },
-    params:   { type: { old: oldType, new: newType } },
-    summonId, sessionId,
-  });
 
   return { space, oldType, newType };
 }
@@ -473,20 +445,6 @@ export async function updateParentRelationship(
     if (session) session.endSession();
   }
 
-  // Single Did per structural event. The child's perspective is the
-  // canonical view; the parent-side mutation is derivable from
-  // params.oldParentId / params.newParentId.
-  await logDid({
-    beingId,
-    action:   "move",
-    target:   { kind: "space", id: childId.toString() },
-    params:   {
-      oldParentId: oldParentId ? oldParentId.toString() : null,
-      newParentId: newParentId.toString(),
-    },
-    summonId, sessionId,
-  });
-
   if (!opts.skipCacheInvalidation) invalidateAll();
   releaseMultiple(lockIds, sessionId);
 
@@ -551,14 +509,6 @@ export async function deleteSpaceBranch(spaceId, beingId, summonId = null, sessi
     releaseMultiple(lockIds, sessionId);
   }
 
-  await logDid({
-    beingId,
-    action:   "remove",
-    target:   { kind: "space", id: spaceId.toString() },
-    params:   { fromParentId: oldParent?.toString() ?? null },
-    summonId, sessionId,
-  });
-
   invalidateSpace(spaceId);
   return spaceToDelete;
 }
@@ -589,14 +539,6 @@ export async function reorderChildren({
   }
 
   await Space.updateOne({ _id: spaceId }, { $set: { children: newOrder } });
-
-  await logDid({
-    beingId,
-    action:   "reorder",
-    target:   { kind: "space", id: spaceId.toString() },
-    params:   { children: newOrder.map(String) },
-    summonId, sessionId,
-  });
 
   return { space };
 }

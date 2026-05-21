@@ -77,7 +77,7 @@ export const authBeing = Object.freeze({
     // loaded yet, and the land needs an operator before anything else.
     const first = await isFirstBeing();
     if (first) {
-      const { findSeedBeing } = await import("../systemBeings.js");
+      const { findSeedBeing } = await import("../landBeings.js");
       const seedBeing = await findSeedBeing();
       let being;
       try {
@@ -93,8 +93,8 @@ export const authBeing = Object.freeze({
       // not block on these writes.
       (async () => {
         try {
-          const { ensureSystemBeings } = await import("../being/systemBeings.js");
-          await ensureSystemBeings(getLandRootId());
+          const { ensureLandBeings } = await import("../being/landBeings.js");
+          await ensureLandBeings(getLandRootId());
         } catch (err) {
           log.warn("auth-being", `post-first-register system-being setup failed: ${err.message}`);
         }

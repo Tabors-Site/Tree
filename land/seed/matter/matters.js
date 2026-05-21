@@ -30,7 +30,6 @@ import { fileURLToPath } from "url";
 import Matter from "../models/matter.js";
 import Space from "../models/space.js";
 import Did from "../models/did.js";
-import { logDid } from "../space/dids.js";
 import { incBeingMeta } from "../being/beingMetadata.js";
 import { escapeRegex } from "../system/utils.js";
 import { getLandConfigValue } from "../landConfig.js";
@@ -209,14 +208,9 @@ async function createMatter({
     checkCascade(spaceId, { action: "matter:create", origin, sizeKB, beingId })
   ).catch(() => {});
 
-  await logDid({
-    beingId,
-    action: "create",
-    target: { kind: "matter", id: newMatter._id.toString() },
-    params: { spaceId, content: isIbpOrigin(origin) ? ibpText(newMatter) : null },
-    summonId, sessionId,
-  });
-
+  // Did audit is the dispatcher's job. The op handler (create-matter)
+  // returns _didTarget pointing at this matter so one Did per op call
+  // names the substrate event.
   return { message: "Matter created successfully", matter: newMatter };
 }
 
@@ -291,14 +285,6 @@ async function editMatter({
   import("./cascade.js").then(({ checkCascade }) =>
     checkCascade(matter.spaceId, { action: "matter:edit", origin: matter.origin, deltaKB, beingId })
   ).catch(() => {});
-
-  await logDid({
-    beingId,
-    action: "edit",
-    target: { kind: "matter", id: matter._id.toString() },
-    params: { spaceId: matter.spaceId, content: typeof finalContent === "string" ? finalContent : "" },
-    summonId, sessionId,
-  });
 
   return { message: "Matter updated successfully", matter };
 }
@@ -400,14 +386,6 @@ async function deleteMatterAndFile({
     ).catch(() => {});
   }
 
-  await logDid({
-    beingId,
-    action: "remove",
-    target: { kind: "matter", id: matterId.toString() },
-    params: { spaceId, fileDeleted: fileDeleted || undefined },
-    summonId, sessionId,
-  });
-
   return {
     message: isFilesystemOrigin(matter.origin)
       ? "File matter removed and underlying file deleted."
@@ -445,22 +423,6 @@ async function transferMatter({
   const sourceSpaceId = matter.spaceId;
   matter.spaceId = targetSpace;
   await matter.save();
-
-  await logDid({
-    beingId,
-    action: "remove",
-    target: { kind: "matter", id: matterId.toString() },
-    params: { spaceId: sourceSpaceId, reason: "transfer" },
-    summonId, sessionId,
-  });
-
-  await logDid({
-    beingId,
-    action: "create",
-    target: { kind: "matter", id: matterId.toString() },
-    params: { spaceId: targetSpace, content: isIbpOrigin(matter.origin) ? ibpText(matter) : null, reason: "transfer" },
-    summonId, sessionId,
-  });
 
   return { message: "Matter transferred successfully", matterId: matterId.toString(), from: { spaceId: sourceSpaceId }, to: { spaceId: targetSpace } };
 }

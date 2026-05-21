@@ -32,7 +32,7 @@ import log from "../../system/log.js";
 import Being from "../../models/being.js";
 import Space from "../../models/space.js";
 import { IbpError, IBP_ERR } from "../../ibp/errors.js";
-import { findRootOperator } from "../systemBeings.js";
+import { findRootOperator } from "../landBeings.js";
 
 export const llmAssignerBeing = Object.freeze({
   name: "llm-assigner",

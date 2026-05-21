@@ -375,13 +375,12 @@ async function buildLandDescriptor(resolved, { identity } = {}) {
     },
     isLandRoot: true,
     isHomeRoot: false,
-    // Beings whose home is the land root. All four are real Being rows
-    // (created by ensureSystemBeings). With the resolver now exposing
-    // landRootId as the spaceId for land-root stances, the SUMMON inbox
-    // sits on the land-root node like any other position — so these
-    // beings are addressable via both BE (auth, llm-assigner — code
-    // cognition) and SUMMON (land-manager, citizen — LLM-driven once
-    // their role specs are registered).
+    // Beings whose home is the land root. All real Being rows (created
+    // by ensureLandBeings). With the resolver exposing landRootId as
+    // the spaceId for land-root stances, the SUMMON inbox sits on the
+    // land-root node like any other position — so these beings are
+    // addressable via both BE (auth, llm-assigner — code cognition)
+    // and SUMMON (land-manager — LLM-driven).
     beings: [
       {
         being:       "auth",
@@ -412,16 +411,6 @@ async function buildLandDescriptor(resolved, { identity } = {}) {
         modeKey:     "land:manager",
         kind:        "ai",
         icon:        "\u{1F3DB}\u{FE0F}",
-      },
-      {
-        being:       "citizen",
-        label:       "Citizen",
-        description: "Read-only browsing of the land's public surface.",
-        invocableBy: "anyone",
-        available:   isRegistered("citizen"),
-        modeKey:     "land:citizen",
-        kind:        "ai",
-        icon:        "\u{1F464}",
       },
     ],
     // Public trees at land scope. Populated from the user-root nodes
