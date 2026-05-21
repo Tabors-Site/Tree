@@ -1,14 +1,20 @@
 // TreeOS Seed . AGPL-3.0 . https://treeos.ai . Tabor Holly
 //
-// Stance property derivation.
+// Stance properties. The facts a SEE, DO, SUMMON, or BE brings to
+// the gate.
 //
-// Given an acting being and a target position, compute the derived facts
-// the authorize function compares against permission-rule `requires`.
-// Pure read: this function never writes; it just collects facts from
-// Layer 1 sources (Being row + Space fields + ancestor cache).
+// Every verb call has an asker (the being on the left of the
+// address) and a target (the position on the right). Before any
+// SEE / DO / SUMMON / BE lands, the gate (authorize.js) has to know
+// how the asker relates to the target — is it their home? do they
+// own this space? are they a contributor anywhere up the chain? are
+// they arriving without an identity? This file computes that bag
+// of facts.
 //
-// All properties are derived from layer-1 data. There is no duplication
-// of state; this is a computed projection.
+// Pure read. This function never writes; it just collects facts
+// from Layer 1 sources (Being row + Space fields + ancestor cache).
+// There is no duplication of state — the stance bag is a computed
+// projection of substrate data the gate consults.
 //
 // Output shape (every field always present so the comparator can do
 // simple equality / membership checks without undefined sniffing):

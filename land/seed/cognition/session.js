@@ -38,11 +38,17 @@ export const SESSION_TYPES = {
  */
 export function registerSessionType(key, value) {
   if (typeof key !== "string" || typeof value !== "string") {
-    log.warn("Session", `Invalid session type registration: key and value must be strings`);
+    log.warn(
+      "Session",
+      `Invalid session type registration: key and value must be strings`,
+    );
     return false;
   }
   if (SESSION_TYPES[key] && SESSION_TYPES[key] !== value) {
-    log.warn("Session", `Session type "${key}" already registered as "${SESSION_TYPES[key]}". Cannot overwrite with "${value}".`);
+    log.warn(
+      "Session",
+      `Session type "${key}" already registered as "${SESSION_TYPES[key]}". Cannot overwrite with "${value}".`,
+    );
     return false;
   }
   SESSION_TYPES[key] = value;
@@ -67,7 +73,12 @@ const sessionAbortControllers = new Map();
 
 // scopeKey -> { sessionId, lastActivity }  (for idle-TTL reuse of scoped sessions)
 const scopedSessions = new Map();
-function MAX_SCOPED_SESSIONS() { return Math.max(100, Math.min(Number(getLandConfigValue("maxScopedSessions")) || 20000, 100000)); }
+function MAX_SCOPED_SESSIONS() {
+  return Math.max(
+    100,
+    Math.min(Number(getLandConfigValue("maxScopedSessions")) || 20000, 100000),
+  );
+}
 let DEFAULT_SCOPE_TTL = 15 * 60 * 1000; // 15 minutes
 export function setSessionTTL(ms) {
   DEFAULT_SCOPE_TTL = Math.max(5000, Math.min(ms, 86400000));
@@ -85,17 +96,29 @@ export function setMaxSessions(n) {
 /**
  * Create or retrieve a session. Single entry point for all session creation.
  */
-export function createSession({ beingId, type, scopeKey, description = "", meta = {}, idleTTL = DEFAULT_SCOPE_TTL }) {
+export function createSession({
+  beingId,
+  type,
+  scopeKey,
+  description = "",
+  meta = {},
+  idleTTL = DEFAULT_SCOPE_TTL,
+}) {
   if (!beingId) throw new Error("createSession requires beingId");
-  if (!type || typeof type !== "string") throw new Error("createSession requires a valid type string");
+  if (!type || typeof type !== "string")
+    throw new Error("createSession requires a valid type string");
 
   const now = Date.now();
 
   // Land-level session cap with oldest-first eviction
   if (sessions.size >= MAX_SESSIONS) {
-    let oldestKey = null, oldestTime = Infinity;
+    let oldestKey = null,
+      oldestTime = Infinity;
     for (const [id, s] of sessions) {
-      if (s.lastActivity < oldestTime) { oldestTime = s.lastActivity; oldestKey = id; }
+      if (s.lastActivity < oldestTime) {
+        oldestTime = s.lastActivity;
+        oldestKey = id;
+      }
     }
     if (oldestKey) endSession(oldestKey);
   }
@@ -105,22 +128,38 @@ export function createSession({ beingId, type, scopeKey, description = "", meta 
     const existing = scopedSessions.get(scopeKey);
     if (existing && now - existing.lastActivity < idleTTL) {
       existing.lastActivity = now;
-      const { isActiveNavigator } = registerSession({ sessionId: existing.sessionId, beingId, type, description, meta });
+      const { isActiveNavigator } = registerSession({
+        sessionId: existing.sessionId,
+        beingId,
+        type,
+        description,
+        meta,
+      });
       return { sessionId: existing.sessionId, reused: true, isActiveNavigator };
     }
   }
 
   // Create a new session
   const sessionId = uuidv4();
-  const { isActiveNavigator } = registerSession({ sessionId, beingId, type, description, meta });
+  const { isActiveNavigator } = registerSession({
+    sessionId,
+    beingId,
+    type,
+    description,
+    meta,
+  });
 
   // Store in scoped map if scopeKey provided (with cap)
   if (scopeKey) {
     if (scopedSessions.size >= MAX_SCOPED_SESSIONS()) {
       // Evict oldest scoped entry
-      let oldestKey = null, oldestTime = Infinity;
+      let oldestKey = null,
+        oldestTime = Infinity;
       for (const [k, v] of scopedSessions) {
-        if (v.lastActivity < oldestTime) { oldestTime = v.lastActivity; oldestKey = k; }
+        if (v.lastActivity < oldestTime) {
+          oldestTime = v.lastActivity;
+          oldestKey = k;
+        }
       }
       if (oldestKey) scopedSessions.delete(oldestKey);
     }
@@ -140,11 +179,20 @@ export function createSession({ beingId, type, scopeKey, description = "", meta 
  */
 const MAX_DESCRIPTION_LENGTH = 500;
 
-export function registerSession({ sessionId, beingId, type, description = "", meta = {} }) {
+export function registerSession({
+  sessionId,
+  beingId,
+  type,
+  description = "",
+  meta = {},
+}) {
   const now = Date.now();
   const uid = String(beingId);
   // Cap description to prevent oversized session objects
-  const safeDesc = typeof description === "string" ? description.slice(0, MAX_DESCRIPTION_LENGTH) : "";
+  const safeDesc =
+    typeof description === "string"
+      ? description.slice(0, MAX_DESCRIPTION_LENGTH)
+      : "";
 
   const existing = sessions.get(sessionId);
   if (existing) {
@@ -185,9 +233,21 @@ export function registerSession({ sessionId, beingId, type, description = "", me
   }
 
   const isNav = activeNavigator.get(uid) === sessionId;
-  log.debug("Session", `Session registered: ${type} [${sessionId.slice(0, 8)}] for being ${uid} (navigator: ${isNav})`);
+  log.debug(
+    "Session",
+    `Session registered: ${type} [${sessionId.slice(0, 8)}] for being ${uid} (navigator: ${isNav})`,
+  );
 
-  hooks.run("afterSessionCreate", { sessionId, beingId: uid, type, description, meta, isActiveNavigator: isNav }).catch(() => {});
+  hooks
+    .run("afterSessionCreate", {
+      sessionId,
+      beingId: uid,
+      type,
+      description,
+      meta,
+      isActiveNavigator: isNav,
+    })
+    .catch(() => {});
   return { sessionId, isActiveNavigator: isNav };
 }
 
@@ -205,7 +265,9 @@ export function endSession(sessionId) {
   // Abort any in-flight work tied to this session
   const ac = sessionAbortControllers.get(sessionId);
   if (ac) {
-    try { ac.abort(); } catch {}
+    try {
+      ac.abort();
+    } catch {}
     sessionAbortControllers.delete(sessionId);
   }
 
@@ -225,7 +287,15 @@ export function endSession(sessionId) {
     promoteNavigator(uid);
   }
 
-  hooks.run("afterSessionEnd", { sessionId, beingId: uid, type, meta, description }).catch(() => {});
+  hooks
+    .run("afterSessionEnd", {
+      sessionId,
+      beingId: uid,
+      type,
+      meta,
+      description,
+    })
+    .catch(() => {});
 }
 
 /**
@@ -248,10 +318,15 @@ export function updateSessionMeta(sessionId, metaUpdates) {
   const merged = { ...session.meta, ...metaUpdates };
   try {
     if (JSON.stringify(merged).length > 65536) {
-      log.warn("Session", `Session meta update rejected: would exceed 64KB for ${sessionId.slice(0, 8)}`);
+      log.warn(
+        "Session",
+        `Session meta update rejected: would exceed 64KB for ${sessionId.slice(0, 8)}`,
+      );
       return false;
     }
-  } catch { return false; }
+  } catch {
+    return false;
+  }
   session.meta = merged;
   session.lastActivity = Date.now();
   return true;
@@ -331,7 +406,9 @@ export function setSessionAbort(sessionId, abortController) {
 export function abortSession(sessionId) {
   const ac = sessionAbortControllers.get(sessionId);
   if (ac) {
-    try { ac.abort(); } catch {}
+    try {
+      ac.abort();
+    } catch {}
     sessionAbortControllers.delete(sessionId);
   }
 }
@@ -372,13 +449,18 @@ function promoteNavigator(beingId) {
     return;
   }
 
-  const priority = PROMOTION_PRIORITY_KEYS.map(k => SESSION_TYPES[k]).filter(Boolean);
+  const priority = PROMOTION_PRIORITY_KEYS.map((k) => SESSION_TYPES[k]).filter(
+    Boolean,
+  );
   for (const type of priority) {
     for (const sid of beingSet) {
       const s = sessions.get(sid);
       if (s && s.type === type && s.status === "active") {
         activeNavigator.set(beingId, sid);
-        log.debug("Session", `Navigator promoted: ${type} [${sid.slice(0, 8)}] for being ${beingId}`);
+        log.debug(
+          "Session",
+          `Navigator promoted: ${type} [${sid.slice(0, 8)}] for being ${beingId}`,
+        );
         return;
       }
     }
@@ -396,30 +478,38 @@ export function setStaleTimeout(ms) {
   STALE_TIMEOUT = Math.max(60000, Math.min(ms, 86400000));
 }
 
-setInterval(() => {
-  const now = Date.now();
-  for (const [sessionId, session] of sessions) {
-    // WebSocket sessions get a longer timeout: they normally clean up on
-    // socket disconnect, but crashed clients (power loss, network drop without
-    // TCP FIN) can leave orphaned sessions. 2x the normal stale timeout gives
-    // generous reconnection headroom while still reclaiming dead sessions.
-    const timeout = session.type === SESSION_TYPES.WEBSOCKET_CHAT
-      ? STALE_TIMEOUT * 2
-      : STALE_TIMEOUT;
-    if (now - session.lastActivity > timeout) {
-      log.debug("Session", `Stale session removed: ${session.type} [${sessionId.slice(0, 8)}]`);
-      endSession(sessionId);
+setInterval(
+  () => {
+    const now = Date.now();
+    for (const [sessionId, session] of sessions) {
+      // WebSocket sessions get a longer timeout: they normally clean up on
+      // socket disconnect, but crashed clients (power loss, network drop without
+      // TCP FIN) can leave orphaned sessions. 2x the normal stale timeout gives
+      // generous reconnection headroom while still reclaiming dead sessions.
+      const timeout =
+        session.type === SESSION_TYPES.WEBSOCKET_CHAT
+          ? STALE_TIMEOUT * 2
+          : STALE_TIMEOUT;
+      if (now - session.lastActivity > timeout) {
+        log.debug(
+          "Session",
+          `Stale session removed: ${session.type} [${sessionId.slice(0, 8)}]`,
+        );
+        endSession(sessionId);
+      }
     }
-  }
-  // Clean up expired scoped session entries
-  for (const [key, val] of scopedSessions) {
-    if (now - val.lastActivity > DEFAULT_SCOPE_TTL) scopedSessions.delete(key);
-  }
-  // Clean up orphaned abort controllers (session already ended but controller lingered)
-  for (const sid of sessionAbortControllers.keys()) {
-    if (!sessions.has(sid)) sessionAbortControllers.delete(sid);
-  }
-}, 5 * 60 * 1000).unref();
+    // Clean up expired scoped session entries
+    for (const [key, val] of scopedSessions) {
+      if (now - val.lastActivity > DEFAULT_SCOPE_TTL)
+        scopedSessions.delete(key);
+    }
+    // Clean up orphaned abort controllers (session already ended but controller lingered)
+    for (const sid of sessionAbortControllers.keys()) {
+      if (!sessions.has(sid)) sessionAbortControllers.delete(sid);
+    }
+  },
+  5 * 60 * 1000,
+).unref();
 
 // ─────────────────────────────────────────────────────────────────────────
 // PIPELINE KEY RESOLUTION
@@ -481,25 +571,46 @@ export function resolvePipelineKey({
   makeEphemeral,
 }) {
   if (pipelineKey) {
-    return { key: pipelineKey, persist: !pipelineKey.startsWith("pipeline:ephemeral:") };
+    return {
+      key: pipelineKey,
+      persist: !pipelineKey.startsWith("pipeline:ephemeral:"),
+    };
   }
   if (scope) {
-    const suffix = extra ? `:${String(extra).slice(0, 64).replace(/[^a-z0-9:._-]/gi, "")}` : "";
+    const suffix = extra
+      ? `:${String(extra)
+          .slice(0, 64)
+          .replace(/[^a-z0-9:._-]/gi, "")}`
+      : "";
     if (scope === "tree") {
-      if (!rootId || !purpose) throw new Error("resolvePipelineKey: scope='tree' requires rootId and purpose");
-      return { key: `pipeline:tree:${rootId}:${purpose}${suffix}`, persist: true };
+      if (!rootId || !purpose)
+        throw new Error(
+          "resolvePipelineKey: scope='tree' requires rootId and purpose",
+        );
+      return {
+        key: `pipeline:tree:${rootId}:${purpose}${suffix}`,
+        persist: true,
+      };
     }
     if (scope === "home") {
-      if (!beingId || !purpose) throw new Error("resolvePipelineKey: scope='home' requires beingId and purpose");
-      return { key: `pipeline:home:${beingId}:${purpose}${suffix}`, persist: true };
+      if (!beingId || !purpose)
+        throw new Error(
+          "resolvePipelineKey: scope='home' requires beingId and purpose",
+        );
+      return {
+        key: `pipeline:home:${beingId}:${purpose}${suffix}`,
+        persist: true,
+      };
     }
     if (scope === "land") {
-      if (!purpose) throw new Error("resolvePipelineKey: scope='land' requires purpose");
+      if (!purpose)
+        throw new Error("resolvePipelineKey: scope='land' requires purpose");
       return { key: `pipeline:land:${purpose}${suffix}`, persist: true };
     }
     throw new Error(`resolvePipelineKey: unknown scope "${scope}"`);
   }
-  const uuid = typeof makeEphemeral === "function" ? makeEphemeral() : cryptoRandomUUID();
+  const uuid =
+    typeof makeEphemeral === "function" ? makeEphemeral() : cryptoRandomUUID();
   return { key: `pipeline:ephemeral:${uuid}`, persist: false };
 }
 

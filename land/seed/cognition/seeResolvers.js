@@ -61,8 +61,10 @@ const QUALIFIED_RE = /^[a-z][a-z0-9-]*:[a-z][a-z0-9-]*$/;
  */
 export function registerSeeResolver(name, fn, extName = "kernel") {
   if (typeof name !== "string" || !NAME_RE.test(name)) {
-    log.error("SeeResolvers",
-      `Invalid resolver name "${String(name).slice(0, 30)}". Must match /^[a-z][a-z0-9-]*$/`);
+    log.error(
+      "SeeResolvers",
+      `Invalid resolver name "${String(name).slice(0, 30)}". Must match /^[a-z][a-z0-9-]*$/`,
+    );
     return null;
   }
   if (typeof fn !== "function") {
@@ -73,8 +75,10 @@ export function registerSeeResolver(name, fn, extName = "kernel") {
   const key = extName === "kernel" ? name : `${extName}:${name}`;
   if (RESOLVERS.has(key)) {
     const existing = RESOLVERS.get(key);
-    log.warn("SeeResolvers",
-      `Resolver "${key}" already registered by "${existing.extName}"; rejecting from "${extName}"`);
+    log.warn(
+      "SeeResolvers",
+      `Resolver "${key}" already registered by "${existing.extName}"; rejecting from "${extName}"`,
+    );
     return null;
   }
   RESOLVERS.set(key, { fn, extName });
@@ -132,9 +136,11 @@ export function getSeeResolver(name) {
   if (matches.length === 0) return null;
   if (matches.length === 1) return RESOLVERS.get(matches[0]).fn;
 
-  log.warn("SeeResolvers",
+  log.warn(
+    "SeeResolvers",
     `Ambiguous see-resolver "${name}" — matches ${matches.join(", ")}. ` +
-    `Use the qualified name in the role spec.`);
+      `Use the qualified name in the role spec.`,
+  );
   return null;
 }
 
@@ -149,20 +155,22 @@ export function getSeeResolver(name) {
  */
 export async function resolveSeeList(names, ctx) {
   if (!Array.isArray(names) || names.length === 0) return [];
-  const settled = await Promise.all(names.map(async (name) => {
-    const fn = getSeeResolver(name);
-    if (!fn) {
-      log.warn("SeeResolvers", `Unknown see-resolver "${name}"; skipping`);
-      return null;
-    }
-    try {
-      const out = await fn(ctx);
-      return typeof out === "string" && out.length > 0 ? out : null;
-    } catch (err) {
-      log.warn("SeeResolvers", `Resolver "${name}" failed: ${err.message}`);
-      return null;
-    }
-  }));
+  const settled = await Promise.all(
+    names.map(async (name) => {
+      const fn = getSeeResolver(name);
+      if (!fn) {
+        log.warn("SeeResolvers", `Unknown see-resolver "${name}"; skipping`);
+        return null;
+      }
+      try {
+        const out = await fn(ctx);
+        return typeof out === "string" && out.length > 0 ? out : null;
+      } catch (err) {
+        log.warn("SeeResolvers", `Resolver "${name}" failed: ${err.message}`);
+        return null;
+      }
+    }),
+  );
   return settled.filter(Boolean);
 }
 
@@ -171,6 +179,7 @@ export async function resolveSeeList(names, ctx) {
  */
 export function listSeeResolvers(filter = {}) {
   let entries = Array.from(RESOLVERS.entries());
-  if (filter.extName) entries = entries.filter(([, e]) => e.extName === filter.extName);
+  if (filter.extName)
+    entries = entries.filter(([, e]) => e.extName === filter.extName);
   return entries.map(([key, e]) => ({ key, extName: e.extName }));
 }

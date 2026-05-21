@@ -26,7 +26,7 @@ export async function syncRegistryToSubstrate({ seedSpace, items, itemType = "re
   const existingChildren = await Space.find({
     parent: parent._id,
     type: itemType,
-  }).select("_id name metadata").lean();
+  }).select("_id name qualities").lean();
 
   const existingByName = new Map(existingChildren.map((c) => [c.name, c]));
   const desiredByName = new Map(items.map((it) => [it.name, it]));
@@ -41,7 +41,7 @@ export async function syncRegistryToSubstrate({ seedSpace, items, itemType = "re
       if (item.qualities) {
         await Space.updateOne(
           { _id: existing._id },
-          { $set: { metadata: item.qualities } },
+          { $set: { qualities: item.qualities } },
         );
       }
       kept++;
@@ -54,7 +54,7 @@ export async function syncRegistryToSubstrate({ seedSpace, items, itemType = "re
       parent: parent._id,
       children: [],
       contributors: [],
-      ...(item.qualities ? { metadata: item.qualities } : {}),
+      ...(item.qualities ? { qualities: item.qualities } : {}),
     });
     await Space.updateOne(
       { _id: parent._id },
@@ -77,14 +77,14 @@ export async function syncRegistryToSubstrate({ seedSpace, items, itemType = "re
 }
 
 // Idempotent single-child add/refresh for runtime registrations.
-export async function addRegistryChild({ seedSpace, name, metadata = null, itemType = "resource" }) {
+export async function addRegistryChild({ seedSpace, name, qualities = null, itemType = "resource" }) {
   if (!name) return null;
   const parent = await Space.findOne({ seedSpace });
   if (!parent) return null;
   const existing = await Space.findOne({ parent: parent._id, name, type: itemType }).select("_id").lean();
   if (existing) {
-    if (metadata) {
-      await Space.updateOne({ _id: existing._id }, { $set: { metadata } });
+    if (qualities) {
+      await Space.updateOne({ _id: existing._id }, { $set: { qualities } });
     }
     return existing._id;
   }
@@ -95,7 +95,7 @@ export async function addRegistryChild({ seedSpace, name, metadata = null, itemT
     parent: parent._id,
     children: [],
     contributors: [],
-    ...(metadata ? { metadata } : {}),
+    ...(qualities ? { qualities } : {}),
   });
   await Space.updateOne(
     { _id: parent._id },

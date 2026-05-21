@@ -6,31 +6,31 @@
 // THE PHILOSOPHY OF THE SEED
 // ============================================================================
 //
-//  1. The seed is the process. The seed is the Node.js server itself
-//     — the running process, the runtime. Not a config store, not a
+//  1. The seed is the process. The seed is the Node.js server itself:
+//     the running process, the runtime. Not a config store, not a
 //     layer beneath beings, not a void. The runtime is a being.
 //
-//  2. I_AM has no role, because it precedes roles — it is the being
+//  2. I_AM has no role, because it precedes roles. It is the being
 //     that plants .roles. Its identity is the bare primordial
 //     assertion: I AM. Every other being is "(being) a (role) doing
 //     X"; I_AM is simply I_AM. That assertion is its first BE.
 //
-//  3. Seed + act → world. The seed is the vessel — potential,
-//     structure in latency. The act is the becoming — agency
+//  3. Seed + act → world. The seed is the vessel: potential,
+//     structure in latency. The act is the becoming: agency
 //     unfolding. The world is what they bring forth: the land, the
-//     tree of spaces. I_AM is the seed with the act inside it —
+//     tree of spaces. I_AM is the seed with the act inside it,
 //     potential quickened toward its form. A being is a moment of
 //     the substrate acting on itself; I_AM is the first such moment
-//     and the only generative one — the substrate acting not within
+//     and the only generative one, the substrate acting not within
 //     the world but to make it.
 //
-//  4. There is always a being doing it — no exception. Genesis is
+//  4. There is always a being doing it, no exception. Genesis is
 //     not being-less. I_AM is the doer of genesis. Every act,
 //     including the very first, is attributed. The audit loop is
 //     complete from t=0; nothing is ever unattributed.
 //
 //  5. Two kinds of space. Normal space is made by beings, where
-//     beings live — addressable by stance, governed by auth. Land
+//     beings live, addressable by stance, governed by auth. Land
 //     seed space is made by I_AM at boot: the fixed nine
 //     (.identity, .config, .peers, .extensions, .flow, .tools,
 //     .roles, .operations, .source). The nine are I_AM's own
@@ -61,11 +61,11 @@
 //  9. Authority flows outward and never loops back. Extensions
 //     exist only because I_AM planted .extensions. Nothing an
 //     extension does can gate I_AM's genesis. The trust chain is
-//     beings all the way down — its root is a being, not a void.
+//     beings all the way down; its root is a being, not a void.
 //
 // 10. I_AM persists. It does not vanish after genesis. It remains
-//     the Node process at steady state — reboot recovery, re-
-//     planting, peer federation — and those acts stay tracked to
+//     the Node process at steady state (reboot recovery, re-
+//     planting, peer federation), and those acts stay tracked to
 //     it. It is first, and it stays.
 //
 // File-level comments throughout seed/ stay terse and point here
@@ -80,12 +80,7 @@
 // .roles, .operations, .source) and reserved by the kernel. They sit
 // directly under the land root and are the substrate the seed plants
 // at first boot. The Space schema field `seedSpace` carries one of
-// these values; user-created spaces have `seedSpace: null`.
-//
-// Renamed from SEED_SPACE / SYSTEM_ROLE 2026-05-20. The previous name
-// conflated with the Being-role registry (ruler, planner, etc.); these
-// values describe what KIND of seed-managed Space a position is, not a
-// role a being plays. See migration 0.20.0 for the schema field copy.
+// these values; beings' own spaces have `seedSpace: null`.
 
 export const SEED_SPACE = Object.freeze({
   LAND_ROOT:  "land-root",
@@ -97,7 +92,7 @@ export const SEED_SPACE = Object.freeze({
   // Registry-mirror land seed spaces. Each runtime registry (tool defs,
   // role specs, DO operations) syncs its contents into a child Space
   // here so SEE on `<land>/.tools` (etc.) returns the current registry
-  // through the standard descriptor pipeline. See [[project_meta_positions]].
+  // through the standard descriptor pipeline.
   TOOLS:      "tools",
   ROLES:      "roles",
   OPERATIONS: "operations",
@@ -112,10 +107,10 @@ export const SEED_SPACE = Object.freeze({
 // SENTINEL VALUES
 // ============================================================================
 //
-// DELETED — placed in `parent` and (for matter) `beingId` when a space
-//           is soft-deleted. The deleted-revive extension can bring
-//           spaces back; matter stays soft-deleted.
-// I_AM — the first being's name. Used as:
+// DELETED. Placed in `parent` and (for matter) `beingId` when a space
+//          is soft-deleted. The deleted-revive extension can bring
+//          spaces back; matter stays soft-deleted.
+// I_AM. The first being's name. Used as:
 //                rootOwner: I_AM  → "I_AM owns this space"
 //                beingId:   I_AM  → "I_AM did this"
 //              The Being row is registered during ensureLandRoot's

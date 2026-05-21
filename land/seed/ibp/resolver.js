@@ -1,38 +1,45 @@
 // TreeOS Seed . AGPL-3.0 . https://treeos.ai . Tabor Holly
 //
-// IBP Address resolves to stance.
+// Resolving a stance to substrate.
 //
-// Resolution turns a parsed stance into the concrete substrate facts a
-// verb handler needs: which Space is being addressed, which tree contains
-// it, which being (if any) is invoked, and the top-down path the client
-// can use for breadcrumb-style rendering. Positions are flat space-IDs;
-// flags on the result describe what kind of position the leaf is
-// (land root, a being's home, or a plain space).
+// IBP gives the speaker a way to NAME what they're acting on
+// (address.js). This file turns that name into the actual substrate
+// facts a SEE / DO / SUMMON / BE handler needs to act: which Space,
+// which tree, which being, what the path looks like top-down. The
+// address grammar layer is pure parsing; this layer crosses into
+// the world the address points at.
+//
+// Without me the four verbs couldn't reach the substrate at all —
+// every verb call would just be a string. I take a stance and
+// produce the handles (`spaceId`, `rootId`, `beingId`) that my
+// substrate primitives actually mutate.
 //
 // Result shape:
 //   {
 //     isLandRoot, isHomeRoot — flags describing leaf semantics
-//     spaceId, rootId         — substrate handles (rootId = enclosing tree)
+//     spaceId, rootId        — substrate handles (rootId = enclosing tree)
 //     chain                  — [{ name, id }] top-down (land root → leaf)
 //     leafName, leafId       — convenience: last entry of chain
 //     beingId, name          — populated when the address names a being
 //                              (the @being qualifier or a "/~user" home)
 //     being                  — the raw @label from the stance
-//     leafSpace               — optional pass-through Space doc (descriptor
-//                              builders use it to avoid a refetch)
+//     leafSpace              — optional pass-through Space doc
+//                              (descriptor builders use it to avoid
+//                              a refetch)
 //   }
 //
-// Per [[project_zones_retired]] the "zone" concept is gone; every
-// address resolves to a space and callers branch on positional flags.
+// Every address resolves to a space and callers branch on positional
+// flags; there is no longer a "zone" concept above the position.
 
-import { IbpError, IBP_ERR } from "../ibp/errors.js";
+import { IbpError, IBP_ERR } from "../ibp/protocol.js";
 import { getLandDomain } from "./address.js";
 import Being from "../models/being.js";
 import Space from "../models/space.js";
 import { getLandRootId } from "../landRoot.js";
 import { resolveRootSpace } from "../land/space/spaceFetch.js";
 
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const UUID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /**
  * @param {{ land: string|null, path: string|null, being: string|null }} stance
@@ -69,8 +76,8 @@ export async function resolveStance(stance, opts = {}) {
     const landRootId = getLandRootId();
     return base({
       isLandRoot: true,
-      spaceId:     landRootId,
-      leafId:     landRootId,
+      spaceId: landRootId,
+      leafId: landRootId,
       being,
     });
   }
@@ -90,7 +97,7 @@ export async function resolveStance(stance, opts = {}) {
     const beingDoc = await Being.findOne({ name }).select("_id name").lean();
     if (!beingDoc) {
       throw new IbpError(
-        IBP_ERR.USER_NOT_FOUND,
+        IBP_ERR.BEING_NOT_FOUND,
         `No being named "${name}" on this land`,
         { name },
       );
@@ -101,18 +108,18 @@ export async function resolveStance(stance, opts = {}) {
     if (subPath.length === 0) {
       return base({
         isHomeRoot: true,
-        beingId:    beingDoc._id,
-        name:       beingDoc.name,
-        chain:      [{ name: `~${beingDoc.name}`, id: beingDoc._id }],
-        leafName:   `~${beingDoc.name}`,
-        leafId:     beingDoc._id,
+        beingId: beingDoc._id,
+        name: beingDoc.name,
+        chain: [{ name: `~${beingDoc.name}`, id: beingDoc._id }],
+        leafName: `~${beingDoc.name}`,
+        leafId: beingDoc._id,
         being,
       });
     }
 
     // "/~name/<segments>" → walk the being's home tree.
     return walkSpacePath({
-      segments:    subPath,
+      segments: subPath,
       ownerFilter: { rootOwner: beingDoc._id },
       contextBeing: beingDoc,
       being,
@@ -127,7 +134,7 @@ export async function resolveStance(stance, opts = {}) {
   }
   return walkSpacePath({
     segments,
-    ownerFilter:  {},
+    ownerFilter: {},
     contextBeing: null,
     being,
   });
@@ -146,15 +153,15 @@ function base(over = {}) {
   return {
     isLandRoot: false,
     isHomeRoot: false,
-    beingId:    null,
-    name:       null,
-    rootId:     null,
-    spaceId:     null,
-    chain:      [],
-    leafName:   null,
-    leafId:     null,
-    being:      null,
-    leafSpace:   null,
+    beingId: null,
+    name: null,
+    rootId: null,
+    spaceId: null,
+    chain: [],
+    leafName: null,
+    leafId: null,
+    being: null,
+    leafSpace: null,
     ...over,
   };
 }
@@ -181,18 +188,23 @@ async function walkSpacePath({ segments, ownerFilter, contextBeing, being }) {
     const seg = segments[i];
     const isFirst = i === 0;
     const baseQuery = {
-      parent:     currentParent,
+      parent: currentParent,
       seedSpace: null,
       ...(isFirst ? ownerFilter : {}),
     };
 
-    const fields = "_id name type status parent rootOwner contributors visibility metadata";
+    const fields =
+      "_id name type status parent rootOwner contributors visibility qualities";
     let space = null;
     if (UUID_RE.test(seg)) {
-      space = await Space.findOne({ ...baseQuery, _id: seg }).select(fields).lean();
+      space = await Space.findOne({ ...baseQuery, _id: seg })
+        .select(fields)
+        .lean();
     }
     if (!space) {
-      space = await Space.findOne({ ...baseQuery, name: seg }).select(fields).lean();
+      space = await Space.findOne({ ...baseQuery, name: seg })
+        .select(fields)
+        .lean();
     }
     if (!space) {
       throw new IbpError(
@@ -218,13 +230,13 @@ async function walkSpacePath({ segments, ownerFilter, contextBeing, being }) {
   }
 
   return base({
-    beingId:  contextBeing?._id || null,
-    name:     contextBeing?.name || null,
+    beingId: contextBeing?._id || null,
+    name: contextBeing?.name || null,
     rootId,
-    spaceId:   leafSpace._id,
+    spaceId: leafSpace._id,
     chain,
     leafName: leafSpace.name,
-    leafId:   leafSpace._id,
+    leafId: leafSpace._id,
     being,
     leafSpace,
   });

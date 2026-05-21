@@ -1,23 +1,35 @@
-import { authApiRouter, authPageRouter } from "./auth.js";
-
-import ibp from "./api/ibp.js";
-
-// Legacy per-feature route files retired 2026-05-18. Every operation
-// is reachable through the unified IBP HTTP adapter at
-// `/ibp/<verb>/<addr>`. See [[project_everything_is_substrate]] and
-// [[project_protocol_transport_separation]].
+// HTTP route mounting + boot ordering.
 //
-// Deleted route files + their IBP equivalents:
-//   /api/v1/me                  → GET /ibp/see/<land>/@<myname>
-//   /api/v1/user/*              → ibp:see + ibp:do create-child
-//   /api/v1/space/*             → ibp:see + ibp:do set-meta
-//   /api/v1/root/*              → ibp:see + ibp:do set-meta
-//   /api/v1/..../matter/matters/*     → ibp:do create-artifact / set-name / etc.
-//   /api/v1/.../dids            → ibp:see (with dids field)
-//   /api/v1/.../cascade,/flow*  → ibp:do cascade + ibp:see on .flow
-//   /api/v1/user/*/custom-llm   → ibp:do add/update/delete-llm-connection
-//   /api/v1/user/*/llm-assign   → ibp:do assign-llm-slot
-//   /api/v1/land/extensions/*   → ibp:do install/uninstall/enable/disable-extension
+// I open the HTTP side of my senses here. The path is fixed:
+//
+//   1. Rate limit — every request first.
+//   2. DB health gate under /api/v1. If MongoDB is down I 503
+//      cleanly instead of letting Mongoose throw from inside a
+//      handler.
+//   3. Auth page routes (login / register / logout HTML forms).
+//   4. ensureLandRoot + initLandConfig — the land root and .config
+//      space must exist before any extension reads them. Idempotent.
+//   5. registerExtensionManagementOps — install / uninstall / enable
+//      / disable DO ops register before extensions load so they're
+//      callable even if every extension fails.
+//   6. loadExtensions — manifests discovered, deps validated, routes
+//      and hooks wired.
+//   7. connectMcpTransport — AFTER step 6, because the MCP SDK locks
+//      its tool list at connect time and extension tools must be
+//      present first.
+//   8. MCP HTTP routes (POST/GET/DELETE /mcp).
+//   9. /api/v1/uploads static.
+//  10. /api/v1 auth + /api/v1 land-config routes.
+//  11. /ibp/:verb/<addr> — the single IBP HTTP adapter. Same
+//      dispatcher the WebSocket layer uses; every kernel and
+//      extension operation is automatically callable here.
+//
+// The protocol IS the API. Cross-land federation flows through
+// /ibp/ with canopy-signed envelopes (canopy itself is just the
+// signing-key + peer-registry shape on top).
+
+import { authApiRouter, authPageRouter } from "./auth.js";
+import ibp from "./api/ibp.js";
 import landConfig from "./api/config.js";
 
 import { handleMcpRequest, mcpServerInstance, connectMcpTransport } from "../../protocols/mcp/server.js";
@@ -28,13 +40,13 @@ import express from "express";
 import path from "path";
 import { fileURLToPath } from "url";
 import rateLimit from "express-rate-limit";
-import { sendOk, sendError, ERR } from "../../seed/ibp/protocol.js";
+import { sendOk, sendError, IBP_ERR } from "../../seed/ibp/protocol.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 import { loadExtensions, registerExtensionManagementOps } from "../../extensions/loader.js";
 
-function notFoundPage(req, res, message = "This page doesn't exist or may have been moved.") {
-  return sendError(res, 404, ERR.SPACE_NOT_FOUND, message);
+function rejectReservedId(req, res, message = "Reserved identifier.") {
+  return sendError(res, 400, IBP_ERR.INVALID_INPUT, message);
 }
 import { getLandConfigValue } from "../../seed/landConfig.js";
 
@@ -48,36 +60,33 @@ const apiLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   handler: (req, res) => {
-    sendError(res, 429, ERR.RATE_LIMITED, "You are sending requests too fast. Try again in 15 minutes.", { retryAfterMinutes: 15 });
+    sendError(res, 429, IBP_ERR.RATE_LIMITED, "You are sending requests too fast. Try again in 15 minutes.", { retryAfterMinutes: 15 });
   },
 });
 
 export default async function registerURLRoutes(app, opts = {}) {
   app.param("beingId", (req, res, next, val) => {
-    if (BLOCKED_IDS.has(val)) return notFoundPage(req, res);
+    if (BLOCKED_IDS.has(val)) return rejectReservedId(req, res);
     next();
   });
   app.param("spaceId", (req, res, next, val) => {
-    if (BLOCKED_IDS.has(val)) return notFoundPage(req, res);
+    if (BLOCKED_IDS.has(val)) return rejectReservedId(req, res);
     next();
   });
   app.param("rootId", (req, res, next, val) => {
-    if (BLOCKED_IDS.has(val)) return notFoundPage(req, res);
+    if (BLOCKED_IDS.has(val)) return rejectReservedId(req, res);
     next();
   });
 
-  // CLI bootstrap endpoint is `GET /.well-known/treeos-portal` (mounted
-  // by IBP's bootstrap-route.js). Beyond that initial discovery, clients
-  // read the rest of the protocol surface via `ibp:see` on substrate
-  // positions:
+  // CLI bootstrap endpoint is `GET /.well-known/treeos-portal`
+  // (mounted by IBP's bootstrap-route.js). Beyond that initial
+  // discovery, clients read the rest of the protocol surface via
+  // `ibp:see` on land seed spaces:
   //
   //   GET /ibp/see/<land>/.extensions   — extensions + capabilities
   //   GET /ibp/see/<land>/.tools        — registered tools
   //   GET /ibp/see/<land>/.roles        — registered roles
   //   GET /ibp/see/<land>/.operations   — registered DO operations
-  //
-  // The legacy /protocol + /api/v1/protocol endpoints retired
-  // 2026-05-19; CLI bootstrap is `/.well-known/treeos-portal` then ibp.
 
   // Rate limiter (after bootstrap so load balancer pings don't count)
   app.use(apiLimiter);
@@ -124,16 +133,9 @@ export default async function registerURLRoutes(app, opts = {}) {
   app.use("/api/v1", authApiRouter);
   app.use("/api/v1", landConfig);
 
-  // IBP HTTP adapter: POST /ibp/:verb/<encoded-address>
-  // No /api/v1 prefix — per [[project_protocol_transport_separation]] +
-  // [[project_extensions_are_server_side]], the protocol IS the API.
-  // Same handler the WebSocket layer uses. Every registered IBP
-  // operation (kernel or extension) is automatically callable here.
+  // IBP HTTP adapter: POST /ibp/:verb/<encoded-address>.
+  // No /api/v1 prefix — the protocol IS the API. Same handler the
+  // WebSocket layer uses; every registered IBP operation (kernel or
+  // extension) is automatically callable here.
   app.use("/", ibp);
-
-  // The parallel /canopy/* federation surface retired 2026-05-19. Canopy
-  // is now the cross-land auth scheme only (signing keys + peer registry).
-  // Cross-land calls flow through /ibp/<verb>/<addr> with canopy-signed
-  // envelopes. See [[project_canopy_folds_into_ibp]].
-
 }

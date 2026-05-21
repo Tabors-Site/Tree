@@ -70,7 +70,7 @@ Same nine methods on each primitive's sub-namespace. Atomic at the MongoDB layer
 
 I give every Space, Matter, and Being two layers, and they differ in kind.
 
-**My schema is layer one.** The schema fields — `spaceId`, `beingId`, `name`, `parentMatterId`, `children[]`, `origin`, `content`, `rootOwner`, `contributors[]`, `operatingMode`, `homeSpace`, timestamps. I define them. They are closed: the set is the set, and I do not grow it at runtime. They are constitutive: they make a primitive the kind of thing I can handle. Remove `spaceId` from a Matter and I cannot place it. Remove `origin` and I cannot fetch it. The schema is my necessary grip on the world.
+**My schema is layer one.** The schema fields: `spaceId`, `beingId`, `name`, `parentMatterId`, `children[]`, `origin`, `content`, `rootOwner`, `contributors[]`, `operatingMode`, `homeSpace`, timestamps. I define them. They are closed: the set is the set, and I do not grow it at runtime. They are constitutive: they make a primitive the kind of thing I can handle. Remove `spaceId` from a Matter and I cannot place it. Remove `origin` and I cannot fetch it. The schema is my necessary grip on the world.
 
 **The `qualities` Map is layer two.** I do not define what goes in it. Extensions do. Default empty at creation, open and unbounded for the life of the primitive. I never read inside an extension's quality namespace; I only provide the atomic primitives above that move data in and out under guard.
 
@@ -78,29 +78,37 @@ I give every Space, Matter, and Being two layers, and they differ in kind.
 
 I used to call this `metadata`. The name lied. "Meta-" implies data-about-data, something subordinate to the primitive it sits on. A primitive's qualities are not subordinate to the primitive; they are what it is like. The new name says what is true: this is primary characterization, not secondary annotation. And the word's coined meaning (Plato's "of-what-sort-ness") is exactly the field's function. There is no gap between them.
 
+### "Quality" can mean "good." This field cannot be misread that way.
+
+English carries two senses of "quality." One is the technical one I want: the characterizing sense, "of what sort." The other is the evaluative one, "how good": "the quality of his work," "a quality product," "high quality." A natural worry: could `matter.qualities` be misread as "how good is this matter"?
+
+No, because the two senses do not sit evenly across the word's forms. The evaluative sense lives only in the singular mass form and the adjective: "the quality of X," "a quality X," "high quality." It never appears in the countable plural. The countable plural, "qualities," is reliably neutral: "her best qualities," "the qualities of the alloy," "the qualities of a good knife." "This product has high qualities" does not parse. The singular can go either way; the plural carries only the neutral sense.
+
+The field is `qualities`, countable plural. It sits on the side of the split that has only the characterizing meaning. `matter.qualities` cannot be misread as "how good is the matter" for the exact reason "her qualities" cannot be. The evaluative usage isn't a hazard the name has to survive; it's a different grammatical branch of the word, and the form is not on it. English itself did the quarantining.
+
 ### How a builder decides where a property belongs
 
 For any property on a primitive, ask two things:
 
-1. **Who defines it** — me, or an extension?
-2. **Is the set closed** — finite and fixed, or open and unbounded?
+1. **Who defines it**: me, or an extension?
+2. **Is the set closed**: finite and fixed, or open and unbounded?
 
 I-defined and closed → schema field. Extension-defined and open → quality.
 
 That axis sorts every case I have met, including the borderline ones:
 
 - `Matter.name` is optional, but I define it, I use it (`set-name`, filesystem-origin mirroring), and there is one of it. → schema field.
-- `Matter.origin` looks like it answers "what sort of Matter?" — and it does. But it is my enum: I choose origins, I dispatch fetching on them, I address by them. New origins arrive when I change. They do not arrive at runtime from extensions. It is a kernel-constitutive kind, not an extension-contributed one. → schema field.
+- `Matter.origin` looks like it answers "what sort of Matter?", and it does. But it is my enum: I choose origins, I dispatch fetching on them, I address by them. New origins arrive when I change. They do not arrive at runtime from extensions. It is a kernel-constitutive kind, not an extension-contributed one. → schema field.
 - `qualities.governing.kind = "domain"` is written by the governing extension to characterize a Space as a domain. I know nothing of "governing" or "domain." → quality.
 
-Same genus — "what sort" — different owner, different openness. Origin is my kind. Qualities are extensions' kinds.
+Same genus ("what sort"), different owner, different openness. Origin is my kind. Qualities are extensions' kinds.
 
 ### The four marks that make a Map entry a quality
 
 A Map entry belongs in `qualities` because it has all four; schema fields have none of them:
 
 1. **Predicated of, not constitutive of.** It inheres in a primitive that already fully exists. A schema field constitutes the primitive: take it away and there is no primitive for anything to inhere in.
-2. **Characterizes.** It states what sort the primitive is, in some respect — `governing`, `energy`, `review`.
+2. **Characterizes.** It states what sort the primitive is, in some respect: `governing`, `energy`, `review`.
 3. **Removable without destroying the thing.** Empty the `qualities` Map and a Matter is still complete and I still handle it. Remove `origin` and I cannot handle it anymore.
 4. **Comes in open plurality.** Many, layered, one namespace per extension, unbounded. A primitive can grow new qualities forever; new schema fields require me to change.
 
@@ -110,7 +118,7 @@ I default `qualities` to an empty Map. A brand-new primitive carries zero qualit
 
 ### Extension data and qualities are the same thing
 
-An extension, by its nature, cannot change what a primitive constitutively is. It cannot add a schema field, redefine `origin`, or rewrite my grip. What it does is add a respect in which the primitive is some sort: a governance-sort, an energy-sort, a review-sort. That act — characterizing a primitive in a new respect — is the act of adding a quality. "Extension data" and "quality" are not two things sharing a field; they are the same thing. That is why one field — `qualities` — is the correct and complete home for every extension's contribution to a primitive, identically, on Space, Matter, and Being. My schema is the closed kernel-constitution; the Map is the open extension-characterization. Same axis, three primitives.
+An extension, by its nature, cannot change what a primitive constitutively is. It cannot add a schema field, redefine `origin`, or rewrite my grip. What it does is add a respect in which the primitive is some sort: a governance-sort, an energy-sort, a review-sort. That act, characterizing a primitive in a new respect, is the act of adding a quality. "Extension data" and "quality" are not two things sharing a field; they are the same thing. That is why one field, `qualities`, is the correct and complete home for every extension's contribution to a primitive, identically, on Space, Matter, and Being. My schema is the closed kernel-constitution; the Map is the open extension-characterization. Same axis, three primitives.
 
 ## How they relate
 
@@ -126,15 +134,15 @@ The architecture carries the extra fields that go beyond the tree shape:
 
 `seed/land/` holds the operations on the three primitives. Each subfolder contains the code that creates, mutates, observes, and tears down its primitive:
 
-- **`being/`** — identity operations. Creating beings, walking the being tree, position tracking, finder helpers. The Being's own homepage in the code.
-- **`space/`** — tree operations. Planting spaces, walking ancestor chains, managing ownership and contributors, the cascade engine, the seed-space markers (`SEED_SPACE`, `DELETED`). The Space's homepage.
-- **`matter/`** — content operations. Creating and editing matter, managing uploads, the `MATTER_ORIGIN` enum. The Matter's homepage.
-- **`qualities.js`** — the consolidated per-primitive extension-data API. Three sub-namespaces (`qualities.being`, `qualities.space`, `qualities.matter`), each with the same nine atomic primitives for reading and writing what kind a given primitive is.
+- **`being/`**: identity operations. Creating beings, walking the being tree, position tracking, finder helpers. The Being's own homepage in the code.
+- **`space/`**: tree operations. Planting spaces, walking ancestor chains, managing ownership and contributors, the cascade engine, the seed-space markers (`SEED_SPACE`, `DELETED`). The Space's homepage.
+- **`matter/`**: content operations. Creating and editing matter, managing uploads, the `MATTER_ORIGIN` enum. The Matter's homepage.
+- **`qualities.js`**: the consolidated per-primitive extension-data API. Three sub-namespaces (`qualities.being`, `qualities.space`, `qualities.matter`), each with the same nine atomic primitives for reading and writing what kind a given primitive is.
 
 Two siblings at the root:
 
-- **`registryMirror.js`** — surfaces the I-Am's runtime registries (tools, roles, operations) as Space children under `.tools`, `.roles`, `.operations` so SEE can introspect them through the standard pipeline. It writes Space rows, so it belongs here alongside the world it shapes.
-- **`integrityCheck.js`** — fsck for the world's tree-shaped primitives (Space, Matter, Being). Verifies parent/children agreement, repairs phantoms, soft-deletes orphans. Knows the world by name; lives where the world lives.
+- **`registryMirror.js`**: surfaces the I-Am's runtime registries (tools, roles, operations) as Space children under `.tools`, `.roles`, `.operations` so SEE can introspect them through the standard pipeline. It writes Space rows, so it belongs here alongside the world it shapes.
+- **`integrityCheck.js`**: fsck for the world's tree-shaped primitives (Space, Matter, Being). Verifies parent/children agreement, repairs phantoms, soft-deletes orphans. Knows the world by name; lives where the world lives.
 
 The schemas for all six primitives (the three above plus Did, Summon, LlmConnection) live at `seed/models/` so they sit in one place. The operations on the three world-shape primitives live here.
 

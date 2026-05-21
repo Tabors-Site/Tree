@@ -19,7 +19,7 @@
 //            having no being-tree parent.
 //
 //   space    set-space-llm
-//            Sets metadata.llm.slots[slot] on a space the caller owns
+//            Sets qualities.llm.slots[slot] on a space the caller owns
 //            (rootOwner matches). Drives the tree-level resolution
 //            step in seed/cognition/llmClient.js.
 //
@@ -31,7 +31,7 @@
 import log from "../../system/log.js";
 import Being from "../../models/being.js";
 import Space from "../../models/space.js";
-import { IbpError, IBP_ERR } from "../../ibp/errors.js";
+import { IbpError, IBP_ERR } from "../../ibp/protocol.js";
 import { findRootOperator } from "../../land/being/landBeings.js";
 
 // Tutorial-matter markers. The llm-assigner's start-tutorial /
@@ -88,7 +88,7 @@ export const llmAssignerBeing = Object.freeze({
   /**
    * Bind one of the caller's connections to a slot on their own being.
    * Slot "main" updates Being.llmDefault; named slots write into
-   * Being.qualities.userLlm.slots.
+   * Being.qualities.beingLlm.slots.
    *
    * @param {object} payload  { slot, connectionId }   connectionId null to unbind
    */
@@ -130,7 +130,7 @@ export const llmAssignerBeing = Object.freeze({
 
   /**
    * Delete one of the caller's LLM connections. The kernel cascades
-   * the removal: clears Being.llmDefault, every Being.qualities.userLlm
+   * the removal: clears Being.llmDefault, every Being.qualities.beingLlm
    * slot pointing at it, and every Space.qualities.llm.slots reference.
    *
    * @param {object} payload  { connectionId }
@@ -187,7 +187,7 @@ export const llmAssignerBeing = Object.freeze({
 
   /**
    * Set an LLM slot on a space the caller owns (via rootOwner of the
-   * containing tree). Writes metadata.llm.slots[slot] on the space —
+   * containing tree). Writes qualities.llm.slots[slot] on the space —
    * the tree-level step of the resolution chain in
    * seed/cognition/llmClient.js.
    *

@@ -1,30 +1,33 @@
 // TreeOS Seed . AGPL-3.0 . https://treeos.ai . Tabor Holly
-/**
- * Cascade: The Nervous System
- *
- * When content is written at a space that has metadata.cascade configured
- * and cascadeEnabled is true in .config, the kernel fires onCascade.
- * The first cascade event is always local: somebody wrote something at
- * a position marked for cascade. Extensions then propagate outward.
- *
- * The kernel checks two booleans on every content write (note, status change):
- *   1. Does this space have metadata.cascade.enabled = true?
- *   2. Is cascadeEnabled = true in .config?
- * If both yes, fire onCascade with the write context.
- *
- * Extensions register onCascade handlers to react, propagate to children,
- * send across lands via Canopy, or write results to .flow.
- *
- * The kernel never blocks inbound. Results are always written.
- */
+//
+// Cascade. How a write at one position ripples outward.
+//
+// A write here is a write here — until someone marks the position as
+// cascading. When a Matter write lands at a space whose
+// qualities.cascade.enabled is true, and the land has cascadeEnabled
+// in its config, I fire onCascade with the write context. Extensions
+// hang their propagation logic off that hook: walk to children, send
+// across lands through Canopy, queue downstream work, write results
+// to .flow.
+//
+// Two gates only, both substrate:
+//   1. qualities.cascade.enabled on this space.
+//   2. cascadeEnabled in land config.
+// I check both on every Matter write and let the hook chain do the
+// rest. I never block inbound cascade; the result is always recorded.
+//
+// Results live under .flow as daily partition spaces, each carrying a
+// qualities.results map keyed by signalId. The six statuses below
+// classify what happened so the tree-health circuit (spaceCircuit.js)
+// can count failures and rejections without scanning everything.
 
 import log from "../../system/log.js";
 import Space from "../../models/space.js";
 import { hooks } from "../../system/hooks.js";
 import { getLandConfigValue } from "../../landConfig.js";
-import { SEED_SPACE } from "../space/seedSpaces.js";
+import { SEED_SPACE } from "./seedSpaces.js";
 import { v4 as uuidv4 } from "uuid";
-import { checkWriteSize, estimateWriteSize } from "./documentGuard.js";
+import { checkWriteSize, estimateWriteSize } from "../documentGuard.js";
 
 // Cascade result statuses written into the .flow partitions and used by
 // the tree health equation (spaceCircuit.js) to count rejections + failures.
@@ -70,7 +73,7 @@ function trackSignalDepth(signalId, depth) {
  * Called from the afterMatter hook in the kernel.
  *
  * @param {string} spaceId - the space where content was written
- * @param {object} writeContext - what was written (matter data, metadata, etc.)
+ * @param {object} writeContext - what was written (matter data, qualities, etc.)
  */
 export async function checkCascade(spaceId, writeContext) {
   // Check global enable
@@ -78,11 +81,11 @@ export async function checkCascade(spaceId, writeContext) {
   if (enabled === false || enabled === "false") return;
 
   // Load space and check cascade config
-  const space = await Space.findById(spaceId).select("name metadata children seedSpace").lean();
+  const space = await Space.findById(spaceId).select("name qualities children seedSpace").lean();
   if (!space || space.seedSpace) return;
 
-  const meta = space.qualities instanceof Map ? Object.fromEntries(space.qualities) : (space.qualities || {});
-  const cascadeConfig = meta.cascade;
+  const quals = space.qualities instanceof Map ? Object.fromEntries(space.qualities) : (space.qualities || {});
+  const cascadeConfig = quals.cascade;
   if (!cascadeConfig?.enabled) return;
 
   // Rate limit: count signals from this space in the current minute
@@ -189,7 +192,7 @@ export async function deliverCascade({ spaceId, signalId, payload = {}, source, 
   }
 
   // Load target space
-  const space = await Space.findById(spaceId).select("name metadata children seedSpace").lean();
+  const space = await Space.findById(spaceId).select("name qualities children seedSpace").lean();
   if (!space) {
     const result = { status: CASCADE.FAILED, source: spaceId, payload: { reason: "space not found" }, timestamp: new Date(), signalId };
     await writeResult(signalId, result);
@@ -202,16 +205,15 @@ export async function deliverCascade({ spaceId, signalId, payload = {}, source, 
   }
 
   // Circuit breaker: reject signals to tripped trees
-  const nodeMeta = space.qualities instanceof Map ? Object.fromEntries(space.qualities) : (space.qualities || {});
-  if (nodeMeta.circuit?.tripped) {
+  const spaceQuals = space.qualities instanceof Map ? Object.fromEntries(space.qualities) : (space.qualities || {});
+  if (spaceQuals.circuit?.tripped) {
     const result = { status: CASCADE.REJECTED, source: spaceId, payload: { reason: "tree circuit breaker tripped" }, timestamp: new Date(), signalId };
     await writeResult(signalId, result);
     return result;
   }
 
   // Check space's cascade config
-  const meta = nodeMeta;
-  const cascadeConfig = meta.cascade;
+  const cascadeConfig = spaceQuals.cascade;
 
   // Never block inbound. Fire onCascade regardless of local cascade config.
   // The config controls whether THIS space originates cascades, not whether it receives them.
@@ -240,10 +242,10 @@ export async function deliverCascade({ spaceId, signalId, payload = {}, source, 
  * Reads today's .flow partition and counts results where source matches.
  */
 async function countRecentSignals(spaceId) {
-  const flowNode = await Space.findOne({ seedSpace: SEED_SPACE.FLOW }).select("_id").lean();
-  if (!flowNode) return 0;
+  const flowSpace = await Space.findOne({ seedSpace: SEED_SPACE.FLOW }).select("_id").lean();
+  if (!flowSpace) return 0;
   const today = todayPartitionName();
-  const partition = await Space.findOne({ parent: flowNode._id, name: today }).select("metadata").lean();
+  const partition = await Space.findOne({ parent: flowSpace._id, name: today }).select("qualities").lean();
   if (!partition) return 0;
   const results = partition.qualities instanceof Map
     ? partition.qualities.get("results") || {}
@@ -275,21 +277,21 @@ function todayPartitionName() {
  */
 async function getOrCreatePartition() {
   const today = todayPartitionName();
-  const flowNode = await Space.findOne({ seedSpace: SEED_SPACE.FLOW }).select("_id").lean();
-  if (!flowNode) return null;
+  const flowSpace = await Space.findOne({ seedSpace: SEED_SPACE.FLOW }).select("_id").lean();
+  if (!flowSpace) return null;
 
   // Atomic upsert: prevents duplicate partitions when concurrent cascade
   // writes hit the midnight boundary simultaneously.
   const partition = await Space.findOneAndUpdate(
-    { parent: flowNode._id, name: today },
+    { parent: flowSpace._id, name: today },
     {
       $setOnInsert: {
         _id: uuidv4(),
         name: today,
-        parent: flowNode._id,
+        parent: flowSpace._id,
         children: [],
         contributors: [],
-        metadata: { results: {} },
+        qualities: { results: {} },
       },
     },
     { upsert: true, new: true, lean: true },
@@ -297,7 +299,7 @@ async function getOrCreatePartition() {
 
   // Ensure .flow's children includes this partition (idempotent)
   await Space.updateOne(
-    { _id: flowNode._id },
+    { _id: flowSpace._id },
     { $addToSet: { children: partition._id } },
   );
 
@@ -331,7 +333,7 @@ function findOldestResultKey(results) {
  * Runs asynchronously after writes to avoid racing on the count check.
  */
 async function trimPartitionIfNeeded(partitionId, maxPerDay) {
-  const doc = await Space.findById(partitionId).select("metadata").lean();
+  const doc = await Space.findById(partitionId).select("qualities").lean();
   if (!doc) return;
   const results = doc.qualities instanceof Map
     ? doc.qualities.get("results") || {}
@@ -373,7 +375,7 @@ async function writeResult(signalId, result) {
       return;
     }
 
-    const partition = await Space.findById(partitionId).select("metadata").lean();
+    const partition = await Space.findById(partitionId).select("qualities").lean();
     if (!partition) return;
 
     // Hard cap: reject writes when signal key count exceeds per-day cap.
@@ -405,7 +407,7 @@ async function writeResult(signalId, result) {
           { $unset: { [`qualities.results.${oldestKey}`]: 1 } },
         );
       } else {
-        // No key to drop. Partition metadata is full with non-result data. Reject.
+        // No key to drop. Partition qualities is full with non-result data. Reject.
         log.error("Cascade", `Partition ${partitionId} over size limit with no droppable results. Write rejected.`);
         return;
       }
@@ -432,12 +434,12 @@ async function writeResult(signalId, result) {
  * Searches across all partitions (most recent first).
  */
 export async function getCascadeResults(signalId) {
-  const flowNode = await Space.findOne({ seedSpace: SEED_SPACE.FLOW }).select("_id children").lean();
-  if (!flowNode) return [];
+  const flowSpace = await Space.findOne({ seedSpace: SEED_SPACE.FLOW }).select("_id children").lean();
+  if (!flowSpace) return [];
 
   // Search partitions newest first
-  const partitions = await Space.find({ parent: flowNode._id })
-    .select("metadata")
+  const partitions = await Space.find({ parent: flowSpace._id })
+    .select("qualities")
     .sort({ name: -1 })
     .lean();
 
@@ -455,11 +457,11 @@ export async function getCascadeResults(signalId) {
  * Get all recent cascade results across partitions.
  */
 export async function getAllCascadeResults(limit = 50) {
-  const flowNode = await Space.findOne({ seedSpace: SEED_SPACE.FLOW }).select("_id").lean();
-  if (!flowNode) return {};
+  const flowSpace = await Space.findOne({ seedSpace: SEED_SPACE.FLOW }).select("_id").lean();
+  if (!flowSpace) return {};
 
-  const partitions = await Space.find({ parent: flowNode._id })
-    .select("metadata")
+  const partitions = await Space.find({ parent: flowSpace._id })
+    .select("qualities")
     .sort({ name: -1 })
     .lean();
 
@@ -497,12 +499,12 @@ export async function cleanupExpiredResults() {
   const cutoff = new Date(Date.now() - ttl * 1000);
   const cutoffDate = cutoff.toISOString().slice(0, 10); // "2026-03-18"
 
-  const flowNode = await Space.findOne({ seedSpace: SEED_SPACE.FLOW }).select("_id children").lean();
-  if (!flowNode) return 0;
+  const flowSpace = await Space.findOne({ seedSpace: SEED_SPACE.FLOW }).select("_id children").lean();
+  if (!flowSpace) return 0;
 
   // Find partitions older than cutoff (partition name is date string, lexicographic compare works)
   const expired = await Space.find({
-    parent: flowNode._id,
+    parent: flowSpace._id,
     name: { $lt: cutoffDate },
   }).select("_id name");
 
@@ -512,7 +514,7 @@ export async function cleanupExpiredResults() {
 
   // Remove from .flow children
   await Space.updateOne(
-    { _id: flowNode._id },
+    { _id: flowSpace._id },
     { $pullAll: { children: expiredIds } },
   );
 

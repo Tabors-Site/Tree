@@ -17,13 +17,13 @@ import {
   plantSeed,
   unplantSeed,
   listPlantedAt,
-} from "./land/space/seeds.js";
+} from "./land/seeds.js";
 import Being from "./models/being.js";
 import Space from "./models/space.js";
 import Did from "./models/did.js";
 import Matter from "./models/matter.js";
 
-import { logDid } from "./land/space/dids.js";
+import { logDid } from "./land/dids.js";
 import { resolveSpaceAccess } from "./land/space/spaceFetch.js";
 import {
   createBeing,
@@ -95,7 +95,7 @@ import {
   getIO,
   getHttpServer,
 } from "./ibp/pushChannel.js";
-import { ok, error, sendOk, sendError, ERR } from "./ibp/protocol.js";
+import { ok, error, sendOk, sendError, IBP_ERR } from "./ibp/protocol.js";
 import { CASCADE } from "./land/space/cascade.js";
 import { qualities } from "./land/qualities.js";
 import { deliverCascade } from "./land/space/cascade.js";
@@ -177,10 +177,6 @@ import {
 // The four-verb dispatcher. The whole of my public surface for
 // operations on space, matter, and beings.
 import { doVerb, seeVerb, summonVerb, beVerb } from "./ibp/verbs.js";
-import {
-  registerDescriptorDeriver,
-  unregisterDescriptorDeriver,
-} from "./ibp/descriptor.js";
 // Side-effect import. Registers kernel DO operations with the
 // registry on load. See seed/ibp/coreOperations.js for the current set.
 import "./ibp/coreOperations.js";
@@ -232,10 +228,6 @@ export function buildCoreServices({
 
     // --- Always-available services ---
     dids: { logDid },
-    descriptor: {
-      registerDeriver: registerDescriptorDeriver,
-      unregisterDeriver: unregisterDescriptorDeriver,
-    },
     auth: {
       resolveSpaceAccess,
       createBeing,
@@ -303,7 +295,7 @@ export function buildCoreServices({
 
     mcp: { connectToMCP, closeMCPClient, getMCPClient, MCP_SERVER_URL },
 
-    // Push channel — proxies from seed/ibp/pushChannel.js that route to
+    // Push channel. Proxies from seed/ibp/pushChannel.js that route to
     // the registered transport (today: WebSocket via initWebSocketServer).
     // No-op when no transport has registered. Named `websocket` for
     // back-compat with extension callers; the channel itself is
@@ -481,7 +473,7 @@ export function buildCoreServices({
     },
 
     // --- Response protocol (shapes, error codes, event types) ---
-    protocol: { ok, error, sendOk, sendError, ERR, CASCADE },
+    protocol: { ok, error, sendOk, sendError, IBP_ERR, CASCADE },
   };
 
   // Apply overrides (lands can swap any service)

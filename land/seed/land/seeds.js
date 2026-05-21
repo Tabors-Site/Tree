@@ -1,18 +1,46 @@
 // TreeOS Seed . AGPL-3.0 . https://treeos.ai . Tabor Holly
 //
-// Extension Seeds — scaffolded shapes a land can plant.
+// Seeds. Scaffolds a land can plant.
 //
-// A `seed` is a declared recipe an extension provides: "if you plant me
-// at a space, I will create this structure (spaces, beings, matters,
-// qualities) to bootstrap whatever the extension does." A land grows
-// only the populations its operators plant.
+// ── What a seed is ──────────────────────────────────────────────
 //
-// Scaffolding is a single substrate fact: which seeds were planted,
-// where, when. "What's actually present in this tree?" answers as a
-// direct lookup on the target space, not a walk across many quality
-// namespaces.
+// An extension is a capability surface. What that capability needs
+// to stand on — beings at their roles, child spaces around them,
+// initial matter, qualities stamped at the right positions — is a
+// scaffold. A seed is that scaffold declared: a recipe that says
+// "if you plant me at a space, I will create this structure to
+// bootstrap what I do."
 //
-// **Shape of a seed recipe:**
+// A land grows only the populations its operator plants. Nothing
+// auto-installs; installing an extension is not the same as planting
+// it. The seed is potential; planting is the act that turns potential
+// into world.
+//
+//
+// ── Seeds are how the I_AM extends ──────────────────────────────
+//
+// Every act in the world has a being behind it; genesis is no
+// exception. At boot the I_AM acts alone: it plants the land root,
+// the nine land seed spaces, its own Being row, and the first land
+// beings. That sequence is the I_AM turning seed-as-potential into
+// world-as-fact for the first time.
+//
+// A planted seed is the same act, later in time, with the operator
+// as the trigger. The scaffold function runs through `core` —
+// kernel-trusted; the writes flow through verbs with the I_AM's
+// authority; the planted structure stamps an audit trail naming
+// the operator who triggered it and the I_AM that performed it.
+// Genesis at boot and seed-plant at runtime are not different in
+// kind; they are the same operation at different times. The land's
+// shape grows the way the land was first formed: a being scaffolds
+// substrate from a recipe.
+//
+// This is why the registry sits in the kernel and not in any one
+// extension. Seeds are the I_AM's own mechanism for extending the
+// world, offered as a surface extensions can declare against. The
+// extension supplies the recipe; the I_AM does the planting.
+//
+// ── Shape of a seed recipe ──────────────────────────────────────
 //
 //   {
 //     name: "<ext>:<seed-action>",      // e.g. "governing:rulership"
@@ -24,7 +52,7 @@
 //     },
 //   }
 //
-// **Plant lifecycle:**
+// ── Plant lifecycle ─────────────────────────────────────────────
 //
 //   plant   → recipe.scaffold runs; creates structure; stamps
 //             qualities.seeds.<plantedSeedId> on the target space with
@@ -33,15 +61,16 @@
 //   unplant → walks plantedThings (in reverse) and deletes them; clears
 //             the qualities entry
 //
-// Two registry maps: SEEDS (recipes by name) and a per-extension owner
-// lookup so unregisterFromExtension at unload time stays clean.
+// Two registry maps live in this module: SEEDS (recipes by name)
+// and a per-extension owner lookup so unregisterFromExtension at
+// unload time stays clean.
 
 import { v4 as uuidv4 } from "uuid";
-import log from "../../system/log.js";
-import Space from "../../models/space.js";
+import log from "../system/log.js";
+import Space from "../models/space.js";
 
-const SEEDS = new Map();             // name → recipe
-const SEED_OWNER = new Map();        // name → owning extension
+const SEEDS = new Map(); // name → recipe
+const SEED_OWNER = new Map(); // name → owning extension
 
 const SEED_NAME_RE = /^[a-z][a-z0-9-]*:[a-z][a-z0-9-]*$/;
 const MAX_SEEDS = 200;
@@ -59,7 +88,10 @@ const MAX_SEEDS = 200;
  */
 export function registerSeed(name, recipe, ownerExtension = "kernel") {
   if (typeof name !== "string" || !SEED_NAME_RE.test(name)) {
-    log.error("Seeds", `Invalid seed name "${String(name).slice(0, 30)}". Use "<ext>:<seed-action>" (lowercase, hyphens).`);
+    log.error(
+      "Seeds",
+      `Invalid seed name "${String(name).slice(0, 30)}". Use "<ext>:<seed-action>" (lowercase, hyphens).`,
+    );
     return false;
   }
   if (!recipe || typeof recipe !== "object") {
@@ -67,25 +99,39 @@ export function registerSeed(name, recipe, ownerExtension = "kernel") {
     return false;
   }
   if (typeof recipe.scaffold !== "function") {
-    log.error("Seeds", `Seed "${name}" rejected: recipe.scaffold must be a function`);
+    log.error(
+      "Seeds",
+      `Seed "${name}" rejected: recipe.scaffold must be a function`,
+    );
     return false;
   }
   if (typeof recipe.description !== "string" || !recipe.description.length) {
-    log.error("Seeds", `Seed "${name}" rejected: recipe.description is required`);
+    log.error(
+      "Seeds",
+      `Seed "${name}" rejected: recipe.description is required`,
+    );
     return false;
   }
   const declaredPrefix = name.split(":")[0];
   if (ownerExtension !== "kernel" && declaredPrefix !== ownerExtension) {
-    log.error("Seeds",
-      `Seed "${name}" rejected: prefix "${declaredPrefix}" does not match owner "${ownerExtension}".`);
+    log.error(
+      "Seeds",
+      `Seed "${name}" rejected: prefix "${declaredPrefix}" does not match owner "${ownerExtension}".`,
+    );
     return false;
   }
   if (SEEDS.size >= MAX_SEEDS) {
-    log.error("Seeds", `Seed registry full (${MAX_SEEDS}). "${name}" rejected.`);
+    log.error(
+      "Seeds",
+      `Seed registry full (${MAX_SEEDS}). "${name}" rejected.`,
+    );
     return false;
   }
   if (SEEDS.has(name)) {
-    log.warn("Seeds", `Seed "${name}" already registered by "${SEED_OWNER.get(name)}". Re-registration from "${ownerExtension}" rejected.`);
+    log.warn(
+      "Seeds",
+      `Seed "${name}" already registered by "${SEED_OWNER.get(name)}". Re-registration from "${ownerExtension}" rejected.`,
+    );
     return false;
   }
   SEEDS.set(name, Object.freeze({ name, ...recipe, ownerExtension }));
@@ -115,7 +161,8 @@ export function unregisterSeedsFromExtension(extName) {
       count++;
     }
   }
-  if (count > 0) log.verbose("Seeds", `Unregistered ${count} seed(s) from "${extName}"`);
+  if (count > 0)
+    log.verbose("Seeds", `Unregistered ${count} seed(s) from "${extName}"`);
   return count;
 }
 
@@ -159,20 +206,29 @@ export function listSeeds() {
  * @returns {Promise<{ plantedSeedId, plantedThings }>} on success
  * @throws when the seed isn't registered or the target space doesn't exist
  */
-export async function plantSeed({ name, atSpaceId, identity, core, params = {} }) {
+export async function plantSeed({
+  name,
+  atSpaceId,
+  identity,
+  core,
+  params = {},
+}) {
   const recipe = SEEDS.get(name);
   if (!recipe) throw new Error(`Seed "${name}" not registered`);
   if (!atSpaceId) throw new Error("plantSeed requires atSpaceId");
-  if (!identity?.beingId) throw new Error("plantSeed requires identity.beingId");
+  if (!identity?.beingId)
+    throw new Error("plantSeed requires identity.beingId");
 
   const target = await Space.findById(atSpaceId).select("_id name").lean();
-  if (!target) throw new Error(`Target space ${String(atSpaceId).slice(0, 8)} not found`);
+  if (!target)
+    throw new Error(`Target space ${String(atSpaceId).slice(0, 8)} not found`);
 
   // Defensive copy so the recipe cannot mutate the caller's params.
   // Reject obviously dangerous shapes (non-object, null, array).
-  const safeParams = (params && typeof params === "object" && !Array.isArray(params))
-    ? { ...params }
-    : {};
+  const safeParams =
+    params && typeof params === "object" && !Array.isArray(params)
+      ? { ...params }
+      : {};
 
   const plantedSeedId = uuidv4();
   const plantedAt = new Date().toISOString();
@@ -189,7 +245,10 @@ export async function plantSeed({ name, atSpaceId, identity, core, params = {} }
   try {
     plantedThings = await recipe.scaffold(ctx);
   } catch (err) {
-    log.error("Seeds", `Plant "${name}" at ${String(atSpaceId).slice(0, 8)} failed: ${err.message}`);
+    log.error(
+      "Seeds",
+      `Plant "${name}" at ${String(atSpaceId).slice(0, 8)} failed: ${err.message}`,
+    );
     throw err;
   }
 
@@ -197,7 +256,7 @@ export async function plantSeed({ name, atSpaceId, identity, core, params = {} }
   // quality namespace is a blob keyed by plantedSeedId. Params land
   // here too so an audit / re-plant can see what the operator
   // configured.
-  const { qualities } = await import("../qualities.js");
+  const { qualities } = await import("./qualities.js");
   const space = await Space.findById(atSpaceId);
   if (space) {
     const existing = (await qualities.space.getQuality(space, "seeds")) || {};
@@ -211,9 +270,11 @@ export async function plantSeed({ name, atSpaceId, identity, core, params = {} }
     await qualities.space.setQuality(space, "seeds", existing);
   }
 
-  log.info("Seeds",
+  log.info(
+    "Seeds",
     `🌱 planted "${name}" at ${String(atSpaceId).slice(0, 8)} ` +
-    `(plantedSeedId=${plantedSeedId.slice(0, 8)})`);
+      `(plantedSeedId=${plantedSeedId.slice(0, 8)})`,
+  );
 
   return { plantedSeedId, plantedThings };
 }
@@ -226,9 +287,10 @@ export async function listPlantedAt(spaceId) {
   if (!spaceId) return [];
   const space = await Space.findById(spaceId).select("_id qualities").lean();
   if (!space) return [];
-  const planted = space.qualities instanceof Map
-    ? space.qualities.get("seeds")
-    : space.qualities?.seeds;
+  const planted =
+    space.qualities instanceof Map
+      ? space.qualities.get("seeds")
+      : space.qualities?.seeds;
   if (!planted || typeof planted !== "object") return [];
   return Object.entries(planted).map(([plantedSeedId, entry]) => ({
     plantedSeedId,
@@ -242,17 +304,26 @@ export async function listPlantedAt(spaceId) {
  * qualities entry. Recipes without `unscaffold` are best-effort —
  * plantedThings stays as the audit trail.
  */
-export async function unplantSeed({ atSpaceId, plantedSeedId, identity, core }) {
+export async function unplantSeed({
+  atSpaceId,
+  plantedSeedId,
+  identity,
+  core,
+}) {
   if (!atSpaceId || !plantedSeedId) {
     throw new Error("unplantSeed requires atSpaceId and plantedSeedId");
   }
   const space = await Space.findById(atSpaceId);
-  if (!space) throw new Error(`Target space ${String(atSpaceId).slice(0, 8)} not found`);
+  if (!space)
+    throw new Error(`Target space ${String(atSpaceId).slice(0, 8)} not found`);
 
-  const { qualities } = await import("../qualities.js");
+  const { qualities } = await import("./qualities.js");
   const seeds = (await qualities.space.getQuality(space, "seeds")) || {};
   const entry = seeds[plantedSeedId];
-  if (!entry) throw new Error(`Planted seed ${plantedSeedId.slice(0, 8)} not found at ${String(atSpaceId).slice(0, 8)}`);
+  if (!entry)
+    throw new Error(
+      `Planted seed ${plantedSeedId.slice(0, 8)} not found at ${String(atSpaceId).slice(0, 8)}`,
+    );
 
   const recipe = SEEDS.get(entry.name);
   if (recipe && typeof recipe.unscaffold === "function") {
@@ -265,17 +336,24 @@ export async function unplantSeed({ atSpaceId, plantedSeedId, identity, core }) 
         plantedThings: entry.plantedThings,
       });
     } catch (err) {
-      log.error("Seeds", `Unplant "${entry.name}" recipe.unscaffold failed: ${err.message}`);
+      log.error(
+        "Seeds",
+        `Unplant "${entry.name}" recipe.unscaffold failed: ${err.message}`,
+      );
       throw err;
     }
   } else {
-    log.warn("Seeds",
-      `Seed "${entry.name}" has no unscaffold(); plantedThings record kept as audit trail`);
+    log.warn(
+      "Seeds",
+      `Seed "${entry.name}" has no unscaffold(); plantedThings record kept as audit trail`,
+    );
   }
 
   delete seeds[plantedSeedId];
   await qualities.space.setQuality(space, "seeds", seeds);
 
-  log.info("Seeds",
-    `🪦 unplanted ${plantedSeedId.slice(0, 8)} ("${entry.name}") from ${String(atSpaceId).slice(0, 8)}`);
+  log.info(
+    "Seeds",
+    `🪦 unplanted ${plantedSeedId.slice(0, 8)} ("${entry.name}") from ${String(atSpaceId).slice(0, 8)}`,
+  );
 }

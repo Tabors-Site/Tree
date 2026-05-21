@@ -1,4 +1,4 @@
-// TreeOS Seed . AGPL-3.0 . https://treeos.ai
+// TreeOS Seed . AGPL-3.0 . https://treeos.ai . Tabor Holly
 //
 // MCP authentication middleware.
 //
@@ -11,16 +11,16 @@
 
 import log from "../../../seed/system/log.js";
 import { decodeToken } from "../../../seed/land/being/identity.js";
-import { sendError, ERR } from "../../../seed/ibp/protocol.js";
+import { sendError, IBP_ERR } from "../../../seed/ibp/protocol.js";
 
 export default function authenticateMCP(req, res, next) {
   const token = req.headers["x-internal-token"];
-  if (!token) return sendError(res, 401, ERR.UNAUTHORIZED, "Missing token");
+  if (!token) return sendError(res, 401, IBP_ERR.UNAUTHORIZED, "Missing token");
 
   const decoded = decodeToken(token);
   if (!decoded) {
     log.error("MCP", "invalid token");
-    return sendError(res, 401, ERR.UNAUTHORIZED, "Invalid token");
+    return sendError(res, 401, IBP_ERR.UNAUTHORIZED, "Invalid token");
   }
 
   req.beingId         = decoded.beingId;

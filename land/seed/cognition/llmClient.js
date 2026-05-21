@@ -28,8 +28,15 @@ import Space from "../models/space.js";
 import LlmConnection from "../models/llmConnection.js";
 import { getLandConfigValue } from "../landConfig.js";
 import { getAncestorChain } from "../land/space/ancestorCache.js";
-import { getSpaceLlmAssignments, getBeingLlmAssignments } from "./assignments.js";
-import { resolveAndValidateHost, hostInAllowedLlmDomains, getEncryptionKey } from "./connections.js";
+import {
+  getSpaceLlmAssignments,
+  getBeingLlmAssignments,
+} from "./assignments.js";
+import {
+  resolveAndValidateHost,
+  hostInAllowedLlmDomains,
+  getEncryptionKey,
+} from "./connections.js";
 
 // ─────────────────────────────────────────────────────────────────────────
 // CONFIG
@@ -38,11 +45,17 @@ import { resolveAndValidateHost, hostInAllowedLlmDomains, getEncryptionKey } fro
 const ALGORITHM = "aes-256-cbc";
 
 let LLM_TIMEOUT_MS = 5 * 60 * 1000; // 5 min default
-export function setLlmTimeout(ms) { LLM_TIMEOUT_MS = ms; }
-export function getLlmTimeout() { return LLM_TIMEOUT_MS; }
+export function setLlmTimeout(ms) {
+  LLM_TIMEOUT_MS = ms;
+}
+export function getLlmTimeout() {
+  return LLM_TIMEOUT_MS;
+}
 
 let CLIENT_CACHE_TTL = 5 * 60 * 1000; // 5 min
-export function setClientCacheTtl(ms) { CLIENT_CACHE_TTL = ms; }
+export function setClientCacheTtl(ms) {
+  CLIENT_CACHE_TTL = ms;
+}
 
 // ─────────────────────────────────────────────────────────────────────────
 // API KEY DECRYPTION
@@ -56,7 +69,10 @@ function decrypt(encryptedText) {
     throw new Error("Cannot decrypt LLM credentials: " + e.message);
   }
   const [ivHex, encrypted] = encryptedText.split(":");
-  if (!ivHex || !encrypted) throw new Error("Malformed encrypted LLM credential (expected iv:ciphertext)");
+  if (!ivHex || !encrypted)
+    throw new Error(
+      "Malformed encrypted LLM credential (expected iv:ciphertext)",
+    );
   try {
     const iv = Buffer.from(ivHex, "hex");
     const decipher = crypto.createDecipheriv(ALGORITHM, key, iv);
@@ -64,7 +80,9 @@ function decrypt(encryptedText) {
     decrypted += decipher.final("utf8");
     return decrypted;
   } catch {
-    throw new Error("Failed to decrypt LLM credential. The encryption key may have changed or the stored credential is corrupted.");
+    throw new Error(
+      "Failed to decrypt LLM credential. The encryption key may have changed or the stored credential is corrupted.",
+    );
   }
 }
 
@@ -78,12 +96,16 @@ function decrypt(encryptedText) {
 //   `land:${slot}` — land-level default fallback
 const beingClientCache = new Map();
 
-setInterval(() => {
-  const now = Date.now();
-  for (const [key, entry] of beingClientCache) {
-    if (now - entry.fetchedAt > CLIENT_CACHE_TTL * 2) beingClientCache.delete(key);
-  }
-}, 10 * 60 * 1000).unref();
+setInterval(
+  () => {
+    const now = Date.now();
+    for (const [key, entry] of beingClientCache) {
+      if (now - entry.fetchedAt > CLIENT_CACHE_TTL * 2)
+        beingClientCache.delete(key);
+    }
+  },
+  10 * 60 * 1000,
+).unref();
 
 /** Clear cached client(s) for a being. Call when their LLM config changes. */
 export function clearBeingClientCache(beingId) {
@@ -115,7 +137,10 @@ async function resolveConnection(connectionId, cacheKey) {
       await resolveAndValidateHost(hostname);
     }
   } catch (err) {
-    log.error("LLM", `Blocked custom LLM connection ${connectionId}: ${err.message}`);
+    log.error(
+      "LLM",
+      `Blocked custom LLM connection ${connectionId}: ${err.message}`,
+    );
     return null;
   }
 
@@ -138,15 +163,17 @@ async function resolveConnection(connectionId, cacheKey) {
       maxRetries: 0,
       timeout: LLM_TIMEOUT_MS,
       defaultHeaders: {
-        "HTTP-Referer": getLandConfigValue("landUrl") || `http://localhost:${process.env.PORT || 3000}`,
+        "HTTP-Referer":
+          getLandConfigValue("landUrl") ||
+          `http://localhost:${process.env.PORT || 3000}`,
         "X-OpenRouter-Title": "TreeOS",
         "X-OpenRouter-Categories": "personal-agent,general-chat",
       },
     }),
-    model:        conn.model || null,
-    isCustom:     true,
+    model: conn.model || null,
+    isCustom: true,
     connectionId: conn._id,
-    fetchedAt:    Date.now(),
+    fetchedAt: Date.now(),
   };
 
   if (cacheKey) beingClientCache.set(cacheKey, entry);
@@ -166,7 +193,7 @@ async function resolveConnection(connectionId, cacheKey) {
 /**
  * Resolve the LLM client for a being. Chain:
  *   1. overrideConnectionId (from a tree's role-slot resolution)
- *   2. being slot assignment (metadata.userLlm.slots[slot])
+ *   2. being slot assignment (qualities.beingLlm.slots[slot])
  *   3. being default (Being.llmDefault), if slot wasn't "main"
  *   4. land-level default (landLlmConnection)
  *   5. noLlm sentinel
@@ -179,12 +206,12 @@ async function resolveConnection(connectionId, cacheKey) {
 export async function getClientForBeing(beingId, slot, overrideConnectionId) {
   if (!beingId) {
     return {
-      client:       null,
-      model:        null,
-      isCustom:     false,
+      client: null,
+      model: null,
+      isCustom: false,
       connectionId: null,
-      noLlm:        true,
-      fetchedAt:    Date.now(),
+      noLlm: true,
+      fetchedAt: Date.now(),
     };
   }
 
@@ -194,19 +221,28 @@ export async function getClientForBeing(beingId, slot, overrideConnectionId) {
   if (overrideConnectionId) {
     const overrideCacheKey = "conn:" + overrideConnectionId;
     const overrideCached = beingClientCache.get(overrideCacheKey);
-    if (overrideCached && Date.now() - overrideCached.fetchedAt < CLIENT_CACHE_TTL) {
+    if (
+      overrideCached &&
+      Date.now() - overrideCached.fetchedAt < CLIENT_CACHE_TTL
+    ) {
       return overrideCached;
     }
     try {
-      const overrideEntry = await resolveConnection(overrideConnectionId, overrideCacheKey);
+      const overrideEntry = await resolveConnection(
+        overrideConnectionId,
+        overrideCacheKey,
+      );
       if (overrideEntry) return overrideEntry;
     } catch (err) {
-      log.error("LLM", `Failed to resolve override connection ${overrideConnectionId}: ${err.message}`);
+      log.error(
+        "LLM",
+        `Failed to resolve override connection ${overrideConnectionId}: ${err.message}`,
+      );
     }
     // Fall through to normal slot-based resolution
   }
 
-  // 2 + 3. Slot-based resolution from being's llmDefault + metadata.userLlm.
+  // 2 + 3. Slot-based resolution from being's llmDefault + qualities.beingLlm.
   const cacheKey = beingId + ":" + slot;
   const cached = beingClientCache.get(cacheKey);
   if (cached && Date.now() - cached.fetchedAt < CLIENT_CACHE_TTL) {
@@ -214,10 +250,13 @@ export async function getClientForBeing(beingId, slot, overrideConnectionId) {
   }
 
   try {
-    const being = await Being.findById(beingId).select("llmDefault metadata").lean();
-    const meta = being?.qualities || {};
-    const extSlots = meta?.userLlm?.slots || {};
-    let connectionId = slot === "main" ? being?.llmDefault : (extSlots[slot] || null);
+    const being = await Being.findById(beingId)
+      .select("llmDefault qualities")
+      .lean();
+    const quals = being?.qualities || {};
+    const extSlots = quals?.beingLlm?.slots || {};
+    let connectionId =
+      slot === "main" ? being?.llmDefault : extSlots[slot] || null;
 
     // Fall back to "main" (llmDefault) if the specific slot has no assignment
     if (!connectionId && slot !== "main" && being?.llmDefault) {
@@ -229,7 +268,10 @@ export async function getClientForBeing(beingId, slot, overrideConnectionId) {
       if (entry) return entry;
     }
   } catch (err) {
-    log.error("LLM", `Failed to load custom LLM for being ${beingId}: ${err.message}`);
+    log.error(
+      "LLM",
+      `Failed to load custom LLM for being ${beingId}: ${err.message}`,
+    );
   }
 
   // 4. Land-level default (operator-configured fallback).
@@ -250,12 +292,12 @@ export async function getClientForBeing(beingId, slot, overrideConnectionId) {
 
   // 5. No LLM available. Cache the sentinel so we don't re-walk.
   const noLlmEntry = {
-    client:       null,
-    model:        null,
-    isCustom:     false,
+    client: null,
+    model: null,
+    isCustom: false,
     connectionId: null,
-    noLlm:        true,
-    fetchedAt:    Date.now(),
+    noLlm: true,
+    fetchedAt: Date.now(),
   };
   beingClientCache.set(cacheKey, noLlmEntry);
   return noLlmEntry;
@@ -272,14 +314,14 @@ export async function getClientForBeing(beingId, slot, overrideConnectionId) {
 //
 //   Layer 1 — Lockout (sovereign over everything):
 //     ANY ancestor in the space walk has `llmDefault === "none"`, OR
-//     ANY ancestor in the being walk has `userLlm.locked === true`
+//     ANY ancestor in the being walk has `beingLlm.locked === true`
 //     → returns null. "No LLM under this scope, period."
 //
 //   Layer 2 — Enforcement (sovereign over preferOwn):
 //     ANY ancestor in the space walk has `qualities.llm.enforced === true`
 //     → use that space's connection. Position locks the LLM in.
 //
-//     ANY ancestor in the being walk has `userLlm.enforced === true`
+//     ANY ancestor in the being walk has `beingLlm.enforced === true`
 //     → use that being's connection. Parent being locks descendants in.
 //
 //     When both apply, space enforcement wins (position > identity).
@@ -290,11 +332,11 @@ export async function getClientForBeing(beingId, slot, overrideConnectionId) {
 //     3. walk to parent, repeat 1+2
 //     4. ... up to land root ...
 //     5. land config: landLlmConnection  ← operator fallback for the land
-//     6. being.qualities.userLlm.slots[slot] ← being's role-specific LLM
+//     6. being.qualities.beingLlm.slots[slot] ← being's role-specific LLM
 //     7. being.llmDefault                 ← being's "personal" default
 //
 //   Layer 3′ — Being-preferred chain (user opts in):
-//     When `being.qualities.userLlm.preferOwn === true` AND no
+//     When `being.qualities.beingLlm.preferOwn === true` AND no
 //     enforcement was found, the order inverts: being's LLM ranks
 //     above position. Lockout still applies; enforcement still wins
 //     over preferOwn.
@@ -327,7 +369,7 @@ async function walkBeingChain(rootBeing) {
     if (seen.has(id)) break;
     seen.add(id);
     const parent = await Being.findById(id)
-      .select("llmDefault metadata parentBeingId")
+      .select("llmDefault qualities parentBeingId")
       .lean()
       .catch(() => null);
     if (!parent) break;
@@ -349,7 +391,9 @@ async function spaceChainResolve(spaceId, slot) {
   try {
     chain = await getAncestorChain(spaceId);
   } catch {
-    const single = await Space.findById(spaceId).select("llmDefault metadata").lean();
+    const single = await Space.findById(spaceId)
+      .select("llmDefault qualities")
+      .lean();
     chain = single ? [single] : [];
   }
   let firstHit = null;
@@ -398,18 +442,22 @@ function beingChainResolve(beingChain, slot) {
  * @param {string} [opts.slot]     role-slot name (defaults to "main")
  * @returns {Promise<string|null>} connectionId, or null for noLlm
  */
-export async function resolveLlmConnection({ beingId = null, spaceId = null, slot = "main" } = {}) {
+export async function resolveLlmConnection({
+  beingId = null,
+  spaceId = null,
+  slot = "main",
+} = {}) {
   // Load the being and its ancestor chain together.
   const being = beingId
     ? await Being.findById(beingId)
-        .select("llmDefault metadata parentBeingId")
+        .select("llmDefault qualities parentBeingId")
         .lean()
         .catch(() => null)
     : null;
   const beingChain = await walkBeingChain(being);
 
   // Walk both trees collecting lockout / enforcement / first-hit.
-  const spaceHit  = await spaceChainResolve(spaceId, slot);
+  const spaceHit = await spaceChainResolve(spaceId, slot);
   const beingHit = beingChainResolve(beingChain, slot);
 
   // Layer 1: Lockout wins over everything.
@@ -417,12 +465,12 @@ export async function resolveLlmConnection({ beingId = null, spaceId = null, slo
 
   // Layer 2: Enforcement wins over preferOwn. Space enforcement beats
   // being enforcement when both apply (position-first philosophy).
-  if (spaceHit?.enforced)  return spaceHit.connectionId;
+  if (spaceHit?.enforced) return spaceHit.connectionId;
   if (beingHit?.enforced) return beingHit.connectionId;
 
   // Layer 3 / 3′: normal chain. preferOwn (set on the calling being's
-  // own metadata) inverts the order.
-  const preferOwn = being?.qualities?.userLlm?.preferOwn === true;
+  // own qualities) inverts the order.
+  const preferOwn = being?.qualities?.beingLlm?.preferOwn === true;
   const landConnId = getLandConfigValue("landLlmConnection") || null;
   const candidates = preferOwn
     ? [beingHit?.connectionId, spaceHit?.connectionId, landConnId]
@@ -443,7 +491,7 @@ export async function resolveRootLlmForRole(rootId, role) {
   if (!rootId) return null;
   return resolveLlmConnection({
     spaceId: rootId,
-    slot:   role?.llmSlot || "main",
+    slot: role?.llmSlot || "main",
   });
 }
 
@@ -457,9 +505,9 @@ export async function resolveRootLlmForRole(rootId, role) {
  */
 export async function beingHasLlm(beingId) {
   if (!beingId) return false;
-  const being = await Being.findById(beingId).select("metadata").lean();
-  const beingMeta = being?.qualities || {};
-  const beingLlm = beingMeta?.userLlm?.slots || {};
+  const being = await Being.findById(beingId).select("qualities").lean();
+  const beingQuals = being?.qualities || {};
+  const beingLlm = beingQuals?.beingLlm?.slots || {};
   if (beingLlm.main) return true;
   const count = await LlmConnection.countDocuments({ beingId });
   if (count > 0) return true;

@@ -73,11 +73,13 @@ export async function defaultSummon({ message, ctx, role }) {
 
   const isReply = !!message.inReplyTo;
   const senderHint = message.from || "(unknown sender)";
-  log.info(logTag,
+  log.info(
+    logTag,
     `summons at ${String(scopeNodeId).slice(0, 8)} ` +
-    `(role=${ctx.activeRole || roleName}, ` +
-    `${isReply ? `reply from ${senderHint}` : `from ${senderHint}`}, ` +
-    `correlation=${message.correlation?.slice(0, 8) || "?"})`);
+      `(role=${ctx.activeRole || roleName}, ` +
+      `${isReply ? `reply from ${senderHint}` : `from ${senderHint}`}, ` +
+      `correlation=${message.correlation?.slice(0, 8) || "?"})`,
+  );
 
   // Reply-context shape. Most roles want the default "[wakeup] X
   // replied:" prefix, but a role can declare its own
@@ -85,18 +87,18 @@ export async function defaultSummon({ message, ctx, role }) {
   // (Ruler: "X advanced state to Y; consider Z." Foreman: judgment-
   // framed. etc). Default falls back to buildReplyContextMessage.
   const messageBody = isReply
-    ? (typeof role?.buildReplyContext === "function"
-         ? role.buildReplyContext(message)
-         : buildReplyContextMessage(message))
+    ? typeof role?.buildReplyContext === "function"
+      ? role.buildReplyContext(message)
+      : buildReplyContextMessage(message)
     : String(message.content || "");
 
   let result;
   try {
     result = await runChat({
-      being:    ctx.toBeing,
+      being: ctx.toBeing,
       envelope: { ...message, content: messageBody },
       role,
-      signal:   ctx.signal,
+      signal: ctx.signal,
     });
   } catch (err) {
     if (ctx.signal?.aborted) {
@@ -109,8 +111,10 @@ export async function defaultSummon({ message, ctx, role }) {
 
   const durationMs = Date.now() - startMs;
   const text = result?.text || "(no response)";
-  log.info(logTag,
-    `summons complete at ${String(scopeNodeId).slice(0, 8)} in ${durationMs}ms`);
+  log.info(
+    logTag,
+    `summons complete at ${String(scopeNodeId).slice(0, 8)} in ${durationMs}ms`,
+  );
 
   // Reply emission. The role spec's `replyTo` selects which shape.
   // "asker" and "chain-initial" both flow through the seed reply
@@ -154,11 +158,11 @@ async function maybeEmitReply({
 
   if (replyTo === "asker") {
     await emitReplyToAsker({
-      fromNodeId:      scopeNodeId,
+      fromNodeId: scopeNodeId,
       fromBeing,
       fromRoleName,
       originalMessage: message,
-      exitText:        text,
+      exitText: text,
     });
     return;
   }
@@ -179,16 +183,18 @@ async function maybeEmitReply({
     if (askerStance) {
       await emitReplyToStance({
         askerStance,
-        fromNodeId:   scopeNodeId,
+        fromNodeId: scopeNodeId,
         fromBeing,
         fromRoleName,
-        exitText:     text,
+        exitText: text,
         rootCorrelation,
       });
     } else {
-      log.warn(logTag,
+      log.warn(
+        logTag,
         `no chain-initial caller resolvable at ${String(scopeNodeId).slice(0, 8)} ` +
-        `(root=${rootCorrelation?.slice(0, 8) || "?"}); reply dropped`);
+          `(root=${rootCorrelation?.slice(0, 8) || "?"}); reply dropped`,
+      );
     }
     return;
   }
@@ -204,9 +210,10 @@ async function maybeEmitReply({
  */
 export function buildReplyContextMessage(message) {
   const sender = message.from || "(sub-being)";
-  const exitText = typeof message.content === "string"
-    ? message.content
-    : JSON.stringify(message.content);
+  const exitText =
+    typeof message.content === "string"
+      ? message.content
+      : JSON.stringify(message.content);
 
   return [
     `[wakeup] ${sender} replied:`,

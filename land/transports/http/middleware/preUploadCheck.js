@@ -1,14 +1,15 @@
-// TreeOS Seed . AGPL-3.0 . https://treeos.ai
-/**
- * Pre-multer guard: validates multipart upload requests.
- * Three kernel checks before the file reaches multer:
- *   1. uploadEnabled - master switch for the entire land
- *   2. maxUploadBytes - hard ceiling, protects server from memory exhaustion
- *   3. allowedMimeTypes - MIME prefix filter, null means allow all
- * Extensions enforce their own limits (tier gates, storage quotas) via hooks.
- */
+// TreeOS Seed . AGPL-3.0 . https://treeos.ai . Tabor Holly
+//
+// Pre-multer guard for multipart uploads. Three checks run before
+// the file reaches multer:
+//   1. uploadEnabled    — master switch for the land
+//   2. maxUploadBytes   — hard ceiling against memory exhaustion
+//   3. allowedMimeTypes — MIME prefix filter; null/empty admits all
+//
+// Extensions add their own limits (tier gates, storage quotas)
+// through the matter hooks.
 import { getLandConfigValue } from "../../../seed/landConfig.js";
-import { sendError, ERR } from "../../../seed/ibp/protocol.js";
+import { sendError, IBP_ERR } from "../../../seed/ibp/protocol.js";
 
 export default function preUploadCheck(req, res, next) {
   const contentType = req.headers["content-type"] || "";
@@ -17,14 +18,14 @@ export default function preUploadCheck(req, res, next) {
   // Master switch
   const enabled = getLandConfigValue("uploadEnabled");
   if (enabled === false || enabled === "false") {
-    return sendError(res, 403, ERR.UPLOAD_DISABLED, "Uploads are disabled on this land");
+    return sendError(res, 403, IBP_ERR.UPLOAD_DISABLED, "Uploads are disabled on this land");
   }
 
   // Size ceiling
   const maxBytes = Number(getLandConfigValue("maxUploadBytes")) || 104857600;
   const contentLength = parseInt(req.headers["content-length"], 10);
   if (contentLength && contentLength > maxBytes) {
-    return sendError(res, 413, ERR.UPLOAD_TOO_LARGE,
+    return sendError(res, 413, IBP_ERR.UPLOAD_TOO_LARGE,
       `Upload exceeds maximum size (${Math.round(maxBytes / 1048576)}MB)`);
   }
 
@@ -34,7 +35,7 @@ export default function preUploadCheck(req, res, next) {
     const mime = contentType.split(";")[0].trim();
     const passes = allowed.some(prefix => mime.startsWith(prefix));
     if (!passes) {
-      return sendError(res, 415, ERR.UPLOAD_MIME_REJECTED,
+      return sendError(res, 415, IBP_ERR.UPLOAD_MIME_REJECTED,
         `File type not allowed. Accepted: ${allowed.join(", ")}`);
     }
   }

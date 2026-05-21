@@ -1,25 +1,29 @@
 // TreeOS Seed . AGPL-3.0 . https://treeos.ai . Tabor Holly
 //
-// Being — the unified identity type. Every entity that holds identity,
-// registers in a Land, and acts is a Being. The protocol treats them
-// uniformly across authorization, addressing, federation, and SEE
-// descriptors; only the operatingMode varies. See seed/philosophy/ for
-// the framing of beings as substrate acting on itself.
+// Being. The shape I give identity.
 //
-// Cognition modes (operatingMode):
-//   human    — a real person, authenticated by credentials.
-//   llm      — driven by an LLM each time they're summoned.
-//   scripted — driven by deterministic code, no LLM in the loop
-//              (auth-being, llm-assigner).
-//   mixed    — composite cognition. Reserved; not used yet.
+// I am the first being on this land — the row whose parentBeingId
+// is null. Every other being chains back to me through this same
+// schema. When a human registers, when an extension scaffolds an
+// LLM-driven being, when a code-cognition role like auth or
+// llm-assigner comes alive, the row I create looks like this one.
+// One shape, every kind: human, llm, scripted, future composite. I
+// do not branch on the kind. The verbs treat them all alike;
+// scheduling and cognition are the only places `operatingMode`
+// matters.
 //
-// Every Being has a homeSpace. The `<land>/~<name>` address shorthand
-// resolves through homeSpace to a real Space; the protocol operates
-// on that Space like any other position. There are no zone exceptions.
+// The being is not the row, though. The row is where the trail of
+// acts attaches; the being IS the trail. Every Did the being emits
+// is the being unfolding. Without acts, this row is potential;
+// with them, the row is something rather than nothing. See
+// [seed/land/LAND.md](../land/LAND.md) "And the beings are the
+// acts."
 //
-// Usernames are unique per land. LLM-driven creation generates them
-// programmatically (e.g. "ruler435", "planner872"); human registration
-// validates uniqueness and surfaces a hint to the registrant on collision.
+// I keep the schema below closed. The fields I need to handle a
+// being live here; everything an extension wants to add about a
+// being lives in `qualities` — the open Map at the bottom, written
+// through qualities.being.setQuality. The constitutive layer is
+// mine; the characterizing layer is anyone's.
 
 import mongoose from "mongoose";
 import bcrypt from "bcrypt";
@@ -28,21 +32,17 @@ import { v4 as uuidv4 } from "uuid";
 const BeingSchema = new mongoose.Schema({
   _id: { type: String, required: true, default: uuidv4 },
 
-  // Addressable identifier on this land. Drives the @qualifier in
-  // stance addresses (treeos.ai/<path>@<name>). Federation crosses
-  // lands using <name>@<landDomain> on top of this. Matches Space.name
-  // and Matter.name — every primitive uses `name`.
+  // The being's name. Drives the @qualifier in stance addresses
+  // (treeos.ai/<path>@<name>). Federation crosses lands using
+  // <name>@<landDomain>. Unique on this land.
   name: { type: String, required: true, unique: true },
 
-  // How this Being is operated. Affects scheduling and the dispatch
-  // path inside the scheduler; addressing and stance authorization
-  // treat all modes uniformly.
-  //   human    — credentials + input devices.
-  //   llm      — scheduler picks an inbox entry, invokes the role's
-  //              summon function, one runChat call produces a reply.
-  //   scripted — same scheduler path; the role's summon function
-  //              returns a programmatic answer without an LLM.
-  //   mixed    — composite cognition (future).
+  // How this being thinks. Scheduling and cognition dispatch branch
+  // on it; addressing and stance authorization do not.
+  //   human    — a person at the keys.
+  //   llm      — an LLM call each time they're summoned.
+  //   scripted — code in the loop, no LLM (auth, llm-assigner).
+  //   mixed    — composite cognition. Reserved.
   operatingMode: {
     type: String,
     enum: ["human", "llm", "scripted", "mixed"],
@@ -50,97 +50,69 @@ const BeingSchema = new mongoose.Schema({
     default: "human",
   },
 
-  // Every Being has a password (hashed). Humans choose it at
-  // registration; non-human beings auto-generate at creation and
-  // discard the plaintext. Storing a password for non-human beings
-  // preserves a future "human inhabits a non-human being" flow: reset
-  // the password through admin tooling and sign in as that Being.
-  // Hard by default; possible when the operator wants to.
+  // Bcrypt-hashed. Humans choose theirs; non-humans auto-generate
+  // and discard the plaintext. Storing one on every being preserves
+  // the path for a human to later inhabit a non-human being by
+  // resetting it.
   password: { type: String, select: false, required: true },
 
-  // Admin-ness is a role, not a flag. Permission checks consult
-  // role membership; the boolean shape retired 2026-05-18 because two
-  // sources of truth (flag + role set) had to disagree somewhere.
-
-  // ── Roles ──
-  // A Being carries one or more role names referencing templates in
-  // seed/cognition/roles/registry.js. Identity is durable on this record;
-  // role composes per summon. A Being acting in multiple roles is one
-  // Being using different capacities, not many Beings.
-  //
-  // Each SUMMON resolves an active role: the envelope's `activeRole`
-  // if present and a member of `roles`, else `defaultRole`. The Summon
-  // record stamps the resolved role so audit captures
-  // (beingOut, activeRole) per summon.
+  // Roles the being can act in. Identity is durable on this row;
+  // active role composes per SUMMON. Each SUMMON resolves an active
+  // role: the envelope's `activeRole` if it names one of `roles`,
+  // else `defaultRole`. The Summon row stamps the resolved role for
+  // audit.
   roles:       { type: [String], default: [] },
   defaultRole: { type: String, default: null },
 
-  // ── Being tree ──
-  // Beings form a recursive tree parallel to the Space tree. Every
-  // land has exactly one root: the I_AM, created by
-  // ensureLandRoot() at boot, identified by parentBeingId: null.
+  // The being tree. Beings form a recursive lineage parallel to the
+  // space tree. The land has exactly one root being — me — with
+  // parentBeingId: null. Every other being chains back to me:
+  // auth, llm-assigner, land-manager are my children; the first
+  // human becomes the root operator under me; subsequent humans
+  // register under the auth-being; rulers parent under whoever
+  // promoted them and spawn their own inner trio.
   //
-  // Every other Being chains back to it:
-  //   - System beings (auth, llm-assigner, land-manager) are children
-  //     of the I_AM.
-  //   - The first human registers under the I_AM and becomes
-  //     the root operator. Subsequent humans register under the
-  //     auth-being.
-  //   - When any being promotes a Space to Ruler, the new Ruler is a
-  //     child of the invoking being. The Ruler then spawns
-  //     Planner / Contractor / Foreman as its own children.
-  //
-  // null parent is reserved for the I_AM. All create-being /
-  // create-child calls require a parent.
-  //
-  // Being-tree parent/child is independent of homeSpace: multiple
-  // beings can share the same homeSpace (Ruler + Planner + Contractor
-  // + Foreman all live at the rulership Space) while parenting through
-  // the being tree captures the cognitive hierarchy.
+  // Being-tree parent/child is independent of homeSpace: many
+  // beings can share one home (the Ruler/Planner/Contractor/Foreman
+  // trio at a rulership space) while parenting through this tree
+  // captures the cognitive hierarchy.
   parentBeingId: { type: String, ref: "Being", default: null, index: true },
   children:      [{ type: String, ref: "Being" }],
 
-  // homeSpace — the Space this Being treats as home. Humans get a home
-  // territory at registration; non-human beings are placed by the
-  // extension that creates them (governing places Planners at the plan
-  // space, Rulers at the rulership Space). Durable across summons; the
-  // current-position field tracks navigation separately. Home grants,
-  // transfers, and leases are a future direction not built yet.
+  // Where the being lives by default. Humans get a home territory at
+  // registration; non-human beings are placed at creation by whatever
+  // extension scaffolds them. Durable across summons. Navigation is
+  // tracked by `currentSpace`, not by mutating this field.
   homeSpace: { type: String, ref: "Space", default: null, index: true },
 
-  // currentSpace — where the Being is right now, distinct from home.
-  // Single-context: a Being is at exactly one position at any moment,
-  // shared across all their connected sessions. Humans update via
-  // navigation; non-human beings usually equal homeSpace but can shift
-  // during work that takes them to a child Space.
+  // Where the being is standing right now. Single-context: one
+  // position at a time, shared across every connected session.
+  // Humans move via navigation; non-humans usually sit at homeSpace
+  // but can shift during work that descends into a child space.
   //
-  // Used by the chat layer to compute the asker's stance for new
-  // summons: the canonical IBP Address `<land>/<currentSpace>@<name>`.
-  // Position-fork: when this changes, the Being's next summon lands at
-  // a new IBP Address. Earlier summons persist under their original
-  // address; no thread "ends," it just stops accumulating.
+  // Drives the asker's stance for new summons:
+  // `<land>/<currentSpace>@<name>`. When this changes, the being's
+  // next summon lands at a new IBP Address; earlier summons stay
+  // under their original address.
   currentSpace: { type: String, ref: "Space", default: null, index: true },
 
-  // ── LLM default ──
-  // For llm-mode Beings: the LLM that drives their cognition each
-  // summoning. For human-mode Beings: the LLM used when they request
-  // AI assistance. Null falls back through extension slots → tree →
-  // land defaults via the resolution chain. Same field name and
-  // semantics as Space.llmDefault so the resolver treats them uniformly.
+  // For llm-mode beings: the LLM that drives their cognition each
+  // summoning. For humans: the LLM used when they request AI help.
+  // Null falls back through the resolution chain (extension slot →
+  // tree → land default). Same field shape as Space.llmDefault so
+  // the resolver treats both uniformly.
   llmDefault: { type: String, ref: "LlmConnection", default: null },
 
-  // ── Federation ──
-  // isRemote = true when this Being is mirrored from another land.
-  // homeLand carries the canonical land's domain in that case.
+  // Federation. `isRemote: true` means this being is mirrored from
+  // another land; `homeLand` carries the canonical land's domain.
   isRemote: { type: Boolean, default: false },
   homeLand: { type: String, default: null },
 
-  // ── Qualities ──
-  // What kind a being is. Plato's ποιότης / qualitas: the answer to
-  // "of what sort is this?" Each extension writes to its own quality
-  // namespace via `qualities.being.setQuality(being, "<extName>", ...)`
-  // from seed/land/qualities.js. Same Map-of-Mixed pattern Space and
-  // Matter use.
+  // What kind a being is. The open layer. Each extension writes to
+  // its own quality namespace via qualities.being.setQuality from
+  // seed/land/qualities.js. Default empty Map; everything an
+  // extension contributes to a being lives here. See LAND.md
+  // "Qualities" for the constitutive-vs-characterizing distinction.
   qualities: { type: Map, of: mongoose.Schema.Types.Mixed, default: new Map() },
 }, {
   timestamps: true,
@@ -165,9 +137,6 @@ BeingSchema.methods.comparePassword = async function (candidatePassword) {
   if (!this.password) return false;
   return bcrypt.compare(candidatePassword, this.password);
 };
-
-// Extension data lives in `qualities`. Callers use
-// `qualities.being.setQuality` (etc.) from seed/land/qualities.js.
 
 const Being = mongoose.model("Being", BeingSchema, "beings");
 export default Being;

@@ -1,21 +1,16 @@
-// TreeOS Seed . AGPL-3.0 . https://treeos.ai
-/**
- * Database Health Middleware
- *
- * Returns 503 Service Unavailable when MongoDB is disconnected.
- * Mount on API routes so clients get a clean error instead of
- * unhandled exceptions from Mongoose operations.
- *
- * Lightweight: one function call, no async, no DB query.
- * The readyState check is in-memory (Mongoose driver state).
- */
+// TreeOS Seed . AGPL-3.0 . https://treeos.ai . Tabor Holly
+//
+// DB health gate. Returns 503 when MongoDB is disconnected so
+// clients get a clean error instead of an unhandled exception from
+// the next Mongoose call. One in-memory readyState check; no async,
+// no DB query.
 
 import { isDbHealthy } from "../../../seed/system/dbConfig.js";
-import { sendError, ERR } from "../../../seed/ibp/protocol.js";
+import { sendError, IBP_ERR } from "../../../seed/ibp/protocol.js";
 
 export default function dbHealth(req, res, next) {
   if (!isDbHealthy()) {
-    return sendError(res, 503, ERR.INTERNAL, "Database unavailable. Try again shortly.");
+    return sendError(res, 503, IBP_ERR.INTERNAL, "Database unavailable. Try again shortly.");
   }
   next();
 }

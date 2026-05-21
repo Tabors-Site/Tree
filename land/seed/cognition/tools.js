@@ -25,12 +25,14 @@
 
 import log from "../system/log.js";
 const toolDefs = {};
-const toolVerbs = {};        // name → "see" | "do" | "summon" | "be"
+const toolVerbs = {}; // name → "see" | "do" | "summon" | "be"
 let MAX_TOOLS = 500;
 const TOOL_NAME_RE = /^[a-z][a-z0-9_-]{0,63}$/;
 const VALID_VERBS = new Set(["see", "do", "summon", "be"]);
 
-export function setMaxTools(n) { MAX_TOOLS = Math.max(10, Number(n) || 500); }
+export function setMaxTools(n) {
+  MAX_TOOLS = Math.max(10, Number(n) || 500);
+}
 
 /**
  * Register a tool definition so resolveTools can find it.
@@ -46,26 +48,44 @@ export function setMaxTools(n) { MAX_TOOLS = Math.max(10, Number(n) || 500); }
 export function registerToolDef(name, schema, opts = {}) {
   // Validate name format
   if (typeof name !== "string" || !TOOL_NAME_RE.test(name)) {
-    log.error("Tools", `Invalid tool name "${String(name).slice(0, 30)}". Must be lowercase alphanumeric/hyphens/underscores, 1-64 chars, start with letter.`);
+    log.error(
+      "Tools",
+      `Invalid tool name "${String(name).slice(0, 30)}". Must be lowercase alphanumeric/hyphens/underscores, 1-64 chars, start with letter.`,
+    );
     return false;
   }
   // Reject duplicates
   if (toolDefs[name]) {
-    log.error("Tools", `Tool "${name}" already registered. Duplicate rejected.`);
+    log.error(
+      "Tools",
+      `Tool "${name}" already registered. Duplicate rejected.`,
+    );
     return false;
   }
   // Registry cap
   if (Object.keys(toolDefs).length >= MAX_TOOLS) {
-    log.error("Tools", `Tool registry full (${MAX_TOOLS}). "${name}" rejected.`);
+    log.error(
+      "Tools",
+      `Tool registry full (${MAX_TOOLS}). "${name}" rejected.`,
+    );
     return false;
   }
   // Validate schema structure. Must be an object with a function property.
   if (!schema || typeof schema !== "object") {
-    log.error("Tools", `Tool "${name}" has invalid schema (expected object, got ${typeof schema}). Rejected.`);
+    log.error(
+      "Tools",
+      `Tool "${name}" has invalid schema (expected object, got ${typeof schema}). Rejected.`,
+    );
     return false;
   }
-  if (schema.type === "function" && (!schema.function || typeof schema.function.name !== "string")) {
-    log.error("Tools", `Tool "${name}" has malformed function schema (missing function.name). Rejected.`);
+  if (
+    schema.type === "function" &&
+    (!schema.function || typeof schema.function.name !== "string")
+  ) {
+    log.error(
+      "Tools",
+      `Tool "${name}" has malformed function schema (missing function.name). Rejected.`,
+    );
     return false;
   }
   // Description is required at registration. Without it, the role-summon
@@ -77,8 +97,8 @@ export function registerToolDef(name, schema, opts = {}) {
     if (typeof desc !== "string" || !desc.trim()) {
       throw new Error(
         `Tool "${name}" registration rejected: function.description must be a ` +
-        `non-empty string. Roles that declare this tool cannot be summoned ` +
-        `without it.`,
+          `non-empty string. Roles that declare this tool cannot be summoned ` +
+          `without it.`,
       );
     }
   }
@@ -87,9 +107,11 @@ export function registerToolDef(name, schema, opts = {}) {
   // No permissive default; missing or invalid verb rejects registration.
   const verb = opts.verb;
   if (typeof verb !== "string" || !VALID_VERBS.has(verb)) {
-    log.error("Tools",
+    log.error(
+      "Tools",
       `Tool "${name}" rejected: missing or invalid verb (got ${JSON.stringify(verb)}). ` +
-      `Every tool must declare { verb: "see"|"do"|"summon"|"be" } at registration.`);
+        `Every tool must declare { verb: "see"|"do"|"summon"|"be" } at registration.`,
+    );
     return false;
   }
 
@@ -128,7 +150,8 @@ export async function registerToolBundle(tools, { ownerExt, mcpServer }) {
 
   const { z } = await import("zod");
   const { zodToJsonSchema } = await import("zod-to-json-schema");
-  const { registerToolOwner, getToolOwner } = await import("../land/space/extensionScope.js");
+  const { registerToolOwner, getToolOwner } =
+    await import("../land/space/extensionScope.js");
 
   for (const tool of tools) {
     // Description gate first. Without it, the MCP server would get a
@@ -136,24 +159,38 @@ export async function registerToolBundle(tools, { ownerExt, mcpServer }) {
     // inconsistent. Catch the missing description before any
     // registration work runs.
     if (typeof tool.description !== "string" || !tool.description.trim()) {
-      log.error("Tools",
+      log.error(
+        "Tools",
         `${ownerExt}: tool "${tool.name}" rejected (description must be a ` +
-        `non-empty string). Skipped.`);
+          `non-empty string). Skipped.`,
+      );
       continue;
     }
 
     const existingOwner = getToolOwner(tool.name);
     if (existingOwner) {
-      log.error("Tools", `Tool "${tool.name}" from "${ownerExt}" conflicts with "${existingOwner}". Skipped.`);
+      log.error(
+        "Tools",
+        `Tool "${tool.name}" from "${ownerExt}" conflicts with "${existingOwner}". Skipped.`,
+      );
       continue;
     }
-    registerToolOwner(tool.name, ownerExt, tool.annotations?.readOnlyHint ?? false);
+    registerToolOwner(
+      tool.name,
+      ownerExt,
+      tool.annotations?.readOnlyHint ?? false,
+    );
 
     // MCP input schema. Wrap raw shapes in passthrough; pass through
     // pre-built zod objects with .passthrough() to keep injected
     // context fields (beingId, summonId, spaceId, sessionId).
     let inputSchema;
-    if (tool.schema && typeof tool.schema === "object" && !tool.schema._def && !tool.schema._zod) {
+    if (
+      tool.schema &&
+      typeof tool.schema === "object" &&
+      !tool.schema._def &&
+      !tool.schema._zod
+    ) {
       inputSchema = z.object(tool.schema).passthrough();
     } else if (tool.schema && typeof tool.schema.passthrough === "function") {
       inputSchema = tool.schema.passthrough();
@@ -173,7 +210,10 @@ export async function registerToolBundle(tools, { ownerExt, mcpServer }) {
           tool.handler,
         );
       } catch (err) {
-        log.warn("Tools", `${ownerExt}: MCP register "${tool.name}" failed: ${err.message}`);
+        log.warn(
+          "Tools",
+          `${ownerExt}: MCP register "${tool.name}" failed: ${err.message}`,
+        );
       }
     }
 
@@ -187,16 +227,23 @@ export async function registerToolBundle(tools, { ownerExt, mcpServer }) {
       jsonSchema = tool.schema;
     }
 
-    registerToolDef(tool.name, {
-      type: "function",
-      function: {
-        name:        tool.name,
-        description: tool.description,
-        parameters:  jsonSchema,
+    registerToolDef(
+      tool.name,
+      {
+        type: "function",
+        function: {
+          name: tool.name,
+          description: tool.description,
+          parameters: jsonSchema,
+        },
       },
-    }, { verb: tool.verb });
+      { verb: tool.verb },
+    );
 
-    log.verbose("Tools", `${ownerExt}: registered "${tool.name}" (${tool.verb})`);
+    log.verbose(
+      "Tools",
+      `${ownerExt}: registered "${tool.name}" (${tool.verb})`,
+    );
   }
 }
 
@@ -244,27 +291,29 @@ const MAX_WARNED = 500;
  */
 export function resolveTools(toolNames, permissions = null) {
   const allowed = Array.isArray(permissions) ? new Set(permissions) : null;
-  return toolNames.map((name) => {
-    if (typeof name !== "string") return null;
-    const def = toolDefs[name];
-    if (!def) {
-      if (!_warnedTools.has(name)) {
-        if (_warnedTools.size >= MAX_WARNED) {
-          // Evict oldest warnings to prevent unbounded growth
-          const first = _warnedTools.values().next().value;
-          _warnedTools.delete(first);
+  return toolNames
+    .map((name) => {
+      if (typeof name !== "string") return null;
+      const def = toolDefs[name];
+      if (!def) {
+        if (!_warnedTools.has(name)) {
+          if (_warnedTools.size >= MAX_WARNED) {
+            // Evict oldest warnings to prevent unbounded growth
+            const first = _warnedTools.values().next().value;
+            _warnedTools.delete(first);
+          }
+          _warnedTools.add(name);
+          log.warn("Tools", `Unknown tool: ${name} (skipped)`);
         }
-        _warnedTools.add(name);
-        log.warn("Tools", `Unknown tool: ${name} (skipped)`);
+        return null;
       }
-      return null;
-    }
-    if (allowed) {
-      const verb = toolVerbs[name];
-      if (!verb || !allowed.has(verb)) return null;
-    }
-    return def;
-  }).filter(Boolean);
+      if (allowed) {
+        const verb = toolVerbs[name];
+        if (!verb || !allowed.has(verb)) return null;
+      }
+      return def;
+    })
+    .filter(Boolean);
 }
 
 /**
@@ -322,10 +371,10 @@ export async function auditToolDescriptions() {
     if (!role) continue;
     scanned++;
     const declared = [
-      ...(role.canSee    || []),
-      ...(role.canDo     || []),
+      ...(role.canSee || []),
+      ...(role.canDo || []),
       ...(role.canSummon || []),
-      ...(role.canBe     || []),
+      ...(role.canBe || []),
     ];
     const gaps = declared.filter((name) => !toolDefs[name]);
     if (gaps.length > 0) missing[roleName] = gaps;
@@ -336,16 +385,18 @@ export async function auditToolDescriptions() {
     log.verbose("Tools", `tool-description audit: ${scanned} role(s) clean`);
   } else {
     for (const [roleName, gaps] of Object.entries(missing)) {
-      log.error("Tools",
+      log.error(
+        "Tools",
         `role "${roleName}" declares ${gaps.length} tool(s) with no registered ` +
-        `description: ${gaps.join(", ")}. Role cannot be summoned until resolved.`);
+          `description: ${gaps.join(", ")}. Role cannot be summoned until resolved.`,
+      );
     }
   }
   return { roles: scanned, missing };
 }
 
 // Sync the full tool registry into `<land>/.tools` as child spaces.
-// One child per tool, name = tool name, metadata carries the
+// One child per tool, name = tool name, qualities carries the
 // registered shape info. Called at the end of genesis (after
 // extensions have registered their tools) so SEE on `<land>/.tools`
 // reflects current state. Idempotent; subsequent calls reconcile
@@ -355,12 +406,15 @@ export async function syncToolsToSubstrate() {
   const { syncRegistryToSubstrate } = await import("../land/registryMirror.js");
   const items = Object.entries(toolDefs).map(([name, def]) => ({
     name,
-    metadata: new Map([
-      ["tool", {
-        verb:        toolVerbs[name] || null,
-        description: def?.function?.description || null,
-        parameters:  def?.function?.parameters || null,
-      }],
+    qualities: new Map([
+      [
+        "tool",
+        {
+          verb: toolVerbs[name] || null,
+          description: def?.function?.description || null,
+          parameters: def?.function?.parameters || null,
+        },
+      ],
     ]),
   }));
   return syncRegistryToSubstrate({ seedSpace: SEED_SPACE.TOOLS, items });

@@ -1,60 +1,38 @@
+// TreeOS Seed . AGPL-3.0 . https://treeos.ai . Tabor Holly
+//
+// Deferred HTTP endpoint(s). What's left here is the one shim
+// that hasn't moved onto the IBP surface yet (`GET /land/root`),
+// kept so the legacy clients keep working. Every other land-level
+// surface is reachable through `ibp:see <land>/.config`,
+// `ibp:see <land>/.extensions`, `ibp:do <land>` with set-config /
+// install-extension / etc. The protocol is the API; this file
+// stays small.
+
 import express from "express";
 import { authenticateOptional } from "../middleware/authenticate.js";
-import { sendOk, sendError, ERR } from "../../../seed/ibp/protocol.js";
+import { sendOk, sendError, IBP_ERR } from "../../../seed/ibp/protocol.js";
 import Space from "../../../seed/models/space.js";
 import { getLandRoot } from "../../../seed/landRoot.js";
 
 const router = express.Router();
 
-// Land config endpoints retired 2026-05-18. Reachable as substrate
-// operations on the `<land>/.config` meta-position
-// ([[project_meta_positions]]):
-//
-//   GET /ibp/see/<land>/.config              (full config snapshot)
-//   POST /ibp/do/<land>  { payload: { action: "set-config",    args: { key, value } } }
-//   POST /ibp/do/<land>  { payload: { action: "delete-config", args: { key } } }
-//
-// Extension introspection + lifecycle endpoints retired 2026-05-19
-// ([[project_everything_is_substrate]]):
-//
-//   GET  /ibp/see/<land>/.extensions                  (list)
-//   GET  /ibp/see/<land>/.extensions/<name>           (one)
-//   POST /ibp/do/<land>  { action: "install-extension",   args: { name, files, ... } }
-//   POST /ibp/do/<land>  { action: "uninstall-extension", args: { name } }
-//   POST /ibp/do/<land>  { action: "enable-extension",    args: { name } }
-//   POST /ibp/do/<land>  { action: "disable-extension",   args: { name } }
-//
-// Horizon proxy endpoints (publish/comment/react) retired 2026-05-19
-// with the parallel Canopy federation protocol
-// ([[project_canopy_folds_into_ibp]]). When wire-protocol federation
-// lands they become cross-land DO ops:
-//
-//   ibp:do horizon.treeos.ai/<land>/.extensions/<name>  { action: "horizon:publish", ... }
-//   ibp:do horizon.treeos.ai/<land>/.extensions/<name>  { action: "horizon:comment", ... }
-//   ibp:do horizon.treeos.ai/<land>/.extensions/<name>  { action: "horizon:react",   ... }
-//
-// Authenticated with canopy-signed envelopes; no per-route shims needed.
-
-// ─────────────────────────────────────────────────────────────────────────
-// Land root
-// ─────────────────────────────────────────────────────────────────────────
-
 /**
  * GET /api/v1/land/root
- * Returns the Land root space with children visible to the requesting user:
- *   - System nodes (.identity, .config, .peers)
- *   - Trees the user owns
- *   - Trees the user contributes to
- *   - Public trees on this land
  *
- * Deferred retirement: this folds into `ibp:see <land>` once stance
- * authorization gates visibility per-stance ([[project_stance_authorization]]).
+ * Returns the land root space with children visible to the asker:
+ *   - Land seed spaces (.identity, .config, .peers, ...)
+ *   - Space-trees the being owns
+ *   - Space-trees the being contributes to
+ *   - Public space-trees on this land
+ *
+ * Folds into `ibp:see <land>` once stance authorization gates
+ * visibility per-stance uniformly.
  */
 router.get("/land/root", authenticateOptional, async (req, res) => {
   try {
     const landRootCached = await getLandRoot();
     if (!landRootCached) {
-      return sendError(res, 404, ERR.SPACE_NOT_FOUND, "Land root not found");
+      return sendError(res, 404, IBP_ERR.SPACE_NOT_FOUND, "Land root not found");
     }
 
     // Fetch fresh from DB so we see newly created trees (cache may be stale)
@@ -63,21 +41,22 @@ router.get("/land/root", authenticateOptional, async (req, res) => {
     const beingId = req.beingId;
     const isAnon = !beingId;
 
-    // Fetch all Land root children with the fields we need to filter
+    // Fetch all land-root children with the fields needed to filter.
     const children = await Space.find({ _id: { $in: landRoot.children } })
-      .select("_id name seedSpace rootOwner contributors llmDefault metadata")
+      .select("_id name seedSpace rootOwner contributors llmDefault qualities")
       .lean();
 
     // A child is public if it carries a wildcard SEE permission rule
-    // with empty requires — i.e. stance auth admits anyone.
+    // with empty requires — stance auth admits anyone.
     const isPublicSpace = (c) => {
-      const meta = c.qualities instanceof Map ? Object.fromEntries(c.qualities) : (c.qualities || {});
-      const rule = meta.permissions?.see?.["*"];
+      const quals = c.qualities instanceof Map ? Object.fromEntries(c.qualities) : (c.qualities || {});
+      const rule = quals.permissions?.see?.["*"];
       if (!rule) return false;
       return !rule.requires || Object.keys(rule.requires).length === 0;
     };
 
-    // Filter: anonymous sees only public trees, authenticated sees system + owned + contributing + public
+    // Filter: anonymous sees only public trees; authenticated sees
+    // seed spaces + owned + contributing + public.
     const visible = children.filter((c) => {
       const pub = isPublicSpace(c);
       if (isAnon) return pub;
@@ -100,12 +79,12 @@ router.get("/land/root", authenticateOptional, async (req, res) => {
           isOwned: !isAnon && c.rootOwner && String(c.rootOwner) === String(beingId),
           isPublic: pub,
           queryAvailable: pub && !!(c.llmDefault && c.llmDefault !== "none"),
-          metadata: c.qualities || null,
+          qualities: c.qualities || null,
         };
       }),
     });
   } catch (err) {
-    sendError(res, 500, ERR.INTERNAL, err.message);
+    sendError(res, 500, IBP_ERR.INTERNAL, err.message);
   }
 });
 

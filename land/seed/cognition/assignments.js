@@ -2,13 +2,13 @@
 /**
  * LLM assignment resolution.
  *
- * Reads LLM assignment data from space/being metadata and returns a
+ * Reads LLM assignment data from space/being qualities and returns a
  * normalized shape. `resolveLlmConnection` in llmClient.js walks the
  * space ancestor chain AND the being ancestor chain and applies a
  * four-layer resolution policy. See that function's doc comment for the
  * full chain.
  *
- * Security: metadata is untrusted (extensions write to it). Slots are
+ * Security: qualities is untrusted (extensions write to it). Slots are
  * sanitized to prevent prototype pollution and type confusion.
  *
  * Assignment data carries two kinds of fields:
@@ -28,7 +28,14 @@
  *                     own LLM ranks above the position's
  */
 
-const DANGEROUS_KEYS = new Set(["__proto__", "constructor", "prototype", "hasOwnProperty", "toString", "valueOf"]);
+const DANGEROUS_KEYS = new Set([
+  "__proto__",
+  "constructor",
+  "prototype",
+  "hasOwnProperty",
+  "toString",
+  "valueOf",
+]);
 const MAX_SLOTS = 50;
 
 function sanitizeSlots(raw) {
@@ -48,7 +55,9 @@ function sanitizeSlots(raw) {
   return clean;
 }
 
-function asBool(v) { return v === true; }
+function asBool(v) {
+  return v === true;
+}
 
 /**
  * Get LLM assignments for a space.
@@ -66,13 +75,17 @@ function asBool(v) { return v === true; }
 export function getSpaceLlmAssignments(space) {
   if (!space) return { default: null, enforced: false };
 
-  const meta = space.qualities instanceof Map ? space.qualities.get("llm") : space.qualities?.llm;
+  const meta =
+    space.qualities instanceof Map
+      ? space.qualities.get("llm")
+      : space.qualities?.llm;
   const slots = sanitizeSlots(meta?.slots);
 
   const result = { ...slots };
-  result.default = (typeof space.llmDefault === "string" && space.llmDefault.length <= 100)
-    ? space.llmDefault
-    : null;
+  result.default =
+    typeof space.llmDefault === "string" && space.llmDefault.length <= 100
+      ? space.llmDefault
+      : null;
   result.enforced = asBool(meta?.enforced);
 
   return result;
@@ -83,25 +96,30 @@ export function getSpaceLlmAssignments(space) {
  *
  * Reads:
  *   - `being.llmDefault` (kernel field; the being's personal default)
- *   - `being.qualities.userLlm.slots` (role-specific overrides for this being)
- *   - `being.qualities.userLlm.enforced` (lock IN for descendants in being-tree)
- *   - `being.qualities.userLlm.locked`   (lockdown for descendants in being-tree)
- *   - `being.qualities.userLlm.preferOwn` (invert resolution chain order)
+ *   - `being.qualities.beingLlm.slots` (role-specific overrides for this being)
+ *   - `being.qualities.beingLlm.enforced` (lock IN for descendants in being-tree)
+ *   - `being.qualities.beingLlm.locked`   (lockdown for descendants in being-tree)
+ *   - `being.qualities.beingLlm.preferOwn` (invert resolution chain order)
  *
  * Returns `{ main, [slot]: connId, enforced, locked, preferOwn }`.
  */
 export function getBeingLlmAssignments(being) {
-  if (!being) return { main: null, enforced: false, locked: false, preferOwn: false };
+  if (!being)
+    return { main: null, enforced: false, locked: false, preferOwn: false };
 
-  const meta = being.qualities instanceof Map ? being.qualities.get("userLlm") : being.qualities?.userLlm;
+  const meta =
+    being.qualities instanceof Map
+      ? being.qualities.get("beingLlm")
+      : being.qualities?.beingLlm;
   const slots = sanitizeSlots(meta?.slots);
 
   const result = { ...slots };
-  result.main = (typeof being.llmDefault === "string" && being.llmDefault.length <= 100)
-    ? being.llmDefault
-    : null;
-  result.enforced  = asBool(meta?.enforced);
-  result.locked    = asBool(meta?.locked);
+  result.main =
+    typeof being.llmDefault === "string" && being.llmDefault.length <= 100
+      ? being.llmDefault
+      : null;
+  result.enforced = asBool(meta?.enforced);
+  result.locked = asBool(meta?.locked);
   result.preferOwn = asBool(meta?.preferOwn);
 
   return result;

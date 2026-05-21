@@ -18,7 +18,7 @@ import log from "./system/log.js";
 import Space from "./models/space.js";
 import { SEED_SPACE, I_AM } from "./land/space/seedSpaces.js";
 import { createLandSeedSpace } from "./land/space/spaceManagement.js";
-import { logDid } from "./land/space/dids.js";
+import { logDid } from "./land/dids.js";
 
 let landRootCache = null;
 
@@ -26,7 +26,7 @@ const LAND_SEED_SPACES = [
   {
     name: ".identity",
     seedSpace: SEED_SPACE.IDENTITY,
-    buildMetadata: () => {
+    buildQualities: () => {
       const domain = process.env.LAND_DOMAIN || "localhost";
       return new Map([["domain", domain]]);
     },
@@ -34,7 +34,7 @@ const LAND_SEED_SPACES = [
   {
     name: ".config",
     seedSpace: SEED_SPACE.CONFIG,
-    buildMetadata: () => {
+    buildQualities: () => {
       const name = process.env.LAND_NAME || "My Land";
       const domain = process.env.LAND_DOMAIN || "localhost";
       return new Map([
@@ -94,7 +94,7 @@ export async function ensureLandRoot() {
           name:      def.name,
           parentId:  landRoot._id,
           seedSpace: def.seedSpace,
-          metadata:  def.buildMetadata ? def.buildMetadata() : null,
+          qualities: def.buildQualities ? def.buildQualities() : null,
         });
         log.info("Land", `Created land seed space: ${def.name}`);
       } catch (err) {
@@ -245,7 +245,7 @@ export async function syncExtensionsToTree(manifests) {
   for (const manifest of manifests) {
     currentNames.add(manifest.name);
 
-    const extensionMeta = {
+    const extensionQuality = {
       version: manifest.version || "0.0.0",
       description: manifest.description || null,
       type: manifest.type || null,
@@ -261,11 +261,11 @@ export async function syncExtensionsToTree(manifests) {
         sessionTypes: Object.keys(manifest.provides?.sessionTypes || {}),
       },
     };
-    const metadata = new Map([["extension", extensionMeta]]);
+    const qualities = new Map([["extension", extensionQuality]]);
 
     if (existingByName.has(manifest.name)) {
       await Space.findByIdAndUpdate(existingByName.get(manifest.name), {
-        $set: { type: "resource", metadata },
+        $set: { type: "resource", qualities },
       });
     } else {
       try {
@@ -275,7 +275,7 @@ export async function syncExtensionsToTree(manifests) {
           type: "resource",
           children: [],
           contributors: [],
-          metadata,
+          qualities,
         });
         await child.save();
         await Space.findByIdAndUpdate(extSpace._id, {

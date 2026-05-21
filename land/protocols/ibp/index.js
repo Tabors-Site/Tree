@@ -109,10 +109,8 @@ export function initIBPWS(io) {
 // handler) can import them through this module.
 export { parseFromSocket, parseWithContext, format, canonical, getLandDomain } from "../../seed/ibp/address.js";
 export { resolveStance } from "../../seed/ibp/resolver.js";
-export { buildDescriptor } from "../../seed/ibp/descriptor.js";
-export { buildDiscovery, IBP_PROTOCOL_VERSION } from "../../seed/ibp/discovery.js";
-export { DESCRIPTOR_VERSION } from "../../seed/ibp/descriptor.js";
-export { IbpError, IBP_ERR, isIbpError } from "../../seed/ibp/errors.js";
+export { buildPlaceDescriptor, buildDiscovery, DESCRIPTOR_VERSION, IBP_PROTOCOL_VERSION } from "../../seed/ibp/descriptor.js";
+export { IbpError, IBP_ERR, isIbpError } from "../../seed/ibp/protocol.js";
 // Inbox primitives that role templates need (cancel sweeps, etc.). Append
 // and read are deliberately not re-exported — only SUMMON should write
 // the inbox; role templates either let the scheduler consume entries or

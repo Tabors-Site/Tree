@@ -1,4 +1,4 @@
-// TreeOS Seed . AGPL-3.0 . https://treeos.ai
+// TreeOS Seed . AGPL-3.0 . https://treeos.ai . Tabor Holly
 //
 // HTTP authentication middleware.
 //
@@ -14,7 +14,7 @@ import log from "../../../seed/system/log.js";
 import { verifyTokenStrict } from "../../../seed/land/being/identity.js";
 import { resolveSpaceAccess } from "../../../seed/land/space/spaceFetch.js";
 import { authStrategies } from "../../../seed/services.js";
-import { sendError, ERR } from "../../../seed/ibp/protocol.js";
+import { sendError, IBP_ERR } from "../../../seed/ibp/protocol.js";
 
 function extractToken(req) {
   const authHeader = req.headers.authorization;
@@ -31,12 +31,12 @@ export default async function authenticate(req, res, next) {
     if (token) {
       const result = await verifyTokenStrict(token);
       if (!result) {
-        return sendError(res, 401, ERR.UNAUTHORIZED, "Invalid or expired credentials");
+        return sendError(res, 401, IBP_ERR.UNAUTHORIZED, "Invalid or expired credentials");
       }
       req.beingId  = result.beingId;
       req.name     = result.name;
       req.authType = "jwt";
-      if (!await attachTreeAccess(req, res)) return;
+      if (!await attachSpaceAccess(req, res)) return;
       return next();
     }
 
@@ -54,20 +54,20 @@ export default async function authenticate(req, res, next) {
           if (result.extra && typeof result.extra === "object") {
             req.strategyExtra = Object.freeze({ ...result.extra });
           }
-          if (!await attachTreeAccess(req, res)) return;
+          if (!await attachSpaceAccess(req, res)) return;
           return next();
         }
       } catch (strategyErr) {
         if (strategyErr.status) {
-          return sendError(res, strategyErr.status, ERR.UNAUTHORIZED, strategyErr.message);
+          return sendError(res, strategyErr.status, IBP_ERR.UNAUTHORIZED, strategyErr.message);
         }
       }
     }
 
-    return sendError(res, 401, ERR.UNAUTHORIZED, "Missing or invalid credentials");
+    return sendError(res, 401, IBP_ERR.UNAUTHORIZED, "Missing or invalid credentials");
   } catch (err) {
     log.error("Auth", "Auth error:", err);
-    return sendError(res, 401, ERR.UNAUTHORIZED, "Invalid or expired credentials");
+    return sendError(res, 401, IBP_ERR.UNAUTHORIZED, "Invalid or expired credentials");
   }
 }
 
@@ -113,36 +113,34 @@ export async function authenticateOptional(req, res, next) {
   }
 }
 
-// ────────────────────────────────────────────────────────────────────
-// Tree-access helper
-// ────────────────────────────────────────────────────────────────────
+// ── Space-access helper ──
 
-const TREE_ACCESS_ERRORS = {
-  [ERR.SPACE_NOT_FOUND]: { http: 404, code: ERR.SPACE_NOT_FOUND },
-  [ERR.INVALID_INPUT]:  { http: 400, code: ERR.INVALID_INPUT },
-  [ERR.INVALID_TREE]:   { http: 400, code: ERR.INVALID_TREE },
+const SPACE_ACCESS_ERRORS = {
+  [IBP_ERR.SPACE_NOT_FOUND]: { http: 404, code: IBP_ERR.SPACE_NOT_FOUND },
+  [IBP_ERR.INVALID_INPUT]:  { http: 400, code: IBP_ERR.INVALID_INPUT },
+  [IBP_ERR.INVALID_SPACE]:  { http: 400, code: IBP_ERR.INVALID_SPACE },
 };
 
 /**
- * Resolve tree access for the request. Sends error response and returns
+ * Resolve space access for the request. Sends error response and returns
  * `false` if access is denied or the space doesn't exist. Returns `true`
  * on success or when no spaceId is present (nothing to check).
  */
-async function attachTreeAccess(req, res) {
+async function attachSpaceAccess(req, res) {
   const spaceId = req.body?.spaceId || req.params?.spaceId || req.query?.spaceId;
   if (!spaceId) return true;
 
   const access = await resolveSpaceAccess(spaceId, req.beingId);
   if (!access.ok) {
-    const mapped = TREE_ACCESS_ERRORS[access.error] || { http: 500, code: ERR.INTERNAL };
+    const mapped = SPACE_ACCESS_ERRORS[access.error] || { http: 500, code: IBP_ERR.INTERNAL };
     sendError(res, mapped.http, mapped.code, access.message);
     return false;
   }
   if (!access.canWrite) {
-    sendError(res, 403, ERR.FORBIDDEN, "You do not have write access to this tree");
+    sendError(res, 403, IBP_ERR.FORBIDDEN, "You do not have write access to this space");
     return false;
   }
-  req.rootId     = access.rootId;
-  req.treeAccess = access;
+  req.rootId      = access.rootId;
+  req.spaceAccess = access;
   return true;
 }

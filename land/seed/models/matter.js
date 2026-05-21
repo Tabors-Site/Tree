@@ -1,31 +1,32 @@
 // TreeOS Seed . AGPL-3.0 . https://treeos.ai . Tabor Holly
 //
-// Matter — a thing inside a Space.
+// Matter. What fills a space.
 //
-// Matter is the kernel's "stuff that occupies a position" primitive.
-// Space is the position itself (the place where things happen).
-// Matter is what sits in that place. Beings are the agentive subset of
-// substrate that can act on either. See seed/philosophy/.
+// Space gives the world a where; matter gives it a what. I do not
+// split matter by what it carries — text, a file, a URL, a bridge
+// to another land. One row, one schema, one set of operations. The
+// `origin` field names the realm the underlying content actually
+// lives in, and that decides how I fetch it, address it, and keep
+// it in sync. Adding a new origin is a bridging pattern, never a
+// schema change.
 //
-// The axis is origin, not type. Origin captures what system the
-// underlying representation comes from. It determines fetching,
-// storage, synchronization, addressing, and transfer.
+// The origins I know:
 //
-//   ibp        — TreeOS native. content is a string (text) or null
-//                (a Matter row carrying only qualities, no payload).
-//                Always in sync; TreeOS owns it.
-//   filesystem — Bridges to a file on disk. content is { path, size,
-//                mimeType }. Bytes live outside TreeOS.
-//   web        — Bridges to a URL. content is { url, fetchedAt?, cache? }.
-//                Live content lives on the web.
-//   cross-land — Bridges to Matter on another TreeOS land.
-//                content is { land, matterRef }. Matter lives in the
-//                other land.
+//   ibp        — I own the bytes. Content is a string (text) or
+//                null for a row carrying only qualities.
+//   filesystem — bridges to a file on disk. Content is { path, size,
+//                mimeType }. Bytes live outside me; the orphan
+//                sweeper retires unreferenced files.
+//   web        — bridges to a URL. Content is { url, fetchedAt?,
+//                cache? }. Live content lives on the web.
+//   cross-land — bridges to Matter on another land. Content is
+//                { land, matterRef }.
 //
-// Future origins (git, database, stream, service) plug in as new
-// bridging patterns. Schema does not change; origin enum extends and
-// renderers / fetchers handle the new origin. See origins.js for the
-// canonical enum and seed/land/matter/matters.js for CRUD.
+// Matter also forms a tree within its space (parentMatterId +
+// children[]). Folder-and-file structures, recursive emission
+// hierarchies, anything where one piece of content contains
+// another. The schema below is closed; what an extension wants to
+// say about a piece of matter goes in `qualities`.
 
 import mongoose from "mongoose";
 import { v4 as uuidv4 } from "uuid";
@@ -34,33 +35,22 @@ import { MATTER_ORIGIN } from "../land/matter/origins.js";
 const MatterSchema = new mongoose.Schema({
   _id: { type: String, default: uuidv4 },
 
-  // Which Space this Matter lives in. Required: Matter does not exist
-  // outside a position. DELETED sentinel marks soft-deleted Matter.
+  // Matter does not exist outside a position. The DELETED sentinel
+  // on spaceId / beingId marks soft-deleted matter.
   spaceId: { type: String, ref: "Space", required: true },
-
-  // Who wrote this Matter. Required: every Matter has an author.
-  // DELETED sentinel marks soft-deleted Matter.
   beingId: { type: String, ref: "Being", required: true },
 
-  // Human-readable identifier. Used by set-name and by filesystem-
-  // origin mirroring (the file's name). Optional — pure-qualities
-  // Matter may not need one. Capped at the same length as Space.name.
+  // Optional human-readable label. Used by set-name and by
+  // filesystem-origin mirroring (the file's name).
   name: { type: String, default: null },
 
-  // ── Matter tree ──
-  // Matter forms a recursive tree (the third tree in the substrate,
-  // alongside Spaces and Beings). Root Matter at a Space carries
+  // The matter tree at this space. Root matter has
   // parentMatterId: null; descendants chain through parentMatterId.
-  // Enables filesystem-origin folder-and-file structures, recursive
-  // emission/step hierarchies for governing, etc. See
-  // workspace.
   parentMatterId: { type: String, ref: "Matter", default: null, index: true },
   children:       [{ type: String, ref: "Matter" }],
 
-  // What system the underlying representation comes from. See
-  // origins.js MATTER_ORIGIN. Required — origin determines fetching,
-  // sync mode, and addressing, so callers cannot create Matter whose
-  // handling is ambiguous.
+  // Which realm the underlying content lives in. Required — origin
+  // determines fetching, sync mode, and addressing.
   origin: {
     type: String,
     enum: Object.values(MATTER_ORIGIN),
@@ -68,15 +58,10 @@ const MatterSchema = new mongoose.Schema({
     required: true,
   },
 
-  // Content shape varies by origin (see origins.js). Optional so Matter
-  // can be a row carrying only qualities (origin "ibp" with no payload).
+  // Shape varies by origin (see origins.js). May be null for a row
+  // carrying only qualities.
   content: { type: mongoose.Schema.Types.Mixed, default: null },
 
-  // Qualities. What kind a matter is. Plato's ποιότης / qualitas:
-  // the answer to "of what sort is this?" Each extension writes to
-  // its own quality namespace via
-  // `qualities.matter.setQuality(matter, "<extName>", ...)` from
-  // seed/land/qualities.js.
   qualities: {
     type: Map,
     of: mongoose.Schema.Types.Mixed,
@@ -86,11 +71,6 @@ const MatterSchema = new mongoose.Schema({
   createdAt: { type: Date, default: Date.now },
   updatedAt: { type: Date, default: Date.now },
 });
-
-// Extensions tag Matter via `qualities`, each in its own namespace.
-// maxMatterPerSpace (land config, default 1000) checked in createMatter
-// before write. Retention: kernel soft-deletes Matter when its spaceId
-// is set to the DELETED sentinel.
 
 MatterSchema.index({ spaceId: 1, createdAt: -1 });
 MatterSchema.index({ beingId: 1, createdAt: -1 });

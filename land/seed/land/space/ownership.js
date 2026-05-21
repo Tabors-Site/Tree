@@ -1,15 +1,25 @@
 // TreeOS Seed . AGPL-3.0 . https://treeos.ai . Tabor Holly
-/**
- * Ownership and contributor mutations.
- *
- * All mutations resolve the current owner by walking the parent chain
- * via resolveSpaceAccess. Only the resolved owner (or admin) can modify
- * rootOwner or contributors at any position.
- *
- * rootOwner means "the owner from this point down." Setting rootOwner
- * on a branch delegates that entire sub-tree to a new owner. The owner
- * above can revoke it. The delegate cannot revoke the owner above.
- */
+//
+// Ownership and contributors. Who can act here.
+//
+// Every Space carries two access fields: rootOwner (one being who
+// owns this position and everything beneath it) and contributors[]
+// (beings invited to write here without taking ownership). Both
+// resolve up the parent chain — a Space without its own rootOwner
+// inherits the nearest ancestor's. resolveSpaceAccess does the walk;
+// this file is the write side that mutates the fields.
+//
+// rootOwner means "owner from this point down." Setting it on a
+// branch delegates the whole sub-tree to a new being. The owner
+// above can revoke the delegation; the delegate cannot revoke the
+// owner above.
+//
+// Every mutation here gates on resolveSpaceAccess: only the resolved
+// owner at the position can change ownership or contributors.
+// Self-removal is the one exception — a contributor can step out
+// without owner permission. Stance authorization will eventually
+// express these rules uniformly; until then each method checks
+// inline.
 
 import Space from "../../models/space.js";
 import Being from "../../models/being.js";
@@ -17,12 +27,12 @@ import { resolveSpaceAccess } from "./spaceFetch.js";
 import { invalidateSpace } from "./ancestorCache.js";
 import { hooks } from "../../system/hooks.js";
 import { getLandConfigValue } from "../../landConfig.js";
-import { ERR, ProtocolError } from "../../ibp/protocol.js";
-import { I_AM } from "../space/seedSpaces.js";
+import { IBP_ERR, IbpError } from "../../ibp/protocol.js";
+import { I_AM } from "./seedSpaces.js";
 import { acquireSpaceLock, releaseSpaceLock } from "./spaceLocks.js";
 
 /**
- * Add a contributor to a space. Only the resolved owner or admin can do this.
+ * Add a contributor to a space. Only the resolved owner can do this.
  * Uses $addToSet for atomic dedup.
  */
 export async function addContributor(spaceId, contributorId, beingId) {
@@ -30,7 +40,7 @@ export async function addContributor(spaceId, contributorId, beingId) {
   if (!space) throw new Error("Space not found");
   if (space.seedSpace) throw new Error("Cannot modify land seed spaces");
 
-  await assertUserExists(contributorId);
+  await assertBeingExists(contributorId);
   await assertOwner(spaceId, beingId);
 
   // Prevent adding the resolved owner as a contributor (redundant, logically wrong)
@@ -56,14 +66,14 @@ export async function addContributor(spaceId, contributorId, beingId) {
 
 /**
  * Remove a contributor from a space.
- * The resolved owner, an admin, or the contributor themselves can remove.
+ * The resolved owner or the contributor themselves can remove.
  */
 export async function removeContributor(spaceId, contributorId, beingId) {
   const space = await Space.findById(spaceId).select("seedSpace").lean();
   if (!space) throw new Error("Space not found");
   if (space.seedSpace) throw new Error("Cannot modify land seed spaces");
 
-  await assertUserExists(contributorId);
+  await assertBeingExists(contributorId);
 
   // Self-removal is always allowed
   if (contributorId !== beingId) {
@@ -80,7 +90,7 @@ export async function removeContributor(spaceId, contributorId, beingId) {
 
 /**
  * Set rootOwner on a space (delegate ownership of a sub-tree).
- * Only the resolved owner above this position, or admin, can delegate.
+ * Only the resolved owner above this position can delegate.
  * Cannot set rootOwner on land seed spaces.
  */
 export async function setOwner(spaceId, newOwnerId, beingId) {
@@ -88,17 +98,15 @@ export async function setOwner(spaceId, newOwnerId, beingId) {
   if (!space) throw new Error("Space not found");
   if (space.seedSpace) throw new Error("Cannot set ownership on land seed spaces");
 
-  await assertUserExists(newOwnerId);
+  await assertBeingExists(newOwnerId);
 
   if (space.rootOwner && space.rootOwner.toString() === newOwnerId) {
-    throw new Error("User is already the owner at this space");
+    throw new Error("Being is already the owner at this space");
   }
 
-  // If this space already has rootOwner, only that owner or an admin can change it.
+  // If this space already has rootOwner, only that owner can change it.
   // If it doesn't, resolve the owner above.
   if (space.rootOwner && space.rootOwner !== I_AM) {
-    // Only the current owner can reassign. (Admin bypass retired
-    // 2026-05-18; stance authorization replaces it.)
     if (space.rootOwner.toString() !== beingId) {
       throw new Error("Only the current owner can reassign rootOwner");
     }
@@ -114,7 +122,7 @@ export async function setOwner(spaceId, newOwnerId, beingId) {
   const previousOwnerId = space.rootOwner ? space.rootOwner.toString() : null;
 
   const locked = await acquireSpaceLock(spaceId, beingId);
-  if (!locked) throw new ProtocolError(409, ERR.RESOURCE_CONFLICT, "Space ownership is being modified");
+  if (!locked) throw new IbpError(IBP_ERR.RESOURCE_CONFLICT, "Space ownership is being modified");
   try {
     const filter = { _id: spaceId };
     if (previousOwnerId) {
@@ -144,7 +152,7 @@ export async function setOwner(spaceId, newOwnerId, beingId) {
 
 /**
  * Remove rootOwner from a space (revoke delegation).
- * Only the owner ABOVE this space in the chain, or admin, can revoke.
+ * Only the owner ABOVE this space in the chain can revoke.
  * The delegate cannot revoke themselves (that would orphan the sub-tree
  * from their own authority, which makes no sense).
  */
@@ -166,7 +174,7 @@ export async function removeOwner(spaceId, beingId) {
   const removedOwnerId = space.rootOwner.toString();
 
   const locked = await acquireSpaceLock(spaceId, beingId);
-  if (!locked) throw new ProtocolError(409, ERR.RESOURCE_CONFLICT, "Space ownership is being modified");
+  if (!locked) throw new IbpError(IBP_ERR.RESOURCE_CONFLICT, "Space ownership is being modified");
   try {
     await Space.updateOne(
       { _id: spaceId },
@@ -181,7 +189,7 @@ export async function removeOwner(spaceId, beingId) {
 
 /**
  * Transfer ownership: set a new rootOwner on a space that already has one.
- * Only the current rootOwner on this space, or admin, can transfer.
+ * Only the current rootOwner on this space can transfer.
  */
 export async function transferOwnership(spaceId, newOwnerId, beingId) {
   const space = await Space.findById(spaceId).select("seedSpace rootOwner").lean();
@@ -189,7 +197,7 @@ export async function transferOwnership(spaceId, newOwnerId, beingId) {
   if (space.seedSpace) throw new Error("Cannot modify land seed spaces");
   if (!space.rootOwner || space.rootOwner === I_AM) throw new Error("Space has no owner to transfer from");
 
-  await assertUserExists(newOwnerId);
+  await assertBeingExists(newOwnerId);
 
   const oldOwnerId = space.rootOwner.toString();
 
@@ -197,14 +205,12 @@ export async function transferOwnership(spaceId, newOwnerId, beingId) {
     throw new Error("User is already the owner at this space");
   }
 
-  // Only the current owner can transfer. Admin bypass retired
-  // 2026-05-18 ([[project_stance_authorization]] is the replacement).
   if (oldOwnerId !== beingId) {
     throw new Error("Only the current owner can transfer ownership");
   }
 
   const locked = await acquireSpaceLock(spaceId, beingId);
-  if (!locked) throw new ProtocolError(409, ERR.RESOURCE_CONFLICT, "Space ownership is being modified");
+  if (!locked) throw new IbpError(IBP_ERR.RESOURCE_CONFLICT, "Space ownership is being modified");
   try {
     await Space.bulkWrite([
       {
@@ -229,21 +235,16 @@ export async function transferOwnership(spaceId, newOwnerId, beingId) {
 
 // ── Helpers ──
 
-// `isAdmin` retired 2026-05-18. The fallback "admin bypass" is gone;
-// only the tree's owner can perform owner-only actions. Future
-// stance-authorization rules ([[project_stance_authorization]]) replace
-// the admin-bypass with proper per-stance grants.
+// Owner-only gate. Only the tree's owner passes; stance authorization
+// will eventually grant per-stance exceptions, but not yet.
 async function assertOwner(spaceId, beingId) {
   const access = await resolveSpaceAccess(spaceId, beingId);
   if (access.ok && access.isOwner) return;
   throw new Error("Only the tree owner can perform this action");
 }
 
-// assertAdmin is dead. Callers that used it had owner fallbacks via
-// assertOwner; pure-admin gates retire pending stance authorization.
-
-async function assertUserExists(beingId) {
-  if (!beingId) throw new Error("User ID is required");
-  const user = await Being.findById(beingId).select("_id").lean();
-  if (!user) throw new Error("User not found");
+async function assertBeingExists(beingId) {
+  if (!beingId) throw new Error("Being id is required");
+  const being = await Being.findById(beingId).select("_id").lean();
+  if (!being) throw new Error("Being not found");
 }

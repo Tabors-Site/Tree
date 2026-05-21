@@ -10,7 +10,7 @@
 //   GET  /api/v1/root/:rootId/governance/stream       SSE live-update stream
 
 import express from "express";
-import { sendOk, sendError, ERR } from "../../seed/ibp/protocol.js";
+import { sendOk, sendError, IBP_ERR } from "../../seed/ibp/protocol.js";
 import authenticate from "../../transports/http/middleware/authenticate.js";
 import { getExtension } from "../loader.js";
 import Space from "../../seed/models/space.js";
@@ -106,7 +106,7 @@ router.get("/governing/plan/:spaceId", authenticate, async (req, res) => {
     const plan = await readPlan(req.params.spaceId);
     return sendOk(res, { plan });
   } catch (err) {
-    return sendError(res, 500, ERR.INTERNAL, err.message);
+    return sendError(res, 500, IBP_ERR.INTERNAL, err.message);
   }
 });
 

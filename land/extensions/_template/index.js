@@ -122,18 +122,6 @@ export async function init(core) {
   // });
 
   // ───────────────────────────────────────────────────────────────
-  // DESCRIPTOR DERIVERS — contribute derived fields to the
-  // Position Description that clients render (3D portal, web
-  // dashboard). The seed has its own deriver registry; reaching
-  // into other extensions from inside seed is forbidden.
-  // Canonical kinds: "models", "scenes", "scene-block".
-  // ───────────────────────────────────────────────────────────────
-  //
-  // core.descriptor.registerDeriver("models", (meta) => {
-  //   const raw = meta instanceof Map ? meta.get("models") : meta?.models;
-  //   return raw?.model ? { model: raw.model, scale: raw.scale ?? 1 } : null;
-  // });
-
   // ───────────────────────────────────────────────────────────────
   // SEEDS — plantable scaffolds. Register a recipe here (or via
   // the manifest's provides.seeds path) and the operator plants

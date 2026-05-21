@@ -114,7 +114,7 @@ The `SEED_SPACE` enum names each one. The `seedSpace` field on Space marks the r
 
 ## Qualities. Of what sort.
 
-Three primitives carry an extensible `qualities` Map: Being, Space, Matter. A bare primitive answers *that* — that something is. Qualities answer the other half: of what sort is this particular space, this particular being, this particular matter? Each extension owns one quality namespace under its name (`qualities.governing`, `qualities.energy`, `qualities.review`); I never read or write inside an extension's namespace.
+Three primitives carry an extensible `qualities` Map: Being, Space, Matter. A bare primitive answers *that*: that something is. Qualities answer the other half: of what sort is this particular space, this particular being, this particular matter? Each extension owns one quality namespace under its name (`qualities.governing`, `qualities.energy`, `qualities.review`); I never read or write inside an extension's namespace.
 
 The word is Plato's. ποιότης (poiótēs), coined in *Theaetetus* to answer "what sort is it?" Cicero calqued it into Latin as *qualitas* (from *qualis*, "of what kind"). English inherited the word still carrying its original technical sense. The field is named for exactly what it does.
 
@@ -219,7 +219,7 @@ Per-handler timeout is 5 seconds; chain timeout is 15 seconds. Five consecutive 
 | `enrichContext` | sequential | Inject extension data into AI context. |
 | `onCascade` | sequential | Fires on content write at a cascade-enabled space. Results written to `.flow`. |
 | `onDocumentPressure` | after | A document exceeds 80% of `maxDocumentSizeBytes`. |
-| `onTreeTripped` / `onTreeRevived` | after | Tree circuit breaker state changes. |
+| `onTreeTripped` / `onTreeRevived` | after | Space-tree circuit breaker state changes. |
 
 Extensions namespace their own hooks as `extName:hookName`.
 
@@ -231,7 +231,7 @@ Everything an extension contributes that I dispatch through goes into one of thr
 |----------|-------------------|--------|
 | **Operations** | DO actions, keyed `<ext>:<action>`. Bare names reserved for me. | [ibp/operations.js](ibp/operations.js) |
 | **Roles** | SUMMON-honoring being templates. Each role declares permissions (verb subset), respondMode, `summon(message, ctx)`, and optionally `buildSystemPrompt` / `toolNames`. | [being/roles/registry.js](being/roles/registry.js) |
-| **Seeds** | Plantable scaffolds. Recipes that bootstrap a domain (Ruler/Planner/Contractor/Foreman/Workers, etc.). Operators plant via the `plant-seed` DO. | [space/seeds.js](space/seeds.js) |
+| **Seeds** | Plantable scaffolds. Recipes that bootstrap a domain (Ruler/Planner/Contractor/Foreman/Workers, etc.). Operators plant via the `plant-seed` DO. | [land/seeds.js](land/seeds.js) |
 
 Auto-namespacing. Extensions write bare names; I record the qualified form (`governing:hire-planner`). Same prefixing applies to `core.websocket.emitToBeing(...)` events.
 
@@ -302,7 +302,7 @@ All write functions accept a document or an id. No read-modify-write. No race co
 
 ### Protocol (`core.protocol`)
 
-`sendOk(res, data)`, `sendError(res, status, code, message, detail)`, the `ERR` enum, `ProtocolError` class. One shared response shape across HTTP.
+`sendOk(res, data)`, `sendError(res, status, code, message, detail)`, the `IBP_ERR` enum, `IbpError` class. One shared response shape across HTTP. HTTP status derives from the IBP code via `httpStatusFor(code)`; throw sites pass only the code.
 
 ### Conversation entry (`core.llm`)
 
@@ -374,16 +374,16 @@ The full list of keys with defaults lives in [landConfig.js](landConfig.js) unde
 - Matter and documents: `matterMaxChars`, `maxMatterPerNode`, `maxDocumentSizeBytes`, `maxUploadBytes`.
 - Hooks: `hookTimeoutMs`, `hookMaxHandlers`, `hookCircuitThreshold`, `hookCircuitHalfOpenMs`, `hookChainTimeoutMs`.
 - Cascade: `cascadeEnabled`, `cascadeMaxDepth`, `cascadeMaxPayloadBytes`, `cascadeRateLimit`, `resultTTL`, `awaitingTimeout`, `flowMaxResultsPerDay`.
-- Tree circuit: `treeCircuitEnabled`, `maxTreeSpaces`, `maxTreeMetadataBytes`, `maxTreeErrorRate`, weight knobs.
+- Space-tree circuit: `treeCircuitEnabled`, `maxTreeSpaces`, `maxTreeQualityBytes`, `maxTreeErrorRate`, weight knobs.
 - Scheduler backpressure: `summonInboxDepth`, `summonsPerSecond`, `summonMaxAgeSeconds`.
 - Retention and cleanup: `summonRetentionDays`, `didRetentionDays`, `retentionCleanupInterval`, `uploadCleanupInterval`, `uploadGracePeriodMs`.
 - Security: `jwtExpiryDays`, `allowedLlmDomains`, `allowedFrameDomains`.
 
-## Tree circuit breaker
+## Space-tree circuit breaker
 
 When a tree exceeds health thresholds, its circuit trips. No AI, no cascade, no writes. Read access stays open. The data is intact; the tree is sleeping.
 
-Health equation: `(nodeCount / max) * nodeWeight + (metadataDensity / max) * densityWeight + (errorRate / max) * errorWeight`. When the score exceeds 1.0, the tree trips. Error rate reads from the Did log (DO emissions with `result.error`) and from `.flow` partitions (`CASCADE.FAILED` and `CASCADE.REJECTED` scoped to this tree's spaces).
+Health equation: `(nodeCount / max) * nodeWeight + (qualitiesDensity / max) * densityWeight + (errorRate / max) * errorWeight`. When the score exceeds 1.0, the tree trips. Error rate reads from the Did log (DO emissions with `result.error`) and from `.flow` partitions (`CASCADE.FAILED` and `CASCADE.REJECTED` scoped to this tree's spaces).
 
 State stored on the tree root: `qualities.circuit = { tripped, reason, timestamp, scores }`. I write one field. Extensions read it.
 
@@ -413,13 +413,13 @@ I enforce dozens of guarantees so no extension can take me down. They are:
 | `enrichContext` chain timeout | 15s cumulative cap for the entire chain. Per-handler timeout reduced to the remaining budget. |
 | MCP spatial scoping | MCP tool calls check `isExtensionBlockedAtSpace` before dispatch. Same scoping guarantee as WebSocket conversations. |
 | Document size guard | Every quality write checks total document size against `maxDocumentSizeBytes` (14MB default). `DOCUMENT_SIZE_EXCEEDED` rejected. `onDocumentPressure` fires at 80%. |
-| Per-namespace cap | `metadataNamespaceMaxBytes` (default 512KB) per extension namespace on Space, Being, Matter. |
+| Per-namespace cap | `qualityNamespaceMaxBytes` (default 512KB) per extension namespace on Space, Being, Matter. |
 | Matter count per space | `maxMatterPerNode` (default 1000) checked in `createMatter`. |
 | Did query cap | `didQueryLimit` (default 5000) on every audit query. |
 | Ownership chain | `rootOwner`/`contributor` mutations validate the parent chain. Only resolved owner or admin can modify. Land seed spaces always rejected. |
 | Space locks | Structural mutations (move, delete, transfer) acquire short-lived locks. Sorted acquisition prevents deadlocks. 30s TTL prevents permanent locks on crash. |
 | `.flow` partitioning | Daily partitions cap unbounded growth. `flowMaxResultsPerDay` with circular overwrite. Retention deletes whole partitions. |
-| Tree circuit breaker | Health equation monitors space count, metadata density, error rate. Score > 1.0 trips the tree. Read access stays. Extensions revive. Off by default. |
+| Space-tree circuit breaker | Health equation monitors space count, qualities density, error rate. Score > 1.0 trips the space-tree. Read access stays. Extensions revive. Off by default. |
 | Ancestor cache | Shared cache for parent chain walks. One walk serves every resolution chain. Snapshot per message. `moveSpace` clears entire cache. `deleteSpace` clears entries containing the deleted space. |
 | Session cap | 10K max (configurable). Oldest-first eviction. |
 | MCP client cap | 5,000 max. Oldest evicted on overflow. 10s connect timeout, 5s close timeout, 15-minute stale sweep. |

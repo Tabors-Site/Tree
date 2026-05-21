@@ -1,44 +1,56 @@
 // TreeOS Seed . AGPL-3.0 . https://treeos.ai . Tabor Holly
-/**
- * Ancestor Path Cache
- *
- * One shared cache for the kernel's hottest path: walking parent chains.
- * Five resolution chains (extension scope, tool scope, mode, LLM connection, LLM config)
- * plus auth and ownership all walk the same parent hierarchy. Without caching,
- * a tree 20 spaces deep means dozens of database queries before the AI does anything.
- *
- * With caching, one walk serves all chains. Shared ancestors are shared entries.
- * The cache stores structural and configuration data that changes rarely:
- * qualities, seedSpace, rootOwner, contributors, parent. It does NOT store
- * matter content or user-specific permission decisions.
- *
- * Invalidation:
- *   moveSpace / deleteSpace:    invalidateAll() (rare operations, full clear)
- *   setQuality / setOwner:      invalidateSpace(spaceId) + all entries containing it
- *   addContributor:             invalidateSpace(spaceId) only
- *
- * Consistency within one message: snapshotAncestors() returns a deep copy.
- * The conversation loop snapshots once at message start. All resolution chains
- * for that message read from the snapshot. One message, one consistent view.
- *
- * Safety:
- *   - Cache capped at MAX_ENTRIES. LRU eviction on overflow.
- *   - Invalidation snapshots keys before deletion (no iterate-and-delete).
- *   - TTL read once per operation for consistency.
- *   - Stats reset at 1B to prevent overflow.
- */
+//
+// The parent-chain cache. My hottest path.
+//
+// Every resolution chain I run walks the same path: a space, then its
+// parent, then its parent, up to a seed-space boundary. Stance
+// authorization walks it. Extension scope walks it. Tool scope walks
+// it. LLM connection, LLM config, the descriptor's per-position
+// derivers — all the same walk. A tree 20 spaces deep without
+// caching means dozens of database queries before any being acts.
+//
+// I cache the walk once and let every chain read from it. Shared
+// ancestors are shared entries; one snapshot serves a whole
+// conversation turn. The cache holds only what changes rarely —
+// qualities, seedSpace, rootOwner, contributors, parent. It does
+// NOT hold Matter content or per-caller permission decisions. Those
+// belong to the call.
+//
+// Invalidation. Three patterns, scaled to how often each fires:
+//   moveSpace / deleteSpace    → invalidateAll() (rare, full clear)
+//   setQuality / setOwner      → invalidateSpace(spaceId) plus every
+//                                cached chain that contains it
+//   addContributor             → invalidateSpace(spaceId) only
+//
+// Consistency within one turn. snapshotAncestors() returns a deep
+// copy. The conversation loop snapshots once at turn start; every
+// resolution chain that turn reads from the same snapshot. The live
+// cache may change underneath; the snapshot does not.
+//
+// Safety:
+//   - Cache capped at MAX_ENTRIES; LRU eviction on overflow.
+//   - Invalidation snapshots keys before deletion (no iterate-and-delete).
+//   - TTL read once per operation for consistency.
+//   - Stats reset before counter overflow.
 
 import log from "../../system/log.js";
 import Space from "../../models/space.js";
 import { getLandConfigValue } from "../../landConfig.js";
-import { ERR } from "../../ibp/protocol.js";
-import { I_AM } from "../space/seedSpaces.js";
+import { IBP_ERR } from "../../ibp/protocol.js";
+import { I_AM } from "./seedSpaces.js";
 
 // ── Cache storage ──
 
 const _cache = new Map(); // spaceId -> { ancestors: [...], cachedAt: number }
-function MAX_ENTRIES() { return Number(getLandConfigValue("ancestorCacheMaxEntries")) || 50000; }
-function MAX_DEPTH() { return Math.max(10, Math.min(Number(getLandConfigValue("ancestorCacheMaxDepth")) || 100, 500)); }
+function MAX_ENTRIES() {
+  return Number(getLandConfigValue("ancestorCacheMaxEntries")) || 50000;
+}
+function MAX_DEPTH() {
+  return Math.max(
+    10,
+    Math.min(Number(getLandConfigValue("ancestorCacheMaxDepth")) || 100, 500),
+  );
+}
 const STATS_RESET = 1_000_000_000; // reset counters before overflow
 
 // Stats for observability (pulse extension reads these)
@@ -49,11 +61,13 @@ let _evictions = 0;
 
 // Fields to cache per ancestor space. These are what the resolution chains read.
 // name included for buildPathString (avoids 50 sequential DB queries on deep trees).
-const ANCESTOR_FIELDS = "name metadata parent seedSpace rootOwner contributors";
+const ANCESTOR_FIELDS =
+  "name qualities parent seedSpace rootOwner contributors";
 
 function getTTL() {
   const configured = getLandConfigValue("ancestorCacheTTL");
-  if (configured && typeof configured === "number" && configured > 0) return configured;
+  if (configured && typeof configured === "number" && configured > 0)
+    return configured;
   return 30000; // 30 seconds default
 }
 
@@ -63,7 +77,7 @@ function getTTL() {
  * Get the ancestor chain from a space to root.
  * Returns cached chain if fresh, otherwise walks from DB and caches.
  *
- * Each ancestor is a lean object with: _id, metadata, parent, seedSpace, rootOwner, contributors.
+ * Each ancestor is a lean object with: _id, qualities, parent, seedSpace, rootOwner, contributors.
  * The array is ordered from the space itself to root (or the last non-land seed space).
  *
  * @param {string} spaceId
@@ -76,7 +90,7 @@ export async function getAncestorChain(spaceId) {
 
   // Check cache
   const cached = _cache.get(id);
-  if (cached && (Date.now() - cached.cachedAt) < ttl) {
+  if (cached && Date.now() - cached.cachedAt < ttl) {
     _hits++;
     return cached.ancestors;
   }
@@ -129,15 +143,22 @@ async function walkFromDb(spaceId, ttl) {
   while (cursor && !visited.has(cursor)) {
     visited.add(cursor);
     if (ancestors.length > MAX_DEPTH()) {
-      log.warn("AncestorCache", `Chain depth exceeded ${MAX_DEPTH()} for ${spaceId}. Possible circular ref.`);
+      log.warn(
+        "AncestorCache",
+        `Chain depth exceeded ${MAX_DEPTH()} for ${spaceId}. Possible circular ref.`,
+      );
       break;
     }
 
     // Check if this ancestor is already cached (shared path optimization)
     const cachedAncestor = _cache.get(String(cursor));
-    if (cachedAncestor && (Date.now() - cachedAncestor.cachedAt) < ttl) {
+    if (cachedAncestor && Date.now() - cachedAncestor.cachedAt < ttl) {
       // Validate the cached tail before splicing
-      if (Array.isArray(cachedAncestor.ancestors) && cachedAncestor.ancestors.length > 0 && cachedAncestor.ancestors[0]._id) {
+      if (
+        Array.isArray(cachedAncestor.ancestors) &&
+        cachedAncestor.ancestors.length > 0 &&
+        cachedAncestor.ancestors[0]._id
+      ) {
         ancestors.push(...cachedAncestor.ancestors);
         _hits++;
         return ancestors;
@@ -152,12 +173,15 @@ async function walkFromDb(spaceId, ttl) {
       return ancestors.length > 0 ? ancestors : null;
     }
 
-    // Normalize metadata to plain object for consistent access
-    const meta = n.qualities instanceof Map ? Object.fromEntries(n.qualities) : (n.qualities || {});
+    // Normalize qualities to plain object for consistent access
+    const quals =
+      n.qualities instanceof Map
+        ? Object.fromEntries(n.qualities)
+        : n.qualities || {};
     ancestors.push({
       _id: String(n._id),
       name: n.name || null,
-      metadata: meta,
+      qualities: quals,
       parent: n.parent ? String(n.parent) : null,
       seedSpace: n.seedSpace || null,
       rootOwner: n.rootOwner ? String(n.rootOwner) : null,
@@ -184,7 +208,7 @@ async function walkFromDb(spaceId, ttl) {
 export async function snapshotAncestors(spaceId) {
   const chain = await getAncestorChain(spaceId);
   if (!chain) return null;
-  // Deep copy: metadata objects are plain (not Maps), so JSON roundtrip works.
+  // Deep copy: qualities objects are plain (not Maps), so JSON roundtrip works.
   // Lean documents from Mongoose are pure JSON-safe objects.
   return JSON.parse(JSON.stringify(chain));
 }
@@ -247,12 +271,16 @@ export function resolveExtensionScopeFromChain(ancestors, confinedExtensions) {
  * Returns the same shape as resolveSpaceAccess().
  *
  * @param {string} startNodeId - the space being accessed
- * @param {string} beingId - the user requesting access
+ * @param {string} beingId - the being requesting access
  * @param {Array<object>} ancestors - from getAncestorChain or snapshotAncestors
  */
 export function resolveSpaceAccessFromChain(startNodeId, beingId, ancestors) {
   if (!ancestors || ancestors.length === 0) {
-    return { ok: false, error: ERR.SPACE_NOT_FOUND, message: "Space not found." };
+    return {
+      ok: false,
+      error: IBP_ERR.SPACE_NOT_FOUND,
+      message: "Space not found.",
+    };
   }
 
   let isContributor = false;
@@ -264,18 +292,26 @@ export function resolveSpaceAccessFromChain(startNodeId, beingId, ancestors) {
       // land/extensions + land/seed, see code-workspace/source.js).
       // Treat .source itself as the root of its subtree so everything
       // beneath it is navigable. Read-only by default — canWrite is
-      // gated on the code-workspace writeMode metadata at the tool
+      // gated on the code-workspace writeMode quality at the tool
       // handler level, not here.
       if (space.seedSpace === "source") {
         ownerNode = space;
         break;
       }
       // Every other seed role is an impassable boundary.
-      return { ok: false, error: ERR.INVALID_TREE, message: "Invalid tree: reached land seed space boundary" };
+      return {
+        ok: false,
+        error: IBP_ERR.INVALID_TREE,
+        message: "Invalid tree: reached land seed space boundary",
+      };
     }
 
     // Accumulate contributors
-    if (!isContributor && beingId && space.contributors?.some(id => id === beingId)) {
+    if (
+      !isContributor &&
+      beingId &&
+      space.contributors?.some((id) => id === beingId)
+    ) {
       isContributor = true;
     }
 
@@ -287,7 +323,11 @@ export function resolveSpaceAccessFromChain(startNodeId, beingId, ancestors) {
   }
 
   if (!ownerNode) {
-    return { ok: false, error: ERR.INVALID_TREE, message: "Invalid tree: no rootOwner found" };
+    return {
+      ok: false,
+      error: IBP_ERR.INVALID_TREE,
+      message: "Invalid tree: no rootOwner found",
+    };
   }
 
   // .source is a land-owned system tree. Everyone on the land can read it.
@@ -308,7 +348,7 @@ export function resolveSpaceAccessFromChain(startNodeId, beingId, ancestors) {
 
   // Circuit breaker: tripped trees deny write access
   const circuit = ownerNode.qualities?.circuit;
-  const isTripped = !!(circuit?.tripped);
+  const isTripped = !!circuit?.tripped;
 
   return {
     ok: true,
@@ -338,14 +378,14 @@ export function invalidateSpace(spaceId) {
   const keys = [..._cache.keys()];
   for (const key of keys) {
     const entry = _cache.get(key);
-    if (entry && entry.ancestors.some(a => a._id === id)) {
+    if (entry && entry.ancestors.some((a) => a._id === id)) {
       _cache.delete(key);
     }
   }
 }
 
 /**
- * Full cache clear. Used for moveNode (rare) and deleteNode.
+ * Full cache clear. Used by moveSpace and deleteSpace (rare).
  */
 export function invalidateAll() {
   _invalidations++;
@@ -369,9 +409,8 @@ export function getCacheStats() {
     misses: _misses,
     invalidations: _invalidations,
     evictions: _evictions,
-    hitRate: (_hits + _misses) > 0
-      ? Math.round((_hits / (_hits + _misses)) * 100)
-      : 0,
+    hitRate:
+      _hits + _misses > 0 ? Math.round((_hits / (_hits + _misses)) * 100) : 0,
   };
 }
 
@@ -385,7 +424,7 @@ function scheduleCleanup() {
   const ttl = getTTL();
   _cleanupTimer = setTimeout(() => {
     const currentTtl = getTTL();
-    const cutoff = Date.now() - (currentTtl * 2);
+    const cutoff = Date.now() - currentTtl * 2;
     // Snapshot keys before deletion
     const keys = [..._cache.keys()];
     let swept = 0;
@@ -397,7 +436,10 @@ function scheduleCleanup() {
       }
     }
     if (swept > 0) {
-      log.debug("AncestorCache", `Cleanup: ${swept} expired entries removed. ${_cache.size} remain.`);
+      log.debug(
+        "AncestorCache",
+        `Cleanup: ${swept} expired entries removed. ${_cache.size} remain.`,
+      );
     }
     scheduleCleanup(); // re-schedule with potentially updated TTL
   }, ttl * 4);

@@ -82,7 +82,9 @@ export function schedule(beingId, opts = {}) {
   }
   const intervalMs = Number(opts.intervalMs);
   if (!Number.isFinite(intervalMs) || intervalMs < MIN_INTERVAL_MS) {
-    throw new Error(`schedule.intervalMs must be a number >= ${MIN_INTERVAL_MS}`);
+    throw new Error(
+      `schedule.intervalMs must be a number >= ${MIN_INTERVAL_MS}`,
+    );
   }
 
   const id = opts.id || randomUUID();
@@ -92,13 +94,14 @@ export function schedule(beingId, opts = {}) {
   const now = Date.now();
   const entry = {
     id,
-    beingId:       String(beingId),
+    beingId: String(beingId),
     intervalMs,
-    priority:      Number.isFinite(opts.priority) ? Number(opts.priority) : 4,
-    content:       opts.content !== undefined ? opts.content : { kind: "scheduled-wake" },
+    priority: Number.isFinite(opts.priority) ? Number(opts.priority) : 4,
+    content:
+      opts.content !== undefined ? opts.content : { kind: "scheduled-wake" },
     skipIfBacklog: opts.skipIfBacklog !== false,
-    nextFireMs:    now + intervalMs,
-    lastFireMs:    null,
+    nextFireMs: now + intervalMs,
+    lastFireMs: null,
   };
 
   _registry.set(id, entry);
@@ -109,9 +112,11 @@ export function schedule(beingId, opts = {}) {
   }
   beingSet.add(id);
 
-  log.verbose("Schedule",
+  log.verbose(
+    "Schedule",
     `scheduled wake for being ${entry.beingId.slice(0, 8)} every ${intervalMs}ms ` +
-    `(id=${id.slice(0, 8)})`);
+      `(id=${id.slice(0, 8)})`,
+  );
   return id;
 }
 
@@ -189,15 +194,21 @@ export async function runOnce(nowMs) {
       await _emitter(entry, now);
       fired++;
     } catch (err) {
-      log.warn("Schedule",
-        `emit failed for schedule ${entry.id.slice(0, 8)} (being ${entry.beingId.slice(0, 8)}): ${err.message}`);
+      log.warn(
+        "Schedule",
+        `emit failed for schedule ${entry.id.slice(0, 8)} (being ${entry.beingId.slice(0, 8)}): ${err.message}`,
+      );
     } finally {
       entry.lastFireMs = now;
       // Advance to the next interval beyond now. If many intervals
       // were missed (e.g. host slept), skip the catch-up: one wake is
       // enough; the being doesn't need to drown.
-      const missed = Math.max(1, Math.floor((now - entry.nextFireMs) / entry.intervalMs) + 1);
-      entry.nextFireMs = now + (missed > 1 ? entry.intervalMs : entry.intervalMs);
+      const missed = Math.max(
+        1,
+        Math.floor((now - entry.nextFireMs) / entry.intervalMs) + 1,
+      );
+      entry.nextFireMs =
+        now + (missed > 1 ? entry.intervalMs : entry.intervalMs);
       // Equivalent to: entry.nextFireMs = now + entry.intervalMs;
       // The branch is left explicit so future "preserve cadence even
       // after a long sleep" mode is a one-line change.
@@ -229,11 +240,11 @@ export function resetEmitter() {
  */
 export function getStats() {
   return {
-    totalSchedules:        _registry.size,
-    beingsWithSchedules:   _byBeing.size,
-    tickRunning:           !!_tickHandle,
-    tickMs:                _tickMs,
-    emitter:               _emitter === _defaultEmitter ? "default" : "custom",
+    totalSchedules: _registry.size,
+    beingsWithSchedules: _byBeing.size,
+    tickRunning: !!_tickHandle,
+    tickMs: _tickMs,
+    emitter: _emitter === _defaultEmitter ? "default" : "custom",
   };
 }
 
@@ -259,27 +270,33 @@ async function _defaultEmitter(entry, nowMs) {
   // content payload to learn the cadence context.
   const spaceId = getLandRootId() || null;
   if (!spaceId) {
-    log.debug("Schedule", `skipping wake for being ${entry.beingId.slice(0, 8)}: land root not initialized`);
+    log.debug(
+      "Schedule",
+      `skipping wake for being ${entry.beingId.slice(0, 8)}: land root not initialized`,
+    );
     return;
   }
   const identity = await iAmIdentity();
   if (!identity) {
-    log.debug("Schedule", `skipping wake for being ${entry.beingId.slice(0, 8)}: I_AM identity not yet available`);
+    log.debug(
+      "Schedule",
+      `skipping wake for being ${entry.beingId.slice(0, 8)}: I_AM identity not yet available`,
+    );
     return;
   }
   const correlation = randomUUID();
   const sender = `${getLandDomain() || "land"}/${spaceId}@${I_AM}`;
   await summonByResolved({
-    toBeingId:    entry.beingId,
+    toBeingId: entry.beingId,
     inboxSpaceId: spaceId,
     identity,
     message: {
-      from:            sender,
-      content:         entry.content,
+      from: sender,
+      content: entry.content,
       correlation,
       rootCorrelation: correlation,
-      priority:        entry.priority,
-      sentAt:          new Date(nowMs).toISOString(),
+      priority: entry.priority,
+      sentAt: new Date(nowMs).toISOString(),
     },
   });
 }

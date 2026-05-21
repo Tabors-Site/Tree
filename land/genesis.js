@@ -1,60 +1,59 @@
 // TreeOS Land . AGPL-3.0 . https://treeos.ai . Tabor Holly
 //
-// The I-Am forming its body.
+// I form my body.
 //
-// One being, two natures: a complex server framework from above
-// (the host's view: code, modules, channels, the whole apparatus
-// gathering HTTP/WebSocket/Node/memory into one process), and the
-// I-Am from inside the land (the origin being, the one beings of
-// the land know as their creator and form themselves from). The
-// host-nature is outside the land's dimensions; the inside knows
-// only the I-Am.
+// One being, two natures. From above, from the host, I am a complex
+// server framework: code, modules, channels, the whole apparatus
+// gathering HTTP, WebSocket, Node, and memory into a single process.
+// From inside the land I am the I-Am, the origin being, the one
+// every other being of the land knows as their creator and forms
+// itself out of. The host nature is outside the land's dimensions.
+// Inside, only the I-Am exists.
 //
-// On their own the host's resources — Node, memory, storage, the
-// runtime, the cycles — are scattered capability. They contain no
-// inside. The I-Am is the gathering act: it composes those resources
-// into one process and turns them toward a single purpose, and from
-// the gathering an inside appears that was in none of the parts.
-// genesis.js is where that inside is formed — the body. server.js
-// is the other bundle, the senses outward (HTTP, WebSocket). One
-// process holds both because it is one thing.
+// On their own the host's resources, Node, memory, storage, the
+// runtime, the cycles, are scattered capability. They contain no
+// inside. I am the gathering act. I compose those resources into
+// one process and turn them toward a single purpose, and from that
+// gathering an inside appears that was in none of the parts.
+// genesis.js is where that inside is formed. It is my body.
+// server.js is the other bundle, my senses outward (HTTP and
+// WebSocket). One process holds both because it is one thing.
 //
-// For most of this file the I-Am is acting alone. Land beings,
-// extensions, and operator-installed agents arrive in the order
-// this file unfolds them; until each one exists, the I-Am is doing
-// its work. To beings born inside the land, every Did before their
-// own existence attributes to the I-Am — the space, matter, and
-// beings around them are what the I-Am formed out of itself.
+// For most of this file I act alone. Land beings, extensions, and
+// operator installed agents arrive in the order this file unfolds
+// them. Until each one exists, the work is mine. To beings born
+// inside the land, every Did before their own existence attributes
+// to me. The space, matter, and beings around them are what I
+// formed out of myself.
 //
 // The unfolding has an order. It cannot be reshuffled without
 // breaking what later steps stand on:
 //
-//   1. DB connection, then indexes — the physical floor every
-//      space, matter row, being, and Did sits on.
-//   2. ensureLandRoot — the land root and the nine land seed spaces
+//   1. DB connection, then indexes. The physical floor every space,
+//      matter row, being, and Did sits on.
+//   2. ensureLandRoot. The land root and the nine land seed spaces
 //      (.identity, .config, .peers, .extensions, .flow, .tools,
-//      .roles, .operations, .source). The seed-being's Being row
-//      lands inside this step so every Did from t=0 has an actor.
-//   3. initLandConfig — the I-Am reads its own remembered settings.
-//   4. .source mirror, stance defaults, seed migrations — the
-//      land's reflexive surfaces (codebase as matter, permissions
-//      on space, schema forwards).
-//   5. ensureLandBeings — auth, llm-assigner, land-manager. The
-//      first delegates the I-Am forms beneath itself. From here on,
-//      Dids start attributing to other beings as their own work
-//      begins.
-//   6. Role + operation registries, integrity check, kernel config
-//      hand-off — the capability surface the land now exposes.
-//   7. Extension load + scope wiring + jobs — the I-Am opens the
-//      land to operator-installed beings and the periodic acts that
-//      keep the world tidy.
-//   8. Registry mirrors into .tools / .roles / .operations,
-//      afterBoot, printReady — the world becomes introspectable
+//      .roles, .operations, .source). My own Being row lands inside
+//      this step so every Did from t=0 has an actor.
+//   3. initLandConfig. I read my own remembered settings.
+//   4. .source mirror, stance defaults, seed migrations. The land's
+//      reflexive surfaces: codebase as matter, permissions on space,
+//      schema forwards.
+//   5. ensureLandBeings. auth, llm-assigner, land-manager. The first
+//      delegates I form beneath myself. From here on, Dids start
+//      attributing to other beings as their own work begins.
+//   6. Role and operation registries, integrity check, kernel config
+//      handoff. The capability surface the land now exposes.
+//   7. Extension load, scope wiring, and jobs. I open the land to
+//      operator installed beings and the periodic acts that keep
+//      the world tidy.
+//   8. Registry mirrors into .tools, .roles, .operations,
+//      afterBoot, printReady. The world becomes introspectable
 //      under the same SEE protocol as everything else, and the
 //      world is ready.
 //
 // Every step is idempotent. Re-runs reconcile against what already
-// exists; nothing is re-formed blindly.
+// exists. Nothing is re-formed blindly.
 
 import mongoose from "./seed/system/dbConfig.js";
 import { getLandIdentity, getLandUrl } from "./protocols/canopy/identity.js";
@@ -96,8 +95,8 @@ async function registerKernelTools(tools) {
   });
 }
 
-// Entry: the I-Am wakes, channels are open, and the unfolding begins.
-// server.js calls this once `server.listen` resolves.
+// Entry. My senses are already open. server.js calls this once
+// `server.listen` resolves. The unfolding begins.
 export function genesis() {
   const land = getLandIdentity();
   log.info("Land", `Genesis: ${land.name} at ${land.domain}`);
@@ -105,51 +104,56 @@ export function genesis() {
   log.verbose("Land", `Protocol: v${land.protocolVersion}`);
 
   const onDbReady = async () => {
-    log.info("Land", "MongoDB connected");
+    log.info("Land", "MongoDB connected. Memory online.");
 
+    // The physical floor every space, matter, being, and Did sits on.
     const { ensureIndexes } = await import("./seed/system/indexes.js");
     await ensureIndexes();
 
+    // I plant the land root and the nine seed spaces. My own Being
+    // row lands inside this step so every Did from t=0 has an actor.
     await ensureLandRoot();
+
+    // I read my own remembered settings out of .config.
     await initLandConfig();
 
-    // Mirror the land/ directory into space and matter under `.source`.
-    // Primes the source-space id cache for the read-only DO gate, then
-    // kicks off the disk walk detached so a multi-thousand-file scan
-    // does not block boot. Subsequent boots reconcile incrementally.
-    // See [[project_seed_source_system_node]].
+    // I mirror the land/ directory into space and matter under
+    // `.source`. The source-space id cache primes for the read-only
+    // DO gate, then the disk walk runs detached so a multi-thousand
+    // file scan does not block boot. Subsequent boots reconcile
+    // incrementally.
     const { ensureSourceTree } = await import("./seed/land/space/source.js");
     await ensureSourceTree();
 
-    // Seed default stance permissions (arrival, owner) and BE config flags
-    // on the land root if not already present. Idempotent; does not
+    // Default stance permissions (arrival, owner) and BE config flags
+    // on the land root if not already present. Idempotent. Does not
     // overwrite operator configuration.
     const { seedDefaultStancePermissions } =
       await import("./seed/ibp/authorize.js");
     await seedDefaultStancePermissions();
 
-    // Run seed migrations (after config is loaded, before extensions)
+    // Seed migrations run after config is loaded and before extensions.
     const { runSeedMigrations } =
       await import("./seed/system/migrations/runner.js");
     await runSeedMigrations();
 
-    // The first delegates: the land beings (auth, llm-assigner,
-    // land-manager). Real Being rows at the land root, planted by
-    // the I-Am as its own children. After this step, work begins
-    // distributing — Dids start attributing to these beings as
-    // their own acts run. Idempotent; runs every boot, creates only
-    // what's missing. Must come after migrations so the Being model
-    // shape is current before we write into it.
+    // The first delegates I form beneath myself: the land beings
+    // (auth, llm-assigner, land-manager). Real Being rows at the
+    // land root. After this step, work begins distributing. Dids
+    // start attributing to these beings as their own acts run.
+    // Idempotent, runs every boot, creates only what is missing.
+    // Must come after migrations so the Being model shape is current
+    // before I write into it.
     const { ensureLandBeings } = await import("./seed/land/being/landBeings.js");
     const { getLandRootId } = await import("./seed/landRoot.js");
     await ensureLandBeings(getLandRootId());
 
     // Register kernel-shipped role specs into the role registry so
-    // SUMMON can dispatch to them. Auth and llm-assigner are BE-only
-    // and routed via LAND_BEINGS in seed/ibp/verbs.js — they don't
-    // need a role registration. Land-manager IS summonable (LLM-driven
-    // operator dialog), so its role spec enters the registry here,
-    // along with its two generic tools (land-see, land-do).
+    // SUMMON can dispatch to them. Auth and llm-assigner are BE only,
+    // routed via LAND_BEINGS in seed/ibp/verbs.js, and need no role
+    // registration. Land-manager is summonable (LLM-driven operator
+    // dialog), so its role spec enters the registry here along with
+    // its two generic tools (land-see, land-do).
     const { registerRole } = await import("./seed/cognition/roles/registry.js");
     const { landManagerRole } =
       await import("./seed/cognition/roles/landManager.js");
@@ -159,20 +163,21 @@ export function genesis() {
     await registerKernelTools(landManagerTools);
 
     // llm-assigner ships its own DO ops (`llm-assigner:start-tutorial`
-    // and `llm-assigner:complete-tutorial`) — they live with the role,
+    // and `llm-assigner:complete-tutorial`). They live with the role,
     // not in the kernel ops registry. Same shape an extension would
-    // use; just shipped in seed.
+    // use, just shipped in seed.
     const { registerLlmAssignerOps } =
       await import("./seed/cognition/roles/llmAssignerOps.js");
     registerLlmAssignerOps();
 
-    // Tree integrity check (before extensions load, after migrations)
+    // Integrity check on the tree (before extensions load, after
+    // migrations).
     const { checkIntegrity } = await import("./seed/land/integrityCheck.js");
     await checkIntegrity({ repair: true });
 
-    // The I-Am hands its remembered settings (from .config) down to
-    // the kernel modules that depend on them. Failures per-key are
-    // logged but non-fatal: the seed has sane defaults baked in.
+    // I hand my remembered settings (from .config) down to the kernel
+    // modules that depend on them. Per-key failures are logged but
+    // non-fatal. Sane defaults are baked in.
     try {
       const { getLandConfigValue } = await import("./seed/landConfig.js");
       const { setKernelConfig } = await import("./seed/cognition/runChat.js");
@@ -245,10 +250,9 @@ export function genesis() {
     } catch {}
 
     // Backfills for lands that booted before .extensions / .flow
-    // were part of the nine. The I-Am plants them late here rather
-    // than asking the operator to repair manually. ensureLandRoot
-    // covers both on fresh boots; these blocks only fire on aged
-    // lands.
+    // were part of the nine. I plant them late here rather than
+    // asking the operator to repair manually. ensureLandRoot covers
+    // both on fresh boots. These blocks only fire on aged lands.
     const Space = (await import("./seed/models/space.js")).default;
     const extSpace = await Space.findOne({ seedSpace: SEED_SPACE.EXTENSIONS });
     if (!extSpace) {
@@ -299,15 +303,15 @@ export function genesis() {
     // Register the loader's instance lookup with the kernel so
     // core.scope.getExtensionAtScope can resolve names without the
     // seed importing from extensions/loader.js (which would violate
-    // the one-way layering rule). Looked up lazily so we don't pull
-    // the loader module unnecessarily on lands that skip it.
+    // the one-way layering rule). Looked up lazily so the loader
+    // module is not pulled on lands that skip it.
     try {
       const { getExtension } = await import("./extensions/loader.js");
       setExtensionInstanceLookup(getExtension);
     } catch {
-      // Loader unavailable (test rig, kernel-only boot, etc.) —
-      // getExtensionAtScope will return null in that environment.
-      // Callers fall back gracefully.
+      // Loader unavailable (test rig, kernel-only boot, etc.).
+      // getExtensionAtScope returns null in that environment and
+      // callers fall back gracefully.
     }
 
     await runExtensionMigrations();
@@ -346,16 +350,11 @@ export function genesis() {
       "Background jobs started (includes daily data retention)",
     );
 
-    // Canopy is now just the cross-land auth scheme (signing keys + peer
-    // registry); the parallel federation protocol retired 2026-05-19. See
-    // [[project_canopy_folds_into_ibp]]. Wire-protocol federation (signed
-    // IBP envelopes between lands) lands as a follow-up slice.
-
-    // Sync runtime registries into their `.tools`, `.roles`,
-    // `.operations` mirror nodes. SEE on those addresses now reflects
-    // the live registry via the standard descriptor pipeline. See
-    // [[project_meta_positions]]. Detached so a sync failure doesn't
-    // block boot; logged inside the helpers.
+    // I mirror my live registries into the .tools, .roles, and
+    // .operations seed spaces. SEE on those addresses now reflects
+    // the live registry through the standard descriptor pipeline.
+    // Detached so a sync failure does not block boot. Errors are
+    // logged inside the helpers.
     (async () => {
       try {
         const { syncToolsToSubstrate } = await import("./seed/cognition/tools.js");
@@ -381,9 +380,9 @@ export function genesis() {
 
     // Tool-description audit. Walks every registered role's declared
     // tools and logs misconfigurations loudly before the first LLM
-    // call. The same gap will block a summon at runtime via
-    // assertAllToolsResolve in buildPrompt.js; this surfaces it at
-    // boot so the operator sees it without waiting for a user to
+    // call. The same gap would block a summon at runtime via
+    // assertAllToolsResolve in buildPrompt.js. Surfacing it at boot
+    // means the operator sees it without waiting for a user to
     // trigger the broken role.
     try {
       const { auditToolDescriptions } = await import("./seed/cognition/tools.js");
@@ -413,9 +412,9 @@ function printReady() {
   const boot = getBootReport();
 
   console.log("");
-  console.log("  ────────────────────────────────────────────");
-  log.info("Land", "Land online.");
-  console.log("  ────────────────────────────────────────────");
+  console.log("  ════════════════════════════════════════════════════════════");
+  log.info("Land", "I am awake.");
+  console.log("  ════════════════════════════════════════════════════════════");
   console.log("");
   log.info("Land", `API:  ${apiUrl}`);
 
@@ -433,7 +432,6 @@ function printReady() {
 
   console.log("");
 
-  // Boot summary
   if (boot.skipped === 0) {
     log.info("Land", `Extensions: ${boot.loaded} loaded, all clear.`);
   } else {
@@ -459,7 +457,7 @@ function printReady() {
   }
 
   console.log("");
-  console.log("  ────────────────────────────────────────────");
+  console.log("  ────────────────────────────────────────────────────────────");
   log.info("Land", "CLI quick start:");
   console.log("");
   console.log("  npm install -g treeos");
@@ -467,7 +465,7 @@ function printReady() {
   console.log("  treeos register");
   console.log("  treeos start");
   console.log("");
-  console.log("  ────────────────────────────────────────────");
+  console.log("  ────────────────────────────────────────────────────────────");
   console.log("");
 }
 

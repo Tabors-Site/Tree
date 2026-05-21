@@ -79,7 +79,7 @@ export function registerLlmAssignerOps() {
           title:       "Setting up an LLM connection",
         },
         parentMatterId: null,
-        metadata: new Map([
+        qualities: new Map([
           ["tutorial", { purpose: LLM_ASSIGNER_TUTORIAL_MARK }],
         ]),
       });

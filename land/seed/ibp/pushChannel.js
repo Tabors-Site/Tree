@@ -1,22 +1,24 @@
 // TreeOS Seed . AGPL-3.0 . https://treeos.ai . Tabor Holly
 //
-// Push channel.
+// Push channel. How I reach the speaker without being asked.
 //
-// Seed-side interface for "push an event to a being's connected clients."
-// Inverts the previous dependency where seed imported emitToBeing /
-// emitNavigate / getIO directly from transports/ws/websocket.js — that
-// violated the layering rule (transports → protocols → seed; never the
-// other way).
+// Most of IBP is request/response: a SEE / DO / SUMMON / BE comes
+// in, I answer. The push channel is the other direction. When I
+// SUMMON a being whose client is connected, or when a SEE-subscribed
+// position changes underneath them, I have to push to that client
+// without waiting for them to ask. This file is how.
 //
-// Each transport that can deliver pushes calls `setPushChannel({...})`
-// at boot. The seed bundle exposes the registered channel through this
-// module's proxy functions. When no transport has registered (CLI-only
-// run, tests, dry-boot), every proxy no-ops and getIO/getHttpServer
-// return null — extensions that try to push just see "nothing happened"
-// without crashing.
+// Layering inversion. I never import from transports — that would
+// violate the layering rule (transports → protocols → seed; never
+// the other way). Each transport that can deliver pushes calls
+// `setPushChannel({...})` at boot to register its emitter; I expose
+// the registered channel through proxy functions. When no transport
+// has registered (CLI-only run, tests, dry-boot), every proxy
+// no-ops and getIO / getHttpServer return null — callers that try
+// to push just see "nothing happened" without crashing.
 //
-// Matches the same inversion pattern already used by the schedule
-// emitter (see seed/cognition/wakeSchedule.js setScheduleEmitter).
+// Same inversion pattern as the schedule emitter (see
+// seed/cognition/wakeSchedule.js setScheduleEmitter).
 
 import log from "../system/log.js";
 

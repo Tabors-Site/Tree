@@ -1,21 +1,36 @@
 // TreeOS Seed . AGPL-3.0 . https://treeos.ai . Tabor Holly
 //
-// Document size guard.
+// The size guard. MongoDB's hard wall, on the substrate's side.
 //
-// Protects every MongoDB document from hitting the 16MB BSON limit.
-// Every quality write path in the kernel calls checkWriteSize before
-// writing. No exceptions. No direct $set or $push on a primitive's
-// qualities without size checking first.
+// MongoDB caps every BSON document at 16MB. The qualities Map on a
+// Space, Being, or Matter grows freely under that ceiling. Without a
+// guard, an extension's well-meaning write can be the one that
+// crosses it — and from there the whole document is unwritable,
+// permanently. I will not let that happen on my land.
 //
-// Default ceiling: 14MB (2MB headroom under MongoDB's 16MB limit).
-// Configurable via maxDocumentSizeBytes in .config.
+// Every quality write path the kernel exposes calls checkWriteSize
+// (or its strict variant guardQualityWrite) before the write lands.
+// No exceptions. No direct $set on a qualities namespace without
+// checking first.
 //
-// Fires onDocumentPressure hook at 80% capacity so extensions can
-// react (compress, archive, alert) before writes start failing.
+// Default ceiling: 14MB. The 2MB headroom under Mongo's 16MB is
+// space for the BSON-vs-JSON overhead and concurrent writes that
+// slip in between the check and the write. Configurable via
+// maxDocumentSizeBytes in .config.
+//
+// Pressure signal. At 80% of the ceiling I fire onDocumentPressure
+// so extensions can compress, archive, or alert before writes start
+// failing. The signal is fire-and-forget; the write still proceeds
+// if it fits.
+//
+// Universal. The qualities Maps on Space, Being, and Matter all
+// flow through this guard. Cascade results on .flow partitions flow
+// through it too. The file lives directly under land/ rather than
+// inside one primitive's subfolder.
 
-import { getLandConfigValue } from "../../landConfig.js";
-import { hooks } from "../../system/hooks.js";
-import log from "../../system/log.js";
+import { getLandConfigValue } from "../landConfig.js";
+import { hooks } from "../system/hooks.js";
+import log from "../system/log.js";
 
 const DEFAULT_MAX_BYTES = 14 * 1024 * 1024; // 14MB
 const PRESSURE_THRESHOLD = 0.8; // 80%
@@ -39,7 +54,7 @@ function getMaxBytes() {
  * For lean() documents, works directly on the plain object.
  */
 // BSON overhead factor: BSON encoding adds type headers, key length bytes,
-// and 64-bit floats. For Map-heavy documents like spaces with extension metadata,
+// and 64-bit floats. For Map-heavy documents like spaces with extension qualities,
 // BSON can be 20-30% larger than JSON. Factor of 1.3 prevents the 14MB JSON
 // estimate from becoming 17MB+ BSON, which would exceed MongoDB's 16MB limit.
 const BSON_OVERHEAD_FACTOR = 1.3;
@@ -61,7 +76,7 @@ function estimateDocSize(doc) {
  * @param {object} doc - Mongoose document or lean object
  * @param {number} additionalBytes - estimated size of the incoming write
  * @param {object} [opts]
- * @param {string} [opts.documentType] - "space", "user", or "system"
+ * @param {string} [opts.documentType] - "being", "space", "matter", or "system"
  * @param {string} [opts.documentId] - the document's _id
  * @returns {{ ok: boolean, currentSize: number, maxSize: number, headroom: number }}
  */
@@ -74,15 +89,23 @@ export function checkWriteSize(doc, additionalBytes = 0, opts = {}) {
   // Fire pressure hook at 80% (async, fire-and-forget)
   if (projectedSize >= maxSize * PRESSURE_THRESHOLD) {
     const documentType = opts.documentType || "space";
-    const documentId = opts.documentId || (doc._id ? String(doc._id) : "unknown");
-    hooks.run("onDocumentPressure", {
-      documentType,
-      documentId,
-      currentSize,
-      projectedSize,
-      maxSize,
-      percent: Math.round((projectedSize / maxSize) * 100),
-    }).catch(err => log.debug("DocumentGuard", `onDocumentPressure hook error: ${err.message}`));
+    const documentId =
+      opts.documentId || (doc._id ? String(doc._id) : "unknown");
+    hooks
+      .run("onDocumentPressure", {
+        documentType,
+        documentId,
+        currentSize,
+        projectedSize,
+        maxSize,
+        percent: Math.round((projectedSize / maxSize) * 100),
+      })
+      .catch((err) =>
+        log.debug(
+          "DocumentGuard",
+          `onDocumentPressure hook error: ${err.message}`,
+        ),
+      );
 
     if (projectedSize > maxSize) {
       return {
@@ -105,7 +128,7 @@ export function checkWriteSize(doc, additionalBytes = 0, opts = {}) {
 }
 
 /**
- * Estimate the byte size of a value that will be written to metadata.
+ * Estimate the byte size of a value that will be written to qualities.
  * Use this before calling checkWriteSize to get the additionalBytes.
  */
 export function estimateWriteSize(data) {
@@ -120,7 +143,7 @@ export function estimateWriteSize(data) {
 }
 
 /**
- * Guard a metadata write. Checks size, rejects if over limit.
+ * Guard a qualities write. Checks size, rejects if over limit.
  * Returns { ok: true } or throws with DOCUMENT_SIZE_EXCEEDED info.
  *
  * @param {object} doc - the document being written to
@@ -132,7 +155,7 @@ export function guardQualityWrite(doc, data, opts = {}) {
   const check = checkWriteSize(doc, writeBytes, opts);
   if (!check.ok) {
     const err = new Error(
-      `Document size would exceed limit: ${Math.round(check.projectedSize / 1024)}KB projected, ${Math.round(check.maxSize / 1024)}KB max`
+      `Document size would exceed limit: ${Math.round(check.projectedSize / 1024)}KB projected, ${Math.round(check.maxSize / 1024)}KB max`,
     );
     err.code = "DOCUMENT_SIZE_EXCEEDED";
     err.detail = {

@@ -72,7 +72,9 @@ import { getSpaceName } from "../land/space/spaceFetch.js";
  */
 export async function buildPrompt(role, ctx) {
   if (!role || typeof role.prompt !== "function") {
-    throw new Error(`buildPrompt: role "${role?.name || "(unnamed)"}" has no prompt()`);
+    throw new Error(
+      `buildPrompt: role "${role?.name || "(unnamed)"}" has no prompt()`,
+    );
   }
 
   // Hard gate: every tool the role declares (across all four verbs)
@@ -84,7 +86,7 @@ export async function buildPrompt(role, ctx) {
   assertAllToolsResolve(role);
 
   const beingName = ctx.being?.name || ctx.name || "(unknown being)";
-  const roleName  = role.name;
+  const roleName = role.name;
   const spaceName = await resolveSpaceName(ctx);
 
   const identity = spaceName
@@ -123,15 +125,15 @@ async function renderPreloadedSee(role, ctx) {
 function renderCapabilities(role) {
   const sections = [];
 
-  const seeBlock     = renderToolList(role.canSee,    "see");
-  const doBlock      = renderToolList(role.canDo,     "do");
-  const summonBlock  = renderToolList(role.canSummon, "summon");
-  const beBlock      = renderToolList(role.canBe,     "be", "(for creating new beings)");
+  const seeBlock = renderToolList(role.canSee, "see");
+  const doBlock = renderToolList(role.canDo, "do");
+  const summonBlock = renderToolList(role.canSummon, "summon");
+  const beBlock = renderToolList(role.canBe, "be", "(for creating new beings)");
 
-  if (seeBlock)    sections.push(seeBlock);
-  if (doBlock)     sections.push(doBlock);
+  if (seeBlock) sections.push(seeBlock);
+  if (doBlock) sections.push(doBlock);
   if (summonBlock) sections.push(summonBlock);
-  if (beBlock)     sections.push(beBlock);
+  if (beBlock) sections.push(beBlock);
 
   // Exit gate. Architectural: the seed enforces this. Render after the
   // capability list so the LLM sees it as the closing instruction in
@@ -171,21 +173,23 @@ function renderToolList(names, label, suffix = null) {
  */
 function assertAllToolsResolve(role) {
   const declared = [
-    ...(role.canSee    || []),
-    ...(role.canDo     || []),
+    ...(role.canSee || []),
+    ...(role.canDo || []),
     ...(role.canSummon || []),
-    ...(role.canBe     || []),
+    ...(role.canBe || []),
   ];
   const missing = declared.filter((name) => !getToolDescription(name));
   if (missing.length === 0) return;
-  log.error("Prompt",
+  log.error(
+    "Prompt",
     `Role "${role.name}" cannot be summoned: ${missing.length} declared tool(s) ` +
-    `have no registered description (${missing.join(", ")}).`);
+      `have no registered description (${missing.join(", ")}).`,
+  );
   throw new Error(
     `Role "${role.name}" cannot be summoned: ${missing.length} declared tool(s) ` +
-    `have no registered description (${missing.join(", ")}). The tools either ` +
-    `failed to register or the role's canSee/canDo/canSummon/canBe names a ` +
-    `tool that does not exist.`,
+      `have no registered description (${missing.join(", ")}). The tools either ` +
+      `failed to register or the role's canSee/canDo/canSummon/canBe names a ` +
+      `tool that does not exist.`,
   );
 }
 
@@ -218,17 +222,21 @@ async function resolveSpaceName(ctx) {
 // "this-space" renders a one-line summary of where the being is now.
 // Roles that want a richer block register their own resolver under
 // a different name and reference it in role.see.
-registerSeeResolver("this-space", async (ctx) => {
-  const spaceId = ctx.currentSpace || ctx.targetSpace || ctx.rootId;
-  if (!spaceId) return null;
-  try {
-    const name = await getSpaceName(spaceId);
-    return name
-      ? `[Space] ${name} (${String(spaceId).slice(0, 8)})`
-      : `[Space] ${spaceId}`;
-  } catch {
-    return null;
-  }
-}, "seed");
+registerSeeResolver(
+  "this-space",
+  async (ctx) => {
+    const spaceId = ctx.currentSpace || ctx.targetSpace || ctx.rootId;
+    if (!spaceId) return null;
+    try {
+      const name = await getSpaceName(spaceId);
+      return name
+        ? `[Space] ${name} (${String(spaceId).slice(0, 8)})`
+        : `[Space] ${spaceId}`;
+    } catch {
+      return null;
+    }
+  },
+  "seed",
+);
 
 log.verbose("BuildPrompt", "assembler ready; default resolvers registered");

@@ -1,27 +1,23 @@
 // TreeOS Seed . AGPL-3.0 . https://treeos.ai . Tabor Holly
 //
-// .source — the seed's own source tree as substrate.
+// My own source, as substrate.
 //
-// At boot, seed walks the land/ directory and plants a recursive
-// filesystem-origin matter tree under the `.source` land seed space.
-// Each directory becomes a folder-matter; each file becomes a
-// file-matter; parent-child relationships are captured through
-// parentMatterId so the matter tree faithfully mirrors disk.
+// At boot I walk the land/ directory on disk and plant a recursive
+// filesystem-origin Matter tree under the .source land seed space.
+// Each directory becomes a folder-Matter; each file becomes a
+// file-Matter; parentMatterId chains the tree so what's under
+// .source faithfully mirrors what's on the floor.
 //
-// The codebase becomes substrate-native at the right layer: the AI
-// (or any being) running inside the land can SEE its own implementation
-// through the same protocol it uses for every other position.
+// The point is reflection. A being running inside this land can SEE
+// the code I am running through the same protocol it uses to look at
+// anything else. The codebase is substrate at the layer where every
+// other position is substrate.
 //
-// Read-only sync direction. The substrate cannot mutate seed files
-// through verbs — DO operations against `.source` matters reject with
-// ORIGIN_READ_ONLY (gate lives in ibp/verbs/do.js). The kernel's
-// reconciliation walk uses direct Matter saves and bypasses the
-// public createMatter path because that path also (correctly)
-// refuses to author into land seed spaces.
-//
-// See [[project_seed_source_system_node]] (decision 2026-05-19) and
-// [[project_substrate_as_universal_workspace]] (the canonical proof
-// case for parentMatterId).
+// One-way sync. Disk → substrate; never the other way. DO operations
+// against .source Matter reject with ORIGIN_READ_ONLY (gate in
+// ibp/verbs/do.js). The reconciliation walk uses direct Matter
+// saves and bypasses the public createMatter path because that path
+// also (correctly) refuses to author into land seed spaces.
 
 import fs from "fs";
 import path from "path";
@@ -34,11 +30,12 @@ import { MATTER_ORIGIN } from "../matter/origins.js";
 import { SEED_SPACE, I_AM } from "./seedSpaces.js";
 
 const __filename = fileURLToPath(import.meta.url);
-const __dirname  = path.dirname(__filename);
+const __dirname = path.dirname(__filename);
 
-// Default root: the land/ directory (two levels above seed/system/).
-// SOURCE_TREE_ROOT env var overrides for tests or non-standard layouts.
-const DEFAULT_SOURCE_ROOT = path.resolve(__dirname, "../..");
+// Default root: the land/ directory (three levels above this file,
+// which lives at seed/land/space/). SOURCE_TREE_ROOT env var overrides
+// for tests or non-standard layouts.
+const DEFAULT_SOURCE_ROOT = path.resolve(__dirname, "../../..");
 
 // Entries skipped during the walk. Build matters, dependency trees,
 // runtime data, secrets, and OS noise. The list is conservative; the
@@ -67,7 +64,7 @@ const DEFAULT_IGNORE = new Set([
 ]);
 
 // Conservative file-size cap: any single file over this gets its
-// metadata captured but no extra processing. Prevents accidentally
+// qualities captured but no extra processing. Prevents accidentally
 // pulling huge binary blobs through the walk.
 const DEFAULT_MAX_FILE_BYTES = 50 * 1024 * 1024; // 50 MB
 
@@ -92,13 +89,19 @@ let sourceSpaceIdCache = null;
  * @param {boolean} [opts.detached]   - run walk in background (default true)
  */
 export async function ensureSourceTree(opts = {}) {
-  const rootPath = opts.rootPath || process.env.SOURCE_TREE_ROOT || DEFAULT_SOURCE_ROOT;
-  const ignore   = opts.ignore   || DEFAULT_IGNORE;
+  const rootPath =
+    opts.rootPath || process.env.SOURCE_TREE_ROOT || DEFAULT_SOURCE_ROOT;
+  const ignore = opts.ignore || DEFAULT_IGNORE;
   const detached = opts.detached !== false;
 
-  const sourceSpace = await Space.findOne({ seedSpace: SEED_SPACE.SOURCE }).select("_id").lean();
+  const sourceSpace = await Space.findOne({ seedSpace: SEED_SPACE.SOURCE })
+    .select("_id")
+    .lean();
   if (!sourceSpace) {
-    log.warn("Source", `.source land seed space missing; cannot populate source tree`);
+    log.warn(
+      "Source",
+      `.source land seed space missing; cannot populate source tree`,
+    );
     return null;
   }
   sourceSpaceIdCache = String(sourceSpace._id);
@@ -113,7 +116,10 @@ export async function ensureSourceTree(opts = {}) {
     try {
       const stats = await syncSourceTree({ rootPath, ignore });
       const ms = Date.now() - started;
-      log.info("Source", `synced .source from ${rootPath} in ${ms}ms: +${stats.created} ~${stats.updated} -${stats.removed} =${stats.kept}`);
+      log.info(
+        "Source",
+        `synced .source from ${rootPath} in ${ms}ms: +${stats.created} ~${stats.updated} -${stats.removed} =${stats.kept}`,
+      );
     } catch (err) {
       log.error("Source", `sync failed: ${err.message}`);
     }
@@ -131,10 +137,16 @@ export async function ensureSourceTree(opts = {}) {
  *
  * @returns {{ created: number, updated: number, removed: number, kept: number }}
  */
-export async function syncSourceTree({ rootPath, ignore = DEFAULT_IGNORE } = {}) {
-  const targetPath = rootPath || process.env.SOURCE_TREE_ROOT || DEFAULT_SOURCE_ROOT;
+export async function syncSourceTree({
+  rootPath,
+  ignore = DEFAULT_IGNORE,
+} = {}) {
+  const targetPath =
+    rootPath || process.env.SOURCE_TREE_ROOT || DEFAULT_SOURCE_ROOT;
 
-  const sourceSpace = await Space.findOne({ seedSpace: SEED_SPACE.SOURCE }).select("_id").lean();
+  const sourceSpace = await Space.findOne({ seedSpace: SEED_SPACE.SOURCE })
+    .select("_id")
+    .lean();
   if (!sourceSpace) throw new Error(".source land seed space not found");
   const sourceSpaceId = String(sourceSpace._id);
   sourceSpaceIdCache = sourceSpaceId;
@@ -159,10 +171,17 @@ export async function syncSourceTree({ rootPath, ignore = DEFAULT_IGNORE } = {})
       kind: "directory",
     });
     stats.created++;
-  } else if (rootMatter.content?.path !== targetPath || rootMatter.name !== rootName) {
+  } else if (
+    rootMatter.content?.path !== targetPath ||
+    rootMatter.name !== rootName
+  ) {
     // Source root moved on disk or renamed; update in place.
     rootMatter.name = rootName;
-    rootMatter.content = { ...rootMatter.content, path: targetPath, kind: "directory" };
+    rootMatter.content = {
+      ...rootMatter.content,
+      path: targetPath,
+      kind: "directory",
+    };
     await rootMatter.save();
     stats.updated++;
   } else {
@@ -202,7 +221,13 @@ export function isSourceSpaceId(spaceId) {
 // RECONCILIATION
 // ────────────────────────────────────────────────────────────────────
 
-async function reconcileChildren({ diskPath, parentMatterId, sourceSpaceId, ignore, stats }) {
+async function reconcileChildren({
+  diskPath,
+  parentMatterId,
+  sourceSpaceId,
+  ignore,
+  stats,
+}) {
   let entries;
   try {
     entries = await fs.promises.readdir(diskPath, { withFileTypes: true });
@@ -224,8 +249,10 @@ async function reconcileChildren({ diskPath, parentMatterId, sourceSpaceId, igno
   const existing = await Matter.find({
     parentMatterId,
     origin: MATTER_ORIGIN.FILESYSTEM,
-  }).select("_id name content").lean();
-  const existingByName = new Map(existing.map(a => [a.name, a]));
+  })
+    .select("_id name content")
+    .lean();
+  const existingByName = new Map(existing.map((a) => [a.name, a]));
 
   // Create / update / recurse.
   for (const [name, entry] of onDisk) {
@@ -259,14 +286,27 @@ async function reconcileChildren({ diskPath, parentMatterId, sourceSpaceId, igno
       } else {
         // Refresh path if the rootPath shifted under us.
         if (ex.content?.path !== full) {
-          await Matter.updateOne({ _id: ex._id }, { $set: { content: { ...ex.content, path: full, kind: "directory" } } });
+          await Matter.updateOne(
+            { _id: ex._id },
+            {
+              $set: {
+                content: { ...ex.content, path: full, kind: "directory" },
+              },
+            },
+          );
           stats.updated++;
         } else {
           stats.kept++;
         }
         matterId = String(ex._id);
       }
-      await reconcileChildren({ diskPath: full, parentMatterId: matterId, sourceSpaceId, ignore, stats });
+      await reconcileChildren({
+        diskPath: full,
+        parentMatterId: matterId,
+        sourceSpaceId,
+        ignore,
+        stats,
+      });
       continue;
     }
 
@@ -371,14 +411,21 @@ function contentChanged(prev, next) {
 // ────────────────────────────────────────────────────────────────────
 
 async function createSourceMatter({
-  spaceId, parentMatterId, name, diskPath, kind,
-  size = null, mtime = null, mimeType = null, oversize = false,
+  spaceId,
+  parentMatterId,
+  name,
+  diskPath,
+  kind,
+  size = null,
+  mtime = null,
+  mimeType = null,
+  oversize = false,
 }) {
   const content = { path: diskPath, kind };
-  if (size != null)     content.size = size;
-  if (mtime != null)    content.mtime = mtime;
+  if (size != null) content.size = size;
+  if (mtime != null) content.mtime = mtime;
   if (mimeType != null) content.mimeType = mimeType;
-  if (oversize)         content.oversize = true;
+  if (oversize) content.oversize = true;
 
   const matter = new Matter({
     spaceId,
@@ -387,7 +434,7 @@ async function createSourceMatter({
     name,
     origin: MATTER_ORIGIN.FILESYSTEM,
     content,
-    metadata: new Map([["source", { readOnly: true }]]),
+    qualities: new Map([["source", { readOnly: true }]]),
   });
   await matter.save();
 
@@ -406,31 +453,31 @@ async function createSourceMatter({
 // ────────────────────────────────────────────────────────────────────
 
 const MIME_BY_EXT = {
-  ".js":   "application/javascript",
-  ".mjs":  "application/javascript",
-  ".cjs":  "application/javascript",
-  ".jsx":  "application/javascript",
-  ".ts":   "application/typescript",
-  ".tsx":  "application/typescript",
+  ".js": "application/javascript",
+  ".mjs": "application/javascript",
+  ".cjs": "application/javascript",
+  ".jsx": "application/javascript",
+  ".ts": "application/typescript",
+  ".tsx": "application/typescript",
   ".json": "application/json",
-  ".md":   "text/markdown",
+  ".md": "text/markdown",
   ".html": "text/html",
-  ".css":  "text/css",
+  ".css": "text/css",
   ".scss": "text/x-scss",
-  ".txt":  "text/plain",
-  ".yml":  "application/yaml",
+  ".txt": "text/plain",
+  ".yml": "application/yaml",
   ".yaml": "application/yaml",
   ".toml": "application/toml",
-  ".sh":   "application/x-sh",
-  ".py":   "text/x-python",
-  ".sql":  "application/sql",
-  ".svg":  "image/svg+xml",
-  ".png":  "image/png",
-  ".jpg":  "image/jpeg",
+  ".sh": "application/x-sh",
+  ".py": "text/x-python",
+  ".sql": "application/sql",
+  ".svg": "image/svg+xml",
+  ".png": "image/png",
+  ".jpg": "image/jpeg",
   ".jpeg": "image/jpeg",
-  ".gif":  "image/gif",
-  ".ico":  "image/x-icon",
-  ".pdf":  "application/pdf",
+  ".gif": "image/gif",
+  ".ico": "image/x-icon",
+  ".pdf": "application/pdf",
 };
 
 function mimeTypeFor(filename) {

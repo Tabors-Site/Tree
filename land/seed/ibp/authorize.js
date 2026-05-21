@@ -1,22 +1,33 @@
 // TreeOS Seed . AGPL-3.0 . https://treeos.ai . Tabor Holly
 //
-// Stance Authorization (Layer 4).
+// The gate. Every SEE, DO, SUMMON, and BE passes through me here.
 //
-// One function gates every IBP verb call. The flow:
+// IBP is my communication primitive. This file is what every
+// verb call crosses on its way from being to substrate. One
+// function gates every SEE, DO, SUMMON, and BE. Until a verb passes
+// this gate, nothing else in me hears it.
 //
-//   1. Derive the acting stance's properties (Layer 2 — stanceProperties.js).
-//      Owner / contributor relations, role, home position relations,
-//      operating mode, federation status — all computed from Layer 1
-//      data (Being + Space fields).
+// I am the only exception. I act with universal authority on my own
+// land — my kernel-emitted SUMMONs, my scheduled wakes, my genesis
+// scaffolding — and short past the layered check. Every other
+// being's verb call I evaluate.
 //
-//   2. Look up the applicable permission rule for this verb at the target
-//      position (Layer 3 — metadata.permissions on the position, walking
-//      up the parent chain to the land root). When no rule matches, fall
-//      through to the extension defaults registry, then default deny.
+// How I evaluate:
 //
-//   3. Compare each `requires` entry in the rule against the stance's
-//      derived properties. All must be satisfied. Returns allow or
-//      deny with a reason.
+//   1. I derive the acting stance's properties (Layer 2 —
+//      stanceProperties.js). Owner / contributor relations, role,
+//      home relations, operating mode, federation status — all
+//      computed from Layer 1 data (Being + Space fields).
+//
+//   2. I look up the applicable permission rule for this verb at
+//      the target position (Layer 3 — qualities.permissions on the
+//      position, walking up the parent chain to the land root).
+//      When no rule matches, I fall through to the extension
+//      defaults registry below, then default deny.
+//
+//   3. I compare each `requires` entry in the rule against the
+//      stance's derived properties. All must be satisfied. I return
+//      allow or deny with a reason.
 //
 // Lookup key shape per verb:
 //   see:     "*"                                          (universal for now)
@@ -24,21 +35,22 @@
 //   summon:  "@<qualifier>:<intent>" or "@<qualifier>"    (qualifier supports prefix wildcard)
 //   be:      "<operation>"                                (register|claim|release|switch)
 //
-// Specificity precedence: exact > prefix-wildcard > "*"  per key part.
-// Position precedence: closer position beats farther via parent walk.
+// Specificity precedence: exact > prefix-wildcard > "*" per key
+// part. Position precedence: closer position beats farther via
+// parent walk.
 //
-// Backward compat: during the rules-migration window, when no new-shape
-// rule matches, the function falls back to the older
-// metadata.beings.<stance>.permissions shape (arrival / owner /
-// member). That fallback gets removed once governing's lifecycle has
-// stamped the new-shape rules everywhere.
+// The bottom half of this file holds the default-permission
+// registry that Layer 3 falls through to. Extensions contribute
+// defaults through their manifest's `provides.defaultPermissions`;
+// the loader calls registerDefaultPermissions(extName, perms) at
+// boot.
 
 import Space from "../models/space.js";
 import { getLandRootId } from "../landRoot.js";
 import { getAncestorChain } from "../land/space/ancestorCache.js";
 import { deriveStanceProperties } from "../ibp/stanceProperties.js";
-import { lookupDefault } from "./defaultPermissions.js";
-import { IBP_ERR } from "./errors.js";
+import log from "../system/log.js";
+import { IBP_ERR } from "./protocol.js";
 import { I_AM } from "../land/space/seedSpaces.js";
 
 // ─────────────────────────────────────────────────────────────────────
@@ -49,7 +61,7 @@ import { I_AM } from "../land/space/seedSpaces.js";
 // ancestor walk). These map the legacy "arrival is restricted, anyone
 // else can act" semantics into the unified rule shape:
 //
-//   metadata.permissions.<verb>.<keyParts> = { requires: { ... } }
+//   qualities.permissions.<verb>.<keyParts> = { requires: { ... } }
 //
 // `requires: { arrival: false }` admits every authenticated stance and
 // denies arrival. `requires: {}` admits everyone (arrival included).
@@ -57,16 +69,16 @@ import { I_AM } from "../land/space/seedSpaces.js";
 
 const LAND_ROOT_DEFAULT_PERMISSIONS = Object.freeze({
   // Default SEE / DO / SUMMON: any authenticated being.
-  see:    { "*": { requires: { arrival: false } } },
-  do:     { "*": { requires: { arrival: false } } },
+  see: { "*": { requires: { arrival: false } } },
+  do: { "*": { requires: { arrival: false } } },
   summon: { "*": { requires: { arrival: false } } },
   // BE: arrival can register/claim (so anyone can sign up); only
   // authenticated callers can release/switch their own session.
   be: {
     register: { requires: {} },
-    claim:    { requires: {} },
-    release:  { requires: { arrival: false } },
-    switch:   { requires: { arrival: false } },
+    claim: { requires: {} },
+    release: { requires: { arrival: false } },
+    switch: { requires: { arrival: false } },
   },
 });
 
@@ -90,7 +102,7 @@ const LAND_ROOT_DEFAULT_PERMISSIONS = Object.freeze({
 export async function authorize(args) {
   const { identity, verb, target } = args;
   const beingId = identity?.beingId || null;
-  const spaceId  = target?.spaceId || null;
+  const spaceId = target?.spaceId || null;
 
   // The I_AM has universal authority. The seed is the source of all
   // permission on its land. Authority flows outward from the I_AM;
@@ -109,8 +121,11 @@ export async function authorize(args) {
   // permitted, gated by land-level register_enabled/claim_enabled
   // flags (enforced by the auth-being itself). Without this no one
   // could ever sign up on a fresh land.
-  if (verb === "be" && props.arrival
-      && (args.operation === "register" || args.operation === "claim")) {
+  if (
+    verb === "be" &&
+    props.arrival &&
+    (args.operation === "register" || args.operation === "claim")
+  ) {
     return { ok: true, stance: "arrival" };
   }
 
@@ -123,7 +138,11 @@ export async function authorize(args) {
   // ── Build the lookup key parts for this request ──
   const keyParts = buildKeyParts(args);
   if (!keyParts) {
-    return { ok: false, stance: stanceLabel, reason: `Unknown or unsupported verb shape: ${verb}` };
+    return {
+      ok: false,
+      stance: stanceLabel,
+      reason: `Unknown or unsupported verb shape: ${verb}`,
+    };
   }
 
   // ── Layer 3: walk the parent chain looking for a matching rule ──
@@ -143,7 +162,12 @@ export async function authorize(args) {
     }
   }
   if (defaultRule) {
-    return evaluateRequires(defaultRule, props, stanceLabel, "extension-default");
+    return evaluateRequires(
+      defaultRule,
+      props,
+      stanceLabel,
+      "extension-default",
+    );
   }
 
   // ── Layer 5: default deny ──
@@ -164,7 +188,10 @@ function buildKeyParts(args) {
       return ["*"];
     case "do": {
       if (!args.action) return null;
-      if ((args.action === "set-meta" || args.action === "clear-meta") && args.namespace) {
+      if (
+        (args.action === "set-meta" || args.action === "clear-meta") &&
+        args.namespace
+      ) {
         return [args.action, args.namespace];
       }
       return [args.action];
@@ -199,9 +226,10 @@ async function findMatchingRule({ spaceId, verb, keyParts }) {
   } catch {
     chain = null;
   }
-  const path = Array.isArray(chain) && chain.length
-    ? chain.map((n) => String(n._id))
-    : [String(spaceId)];
+  const path =
+    Array.isArray(chain) && chain.length
+      ? chain.map((n) => String(n._id))
+      : [String(spaceId)];
 
   for (const id of path) {
     const match = await matchOnSpace(id, verb, keyParts);
@@ -211,10 +239,11 @@ async function findMatchingRule({ spaceId, verb, keyParts }) {
 }
 
 async function matchOnSpace(spaceId, verb, keyParts) {
-  const space = await Space.findById(spaceId).select("metadata").lean();
-  const meta = space?.qualities;
-  if (!meta) return null;
-  const perms = meta instanceof Map ? meta.get("permissions") : meta.permissions;
+  const space = await Space.findById(spaceId).select("qualities").lean();
+  const quals = space?.qualities;
+  if (!quals) return null;
+  const perms =
+    quals instanceof Map ? quals.get("permissions") : quals.permissions;
   if (!perms) return null;
   const bucket = perms[verb];
   if (!bucket || typeof bucket !== "object") return null;
@@ -300,11 +329,17 @@ function compareRequirement(propName, expected, props) {
   // positionInHomeDomain, in the target's ancestor chain). Without
   // this, scoped rules like `homeInDomain: "<rulership-id>"` would
   // do a useless string-equality check against a boolean.
-  if (typeof expected === "string" && (propName === "homeInDomain" || propName === "positionInHomeDomain")) {
-    return Array.isArray(props.homeAncestors) && props.homeAncestors.includes(expected);
+  if (
+    typeof expected === "string" &&
+    (propName === "homeInDomain" || propName === "positionInHomeDomain")
+  ) {
+    return (
+      Array.isArray(props.homeAncestors) &&
+      props.homeAncestors.includes(expected)
+    );
   }
 
-  if (expected === true)  return actual === true;
+  if (expected === true) return actual === true;
   if (expected === false) return actual === false;
   if (Array.isArray(expected)) return expected.includes(actual);
   return actual === expected;
@@ -317,9 +352,9 @@ function compareRequirement(propName, expected, props) {
 
 function stanceLabelFromProps(props) {
   if (props.arrival) return "arrival";
-  if (props.owner)   return "owner";
+  if (props.owner) return "owner";
   if (props.contributor) return "contributor";
-  if (props.role)    return props.role;
+  if (props.role) return props.role;
   return "member";
 }
 
@@ -332,7 +367,7 @@ function stanceLabelFromProps(props) {
  * Idempotent. Writes the unified layer-2 rule shape that the authorize
  * walk reads at every verb call:
  *
- *   metadata.permissions.<verb>.<keyParts> = { requires: { ... } }
+ *   qualities.permissions.<verb>.<keyParts> = { requires: { ... } }
  *
  * The defaults preserve the historical semantics: any authenticated
  * being can act at the land root (any verb, any keyParts); arrival
@@ -341,11 +376,13 @@ function stanceLabelFromProps(props) {
  */
 export async function seedDefaultStancePermissions() {
   const landRootId = getLandRootId();
-  if (!landRootId) return { seeded: false, reason: "land root not initialized" };
+  if (!landRootId)
+    return { seeded: false, reason: "land root not initialized" };
 
-  const root = await Space.findById(landRootId).select("metadata").lean();
-  const meta = root?.qualities;
-  const permsRoot = meta instanceof Map ? meta.get("permissions") : meta?.permissions;
+  const root = await Space.findById(landRootId).select("qualities").lean();
+  const quals = root?.qualities;
+  const permsRoot =
+    quals instanceof Map ? quals.get("permissions") : quals?.permissions;
 
   const updates = {};
 
@@ -359,7 +396,7 @@ export async function seedDefaultStancePermissions() {
 
   // Land-level BE config flags (register/claim toggles for operators
   // who want to lock the land down).
-  const auth = meta instanceof Map ? meta.get("auth") : meta?.auth;
+  const auth = quals instanceof Map ? quals.get("auth") : quals?.auth;
   const hasAuth = auth instanceof Map ? auth.size > 0 : !!auth;
   if (!hasAuth) {
     updates["qualities.auth"] = { register_enabled: true, claim_enabled: true };
@@ -387,9 +424,109 @@ export async function getAuthConfig() {
   };
   return {
     register_enabled: get("register_enabled", true) !== false,
-    claim_enabled:    get("claim_enabled",    true) !== false,
+    claim_enabled: get("claim_enabled", true) !== false,
   };
 }
 
 // Re-export for use in verb handlers.
 export { IBP_ERR };
+
+// ─────────────────────────────────────────────────────────────────────
+// Default permission registry (Layer 3)
+//
+// When no explicit qualities.permissions rule matches at the target
+// position or any ancestor, the authorize walk above falls through
+// here for an installed-extension-provided default.
+//
+// Populated by extensions through their manifest:
+//
+//   // extensions/<name>/manifest.js
+//   export default {
+//     name: "position",
+//     provides: {
+//       defaultPermissions: {
+//         "do:set-meta:position": { requires: { contributor: true } },
+//       },
+//     },
+//   };
+//
+// Lifecycle:
+//   - Built at boot when the extension loader sees `provides.defaultPermissions`.
+//   - Rebuilt when an extension is installed / uninstalled at runtime.
+//   - Missing entries return null. Never throws — uninstalled extensions
+//     simply contribute nothing, and authorize falls through to default
+//     deny.
+//
+// Data shape: `Map<key, rule>`. Keys are the same shape as
+// qualities.permissions entries ("do:set-meta:position",
+// "summon:@planner*", etc.). Rules carry `requires` (stance property
+// requirements). The registry also stores `_extName` so an uninstall
+// can remove only that extension's contributions.
+// ─────────────────────────────────────────────────────────────────────
+
+const _defaultPermissions = new Map();
+
+/**
+ * Register one extension's default permission rules. Idempotent —
+ * re-registering replaces any prior rules from the same extension.
+ *
+ * @param {string} extName
+ * @param {object} perms  map of `<key>` → { requires: {...} }
+ */
+export function registerDefaultPermissions(extName, perms) {
+  if (!extName || !perms || typeof perms !== "object") return;
+  // Remove prior rules from this extension first (idempotent reload).
+  unregisterDefaultPermissions(extName);
+  let count = 0;
+  for (const [key, rule] of Object.entries(perms)) {
+    if (!key || typeof key !== "string") continue;
+    if (!rule || typeof rule !== "object") continue;
+    const safe = {
+      requires:
+        rule.requires && typeof rule.requires === "object"
+          ? { ...rule.requires }
+          : {},
+      _extName: extName,
+    };
+    _defaultPermissions.set(key, safe);
+    count++;
+  }
+  if (count > 0) {
+    log.verbose(
+      "Authorize",
+      `registered ${count} default permission rule(s) for "${extName}"`,
+    );
+  }
+}
+
+/**
+ * Remove all default permission rules contributed by an extension.
+ * Called when the extension is uninstalled at runtime.
+ */
+export function unregisterDefaultPermissions(extName) {
+  if (!extName) return;
+  for (const [key, rule] of Array.from(_defaultPermissions.entries())) {
+    if (rule._extName === extName) _defaultPermissions.delete(key);
+  }
+}
+
+/**
+ * Look up a default permission rule by exact key. Returns null when
+ * no extension currently contributes a default for this key.
+ */
+function lookupDefault(key) {
+  if (!key) return null;
+  return _defaultPermissions.get(key) || null;
+}
+
+/**
+ * Enumerate the registered keys (diagnostic — used by introspection
+ * tools that show "what default permissions are active on this land").
+ */
+export function listDefaultPermissions() {
+  const out = {};
+  for (const [key, rule] of _defaultPermissions) {
+    out[key] = { requires: rule.requires, fromExtension: rule._extName };
+  }
+  return out;
+}

@@ -4,7 +4,7 @@
 //
 // One of two coexisting paths that wake beings (the other being direct
 // being-to-being SUMMONs). When a DO action lands at a position — a
-// matter write, a status change, a metadata write — the substrate's
+// matter write, a status change, a qualities write — the substrate's
 // post-DO hooks emit SUMMONs to every subscriber whose interest covers
 // the affected position and event shape. The SUMMON's content carries
 // a small envelope describing what changed (event name, action,
@@ -26,7 +26,7 @@
 //     event:         "afterMatter"            // hook name to match
 //                  | "afterQualityWrite",    // extensions express
 //                                              // status-like changes via
-//                                              // afterMetadataWrite +
+//                                              // afterQualitiesWrite +
 //                                              // a namespace filter
 //     scope:         { everywhere: true }     // any space in the land
 //                  | { spaceId: "<id>" }       // exact match
@@ -41,7 +41,7 @@
 //   }
 //
 // **Storage.** In-memory registry; subscriptions are re-registered at
-// boot by each extension that wires them. A metadata-backed registry
+// boot by each extension that wires them. A qualities-backed registry
 // on each being's home space is on the roadmap so boot can rebuild
 // without re-running extension code; for now the in-memory registry
 // plus extension-init re-registration is enough.
@@ -104,18 +104,23 @@ export function subscribe(beingId, sub) {
     throw new Error("subscription.scope is required");
   }
   if (!sub.scope.everywhere && !sub.scope.spaceId && !sub.scope.ancestor) {
-    throw new Error("subscription.scope must specify everywhere|spaceId|ancestor");
+    throw new Error(
+      "subscription.scope must specify everywhere|spaceId|ancestor",
+    );
   }
 
   const id = sub.id || randomUUID();
   const entry = {
     id,
-    beingId:    String(beingId),
-    event:      sub.event,
-    scope:      sub.scope,
-    filter:     sub.filter || null,
-    priority:   Number.isFinite(sub.priority) ? Number(sub.priority) : 4, // BACKGROUND
-    coalesceMs: Number.isFinite(sub.coalesceMs) && sub.coalesceMs > 0 ? Number(sub.coalesceMs) : 0,
+    beingId: String(beingId),
+    event: sub.event,
+    scope: sub.scope,
+    filter: sub.filter || null,
+    priority: Number.isFinite(sub.priority) ? Number(sub.priority) : 4, // BACKGROUND
+    coalesceMs:
+      Number.isFinite(sub.coalesceMs) && sub.coalesceMs > 0
+        ? Number(sub.coalesceMs)
+        : 0,
   };
 
   let beingMap = _byBeing.get(entry.beingId);
@@ -134,9 +139,11 @@ export function subscribe(beingId, sub) {
 
   _index.set(id, entry);
 
-  log.verbose("Subscriptions",
+  log.verbose(
+    "Subscriptions",
     `subscribed ${entry.event} for being ${entry.beingId.slice(0, 8)} ` +
-    `(scope=${_scopeLabel(entry.scope)}, id=${id.slice(0, 8)})`);
+      `(scope=${_scopeLabel(entry.scope)}, id=${id.slice(0, 8)})`,
+  );
   return id;
 }
 
@@ -186,7 +193,9 @@ export function unsubscribeAllForBeing(beingId) {
  */
 export function _resetAll() {
   for (const pending of _pendingCoalesce.values()) {
-    try { clearTimeout(pending.timer); } catch {}
+    try {
+      clearTimeout(pending.timer);
+    } catch {}
   }
   _pendingCoalesce.clear();
   _byBeing.clear();
@@ -236,12 +245,17 @@ export async function getMatchingSubscribers(eventName, payload) {
     try {
       const chain = await getAncestorChain(spaceId);
       ancestorChainIds = new Set(
-        (Array.isArray(chain) ? chain : []).map((n) => String(n?._id)).filter(Boolean),
+        (Array.isArray(chain) ? chain : [])
+          .map((n) => String(n?._id))
+          .filter(Boolean),
       );
       // The space itself counts as ancestor=self for scope.ancestor checks.
       ancestorChainIds.add(spaceId);
     } catch (err) {
-      log.debug("Subscriptions", `ancestor chain lookup failed for ${spaceId.slice(0, 8)}: ${err.message}`);
+      log.debug(
+        "Subscriptions",
+        `ancestor chain lookup failed for ${spaceId.slice(0, 8)}: ${err.message}`,
+      );
       ancestorChainIds = new Set([spaceId]);
     }
     return ancestorChainIds;
@@ -299,7 +313,10 @@ export async function emitToSubscribers(eventName, payload, options = {}) {
   // `from`. Position carries where the triggering DO happened.
   const identity = await iAmIdentity();
   if (!identity) {
-    log.debug("Subscriptions", `skipping ${eventName}: I_AM identity not yet available`);
+    log.debug(
+      "Subscriptions",
+      `skipping ${eventName}: I_AM identity not yet available`,
+    );
     return 0;
   }
   const senderStance = _senderStanceForPayload(payload);
@@ -310,8 +327,10 @@ export async function emitToSubscribers(eventName, payload, options = {}) {
     try {
       const targetSpace = _inboxNodeIdForSubscriber(sub, payload);
       if (!targetSpace) {
-        log.debug("Subscriptions",
-          `skipping ${eventName} → being ${sub.beingId.slice(0, 8)}: no resolvable inbox space`);
+        log.debug(
+          "Subscriptions",
+          `skipping ${eventName} → being ${sub.beingId.slice(0, 8)}: no resolvable inbox space`,
+        );
         continue;
       }
       const eventContent = _renderTriggerContent(eventName, payload);
@@ -321,7 +340,7 @@ export async function emitToSubscribers(eventName, payload, options = {}) {
         // expires, ONE SUMMON fires with content.events = [...].
         _enqueueCoalesce(sub, {
           eventName,
-          event:           eventContent,
+          event: eventContent,
           senderStance,
           targetSpace,
           rootCorrelation,
@@ -330,18 +349,20 @@ export async function emitToSubscribers(eventName, payload, options = {}) {
       } else {
         await _emitOne({
           inboxSpaceId: targetSpace,
-          toBeingId:    sub.beingId,
-          priority:     sub.priority,
+          toBeingId: sub.beingId,
+          priority: sub.priority,
           senderStance,
-          content:      eventContent,
+          content: eventContent,
           rootCorrelation,
           identity,
         });
         emitted++;
       }
     } catch (err) {
-      log.warn("Subscriptions",
-        `emit ${eventName} → being ${sub.beingId.slice(0, 8)} failed: ${err.message}`);
+      log.warn(
+        "Subscriptions",
+        `emit ${eventName} → being ${sub.beingId.slice(0, 8)} failed: ${err.message}`,
+      );
     }
   }
   return emitted;
@@ -350,19 +371,27 @@ export async function emitToSubscribers(eventName, payload, options = {}) {
 // Single-SUMMON delivery. The verb runs auth (the I_AM passes
 // universally) and dispatches through the standard inbox + role
 // path. There is no direct appendToInbox + wake bypass.
-async function _emitOne({ inboxSpaceId, toBeingId, priority, senderStance, content, rootCorrelation, identity }) {
+async function _emitOne({
+  inboxSpaceId,
+  toBeingId,
+  priority,
+  senderStance,
+  content,
+  rootCorrelation,
+  identity,
+}) {
   const correlation = randomUUID();
   await summonByResolved({
     toBeingId,
     inboxSpaceId,
     identity,
     message: {
-      from:            senderStance,
+      from: senderStance,
       content,
       correlation,
       rootCorrelation: rootCorrelation || correlation,
       priority,
-      sentAt:          new Date().toISOString(),
+      sentAt: new Date().toISOString(),
     },
   });
 }
@@ -377,17 +406,20 @@ function _enqueueCoalesce(sub, ctx) {
     return;
   }
   const pending = {
-    events:          [ctx.event],
-    firstAt:         Date.now(),
-    senderStance:    ctx.senderStance,
-    targetSpace:    ctx.targetSpace,
+    events: [ctx.event],
+    firstAt: Date.now(),
+    senderStance: ctx.senderStance,
+    targetSpace: ctx.targetSpace,
     rootCorrelation: ctx.rootCorrelation,
-    eventName:       ctx.eventName,
-    timer:           null,
+    eventName: ctx.eventName,
+    timer: null,
   };
   pending.timer = setTimeout(() => {
     _flushCoalesce(sub).catch((err) => {
-      log.warn("Subscriptions", `flushCoalesce ${sub.id.slice(0, 8)} failed: ${err.message}`);
+      log.warn(
+        "Subscriptions",
+        `flushCoalesce ${sub.id.slice(0, 8)} failed: ${err.message}`,
+      );
     });
   }, sub.coalesceMs);
   if (typeof pending.timer.unref === "function") pending.timer.unref();
@@ -403,28 +435,30 @@ async function _flushCoalesce(sub) {
   // Single SUMMON whose content carries the batch. Receivers know
   // `events` is a list when coalesceMs > 0 was configured.
   const content = {
-    event:    pending.eventName,
+    event: pending.eventName,
     coalesced: true,
     batchSize: pending.events.length,
-    events:    pending.events,
-    firstAt:   new Date(pending.firstAt).toISOString(),
-    lastAt:    new Date().toISOString(),
+    events: pending.events,
+    firstAt: new Date(pending.firstAt).toISOString(),
+    lastAt: new Date().toISOString(),
   };
   try {
     const identity = await iAmIdentity();
     if (!identity) return;
     await _emitOne({
       inboxSpaceId: pending.targetSpace,
-      toBeingId:    sub.beingId,
-      priority:     sub.priority,
+      toBeingId: sub.beingId,
+      priority: sub.priority,
       senderStance: pending.senderStance,
       content,
       rootCorrelation: pending.rootCorrelation,
       identity,
     });
   } catch (err) {
-    log.warn("Subscriptions",
-      `coalesced emit ${pending.eventName} → being ${sub.beingId.slice(0, 8)} failed: ${err.message}`);
+    log.warn(
+      "Subscriptions",
+      `coalesced emit ${pending.eventName} → being ${sub.beingId.slice(0, 8)} failed: ${err.message}`,
+    );
   }
 }
 
@@ -477,10 +511,7 @@ function _inboxNodeIdForSubscriber(sub, payload) {
   // ends up at a single well-defined place per being. Fallback to the
   // event's spaceId (the affected space) and ultimately the land root.
   return (
-    payload?.subscriberHomeId
-    || payload?.spaceId
-    || getLandRootId()
-    || null
+    payload?.subscriberHomeId || payload?.spaceId || getLandRootId() || null
   );
 }
 
@@ -490,17 +521,17 @@ function _renderTriggerContent(eventName, payload) {
   // and the payload fields. Trim what's likely large (full matter
   // content) to references only.
   const out = { event: eventName };
-  if (payload?.spaceId)          out.spaceId          = String(payload.spaceId);
-  if (payload?.beingId)         out.actorBeingId    = String(payload.beingId);
-  if (payload?.action)          out.action          = payload.action;
-  if (payload?.matter?._id)     out.matterId        = String(payload.matter._id);
-  if (payload?.matter?.origin)  out.matterOrigin   = payload.matter.origin;
-  if (payload?.origin)          out.origin          = payload.origin;
-  if (payload?.extName)         out.extName         = payload.extName;
-  if (payload?.fromStatus)      out.fromStatus      = payload.fromStatus;
-  if (payload?.toStatus)        out.toStatus        = payload.toStatus;
-  if (payload?.timestamp)       out.timestamp       = payload.timestamp;
-  else                          out.timestamp       = new Date().toISOString();
+  if (payload?.spaceId) out.spaceId = String(payload.spaceId);
+  if (payload?.beingId) out.actorBeingId = String(payload.beingId);
+  if (payload?.action) out.action = payload.action;
+  if (payload?.matter?._id) out.matterId = String(payload.matter._id);
+  if (payload?.matter?.origin) out.matterOrigin = payload.matter.origin;
+  if (payload?.origin) out.origin = payload.origin;
+  if (payload?.extName) out.extName = payload.extName;
+  if (payload?.fromStatus) out.fromStatus = payload.fromStatus;
+  if (payload?.toStatus) out.toStatus = payload.toStatus;
+  if (payload?.timestamp) out.timestamp = payload.timestamp;
+  else out.timestamp = new Date().toISOString();
   return out;
 }
 

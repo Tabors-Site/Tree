@@ -27,7 +27,9 @@ import dns from "dns/promises";
 const ENCRYPTION_KEY = process.env.CUSTOM_LLM_API_SECRET_KEY;
 const ALGORITHM = "aes-256-cbc";
 let MAX_CONNECTIONS_PER_USER = 15;
-export function setMaxConnectionsPerUser(n) { MAX_CONNECTIONS_PER_USER = Math.max(1, Math.min(Number(n) || 15, 100)); }
+export function setMaxConnectionsPerUser(n) {
+  MAX_CONNECTIONS_PER_USER = Math.max(1, Math.min(Number(n) || 15, 100));
+}
 const MAX_NAME_LENGTH = 100;
 const MAX_KEY_LENGTH = 500;
 const MAX_MODEL_LENGTH = 200;
@@ -46,7 +48,8 @@ export function getEncryptionKey() {
 }
 
 function encrypt(text) {
-  if (!text || typeof text !== "string") throw new Error("Cannot encrypt: value must be a non-empty string");
+  if (!text || typeof text !== "string")
+    throw new Error("Cannot encrypt: value must be a non-empty string");
   const key = getEncryptionKey();
   const iv = crypto.randomBytes(16);
   const cipher = crypto.createCipheriv(ALGORITHM, key, iv);
@@ -91,7 +94,7 @@ const BLOCKED_IP_PATTERNS = [
 ];
 
 function isBlockedIp(ip) {
-  return BLOCKED_IP_PATTERNS.some(p => p.test(ip));
+  return BLOCKED_IP_PATTERNS.some((p) => p.test(ip));
 }
 
 async function resolveAndValidateHost(hostname) {
@@ -108,7 +111,12 @@ async function resolveAndValidateHost(hostname) {
     // from hanging when DNS is slow or unresponsive.
     const result = await Promise.race([
       dns.lookup(hostname, { all: true }),
-      new Promise((_, reject) => setTimeout(() => reject(new Error("DNS lookup timed out")), Number(getLandConfigValue("dnsLookupTimeout")) || 5000)),
+      new Promise((_, reject) =>
+        setTimeout(
+          () => reject(new Error("DNS lookup timed out")),
+          Number(getLandConfigValue("dnsLookupTimeout")) || 5000,
+        ),
+      ),
     ]);
     for (const entry of result) {
       if (isBlockedIp(entry.address)) {
@@ -119,7 +127,11 @@ async function resolveAndValidateHost(hostname) {
     if (err.message.includes("private") || err.message.includes("internal")) {
       throw err;
     }
-    throw new Error("Could not resolve hostname: " + hostname + (err.message.includes("timed out") ? " (DNS timeout)" : ""));
+    throw new Error(
+      "Could not resolve hostname: " +
+        hostname +
+        (err.message.includes("timed out") ? " (DNS timeout)" : ""),
+    );
   }
 }
 
@@ -164,8 +176,8 @@ function validateBaseUrl(baseUrl) {
   if (isBlockedIp(hostname)) {
     throw new Error(
       "Local/private network URLs are not allowed. Add the host to " +
-      "`allowedLlmDomains` in land config to opt in (e.g. for Ollama " +
-      "or a LAN-hosted LLM).",
+        "`allowedLlmDomains` in land config to opt in (e.g. for Ollama " +
+        "or a LAN-hosted LLM).",
     );
   }
 
@@ -173,7 +185,9 @@ function validateBaseUrl(baseUrl) {
   // (Empty/missing allowlist means no restriction beyond the SSRF gate.)
   const allowed = getLandConfigValue("allowedLlmDomains");
   if (Array.isArray(allowed) && allowed.length > 0) {
-    throw new Error(`LLM domain "${hostname}" is not in this land's allowed list.`);
+    throw new Error(
+      `LLM domain "${hostname}" is not in this land's allowed list.`,
+    );
   }
 
   return parsed.href.replace(/\/+$/, "");
@@ -182,7 +196,7 @@ function validateBaseUrl(baseUrl) {
 function hostInAllowedLlmDomains(hostname) {
   const allowed = getLandConfigValue("allowedLlmDomains");
   if (!Array.isArray(allowed) || allowed.length === 0) return false;
-  return allowed.some(d => {
+  return allowed.some((d) => {
     const low = d.toLowerCase();
     return hostname === low || hostname.endsWith("." + low);
   });
@@ -193,7 +207,8 @@ function hostInAllowedLlmDomains(hostname) {
 // ─────────────────────────────────────────────────────────────────────────
 
 function validateName(name) {
-  if (!name || typeof name !== "string") throw new Error("Connection name is required");
+  if (!name || typeof name !== "string")
+    throw new Error("Connection name is required");
   const trimmed = name.trim();
   if (trimmed.length === 0 || trimmed.length > MAX_NAME_LENGTH) {
     throw new Error(`Connection name must be 1-${MAX_NAME_LENGTH} characters`);
@@ -231,7 +246,8 @@ function validateApiKey(apiKey, required) {
  */
 function validateConnectionId(connectionId) {
   if (connectionId === null || connectionId === undefined) return null;
-  if (typeof connectionId !== "string") throw new Error("Invalid connection ID");
+  if (typeof connectionId !== "string")
+    throw new Error("Invalid connection ID");
   if (connectionId.length > 100) throw new Error("Invalid connection ID");
   return connectionId;
 }
@@ -245,18 +261,30 @@ const CORE_BEING_SLOTS = new Set(["main"]);
 const _extBeingSlots = new Set();
 
 export function registerBeingLlmSlot(slot) {
-  if (typeof slot !== "string" || !SLOT_NAME_PATTERN.test(slot) || slot.length > MAX_SLOT_NAME_LENGTH) {
-    log.warn("LLM", `Invalid user LLM slot name rejected: ${String(slot).slice(0, 50)}`);
+  if (
+    typeof slot !== "string" ||
+    !SLOT_NAME_PATTERN.test(slot) ||
+    slot.length > MAX_SLOT_NAME_LENGTH
+  ) {
+    log.warn(
+      "LLM",
+      `Invalid user LLM slot name rejected: ${String(slot).slice(0, 50)}`,
+    );
     return;
   }
   _extBeingSlots.add(slot);
 }
 
 function isValidUserSlot(slot) {
-  return typeof slot === "string" && (CORE_BEING_SLOTS.has(slot) || _extBeingSlots.has(slot));
+  return (
+    typeof slot === "string" &&
+    (CORE_BEING_SLOTS.has(slot) || _extBeingSlots.has(slot))
+  );
 }
 
-export function getAllBeingLlmSlots() { return [...CORE_BEING_SLOTS, ..._extBeingSlots]; }
+export function getAllBeingLlmSlots() {
+  return [...CORE_BEING_SLOTS, ..._extBeingSlots];
+}
 
 // Core tree slots. Extensions register additional via registerRootLlmSlot().
 // Only "default" is kernel. Extensions register their own slots during init.
@@ -264,30 +292,47 @@ const CORE_ROOT_SLOTS = new Set(["default"]);
 const _extRootSlots = new Set();
 
 export function registerRootLlmSlot(slot) {
-  if (typeof slot !== "string" || !SLOT_NAME_PATTERN.test(slot) || slot.length > MAX_SLOT_NAME_LENGTH) {
-    log.warn("LLM", `Invalid root LLM slot name rejected: ${String(slot).slice(0, 50)}`);
+  if (
+    typeof slot !== "string" ||
+    !SLOT_NAME_PATTERN.test(slot) ||
+    slot.length > MAX_SLOT_NAME_LENGTH
+  ) {
+    log.warn(
+      "LLM",
+      `Invalid root LLM slot name rejected: ${String(slot).slice(0, 50)}`,
+    );
     return;
   }
   _extRootSlots.add(slot);
 }
 
 export function isValidRootLlmSlot(slot) {
-  return typeof slot === "string" && (CORE_ROOT_SLOTS.has(slot) || _extRootSlots.has(slot));
+  return (
+    typeof slot === "string" &&
+    (CORE_ROOT_SLOTS.has(slot) || _extRootSlots.has(slot))
+  );
 }
 
-export function getAllRootLlmSlots() { return [...CORE_ROOT_SLOTS, ..._extRootSlots]; }
+export function getAllRootLlmSlots() {
+  return [...CORE_ROOT_SLOTS, ..._extRootSlots];
+}
 
 // ─────────────────────────────────────────────────────────────────────────
 // PUBLIC API
 // ─────────────────────────────────────────────────────────────────────────
 
-export async function addLlmConnection(beingId, { name, baseUrl, apiKey, model }) {
+export async function addLlmConnection(
+  beingId,
+  { name, baseUrl, apiKey, model },
+) {
   const being = await Being.findById(beingId).select("_id").lean();
   if (!being) throw new Error("Being not found");
 
   const count = await LlmConnection.countDocuments({ beingId });
   if (count >= MAX_CONNECTIONS_PER_USER) {
-    throw new Error(`Maximum of ${MAX_CONNECTIONS_PER_USER} connections reached`);
+    throw new Error(
+      `Maximum of ${MAX_CONNECTIONS_PER_USER} connections reached`,
+    );
   }
 
   const safeName = validateName(name);
@@ -321,8 +366,14 @@ export async function addLlmConnection(beingId, { name, baseUrl, apiKey, model }
   };
 }
 
-export async function updateLlmConnection(beingId, connectionId, { name, baseUrl, apiKey, model }) {
-  const being = await Being.findById(beingId).select("llmDefault metadata").lean();
+export async function updateLlmConnection(
+  beingId,
+  connectionId,
+  { name, baseUrl, apiKey, model },
+) {
+  const being = await Being.findById(beingId)
+    .select("llmDefault qualites")
+    .lean();
   if (!being) throw new Error("Being not found");
 
   const safeConnId = validateConnectionId(connectionId);
@@ -354,7 +405,12 @@ export async function updateLlmConnection(beingId, connectionId, { name, baseUrl
   }
 
   if (Object.keys(update).length === 0) {
-    return { _id: existing._id, name: existing.name, baseUrl: existing.baseUrl, model: existing.model };
+    return {
+      _id: existing._id,
+      name: existing.name,
+      baseUrl: existing.baseUrl,
+      model: existing.model,
+    };
   }
 
   const updated = await LlmConnection.findByIdAndUpdate(
@@ -364,9 +420,15 @@ export async function updateLlmConnection(beingId, connectionId, { name, baseUrl
   );
 
   // Bust cache if this connection is currently assigned
-  const userLlmMeta = being.qualities instanceof Map ? being.qualities.get("userLlm") : being.qualities?.userLlm;
-  const userSlots = userLlmMeta?.slots || {};
-  if (being.llmDefault === connectionId || Object.values(userSlots).includes(connectionId)) {
+  const beingLlmMeta =
+    being.qualities instanceof Map
+      ? being.qualities.get("beingLlm")
+      : being.qualities?.beingLlm;
+  const beingSlots = beingLlmMeta?.slots || {};
+  if (
+    being.llmDefault === connectionId ||
+    Object.values(beingSlots).includes(connectionId)
+  ) {
     clearBeingClientCache(beingId);
   }
 
@@ -380,21 +442,29 @@ export async function updateLlmConnection(beingId, connectionId, { name, baseUrl
 
 export async function deleteLlmConnection(beingId, connectionId) {
   const safeConnId = validateConnectionId(connectionId);
-  const conn = await LlmConnection.findOneAndDelete({ _id: safeConnId, beingId });
+  const conn = await LlmConnection.findOneAndDelete({
+    _id: safeConnId,
+    beingId,
+  });
   if (!conn) throw new Error("Connection not found");
 
   // Clear being assignments pointing to the deleted connection.
-  const being = await Being.findById(beingId).select("llmDefault metadata").lean();
+  const being = await Being.findById(beingId)
+    .select("llmDefault qualities")
+    .lean();
   if (being) {
     const updates = {};
     if (being.llmDefault === connectionId) {
       updates.llmDefault = null;
     }
-    const beingLlmMeta = being.qualities instanceof Map ? being.qualities.get("userLlm") : being.qualities?.userLlm;
+    const beingLlmMeta =
+      being.qualities instanceof Map
+        ? being.qualities.get("beingLlm")
+        : being.qualities?.beingLlm;
     const beingSlots = beingLlmMeta?.slots || {};
     for (const [s, val] of Object.entries(beingSlots)) {
       if (val === connectionId) {
-        updates[`qualities.userLlm.slots.${s}`] = null;
+        updates[`qualities.beingLlm.slots.${s}`] = null;
       }
     }
     if (Object.keys(updates).length > 0) {
@@ -410,7 +480,7 @@ export async function deleteLlmConnection(beingId, connectionId) {
   );
 
   // Clear extension slots on nodes in one pass per slot
-  const extSlots = getAllRootLlmSlots().filter(s => s !== "default");
+  const extSlots = getAllRootLlmSlots().filter((s) => s !== "default");
   for (const slot of extSlots) {
     await Space.updateMany(
       { [`qualities.llm.slots.${slot}`]: connectionId },
@@ -430,18 +500,21 @@ export async function assignConnection(beingId, slot, connectionId) {
 
   // If assigning (not clearing), verify the connection exists and belongs to this user
   if (safeConnId) {
-    const conn = await LlmConnection.findOne({ _id: safeConnId, beingId }).lean();
+    const conn = await LlmConnection.findOne({
+      _id: safeConnId,
+      beingId,
+    }).lean();
     if (!conn) throw new Error("Connection not found");
   }
 
-  // "main" slot goes to llmDefault, other slots go to metadata.userLlm.slots
+  // "main" slot goes to llmDefault, other slots go to qualities.beingLlm.slots
   if (slot === "main") {
     await Being.findByIdAndUpdate(beingId, {
       $set: { llmDefault: safeConnId },
     });
   } else {
     await Being.findByIdAndUpdate(beingId, {
-      $set: { [`qualities.userLlm.slots.${slot}`]: safeConnId },
+      $set: { [`qualities.beingLlm.slots.${slot}`]: safeConnId },
     });
   }
 
@@ -464,7 +537,12 @@ export async function assignConnection(beingId, slot, connectionId) {
  * (the DO operation handler) is responsible for owner-of-tree checks
  * via stance authorization before reaching this function.
  */
-export async function assignSpaceConnection(spaceId, slot, connectionId, { ownerBeingId } = {}) {
+export async function assignSpaceConnection(
+  spaceId,
+  slot,
+  connectionId,
+  { ownerBeingId } = {},
+) {
   if (!isValidUserSlot(slot)) {
     throw new Error("Invalid assignment slot: " + slot);
   }
@@ -480,7 +558,10 @@ export async function assignSpaceConnection(spaceId, slot, connectionId, { owner
 
   if (slot === "main") {
     if (safeConnId) {
-      await Space.updateOne({ _id: spaceId }, { $set: { llmDefault: safeConnId } });
+      await Space.updateOne(
+        { _id: spaceId },
+        { $set: { llmDefault: safeConnId } },
+      );
     } else {
       await Space.updateOne({ _id: spaceId }, { $set: { llmDefault: null } });
     }

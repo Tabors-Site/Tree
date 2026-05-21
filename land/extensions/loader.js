@@ -1013,7 +1013,7 @@ export async function loadExtensions(app, mcpServer, opts = {}) {
       // Idempotent — re-registering replaces this extension's prior rules.
       if (manifest.provides?.defaultPermissions) {
         try {
-          const { registerDefaultPermissions } = await import("../seed/ibp/defaultPermissions.js");
+          const { registerDefaultPermissions } = await import("../seed/ibp/authorize.js");
           registerDefaultPermissions(manifest.name, manifest.provides.defaultPermissions);
         } catch (err) {
           log.warn("Extensions", `default-permissions registration failed for "${manifest.name}": ${err.message}`);
@@ -1721,7 +1721,7 @@ export async function uninstallExtension(name) {
     // Drop this extension's default permission rules from the registry
     // so authorize stops consulting them post-uninstall.
     try {
-      const { unregisterDefaultPermissions } = await import("../seed/ibp/defaultPermissions.js");
+      const { unregisterDefaultPermissions } = await import("../seed/ibp/authorize.js");
       unregisterDefaultPermissions(name);
     } catch {}
   }

@@ -7,7 +7,11 @@ import { hooks } from "../system/hooks.js";
 import crypto from "crypto";
 import Being from "../models/being.js";
 import Space from "../models/space.js";
-import { snapshotAncestors, resolveExtensionScopeFromChain, getAncestorChain } from "../land/space/ancestorCache.js";
+import {
+  snapshotAncestors,
+  resolveExtensionScopeFromChain,
+  getAncestorChain,
+} from "../land/space/ancestorCache.js";
 import { isDbHealthy } from "../system/dbConfig.js";
 import { resolveTools } from "../cognition/tools.js";
 import { getSpaceName } from "../land/space/spaceFetch.js";
@@ -17,7 +21,9 @@ import { mcpClients, connectToMCP, MCP_SERVER_URL } from "./mcpClient.js";
 // role doesn't request a full reset. Used to give continuity to the
 // next role's context window.
 let CARRY_MESSAGES = 4;
-export function setCarryMessages(n) { CARRY_MESSAGES = Math.max(0, Number(n) || 4); }
+export function setCarryMessages(n) {
+  CARRY_MESSAGES = Math.max(0, Number(n) || 4);
+}
 import { getLandConfigValue } from "../landConfig.js";
 import { I_AM } from "../land/space/seedSpaces.js";
 import { signInternalToken } from "../land/being/identity.js";
@@ -67,7 +73,9 @@ async function buildSystemPromptForRole(role, ctx) {
   }
 
   if (typeof role.buildSystemPrompt !== "function") {
-    throw new Error(`buildSystemPromptForRole: role "${role?.name || "(unnamed)"}" has neither prompt nor buildSystemPrompt`);
+    throw new Error(
+      `buildSystemPromptForRole: role "${role?.name || "(unnamed)"}" has neither prompt nor buildSystemPrompt`,
+    );
   }
 
   // ── Layer 1: position block ──
@@ -79,7 +87,8 @@ async function buildSystemPromptForRole(role, ctx) {
 
   const idsToResolve = {};
   if (rootId) idsToResolve.root = rootId;
-  if (currentSpace && currentSpace !== rootId) idsToResolve.current = currentSpace;
+  if (currentSpace && currentSpace !== rootId)
+    idsToResolve.current = currentSpace;
   if (targetSpace && targetSpace !== rootId && targetSpace !== currentSpace) {
     idsToResolve.target = targetSpace;
   }
@@ -88,35 +97,49 @@ async function buildSystemPromptForRole(role, ctx) {
   try {
     const entries = Object.entries(idsToResolve);
     if (entries.length > 0) {
-      const resolved = await Promise.all(entries.map(([, id]) => getSpaceName(id)));
-      entries.forEach(([key], i) => { names[key] = resolved[i]; });
+      const resolved = await Promise.all(
+        entries.map(([, id]) => getSpaceName(id)),
+      );
+      entries.forEach(([key], i) => {
+        names[key] = resolved[i];
+      });
     }
   } catch (nameErr) {
     log.debug("Role", `Space name resolution failed: ${nameErr.message}`);
   }
   if (rootId) {
-    positionLines.push(names.root ? `Tree: ${names.root} (${rootId})` : `Tree: ${rootId}`);
+    positionLines.push(
+      names.root ? `Tree: ${names.root} (${rootId})` : `Tree: ${rootId}`,
+    );
   }
   if (currentSpace && currentSpace !== rootId) {
-    positionLines.push(names.current
-      ? `Current space: ${names.current} (${currentSpace})`
-      : `Current space: ${currentSpace}`);
+    positionLines.push(
+      names.current
+        ? `Current space: ${names.current} (${currentSpace})`
+        : `Current space: ${currentSpace}`,
+    );
   }
   if (targetSpace && targetSpace !== rootId && targetSpace !== currentSpace) {
-    positionLines.push(names.target
-      ? `Target space: ${names.target} (${targetSpace})`
-      : `Target space: ${targetSpace}`);
+    positionLines.push(
+      names.target
+        ? `Target space: ${names.target} (${targetSpace})`
+        : `Target space: ${targetSpace}`,
+    );
   }
-  const positionBlock = positionLines.length > 0
-    ? `[Position]\n${positionLines.join("\n")}\n\n`
-    : "";
+  const positionBlock =
+    positionLines.length > 0
+      ? `[Position]\n${positionLines.join("\n")}\n\n`
+      : "";
 
   // ── Layer 2: role prompt ──
   let rolePrompt;
   try {
     rolePrompt = await Promise.resolve(role.buildSystemPrompt(ctx));
   } catch (promptErr) {
-    log.error("Role", `role "${role.name}" buildSystemPrompt failed: ${promptErr.message}`);
+    log.error(
+      "Role",
+      `role "${role.name}" buildSystemPrompt failed: ${promptErr.message}`,
+    );
     rolePrompt = `[Role prompt error: ${promptErr.message}]`;
   }
 
@@ -130,10 +153,14 @@ async function buildSystemPromptForRole(role, ctx) {
  * Resolve the OpenAI-compatible tools array for a role.
  *   1. role.toolNames (base)
  *   2. extension-injected tools (via _getExtToolsFn, keyed by role name)
- *   3. tree-specific overlays (metadata.tools.allowed / blocked)
+ *   3. tree-specific overlays (qualities.tools.allowed / blocked)
  *   4. permission filter (drop tools whose verb isn't in role.permissions)
  */
-function resolveToolsForRole(role, treeToolConfig = null, rolePermissions = null) {
+function resolveToolsForRole(
+  role,
+  treeToolConfig = null,
+  rolePermissions = null,
+) {
   if (!role) return [];
 
   // Layer 1: role base tools
@@ -159,8 +186,11 @@ function resolveToolsForRole(role, treeToolConfig = null, rolePermissions = null
   // Layer 4: role-permissions filter (verb tag ∩ role.permissions).
   // Permissions are role identity ([[project_role_permissions_not_envelope]]);
   // envelopes never widen them.
-  const permsForFilter = Array.isArray(rolePermissions) ? rolePermissions
-                       : (Array.isArray(role.permissions) ? role.permissions : null);
+  const permsForFilter = Array.isArray(rolePermissions)
+    ? rolePermissions
+    : Array.isArray(role.permissions)
+      ? role.permissions
+      : null;
   return resolveTools(toolNames, permsForFilter);
 }
 
@@ -178,7 +208,15 @@ export function setExtensionToolResolver(fn) {
 let MAX_MESSAGES = 30;
 let MAX_TOOL_ITERATIONS = 15;
 let LLM_MAX_RETRIES = 3;
-function MAX_MESSAGE_CONTENT_BYTES() { return Math.max(4096, Math.min(Number(getLandConfigValue("maxMessageContentBytes")) || 32768, 131072)); }
+function MAX_MESSAGE_CONTENT_BYTES() {
+  return Math.max(
+    4096,
+    Math.min(
+      Number(getLandConfigValue("maxMessageContentBytes")) || 32768,
+      131072,
+    ),
+  );
+}
 
 // ── Kernel config setters (called from genesis.js after land config loads) ──
 export function setKernelConfig(key, value) {
@@ -187,18 +225,40 @@ export function setKernelConfig(key, value) {
   // timeouts/limits would brick the conversation loop. Government-level:
   // every config path produces a functional system, never a broken one.
   switch (key) {
-    case "llmTimeout": setLlmTimeout(Math.max(5000, Math.min(num * 1000, 30 * 60 * 1000))); break;
-    case "llmMaxRetries": LLM_MAX_RETRIES = Math.max(0, Math.min(num, 10)); break;
-    case "maxToolIterations": MAX_TOOL_ITERATIONS = Math.max(1, Math.min(num, 100)); break;
-    case "maxConversationMessages": MAX_MESSAGES = Math.max(4, Math.min(num, 200)); break;
+    case "llmTimeout":
+      setLlmTimeout(Math.max(5000, Math.min(num * 1000, 30 * 60 * 1000)));
+      break;
+    case "llmMaxRetries":
+      LLM_MAX_RETRIES = Math.max(0, Math.min(num, 10));
+      break;
+    case "maxToolIterations":
+      MAX_TOOL_ITERATIONS = Math.max(1, Math.min(num, 100));
+      break;
+    case "maxConversationMessages":
+      MAX_MESSAGES = Math.max(4, Math.min(num, 200));
+      break;
     // "defaultModel" removed: model comes from the connection record, not a global default
-    case "llmMaxConcurrent": LLM_MAX_CONCURRENT = Math.max(1, Math.min(num, 500)); break;
-    case "failoverTimeout": FAILOVER_TIMEOUT_MS = Math.max(1000, Math.min(num * 1000, 120000)); break;
-    case "toolCallTimeout": TOOL_CALL_TIMEOUT_MS = Math.max(5000, Math.min(num * 1000, 600000)); break;
-    case "toolResultMaxBytes": TOOL_RESULT_MAX_BYTES = Math.max(1000, Math.min(num, 1000000)); break;
-    case "llmWaiterTimeout": LLM_WAITER_TIMEOUT_MS = Math.max(5000, Math.min(num * 1000, 120000)); break;
-    case "maxConversationSessions": MAX_CONVERSATION_SESSIONS = Math.max(100, Math.min(num, 500000)); break;
-    case "staleConversationTimeout": STALE_SESSION_MS = Math.max(60000, Math.min(num * 1000, 86400000)); break;
+    case "llmMaxConcurrent":
+      LLM_MAX_CONCURRENT = Math.max(1, Math.min(num, 500));
+      break;
+    case "failoverTimeout":
+      FAILOVER_TIMEOUT_MS = Math.max(1000, Math.min(num * 1000, 120000));
+      break;
+    case "toolCallTimeout":
+      TOOL_CALL_TIMEOUT_MS = Math.max(5000, Math.min(num * 1000, 600000));
+      break;
+    case "toolResultMaxBytes":
+      TOOL_RESULT_MAX_BYTES = Math.max(1000, Math.min(num, 1000000));
+      break;
+    case "llmWaiterTimeout":
+      LLM_WAITER_TIMEOUT_MS = Math.max(5000, Math.min(num * 1000, 120000));
+      break;
+    case "maxConversationSessions":
+      MAX_CONVERSATION_SESSIONS = Math.max(100, Math.min(num, 500000));
+      break;
+    case "staleConversationTimeout":
+      STALE_SESSION_MS = Math.max(60000, Math.min(num * 1000, 86400000));
+      break;
   }
 }
 export { setLlmTimeout } from "./llmClient.js";
@@ -248,10 +308,10 @@ const _llmWaiters = [];
  * Lower number = higher priority.
  */
 export const LLM_PRIORITY = {
-  HUMAN: 1,        // CLI and WebSocket sessions (direct human interaction)
-  GATEWAY: 2,      // External channel responses (Telegram, Discord, email, etc.)
-  INTERACTIVE: 3,  // Human-initiated async (scout, explore, reroot analysis)
-  BACKGROUND: 4,   // Autonomous jobs (intent, dreams, codebook, cascade, compression)
+  HUMAN: 1, // CLI and WebSocket sessions (direct human interaction)
+  GATEWAY: 2, // External channel responses (Telegram, Discord, email, etc.)
+  INTERACTIVE: 3, // Human-initiated async (scout, explore, reroot analysis)
+  BACKGROUND: 4, // Autonomous jobs (intent, dreams, codebook, cascade, compression)
 };
 
 /**
@@ -286,7 +346,9 @@ async function acquireLlmSlot(signal, priority = LLM_PRIORITY.BACKGROUND) {
     const timeoutId = setTimeout(() => {
       const idx = _llmWaiters.indexOf(waiter);
       if (idx >= 0) _llmWaiters.splice(idx, 1);
-      reject(new Error(`LLM slot not acquired within ${LLM_WAITER_TIMEOUT_MS}ms`));
+      reject(
+        new Error(`LLM slot not acquired within ${LLM_WAITER_TIMEOUT_MS}ms`),
+      );
     }, LLM_WAITER_TIMEOUT_MS);
     waiter.cleanupTimeout = () => clearTimeout(timeoutId);
 
@@ -355,7 +417,9 @@ function isJsonEscapeError(err) {
   // Do NOT match the generic "failed to parse JSON" wording — that
   // catches structural failures too and routes them to the wrong
   // retry hint. See isJsonStructuralError for that path.
-  return /string escape code|invalid escape sequence|unescaped control|bad escaped character|invalid \\u escape/i.test(msg);
+  return /string escape code|invalid escape sequence|unescaped control|bad escaped character|invalid \\u escape/i.test(
+    msg,
+  );
 }
 
 /**
@@ -384,11 +448,20 @@ function isJsonStructuralError(err) {
   //   "expected ':' after object key"
   //   generic "failed to parse JSON" without escape-specific wording
   if (/invalid character .*(after|in) (object|array)/i.test(msg)) return true;
-  if (/unexpected end of JSON input|unterminated string|unexpected token/i.test(msg)) return true;
+  if (
+    /unexpected end of JSON input|unterminated string|unexpected token/i.test(
+      msg,
+    )
+  )
+    return true;
   if (/expected (',' or '}'|':' after|',' or ']')/i.test(msg)) return true;
   // Generic "failed to parse JSON" / "json parse error" without any
   // escape keyword is structural by elimination.
-  if (/failed to parse JSON|json.*parse.*error/i.test(msg) && !/escape|control/i.test(msg)) return true;
+  if (
+    /failed to parse JSON|json.*parse.*error/i.test(msg) &&
+    !/escape|control/i.test(msg)
+  )
+    return true;
   return false;
 }
 
@@ -427,34 +500,51 @@ async function callWithFailover(callFn, primaryClient, beingId, rootId) {
       const retryAfter = Number(err.headers?.["retry-after"]) || 0;
       const baseMs = retryAfter > 0 ? retryAfter * 1000 : 1000;
       const jitter = Math.random() * baseMs;
-      await new Promise(r => setTimeout(r, baseMs + jitter));
+      await new Promise((r) => setTimeout(r, baseMs + jitter));
     }
 
     // No failover resolver registered, nothing to try
     if (!_failoverResolver) throw err;
 
-    log.warn("LLM", `Primary failed (${status}): ${primaryClient.model}. Trying failover.`);
+    log.warn(
+      "LLM",
+      `Primary failed (${status}): ${primaryClient.model}. Trying failover.`,
+    );
   }
 
   // Ask the extension for fallback connection IDs
   const stack = await _failoverResolver(beingId, rootId);
   if (!stack || stack.length === 0) {
-    throw new Error("Primary LLM connection failed and no failover connections configured.");
+    throw new Error(
+      "Primary LLM connection failed and no failover connections configured.",
+    );
   }
 
   // Walk the stack with cumulative timeout
   const failoverStart = Date.now();
   for (const connId of stack) {
     if (Date.now() - failoverStart > FAILOVER_TIMEOUT_MS) {
-      log.warn("LLM", `Failover walk timed out after ${FAILOVER_TIMEOUT_MS}ms. Giving up.`);
+      log.warn(
+        "LLM",
+        `Failover walk timed out after ${FAILOVER_TIMEOUT_MS}ms. Giving up.`,
+      );
       break;
     }
     if (connId === primaryClient.connectionId) continue; // skip primary
     try {
-      const fallbackClient = await resolveConnection(connId, "failover:" + connId);
+      const fallbackClient = await resolveConnection(
+        connId,
+        "failover:" + connId,
+      );
       if (!fallbackClient) continue;
-      log.verbose("LLM", `Trying failover: ${fallbackClient.model} (${connId})`);
-      const response = await callFn(fallbackClient.client, fallbackClient.model);
+      log.verbose(
+        "LLM",
+        `Trying failover: ${fallbackClient.model} (${connId})`,
+      );
+      const response = await callFn(
+        fallbackClient.client,
+        fallbackClient.model,
+      );
       log.verbose("LLM", `Failover succeeded: ${fallbackClient.model}`);
       return { response, usedClient: fallbackClient };
     } catch (err) {
@@ -463,30 +553,40 @@ async function callWithFailover(callFn, primaryClient, beingId, rootId) {
         const idx = stack.indexOf(connId);
         const baseMs = 1000 * Math.pow(2, idx);
         const jitter = Math.random() * baseMs;
-        await new Promise(r => setTimeout(r, baseMs + jitter));
+        await new Promise((r) => setTimeout(r, baseMs + jitter));
       }
-      log.warn("LLM", `Failover ${connId} failed: ${err.message?.slice(0, 100)}`);
+      log.warn(
+        "LLM",
+        `Failover ${connId} failed: ${err.message?.slice(0, 100)}`,
+      );
       continue;
     }
   }
 
   // All failed
-  throw new Error(`All LLM connections failed (primary + ${stack.length} failover). Check your connections.`);
+  throw new Error(
+    `All LLM connections failed (primary + ${stack.length} failover). Check your connections.`,
+  );
 }
-export function setLlmMaxRetries(n) { LLM_MAX_RETRIES = n; }
+export function setLlmMaxRetries(n) {
+  LLM_MAX_RETRIES = n;
+}
 
 // Retries / timeout resolution for a role-driven LLM call.
 //   - Role spec may declare `timeoutMs` and `maxRetries`. Per-role values
 //     win because the role knows its own budget (a Planner with a giant
 //     prompt expects longer than a one-shot Worker).
-//   - per-space override via metadata.timeouts.<roleName> still wins
+//   - per-space override via qualities.timeouts.<roleName> still wins
 //     (operator escape hatch for slow specific scopes).
 //   - Land default is the floor.
 function getRetriesForRole(role) {
   return role?.maxRetries ?? LLM_MAX_RETRIES;
 }
-function getTimeoutForRole(role, spaceMetadata = null) {
-  const meta = spaceMetadata instanceof Map ? Object.fromEntries(spaceMetadata) : (spaceMetadata || {});
+function getTimeoutForRole(role, spaceQualities = null) {
+  const meta =
+    spaceQualities instanceof Map
+      ? Object.fromEntries(spaceQualities)
+      : spaceQualities || {};
   const spaceTimeout = role?.name ? meta.timeouts?.[role.name] : null;
   if (spaceTimeout && Number.isFinite(spaceTimeout)) return spaceTimeout;
   if (role?.timeoutMs && Number.isFinite(role.timeoutMs)) return role.timeoutMs;
@@ -495,10 +595,7 @@ function getTimeoutForRole(role, spaceMetadata = null) {
 
 // LLM connection resolution lives in seed/cognition/llmClient.js. Imported
 // here for use by the turn engine.
-import {
-  getClientForBeing,
-  resolveRootLlmForRole,
-} from "./llmClient.js";
+import { getClientForBeing, resolveRootLlmForRole } from "./llmClient.js";
 
 // ─────────────────────────────────────────────────────────────────────────
 // SESSION STATE (keyed by ai-chat session key)
@@ -559,9 +656,13 @@ function getSession(conversationKey) {
   if (!sessions.has(conversationKey)) {
     // Hard cap: if sessions exceed limit, evict oldest before creating new
     if (sessions.size >= MAX_CONVERSATION_SESSIONS) {
-      let oldestKey = null, oldestTime = Infinity;
+      let oldestKey = null,
+        oldestTime = Infinity;
       for (const [id, s] of sessions) {
-        if ((s._lastActive || 0) < oldestTime) { oldestTime = s._lastActive || 0; oldestKey = id; }
+        if ((s._lastActive || 0) < oldestTime) {
+          oldestTime = s._lastActive || 0;
+          oldestKey = id;
+        }
       }
       if (oldestKey) sessions.delete(oldestKey);
     }
@@ -599,7 +700,8 @@ setInterval(
       }
     }
     if (swept > 0)
-      log.debug("LLM", 
+      log.debug(
+        "LLM",
         `🧹 Swept ${swept} stale conversation session(s) (${sessions.size} remaining)`,
       );
   },
@@ -617,7 +719,9 @@ setInterval(
  */
 export async function switchRole(clientSessionId, newRole, ctx) {
   if (!newRole || typeof newRole !== "object" || !newRole.name) {
-    throw new Error("switchRole requires a role spec with at least a `name` field");
+    throw new Error(
+      "switchRole requires a role spec with at least a `name` field",
+    );
   }
   ctx = ctx || {};
   const beingId = ctx.beingId || null;
@@ -637,15 +741,16 @@ export async function switchRole(clientSessionId, newRole, ctx) {
       .filter((m) => m.role === "user" || m.role === "assistant")
       .slice(-carryCount);
 
-    carriedContext = recentMessages.length > 0
-      ? [
-          {
-            role: "system",
-            content: `[Role Switch] Switched from ${oldRole?.name || "none"} to ${newRole.name}. Recent conversation context preserved.`,
-          },
-          ...recentMessages,
-        ]
-      : [];
+    carriedContext =
+      recentMessages.length > 0
+        ? [
+            {
+              role: "system",
+              content: `[Role Switch] Switched from ${oldRole?.name || "none"} to ${newRole.name}. Recent conversation context preserved.`,
+            },
+            ...recentMessages,
+          ]
+        : [];
   }
 
   const systemPrompt = await buildSystemPromptForRole(newRole, {
@@ -662,7 +767,8 @@ export async function switchRole(clientSessionId, newRole, ctx) {
   session.role = newRole;
   if (ctx.currentSpace) await setCurrentSpace(beingId, ctx.currentSpace);
 
-  log.debug("LLM",
+  log.debug(
+    "LLM",
     `🔄 Role switch for ${clientSessionId}: ${oldRole?.name || "none"} → ${newRole.name} (carried ${recentMessages.length} messages)`,
   );
 
@@ -698,7 +804,10 @@ async function ensureSession(clientSessionId, ctx) {
   const incomingRootId = ctx.rootId || null;
   const knownRootId = getSpaceRootId(beingId);
   if (knownRootId && incomingRootId && knownRootId !== incomingRootId) {
-    log.debug("LLM", `Root mismatch for ${clientSessionId}: being=${knownRootId}, ctx=${incomingRootId}. Clearing.`);
+    log.debug(
+      "LLM",
+      `Root mismatch for ${clientSessionId}: being=${knownRootId}, ctx=${incomingRootId}. Clearing.`,
+    );
     session.messages = [];
     session.role = null;
   }
@@ -719,12 +828,15 @@ async function ensureSession(clientSessionId, ctx) {
     await switchRole(clientSessionId, ctx.role, ctx);
   }
   if (!session.role) {
-    throw new Error("ensureSession: no role on session and no ctx.role; every LLM call needs a role");
+    throw new Error(
+      "ensureSession: no role on session and no ctx.role; every LLM call needs a role",
+    );
   }
 
   // Snapshot ancestor chain for consistent resolution within this message.
   // All resolution chains (scope, tools, LLM, config) read from this snapshot.
-  const snapshotNodeId = getCurrentSpace(beingId) || getSpaceRootId(beingId) || ctx.rootId;
+  const snapshotNodeId =
+    getCurrentSpace(beingId) || getSpaceRootId(beingId) || ctx.rootId;
   if (snapshotNodeId) {
     session._ancestorSnapshot = await snapshotAncestors(snapshotNodeId);
   }
@@ -739,10 +851,13 @@ async function ensureSession(clientSessionId, ctx) {
 function checkTreeCircuit(session) {
   if (session._ancestorSnapshot) {
     // The owner space (root) is the last non-land seed space in the chain
-    const rootAncestor = session._ancestorSnapshot.find(a => a.rootOwner && a.rootOwner !== I_AM);
+    const rootAncestor = session._ancestorSnapshot.find(
+      (a) => a.rootOwner && a.rootOwner !== I_AM,
+    );
     if (rootAncestor?.qualities?.circuit?.tripped) {
       return {
-        content: "This tree is dormant. It exceeded health thresholds and its circuit breaker tripped. Contact the land operator or wait for an extension to revive it.",
+        content:
+          "This tree is dormant. It exceeded health thresholds and its circuit breaker tripped. Contact the land operator or wait for an extension to revive it.",
         role: session.role?.name || null,
         _internal: { tripped: true, rootId: rootAncestor._id },
       };
@@ -815,7 +930,10 @@ async function prepareConversation(session, ctx, message, clientSessionId) {
     role.maxMessagesBeforeLoop &&
     session.messages.length > role.maxMessagesBeforeLoop
   ) {
-    log.debug("LLM", `🔁 Conversation loop for ${clientSessionId} in role ${role.name}`);
+    log.debug(
+      "LLM",
+      `🔁 Conversation loop for ${clientSessionId} in role ${role.name}`,
+    );
     const recentMessages = session.messages
       .filter((m) => m.role === "user" || m.role === "assistant")
       .slice(-(CARRY_MESSAGES * 2)); // carry more on loop
@@ -846,13 +964,18 @@ async function prepareConversation(session, ctx, message, clientSessionId) {
     // checks and are designed to run per-turn.
     let enrichedContext = null;
     try {
-      const posNodeId = getCurrentSpace(ctx.beingId) || getSpaceRootId(ctx.beingId) || ctx.rootId || null;
+      const posNodeId =
+        getCurrentSpace(ctx.beingId) ||
+        getSpaceRootId(ctx.beingId) ||
+        ctx.rootId ||
+        null;
       if (posNodeId) {
         const posSpace = await Space.findById(posNodeId).lean();
         if (posSpace) {
-          const meta = posSpace.qualities instanceof Map
-            ? Object.fromEntries(posSpace.qualities)
-            : (posSpace.qualities || {});
+          const meta =
+            posSpace.qualities instanceof Map
+              ? Object.fromEntries(posSpace.qualities)
+              : posSpace.qualities || {};
           enrichedContext = {};
           await hooks.run("enrichContext", {
             context: enrichedContext,
@@ -896,11 +1019,11 @@ async function prepareConversation(session, ctx, message, clientSessionId) {
     // in session memory for the prompt builder; not persisted.
   }
 
-
   // Trim if over max. Preserve conversation integrity: tool results must
   // follow their corresponding assistant tool_call message. Trim to a clean
   // boundary (user or assistant without tool_calls) to avoid orphaned tool results.
-  const maxMsgs = session._nodeLlmConfig?.maxConversationMessages ?? MAX_MESSAGES;
+  const maxMsgs =
+    session._nodeLlmConfig?.maxConversationMessages ?? MAX_MESSAGES;
   if (session.messages.length > maxMsgs) {
     const systemMsg = session.messages[0];
     let recent = session.messages.slice(-(maxMsgs - 1));
@@ -911,7 +1034,11 @@ async function prepareConversation(session, ctx, message, clientSessionId) {
     }
     // Drop orphaned assistant tool_calls (their tool results were trimmed away).
     // An assistant message with tool_calls but no subsequent tool results confuses the LLM.
-    while (recent.length > 0 && recent[0].role === "assistant" && recent[0].tool_calls?.length > 0) {
+    while (
+      recent.length > 0 &&
+      recent[0].role === "assistant" &&
+      recent[0].tool_calls?.length > 0
+    ) {
       recent.shift();
       // Drop any trailing tool results that belonged to the dropped assistant
       while (recent.length > 0 && recent[0].role === "tool") {
@@ -936,9 +1063,10 @@ async function prepareConversation(session, ctx, message, clientSessionId) {
   // with synthetic "continue" turns.
   if (!ctx?.continuation) {
     const maxMsgBytes = MAX_MESSAGE_CONTENT_BYTES();
-    const safeUserMsg = message.length > maxMsgBytes
-      ? message.slice(0, maxMsgBytes) + "\n... (message truncated)"
-      : message;
+    const safeUserMsg =
+      message.length > maxMsgBytes
+        ? message.slice(0, maxMsgBytes) + "\n... (message truncated)"
+        : message;
     session.messages.push({ role: "user", content: safeUserMsg });
   }
 }
@@ -967,8 +1095,10 @@ const COMPRESSION_ENABLED = () => {
   const v = getLandConfigValue("conversationCompression");
   return v !== false; // default true; only disables when explicitly false
 };
-const COMPRESSION_THRESHOLD = () => Number(getLandConfigValue("compressionThreshold")) || 20;
-const COMPRESSION_KEEP = () => Number(getLandConfigValue("compressionKeep")) || 8;
+const COMPRESSION_THRESHOLD = () =>
+  Number(getLandConfigValue("compressionThreshold")) || 20;
+const COMPRESSION_KEEP = () =>
+  Number(getLandConfigValue("compressionKeep")) || 8;
 
 /**
  * Compress mid-conversation messages into a summary.
@@ -996,7 +1126,11 @@ async function compressConversation(session, threshold, keep) {
   // Build mechanical summary: extract assistant content, skip tool call details
   const summaryParts = [];
   for (const msg of toCompress) {
-    if (msg.role === "assistant" && msg.content && typeof msg.content === "string") {
+    if (
+      msg.role === "assistant" &&
+      msg.content &&
+      typeof msg.content === "string"
+    ) {
       // Skip very short tool-call-only messages
       const text = msg.content.trim();
       if (text.length > 20) summaryParts.push(text);
@@ -1007,7 +1141,8 @@ async function compressConversation(session, threshold, keep) {
 
   // Cap summary at ~2000 chars to keep it useful but compact
   let summary = summaryParts.join("\n").slice(0, 2000);
-  if (summaryParts.join("\n").length > 2000) summary += "\n... (earlier context compressed)";
+  if (summaryParts.join("\n").length > 2000)
+    summary += "\n... (earlier context compressed)";
 
   // Fire onCompress hook if registered. Extensions can replace the mechanical
   // summary with an LLM-powered one. The hook receives the raw messages and
@@ -1031,12 +1166,15 @@ async function compressConversation(session, threshold, keep) {
 
   session.messages = [systemPrompt, compressedMsg, ...toKeep];
 
-  log.verbose("LLM", `Compressed ${toCompress.length} messages into summary (${summary.length} chars), kept ${toKeep.length}`);
+  log.verbose(
+    "LLM",
+    `Compressed ${toCompress.length} messages into summary (${summary.length} chars), kept ${toKeep.length}`,
+  );
 }
 
 /**
  * Resolve per-position LLM config. Three-layer resolution:
- *   1. Space config (metadata.llm.config) - operator override at position
+ *   1. Space config (qualities.llm.config) - operator override at position
  *   2. Mode config (mode object fields) - mode knows its own needs
  *   3. Land globals (the defaults) - safety ceiling
  *
@@ -1044,11 +1182,11 @@ async function compressConversation(session, threshold, keep) {
  */
 const LLM_CONFIG_KEYS = {
   maxToolIterations: 100,
-  toolCallTimeout: 600000,       // 10 minutes max
-  toolResultMaxBytes: 1000000,   // 1MB max
+  toolCallTimeout: 600000, // 10 minutes max
+  toolResultMaxBytes: 1000000, // 1MB max
   maxConversationMessages: 200,
-  compressionThreshold: 200,     // message count before mid-loop compression
-  compressionKeep: 20,           // messages to preserve at the end
+  compressionThreshold: 200, // message count before mid-loop compression
+  compressionKeep: 20, // messages to preserve at the end
 };
 
 function resolveLlmConfig(ancestors, role) {
@@ -1064,7 +1202,11 @@ function resolveLlmConfig(ancestors, role) {
         if (config[key] !== undefined) continue;
         const val = llmConfig[key];
         if (typeof val === "number" && isFinite(val) && val > 0) {
-          if (val > maxVal) log.verbose("LLM", `Space LLM config ${key}=${val} clamped to max ${maxVal}`);
+          if (val > maxVal)
+            log.verbose(
+              "LLM",
+              `Space LLM config ${key}=${val} clamped to max ${maxVal}`,
+            );
           config[key] = Math.min(val, maxVal);
         }
       }
@@ -1078,7 +1220,11 @@ function resolveLlmConfig(ancestors, role) {
       if (config[key] !== undefined) continue;
       const val = role[key];
       if (typeof val === "number" && isFinite(val) && val > 0) {
-        if (val > maxVal) log.verbose("LLM", `Role LLM config ${key}=${val} clamped to max ${maxVal}`);
+        if (val > maxVal)
+          log.verbose(
+            "LLM",
+            `Role LLM config ${key}=${val} clamped to max ${maxVal}`,
+          );
         config[key] = Math.min(val, maxVal);
       }
     }
@@ -1093,7 +1239,11 @@ function resolveLlmConfig(ancestors, role) {
  * Uses the per-message snapshot (zero DB queries). Falls back to ancestor cache on miss.
  * Returns { tools, blockedExtensions, restrictedExtensions }.
  */
-async function resolveToolsForPosition(session, beingId, rolePermissions = null) {
+async function resolveToolsForPosition(
+  session,
+  beingId,
+  rolePermissions = null,
+) {
   let treeToolConfig = null;
   let blockedExtensions = null;
   let restrictedExtensions = null;
@@ -1102,8 +1252,8 @@ async function resolveToolsForPosition(session, beingId, rolePermissions = null)
     try {
       // Use the per-message snapshot. Every resolution chain reads from this.
       // Falls back to ancestor cache (still cached, not raw DB) if no snapshot.
-      const ancestors = session._ancestorSnapshot
-        || await getAncestorChain(currentSpace);
+      const ancestors =
+        session._ancestorSnapshot || (await getAncestorChain(currentSpace));
 
       if (ancestors && ancestors.length > 0) {
         // Tool config: walk ancestor chain in memory
@@ -1112,8 +1262,10 @@ async function resolveToolsForPosition(session, beingId, rolePermissions = null)
         for (const space of ancestors) {
           if (space.seedSpace) break;
           const meta = space.qualities || {};
-          if (meta.tools?.allowed) for (const t of meta.tools.allowed) allowed.add(t);
-          if (meta.tools?.blocked) for (const t of meta.tools.blocked) blocked.add(t);
+          if (meta.tools?.allowed)
+            for (const t of meta.tools.allowed) allowed.add(t);
+          if (meta.tools?.blocked)
+            for (const t of meta.tools.blocked) blocked.add(t);
         }
         if (allowed.size || blocked.size) {
           treeToolConfig = {
@@ -1123,22 +1275,34 @@ async function resolveToolsForPosition(session, beingId, rolePermissions = null)
         }
 
         // Extension scoping: reuse the same resolution helper that extensionScope.js uses
-        const { getConfinedExtensions } = await import("../land/space/extensionScope.js");
-        const scope = resolveExtensionScopeFromChain(ancestors, getConfinedExtensions());
+        const { getConfinedExtensions } =
+          await import("../land/space/extensionScope.js");
+        const scope = resolveExtensionScopeFromChain(
+          ancestors,
+          getConfinedExtensions(),
+        );
         if (scope.blocked.size) blockedExtensions = scope.blocked;
         if (scope.restricted.size) restrictedExtensions = scope.restricted;
       }
     } catch (scopeErr) {
-      log.warn("LLM", `Tool scope resolution failed for space ${currentSpace}: ${scopeErr.message}`);
+      log.warn(
+        "LLM",
+        `Tool scope resolution failed for space ${currentSpace}: ${scopeErr.message}`,
+      );
     }
   }
   // Role-based tool resolution: each role declares its own tools.
   // rolePermissions (when present) filters tools to those whose verb tag is in
   // the role's declared permission set. See [[project_role_permissions_not_envelope]].
-  let tools = resolveToolsForRole(session.role, treeToolConfig, rolePermissions);
+  let tools = resolveToolsForRole(
+    session.role,
+    treeToolConfig,
+    rolePermissions,
+  );
   // Filter tools by spatial extension scope (blocked + restricted)
   if (blockedExtensions || restrictedExtensions) {
-    const { filterToolsByScope } = await import("../land/space/extensionScope.js");
+    const { filterToolsByScope } =
+      await import("../land/space/extensionScope.js");
     tools = filterToolsByScope(tools, blockedExtensions, restrictedExtensions);
   }
   return { tools, blockedExtensions, restrictedExtensions };
@@ -1148,7 +1312,15 @@ async function resolveToolsForPosition(session, beingId, rolePermissions = null)
  * The LLM API call with semaphore, failover, afterLLMCall hook, and failed_generation handling.
  * Returns the response object.
  */
-async function callLLM(openai, MODEL, session, tools, ctx, clientEntry, clientSessionId) {
+async function callLLM(
+  openai,
+  MODEL,
+  session,
+  tools,
+  ctx,
+  clientEntry,
+  clientSessionId,
+) {
   const requestParams = {
     model: MODEL,
     messages: session.messages,
@@ -1178,14 +1350,22 @@ async function callLLM(openai, MODEL, session, tools, ctx, clientEntry, clientSe
   if (_llmChatId) {
     try {
       const { default: _Summon } = await import("../models/summon.js");
-      const _chatDoc = await _Summon.findById(_llmChatId).select("inReplyTo").lean();
+      const _chatDoc = await _Summon
+        .findById(_llmChatId)
+        .select("inReplyTo")
+        .lean();
       if (_chatDoc?.inReplyTo) _llmParentChatId = String(_chatDoc.inReplyTo);
     } catch {}
   }
   const llmHookData = {
-    beingId: ctx.beingId, rootId: ctx.rootId, role: session.role?.name,
-    model: MODEL, messageCount: session.messages.length, hasTools: tools.length > 0,
-    messages: session.messages, spaceId: getCurrentSpace(ctx.beingId) || ctx.rootId || null,
+    beingId: ctx.beingId,
+    rootId: ctx.rootId,
+    role: session.role?.name,
+    model: MODEL,
+    messageCount: session.messages.length,
+    hasTools: tools.length > 0,
+    messages: session.messages,
+    spaceId: getCurrentSpace(ctx.beingId) || ctx.rootId || null,
     summonId: _llmChatId,
     sessionId: _llmSessionId,
     parentSummonId: _llmParentChatId,
@@ -1201,9 +1381,16 @@ async function callLLM(openai, MODEL, session, tools, ctx, clientEntry, clientSe
   // Each [Block] maps to a part of speech: adverbs, pronouns, articles, prepositions.
   if (session.messages[0]?.role === "system") {
     const sys = session.messages[0].content;
-    const blocks = sys.split("\n").filter(l => l.startsWith("[")).map(l => l.split("]")[0] + "]").slice(0, 10);
+    const blocks = sys
+      .split("\n")
+      .filter((l) => l.startsWith("["))
+      .map((l) => l.split("]")[0] + "]")
+      .slice(0, 10);
     if (blocks.length > 0) {
-      log.verbose("Grammar", `[role:${session.role?.name}] modifiers: ${blocks.join(" ")}`);
+      log.verbose(
+        "Grammar",
+        `[role:${session.role?.name}] modifiers: ${blocks.join(" ")}`,
+      );
     }
   }
 
@@ -1213,7 +1400,11 @@ async function callLLM(openai, MODEL, session, tools, ctx, clientEntry, clientSe
   await acquireLlmSlot(ctx.signal, ctx.llmPriority || LLM_PRIORITY.HUMAN);
   try {
     const failoverResult = await callWithFailover(
-      (client, model) => client.chat.completions.create({ ...requestParams, model }, requestOpts),
+      (client, model) =>
+        client.chat.completions.create(
+          { ...requestParams, model },
+          requestOpts,
+        ),
       clientEntry,
       ctx.beingId,
       ctx.rootId || null,
@@ -1227,22 +1418,27 @@ async function callLLM(openai, MODEL, session, tools, ctx, clientEntry, clientSe
     // afterLLMCall: token metering, billing, analytics, forensics.
     // Includes the full responseText so the AI forensics capture in
     // treeos-base gets "what the AI said" without a second hook.
-    hooks.run("afterLLMCall", {
-      beingId: ctx.beingId, rootId: ctx.rootId, role: session.role?.name,
-      model: failoverResult.usedClient?.model || MODEL,
-      usage: response?.usage || null,
-      hasToolCalls: !!response?.choices?.[0]?.message?.tool_calls?.length,
-      summonId: _llmChatId,
-      sessionId: _llmSessionId,
-      responseText: response?.choices?.[0]?.message?.content || null,
-    }).catch(() => {});
+    hooks
+      .run("afterLLMCall", {
+        beingId: ctx.beingId,
+        rootId: ctx.rootId,
+        role: session.role?.name,
+        model: failoverResult.usedClient?.model || MODEL,
+        usage: response?.usage || null,
+        hasToolCalls: !!response?.choices?.[0]?.message?.tool_calls?.length,
+        summonId: _llmChatId,
+        sessionId: _llmSessionId,
+        responseText: response?.choices?.[0]?.message?.content || null,
+      })
+      .catch(() => {});
   } catch (apiErr) {
     // Handle models that invent tool names (e.g. "json") instead of using defined tools.
     // Common with cheap/free models on OpenRouter that attempt function calling syntax
     // but use hallucinated tool names. The error contains the model's actual output in
     // failed_generation. We extract the useful text from that output.
     if (apiErr.code === "tool_use_failed" && apiErr.error?.failed_generation) {
-      const inventedTool = apiErr.error?.message?.match(/tool '(\w+)'/)?.[1] || "?";
+      const inventedTool =
+        apiErr.error?.message?.match(/tool '(\w+)'/)?.[1] || "?";
       let extracted = null;
 
       // Phase 1: Try parsing as JSON and extract from known argument fields
@@ -1250,8 +1446,14 @@ async function callLLM(openai, MODEL, session, tools, ctx, clientEntry, clientSe
         const gen = JSON.parse(apiErr.error.failed_generation);
         const args = gen.arguments || gen;
         // Walk common field names that models put their actual response into
-        extracted = args.responseHint || args.response || args.content
-          || args.summary || args.text || args.message || args.answer;
+        extracted =
+          args.responseHint ||
+          args.response ||
+          args.content ||
+          args.summary ||
+          args.text ||
+          args.message ||
+          args.answer;
         // If none matched but arguments exists, serialize it (but not "undefined")
         if (!extracted && gen.arguments && typeof gen.arguments === "object") {
           extracted = JSON.stringify(gen.arguments);
@@ -1260,39 +1462,75 @@ async function callLLM(openai, MODEL, session, tools, ctx, clientEntry, clientSe
         // Phase 2: JSON parse failed. Try regex extraction from raw text.
         // Check multiple field names, not just responseHint.
         const raw = apiErr.error.failed_generation;
-        for (const field of ["responseHint", "response", "content", "summary", "text", "message", "answer"]) {
-          const match = raw.match(new RegExp(`"${field}"\\s*:\\s*"([\\s\\S]*?)(?:"\\s*[,}])`));
+        for (const field of [
+          "responseHint",
+          "response",
+          "content",
+          "summary",
+          "text",
+          "message",
+          "answer",
+        ]) {
+          const match = raw.match(
+            new RegExp(`"${field}"\\s*:\\s*"([\\s\\S]*?)(?:"\\s*[,}])`),
+          );
           if (match) {
             extracted = match[1].replace(/\\n/g, "\n").replace(/\\"/g, '"');
             break;
           }
         }
         // Phase 3: If still nothing, try to use the raw text itself if it looks like prose
-        if (!extracted && raw && !raw.startsWith("{") && !raw.startsWith("<") && raw.length > 10) {
+        if (
+          !extracted &&
+          raw &&
+          !raw.startsWith("{") &&
+          !raw.startsWith("<") &&
+          raw.length > 10
+        ) {
           extracted = raw;
         }
       }
 
       if (extracted && extracted !== "undefined" && extracted !== "null") {
-        log.warn("LLM", `Model invented tool "${inventedTool}". Extracted response from failed_generation (${extracted.length} chars).`);
-        response = { choices: [{ message: { role: "assistant", content: extracted }, finish_reason: "stop" }] };
+        log.warn(
+          "LLM",
+          `Model invented tool "${inventedTool}". Extracted response from failed_generation (${extracted.length} chars).`,
+        );
+        response = {
+          choices: [
+            {
+              message: { role: "assistant", content: extracted },
+              finish_reason: "stop",
+            },
+          ],
+        };
 
         // Fire afterLLMCall so extension metering still tracks the call
-        hooks.run("afterLLMCall", {
-          beingId: ctx.beingId, rootId: ctx.rootId, role: session.role?.name,
-          model: clientEntry?.model || MODEL,
-          usage: null, // No usage data available from the error
-          hasToolCalls: false,
-          _failedGeneration: true,
-          summonId: _llmChatId,
-          sessionId: _llmSessionId,
-          responseText: extracted || null,
-        }).catch(() => {});
+        hooks
+          .run("afterLLMCall", {
+            beingId: ctx.beingId,
+            rootId: ctx.rootId,
+            role: session.role?.name,
+            model: clientEntry?.model || MODEL,
+            usage: null, // No usage data available from the error
+            hasToolCalls: false,
+            _failedGeneration: true,
+            summonId: _llmChatId,
+            sessionId: _llmSessionId,
+            responseText: extracted || null,
+          })
+          .catch(() => {});
       } else {
-        log.error("LLM", `Model invented tool "${inventedTool}" but no usable text could be extracted from failed_generation.`);
+        log.error(
+          "LLM",
+          `Model invented tool "${inventedTool}" but no usable text could be extracted from failed_generation.`,
+        );
         throw apiErr;
       }
-    } else if ((isJsonEscapeError(apiErr) || isJsonStructuralError(apiErr)) && !session._jsonRetryDone) {
+    } else if (
+      (isJsonEscapeError(apiErr) || isJsonStructuralError(apiErr)) &&
+      !session._jsonRetryDone
+    ) {
       // Provider rejected the model's tool-call JSON. Two distinct
       // failure modes, two different retry hints. Blind retry of the
       // identical request would fail identically; so we inject a
@@ -1304,7 +1542,9 @@ async function callLLM(openai, MODEL, session, tools, ctx, clientEntry, clientSe
       // session._jsonRetryDone is the per-session guard preventing an
       // infinite retry loop if the model can't produce clean output.
       session._jsonRetryDone = true;
-      const errMsg = String(apiErr.message || apiErr.error?.message || "").slice(0, 200);
+      const errMsg = String(
+        apiErr.message || apiErr.error?.message || "",
+      ).slice(0, 200);
       const isEscape = isJsonEscapeError(apiErr);
       const failureClass = isEscape ? "escape" : "structural";
       log.warn(
@@ -1321,9 +1561,15 @@ async function callLLM(openai, MODEL, session, tools, ctx, clientEntry, clientSe
       // print "unset" — provider falls back to its own default and
       // that default is the prime suspect for mid-stream truncation.
       try {
-        const totalMessageChars = (session.messages || [])
-          .reduce((sum, m) => sum + (typeof m?.content === "string" ? m.content.length : 0), 0);
-        const failedGen = apiErr?.error?.failed_generation || apiErr?.error?.failed_response || null;
+        const totalMessageChars = (session.messages || []).reduce(
+          (sum, m) =>
+            sum + (typeof m?.content === "string" ? m.content.length : 0),
+          0,
+        );
+        const failedGen =
+          apiErr?.error?.failed_generation ||
+          apiErr?.error?.failed_response ||
+          null;
         const failedGenLen = failedGen ? String(failedGen).length : null;
         const failedGenTail = failedGen
           ? String(failedGen).slice(-200).replace(/\s+/g, " ")
@@ -1331,16 +1577,21 @@ async function callLLM(openai, MODEL, session, tools, ctx, clientEntry, clientSe
         log.warn(
           "LLM",
           `↳ diagnostic: model=${MODEL} ` +
-          `connection=${clientEntry?.connectionId ? String(clientEntry.connectionId).slice(0, 8) : "default"} ` +
-          `messages=${(session.messages || []).length} ` +
-          `inputChars=${totalMessageChars} ` +
-          `tools=${tools.length} ` +
-          `max_tokens=${requestParams.max_tokens ?? "unset"} ` +
-          (failedGenLen != null ? `partialOutputChars=${failedGenLen} ` : "") +
-          (failedGenTail ? `tail="${failedGenTail}"` : ""),
+            `connection=${clientEntry?.connectionId ? String(clientEntry.connectionId).slice(0, 8) : "default"} ` +
+            `messages=${(session.messages || []).length} ` +
+            `inputChars=${totalMessageChars} ` +
+            `tools=${tools.length} ` +
+            `max_tokens=${requestParams.max_tokens ?? "unset"} ` +
+            (failedGenLen != null
+              ? `partialOutputChars=${failedGenLen} `
+              : "") +
+            (failedGenTail ? `tail="${failedGenTail}"` : ""),
         );
       } catch (diagErr) {
-        log.debug("LLM", `structural-failure diagnostic skipped: ${diagErr.message}`);
+        log.debug(
+          "LLM",
+          `structural-failure diagnostic skipped: ${diagErr.message}`,
+        );
       }
 
       const escapeHint =
@@ -1381,21 +1632,55 @@ async function callLLM(openai, MODEL, session, tools, ctx, clientEntry, clientSe
   // (_jsonRetryDone) prevents this branch from firing a second time.
   if (ctx._retryJsonEscape) {
     ctx._retryJsonEscape = false;
-    return await callLLM(openai, MODEL, session, tools, ctx, clientEntry, clientSessionId);
+    return await callLLM(
+      openai,
+      MODEL,
+      session,
+      tools,
+      ctx,
+      clientEntry,
+      clientSessionId,
+    );
   }
 
   // Validate response structure. Some LLM providers return malformed responses
   // (missing choices array, null choices, empty array). Normalize to prevent
   // downstream crashes.
   if (!response || !response.choices || !Array.isArray(response.choices)) {
-    log.warn("LLM", `LLM returned malformed response (no choices array). Model: ${MODEL}`);
-    response = { choices: [{ message: { role: "assistant", content: "I was unable to generate a response. Please try again." }, finish_reason: "stop" }] };
+    log.warn(
+      "LLM",
+      `LLM returned malformed response (no choices array). Model: ${MODEL}`,
+    );
+    response = {
+      choices: [
+        {
+          message: {
+            role: "assistant",
+            content: "I was unable to generate a response. Please try again.",
+          },
+          finish_reason: "stop",
+        },
+      ],
+    };
   } else if (response.choices.length === 0) {
     log.warn("LLM", `LLM returned empty choices array. Model: ${MODEL}`);
-    response = { choices: [{ message: { role: "assistant", content: "I was unable to generate a response. Please try again." }, finish_reason: "stop" }] };
+    response = {
+      choices: [
+        {
+          message: {
+            role: "assistant",
+            content: "I was unable to generate a response. Please try again.",
+          },
+          finish_reason: "stop",
+        },
+      ],
+    };
   } else if (!response.choices[0].message) {
     log.warn("LLM", `LLM returned choice without message. Model: ${MODEL}`);
-    response.choices[0].message = { role: "assistant", content: "I was unable to generate a response. Please try again." };
+    response.choices[0].message = {
+      role: "assistant",
+      content: "I was unable to generate a response. Please try again.",
+    };
   }
 
   return response;
@@ -1407,7 +1692,17 @@ async function callLLM(openai, MODEL, session, tools, ctx, clientEntry, clientSe
  * earlyReturn: a value to return directly from processMessage.
  * breakLoop: true if the tool loop should break.
  */
-async function handleModelQuirks(assistantMessage, session, tools, openai, MODEL, ctx, isInternal, isCustom, resolvedConnectionId) {
+async function handleModelQuirks(
+  assistantMessage,
+  session,
+  tools,
+  openai,
+  MODEL,
+  ctx,
+  isInternal,
+  isCustom,
+  resolvedConnectionId,
+) {
   if (
     !assistantMessage.tool_calls?.length &&
     assistantMessage.content &&
@@ -1420,7 +1715,8 @@ async function handleModelQuirks(assistantMessage, session, tools, openai, MODEL
       /```tool_code/i.test(_content);
 
     if (looksLikeToolCall) {
-      log.warn("LLM",
+      log.warn(
+        "LLM",
         `Model returned tool-call text instead of function calling (${MODEL}). Retrying without tools.`,
       );
 
@@ -1483,7 +1779,10 @@ async function handleModelQuirks(assistantMessage, session, tools, openai, MODEL
       } else {
         // Fallback produced nothing. Let the original tool-call text through
         // as the response rather than returning nothing.
-        log.warn("LLM", `Fallback retry produced no content for ${MODEL}. Using original text.`);
+        log.warn(
+          "LLM",
+          `Fallback retry produced no content for ${MODEL}. Using original text.`,
+        );
         session.messages.push(assistantMessage);
       }
       return { breakLoop: true };
@@ -1556,7 +1855,10 @@ async function executeTool(toolCall, session, ctx, client, clientSessionId) {
   const toolName = toolCall.function.name;
   let args;
 
-  if (!toolCall.function.arguments || typeof toolCall.function.arguments !== "string") {
+  if (
+    !toolCall.function.arguments ||
+    typeof toolCall.function.arguments !== "string"
+  ) {
     log.error("LLM", `Missing or non-string tool arguments for ${toolName}`);
     session.messages.push({
       role: "tool",
@@ -1607,8 +1909,10 @@ async function executeTool(toolCall, session, ctx, client, clientSessionId) {
   // the orchestrator's reader can find what a tool wrote without having
   // to know which chainstep within the turn did the writing. Falls back
   // to summonId for paths that don't yet plumb rootSummonId.
-  if (ctx?.rootSummonId && !args.rootSummonId) args.rootSummonId = ctx.rootSummonId;
-  else if (ctx?.summonId && !args.rootSummonId) args.rootSummonId = ctx.summonId;
+  if (ctx?.rootSummonId && !args.rootSummonId)
+    args.rootSummonId = ctx.rootSummonId;
+  else if (ctx?.summonId && !args.rootSummonId)
+    args.rootSummonId = ctx.summonId;
   // ibpAddress is the conversation-level identifier (canonical
   // stance::stance). Per-conversation state Maps (abortRegistry,
   // pendingPlan, pendingSwarmPlan) key on it so all chainsteps of one
@@ -1616,7 +1920,8 @@ async function executeTool(toolCall, session, ctx, client, clientSessionId) {
   // carries this value through ctx; fall back to clientSessionId for
   // stanceless background pipelines.
   if (ctx?.mcpCacheKey && !args.ibpAddress) args.ibpAddress = ctx.mcpCacheKey;
-  else if (clientSessionId && !args.ibpAddress) args.ibpAddress = clientSessionId;
+  else if (clientSessionId && !args.ibpAddress)
+    args.ibpAddress = clientSessionId;
   if (ctx.rootId && !args.rootId) args.rootId = ctx.rootId;
   // Pinned position wins. When a turn is dispatched with an explicit
   // ctx.currentSpace (Worker-at-Ruler-scope, sub-Ruler turn, branch
@@ -1627,21 +1932,32 @@ async function executeTool(toolCall, session, ctx, client, clientSessionId) {
   // because position is per-being and shared between user-driven turns
   // and dispatch-driven turns.
   // Falls back to being-position state for unpinned turns (regular chat).
-  const _curNode = ctx.currentSpace || getCurrentSpace(ctx.beingId) || ctx.rootId || null;
+  const _curNode =
+    ctx.currentSpace || getCurrentSpace(ctx.beingId) || ctx.rootId || null;
   if (_curNode && !args.spaceId) args.spaceId = _curNode;
 
   // Tool circuit breaker: if this tool has failed too many times in this session, skip it.
   // The tool disappears from the AI's perspective. It adapts by using other tools.
   // One bad API key disables one tool, not the whole tree.
   if (!session._toolFailures) session._toolFailures = {};
-  const toolCircuitThreshold = parseInt(getLandConfigValue("toolCircuitThreshold") || "5", 10);
+  const toolCircuitThreshold = parseInt(
+    getLandConfigValue("toolCircuitThreshold") || "5",
+    10,
+  );
   if ((session._toolFailures[toolName] || 0) >= toolCircuitThreshold) {
     session.messages.push({
       role: "tool",
       tool_call_id: toolCall.id,
-      content: JSON.stringify({ error: `Tool "${toolName}" has been temporarily disabled due to repeated failures. Use a different approach.` }),
+      content: JSON.stringify({
+        error: `Tool "${toolName}" has been temporarily disabled due to repeated failures. Use a different approach.`,
+      }),
     });
-    return { tool: toolName, args, success: false, error: "tool_circuit_tripped" };
+    return {
+      tool: toolName,
+      args,
+      success: false,
+      error: "tool_circuit_tripped",
+    };
   }
 
   // beforeToolCall: extensions can modify args or cancel. summonId +
@@ -1651,8 +1967,11 @@ async function executeTool(toolCall, session, ctx, client, clientSessionId) {
   const _toolChatId = ctx?.summonId || null;
   const _toolSessionId = ctx?.sessionId || null;
   const hookData = {
-    toolName, args,
-    beingId: ctx.beingId, rootId: ctx.rootId, role: session.role?.name,
+    toolName,
+    args,
+    beingId: ctx.beingId,
+    rootId: ctx.rootId,
+    role: session.role?.name,
     summonId: _toolChatId,
     sessionId: _toolSessionId,
     spaceId: getCurrentSpace(ctx.beingId) || ctx.rootId || null,
@@ -1663,7 +1982,10 @@ async function executeTool(toolCall, session, ctx, client, clientSessionId) {
     session.messages.push({
       role: "tool",
       tool_call_id: toolCall.id,
-      content: JSON.stringify({ error: hookResult.reason || "Tool call cancelled", code: errCode }),
+      content: JSON.stringify({
+        error: hookResult.reason || "Tool call cancelled",
+        code: errCode,
+      }),
     });
     return { tool: toolName, args, success: false, error: errCode };
   }
@@ -1675,14 +1997,18 @@ async function executeTool(toolCall, session, ctx, client, clientSessionId) {
   // Announce tool call BEFORE it runs. Gives live consumers (CLI, web) a
   // chance to show "running <tool>..." status before the result lands.
   if (ctx.onToolCalled) {
-    try { ctx.onToolCalled({ tool: resolvedToolName, args }); }
-    catch { /* never let a listener break the tool loop */ }
+    try {
+      ctx.onToolCalled({ tool: resolvedToolName, args });
+    } catch {
+      /* never let a listener break the tool loop */
+    }
   }
 
   // DB health check: if the database is unreachable, tell the AI immediately
   // so it responds to the user instead of retrying blindly with broken hands.
   if (!isDbHealthy()) {
-    const dbErr = "Database is currently unavailable. Tell the user the land is experiencing issues and to try again shortly.";
+    const dbErr =
+      "Database is currently unavailable. Tell the user the land is experiencing issues and to try again shortly.";
     session.messages.push({
       role: "tool",
       tool_call_id: toolCall.id,
@@ -1705,7 +2031,8 @@ async function executeTool(toolCall, session, ctx, client, clientSessionId) {
     // .race below never fires because MCP throws first. We pass the
     // configured value to BOTH the SDK's option and the race ceiling
     // so a hung MCP layer can still be unstuck by the wrapper.
-    const nodeToolTimeout = session._nodeLlmConfig?.toolCallTimeout ?? TOOL_CALL_TIMEOUT_MS;
+    const nodeToolTimeout =
+      session._nodeLlmConfig?.toolCallTimeout ?? TOOL_CALL_TIMEOUT_MS;
     const toolPromise = client.callTool(
       { name: resolvedToolName, arguments: args },
       undefined,
@@ -1714,7 +2041,15 @@ async function executeTool(toolCall, session, ctx, client, clientSessionId) {
     const result = await Promise.race([
       toolPromise,
       new Promise((_, reject) =>
-        setTimeout(() => reject(new Error(`Tool "${resolvedToolName}" timed out after ${nodeToolTimeout / 1000}s`)), nodeToolTimeout)
+        setTimeout(
+          () =>
+            reject(
+              new Error(
+                `Tool "${resolvedToolName}" timed out after ${nodeToolTimeout / 1000}s`,
+              ),
+            ),
+          nodeToolTimeout,
+        ),
       ),
     ]);
     let resultText =
@@ -1722,11 +2057,14 @@ async function executeTool(toolCall, session, ctx, client, clientSessionId) {
       result?.content?.[0]?.text ||
       JSON.stringify(result);
     // Cap tool result size to prevent huge payloads from consuming context window
-    const nodeResultMax = session._nodeLlmConfig?.toolResultMaxBytes ?? TOOL_RESULT_MAX_BYTES;
+    const nodeResultMax =
+      session._nodeLlmConfig?.toolResultMaxBytes ?? TOOL_RESULT_MAX_BYTES;
     if (resultText && Buffer.byteLength(resultText, "utf8") > nodeResultMax) {
       // Slice by characters (conservative, may be slightly under byte limit for multi-byte)
       const charEstimate = Math.floor(nodeResultMax * 0.9);
-      resultText = resultText.slice(0, charEstimate) + `\n... (truncated, result exceeded ${Math.round(nodeResultMax / 1024)}KB)`;
+      resultText =
+        resultText.slice(0, charEstimate) +
+        `\n... (truncated, result exceeded ${Math.round(nodeResultMax / 1024)}KB)`;
     }
 
     session.messages.push({
@@ -1739,13 +2077,20 @@ async function executeTool(toolCall, session, ctx, client, clientSessionId) {
     delete session._toolFailures[resolvedToolName];
 
     // afterToolCall (success): fire-and-forget
-    hooks.run("afterToolCall", {
-      toolName: resolvedToolName, args, result: resultText, success: true,
-      beingId: ctx.beingId, rootId: ctx.rootId, role: session.role?.name,
-      summonId: _toolChatId,
-      sessionId: _toolSessionId,
-      spaceId: getCurrentSpace(ctx.beingId) || ctx.rootId || null,
-    }).catch(() => {});
+    hooks
+      .run("afterToolCall", {
+        toolName: resolvedToolName,
+        args,
+        result: resultText,
+        success: true,
+        beingId: ctx.beingId,
+        rootId: ctx.rootId,
+        role: session.role?.name,
+        summonId: _toolChatId,
+        sessionId: _toolSessionId,
+        spaceId: getCurrentSpace(ctx.beingId) || ctx.rootId || null,
+      })
+      .catch(() => {});
 
     // Return the full result text too so the chat record can store it
     // for audit replay. Consumers that only care about success still
@@ -1755,9 +2100,13 @@ async function executeTool(toolCall, session, ctx, client, clientSessionId) {
     log.error("LLM", `❌ Tool ${resolvedToolName} failed:`, err.message);
 
     // Tool circuit breaker: increment failure count
-    session._toolFailures[resolvedToolName] = (session._toolFailures[resolvedToolName] || 0) + 1;
+    session._toolFailures[resolvedToolName] =
+      (session._toolFailures[resolvedToolName] || 0) + 1;
     if (session._toolFailures[resolvedToolName] >= toolCircuitThreshold) {
-      log.warn("LLM", `Tool "${resolvedToolName}" tripped after ${toolCircuitThreshold} consecutive failures. Disabled for this session.`);
+      log.warn(
+        "LLM",
+        `Tool "${resolvedToolName}" tripped after ${toolCircuitThreshold} consecutive failures. Disabled for this session.`,
+      );
     }
 
     // If DB died during tool execution, tell the AI clearly
@@ -1772,13 +2121,20 @@ async function executeTool(toolCall, session, ctx, client, clientSessionId) {
     });
 
     // afterToolCall (failure): fire-and-forget
-    hooks.run("afterToolCall", {
-      toolName: resolvedToolName, args, error: err.message, success: false,
-      beingId: ctx.beingId, rootId: ctx.rootId, role: session.role?.name,
-      summonId: _toolChatId,
-      sessionId: _toolSessionId,
-      spaceId: getCurrentSpace(ctx.beingId) || ctx.rootId || null,
-    }).catch(() => {});
+    hooks
+      .run("afterToolCall", {
+        toolName: resolvedToolName,
+        args,
+        error: err.message,
+        success: false,
+        beingId: ctx.beingId,
+        rootId: ctx.rootId,
+        role: session.role?.name,
+        summonId: _toolChatId,
+        sessionId: _toolSessionId,
+        spaceId: getCurrentSpace(ctx.beingId) || ctx.rootId || null,
+      })
+      .catch(() => {});
 
     return {
       tool: resolvedToolName,
@@ -1792,7 +2148,16 @@ async function executeTool(toolCall, session, ctx, client, clientSessionId) {
 /**
  * Ensure final text response, push to messages, return the result object.
  */
-async function finalizeResponse(session, openai, MODEL, response, isInternal, isCustom, resolvedConnectionId, ctx) {
+async function finalizeResponse(
+  session,
+  openai,
+  MODEL,
+  response,
+  isInternal,
+  isCustom,
+  resolvedConnectionId,
+  ctx,
+) {
   // Ensure final text response. If the tool loop ended with no text content
   // (e.g., model returned only tool calls), make one more call to get a summary.
   if (!response?.choices?.[0]?.message?.content) {
@@ -1830,7 +2195,7 @@ async function finalizeResponse(session, openai, MODEL, response, isInternal, is
   return {
     success: true,
     content: finalAnswer,
-    text:    finalAnswer,
+    text: finalAnswer,
     _internal,
   };
 }
@@ -1856,42 +2221,46 @@ export async function processMessage(clientSessionId, message, ctx) {
   // Phase 3: Resolve LLM client + MCP connection
   const llmResult = await resolveLLMClient(ctx, session, clientSessionId);
   if (llmResult.noLlmResponse) return llmResult.noLlmResponse;
-  const { openai, MODEL, isCustom, resolvedConnectionId, client, clientEntry } = llmResult;
+  const { openai, MODEL, isCustom, resolvedConnectionId, client, clientEntry } =
+    llmResult;
 
   // Phase 4: Prepare conversation (trim, init, add user message)
   await prepareConversation(session, ctx, message, clientSessionId);
 
   // Phase 5: Resolve tools for current position
-  let { tools } = await resolveToolsForPosition(session, ctx.beingId, ctx.rolePermissions);
+  let { tools } = await resolveToolsForPosition(
+    session,
+    ctx.beingId,
+    ctx.rolePermissions,
+  );
 
   // Query constraint: when readOnly is set, only tools registered with readOnlyHint
   // are available. Write tools are filtered before the role's LLM fires.
   if (ctx.readOnly) {
     const { isToolReadOnly } = await import("../land/space/extensionScope.js");
-    tools = tools.filter(t => {
+    tools = tools.filter((t) => {
       const name = t.function?.name || t.name;
       return name && isToolReadOnly(name);
     });
   }
 
   // Phase 5b: Resolve LLM config. Three layers: space > role > land globals.
-  // Space config walks metadata.llm.config on ancestors. Role declares its own needs.
+  // Space config walks qualities.llm.config on ancestors. Role declares its own needs.
   // Stored on session so callLLM and executeTool can read overrides.
   session._nodeLlmConfig = resolveLlmConfig(session._ancestorSnapshot, role);
 
   // Phase 6: Tool calling loop
   let response;
   let iterations = 0;
-  const maxIterations = session._nodeLlmConfig.maxToolIterations ?? MAX_TOOL_ITERATIONS;
+  const maxIterations =
+    session._nodeLlmConfig.maxToolIterations ?? MAX_TOOL_ITERATIONS;
 
   // Bounded per-step tool-call budget. When a role declares maxToolCallsPerStep
   // (or ctx forces one), break out after that many tool calls and signal the
   // caller with _continue: true so an orchestrator can open a new chainIndex
   // step and re-enter this loop on the same session.
   const maxToolCallsPerStep =
-    ctx?.maxToolCallsPerStep ??
-    role.maxToolCallsPerStep ??
-    null;
+    ctx?.maxToolCallsPerStep ?? role.maxToolCallsPerStep ?? null;
   let toolCallsThisStep = 0;
   let continueReason = null;
 
@@ -1907,7 +2276,15 @@ export async function processMessage(clientSessionId, message, ctx) {
     iterations++;
 
     // LLM call with semaphore, failover, hooks
-    response = await callLLM(openai, MODEL, session, tools, ctx, clientEntry, clientSessionId);
+    response = await callLLM(
+      openai,
+      MODEL,
+      session,
+      tools,
+      ctx,
+      clientEntry,
+      clientSessionId,
+    );
 
     const choice = response.choices?.[0];
     if (!choice) break;
@@ -1932,12 +2309,28 @@ export async function processMessage(clientSessionId, message, ctx) {
       typeof assistantMessage.content === "string" &&
       assistantMessage.content.trim().length > 0
     ) {
-      try { ctx.onThinking({ text: assistantMessage.content, role: session.role?.name }); }
-      catch { /* never let a listener break the loop */ }
+      try {
+        ctx.onThinking({
+          text: assistantMessage.content,
+          role: session.role?.name,
+        });
+      } catch {
+        /* never let a listener break the loop */
+      }
     }
 
     // Detect models returning tool-call text instead of proper function calling
-    const quirk = await handleModelQuirks(assistantMessage, session, tools, openai, MODEL, ctx, isInternal, isCustom, resolvedConnectionId);
+    const quirk = await handleModelQuirks(
+      assistantMessage,
+      session,
+      tools,
+      openai,
+      MODEL,
+      ctx,
+      isInternal,
+      isCustom,
+      resolvedConnectionId,
+    );
     if (quirk?.earlyReturn) return quirk.earlyReturn;
     if (quirk?.breakLoop) break;
 
@@ -1956,12 +2349,20 @@ export async function processMessage(clientSessionId, message, ctx) {
             `You have not yet called \`${requiredExitTool}\`. ` +
             `Your turn cannot end until that tool fires. Call it now.`,
         });
-        log.verbose("RunChat",
+        log.verbose(
+          "RunChat",
           `exit-gate: ${role.name} produced terminal text without calling ` +
-          `${requiredExitTool}; nudging back into the loop (iteration ${iterations}/${maxIterations})`);
+            `${requiredExitTool}; nudging back into the loop (iteration ${iterations}/${maxIterations})`,
+        );
         continue;
       }
-      if (isInternal) return parseInternalResponse(assistantMessage.content, isCustom, MODEL, resolvedConnectionId);
+      if (isInternal)
+        return parseInternalResponse(
+          assistantMessage.content,
+          isCustom,
+          MODEL,
+          resolvedConnectionId,
+        );
       break;
     }
 
@@ -1971,7 +2372,13 @@ export async function processMessage(clientSessionId, message, ctx) {
     const toolResults = [];
     for (const toolCall of assistantMessage.tool_calls) {
       if (ctx.signal?.aborted) throw new Error("Request cancelled");
-      const toolResult = await executeTool(toolCall, session, ctx, client, clientSessionId);
+      const toolResult = await executeTool(
+        toolCall,
+        session,
+        ctx,
+        client,
+        clientSessionId,
+      );
       toolResults.push(toolResult);
       toolCallsThisStep++;
       firedTools.add(toolCall.function?.name);
@@ -2004,13 +2411,16 @@ export async function processMessage(clientSessionId, message, ctx) {
     // Mid-conversation compression: when messages pile up during long tool chains,
     // compress older messages into a summary. Keeps the AI focused.
     // Config: conversationCompression (bool), compressionThreshold (int), compressionKeep (int)
-    // per-space override: metadata.llm.config.compressionThreshold / compressionKeep
-    const compEnabled = session._nodeLlmConfig?.compressionThreshold !== undefined
-      ? true // space-level config implies enabled
-      : COMPRESSION_ENABLED();
+    // per-space override: qualities.llm.config.compressionThreshold / compressionKeep
+    const compEnabled =
+      session._nodeLlmConfig?.compressionThreshold !== undefined
+        ? true // space-level config implies enabled
+        : COMPRESSION_ENABLED();
     if (compEnabled) {
-      const compThreshold = session._nodeLlmConfig?.compressionThreshold ?? COMPRESSION_THRESHOLD();
-      const compKeep = session._nodeLlmConfig?.compressionKeep ?? COMPRESSION_KEEP();
+      const compThreshold =
+        session._nodeLlmConfig?.compressionThreshold ?? COMPRESSION_THRESHOLD();
+      const compKeep =
+        session._nodeLlmConfig?.compressionKeep ?? COMPRESSION_KEEP();
       await compressConversation(session, compThreshold, compKeep);
     }
   }
@@ -2034,14 +2444,23 @@ export async function processMessage(clientSessionId, message, ctx) {
     return {
       success: true,
       content: "",
-      text:    "",
+      text: "",
       _internal,
       _continue: continueReason === "tool-cap",
       _continueReason: continueReason,
     };
   }
 
-  return finalizeResponse(session, openai, MODEL, response, isInternal, isCustom, resolvedConnectionId, ctx);
+  return finalizeResponse(
+    session,
+    openai,
+    MODEL,
+    response,
+    isInternal,
+    isCustom,
+    resolvedConnectionId,
+    ctx,
+  );
 }
 
 // injectContext retired 2026-05-18. The "frontend pushes a buffer-text
@@ -2117,7 +2536,10 @@ export async function runChat({ being, envelope, role, signal = null } = {}) {
   if (!being?._id) {
     throw new Error("runChat requires being with _id");
   }
-  if (!envelope || (envelope.content === undefined && envelope.content !== "")) {
+  if (
+    !envelope ||
+    (envelope.content === undefined && envelope.content !== "")
+  ) {
     throw new Error("runChat requires envelope with content");
   }
   if (!role || typeof role !== "object" || !role.name) {
@@ -2131,22 +2553,25 @@ export async function runChat({ being, envelope, role, signal = null } = {}) {
     const m = envelope.from.match(/@([a-z][a-z0-9-]*)$/i);
     if (m) askerName = m[1];
   }
-  const beingIn  = envelope.fromBeingId || String(being._id);
-  const beingId  = beingIn;
+  const beingIn = envelope.fromBeingId || String(being._id);
+  const beingId = beingIn;
   const username = askerName || being.name || null;
-  const message  = typeof envelope.content === "string"
-    ? envelope.content
-    : JSON.stringify(envelope.content);
-  const spaceId   = being.currentPositionId || being.homePositionId || null;
-  const rootId   = null;
-  const llmPriority    = envelope.priority || null;
+  const message =
+    typeof envelope.content === "string"
+      ? envelope.content
+      : JSON.stringify(envelope.content);
+  const spaceId = being.currentPositionId || being.homePositionId || null;
+  const rootId = null;
+  const llmPriority = envelope.priority || null;
   const parentSummonId = envelope.inReplyTo || null;
 
-  const { connectToMCP, getMCPClient, MCP_SERVER_URL } = await import("./mcpClient.js");
+  const { connectToMCP, getMCPClient, MCP_SERVER_URL } =
+    await import("./mcpClient.js");
   const { startSummon, finalizeSummon } = await import("./summonTracker.js");
-  const { setSessionAbort, clearSessionAbort } = await import("../cognition/session.js");
+  const { setSessionAbort, clearSessionAbort } =
+    await import("../cognition/session.js");
   const { resolvePipelineKey } = await import("./session.js");
-  const { computeIbpAddressForSummon } = await import("../ibp/addressStorage.js");
+  const { computeIbpAddressForSummon } = await import("./summonAddress.js");
 
   // Eagerly compute the IBP Address for being-to-being conversations
   // so it can serve as the MCP client cache key. When beingOut is set
@@ -2155,8 +2580,8 @@ export async function runChat({ being, envelope, role, signal = null } = {}) {
   // resolved, fall back to a fresh ephemeral pipeline key.
   const _eagerIbpAddress = beingOut
     ? await computeIbpAddressForSummon({
-        askerBeingId:    beingId,
-        askerPosition:   getCurrentSpace(beingId) || null,
+        askerBeingId: beingId,
+        askerPosition: getCurrentSpace(beingId) || null,
         addresseeBeingId: beingOut,
       })
     : null;
@@ -2167,7 +2592,7 @@ export async function runChat({ being, envelope, role, signal = null } = {}) {
   // its own local for clarity in the function body; resolves to the
   // same string as mcpCacheKey under the new architecture.
   const sessionKey = mcpCacheKey;
-  const sessionId  = crypto.randomUUID();
+  const sessionId = crypto.randomUUID();
 
   // Abort controller for cancellation (Ctrl+C, timeout, etc.)
   const abort = signal ? null : new AbortController();
@@ -2202,7 +2627,12 @@ export async function runChat({ being, envelope, role, signal = null } = {}) {
   const currentRole = getCurrentRole(mcpCacheKey);
   if (currentRole?.name !== role.name) {
     try {
-      await switchRole(sessionKey, role, { username, beingId, mcpCacheKey, currentSpace: getCurrentSpace(beingId) });
+      await switchRole(sessionKey, role, {
+        username,
+        beingId,
+        mcpCacheKey,
+        currentSpace: getCurrentSpace(beingId),
+      });
     } catch (err) {
       log.warn("RunChat", `Role switch to ${role.name} failed: ${err.message}`);
     }
@@ -2211,20 +2641,20 @@ export async function runChat({ being, envelope, role, signal = null } = {}) {
   // 4. Create Summon record
   let chat;
   try {
-    const clientInfo = await getClientForBeing(beingId, sessionKey) || {};
+    const clientInfo = (await getClientForBeing(beingId, sessionKey)) || {};
     chat = await startSummon({
-      beingIn:       beingId,                                       // asker
-      beingOut,                                                     // responder
+      beingIn: beingId, // asker
+      beingOut, // responder
       // Asker stance position: the asker's CURRENT navigated position
       // (per Being.currentPositionId / seed/land/being/position.js cache),
       // with rootId as fallback. The Summon's IBP Address is computed
       // from this stance plus the addressee's stance.
       askerPosition: getCurrentSpace(beingId) || rootId || null,
       message,
-      activeRole:    role.name,
+      activeRole: role.name,
       llmProvider: {
-        isCustom:     clientInfo.isCustom || false,
-        model:        clientInfo.model || "unknown",
+        isCustom: clientInfo.isCustom || false,
+        model: clientInfo.model || "unknown",
         connectionId: clientInfo.connectionId || null,
       },
       // When the caller links to a parent Summon, the new record
@@ -2246,17 +2676,19 @@ export async function runChat({ being, envelope, role, signal = null } = {}) {
       beingId,
       rootId,
       currentSpace: getCurrentSpace(beingId),
-      summonId:     chat?._id || null,
-      rootSummonId: chat?._id || null,   // runChat creates one root Summon; summonId === rootSummonId
+      summonId: chat?._id || null,
+      rootSummonId: chat?._id || null, // runChat creates one root Summon; summonId === rootSummonId
       sessionId,
       mcpCacheKey,
-      signal:       abortSignal,
+      signal: abortSignal,
       llmPriority,
       // Role permissions ∩ tool verbs — narrows the LLM's tool surface
       // to what the role declares. Permissions are role identity; no
       // envelope or caller may widen them. Untagged tools are rejected
       // at registration (see seed/tools.js).
-      rolePermissions: Array.isArray(role.permissions) ? role.permissions : null,
+      rolePermissions: Array.isArray(role.permissions)
+        ? role.permissions
+        : null,
       // Role spec flows through ctx so ensureSession can apply it
       // when the session has none yet (first message on a fresh key).
       role,
@@ -2264,14 +2696,22 @@ export async function runChat({ being, envelope, role, signal = null } = {}) {
   } catch (err) {
     if (chat) {
       const stopped = abortSignal.aborted;
-      try { await finalizeSummon({ summonId: chat._id, content: stopped ? null : `Error: ${err.message}`, stopped }); } catch {}
+      try {
+        await finalizeSummon({
+          summonId: chat._id,
+          content: stopped ? null : `Error: ${err.message}`,
+          stopped,
+        });
+      } catch {}
     }
     if (abort) clearSessionAbort(sessionKey);
     throw err;
   }
 
   const stopped = abortSignal.aborted;
-  let text = stopped ? null : (result?.content || result?.answer || "No response.");
+  let text = stopped
+    ? null
+    : result?.content || result?.answer || "No response.";
 
   // 6. beforeResponse hook: extensions clean/modify the response before delivery.
   if (text && !stopped) {
@@ -2286,7 +2726,12 @@ export async function runChat({ being, envelope, role, signal = null } = {}) {
   if (chat) {
     try {
       const internal = result?._internal || {};
-      await finalizeSummon({ summonId: chat._id, content: stopped ? null : text, stopped, role: internal.role || role.name });
+      await finalizeSummon({
+        summonId: chat._id,
+        content: stopped ? null : text,
+        stopped,
+        role: internal.role || role.name,
+      });
     } catch {}
   }
 
@@ -2296,7 +2741,7 @@ export async function runChat({ being, envelope, role, signal = null } = {}) {
   return {
     text,
     summonId: chat?._id || null,
-    role:     role.name,
+    role: role.name,
     sessionKey,
   };
 }

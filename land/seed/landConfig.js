@@ -3,7 +3,7 @@
 // My remembered settings, across reboots.
 //
 // At genesis I plant the `.config` land seed space and write the
-// boot-time settings into its metadata Map. Every later boot, I
+// boot-time settings into its qualities Map. Every later boot, I
 // read that Map back through `initLandConfig()` and the values are
 // who I am operationally on this land. `getLandConfigValue(key)`
 // and `setLandConfigValue(key, value)` are the only sanctioned
@@ -96,15 +96,15 @@ function deepCopy(value) {
 
 async function loadConfigFromDb() {
   try {
-    const configNode = await Space.findOne({ seedSpace: SEED_SPACE.CONFIG }).lean();
-    if (!configNode || !configNode.qualities) {
-      log.warn("Land", "No .config land seed space found or metadata is empty. Using empty config.");
+    const configSpace = await Space.findOne({ seedSpace: SEED_SPACE.CONFIG }).lean();
+    if (!configSpace || !configSpace.qualities) {
+      log.warn("Land", "No .config land seed space found or qualities is empty. Using empty config.");
       configCache = {};
       return;
     }
-    const raw = configNode.qualities instanceof Map
-      ? Object.fromEntries(configNode.qualities)
-      : { ...configNode.qualities };
+    const raw = configSpace.qualities instanceof Map
+      ? Object.fromEntries(configSpace.qualities)
+      : { ...configSpace.qualities };
 
     // Strip keys that would fail validation (manual DB edits, proto
     // pollution injected directly into MongoDB, Mongoose lean() leaks).
@@ -236,9 +236,9 @@ export const CONFIG_DEFAULTS = {
   spaceLockTimeoutMs: 30000,
   spaceLockWaitMs:    5000,
 
-  // Metadata namespace limits (per-namespace, all three primitive maps)
-  metadataNamespaceMaxBytes: 524288,
-  metadataMaxNestingDepth:   8,
+  // Quality namespace limits (per-namespace, all three primitive maps)
+  qualityNamespaceMaxBytes: 524288,
+  qualityMaxNestingDepth:   8,
 
   // Cascade
   cascadeEnabled: false,
@@ -285,7 +285,7 @@ export const CONFIG_DEFAULTS = {
   // Circuit breaker (space tree health)
   treeCircuitEnabled: false,
   maxTreeSpaces: 10000,
-  maxTreeMetadataBytes: 1073741824,
+  maxTreeQualityBytes: 1073741824,
   maxTreeErrorRate: 100,
   circuitSpaceWeight: 0.4,
   circuitDensityWeight: 0.3,

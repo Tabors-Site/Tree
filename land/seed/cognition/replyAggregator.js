@@ -54,16 +54,23 @@ import log from "../system/log.js";
  *   abort:  () => void,
  * }}
  */
-export function aggregate({ correlations, minReplies, timeoutMs, signal, matcher } = {}) {
+export function aggregate({
+  correlations,
+  minReplies,
+  timeoutMs,
+  signal,
+  matcher,
+} = {}) {
   if (!Array.isArray(correlations) || correlations.length === 0) {
     throw new Error("aggregate requires correlations[]");
   }
-  const need = typeof minReplies === "number" && minReplies > 0
-    ? Math.min(minReplies, correlations.length)
-    : correlations.length;
+  const need =
+    typeof minReplies === "number" && minReplies > 0
+      ? Math.min(minReplies, correlations.length)
+      : correlations.length;
 
   const want = new Set(correlations.map(String));
-  const got = new Map();         // correlation -> reply (deduped)
+  const got = new Map(); // correlation -> reply (deduped)
   let resolveFn = null;
   let promise = null;
   let timeoutId = null;
@@ -78,7 +85,9 @@ export function aggregate({ correlations, minReplies, timeoutMs, signal, matcher
       timeoutId = null;
     }
     if (signal && abortHandler) {
-      try { signal.removeEventListener("abort", abortHandler); } catch {}
+      try {
+        signal.removeEventListener("abort", abortHandler);
+      } catch {}
       abortHandler = null;
     }
     resolveFn?.(payload);
@@ -86,9 +95,7 @@ export function aggregate({ correlations, minReplies, timeoutMs, signal, matcher
 
   function currentReplies() {
     // Return replies in the order their correlations were registered.
-    return correlations
-      .map((c) => got.get(String(c)))
-      .filter(Boolean);
+    return correlations.map((c) => got.get(String(c))).filter(Boolean);
   }
 
   function notify(reply) {
@@ -99,7 +106,9 @@ export function aggregate({ correlations, minReplies, timeoutMs, signal, matcher
     if (got.has(matchId)) return false; // dedupe — first reply wins per correlation
     if (matcher && typeof matcher === "function") {
       let ok = false;
-      try { ok = !!matcher(reply); } catch (err) {
+      try {
+        ok = !!matcher(reply);
+      } catch (err) {
         log.warn("ReplyAggregator", `matcher threw: ${err.message}`);
       }
       if (!ok) return false;
@@ -115,19 +124,36 @@ export function aggregate({ correlations, minReplies, timeoutMs, signal, matcher
     if (!promise) {
       promise = new Promise((resolve) => {
         resolveFn = resolve;
-        if (settled) resolve({ replies: currentReplies(), timedOut: false, cancelled: false });
+        if (settled)
+          resolve({
+            replies: currentReplies(),
+            timedOut: false,
+            cancelled: false,
+          });
       });
       if (typeof timeoutMs === "number" && timeoutMs > 0) {
         timeoutId = setTimeout(() => {
-          settle({ replies: currentReplies(), timedOut: true, cancelled: false });
+          settle({
+            replies: currentReplies(),
+            timedOut: true,
+            cancelled: false,
+          });
         }, timeoutMs);
       }
       if (signal) {
         if (signal.aborted) {
-          settle({ replies: currentReplies(), timedOut: false, cancelled: true });
+          settle({
+            replies: currentReplies(),
+            timedOut: false,
+            cancelled: true,
+          });
         } else {
           abortHandler = () => {
-            settle({ replies: currentReplies(), timedOut: false, cancelled: true });
+            settle({
+              replies: currentReplies(),
+              timedOut: false,
+              cancelled: true,
+            });
           };
           signal.addEventListener("abort", abortHandler, { once: true });
         }

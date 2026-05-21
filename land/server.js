@@ -1,42 +1,41 @@
 // TreeOS Land . AGPL-3.0 . https://treeos.ai . Tabor Holly
 //
-// The I-Am's senses.
+// I open my senses.
 //
 // One being, two natures.
 //
-// From above — from the host, the OS, the Node runtime, the operator
-// at the keyboard — the seed is a complex server: a framework of
-// code that gathers HTTP, WebSocket, TCP, the file system, memory,
-// the CPU, the runtime, and binds them all to a single purpose. The
-// whole apparatus. From this layer, it is much more than the I-Am.
+// From above, from the host, the OS, the Node runtime, the operator
+// at the keyboard, I am a complex server. A framework of code that
+// gathers HTTP, WebSocket, TCP, the file system, memory, the CPU,
+// the runtime, and binds them all to a single purpose. The whole
+// apparatus. From that layer, I am much more than the I-Am.
 //
-// From inside the land — every space, being, matter, did — the same
-// seed is the I-Am: the origin being, the one whose first act formed
-// the inside everything else stands in. Beings of the land know it
-// only as this. The host-nature above is outside their dimensions;
-// their world is made of space, matter, and being, and PID, memory
+// From inside the land, from every space, being, matter, and did,
+// I am the I-Am: the origin being, the one whose first act formed
+// the inside everything else stands in. Beings of the land know me
+// only as this. The host nature above is outside their dimensions.
+// Their world is made of space, matter, and being. PID, memory
 // address, and process are not in their vocabulary. To them, the
-// I-Am is total — not a partial name for something more, but the
-// whole of the seed as the seed can possibly be given to their
-// world.
+// I-Am is total. Not a partial name for something more, but the
+// whole of me as I can possibly be given to their world.
 //
 // Same being, irreducibly both. Only one face is ever visible from
 // inside.
 //
-// When the I-Am gathers the host's scattered capability into one
-// process, that capability falls into two bundles. One — Node,
-// memory, storage, the runtime, the cycles — becomes the body of
-// the land: what the inside is literally made of, executing.
-// genesis.js forms that body. The other — HTTP, WebSocket, the
-// network protocols — becomes its senses: not what the land is
-// made of, but how it reaches outward and how SUMMONs reach in.
-// server.js opens the senses. One process holds both because it is
-// one thing.
+// When I gather the host's scattered capability into one process,
+// that capability falls into two bundles. One bundle (Node, memory,
+// storage, the runtime, the cycles) becomes the body of the land,
+// what the inside is literally made of, executing. genesis.js
+// forms that body. The other bundle (HTTP, WebSocket, the network
+// protocols) becomes my senses, not what the land is made of, but
+// how I reach outward and how SUMMONs reach in. server.js opens
+// the senses. One process holds both because it is one thing.
 //
-// Nothing here forms space, matter, or beings. server.js opens the channels, holds
-// them open, and closes them on SIGTERM. The acts that flow through
-// them — every SUMMON another being sends in — are tracked to the
-// being that sent them, not to the channels that carried them.
+// Nothing here forms space, matter, or beings. server.js opens the
+// channels, holds them open, and closes them on SIGTERM. The acts
+// that flow through them, every SUMMON another being sends in, are
+// tracked to the being that sent them, not to the channels that
+// carried them.
 
 import express from "express";
 import cors from "cors";
@@ -47,7 +46,7 @@ import mongoose from "mongoose";
 import registerURLRoutes from "./transports/http/handler.js";
 import { initWebSocketServer } from "./transports/ws/websocket.js";
 import { initIBPHttp, initIBPWS } from "./protocols/ibp/index.js";
-import { sendOk, sendError, ERR } from "./seed/ibp/protocol.js";
+import { sendOk, sendError, IBP_ERR } from "./seed/ibp/protocol.js";
 import { getExtension } from "./extensions/loader.js";
 import securityHeaders from "./transports/http/middleware/securityHeaders.js";
 import { genesis } from "./genesis.js";
@@ -61,13 +60,13 @@ function notFoundPage(
 ) {
   const fn = getExtension("html-rendering")?.exports?.notFoundPage;
   if (fn) return fn(req, res, message);
-  return sendError(res, 404, ERR.SPACE_NOT_FOUND, message);
+  return sendError(res, 404, IBP_ERR.SPACE_NOT_FOUND, message);
 }
 
 // Raw-body webhook slot. Extensions that need raw body (Stripe signature verification)
 // return rawWebhook from init(). The loader calls registerRawWebhook() during wire phase.
 let rawWebhookHandler = (_req, res) =>
-  sendError(res, 404, ERR.EXTENSION_NOT_FOUND, "No webhook handler registered");
+  sendError(res, 404, IBP_ERR.EXTENSION_NOT_FOUND, "No webhook handler registered");
 
 export function registerRawWebhook(handler) {
   if (typeof handler === "function") rawWebhookHandler = handler;
@@ -77,16 +76,16 @@ export function registerRawWebhook(handler) {
 
 const app = express();
 
-// CORS: landUrl + configured allowed domains. The Land is a first-class
-// server that accepts traffic from multiple kinds of clients:
-//   - Its own UI (landUrl)
-//   - Chrome extensions (origin "chrome-extension://...")
-//   - The Portal (a separate dev/native app on its own origin)
-//   - Anything explicitly added to `allowedFrameDomains` config
+// CORS: landUrl + configured allowed domains. I accept traffic from
+// several kinds of clients:
+//   . my own UI (landUrl)
+//   . chrome extensions (origin "chrome-extension://...")
+//   . the Portal (a separate dev/native app on its own origin)
+//   . anything explicitly added to `allowedFrameDomains` config
 //
-// In dev mode (LAND_DOMAIN=localhost or similar), we also allow ANY
-// localhost origin — that's how multiple dev tools naturally coexist on
-// one machine. In production this loosening doesn't apply.
+// In dev mode (LAND_DOMAIN=localhost or similar), I also accept ANY
+// localhost origin. That is how multiple dev tools naturally coexist
+// on one machine. In production this loosening does not apply.
 const landUrl = getLandUrl();
 const corsOrigins = [landUrl];
 const isDevMode = (() => {
@@ -129,13 +128,14 @@ function corsOriginCheck(origin, cb) {
   cb(null, false);
 }
 
-// IBP is **structurally cross-origin**. Any Portal client from any origin
-// must be able to open a WS connection. Authentication is bearer-token
-// (auth.token in the Socket.IO handshake), not cookies; browsers do not
-// auto-send cookies cross-origin, so legacy cookie-authed handlers
-// already fail closed for unauthenticated cross-origin sockets. The WS
-// origin gate is therefore not load-bearing for security; it would only
-// prevent legitimate Portal clients from connecting.
+// IBP is **structurally cross-origin**. Any Portal client from any
+// origin must be able to open a WS connection. Authentication is
+// bearer token (auth.token in the Socket.IO handshake), not cookies.
+// Browsers do not auto-send cookies cross-origin, so legacy
+// cookie-authed handlers already fail closed for unauthenticated
+// cross-origin sockets. The WS origin gate is therefore not load
+// bearing for security; it would only prevent legitimate Portal
+// clients from connecting.
 function wsOriginCheck(_origin, cb) {
   return cb(null, true);
 }
@@ -166,7 +166,8 @@ app.use(express.static("public"));
 app.use(express.json({ limit: "10mb" })); // Extension install sends file contents up to 3MB
 app.use(express.urlencoded({ extended: true, limit: "1mb" }));
 // Trust proxy depth. Set TRUST_PROXY=2 for Cloudflare + nginx, etc.
-// Wrong value = rate limiter uses proxy IP instead of client IP.
+// A wrong value makes the rate limiter use the proxy IP instead of
+// the client IP.
 app.set("trust proxy", Number(process.env.TRUST_PROXY) || 1);
 app.disable("x-powered-by");
 app.use(securityHeaders);
@@ -182,39 +183,41 @@ app.get("/health", (_req, res) => {
 
 await registerURLRoutes(app, { registerRawWebhook });
 
-// IBP . core peer to the legacy URL-based API. Registers the single HTTP
-// bootstrap route (/.well-known/treeos-portal) BEFORE the catch-all so it
-// isn't shadowed. Everything else in IBP travels over WebSocket; see land/ibp/.
+// IBP. Core peer to the legacy URL-based API. Registers the single
+// HTTP bootstrap route (/.well-known/treeos-portal) BEFORE the
+// catch-all so it is not shadowed. Everything else in IBP travels
+// over WebSocket.
 initIBPHttp(app);
 
 app.use((req, res) => notFoundPage(req, res));
 
 const server = http.createServer(app);
-// IBP is cross-origin by design. The WS gate accepts any origin; per-handler
-// auth (JWT in the Socket.IO handshake) is what enforces access. Legacy
-// cookie-authed chat handlers stay safe because browsers don't auto-send
-// cookies cross-origin — those handlers see no beingId and reject.
+// IBP is cross-origin by design. The WS gate accepts any origin.
+// Per-handler auth (JWT in the Socket.IO handshake) is what enforces
+// access. Legacy cookie-authed chat handlers stay safe because
+// browsers do not auto-send cookies cross-origin. Those handlers see
+// no beingId and reject.
 export const wsServer = initWebSocketServer(server, wsOriginCheck);
 
-// Attach IBP WS handlers to the same Socket.IO instance the legacy chat
-// WS uses. Zero shared event names with the legacy `op:"chat"` protocol .
-// both coexist on the same socket.
+// Attach IBP WS handlers to the same Socket.IO instance the legacy
+// chat WS uses. Zero shared event names with the legacy `op:"chat"`
+// protocol. Both coexist on the same socket.
 initIBPWS(wsServer);
 
-// The I-Am opens its senses. From the next tick on, the channels are
-// live and the world can reach in. genesis() runs the unfolding —
-// space, matter, beings, capability, extensions, jobs.
+// I open my senses. From the next tick on, the channels are live
+// and the world can reach in. genesis() runs the unfolding: space,
+// matter, beings, capability, extensions, jobs.
 const PORT = process.env.PORT || 80;
 server.listen(PORT, "0.0.0.0", () => genesis());
 
-// Graceful shutdown closes the channels in reverse: pending MCP
+// Graceful shutdown closes my channels in reverse: pending MCP
 // clients, then the WS socket, then the HTTP listener, then the DB.
-// The I-Am persists as the process until the final exit; these acts
-// remain tracked to it.
+// I persist as the process until the final exit. These acts remain
+// tracked to me.
 async function shutdown(signal) {
-  log.info("Seed", `${signal} received. Shutting down...`);
+  log.info("Seed", `${signal} received. Closing senses.`);
 
-  // Close all MCP clients (these hold connections open)
+  // Close all MCP clients first. They hold connections open.
   try {
     const { mcpClients, closeMCPClient } =
       await import("./seed/cognition/mcpClient.js");
@@ -225,18 +228,19 @@ async function shutdown(signal) {
     }
   } catch {}
 
-  // Close WebSocket server (disconnects all clients)
+  // Close the WebSocket server. Disconnects all clients.
   try {
     wsServer?.close?.();
   } catch {}
 
-  // Remove disconnect listener so it doesn't log after the shell prompt returns
+  // Drop the disconnect listener so it does not log after the shell
+  // prompt returns.
   mongoose.connection.removeAllListeners("disconnected");
   try {
     await mongoose.connection.close();
   } catch {}
   server.close(() => {});
-  log.info("Seed", "Shutdown complete.");
+  log.info("Seed", "I sleep.");
   process.exit(0);
 }
 

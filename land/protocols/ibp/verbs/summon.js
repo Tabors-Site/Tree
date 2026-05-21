@@ -17,7 +17,7 @@
 // [[project_protocol_transport_separation]].
 
 import log from "../../../seed/system/log.js";
-import { IbpError, IBP_ERR, isIbpError } from "../../../seed/ibp/errors.js";
+import { IbpError, IBP_ERR, isIbpError } from "../../../seed/ibp/protocol.js";
 import { ackOk, ackError } from "../envelope.js";
 import { summonVerb } from "../../../seed/ibp/verbs.js";
 import { emitToBeingRoom } from "../../../seed/ibp/pushChannel.js";

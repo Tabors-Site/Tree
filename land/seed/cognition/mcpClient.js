@@ -36,7 +36,8 @@ import log from "../system/log.js";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 
-const MCP_SERVER_URL = process.env.MCP_SERVER_URL || "http://localhost:3000/mcp";
+const MCP_SERVER_URL =
+  process.env.MCP_SERVER_URL || "http://localhost:3000/mcp";
 
 // ─────────────────────────────────────────────────────────────────────────
 // CLIENT MAP
@@ -53,12 +54,21 @@ const clientLastUsed = new Map();
 
 import { getLandConfigValue } from "../landConfig.js";
 
-function MAX_MCP_CLIENTS() { return Math.max(100, Math.min(Number(getLandConfigValue("maxMcpClients")) || 5000, 50000)); }
+function MAX_MCP_CLIENTS() {
+  return Math.max(
+    100,
+    Math.min(Number(getLandConfigValue("maxMcpClients")) || 5000, 50000),
+  );
+}
 const MCP_CLOSE_TIMEOUT_MS = 5000; // safety ceiling, not configurable
 
 // Configurable via land config, read at use time
-function mcpConnectTimeout() { return Number(getLandConfigValue("mcpConnectTimeout")) || 10000; }
-function mcpStaleMs() { return Number(getLandConfigValue("mcpStaleTimeout")) || 3600000; }
+function mcpConnectTimeout() {
+  return Number(getLandConfigValue("mcpConnectTimeout")) || 10000;
+}
+function mcpStaleMs() {
+  return Number(getLandConfigValue("mcpStaleTimeout")) || 3600000;
+}
 
 // ─────────────────────────────────────────────────────────────────────────
 // CONNECT
@@ -79,9 +89,13 @@ export async function connectToMCP(serverUrl, cacheKey, jwtToken) {
 
   // Cap: evict oldest client if at limit
   if (mcpClients.size >= MAX_MCP_CLIENTS()) {
-    let oldestId = null, oldestTime = Infinity;
+    let oldestId = null,
+      oldestTime = Infinity;
     for (const [id, ts] of clientLastUsed) {
-      if (ts < oldestTime) { oldestTime = ts; oldestId = id; }
+      if (ts < oldestTime) {
+        oldestTime = ts;
+        oldestId = id;
+      }
     }
     if (oldestId) {
       log.debug("MCP", `Evicting oldest MCP client: ${oldestId}`);
@@ -111,12 +125,17 @@ export async function connectToMCP(serverUrl, cacheKey, jwtToken) {
     await Promise.race([
       client.connect(transport),
       new Promise((_, reject) =>
-        setTimeout(() => reject(new Error("MCP connect timed out")), mcpConnectTimeout())
+        setTimeout(
+          () => reject(new Error("MCP connect timed out")),
+          mcpConnectTimeout(),
+        ),
       ),
     ]);
   } catch (err) {
     // Clean up the transport on failure
-    try { if (transport.close) await transport.close(); } catch {}
+    try {
+      if (transport.close) await transport.close();
+    } catch {}
     throw new Error(`MCP connection failed: ${err.message}`);
   }
 
@@ -142,9 +161,12 @@ export async function closeMCPClient(cacheKey) {
 
   try {
     // Close with timeout. Broken transports can hang on close.
-    const closePromise = typeof client.close === "function"
-      ? client.close()
-      : (client.transport?.close ? client.transport.close() : Promise.resolve());
+    const closePromise =
+      typeof client.close === "function"
+        ? client.close()
+        : client.transport?.close
+          ? client.transport.close()
+          : Promise.resolve();
 
     await Promise.race([
       closePromise,
@@ -171,18 +193,24 @@ export function getMCPClient(cacheKey) {
 // Safety net for violent disconnects where the cleanup handler never fires.
 // ─────────────────────────────────────────────────────────────────────────
 
-setInterval(() => {
-  const now = Date.now();
-  let swept = 0;
-  for (const [cacheKey, lastUsed] of clientLastUsed) {
-    if (now - lastUsed > mcpStaleMs()) {
-      closeMCPClient(cacheKey).catch(() => {});
-      swept++;
+setInterval(
+  () => {
+    const now = Date.now();
+    let swept = 0;
+    for (const [cacheKey, lastUsed] of clientLastUsed) {
+      if (now - lastUsed > mcpStaleMs()) {
+        closeMCPClient(cacheKey).catch(() => {});
+        swept++;
+      }
     }
-  }
-  if (swept > 0) {
-    log.debug("MCP", `Swept ${swept} stale MCP client(s) (${mcpClients.size} remaining)`);
-  }
-}, 15 * 60 * 1000).unref(); // every 15 minutes
+    if (swept > 0) {
+      log.debug(
+        "MCP",
+        `Swept ${swept} stale MCP client(s) (${mcpClients.size} remaining)`,
+      );
+    }
+  },
+  15 * 60 * 1000,
+).unref(); // every 15 minutes
 
 export { MCP_SERVER_URL };

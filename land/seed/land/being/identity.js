@@ -16,7 +16,7 @@ import crypto from "crypto";
 import { v4 as uuidv4 } from "uuid";
 import { escapeRegex } from "../../system/utils.js";
 import { getLandConfigValue } from "../../landConfig.js";
-import { ERR, ProtocolError } from "../../ibp/protocol.js";
+import { IBP_ERR, IbpError } from "../../ibp/protocol.js";
 import log from "../../system/log.js";
 
 if (!process.env.JWT_SECRET)
@@ -35,33 +35,21 @@ const MAX_PASSWORD = 128;
 
 function validateName(name) {
   if (!name || typeof name !== "string")
-    throw new ProtocolError(400, ERR.INVALID_INPUT, "Name is required");
+    throw new IbpError(IBP_ERR.INVALID_INPUT, "Name is required");
   const trimmed = name.trim();
   if (!BEING_NAME_RE.test(trimmed)) {
-    throw new ProtocolError(
-      400,
-      ERR.INVALID_INPUT,
-      "Name may only contain letters, numbers, hyphens, and underscores (1-32 chars)",
-    );
+    throw new IbpError(IBP_ERR.INVALID_INPUT, "Name may only contain letters, numbers, hyphens, and underscores (1-32 chars)");
   }
   return trimmed;
 }
 
 function validatePassword(password) {
   if (!password || typeof password !== "string")
-    throw new ProtocolError(400, ERR.INVALID_INPUT, "Password is required");
+    throw new IbpError(IBP_ERR.INVALID_INPUT, "Password is required");
   if (password.length < MIN_PASSWORD)
-    throw new ProtocolError(
-      400,
-      ERR.INVALID_INPUT,
-      `Password must be at least ${MIN_PASSWORD} characters`,
-    );
+    throw new IbpError(IBP_ERR.INVALID_INPUT, `Password must be at least ${MIN_PASSWORD} characters`);
   if (password.length > MAX_PASSWORD)
-    throw new ProtocolError(
-      400,
-      ERR.INVALID_INPUT,
-      `Password must be ${MAX_PASSWORD} characters or fewer`,
-    );
+    throw new IbpError(IBP_ERR.INVALID_INPUT, `Password must be ${MAX_PASSWORD} characters or fewer`);
 }
 
 // ─────────────────────────────────────────────────────────────────────────
@@ -80,8 +68,8 @@ export async function isFirstBeing() {
 // so the first human's being-tree parent is me. Race-resilient: two
 // concurrent first-run registrations both pass isFirstBeing(); the
 // earliest insertion wins via the unique index.
-export async function createFirstBeing(username, password, opts = {}) {
-  return createBeing(username, password, opts);
+export async function createFirstBeing(name, password, opts = {}) {
+  return createBeing(name, password, opts);
 }
 
 // Create a being. Defaults to operatingMode="human" with a chosen
@@ -100,7 +88,7 @@ export async function createBeing(name, password, opts = {}) {
     name: { $regex: `^${escapeRegex(name)}$`, $options: "i" },
   });
   if (existing)
-    throw new ProtocolError(409, ERR.RESOURCE_CONFLICT, "Name already taken");
+    throw new IbpError(IBP_ERR.RESOURCE_CONFLICT, "Name already taken");
 
   // Roles + defaultRole. opts.role (singular) is the common shape: AI
   // beings declare one role at creation; that becomes the default and
@@ -145,14 +133,14 @@ export async function createBeing(name, password, opts = {}) {
     await being.save();
   } catch (err) {
     if (err.code === 11000)
-      throw new ProtocolError(409, ERR.RESOURCE_CONFLICT, "Name already taken");
+      throw new IbpError(IBP_ERR.RESOURCE_CONFLICT, "Name already taken");
     throw err;
   }
   return being;
 }
 
 /**
- * Generate a unique username for a new AI being. Pattern:
+ * Generate a unique name for a new being. Pattern:
  * <role><suffix>, retrying with a longer suffix on collision. Used by
  * extensions that scaffold AI beings (governing → ruler/planner/...).
  */
@@ -307,7 +295,7 @@ export async function verifyTokenStrict(token, { loadBeing = true } = {}) {
   if (!decoded) return null;
 
   const being = await Being.findById(decoded.beingId)
-    .select(loadBeing ? undefined : "_id metadata")
+    .select(loadBeing ? undefined : "_id qualities")
     .lean();
   if (!being) return null;
 
@@ -380,7 +368,7 @@ export async function findBeingByName(name) {
  * @param {string} [opts.homeParent]          OR create a new child under this Space
  * @param {string} [opts.homeName]            name for the new home (defaults derived)
  * @param {string} [opts.homeType]            type for the new home (defaults derived)
- * @param {object} [opts.homeMetadata]        initial metadata for the new home Space
+ * @param {object} [opts.homeQualities]       initial qualities for the new home Space
  * @param {function} [opts.scaffolding]       async ({being, home}) => {} for extra structure
  * @param {boolean} [opts.isRemote=false]
  * @param {string} [opts.homeLand=null]
@@ -400,7 +388,7 @@ export async function createBeingWithHome(opts) {
     homeParent = null,
     homeName = null,
     homeType = null,
-    homeMetadata = null,
+    homeQualities = null,
     scaffolding = null,
     isRemote = false,
     homeLand = null,
@@ -431,13 +419,13 @@ export async function createBeingWithHome(opts) {
   // ── Resolve identity (auto-fill for non-human beings) ──
   if (!name) {
     if (operatingMode !== "human") name = await generateUniqueName(role);
-    else throw new ProtocolError(400, ERR.INVALID_INPUT, "Name is required");
+    else throw new IbpError(IBP_ERR.INVALID_INPUT, "Name is required");
   }
   if (!password) {
     if (operatingMode !== "human")
       password = crypto.randomBytes(32).toString("hex");
     else
-      throw new ProtocolError(400, ERR.INVALID_INPUT, "Password is required");
+      throw new IbpError(IBP_ERR.INVALID_INPUT, "Password is required");
   }
 
   // ── Resolve the home Space ──
@@ -473,7 +461,7 @@ export async function createBeingWithHome(opts) {
       parent: homeParent,
       rootOwner: null, // set below for humans only
       contributors: [],
-      ...(homeMetadata ? { metadata: homeMetadata } : {}),
+      ...(homeQualities ? { qualities: homeQualities } : {}),
     });
     await Space.updateOne(
       { _id: homeParent },

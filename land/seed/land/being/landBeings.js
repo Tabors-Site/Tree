@@ -47,9 +47,7 @@ import { createBeingWithHome } from "./identity.js";
  * only on a pre-bootstrap land.
  */
 export async function findIAm() {
-  return Being.findOne({ parentBeingId: null })
-    .select("_id name")
-    .lean();
+  return Being.findOne({ parentBeingId: null }).select("_id name").lean();
 }
 
 // Cached I_AM identity object suitable for `opts.identity` on verb
@@ -85,19 +83,22 @@ const LAND_BEINGS = [
     name: "auth",
     role: "auth",
     operatingMode: "scripted",
-    description: "Welcome character; processes BE register/claim/release/switch.",
+    description:
+      "Welcome character; processes BE register/claim/release/switch.",
   },
   {
     name: "llm-assigner",
     role: "llm-assigner",
     operatingMode: "scripted",
-    description: "Configures LLM connections — caller's being, owned nodes, or land default (root operator only for land scope).",
+    description:
+      "Configures LLM connections — caller's being, owned nodes, or land default (root operator only for land scope).",
   },
   {
     name: "land-manager",
     role: "land-manager",
     operatingMode: "llm",
-    description: "Conversational interface for land-level administration (extensions, config, peers). Carries no authority of its own; its writes are gated by the caller's stance — root operator, or owner / contributor on the land root.",
+    description:
+      "Conversational interface for land-level administration (extensions, config, peers). Carries no authority of its own; its writes are gated by the caller's stance — root operator, or owner / contributor on the land root.",
   },
 ];
 
@@ -105,7 +106,7 @@ const LAND_BEINGS = [
  * Ensure each land being exists as a Being row, has the land root as
  * its home, is parented under me (the only Being with
  * parentBeingId: null) in the being-tree, and is registered in
- * metadata.beings at the land root. Returns a summary
+ * qualities.beings at the land root. Returns a summary
  * { created, existing, deferred }.
  *
  * Deferred when I do not yet exist as a Being row (pre-bootstrap
@@ -120,13 +121,19 @@ export async function ensureLandBeings(landRootId) {
 
   const landRoot = await Space.findById(landRootId);
   if (!landRoot) {
-    log.warn("LandBeings", `land root ${String(landRootId).slice(0, 8)} not found; skipping`);
+    log.warn(
+      "LandBeings",
+      `land root ${String(landRootId).slice(0, 8)} not found; skipping`,
+    );
     return { created: 0, existing: 0, deferred: false };
   }
 
   const iAm = await findIAm();
   if (!iAm) {
-    log.info("LandBeings", "no I_AM yet; deferring system-being setup until ensureLandRoot() runs");
+    log.info(
+      "LandBeings",
+      "no I_AM yet; deferring system-being setup until ensureLandRoot() runs",
+    );
     return { created: 0, existing: 0, deferred: true };
   }
   const rootBeingId = String(iAm._id);
@@ -136,17 +143,23 @@ export async function ensureLandBeings(landRootId) {
 
   for (const spec of LAND_BEINGS) {
     try {
-      // Look up by username (the canonical identifier per land).
-      const existingBeing = await Being.findOne({ name: spec.name })
-        .select("_id roles defaultRole homeSpace operatingMode parentBeingId");
+      // Look up by name (the canonical identifier per land).
+      const existingBeing = await Being.findOne({ name: spec.name }).select(
+        "_id roles defaultRole homeSpace operatingMode parentBeingId",
+      );
       if (existingBeing) {
         // Idempotent drift correction: keep mode/role/home/parent in sync.
         let dirty = false;
-        if (existingBeing.operatingMode !== spec.operatingMode) { existingBeing.operatingMode = spec.operatingMode; dirty = true; }
+        if (existingBeing.operatingMode !== spec.operatingMode) {
+          existingBeing.operatingMode = spec.operatingMode;
+          dirty = true;
+        }
         // Sync roles[] + defaultRole to the spec's single role. System
         // beings carry exactly the role the spec names; if the spec
         // changes, the being is updated.
-        const carried = Array.isArray(existingBeing.roles) ? existingBeing.roles : [];
+        const carried = Array.isArray(existingBeing.roles)
+          ? existingBeing.roles
+          : [];
         if (!carried.includes(spec.role) || carried.length !== 1) {
           existingBeing.roles = [spec.role];
           dirty = true;
@@ -181,21 +194,26 @@ export async function ensureLandBeings(landRootId) {
       // createBeingWithHome links into my children list itself.
       await createBeingWithHome({
         operatingMode: spec.operatingMode,
-        name:          spec.name,
-        role:          spec.role,
-        homeSpace:     String(landRootId),
+        name: spec.name,
+        role: spec.role,
+        homeSpace: String(landRootId),
         parentBeingId: rootBeingId,
       });
       created++;
       log.info("LandBeings", `created ${spec.role} being (name=${spec.name})`);
     } catch (err) {
-      log.error("LandBeings", `failed to ensure ${spec.role} being: ${err.message}`);
+      log.error(
+        "LandBeings",
+        `failed to ensure ${spec.role} being: ${err.message}`,
+      );
     }
   }
 
   if (created > 0 || existing > 0) {
-    log.info("LandBeings", `land beings ensured: ${created} created, ${existing} already present (parent=${rootBeingId.slice(0, 8)})`);
+    log.info(
+      "LandBeings",
+      `land beings ensured: ${created} created, ${existing} already present (parent=${rootBeingId.slice(0, 8)})`,
+    );
   }
   return { created, existing, deferred: false };
 }
-

@@ -76,7 +76,7 @@ Several primitives were renamed in 2026-05. Code, comments, and git history mix 
 | **land/protocols/ibp/** (server) | "land/portal/" | folder rename 2026-05-17 |
 | **land/seed/being/roles/** | "land/portal/embodiments/" | 2026-05-18 |
 
-**Three metadata buckets, peer not nested:**
+**Three quality buckets, peer not nested:**
 
 - **Space.qualities.\<ns\>** — extension data at a space. `qualities.beings.<roleName>` records which beings of which roles live at this space.
 - **Being.qualities.\<ns\>** — identity-bearing data per Being (auth email, energy balance, etc.). Persists across role changes. Write via `qualities.being.setQuality`.
@@ -92,19 +92,26 @@ land/
 │   │
 │   ├── land/         IS    — The world as substance. What exists.
 │   │   ├── being/                 Identity ops: identity, position, landBeings,
-│   │   │                          beingMetadata, beRegistry.
+│   │   │                          beRegistry.
 │   │   ├── space/                 Tree ops: spaceManagement, ancestorCache,
 │   │   │                          ownership, cascade, spaceCircuit, spaceFetch,
 │   │   │                          spaceLocks, dids, documentGuard,
-│   │   │                          extensionMetadata, extensionScope, seeds,
-│   │   │                          seedSpaces (SEED_SPACE/SEED_BEING/DELETED),
+│   │   │                          extensionScope, seeds,
+│   │   │                          seedSpaces (SEED_SPACE/I_AM/DELETED),
 │   │   │                          source.
-│   │   ├── matter/                matters, matterMetadata, origins
-│   │   │                          (MATTER_ORIGIN), uploadCleanup.
+│   │   ├── matter/                matters, origins (MATTER_ORIGIN),
+│   │   │                          uploadCleanup.
+│   │   ├── qualities.js           The unified `qualities.{being,space,matter}`
+│   │   │                          API. Nine atomic primitives per primitive
+│   │   │                          (setQuality, mergeQuality, etc.).
+│   │   │                          Replaces the old beingMetadata /
+│   │   │                          extensionMetadata / matterMetadata trio.
 │   │   ├── integrityCheck.js      fsck for tree-shaped primitives.
 │   │   ├── registryMirror.js      Surfaces runtime registries as child
 │   │   │                          Spaces under .tools / .roles / .operations.
-│   │   └── LAND.md                Philosophy of space/matter/being.
+│   │   └── LAND.md                Philosophy of space/matter/being and the
+│   │                              constitutive (schema) vs characterizing
+│   │                              (qualities) two-layer model.
 │   │
 │   ├── ibp/         ACTS  — The world as acted-upon. Four verbs and dispatch.
 │   │                             verbs, operations, authorize, address,
@@ -182,7 +189,7 @@ Every extension capability flows through one of three:
 
 2. **Roles** ([seed/cognition/roles/registry.js](land/seed/cognition/roles/registry.js)) — SUMMON-honoring beings. Each role declares `permissions` (subset of see/do/summon/be), `respondMode` (sync/async/none), `summon(message, ctx)`, and optionally `buildSystemPrompt` / `toolNames` for LLM cognition.
 
-3. **Seeds** ([seed/land/space/seeds.js](land/seed/land/space/seeds.js)) — plantable scaffolds. Recipes that bootstrap a domain (Ruler/Planner/Contractor + workers, etc.). Operators plant via the `plant-seed` DO op.
+3. **Seeds** ([seed/land/seeds.js](land/seed/land/seeds.js)) — plantable scaffolds. Recipes that bootstrap a domain (Ruler/Planner/Contractor + workers, etc.). Operators plant via the `plant-seed` DO op.
 
 The loader auto-namespaces everything. Extensions write bare names (`"hire-planner"`); the kernel records the qualified form (`"governing:hire-planner"`). The same prefixing applies to push-channel events emitted via `core.websocket.emitToBeing(...)`.
 
@@ -240,7 +247,7 @@ Four layers, walked from each call site ([seed/cognition/llmClient.js](land/seed
 
 ```
 Space-tree lockout      (space.llmDefault === "none" anywhere in ancestor chain)
-  Space-tree enforcement (metadata.llm.enforced on any ancestor)
+  Space-tree enforcement (qualities.llm.enforced on any ancestor)
     Being-tree lockout  (being or any ancestor in being-tree has locked=true)
       Default order (being's preferOwn flag flips it):
         Space slot → Space default → Being slot → Being default
@@ -296,17 +303,17 @@ A note at one space creates awareness at related spaces. Fires `onCascade` when 
 | HTTP | Category | ERR codes |
 |---|---|---|
 | 200/201 | Success | — |
-| 400 | Bad request | INVALID_INPUT, INVALID_TYPE, INVALID_TREE |
+| 400 | Bad request | INVALID_INPUT, INVALID_TYPE, INVALID_SPACE |
 | 401 | Unauthorized | UNAUTHORIZED |
 | 403 | Forbidden | FORBIDDEN, EXTENSION_BLOCKED, SESSION_EXPIRED, CASCADE_DISABLED, UPLOAD_DISABLED, ORIGIN_READ_ONLY |
-| 404 | Not found | NODE_NOT_FOUND, USER_NOT_FOUND, ARTIFACT_NOT_FOUND, TREE_NOT_FOUND, PEER_NOT_FOUND, EXTENSION_NOT_FOUND |
+| 404 | Not found | SPACE_NOT_FOUND, BEING_NOT_FOUND, MATTER_NOT_FOUND, PEER_NOT_FOUND, EXTENSION_NOT_FOUND, ROLE_UNAVAILABLE, VERB_NOT_SUPPORTED, ACTION_NOT_SUPPORTED |
 | 409 | Conflict | RESOURCE_CONFLICT |
 | 413 | Payload too large | DOCUMENT_SIZE_EXCEEDED, CASCADE_DEPTH_EXCEEDED, UPLOAD_TOO_LARGE |
 | 415 | Unsupported media | UPLOAD_MIME_REJECTED |
 | 429 | Rate limited | RATE_LIMITED, CASCADE_REJECTED |
 | 500 | Internal | INTERNAL, TIMEOUT, HOOK_TIMEOUT, HOOK_CANCELLED |
 | 502 | Bad gateway | PEER_UNREACHABLE |
-| 503 | Service unavailable | LLM_TIMEOUT, LLM_FAILED, LLM_NOT_CONFIGURED, TREE_DORMANT |
+| 503 | Service unavailable | LLM_TIMEOUT, LLM_FAILED, LLM_NOT_CONFIGURED, SPACE_DORMANT |
 
 Plus five IBP-specific codes: `ADDRESS_PARSE_ERROR`, `ROLE_UNAVAILABLE`, `VERB_NOT_SUPPORTED`, `ACTION_NOT_SUPPORTED`, `INVALID_INTENT`.
 
@@ -327,7 +334,7 @@ Plus five IBP-specific codes: `ADDRESS_PARSE_ERROR`, `ROLE_UNAVAILABLE`, `VERB_N
 
 **enrichContext is how extensions speak to the AI.** Sequential hook; handlers build cumulative output. Guard every handler — check if relevant data exists before injecting. Never run expensive queries unconditionally.
 
-**qualities.space.setQuality for all metadata writes.** Extensions can only write to their own namespace; the loader enforces this on the scoped core. Direct Map manipulation is reserved for atomic MongoDB operations that can't go through read-modify-write.
+**`qualities.{being,space,matter}.setQuality` for all quality writes.** Extensions can only write to their own namespace; the loader enforces this on the scoped core. Direct Map manipulation is reserved for atomic MongoDB operations that can't go through read-modify-write.
 
 **`role` field marks structural spaces.** Extensions that scaffold a tree shape MUST set `qualities.<extName>.role` on every scaffolded space. The base `beforeSpaceDelete` guard cancels deletion of any space with a role in any namespace. `--force` bypasses.
 
@@ -335,14 +342,14 @@ Plus five IBP-specific codes: `ADDRESS_PARSE_ERROR`, `ROLE_UNAVAILABLE`, `VERB_N
 
 **Confined scope for dangerous extensions.** Declare `scope: "confined"` in the manifest. Inactive everywhere by default; operators run `ext-allow` at specific positions to activate.
 
-**Substrate as memory.** Beings are stateless across summons. Everything persistent lives in public substrate — matter and metadata at positions, observable to any being with permission. Don't invent a `qualities.<role>.workingState` namespace.
+**Substrate as memory.** Beings are stateless across summons. Everything persistent lives in public substrate — matter and qualities at positions, observable to any being with permission. Don't invent a `qualities.<role>.workingState` namespace.
 
 ## Conventions
 
 - UUIDs for all primary keys
 - Model-agnostic: any OpenAI-compatible LLM endpoint
 - Never use em dashes or en dashes in user-facing text. Periods and commas only.
-- Extension data namespaced by extension name in metadata
+- Extension data namespaced by extension name in `qualities`
 - Dynamic imports with try/catch for optional cross-extension deps
 - Comments explain WHY, not WHAT. Identifiers carry the WHAT.
 

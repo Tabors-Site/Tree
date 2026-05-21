@@ -1,18 +1,24 @@
 // TreeOS Seed . AGPL-3.0 . https://treeos.ai . Tabor Holly
-/**
- * Periodic cleanup of orphaned upload files.
- * Scans the uploads directory for files not referenced by any artifact
- * (or extension model) with filesystem origin. Runs on a configurable
- * interval (default: every 6 hours). Only deletes files older than a
- * grace period (default: 1 hour) to avoid racing with in-progress uploads.
- *
- * Safety:
- *   - Grace period prevents deleting in-progress uploads
- *   - TOCTOU guard: re-stat before delete rejects files touched between check and delete
- *   - Async I/O throughout (no event loop blocking)
- *   - Per-cycle deletion cap prevents one run from blocking for minutes
- *   - Matter query uses lean projection (path only), not full documents
- */
+//
+// Orphaned uploads. The other side of filesystem-origin Matter.
+//
+// Filesystem-origin Matter bridges a Matter row to a file on disk
+// in the land's uploads/ directory. When that Matter row is deleted
+// (or never finishes writing), the bytes on disk outlive the row.
+// Without a sweeper, the directory grows forever.
+//
+// This file runs the sweeper. Every interval it lists what's on
+// disk, asks the Matter collection (and any extension model with the
+// same origin-shape) what files are still referenced, and removes
+// the orphans older than the grace period. Younger files are spared
+// in case they belong to an upload in flight.
+//
+// Safety:
+//   - Grace period spares in-progress uploads.
+//   - TOCTOU guard: re-stat before unlink, abort if mtime changed
+//     between the two stats.
+//   - Per-cycle deletion cap so one run cannot block for minutes.
+//   - Matter query uses lean projection (path only).
 
 import fs from "fs/promises";
 import fsSync from "fs";
@@ -20,12 +26,14 @@ import path from "path";
 import log from "../../system/log.js";
 import Matter from "../../models/matter.js";
 import { getLandConfigValue } from "../../landConfig.js";
-import { MATTER_ORIGIN } from "../matter/origins.js";
+import { MATTER_ORIGIN } from "./origins.js";
 import { fileURLToPath } from "url";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-const uploadsFolder = process.env.UPLOADS_DIR || path.join(__dirname, "../../uploads");
+// __dirname is seed/land/matter/. Three ups reach the land/ root where
+// the uploads/ folder sits beside seed/.
+const uploadsFolder = process.env.UPLOADS_DIR || path.join(__dirname, "../../../uploads");
 
 let cleanupTimer = null;
 
@@ -35,7 +43,7 @@ function maxDeletionsPerCycle() { return Math.max(10, Math.min(Number(getLandCon
 
 /**
  * Scan uploads directory and remove files not referenced by any
- * filesystem-origin artifact. Only removes files older than graceMs to
+ * filesystem-origin Matter. Only removes files older than graceMs to
  * avoid deleting in-progress uploads.
  *
  * @param {object} [opts]
@@ -55,7 +63,7 @@ export async function cleanOrphanedUploads({ graceMs = DEFAULT_GRACE_MS } = {}) 
 
   if (files.length === 0) return { scanned: 0, deleted: 0, freedKB: 0, capped: false };
 
-  // Get all filenames referenced by filesystem-origin artifacts.
+  // Collect every filename a filesystem-origin Matter still names.
   // content for filesystem origin is shaped { path, size, mimeType };
   // the path field holds the basename in the uploads folder.
   const referencedFiles = new Set();
@@ -66,12 +74,12 @@ export async function cleanOrphanedUploads({ graceMs = DEFAULT_GRACE_MS } = {}) 
     if (p) referencedFiles.add(p);
   }
 
-  // Check all registered models for filesystem-origin references. Extensions
-  // register models at boot via the loader. We don't import from extensions.
-  // We iterate whatever Mongoose has in its global registry. If a model has
-  // an origin field, it might reference uploaded files. This is future-proof:
-  // any extension that stores filesystem-origin artifacts will be checked
-  // without the seed knowing its name.
+  // Check every registered model for filesystem-origin references.
+  // Extensions register models at boot via the loader; I do not import
+  // from them. I walk Mongoose's global registry instead. If a model
+  // has an origin field, its rows might reference uploaded files.
+  // Future-proof: any extension that stores filesystem-origin matter
+  // gets checked without me having to know its name.
   try {
     const mongoose = (await import("mongoose")).default;
     for (const [name, model] of Object.entries(mongoose.models)) {

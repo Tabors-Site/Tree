@@ -1,30 +1,35 @@
 // TreeOS Seed . AGPL-3.0 . https://treeos.ai . Tabor Holly
-/**
- * Tree Circuit Breaker.
- *
- * A "tree" here means an owned subtree of spaces — the connected
- * descendants of a space whose `rootOwner` is set. (The land root `/`
- * is the singular root of the whole land; an owned-tree's anchor is
- * just an ownership boundary, not a root.)
- *
- * When the spaces in an owned tree exceed health thresholds, the
- * kernel trips its circuit. No AI interactions. No cascade. No tool
- * calls. No writes. Data stays intact; the tree is sleeping, not dead.
- *
- * Health equation:
- *   treeHealth = (spaceCount      / maxTreeSpaces)        * spaceWeight
- *              + (metadataDensity / maxTreeMetadataBytes) * densityWeight
- *              + (errorRate       / maxTreeErrorRate)     * errorWeight
- *
- * When treeHealth > 1.0, the tree trips. The kernel writes
- * metadata.circuit = { tripped: true, reason, timestamp, scores } on
- * the tree's anchor space. One metadata write.
- *
- * The kernel trips. Extensions heal. The kernel does NOT auto-revive.
- * Callers invoke reviveTree(treeId, beingId) when satisfied.
- *
- * Defaults to OFF (treeCircuitEnabled: false).
- */
+//
+// Space-tree circuit breaker.
+//
+// Throughout this file "tree" is shorthand for **space-tree**: an
+// owned subtree of spaces, the connected descendants of a space
+// whose `rootOwner` is set. Not a single space. (The land root is
+// the singular root of the whole land; an owned space-tree's anchor
+// is an ownership boundary, not a root.)
+//
+// When the spaces in an owned space-tree exceed health thresholds, I
+// trip its circuit. No SUMMON-driven cognition runs there. No cascade
+// fires. No tool calls land. No writes proceed. The data stays
+// intact; the space-tree is sleeping, not dead.
+//
+// Health equation:
+//
+//   treeHealth = (spaceCount       / maxTreeSpaces)         * spaceWeight
+//              + (qualitiesDensity  / maxTreeQualityBytes)   * densityWeight
+//              + (errorRate         / maxTreeErrorRate)      * errorWeight
+//
+// When treeHealth > 1.0, the tree trips. I write
+// qualities.circuit = { tripped: true, reason, timestamp, scores } on
+// the tree's anchor space. One quality write.
+//
+// I trip; extensions heal; I do not auto-revive. Callers invoke
+// reviveTree(treeId, beingId) when satisfied. The owner is the only
+// being who can revive — the same being whose authority defines the
+// tree in the first place.
+//
+// Defaults to OFF (treeCircuitEnabled: false). A land that never
+// turns this on lives without it.
 
 import log from "../../system/log.js";
 import Space from "../../models/space.js";
@@ -46,7 +51,7 @@ function isEnabled() {
 
 /**
  * Is the tree alive (not tripped)? Fast check: reads the anchor
- * space's metadata.circuit.tripped field.
+ * space's qualities.circuit.tripped field.
  *
  * @param {string} treeId - id of the tree's anchor space (rootOwner-bearing)
  * @returns {Promise<boolean>} true if alive, false if tripped
@@ -55,7 +60,7 @@ export async function isTreeAlive(treeId) {
   if (!treeId) return true;
   if (!isEnabled()) return true;
 
-  const anchor = await Space.findById(treeId).select("metadata").lean();
+  const anchor = await Space.findById(treeId).select("qualities").lean();
   if (!anchor) return true;
 
   const meta = anchor.qualities instanceof Map
@@ -75,11 +80,11 @@ export async function isTreeAlive(treeId) {
  *     is in this tree
  *
  * @param {string} treeId
- * @returns {Promise<{ total, spaceCount, metadataDensity, errorRate, raw }>}
+ * @returns {Promise<{ total, spaceCount, qualitiesDensity, errorRate, raw }>}
  */
 export async function checkTreeHealth(treeId) {
   const maxSpaces     = parseInt(getLandConfigValue("maxTreeSpaces")        || "10000",      10);
-  const maxMetaBytes  = parseInt(getLandConfigValue("maxTreeMetadataBytes") || "1073741824", 10);
+  const maxQualBytes  = parseInt(getLandConfigValue("maxTreeQualityBytes") || "1073741824", 10);
   const maxErrors     = parseInt(getLandConfigValue("maxTreeErrorRate")     || "100",        10);
   const spaceWeight   = parseFloat(getLandConfigValue("circuitSpaceWeight")   || "0.4");
   const densityWeight = parseFloat(getLandConfigValue("circuitDensityWeight") || "0.3");
@@ -88,28 +93,28 @@ export async function checkTreeHealth(treeId) {
   // 1. Space count in this tree.
   const spaceCount = await Space.countDocuments({ rootOwner: treeId });
 
-  // 2. Metadata density (estimate total metadata size). Sample up to
+  // 2. Quality density (estimate total qualities-map size). Sample up to
   //    100 spaces, average, multiply. Random sample — sequential
   //    underestimates because newer spaces accumulate extension data.
   const sampleSize = Math.min(spaceCount, 100);
-  let metadataDensity = 0;
+  let qualitiesDensity = 0;
   if (sampleSize > 0) {
     const sample = await Space.aggregate([
       { $match: { rootOwner: treeId } },
       { $sample: { size: sampleSize } },
-      { $project: { metadata: 1 } },
+      { $project: { qualities: 1 } },
     ]);
 
     let totalSampleSize = 0;
     for (const s of sample) {
       try {
-        const meta = s.qualities instanceof Map ? Object.fromEntries(s.qualities) : (s.qualities || {});
-        totalSampleSize += Buffer.byteLength(JSON.stringify(meta), "utf8");
+        const quals = s.qualities instanceof Map ? Object.fromEntries(s.qualities) : (s.qualities || {});
+        totalSampleSize += Buffer.byteLength(JSON.stringify(quals), "utf8");
       } catch {
         totalSampleSize += 1024; // estimate 1KB on serialization failure
       }
     }
-    metadataDensity = (totalSampleSize / sampleSize) * spaceCount;
+    qualitiesDensity = (totalSampleSize / sampleSize) * spaceCount;
   }
 
   // 3. Error rate. Two sources.
@@ -151,7 +156,7 @@ export async function checkTreeHealth(treeId) {
       const partitions = await Space.find({
         parent: flowSpace._id,
         name:   { $in: [today, yesterday] },
-      }).select("metadata").lean();
+      }).select("qualities").lean();
 
       const MAX_SCAN = Number(getLandConfigValue("circuitFlowScanLimit")) || 5000;
       let scanned = 0;
@@ -182,18 +187,18 @@ export async function checkTreeHealth(treeId) {
   const totalErrors = didErrors + flowErrors;
 
   const spaceScore   = maxSpaces    > 0 ? (spaceCount       / maxSpaces)    * spaceWeight   : 0;
-  const densityScore = maxMetaBytes > 0 ? (metadataDensity  / maxMetaBytes) * densityWeight : 0;
+  const densityScore = maxQualBytes > 0 ? (qualitiesDensity  / maxQualBytes) * densityWeight : 0;
   const errorScore   = maxErrors    > 0 ? (totalErrors      / maxErrors)    * errorWeight   : 0;
   const total = spaceScore + densityScore + errorScore;
 
   return {
     total,
     spaceCount:      spaceScore,
-    metadataDensity: densityScore,
+    qualitiesDensity: densityScore,
     errorRate:       errorScore,
     raw: {
       spaceCount,
-      metadataDensityBytes: Math.round(metadataDensity),
+      qualitiesDensityBytes: Math.round(qualitiesDensity),
       didErrors,
       flowErrors,
       totalErrors,
@@ -248,7 +253,7 @@ export async function reviveTree(treeId, beingId) {
     throw new Error("Only the tree's owner can revive a tripped tree");
   }
 
-  const anchor = await Space.findById(treeId).select("metadata").lean();
+  const anchor = await Space.findById(treeId).select("qualities").lean();
   if (!anchor) throw new Error("Tree not found");
   const circuit = anchor.qualities instanceof Map
     ? anchor.qualities.get("circuit")
@@ -280,7 +285,7 @@ export function startCircuitJob() {
     try {
       const anchors = await Space.find({
         rootOwner: { $nin: [null, I_AM] },
-      }).select("_id name metadata").lean();
+      }).select("_id name qualities").lean();
 
       for (const anchor of anchors) {
         const meta = anchor.qualities instanceof Map
@@ -293,11 +298,11 @@ export function startCircuitJob() {
           const reason =
             `Health score ${health.total.toFixed(2)}: ` +
             `spaces ${health.spaceCount.toFixed(2)}, ` +
-            `density ${health.metadataDensity.toFixed(2)}, ` +
+            `density ${health.qualitiesDensity.toFixed(2)}, ` +
             `errors ${health.errorRate.toFixed(2)}`;
           await tripTree(String(anchor._id), reason, {
             spaceCount:      health.spaceCount,
-            metadataDensity: health.metadataDensity,
+            qualitiesDensity: health.qualitiesDensity,
             errorRate:       health.errorRate,
             total:           health.total,
           });

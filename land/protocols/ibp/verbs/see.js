@@ -7,7 +7,7 @@
 // payload asks for them. See [[project_four_verbs_one_execution]].
 
 import log from "../../../seed/system/log.js";
-import { IbpError, IBP_ERR, isIbpError } from "../../../seed/ibp/errors.js";
+import { IbpError, IBP_ERR, isIbpError } from "../../../seed/ibp/protocol.js";
 import { ackOk, ackError } from "../envelope.js";
 import { seeVerb } from "../../../seed/ibp/verbs.js";
 import { subscribePosition } from "../live.js";

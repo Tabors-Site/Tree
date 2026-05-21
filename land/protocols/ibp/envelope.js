@@ -23,7 +23,7 @@
 // `identity` is the caller's auth token (when applicable). Verb handlers
 // read it from the parsed envelope, no per-verb-field destructuring.
 
-import { IbpError, IBP_ERR } from "../../seed/ibp/errors.js";
+import { IbpError, IBP_ERR } from "../../seed/ibp/protocol.js";
 
 const EMBODIMENT_SUFFIX = /@[a-z][a-z0-9-]*$/i;
 const VALID_VERBS = new Set(["see", "do", "summon", "be"]);

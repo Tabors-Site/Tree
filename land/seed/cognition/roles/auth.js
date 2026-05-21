@@ -36,7 +36,7 @@ import {
   generateToken,
 } from "../../land/being/identity.js";
 import { getLandRootId } from "../../landRoot.js";
-import { IbpError, IBP_ERR } from "../../ibp/errors.js";
+import { IbpError, IBP_ERR } from "../../ibp/protocol.js";
 import { getLandDomain } from "../../ibp/address.js";
 
 const TREEOS_AUTH_WELCOME =
@@ -296,8 +296,8 @@ export const authBeing = Object.freeze({
 });
 
 function mapKernelError(err) {
-  if (err && err.name === "ProtocolError" && err.errCode) {
-    return new IbpError(err.errCode, err.message || "auth operation failed");
+  if (err && err.name === "IbpError" && err.code) {
+    return err;
   }
   const msg = err?.message || "auth operation failed";
   if (/already taken|conflict/i.test(msg)) {

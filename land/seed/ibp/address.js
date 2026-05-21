@@ -1,17 +1,24 @@
 // TreeOS Seed . AGPL-3.0 . https://treeos.ai . Tabor Holly
 //
-// IBP Address: parser + formatter + server-side context helpers.
+// IBP Address. How a SEE, DO, SUMMON, or BE names what it acts on.
 //
-// TreeOS replaces URLs with a three-tier addressing hierarchy:
+// IBP is my communication primitive. Before any of the four verbs
+// can act, the speaker has to name the position and the being
+// involved — that naming is what this file produces. I replace URLs
+// with a three-tier addressing hierarchy that captures more than a
+// URL can: not just "where" but "where, and as what being,
+// addressing what other being or thing."
 //
 //   Position    = land/path           (where)
-//   Stance      = land/path@being     (where + as what being) — one side of a bridge
+//   Stance      = land/path@being     (where + as what being — one side of a bridge)
 //   IBP Address = stance :: stance    (full bridged form — one being addressing another)
 //
-// Each level answers a different question. "What's the position?" → just
-// the land/path. "What's the stance?" → land/path@being (one side).
-// "What's the IBP address?" → the full bridged form. See [[project_ibp_wire_shape]]
-// and [[project_ibp_address_asymmetry]] for the architectural locks.
+// Each level answers a different question. "What's the position?" →
+// just the land/path. "What's the stance?" → land/path@being (one
+// side). "What's the IBP address?" → the full bridged form. The
+// shape is uniform across cross-being, face-to-face, same-being
+// thinking, and self — one grammar covers every conversation I can
+// witness.
 //
 // Full grammar (see docs/ibp-address.md):
 //
@@ -20,7 +27,7 @@
 //   Stance     := Position "@" Being | Position | Being
 //   Position   := Land? Path?
 //   Land       := Domain (":" Port)?
-//   Path       := "/"                            (land zone)
+//   Path       := "/"                            (land space)
 //               | "/" Segment ("/" Segment)*     (space — full chain or leaf-only)
 //               | "/~" UserSlug ("/" Segment)*   (home zone)
 //               | "~" ...                        (home shorthand; expands to /~<user>)
@@ -41,7 +48,7 @@
 //
 // Both sides of a bridge are stances. They use the SAME grammar. A
 // human user is represented as `<land>/@<username>` — i.e. a being at
-// the land root. A bare identifier on the left side (e.g. `tabor`) is
+// the land root space. A bare identifier on the left side (e.g. `tabor`) is
 // the display shorthand for that. In future, the left side of a bridge
 // may carry a deeper path so the request reflects WHERE in the user's
 // land they're sending from (more location context for federated
@@ -91,19 +98,25 @@ export function parse(input, ctx = {}) {
     leftStr = trimmed.slice(0, bridgeIdx).trim();
     rightStr = trimmed.slice(bridgeIdx + 2).trim();
     if (!leftStr) {
-      throw paError("empty-left", input, "Bridge has empty left stance", { offset: 0 });
+      throw paError("empty-left", input, "Bridge has empty left stance", {
+        offset: 0,
+      });
     }
     if (!rightStr) {
-      throw paError("empty-right", input, "Bridge has empty right stance", { offset: bridgeIdx + 2 });
+      throw paError("empty-right", input, "Bridge has empty right stance", {
+        offset: bridgeIdx + 2,
+      });
     }
     if (rightStr.includes("::")) {
-      throw paError("multiple-bridges", input, "Only one '::' separator allowed");
+      throw paError(
+        "multiple-bridges",
+        input,
+        "Only one '::' separator allowed",
+      );
     }
   }
   const right = parseStance(rightStr, ctx);
-  const left = leftStr
-    ? parseStance(leftStr, ctx, { isLeftSide: true })
-    : null;
+  const left = leftStr ? parseStance(leftStr, ctx, { isLeftSide: true }) : null;
   return { left, right };
 }
 
@@ -162,13 +175,28 @@ export function validate(pa) {
   const check = (stance, label) => {
     if (!stance) return;
     if (stance.land != null && !isValidLand(stance.land)) {
-      errors.push({ side: label, field: "land", value: stance.land, reason: "invalid-land" });
+      errors.push({
+        side: label,
+        field: "land",
+        value: stance.land,
+        reason: "invalid-land",
+      });
     }
     if (stance.path != null && !isValidPath(stance.path)) {
-      errors.push({ side: label, field: "path", value: stance.path, reason: "invalid-path" });
+      errors.push({
+        side: label,
+        field: "path",
+        value: stance.path,
+        reason: "invalid-path",
+      });
     }
     if (stance.being != null && !isValidBeing(stance.being)) {
-      errors.push({ side: label, field: "being", value: stance.being, reason: "invalid-being" });
+      errors.push({
+        side: label,
+        field: "being",
+        value: stance.being,
+        reason: "invalid-being",
+      });
     }
   };
   check(pa.left, "left");
@@ -193,7 +221,11 @@ function parseStance(input, ctx, opts = {}) {
     if (isLeftSide) {
       return { land: ctx.currentLand || null, path: "/", being: parseBeing(s) };
     }
-    return { land: ctx.currentLand || null, path: ctx.currentPath || null, being: parseBeing(s) };
+    return {
+      land: ctx.currentLand || null,
+      path: ctx.currentPath || null,
+      being: parseBeing(s),
+    };
   }
   // Split being off the tail.
   let being = null;
@@ -205,7 +237,11 @@ function parseStance(input, ctx, opts = {}) {
   }
   // After stripping being, `rest` is a position (land+path).
   if (!rest) {
-    return { land: ctx.currentLand || null, path: ctx.currentPath || null, being };
+    return {
+      land: ctx.currentLand || null,
+      path: ctx.currentPath || null,
+      being,
+    };
   }
   // Determine if `rest` includes a land identifier or is just a zone marker.
   // The three zone markers are:
@@ -255,7 +291,11 @@ function parseBeing(s) {
     throw paError("empty-being", s, "Being identifier is empty");
   }
   if (!/^[a-z][a-z0-9-]*$/.test(id)) {
-    throw paError("invalid-being-chars", s, `Being "${id}" must be lowercase kebab-case starting with a letter`);
+    throw paError(
+      "invalid-being-chars",
+      s,
+      `Being "${id}" must be lowercase kebab-case starting with a letter`,
+    );
   }
   return id;
 }
@@ -275,7 +315,11 @@ function parsePath(s, ctx) {
   // Home shorthand: "~" or "/~" alone → current user's home.
   if (trimmed === "~" || trimmed === "/~") {
     if (!ctx.currentUser) {
-      throw paError("missing-user-context", trimmed, "Cannot expand '~' without ctx.currentUser");
+      throw paError(
+        "missing-user-context",
+        trimmed,
+        "Cannot expand '~' without ctx.currentUser",
+      );
     }
     return `/~${ctx.currentUser}`;
   }
@@ -287,10 +331,18 @@ function parsePath(s, ctx) {
   if (trimmed === "/") return "/";
   // Otherwise must start with "/".
   if (!trimmed.startsWith("/")) {
-    throw paError("invalid-path", trimmed, `Path "${trimmed}" must start with "/" or "~"`);
+    throw paError(
+      "invalid-path",
+      trimmed,
+      `Path "${trimmed}" must start with "/" or "~"`,
+    );
   }
   if (!isValidPath(trimmed)) {
-    throw paError("invalid-path-segments", trimmed, `Path "${trimmed}" contains invalid segments`);
+    throw paError(
+      "invalid-path-segments",
+      trimmed,
+      `Path "${trimmed}" contains invalid segments`,
+    );
   }
   return trimmed;
 }
@@ -311,7 +363,11 @@ function formatStance(stance, opts = {}) {
     out += stance.path;
   }
   if (stance.being) {
-    if (opts.omitDefaultBeing && opts.defaultBeing && stance.being === opts.defaultBeing) {
+    if (
+      opts.omitDefaultBeing &&
+      opts.defaultBeing &&
+      stance.being === opts.defaultBeing
+    ) {
       // skip
     } else {
       out += `@${stance.being}`;
@@ -324,8 +380,8 @@ function expandStance(stance, ctx) {
   if (!stance) return stance;
   return {
     ...stance,
-    land:  stance.land  || ctx.currentLand  || null,
-    path:  stance.path  || ctx.currentPath  || null,
+    land: stance.land || ctx.currentLand || null,
+    path: stance.path || ctx.currentPath || null,
     being: stance.being || ctx.defaultBeing || null,
   };
 }
@@ -336,7 +392,8 @@ function expandStance(stance, ctx) {
 
 // Lenient: DNS-like, also allows bare identifiers for local lands
 // ("localhost", "tabor-laptop") and explicit port.
-const LAND_RE = /^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)*(:\d{1,5})?$/i;
+const LAND_RE =
+  /^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)*(:\d{1,5})?$/i;
 
 export function isValidLand(land) {
   return typeof land === "string" && LAND_RE.test(land);
@@ -393,7 +450,11 @@ function paError(code, input, message, extra = {}) {
  */
 export function toHttpRoute(stance) {
   if (!stance || !stance.path) {
-    throw paError("missing-path-for-route", stance, "Cannot derive route without a path");
+    throw paError(
+      "missing-path-for-route",
+      stance,
+      "Cannot derive route without a path",
+    );
   }
   const path = stance.path;
   let zone, encodedTail;
@@ -432,10 +493,10 @@ export function toHttpRoute(stance) {
 // client's address bar or socket bootstrap.
 // ─────────────────────────────────────────────────────────────────────
 
-// `IbpError` lives in seed/ibp/errors.js so the parser doesn't need to
+// `IbpError` lives in seed/ibp/protocol.js so the parser doesn't need to
 // know about wire-error wrapping. The server helpers import it locally;
 // the pure parser throws plain Error objects with .code + .paInput.
-import { IbpError, IBP_ERR } from "../ibp/errors.js";
+import { IbpError, IBP_ERR } from "../ibp/protocol.js";
 
 // Cache the land's bare domain. Derived from process.env.LAND_DOMAIN
 // with a localhost fallback. Stripped of protocol/port because an IBP

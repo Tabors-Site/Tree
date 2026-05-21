@@ -1,18 +1,24 @@
 // TreeOS Seed . AGPL-3.0 . https://treeos.ai . Tabor Holly
 //
-// Read-only queries over the space tree. Five small primitives all
-// of which walk the ancestor chain in some way:
+// Reading the space-tree.
 //
-//   getSpaceName       lookup a space's display name by id
-//   buildPathString    "Root > Branch > Leaf" path
-//   resolveRootSpace   walk up to the rootOwner-bearing tree root
-//   isDescendant       does one space sit beneath another
-//   resolveSpaceAccess does a being have read/write at this space
+//   getSpaceName        lookup a space's display name by id
+//   buildPathString     "Root > Branch > Leaf" path
+//   resolveRootSpace    walk up to the rootOwner-bearing tree root
+//   isDescendant        does one space sit beneath another
+//   resolveSpaceAccess  does a being have read/write at this space
+//   listSpaceChildren   list the immediate children of a space
+//   listBeingSpaces     list every space-tree root a being owns
+//
+// All read-only. Writes live in spaceManagement.js. The walks here
+// route through getAncestorChain so the same cached snapshot serves
+// every resolution path within one conversation turn.
 
 import Space from "../../models/space.js";
 import { I_AM } from "./seedSpaces.js";
-import { ERR } from "../../ibp/protocol.js";
+import { IBP_ERR } from "../../ibp/protocol.js";
 import { getAncestorChain, resolveSpaceAccessFromChain } from "./ancestorCache.js";
+import { getLandRootId } from "../../landRoot.js";
 
 /**
  * Get a space's name by ID. Returns null if not found.
@@ -104,18 +110,53 @@ export async function resolveSpaceAccess(spaceId, beingId) {
   if (!spaceId) {
     return {
       ok: false,
-      error: ERR.INVALID_INPUT,
+      error: IBP_ERR.INVALID_INPUT,
       message: "spaceId is required",
     };
   }
-  const safeUserId = beingId ? String(beingId) : null;
+  const safeBeingId = beingId ? String(beingId) : null;
   const ancestors = await getAncestorChain(String(spaceId));
   if (!ancestors) {
     return {
       ok: false,
-      error: ERR.SPACE_NOT_FOUND,
+      error: IBP_ERR.SPACE_NOT_FOUND,
       message: "Space not found.",
     };
   }
-  return resolveSpaceAccessFromChain(String(spaceId), safeUserId, ancestors);
+  return resolveSpaceAccessFromChain(String(spaceId), safeBeingId, ancestors);
+}
+
+/**
+ * List the immediate children of a space. Skips seed spaces (so the
+ * land root yields user-created tree roots, not .config / .tools /
+ * etc.). Returns at most `limit` rows, newest-creation first.
+ */
+export async function listSpaceChildren(parentId, { exclude = null, limit = 500 } = {}) {
+  if (!parentId) return [];
+  const query = { parent: parentId, seedSpace: null };
+  if (exclude) query._id = { $ne: exclude };
+  return Space.find(query)
+    .select("_id name type dateCreated qualities")
+    .sort({ dateCreated: 1 })
+    .limit(limit)
+    .lean();
+}
+
+/**
+ * List every space-tree root a being owns. A space-tree root sits
+ * directly under the land root with rootOwner === beingId.
+ */
+export async function listBeingSpaces(beingId, { limit = 500 } = {}) {
+  if (!beingId) return [];
+  const landRootId = getLandRootId();
+  if (!landRootId) return [];
+  return Space.find({
+    parent: landRootId,
+    rootOwner: beingId,
+    seedSpace: null,
+  })
+    .select("_id name type dateCreated qualities")
+    .sort({ dateCreated: -1 })
+    .limit(limit)
+    .lean();
 }

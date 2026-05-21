@@ -183,18 +183,18 @@ function makeLazyDefaultSummon(role) {
 }
 
 /**
- * Sync the role registry into `<land>/.roles` as child Nodes. One child
- * per role; metadata mirrors the role's surface. Called at boot end
+ * Sync the role registry into `<land>/.roles` as child Spaces. One child
+ * per role; qualities mirror the role's surface. Called at boot end
  * after extensions register; idempotent.
  */
 export async function syncRolesToSubstrate() {
   const { SEED_SPACE } = await import("../../ibp/protocol.js");
-  const { syncRegistryToSubstrate } = await import("../../registryMirror.js");
+  const { syncRegistryToSubstrate } = await import("../../land/registryMirror.js");
   const items = [];
   for (const [name, role] of REGISTRY) {
     items.push({
       name,
-      metadata: new Map([
+      qualities: new Map([
         ["role", {
           permissions: role.permissions || [],
           respondMode: role.respondMode  || null,

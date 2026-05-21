@@ -1,45 +1,55 @@
 // TreeOS Seed . AGPL-3.0 . https://treeos.ai . Tabor Holly
 //
-// Kernel DO operations.
+// Kernel DO operations. My native vocabulary.
 //
-// Kernel-shipped operations register through the operations registry
-// on module load. Same surface extensions use; no special treatment.
+// Every DO action that touches the substrate flows through the
+// registry in operations.js. The actions extensions add are their
+// own concerns; the actions the kernel needs to be itself live here.
+// I register them at module load through the same surface extensions
+// use — no privileged kernel path, no special treatment. The bare
+// names are reserved for me because they describe the substrate
+// shape; extensions get prefixes so every action's owner is
+// structurally evident.
 //
-// Current set:
-//   create-child            (polymorphic over space/being/matter)
-//   create-matter, create-being
-//   set-name                (polymorphic over space/being/matter)
-//   set-type                (space)
-//   set-parent              (space)
-//   delete-space            (space)
-//   set-meta                (polymorphic; namespace + data)
-//   plant-seed              (extension scaffolding)
-//   cascade                 (fire an awareness signal at a space)
-//   add-llm-connection      (being)
-//   update-llm-connection   (being)
-//   delete-llm-connection   (being)
-//   assign-llm-slot         (polymorphic over being/space)
-//   install-extension       (write files; reload-required)
-//   uninstall-extension     (remove files; reload-required)
-//   enable-extension        (toggle disabledExtensions list)
-//   disable-extension       (toggle disabledExtensions list)
-//   set-config              (land config key/value write)
-//   delete-config           (land config key removal)
+// What I ship:
 //
-// See [[project_seed_four_verbs_only]], [[project_ibp_universal_grammar]],
-// [[project_everything_is_substrate]].
+//   create-child           (polymorphic over space/being/matter)
+//   create-matter
+//   set-name               (polymorphic)
+//   set-type               (space)
+//   set-parent             (space)
+//   delete-space
+//   set-meta               (polymorphic; namespace + data)
+//   plant-seed             (extension scaffolding)
+//   cascade                (fire an awareness signal at a space)
+//   add-llm-connection     (being)
+//   update-llm-connection  (being)
+//   delete-llm-connection  (being)
+//   assign-llm-slot        (polymorphic over being/space)
+//   install-extension      (write files; reload-required)
+//   uninstall-extension    (remove files; reload-required)
+//   enable-extension       (toggle disabledExtensions list)
+//   disable-extension      (toggle disabledExtensions list)
+//   set-config             (land config key/value write)
+//   delete-config          (land config key removal)
+//
+// create-being moved to BE on 2026-05-20 — minting identity is a BE
+// concern, not a state mutation on space or matter.
 
 import { registerOperation } from "./operations.js";
-;
-;
-;
-import { createSpace, editSpaceName, editSpaceType, deleteSpaceBranch, updateParentRelationship } from "../land/space/spaceManagement.js";
+import {
+  createSpace,
+  editSpaceName,
+  editSpaceType,
+  deleteSpaceBranch,
+  updateParentRelationship,
+} from "../land/space/spaceManagement.js";
 import { resolveSpaceAccess } from "../land/space/spaceFetch.js";
 import { getLandDomain } from "../ibp/address.js";
-import { IbpError, IBP_ERR, mapPatternsToIbpError } from "./errors.js";
-import Being    from "../models/being.js";
-import Matter   from "../models/matter.js";
-import Space     from "../models/space.js";
+import { IbpError, IBP_ERR, mapPatternsToIbpError } from "./protocol.js";
+import Being from "../models/being.js";
+import Matter from "../models/matter.js";
+import Space from "../models/space.js";
 
 import { qualities } from "../land/qualities.js";
 let _registered = false;
@@ -74,8 +84,10 @@ export function registerKernelOperations() {
     didAction: "create",
     handler: async ({ target, params, identity }) => {
       const kind = detectTargetKind(target);
-      if (kind === "being")  return createBeingChild({ parentBeing: target, params, identity });
-      if (kind === "matter") return createMatterChild({ parentMatter: target, params, identity });
+      if (kind === "being")
+        return createBeingChild({ parentBeing: target, params, identity });
+      if (kind === "matter")
+        return createMatterChild({ parentMatter: target, params, identity });
       return createSpaceChild({ target, params, identity, kind });
     },
   });
@@ -92,11 +104,11 @@ export function registerKernelOperations() {
       const matter = await Matter.create({
         spaceId,
         beingId: identity?.beingId || params.beingId || null,
-        name:    params.name || null,
+        name: params.name || null,
         content: params.content ?? null,
-        origin:  params.origin || "ibp",
+        origin: params.origin || "ibp",
         parentMatterId: null,
-        metadata: params.qualities
+        qualities: params.qualities
           ? new Map(Object.entries(params.qualities))
           : new Map(),
       });
@@ -158,7 +170,8 @@ export function registerKernelOperations() {
         return { matterId: String(target._id), name };
       }
 
-      if (kind === "stance") return renameAtStance({ resolved: target, name, identity });
+      if (kind === "stance")
+        return renameAtStance({ resolved: target, name, identity });
 
       // Mongoose Space doc path: call the seed primitive directly.
       await editSpaceName({
@@ -171,7 +184,7 @@ export function registerKernelOperations() {
   });
 
   // set-status retired from seed 2026-05-18. Status is domain-specific
-  // and lives in extension metadata; extensions register their own
+  // and lives in extension qualities; extensions register their own
   // <ext>:set-<field> ops for state transitions. See
   // [[project_substrate_as_universal_workspace]] for the framing.
 
@@ -206,7 +219,10 @@ export function registerKernelOperations() {
     didAction: "remove",
     handler: async ({ target, params: _params, identity }) => {
       const spaceId = targetIdOf(target);
-      const deleted = await deleteSpaceBranch(spaceId, identity?.beingId || null);
+      const deleted = await deleteSpaceBranch(
+        spaceId,
+        identity?.beingId || null,
+      );
       return { deletedSpaceId: String(deleted?._id || spaceId) };
     },
   });
@@ -225,18 +241,18 @@ export function registerKernelOperations() {
       const matterId = String(target?._id || target?.matterId || target);
       if (!matterId) throw new Error("delete-matter: matterId required");
       const { deleteMatterAndFile } = await import("../land/matter/matters.js");
-      const beingId = identity?.beingId
-        || (await Matter.findById(matterId).select("beingId").lean())?.beingId;
+      const beingId =
+        identity?.beingId ||
+        (await Matter.findById(matterId).select("beingId").lean())?.beingId;
       await deleteMatterAndFile({
         matterId,
-        beingId:   String(beingId || ""),
-        summonId:  summonCtx?.summonId || null,
+        beingId: String(beingId || ""),
+        summonId: summonCtx?.summonId || null,
         sessionId: summonCtx?.sessionId || null,
       });
       return { removed: true, matterId };
     },
   });
-
 
   // set-parent: reparent a space. The target IS the space being moved;
   // params.parentId names the new parent.
@@ -279,7 +295,9 @@ export function registerKernelOperations() {
         throw new Error("set-meta: `namespace` is required");
       }
       if (RESERVED_SET_META_NS.has(namespace)) {
-        throw new Error(`set-meta: namespace "${namespace}" is not writable through set-meta`);
+        throw new Error(
+          `set-meta: namespace "${namespace}" is not writable through set-meta`,
+        );
       }
       if (data === undefined || data === null || typeof data !== "object") {
         throw new Error("set-meta: `data` must be an object");
@@ -288,27 +306,58 @@ export function registerKernelOperations() {
       const kind = detectTargetKind(target);
 
       if (kind === "being") {
-        const op = merge !== false ? qualities.being.mergeQuality : qualities.being.setQuality;
+        const op =
+          merge !== false
+            ? qualities.being.mergeQuality
+            : qualities.being.setQuality;
         await op(target, namespace, data);
-        return { written: true, beingId: String(target._id), namespace, kind: "being" };
+        return {
+          written: true,
+          beingId: String(target._id),
+          namespace,
+          kind: "being",
+        };
       }
       if (kind === "matter") {
-        const op = merge !== false ? qualities.matter.mergeQuality : qualities.matter.setQuality;
+        const op =
+          merge !== false
+            ? qualities.matter.mergeQuality
+            : qualities.matter.setQuality;
         await op(target, namespace, data);
-        return { written: true, matterId: String(target._id), namespace, kind: "matter" };
+        return {
+          written: true,
+          matterId: String(target._id),
+          namespace,
+          kind: "matter",
+        };
       }
-      if (kind === "stance") return setMetaAtStance({ resolved: target, namespace, data, merge, identity });
+      if (kind === "stance")
+        return setMetaAtStance({
+          resolved: target,
+          namespace,
+          data,
+          merge,
+          identity,
+        });
       // kind === "space": Mongoose Space doc passed directly (extension path).
-      const op = merge !== false ? qualities.space.mergeQuality : qualities.space.setQuality;
+      const op =
+        merge !== false
+          ? qualities.space.mergeQuality
+          : qualities.space.setQuality;
       await op(target, namespace, data);
-      return { written: true, spaceId: String(target._id), namespace, kind: "space" };
+      return {
+        written: true,
+        spaceId: String(target._id),
+        namespace,
+        kind: "space",
+      };
     },
   });
 
   // plant-seed: invoke a registered seed recipe at the target space.
   // The recipe scaffolds the structure (Ruler beings, sub-domain
-  // nodes, starter matter, metadata) on the target. See
-  // seed/land/space/seeds.js and memory `extension-seeds`.
+  // spaces, starter matter, qualities) on the target. See
+  // seed/land/seeds.js.
   //
   // params:
   //   name   — required. The seed's registered name.
@@ -323,16 +372,22 @@ export function registerKernelOperations() {
     handler: async ({ target, params, identity }) => {
       const { name } = params || {};
       if (!name || typeof name !== "string") {
-        throw new Error("plant-seed: `name` is required (the seed's registered name)");
+        throw new Error(
+          "plant-seed: `name` is required (the seed's registered name)",
+        );
       }
       const spaceId = targetIdOf(target);
-      if (!spaceId) throw new Error("plant-seed: target must resolve to a space id");
-      const { plantSeed } = await import("../land/space/seeds.js");
+      if (!spaceId)
+        throw new Error("plant-seed: target must resolve to a space id");
+      const { plantSeed } = await import("../land/seeds.js");
       const { getCoreServices } = await import("../services.js");
       const core = getCoreServices();
-      const seedParams = (params?.params && typeof params.params === "object" && !Array.isArray(params.params))
-        ? params.params
-        : {};
+      const seedParams =
+        params?.params &&
+        typeof params.params === "object" &&
+        !Array.isArray(params.params)
+          ? params.params
+          : {};
       const { plantedSeedId, plantedThings } = await plantSeed({
         name,
         atSpaceId: spaceId,
@@ -386,12 +441,18 @@ export function registerKernelOperations() {
     handler: async ({ target, params }) => {
       const { name, baseUrl, apiKey, model } = params || {};
       if (!name || !baseUrl || !model) {
-        throw new Error("add-llm-connection: `name`, `baseUrl`, and `model` are required");
+        throw new Error(
+          "add-llm-connection: `name`, `baseUrl`, and `model` are required",
+        );
       }
-      const { addLlmConnection, assignConnection } = await import("../cognition/connections.js");
+      const { addLlmConnection, assignConnection } =
+        await import("../cognition/connections.js");
       const beingId = String(target._id);
       const connection = await addLlmConnection(beingId, {
-        name, baseUrl, apiKey: apiKey || "none", model,
+        name,
+        baseUrl,
+        apiKey: apiKey || "none",
+        model,
       });
       // If this is the Being's first connection, auto-assign it to the
       // default `main` slot so subsequent runChat calls find an LLM.
@@ -409,13 +470,18 @@ export function registerKernelOperations() {
     ownerExtension: "kernel",
     handler: async ({ target, params }) => {
       const { connectionId, name, baseUrl, apiKey, model } = params || {};
-      if (!connectionId) throw new Error("update-llm-connection: `connectionId` is required");
+      if (!connectionId)
+        throw new Error("update-llm-connection: `connectionId` is required");
       if (!baseUrl || !model) {
-        throw new Error("update-llm-connection: `baseUrl` and `model` are required");
+        throw new Error(
+          "update-llm-connection: `baseUrl` and `model` are required",
+        );
       }
-      const { updateLlmConnection } = await import("../cognition/connections.js");
+      const { updateLlmConnection } =
+        await import("../cognition/connections.js");
       const connection = await updateLlmConnection(
-        String(target._id), connectionId,
+        String(target._id),
+        connectionId,
         { name, baseUrl, apiKey, model },
       );
       return { connection };
@@ -427,8 +493,10 @@ export function registerKernelOperations() {
     ownerExtension: "kernel",
     handler: async ({ target, params }) => {
       const { connectionId } = params || {};
-      if (!connectionId) throw new Error("delete-llm-connection: `connectionId` is required");
-      const { deleteLlmConnection } = await import("../cognition/connections.js");
+      if (!connectionId)
+        throw new Error("delete-llm-connection: `connectionId` is required");
+      const { deleteLlmConnection } =
+        await import("../cognition/connections.js");
       await deleteLlmConnection(String(target._id), connectionId);
       return { removed: true, connectionId };
     },
@@ -439,7 +507,7 @@ export function registerKernelOperations() {
   // walks both, so slot assignment lives at both:
   //
   //   Being target → Being.llmDefault (slot="main") or
-  //                  Being.qualities.userLlm.slots.<slot>
+  //                  Being.qualities.beingLlm.slots.<slot>
   //   Space  target → Space.llmDefault  (slot="main") or
   //                  Space.qualities.llm.slots.<slot>
   registerOperation("assign-llm-slot", {
@@ -449,12 +517,14 @@ export function registerKernelOperations() {
       const { slot, connectionId } = params || {};
       if (!slot) throw new Error("assign-llm-slot: `slot` is required");
       const kind = detectTargetKind(target);
-      const { assignConnection, assignSpaceConnection } = await import("../cognition/connections.js");
+      const { assignConnection, assignSpaceConnection } =
+        await import("../cognition/connections.js");
       if (kind === "being") {
         return assignConnection(String(target._id), slot, connectionId || null);
       }
       const spaceId = targetIdOf(target);
-      if (!spaceId) throw new Error("assign-llm-slot: target must resolve to a space id");
+      if (!spaceId)
+        throw new Error("assign-llm-slot: target must resolve to a space id");
       return assignSpaceConnection(spaceId, slot, connectionId || null, {
         ownerBeingId: identity?.beingId || null,
       });
@@ -498,7 +568,9 @@ export function registerKernelOperations() {
         throw new Error("set-config: `key` is required");
       }
       if (value === undefined) {
-        throw new Error("set-config: `value` is required (use delete-config to remove)");
+        throw new Error(
+          "set-config: `value` is required (use delete-config to remove)",
+        );
       }
       // Scaffold flows (migrations, first-boot bootstrap) are permitted
       // to write PROTECTED_KEYS (seedVersion, disabledExtensions). Being
@@ -546,10 +618,11 @@ const RESERVED_SET_META_NS = new Set([
  *   3. Default → "space"
  */
 function detectTargetKind(target) {
-  if (target && typeof target === "object" && Array.isArray(target.chain)) return "stance";
+  if (target && typeof target === "object" && Array.isArray(target.chain))
+    return "stance";
   const modelName = target?.constructor?.modelName;
-  if (modelName === "Being")    return "being";
-  if (modelName === "Matter")   return "matter";
+  if (modelName === "Being") return "being";
+  if (modelName === "Matter") return "matter";
   return "space";
 }
 
@@ -590,20 +663,23 @@ function targetIdOf(target) {
 
 const KERNEL_ERROR_PATTERNS = {
   createChild: [
-    [/cancelled by extension/i,        IBP_ERR.FORBIDDEN],
+    [/cancelled by extension/i, IBP_ERR.FORBIDDEN],
     [/land seed spaces|reserved|invalid/i, IBP_ERR.INVALID_INPUT],
-    [/not found/i,                     IBP_ERR.SPACE_NOT_FOUND],
+    [/not found/i, IBP_ERR.SPACE_NOT_FOUND],
   ],
   rename: [
-    [/land seed spaces/i,                              IBP_ERR.FORBIDDEN],
-    [/not found/i,                                 IBP_ERR.SPACE_NOT_FOUND],
-    [/cannot|reserved|invalid|characters|empty/i,  IBP_ERR.INVALID_INPUT],
+    [/land seed spaces/i, IBP_ERR.FORBIDDEN],
+    [/not found/i, IBP_ERR.SPACE_NOT_FOUND],
+    [/cannot|reserved|invalid|characters|empty/i, IBP_ERR.INVALID_INPUT],
   ],
   setMeta: [
-    [/blocked/i,                                                  IBP_ERR.EXTENSION_BLOCKED],
-    [/Namespace violation|reserved/i,                             IBP_ERR.FORBIDDEN],
-    [/Invalid extension name|reserved key|nested too|too large/i, IBP_ERR.INVALID_INPUT],
-    [/document size/i,                                            IBP_ERR.DOCUMENT_SIZE_EXCEEDED],
+    [/blocked/i, IBP_ERR.EXTENSION_BLOCKED],
+    [/Namespace violation|reserved/i, IBP_ERR.FORBIDDEN],
+    [
+      /Invalid extension name|reserved key|nested too|too large/i,
+      IBP_ERR.INVALID_INPUT,
+    ],
+    [/document size/i, IBP_ERR.DOCUMENT_SIZE_EXCEEDED],
   ],
 };
 
@@ -638,7 +714,10 @@ async function createSpaceChild({ target, params, identity, kind }) {
   }
   if (target.isHomeRoot) {
     if (String(target.beingId) !== String(beingId)) {
-      throw new IbpError(IBP_ERR.FORBIDDEN, "Cannot create a tree root in another being's home");
+      throw new IbpError(
+        IBP_ERR.FORBIDDEN,
+        "Cannot create a tree root in another being's home",
+      );
     }
     try {
       const newSpace = await createSpace({ name, type, isRoot: true, beingId });
@@ -648,10 +727,18 @@ async function createSpaceChild({ target, params, identity, kind }) {
     }
   }
   if (!target.spaceId) {
-    throw new IbpError(IBP_ERR.SPACE_NOT_FOUND, "Resolved position has no spaceId");
+    throw new IbpError(
+      IBP_ERR.SPACE_NOT_FOUND,
+      "Resolved position has no spaceId",
+    );
   }
   try {
-    const newSpace = await createSpace({ name, type, parentId: target.spaceId, beingId });
+    const newSpace = await createSpace({
+      name,
+      type,
+      parentId: target.spaceId,
+      beingId,
+    });
     return shapeNewSpace(newSpace);
   } catch (err) {
     throw mapPatternsToIbpError(err, KERNEL_ERROR_PATTERNS.createChild);
@@ -662,7 +749,7 @@ function shapeNewSpace(newSpace) {
   const spaceId = String(newSpace._id);
   return {
     spaceId,
-    name:     newSpace.name,
+    name: newSpace.name,
     position: `${getLandDomain()}/${spaceId}`,
     // _didTarget hints the dispatcher to name the new space (not the
     // parent the call addressed) as the substrate-event target.
@@ -673,11 +760,17 @@ function shapeNewSpace(newSpace) {
 async function renameAtStance({ resolved, name, identity }) {
   const beingId = identity?.beingId || null;
   if (!resolved.spaceId) {
-    throw new IbpError(IBP_ERR.SPACE_NOT_FOUND, "Resolved address has no spaceId");
+    throw new IbpError(
+      IBP_ERR.SPACE_NOT_FOUND,
+      "Resolved address has no spaceId",
+    );
   }
   const access = await resolveSpaceAccess(resolved.spaceId, beingId);
   if (!access?.ok || access.write !== true) {
-    throw new IbpError(IBP_ERR.FORBIDDEN, "Not authorized to rename at this place");
+    throw new IbpError(
+      IBP_ERR.FORBIDDEN,
+      "Not authorized to rename at this place",
+    );
   }
   try {
     await editSpaceName({ spaceId: resolved.spaceId, newName: name, beingId });
@@ -690,15 +783,24 @@ async function renameAtStance({ resolved, name, identity }) {
 async function setMetaAtStance({ resolved, namespace, data, merge, identity }) {
   const beingId = identity?.beingId || null;
   if (!resolved.spaceId) {
-    throw new IbpError(IBP_ERR.SPACE_NOT_FOUND, "Resolved address has no spaceId");
+    throw new IbpError(
+      IBP_ERR.SPACE_NOT_FOUND,
+      "Resolved address has no spaceId",
+    );
   }
   const access = await resolveSpaceAccess(resolved.spaceId, beingId);
   if (!access?.ok || access.write !== true) {
-    throw new IbpError(IBP_ERR.FORBIDDEN, "Not authorized to write metadata at this place");
+    throw new IbpError(
+      IBP_ERR.FORBIDDEN,
+      "Not authorized to write qualities at this place",
+    );
   }
   const space = await Space.findById(resolved.spaceId);
   if (!space) {
-    throw new IbpError(IBP_ERR.SPACE_NOT_FOUND, "Space disappeared between resolve and write");
+    throw new IbpError(
+      IBP_ERR.SPACE_NOT_FOUND,
+      "Space disappeared between resolve and write",
+    );
   }
   try {
     if (merge === false) {
@@ -706,7 +808,12 @@ async function setMetaAtStance({ resolved, namespace, data, merge, identity }) {
     } else {
       await qualities.space.mergeQuality(space, namespace, data);
     }
-    return { written: true, spaceId: String(space._id), namespace, kind: "space" };
+    return {
+      written: true,
+      spaceId: String(space._id),
+      namespace,
+      kind: "space",
+    };
   } catch (err) {
     throw mapPatternsToIbpError(err, KERNEL_ERROR_PATTERNS.setMeta);
   }

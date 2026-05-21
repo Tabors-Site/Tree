@@ -1,21 +1,34 @@
 // TreeOS Seed . AGPL-3.0 . https://treeos.ai . Tabor Holly
 //
-// Matter CRUD. The primitives that put stuff into spaces.
+// Matter. What fills a space.
 //
-// Matter is what fills space and gives it feature. I don't treat
-// notes, files, and qualities-only objects as separate categories;
-// every Matter row carries an `origin` field that names the realm
-// its underlying content actually lives in. See `origins.js` for the
-// four origins (ibp, filesystem, web, cross-land) and their content
-// shapes.
+// Space is the where; Matter is the what-sits-there. Together they
+// make a position something rather than empty potential. This file
+// is the place I create, edit, and retire Matter — the operations
+// behind the kernel's create-matter / edit-matter / delete-matter
+// verbs.
 //
-// beforeMatter and afterMatter hooks fire on every write. Extensions
-// tag matter through hookData.qualities using their own namespace.
+// I do not split Matter by what it carries. Text, a file, a URL, a
+// cross-land bridge — one schema for all of them. The `origin` field
+// names the realm the underlying content lives in (ibp, filesystem,
+// web, cross-land; see origins.js) and decides how that content is
+// fetched, addressed, and kept in sync. Adding a new origin extends
+// the enum and adds a bridging pattern; it does not change the shape
+// of Matter.
 //
-// Uploads. Origin "filesystem" stores the file in the land's
-// uploads/ directory. Soft-delete marks a matter with `spaceId` and
-// `beingId` set to the DELETED sentinel; the row stays for audit
-// but no longer lives in the world.
+// Hooks. beforeMatter and afterMatter fire on every write. Before
+// hooks can mutate the payload or cancel the create; after hooks run
+// in parallel for reactive work. Extensions characterize Matter
+// through hookData.qualities under their own namespace.
+//
+// Filesystem origin. Bytes live on disk in the land's uploads/
+// folder, separate from the Matter row that names them. The orphan
+// sweeper in uploadCleanup.js removes files whose Matter has been
+// retired.
+//
+// Soft-delete. Retiring a Matter sets spaceId and beingId to the
+// DELETED sentinel; the row stays for audit but no longer lives in
+// the world.
 
 import log from "../../system/log.js";
 import path from "path";
@@ -31,7 +44,7 @@ import { resolveRootSpace } from "../space/spaceFetch.js";
 import { hooks } from "../../system/hooks.js";
 import { MATTER_ORIGIN } from "./origins.js";
 import { DELETED } from "../space/seedSpaces.js";
-import { ERR, ProtocolError } from "../../ibp/protocol.js";
+import { IBP_ERR, IbpError } from "../../ibp/protocol.js";
 
 import { qualities } from "../qualities.js";
 // `__dirname` resolves to seed/land/matter/. Three ups reach the
@@ -104,7 +117,7 @@ async function createMatter({
   file,
   summonId = null,
   sessionId = null,
-  metadata = {},
+  initialQualities = {},
 }) {
   if (!Object.values(MATTER_ORIGIN).includes(origin)) {
     throw new Error(`Invalid matter origin: ${origin}`);
@@ -146,11 +159,11 @@ async function createMatter({
   // web / cross-land: content shape is the caller's responsibility.
 
   // ── HOOKS ────────────────────────────────────────
-  const hookData = { spaceId, content: finalContent, beingId, origin, metadata: { ...qualities } };
+  const hookData = { spaceId, content: finalContent, beingId, origin, qualities: { ...initialQualities } };
   const hookResult = await hooks.run("beforeMatter", hookData);
   if (hookResult.cancelled) {
-    const code = hookResult.timedOut ? ERR.HOOK_TIMEOUT : ERR.HOOK_CANCELLED;
-    throw new ProtocolError(500, code, hookResult.reason || "Matter creation cancelled by extension");
+    const code = hookResult.timedOut ? IBP_ERR.HOOK_TIMEOUT : IBP_ERR.HOOK_CANCELLED;
+    throw new IbpError(code, hookResult.reason || "Matter creation cancelled by extension");
   }
   finalContent = hookData.content;
 
@@ -160,7 +173,7 @@ async function createMatter({
     content: finalContent,
     beingId,
     spaceId,
-    metadata: hookData.qualities,
+    qualities: hookData.qualities,
   });
   await newMatter.save();
 
@@ -238,7 +251,7 @@ async function editMatter({
 
   let finalContent = newContent;
   {
-    const hookData = { spaceId: matter.spaceId, content: newContent, beingId, origin: matter.origin, metadata: {} };
+    const hookData = { spaceId: matter.spaceId, content: newContent, beingId, origin: matter.origin, qualities: {} };
     await hooks.run("beforeMatter", hookData);
     finalContent = hookData.content;
   }
@@ -291,7 +304,7 @@ async function getMatters({ spaceId, limit, offset, startDate, endDate }) {
       authorName: m.beingId?.name ?? null,              // populated from beingId
       beingId:    m.beingId?._id ? String(m.beingId._id) : null,
       spaceId:     m.spaceId,
-      metadata:   m.qualities,
+      qualities:  m.qualities,
       createdAt:  m.createdAt,
       updatedAt:  m.updatedAt,
     })),
@@ -521,8 +534,34 @@ async function getMatterHistory({ matterId, limit = 100, offset = 0 } = {}) {
   }));
 }
 
+/**
+ * List matter rows at a space, slim shape (matterId, name, beingId,
+ * origin, content, qualities). Hits Matter directly so the returned
+ * `name` is the matter's own — getMatters populates beingId and
+ * overwrites name with the being's name, which the descriptor pass
+ * specifically needs to avoid.
+ */
+async function listMattersAt(spaceId, { limit = 50 } = {}) {
+  if (!spaceId) return [];
+  const list = await Matter.find({ spaceId: String(spaceId) })
+    .sort({ createdAt: -1 })
+    .limit(limit)
+    .lean();
+  return list.map((m) => ({
+    matterId: String(m._id),
+    name: m.name || null,
+    beingId: m.beingId ? String(m.beingId) : null,
+    origin: m.origin || "ibp",
+    content: m.content || null,
+    qualities: m.qualities instanceof Map
+      ? Object.fromEntries(m.qualities)
+      : (m.qualities || {}),
+  }));
+}
+
 export {
   createMatter, editMatter, getMatters, deleteMatterAndFile,
   transferMatter,
   getAllMatterByBeing, searchMatterByBeing, getMatterHistory,
+  listMattersAt,
 };

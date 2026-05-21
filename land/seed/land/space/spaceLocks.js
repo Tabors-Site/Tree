@@ -1,25 +1,33 @@
 // TreeOS Seed . AGPL-3.0 . https://treeos.ai . Tabor Holly
-/**
- * Space Locks
- *
- * Short-lived in-memory locks for structural mutations.
- * Not orchestrator locks (30min TTL for pipelines).
- * These are seconds. Scoped to one structural operation.
- *
- * Three tiers of tree operations:
- *   Tier 1: Reads. Fully concurrent. Zero locks. Zero overhead.
- *   Tier 2: Scoped writes (setQuality, createMatter). Concurrent across namespaces. No locks.
- *   Tier 3: Structural mutations (move, delete, ownership). Lock the affected space(s).
- *
- * Only tier 3 touches this module. Everything else runs free.
- *
- * Multi-space operations (updateParentRelationship touches 3 spaces) acquire
- * locks in sorted order to prevent deadlock. If any acquisition fails,
- * all already-acquired locks are released.
- *
- * TTL auto-expires stale locks from crashed operations. Integrity check
- * on next boot repairs any partial structural mutation.
- */
+//
+// Structural locks on the space tree.
+//
+// Short-lived, in-memory, seconds-scale. Held only for the duration
+// of one structural operation. Nothing about long-running orchestrator
+// state lives here.
+//
+// I sort space-tree operations into three tiers and serialize only
+// the third:
+//
+//   Tier 1: Reads.            Fully concurrent. Zero locks.
+//   Tier 2: Scoped writes.    setQuality and createMatter target
+//                             one namespace or one Matter row.
+//                             Concurrent across namespaces; the
+//                             qualities API uses atomic $set so
+//                             different namespaces never clobber
+//                             each other. No locks.
+//   Tier 3: Structural mutations. move, delete, ownership transfer.
+//                             These touch parent/children edges and
+//                             must serialize. Locks live here.
+//
+// Multi-space mutations (updateParentRelationship touches three
+// spaces: child, old parent, new parent) acquire locks in sorted
+// order to prevent deadlock. If any acquisition fails, the
+// already-acquired locks are released and the caller retries.
+//
+// TTL expires stale locks from crashed operations. The integrity
+// check on next boot repairs any half-finished structural mutation
+// the lock-holder didn't get to clean up.
 
 import log from "../../system/log.js";
 import { getLandConfigValue } from "../../landConfig.js";

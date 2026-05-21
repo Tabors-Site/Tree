@@ -22,7 +22,7 @@
 import log from "../../../seed/system/log.js";
 import { parseFromSocket, expand, getLandDomain } from "../../../seed/ibp/address.js";
 import { resolveStance } from "../../../seed/ibp/resolver.js";
-import { IbpError, IBP_ERR, isIbpError } from "../../../seed/ibp/errors.js";
+import { IbpError, IBP_ERR, isIbpError } from "../../../seed/ibp/protocol.js";
 import { ackOk, ackError, stripBeingQualifier } from "../envelope.js";
 import { doVerb } from "../../../seed/ibp/verbs.js";
 import { getOperation, listOperations } from "../../../seed/ibp/operations.js";

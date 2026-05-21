@@ -21,7 +21,7 @@
 //      summon concurrently when each has work.
 //
 // Backpressure (per-being inbox depth, summons rate) is enforced here
-// against limits read from each being's metadata, falling back to land
+// against limits read from each being's qualities, falling back to land
 // defaults. When tripped, the scheduler logs and drops the lowest-
 // priority pending entries; role templates can override that policy by
 // inspecting their own inbox before allowing append.
@@ -34,7 +34,12 @@
 import { randomUUID } from "crypto";
 import log from "../system/log.js";
 import Being from "../models/being.js";
-import { pickNextEntry, markSummoned, markInboxConsumed, readInbox } from "./inbox.js";
+import {
+  pickNextEntry,
+  markSummoned,
+  markInboxConsumed,
+  readInbox,
+} from "./inbox.js";
 import { getRole } from "../cognition/roles/registry.js";
 import { pushIbp } from "../ibp/pushChannel.js";
 import { getLandConfigValue } from "../landConfig.js";
@@ -112,9 +117,16 @@ export function wake(beingId, spaceId) {
     // contract holds: wake() returns → state.running === true →
     // abortCurrent / getStats see the in-flight Summon.
     runLoop(beingId).catch((err) => {
-      log.error("Scheduler", `runLoop crashed for being ${beingId.slice(0, 8)}: ${err.message}`);
+      log.error(
+        "Scheduler",
+        `runLoop crashed for being ${beingId.slice(0, 8)}: ${err.message}`,
+      );
       const s = _state.get(beingId);
-      if (s) { s.running = false; s.controller = null; s.currentRoot = null; }
+      if (s) {
+        s.running = false;
+        s.controller = null;
+        s.currentRoot = null;
+      }
     });
   }
 }
@@ -134,7 +146,8 @@ export function wake(beingId, spaceId) {
  */
 export function abortCurrent(beingId, reason = "cancelled") {
   const state = _state.get(beingId);
-  if (!state || !state.controller || state.controller.signal.aborted) return false;
+  if (!state || !state.controller || state.controller.signal.aborted)
+    return false;
   try {
     state.controller.abort(new Error(reason));
     return true;
@@ -167,10 +180,14 @@ export function getCurrentRootCorrelation(beingId) {
  * @param {Iterable<string>} rootCorrelations
  * @param {string} [reason]
  */
-export function abortByRootCorrelations(rootCorrelations, reason = "cancelled") {
-  const set = rootCorrelations instanceof Set
-    ? rootCorrelations
-    : new Set(rootCorrelations);
+export function abortByRootCorrelations(
+  rootCorrelations,
+  reason = "cancelled",
+) {
+  const set =
+    rootCorrelations instanceof Set
+      ? rootCorrelations
+      : new Set(rootCorrelations);
   if (!set.size) return 0;
   let aborted = 0;
   for (const [beingId, state] of _state) {
@@ -189,9 +206,9 @@ export function getStats() {
   const out = {};
   for (const [beingId, state] of _state) {
     out[beingId] = {
-      running:     state.running,
+      running: state.running,
       currentRoot: state.currentRoot,
-      queueDepth:  state.wakeQueue.size,
+      queueDepth: state.wakeQueue.size,
     };
   }
   return out;
@@ -205,7 +222,9 @@ export function _resetAll() {
   // Best-effort abort of anything in flight so tests don't leak handles.
   for (const state of _state.values()) {
     if (state.controller && !state.controller.signal.aborted) {
-      try { state.controller.abort(new Error("scheduler reset")); } catch {}
+      try {
+        state.controller.abort(new Error("scheduler reset"));
+      } catch {}
     }
   }
   _state.clear();
@@ -248,7 +267,10 @@ async function runLoop(beingId) {
           if (!_checkRate(beingId)) {
             // Rate-limited — put spaceId back so we revisit on the next wake.
             state.wakeQueue.add(spaceId);
-            log.warn("Scheduler", `being ${beingId.slice(0, 8)} rate-limited; deferring`);
+            log.warn(
+              "Scheduler",
+              `being ${beingId.slice(0, 8)} rate-limited; deferring`,
+            );
             break;
           }
           const picked = await pickNextEntry(spaceId, beingId);
@@ -296,14 +318,20 @@ async function processEntry(beingId, spaceId, picked) {
   try {
     toBeing = await Being.findById(beingId);
     if (!toBeing) {
-      log.warn("Scheduler", `being ${beingId.slice(0, 8)} not found; marking entry consumed and skipping`);
+      log.warn(
+        "Scheduler",
+        `being ${beingId.slice(0, 8)} not found; marking entry consumed and skipping`,
+      );
       await markInboxConsumed(spaceId, beingId, [entry.correlation]);
       return;
     }
     // Cache cognition mode on first encounter so future wakes for this
     // being don't re-resolve it (rarely changes; cleared on _resetAll).
     if (!_cognitionMode.has(beingId)) {
-      _cognitionMode.set(beingId, toBeing.operatingMode === "human" ? "human" : "agent");
+      _cognitionMode.set(
+        beingId,
+        toBeing.operatingMode === "human" ? "human" : "agent",
+      );
     }
     // Human cognition branch. Entries stay pending; we emit
     // being-room notifications for each unconsumed entry at this
@@ -319,9 +347,11 @@ async function processEntry(beingId, spaceId, picked) {
     if (entry.activeRole) {
       const carried = Array.isArray(toBeing.roles) ? toBeing.roles : [];
       if (!carried.includes(entry.activeRole)) {
-        log.warn("Scheduler",
+        log.warn(
+          "Scheduler",
           `entry's activeRole "${entry.activeRole}" not carried by being ${beingId.slice(0, 8)} ` +
-          `(roles: ${carried.join(", ") || "none"}); consuming without summon`);
+            `(roles: ${carried.join(", ") || "none"}); consuming without summon`,
+        );
         await markInboxConsumed(spaceId, beingId, [entry.correlation]);
         return;
       }
@@ -331,13 +361,19 @@ async function processEntry(beingId, spaceId, picked) {
     }
     role = activeRole ? getRole(activeRole) : null;
   } catch (err) {
-    log.error("Scheduler", `resolution failed for being ${beingId.slice(0, 8)}: ${err.message}`);
+    log.error(
+      "Scheduler",
+      `resolution failed for being ${beingId.slice(0, 8)}: ${err.message}`,
+    );
     await markInboxConsumed(spaceId, beingId, [entry.correlation]);
     return;
   }
 
   if (!role) {
-    log.warn("Scheduler", `no role registered for "${activeRole}" of being ${beingId.slice(0, 8)}; consuming without summon`);
+    log.warn(
+      "Scheduler",
+      `no role registered for "${activeRole}" of being ${beingId.slice(0, 8)}; consuming without summon`,
+    );
     await markInboxConsumed(spaceId, beingId, [entry.correlation]);
     return;
   }
@@ -351,27 +387,27 @@ async function processEntry(beingId, spaceId, picked) {
   // data).
   const summonCtx = {
     spaceId,
-    being:      activeRole,                      // legacy field name; carries the active role
-    activeRole,                                  // canonical
+    being: activeRole, // legacy field name; carries the active role
+    activeRole, // canonical
     toBeing,
     message: {
-      from:           entry.from,
-      content:        entry.content,
-      correlation:    entry.correlation,
+      from: entry.from,
+      content: entry.content,
+      correlation: entry.correlation,
       rootCorrelation: entry.rootCorrelation || entry.correlation,
       activeRole,
-      inReplyTo:      entry.inReplyTo,
-      attachments:    entry.attachments,
-      sentAt:         entry.sentAt,
-      priority:       entry.priority,
+      inReplyTo: entry.inReplyTo,
+      attachments: entry.attachments,
+      sentAt: entry.sentAt,
+      priority: entry.priority,
     },
     resolved: {
-      being:      activeRole,
+      being: activeRole,
       activeRole,
       spaceId,
     },
     identity: null, // populated by the caller-side enqueue path (set below if attached)
-    signal:   controller.signal,
+    signal: controller.signal,
   };
 
   // Verb-handler-attached runtime context (sender identity, response
@@ -389,37 +425,47 @@ async function processEntry(beingId, spaceId, picked) {
     const result = await role.summon(summonCtx.message, summonCtx);
     if (result && typeof result === "object") {
       responseEntry = {
-        from:        handoff?.responseFromStance || null,
-        content:     result.text ?? result.content ?? "",
+        from: handoff?.responseFromStance || null,
+        content: result.text ?? result.content ?? "",
         correlation: result.correlation || randomUUID(),
-        inReplyTo:   entry.correlation,
-        sentAt:      new Date().toISOString(),
-        summonId:    result.summonId || null,
+        inReplyTo: entry.correlation,
+        sentAt: new Date().toISOString(),
+        summonId: result.summonId || null,
       };
     }
   } catch (err) {
     if (controller.signal.aborted) {
-      log.info("Scheduler", `Summon aborted for being ${beingId.slice(0, 8)} (${entry.correlation.slice(0, 8)}): ${err.message}`);
+      log.info(
+        "Scheduler",
+        `Summon aborted for being ${beingId.slice(0, 8)} (${entry.correlation.slice(0, 8)}): ${err.message}`,
+      );
       // Treat aborted as a finalization — mark consumed but emit no reply.
       // Role templates that need to inform the sender about cancellation
       // should emit their own SUMMON; the scheduler stays out of policy.
     } else {
-      log.error("Scheduler", `Summon errored for being ${beingId.slice(0, 8)}: ${err.message}`);
+      log.error(
+        "Scheduler",
+        `Summon errored for being ${beingId.slice(0, 8)}: ${err.message}`,
+      );
       if (handoff?.onError) {
-        try { handoff.onError(err, entry); } catch {}
+        try {
+          handoff.onError(err, entry);
+        } catch {}
       }
     }
   } finally {
     try {
       await markInboxConsumed(spaceId, beingId, [entry.correlation], {
         responseId: responseEntry?.correlation || null,
-        summonId:   responseEntry?.summonId    || null,
+        summonId: responseEntry?.summonId || null,
       });
     } catch (err) {
       log.warn("Scheduler", `markInboxConsumed failed: ${err.message}`);
     }
     if (responseEntry && handoff?.onResponse) {
-      try { handoff.onResponse(responseEntry); } catch {}
+      try {
+        handoff.onResponse(responseEntry);
+      } catch {}
     }
     // Clear handoff slot so a long-lived being doesn't accumulate them.
     if (handoff) state.handoffs.delete(entry.correlation);
@@ -485,11 +531,11 @@ function _ensureState(beingId) {
   let state = _state.get(beingId);
   if (!state) {
     state = {
-      running:     false,
-      controller:  null,
+      running: false,
+      controller: null,
       currentRoot: null,
-      wakeQueue:   new Set(),
-      handoffs:    new Map(),
+      wakeQueue: new Set(),
+      handoffs: new Map(),
     };
     _state.set(beingId, state);
   }
@@ -515,4 +561,3 @@ function _checkRate(beingId) {
   bucket.tokens -= 1;
   return true;
 }
-

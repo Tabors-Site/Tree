@@ -3,9 +3,9 @@
 // Qualities. What kind a thing is.
 //
 // Every primitive (Space, Being, Matter) carries two layers. My schema
-// is the constitutive layer — closed, kernel-defined, the necessary
+// is the constitutive layer: closed, kernel-defined, the necessary
 // grip that makes a primitive a primitive I can handle. The `qualities`
-// Map is the characterizing layer — open, extension-defined, the
+// Map is the characterizing layer: open, extension-defined, the
 // answer to Plato's question "of what sort is this particular one?"
 // See LAND.md "Qualities" for the full rationale (why this word, the
 // two-layer test, the four marks, why extension-data and qualities
@@ -21,7 +21,7 @@
 // into the abstract noun "of-what-sort-ness." Cicero calqued it into
 // Latin as qualitas (from qualis, "of what kind"). The field is
 // named for exactly what it does: it holds the answer to the
-// question. The earlier name was `metadata` — replaced because
+// question. The earlier name was `metadata`, replaced because
 // "meta-" implied subordinate; a primitive's qualities are not
 // subordinate to the primitive, they are what it is like.
 //
@@ -32,7 +32,7 @@
 // inside an extension's quality namespace; I only provide the atomic
 // primitives below.
 //
-// The Map defaults to empty at creation — a brand-new primitive is
+// The Map defaults to empty at creation. A brand-new primitive is
 // complete with zero qualities; the empty Map is its standing
 // capacity to be qualified.
 //
@@ -65,18 +65,18 @@ import Being from "../models/being.js";
 import Space from "../models/space.js";
 import Matter from "../models/matter.js";
 import { hooks } from "../system/hooks.js";
-import { guardQualityWrite } from "./space/documentGuard.js";
+import { guardQualityWrite } from "./documentGuard.js";
 import { getLandConfigValue } from "../landConfig.js";
 
 const MAX_KEY_LENGTH = 50;
 const DANGEROUS_KEYS = new Set(["__proto__", "constructor", "prototype"]);
 
 function MAX_VALUE_BYTES() {
-  return Math.max(1024, Math.min(Number(getLandConfigValue("metadataNamespaceMaxBytes")) || 524288, 2 * 1024 * 1024));
+  return Math.max(1024, Math.min(Number(getLandConfigValue("qualityNamespaceMaxBytes")) || 524288, 2 * 1024 * 1024));
 }
 
 function maxNestingDepth() {
-  return Math.max(2, Math.min(Number(getLandConfigValue("metadataMaxNestingDepth")) || 5, 20));
+  return Math.max(2, Math.min(Number(getLandConfigValue("qualityMaxNestingDepth")) || 5, 20));
 }
 
 function validateKey(key) {

@@ -1,29 +1,46 @@
 // TreeOS Seed . AGPL-3.0 . https://treeos.ai . Tabor Holly
-/**
- * Spatial Extension Scoping
- *
- * Two modes per extension:
- *
- * Global (default): Active everywhere. Block to remove at specific positions.
- *   Storage: space.qualities.extensions.blocked[] accumulates up the parent chain.
- *
- * Confined: Active nowhere. Allow to add at specific positions.
- *   Storage: space.qualities.extensions.allowed[] walked up the parent chain.
- *   If not found in allowed[], the extension is treated as blocked.
- *   If found, it's active (but can still be blocked further down).
- *
- * The manifest declares scope: "confined" for dangerous or specialized extensions.
- * The .extensions land seed space stores scope on each extension's registry space.
- *
- * Resolution: is this extension confined? If yes, walk up looking for allowed[].
- * If not found, blocked. If found, continue to normal blocked[] check.
- * Same ancestor cache. Same snapshot. Zero new queries. One check per confined extension.
- */
+//
+// Extension scope at a position.
+//
+// An extension on a land is active at every position by default. The
+// operator can narrow that by writing scope rules into a Space's
+// qualities.extensions namespace, and the rule applies to everything
+// at and below that Space (resolved by walking the parent chain).
+//
+// Two modes per extension:
+//
+//   Global (default). Active everywhere. Block to remove at specific
+//     positions: qualities.extensions.blocked[] accumulates up the
+//     parent chain.
+//
+//   Confined. Active nowhere. Allow to add at specific positions:
+//     qualities.extensions.allowed[] is walked up the parent chain.
+//     If the name is not found, the extension is treated as blocked
+//     here; if it is found, it is active (but can still be blocked
+//     further down).
+//
+// The manifest declares scope: "confined" for dangerous or
+// specialized extensions. The .extensions land seed space stores
+// scope on each extension's registry space; loadConfinedExtensions
+// reads it at boot.
+//
+// Resolution is one walk up the same ancestor cache every chain
+// uses. One snapshot per turn; zero new queries; one extra
+// allowed[] check per confined extension.
+//
+// Tool and mode ownership maps live in the bottom half of this file.
+// They support the scope filter (filterToolNamesByScope drops tools
+// owned by blocked extensions) and are colocated here because they
+// share no consumer outside scope resolution.
 
 import log from "../../system/log.js";
 import Space from "../../models/space.js";
-import { SEED_SPACE } from "../space/seedSpaces.js";
-import { getAncestorChain, resolveExtensionScopeFromChain, invalidateAll as clearAncestorCache } from "./ancestorCache.js";
+import { SEED_SPACE } from "./seedSpaces.js";
+import {
+  getAncestorChain,
+  resolveExtensionScopeFromChain,
+  invalidateAll as clearAncestorCache,
+} from "./ancestorCache.js";
 import { hooks } from "../../system/hooks.js";
 
 // ─────────────────────────────────────────────────────────────────────────
@@ -56,19 +73,23 @@ export function setExtensionInstanceLookup(fn) {
  */
 export async function loadConfinedExtensions() {
   try {
-    const extSpace = await Space.findOne({ seedSpace: SEED_SPACE.EXTENSIONS }).select("children").lean();
+    const extSpace = await Space.findOne({ seedSpace: SEED_SPACE.EXTENSIONS })
+      .select("children")
+      .lean();
     if (!extSpace) return;
 
     const children = await Space.find({ _id: { $in: extSpace.children } })
-      .select("name metadata")
+      .select("name qualities")
       .lean();
 
     const confined = new Set();
     for (const child of children) {
-      const meta = child.qualities instanceof Map
-        ? Object.fromEntries(child.qualities)
-        : (child.qualities || {});
-      if (meta.scope === "confined") confined.add(child.name);
+      const quals =
+        child.qualities instanceof Map
+          ? Object.fromEntries(child.qualities)
+          : child.qualities || {};
+      const extQuality = quals.extension || {};
+      if (extQuality.scope === "confined") confined.add(child.name);
     }
     _confinedExtensions = confined;
 
@@ -149,9 +170,11 @@ export async function getExtensionAtScope(extName, spaceId) {
  * Confined extensions not found in allowed[] are added to the blocked set.
  */
 export async function getBlockedExtensionsAtSpace(spaceId) {
-  if (!spaceId) return { blocked: new Set(), restricted: new Map(), allowed: new Set() };
+  if (!spaceId)
+    return { blocked: new Set(), restricted: new Map(), allowed: new Set() };
   const ancestors = await getAncestorChain(spaceId);
-  if (!ancestors) return { blocked: new Set(), restricted: new Map(), allowed: new Set() };
+  if (!ancestors)
+    return { blocked: new Set(), restricted: new Map(), allowed: new Set() };
   return resolveExtensionScopeFromChain(ancestors, _confinedExtensions);
 }
 
@@ -165,10 +188,19 @@ export function clearScopeCache() {
 /**
  * Clear cache and fire afterScopeChange hook.
  */
-export function notifyScopeChange({ spaceId, blocked, restricted, allowed, beingId } = {}) {
+export function notifyScopeChange({
+  spaceId,
+  blocked,
+  restricted,
+  allowed,
+  beingId,
+} = {}) {
   clearAncestorCache();
-  hooks.run("afterScopeChange", { spaceId, blocked, restricted, allowed, beingId })
-    .catch(err => log.debug("Scope", `afterScopeChange hook error: ${err.message}`));
+  hooks
+    .run("afterScopeChange", { spaceId, blocked, restricted, allowed, beingId })
+    .catch((err) =>
+      log.debug("Scope", `afterScopeChange hook error: ${err.message}`),
+    );
 }
 
 // ─────────────────────────────────────────────────────────────────────────
@@ -178,13 +210,23 @@ export function notifyScopeChange({ spaceId, blocked, restricted, allowed, being
 import { getLandConfigValue } from "../../landConfig.js";
 
 const _toolOwnership = new Map(); // toolName -> { extName, readOnly }
-function maxToolOwners() { return Number(getLandConfigValue("maxRegisteredTools")) || 1000; }
+function maxToolOwners() {
+  return Number(getLandConfigValue("maxRegisteredTools")) || 1000;
+}
 
 export function registerToolOwner(toolName, extName, readOnly = false) {
-  if (typeof toolName !== "string" || toolName.length === 0 || toolName.length > 64) return;
+  if (
+    typeof toolName !== "string" ||
+    toolName.length === 0 ||
+    toolName.length > 64
+  )
+    return;
   if (typeof extName !== "string" || extName.length === 0) return;
   if (_toolOwnership.size >= maxToolOwners() && !_toolOwnership.has(toolName)) {
-    log.warn("Scope", `Tool ownership cap reached (${maxToolOwners()}). "${toolName}" rejected.`);
+    log.warn(
+      "Scope",
+      `Tool ownership cap reached (${maxToolOwners()}). "${toolName}" rejected.`,
+    );
     return;
   }
   _toolOwnership.set(toolName, { extName, readOnly: !!readOnly });
@@ -221,11 +263,18 @@ export function clearToolOwnersForExtension(extName) {
  * Removes tools from blocked extensions.
  * For restricted extensions (access mode "read"), only keeps read-only tools.
  */
-export function filterToolNamesByScope(toolNames, blockedExtensions, restrictedExtensions) {
-  if ((!blockedExtensions || blockedExtensions.size === 0) && (!restrictedExtensions || restrictedExtensions.size === 0)) {
+export function filterToolNamesByScope(
+  toolNames,
+  blockedExtensions,
+  restrictedExtensions,
+) {
+  if (
+    (!blockedExtensions || blockedExtensions.size === 0) &&
+    (!restrictedExtensions || restrictedExtensions.size === 0)
+  ) {
     return toolNames;
   }
-  return toolNames.filter(name => {
+  return toolNames.filter((name) => {
     const info = _toolOwnership.get(name);
     if (!info) return true; // core tool, no owner, always passes
     if (blockedExtensions?.has(info.extName)) return false;
@@ -241,11 +290,18 @@ export function filterToolNamesByScope(toolNames, blockedExtensions, restrictedE
  * Filter resolved tool objects by scope.
  * Tool objects have shape { type: "function", function: { name, ... } }
  */
-export function filterToolsByScope(tools, blockedExtensions, restrictedExtensions) {
-  if ((!blockedExtensions || blockedExtensions.size === 0) && (!restrictedExtensions || restrictedExtensions.size === 0)) {
+export function filterToolsByScope(
+  tools,
+  blockedExtensions,
+  restrictedExtensions,
+) {
+  if (
+    (!blockedExtensions || blockedExtensions.size === 0) &&
+    (!restrictedExtensions || restrictedExtensions.size === 0)
+  ) {
     return tools;
   }
-  return tools.filter(tool => {
+  return tools.filter((tool) => {
     const name = tool?.function?.name || tool?.name;
     if (!name) return true;
     const info = _toolOwnership.get(name);
@@ -264,13 +320,23 @@ export function filterToolsByScope(tools, blockedExtensions, restrictedExtension
 // ─────────────────────────────────────────────────────────────────────────
 
 const _modeOwnership = new Map(); // modeKey -> extName
-function maxModeOwners() { return Number(getLandConfigValue("maxRegisteredModes")) || 500; }
+function maxModeOwners() {
+  return Number(getLandConfigValue("maxRegisteredModes")) || 500;
+}
 
 export function registerModeOwner(modeKey, extName) {
-  if (typeof modeKey !== "string" || modeKey.length === 0 || modeKey.length > 64) return;
+  if (
+    typeof modeKey !== "string" ||
+    modeKey.length === 0 ||
+    modeKey.length > 64
+  )
+    return;
   if (typeof extName !== "string" || extName.length === 0) return;
   if (_modeOwnership.size >= maxModeOwners() && !_modeOwnership.has(modeKey)) {
-    log.warn("Scope", `Mode ownership cap reached (${maxModeOwners()}). "${modeKey}" rejected.`);
+    log.warn(
+      "Scope",
+      `Mode ownership cap reached (${maxModeOwners()}). "${modeKey}" rejected.`,
+    );
     return;
   }
   _modeOwnership.set(modeKey, extName);

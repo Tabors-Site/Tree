@@ -18,7 +18,10 @@ import { getLandConfigValue } from "../landConfig.js";
 import { v4 as uuidv4 } from "uuid";
 import Summon from "../models/summon.js";
 import { createSession, SESSION_TYPES } from "./session.js";
-import { computeIbpAddressForSummon, invalidateStanceCache } from "../ibp/addressStorage.js";
+import {
+  computeIbpAddressForSummon,
+  invalidateStanceCache,
+} from "./summonAddress.js";
 
 export { invalidateStanceCache };
 
@@ -42,7 +45,11 @@ export function ensureSession(socket) {
     description: `Chat session for ${socket.name || "unknown"}`,
     meta: { clientSessionId: socket.clientSessionId },
   });
-  if (!reused) log.debug("AI", `New AI session for ${socket.clientSessionId}: ${sessionId}`);
+  if (!reused)
+    log.debug(
+      "AI",
+      `New AI session for ${socket.clientSessionId}: ${sessionId}`,
+    );
   socket._aiSession = { id: sessionId, lastActivity: Date.now() };
   return sessionId;
 }
@@ -56,7 +63,10 @@ export function rotateSession(socket) {
     description: `Chat session for ${socket.name || "unknown"}`,
     meta: { clientSessionId: socket.clientSessionId },
   });
-  log.debug("AI", `Rotated AI session for ${socket.clientSessionId}: ${sessionId}`);
+  log.debug(
+    "AI",
+    `Rotated AI session for ${socket.clientSessionId}: ${sessionId}`,
+  );
   socket._aiSession = { id: sessionId, lastActivity: Date.now() };
   return sessionId;
 }
@@ -83,8 +93,15 @@ export async function finalizeOpenSummon(socket) {
   if (!active) return;
   socket._activeSummon = null;
   try {
-    await finalizeSummon({ summonId: active.summonId, content: null, stopped: true });
-    log.debug("AI", `Finalized orphaned summon ${active.summonId} for ${socket.clientSessionId}`);
+    await finalizeSummon({
+      summonId: active.summonId,
+      content: null,
+      stopped: true,
+    });
+    log.debug(
+      "AI",
+      `Finalized orphaned summon ${active.summonId} for ${socket.clientSessionId}`,
+    );
   } catch (err) {
     log.warn("AI", `Failed to finalize orphaned summon: ${err.message}`);
   }
@@ -95,7 +112,13 @@ export async function finalizeOpenSummon(socket) {
 // ─────────────────────────────────────────────────────────────────────────
 
 function MAX_CHAT_CONTENT_BYTES() {
-  return Math.max(10000, Math.min(Number(getLandConfigValue("maxChatContentBytes")) || 100000, 1000000));
+  return Math.max(
+    10000,
+    Math.min(
+      Number(getLandConfigValue("maxChatContentBytes")) || 100000,
+      1000000,
+    ),
+  );
 }
 
 function capContent(s) {
@@ -113,9 +136,12 @@ function capContent(s) {
  */
 export async function startSummon(opts = {}) {
   const {
-    beingIn, beingOut = null,
-    askerPosition = null, addresseePosition = null,
-    message, source = "user",
+    beingIn,
+    beingOut = null,
+    askerPosition = null,
+    addresseePosition = null,
+    message,
+    source = "user",
     activeRole = null,
     llmProvider = null,
     inboxMessageId = null,
@@ -150,7 +176,7 @@ export async function startSummon(opts = {}) {
   if (!resolvedRoot) resolvedRoot = summonId;
 
   const ibpAddress = await computeIbpAddressForSummon({
-    askerBeingId:     beingIn,
+    askerBeingId: beingIn,
     askerPosition,
     addresseeBeingId: beingOut,
     addresseePosition,
@@ -161,19 +187,22 @@ export async function startSummon(opts = {}) {
 
   try {
     const summon = await Summon.create({
-      _id:          summonId,
+      _id: summonId,
       beingIn,
-      beingOut:     beingOut || null,
+      beingOut: beingOut || null,
       ibpAddress,
       activeRole,
       inboxMessageId,
       inReplyTo,
       rootCorrelation: resolvedRoot,
-      receivedAt:   receivedAt || now,
-      summonedAt:   now,
+      receivedAt: receivedAt || now,
+      summonedAt: now,
       startMessage: { content: safeMessage, source },
-      llmProvider:  llmProvider
-        ? { model: llmProvider.model || null, connectionId: llmProvider.connectionId || null }
+      llmProvider: llmProvider
+        ? {
+            model: llmProvider.model || null,
+            connectionId: llmProvider.connectionId || null,
+          }
         : { model: null, connectionId: null },
     });
     return summon;
@@ -187,7 +216,11 @@ export async function startSummon(opts = {}) {
  * Phase 2: finalize a Summon — set endMessage.
  * Atomic guard against double-finalize: only fires when endMessage.time is null.
  */
-export async function finalizeSummon({ summonId, content, stopped = false } = {}) {
+export async function finalizeSummon({
+  summonId,
+  content,
+  stopped = false,
+} = {}) {
   if (!summonId) return null;
   const endTime = new Date();
   const safeContent = content != null ? capContent(content) : null;
@@ -223,7 +256,9 @@ export async function getActiveSummonForBeing(beingOut) {
       beingOut,
       "endMessage.time": null,
     })
-      .select("_id startMessage activeRole inReplyTo rootCorrelation beingIn beingOut ibpAddress summonedAt")
+      .select(
+        "_id startMessage activeRole inReplyTo rootCorrelation beingIn beingOut ibpAddress summonedAt",
+      )
       .sort({ summonedAt: -1 })
       .lean();
   } catch {

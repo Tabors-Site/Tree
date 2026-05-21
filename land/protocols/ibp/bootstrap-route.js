@@ -20,7 +20,7 @@
 
 import cors from "cors";
 import { getLandDomain } from "../../seed/ibp/address.js";
-import { IBP_PROTOCOL_VERSION } from "../../seed/ibp/discovery.js";
+import { IBP_PROTOCOL_VERSION } from "../../seed/ibp/descriptor.js";
 import { getLandUrl } from "../canopy/identity.js";
 import { getLandConfigValue } from "../../seed/landConfig.js";
 

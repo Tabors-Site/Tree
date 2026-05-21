@@ -11,6 +11,12 @@
 // Matter row so callers reading the new field name find the existing
 // data.
 //
+// Three landConfig keys also rename in lockstep so an existing
+// .config space's overrides survive the boot:
+//   metadataNamespaceMaxBytes → qualityNamespaceMaxBytes
+//   metadataMaxNestingDepth   → qualityMaxNestingDepth
+//   maxTreeMetadataBytes      → maxTreeQualityBytes
+//
 // Idempotent. Safe to re-run. Mongo's $rename is a no-op when the
 // source field is absent on a document.
 
@@ -18,6 +24,12 @@ import mongoose from "mongoose";
 import log from "../log.js";
 
 const COLLECTIONS = ["beings", "spaces", "matters"];
+
+const CONFIG_KEY_RENAMES = {
+  "qualities.metadataNamespaceMaxBytes": "qualities.qualityNamespaceMaxBytes",
+  "qualities.metadataMaxNestingDepth":   "qualities.qualityMaxNestingDepth",
+  "qualities.maxTreeMetadataBytes":      "qualities.maxTreeQualityBytes",
+};
 
 export default async function migrate() {
   const db = mongoose.connection.db;
@@ -43,6 +55,18 @@ export default async function migrate() {
     if (n > 0) {
       log.info("Seed/0.23.0", `renamed extension-data field on ${n} ${coll} row(s)`);
       totalRenamed += n;
+    }
+  }
+
+  if (present.has("spaces")) {
+    const configResult = await db
+      .collection("spaces")
+      .updateMany(
+        { seedSpace: "config" },
+        { $rename: CONFIG_KEY_RENAMES },
+      );
+    if (configResult.modifiedCount > 0) {
+      log.info("Seed/0.23.0", "renamed landConfig keys in .config space");
     }
   }
 

@@ -1,96 +1,58 @@
 // TreeOS Seed . AGPL-3.0 . https://treeos.ai . Tabor Holly
-/**
- * IBP wire protocol: response shapes, error codes, ProtocolError.
- *
- * Every route handler and every IBP verb handler imports from this
- * file. Extensions access it through `core.protocol`.
- *
- * Domain-specific enums (CASCADE statuses, SEED_SPACE, MATTER_ORIGIN,
- * DELETED, I_AM) live with their domain modules — not here.
- *
- * All exported objects are frozen. Extensions cannot modify error codes
- * or response shapes at runtime.
- */
+//
+// Wire shape. The form every SEE, DO, SUMMON, and BE takes.
+//
+// IBP is my communication primitive. land/ is what I AM; cognition/
+// is how my LLM beings THINK; ibp/ is how any of it speaks to any
+// other. Without this folder a being could not SEE a position, DO
+// an action, SUMMON another being, or BE in any stance — every
+// crossing between substrate and speaker goes through these four
+// verbs. This file is the grammar of success and failure they
+// share: every reply has the same shape, every error speaks the
+// same code set, every wire layer recognizes the same envelope.
+//
+// What lives here:
+//   IbpError              the throwable shape anything inside me raises
+//                         when it has something to say on the wire
+//   IBP_ERR               the code set the wire knows
+//   httpStatusFor(code)   one canonical code → HTTP status mapping
+//   ok / error            the two reply shapes
+//   sendOk / sendError    Express-side wrappers
+//   sendCaughtError       route-level catch helper
+//   mapPatternsToIbpError translate kernel-internal Errors to wire shape
+//
+// Verb handlers catch IbpError and translate it to
+//   { id, status: "error", error: { code, message, detail? } }
+// Anything else thrown becomes INTERNAL. Only IBP codes ever reach
+// the client; internal details stay in my logs.
+//
+// IBP_ERR is the full code set — semantic codes (SPACE_NOT_FOUND,
+// UNAUTHORIZED, FORBIDDEN, RESOURCE_CONFLICT, ...) plus wire-specific
+// codes I can't express any other way (ADDRESS_PARSE_ERROR,
+// ROLE_UNAVAILABLE, VERB_NOT_SUPPORTED, ACTION_NOT_SUPPORTED,
+// INVALID_INTENT). Callers reach for an existing code first; the
+// wire-specific ones exist only for things the substrate can't
+// otherwise name.
+//
+// HTTP status is not stored on the throw. I derive it from the code
+// through `httpStatusFor(code)` — one canonical mapping.
+// `sendCaughtError` consults it; explicit `sendError(res, status,
+// ...)` callers still pass a status if they want to.
+//
+// Domain-specific enums (CASCADE, SEED_SPACE, MATTER_ORIGIN, DELETED,
+// I_AM) live with their domain modules — not here.
 
 import log from "../system/log.js";
 
 // ============================================================================
-// RESPONSE CONSTRUCTORS (transport-agnostic JSON shapes)
+// CODE ENUM
 // ============================================================================
 
-export function ok(data = {}) {
-  return { status: "ok", data };
-}
-
-export function error(code, message, detail) {
-  const err = { code: code || "INTERNAL", message: message || "An error occurred" };
-  if (detail !== undefined && detail !== null) err.detail = detail;
-  return { status: "error", error: err };
-}
-
-// ============================================================================
-// EXPRESS CONVENIENCE (builds shape + sets HTTP status + sends)
-// ============================================================================
-
-/**
- * Send a success response. Guards against double-send.
- */
-export function sendOk(res, data = {}, httpStatus = 200) {
-  if (res.headersSent) {
-    log.warn("Protocol", "sendOk called after headers sent. Skipped.");
-    return;
-  }
-  return res.status(httpStatus).json(ok(data));
-}
-
-/**
- * Send an error response. Guards against double-send.
- * Never leaks internal details. Only ProtocolError messages reach the client.
- */
-export function sendError(res, httpStatus, code, message, detail) {
-  if (res.headersSent) {
-    log.warn("Protocol", `sendError(${code}) called after headers sent. Skipped.`);
-    return;
-  }
-  return res.status(httpStatus).json(error(code, message, detail));
-}
-
-// ============================================================================
-// PROTOCOL ERROR (throwable Error with ERR code + HTTP status)
-// ============================================================================
-
-export class ProtocolError extends Error {
-  constructor(httpStatus, code, message) {
-    super(message);
-    this.name = "ProtocolError";
-    this.httpStatus = httpStatus;
-    this.errCode = code;
-  }
-}
-
-/**
- * Route-level catch helper. If the error is a ProtocolError, sends the
- * proper response. Otherwise sends 500 INTERNAL with a safe generic message.
- * Internal error details are logged, never sent to the client.
- */
-export function sendCaughtError(res, err) {
-  if (err instanceof ProtocolError) {
-    return sendError(res, err.httpStatus, err.errCode, err.message);
-  }
-  log.error("Protocol", `Unhandled error: ${err.message}`);
-  return sendError(res, 500, "INTERNAL", "Something went wrong.");
-}
-
-// ============================================================================
-// SEMANTIC ERROR CODES
-// ============================================================================
-
-export const ERR = Object.freeze({
+export const IBP_ERR = Object.freeze({
   // Data
   SPACE_NOT_FOUND:        "SPACE_NOT_FOUND",
-  USER_NOT_FOUND:         "USER_NOT_FOUND",
+  BEING_NOT_FOUND:         "BEING_NOT_FOUND",
   MATTER_NOT_FOUND:       "MATTER_NOT_FOUND",
-  TREE_NOT_FOUND:         "TREE_NOT_FOUND",
 
   // Auth
   UNAUTHORIZED:           "UNAUTHORIZED",
@@ -100,7 +62,7 @@ export const ERR = Object.freeze({
   // Validation
   INVALID_INPUT:          "INVALID_INPUT",
   INVALID_TYPE:           "INVALID_TYPE",
-  INVALID_TREE:           "INVALID_TREE",
+  INVALID_SPACE:          "INVALID_SPACE",
 
   // Rate limiting
   RATE_LIMITED:           "RATE_LIMITED",
@@ -123,8 +85,8 @@ export const ERR = Object.freeze({
   UPLOAD_TOO_LARGE:       "UPLOAD_TOO_LARGE",
   UPLOAD_MIME_REJECTED:   "UPLOAD_MIME_REJECTED",
 
-  // Tree health
-  TREE_DORMANT:           "TREE_DORMANT",
+  // Space-tree health
+  SPACE_DORMANT:          "SPACE_DORMANT",
 
   // Extensions
   EXTENSION_NOT_FOUND:    "EXTENSION_NOT_FOUND",
@@ -141,15 +103,204 @@ export const ERR = Object.freeze({
   PEER_NOT_FOUND:         "PEER_NOT_FOUND",
   PEER_UNREACHABLE:       "PEER_UNREACHABLE",
 
-  // Origin policy
-  // Raised when a write-type DO operation targets a matter whose
-  // origin's sync mode is read-only. Filesystem-origin matter under
-  // `.source` is always read-only: the substrate cannot mutate the
-  // seed's own source files through verbs. Other read-mostly origins
-  // (web, future bridges) also use this code.
+  // Origin policy. Raised when a write-type DO operation targets a
+  // matter whose origin's sync mode is read-only. Filesystem-origin
+  // matter under .source is always read-only; the substrate cannot
+  // mutate the seed's own source files through verbs.
   ORIGIN_READ_ONLY:       "ORIGIN_READ_ONLY",
 
   // System
   INTERNAL:               "INTERNAL",
   TIMEOUT:                "TIMEOUT",
+
+  // Wire-specific. Things the substrate cannot otherwise express.
+  ADDRESS_PARSE_ERROR:    "ADDRESS_PARSE_ERROR",
+  ROLE_UNAVAILABLE:       "ROLE_UNAVAILABLE",
+  VERB_NOT_SUPPORTED:     "VERB_NOT_SUPPORTED",
+  ACTION_NOT_SUPPORTED:   "ACTION_NOT_SUPPORTED",
+  INVALID_INTENT:         "INVALID_INTENT",
+  NOT_A_BEING:            "NOT_A_BEING",
+  NOT_A_SEED:             "NOT_A_SEED",
 });
+
+// ============================================================================
+// ERROR CLASS
+// ============================================================================
+
+export class IbpError extends Error {
+  constructor(code, message, detail) {
+    super(message);
+    this.name = "IbpError";
+    this.code = code;
+    if (detail !== undefined) this.detail = detail;
+  }
+}
+
+export function isIbpError(e) {
+  return e && e.name === "IbpError" && typeof e.code === "string";
+}
+
+/**
+ * Translate a kernel-internal Error into an IbpError by matching its
+ * message against an ordered rule list. Each rule is `[regex, code]`;
+ * the first regex that matches wins. Errors that already are IbpErrors
+ * pass through unchanged. Otherwise the fallback code is used.
+ *
+ * Used by DO operation handlers that wrap low-level kernel helpers
+ * (createSpace, editSpaceName, setQuality, ...) and want clean
+ * wire-shape errors instead of opaque internal messages.
+ *
+ *   throw mapPatternsToIbpError(err, [
+ *     [/land seed spaces|reserved/i, IBP_ERR.FORBIDDEN],
+ *     [/not found/i,                 IBP_ERR.SPACE_NOT_FOUND],
+ *   ], IBP_ERR.INTERNAL);
+ */
+export function mapPatternsToIbpError(err, rules, fallback = IBP_ERR.INTERNAL) {
+  if (isIbpError(err)) return err;
+  const msg = err?.message || "operation failed";
+  for (const [pattern, code] of rules) {
+    if (pattern.test(msg)) return new IbpError(code, msg);
+  }
+  return new IbpError(fallback, msg);
+}
+
+// ============================================================================
+// HTTP STATUS DERIVATION
+// ============================================================================
+//
+// One canonical mapping from semantic code to HTTP status. Throw sites
+// don't carry an httpStatus; the wire layer derives it here. The
+// classification is the one documented in CLAUDE.md (the table under
+// "HTTP → ERR mapping").
+
+const STATUS_FOR_CODE = Object.freeze({
+  // 400 Bad request
+  INVALID_INPUT:          400,
+  INVALID_TYPE:           400,
+  INVALID_SPACE:          400,
+  ADDRESS_PARSE_ERROR:    400,
+  INVALID_INTENT:         400,
+
+  // 401 Unauthorized
+  UNAUTHORIZED:           401,
+
+  // 403 Forbidden
+  FORBIDDEN:              403,
+  EXTENSION_BLOCKED:      403,
+  SESSION_EXPIRED:        403,
+  CASCADE_DISABLED:       403,
+  UPLOAD_DISABLED:        403,
+  ORIGIN_READ_ONLY:       403,
+  NOT_A_BEING:            403,
+  NOT_A_SEED:             403,
+
+  // 404 Not found
+  SPACE_NOT_FOUND:        404,
+  BEING_NOT_FOUND:         404,
+  MATTER_NOT_FOUND:       404,
+  PEER_NOT_FOUND:         404,
+  EXTENSION_NOT_FOUND:    404,
+  ROLE_UNAVAILABLE:       404,
+  VERB_NOT_SUPPORTED:     404,
+  ACTION_NOT_SUPPORTED:   404,
+
+  // 409 Conflict
+  RESOURCE_CONFLICT:      409,
+
+  // 413 Payload too large
+  DOCUMENT_SIZE_EXCEEDED: 413,
+  CASCADE_DEPTH_EXCEEDED: 413,
+  UPLOAD_TOO_LARGE:       413,
+
+  // 415 Unsupported media
+  UPLOAD_MIME_REJECTED:   415,
+
+  // 429 Rate limited
+  RATE_LIMITED:           429,
+  CASCADE_REJECTED:       429,
+
+  // 500 Internal
+  INTERNAL:               500,
+  TIMEOUT:                500,
+  HOOK_TIMEOUT:           500,
+  HOOK_CANCELLED:         500,
+
+  // 502 Bad gateway
+  PEER_UNREACHABLE:       502,
+
+  // 503 Service unavailable
+  LLM_TIMEOUT:            503,
+  LLM_FAILED:             503,
+  LLM_NOT_CONFIGURED:     503,
+  SPACE_DORMANT:          503,
+});
+
+/**
+ * HTTP status for an IBP code. Returns 500 for unknown codes so the
+ * wire layer always has a number.
+ */
+export function httpStatusFor(code) {
+  return STATUS_FOR_CODE[code] || 500;
+}
+
+// ============================================================================
+// RESPONSE CONSTRUCTORS (transport-agnostic JSON shapes)
+// ============================================================================
+
+export function ok(data = {}) {
+  return { status: "ok", data };
+}
+
+export function error(code, message, detail) {
+  const err = {
+    code: code || IBP_ERR.INTERNAL,
+    message: message || "An error occurred",
+  };
+  if (detail !== undefined && detail !== null) err.detail = detail;
+  return { status: "error", error: err };
+}
+
+// ============================================================================
+// EXPRESS CONVENIENCE (builds shape + sets HTTP status + sends)
+// ============================================================================
+
+/**
+ * Send a success response. Guards against double-send.
+ */
+export function sendOk(res, data = {}, httpStatus = 200) {
+  if (res.headersSent) {
+    log.warn("Protocol", "sendOk called after headers sent. Skipped.");
+    return;
+  }
+  return res.status(httpStatus).json(ok(data));
+}
+
+/**
+ * Send an error response. Guards against double-send.
+ * Never leaks internal details. Only IbpError messages reach the client.
+ */
+export function sendError(res, httpStatus, code, message, detail) {
+  if (res.headersSent) {
+    log.warn(
+      "Protocol",
+      `sendError(${code}) called after headers sent. Skipped.`,
+    );
+    return;
+  }
+  return res.status(httpStatus).json(error(code, message, detail));
+}
+
+/**
+ * Route-level catch helper. If the error is an IbpError, sends the
+ * proper response (HTTP status derived from code). Otherwise sends
+ * 500 INTERNAL with a safe generic message. Internal error details
+ * are logged, never sent to the client.
+ */
+export function sendCaughtError(res, err) {
+  if (isIbpError(err)) {
+    return sendError(res, httpStatusFor(err.code), err.code, err.message, err.detail);
+  }
+  log.error("Protocol", `Unhandled error: ${err.message}`);
+  return sendError(res, 500, IBP_ERR.INTERNAL, "Something went wrong.");
+}
+

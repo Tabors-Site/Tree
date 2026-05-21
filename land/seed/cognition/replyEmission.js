@@ -84,59 +84,68 @@ export async function emitReplyToAsker({
     return false;
   }
   if (!originalMessage?.from) {
-    log.warn("ReplyEmission",
-      `originalMessage.from missing; cannot route reply (correlation=${originalMessage?.correlation?.slice?.(0, 8) || "?"})`);
+    log.warn(
+      "ReplyEmission",
+      `originalMessage.from missing; cannot route reply (correlation=${originalMessage?.correlation?.slice?.(0, 8) || "?"})`,
+    );
     return false;
   }
 
   try {
     const askerStance = parseAskerStance(originalMessage.from);
     if (!askerStance) {
-      log.warn("ReplyEmission",
-        `unparseable asker stance "${originalMessage.from}"; skipping reply`);
+      log.warn(
+        "ReplyEmission",
+        `unparseable asker stance "${originalMessage.from}"; skipping reply`,
+      );
       return false;
     }
 
     const askerBeing = await Being.findOne({ name: askerStance.qualifier })
-      .select("_id name defaultRole roles operatingMode").lean();
+      .select("_id name defaultRole roles operatingMode")
+      .lean();
     if (!askerBeing) {
-      log.warn("ReplyEmission",
-        `asker being "${askerStance.qualifier}" not found; skipping reply`);
+      log.warn(
+        "ReplyEmission",
+        `asker being "${askerStance.qualifier}" not found; skipping reply`,
+      );
       return false;
     }
 
     const landDomain = getLandDomain() || "land";
     const fromQualifier =
-      fromRoleName
-      || fromBeing?.name
-      || (Array.isArray(fromBeing?.roles) && fromBeing.roles[0])
-      || "sub-being";
+      fromRoleName ||
+      fromBeing?.name ||
+      (Array.isArray(fromBeing?.roles) && fromBeing.roles[0]) ||
+      "sub-being";
     const fromStance = `${landDomain}/${fromNodeId}@${fromQualifier}`;
 
     const correlation = randomUUID();
     const rootCorrelation =
-      originalMessage?.rootCorrelation
-      || originalMessage?.correlation
-      || correlation;
+      originalMessage?.rootCorrelation ||
+      originalMessage?.correlation ||
+      correlation;
 
     const content = payload ? { exit: exitText, ...payload } : exitText;
 
     await appendToInbox(String(askerStance.spaceId), String(askerBeing._id), {
-      from:            fromStance,
+      from: fromStance,
       content,
       correlation,
       rootCorrelation,
-      activeRole:      askerBeing.defaultRole || null,
-      inReplyTo:       originalMessage?.correlation || null,
+      activeRole: askerBeing.defaultRole || null,
+      inReplyTo: originalMessage?.correlation || null,
       priority,
-      sentAt:          new Date().toISOString(),
+      sentAt: new Date().toISOString(),
     });
     wake(String(askerBeing._id), String(askerStance.spaceId));
 
-    log.info("ReplyEmission",
+    log.info(
+      "ReplyEmission",
       `↩  ${fromQualifier} → ${askerBeing.name} ` +
-      `at ${String(askerStance.spaceId).slice(0, 8)} ` +
-      `(correlation=${correlation.slice(0, 8)})`);
+        `at ${String(askerStance.spaceId).slice(0, 8)} ` +
+        `(correlation=${correlation.slice(0, 8)})`,
+    );
     return true;
   } catch (err) {
     log.warn("ReplyEmission", `emitReplyToAsker failed: ${err.message}`);
@@ -190,24 +199,29 @@ export async function emitReplyToStance({
   try {
     const parsed = parseAskerStance(askerStance);
     if (!parsed) {
-      log.warn("ReplyEmission",
-        `unparseable asker stance "${askerStance}"; skipping reply`);
+      log.warn(
+        "ReplyEmission",
+        `unparseable asker stance "${askerStance}"; skipping reply`,
+      );
       return false;
     }
     const askerBeing = await Being.findOne({ name: parsed.qualifier })
-      .select("_id name defaultRole roles operatingMode").lean();
+      .select("_id name defaultRole roles operatingMode")
+      .lean();
     if (!askerBeing) {
-      log.warn("ReplyEmission",
-        `asker being "${parsed.qualifier}" not found; skipping reply`);
+      log.warn(
+        "ReplyEmission",
+        `asker being "${parsed.qualifier}" not found; skipping reply`,
+      );
       return false;
     }
 
     const landDomain = getLandDomain() || "land";
     const fromQualifier =
-      fromRoleName
-      || fromBeing?.name
-      || (Array.isArray(fromBeing?.roles) && fromBeing.roles[0])
-      || "sub-being";
+      fromRoleName ||
+      fromBeing?.name ||
+      (Array.isArray(fromBeing?.roles) && fromBeing.roles[0]) ||
+      "sub-being";
     const fromStance = `${landDomain}/${fromNodeId}@${fromQualifier}`;
 
     const correlation = randomUUID();
@@ -215,21 +229,23 @@ export async function emitReplyToStance({
     const content = payload ? { exit: exitText, ...payload } : exitText;
 
     await appendToInbox(String(parsed.spaceId), String(askerBeing._id), {
-      from:            fromStance,
+      from: fromStance,
       content,
       correlation,
       rootCorrelation: rootC,
-      activeRole:      askerBeing.defaultRole || null,
+      activeRole: askerBeing.defaultRole || null,
       inReplyTo,
       priority,
-      sentAt:          new Date().toISOString(),
+      sentAt: new Date().toISOString(),
     });
     wake(String(askerBeing._id), String(parsed.spaceId));
 
-    log.info("ReplyEmission",
+    log.info(
+      "ReplyEmission",
       `↩  ${fromQualifier} → ${askerBeing.name} ` +
-      `at ${String(parsed.spaceId).slice(0, 8)} ` +
-      `(correlation=${correlation.slice(0, 8)})`);
+        `at ${String(parsed.spaceId).slice(0, 8)} ` +
+        `(correlation=${correlation.slice(0, 8)})`,
+    );
     return true;
   } catch (err) {
     log.warn("ReplyEmission", `emitReplyToStance failed: ${err.message}`);
@@ -256,7 +272,11 @@ export async function emitReplyToStance({
  * @param {string} rootCorrelation
  * @returns {Promise<string | null>}
  */
-export async function findChainInitialCaller(scopeNodeId, beingId, rootCorrelation) {
+export async function findChainInitialCaller(
+  scopeNodeId,
+  beingId,
+  rootCorrelation,
+) {
   if (!scopeNodeId || !beingId || !rootCorrelation) return null;
   try {
     const entries = await readInbox(scopeNodeId, beingId);
@@ -268,8 +288,10 @@ export async function findChainInitialCaller(scopeNodeId, beingId, rootCorrelati
     }
     return null;
   } catch (err) {
-    log.warn("ReplyEmission",
-      `findChainInitialCaller failed for being ${String(beingId).slice(0, 8)}/root ${String(rootCorrelation).slice(0, 8)}: ${err.message}`);
+    log.warn(
+      "ReplyEmission",
+      `findChainInitialCaller failed for being ${String(beingId).slice(0, 8)}/root ${String(rootCorrelation).slice(0, 8)}: ${err.message}`,
+    );
     return null;
   }
 }

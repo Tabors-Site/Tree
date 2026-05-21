@@ -2,7 +2,7 @@
 //
 // Inbox primitives.
 //
-// The inbox is per-being-per-position metadata, stored under
+// The inbox is a per-being-per-position quality, stored under
 // `qualities.inbox.<beingId>` on the Space document. The kernel treats
 // `inbox` as a reserved namespace: it cannot be written through DO
 // set-meta (see actions/set-meta.js), only through these primitives,
@@ -70,7 +70,8 @@ const DEFAULT_PRIORITY = 1;
 export async function appendToInbox(spaceId, beingId, message) {
   if (!spaceId) throw new Error("appendToInbox requires spaceId");
   if (!beingId) throw new Error("appendToInbox requires beingId");
-  if (!message || typeof message !== "object") throw new Error("appendToInbox requires a message object");
+  if (!message || typeof message !== "object")
+    throw new Error("appendToInbox requires a message object");
 
   const sentAt = message.sentAt || new Date().toISOString();
   const messageId = message.correlation || randomUUID();
@@ -80,28 +81,30 @@ export async function appendToInbox(spaceId, beingId, message) {
   // own root, which keeps cancelByRootCorrelation symmetric for both
   // standalone messages and chain heads.
   const rootCorrelation = message.rootCorrelation || messageId;
-  const priority = Number.isFinite(message.priority) ? Number(message.priority) : DEFAULT_PRIORITY;
+  const priority = Number.isFinite(message.priority)
+    ? Number(message.priority)
+    : DEFAULT_PRIORITY;
 
   const entry = {
-    from:            message.from || null,
-    content:         message.content ?? null,
-    correlation:     messageId,
+    from: message.from || null,
+    content: message.content ?? null,
+    correlation: messageId,
     rootCorrelation,
     priority,
-    activeRole:      message.activeRole || null,
-    inReplyTo:       message.inReplyTo || null,
-    attachments:     Array.isArray(message.attachments) ? message.attachments : [],
+    activeRole: message.activeRole || null,
+    inReplyTo: message.inReplyTo || null,
+    attachments: Array.isArray(message.attachments) ? message.attachments : [],
     sentAt,
-    consumed:        false,
-    cancelledAt:     null,
-    summonedAt:      null,
-    consumedAt:      null,
-    responseId:      null,
-    summonId:        null,
+    consumed: false,
+    cancelledAt: null,
+    summonedAt: null,
+    consumedAt: null,
+    responseId: null,
+    summonId: null,
   };
 
   // Atomic $push to the per-being bucket. Mongo creates the path if it
-  // does not yet exist on the metadata Map.
+  // does not yet exist on the qualities Map.
   await Space.updateOne(
     { _id: spaceId },
     { $push: { [`qualities.${INBOX_NS}.${beingId}`]: entry } },
@@ -134,7 +137,8 @@ export async function readInbox(spaceId, beingId, options = {}) {
   let entries = bucket;
   if (options.unconsumed) entries = entries.filter((e) => !e.consumed);
   if (options.since) entries = entries.filter((e) => e.sentAt >= options.since);
-  if (typeof options.limit === "number") entries = entries.slice(0, options.limit);
+  if (typeof options.limit === "number")
+    entries = entries.slice(0, options.limit);
   return entries;
 }
 
@@ -155,8 +159,18 @@ export async function readInbox(spaceId, beingId, options = {}) {
  *
  * @returns {Promise<{ consumed: number }>}
  */
-export async function markInboxConsumed(spaceId, beingId, correlationIds, opts = {}) {
-  if (!spaceId || !beingId || !Array.isArray(correlationIds) || correlationIds.length === 0) {
+export async function markInboxConsumed(
+  spaceId,
+  beingId,
+  correlationIds,
+  opts = {},
+) {
+  if (
+    !spaceId ||
+    !beingId ||
+    !Array.isArray(correlationIds) ||
+    correlationIds.length === 0
+  ) {
     return { consumed: 0 };
   }
   let responseId = null;
@@ -165,7 +179,7 @@ export async function markInboxConsumed(spaceId, beingId, correlationIds, opts =
     responseId = opts;
   } else if (opts && typeof opts === "object") {
     responseId = opts.responseId ?? null;
-    summonId     = opts.summonId ?? null;
+    summonId = opts.summonId ?? null;
   }
 
   const consumedAt = new Date().toISOString();
@@ -181,10 +195,10 @@ export async function markInboxConsumed(spaceId, beingId, correlationIds, opts =
   bucket.forEach((entry, i) => {
     if (!idSet.has(entry.correlation) || entry.consumed) return;
     const base = `qualities.${INBOX_NS}.${beingId}.${i}`;
-    updates[`${base}.consumed`]   = true;
+    updates[`${base}.consumed`] = true;
     updates[`${base}.consumedAt`] = consumedAt;
     if (responseId) updates[`${base}.responseId`] = responseId;
-    if (summonId)     updates[`${base}.summonId`]     = summonId;
+    if (summonId) updates[`${base}.summonId`] = summonId;
     consumed++;
   });
 
@@ -218,7 +232,9 @@ export async function pickNextEntry(spaceId, beingId) {
   for (let i = 0; i < bucket.length; i++) {
     const e = bucket[i];
     if (!e || e.consumed || e.cancelledAt) continue;
-    const p = Number.isFinite(e.priority) ? Number(e.priority) : DEFAULT_PRIORITY;
+    const p = Number.isFinite(e.priority)
+      ? Number(e.priority)
+      : DEFAULT_PRIORITY;
     // Strictly less-than keeps the earliest array index (oldest) on ties.
     if (p < bestPriority) {
       bestPriority = p;
@@ -242,7 +258,11 @@ export async function pickNextEntry(spaceId, beingId) {
  * @param {string} rootCorrelation
  * @returns {Promise<{ cancelled: number, correlations: string[] }>}
  */
-export async function cancelByRootCorrelation(spaceId, beingId, rootCorrelation) {
+export async function cancelByRootCorrelation(
+  spaceId,
+  beingId,
+  rootCorrelation,
+) {
   if (!spaceId || !beingId || !rootCorrelation) {
     return { cancelled: 0, correlations: [] };
   }
@@ -284,7 +304,11 @@ export async function markSummoned(spaceId, beingId, index) {
   const summonedAt = new Date().toISOString();
   await Space.updateOne(
     { _id: spaceId },
-    { $set: { [`qualities.${INBOX_NS}.${beingId}.${index}.summonedAt`]: summonedAt } },
+    {
+      $set: {
+        [`qualities.${INBOX_NS}.${beingId}.${index}.summonedAt`]: summonedAt,
+      },
+    },
   );
 }
 
@@ -301,12 +325,15 @@ export async function markSummoned(spaceId, beingId, index) {
  */
 export async function getInboxSummary(spaceId) {
   if (!spaceId) return {};
-  const space = await Space.findById(spaceId).select(`qualities.${INBOX_NS}`).lean();
+  const space = await Space.findById(spaceId)
+    .select(`qualities.${INBOX_NS}`)
+    .lean();
   if (!space) return {};
   const inbox = readMetaPath(space, [INBOX_NS]);
   if (!inbox || typeof inbox !== "object") return {};
   const out = {};
-  const entries = inbox instanceof Map ? inbox.entries() : Object.entries(inbox);
+  const entries =
+    inbox instanceof Map ? inbox.entries() : Object.entries(inbox);
   for (const [beingId, bucket] of entries) {
     if (!Array.isArray(bucket)) continue;
     // Derive queue state from inbox entries alone. The first unconsumed
@@ -315,12 +342,12 @@ export async function getInboxSummary(spaceId) {
     // being is idle from the inbox's perspective — an active chainstep
     // may still be in progress; that's reconciled at the descriptor layer.
     const unconsumed = bucket.filter((e) => !e.consumed);
-    const activeFrom  = unconsumed[0]?.from || null;
+    const activeFrom = unconsumed[0]?.from || null;
     const pendingFrom = unconsumed.slice(1).map((e) => e.from || null);
     out[beingId] = {
-      total:      bucket.length,
+      total: bucket.length,
       unconsumed: unconsumed.length,
-      recent:     bucket.slice(-3),
+      recent: bucket.slice(-3),
       activeFrom,
       pendingFrom,
       queueDepth: pendingFrom.length,
@@ -333,7 +360,7 @@ export async function getInboxSummary(spaceId) {
 // Helpers
 // ────────────────────────────────────────────────────────────────
 
-// Mongoose lean() returns metadata as a plain object whose entries may be
+// Mongoose lean() returns qualities as a plain object whose entries may be
 // nested Maps depending on driver version. Resolve a path traversal that
 // handles both shapes.
 function readMetaPath(space, path) {

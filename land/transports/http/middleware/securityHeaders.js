@@ -1,4 +1,10 @@
-// TreeOS Seed . AGPL-3.0 . https://treeos.ai
+// TreeOS Seed . AGPL-3.0 . https://treeos.ai . Tabor Holly
+//
+// Standard HTTP security headers on every response: no-sniff, SAMEORIGIN
+// framing (plus a frame-ancestors CSP that adds the land's own URL and
+// any operator-allowed frame domains), XSS protection, referrer policy,
+// strict transport security.
+
 import { getLandConfigValue } from "../../../seed/landConfig.js";
 
 export default function securityHeaders(req, res, next) {
