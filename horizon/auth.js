@@ -1,11 +1,11 @@
 import crypto from "node:crypto";
-import Land from "./db/models/land.js";
+import Place from "./db/models/place.js";
 
 /**
  * Decode a CanopyToken without verifying it.
  * Token format: base64url(header).base64url(payload).base64url(signature)
  * Header: { alg: "EdDSA", typ: "JWT" }
- * Payload: { sub, iss, aud, landId, iat, exp }
+ * Payload: { sub, iss, aud, placeId, iat, exp }
  */
 function decodeToken(token) {
   const parts = token.split(".");
@@ -40,7 +40,7 @@ function verifySignature(signedContent, signature, publicKeyPem) {
  *
  * For new registrations (when requestPublicKey is provided), the token
  * is verified against the key in the request body.
- * For existing lands, the token is verified against the stored public key.
+ * For existing places, the token is verified against the stored public key.
  */
 export async function verifyHorizonToken(authHeader, requestPublicKey = null) {
   if (!authHeader || !authHeader.startsWith("CanopyToken ")) {
@@ -68,11 +68,11 @@ export async function verifyHorizonToken(authHeader, requestPublicKey = null) {
   // Determine which public key to use for verification
   let publicKey = null;
 
-  // Try stored key first (existing land)
+  // Try stored key first (existing place)
   if (payload.iss) {
-    const existingLand = await Land.findOne({ domain: payload.iss });
-    if (existingLand) {
-      publicKey = existingLand.publicKey;
+    const existingPlace = await Place.findOne({ domain: payload.iss });
+    if (existingPlace) {
+      publicKey = existingPlace.publicKey;
     }
   }
 

@@ -30,7 +30,7 @@ export function initAddressBar({ onNavigate, onIdentityClick, onBack, onForward 
   const input = document.getElementById("address-input");
   const navBack = document.getElementById("nav-back");
   const navForward = document.getElementById("nav-forward");
-  const navLand = document.getElementById("nav-land");
+  const navPlace = document.getElementById("nav-place");
   const navHome = document.getElementById("nav-home");
   const navRoot = document.getElementById("nav-root");
 
@@ -42,14 +42,14 @@ export function initAddressBar({ onNavigate, onIdentityClick, onBack, onForward 
 
   navBack.addEventListener("click",    () => onBack?.());
   navForward.addEventListener("click", () => onForward?.());
-  navLand.addEventListener("click", () => onNavigate("/"));
+  navPlace.addEventListener("click", () => onNavigate("/"));
   navHome.addEventListener("click", () => onNavigate("/~"));
   navRoot.addEventListener("click", () => {
     if (_addressApi.treeRootPath) onNavigate(_addressApi.treeRootPath);
   });
 
   _addressApi = {
-    chip, input, navBack, navForward, navLand, navHome, navRoot,
+    chip, input, navBack, navForward, navPlace, navHome, navRoot,
     treeRootPath: null,
   };
   return _addressApi;
@@ -61,15 +61,15 @@ export function setHistoryButtonsEnabled({ back, forward }) {
   _addressApi.navForward.disabled = !forward;
 }
 
-export function updateAddressBar({ username, landDomain, pathByNames, chain, isAuthenticated }) {
+export function updateAddressBar({ username, placeDomain, pathByNames, chain, isAuthenticated }) {
   if (!_addressApi) return;
   const nameEl = document.getElementById("chip-name");
-  const landEl = document.getElementById("chip-land");
+  const placeEl = document.getElementById("chip-place");
   if (nameEl) nameEl.textContent = isAuthenticated ? (username || "you") : "arrival";
-  if (landEl) landEl.textContent = `@${landDomain || "<land>"}`;
-  const land = landDomain || "";
+  if (placeEl) placeEl.textContent = `@${placeDomain || "<place>"}`;
+  const place = placeDomain || "";
   const path = pathByNames || "/";
-  _addressApi.input.value = land ? `${land}${path === "/" ? "/" : path}` : path;
+  _addressApi.input.value = place ? `${place}${path === "/" ? "/" : path}` : path;
 
   // Tree root computation: walk the chain past the optional ~user segment.
   let rootPath = null;
@@ -90,10 +90,10 @@ let _chipExpanded = false;
 export function toggleIdentityChip(fullForm) {
   _chipExpanded = !_chipExpanded;
   const nameEl = document.getElementById("chip-name");
-  const landEl = document.getElementById("chip-land");
+  const placeEl = document.getElementById("chip-place");
   if (_chipExpanded) {
     if (nameEl) nameEl.textContent = fullForm;
-    if (landEl) landEl.textContent = "";
+    if (placeEl) placeEl.textContent = "";
   } else {
     // Caller should call updateAddressBar to restore default.
   }
@@ -125,7 +125,7 @@ export function hideLabel() {
 let _signInPanelEl = null;
 let _signInState = { mode: "claim", username: "", password: "", error: "" };
 
-export function showAuthSignInPanel({ land, onSubmit }) {
+export function showAuthSignInPanel({ place, onSubmit }) {
   if (_signInPanelEl) return;
   document.exitPointerLock?.();
 
@@ -143,7 +143,7 @@ export function showAuthSignInPanel({ land, onSubmit }) {
   `;
   el.innerHTML = `
     <div style="font-size: 11px; color: #6b7d72; margin-bottom: 10px;">
-      arrival at ${escapeHtml(land)}
+      arrival at ${escapeHtml(place)}
     </div>
     <form>
       <div style="margin-bottom: 8px;">
@@ -403,7 +403,7 @@ export function isAnyPanelOpen() {
   return !!(_signInPanelEl || _authActionsEl || _talkPanelEl);
 }
 
-// Bottom-right sky clock. Shows the land's local time (HH:MM in 24h),
+// Bottom-right sky clock. Shows the place's local time (HH:MM in 24h),
 // rendered when the scene is in default (sky) mode. Hidden in arrival.
 let _skyClockEl = null;
 function ensureSkyClock() {
@@ -438,7 +438,7 @@ export function hideSkyClock() {
 // ────────────────────────────────────────────────────────────────────
 //
 // Shown when the user activates the llm-assigner being. It is the
-// land's LLM-configuration character — purely programmatic (no LLM
+// place's LLM-configuration character — purely programmatic (no LLM
 // cognition), so the interaction is a form, not a chat.
 //
 // Three scope tabs:
@@ -448,7 +448,7 @@ export function hideSkyClock() {
 //   This Node  — bind one of the caller's connections to a slot on a
 //                specific node. Only enabled when the user is on a
 //                node (currentNodeId provided).
-//   Land       — set the land-level default. Server gates with
+//   Place       — set the place-level default. Server gates with
 //                root-operator check; non-operators get FORBIDDEN.
 //
 // The shared "connections" fetch is reused across all three tabs.
@@ -457,13 +457,13 @@ export function hideSkyClock() {
 
 let _llmAssignerPanelEl = null;
 let _llmPanelState = {
-  tab:      "being",          // "being" | "node" | "land"
+  tab:      "being",          // "being" | "node" | "place"
   add:      { name: "", baseUrl: "", model: "", apiKey: "" },
   nodeSlot: "main",
   error:    "",
 };
 
-export function showLlmAssignerPanel({ client, land, currentNodeId, onClose, onSpawnTutorial }) {
+export function showLlmAssignerPanel({ client, place, currentNodeId, onClose, onSpawnTutorial }) {
   if (_llmAssignerPanelEl) return;
   document.exitPointerLock?.();
 
@@ -489,7 +489,7 @@ export function showLlmAssignerPanel({ client, land, currentNodeId, onClose, onS
       margin-bottom: 10px;">
       <div style="font-size: 12px; color: #c8d3cb;">
         \u{1F9E0} LLM Assigner
-        <span style="color:#6b7d72; font-weight: normal;"> @${escapeHtml(land)}</span>
+        <span style="color:#6b7d72; font-weight: normal;"> @${escapeHtml(place)}</span>
       </div>
       <button class="llm-close" type="button" style="background:transparent;
         color:#6b7d72; border:none; font-size:18px; line-height:1;
@@ -500,7 +500,7 @@ export function showLlmAssignerPanel({ client, land, currentNodeId, onClose, onS
       <button class="llm-spawn-tutorial" type="button"
         style="background:transparent; border:none; padding:0;
           color:#8fbf9f; cursor:pointer; font:inherit; text-align:left;">
-        \u{25B6} Spawn the LLM setup video in the land
+        \u{25B6} Spawn the LLM setup video in the place
       </button>
     </div>
 
@@ -508,7 +508,7 @@ export function showLlmAssignerPanel({ client, land, currentNodeId, onClose, onS
       border-bottom:1px solid #2c3a32;">
       <button class="llm-tab" data-tab="being" type="button">My Being</button>
       <button class="llm-tab" data-tab="node"  type="button" ${currentNodeId ? "" : "disabled"}>This Node</button>
-      <button class="llm-tab" data-tab="land"  type="button">Land Default</button>
+      <button class="llm-tab" data-tab="place"  type="button">Place Default</button>
     </div>
 
     <div class="llm-body" style="font-size:11px;"></div>
@@ -559,7 +559,7 @@ export function showLlmAssignerPanel({ client, land, currentNodeId, onClose, onS
     clearError();
     if (_llmPanelState.tab === "being") return renderBeingTab();
     if (_llmPanelState.tab === "node")  return renderNodeTab();
-    if (_llmPanelState.tab === "land")  return renderLandTab();
+    if (_llmPanelState.tab === "place")  return renderPlaceTab();
   }
 
   // ── My Being tab ───────────────────────────────────────────────
@@ -618,7 +618,7 @@ export function showLlmAssignerPanel({ client, land, currentNodeId, onClose, onS
           Private network URLs (e.g. <code style="color:#9ab0a3;">10.x</code>,
           <code style="color:#9ab0a3;">192.168.x</code>, <code style="color:#9ab0a3;">localhost</code>)
           are blocked by default. The root operator can opt in to specific hosts by setting
-          <code style="color:#9ab0a3;">allowedLlmDomains</code> in land config.
+          <code style="color:#9ab0a3;">allowedLlmDomains</code> in place config.
         </div>
       </form>
     `;
@@ -642,7 +642,7 @@ export function showLlmAssignerPanel({ client, land, currentNodeId, onClose, onS
     bodyEl.querySelectorAll("button[data-act=del]").forEach(b => {
       b.addEventListener("click", async () => {
         try {
-          await client.be("delete-llm", `${land}/@llm-assigner`, { connectionId: b.dataset.id });
+          await client.be("delete-llm", `${place}/@llm-assigner`, { connectionId: b.dataset.id });
           await refreshConnections(); renderActiveTab();
         } catch (err) { showError(fmtErr(err, "delete failed")); }
       });
@@ -650,7 +650,7 @@ export function showLlmAssignerPanel({ client, land, currentNodeId, onClose, onS
     bodyEl.querySelectorAll("button[data-act=main]").forEach(b => {
       b.addEventListener("click", async () => {
         try {
-          await client.be("assign-slot", `${land}/@llm-assigner`,
+          await client.be("assign-slot", `${place}/@llm-assigner`,
             { slot: "main", connectionId: b.dataset.id });
           await refreshConnections(); renderActiveTab();
         } catch (err) { showError(fmtErr(err, "set-main failed")); }
@@ -668,7 +668,7 @@ export function showLlmAssignerPanel({ client, land, currentNodeId, onClose, onS
       // apiKey is optional — local LLMs (Ollama, llama.cpp) need none.
       addBt.disabled = true; addBt.textContent = "adding...";
       try {
-        await client.be("add-llm", `${land}/@llm-assigner`, {
+        await client.be("add-llm", `${place}/@llm-assigner`, {
           name: nameI.value.trim() || null, baseUrl, model, apiKey,
         });
         _llmPanelState.add = { name: "", baseUrl: "", model: "", apiKey: "" };
@@ -725,7 +725,7 @@ export function showLlmAssignerPanel({ client, land, currentNodeId, onClose, onS
       e.preventDefault();
       clearError();
       try {
-        await client.be("set-space-llm", `${land}/@llm-assigner`, {
+        await client.be("set-space-llm", `${place}/@llm-assigner`, {
           nodeId:       currentNodeId,
           slot:         slotI.value.trim() || "main",
           connectionId: connI.value || null,
@@ -737,29 +737,29 @@ export function showLlmAssignerPanel({ client, land, currentNodeId, onClose, onS
     form.querySelector("button[data-act=clear]").addEventListener("click", async () => {
       clearError();
       try {
-        await client.be("set-space-llm", `${land}/@llm-assigner`, {
+        await client.be("set-space-llm", `${place}/@llm-assigner`, {
           nodeId: currentNodeId, slot: slotI.value.trim() || "main", connectionId: null,
         });
       } catch (err) { showError(fmtErr(err, "clear failed")); }
     });
   }
 
-  // ── Land Default tab ───────────────────────────────────────────
-  function renderLandTab() {
+  // ── Place Default tab ───────────────────────────────────────────
+  function renderPlaceTab() {
     if (connections.length === 0) {
       bodyEl.innerHTML = `<div style="color:#6b7d72; padding:8px 0;">
         Add a connection on the <b style="color:#c8d3cb;">My Being</b> tab first,
-        then come back here to set it as the land default.
+        then come back here to set it as the place default.
       </div>`;
       return;
     }
     bodyEl.innerHTML = `
       <div style="color:#6b7d72; margin-bottom:8px;">
-        Setting the land-level default LLM. Restricted to the root
+        Setting the place-level default LLM. Restricted to the root
         operator (the first registered human). Non-operators get
         <code style="color:#d97a7a;">FORBIDDEN</code>.
       </div>
-      <form class="llm-land-form">
+      <form class="llm-place-form">
         <label style="${LABEL}">connection</label>
         ${connDropdown("connectionId")}
         <div style="height:8px"></div>
@@ -769,22 +769,22 @@ export function showLlmAssignerPanel({ client, land, currentNodeId, onClose, onS
         </div>
       </form>
     `;
-    const form = bodyEl.querySelector(".llm-land-form");
+    const form = bodyEl.querySelector(".llm-place-form");
     const connI = form.querySelector("select[name=connectionId]");
 
     form.addEventListener("submit", async (e) => {
       e.preventDefault();
       clearError();
       try {
-        await client.be("set-land-llm", `${land}/@llm-assigner`, {
+        await client.be("set-place-llm", `${place}/@llm-assigner`, {
           connectionId: connI.value || null,
         });
-      } catch (err) { showError(fmtErr(err, "set-land-llm failed")); }
+      } catch (err) { showError(fmtErr(err, "set-place-llm failed")); }
     });
     form.querySelector("button[data-act=clear]").addEventListener("click", async () => {
       clearError();
       try {
-        await client.be("set-land-llm", `${land}/@llm-assigner`, { connectionId: null });
+        await client.be("set-place-llm", `${place}/@llm-assigner`, { connectionId: null });
       } catch (err) { showError(fmtErr(err, "clear failed")); }
     });
   }
@@ -801,7 +801,7 @@ export function showLlmAssignerPanel({ client, land, currentNodeId, onClose, onS
 
   async function refreshConnections() {
     try {
-      const data = await client.be("list-llms", `${land}/@llm-assigner`, {});
+      const data = await client.be("list-llms", `${place}/@llm-assigner`, {});
       connections = data?.connections || [];
       mainConnId  = data?.slots?.main || null;
     } catch (err) {
@@ -837,7 +837,7 @@ export function showLlmAssignerPanel({ client, land, currentNodeId, onClose, onS
       if (typeof onSpawnTutorial === "function") {
         await onSpawnTutorial();
       } else {
-        await client.do(`${land}/`, "llm-assigner:start-tutorial", {});
+        await client.do(`${place}/`, "llm-assigner:start-tutorial", {});
       }
       hideLlmAssignerPanel();
       if (typeof onClose === "function") onClose();

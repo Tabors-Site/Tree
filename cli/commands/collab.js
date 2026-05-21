@@ -23,15 +23,15 @@ module.exports = (program) => {
           const uid = u?._id || u;
           // When viewing a remote tree, flip perspective:
           // - You (matching userId) show as "you"
-          // - Users with isRemote+homeLand show @homeLand (visitors from elsewhere)
-          // - Local users on the remote land show @remoteDomain
+          // - Users with isRemote+homePlace show @homePlace (visitors from elsewhere)
+          // - Local users on the remote place show @remoteDomain
           if (remoteDomain) {
             if (uid && String(uid) === String(cfg.userId)) return name + chalk.dim(" (you)");
-            if (u?.isRemote && u?.homeLand) return name + chalk.dim(` @${u.homeLand}`);
+            if (u?.isRemote && u?.homePlace) return name + chalk.dim(` @${u.homePlace}`);
             return name + chalk.dim(` @${remoteDomain}`);
           }
           // Local view: only annotate remote users
-          if (u?.isRemote && u?.homeLand) return name + chalk.dim(` @${u.homeLand}`);
+          if (u?.isRemote && u?.homePlace) return name + chalk.dim(` @${u.homePlace}`);
           return name;
         };
         console.log(chalk.bold("Owner:"));
@@ -51,7 +51,7 @@ module.exports = (program) => {
 
   program
     .command("invite [userOrAction...]")
-    .description("Invite a user to current tree. Use user@domain for remote lands")
+    .description("Invite a user to current tree. Use user@domain for remote places")
     .action(async (parts) => {
       if (!parts || !parts.length) return console.log(chalk.yellow("Usage: invite <username> | invite <user@domain> | invite accept <id> | invite deny <id>"));
       const cfg = requireAuth();
@@ -103,9 +103,9 @@ module.exports = (program) => {
         invites.forEach((inv, i) => {
           const from = inv.userInviting?.username || inv.remoteInvitingUsername || inv.userInviting || "";
           const tree = inv.rootId?.name || inv.remoteRootName || inv.rootId || "";
-          const land = inv.remoteLandDomain ? ` ${chalk.dim(`@${inv.remoteLandDomain}`)}` : "";
+          const place = inv.remotePlaceDomain ? ` ${chalk.dim(`@${inv.remotePlaceDomain}`)}` : "";
           console.log(
-            `  ${chalk.cyan(i + 1 + ".")} ${chalk.bold(tree)}${land}  ${chalk.dim("from")} ${from}`,
+            `  ${chalk.cyan(i + 1 + ".")} ${chalk.bold(tree)}${place}  ${chalk.dim("from")} ${from}`,
           );
         });
         console.log(chalk.dim("\n  Accept: invite accept <id>  ·  Decline: invite deny <id>"));

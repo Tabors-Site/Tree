@@ -15,9 +15,9 @@ transports/   Thin carriers. WebSocket today; CLI / HTTP shims sit beside it.
 extensions/   Everything else. Optional, installable, removable.
 ```
 
-**Dependency direction.** `transports/` → `protocols/` → `seed/`. Extensions sit beside the three and consume them. `seed/` never imports from `protocols/` or `transports/`; `protocols/` never imports from `transports/`. The push channel ([seed/ibp/pushChannel.js](land/seed/ibp/pushChannel.js)) is the inversion seam — transports register an implementation at boot; seed callers reach it through proxies that no-op when nothing has registered.
+**Dependency direction.** `transports/` → `protocols/` → `seed/`. Extensions sit beside the three and consume them. `seed/` never imports from `protocols/` or `transports/`; `protocols/` never imports from `transports/`. The push channel ([seed/ibp/pushChannel.js](place/seed/ibp/pushChannel.js)) is the inversion seam — transports register an implementation at boot; seed callers reach it through proxies that no-op when nothing has registered.
 
-`core.X` is the services bundle the loader hands to each extension; it's assembled in [seed/services.js](land/seed/services.js) by pulling exports from across seed's domain folders. There is no `seed/core/` folder and no separate "Core" architectural layer — just one assembler at the root of seed.
+`core.X` is the services bundle the loader hands to each extension; it's assembled in [seed/services.js](place/seed/services.js) by pulling exports from across seed's domain folders. There is no `seed/core/` folder and no separate "Core" architectural layer — just one assembler at the root of seed.
 
 ## The six primitives
 
@@ -27,12 +27,12 @@ Everything in seed serves one of six:
 |---|---|---|
 | **Being** | An identity instance. Humans + AI + future composites. | `seed/models/being.js` |
 | **Space** | The substrate primitive. Structure that holds possibility; a position in the tree. | `seed/models/space.js` |
-| **Matter** | Stuff that sits in a space. `origin` tags where the content lives (`ibp`, `filesystem`, `web`, cross-land). | `seed/models/matter.js` |
+| **Matter** | Stuff that sits in a space. `origin` tags where the content lives (`ibp`, `filesystem`, `web`, cross-place). | `seed/models/matter.js` |
 | **Did** | One DO emission, audit log. Past tense — "a did is a thing that was done." | `seed/models/did.js` |
 | **Summon** | One being's wake-and-act through one LLM call. | `seed/models/summon.js` |
 | **LlmConnection** | Per-being LLM client config (URL, key, model). | `seed/models/llmConnection.js` |
 
-Schemas never change. Extensions never add fields. Everything new lives in `qualities` (the open per-primitive Map; see [land/seed/land/LAND.md](land/seed/land/LAND.md) "Qualities" for why the field is named that way and the rule for where any new property belongs).
+Schemas never change. Extensions never add fields. Everything new lives in `qualities` (the open per-primitive Map; see [place/seed/place/PLACE.md](place/seed/place/PLACE.md) "Qualities" for why the field is named that way and the rule for where any new property belongs).
 
 ## The four verbs
 
@@ -45,7 +45,7 @@ SUMMON  deliver to a being's inbox, wake them, run their role's summoning.
 BE      identity. register / claim / release / switch.
 ```
 
-**Wire shape** ([seed/ibp/pushChannel.js](land/seed/ibp/pushChannel.js), [protocols/ibp/events.js](land/protocols/ibp/events.js)):
+**Wire shape** ([seed/ibp/pushChannel.js](place/seed/ibp/pushChannel.js), [protocols/ibp/events.js](place/protocols/ibp/events.js)):
 
 ```
 Client → server:  socket.emit("ibp", { id, verb, address, payload }, ack)
@@ -73,8 +73,8 @@ Several primitives were renamed in 2026-05. Code, comments, and git history mix 
 | **Space** (substrate primitive) | "Node" | 0.12.0 |
 | **Matter** (stuff in a space) | "Artifact" | 0.13.0 |
 | **SUMMON** | "TALK" | code rename 2026-05-17 |
-| **land/protocols/ibp/** (server) | "land/portal/" | folder rename 2026-05-17 |
-| **land/seed/being/roles/** | "land/portal/embodiments/" | 2026-05-18 |
+| **place/protocols/ibp/** (server) | "place/portal/" | folder rename 2026-05-17 |
+| **place/seed/being/roles/** | "place/portal/embodiments/" | 2026-05-18 |
 
 **Three quality buckets, peer not nested:**
 
@@ -87,11 +87,11 @@ Several primitives were renamed in 2026-05. Code, comments, and git history mix 
 ## Project Structure
 
 ```
-land/
+place/
 ├── seed/                       The kernel. Four folders, four roles. NEVER modify.
 │   │
-│   ├── land/         IS    — The world as substance. What exists.
-│   │   ├── being/                 Identity ops: identity, position, landBeings,
+│   ├── place/         IS    — The world as substance. What exists.
+│   │   ├── being/                 Identity ops: identity, position, placeBeings,
 │   │   │                          beRegistry.
 │   │   ├── space/                 Tree ops: spaceManagement, ancestorCache,
 │   │   │                          ownership, cascade, spaceCircuit, spaceFetch,
@@ -109,7 +109,7 @@ land/
 │   │   ├── integrityCheck.js      fsck for tree-shaped primitives.
 │   │   ├── registryMirror.js      Surfaces runtime registries as child
 │   │   │                          Spaces under .tools / .roles / .operations.
-│   │   └── LAND.md                Philosophy of space/matter/being and the
+│   │   └── PLACE.md                Philosophy of space/matter/being and the
 │   │                              constitutive (schema) vs characterizing
 │   │                              (qualities) two-layer model.
 │   │
@@ -130,7 +130,7 @@ land/
 │   │                             subscriptions, replyAggregator, defaultSummon,
 │   │                             assignments, connections, summonTracker,
 │   │                             seeResolvers, tools.js, roles/ (registry +
-│   │                             built-ins: auth, echo, landManager, llmAssigner).
+│   │                             built-ins: auth, echo, placeManager, llmAssigner).
 │   │
 │   ├── system/      HOST  — The host-realm floor. Knows nothing of the world.
 │   │                             dbConfig, log, hooks, indexes, version,
@@ -141,8 +141,8 @@ land/
 │   ├── models/                   Mongoose schemas for all 6 primitives:
 │   │                             being, space, matter, did, summon, llmConnection.
 │   ├── services.js               Assembles `core` from the four folders above.
-│   ├── landRoot.js               Plants the land root + the nine land seed spaces.
-│   ├── landConfig.js             This land's remembered settings.
+│   ├── placeRoot.js               Plants the place root + the nine place seed spaces.
+│   ├── placeConfig.js             This place's remembered settings.
 │   ├── philosophy/               Diagrams of the IBP grammar (jpgs).
 │   ├── SEED.md                   Kernel internals doc (first-person, the I-Am).
 │   └── LICENSE                   AGPL-3.0 with a preamble naming the seed.
@@ -157,7 +157,7 @@ land/
 │   │   ├── index.js                Boot entry: initIBPHttp, initIBPWS, live-hook wiring
 │   │   └── bootstrap-route.js      /.well-known/treeos-portal HTTP discovery (public name; kept
 │   │                               for client compatibility)
-│   ├── canopy/                   Federation between lands (dispatch, identity, peers, models)
+│   ├── canopy/                   Federation between places (dispatch, identity, peers, models)
 │   └── mcp/                      MCP adapter (AI tool execution)
 │
 ├── transports/                 Carriers. transports → protocols → seed.
@@ -169,9 +169,9 @@ land/
 │   ├── EXTENSION_FORMAT.md
 │   └── ... (manifest + index.js per extension)
 │
-├── boot.js                     First-run wizard
-├── server.js                   Express + WebSocket bring-up
-└── genesis.js                  Boot sequence: indexes, config, migrations, extensions, jobs
+├── plant.js                    Operator's act. Plants the seed. Once only.
+├── bigbang.js                  t=0. Opens HTTP/WebSocket senses; fires genesis().
+└── genesis.js                  The unfolding. Indexes, config, migrations, beings, extensions, jobs.
 
 site/                           React landing/docs site
 horizon/                        Public registry (standalone)
@@ -179,17 +179,17 @@ cli/                            CLI package
 portal/3d-app/                  3D IBP client (Three.js + Vite)
 ```
 
-**Placement rule for seed/.** For any file, ask: does this describe what a being **IS**, how it **ACTS**, or how it **THINKS**? → `land/` / `ibp/` / `cognition/`. Does it touch the host while knowing nothing of the world? → `system/`. Schemas live in `models/` (shape vs behavior is a separate axis).
+**Placement rule for seed/.** For any file, ask: does this describe what a being **IS**, how it **ACTS**, or how it **THINKS**? → `place/` / `ibp/` / `cognition/`. Does it touch the host while knowing nothing of the world? → `system/`. Schemas live in `models/` (shape vs behavior is a separate axis).
 
 ## Three registries
 
 Every extension capability flows through one of three:
 
-1. **Operations** ([seed/ibp/operations.js](land/seed/ibp/operations.js)) — DO actions. Extensions register under `<ext>:<action>`; bare names reserved for the kernel. Schema validation declared but not enforced yet (roadmap).
+1. **Operations** ([seed/ibp/operations.js](place/seed/ibp/operations.js)) — DO actions. Extensions register under `<ext>:<action>`; bare names reserved for the kernel. Schema validation declared but not enforced yet (roadmap).
 
-2. **Roles** ([seed/cognition/roles/registry.js](land/seed/cognition/roles/registry.js)) — SUMMON-honoring beings. Each role declares `permissions` (subset of see/do/summon/be), `respondMode` (sync/async/none), `summon(message, ctx)`, and optionally `buildSystemPrompt` / `toolNames` for LLM cognition.
+2. **Roles** ([seed/cognition/roles/registry.js](place/seed/cognition/roles/registry.js)) — SUMMON-honoring beings. Each role declares `permissions` (subset of see/do/summon/be), `respondMode` (sync/async/none), `summon(message, ctx)`, and optionally `buildSystemPrompt` / `toolNames` for LLM cognition.
 
-3. **Seeds** ([seed/land/seeds.js](land/seed/land/seeds.js)) — plantable scaffolds. Recipes that bootstrap a domain (Ruler/Planner/Contractor + workers, etc.). Operators plant via the `plant-seed` DO op.
+3. **Seeds** ([seed/place/seeds.js](place/seed/place/seeds.js)) — plantable scaffolds. Recipes that bootstrap a domain (Ruler/Planner/Contractor + workers, etc.). Operators plant via the `plant-seed` DO op.
 
 The loader auto-namespaces everything. Extensions write bare names (`"hire-planner"`); the kernel records the qualified form (`"governing:hire-planner"`). The same prefixing applies to push-channel events emitted via `core.websocket.emitToBeing(...)`.
 
@@ -221,7 +221,7 @@ An extension can provide:
 - **HTML Pages** (server-rendered, via the html-rendering extension)
 - **Env vars** (with auto-generation)
 
-See [extensions/EXTENSION_FORMAT.md](land/extensions/EXTENSION_FORMAT.md) for the full contract.
+See [extensions/EXTENSION_FORMAT.md](place/extensions/EXTENSION_FORMAT.md) for the full contract.
 
 **Scoped core.** The loader builds a per-extension view of the core services bundle:
 - `core.do.registerOperation(name, spec)` — auto-prefixes to `<ext>:<name>`; rejects mismatched prefixes.
@@ -232,18 +232,18 @@ Extensions never type their own namespace. The framing makes namespace-impersona
 
 ## Stance Authorization
 
-One gate on every verb ([seed/ibp/authorize.js](land/seed/ibp/authorize.js)). Layers:
+One gate on every verb ([seed/ibp/authorize.js](place/seed/ibp/authorize.js)). Layers:
 
 1. **Layer 1: facts.** Stance properties derived from Being and Space (owner / contributor / role / home relation / operating mode / federation status).
 2. **Layer 2: per-position rules.** Walk the ancestor chain looking for `qualities.permissions.<verb>.<keyParts>` rules that match.
 3. **Layer 3: extension defaults.** Registry of default permission rules contributed by installed extensions.
 4. **Layer 4: legacy fallback + default deny.** No match → reject with `FORBIDDEN` (or `UNAUTHORIZED` when there's no identity).
 
-BE register/claim from arrival is the bootstrap exception, gated by land-level `register_enabled` / `claim_enabled` flags on `qualities.auth`.
+BE register/claim from arrival is the bootstrap exception, gated by place-level `register_enabled` / `claim_enabled` flags on `qualities.auth`.
 
 ## LLM Resolution Chain
 
-Four layers, walked from each call site ([seed/cognition/llmClient.js](land/seed/cognition/llmClient.js)):
+Four layers, walked from each call site ([seed/cognition/llmClient.js](place/seed/cognition/llmClient.js)):
 
 ```
 Space-tree lockout      (space.llmDefault === "none" anywhere in ancestor chain)
@@ -290,11 +290,11 @@ Two rules, no exceptions. **Before** hooks run sequentially because they can can
 
 ## Cascade
 
-A note at one space creates awareness at related spaces. Fires `onCascade` when content is written at a space with `qualities.cascade.enabled = true`. Results land in the `.flow` system space. Six statuses: `succeeded`, `failed`, `rejected`, `queued`, `partial`, `awaiting`. Config: `cascadeEnabled`, `resultTTL`, `awaitingTimeout`, `cascadeMaxDepth`. See [seed/space/cascade.js](land/seed/space/cascade.js).
+A note at one space creates awareness at related spaces. Fires `onCascade` when content is written at a space with `qualities.cascade.enabled = true`. Results place in the `.flow` system space. Six statuses: `succeeded`, `failed`, `rejected`, `queued`, `partial`, `awaiting`. Config: `cascadeEnabled`, `resultTTL`, `awaitingTimeout`, `cascadeMaxDepth`. See [seed/space/cascade.js](place/seed/space/cascade.js).
 
 ## Response Protocol
 
-[seed/ibp/protocol.js](land/seed/ibp/protocol.js) defines how the kernel talks to the outside world (response/error constructors + the `ERR` enum). Extensions access via `core.protocol`. Domain enums live in named files alongside it: [seed/space/seedSpaces.js](land/seed/space/seedSpaces.js) (`SEED_SPACE`, `SEED_BEING`, `DELETED`) and [seed/matter/origins.js](land/seed/matter/origins.js) (`MATTER_ORIGIN`).
+[seed/ibp/protocol.js](place/seed/ibp/protocol.js) defines how the kernel talks to the outside world (response/error constructors + the `ERR` enum). Extensions access via `core.protocol`. Domain enums live in named files alongside it: [seed/space/seedSpaces.js](place/seed/space/seedSpaces.js) (`SEED_SPACE`, `SEED_BEING`, `DELETED`) and [seed/matter/origins.js](place/seed/matter/origins.js) (`MATTER_ORIGIN`).
 
 **HTTP/wire shape:** `{ status: "ok", data }` or `{ status: "error", error: { code, message, detail? } }`. Constructors: `sendOk(res, data, httpStatus)`, `sendError(res, httpStatus, code, message, detail)`.
 
@@ -353,4 +353,4 @@ Plus five IBP-specific codes: `ADDRESS_PARSE_ERROR`, `ROLE_UNAVAILABLE`, `VERB_N
 - Dynamic imports with try/catch for optional cross-extension deps
 - Comments explain WHY, not WHAT. Identifiers carry the WHAT.
 
-For server internals (boot sequence, the inbox + scheduler, role templates, how to build an extension), see [land/CLAUDE.md](land/CLAUDE.md).
+For server internals (boot sequence, the inbox + scheduler, role templates, how to build an extension), see [place/CLAUDE.md](place/CLAUDE.md).

@@ -18,7 +18,7 @@ What's locked:
 - Server protocol wire-level rules ([server-protocol.md](server-protocol.md)).
 - Identity-first session model ([identity.md](identity.md)).
 - Zone types and surfaces ([zones.md](zones.md), [surfaces.md](surfaces.md)).
-- IBPA parser ([../../land/seed/addressing/address.js](../../land/seed/addressing/address.js)). The substrate owns the grammar; Portal consumes it via `@ibp-address`.
+- IBPA parser ([../../place/seed/addressing/address.js](../../place/seed/addressing/address.js)). The substrate owns the grammar; Portal consumes it via `@ibp-address`.
 
 Done means anyone joining can read these docs before writing the first new line of code. The format contracts (IBPA + Position Description + four-verb envelope + SUMMON message + inbox shape) are the load-bearing pieces.
 
@@ -28,22 +28,22 @@ The first verb. Read-only path. Smallest risk.
 
 **Work:**
 
-1. Build [land/ibp/verbs/see.js](land/ibp/verbs/see.js):
+1. Build [place/ibp/verbs/see.js](place/ibp/verbs/see.js):
    - One-shot SEE returns a Position Description for the address.
    - Live SEE returns initial descriptor plus an open patch stream.
-2. Extend [land/ibp/descriptor.js](land/ibp/descriptor.js):
+2. Extend [place/ibp/descriptor.js](place/ibp/descriptor.js):
    - Home zone descriptor (was scaffolded empty).
    - Tree zone descriptor (was scaffolded empty).
    - Inbox preview field per being.
    - `honoredIntents`, `respondMode`, `triggerOn` per being.
-3. Wire `ibp:see` in [land/ibp/protocol.js](land/ibp/protocol.js).
+3. Wire `ibp:see` in [place/ibp/protocol.js](place/ibp/protocol.js).
 4. Build the SEE method on [portal/app/src/portal-client.js](portal/app/src/portal-client.js).
 5. Wire live SEE patching on the client: receive frames, apply RFC 6902 patches to local descriptor copy, re-render affected sections.
 
 **Verification:**
 
 - `see treeos.ai/.discovery` returns the four-verb capability set.
-- `see treeos.ai/` returns land zone with public trees.
+- `see treeos.ai/` returns place zone with public trees.
 - `see treeos.ai/~tabor` returns home zone with tabor's trees + inbox preview.
 - `see treeos.ai/~tabor/test-tree` returns tree zone with governance + matters + beings.
 - Live SEE: open subscription, mutate the position via a manual setExtMeta, observe patch frame arriving.
@@ -56,13 +56,13 @@ Mutation path. Three or four named actions prove the dispatcher pattern; `set-me
 
 **Work:**
 
-1. Build [land/ibp/verbs/do.js](land/ibp/verbs/do.js): action dispatcher reading `action` field and routing.
-2. Build first four actions in [land/ibp/actions/](land/ibp/actions/):
+1. Build [place/ibp/verbs/do.js](place/ibp/verbs/do.js): action dispatcher reading `action` field and routing.
+2. Build first four actions in [place/ibp/actions/](place/ibp/actions/):
    - `create-child.js`
    - `rename.js`
    - `change-status.js`
    - `set-meta.js` (the generic extension action)
-3. Wire `ibp:do` in [land/ibp/protocol.js](land/ibp/protocol.js).
+3. Wire `ibp:do` in [place/ibp/protocol.js](place/ibp/protocol.js).
 4. Build the DO method on the client.
 
 **Verification:**
@@ -81,26 +81,26 @@ The hardest piece. Inbox kernel helpers, summoning triggers, sync respond-mode f
 
 **Work:**
 
-1. Build [land/ibp/inbox.js](land/ibp/inbox.js):
+1. Build [place/ibp/inbox.js](place/ibp/inbox.js):
    - `appendToInbox(spaceId, being, message)`
    - `readInbox(spaceId, being, options)`
    - `markInboxConsumed(spaceId, being, correlationIds, responseId)`
-2. Build [land/ibp/verbs/talk.js](land/ibp/verbs/talk.js):
+2. Build [place/ibp/verbs/talk.js](place/ibp/verbs/talk.js):
    - Envelope validation.
    - Address + being resolution.
    - Intent validation against being's `honoredIntents`.
    - Atomic append + summon.
    - Sync respond-mode handling: hold ack open, await summoning result, return inline.
 3. Pick one sync being to demonstrate. Candidate: a minimal "worker" or "oracle" being that takes a `chat`-intent message, runs a single LLM call, returns text.
-4. Update [land/ibp/descriptor.js](land/ibp/descriptor.js) to surface inbox previews.
-5. Wire `ibp:summon` in [land/ibp/protocol.js](land/ibp/protocol.js).
+4. Update [place/ibp/descriptor.js](place/ibp/descriptor.js) to surface inbox previews.
+5. Wire `ibp:summon` in [place/ibp/protocol.js](place/ibp/protocol.js).
 6. Build the SUMMON method on the client.
 
 **Verification:**
 
 - `talk stance: "<home>/test-tree@oracle" { content: "what is at this position?", intent: "query" }` returns inline response.
 - `talk stance: "<home>/test-tree@oracle" { content: "remember this", intent: "place" }` returns no response (intent `place` + respond-mode `none`).
-- Inbox preview field updates via live SEE patch as messages land.
+- Inbox preview field updates via live SEE patch as messages place.
 
 **Estimate:** 1 week. The inbox primitive and the summoning trigger are the load-bearing pieces.
 
@@ -111,12 +111,12 @@ Identity bootstrap. Establishes the protocol's full surface.
 **Work:**
 
 1. Define the auth-being being for treeos.ai.
-2. Build [land/ibp/verbs/be.js](land/ibp/verbs/be.js):
+2. Build [place/ibp/verbs/be.js](place/ibp/verbs/be.js):
    - `register` operation: payload validation, user creation, token issuance.
    - `claim` operation: credential check, token issuance.
    - `release` operation: token invalidation.
    - `switch` operation: client-coordination check.
-3. Wire `ibp:be` in [land/ibp/protocol.js](land/ibp/protocol.js).
+3. Wire `ibp:be` in [place/ibp/protocol.js](place/ibp/protocol.js).
 4. Build the BE method on the client.
 5. Rebuild the sign-in surface ([portal/app/src/components/SignIn.jsx](portal/app/src/components/SignIn.jsx)) to use BE.
 
@@ -135,36 +135,36 @@ Identity bootstrap. Establishes the protocol's full surface.
 
 The kernel system that determines what one stance can do toward another stance or position through a portal connection. Every IBP verb call routes through one authorize call.
 
-Phase 5 wired BE but left per-verb auth checks ad-hoc. Phase 5.5 builds the infrastructure with a deliberately simple permission shape — expressive enough for the patterns lands want today, with room to extend when real lands surface real needs.
+Phase 5 wired BE but left per-verb auth checks ad-hoc. Phase 5.5 builds the infrastructure with a deliberately simple permission shape — expressive enough for the patterns places want today, with room to extend when real places surface real needs.
 
 **Work:**
 
-1. Build `land/ibp/authorize.js`:
+1. Build `place/ibp/authorize.js`:
    - `authorize({ identity, verb, target, action?, namespace? })` → `{ ok, stance, reason? }`.
    - Resolves the requester's stance: `arrival` if no identity; `owner` if identity has write access at the scope (via existing `resolveTreeAccess.write`); falls through to existing access logic otherwise.
-   - Reads `metadata.beings.<stance>.permissions` at the land root.
+   - Reads `metadata.beings.<stance>.permissions` at the place root.
    - Returns allow or deny with the stance that was checked.
 2. Apply the simple permission shape (NOT a glob/prefix DSL):
    - `see: { allowed_visibility: [...] }` — list of Space `visibility` values arrivals may SEE.
    - `do: { allowed_actions: [...] | "*" }` — list of action names or wildcard.
    - `summon: { allowed_targets: ["@being", ...] | "*" }` — list of being names or wildcard.
    - `be: { allowed_operations: [...] }` — which BE ops the stance can call.
-3. Apply land-level BE flags: `metadata.auth.register_enabled` and `metadata.auth.claim_enabled` (both default `true`). Auth-being rejects with `FORBIDDEN` when the requested operation is disabled.
-4. Replace per-verb ad-hoc auth checks in [land/ibp/verbs/*.js](land/ibp/verbs/) with calls to `authorize()`. SEE, DO, SUMMON route through it. BE bootstrap stays (the auth-being is the only escape hatch for unestablished requesters), but consults the land-level BE flags.
-5. Seed default `arrival` and `owner` stance permissions on land boot, so a freshly installed land has the conservative defaults set explicitly in metadata.
+3. Apply place-level BE flags: `metadata.auth.register_enabled` and `metadata.auth.claim_enabled` (both default `true`). Auth-being rejects with `FORBIDDEN` when the requested operation is disabled.
+4. Replace per-verb ad-hoc auth checks in [place/ibp/verbs/*.js](place/ibp/verbs/) with calls to `authorize()`. SEE, DO, SUMMON route through it. BE bootstrap stays (the auth-being is the only escape hatch for unestablished requesters), but consults the place-level BE flags.
+5. Seed default `arrival` and `owner` stance permissions on place boot, so a freshly installed place has the conservative defaults set explicitly in metadata.
 
 **Deferred (Phase 7+):**
 
 - Glob/prefix path matching and conflict-resolution semantics in the permission DSL.
 - Additional stance vocabularies (`member`, `guest`, `contributor`, `moderator`, custom).
-- Land-installer presets (personal / community / service) as convenience configurations.
-- Cross-land stance assignment beyond arrival-by-default (federation, Phase 10+).
-- Introspection queries for "what can stance X do at this land."
+- Place-installer presets (personal / community / service) as convenience configurations.
+- Cross-place stance assignment beyond arrival-by-default (federation, Phase 10+).
+- Introspection queries for "what can stance X do at this place."
 
 **Verification:**
 
-- A freshly installed land has explicit defaults: arrival allows BE register + claim + SEE public; owner allows everything.
-- Editing `metadata.beings.arrival.permissions` on a test land changes what an arrival can do (verify with SEE/SUMMON from an unauthenticated socket).
+- A freshly installed place has explicit defaults: arrival allows BE register + claim + SEE public; owner allows everything.
+- Editing `metadata.beings.arrival.permissions` on a test place changes what an arrival can do (verify with SEE/SUMMON from an unauthenticated socket).
 - Setting `metadata.auth.register_enabled = false` causes `be register` to return `FORBIDDEN`.
 - Authenticated user at their own tree still passes the existing write-access checks.
 - The introspection query returns the configured permissions for a named stance.
@@ -178,7 +178,7 @@ The second SUMMON respond-mode. Required for any being that fires-and-forgets wo
 
 **Work:**
 
-1. Extend [land/ibp/verbs/talk.js](land/ibp/verbs/talk.js):
+1. Extend [place/ibp/verbs/talk.js](place/ibp/verbs/talk.js):
    - Async respond-mode: ack immediately with `{ status: "accepted" }`.
    - When the summoning produces a response (now or later), construct a SUMMON from the being back at the original sender and append it to the sender's inbox.
 2. Pick one async being to demonstrate. Candidate: a minimal Ruler-style being that returns "thinking..." sync then later SUMMONs back with a result via an `inReplyTo` chain.
@@ -198,7 +198,7 @@ Now that the protocol stack is complete, finish the portal app shell against it.
 
 **Work:**
 
-1. Land zone renderer (public trees, beings, discovery cards).
+1. Place zone renderer (public trees, beings, discovery cards).
 2. Home zone renderer (tree grid, beings list, recent inbox).
 3. Tree zone renderer (governance panel, matters, beings panel with inbox, children, chat panel).
 4. Tree navigator sidebar.
@@ -216,7 +216,7 @@ Now that the protocol stack is complete, finish the portal app shell against it.
 
 ## Phase 8: Per-extension migration
 
-For each existing extension, migrate its HTTP routes off the legacy `land/routes/api/*` surface and into the four-verb protocol. Priority order:
+For each existing extension, migrate its HTTP routes off the legacy `place/routes/api/*` surface and into the four-verb protocol. Priority order:
 
 1. **governing** (heaviest user, sets the pattern for complex beings).
 2. **metadata-heavy extensions** (values, codebook, perspective, memory, etc.) which all collapse cleanly to `set-meta`.
@@ -234,13 +234,13 @@ Each extension migration:
 
 ## Phase 9: Legacy chat handler retirement
 
-When SUMMON is proven and at least the governing extension is migrated, retire the legacy chat WS handler in `land/seed/ws/websocket.js`. All beings engaged via SUMMON from this point.
+When SUMMON is proven and at least the governing extension is migrated, retire the legacy chat WS handler in `place/seed/ws/websocket.js`. All beings engaged via SUMMON from this point.
 
 **Estimate:** 2 to 3 days. Mostly cleanup.
 
 ## Phase 10: Federation
 
-Cross-land BE, cross-land SUMMON routing. Depends on Canopy.
+Cross-place BE, cross-place SUMMON routing. Depends on Canopy.
 
 Out of scope for the current pass.
 
@@ -274,9 +274,9 @@ Resist these temptations:
 
 - **Generic web browsing.** The TreeOS Portal does not render arbitrary websites. It renders Position Descriptions.
 - **HTTP versions of the four verbs.** No `/api/v1/see/...` or `/api/v1/do/...` routes. The protocol is WS-only.
-- **Bridge HTTP routes for backwards compatibility.** The legacy `land/routes/api/*` routes stay live during migration but are not extended; they retire per extension.
+- **Bridge HTTP routes for backwards compatibility.** The legacy `place/routes/api/*` routes stay live during migration but are not extended; they retire per extension.
 - **Heavy UI frameworks.** Stick with React + Vite. No Material-UI / heavy component libraries. Visual style is TreeOS-shaped.
-- **Re-implementation of TreeOS features.** All governance / planning / contracting logic stays in the land kernel + extensions. The portal renders state and emits verb requests.
+- **Re-implementation of TreeOS features.** All governance / planning / contracting logic stays in the place kernel + extensions. The portal renders state and emits verb requests.
 - **Mobile-first.** Desktop first. Mobile shape is a Phase 11 concern.
 - **Cross-browser compatibility.** This IS the portal. There is no "render in Chrome too" requirement.
 - **A fifth verb.** If something does not fit SEE / DO / SUMMON / BE, it belongs in an being, an extension, or a layer above the protocol.
@@ -289,4 +289,4 @@ When at least these are true:
 - SEE returns valid descriptors for all three zones (Phase 2 done).
 - Then the portal shell can be built confidently against a stable backend.
 
-Phase 7's portal shell waits for Phases 2 through 6 to land. Before Phase 7, the existing portal app stays scaffolded with sign-in and basic zone renderers, exercised against SEE/DO/SUMMON/BE as each verb comes online.
+Phase 7's portal shell waits for Phases 2 through 6 to place. Before Phase 7, the existing portal app stays scaffolded with sign-in and basic zone renderers, exercised against SEE/DO/SUMMON/BE as each verb comes online.

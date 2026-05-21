@@ -3,7 +3,7 @@
 const { Command } = require("commander");
 const chalk = require("chalk");
 const { version } = require("./package.json");
-const { load, currentPath, currentPathSegments, currentLand, getProtocolCli, currentZone, currentNodeId } = require("./config");
+const { load, currentPath, currentPathSegments, currentPlace, getProtocolCli, currentZone, currentNodeId } = require("./config");
 
 /**
  * Render a path with per-segment coloring. Ruler scopes (segments where
@@ -43,7 +43,7 @@ program
       // Core sections
       const coreSections = [
         { title: "Getting Started", cmds: ["connect", "register", "login", "logout", "whoami"] },
-        { title: "Navigation", cmds: ["pwd", "ls", "cd", "land", "home", "tree", "recent"] },
+        { title: "Navigation", cmds: ["pwd", "ls", "cd", "place", "home", "tree", "recent"] },
         { title: "Trees", cmds: ["roots", "use", "root", "mkroot", "retire"] },
         { title: "Nodes", cmds: ["mkdir", "rm", "mv", "rename", "node", "type", "complete", "activate", "trim"] },
         { title: "Notes", cmds: ["note", "notes", "cat", "rm-note", "download"] },
@@ -65,15 +65,15 @@ program
       // Zone filter: hide commands whose scope doesn't include the current zone
       const inScope = (c) => !c._scope || c._scope.includes(zone);
 
-      const landUrl = cfg.landUrl || cfg.remoteDomain || null;
+      const placeUrl = cfg.placeUrl || cfg.remoteDomain || null;
       const username = cfg.username || null;
-      const extCount = cfg.landProtocol?.extensions?.length || 0;
+      const extCount = cfg.placeProtocol?.extensions?.length || 0;
       const treeName = cfg.activeRootName || null;
 
       let out = "";
 
-      if (landUrl) {
-        out += chalk.bold(`${username || "?"}`) + chalk.dim(`@${landUrl.replace(/^https?:\/\//, "")}`);
+      if (placeUrl) {
+        out += chalk.bold(`${username || "?"}`) + chalk.dim(`@${placeUrl.replace(/^https?:\/\//, "")}`);
         if (extCount) out += chalk.dim(`  ${extCount} extensions`);
         out += "\n";
         if (treeName) {
@@ -170,7 +170,7 @@ require("./commands/llm")(program);
 require("./commands/extensions")(program);
 require("./commands/flow")(program);
 
-// Dynamic commands from connected land's protocol (must be last)
+// Dynamic commands from connected place's protocol (must be last)
 require("./commands/dynamic")(program);
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -182,10 +182,10 @@ require("./commands/dynamic")(program);
 {
   const TREE = ["tree"];
   const HOME = ["home"];
-  const LAND = ["land"];
+  const PLACE = ["place"];
   const TREE_HOME = ["tree", "home"];
-  const TREE_LAND = ["tree", "land"];
-  const HOME_LAND = ["home", "land"];
+  const TREE_LAND = ["tree", "place"];
+  const HOME_LAND = ["home", "place"];
 
   const scopes = {
     // Home zone
@@ -195,11 +195,11 @@ require("./commands/dynamic")(program);
     energy: HOME, tier: HOME, invites: HOME, deleted: HOME, revive: HOME, "share-token": HOME,
     "api-keys": HOME, backup: HOME, "backup-snapshot": HOME, "backup-restore": HOME, "backup-list": HOME,
 
-    // Land zone
-    config: LAND, peers: LAND, peer: LAND,
-    "log-level": LAND,
+    // Place zone
+    config: PLACE, peers: PLACE, peer: PLACE,
+    "log-level": PLACE,
 
-    // Home + Land
+    // Home + Place
     search: HOME_LAND, browse: HOME_LAND,
 
     // Tree zone
@@ -234,9 +234,9 @@ require("./commands/dynamic")(program);
     competence: TREE, evolve: TREE, inverse: TREE,
     intent: TREE, reflect: TREE,
 
-    // Land only
-    bundle: LAND, os: LAND, ext: LAND,
-    "governance-status": LAND, "governance-check": LAND,
+    // Place only
+    bundle: PLACE, os: PLACE, ext: PLACE,
+    "governance-status": PLACE, "governance-check": PLACE,
 
     // Global (no scope needed, available everywhere)
     // whoami, help, logout, connect, login, register, start, stop, protocol, sessions
@@ -468,9 +468,9 @@ const startShell = module.exports.startShell = async () => {
       process.stdout.write("\r");
       const cfg = load();
       const user = cfg.username || cfg.userId || "?";
-      const land = currentLand(cfg);
+      const place = currentPlace(cfg);
       const session = cfg.activeSession ? chalk.magenta(` @${cfg.activeSession}`) : "";
-      const p = chalk.green(user) + chalk.dim("@") + chalk.dim(land) + renderColoredPath(cfg) + session + chalk.bold.cyan(" \u203a ");
+      const p = chalk.green(user) + chalk.dim("@") + chalk.dim(place) + renderColoredPath(cfg) + session + chalk.bold.cyan(" \u203a ");
       // Show hint inline after the command text (dim, same line)
       // Truncate hint so it never wraps to the next line
       let hint = "";
@@ -501,7 +501,7 @@ const startShell = module.exports.startShell = async () => {
         desc = meta?.description || "";
       } else if (context === "ext-arg") {
         const cfg = load();
-        desc = cfg.landProtocol?.extensionDescriptions?.[match] || "";
+        desc = cfg.placeProtocol?.extensionDescriptions?.[match] || "";
       } else if (context.startsWith("sub:")) {
         const parentCmd = context.slice(4);
         const meta = cmdMeta.get(parentCmd);
@@ -567,7 +567,7 @@ const startShell = module.exports.startShell = async () => {
           } else if (parts.length === 2 && extArgTopLevel.has(parts[0])) {
             // ext-block/ext-allow <extName> completion
             const cfg = load();
-            const extNames = (cfg.landProtocol?.extensions || []).sort();
+            const extNames = (cfg.placeProtocol?.extensions || []).sort();
             const partial = parts[1] || "";
             const hits = partial.length > 0 ? extNames.filter(n => n.startsWith(partial)) : extNames;
             if (hits.length === 0) return;
@@ -595,7 +595,7 @@ const startShell = module.exports.startShell = async () => {
           } else if (parts.length === 3 && parts[0] === "ext" && extArgSubs.has(parts[1])) {
             // ext disable/enable/info <extName> completion
             const cfg = load();
-            const extNames = (cfg.landProtocol?.extensions || []).sort();
+            const extNames = (cfg.placeProtocol?.extensions || []).sort();
             const partial = parts[2] || "";
             const hits = partial.length > 0 ? extNames.filter(n => n.startsWith(partial)) : extNames;
             if (hits.length === 0) return;
@@ -639,9 +639,9 @@ const startShell = module.exports.startShell = async () => {
       clearHint(); // remove any lingering hint line below
       const cfg = load(); // re-read so prompt reflects cd/use changes
       const user = cfg.username || cfg.userId || "?";
-      const land = currentLand(cfg);
+      const place = currentPlace(cfg);
       const session = cfg.activeSession ? chalk.magenta(` @${cfg.activeSession}`) : "";
-      const p = chalk.green(user) + chalk.dim("@") + chalk.dim(land) + renderColoredPath(cfg) + session + chalk.bold.cyan(" › ");
+      const p = chalk.green(user) + chalk.dim("@") + chalk.dim(place) + renderColoredPath(cfg) + session + chalk.bold.cyan(" › ");
       rl.setPrompt(p);
       rl.prompt();
     };

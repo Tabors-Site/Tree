@@ -3,7 +3,7 @@ import mongoose from "mongoose";
 const GovernanceConfigSchema = new mongoose.Schema({
   _id: { type: String, default: "governance" },
 
-  // Enforcement threshold. Lands below this version are excluded from listings.
+  // Enforcement threshold. Places below this version are excluded from listings.
   // null means no minimum (all versions listed).
   minimumSeedVersion: { type: String, default: null },
   minimumSeedVersionNumeric: { type: Number, default: null },

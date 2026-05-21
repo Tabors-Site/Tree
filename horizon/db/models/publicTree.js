@@ -4,8 +4,8 @@ import mongoose from "mongoose";
 const PublicTreeSchema = new mongoose.Schema({
   _id: { type: String, default: () => crypto.randomUUID() },
   rootId: { type: String, required: true },
-  landId: { type: String, required: true },
-  landDomain: { type: String, required: true },
+  placeId: { type: String, required: true },
+  placeDomain: { type: String, required: true },
   name: { type: String, default: "" },
   description: { type: String, default: "" },
   ownerUsername: { type: String, default: "" },
@@ -16,7 +16,7 @@ const PublicTreeSchema = new mongoose.Schema({
   indexedAt: { type: Date, default: Date.now },
 });
 
-PublicTreeSchema.index({ rootId: 1, landDomain: 1 }, { unique: true });
+PublicTreeSchema.index({ rootId: 1, placeDomain: 1 }, { unique: true });
 PublicTreeSchema.index({ name: "text", description: "text", tags: "text" });
 
 const PublicTree = mongoose.model("PublicTree", PublicTreeSchema);

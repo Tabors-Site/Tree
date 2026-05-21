@@ -305,8 +305,8 @@ module.exports = (program) => {
         if (item.contentType === "file") {
           const rawPath = item.content || "";
           const filePath = rawPath.startsWith("/") ? rawPath : `/api/v1/uploads/${rawPath}`;
-          const landUrl = (cfg.landUrl || "https://treeos.ai").replace(/\/+$/, "");
-          const url = `${landUrl}${filePath}`;
+          const placeUrl = (cfg.placeUrl || "https://treeos.ai").replace(/\/+$/, "");
+          const url = `${placeUrl}${filePath}`;
           const res = await fetch(url, { headers: api._authHeaders() });
           if (!res.ok) return console.log(chalk.red("Failed to download file"));
           const outPath = opts.output || path.basename(item.content);

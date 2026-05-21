@@ -12,7 +12,7 @@ const VERBS = ["see", "do", "summon", "be"];
 
 const BE_OPS = ["register", "claim", "release", "switch"];
 
-export function mountIbpConsole({ root, client, getLand }) {
+export function mountIbpConsole({ root, client, getPlace }) {
   if (!root) throw new Error("mountIbpConsole: { root } required (DOM container)");
   if (!client) throw new Error("mountIbpConsole: { client } required (PortalClient)");
 
@@ -40,7 +40,7 @@ export function mountIbpConsole({ root, client, getLand }) {
     const verb = els.verb.value;
     els.payload.value = defaultPayloadFor(verb);
     els.payloadHint.textContent = payloadHintFor(verb);
-    els.address.placeholder = addressPlaceholderFor(verb, getLand?.() || "<land>");
+    els.address.placeholder = addressPlaceholderFor(verb, getPlace?.() || "<place>");
   }
 
   els.verb.addEventListener("change", refreshPayloadShape);
@@ -154,13 +154,13 @@ function payloadHintFor(verb) {
   }
 }
 
-function addressPlaceholderFor(verb, land) {
+function addressPlaceholderFor(verb, place) {
   switch (verb) {
-    case "see":    return `${land}/.discovery`;
-    case "do":     return `${land}/<nodeId>`;
-    case "summon": return `${land}/<nodeId>@<being>`;
-    case "be":     return `${land}/@auth`;
-    default:       return land;
+    case "see":    return `${place}/.discovery`;
+    case "do":     return `${place}/<nodeId>`;
+    case "summon": return `${place}/<nodeId>@<being>`;
+    case "be":     return `${place}/@auth`;
+    default:       return place;
   }
 }
 

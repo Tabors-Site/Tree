@@ -1,5 +1,5 @@
 import { Router } from "express";
-import Land from "../db/models/land.js";
+import Place from "../db/models/place.js";
 import PublicTree from "../db/models/publicTree.js";
 import Extension from "../db/models/extension.js";
 import { getGovernanceConfig, setGovernanceConfig } from "../db/models/governanceConfig.js";
@@ -13,7 +13,7 @@ function escapeRegex(str) {
 
 /**
  * POST /horizon/register
- * Register or update a land and its public trees.
+ * Register or update a place and its public trees.
  */
 router.post(
   "/register",
@@ -21,7 +21,7 @@ router.post(
   async (req, res) => {
     try {
       const {
-        landId,
+        placeId,
         domain,
         name,
         baseUrl,
@@ -32,15 +32,15 @@ router.post(
         siteUrl,
       } = req.body;
 
-      if (!landId || !domain || !baseUrl || !publicKey) {
+      if (!placeId || !domain || !baseUrl || !publicKey) {
         return res.status(400).json({
           success: false,
-          error: "Missing required fields: landId, domain, baseUrl, publicKey",
+          error: "Missing required fields: placeId, domain, baseUrl, publicKey",
         });
       }
 
       // SECURITY: The claimed domain must match the token issuer.
-      // Prevents a rogue land from registering someone else's domain.
+      // Prevents a rogue place from registering someone else's domain.
       if (domain !== req.canopyAuth.payload.iss) {
         return res.status(403).json({
           success: false,
@@ -85,9 +85,9 @@ router.post(
       }
 
       // SECURITY: Check Horizon capacity for new registrations
-      const existingLand = await Land.findOne({ domain });
-      if (!existingLand) {
-        const totalLands = await Land.countDocuments();
+      const existingPlace = await Place.findOne({ domain });
+      if (!existingPlace) {
+        const totalLands = await Place.countDocuments();
         if (totalLands >= 50000) {
           return res.status(503).json({
             success: false,
@@ -96,8 +96,8 @@ router.post(
         }
       }
 
-      // Upsert the land record
-      const land = await Land.findOneAndUpdate(
+      // Upsert the place record
+      const place = await Place.findOneAndUpdate(
         { domain },
         {
           $set: {
@@ -113,21 +113,21 @@ router.post(
             lastSeenAt: new Date(),
             failedChecks: 0,
           },
-          $setOnInsert: { _id: landId, registeredAt: new Date() },
+          $setOnInsert: { _id: placeId, registeredAt: new Date() },
         },
         { upsert: true, new: true, setDefaultsOnInsert: true }
       );
 
-      // Replace all public trees for this land (capped at 500)
+      // Replace all public trees for this place (capped at 500)
       if (Array.isArray(publicTrees)) {
-        await PublicTree.deleteMany({ landId: land._id });
+        await PublicTree.deleteMany({ placeId: place._id });
 
         const cappedTrees = publicTrees.slice(0, 500);
         if (cappedTrees.length > 0) {
           const treeDocs = cappedTrees.map((t) => ({
             rootId: t.rootId,
-            landId: land._id,
-            landDomain: domain,
+            placeId: place._id,
+            placeDomain: domain,
             name: t.name || "",
             description: t.description || "",
             ownerUsername: t.ownerUsername || "",
@@ -163,8 +163,8 @@ router.post(
 
       return res.json({
         success: true,
-        message: "Land registered successfully",
-        landId: land._id,
+        message: "Place registered successfully",
+        placeId: place._id,
         notices: notices.length > 0 ? notices : undefined,
       });
     } catch (err) {
@@ -178,10 +178,10 @@ router.post(
 );
 
 /**
- * GET /horizon/lands
- * List registered lands with optional search and filtering.
+ * GET /horizon/places
+ * List registered places with optional search and filtering.
  */
-router.get("/lands", async (req, res) => {
+router.get("/places", async (req, res) => {
   try {
     const page = Math.max(1, parseInt(req.query.page) || 1);
     const limit = Math.min(100, Math.max(1, parseInt(req.query.limit) || 20));
@@ -192,7 +192,7 @@ router.get("/lands", async (req, res) => {
     if (req.query.status) {
       filter.status = req.query.status;
     } else {
-      // Exclude dead lands by default
+      // Exclude dead places by default
       filter.status = { $ne: "dead" };
     }
 
@@ -204,10 +204,10 @@ router.get("/lands", async (req, res) => {
       ];
     }
 
-    // Governance: exclude lands below minimum seed version
+    // Governance: exclude places below minimum seed version
     const gov = await getGovernanceConfig();
     if (gov.minimumSeedVersionNumeric && !req.query.status) {
-      // Lands with seedVersion: null (pre-upgrade) are NOT excluded
+      // Places with seedVersion: null (pre-upgrade) are NOT excluded
       filter.$or = [
         ...(filter.$or || []),
         { seedVersionNumeric: { $gte: gov.minimumSeedVersionNumeric } },
@@ -240,18 +240,18 @@ router.get("/lands", async (req, res) => {
       ? { registeredAt: -1 }
       : { lastSeenAt: -1 };
 
-    const [lands, total] = await Promise.all([
-      Land.find(filter)
+    const [places, total] = await Promise.all([
+      Place.find(filter)
         .select("_id domain name protocolVersion seedVersion status lastSeenAt registeredAt metadata siteUrl")
         .sort(sortField)
         .skip(skip)
         .limit(limit)
         .lean(),
-      Land.countDocuments(filter),
+      Place.countDocuments(filter),
     ]);
 
-    const mapped = lands.map((l) => ({
-      landId: l._id,
+    const mapped = places.map((l) => ({
+      placeId: l._id,
       domain: l.domain,
       name: l.name,
       protocolVersion: l.protocolVersion,
@@ -261,42 +261,42 @@ router.get("/lands", async (req, res) => {
       metadata: l.metadata,
     }));
 
-    return res.json({ success: true, lands: mapped, total, page });
+    return res.json({ success: true, places: mapped, total, page });
   } catch (err) {
-    console.error("[Horizon] List lands error:", err.message);
+    console.error("[Horizon] List places error:", err.message);
     return res.status(500).json({ success: false, error: "Internal server error" });
   }
 });
 
 /**
- * GET /horizon/land/:domain
- * Get full details for a single land.
+ * GET /horizon/place/:domain
+ * Get full details for a single place.
  */
-router.get("/land/:domain", async (req, res) => {
+router.get("/place/:domain", async (req, res) => {
   try {
-    const land = await Land.findOne({ domain: req.params.domain })
+    const place = await Place.findOne({ domain: req.params.domain })
       .select("_id domain name baseUrl publicKey protocolVersion seedVersion siteUrl")
       .lean();
 
-    if (!land) {
-      return res.status(404).json({ success: false, error: "Land not found" });
+    if (!place) {
+      return res.status(404).json({ success: false, error: "Place not found" });
     }
 
     return res.json({
       success: true,
-      land: {
-        landId: land._id,
-        domain: land.domain,
-        name: land.name,
-        baseUrl: land.baseUrl,
-        publicKey: land.publicKey,
-        protocolVersion: land.protocolVersion,
-        seedVersion: land.seedVersion,
-        siteUrl: land.siteUrl,
+      place: {
+        placeId: place._id,
+        domain: place.domain,
+        name: place.name,
+        baseUrl: place.baseUrl,
+        publicKey: place.publicKey,
+        protocolVersion: place.protocolVersion,
+        seedVersion: place.seedVersion,
+        siteUrl: place.siteUrl,
       },
     });
   } catch (err) {
-    console.error("[Horizon] Get land error:", err.message);
+    console.error("[Horizon] Get place error:", err.message);
     return res.status(500).json({ success: false, error: "Internal server error" });
   }
 });
@@ -317,13 +317,13 @@ router.get("/search/trees", async (req, res) => {
       ];
     }
 
-    if (req.query.land) {
-      filter.landDomain = req.query.land;
+    if (req.query.place) {
+      filter.placeDomain = req.query.place;
     }
 
     const [trees, total] = await Promise.all([
       PublicTree.find(filter)
-        .select("rootId name description ownerUsername landDomain tags nodeCount queryAvailable")
+        .select("rootId name description ownerUsername placeDomain tags nodeCount queryAvailable")
         .sort({ lastUpdated: -1 })
         .skip(skip)
         .limit(limit)
@@ -331,18 +331,18 @@ router.get("/search/trees", async (req, res) => {
       PublicTree.countDocuments(filter),
     ]);
 
-    // Attach baseUrl and siteUrl from Land model for building links
-    const landDomains = [...new Set(trees.map((t) => t.landDomain))];
-    const lands = await Land.find({ domain: { $in: landDomains } })
+    // Attach baseUrl and siteUrl from Place model for building links
+    const placeDomains = [...new Set(trees.map((t) => t.placeDomain))];
+    const places = await Place.find({ domain: { $in: placeDomains } })
       .select("domain baseUrl siteUrl")
       .lean();
-    const landMap = Object.fromEntries(lands.map((l) => [l.domain, l]));
+    const placeMap = Object.fromEntries(places.map((l) => [l.domain, l]));
 
     const enriched = trees.map((t) => {
-      const land = landMap[t.landDomain] || {};
+      const place = placeMap[t.placeDomain] || {};
       return {
         ...t,
-        landBaseUrl: land.siteUrl || land.baseUrl || null,
+        placeBaseUrl: place.siteUrl || place.baseUrl || null,
       };
     });
 
@@ -354,11 +354,11 @@ router.get("/search/trees", async (req, res) => {
 });
 
 /**
- * DELETE /horizon/land/:domain
- * Remove a land and all its public trees. Requires valid CanopyToken from the land.
+ * DELETE /horizon/place/:domain
+ * Remove a place and all its public trees. Requires valid CanopyToken from the place.
  */
 router.delete(
-  "/land/:domain",
+  "/place/:domain",
   verifyHorizonAuth(),
   async (req, res) => {
     try {
@@ -368,24 +368,24 @@ router.delete(
       if (req.canopyAuth.payload.iss !== domain) {
         return res.status(403).json({
           success: false,
-          error: "You can only remove your own land registration",
+          error: "You can only remove your own place registration",
         });
       }
 
-      const land = await Land.findOne({ domain });
-      if (!land) {
-        return res.status(404).json({ success: false, error: "Land not found" });
+      const place = await Place.findOne({ domain });
+      if (!place) {
+        return res.status(404).json({ success: false, error: "Place not found" });
       }
 
-      await PublicTree.deleteMany({ landId: land._id });
-      await Land.deleteOne({ _id: land._id });
+      await PublicTree.deleteMany({ placeId: place._id });
+      await Place.deleteOne({ _id: place._id });
 
       return res.json({
         success: true,
-        message: `Land ${domain} and its public trees have been removed`,
+        message: `Place ${domain} and its public trees have been removed`,
       });
     } catch (err) {
-      console.error("[Horizon] Delete land error:", err.message);
+      console.error("[Horizon] Delete place error:", err.message);
       return res.status(500).json({ success: false, error: "Internal server error" });
     }
   }
@@ -450,13 +450,13 @@ router.put("/governance", async (req, res) => {
 
 /**
  * GET /horizon/directory-info
- * Returns directory identity so lands can inspect before registering.
+ * Returns directory identity so places can inspect before registering.
  * Any service implementing the Horizon API can expose this.
  */
 router.get("/directory-info", async (req, res) => {
   try {
-    const [landCount, extensionCount] = await Promise.all([
-      Land.countDocuments({ status: { $ne: "dead" } }),
+    const [placeCount, extensionCount] = await Promise.all([
+      Place.countDocuments({ status: { $ne: "dead" } }),
       Extension.distinct("name").then((r) => r.length),
     ]);
 
@@ -466,7 +466,7 @@ router.get("/directory-info", async (req, res) => {
         name: process.env.HORIZON_NAME || "Canopy Horizon",
         url: process.env.HORIZON_PUBLIC_URL || null,
         operator: process.env.HORIZON_OPERATOR || null,
-        landCount,
+        placeCount,
         packageCount: extensionCount,
         uptime: process.uptime(),
       },
@@ -482,14 +482,14 @@ router.get("/directory-info", async (req, res) => {
  */
 router.get("/health", async (req, res) => {
   try {
-    const [landCount, treeCount] = await Promise.all([
-      Land.countDocuments({ status: { $ne: "dead" } }),
+    const [placeCount, treeCount] = await Promise.all([
+      Place.countDocuments({ status: { $ne: "dead" } }),
       PublicTree.countDocuments(),
     ]);
 
     return res.json({
       status: "ok",
-      landCount,
+      placeCount,
       treeCount,
       uptime: process.uptime(),
     });

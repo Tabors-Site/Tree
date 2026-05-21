@@ -5,7 +5,7 @@ const { registerDynamic } = require("./dynamic");
 
 async function showConfig() {
   const api = getApi(requireAuth());
-  const data = await api.getLandConfig();
+  const data = await api.getPlaceConfig();
   const config = data.config || {};
   const keys = Object.keys(config);
 
@@ -14,7 +14,7 @@ async function showConfig() {
     return;
   }
 
-  console.log(chalk.bold("Land Configuration\n"));
+  console.log(chalk.bold("Place Configuration\n"));
   for (const key of keys.sort()) {
     const val = config[key];
     const display = val === null ? chalk.dim("(not set)") : String(val);
@@ -27,9 +27,9 @@ function printAllByZone(program) {
   const RULE = chalk.dim("-".repeat(55));
   const zone = currentZone(load());
 
-  const zoneLabel = { land: "Land", home: "Home", tree: "Tree" };
-  const zoneColor = { land: chalk.yellow, home: chalk.blue, tree: chalk.green };
-  const groups = { land: [], home: [], tree: [], all: [] };
+  const zoneLabel = { place: "Place", home: "Home", tree: "Tree" };
+  const zoneColor = { place: chalk.yellow, home: chalk.blue, tree: chalk.green };
+  const groups = { place: [], home: [], tree: [], all: [] };
 
   for (const cmd of program.commands) {
     const scope = cmd._scope;
@@ -52,11 +52,11 @@ function printAllByZone(program) {
   console.log(chalk.bold("All commands by zone") + chalk.dim(`  (you are at ${zone})`));
   console.log("");
 
-  for (const z of ["land", "home", "tree", "all"]) {
+  for (const z of ["place", "home", "tree", "all"]) {
     const cmds = groups[z];
     if (cmds.length === 0) continue;
     const color = zoneColor[z] || chalk.white;
-    const label = z === "all" ? "Everywhere" : `${zoneLabel[z]} (${z === "land" ? "/" : z === "home" ? "/~" : "/tree"})`;
+    const label = z === "all" ? "Everywhere" : `${zoneLabel[z]} (${z === "place" ? "/" : z === "home" ? "/~" : "/tree"})`;
     const marker = z === zone ? " <-- you are here" : "";
     console.log(color.bold(label) + chalk.dim(marker));
     cmds.sort((a, b) => a.name().localeCompare(b.name()));
@@ -69,36 +69,36 @@ module.exports = (program) => {
   // Top-level connect command — first thing a user runs
   program
     .command("connect [url]")
-    .description("Set the Land URL to connect to (e.g. http://localhost:3000)")
+    .description("Set the Place URL to connect to (e.g. http://localhost:3000)")
     .action(async (url) => {
       if (!url) return console.log(chalk.yellow("Usage: connect <url>  (e.g. connect http://localhost:3000)"));
       try {
         const cfg = load();
-        cfg.landUrl = url.replace(/\/+$/, "");
-        if (!/^https?:\/\//i.test(cfg.landUrl)) {
-          const isLocal = cfg.landUrl.startsWith("localhost") || cfg.landUrl.startsWith("127.") || cfg.landUrl.startsWith("192.168.") || cfg.landUrl.startsWith("10.");
-          cfg.landUrl = `${isLocal ? "http" : "https"}://${cfg.landUrl}`;
+        cfg.placeUrl = url.replace(/\/+$/, "");
+        if (!/^https?:\/\//i.test(cfg.placeUrl)) {
+          const isLocal = cfg.placeUrl.startsWith("localhost") || cfg.placeUrl.startsWith("127.") || cfg.placeUrl.startsWith("192.168.") || cfg.placeUrl.startsWith("10.");
+          cfg.placeUrl = `${isLocal ? "http" : "https"}://${cfg.placeUrl}`;
         }
 
-        // Fetch land protocol info
+        // Fetch place protocol info
         try {
-          const res = await fetch(`${cfg.landUrl}/api/v1/protocol`);
+          const res = await fetch(`${cfg.placeUrl}/api/v1/protocol`);
           if (res.ok) {
             const raw = await res.json();
             const protocol = raw.data || raw;
-            cfg.landProtocol = protocol;
+            cfg.placeProtocol = protocol;
             console.log(
-              chalk.green(`Connected to ${cfg.landUrl}`) +
+              chalk.green(`Connected to ${cfg.placeUrl}`) +
               chalk.dim(` (${protocol.name || "TreeOS"} v${protocol.version || "?"}, ${(protocol.capabilities || []).length} capabilities, ${(protocol.extensions || []).length} extensions)`)
             );
           } else {
-            cfg.landProtocol = null;
-            console.log(chalk.green(`Connected to ${cfg.landUrl}`));
-            console.log(chalk.dim("  Land does not serve /protocol"));
+            cfg.placeProtocol = null;
+            console.log(chalk.green(`Connected to ${cfg.placeUrl}`));
+            console.log(chalk.dim("  Place does not serve /protocol"));
           }
         } catch {
-          cfg.landProtocol = null;
-          console.log(chalk.green(`Connected to ${cfg.landUrl}`));
+          cfg.placeProtocol = null;
+          console.log(chalk.green(`Connected to ${cfg.placeUrl}`));
         }
 
         save(cfg);
@@ -107,8 +107,8 @@ module.exports = (program) => {
         } else {
           console.log(chalk.dim(`  Logged in as ${cfg.username || "unknown"}`));
         }
-        if (cfg.landProtocol?.cli && Object.keys(cfg.landProtocol.cli).length > 0) {
-          const cmdCount = Object.keys(cfg.landProtocol.cli).reduce((n, k) => n + cfg.landProtocol.cli[k].length, 0);
+        if (cfg.placeProtocol?.cli && Object.keys(cfg.placeProtocol.cli).length > 0) {
+          const cmdCount = Object.keys(cfg.placeProtocol.cli).reduce((n, k) => n + cfg.placeProtocol.cli[k].length, 0);
           registerDynamic(program, cfg);
           console.log(chalk.dim(`  ${cmdCount} extension commands loaded.`));
         }
@@ -117,20 +117,20 @@ module.exports = (program) => {
       }
     });
 
-  // Shared: fetch and cache protocol from land
+  // Shared: fetch and cache protocol from place
   async function refreshProtocol() {
     const cfg = load();
-    let landUrl = cfg.landUrl || "https://treeOS.ai";
-    if (!/^https?:\/\//i.test(landUrl)) landUrl = `https://${landUrl}`;
+    let placeUrl = cfg.placeUrl || "https://treeOS.ai";
+    if (!/^https?:\/\//i.test(placeUrl)) placeUrl = `https://${placeUrl}`;
     const nodeId = currentNodeId(cfg);
     const qs = nodeId ? `?nodeId=${encodeURIComponent(nodeId)}` : "";
-    const res = await fetch(`${landUrl}/api/v1/protocol${qs}`);
+    const res = await fetch(`${placeUrl}/api/v1/protocol${qs}`);
     if (!res.ok) return null;
     const raw = await res.json();
     const protocol = raw.data || raw;
-    cfg.landProtocol = protocol;
+    cfg.placeProtocol = protocol;
     save(cfg);
-    return { cfg, landUrl, protocol };
+    return { cfg, placeUrl, protocol };
   }
 
   // help: silently refresh protocol, then show normal program help
@@ -153,17 +153,17 @@ module.exports = (program) => {
   // protocol: full protocol details (capabilities, extensions, command count)
   program
     .command("protocol")
-    .description("Show land protocol details. Capabilities, extensions, node types, command count.")
+    .description("Show place protocol details. Capabilities, extensions, node types, command count.")
     .action(async () => {
       try {
         const result = await refreshProtocol();
         if (!result) {
-          return console.log(chalk.yellow("Could not reach land protocol endpoint."));
+          return console.log(chalk.yellow("Could not reach place protocol endpoint."));
         }
-        const { landUrl, protocol } = result;
+        const { placeUrl, protocol } = result;
 
         console.log(chalk.bold(`${protocol.name || "TreeOS"} v${protocol.version || "?"}`));
-        console.log(chalk.dim(`Land: ${landUrl}\n`));
+        console.log(chalk.dim(`Place: ${placeUrl}\n`));
 
         if (protocol.capabilities?.length) {
           console.log(chalk.bold("Capabilities:"));
@@ -189,10 +189,10 @@ module.exports = (program) => {
       }
     });
 
-  // Config subcommand for Land runtime settings
+  // Config subcommand for Place runtime settings
   const configCmd = program
     .command("config [action]")
-    .description("View and manage Land runtime configuration")
+    .description("View and manage Place runtime configuration")
     .action(async (action) => {
       if (action) {
         // Unknown subcommand
@@ -201,7 +201,7 @@ module.exports = (program) => {
       }
       try {
         const cfg = load();
-        console.log(chalk.dim(`Land URL: ${cfg.landUrl || "https://treeOS.ai"}\n`));
+        console.log(chalk.dim(`Place URL: ${cfg.placeUrl || "https://treeOS.ai"}\n`));
         await showConfig();
       } catch (e) {
         console.error(chalk.red("Error:"), e.message);
@@ -210,7 +210,7 @@ module.exports = (program) => {
 
   configCmd
     .command("show")
-    .description("Show all Land config values")
+    .description("Show all Place config values")
     .action(async () => {
       try {
         await showConfig();
@@ -223,10 +223,10 @@ module.exports = (program) => {
     .command("get [key]")
     .description("Get a single config value")
     .action(async (key) => {
-      if (!key) return console.log(chalk.yellow("Usage: config get <key>  (e.g. config get LAND_NAME)"));
+      if (!key) return console.log(chalk.yellow("Usage: config get <key>  (e.g. config get PLACE_NAME)"));
       try {
         const api = getApi(requireAuth());
-        const data = await api.getLandConfigValue(key);
+        const data = await api.getPlaceConfigValue(key);
         const val = data.value;
         if (val === null || val === undefined) {
           console.log(chalk.dim(`${key} is not set`));
@@ -242,10 +242,10 @@ module.exports = (program) => {
     .command("set [key] [value]")
     .description("Set a config value (admin only)")
     .action(async (key, value) => {
-      if (!key || !value) return console.log(chalk.yellow("Usage: config set <key> <value>  (e.g. config set LAND_NAME \"My Land\")"));
+      if (!key || !value) return console.log(chalk.yellow("Usage: config set <key> <value>  (e.g. config set PLACE_NAME \"My Place\")"));
       try {
         const api = getApi(requireAuth());
-        await api.setLandConfig(key, value);
+        await api.setPlaceConfig(key, value);
         console.log(chalk.green(`Set ${key} = ${value}`));
       } catch (e) {
         console.error(chalk.red("Error:"), e.message);

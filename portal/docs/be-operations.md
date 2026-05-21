@@ -14,32 +14,32 @@ Folding BE into DO would require an `anonymous-from` exception to the protocol's
 
 ## The four operations
 
-The BE envelope always carries a `stance`. Self-identity operations target stances. For fresh registration, the stance is the land's auth-being (typically `<land>/@auth`); the auth-being processes the credential creation.
+The BE envelope always carries a `stance`. Self-identity operations target stances. For fresh registration, the stance is the place's auth-being (typically `<place>/@auth`); the auth-being processes the credential creation.
 
 ```
 { verb: "be", operation: "register" | "claim" | "release" | "switch", stance: "<stance>", identity?, payload? }
 ```
 
-The auth-being at the stance's land processes the operation. It is a real being inspectable via SEE on its stance; lands choose the qualifier name (`@auth`, `@identity`) and may install custom auth-being beings per land.
+The auth-being at the stance's place processes the operation. It is a real being inspectable via SEE on its stance; places choose the qualifier name (`@auth`, `@identity`) and may install custom auth-being beings per place.
 
 ### register
 
-Creates a new be-er at a land. There is no prior stance, so the address is the land's auth-being.
+Creates a new be-er at a place. There is no prior stance, so the address is the place's auth-being.
 
 ```
 {
   verb:      "be",
   operation: "register",
-  stance:    "<land>/@auth",
-  payload:   { username, password, ...land-specific fields }
+  stance:    "<place>/@auth",
+  payload:   { username, password, ...place-specific fields }
 }
 ```
 
-The payload carries credentials and any registration data the land's auth-being requires (e.g., invite code, real name, contract acceptance).
+The payload carries credentials and any registration data the place's auth-being requires (e.g., invite code, real name, contract acceptance).
 
 Returns: `{ identityToken, beingAddress }`. The new be-er is established for this session; subsequent SEE/DO/SUMMON use the returned token.
 
-Errors: `FORBIDDEN` (registration not open on this land), `RESOURCE_CONFLICT` (username taken), `INVALID_INPUT` (missing required fields).
+Errors: `FORBIDDEN` (registration not open on this place), `RESOURCE_CONFLICT` (username taken), `INVALID_INPUT` (missing required fields).
 
 ### claim
 
@@ -51,7 +51,7 @@ Logs in. Two entry forms:
 {
   verb:      "be",
   operation: "claim",
-  stance:    "<land>/@auth",
+  stance:    "<place>/@auth",
   payload:   { username, password }
 }
 ```
@@ -110,15 +110,15 @@ This is the operation behind "switch identity" in the portal's identity panel. I
 
 ## The auth-being
 
-Every land has a per-land auth-being. By convention, addressable as `<land>/@auth` or `<land>/@identity` (land's choice). It handles BE operations.
+Every place has a per-place auth-being. By convention, addressable as `<place>/@auth` or `<place>/@identity` (place's choice). It handles BE operations.
 
-The auth-being is **a real being.** It has a position (the land root), an being (`auth` or similar), an inbox, a record. It is inspectable like any being. A SEE on `<land>/@auth` returns a descriptor showing the auth-being's policies (open vs. closed registration, supported credential types, etc.).
+The auth-being is **a real being.** It has a position (the place root), an being (`auth` or similar), an inbox, a record. It is inspectable like any being. A SEE on `<place>/@auth` returns a descriptor showing the auth-being's policies (open vs. closed registration, supported credential types, etc.).
 
 This matters because:
 
-- **Each land can specialize its auth-being.** A public land's auth-being welcomes any registration. A private land's may require an invite code. A research land's may bind the be-er to a contract or NDA. A land with values about who can be there expresses those values through its auth-being.
-- **The auth-being can be replaced.** Lands install custom auth beings to change registration flow, credential schemes, identity verification, etc. The protocol stays uniform.
-- **The auth-being can have its own inbox.** A registration that requires manual approval can be a SUMMON from the auth-being to the land operator with `intent: chat`, awaiting a response.
+- **Each place can specialize its auth-being.** A public place's auth-being welcomes any registration. A private place's may require an invite code. A research place's may bind the be-er to a contract or NDA. A place with values about who can be there expresses those values through its auth-being.
+- **The auth-being can be replaced.** Places install custom auth beings to change registration flow, credential schemes, identity verification, etc. The protocol stays uniform.
+- **The auth-being can have its own inbox.** A registration that requires manual approval can be a SUMMON from the auth-being to the place operator with `intent: chat`, awaiting a response.
 
 The auth-being's being honors the BE operations as protocol-level interactions. The protocol does not deliver BE operations as SUMMON messages; they are dispatched directly to the auth-being's BE handler. But the auth-being may SUMMON to others as part of processing (e.g., notifying admins of new registrations).
 
@@ -126,7 +126,7 @@ The auth-being's being honors the BE operations as protocol-level interactions. 
 
 The identity token returned by `register` and `claim` is the bearer credential for SEE/DO/SUMMON.
 
-The protocol does not specify the token format. The land may issue:
+The protocol does not specify the token format. The place may issue:
 - JWTs (current TreeOS convention)
 - Opaque tokens backed by a session store
 - Cryptographic signatures with public-key identity
@@ -135,36 +135,36 @@ Whatever the format, the contract is:
 - Returned by `register` and `claim`
 - Carried by the client on subsequent SEE/DO/SUMMON
 - Invalidated by `release`
-- Verified by the land on every request
+- Verified by the place on every request
 
-Tokens are scoped to a single land. A session that holds be-ers across multiple lands holds multiple tokens.
+Tokens are scoped to a single place. A session that holds be-ers across multiple places holds multiple tokens.
 
 ## Multi-be-er sessions
 
-A portal session may hold many be-ers simultaneously: identities on different lands, multiple identities on the same land (e.g., personal + work). The portal's identity panel lists them; `switch` selects the active one.
+A portal session may hold many be-ers simultaneously: identities on different places, multiple identities on the same place (e.g., personal + work). The portal's identity panel lists them; `switch` selects the active one.
 
-The protocol does not store this. It is client-side state. The portal client tracks `{ activeBeing, beings: [{ stance, identityToken, land }, ...] }` and adjusts the `identity` field of outgoing requests based on which be-er is active.
+The protocol does not store this. It is client-side state. The portal client tracks `{ activeBeing, beings: [{ stance, identityToken, place }, ...] }` and adjusts the `identity` field of outgoing requests based on which be-er is active.
 
-`switch` is a client-side action (selecting a different held identity) that confirms with the land. Some lands may require re-claiming if too much time has passed; the land may respond to `switch` with `UNAUTHORIZED` and the client should fall back to `claim`.
+`switch` is a client-side action (selecting a different held identity) that confirms with the place. Some places may require re-claiming if too much time has passed; the place may respond to `switch` with `UNAUTHORIZED` and the client should fall back to `claim`.
 
 ## Federated identities
 
-A be-er on Land A can address a position on Land B. The protocol envelope carries the home-land identity:
+A be-er on Place A can address a position on Place B. The protocol envelope carries the home-place identity:
 
 ```
 {
   verb:        "see",
-  position:    "land-b.example/some-tree",
-  identity:    <token from Land A>,
-  homeLand:    "land-a.example"
+  position:    "place-b.example/some-tree",
+  identity:    <token from Place A>,
+  homePlace:    "place-a.example"
 }
 ```
 
-Land B verifies the federated identity by contacting Land A (or via Canopy signature). The auth-being on Land B decides whether to accept federated identities and what permissions they have.
+Place B verifies the federated identity by contacting Place A (or via Canopy signature). The auth-being on Place B decides whether to accept federated identities and what permissions they have.
 
 Federation BE operations:
-- A federated `claim` lets a be-er on Land A establish a session token on Land B without re-registering.
-- A federated `register` is rare; usually a be-er registers locally on each land they want to inhabit.
+- A federated `claim` lets a be-er on Place A establish a session token on Place B without re-registering.
+- A federated `register` is rare; usually a be-er registers locally on each place they want to inhabit.
 
 Federation details belong to the Canopy spec and are out of scope here. The protocol envelope reserves the shape.
 
@@ -175,7 +175,7 @@ Federation details belong to the Canopy spec and are out of scope here. The prot
 ```
 {
   verb:    "talk",
-  stance:  "<land>/@auth",
+  stance:  "<place>/@auth",
   identity: <token>,
   message: {
     from:        "<current stance>",
@@ -190,16 +190,16 @@ The auth-being can respond with a challenge, await an answer, and complete the s
 
 ## The arrival stance
 
-An unestablished requester is in the **arrival stance** at the land. Arrival is not a protocol special case; it is a regular stance whose permissions the land defines. See [protocol.md](protocol.md#the-arrival-stance) for the full framing.
+An unestablished requester is in the **arrival stance** at the place. Arrival is not a protocol special case; it is a regular stance whose permissions the place defines. See [protocol.md](protocol.md#the-arrival-stance) for the full framing.
 
 The protocol commits to:
 
-1. Every land has an arrival stance.
+1. Every place has an arrival stance.
 2. BE addressed at the auth-being is always permitted from the arrival stance.
 
-Beyond those two, lands configure what an arrival can do. Some lands are open: arrivals SEE public scopes, SUMMON to a public host being, even DO bounded things like leave a guestbook entry. Some lands are closed: arrivals can only BE.
+Beyond those two, places configure what an arrival can do. Some places are open: arrivals SEE public scopes, SUMMON to a public host being, even DO bounded things like leave a guestbook entry. Some places are closed: arrivals can only BE.
 
-Configuration lives at `<land>/` under `metadata.beings.arrival.permissions`:
+Configuration lives at `<place>/` under `metadata.beings.arrival.permissions`:
 
 ```
 {
@@ -212,7 +212,7 @@ Configuration lives at `<land>/` under `metadata.beings.arrival.permissions`:
 
 Authorization checks arrival permissions on every request from an unestablished requester. No special-case logic.
 
-The discovery position (`<land>/.discovery`) is implicitly readable by arrivals on every land regardless of configuration, because clients need to learn the land's capabilities before they can engage in any other way.
+The discovery position (`<place>/.discovery`) is implicitly readable by arrivals on every place regardless of configuration, because clients need to learn the place's capabilities before they can engage in any other way.
 
 ## Errors
 
@@ -220,14 +220,14 @@ See [protocol.md](protocol.md) for the full error vocabulary. The codes BE most 
 
 | Code | When |
 |---|---|
-| `FORBIDDEN` | registration closed on this land; switch to a non-held be-er; release on an already-released token |
+| `FORBIDDEN` | registration closed on this place; switch to a non-held be-er; release on an already-released token |
 | `UNAUTHORIZED` | claim with invalid credentials |
 | `SESSION_EXPIRED` | switch with an expired token |
 | `USER_NOT_FOUND` | claim or release on an unknown username |
 | `INVALID_INPUT` | register missing required fields per the auth-being's policy |
-| `RESOURCE_CONFLICT` | register with a username already taken on this land |
+| `RESOURCE_CONFLICT` | register with a username already taken on this place |
 | `ADDRESS_PARSE_ERROR` | the address field could not be parsed |
-| `EMBODIMENT_UNAVAILABLE` | the auth-being qualifier in the address is not recognized on this land |
+| `EMBODIMENT_UNAVAILABLE` | the auth-being qualifier in the address is not recognized on this place |
 | `RATE_LIMITED` | throttled (often applied to register and claim to limit credential probing) |
 | `INTERNAL` | server error |
 
@@ -249,7 +249,7 @@ client receives capabilities, knows registration is open
 
 client renders sign-in surface
 
-client -> { verb: "be", operation: "register", land: "treeos.ai", payload: { username: "tabor", password: "..." } }
+client -> { verb: "be", operation: "register", place: "treeos.ai", payload: { username: "tabor", password: "..." } }
 client receives { identityToken, beingAddress: "tabor@treeos.ai" }
 
 client now has an identity. All subsequent SEE/DO/SUMMON use the token.
@@ -259,7 +259,7 @@ client now has an identity. All subsequent SEE/DO/SUMMON use the token.
 
 ```
 client -> { verb: "see", position: "treeos.ai/.discovery" }
-client -> { verb: "be", operation: "claim", land: "treeos.ai", payload: { username: "tabor", password: "..." } }
+client -> { verb: "be", operation: "claim", place: "treeos.ai", payload: { username: "tabor", password: "..." } }
 client receives { identityToken, beingAddress: "tabor@treeos.ai" }
 ```
 
@@ -268,7 +268,7 @@ client receives { identityToken, beingAddress: "tabor@treeos.ai" }
 Already signed in as tabor. Wants to also hold a work identity:
 
 ```
-client (still as tabor) -> { verb: "be", operation: "claim", land: "work.example", payload: { username: "tabor-work", ... } }
+client (still as tabor) -> { verb: "be", operation: "claim", place: "work.example", payload: { username: "tabor-work", ... } }
 client receives second token; now holds two be-ers
 client decides which is active via switch
 ```

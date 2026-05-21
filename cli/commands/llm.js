@@ -66,14 +66,14 @@ module.exports = (program) => {
       const api = getApi(cfg);
 
       if (action === "open") {
-        const landUrl = (cfg.landUrl || "http://localhost:3000").replace(/\/+$/, "");
+        const placeUrl = (cfg.placeUrl || "http://localhost:3000").replace(/\/+$/, "");
         const token = cfg.shareToken || "";
         const qs = token ? `?token=${encodeURIComponent(token)}&html` : "?html";
         let url;
         if (cfg.activeRootId) {
-          url = `${landUrl}/api/v1/root/${cfg.activeRootId}${qs}`;
+          url = `${placeUrl}/api/v1/root/${cfg.activeRootId}${qs}`;
         } else {
-          url = `${landUrl}/api/v1/user/${cfg.userId}/llm${qs}`;
+          url = `${placeUrl}/api/v1/user/${cfg.userId}/llm${qs}`;
         }
         console.log(chalk.dim(`Opening: ${url}`));
         const { exec } = require("child_process");

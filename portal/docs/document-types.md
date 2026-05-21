@@ -44,15 +44,15 @@ These appear inside every document type and inside addresses.
 
 ### Position
 
-A place in the world. Form `<land>/<path>`. Examples: `treeos.ai/` (Land Position), `treeos.ai/~tabor` (home), `treeos.ai/flappybird` (tree node). Addressable; accepted by SEE and DO.
+A place in the world. Form `<place>/<path>`. Examples: `treeos.ai/` (Place Position), `treeos.ai/~tabor` (home), `treeos.ai/flappybird` (tree node). Addressable; accepted by SEE and DO.
 
 ### Stance
 
 A being at a position. Form `<position>@<being>`. Examples: `treeos.ai/@auth`, `treeos.ai/flappybird@ruler`. Addressable; accepted by SEE, required by SUMMON and BE.
 
-### Land
+### Place
 
-A sovereign server. Two forms distinguished by the trailing slash. `treeos.ai` (no slash) is the **Land identifier**, the name of the server, used by BE when dispatching to the land's auth-being. `treeos.ai/` (with slash) is the **Land Position**, the actual addressable place at path `/` on that land. The trailing slash is the load-bearing distinction.
+A sovereign server. Two forms distinguished by the trailing slash. `treeos.ai` (no slash) is the **Place identifier**, the name of the server, used by BE when dispatching to the place's auth-being. `treeos.ai/` (with slash) is the **Place Position**, the actual addressable place at path `/` on that place. The trailing slash is the load-bearing distinction.
 
 ### Being
 

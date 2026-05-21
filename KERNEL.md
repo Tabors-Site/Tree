@@ -1,6 +1,6 @@
 # The Seed
 
-The kernel is called the seed. You plant it on a land. It grows trees. The full specification lives in [land/seed/SEED.md](land/seed/SEED.md).
+The kernel is called the seed. You plant it on a place. It grows trees. The full specification lives in [place/seed/SEED.md](place/seed/SEED.md).
 
 
 # NEVER MODIFY THE SEED WHEN BUILDING EXTENSIONS. ALL EXTENSIONS MUST BE DECOUPLED FROM KERNEL AND ONLY DEPEND ON EACHOTHER
@@ -20,4 +20,4 @@ One guarantee: the kernel never blocks inbound cascade signals. One structural i
 
 The seed never imports from extensions. Extensions import from seed. Extension data lives in metadata Maps, never in seed schemas. The schemas never change.
 
-See [land/seed/SEED.md](land/seed/SEED.md) for the complete specification, directory structure, hook table, config table, cascade documentation, and protocol reference.
+See [place/seed/SEED.md](place/seed/SEED.md) for the complete specification, directory structure, hook table, config table, cascade documentation, and protocol reference.

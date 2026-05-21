@@ -1,11 +1,11 @@
 const chalk = require("chalk");
 const { createProxyApi } = require("../api");
-const { load, save, requireAuth, currentNodeId, currentPath, currentLand, hasExtension } = require("../config");
+const { load, save, requireAuth, currentNodeId, currentPath, currentPlace, hasExtension } = require("../config");
 const { getChildren, flattenTree, findChild, getApi } = require("../helpers");
 const { printNode, printTable } = require("../display");
 
-/** Clear session and go to land level (/) */
-function goLand(cfg) {
+/** Clear session and go to place level (/) */
+function goPlace(cfg) {
   cfg.activeRootId = null;
   cfg.activeRootName = null;
   cfg.pathStack = [];
@@ -28,11 +28,11 @@ module.exports = (program) => {
   const cfg = load();
 
   program
-    .command("land")
-    .description("Go to land root (/)")
+    .command("place")
+    .description("Go to place root (/)")
     .action(() => {
       const cfg = requireAuth();
-      goLand(cfg);
+      goPlace(cfg);
       save(cfg);
     });
 
@@ -46,7 +46,7 @@ module.exports = (program) => {
 
   program
     .command("ls")
-    .description("List contents (/ = land, /~ = your trees, inside tree = children). -l long format")
+    .description("List contents (/ = place, /~ = your trees, inside tree = children). -l long format")
     .option("-l", "Long format with IDs and status")
     .action(async ({ l }) => {
       const cfg = requireAuth();
@@ -54,11 +54,11 @@ module.exports = (program) => {
 
       if (!cfg.activeRootId) {
         if (cfg.remoteDomain) {
-          // At remote land root — proxy getLandRoot to see the same view as local /
+          // At remote place root — proxy getPlaceRoot to see the same view as local /
           try {
             const proxyApi = createProxyApi(cfg.apiKey, cfg.remoteDomain);
-            const landData = await proxyApi.getLandRoot();
-            const children = landData.children || [];
+            const placeData = await proxyApi.getPlaceRoot();
+            const children = placeData.children || [];
 
             if (!children.length) return console.log(chalk.dim(`  (empty)`));
 
@@ -100,20 +100,20 @@ module.exports = (program) => {
 
             if (l) {
               const rows = [
-                ...roots.map((r) => ({ name: r.name, visibility: r.visibility === "public" ? "public" : "private", land: "local", _id: r._id })),
-                ...remoteRoots.map((r) => ({ name: r.rootName, visibility: "", land: `@${r.landDomain}`, _id: r.rootId })),
+                ...roots.map((r) => ({ name: r.name, visibility: r.visibility === "public" ? "public" : "private", place: "local", _id: r._id })),
+                ...remoteRoots.map((r) => ({ name: r.rootName, visibility: "", place: `@${r.placeDomain}`, _id: r.rootId })),
               ];
               printTable(rows, [
                 { key: "name", label: "Name", width: 24 },
                 { key: "visibility", label: "Visibility", width: 10 },
-                { key: "land", label: "Land", width: 20 },
+                { key: "place", label: "Place", width: 20 },
                 { key: "_id", label: "ID", width: 28 },
               ]);
             } else {
               const localNames = roots.map((r) =>
                 r.visibility === "public" ? chalk.white(r.name) : chalk.cyan(r.name)
               );
-              const remoteNames = remoteRoots.map((r) => chalk.cyan(r.rootName) + chalk.dim(` @${r.landDomain}`));
+              const remoteNames = remoteRoots.map((r) => chalk.cyan(r.rootName) + chalk.dim(` @${r.placeDomain}`));
               const all = [...localNames, ...remoteNames];
               console.log(all.join(chalk.dim("  ·  ")));
             }
@@ -121,10 +121,10 @@ module.exports = (program) => {
             console.error(chalk.red(e.message));
           }
         } else {
-          // At / — show land roots (public + your private + system)
+          // At / — show place roots (public + your private + system)
           try {
-            const landData = await api.getLandRoot();
-            const children = landData.children || [];
+            const placeData = await api.getPlaceRoot();
+            const children = placeData.children || [];
 
             if (!children.length) return console.log(chalk.dim("  (empty)"));
 
@@ -208,30 +208,30 @@ module.exports = (program) => {
         const rest = hasTree ? name.slice(slashIdx + 1) : null;
         if (!domain) return console.log(chalk.yellow("Usage: cd @domain or cd @domain/treename"));
 
-        // Detect if this is the user's own land — treat as local
-        const ownLand = currentLand(cfg);
+        // Detect if this is the user's own place — treat as local
+        const ownPlace = currentPlace(cfg);
         const domainLower = domain.toLowerCase();
-        const isOwnLand = domainLower === ownLand.toLowerCase() || domainLower === cfg.landUrl?.replace(/^https?:\/\//, "").replace(/\/+$/, "").toLowerCase();
+        const isOwnPlace = domainLower === ownPlace.toLowerCase() || domainLower === cfg.placeUrl?.replace(/^https?:\/\//, "").replace(/\/+$/, "").toLowerCase();
 
         if (hasTree && !rest) return console.log(chalk.yellow("Usage: cd @domain/treename"));
 
         if (hasTree) {
           // cd @domain/treename
           try {
-            const api = isOwnLand ? new TreeAPI(cfg.apiKey) : createProxyApi(cfg.apiKey, domain);
-            const landData = await api.getLandRoot();
-            const children = landData.children || [];
+            const api = isOwnPlace ? new TreeAPI(cfg.apiKey) : createProxyApi(cfg.apiKey, domain);
+            const placeData = await api.getPlaceRoot();
+            const children = placeData.children || [];
             const target = await findChild(children, rest);
             if (!target) return;
 
-            cfg.remoteDomain = isOwnLand ? null : domain;
+            cfg.remoteDomain = isOwnPlace ? null : domain;
             cfg.activeRootId = target._id;
             cfg.activeRootName = target.name;
             cfg.pathStack = [];
             cfg.isSystemRoot = !!target.isSystem;
             cfg.atHome = false;
             save(cfg);
-            if (isOwnLand) {
+            if (isOwnPlace) {
               console.log(chalk.green(`Entered ${target.name}`));
             } else {
               console.log(chalk.green(`Entered ${target.name} on ${chalk.dim(`@${domain}`)}`));
@@ -241,9 +241,9 @@ module.exports = (program) => {
           }
         } else {
           // cd @domain
-          if (isOwnLand) {
-            // Already on this land, just go to land root
-            goLand(cfg);
+          if (isOwnPlace) {
+            // Already on this place, just go to place root
+            goPlace(cfg);
             save(cfg);
             return;
           }
@@ -268,20 +268,20 @@ module.exports = (program) => {
         return;
       }
 
-      // ── cd / — go to tree root if deep in tree, go to land if at tree root ──
+      // ── cd / — go to tree root if deep in tree, go to place if at tree root ──
       if (name === "/") {
         if (cfg.activeRootId && cfg.pathStack.length > 0) {
           // Inside a tree past root — go back to tree root
           cfg.pathStack = [];
         } else if (cfg.activeRootId) {
-          // At tree root — go to land
-          goLand(cfg);
+          // At tree root — go to place
+          goPlace(cfg);
         }
         else if (cfg.atHome) {
-          // At /~ — go to land
-          goLand(cfg);
+          // At /~ — go to place
+          goPlace(cfg);
         }
-        // Already at land — no-op
+        // Already at place — no-op
         save(cfg);
         return;
       }
@@ -291,12 +291,12 @@ module.exports = (program) => {
       if (!cfg.activeRootId) {
         if (name === "..") {
           if (cfg.remoteDomain) {
-            // At remote land root -> go back to local land root /
-            goLand(cfg);
+            // At remote place root -> go back to local place root /
+            goPlace(cfg);
             save(cfg);
           } else if (cfg.atHome) {
-            // /~ -> / (go up to land)
-            goLand(cfg);
+            // /~ -> / (go up to place)
+            goPlace(cfg);
             save(cfg);
           } else {
             console.log(chalk.dim("Already at /"));
@@ -305,11 +305,11 @@ module.exports = (program) => {
         }
 
         if (cfg.remoteDomain) {
-          // At remote land root — cd into a tree by name via proxied land root
+          // At remote place root — cd into a tree by name via proxied place root
           try {
             const proxyApi = createProxyApi(cfg.apiKey, cfg.remoteDomain);
-            const landData = await proxyApi.getLandRoot();
-            const children = landData.children || [];
+            const placeData = await proxyApi.getPlaceRoot();
+            const children = placeData.children || [];
             const target = await findChild(children, name);
             if (!target) return;
             cfg.activeRootId = target._id;
@@ -370,17 +370,17 @@ module.exports = (program) => {
 
             // Try remote roots
             const remoteTarget = await findChild(
-              remoteRoots.map((r) => ({ _id: r.rootId, name: r.rootName, landDomain: r.landDomain })),
+              remoteRoots.map((r) => ({ _id: r.rootId, name: r.rootName, placeDomain: r.placeDomain })),
               treeName,
             );
             if (remoteTarget) {
-              cfg.remoteDomain = remoteTarget.landDomain;
+              cfg.remoteDomain = remoteTarget.placeDomain;
               cfg.activeRootId = remoteTarget._id;
               cfg.activeRootName = remoteTarget.name;
               cfg.pathStack = [];
               cfg.isSystemRoot = false;
               save(cfg);
-              console.log(chalk.green(`Entered ${remoteTarget.name} on ${chalk.dim(`@${remoteTarget.landDomain}`)}`));
+              console.log(chalk.green(`Entered ${remoteTarget.name} on ${chalk.dim(`@${remoteTarget.placeDomain}`)}`));
               return;
             }
 
@@ -389,10 +389,10 @@ module.exports = (program) => {
             console.error(chalk.red(e.message));
           }
         } else {
-          // At / — cd into land root children
+          // At / — cd into place root children
           try {
-            const landData = await api.getLandRoot();
-            const children = landData.children || [];
+            const placeData = await api.getPlaceRoot();
+            const children = placeData.children || [];
             const target = await findChild(children, name);
             if (!target) return;
             cfg.activeRootId = target._id;
@@ -410,7 +410,7 @@ module.exports = (program) => {
       // ── cd .. ──
       if (name === "..") {
         if (cfg.pathStack.length === 0) {
-          // At tree root — go back to land level (keep remoteDomain if on a remote land)
+          // At tree root — go back to place level (keep remoteDomain if on a remote place)
           cfg.activeRootId = null;
           cfg.activeRootName = null;
           cfg.isSystemRoot = false;

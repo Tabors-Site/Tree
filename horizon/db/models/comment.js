@@ -6,7 +6,7 @@ const CommentSchema = new mongoose.Schema({
   extensionVersion: { type: String, default: null }, // null = general, specific = version-specific
 
   // Who wrote it (verified via CanopyToken)
-  authorLandId: { type: String, required: true },
+  authorPlaceId: { type: String, required: true },
   authorDomain: { type: String, required: true },
   authorUsername: { type: String, default: "" },
 
@@ -21,16 +21,16 @@ const CommentSchema = new mongoose.Schema({
 
 CommentSchema.index({ extensionName: 1, createdAt: -1 });
 CommentSchema.index({ extensionName: 1, extensionVersion: 1 });
-CommentSchema.index({ authorLandId: 1, extensionName: 1 });
+CommentSchema.index({ authorPlaceId: 1, extensionName: 1 });
 
 const Comment = mongoose.model("Comment", CommentSchema);
 
-// ── Reactions (star or flag, one per user per land per extension) ──
+// ── Reactions (star or flag, one per user per place per extension) ──
 
 const ReactionSchema = new mongoose.Schema({
   extensionName: { type: String, required: true },
   // Who reacted
-  authorLandId: { type: String, required: true },
+  authorPlaceId: { type: String, required: true },
   authorDomain: { type: String, required: true },
   authorUsername: { type: String, default: "" },
   // Type
@@ -39,9 +39,9 @@ const ReactionSchema = new mongoose.Schema({
   createdAt: { type: Date, default: Date.now },
 });
 
-// One reaction per type per user per land per extension
+// One reaction per type per user per place per extension
 ReactionSchema.index(
-  { extensionName: 1, authorLandId: 1, authorUsername: 1, type: 1 },
+  { extensionName: 1, authorPlaceId: 1, authorUsername: 1, type: 1 },
   { unique: true },
 );
 ReactionSchema.index({ extensionName: 1, type: 1 });

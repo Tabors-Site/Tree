@@ -4,20 +4,20 @@ import path from "path";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
-const LAND_TARGET = process.env.PORTAL_LAND_TARGET || "http://localhost:3000";
+const PLACE_TARGET = process.env.PORTAL_LAND_TARGET || "http://localhost:3000";
 
 export default defineConfig({
   server: {
     port: 5176,
     proxy: {
-      "/api":         { target: LAND_TARGET, changeOrigin: true },
-      "/.well-known": { target: LAND_TARGET, changeOrigin: true },
-      "/socket.io":   { target: LAND_TARGET, changeOrigin: true, ws: true },
+      "/api":         { target: PLACE_TARGET, changeOrigin: true },
+      "/.well-known": { target: PLACE_TARGET, changeOrigin: true },
+      "/socket.io":   { target: PLACE_TARGET, changeOrigin: true, ws: true },
     },
   },
   resolve: {
     alias: {
-      "@ibp-address": path.resolve(__dirname, "../../land/seed/addressing/address.js"),
+      "@ibp-address": path.resolve(__dirname, "../../place/seed/addressing/address.js"),
     },
   },
 });

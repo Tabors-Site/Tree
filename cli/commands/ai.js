@@ -166,13 +166,13 @@ module.exports = (program) => {
         const noLive = opts && opts.live === false;
 
         if (!target.rootId && !cfg.atHome) {
-          console.log(chalk.dim("Land Manager…"));
-          const live = await tryLive({ verb: "chat", message, zone: "land", noLive });
+          console.log(chalk.dim("Place Manager…"));
+          const live = await tryLive({ verb: "chat", message, zone: "place", noLive });
           if (live.live) {
-            console.log(chalk.bold("\nLand:") + " " + (live.result.answer || "No response."));
+            console.log(chalk.bold("\nPlace:") + " " + (live.result.answer || "No response."));
           } else {
-            const data = await api.post("/land/chat", { message }, { signal });
-            console.log(chalk.bold("\nLand:") + " " + (data.answer || "No response."));
+            const data = await api.post("/place/chat", { message }, { signal });
+            console.log(chalk.bold("\nPlace:") + " " + (data.answer || "No response."));
           }
         } else if (!target.rootId) {
           console.log(chalk.dim("Thinking…"));

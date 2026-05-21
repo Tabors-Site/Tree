@@ -1,7 +1,7 @@
 // TreeOS CLI . ws.js
 //
 // WebSocket client for the four conversational verbs: chat, place, query, be.
-// Connects to the same land the HTTP API uses, authenticates with the same
+// Connects to the same place the HTTP API uses, authenticates with the same
 // API key or JWT, and surfaces the live reasoning stream (mode picks, tool
 // calls, thinking prose, swarm branches) to a callback so the terminal can
 // render it as it happens.
@@ -20,7 +20,7 @@ const REQUEST_TIMEOUT_MS = 45 * 60 * 1000;
 
 function getSocketBase() {
   const cfg = load();
-  let site = cfg.landUrl || "https://treeOS.ai";
+  let site = cfg.placeUrl || "https://treeOS.ai";
   if (!/^https?:\/\//i.test(site)) {
     const isLocal =
       site.startsWith("localhost") ||

@@ -23,12 +23,12 @@ const ExtensionSchema = new mongoose.Schema({
   osConfig: { type: mongoose.Schema.Types.Mixed, default: null },
   osOrchestrators: { type: mongoose.Schema.Types.Mixed, default: null },
 
-  // Author (the land that originally published)
-  authorLandId: { type: String, required: true },
+  // Author (the place that originally published)
+  authorPlaceId: { type: String, required: true },
   authorDomain: { type: String, required: true },
   authorName: { type: String, default: "" },
 
-  // Additional lands allowed to publish updates (land domains)
+  // Additional places allowed to publish updates (place domains)
   maintainers: [{ type: String }],
 
   // Manifest (the full contract)
@@ -69,7 +69,7 @@ const ExtensionSchema = new mongoose.Schema({
 ExtensionSchema.index({ name: 1, version: 1 }, { unique: true });
 ExtensionSchema.index({ name: 1 });
 ExtensionSchema.index({ tags: 1 });
-ExtensionSchema.index({ authorLandId: 1 });
+ExtensionSchema.index({ authorPlaceId: 1 });
 ExtensionSchema.index({ type: 1 });
 ExtensionSchema.index({ builtFor: 1 });
 ExtensionSchema.index({ type: 1, builtFor: 1 });

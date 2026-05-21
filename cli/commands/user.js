@@ -162,7 +162,7 @@ module.exports = (program) => {
 
   program
     .command("home")
-    .description("Go to /~ (your trees across all lands)")
+    .description("Go to /~ (your trees across all places)")
     .action(() => {
       const cfg = requireAuth();
       cfg.activeRootId = null;

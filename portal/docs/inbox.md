@@ -1,6 +1,6 @@
 # The Inbox Model
 
-Every being has an inbox at its position. Every SUMMON lands there. Summonings read it. This document specifies the inbox's place in the record, the summoning triggers that fire on inbox writes, and the response delivery contract.
+Every being has an inbox at its position. Every SUMMON places there. Summonings read it. This document specifies the inbox's place in the record, the summoning triggers that fire on inbox writes, and the response delivery contract.
 
 Read [being-summoned.md](being-summoned.md) and [message-envelope.md](message-envelope.md) first.
 
@@ -146,9 +146,9 @@ The SUMMON handler holds the WebSocket ack open. When the summoning completes, t
 
 ```
 client -> ibp:summon { stance: ..., message: { intent: "chat", ... } }
-  land appends to inbox, triggers summoning (synchronously)
+  place appends to inbox, triggers summoning (synchronously)
     summoning runs, produces response
-  land returns response inline as the ack
+  place returns response inline as the ack
 client <- ack { response: { ...response message... } }
 ```
 
@@ -160,11 +160,11 @@ The SUMMON handler acks immediately with `{ status: "accepted" }`. The summoning
 
 ```
 client -> ibp:summon { stance: ..., message: { intent: "chat", ... } }
-  land appends to inbox, triggers summoning, immediately acks
+  place appends to inbox, triggers summoning, immediately acks
 client <- ack { status: "accepted" }
 ... time passes ...
 ... summoning completes, produces response ...
-  land writes SUMMON to sender's inbox (which is its own position's inbox)
+  place writes SUMMON to sender's inbox (which is its own position's inbox)
 client (listening on its home with live SEE) <- inbox update arrives
 ```
 
@@ -180,7 +180,7 @@ Place-intent beings often use `none`. So do logger-style beings and event-sink p
 
 ```
 client -> ibp:summon { address: ..., message: { intent: "place", ... } }
-  land appends to inbox, triggers summoning, acks
+  place appends to inbox, triggers summoning, acks
 client <- ack { status: "accepted" }
 ... summoning runs, does its work, ends ...
 ... no response is delivered ...
@@ -203,9 +203,9 @@ Mismatches are real: a sender with `intent: chat` addressing an being with `resp
 
 ## Multiple senders, one being
 
-Multiple SUMMONs can arrive at the same being from different senders concurrently. Each `appendToInbox` is atomic; messages land in arrival order. Each fires its own summoning per `triggerOn`.
+Multiple SUMMONs can arrive at the same being from different senders concurrently. Each `appendToInbox` is atomic; messages place in arrival order. Each fires its own summoning per `triggerOn`.
 
-Summonings of the same being do not block each other at the protocol level. The land may serialize them per-being if it chooses (today's request queue does this for `chat`-intent messages), but the protocol does not require serialization.
+Summonings of the same being do not block each other at the protocol level. The place may serialize them per-being if it chooses (today's request queue does this for `chat`-intent messages), but the protocol does not require serialization.
 
 A being summoned multiple times concurrently sees the inbox state at the moment of each summoning. Two summonings may see overlapping unconsumed entries; the being is responsible for using `markInboxConsumed` atomically.
 
@@ -213,7 +213,7 @@ This is consistent with the summoned-beings model: each summoning is an independ
 
 ## Inbox history and pruning
 
-The inbox accumulates. By default, entries stay forever. Land config may set a retention policy:
+The inbox accumulates. By default, entries stay forever. Place config may set a retention policy:
 
 ```
 config.inbox.retention = { days: 90 }

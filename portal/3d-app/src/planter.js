@@ -2,7 +2,7 @@
 //
 // Orchestrates the two-step flow that turns a held seed into living
 // substrate: (1) DO create-child at the current position to spawn a
-// fresh node — when that position is the land root, the creator is
+// fresh node — when that position is the place root, the creator is
 // stamped as `rootOwner` by the kernel — and (2) DO plant-seed at the
 // newly-created node id, which runs the seed's scaffold recipe
 // (materializing Ruler/Planner/Contractor/Foreman/coder beings for
@@ -11,7 +11,7 @@
 // Why two DOs and not one: planting INTO an empty position would mean
 // the seed scaffolds over the operator's existing tree. Planting AT a
 // NEW position lets the operator place many independent rulerships
-// across the land. The first DO declares the place; the second declares
+// across the place. The first DO declares the place; the second declares
 // what grows there.
 
 let _modal = null;
@@ -83,7 +83,7 @@ export function isPlanterOpen() {
  * Plant a seed end-to-end. Two DOs over the IBP socket:
  *
  *   1. core.do(parentAddress, "create-child", { name, type })
- *      → returns the new node. At the land root this stamps `rootOwner`.
+ *      → returns the new node. At the place root this stamps `rootOwner`.
  *   2. core.do(newNodeAddress, "plant-seed", { name: seedName })
  *      → runs the seed's scaffold; returns plantedSeedId + plantedThings.
  *
@@ -91,14 +91,14 @@ export function isPlanterOpen() {
  *
  * @param {object} args
  * @param {object} args.client          PortalClient
- * @param {string} args.parentAddress   parent position ("treeos.ai/" for land root)
+ * @param {string} args.parentAddress   parent position ("treeos.ai/" for place root)
  * @param {string} args.seedName        registered seed name (e.g. "coder:governing-coder")
  * @param {string} args.newNodeName     name for the new node
  * @param {string} [args.newNodeType]   defaults to "branch"
  */
 export async function plantSeed({ client, parentAddress, seedName, newNodeName, newNodeType = "branch" }) {
   // Step 1 — create the new node. The kernel's create-child returns
-  // the created node (full doc). At the land root, isRoot=true and
+  // the created node (full doc). At the place root, isRoot=true and
   // rootOwner gets stamped with the creator's beingId.
   const created = await client.do(parentAddress, "create-child", {
     name: newNodeName,
@@ -112,7 +112,7 @@ export async function plantSeed({ client, parentAddress, seedName, newNodeName, 
   }
 
   // Step 2 — plant the seed at the new node. Address by path (the
-  // resolver will land on the same node we just created).
+  // resolver will place on the same node we just created).
   const planted = await client.do(newNodePath, "plant-seed", {
     name: seedName,
   });
@@ -134,8 +134,8 @@ function shortLabel(item) {
 }
 
 function derivePath(parentAddress, name) {
-  // parentAddress shapes: "<land>", "<land>/", "<land>/foo/bar"
-  // We want "<land>/foo/bar/<name>" with single slashes.
+  // parentAddress shapes: "<place>", "<place>/", "<place>/foo/bar"
+  // We want "<place>/foo/bar/<name>" with single slashes.
   const trimmed = String(parentAddress || "").replace(/\/+$/, "");
   return `${trimmed}/${name}`;
 }

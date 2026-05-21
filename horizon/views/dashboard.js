@@ -1,9 +1,9 @@
 import {
-  escapeHtml, timeAgo, pageShell, packageCard, landCard,
+  escapeHtml, timeAgo, pageShell, packageCard, placeCard,
   ecosystemStats, typeBadge,
 } from "./shared.js";
 
-export function renderDashboard({ lands, trees, extensions, stats }) {
+export function renderDashboard({ places, trees, extensions, stats }) {
   // Separate extensions by type
   const osItems = (extensions || []).filter(e => e.type === "os");
   const seedExts = (extensions || []).filter(e => (e.type || "extension") === "extension" && (!e.builtFor || e.builtFor === "seed" || e.builtFor === "kernel"));
@@ -20,11 +20,11 @@ export function renderDashboard({ lands, trees, extensions, stats }) {
     ? recentSeed.map((pkg, i) => packageCard(pkg, i)).join("")
     : '<div class="empty-state">No seed extensions published yet.</div>';
 
-  // Recent lands (max 6)
-  const recentLands = (lands || []).slice(0, 6);
-  const landCards = recentLands.length > 0
-    ? recentLands.map((land, i) => landCard(land, i)).join("")
-    : '<div class="empty-state">No lands registered yet.</div>';
+  // Recent places (max 6)
+  const recentLands = (places || []).slice(0, 6);
+  const placeCards = recentLands.length > 0
+    ? recentLands.map((place, i) => placeCard(place, i)).join("")
+    : '<div class="empty-state">No places registered yet.</div>';
 
   // Count types
   const bundleCount = (extensions || []).filter(e => e.type === "bundle").length;
@@ -38,7 +38,7 @@ export function renderDashboard({ lands, trees, extensions, stats }) {
     <!-- Stats -->
     <div class="glass-card" style="animation-delay: 0.05s;">
       <div class="stats-row">
-        <div class="stat-chip"><span class="num">${stats.landCount}</span> lands</div>
+        <div class="stat-chip"><span class="num">${stats.placeCount}</span> places</div>
         <div class="stat-chip"><span class="num">${stats.activeLands}</span> active</div>
         <div class="stat-chip"><span class="num">${stats.extensionCount || 0}</span> packages</div>
         <div class="stat-chip"><span class="num">${osItems.length}</span> OS</div>
@@ -65,13 +65,13 @@ export function renderDashboard({ lands, trees, extensions, stats }) {
       ${seedExts.length > 6 ? '<a href="/extensions/browse?builtFor=seed" class="section-link">Browse all seed extensions</a>' : ""}
     </div>
 
-    <!-- Recent Lands -->
+    <!-- Recent Places -->
     <div class="glass-card" style="animation-delay: 0.2s;">
-      <h2>Recent Lands</h2>
+      <h2>Recent Places</h2>
       <div class="card-grid">
-        ${landCards}
+        ${placeCards}
       </div>
-      ${(lands || []).length > 6 ? '<a href="/lands" class="section-link">Browse all lands</a>' : ""}
+      ${(places || []).length > 6 ? '<a href="/places" class="section-link">Browse all places</a>' : ""}
     </div>
   `;
 

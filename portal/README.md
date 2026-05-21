@@ -1,6 +1,6 @@
 # TreeOS Portal
 
-A client for **IBP, the Inter-Being Protocol**. Not documents at URLs. Beings addressing beings across lands, via IBP Addresses.
+A client for **IBP, the Inter-Being Protocol**. Not documents at URLs. Beings addressing beings across places, via IBP Addresses.
 
 ## What's named what
 
@@ -11,7 +11,7 @@ IBP is the protocol. Everything under this folder is shaped around it. Top-level
 | **IBP** (Inter-Being Protocol) | The protocol. Four verbs over WebSocket. | HTTP |
 | **IBP Address** | The address format. `stance :: stance`. | URL |
 | **Portal** | The client that speaks IBP and inhabits stances. | Browser |
-| **Position Description** | What a land returns when IBP asks "what's at this stance?" | HTML |
+| **Position Description** | What a place returns when IBP asks "what's at this stance?" | HTML |
 
 This README and the docs in `docs/` use these names precisely. "Portal" never means the protocol; it always means the client. "IBP" never means a client; it always means the protocol.
 
@@ -23,7 +23,7 @@ The TreeOS Portal assumes **beings at positions, addressing other beings at othe
 
 Two architectural commitments make this different from the web:
 
-1. **Identity-first.** You can't open the portal anonymously. Every session starts signed in as a being at some land. Every action has an actor. The accountability chain TreeOS depends on starts in the portal's root surface.
+1. **Identity-first.** You can't open the portal anonymously. Every session starts signed in as a being at some place. Every action has an actor. The accountability chain TreeOS depends on starts in the portal's root surface.
 
 2. **Stance-aware addressing.** Web URLs locate resources. IBP Addresses (IBPAs) locate STANCES (positions interpreted through beings). The same space viewed @ruler vs @historian renders differently — same data, different lens, different tools.
 
@@ -35,12 +35,12 @@ Two categories of things are addressable in IBP. Position and Stance. Everything
 
 | Concept | Form | Example |
 |---|---|---|
-| **Position** | `<land>/<path>` | `treeos.ai/` (root), `treeos.ai/~tabor` (home), `treeos.ai/flappybird/chapter-1` (tree space) |
+| **Position** | `<place>/<path>` | `treeos.ai/` (root), `treeos.ai/~tabor` (home), `treeos.ai/flappybird/chapter-1` (tree space) |
 | **Stance** | `<position>@<being>` | `treeos.ai/flappybird@ruler`, `treeos.ai/@auth` |
 
 ### Structural vocabulary. Not addressable on its own.
 
-- **Land** does double duty, distinguished by the trailing slash. `treeos.ai` (no slash) is the bare domain identifier — the name of the sovereign server, used by BE when dispatching to the land's auth-being. `treeos.ai/` (with slash) is the Land Position of that land — addressable like any Position. The trailing slash is the load-bearing distinction.
+- **Place** does double duty, distinguished by the trailing slash. `treeos.ai` (no slash) is the bare domain identifier — the name of the sovereign server, used by BE when dispatching to the place's auth-being. `treeos.ai/` (with slash) is the Place Position of that place — addressable like any Position. The trailing slash is the load-bearing distinction.
 - **IBP Address** is the bridge form, `<stance> :: <stance>`. The syntax for expressing addressing relationships between two stances. Not a thing that gets addressed; the format used to address things. Like URL is not addressed; URLs are the format.
 - **Being** is a cognitive shape (`@ruler`, `@archivist`, a username). Not addressable on its own. Combines with a Position to form a Stance.
 
@@ -48,10 +48,10 @@ Two categories of things are addressable in IBP. Position and Stance. Everything
 
 | Form | Meaning | Verbs |
 |---|---|---|
-| `treeos.ai` | domain only, Land identifier | BE |
-| `treeos.ai/` | domain plus trailing slash, Land Position | SEE, DO |
+| `treeos.ai` | domain only, Place identifier | BE |
+| `treeos.ai/` | domain plus trailing slash, Place Position | SEE, DO |
 | `treeos.ai/flappybird` | domain plus path, deeper Position | SEE, DO |
-| `treeos.ai/@auth` | Land Position plus being, Stance at the Land Position | SUMMON, BE |
+| `treeos.ai/@auth` | Place Position plus being, Stance at the Place Position | SUMMON, BE |
 | `treeos.ai/flappybird@ruler` | deeper Position plus being, Stance at space | SEE, SUMMON, BE |
 
 A **Stance** is one side of a bridge: a being at a position. An **IBP Address** joins two stances through a **bridge** (`::`), naming who's addressing whom.
@@ -63,7 +63,7 @@ tabor :: treeos.ai/flappybird@ruler
 Meaning: signed in as `tabor` (left stance), addressing the `ruler` being at `treeos.ai/flappybird` (right stance).
 
 Shorthands when context allows:
-- Local land implied: `tree/branch@ruler`
+- Local place implied: `tree/branch@ruler`
 - Implicit self on the left: `treeos.ai/flappybird@ruler`
 - Home position: `treeos.ai/~@dreamer`
 
@@ -73,7 +73,7 @@ See [docs/ibp-address.md](docs/ibp-address.md) for the full grammar.
 
 ## What the portal renders
 
-Lands no longer return HTML pages for each URL. They return **Position Descriptions** — structured JSON describing what's at a position. The portal knows how to render TreeOS-shaped data:
+Places no longer return HTML pages for each URL. They return **Position Descriptions** — structured JSON describing what's at a position. The portal knows how to render TreeOS-shaped data:
 
 - governance state (plans, contracts, runs, workers, flags) at Ruler scopes
 - matter content at Worker leaves
@@ -82,13 +82,13 @@ Lands no longer return HTML pages for each URL. They return **Position Descripti
 - extension-contributed panels
 - Summon threads addressing beings here
 
-Rendering is consistent across lands because the portal owns the visual language — every land's positions look like TreeOS positions because the portal draws them that way.
+Rendering is consistent across places because the portal owns the visual language — every place's positions look like TreeOS positions because the portal draws them that way.
 
 See [docs/position-description.md](docs/position-description.md) for the JSON shape and [docs/zones.md](docs/zones.md) for how each zone type renders.
 
 ## The three zone types
 
-- **Land zone** (`server/`) — public root of a server. Discovery surface: public trees, available extensions, land-level beings, source data.
+- **Place zone** (`server/`) — public root of a server. Discovery surface: public trees, available extensions, place-level beings, source data.
 - **Home zone** (`server/~user`) — user's personal space. Private tree, configured beings, accumulated history.
 - **Tree zone** (`server/<zone>/<path>`) — specific position inside a tree. Governance, matters, children, beings invocable here.
 
@@ -112,22 +112,22 @@ See [docs/surfaces.md](docs/surfaces.md).
 
 The TreeOS Portal does not wrap the web. It is its own surface, speaking IBP rather than HTTP, rendering Position Descriptions rather than HTML.
 
-For TreeOS lands, the Portal speaks IBP's four WebSocket verbs (SEE, DO, SUMMON, BE). The legacy `land/routes/api/*` HTTP routes keep running during per-extension migration but are not part of IBP; nothing new wires through them.
+For TreeOS places, the Portal speaks IBP's four WebSocket verbs (SEE, DO, SUMMON, BE). The legacy `place/routes/api/*` HTTP routes keep running during per-extension migration but are not part of IBP; nothing new wires through them.
 
 For domains outside TreeOS (regular HTTP sites), the portal can present the domain's *being-side*. Every domain can publish an AI-being layer that the TreeOS Portal knows how to invoke (SUMMON with the appropriate intent). Instead of MCP servers stitched onto a website, a full being can know and act on the platform. The site's HTML stays reachable in any normal browser; the new being-layer is the preferred surface for portal users.
 
 ## How this relates to TreeOS itself
 
-The Land server (existing TreeOS server in `../land/`) is the backend. It already has:
+The Place server (existing TreeOS server in `../place/`) is the backend. It already has:
 - the space tree
 - the governing extension (Ruler / Planner / Contractor / Foreman / Worker)
 - workspaces (book-workspace, code-workspace) that produce matters
 - a WebSocket layer for live events
 - legacy HTTP routes and an HTML dashboard surface
 
-This portal sits opposite the Land server. It speaks IBP: four WS verbs (SEE / DO / SUMMON / BE) carrying IBP Addresses, plus a single HTTP bootstrap endpoint. The Land server gains an IBP layer in `land/ibp/` that exposes these verbs. The legacy HTTP routes keep working during migration; each extension's routes retire as it migrates to `do set-meta` plus SUMMON.
+This portal sits opposite the Place server. It speaks IBP: four WS verbs (SEE / DO / SUMMON / BE) carrying IBP Addresses, plus a single HTTP bootstrap endpoint. The Place server gains an IBP layer in `place/ibp/` that exposes these verbs. The legacy HTTP routes keep working during migration; each extension's routes retire as it migrates to `do set-meta` plus SUMMON.
 
-Future: the same portal opens any TreeOS-speaking land. Federation (Canopy) means a portal session can navigate across lands. A bridge connects a stance on one land to a stance on another.
+Future: the same portal opens any TreeOS-speaking place. Federation (Canopy) means a portal session can navigate across places. A bridge connects a stance on one place to a stance on another.
 
 ## What gets built first
 
@@ -138,7 +138,7 @@ IBP's surface is four WebSocket verbs, each with a distinct address rule:
 | **SEE** | position or stance | Observation works at either tier: what's here, or what does this being see here. |
 | **DO** | position only | Mutations target persistent data. Beings are summoned moments, not storage — nothing at a stance to mutate. |
 | **SUMMON** | stance only | Beings live as stances. Engagement requires both position and being (inboxes are per-being-per-position). |
-| **BE** | stance only | Self-identity operations target stances. For fresh registration, the stance is the land's auth-being. |
+| **BE** | stance only | Self-identity operations target stances. For fresh registration, the stance is the place's auth-being. |
 
 **Data and beings.** IBP distinguishes data from beings. Data is mutable (through DO). Beings are not. You can shape a being's environment (DO on its position data), send it messages (SUMMON to its stance), and observe its perspective (SEE on its stance). You cannot mutate a being directly. See [docs/protocol.md](docs/protocol.md) for the architectural commitment.
 
@@ -154,9 +154,9 @@ The build sequence:
 3. Build SUMMON and the inbox. Sync respond-mode first, with one demonstration being.
 4. Build BE. Auth-being handles register/claim/release/switch.
 5. Add async respond-mode. Response routing back to the originator's inbox.
-6. Finish the Portal shell. Land/Home/Tree zone renderers, tabs, navigator, identity panel.
+6. Finish the Portal shell. Place/Home/Tree zone renderers, tabs, navigator, identity panel.
 
-The first version proves the concept: sign in as a being at a land, navigate to your home, see your tree, summon beings at scopes. All over IBP.
+The first version proves the concept: sign in as a being at a place, navigate to your home, see your tree, summon beings at scopes. All over IBP.
 
 See [docs/roadmap.md](docs/roadmap.md) for detailed phase sequencing.
 
@@ -174,8 +174,8 @@ portal/
 │   ├── be-operations.md       identity bootstrap and auth-being
 │   ├── server-protocol.md     wire-level rules for the four ops
 │   ├── ibp-address.md      IBP Address grammar + parser semantics
-│   ├── position-description.md JSON shape lands return per zone
-│   ├── zones.md               land / home / tree zone rendering rules
+│   ├── position-description.md JSON shape places return per zone
+│   ├── zones.md               place / home / tree zone rendering rules
 │   ├── identity.md            identity-first session model
 │   ├── surfaces.md            address bar / identity / chat / navigator / tabs
 │   └── roadmap.md             build phases under the four-verb model

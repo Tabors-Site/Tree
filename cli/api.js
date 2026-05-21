@@ -10,7 +10,7 @@ let _baseCache = null;
 function getBase() {
   if (_baseCache) return _baseCache;
   const cfg = load();
-  let site = cfg.landUrl || "https://treeOS.ai";
+  let site = cfg.placeUrl || "https://treeOS.ai";
   if (!/^https?:\/\//i.test(site)) {
     const isLocal = site.startsWith("localhost") || site.startsWith("127.") || site.startsWith("192.168.") || site.startsWith("10.");
     site = (isLocal ? "http://" : "https://") + site;
@@ -21,14 +21,14 @@ function getBase() {
 
 function getBaseSite() {
   const cfg = load();
-  const site = cfg.landUrl || "https://treeOS.ai";
+  const site = cfg.placeUrl || "https://treeOS.ai";
   return site.replace(/\/+$/, "");
 }
 
 // Clear base cache (for tests or after config change)
 function clearBaseCache() { _baseCache = null; }
 
-// Matches the land's apiOrchestrationTimeout (19 min default). Long
+// Matches the place's apiOrchestrationTimeout (19 min default). Long
 // builds through the continuation loop or the branch swarm can legitimately
 // take 10-15 minutes on a 27B local model — the old 8-min wall was killing
 // work that the server was perfectly happy to complete.
@@ -75,7 +75,7 @@ async function coreFetch(url, opts = {}) {
           );
         }
         throw Object.assign(
-          new Error(`Server returned non-JSON (HTTP ${res.status}). Is the land running?`),
+          new Error(`Server returned non-JSON (HTTP ${res.status}). Is the place running?`),
           { status: res.status }
         );
       }
@@ -166,19 +166,19 @@ class TreeAPI {
   put(path, body, opts) { return this._req("PUT", path, body, opts); }
   del(path, opts) { return this._req("DELETE", path, null, opts); }
 
-  // ── Land Config ───────────────────────────────────────────────────────
-  getLandRoot() { return this.get("/land/root"); }
-  getLandConfig() { return this.get("/land/config"); }
-  getLandConfigValue(key) { return this.get(`/land/config/${encodeURIComponent(key)}`); }
-  setLandConfig(key, value) { return this.put(`/land/config/${encodeURIComponent(key)}`, { value }); }
+  // ── Place Config ───────────────────────────────────────────────────────
+  getPlaceRoot() { return this.get("/place/root"); }
+  getPlaceConfig() { return this.get("/place/config"); }
+  getPlaceConfigValue(key) { return this.get(`/place/config/${encodeURIComponent(key)}`); }
+  setPlaceConfig(key, value) { return this.put(`/place/config/${encodeURIComponent(key)}`, { value }); }
 
   // ── Extensions ────────────────────────────────────────────────────────
-  getExtensions() { return this.get("/land/extensions"); }
-  getExtension(name) { return this.get(`/land/extensions/${encodeURIComponent(name)}`); }
-  disableExtension(name) { return this.post(`/land/extensions/${encodeURIComponent(name)}/disable`); }
-  enableExtension(name) { return this.post(`/land/extensions/${encodeURIComponent(name)}/enable`); }
-  uninstallExtension(name) { return this.post(`/land/extensions/${encodeURIComponent(name)}/uninstall`); }
-  publishExtension(name, opts = {}) { return this.post(`/land/extensions/${encodeURIComponent(name)}/publish`, opts); }
+  getExtensions() { return this.get("/place/extensions"); }
+  getExtension(name) { return this.get(`/place/extensions/${encodeURIComponent(name)}`); }
+  disableExtension(name) { return this.post(`/place/extensions/${encodeURIComponent(name)}/disable`); }
+  enableExtension(name) { return this.post(`/place/extensions/${encodeURIComponent(name)}/enable`); }
+  uninstallExtension(name) { return this.post(`/place/extensions/${encodeURIComponent(name)}/uninstall`); }
+  publishExtension(name, opts = {}) { return this.post(`/place/extensions/${encodeURIComponent(name)}/publish`, opts); }
 
   async getHorizonVersions(name) {
     const horizonUrl = await this._getHorizonUrl();
@@ -213,7 +213,7 @@ class TreeAPI {
       ext.manifest = fullData.manifest;
     }
 
-    // Validate before sending to land
+    // Validate before sending to place
     if (!ext.files || !Array.isArray(ext.files) || ext.files.length === 0) {
       throw new Error("Extension has no files. Registry may be corrupted.");
     }
@@ -221,7 +221,7 @@ class TreeAPI {
       throw new Error("Extension has no manifest. Registry may be corrupted.");
     }
 
-    return this.post("/land/extensions/install", {
+    return this.post("/place/extensions/install", {
       name: ext.name || name,
       version: ext.version,
       manifest: ext.manifest,
@@ -238,7 +238,7 @@ class TreeAPI {
   }
 
   async _getHorizonUrl() {
-    const config = await this.get("/land/config/HORIZON_URL").catch(() => null);
+    const config = await this.get("/place/config/HORIZON_URL").catch(() => null);
     if (config?.value) {
       let url = config.value;
       if (!/^https?:\/\//i.test(url)) url = "https://" + url;
@@ -455,7 +455,7 @@ class TreeAPI {
   heartbeat() { return this._canopyReq("POST", "/canopy/admin/heartbeat"); }
   searchLands(q) {
     const qs = q ? `?q=${encodeURIComponent(q)}` : "";
-    return this._canopyReq("GET", `/canopy/admin/horizon/lands${qs}`);
+    return this._canopyReq("GET", `/canopy/admin/horizon/places${qs}`);
   }
   searchTrees(q) {
     const qs = q ? `?q=${encodeURIComponent(q)}` : "";

@@ -17,7 +17,7 @@ Everything in TreeOS reduces to: positions have data. The data has namespaces. D
 
   All namespaces are written through the same `set-meta` action. The namespace's name is in the payload.
 - **Inbox writes**, technically a kind of namespaced metadata, but happen through **SUMMON** rather than DO. SUMMON is its own verb because it triggers summoning; DO would not.
-- **Land-level operations** (install/disable/uninstall extensions, set-config, publish to Horizon). Same DO grammar, addressed at the Land Position (`<land>/`).
+- **Place-level operations** (install/disable/uninstall extensions, set-config, publish to Horizon). Same DO grammar, addressed at the Place Position (`<place>/`).
 
 Beings are not data targets. They are active instances, summoned on demand to read position data and act. The "programming" of an being is just position data in the being's namespace. There is no separate being-tier of addressing; the only target is the position.
 
@@ -115,15 +115,15 @@ Writes `Space.visibility`.
 Writes `Space.rootOwner`. Requires current owner identity. The `afterOwnershipChange` hook fires.
 
 ```
-{ verb: "do", action: "transfer-owner", position: "<Land Position>", identity, payload: { user } }
+{ verb: "do", action: "transfer-owner", position: "<Place Position>", identity, payload: { user } }
 ```
 
 #### invite
 
-Adds a user to `Space.contributors` on the tree root. Cross-land invites use `username@land`. The invite system handles delivery.
+Adds a user to `Space.contributors` on the tree root. Cross-place invites use `username@place`. The invite system handles delivery.
 
 ```
-{ verb: "do", action: "invite", position: "<Land Position>", identity, payload: { user } }
+{ verb: "do", action: "invite", position: "<Place Position>", identity, payload: { user } }
 ```
 
 #### accept-invite
@@ -131,7 +131,7 @@ Adds a user to `Space.contributors` on the tree root. Cross-land invites use `us
 Confirms a pending invite. Adds the requester to `Space.contributors`.
 
 ```
-{ verb: "do", action: "accept-invite", position: "<Land Position>", identity, payload: { inviteId } }
+{ verb: "do", action: "accept-invite", position: "<Place Position>", identity, payload: { inviteId } }
 ```
 
 #### revoke
@@ -139,7 +139,7 @@ Confirms a pending invite. Adds the requester to `Space.contributors`.
 Removes a user from `Space.contributors`.
 
 ```
-{ verb: "do", action: "revoke", position: "<Land Position>", identity, payload: { user } }
+{ verb: "do", action: "revoke", position: "<Place Position>", identity, payload: { user } }
 ```
 
 ### Position-level content
@@ -238,24 +238,24 @@ Assigns an LLM connection to a slot at a position or user. Writes `metadata.llm.
 { verb: "do", action: "assign-llm-slot", position: "<position>", identity, payload: { slot, connectionId } }
 ```
 
-### Land-level operations
+### Place-level operations
 
-Operations targeted at the Land Position (`<land>/`). These manipulate the land's installed-extensions list, configuration, and user-record-level LLM connections.
+Operations targeted at the Place Position (`<place>/`). These manipulate the place's installed-extensions list, configuration, and user-record-level LLM connections.
 
 #### install-extension
 
-Installs an extension to the land. Requires `isAdmin`. Writes the extension files to disk; the extension is not loaded until restart.
+Installs an extension to the place. Requires `isAdmin`. Writes the extension files to disk; the extension is not loaded until restart.
 
 ```
-{ verb: "do", action: "install-extension", position: "<land>/", identity, payload: { name, version?, manifest?, files: [{ path, content }] } }
+{ verb: "do", action: "install-extension", position: "<place>/", identity, payload: { name, version?, manifest?, files: [{ path, content }] } }
 ```
 
 #### enable-extension / disable-extension / uninstall-extension
 
 ```
-{ verb: "do", action: "enable-extension",   position: "<land>/", identity, payload: { name } }
-{ verb: "do", action: "disable-extension",  position: "<land>/", identity, payload: { name } }
-{ verb: "do", action: "uninstall-extension", position: "<land>/", identity, payload: { name, force?: boolean } }
+{ verb: "do", action: "enable-extension",   position: "<place>/", identity, payload: { name } }
+{ verb: "do", action: "disable-extension",  position: "<place>/", identity, payload: { name } }
+{ verb: "do", action: "uninstall-extension", position: "<place>/", identity, payload: { name, force?: boolean } }
 ```
 
 #### publish-extension
@@ -263,15 +263,15 @@ Installs an extension to the land. Requires `isAdmin`. Writes the extension file
 Publishes an installed extension to the Horizon registry.
 
 ```
-{ verb: "do", action: "publish-extension", position: "<land>/", identity, payload: { name, tags?, readme?, repoUrl?, maintainers?, releaseNotes? } }
+{ verb: "do", action: "publish-extension", position: "<place>/", identity, payload: { name, tags?, readme?, repoUrl?, maintainers?, releaseNotes? } }
 ```
 
 #### set-config
 
-Writes a land-level configuration key. Requires `isAdmin`. Some keys are restricted; the land's config registry defines per-key permissions.
+Writes a place-level configuration key. Requires `isAdmin`. Some keys are restricted; the place's config registry defines per-key permissions.
 
 ```
-{ verb: "do", action: "set-config", position: "<land>/", identity, payload: { key, value } }
+{ verb: "do", action: "set-config", position: "<place>/", identity, payload: { key, value } }
 ```
 
 #### set-llm-connection
@@ -372,7 +372,7 @@ See [protocol.md](protocol.md) for the full error vocabulary. The codes DO most 
 | `RESOURCE_CONFLICT` | action's preconditions not met (e.g., delete on a role-bearing space without force) |
 | `UPLOAD_TOO_LARGE` | upload-matter bytes exceed configured limit |
 | `UPLOAD_MIME_REJECTED` | upload-matter content type not accepted |
-| `UPLOAD_DISABLED` | uploads disabled on this land |
+| `UPLOAD_DISABLED` | uploads disabled on this place |
 | `DOCUMENT_SIZE_EXCEEDED` | payload exceeds size budget |
 | `RATE_LIMITED` | throttled |
 | `TIMEOUT` | action timed out internally |

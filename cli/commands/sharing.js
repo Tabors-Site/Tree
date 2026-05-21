@@ -5,14 +5,14 @@ const { load, save, requireAuth, currentNodeId, currentZone, hasExtension } = re
 const { getApi } = require("../helpers");
 const { termLink } = require("../helpers");
 
-/** Check if the connected Land has frontend HTML enabled */
+/** Check if the connected Place has frontend HTML enabled */
 async function checkFrontendEnabled(api) {
   try {
-    const data = await api.getLandConfigValue("ENABLE_FRONTEND_HTML");
+    const data = await api.getPlaceConfigValue("ENABLE_FRONTEND_HTML");
     const val = data.value;
     return val === true || val === "true";
   } catch {
-    // Config endpoint may not exist on older lands, assume enabled
+    // Config endpoint may not exist on older places, assume enabled
     return true;
   }
 }
@@ -52,7 +52,7 @@ module.exports = (program) => {
       const checkApi = new TreeAPI(cfg.apiKey);
       const enabled = await checkFrontendEnabled(checkApi);
       if (!enabled) {
-        return console.log(chalk.yellow("This Land does not have frontend HTML enabled. Ask the admin to set ENABLE_FRONTEND_HTML=true"));
+        return console.log(chalk.yellow("This Place does not have frontend HTML enabled. Ask the admin to set ENABLE_FRONTEND_HTML=true"));
       }
 
       if (type === "idea") {
@@ -103,7 +103,7 @@ module.exports = (program) => {
         const api = new TreeAPI(cfg.apiKey);
         const enabled = await checkFrontendEnabled(api);
         if (!enabled) {
-          return console.log(chalk.yellow("This Land does not have frontend HTML enabled. Ask the admin to set ENABLE_FRONTEND_HTML=true"));
+          return console.log(chalk.yellow("This Place does not have frontend HTML enabled. Ask the admin to set ENABLE_FRONTEND_HTML=true"));
         }
       }
       const qs = cfg.shareToken ? `?token=${cfg.shareToken}&html` : "?html";
@@ -117,12 +117,12 @@ module.exports = (program) => {
 
       if (!type) {
         if (!cfg.activeRootId) {
-          if (currentZone(cfg) === "land") {
+          if (currentZone(cfg) === "place") {
             try {
               const api = getApi(cfg);
-              const landRoot = await api.getLandRoot();
-              const landNodeId = landRoot?._id || landRoot?.id;
-              if (landNodeId) { url = `${getBaseSite()}/api/v1/space/${landNodeId}${qs}`; }
+              const placeRoot = await api.getPlaceRoot();
+              const placeNodeId = placeRoot?._id || placeRoot?.id;
+              if (placeNodeId) { url = `${getBaseSite()}/api/v1/space/${placeNodeId}${qs}`; }
             } catch {}
           }
           if (!url) url = `${getBaseSite()}/api/v1/user/${cfg.userId}${qs}`;
@@ -155,14 +155,14 @@ module.exports = (program) => {
         url = `${getBaseSite()}/dashboard/flow`;
       } else if (type === "cc") {
         let nodeId = cfg.activeRootId ? currentNodeId(cfg) : null;
-        if (!nodeId && currentZone(cfg) === "land") {
+        if (!nodeId && currentZone(cfg) === "place") {
           try {
             const api = getApi(cfg);
-            const landRoot = await api.getLandRoot();
-            nodeId = landRoot?._id || landRoot?.id;
+            const placeRoot = await api.getPlaceRoot();
+            nodeId = placeRoot?._id || placeRoot?.id;
           } catch {}
         }
-        if (!nodeId) return console.log(chalk.yellow("Navigate to a tree or land root first."));
+        if (!nodeId) return console.log(chalk.yellow("Navigate to a tree or place root first."));
         url = `${getBaseSite()}/api/v1/space/${nodeId}/command-center${qs}`;
       } else {
         if (cfg.activeRootId) {

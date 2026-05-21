@@ -1,38 +1,38 @@
-# Zones — land, home, space
+# Zones — place, home, space
 
 Every position in the TreeOS Portal belongs to one of three zone types. The zone determines the top-level chrome the portal renders. The position within the zone determines what the body shows.
 
-## Land zone
+## Place zone
 
-`land/` — the public root of a server. The discovery surface.
+`place/` — the public root of a server. The discovery surface.
 
 ### What it surfaces
 
-- **Public trees** — anything ext-allow'd at land scope, browsable by visitors.
-- **Land-level beings** — beings invocable on the land itself (`@citizen`, `@oracle` for public knowledge, `@merchant` if there's a marketplace, custom land-defined beings).
-- **Available extensions** — what this land hosts that users can install on their trees.
-- **Source data** — public files / matters shared at land scope.
-- **Land metadata** — who runs it, what's its operating policy, registration status, economy (if any).
-- **Visitors-from-elsewhere registry** — beings on other lands who've registered themselves as accessible here (Pass 5 federation).
+- **Public trees** — anything ext-allow'd at place scope, browsable by visitors.
+- **Place-level beings** — beings invocable on the place itself (`@citizen`, `@oracle` for public knowledge, `@merchant` if there's a marketplace, custom place-defined beings).
+- **Available extensions** — what this place hosts that users can install on their trees.
+- **Source data** — public files / matters shared at place scope.
+- **Place metadata** — who runs it, what's its operating policy, registration status, economy (if any).
+- **Visitors-from-elsewhere registry** — beings on other places who've registered themselves as accessible here (Pass 5 federation).
 
 ### When a visitor arrives without a more specific address
 
-`treeos.ai` with no path → the land zone renders. Whoever stops by sees what's available: a list of public trees, a sign-up surface if registration is open, beings they can talk to as a guest.
+`treeos.ai` with no path → the place zone renders. Whoever stops by sees what's available: a list of public trees, a sign-up surface if registration is open, beings they can talk to as a guest.
 
 ### Chrome
 
-- Header: land name + operator + status pill
+- Header: place name + operator + status pill
 - Body: discovery cards (trees, extensions, beings)
 - Sidebar: navigation into specific public trees
 - Identity panel still in place — the visitor's signed-in identity is shown; if they're not a being here, the prompt to register is visible
 
 ### Default being
 
-`@citizen` — generic participant. Read-only browsing. Talking to public beings allowed; creating things on the land typically requires elevation (which the land's auth model gates).
+`@citizen` — generic participant. Read-only browsing. Talking to public beings allowed; creating things on the place typically requires elevation (which the place's auth model gates).
 
 ## Home zone
 
-`land/~user` — a user's personal tree root.
+`place/~user` — a user's personal tree root.
 
 ### What it surfaces
 
@@ -63,7 +63,7 @@ The home zone is the most-visited part of the portal for any given user. Buildin
 
 ## Tree zone
 
-`land/<path>` — a specific position inside a tree.
+`place/<path>` — a specific position inside a tree.
 
 ### What it surfaces
 
@@ -134,14 +134,14 @@ Every zone has:
 - **Address bar** at the top (left = identity, right = position+being)
 - **Identity panel** always visible
 - **Tabs** for multiple IBP Addresses open at once
-- **Back / forward / home buttons** (home = home zone of current land; tree button to go to tree root when inside a tree)
+- **Back / forward / home buttons** (home = home zone of current place; tree button to go to tree root when inside a tree)
 - **No refresh button** — everything is live via WS. State invalidation is event-driven.
 
 The only chrome difference is the body — what fills the main view and which sidebars / panels are populated.
 
 ## Switching zones
 
-Address-bar typing handles cross-zone moves transparently. Typing `/` jumps to the land zone of the current land. Typing `~` jumps to the user's home. Typing a path jumps to a space.
+Address-bar typing handles cross-zone moves transparently. Typing `/` jumps to the place zone of the current place. Typing `~` jumps to the user's home. Typing a path jumps to a space.
 
 Visual cues distinguish the zones — different background tint, different sidebar shape. Doesn't have to be loud; just enough that the user knows which zone they're in at a glance.
 
@@ -151,14 +151,14 @@ Visual cues distinguish the zones — different background tint, different sideb
 
 These three carve at real architectural joints:
 
-- **Land zone**: the server's public-facing surface. Discovery + economy. Anyone may visit.
+- **Place zone**: the server's public-facing surface. Discovery + economy. Anyone may visit.
 - **Home zone**: a user's private root. Personal authority + accumulated matters.
-- **Tree zone**: everywhere else — every position inside any tree, any user's home, any land-public tree. The recursive workspace.
+- **Tree zone**: everywhere else — every position inside any tree, any user's home, any place-public tree. The recursive workspace.
 
-Four would over-specify (tree zone covers a lot of different space types but the BROWSER chrome stays the same; the Position Description varies the BODY). Two would conflate land and home (both are "roots" but their privacy + content differ enough).
+Four would over-specify (tree zone covers a lot of different space types but the BROWSER chrome stays the same; the Position Description varies the BODY). Two would conflate place and home (both are "roots" but their privacy + content differ enough).
 
-The three-zone split makes the address bar predictable: type `/` you're in land, `~` you're in home, a path you're in space. The portal knows which chrome to draw before the Position Description arrives.
+The three-zone split makes the address bar predictable: type `/` you're in place, `~` you're in home, a path you're in space. The portal knows which chrome to draw before the Position Description arrives.
 
-## Open question: ZONE for cross-land federation
+## Open question: ZONE for cross-place federation
 
-A "federated zone" for visiting another land while signed in to your home land might warrant its own chrome (subtly different border / "federated" indicator). For Pass 1 this is over-design; cross-land visits use the tree-zone chrome with a small "federated" pill. Revisit if Pass 5's federation work makes the visit pattern common.
+A "federated zone" for visiting another place while signed in to your home place might warrant its own chrome (subtly different border / "federated" indicator). For Pass 1 this is over-design; cross-place visits use the tree-zone chrome with a small "federated" pill. Revisit if Pass 5's federation work makes the visit pattern common.

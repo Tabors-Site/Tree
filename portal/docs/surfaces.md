@@ -16,13 +16,13 @@ The primary navigation surface. Always at the top.
 ```
 
 - **Left chip**: identity (signed-in being). Not editable. Click → roster dropdown to switch.
-- **Right text**: the destination stance (`land/path@being`). Editable. The `::` bridge is rendered between them but not editable as a character.
+- **Right text**: the destination stance (`place/path@being`). Editable. The `::` bridge is rendered between them but not editable as a character.
 
 ### Behaviors
 
 - **Type Enter** → navigate to the right-side address using the left-side identity.
 - **Auto-complete** triggers on:
-  - `~` → user homes in the current land
+  - `~` → user homes in the current place
   - `/` → child paths from current position, then siblings, then known trees
   - `@` → beings invocable at the current right-side path (from the Position Description's `beings:`)
   - bare typing → fuzzy match against navigation history + favorites
@@ -62,7 +62,7 @@ Always visible. Top-left or top-right of the portal chrome.
 
 ### State indicators
 
-- Green dot if the identity's WebSocket is connected to its land.
+- Green dot if the identity's WebSocket is connected to its place.
 - Yellow if connected but stale (no events for >5 min).
 - Red if disconnected. Click to retry.
 
@@ -72,7 +72,7 @@ The body of the current tab. Renders the right-side position's Position Descript
 
 ### Layout per zone
 
-- **Land zone**: discovery grid (trees + extensions + beings + land metadata).
+- **Place zone**: discovery grid (trees + extensions + beings + place metadata).
 - **Home zone**: tree grid (the user's projects + notes + active extensions).
 - **Tree zone**: tree-shaped layout with governance panel, matter body, sibling navigator, lineage breadcrumb.
 
@@ -134,7 +134,7 @@ Chat messages can carry:
 
 ### Persistence
 
-Threads persist in the portal's local store + on the land server. Closing the panel and reopening shows them again. Threads cross sessions (signing out and back in restores them).
+Threads persist in the portal's local store + on the place server. Closing the panel and reopening shows them again. Threads cross sessions (signing out and back in restores them).
 
 ### "Always-on surface" model
 

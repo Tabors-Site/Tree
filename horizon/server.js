@@ -7,15 +7,15 @@ import horizonRoutes from "./routes/horizon.js";
 import extensionRoutes from "./routes/extensions.js";
 import { startHealthCheckJob } from "./jobs/healthCheck.js";
 import { renderDashboard } from "./views/dashboard.js";
-import { renderLandsPage } from "./views/landsPage.js";
+import { renderPlacesPage } from "./views/placesPage.js";
 import { renderExtensionsBrowsePage } from "./views/extensionsBrowsePage.js";
 import { renderOsPage } from "./views/osPage.js";
 import { renderBundlePage } from "./views/bundlePage.js";
 import { renderExtensionPage } from "./views/extensionPage.js";
-import { renderLandDetailPage } from "./views/landDetailPage.js";
+import { renderPlaceDetailPage } from "./views/placeDetailPage.js";
 import Comment, { Reaction } from "./db/models/comment.js";
 import { verifyHorizonAuth } from "./auth.js";
-import Land from "./db/models/land.js";
+import Place from "./db/models/place.js";
 import PublicTree from "./db/models/publicTree.js";
 import Extension from "./db/models/extension.js";
 
@@ -46,8 +46,8 @@ const searchLimiter = rateLimit({
 });
 
 app.use("/horizon/register", registrationLimiter);
-app.use("/horizon/lands", searchLimiter);
-app.use("/horizon/land", searchLimiter);
+app.use("/horizon/places", searchLimiter);
+app.use("/horizon/place", searchLimiter);
 app.use("/horizon/search", searchLimiter);
 
 // Serve static files
@@ -62,8 +62,8 @@ app.get("/humans.txt", (req, res) => res.type("text/plain").sendFile(join(__dirn
 // Dashboard: ecosystem-first landing page
 app.get("/", async (req, res) => {
   try {
-    const [lands, extensions, landCount, activeLands, extensionCount, totalDownloads, totalStars] = await Promise.all([
-      Land.find({ status: { $ne: "dead" } })
+    const [places, extensions, placeCount, activeLands, extensionCount, totalDownloads, totalStars] = await Promise.all([
+      Place.find({ status: { $ne: "dead" } })
         .sort({ lastSeenAt: -1 })
         .limit(6)
         .lean(),
@@ -75,18 +75,18 @@ app.get("/", async (req, res) => {
         { $limit: 200 },
         { $project: { name: 1, version: 1, description: 1, type: 1, builtFor: 1, authorDomain: 1, authorName: 1, tags: 1, downloads: 1, publishedAt: 1, npmDependencies: 1 } },
       ]),
-      Land.countDocuments({ status: { $ne: "dead" } }),
-      Land.countDocuments({ status: "active" }),
+      Place.countDocuments({ status: { $ne: "dead" } }),
+      Place.countDocuments({ status: "active" }),
       Extension.distinct("name").then((r) => r.length),
       Extension.aggregate([{ $group: { _id: null, total: { $sum: "$downloads" } } }]).then((r) => r[0]?.total || 0),
       Reaction.countDocuments({ type: "star" }),
     ]);
 
     const html = renderDashboard({
-      lands,
+      places,
       trees: [],
       extensions,
-      stats: { landCount, treeCount: 0, activeLands, extensionCount, totalDownloads, totalStars },
+      stats: { placeCount, treeCount: 0, activeLands, extensionCount, totalDownloads, totalStars },
     });
 
     res.setHeader("Content-Type", "text/html");
@@ -103,8 +103,8 @@ app.get("/about", (req, res) => {
   }).catch(err => res.status(500).send("Error: " + err.message));
 });
 
-// Lands browse page
-app.get("/lands", async (req, res) => {
+// Places browse page
+app.get("/places", async (req, res) => {
   try {
     const page = Math.max(1, parseInt(req.query.page) || 1);
     const perPage = 25;
@@ -123,12 +123,12 @@ app.get("/lands", async (req, res) => {
 
     const sortField = sort === "recent" ? { registeredAt: -1 } : { lastSeenAt: -1 };
 
-    const [lands, total] = await Promise.all([
-      Land.find(filter).sort(sortField).skip(skip).limit(perPage).lean(),
-      Land.countDocuments(filter),
+    const [places, total] = await Promise.all([
+      Place.find(filter).sort(sortField).skip(skip).limit(perPage).lean(),
+      Place.countDocuments(filter),
     ]);
 
-    const html = renderLandsPage({ lands, total, page, sort, query: q });
+    const html = renderPlacesPage({ places, total, page, sort, query: q });
     res.setHeader("Content-Type", "text/html");
     res.send(html);
   } catch (err) {
@@ -136,29 +136,29 @@ app.get("/lands", async (req, res) => {
   }
 });
 
-// Land detail page
-app.get("/lands/:domain", async (req, res) => {
+// Place detail page
+app.get("/places/:domain", async (req, res) => {
   try {
-    const land = await Land.findOne({ domain: req.params.domain }).lean();
-    if (!land) return res.status(404).send("Land not found");
+    const place = await Place.findOne({ domain: req.params.domain }).lean();
+    if (!place) return res.status(404).send("Place not found");
 
-    // Get all extensions published by this land
+    // Get all extensions published by this place
     const extensions = await Extension.aggregate([
-      { $match: { authorLandId: land._id } },
+      { $match: { authorPlaceId: place._id } },
       { $sort: { name: 1, publishedAt: -1 } },
       { $group: { _id: "$name", doc: { $first: "$$ROOT" } } },
       { $replaceRoot: { newRoot: "$doc" } },
       { $sort: { downloads: -1 } },
     ]);
 
-    // Aggregate stars and flags across all this land's extensions
+    // Aggregate stars and flags across all this place's extensions
     const extNames = extensions.map(e => e.name);
     const [stars, flags] = await Promise.all([
       Reaction.countDocuments({ extensionName: { $in: extNames }, type: "star" }),
       Reaction.countDocuments({ extensionName: { $in: extNames }, type: "flag" }),
     ]);
 
-    const html = renderLandDetailPage({ land, extensions, stars, flags });
+    const html = renderPlaceDetailPage({ place, extensions, stars, flags });
     res.setHeader("Content-Type", "text/html");
     res.send(html);
   } catch (err) {
@@ -166,10 +166,10 @@ app.get("/lands/:domain", async (req, res) => {
   }
 });
 
-// Land comments API (stored with extensionName = "land:<domain>")
-app.get("/lands/:domain/comments", async (req, res) => {
+// Place comments API (stored with extensionName = "place:<domain>")
+app.get("/places/:domain/comments", async (req, res) => {
   try {
-    const key = "land:" + req.params.domain;
+    const key = "place:" + req.params.domain;
     const limit = Math.min(Number(req.query.limit) || 50, 200);
     const offset = Math.max(Number(req.query.offset) || 0, 0);
     const [comments, total] = await Promise.all([
@@ -182,9 +182,9 @@ app.get("/lands/:domain/comments", async (req, res) => {
   }
 });
 
-app.post("/lands/:domain/comments", verifyHorizonAuth(), async (req, res) => {
+app.post("/places/:domain/comments", verifyHorizonAuth(), async (req, res) => {
   try {
-    const key = "land:" + req.params.domain;
+    const key = "place:" + req.params.domain;
     const { text, username } = req.body;
     const { payload } = req.canopyAuth;
 
@@ -195,23 +195,23 @@ app.post("/lands/:domain/comments", verifyHorizonAuth(), async (req, res) => {
       return res.status(400).json({ error: "Comment must be 2000 characters or fewer" });
     }
 
-    // Verify land exists
-    const target = await Land.findOne({ domain: req.params.domain });
-    if (!target) return res.status(404).json({ error: "Land not found" });
+    // Verify place exists
+    const target = await Place.findOne({ domain: req.params.domain });
+    if (!target) return res.status(404).json({ error: "Place not found" });
 
     // Verify commenter is registered
-    const commenter = await Land.findById(payload.landId);
-    if (!commenter) return res.status(403).json({ error: "Your land must be registered on Horizon" });
+    const commenter = await Place.findById(payload.placeId);
+    if (!commenter) return res.status(403).json({ error: "Your place must be registered on Horizon" });
 
-    // Rate limit: max 3 comments per commenter per land
-    const count = await Comment.countDocuments({ extensionName: key, authorLandId: payload.landId, type: "comment" });
+    // Rate limit: max 3 comments per commenter per place
+    const count = await Comment.countDocuments({ extensionName: key, authorPlaceId: payload.placeId, type: "comment" });
     if (count >= 3) {
-      return res.status(429).json({ error: "Maximum 3 comments per land" });
+      return res.status(429).json({ error: "Maximum 3 comments per place" });
     }
 
     const comment = await Comment.create({
       extensionName: key,
-      authorLandId: payload.landId,
+      authorPlaceId: payload.placeId,
       authorDomain: payload.iss || commenter.domain,
       authorUsername: username || "",
       text: text.trim(),

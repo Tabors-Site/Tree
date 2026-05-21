@@ -30,10 +30,10 @@ Every SUMMON carries this. User-to-being, being-to-being, cascade arrival, Ruler
 
 ### from
 
-The sender's position with being qualifier (`land/path@being`). Always present and always qualified; the protocol does not deliver anonymous or unqualified SUMMON.
+The sender's position with being qualifier (`place/path@being`). Always present and always qualified; the protocol does not deliver anonymous or unqualified SUMMON.
 
 Examples:
-- `tabor@treeos.ai` (a human user at their home land)
+- `tabor@treeos.ai` (a human user at their home place)
 - `treeos.ai/flappybird/chapter-1@worker` (a worker being at a position)
 - `gateway.telegram.io/chat-12345@user` (an external sender routed through a gateway)
 
@@ -89,7 +89,7 @@ Optional structured payloads alongside content. Kinds:
 
 ### sentAt
 
-Server-side timestamp at which the protocol accepted the SUMMON. The land sets this; senders do not provide it. Used for inbox ordering and history.
+Server-side timestamp at which the protocol accepted the SUMMON. The place sets this; senders do not provide it. Used for inbox ordering and history.
 
 ## Intent semantics in detail
 
@@ -115,7 +115,7 @@ The sender is asking the being to read and report. The being's write tools are b
 - Search ("find me notes mentioning X")
 - Consultation ("what would you recommend?")
 
-Beings that receive `query` must not mutate. The land enforces this at the tool-permission layer when summoning.
+Beings that receive `query` must not mutate. The place enforces this at the tool-permission layer when summoning.
 
 ### be
 
@@ -128,7 +128,7 @@ This is the most open intent and the most being-dependent. Document carefully wh
 
 ## How the protocol handles a SUMMON
 
-1. Receive SUMMON at land.
+1. Receive SUMMON at place.
 2. Validate envelope shape. Reject with `INVALID_INPUT` if malformed.
 3. Resolve `address` to a position and being. Reject with `NODE_NOT_FOUND` or `EMBODIMENT_UNAVAILABLE` if either fails.
 4. Authorize: does `identity` permit SUMMON at this address? Reject with `FORBIDDEN` if not.
@@ -140,7 +140,7 @@ This is the most open intent and the most being-dependent. Document carefully wh
    - `async`: ack immediately. When the summoning produces a response (now or later), the protocol writes that response as a new SUMMON to `from`'s inbox with `inReplyTo` set.
    - `none`: ack immediately. No response is generated.
 
-Steps 6 and 7 are atomic: a write to the inbox without summoning means a message lost in limbo; summoning without a write means a being summoned to find nothing new. The land guarantees both happen or neither happens.
+Steps 6 and 7 are atomic: a write to the inbox without summoning means a message lost in limbo; summoning without a write means a being summoned to find nothing new. The place guarantees both happen or neither happens.
 
 ## Response shape
 
@@ -150,7 +150,7 @@ A response is itself a SUMMON. There is no distinct "response envelope." When a 
 {
   verb: "talk",
   stance: <from of original message>,
-  identity: <being's identity, set by the land>,
+  identity: <being's identity, set by the place>,
   message: {
     from:        <being's stance>,
     content:     <response content>,
@@ -224,7 +224,7 @@ The Ruler responds to "begin" some seconds later, after firing-and-forgetting a 
 {
   verb: "talk",
   stance: "tabor@treeos.ai",
-  identity: "<ruler's identity, set by land>",
+  identity: "<ruler's identity, set by place>",
   message: {
     from: "treeos.ai/flappybird@ruler",
     content: "Plan is ready. Six chapters, three weeks. Want to proceed?",
@@ -264,6 +264,6 @@ Same envelope, structured content. The Ruler's being recognizes the schema and a
 ## See also
 
 - [protocol.md](protocol.md) the high-level four-verb spec
-- [inbox.md](inbox.md) where messages land and how summoning works
+- [inbox.md](inbox.md) where messages place and how summoning works
 - [being-summoned.md](being-summoned.md) the architectural framing
 - [server-protocol.md](server-protocol.md) wire-level rules for the talk op

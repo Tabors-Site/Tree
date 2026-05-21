@@ -12,7 +12,7 @@ const ExtensionTombstoneSchema = new mongoose.Schema({
   name: { type: String, required: true },
   version: { type: String, required: true },
   checksum: { type: String, default: null },
-  authorLandId: { type: String, required: true },
+  authorPlaceId: { type: String, required: true },
   unpublishedAt: { type: Date, default: Date.now },
 });
 

@@ -1,4 +1,4 @@
-import Land from "../db/models/land.js";
+import Place from "../db/models/place.js";
 
 const HEALTH_CHECK_INTERVAL =
   parseInt(process.env.HEALTH_CHECK_INTERVAL) || 600000; // 10 minutes
@@ -10,10 +10,10 @@ const DEAD_DAYS = 30;
 let intervalId = null;
 
 /**
- * Ping a single land and update its status based on the response.
+ * Ping a single place and update its status based on the response.
  */
-async function checkLand(land) {
-  const url = `${land.baseUrl}/canopy/info`;
+async function checkPlace(place) {
+  const url = `${place.baseUrl}/canopy/info`;
 
   try {
     const controller = new AbortController();
@@ -27,54 +27,54 @@ async function checkLand(land) {
       try {
         const info = await response.json();
         if (info.seedVersion) {
-          land.seedVersion = info.seedVersion;
+          place.seedVersion = info.seedVersion;
           const [maj, min, pat] = info.seedVersion.split(".").map(Number);
-          land.seedVersionNumeric = maj * 10000 + min * 100 + (pat || 0);
+          place.seedVersionNumeric = maj * 10000 + min * 100 + (pat || 0);
         }
       } catch {
         // Response body parse failure is non-fatal for health check
       }
 
-      land.lastSeenAt = new Date();
-      land.lastHealthCheck = new Date();
-      land.failedChecks = 0;
-      land.status = "active";
-      await land.save();
+      place.lastSeenAt = new Date();
+      place.lastHealthCheck = new Date();
+      place.failedChecks = 0;
+      place.status = "active";
+      await place.save();
       return;
     }
 
     // Non-ok response counts as a failure
-    await recordFailure(land);
+    await recordFailure(place);
   } catch {
-    await recordFailure(land);
+    await recordFailure(place);
   }
 }
 
 /**
- * Record a health check failure and update land status accordingly.
+ * Record a health check failure and update place status accordingly.
  */
-async function recordFailure(land) {
-  land.failedChecks += 1;
-  land.lastHealthCheck = new Date();
+async function recordFailure(place) {
+  place.failedChecks += 1;
+  place.lastHealthCheck = new Date();
 
-  if (land.failedChecks >= UNREACHABLE_THRESHOLD) {
-    land.status = "unreachable";
-  } else if (land.failedChecks >= DEGRADED_THRESHOLD) {
-    land.status = "degraded";
+  if (place.failedChecks >= UNREACHABLE_THRESHOLD) {
+    place.status = "unreachable";
+  } else if (place.failedChecks >= DEGRADED_THRESHOLD) {
+    place.status = "degraded";
   }
 
-  await land.save();
+  await place.save();
 }
 
 /**
- * Run a full health check cycle across all active and degraded lands.
- * Also marks lands that have been unreachable for 30+ days as dead.
+ * Run a full health check cycle across all active and degraded places.
+ * Also marks places that have been unreachable for 30+ days as dead.
  */
 async function runHealthChecks() {
   try {
-    // Mark long-unreachable lands as dead
+    // Mark long-unreachable places as dead
     const deadCutoff = new Date(Date.now() - DEAD_DAYS * 24 * 60 * 60 * 1000);
-    await Land.updateMany(
+    await Place.updateMany(
       {
         status: "unreachable",
         lastSeenAt: { $lt: deadCutoff },
@@ -82,18 +82,18 @@ async function runHealthChecks() {
       { $set: { status: "dead" } }
     );
 
-    // Check all active and degraded lands
-    const lands = await Land.find({
+    // Check all active and degraded places
+    const places = await Place.find({
       status: { $in: ["active", "degraded", "unreachable"] },
     });
 
-    console.log(`[Horizon] Health check starting for ${lands.length} lands`);
+    console.log(`[Horizon] Health check starting for ${places.length} places`);
 
     // Run checks in parallel with a concurrency limit
     const batchSize = 10;
-    for (let i = 0; i < lands.length; i += batchSize) {
-      const batch = lands.slice(i, i + batchSize);
-      await Promise.allSettled(batch.map((land) => checkLand(land)));
+    for (let i = 0; i < places.length; i += batchSize) {
+      const batch = places.slice(i, i + batchSize);
+      await Promise.allSettled(batch.map((place) => checkPlace(place)));
     }
 
     console.log("[Horizon] Health check complete");

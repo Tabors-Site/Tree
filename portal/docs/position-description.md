@@ -1,6 +1,6 @@
 # Position Description: the JSON shape SEE returns
 
-When the SEE verb of IBP (the Inter-Being Protocol) addresses a position (with or without an being qualifier), the land returns a **Position Description**: structured JSON describing what is at that address. The Portal renders the descriptor according to TreeOS conventions. No HTML, no land-supplied layout. The land owns the data; the Portal owns the rendering.
+When the SEE verb of IBP (the Inter-Being Protocol) addresses a position (with or without an being qualifier), the place returns a **Position Description**: structured JSON describing what is at that address. The Portal renders the descriptor according to TreeOS conventions. No HTML, no place-supplied layout. The place owns the data; the Portal owns the rendering.
 
 Position Description is to IBP what HTML is to HTTP: the response shape the client knows how to render.
 
@@ -8,7 +8,7 @@ Position Description is to IBP what HTML is to HTTP: the response shape the clie
 
 The descriptor describes **what is at the addressed position**, with being-specific augmentation when the address has a qualifier. Recall the terminology:
 
-- **Position**: `<land>/<path>`. The slash is always present. The path may be empty (`treeos.ai/`, the Land Position), `~user...` (a home), or any tree space (`treeos.ai/flappybird/chapter-1`). A position is the actual place in the world.
+- **Position**: `<place>/<path>`. The slash is always present. The path may be empty (`treeos.ai/`, the Place Position), `~user...` (a home), or any tree space (`treeos.ai/flappybird/chapter-1`). A position is the actual place in the world.
 - **Stance**: `<position>@<being>`. A being at a position. `treeos.ai/flappybird@ruler`.
 - **IBP Address**: `<stance> :: <stance>`. `tabor :: treeos.ai/flappybird@ruler`. Names the relationship between two stances. Used in UI and being-to-being framing; the verb envelope carries only the "to" side.
 
@@ -32,13 +32,13 @@ The descriptor is **filtered by the requesting identity**. Which beings appear i
   // chain depth. The portal renders whichever form the user prefers
   // and can switch freely (the four forms in ibp-address.md).
   "address": {
-    "land": "treeos.ai",
+    "place": "treeos.ai",
     "path": "/flappybird/chapter-1",        // the form the request used (verbatim)
     "being": "ruler",                  // the being the request asked for
     "spaceId": "<uuid-b>",                  // leaf space id (canonical, stable across renames)
     "userId": "<uuid|null>",                // user-owner of this scope, when applicable
 
-    // Full chain — BOTH representations, top-down (land root → leaf).
+    // Full chain — BOTH representations, top-down (place root → leaf).
     // The portal uses these to render the four switchable path forms.
     "chain": [
       { "name": "flappybird", "id": "<uuid-a>" },
@@ -55,7 +55,7 @@ The descriptor is **filtered by the requesting identity**. Which beings appear i
   },
 
   // Zone type — controls which top-level chrome the portal draws.
-  "zone": "land" | "home" | "tree",
+  "zone": "place" | "home" | "tree",
 
   // Beings invocable AT this position by the addressing identity.
   // The portal uses this list to populate the address-bar autocomplete
@@ -200,7 +200,7 @@ The descriptor is **filtered by the requesting identity**. Which beings appear i
 
   // Navigation breadcrumbs upward.
   "lineage": [
-    { "path": "/", "name": "treeos.ai (land)" },
+    { "path": "/", "name": "treeos.ai (place)" },
     { "path": "/~tabor", "name": "tabor's home" },
     { "path": "/~tabor/flappybird", "name": "Flappy Bird project" }
   ],
@@ -214,7 +214,7 @@ The descriptor is **filtered by the requesting identity**. Which beings appear i
   // Live SEE subscription is requested via the live: true flag on the
   // original SEE call. Closing the WS connection ends all live SEEs.
   // The portal does not need a separate subscribe step; the field below
-  // declares the patch granularity the land will emit if live SEE is
+  // declares the patch granularity the place will emit if live SEE is
   // active on this address.
   "live": {
     "supportedScopes": ["position", "subtree"],
@@ -234,7 +234,7 @@ The descriptor is **filtered by the requesting identity**. Which beings appear i
   // Diagnostics + version. Portal surfaces these on error.
   "_meta": {
     "descriptorVersion": "1.0",
-    "serverVersion": "treeos-land 1.0.0",
+    "serverVersion": "treeos-place 1.0.0",
     "generatedAt": "2026-05-15T10:42:00Z",
     "renderHints": []                      // optional server-suggested rendering nudges
   }
@@ -245,29 +245,29 @@ The descriptor is **filtered by the requesting identity**. Which beings appear i
 
 The shape above is the union. Each zone uses a subset.
 
-### Land zone (`zone: "land"`)
+### Place zone (`zone: "place"`)
 
 Public root. Discovery surface.
 
 ```jsonc
 {
-  "address": { "land": "treeos.ai", "path": "/" },
-  "zone": "land",
-  "beings": [ /* land-level beings: @citizen, @oracle (public knowledge), @merchant (marketplace), etc. */ ],
+  "address": { "place": "treeos.ai", "path": "/" },
+  "zone": "place",
+  "beings": [ /* place-level beings: @citizen, @oracle (public knowledge), @merchant (marketplace), etc. */ ],
   "children": [
-    /* PUBLIC trees on this land — anything ext-allow'd at land root */
+    /* PUBLIC trees on this place — anything ext-allow'd at place root */
     { "name": "tagay-book", "path": "/tagay-book", "type": "ruler", "lifecycle": "running" },
     { "name": "flappybird", "path": "/flappybird", "type": "ruler", "lifecycle": "completed" }
   ],
-  "land": {
-    /* metadata: who runs this land, what economy, what extensions, etc. */
-    "name": "TreeOS Public Land",
+  "place": {
+    /* metadata: who runs this place, what economy, what extensions, etc. */
+    "name": "TreeOS Public Place",
     "operator": "tabor@treeos.ai",
-    "extensionsAvailable": [ /* installable extensions this land hosts */ ],
+    "extensionsAvailable": [ /* installable extensions this place hosts */ ],
     "policies": { "registrationOpen": true, "guestsAllowed": true }
   },
-  /* no governance block — land root isn't a Ruler */
-  /* no chat-threads block by default — though a "land citizen" being can be invoked */
+  /* no governance block — place root isn't a Ruler */
+  /* no chat-threads block by default — though a "place citizen" being can be invoked */
 }
 ```
 
@@ -277,7 +277,7 @@ User's tree root. Personal space.
 
 ```jsonc
 {
-  "address": { "land": "treeos.ai", "path": "/~tabor" },
+  "address": { "place": "treeos.ai", "path": "/~tabor" },
   "zone": "home",
   "beings": [
     /* @dreamer, @builder, plus any beings the user has configured personally */
@@ -309,7 +309,7 @@ The full union above is the example. Most tree-zone stances will have governance
 | Field | Portal surface |
 |---|---|
 | `address` | Address bar shows it. Tab title uses path + being. |
-| `zone` | Determines top-level chrome (land discovery / home dashboard / space renderer). |
+| `zone` | Determines top-level chrome (place discovery / home dashboard / space renderer). |
 | `beings` | Address-bar autocomplete on `@`. Chat-panel invoke dropdown. Each being's inbox drives a chat-panel preview. |
 | `beings[].honoredIntents` | Portal-side intent picker for SUMMON. Disables intents the being refuses. |
 | `beings[].respondMode` | Portal-side rendering choice: sync (block UI for response) vs async (background panel + notification on response). |
@@ -321,16 +321,16 @@ The full union above is the example. Most tree-zone stances will have governance
 | `conversations` | Chat panel. Restored threads on page load. Click to focus a thread keyed by rootCorrelation. |
 | `lineage` | Breadcrumbs at the top of the main view. |
 | `siblings` | Sideways arrows. Quick-switch buttons in the tree navigator. |
-| `live` | Declares what the land will emit for live SEE on this address. |
+| `live` | Declares what the place will emit for live SEE on this address. |
 | `identity` | Identity panel sanity-check (if mismatch with portal's signed-in being, prompt to re-auth). |
 | `_meta` | Error overlays, diagnostic toggles. |
 
 ## Why JSON, not HTML
 
-- **Consistent rendering.** Every land's positions look like TreeOS positions because the portal draws them the same way. Visitors do not learn each land's UI; they learn TreeOS once.
+- **Consistent rendering.** Every place's positions look like TreeOS positions because the portal draws them the same way. Visitors do not learn each place's UI; they learn TreeOS once.
 - **Live updates.** Live SEE streams RFC 6902 patches. New plan emission patches `governance.plan.active`. New inbox message patches `beings[].inbox`. No re-fetching.
-- **Being-aware rendering.** The same position fetched as `@ruler` vs `@archivist` returns different subsets of the same shape. The portal strips DO/SUMMON write surfaces in archivist mode. The land does not render two variants; it returns the same descriptor with different `beings[].available` and `identity.writeAllowed`.
-- **Federation.** A portal session can navigate across lands; each land returns the same descriptor shape; no per-land rendering quirks.
+- **Being-aware rendering.** The same position fetched as `@ruler` vs `@archivist` returns different subsets of the same shape. The portal strips DO/SUMMON write surfaces in archivist mode. The place does not render two variants; it returns the same descriptor with different `beings[].available` and `identity.writeAllowed`.
+- **Federation.** A portal session can navigate across places; each place returns the same descriptor shape; no per-place rendering quirks.
 - **Extensibility.** Adding a new matter `kind` or extension `surface` does not require a rewrite. It adds a field the portal recognizes.
 
 ## What the server returns when the stance does not resolve
@@ -355,7 +355,7 @@ The portal shows a sign-in prompt with the suggestions.
 
 `_meta.descriptorVersion` is a SemVer the portal checks against its supported range. Backwards-incompatible changes bump the major. The portal falls back to a degraded mode when descriptor version is unsupported.
 
-The Position Description format is the CONTRACT between portal and land server. It stays stable through Pass 1 and Pass 2. Pass 3+ may add fields, never remove.
+The Position Description format is the CONTRACT between portal and place server. It stays stable through Pass 1 and Pass 2. Pass 3+ may add fields, never remove.
 
 ## See also
 

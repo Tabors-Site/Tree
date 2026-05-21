@@ -30,7 +30,7 @@ const COLOR_HOME        = 0x8fbf9f;
 const COLOR_BEING_AUTH  = 0xb39ddb;
 const COLOR_BEING_OTHER = 0xa3c3b1;
 
-// Visual modes for the land scene.
+// Visual modes for the place scene.
 const VISUAL_ARRIVAL = {
   bgColor:    0x0a0d0c,
   fogNear:    8,
@@ -113,7 +113,7 @@ export class Scene {
     this._buildGround();
     this._buildSky();
     this._skyMode = "arrival";
-    this._landTimezone = null;
+    this._placeTimezone = null;
     this._applyVisualMode(VISUAL_ARRIVAL);
 
     // Container for descriptor-rendered objects so we can clear/rebuild
@@ -162,15 +162,15 @@ export class Scene {
   }
 
   // Replace the world with what's described by the given descriptor.
-  // Two visual modes for the land zone:
+  // Two visual modes for the place zone:
   //   - arrival: matrix-dark ground, only the auth-being visible.
   //     Movement locked. Player faces the auth-being.
   //   - default: grassy field, all beings and children rendered.
   //     Movement unlocked.
   renderDescriptor(desc, { isAuthenticated } = {}) {
     this._clearWorld();
-    const isLandRoot = !!desc?.isLandRoot;
-    const arrival    = isLandRoot && !isAuthenticated;
+    const isPlaceRoot = !!desc?.isPlaceRoot;
+    const arrival    = isPlaceRoot && !isAuthenticated;
 
     // Pick the visual mode. Arrival overrides everything. Otherwise the
     // descriptor's resolved scene.sceneType picks a preset; unknown or
@@ -235,9 +235,9 @@ export class Scene {
       });
     }
 
-    // At the land root, when authenticated, drop the signed-in being's
+    // At the place root, when authenticated, drop the signed-in being's
     // home as a small house object you can walk up to and enter.
-    if (isLandRoot && isAuthenticated) {
+    if (isPlaceRoot && isAuthenticated) {
       const home = this._makeHomeMesh();
       home.position.set(-8, 0, 6);
       home.userData = {
@@ -550,14 +550,14 @@ export class Scene {
   }
 
   // Set the timezone used to compute time-of-day. null = browser local time.
-  setLandTimezone(tz) {
-    this._landTimezone = tz || null;
+  setPlaceTimezone(tz) {
+    this._placeTimezone = tz || null;
     this._lastClockMinute = -1;
     if (this._skyMode === "default") this._updateTimeOfDay();
   }
 
   _getLocalHour() {
-    const tz = this._landTimezone || undefined;
+    const tz = this._placeTimezone || undefined;
     try {
       const parts = new Intl.DateTimeFormat("en-US", {
         timeZone: tz, hour: "numeric", minute: "numeric", hour12: false,
@@ -576,7 +576,7 @@ export class Scene {
     }
   }
 
-  // Drive sun position, sky color, and light intensity from the land's
+  // Drive sun position, sky color, and light intensity from the place's
   // local clock. Sunrise ~6, noon overhead at 12, sunset ~18, night at 0/24.
   _updateTimeOfDay() {
     if (this._skyMode !== "default") return;
@@ -659,7 +659,7 @@ export class Scene {
   }
 
   _formatLocalTime() {
-    const tz = this._landTimezone || undefined;
+    const tz = this._placeTimezone || undefined;
     try {
       return new Intl.DateTimeFormat("en-US", {
         timeZone: tz, hour: "numeric", minute: "2-digit", hour12: true,
@@ -1606,7 +1606,7 @@ function worldToScreen(pos, camera, renderer) {
 }
 
 // Sky palette keyframes by hour-of-day (0..24). Lerped between adjacent
-// frames. `horizon` is the lower-sky band (where land meets sky), `zenith`
+// frames. `horizon` is the lower-sky band (where place meets sky), `zenith`
 // is the top of the dome. fog uses `horizon` so distant geometry fades
 // into the visible horizon line.
 const SKY_KEYFRAMES = [

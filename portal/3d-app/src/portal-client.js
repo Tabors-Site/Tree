@@ -20,8 +20,8 @@
 import { io } from "socket.io-client";
 
 export class PortalClient {
-  constructor({ landUrl, token, useProxy, onConnectionChange, onSummon, onDescriptorEvent }) {
-    this.landUrl              = landUrl;
+  constructor({ placeUrl, token, useProxy, onConnectionChange, onSummon, onDescriptorEvent }) {
+    this.placeUrl              = placeUrl;
     this.token                = token;
     this.useProxy             = !!useProxy;
     this.socket               = null;
@@ -43,13 +43,13 @@ export class PortalClient {
 
   // ────────────────────────────────────────────────────────────────
   // Bootstrap (one HTTP call before WS opens).
-  // GET /.well-known/treeos-portal → { ws, protocolVersion, land }
+  // GET /.well-known/treeos-portal → { ws, protocolVersion, place }
   // ────────────────────────────────────────────────────────────────
 
-  static async bootstrap(landUrl, { useProxy } = {}) {
+  static async bootstrap(placeUrl, { useProxy } = {}) {
     const url = useProxy
       ? "/.well-known/treeos-portal"
-      : `${landUrl.replace(/\/+$/, "")}/.well-known/treeos-portal`;
+      : `${placeUrl.replace(/\/+$/, "")}/.well-known/treeos-portal`;
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 10000);
     try {
@@ -58,7 +58,7 @@ export class PortalClient {
       return await res.json();
     } catch (err) {
       if (err.name === "AbortError") {
-        throw new Error("Portal bootstrap timed out (10s). Is the Land server reachable?");
+        throw new Error("Portal bootstrap timed out (10s). Is the Place server reachable?");
       }
       throw err;
     } finally {
@@ -72,7 +72,7 @@ export class PortalClient {
 
   connect() {
     if (this.socket) return;
-    const target = this.useProxy ? undefined : this.landUrl;
+    const target = this.useProxy ? undefined : this.placeUrl;
     this.socket = io(target, {
       auth:            { token: this.token, client: "portal", instance: "main" },
       transports:      ["websocket"],
@@ -115,9 +115,9 @@ export class PortalClient {
 
   /**
    * SEE: observe a place. Returns a Position Descriptor (or the
-   * discovery payload for `<land>/.discovery`).
+   * discovery payload for `<place>/.discovery`).
    *
-   * @param {string} address  position or stance ("<land>/<path>", "<land>/<path>@<being>", "<land>")
+   * @param {string} address  position or stance ("<place>/<path>", "<place>/<path>@<being>", "<place>")
    * @param {object} [options] { live?: boolean }
    */
   async see(address, { live = false } = {}) {
@@ -142,7 +142,7 @@ export class PortalClient {
   /**
    * SUMMON: deliver a message to a being's inbox and wake them.
    *
-   * @param {string} stance   "<land>/<path>@<being>" — being qualifier mandatory
+   * @param {string} stance   "<place>/<path>@<being>" — being qualifier mandatory
    * @param {object} message  { from, content, correlation?, inReplyTo?, attachments? }
    * @param {object} [threading]  optional { rootCorrelation?, priority?, activeRole? }
    */
@@ -156,10 +156,10 @@ export class PortalClient {
   }
 
   /**
-   * BE: identity operations on a stance / land.
+   * BE: identity operations on a stance / place.
    *
    * @param {string} op           "register" | "claim" | "release" | "switch"
-   * @param {string} address      stance ("<land>/@auth", "<land>/@<name>") or bare land ("<land>")
+   * @param {string} address      stance ("<place>/@auth", "<place>/@<name>") or bare place ("<place>")
    * @param {object} [credentials] op-specific fields ({ name, password, ... })
    */
   async be(op, address, credentials = {}) {
@@ -223,13 +223,13 @@ export class PortalClient {
 
 /**
  * Coerce an address into a string. Accepts a string directly, or an
- * object with a `.position`, `.stance`, `.land`, or `.value` field
+ * object with a `.position`, `.stance`, `.place`, or `.value` field
  * (legacy callers).
  */
 function normalize(address) {
   if (typeof address === "string") return address;
   if (address && typeof address === "object") {
-    return address.position || address.stance || address.land || address.value || null;
+    return address.position || address.stance || address.place || address.value || null;
   }
   return null;
 }

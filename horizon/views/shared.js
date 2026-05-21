@@ -324,13 +324,13 @@ export function baseStyles() {
       gap: 12px;
     }
 
-    /* Land cards */
-    .land-card-link {
+    /* Place cards */
+    .place-card-link {
       text-decoration: none;
       color: inherit;
       display: block;
     }
-    .land-card {
+    .place-card {
       padding: 16px 18px;
       border-radius: 10px;
       background: var(--bg-elevated);
@@ -339,19 +339,19 @@ export function baseStyles() {
       animation: fadeInUp 0.3s ease-out both;
       transition: background 150ms ease, border-color 150ms ease;
     }
-    .land-card:hover {
+    .place-card:hover {
       background: var(--bg-hover);
       border-color: var(--border-strong);
       border-left-color: var(--accent-border);
     }
-    .land-card-header {
+    .place-card-header {
       display: flex;
       justify-content: space-between;
       align-items: center;
       margin-bottom: 6px;
     }
-    .land-name { font-size: 14px; font-weight: 600; color: var(--text-primary); }
-    .land-status {
+    .place-name { font-size: 14px; font-weight: 600; color: var(--text-primary); }
+    .place-status {
       font-size: 11px;
       font-weight: 600;
       text-transform: uppercase;
@@ -366,8 +366,8 @@ export function baseStyles() {
       margin-right: 4px;
       vertical-align: middle;
     }
-    .land-domain { margin-bottom: 6px; }
-    .land-domain code {
+    .place-domain { margin-bottom: 6px; }
+    .place-domain code {
       font-family: "JetBrains Mono", monospace;
       font-size: 12px;
       padding: 2px 7px;
@@ -376,13 +376,13 @@ export function baseStyles() {
       border-radius: 5px;
       color: var(--text-secondary);
     }
-    .land-meta { font-size: 11px; color: var(--text-dim); }
-    .land-site-link {
+    .place-meta { font-size: 11px; color: var(--text-dim); }
+    .place-site-link {
       color: var(--accent-strong);
       text-decoration: none;
       font-weight: 600;
     }
-    .land-site-link:hover { text-decoration: underline; }
+    .place-site-link:hover { text-decoration: underline; }
 
     /* Package cards (extension, bundle, os) */
     .pkg-card {
@@ -604,14 +604,14 @@ export function baseStyles() {
 // ---------------------------------------------------------------------------
 
 /**
- * Navigation bar. activePage is one of: "home", "explore", "lands"
+ * Navigation bar. activePage is one of: "home", "explore", "places"
  * breadcrumb is optional extra text (e.g. OS name or bundle name)
  */
 export function navBar(activePage, breadcrumb) {
   const links = [
     { key: "home", label: "Horizon", href: "/" },
     { key: "explore", label: "Explore", href: "/extensions/browse" },
-    { key: "lands", label: "Lands", href: "/lands" },
+    { key: "places", label: "Places", href: "/places" },
     { key: "about", label: "About", href: "/about" },
   ];
 
@@ -755,27 +755,27 @@ export function packageCard(pkg, idx) {
 }
 
 /**
- * Render a land card.
+ * Render a place card.
  */
-export function landCard(land, idx) {
-  const color = statusColor(land.status);
+export function placeCard(place, idx) {
+  const color = statusColor(place.status);
   const delay = idx != null ? `animation-delay: ${0.05 + (idx || 0) * 0.04}s;` : "";
   return `
-    <a href="/lands/${encodeURIComponent(land.domain)}" class="land-card-link" style="${delay}">
-      <div class="land-card">
-        <div class="land-card-header">
-          <div class="land-name">${escapeHtml(land.name || "Unnamed Land")}</div>
-          <div class="land-status">
+    <a href="/places/${encodeURIComponent(place.domain)}" class="place-card-link" style="${delay}">
+      <div class="place-card">
+        <div class="place-card-header">
+          <div class="place-name">${escapeHtml(place.name || "Unnamed Place")}</div>
+          <div class="place-status">
             <span class="status-dot" style="background: ${color};"></span>
-            ${escapeHtml(land.status || "unknown")}
+            ${escapeHtml(place.status || "unknown")}
           </div>
         </div>
-        <div class="land-domain"><code>${escapeHtml(land.domain)}</code></div>
-        <div class="land-meta">
-          Protocol v${land.protocolVersion || "?"}
+        <div class="place-domain"><code>${escapeHtml(place.domain)}</code></div>
+        <div class="place-meta">
+          Protocol v${place.protocolVersion || "?"}
           <span class="separator"></span>
-          Last seen ${timeAgo(land.lastSeenAt)}
-          ${land.siteUrl ? `<span class="separator"></span><span class="land-site-link">Visit Site</span>` : ""}
+          Last seen ${timeAgo(place.lastSeenAt)}
+          ${place.siteUrl ? `<span class="separator"></span><span class="place-site-link">Visit Site</span>` : ""}
         </div>
       </div>
     </a>
@@ -824,7 +824,7 @@ export function pageShell(opts, bodyContent) {
     ${navBar(opts.activePage || "home", opts.breadcrumb)}
     ${bodyContent}
     <div class="footer">
-      <a href="https://treeos.ai/land" class="footer-cta">What is a Land? Start your own.</a>
+      <a href="https://treeos.ai/place" class="footer-cta">What is a Place? Start your own.</a>
       <br><br>
       Canopy Horizon
       <span class="separator"></span>

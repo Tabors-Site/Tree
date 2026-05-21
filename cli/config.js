@@ -13,7 +13,7 @@ const DEFAULT_CONFIG = {
   activeRootName: null,
   // Stack of { id, name } objects — index 0 is root node
   pathStack: [],
-  // true when at /~ (user home), false when at / (land level)
+  // true when at /~ (user home), false when at / (place level)
   atHome: false,
   // Named sessions pinned to positions. @fitness stays at /Health/Fitness.
   // { [handle]: { rootId, rootName, pathStack, createdAt } }
@@ -85,8 +85,8 @@ function currentPathSegments(cfg) {
   return { remote, segments };
 }
 
-function currentLand(cfg) {
-  return cfg.landUrl ? cfg.landUrl.replace(/^https?:\/\//, "").replace(/:\d+$/, "").replace(/\/+$/, "") : "local";
+function currentPlace(cfg) {
+  return cfg.placeUrl ? cfg.placeUrl.replace(/^https?:\/\//, "").replace(/:\d+$/, "").replace(/\/+$/, "") : "local";
 }
 
 function isRemoteSession(cfg) {
@@ -94,14 +94,14 @@ function isRemoteSession(cfg) {
 }
 
 function hasExtension(cfg, name) {
-  const protocol = cfg.landProtocol;
+  const protocol = cfg.placeProtocol;
   if (!protocol) return true; // no protocol info cached, assume available
   const all = [...(protocol.capabilities || []), ...(protocol.extensions || [])];
   return all.includes(name);
 }
 
 function getProtocolCli(cfg) {
-  return cfg?.landProtocol?.cli || {};
+  return cfg?.placeProtocol?.cli || {};
 }
 
 // ── Session helpers ──
@@ -175,11 +175,11 @@ function resolveSessionTarget(cfg, handle) {
 function currentZone(cfg) {
   if (cfg.activeRootId) return "tree";
   if (cfg.atHome) return "home";
-  return "land";
+  return "place";
 }
 
 module.exports = {
-  load, save, requireAuth, currentNodeId, currentPath, currentPathSegments, currentLand, currentZone,
+  load, save, requireAuth, currentNodeId, currentPath, currentPathSegments, currentPlace, currentZone,
   isRemoteSession, hasExtension, getProtocolCli,
   getSession, createSession: createSession, switchSession, killSession,
   listSessions, resolveSessionTarget,

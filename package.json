@@ -1,5 +1,5 @@
 {
-  "name": "treeos-land",
+  "name": "treeos-place",
   "version": "2.0.0",
   "private": true,
   "type": "module",
@@ -8,12 +8,12 @@
     "node": ">=18"
   },
   "scripts": {
-    "land": "cd land && node boot.js",
-    "start": "cd land && node boot.js",
-    "dev": "cd land && SITE_DEV=true node boot.js",
+    "place": "cd place && node plant.js",
+    "start": "cd place && node plant.js",
+    "dev": "cd place && SITE_DEV=true node plant.js",
     "build": "cd site && npm run build",
     "dev:site": "cd site && npm run dev",
-    "postinstall": "cd land && npm install && cd ../site && npm install --no-optional && cd ../cli && npm install",
+    "postinstall": "cd place && npm install && cd ../site && npm install --no-optional && cd ../cli && npm install",
     "test": "node --test test/core.test.js"
   }
 }

@@ -55,12 +55,12 @@ main().catch((err) => {
 async function main() {
   setHud("bootstrapping...");
 
-  const landUrl = state.session?.landUrl || defaultLandUrl();
-  const useProxy = shouldUseProxy(landUrl);
+  const placeUrl = state.session?.placeUrl || defaultPlaceUrl();
+  const useProxy = shouldUseProxy(placeUrl);
 
-  state.discovery = await PortalClient.bootstrap(landUrl, { useProxy });
+  state.discovery = await PortalClient.bootstrap(placeUrl, { useProxy });
 
-  setHud(`connected to ${state.discovery.land}`);
+  setHud(`connected to ${state.discovery.place}`);
 
   // Build the 3D scene.
   state.scene = new Scene({
@@ -72,7 +72,7 @@ async function main() {
     onMatterPlaybackTick: (info) => onMatterPlaybackTick(info),
     isInputBlocked: isGameplayInputBlocked,
   });
-  state.scene.setLandTimezone(state.discovery.timezone || null);
+  state.scene.setPlaceTimezone(state.discovery.timezone || null);
   state.scene.start();
 
   // Best-effort flush on tab close: walk any live video meshes, grab
@@ -88,8 +88,8 @@ async function main() {
     onNavigate: (raw) => navigate(raw),
     onIdentityClick: () => {
       const full = state.session?.username
-        ? `${state.session.username}@${state.discovery.land}`
-        : `arrival@${state.discovery.land}`;
+        ? `${state.session.username}@${state.discovery.place}`
+        : `arrival@${state.discovery.place}`;
       toggleIdentityChip(full);
       refreshAddressBar();
     },
@@ -99,9 +99,9 @@ async function main() {
 
   // Open the IBP socket.
   if (state.session?.token) {
-    await connectAndLand(state.session);
+    await connectAndPlace(state.session);
   } else {
-    await connectAnonymous(landUrl, useProxy);
+    await connectAnonymous(placeUrl, useProxy);
   }
 
   // Mount the IBP console (toggle with backtick). Reuses the live
@@ -109,23 +109,23 @@ async function main() {
   mountIbpConsole({
     root:    document.getElementById("overlays") || document.body,
     client:  state.client,
-    getLand: () => state.discovery?.land || "treeos.ai",
+    getPlace: () => state.discovery?.place || "treeos.ai",
   });
 
-  // Mount the hotbar. Populated from the land's discovery payload
+  // Mount the hotbar. Populated from the place's discovery payload
   // (refreshed on every connect — see refreshSeedCatalog).
   state.hotbar = initHotbar(document.getElementById("hud") || document.body);
   await refreshSeedCatalog();
 }
 
-// Pull `<land>/.discovery` over the live IBP socket and hand the seed
+// Pull `<place>/.discovery` over the live IBP socket and hand the seed
 // catalog to the hotbar. The HTTP bootstrap is intentionally minimal
 // (just enough to open the socket); the full capability surface lives
 // on the socket-side discovery.
 async function refreshSeedCatalog() {
-  if (!state.client || !state.discovery?.land) return;
+  if (!state.client || !state.discovery?.place) return;
   try {
-    const full = await state.client.see(`${state.discovery.land}/.discovery`);
+    const full = await state.client.see(`${state.discovery.place}/.discovery`);
     // Merge into state.discovery so other consumers see the rich form too.
     state.discovery = { ...state.discovery, ...full };
     const seeds = Array.isArray(full?.seeds) ? full.seeds : [];
@@ -137,16 +137,16 @@ async function refreshSeedCatalog() {
       description: s.description,
     })));
     if (seeds.length === 0) {
-      setHud("no plantable seeds registered on this land");
+      setHud("no plantable seeds registered on this place");
     }
   } catch (err) {
     console.warn("[3D] discovery fetch failed:", err?.message || err);
   }
 }
 
-async function connectAnonymous(landUrl, useProxy) {
+async function connectAnonymous(placeUrl, useProxy) {
   state.client = new PortalClient({
-    landUrl,
+    placeUrl,
     token: null,
     useProxy,
     onConnectionChange: (status) => setHud(`socket: ${status}`),
@@ -158,11 +158,11 @@ async function connectAnonymous(landUrl, useProxy) {
   await navigate("/");
 }
 
-async function connectAndLand(session) {
+async function connectAndPlace(session) {
   state.client = new PortalClient({
-    landUrl: session.landUrl,
+    placeUrl: session.placeUrl,
     token: session.token,
-    useProxy: session.landIsProxied,
+    useProxy: session.placeIsProxied,
     onConnectionChange: (status) => setHud(`${session.username} | ${status}`),
     onSummon: handleSummon,
     onDescriptorEvent: handleDescriptorEvent,
@@ -177,8 +177,8 @@ async function connectAndLand(session) {
   // refuses, drop the local session and reconnect anonymously rather
   // than lie to the user with a stale "tabor" chip.
   const beingAddress = session.beingAddress
-    || (session.username && state.discovery?.land
-        ? `${state.discovery.land}/@${session.username}`
+    || (session.username && state.discovery?.place
+        ? `${state.discovery.place}/@${session.username}`
         : null);
   if (beingAddress) {
     try {
@@ -189,8 +189,8 @@ async function connectAndLand(session) {
         clearSession();
         state.session = null;
         state.client.disconnect();
-        const landUrl = session.landUrl || defaultLandUrl();
-        await connectAnonymous(landUrl, shouldUseProxy(landUrl));
+        const placeUrl = session.placeUrl || defaultPlaceUrl();
+        await connectAnonymous(placeUrl, shouldUseProxy(placeUrl));
         return;
       }
       // Other errors (network, TIMEOUT) — let navigation surface them.
@@ -244,10 +244,10 @@ function handleSummon(entry) {
 // its marker before deleting.
 async function onMatterEnded({ matterId }) {
   if (!state.client || !matterId) return;
-  const land = state.discovery?.land;
-  if (!land) return;
+  const place = state.discovery?.place;
+  if (!place) return;
   try {
-    await state.client.do(`${land}/`, "llm-assigner:complete-tutorial", { matterId });
+    await state.client.do(`${place}/`, "llm-assigner:complete-tutorial", { matterId });
   } catch (err) {
     console.warn("[3D] llm-assigner:complete-tutorial failed:", err?.code || err?.message || err);
   }
@@ -259,10 +259,10 @@ async function onMatterEnded({ matterId }) {
 // so revisits resume at the saved point across browsers and devices.
 async function onMatterPlaybackTick({ matterId, currentTime }) {
   if (!state.client?.connected || !matterId) return;
-  const land = state.discovery?.land;
-  if (!land) return;
+  const place = state.discovery?.place;
+  if (!place) return;
   try {
-    await state.client.do(`${land}/`, "llm-assigner:save-playback",
+    await state.client.do(`${place}/`, "llm-assigner:save-playback",
       { matterId, currentTime });
   } catch (err) {
     console.warn("[3D] save-playback failed:",
@@ -270,7 +270,7 @@ async function onMatterPlaybackTick({ matterId, currentTime }) {
   }
 }
 
-// Spawn the llm-assigner intro tutorial matter at the land root.
+// Spawn the llm-assigner intro tutorial matter at the place root.
 // The DO op is idempotent server-side (marker on metadata.tutorial.purpose)
 // so calling it twice returns the existing matter instead of creating
 // a duplicate. We ALWAYS re-render after the call — even when `created`
@@ -279,8 +279,8 @@ async function onMatterPlaybackTick({ matterId, currentTime }) {
 async function spawnLlmAssignerTutorial() {
   if (!state.client) throw new Error("Not connected");
   if (!state.session?.token) throw new Error("Not authenticated. Sign in via @auth first.");
-  const land = state.discovery?.land;
-  if (!land) throw new Error("No land");
+  const place = state.discovery?.place;
+  if (!place) throw new Error("No place");
 
   // After an HMR reload (or any transient disconnect) the panel may
   // open before the socket is back. Give it a short window to reconnect
@@ -293,7 +293,7 @@ async function spawnLlmAssignerTutorial() {
     if (!state.client.connected) throw new Error("Portal socket not connected (after 3s)");
   }
 
-  const result = await state.client.do(`${land}/`, "llm-assigner:start-tutorial", {});
+  const result = await state.client.do(`${place}/`, "llm-assigner:start-tutorial", {});
 
   // Always re-fetch — even when created:false, the live descriptor
   // for this client may not have the matter yet.
@@ -312,7 +312,7 @@ async function navigate(address, { fromHistory = false } = {}) {
   try {
     const resolved = expandHomeShorthand(address);
     // Subscribe live: every change to this position (placements, beings
-    // appearing/disappearing, queue state, activity) lands as a
+    // appearing/disappearing, queue state, activity) places as a
     // descriptor event we can refetch on.
     const desc = await state.client.see(resolved, { live: true });
     state.descriptor = desc;
@@ -369,7 +369,7 @@ function updateHistoryButtons() {
 function refreshAddressBar() {
   updateAddressBar({
     username: state.session?.username,
-    landDomain: state.discovery?.land,
+    placeDomain: state.discovery?.place,
     pathByNames: state.descriptor?.address?.pathByNames,
     chain: state.descriptor?.address?.chain,
     isAuthenticated: !!state.session?.token,
@@ -438,11 +438,11 @@ function openLlmAssignerPanel() {
   }
   // The Node tab needs a concrete nodeId. We pull it from the live
   // descriptor — when the user is at a tree position, descriptor.address.nodeId
-  // is set. Land-root / arrival has nodeId: null and the panel disables
+  // is set. Place-root / arrival has nodeId: null and the panel disables
   // the Node tab.
   showLlmAssignerPanel({
     client:        state.client,
-    land:          state.discovery.land,
+    place:          state.discovery.place,
     currentNodeId: state.descriptor?.address?.nodeId || null,
     onClose:       () => {},
     // Link in the panel: fires the llm-assigner:start-tutorial DO,
@@ -463,18 +463,18 @@ function openAuthPanel() {
   } else {
     hideAuthActions();
     showAuthSignInPanel({
-      land: state.discovery.land,
+      place: state.discovery.place,
       onSubmit: async (mode, username, password) => {
         // `name` is the canonical wire field; the server accepts
         // `username` as a legacy alias. Pass directly — `client.be`
         // already wraps these into the BE envelope's payload.
-        const result = await state.client.be(mode, state.discovery.land, {
+        const result = await state.client.be(mode, state.discovery.place, {
           name: username,
           password,
         });
         const newSession = {
-          landUrl: state.session?.landUrl || defaultLandUrl(),
-          landIsProxied: shouldUseProxy(state.session?.landUrl || defaultLandUrl()),
+          placeUrl: state.session?.placeUrl || defaultPlaceUrl(),
+          placeIsProxied: shouldUseProxy(state.session?.placeUrl || defaultPlaceUrl()),
           token: result.identityToken,
           username,
           beingAddress: result.beingAddress,
@@ -482,7 +482,7 @@ function openAuthPanel() {
         saveSession(newSession);
         state.session = newSession;
         state.client.disconnect();
-        await connectAndLand(newSession);
+        await connectAndPlace(newSession);
       },
     });
   }
@@ -508,15 +508,15 @@ async function sendSummon(b, text) {
   // the panel stays out of the way until the user activates again.
   hideTalkPanel();
   state.currentTalkBeing = null;
-  const land = state.discovery.land;
+  const place = state.discovery.place;
   const path = state.descriptor.address?.pathByNames || "/";
-  // Stance form: `<land>/<path>@<being>`. When path is "/" the slash
-  // is already present, so `${land}${path}@...` collapses to `<land>/@...`
-  // (the canonical form for land/home-root beings).
-  const stance = `${land}${path}@${b.being}`.replace(/\/+@/, "/@");
+  // Stance form: `<place>/<path>@<being>`. When path is "/" the slash
+  // is already present, so `${place}${path}@...` collapses to `<place>/@...`
+  // (the canonical form for place/home-root beings).
+  const stance = `${place}${path}@${b.being}`.replace(/\/+@/, "/@");
   const fromStance = state.session?.username
-    ? `${land}/@${state.session.username}`
-    : `${land}/@arrival`;
+    ? `${place}/@${state.session.username}`
+    : `${place}/@arrival`;
   const correlation = `c-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
   const message = {
     from: fromStance,
@@ -582,9 +582,9 @@ async function attemptPlant() {
   }
   if (!state.descriptor || !state.client) return;
 
-  const land = state.discovery.land;
+  const place = state.discovery.place;
   const path = state.descriptor.address?.pathByNames || "/";
-  const parentAddress = `${land}${path}`.replace(/\/+$/, "") || land;
+  const parentAddress = `${place}${path}`.replace(/\/+$/, "") || place;
 
   let answer;
   try {
@@ -628,7 +628,7 @@ function isGameplayInputBlocked() {
 async function logout() {
   if (!state.session?.token) return;
   const stance = state.session.beingAddress
-    || `${state.discovery.land}/@${state.session.username}`;
+    || `${state.discovery.place}/@${state.session.username}`;
   try {
     await state.client.be("release", stance, { identity: state.session.token });
   } catch (err) {
@@ -638,7 +638,7 @@ async function logout() {
   clearSession();
   state.session = null;
   state.client.disconnect();
-  await connectAnonymous(defaultLandUrl(), shouldUseProxy(defaultLandUrl()));
+  await connectAnonymous(defaultPlaceUrl(), shouldUseProxy(defaultPlaceUrl()));
 }
 
 async function onEnter(target) {
@@ -681,13 +681,13 @@ function expandHomeShorthand(address) {
   return address;
 }
 
-function defaultLandUrl() {
+function defaultPlaceUrl() {
   return "http://localhost:3000";
 }
 
-function shouldUseProxy(landUrl) {
-  if (!landUrl) return true;
-  return landUrl.includes("localhost") || landUrl.includes("127.0.0.1");
+function shouldUseProxy(placeUrl) {
+  if (!placeUrl) return true;
+  return placeUrl.includes("localhost") || placeUrl.includes("127.0.0.1");
 }
 
 function waitForConnect(client, timeoutMs = 10000) {
@@ -708,7 +708,7 @@ function waitForConnect(client, timeoutMs = 10000) {
 function formatLocation(desc, session) {
   const where = desc?.address?.pathByNames || "/";
   const who = session?.username || "arrival";
-  return `${who} | ${desc?.address?.land || ""}${where}`;
+  return `${who} | ${desc?.address?.place || ""}${where}`;
 }
 
 window.__portal3d = state;

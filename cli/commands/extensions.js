@@ -6,8 +6,8 @@ const { getApi } = require("../helpers");
 async function refreshProtocolCache(nodeId) {
   try {
     const cfg = load();
-    if (!cfg.landUrl) return;
-    let url = cfg.landUrl;
+    if (!cfg.placeUrl) return;
+    let url = cfg.placeUrl;
     if (!/^https?:\/\//i.test(url)) url = "https://" + url;
     // Pass nodeId for position-aware protocol. Without it, returns everything.
     const nid = nodeId || currentNodeId(cfg);
@@ -15,7 +15,7 @@ async function refreshProtocolCache(nodeId) {
     const res = await fetch(`${url}/api/v1/protocol${qs}`);
     if (res.ok) {
       const raw = await res.json();
-      cfg.landProtocol = raw.data || raw;
+      cfg.placeProtocol = raw.data || raw;
       save(cfg);
     }
   } catch {}
@@ -40,7 +40,7 @@ function printSearchResults(data, query) {
 module.exports = (program) => {
   const ext = program
     .command("ext")
-    .description("Manage land extensions")
+    .description("Manage place extensions")
     .addHelpText("after", `
 Examples:
   ext search               List all extensions in registry
@@ -48,7 +48,7 @@ Examples:
   ext view understanding    Full details from registry
   ext install understanding Install from registry
   ext update understanding  Update to latest version
-  ext list                  Show loaded extensions on this land
+  ext list                  Show loaded extensions on this place
     `)
     .action((args) => {
       if (args?.args?.length) {
@@ -316,7 +316,7 @@ Examples:
           }
         }
 
-        console.log(chalk.dim("Restart the land to load it."));
+        console.log(chalk.dim("Restart the place to load it."));
         await refreshProtocolCache();
       } catch (err) {
         console.error(chalk.red("Error:"), err.message);
@@ -334,7 +334,7 @@ Examples:
 
         // Get current installed version
         const protocol = await api.get("/protocol");
-        const manifests = await api.get("/land/extensions");
+        const manifests = await api.get("/place/extensions");
         const installed = manifests?.extensions?.find(e => e.name === name);
         if (!installed) return console.log(chalk.red(`"${name}" is not installed.`));
 
@@ -359,7 +359,7 @@ Examples:
         console.log(chalk.dim(`Updating ${name}: v${currentVersion} -> v${latestVersion}`));
         const data = await api.installExtension(name, latestVersion);
         console.log(chalk.green(`Updated: ${name} v${latestVersion}`));
-        console.log(chalk.dim(`${data.filesWritten} files written. Restart the land to load.`));
+        console.log(chalk.dim(`${data.filesWritten} files written. Restart the place to load.`));
         await refreshProtocolCache();
       } catch (err) {
         console.error(chalk.red("Error:"), err.message);
@@ -406,7 +406,7 @@ Examples:
           try {
             extData = await api.getExtension(cleanName);
           } catch {
-            throw new Error(`Extension "${cleanName}" not found on this land.`);
+            throw new Error(`Extension "${cleanName}" not found on this place.`);
           }
 
           const m = extData.manifest || {};
@@ -557,7 +557,7 @@ Examples:
       try {
         const api = getApi(requireAuth());
         console.log(chalk.dim(`Commenting on ${name}...`));
-        const data = await api.post(`/land/extensions/${encodeURIComponent(name)}/comment`, { text });
+        const data = await api.post(`/place/extensions/${encodeURIComponent(name)}/comment`, { text });
         console.log(chalk.green(`Comment posted on ${name}`));
       } catch (err) {
         console.error(chalk.red("Error:"), err.message);
@@ -565,16 +565,16 @@ Examples:
     });
 
   ext
-    .command("comment-land [args...]")
-    .description('Comment on a land: ext comment-land <domain> "your comment"')
+    .command("comment-place [args...]")
+    .description('Comment on a place: ext comment-place <domain> "your comment"')
     .action(async (args) => {
-      if (!args || args.length < 2) return console.log(chalk.yellow('Usage: ext comment-land <domain> "your comment"'));
+      if (!args || args.length < 2) return console.log(chalk.yellow('Usage: ext comment-place <domain> "your comment"'));
       const domain = args[0];
       const text = args.slice(1).join(" ");
       try {
         const api = getApi(requireAuth());
         console.log(chalk.dim(`Commenting on ${domain}...`));
-        const data = await api.post(`/land/extensions/land:${encodeURIComponent(domain)}/comment`, { text });
+        const data = await api.post(`/place/extensions/place:${encodeURIComponent(domain)}/comment`, { text });
         console.log(chalk.green(`Comment posted on ${domain}`));
       } catch (err) {
         console.error(chalk.red("Error:"), err.message);
@@ -589,7 +589,7 @@ Examples:
       const name = parts.join("-");
       try {
         const api = getApi(requireAuth());
-        const data = await api.post(`/land/extensions/${encodeURIComponent(name)}/react`, { type: "star" });
+        const data = await api.post(`/place/extensions/${encodeURIComponent(name)}/react`, { type: "star" });
         if (data.toggled === "added") console.log(chalk.yellow(`Starred: ${name}`));
         else console.log(chalk.dim(`Unstarred: ${name}`));
       } catch (err) {
@@ -605,7 +605,7 @@ Examples:
       const name = parts.join("-");
       try {
         const api = getApi(requireAuth());
-        const data = await api.post(`/land/extensions/${encodeURIComponent(name)}/react`, { type: "flag" });
+        const data = await api.post(`/place/extensions/${encodeURIComponent(name)}/react`, { type: "flag" });
         if (data.toggled === "added") console.log(chalk.red(`Flagged: ${name}`));
         else console.log(chalk.dim(`Unflagged: ${name}`));
       } catch (err) {
@@ -622,11 +622,11 @@ Examples:
       try {
         const api = getApi(requireAuth());
 
-        // Validate extension exists on this land
-        const allManifests = await api.get("/land/extensions");
+        // Validate extension exists on this place
+        const allManifests = await api.get("/place/extensions");
         const known = (allManifests?.loaded || allManifests?.extensions || []).map(e => e.name);
         if (!known.includes(name)) {
-          return console.log(chalk.red(`Extension "${name}" not found on this land. Run 'ext list' to see loaded extensions.`));
+          return console.log(chalk.red(`Extension "${name}" not found on this place. Run 'ext list' to see loaded extensions.`));
         }
 
         // Warn if other extensions depend on this one
@@ -641,7 +641,7 @@ Examples:
 
         const data = await api.disableExtension(name);
         console.log(chalk.yellow(`Disabled: ${name}`));
-        console.log(chalk.dim("Restart the land for this to take effect."));
+        console.log(chalk.dim("Restart the place for this to take effect."));
         if (data.disabledExtensions?.length) {
           console.log(chalk.dim("Currently disabled:"), data.disabledExtensions.join(", "));
         }
@@ -662,7 +662,7 @@ Examples:
         const data = await api.enableExtension(name);
         if (data?.error) return console.log(chalk.red(data.error));
         console.log(chalk.green(`Enabled: ${name}`));
-        console.log(chalk.dim("Restart the land for this to take effect."));
+        console.log(chalk.dim("Restart the place for this to take effect."));
         await refreshProtocolCache();
       } catch (err) {
         console.error(chalk.red("Error:"), err.message);
@@ -680,7 +680,7 @@ Examples:
         const api = getApi(requireAuth());
 
         // Validate and check dependencies
-        const allManifests = await api.get("/land/extensions");
+        const allManifests = await api.get("/place/extensions");
         const dependents = [];
         if (allManifests?.extensions) {
           for (const ext of allManifests.extensions) {
@@ -716,7 +716,7 @@ Examples:
 
         const data = await api.uninstallExtension(name);
         console.log(chalk.green(`Uninstalled: ${name}`));
-        console.log(chalk.dim("Restart the land to apply."));
+        console.log(chalk.dim("Restart the place to apply."));
         await refreshProtocolCache();
       } catch (err) {
         console.error(chalk.red("Error:"), err.message);
@@ -867,7 +867,7 @@ Examples:
         console.log();
         console.log(chalk.bold("Summary:"), `${installed} installed, ${skipped} already present, ${failed} failed`);
         if (failed === 0) {
-          console.log(chalk.dim("Restart the land to load."));
+          console.log(chalk.dim("Restart the place to load."));
         } else {
           console.log(chalk.yellow("Some extensions failed. The bundle may not work correctly."));
         }
@@ -1122,7 +1122,7 @@ Examples:
           try {
             for (const [key, value] of Object.entries(config)) {
               try {
-                await api.post("/land/config", { key, value, merge: true });
+                await api.post("/place/config", { key, value, merge: true });
                 console.log(chalk.dim(`  ${key}: ${value}`));
               } catch {
                 console.log(chalk.dim(`  ${key}: skipped (already set or invalid)`));
@@ -1137,10 +1137,10 @@ Examples:
         console.log(`  ${installed} installed, ${skipped} already present, ${failed} failed`);
         if (failed === 0) {
           console.log(chalk.green(`\n${name} installed successfully.`));
-          console.log(chalk.dim("Restart the land to load."));
+          console.log(chalk.dim("Restart the place to load."));
         } else {
           console.log(chalk.yellow("\nSome components failed. The OS may not work correctly."));
-          console.log(chalk.dim("Restart the land to load what was installed."));
+          console.log(chalk.dim("Restart the place to load what was installed."));
         }
         await refreshProtocolCache();
       } catch (err) {

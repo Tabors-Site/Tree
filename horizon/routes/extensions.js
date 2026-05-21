@@ -2,11 +2,11 @@ import { Router } from "express";
 import crypto from "crypto";
 import Extension from "../db/models/extension.js";
 import ExtensionTombstone from "../db/models/extensionTombstone.js";
-import Land from "../db/models/land.js";
+import Place from "../db/models/place.js";
 import { verifyHorizonAuth } from "../auth.js";
 
 // ---------------------------------------------------------------------------
-// Semver utilities (mirrored from land/extensions/loader.js)
+// Semver utilities (mirrored from place/extensions/loader.js)
 // ---------------------------------------------------------------------------
 
 function parseDepString(dep) {
@@ -128,12 +128,12 @@ function validateVersion(version) {
 
 // ---------------------------------------------------------------------------
 // Reserved names: kernel components and built-in extensions that ship with
-// every land. Prevents confusion and impersonation on the public registry.
+// every place. Prevents confusion and impersonation on the public registry.
 // ---------------------------------------------------------------------------
 
 const RESERVED_NAMES = new Set([
   // Kernel / core terms (not extension names, never publishable)
-  "seed", "kernel", "canopy", "horizon", "core", "land", "tree",
+  "seed", "kernel", "canopy", "horizon", "core", "place", "tree",
   // Loader internals
   "loader", "_template",
 ]);
@@ -163,10 +163,10 @@ function levenshtein(a, b) {
  * Only runs for brand new names (first publish). Threshold: distance 1 for
  * short names (<8 chars), distance 2 for longer names.
  */
-async function checkTyposquatting(name, landId) {
+async function checkTyposquatting(name, placeId) {
   // Get all published extensions (name + author) to check similarity
   const existingExts = await Extension.aggregate([
-    { $group: { _id: "$name", authorLandId: { $first: "$authorLandId" } } },
+    { $group: { _id: "$name", authorPlaceId: { $first: "$authorPlaceId" } } },
   ]);
 
   const threshold = name.length < 8 ? 1 : 2;
@@ -178,8 +178,8 @@ async function checkTyposquatting(name, landId) {
     if (existing === name) continue;
     // Skip names in the same family (shared prefix with hyphen separator)
     if (name.startsWith(existing + "-") || existing.startsWith(name + "-")) continue;
-    // Skip extensions published by the same land (same author, not typosquatting)
-    if (landId && ext.authorLandId === landId) continue;
+    // Skip extensions published by the same place (same author, not typosquatting)
+    if (placeId && ext.authorPlaceId === placeId) continue;
     const dist = levenshtein(name, existing);
     if (dist <= threshold) {
       suspicious.push(existing);
@@ -231,16 +231,16 @@ function validateFilePaths(files) {
 }
 
 // ---------------------------------------------------------------------------
-// Name ownership: the first land to publish a name owns it
+// Name ownership: the first place to publish a name owns it
 // ---------------------------------------------------------------------------
 
-async function checkNameOwnership(name, landId, landDomain) {
-  const existing = await Extension.findOne({ name }).select("authorLandId maintainers").lean();
+async function checkNameOwnership(name, placeId, placeDomain) {
+  const existing = await Extension.findOne({ name }).select("authorPlaceId maintainers").lean();
   if (!existing) return null; // New name, no conflict
-  const isAuthor = existing.authorLandId === landId;
-  const isMaintainer = landDomain && (existing.maintainers || []).includes(landDomain);
+  const isAuthor = existing.authorPlaceId === placeId;
+  const isMaintainer = placeDomain && (existing.maintainers || []).includes(placeDomain);
   if (!isAuthor && !isMaintainer) {
-    return `extension "${name}" is owned by another land. Only the author or maintainers can publish new versions.`;
+    return `extension "${name}" is owned by another place. Only the author or maintainers can publish new versions.`;
   }
   return null;
 }
@@ -256,7 +256,7 @@ const MAX_TAGS = 20;
 const MAX_FILES = 200;
 const MAX_MANIFEST_BYTES = 50000; // 50KB serialized manifest
 const MAX_VERSIONS_PER_NAME = 100; // Prevent version flooding
-const MAX_PACKAGES_PER_LAND = 200; // Prevent spam publishing
+const MAX_PACKAGES_PER_PLACE = 200; // Prevent spam publishing
 
 function validateContentLimits(manifest, files, readme, tags) {
   const errors = [];
@@ -301,24 +301,24 @@ function computeChecksum(files) {
 }
 
 /**
- * Middleware to extract land identity from verified canopy auth payload
- * and attach req.landId, req.landDomain, req.landName for route handlers.
+ * Middleware to extract place identity from verified canopy auth payload
+ * and attach req.placeId, req.placeDomain, req.placeName for route handlers.
  */
-function attachLandIdentity() {
+function attachPlaceIdentity() {
   return async (req, res, next) => {
     const payload = req.canopyAuth?.payload;
     if (!payload) {
       return res.status(401).json({ error: "No auth payload" });
     }
-    req.landId = payload.landId;
-    req.landDomain = payload.iss || "";
+    req.placeId = payload.placeId;
+    req.placeDomain = payload.iss || "";
 
-    // Look up the land name from the registry
-    if (req.landDomain) {
-      const land = await Land.findOne({ domain: req.landDomain }).select("name").lean();
-      req.landName = land?.name || "";
+    // Look up the place name from the registry
+    if (req.placeDomain) {
+      const place = await Place.findOne({ domain: req.placeDomain }).select("name").lean();
+      req.placeName = place?.name || "";
     } else {
-      req.landName = "";
+      req.placeName = "";
     }
     next();
   };
@@ -692,7 +692,7 @@ router.get("/:name/:version(\\d+\\.\\d+\\.\\d+.*)", async (req, res) => {
 
 /**
  * POST /extensions
- * Publish an extension. Requires land authentication.
+ * Publish an extension. Requires place authentication.
  * Body: { manifest, files, readme, tags, repoUrl }
  *
  * Validation order:
@@ -701,7 +701,7 @@ router.get("/:name/:version(\\d+\\.\\d+\\.\\d+.*)", async (req, res) => {
  *   3. Policy      (reserved names, ownership, typosquatting, deps)
  *   4. Persistence (upsert)
  */
-router.post("/", verifyHorizonAuth(), attachLandIdentity(), async (req, res) => {
+router.post("/", verifyHorizonAuth(), attachPlaceIdentity(), async (req, res) => {
   try {
     const { manifest, files, readme, tags, repoUrl, maintainers } = req.body;
 
@@ -786,7 +786,7 @@ router.post("/", verifyHorizonAuth(), attachLandIdentity(), async (req, res) => 
     }
 
     // Name ownership: first publisher owns the name
-    const ownershipErr = await checkNameOwnership(manifest.name, req.landId, req.landDomain);
+    const ownershipErr = await checkNameOwnership(manifest.name, req.placeId, req.placeDomain);
     if (ownershipErr) {
       return res.status(403).json({ error: ownershipErr });
     }
@@ -794,7 +794,7 @@ router.post("/", verifyHorizonAuth(), attachLandIdentity(), async (req, res) => 
     // Typosquatting: only for brand new names (no existing versions)
     const existingAny = await Extension.findOne({ name: manifest.name }).select("_id").lean();
     if (!existingAny) {
-      const suspicious = await checkTyposquatting(manifest.name, req.landId);
+      const suspicious = await checkTyposquatting(manifest.name, req.placeId);
       if (suspicious.length > 0) {
         return res.status(409).json({
           error: `Name "${manifest.name}" is suspiciously similar to existing extensions: ${suspicious.join(", ")}. If this is intentional, contact the directory maintainers.`,
@@ -812,23 +812,23 @@ router.post("/", verifyHorizonAuth(), attachLandIdentity(), async (req, res) => 
       });
     }
 
-    // Maintainer validation: all listed domains must be registered lands
+    // Maintainer validation: all listed domains must be registered places
     if (maintainers && Array.isArray(maintainers) && maintainers.length > 0) {
-      const registeredLands = await Land.find({ domain: { $in: maintainers } }).select("domain").lean();
+      const registeredLands = await Place.find({ domain: { $in: maintainers } }).select("domain").lean();
       const registeredDomains = new Set(registeredLands.map((l) => l.domain));
       const unregistered = maintainers.filter((m) => !registeredDomains.has(m));
       if (unregistered.length > 0) {
         return res.status(400).json({
-          error: `Maintainer domains not found in horizon: ${unregistered.join(", ")}. Only registered lands can be maintainers.`,
+          error: `Maintainer domains not found in horizon: ${unregistered.join(", ")}. Only registered places can be maintainers.`,
         });
       }
     }
 
-    // Per-land package cap: prevent one land from flooding the directory
-    const landPackageCount = await Extension.distinct("name", { authorLandId: req.landId });
-    if (!existingAny && landPackageCount.length >= MAX_PACKAGES_PER_LAND) {
+    // Per-place package cap: prevent one place from flooding the directory
+    const placePackageCount = await Extension.distinct("name", { authorPlaceId: req.placeId });
+    if (!existingAny && placePackageCount.length >= MAX_PACKAGES_PER_PLACE) {
       return res.status(429).json({
-        error: `Your land has reached the maximum of ${MAX_PACKAGES_PER_LAND} unique packages. Unpublish unused packages before publishing new ones.`,
+        error: `Your place has reached the maximum of ${MAX_PACKAGES_PER_PLACE} unique packages. Unpublish unused packages before publishing new ones.`,
       });
     }
 
@@ -884,9 +884,9 @@ router.post("/", verifyHorizonAuth(), attachLandIdentity(), async (req, res) => 
       standalone: pkgType === "os" ? (manifest.standalone || []) : [],
       osConfig: pkgType === "os" ? (manifest.config || null) : null,
       osOrchestrators: pkgType === "os" ? (manifest.orchestrators || null) : null,
-      authorLandId: req.landId,
-      authorDomain: req.landDomain || "",
-      authorName: req.landName || "",
+      authorPlaceId: req.placeId,
+      authorDomain: req.placeDomain || "",
+      authorName: req.placeName || "",
       manifest,
       files,
       checksum,
@@ -909,8 +909,8 @@ router.post("/", verifyHorizonAuth(), attachLandIdentity(), async (req, res) => 
         await Comment.create({
           extensionName: manifest.name,
           extensionVersion: manifest.version,
-          authorLandId: req.landId,
-          authorDomain: req.landDomain || "",
+          authorPlaceId: req.placeId,
+          authorDomain: req.placeDomain || "",
           authorUsername: "",
           text: releaseNotes.trim().slice(0, 2000),
           type: "release",
@@ -935,11 +935,11 @@ router.post("/", verifyHorizonAuth(), attachLandIdentity(), async (req, res) => 
 
 /**
  * DELETE /extensions/:name/:version
- * Unpublish a version. Requires land authentication (author only).
+ * Unpublish a version. Requires place authentication (author only).
  * Blocked if other published extensions have a hard dependency on this
  * extension and no other version would satisfy the constraint.
  */
-router.delete("/:name/:version(\\d+\\.\\d+\\.\\d+.*)", verifyHorizonAuth(), attachLandIdentity(), async (req, res) => {
+router.delete("/:name/:version(\\d+\\.\\d+\\.\\d+.*)", verifyHorizonAuth(), attachPlaceIdentity(), async (req, res) => {
   try {
     const { name, version } = req.params;
 
@@ -948,8 +948,8 @@ router.delete("/:name/:version(\\d+\\.\\d+\\.\\d+.*)", verifyHorizonAuth(), atta
       return res.status(404).json({ error: "Extension version not found" });
     }
 
-    const isAuthor = ext.authorLandId === req.landId;
-    const isMaintainer = (ext.maintainers || []).includes(req.landDomain);
+    const isAuthor = ext.authorPlaceId === req.placeId;
+    const isMaintainer = (ext.maintainers || []).includes(req.placeDomain);
     if (!isAuthor && !isMaintainer) {
       return res.status(403).json({ error: "Only the author or maintainers can unpublish" });
     }
@@ -1001,7 +1001,7 @@ router.delete("/:name/:version(\\d+\\.\\d+\\.\\d+.*)", verifyHorizonAuth(), atta
     // name+version can never be republished, even by the original author.
     await ExtensionTombstone.findOneAndUpdate(
       { name, version },
-      { name, version, checksum: ext.checksum, authorLandId: ext.authorLandId, unpublishedAt: new Date() },
+      { name, version, checksum: ext.checksum, authorPlaceId: ext.authorPlaceId, unpublishedAt: new Date() },
       { upsert: true },
     );
 
@@ -1013,13 +1013,13 @@ router.delete("/:name/:version(\\d+\\.\\d+\\.\\d+.*)", verifyHorizonAuth(), atta
 });
 
 // =========================================================================
-// COMMENTS & REACTIONS (land-verified via CanopyToken)
+// COMMENTS & REACTIONS (place-verified via CanopyToken)
 // =========================================================================
 
 import Comment, { Reaction } from "../db/models/comment.js";
 
-const MAX_COMMENTS_PER_LAND_PER_EXT = 3;  // per version. Prevents spam.
-const MAX_COMMENTS_PER_LAND_PER_DAY = 20; // across all extensions. Global rate limit.
+const MAX_COMMENTS_PER_PLACE_PER_EXT = 3;  // per version. Prevents spam.
+const MAX_COMMENTS_PER_PLACE_PER_DAY = 20; // across all extensions. Global rate limit.
 
 /**
  * GET /extensions/:name/comments
@@ -1052,8 +1052,8 @@ router.get("/:name/comments", async (req, res) => {
 /**
  * POST /extensions/:name/comments
  * Add a comment. Requires CanopyToken.
- * Rate limited: max 3 comments per land per extension version.
- * Max 20 comments per land per day across all extensions.
+ * Rate limited: max 3 comments per place per extension version.
+ * Max 20 comments per place per day across all extensions.
  */
 router.post("/:name/comments", verifyHorizonAuth(), async (req, res) => {
   try {
@@ -1072,37 +1072,37 @@ router.post("/:name/comments", verifyHorizonAuth(), async (req, res) => {
     const ext = await Extension.findOne({ name }).lean();
     if (!ext) return res.status(404).json({ error: `Extension "${name}" not found` });
 
-    // Verify land is registered
-    const land = await Land.findById(payload.landId);
-    if (!land) return res.status(403).json({ error: "Your land must be registered on Horizon to comment" });
+    // Verify place is registered
+    const place = await Place.findById(payload.placeId);
+    if (!place) return res.status(403).json({ error: "Your place must be registered on Horizon to comment" });
 
     // Rate limit: per extension version
     const perExtCount = await Comment.countDocuments({
       extensionName: name,
       extensionVersion: version || null,
-      authorLandId: payload.landId,
+      authorPlaceId: payload.placeId,
       type: "comment",
     });
-    if (perExtCount >= MAX_COMMENTS_PER_LAND_PER_EXT) {
-      return res.status(429).json({ error: `Maximum ${MAX_COMMENTS_PER_LAND_PER_EXT} comments per land per extension version` });
+    if (perExtCount >= MAX_COMMENTS_PER_PLACE_PER_EXT) {
+      return res.status(429).json({ error: `Maximum ${MAX_COMMENTS_PER_PLACE_PER_EXT} comments per place per extension version` });
     }
 
     // Rate limit: per day globally
     const dayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
     const dailyCount = await Comment.countDocuments({
-      authorLandId: payload.landId,
+      authorPlaceId: payload.placeId,
       type: "comment",
       createdAt: { $gte: dayAgo },
     });
-    if (dailyCount >= MAX_COMMENTS_PER_LAND_PER_DAY) {
-      return res.status(429).json({ error: `Maximum ${MAX_COMMENTS_PER_LAND_PER_DAY} comments per land per day` });
+    if (dailyCount >= MAX_COMMENTS_PER_PLACE_PER_DAY) {
+      return res.status(429).json({ error: `Maximum ${MAX_COMMENTS_PER_PLACE_PER_DAY} comments per place per day` });
     }
 
     const comment = await Comment.create({
       extensionName: name,
       extensionVersion: version || null,
-      authorLandId: payload.landId,
-      authorDomain: payload.iss || land.domain,
+      authorPlaceId: payload.placeId,
+      authorDomain: payload.iss || place.domain,
       authorUsername: username || "",
       text: text.trim(),
       type: "comment",
@@ -1116,7 +1116,7 @@ router.post("/:name/comments", verifyHorizonAuth(), async (req, res) => {
 
 /**
  * DELETE /extensions/:name/comments/:commentId
- * Remove your own comment. Requires CanopyToken from the same land.
+ * Remove your own comment. Requires CanopyToken from the same place.
  */
 router.delete("/:name/comments/:commentId", verifyHorizonAuth(), async (req, res) => {
   try {
@@ -1126,7 +1126,7 @@ router.delete("/:name/comments/:commentId", verifyHorizonAuth(), async (req, res
     const comment = await Comment.findById(commentId);
     if (!comment) return res.status(404).json({ error: "Comment not found" });
 
-    if (comment.authorLandId !== payload.landId) {
+    if (comment.authorPlaceId !== payload.placeId) {
       return res.status(403).json({ error: "You can only delete your own comments" });
     }
 
@@ -1138,13 +1138,13 @@ router.delete("/:name/comments/:commentId", verifyHorizonAuth(), async (req, res
 });
 
 // =========================================================================
-// REACTIONS (star / flag, one per user per land per extension)
+// REACTIONS (star / flag, one per user per place per extension)
 // =========================================================================
 
 /**
  * GET /extensions/:name/reactions
- * Get reaction counts and whether the requesting land has reacted.
- * Public counts. Land-specific status requires CanopyToken.
+ * Get reaction counts and whether the requesting place has reacted.
+ * Public counts. Place-specific status requires CanopyToken.
  */
 router.get("/:name/reactions", async (req, res) => {
   try {
@@ -1161,7 +1161,7 @@ router.get("/:name/reactions", async (req, res) => {
 
 /**
  * POST /extensions/:name/react
- * Star or flag an extension. One per type per user per land.
+ * Star or flag an extension. One per type per user per place.
  * Toggle: if already reacted, removes it.
  * Body: { type: "star"|"flag", username: "optional" }
  */
@@ -1179,19 +1179,19 @@ router.post("/:name/react", verifyHorizonAuth(), async (req, res) => {
     const ext = await Extension.findOne({ name }).lean();
     if (!ext) return res.status(404).json({ error: `Extension "${name}" not found` });
 
-    // Verify land is registered (_id is the landId)
-    const land = await Land.findById(payload.landId);
-    if (!land) return res.status(403).json({ error: "Your land must be registered on Horizon" });
+    // Verify place is registered (_id is the placeId)
+    const place = await Place.findById(payload.placeId);
+    if (!place) return res.status(403).json({ error: "Your place must be registered on Horizon" });
 
     // Can't star or flag your own extensions
-    if (ext.authorLandId === payload.landId) {
+    if (ext.authorPlaceId === payload.placeId) {
       return res.status(403).json({ error: "Cannot star or flag your own extension" });
     }
 
     // Toggle: check if reaction exists
     const existing = await Reaction.findOne({
       extensionName: name,
-      authorLandId: payload.landId,
+      authorPlaceId: payload.placeId,
       authorUsername: username || "",
       type,
     });
@@ -1205,15 +1205,15 @@ router.post("/:name/react", verifyHorizonAuth(), async (req, res) => {
     const opposite = type === "star" ? "flag" : "star";
     await Reaction.deleteOne({
       extensionName: name,
-      authorLandId: payload.landId,
+      authorPlaceId: payload.placeId,
       authorUsername: username || "",
       type: opposite,
     });
 
     await Reaction.create({
       extensionName: name,
-      authorLandId: payload.landId,
-      authorDomain: payload.iss || land.domain,
+      authorPlaceId: payload.placeId,
+      authorDomain: payload.iss || place.domain,
       authorUsername: username || "",
       type,
     });

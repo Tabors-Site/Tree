@@ -102,7 +102,7 @@ export function renderExtensionPage({ ext, versions, dependents, ecosystem }) {
       <div class="ext-subtitle">${escapeHtml(ext.description || "")}</div>
       <div class="ext-meta-row">
         <span>v<strong>${escapeHtml(ext.version)}</strong></span>
-        <span>by <a href="/lands/${encodeURIComponent(ext.authorDomain || "")}" style="color:var(--text-dim);text-decoration:none;"><strong>${escapeHtml(ext.authorName || ext.authorDomain || "unknown")}</strong></a></span>
+        <span>by <a href="/places/${encodeURIComponent(ext.authorDomain || "")}" style="color:var(--text-dim);text-decoration:none;"><strong>${escapeHtml(ext.authorName || ext.authorDomain || "unknown")}</strong></a></span>
         <span><strong>${ext.downloads || 0}</strong> downloads</span>
         ${ext.fileCount ? `<span><strong>${ext.fileCount}</strong> files</span>` : ""}
         ${ext.totalLines ? `<span><strong>${ext.totalLines.toLocaleString()}</strong> lines</span>` : ""}
@@ -577,7 +577,7 @@ export function renderExtensionPage({ ext, versions, dependents, ecosystem }) {
           var isRelease = c.type === "release";
           var badge = isRelease ? '<span class="comment-badge release">release</span>' : '';
           var version = c.extensionVersion ? '<span class="comment-version">v' + c.extensionVersion + '</span>' : '';
-          var author = c.authorDomain || "unknown land";
+          var author = c.authorDomain || "unknown place";
           var user = c.authorUsername ? c.authorUsername + " @ " + author : author;
           var ago = timeAgoJs(c.createdAt);
           html += '<div class="comment' + (isRelease ? ' comment-release' : '') + '">'

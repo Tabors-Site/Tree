@@ -32,7 +32,7 @@ The closest human analogy is sleep. The person does not experience time across t
 
 **Concurrency makes sense only under this model.** Multiple beings across the system can be summoned simultaneously without conflicting, because no being holds a long-running resource. Multiple senders addressing one being is just multiple inbox writes; when the being is next summoned it reads them in arrival order.
 
-**Federation makes sense only under this model.** A being can move between lands or be addressed from across the network because its identity is in its record, not in a running process. Forwarding a being amounts to forwarding its record.
+**Federation makes sense only under this model.** A being can move between places or be addressed from across the network because its identity is in its record, not in a running process. Forwarding a being amounts to forwarding its record.
 
 **Coordination makes sense only under this model.** A Ruler fires-and-forgets background work and ends its invocation. When that work completes, a hook fires, and the Ruler is summoned again to see the result. There is no need for the Ruler to "wait" in any active sense, because the Ruler does not exist between summonings.
 
@@ -74,7 +74,7 @@ Everything else, including coordination across summonings, is the being's own de
 
 **Being.** A registered behavior pattern (Ruler, Worker, Oracle, Dreamer, etc.) that describes how a summoning at a position acts.
 
-**Position.** A node in a tree on a land. Addresses name positions.
+**Position.** A node in a tree on a place. Addresses name positions.
 
 **Record.** Everything written at a position: status, metadata, notes, contributions, inbox, conversation history.
 

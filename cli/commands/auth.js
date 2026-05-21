@@ -145,11 +145,11 @@ module.exports = (program) => {
       if (cfg.apiKey && cfg.username) {
         return console.log(chalk.yellow(`Already logged in as ${cfg.username}. Run: logout first.`));
       }
-      const landUrl = (cfg.landUrl || "https://treeOS.ai").replace(/\/+$/, "");
+      const placeUrl = (cfg.placeUrl || "https://treeOS.ai").replace(/\/+$/, "");
       const nonInteractive = !!(opts.username && opts.password);
 
       if (opts.browser) {
-        openBrowser(`${landUrl}/register`);
+        openBrowser(`${placeUrl}/register`);
         console.log(chalk.dim("  Opened registration page. After signing up, run: treeos login"));
         return;
       }
@@ -178,8 +178,8 @@ module.exports = (program) => {
         } catch (e) {
           // Server requires email but user skipped it
           if (!email && e.message && e.message.toLowerCase().includes("email is required")) {
-            const retryEmail = await prompt("  This land requires email: ");
-            if (!retryEmail) return console.log(chalk.yellow("Email is required on this land."));
+            const retryEmail = await prompt("  This place requires email: ");
+            if (!retryEmail) return console.log(chalk.yellow("Email is required on this place."));
             data = await unauthPost("/register", {
               username,
               password,
@@ -274,11 +274,11 @@ module.exports = (program) => {
       if (cfg.apiKey && cfg.username && !opts.key) {
         return console.log(chalk.yellow(`Already logged in as ${cfg.username}. Run: logout first.`));
       }
-      const landUrl = (cfg.landUrl || "https://treeOS.ai").replace(/\/+$/, "");
+      const placeUrl = (cfg.placeUrl || "https://treeOS.ai").replace(/\/+$/, "");
 
       // --browser: open login page
       if (opts.browser) {
-        openBrowser(`${landUrl}/login`);
+        openBrowser(`${placeUrl}/login`);
         console.log(chalk.dim("  Opened login page. After logging in, run: treeos login --key <your-key>"));
         return;
       }

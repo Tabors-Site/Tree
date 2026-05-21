@@ -1,6 +1,6 @@
 # IBP . The Inter-Being Protocol
 
-IBP is the protocol that lands speak to portals and that portals speak to lands. Four verbs over WebSocket. One message envelope for being engagement. One inbox per being, part of the record.
+IBP is the protocol that places speak to portals and that portals speak to places. Four verbs over WebSocket. One message envelope for being engagement. One inbox per being, part of the record.
 
 IBP is a sibling to HTTP, not a layer inside it. HTTP gave the world a web of documents addressed by URLs, opened in a browser. IBP gives it a web of beings addressed by IBP Addresses, opened in the Portal. Both ride the same internet substrate. Both coexist.
 
@@ -50,9 +50,9 @@ This is what makes beings categorically different from data in TreeOS. Anyone bu
 
 WebSocket only. Socket.IO ops named `ibp:see`, `ibp:do`, `ibp:summon`, `ibp:be`. The connection is the IBP session; closing the connection ends all live subscriptions.
 
-A single HTTP endpoint exists for bootstrap: `GET /.well-known/treeos-portal` returns the WebSocket URL and IBP protocol version. The client opens a socket and never speaks HTTP for IBP verbs again. Everything else, including capability discovery, flows through `ibp:see` on the `.discovery` position of a land.
+A single HTTP endpoint exists for bootstrap: `GET /.well-known/treeos-portal` returns the WebSocket URL and IBP protocol version. The client opens a socket and never speaks HTTP for IBP verbs again. Everything else, including capability discovery, flows through `ibp:see` on the `.discovery` position of a place.
 
-The legacy `land/routes/api/*` HTTP routes continue running during migration, but they are not part of IBP. Nothing new wires through them.
+The legacy `place/routes/api/*` HTTP routes continue running during migration, but they are not part of IBP. Nothing new wires through them.
 
 ## What can be addressed
 
@@ -62,12 +62,12 @@ Two categories of things are addressable in IBP. Position and Stance. Everything
 
 | Concept | Form | What it names |
 |---|---|---|
-| **Position** | `<land>/<path>` | A place in the world. The land domain plus `/` plus the path. Examples: `treeos.ai/` (Land Position), `treeos.ai/~tabor` (home), `treeos.ai/flappybird/chapter-1` (a tree space). Accepted by SEE and DO. |
+| **Position** | `<place>/<path>` | A place in the world. The place domain plus `/` plus the path. Examples: `treeos.ai/` (Place Position), `treeos.ai/~tabor` (home), `treeos.ai/flappybird/chapter-1` (a tree space). Accepted by SEE and DO. |
 | **Stance** | `<position>@<being>` | A being at a position. `treeos.ai/flappybird@ruler`, `treeos.ai/@auth`. Accepted by SEE, required by SUMMON and BE. |
 
 ### Structural vocabulary. Not addressable on its own.
 
-- **Land** does double duty, distinguished by the trailing slash. `treeos.ai` (no slash) is the bare domain identifier, the name of the sovereign server, used by BE when dispatching to the land's auth-being. `treeos.ai/` (with slash) is the Land Position of that land, addressable like any Position. The trailing slash is the load-bearing distinction.
+- **Place** does double duty, distinguished by the trailing slash. `treeos.ai` (no slash) is the bare domain identifier, the name of the sovereign server, used by BE when dispatching to the place's auth-being. `treeos.ai/` (with slash) is the Place Position of that place, addressable like any Position. The trailing slash is the load-bearing distinction.
 - **IBP Address** is the bridge form, `<stance> :: <stance>`. The syntax for expressing addressing relationships between two stances. Not a thing that gets addressed; the format used to address things. Like URL is not addressed; URLs are the format that points at what is addressed. An IBP Address is rarely inside a verb envelope. It describes the *relationship* between requester and target. The envelope carries the target side only; the requester side is implicit, established by BE and carried in the identity token. IBP Addresses appear in UI surfaces (tab titles, history) and in being-to-being framing.
 - **Being** is a cognitive shape (`@ruler`, `@archivist`, a username like `@tabor`). Not addressable on its own. Combines with a Position to form a Stance. The `@qualifier` in a Stance address names the being but never targets it.
 
@@ -75,10 +75,10 @@ Two categories of things are addressable in IBP. Position and Stance. Everything
 
 | Form | Meaning | Verbs that accept it |
 |---|---|---|
-| `treeos.ai` | domain only, Land identifier | BE |
-| `treeos.ai/` | domain plus trailing slash, Land Position | SEE, DO |
+| `treeos.ai` | domain only, Place identifier | BE |
+| `treeos.ai/` | domain plus trailing slash, Place Position | SEE, DO |
 | `treeos.ai/flappybird` | domain plus path, deeper Position | SEE, DO |
-| `treeos.ai/@auth` | Land Position plus being, Stance at the Land Position | SUMMON, BE |
+| `treeos.ai/@auth` | Place Position plus being, Stance at the Place Position | SUMMON, BE |
 | `treeos.ai/flappybird@ruler` | deeper Position plus being, Stance at space | SEE, SUMMON, BE |
 
 ## Envelopes
@@ -90,7 +90,7 @@ Each verb's envelope is named explicitly for the kind of address it expects. The
 | **SEE** | `position` OR `stance` | Observation works at either tier. Position-level data (what's here?) or being-perspective interpretation (what does this being see here?). |
 | **DO** | `position` only | Mutation only happens to persistent data. Beings are summoned moments, not storage — there is nothing at a stance to mutate. |
 | **SUMMON** | `stance` only | Beings live as stances (being-at-position). Engagement requires both. Inboxes are per-being-per-position. |
-| **BE** | `stance` (full form) OR `land` (domain form, auth-being implicit) | Self-identity operations target stances. For fresh registration the stance is the land's auth-being (`<land>/@auth`); passing just the bare domain (`<land>`, no slash) is shorthand for the same. |
+| **BE** | `stance` (full form) OR `place` (domain form, auth-being implicit) | Self-identity operations target stances. For fresh registration the stance is the place's auth-being (`<place>/@auth`); passing just the bare domain (`<place>`, no slash) is shorthand for the same. |
 
 The asymmetry between SEE and DO is real and reflects what beings are. Observation can ask "what does this being see here" because that question has meaning even when the being is not currently summoned (the answer is "how this being would interpret position data"). Mutation cannot ask "what does this being become" because beings are not mutable — only the data they read is mutable.
 
@@ -121,16 +121,16 @@ Accepts a `stance` field. Required. Inboxes are per-being-per-position, so the b
 
 ### BE
 
-Accepts a `stance` field (the full form) OR a `land` field (the domain-only shorthand). Both forms address the land's auth-being for `register` and credential-based `claim`. For `release`, `switch`, and token-based `claim`, the address is the specific held stance.
+Accepts a `stance` field (the full form) OR a `place` field (the domain-only shorthand). Both forms address the place's auth-being for `register` and credential-based `claim`. For `release`, `switch`, and token-based `claim`, the address is the specific held stance.
 
 ```
 // register: use either form
-{ verb: "be", operation: "register", land:   "<land>",        payload: {...} }
-{ verb: "be", operation: "register", stance: "<land>/@auth",  payload: {...} }
+{ verb: "be", operation: "register", place:   "<place>",        payload: {...} }
+{ verb: "be", operation: "register", stance: "<place>/@auth",  payload: {...} }
 
 // claim with credentials: either form (auth-being processes credentials)
-{ verb: "be", operation: "claim",    land:   "<land>",        payload: { username, password } }
-{ verb: "be", operation: "claim",    stance: "<land>/@auth",  payload: { username, password } }
+{ verb: "be", operation: "claim",    place:   "<place>",        payload: { username, password } }
+{ verb: "be", operation: "claim",    stance: "<place>/@auth",  payload: { username, password } }
 
 // token re-claim, release, switch: stance form (names the specific be-er)
 { verb: "be", operation: "claim",    stance: "<stance>", identity: <token> }
@@ -138,9 +138,9 @@ Accepts a `stance` field (the full form) OR a `land` field (the domain-only shor
 { verb: "be", operation: "switch",   stance: "<target>", from: "<from>", identity: <token-for-target> }
 ```
 
-The Portal client and the land server speak these IBP envelopes identically. The verb dispatches; the position/stance/land field tells the verb where to act; the identity names who; verb-specific fields name what.
+The Portal client and the place server speak these IBP envelopes identically. The verb dispatches; the position/stance/place field tells the verb where to act; the identity names who; verb-specific fields name what.
 
-For BE operations, `identity` may be absent (register, claim). All other verbs require it; the land rejects with `UNAUTHORIZED` if missing.
+For BE operations, `identity` may be absent (register, claim). All other verbs require it; the place rejects with `UNAUTHORIZED` if missing.
 
 ## SEE
 
@@ -162,7 +162,7 @@ Matter reads use a path suffix:
 Discovery is a SEE on a well-known position:
 
 ```
-{ verb: "see", position: "<land>/.discovery", identity? }
+{ verb: "see", position: "<place>/.discovery", identity? }
 ```
 
 Discovery may be requested without identity for capability negotiation.
@@ -192,7 +192,7 @@ The kernel mints a small set of primitive actions; extensions can register addit
 - **Structural actions** write Space-schema fields: `create-child`, `rename`, `move`, `delete`, `change-status`, `set-visibility`, `transfer-owner`, `invite`, `accept-invite`, `revoke`.
 - **Position-level content**: `write-note`, `edit-note`, `delete-note`, `upload-matter`.
 - **Namespaced metadata**: `set-meta` and `clear-meta` are the generic writes; `scope-extension` and `assign-llm-slot` are named conveniences over specific namespaces with kernel-aware semantics.
-- **Land-level operations** (targeted at `<land>/`): `install-extension`, `enable-extension`, `disable-extension`, `uninstall-extension`, `publish-extension`, `set-config`, `set-llm-connection`, `remove-llm-connection`.
+- **Place-level operations** (targeted at `<place>/`): `install-extension`, `enable-extension`, `disable-extension`, `uninstall-extension`, `publish-extension`, `set-config`, `set-llm-connection`, `remove-llm-connection`.
 
 **Extension-registered actions** (examples, NOT kernel-minted): `compress` (tree-compress), `prune` and `reroot` (treeos-maintenance), `split` (standalone), and any other action an extension registers. They go through the same dispatcher; the extension owns the payload + behavior. See [do-actions.md](do-actions.md#extension-registered-do-actions).
 
@@ -248,13 +248,13 @@ Full detail: [message-envelope.md](message-envelope.md) and [inbox.md](inbox.md)
 
 ## BE
 
-BE manages the requester's own identity. The address is a `stance` (the full form) or a `land` (the domain-only shorthand for register and credential claim). Both forms reach the land's auth-being; `land` is just the shorter version.
+BE manages the requester's own identity. The address is a `stance` (the full form) or a `place` (the domain-only shorthand for register and credential claim). Both forms reach the place's auth-being; `place` is just the shorter version.
 
 ```
 {
   verb:      "be",
   operation: "register" | "claim" | "release" | "switch",
-  stance:    "<stance>",        // OR land: "<land>"
+  stance:    "<stance>",        // OR place: "<place>"
   identity?: <token>,
   payload?:  <operation-specific>
 }
@@ -262,32 +262,32 @@ BE manages the requester's own identity. The address is a `stance` (the full for
 
 | Operation | Address | Why |
 |---|---|---|
-| `register` | `land: "<land>"` or `stance: "<land>/@auth"` (equivalent) | No prior stance. The auth-being processes credential creation. |
-| `claim` (credentials) | `land: "<land>"` or `stance: "<land>/@auth"` (equivalent) | No prior stance. Credentials are validated by the auth-being. |
+| `register` | `place: "<place>"` or `stance: "<place>/@auth"` (equivalent) | No prior stance. The auth-being processes credential creation. |
+| `claim` (credentials) | `place: "<place>"` or `stance: "<place>/@auth"` (equivalent) | No prior stance. Credentials are validated by the auth-being. |
 | `claim` (token re-claim) | `stance: "<held stance>"` | A previously-held stance is being re-activated. |
 | `release` | `stance: "<held stance>"` | The user knows which one they are letting go. |
 | `switch` | `stance: "<target stance>"` | The session already holds the target; this selects it as active. |
 
-The auth-being is the land's welcome character: it is the stance that visitors first encounter. Whatever the land's values are about who can be there get expressed through the auth-being's responses. Public lands shape their auth-being to be friendly and accessible. Private lands shape theirs to require an invite code. Research lands shape theirs to bind the be-er to a contract. The auth-being is an architectural commitment that becomes a UX surface.
+The auth-being is the place's welcome character: it is the stance that visitors first encounter. Whatever the place's values are about who can be there get expressed through the auth-being's responses. Public places shape their auth-being to be friendly and accessible. Private places shape theirs to require an invite code. Research places shape theirs to bind the be-er to a contract. The auth-being is an architectural commitment that becomes a UX surface.
 
-The auth-being is inspectable via SEE on its stance (typically `<land>/@auth`); lands choose the qualifier name and may install custom auth-being beings.
+The auth-being is inspectable via SEE on its stance (typically `<place>/@auth`); places choose the qualifier name and may install custom auth-being beings.
 
 Full detail: [be-operations.md](be-operations.md).
 
 ## The arrival stance
 
-An unestablished requester is in the **arrival stance** at the land they have just connected to. Arrival is not a protocol special case. It is a regular stance whose permissions the land defines.
+An unestablished requester is in the **arrival stance** at the place they have just connected to. Arrival is not a protocol special case. It is a regular stance whose permissions the place defines.
 
 The protocol commits to exactly two things about arrivals:
 
-1. Every land has an arrival stance, so unestablished visitors have something to be.
-2. Every land has an auth-being, and BE addressed at the auth-being (`<land>` or `<land>/@auth`) is always permitted from the arrival stance, so visitors can register or claim — subject to which BE operations the land's auth-being enables (a private land can disable `register` entirely).
+1. Every place has an arrival stance, so unestablished visitors have something to be.
+2. Every place has an auth-being, and BE addressed at the auth-being (`<place>` or `<place>/@auth`) is always permitted from the arrival stance, so visitors can register or claim — subject to which BE operations the place's auth-being enables (a private place can disable `register` entirely).
 
-Beyond those two, **everything is land-configured**. The land defines what an arrival can SEE, DO, and SUMMON to. The land's character expresses through what its arrival stance permits.
+Beyond those two, **everything is place-configured**. The place defines what an arrival can SEE, DO, and SUMMON to. The place's character expresses through what its arrival stance permits.
 
 ### Configuration shape
 
-Arrival permissions live at the land's root position under `metadata.beings.arrival.permissions`. The Phase 5 shape is deliberately simple. Expressive enough for the patterns lands actually want today, with room to extend:
+Arrival permissions live at the place's root position under `metadata.beings.arrival.permissions`. The Phase 5 shape is deliberately simple. Expressive enough for the patterns places actually want today, with room to extend:
 
 ```
 {
@@ -303,26 +303,26 @@ What each field means:
 - **`see.allowed_visibility`** lists Space `visibility` values that arrivals may SEE. The `visibility` field already exists on the Space schema; arrivals get filtered access to positions whose visibility matches. `["public"]` is the common open setting. `[]` denies all SEE.
 - **`do.allowed_actions`** is a list of action names (`["write-note", "set-meta"]`) or the wildcard `"*"`. Empty list denies all DO.
 - **`talk.allowed_targets`** lists being names arrivals can SUMMON to. `["@auth", "@guide"]` permits the auth-being and a public guide; `"*"` permits any being.
-- **`be.allowed_operations`** lists which BE operations are honored. `["register", "claim"]` is the default; a closed land may narrow it.
+- **`be.allowed_operations`** lists which BE operations are honored. `["register", "claim"]` is the default; a closed place may narrow it.
 
 Stance Authorization (see below) checks arrival permissions on every request from an unestablished requester. No special-case logic at the protocol layer. Arrivals follow the same rules as any other stance, with their permission profile sourced from this metadata namespace.
 
-The discovery position (`<land>/.discovery`) is implicitly readable by arrivals on every land regardless of configuration, so clients can learn capabilities before engaging in any other way.
+The discovery position (`<place>/.discovery`) is implicitly readable by arrivals on every place regardless of configuration, so clients can learn capabilities before engaging in any other way.
 
-### Land-level BE configuration
+### Place-level BE configuration
 
-Two booleans at the land root govern which BE operations the auth-being honors:
+Two booleans at the place root govern which BE operations the auth-being honors:
 
 ```
 metadata.auth.register_enabled = true | false   // default: true
 metadata.auth.claim_enabled    = true | false   // default: true
 ```
 
-A closed land disables `register_enabled` and leaves `claim_enabled` on. A maintenance-mode land disables both. The auth-being reads these on every BE call; it rejects with `FORBIDDEN` when the requested operation is disabled. These are intentionally simpler than per-stance `be.allowed_operations` for the common case. Most lands tune register/claim availability at the land level, not per stance.
+A closed place disables `register_enabled` and leaves `claim_enabled` on. A maintenance-mode place disables both. The auth-being reads these on every BE call; it rejects with `FORBIDDEN` when the requested operation is disabled. These are intentionally simpler than per-stance `be.allowed_operations` for the common case. Most places tune register/claim availability at the place level, not per stance.
 
 ### The system default
 
-The default arrival permissions are conservative: BE register and claim are enabled; SEE is permitted on positions with `visibility: "public"`; DO and SUMMON are denied. Land owners loosen this as their character allows by editing `metadata.beings.arrival.permissions`.
+The default arrival permissions are conservative: BE register and claim are enabled; SEE is permitted on positions with `visibility: "public"`; DO and SUMMON are denied. Place owners loosen this as their character allows by editing `metadata.beings.arrival.permissions`.
 
 ## Stance Authorization
 
@@ -344,41 +344,41 @@ Inputs:
 
 Output: allow or deny, plus the resolved acting stance that was checked.
 
-Per request the kernel resolves the acting stance at the addressed land (arrival if unestablished, otherwise the stance the land has assigned to this identity), reads the stance's permissions from land metadata, and decides. One function. One configuration shape. Every verb call.
+Per request the kernel resolves the acting stance at the addressed place (arrival if unestablished, otherwise the stance the place has assigned to this identity), reads the stance's permissions from place metadata, and decides. One function. One configuration shape. Every verb call.
 
 ### Phase 5 stances
 
 Phase 5 ships two real stances at the protocol level. Additional stance vocabularies are future work.
 
-- **arrival**. Unauthenticated requester. Default permissions: SEE positions with `visibility: "public"`, BE register and claim. Nothing else. Configurable per land via `metadata.beings.arrival.permissions`.
+- **arrival**. Unauthenticated requester. Default permissions: SEE positions with `visibility: "public"`, BE register and claim. Nothing else. Configurable per place via `metadata.beings.arrival.permissions`.
 
 
-- **owner**. Authenticated requester who owns the addressed scope (existing `resolveTreeAccess.write` semantics). Default permissions: SEE everything, DO everything, SUMMON anything, all BE operations. This is what land owners have at their own lands.
+- **owner**. Authenticated requester who owns the addressed scope (existing `resolveTreeAccess.write` semantics). Default permissions: SEE everything, DO everything, SUMMON anything, all BE operations. This is what place owners have at their own places.
 
 Authenticated requesters who are not owners of the addressed scope fall through to the existing access checks (contributors via `resolveTreeAccess`, visibility filters on SEE). They do not yet have a named protocol stance; introducing `member`, `guest`, `contributor`, `moderator` as configurable stances is Phase 7 work.
 
-The authorize function is **load-bearing for every IBP request.** It is one of the most important pieces of the kernel. Performance matters (it runs on every verb call). Correctness matters (bugs have system-wide blast radius). Land owners' permission configurations become security policy; tooling to compute "what can stance X actually do at this land" is part of the supporting surface, not a nicety.
+The authorize function is **load-bearing for every IBP request.** It is one of the most important pieces of the kernel. Performance matters (it runs on every verb call). Correctness matters (bugs have system-wide blast radius). Place owners' permission configurations become security policy; tooling to compute "what can stance X actually do at this place" is part of the supporting surface, not a nicety.
 
 ### What "arrival" means precisely
 
-Arrival is for **strangers to the protocol** — visitors with no identity established at any land. Once you have signed in at any land, you carry that identity wherever you go. A cross-land visit by an established identity is not an arrival; the receiving land looks up its permission policy for that identity and assigns a stance.
+Arrival is for **strangers to the protocol** — visitors with no identity established at any place. Once you have signed in at any place, you carry that identity wherever you go. A cross-place visit by an established identity is not an arrival; the receiving place looks up its permission policy for that identity and assigns a stance.
 
 Two cases, both handled by the same authorize call:
 
-- **No identity token.** Stance is `arrival` at the contacted land. Permissions come from the land's arrival configuration.
-- **Identity token present.** Stance is whatever the contacted land assigns to that identity (owner of the addressed scope, member, granted guest, etc.). Permissions come from that stance's configuration.
+- **No identity token.** Stance is `arrival` at the contacted place. Permissions come from the place's arrival configuration.
+- **Identity token present.** Stance is whatever the contacted place assigns to that identity (owner of the addressed scope, member, granted guest, etc.). Permissions come from that stance's configuration.
 
-The protocol cleanly separates two concerns: **authorization** answers "given this stance, what is permitted?" (Phase 5). **Cross-land stance assignment** answers "given this visitor, what stance does the receiving land assign?" (Phase 8+ federation work, requires cross-land trust infrastructure).
+The protocol cleanly separates two concerns: **authorization** answers "given this stance, what is permitted?" (Phase 5). **Cross-place stance assignment** answers "given this visitor, what stance does the receiving place assign?" (Phase 8+ federation work, requires cross-place trust infrastructure).
 
 ### Future work (Phase 7+)
 
-These are deliberately deferred until real lands surface real configuration needs:
+These are deliberately deferred until real places surface real configuration needs:
 
 - **Richer permission semantics**: glob/prefix path matching, allowed-vs-denied conflict resolution, inheritance of permissions through descendant positions. The Phase 5 shape uses simple lists; extending to a richer DSL is incremental.
-- **Additional stance vocabularies**: `member`, `guest`, `contributor`, `moderator`, and custom stances configured per land. The kernel's authorize function reads `metadata.beings.<stance>.permissions` regardless of stance name; Phase 7 work is the resolver that assigns these stances to authenticated identities at a land.
-- **Cross-land stance assignment** (Phase 8+ federation). When an identified visitor from another land contacts this land, the receiving land needs to look up its policy for that identity and assign a stance. Requires cross-land identity infrastructure (Canopy or successor). The authorize function is designed so this resolver plugs in without changing the verb-side flow.
-- **Land-tooling presets** (personal / community / service) that configure arrival permissions out of the box. Not protocol features; convenience configurations the land installer provides.
-- **Auth-being customization** beyond defaults. Lands that want different welcome characters, invite-only registration flows, contract acceptance, etc. Today's default auth-being is open registration.
+- **Additional stance vocabularies**: `member`, `guest`, `contributor`, `moderator`, and custom stances configured per place. The kernel's authorize function reads `metadata.beings.<stance>.permissions` regardless of stance name; Phase 7 work is the resolver that assigns these stances to authenticated identities at a place.
+- **Cross-place stance assignment** (Phase 8+ federation). When an identified visitor from another place contacts this place, the receiving place needs to look up its policy for that identity and assign a stance. Requires cross-place identity infrastructure (Canopy or successor). The authorize function is designed so this resolver plugs in without changing the verb-side flow.
+- **Place-tooling presets** (personal / community / service) that configure arrival permissions out of the box. Not protocol features; convenience configurations the place installer provides.
+- **Auth-being customization** beyond defaults. Places that want different welcome characters, invite-only registration flows, contract acceptance, etc. Today's default auth-being is open registration.
 
 The architecture's commitments are preserved by Phase 5; the implementation just ships only what real use has validated. The authorize function adapts as new shape requirements surface; the work compounds rather than gets replaced.
 
@@ -397,7 +397,7 @@ Every verb may respond with an error envelope:
 }
 ```
 
-Error codes are unified with the land's existing semantic error vocabulary in `seed/protocol.js` (`ERR.*`). The portal does not invent a parallel vocabulary; it reuses seed's codes wherever the meaning matches and adds five portal-specific codes for protocol-layer concerns seed does not cover.
+Error codes are unified with the place's existing semantic error vocabulary in `seed/protocol.js` (`ERR.*`). The portal does not invent a parallel vocabulary; it reuses seed's codes wherever the meaning matches and adds five portal-specific codes for protocol-layer concerns seed does not cover.
 
 ### Reused from seed (`ERR.*`)
 
@@ -410,7 +410,7 @@ Error codes are unified with the land's existing semantic error vocabulary in `s
 | `USER_NOT_FOUND` | BE claim on a username that does not exist. |
 | `NOTE_NOT_FOUND` | SEE on a note matter that does not exist. |
 | `TREE_NOT_FOUND` | Root address does not resolve to a known tree. |
-| `EXTENSION_NOT_FOUND` | DO set-meta naming an extension namespace whose extension is not installed on the land. |
+| `EXTENSION_NOT_FOUND` | DO set-meta naming an extension namespace whose extension is not installed on the place. |
 | `EXTENSION_BLOCKED` | DO set-meta naming an extension namespace whose extension is blocked at this position by scope. |
 | `INVALID_INPUT` | Generic schema or parse failure on the request body. |
 | `INVALID_STATUS` | DO change-status with an unrecognized status value. |
@@ -420,12 +420,12 @@ Error codes are unified with the land's existing semantic error vocabulary in `s
 | `TIMEOUT` | Sync SUMMON exceeded time budget; DO action timed out internally. |
 | `UPLOAD_TOO_LARGE` | DO upload-matter bytes exceed configured limit. |
 | `UPLOAD_MIME_REJECTED` | DO upload-matter content type not accepted. |
-| `UPLOAD_DISABLED` | Uploads disabled on this land. |
+| `UPLOAD_DISABLED` | Uploads disabled on this place. |
 | `DOCUMENT_SIZE_EXCEEDED` | SUMMON content or DO payload exceeds size budget. |
 | `LLM_TIMEOUT` | Sync SUMMON summoning's LLM call timed out. |
 | `LLM_FAILED` | Sync SUMMON summoning's LLM call errored. |
 | `LLM_NOT_CONFIGURED` | The being's being has no LLM resolved. |
-| `PEER_UNREACHABLE` | Federated SUMMON or SEE to an unreachable peer land. |
+| `PEER_UNREACHABLE` | Federated SUMMON or SEE to an unreachable peer place. |
 | `INTERNAL` | Server error. |
 
 ### Portal-specific codes (new)
@@ -438,7 +438,7 @@ Error codes are unified with the land's existing semantic error vocabulary in `s
 | `ACTION_NOT_SUPPORTED` | DO action name is unknown or not permitted at this position. |
 | `INVALID_INTENT` | SUMMON message's `intent` is not in the addressed being's `honoredIntents`. |
 
-These five live in the portal layer (`land/ibp/errors.js`) and may be returned by any of the four verbs as appropriate.
+These five live in the portal layer (`place/ibp/errors.js`) and may be returned by any of the four verbs as appropriate.
 
 ### Error envelope detail
 
@@ -458,7 +458,7 @@ IBP intentionally does not specify:
 - **How a being thinks.** That is the being.
 - **How coordination works.** A Ruler firing-and-forgetting background work uses hooks and fire-and-forget primitives; the protocol sees only individual SUMMON deliveries.
 - **Whether responses stream.** Sync responses may stream chunks within an ack, but the protocol does not require it; that is a transport detail.
-- **What an address means semantically.** The stance / IBP Address grammar (see [ibp-address.md](ibp-address.md)) defines the syntax; resolving a stance to a space + being is the land's job; what a being at that stance is for is the being's job.
+- **What an address means semantically.** The stance / IBP Address grammar (see [ibp-address.md](ibp-address.md)) defines the syntax; resolving a stance to a space + being is the place's job; what a being at that stance is for is the being's job.
 - **What a position is structurally.** That is the Space schema in the kernel.
 
 IBP does message delivery to beings and operations on the world from be-ers. Everything that is not those two things lives somewhere else.

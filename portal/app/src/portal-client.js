@@ -11,8 +11,8 @@
 import { io } from "socket.io-client";
 
 export class PortalClient {
-  constructor({ landUrl, token, useProxy, onConnectionChange }) {
-    this.landUrl = landUrl;
+  constructor({ placeUrl, token, useProxy, onConnectionChange }) {
+    this.placeUrl = placeUrl;
     this.token = token;
     this.useProxy = !!useProxy; // dev: use Vite proxy (relative URLs, same-origin)
     this.socket = null;
@@ -23,13 +23,13 @@ export class PortalClient {
 
   // ────────────────────────────────────────────────────────────────
   // Bootstrap: the one HTTP call before WS opens.
-  // GET /.well-known/treeos-portal returns { ws, protocolVersion, land }.
+  // GET /.well-known/treeos-portal returns { ws, protocolVersion, place }.
   // ────────────────────────────────────────────────────────────────
 
-  static async bootstrap(landUrl, { useProxy } = {}) {
+  static async bootstrap(placeUrl, { useProxy } = {}) {
     const url = useProxy
       ? "/.well-known/treeos-portal"
-      : `${landUrl.replace(/\/+$/, "")}/.well-known/treeos-portal`;
+      : `${placeUrl.replace(/\/+$/, "")}/.well-known/treeos-portal`;
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 10000);
     try {
@@ -40,7 +40,7 @@ export class PortalClient {
       return await res.json();
     } catch (err) {
       if (err.name === "AbortError") {
-        throw new Error("Portal bootstrap timed out (10s). Is the Land server reachable?");
+        throw new Error("Portal bootstrap timed out (10s). Is the Place server reachable?");
       }
       throw err;
     } finally {
@@ -54,7 +54,7 @@ export class PortalClient {
 
   connect() {
     if (this.socket) return;
-    const target = this.useProxy ? undefined : this.landUrl;
+    const target = this.useProxy ? undefined : this.placeUrl;
     this.socket = io(target, {
       auth: { token: this.token, client: "portal", instance: "main" },
       transports: ["websocket"],
@@ -141,15 +141,15 @@ export class PortalClient {
   /**
    * BE: manage be-er identity.
    *
-   * Accepts either a stance (full form, e.g. `<land>/@auth` or a held
-   * stance like `<land>/@<username>`) or a bare land domain (shorthand
+   * Accepts either a stance (full form, e.g. `<place>/@auth` or a held
+   * stance like `<place>/@<username>`) or a bare place domain (shorthand
    * for register and credential-based claim). For release and switch,
    * use the held stance.
    *
    * @param {string} operation              register | claim | release | switch
-   * @param {string|object} addressOrField  bare land like "treeos.ai",
+   * @param {string|object} addressOrField  bare place like "treeos.ai",
    *                                        a stance like "treeos.ai/@auth",
-   *                                        or { stance } / { land }
+   *                                        or { stance } / { place }
    * @param {object} [extra]                operation-specific fields (payload, from, ...)
    */
   async be(operation, addressOrField, extra = {}) {
@@ -173,7 +173,7 @@ export class PortalClient {
       }
       const id = this._nextId();
       const timeout = setTimeout(() => {
-        const err = new Error(`${op} timed out (or not wired on this land)`);
+        const err = new Error(`${op} timed out (or not wired on this place)`);
         err.code = "VERB_NOT_WIRED";
         reject(err);
       }, 15000);
@@ -221,7 +221,7 @@ function _toAddressField(address) {
 
 /**
  * Route a BE address to its protocol field name. A bare domain (no
- * slash, no @) becomes `{ land }`; anything with `@` becomes `{ stance }`.
+ * slash, no @) becomes `{ place }`; anything with `@` becomes `{ stance }`.
  * Callers may pass an explicit object to force one or the other.
  */
 function _toBeAddressField(address) {
@@ -229,14 +229,14 @@ function _toBeAddressField(address) {
     const hasEmbodiment = /@[a-z][a-z0-9-]*$/i.test(address);
     const looksLikeBareDomain = !address.includes("/") && !address.includes("@");
     if (hasEmbodiment) return { stance: address };
-    if (looksLikeBareDomain) return { land: address };
+    if (looksLikeBareDomain) return { place: address };
     throw new Error(
-      `BE requires either a bare land domain ("treeos.ai") or a stance with @being ("treeos.ai/@auth"). Got: ${address}`,
+      `BE requires either a bare place domain ("treeos.ai") or a stance with @being ("treeos.ai/@auth"). Got: ${address}`,
     );
   }
   if (address && typeof address === "object") {
     if ("stance" in address) return { stance: address.stance };
-    if ("land" in address) return { land: address.land };
+    if ("place" in address) return { place: address.place };
   }
-  throw new Error("BE requires a stance or land address");
+  throw new Error("BE requires a stance or place address");
 }

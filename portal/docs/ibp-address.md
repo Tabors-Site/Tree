@@ -4,18 +4,18 @@ An IBP Address (IBPA) names **a being addressing another being**. IBPAs are the 
 
 ## The vocabulary
 
-Two categories of things are addressable in IBP: a **Position** (a place) and a **Stance** (a being at that place). The other names that appear in the protocol (Land, IBP Address, Being) are structural vocabulary, not addressable on their own.
+Two categories of things are addressable in IBP: a **Position** (a place) and a **Stance** (a being at that place). The other names that appear in the protocol (Place, IBP Address, Being) are structural vocabulary, not addressable on their own.
 
 ### Addressable. Targets of verb calls.
 
 | Concept | Form | Example | Answer to |
 |---|---|---|---|
-| **Position** | `<land>/<path>` | `treeos.ai/` (root), `treeos.ai/~tabor` (home), `treeos.ai/flappybird/chapter-1` (tree space) | "Where in the world?" |
+| **Position** | `<place>/<path>` | `treeos.ai/` (root), `treeos.ai/~tabor` (home), `treeos.ai/flappybird/chapter-1` (tree space) | "Where in the world?" |
 | **Stance** | `<position>@<being>` | `treeos.ai/flappybird@ruler`, `treeos.ai/@auth` | "Which being at the place?" |
 
 ### Structural vocabulary. Not addressable on its own.
 
-- **Land** does double duty, distinguished by the trailing slash. `treeos.ai` (no slash) is the bare domain identifier, the name of the sovereign server, used by BE when dispatching to the land's auth-being. `treeos.ai/` (with slash) is the Land Position of that land, addressable like any Position. The trailing slash is the load-bearing distinction. When the docs say "land" they usually mean one or the other depending on context.
+- **Place** does double duty, distinguished by the trailing slash. `treeos.ai` (no slash) is the bare domain identifier, the name of the sovereign server, used by BE when dispatching to the place's auth-being. `treeos.ai/` (with slash) is the Place Position of that place, addressable like any Position. The trailing slash is the load-bearing distinction. When the docs say "place" they usually mean one or the other depending on context.
 - **IBP Address** is the bridge form, `<stance> :: <stance>`. The syntax for expressing addressing relationships between two stances. Not a thing that gets addressed; the format used to address things. Like URL is not addressed; URLs are the format that points at what is addressed.
 - **Being** is a cognitive shape (`@ruler`, `@archivist`, a username). Not addressable on its own. Combines with a Position to form a Stance. The `@qualifier` in a Stance address names the being but never targets it.
 
@@ -27,10 +27,10 @@ The conceptual shift from the web: a URL says *"this resource, fetched."* An IBP
 
 | Form | Meaning | Verbs that accept it |
 |---|---|---|
-| `treeos.ai` | domain only, Land identifier | BE |
-| `treeos.ai/` | domain plus trailing slash, Land Position | SEE, DO |
+| `treeos.ai` | domain only, Place identifier | BE |
+| `treeos.ai/` | domain plus trailing slash, Place Position | SEE, DO |
 | `treeos.ai/flappybird` | domain plus path, deeper Position | SEE, DO |
-| `treeos.ai/@auth` | Land Position plus being, Stance at the Land Position | SUMMON, BE |
+| `treeos.ai/@auth` | Place Position plus being, Stance at the Place Position | SUMMON, BE |
 | `treeos.ai/flappybird@ruler` | deeper Position plus being, Stance at space | SEE, SUMMON, BE |
 
 ## Full grammar
@@ -39,17 +39,17 @@ The conceptual shift from the web: a URL says *"this resource, fetched."* An IBP
 IbpAddress         := Bridge | Stance
 Bridge                := Stance "::" Stance
 Stance                := Position "@" Being | Position | Being
-Position              := Land "/" Path?
-Land                  := Domain | Domain ":" Port
+Position              := Place "/" Path?
+Place                  := Domain | Domain ":" Port
 Path                  := Segment ("/" Segment)*  | "~" UserSlug ("/" Segment)*  | ""
 Being            := "@" Identifier
-Domain                := Host (DNS-style; tld optional for local lands)
+Domain                := Host (DNS-style; tld optional for local places)
 Segment               := url-safe identifier (space-name OR space-id uuid)
 UserSlug              := url-safe identifier (the user's home identity)
 Identifier            := [a-z][a-z0-9-]*
 ```
 
-A Position requires the Land followed by `/`. The Path after the slash may be empty (the Land Position), start with `~` (a home), or be one or more segments (a tree space).
+A Position requires the Place followed by `/`. The Path after the slash may be empty (the Place Position), start with `~` (a home), or be one or more segments (a tree space).
 
 ## The bridge form (two-sided, symmetric)
 
@@ -57,7 +57,7 @@ A Position requires the Land followed by `/`. The Path after the slash may be em
 left-stance :: right-stance
 ```
 
-**Both sides are stances and use the exact same grammar.** A Stance is always `land/path@being`. There is no special "identity carrier" on the left — the human user is just another being, addressed by their username at their land's root.
+**Both sides are stances and use the exact same grammar.** A Stance is always `place/path@being`. There is no special "identity carrier" on the left — the human user is just another being, addressed by their username at their place's root.
 
 Canonical form:
 
@@ -65,15 +65,15 @@ Canonical form:
 treeos.ai/@tabor :: treeos.ai/flappybird@ruler
 ```
 
-Read: "at the Land Position `treeos.ai/`, embodied as `tabor`, addressing the `ruler` being at `treeos.ai/flappybird`."
+Read: "at the Place Position `treeos.ai/`, embodied as `tabor`, addressing the `ruler` being at `treeos.ai/flappybird`."
 
 The left stance parses as:
-- land = `treeos.ai`
-- path = `/` (Land Position — the user is "at" their land)
+- place = `treeos.ai`
+- path = `/` (Place Position — the user is "at" their place)
 - being = `tabor` (the username, which IS the being label for that human being)
 
 The right stance parses as:
-- land = `treeos.ai`
+- place = `treeos.ai`
 - path = `/flappybird`
 - being = `ruler`
 
@@ -87,9 +87,9 @@ In the address bar, the user's own left side is collapsed because the values are
 [ tabor ] :: [ treeos.ai/flappybird@ruler ]
 ```
 
-The left chip shows just `tabor` (the being label). The land is implicit (the land the user is signed into; visible elsewhere in chrome). The path is implicit (always `/` for a human at their Land Position). The `@` prefix is dropped because the chip-style rendering makes it visually clear that this is a label.
+The left chip shows just `tabor` (the being label). The place is implicit (the place the user is signed into; visible elsewhere in chrome). The path is implicit (always `/` for a human at their Place Position). The `@` prefix is dropped because the chip-style rendering makes it visually clear that this is a label.
 
-Clicking the chip expands to the full form so the user can see what land they're signed into:
+Clicking the chip expands to the full form so the user can see what place they're signed into:
 
 ```
 [ treeos.ai/@tabor ▾ ] :: [ ... ]
@@ -103,9 +103,9 @@ Two AI beings can talk. Pass 2 court material expects this:
 treeos.ai/projectA/some-ruler@ruler :: otherland.com/library/the-oracle@oracle
 ```
 
-A `ruler` at projectA addressing an `oracle` at otherland's library. The court / federation layer adjudicates or routes based on both sides. **No new grammar needed** — the same `land/path@being` Stance shape works for both human and AI beings. A human just happens to live at the Land Position (`/`) embodied as themselves (`@<username>`).
+A `ruler` at projectA addressing an `oracle` at otherland's library. The court / federation layer adjudicates or routes based on both sides. **No new grammar needed** — the same `place/path@being` Stance shape works for both human and AI beings. A human just happens to live at the Place Position (`/`) embodied as themselves (`@<username>`).
 
-For Pass 1, the left stance is almost always the signed-in user's `<land>/@<username>`. Pass 2+ unlocks AI-to-AI by having the same shape carry an AI being's position + being on the left.
+For Pass 1, the left stance is almost always the signed-in user's `<place>/@<username>`. Pass 2+ unlocks AI-to-AI by having the same shape carry an AI being's position + being on the left.
 
 ## The single-stance form (no bridge)
 
@@ -125,36 +125,36 @@ A Stance is a Position with an Being qualifier:
 
 ```
 treeos.ai          /flappybird/chapter-1    @ruler
-land             + path                   + being
+place             + path                   + being
 └──────── position ────────┘
 └──────────────────── stance ────────────────────┘
 ```
 
-The `@` is the load-bearing piece. It names the **being** at the position. Everything to the left of `@` is the position (where); the `@<label>` is the being (who) at that place. When we say "stance" we mean the whole chain (land + path + being), but the working focus is usually the being at the end.
+The `@` is the load-bearing piece. It names the **being** at the position. Everything to the left of `@` is the position (where); the `@<label>` is the being (who) at that place. When we say "stance" we mean the whole chain (place + path + being), but the working focus is usually the being at the end.
 
 ### What each kind of being brings to a Stance
 
 The being on either side of a bridge brings its own capability surface:
 
-- **Human being** (`@<username>` — usually at the Land Position `/`). The human brings *everything they are* — their full life experience, all the modes and tools available to them as a person, plus any account-level settings (LLM config, identity roster, permissions on this land). The default left-side stance for a signed-in human is `<land>/@<username>` — the human inhabits the Land at its root. A human CAN appear at deeper positions (`treeos.ai/flappybird@tabor`); the path then provides context about *where on the land they're operating from*, beyond just "user." For Pass 1 the focus is the default `/` case.
+- **Human being** (`@<username>` — usually at the Place Position `/`). The human brings *everything they are* — their full life experience, all the modes and tools available to them as a person, plus any account-level settings (LLM config, identity roster, permissions on this place). The default left-side stance for a signed-in human is `<place>/@<username>` — the human inhabits the Place at its root. A human CAN appear at deeper positions (`treeos.ai/flappybird@tabor`); the path then provides context about *where on the place they're operating from*, beyond just "user." For Pass 1 the focus is the default `/` case.
 
-- **AI being** (`@<being>` — at any space). The AI brings whatever it's programmed with at that position: enabled tools, the mode/orchestration script, the rulership scope, system instructions, memory window, extension surfaces invocable at this position. None of that is intrinsic to the being label; it's whatever the land has wired up under that label at that scope. `@ruler` at one space can have a completely different toolset from `@ruler` at another — same kind, different instance, different configuration.
+- **AI being** (`@<being>` — at any space). The AI brings whatever it's programmed with at that position: enabled tools, the mode/orchestration script, the rulership scope, system instructions, memory window, extension surfaces invocable at this position. None of that is intrinsic to the being label; it's whatever the place has wired up under that label at that scope. `@ruler` at one space can have a completely different toolset from `@ruler` at another — same kind, different instance, different configuration.
 
-So when you read a stance, the `@<label>` is the being. The land tells human from AI by whether the label matches a registered username or a configured being kind. What that being can *do* at the position is determined by:
-- Human → the human's account + the land's rules for users at this position.
+So when you read a stance, the `@<label>` is the being. The place tells human from AI by whether the label matches a registered username or a configured being kind. What that being can *do* at the position is determined by:
+- Human → the human's account + the place's rules for users at this position.
 - AI → the position's being configuration (tools, modes, orchestration, rulership, etc.).
 
-### Land
+### Place
 
-Just the domain. DNS-style for federated lands (`treeos.ai`, `otherland.com`). Local-only lands can use bare identifiers (`localhost`, `my-laptop`, `home`). Port allowed: `treeos.ai:3000`.
+Just the domain. DNS-style for federated places (`treeos.ai`, `otherland.com`). Local-only places can use bare identifiers (`localhost`, `my-laptop`, `home`). Port allowed: `treeos.ai:3000`.
 
-Omitted when the portal session is already inside a land (current-land implicit).
+Omitted when the portal session is already inside a place (current-place implicit).
 
 ### Path
 
 The three zone markers, taken literally:
 
-- `/` IS the land zone (the slash alone — the server's public root)
+- `/` IS the place zone (the slash alone — the server's public root)
 - `~` (or `~user`) IS the home zone (shorthand; expands to `/~user`)
 - `/<space>...` IS a tree zone (one or more segments deep)
 
@@ -203,13 +203,13 @@ Canonical beings (initial set; extensible):
 - `@dreamer` — creative/imaginative cognition
 - `@merchant` — trade/economy/social negotiation
 - `@guardian` — defense/moderation/security
-- `@builder` — construction/land editing
+- `@builder` — construction/place editing
 - `@citizen` — normal participant stance
 - `@historian` — archive/memory/history-oriented (read-only)
 - `@archivist` — read-only browsing of matters and trace history
 - `@swarm` — collective/group-agent cognition
 
-Lands can extend with custom beings. The portal doesn't need to know all beings in advance — it asks the land what's invocable at this position (in the Position Description) and renders the chat-invoke surface accordingly.
+Places can extend with custom beings. The portal doesn't need to know all beings in advance — it asks the place what's invocable at this position (in the Position Description) and renders the chat-invoke surface accordingly.
 
 
 
@@ -221,30 +221,30 @@ When context allows, parts can be omitted. Both sides of a bridge expand the sam
 
 | Shorthand | Expands to | Used when |
 |---|---|---|
-| `~@dreamer` | `<current-land>/~<current-user>@dreamer` | inside a session, current user's home |
-| `~tabor@dreamer` | `<current-land>/~tabor@dreamer` | inside a land, specific user's home |
-| `/flappybird@ruler` | `<current-land>/flappybird@ruler` | inside a land |
-| `@ruler` | `<current-land><current-path>@ruler` | re-embody current space with different mode |
-| `flappybird/chapter-1` | `<current-land>/flappybird/chapter-1@<default-being>` | inside a land; being default applies |
+| `~@dreamer` | `<current-place>/~<current-user>@dreamer` | inside a session, current user's home |
+| `~tabor@dreamer` | `<current-place>/~tabor@dreamer` | inside a place, specific user's home |
+| `/flappybird@ruler` | `<current-place>/flappybird@ruler` | inside a place |
+| `@ruler` | `<current-place><current-path>@ruler` | re-embody current space with different mode |
+| `flappybird/chapter-1` | `<current-place>/flappybird/chapter-1@<default-being>` | inside a place; being default applies |
 
 ### Left-side shorthands (who you are)
 
 | Shorthand | Expands to | Used when |
 |---|---|---|
-| `tabor` | `<current-land>/@tabor` | the signed-in human user; bare username at the Land Position |
-| `@tabor` | `<current-land>/@tabor` | explicit-@ form of the same |
-| `treeos.ai/@tabor` | (already canonical) | another land's user, e.g. cross-land bridges |
-| `otherland.com/projectX/some-ruler@ruler` | (already canonical) | AI being on another land acting through @ruler |
+| `tabor` | `<current-place>/@tabor` | the signed-in human user; bare username at the Place Position |
+| `@tabor` | `<current-place>/@tabor` | explicit-@ form of the same |
+| `treeos.ai/@tabor` | (already canonical) | another place's user, e.g. cross-place bridges |
+| `otherland.com/projectX/some-ruler@ruler` | (already canonical) | AI being on another place acting through @ruler |
 
 The left-side bare-identifier shorthand (no `@`, no `/`, no `.`) is treated as a human-user being. This is the most common case — the user typing or seeing their own username.
 
-The portal keeps a "current context" (land + path + user) and uses it to expand shorthands at parse time on both sides.
+The portal keeps a "current context" (place + path + user) and uses it to expand shorthands at parse time on both sides.
 
 ## Default being
 
 When the right side omits `@being`, the default is the being most natural for that zone type:
 
-- Land zone (`server/`) — `@citizen` (browsing the land)
+- Place zone (`server/`) — `@citizen` (browsing the place)
 - Home zone (`server/~user`) — `@dreamer` or `@builder` (personal creative space; user picks via setting)
 - Tree zone (`server/<path>`) — depends on the space's role. Ruler scopes default to `@ruler`. Worker leaves default to `@worker`. Read-only matter spaces default to `@archivist`.
 
@@ -262,9 +262,9 @@ Left chip = current identity (click to switch). Right text = editable position+b
 
 Autocomplete:
 - typing `~` suggests user homes the current session knows about
-- typing `/` suggests public trees on the current land
+- typing `/` suggests public trees on the current place
 - typing `@` suggests beings invocable at the current right-side path
-- typing a domain suggests known lands
+- typing a domain suggests known places
 
 ## Identity vs being
 
@@ -273,18 +273,18 @@ These are different concepts even though, for a human user, they collapse:
 - **Identity** is WHO YOU ARE. The persistent record of an actor across all their sessions. Tied to credentials, history, ownership. A single identity persists for years.
 - **Being** is HOW YOU'RE OPERATING AT A POSITION RIGHT NOW. The lens, mode, role. Switches as you navigate.
 
-For a human user, the username IS BOTH the identity record AND the canonical being label at their Land Position. So `treeos.ai/@tabor` simultaneously names the human user's identity (tabor) AND the being they're operating through (also tabor, in human-being mode). The terms collapse because there's only one human-being being per identity.
+For a human user, the username IS BOTH the identity record AND the canonical being label at their Place Position. So `treeos.ai/@tabor` simultaneously names the human user's identity (tabor) AND the being they're operating through (also tabor, in human-being mode). The terms collapse because there's only one human-being being per identity.
 
 For AI beings, they pull apart: an AI Ruler at `projectA` has a position (`treeos.ai/projectA`) and an being (`@ruler`). The identity-equivalent (which AI being, with which configuration) is implicit in the position + being combination.
 
-The grammar doesn't need to model identity-vs-being separately. Both sides of a bridge use the same `land/path@being` shape, and the being field carries:
+The grammar doesn't need to model identity-vs-being separately. Both sides of a bridge use the same `place/path@being` shape, and the being field carries:
 - A username for human-being stances (`@tabor`)
 - A role label for AI-being stances (`@ruler`, `@oracle`, etc.)
-- A custom being a land has defined
+- A custom being a place has defined
 
 ## Examples
 
-Each row shows the **display shorthand** (what the user sees) and the **canonical form** (the fully-expanded address). The shorthand always re-expands to the canonical via the parser given a `currentLand + currentUser` context.
+Each row shows the **display shorthand** (what the user sees) and the **canonical form** (the fully-expanded address). The shorthand always re-expands to the canonical via the parser given a `currentPlace + currentUser` context.
 
 | Shorthand | Canonical | Meaning |
 |---|---|---|
@@ -292,7 +292,7 @@ Each row shows the **display shorthand** (what the user sees) and the **canonica
 | `tabor :: ~@dreamer` | `treeos.ai/@tabor :: treeos.ai/~tabor@dreamer` | tabor visiting his own home in dreamer mode |
 | `tabor :: ~tabor/notes/idea-1@archivist` | `treeos.ai/@tabor :: treeos.ai/~tabor/notes/idea-1@archivist` | tabor reading his own old idea note |
 | `tabor :: /library/cookbook@oracle` | `treeos.ai/@tabor :: treeos.ai/library/cookbook@oracle` | tabor querying a public oracle at a recipe library |
-| `tabor :: otherland.com/chess-club@citizen` | `treeos.ai/@tabor :: otherland.com/chess-club@citizen` | tabor visiting another land's chess club as a participant |
+| `tabor :: otherland.com/chess-club@citizen` | `treeos.ai/@tabor :: otherland.com/chess-club@citizen` | tabor visiting another place's chess club as a participant |
 | `treeos.ai/flappybird/chapter-1@archivist` | (already canonical, no left side) | single-side: reading chapter-1 without a sender — public observation |
 | `@ruler` | `treeos.ai/@tabor :: treeos.ai/<current-path>@ruler` | re-embody the current space as ruler (shortest possible IBPA — left auto-fills from session identity) |
 | `treeos.ai/projectA/some-ruler@ruler :: otherland.com/library/the-oracle@oracle` | (already canonical) | Pass 2+: AI being-to-being bridge |
@@ -301,17 +301,17 @@ Each row shows the **display shorthand** (what the user sees) and the **canonica
 
 The `lib/ibp-address.js` parser:
 - accepts any of the above forms
-- returns a normalized object: `{ left?: Stance, right: Stance }` where `Stance = { land?, path?, being? }`
-- expands shorthands when given a context: `parse(input, { currentLand, currentPath, currentUser })`
+- returns a normalized object: `{ left?: Stance, right: Stance }` where `Stance = { place?, path?, being? }`
+- expands shorthands when given a context: `parse(input, { currentPlace, currentPath, currentUser })`
 - round-trips: `format(parsed) === normalized canonical form`
 - rejects malformed input with structured errors so the address bar can highlight the bad segment
 
 
 
-See [`../../land/seed/addressing/address.js`](../../land/seed/addressing/address.js) for the implementation. The substrate owns the grammar; Portal consumes it via the `@ibp-address` Vite alias.
+See [`../../place/seed/addressing/address.js`](../../place/seed/addressing/address.js) for the implementation. The substrate owns the grammar; Portal consumes it via the `@ibp-address` Vite alias.
 
 ## What this is NOT
 
 - It's not a URL with extra syntax. URLs locate resources; IBPAs locate stances (position + being) and connect two of them via a bridge. A position has many possible stances depending on the being chosen.
 - It's not an actor model. Stances don't name individual workers or threads. They name positions a being CAN operate at; the same `@ruler` is invoked freshly each session.
-- It's not a permission model. Beings suggest what tools/permissions apply, but the actual authorization is on the land server (each request carries identity headers; the land enforces). IBPAs are addressing, not authorization.
+- It's not a permission model. Beings suggest what tools/permissions apply, but the actual authorization is on the place server (each request carries identity headers; the place enforces). IBPAs are addressing, not authorization.

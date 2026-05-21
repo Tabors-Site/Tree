@@ -2,7 +2,7 @@
 
 Optional features built on the seed. Every extension is a folder with a `manifest.js` and an `index.js`. Install from the registry, build your own, block per-branch. The seed never imports from extensions. Extensions import from seed.
 
-Extensions are advertised via the `extensions` array in `GET /protocol`. Full developer spec at [land/extensions/EXTENSION_FORMAT.md](land/extensions/EXTENSION_FORMAT.md).
+Extensions are advertised via the `extensions` array in `GET /protocol`. Full developer spec at [place/extensions/EXTENSION_FORMAT.md](place/extensions/EXTENSION_FORMAT.md).
 
 ## Fitness
 
@@ -24,12 +24,12 @@ Calorie and macro tracking, meal planning, and nutritional coaching. Same patter
 
 ## Monitor
 
-Land activity monitoring. Summarizes AI usage, hook activity, sessions, and extension health. The AI doesn't dump raw data. It tells a story.
+Place activity monitoring. Summarizes AI usage, hook activity, sessions, and extension health. The AI doesn't dump raw data. It tells a story.
 
 | Command | What it does |
 |---------|-------------|
 | `treeos activity "what happened today"` | AI-powered activity summary |
-| `GET /land/activity` | Raw stats JSON for dashboards |
+| `GET /place/activity` | Raw stats JSON for dashboards |
 
 ## Energy System
 
@@ -67,7 +67,7 @@ Plan upgrades and additional energy purchases via Stripe.
 
 ## Prestige / Versioning
 
-Nodes can have multiple versions (prestige levels). Each prestige creates a new version with fresh values while archiving the previous one. Lands that implement prestige add versioned routes (`/:version/`) alongside the core versionless ones. The versionless routes always operate on the latest version.
+Nodes can have multiple versions (prestige levels). Each prestige creates a new version with fresh values while archiving the previous one. Places that implement prestige add versioned routes (`/:version/`) alongside the core versionless ones. The versionless routes always operate on the latest version.
 
 | Method | Path | Description |
 |--------|------|-------------|
@@ -112,7 +112,7 @@ Export tree notes as a formatted document. Generate shareable links.
 
 ## Blog
 
-Land-level blog system for posts and updates.
+Place-level blog system for posts and updates.
 
 | Method | Path | Description |
 |--------|------|-------------|
@@ -132,15 +132,15 @@ User-managed API keys for programmatic access.
 | POST | /api/v1/user/:userId/api-keys | Create key |
 | DELETE | /api/v1/user/:userId/api-keys/:keyId | Revoke key |
 
-## Land Configuration
+## Place Configuration
 
 Runtime configuration stored in system nodes. Managed by admin.
 
 | Method | Path | Description |
 |--------|------|-------------|
-| GET | /api/v1/land/config | All config |
-| GET | /api/v1/land/config/:key | Single value |
-| PUT | /api/v1/land/config/:key | Set value (admin) |
+| GET | /api/v1/place/config | All config |
+| GET | /api/v1/place/config/:key | Single value |
+| PUT | /api/v1/place/config/:key | Set value (admin) |
 
 ## Dreams
 
@@ -150,7 +150,7 @@ Daily background maintenance cycle per tree. Runs cleanup (expand sparse branche
 |--------|------|-------------|
 | POST | /api/v1/root/:rootId/dream-time | Set daily dream time. Body: `{ dreamTime: "HH:MM" }` |
 
-How dreams are implemented internally (cleanup passes, drain pipeline, etc.) is up to the land.
+How dreams are implemented internally (cleanup passes, drain pipeline, etc.) is up to the place.
 
 ## Understanding
 
@@ -242,4 +242,4 @@ Per-tree policy for who can propose transactions.
 
 ## HTML Rendering
 
-Any GET endpoint MAY return server-rendered HTML when `?html` query parameter is present and the land has `ENABLE_FRONTEND_HTML=true`. This is a presentation extension, not part of the data protocol.
+Any GET endpoint MAY return server-rendered HTML when `?html` query parameter is present and the place has `ENABLE_FRONTEND_HTML=true`. This is a presentation extension, not part of the data protocol.
