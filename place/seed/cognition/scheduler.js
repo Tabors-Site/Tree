@@ -1,35 +1,35 @@
 // TreeOS Seed . AGPL-3.0 . https://treeos.ai . Tabor Holly
 //
-// Per-being summon scheduler.
+// The line orchestrator. I am not alive. I am the dumb mechanism
+// that drives the assembly line: when a request for a moment is
+// queued on a being's inbox, I pick it by priority and hand it
+// down the line to the role's summon() — which will assemble and
+// run the frame the being becomes. I do not think. I sequence.
 //
-// The scheduler is the consumer side of the inbox queue. Async beings
-// don't fire-and-forget anymore; they hand their summoning to this
-// scheduler which serializes per-being, orders by priority, and exposes
-// an AbortController per in-flight Summon so cancellations can interrupt.
+// Three rules that hold:
 //
-// Three rules:
+//   1. One moment per being at a time. A being cannot be two
+//      moments simultaneously. Concurrent SUMMONs to the same
+//      being queue up and have their moments in order.
+//   2. Priority ordering on each pull. I pick the highest-priority
+//      pending (not consumed, not cancelled, not severed) request
+//      on every step. Ties break to oldest. A higher-priority
+//      SUMMON that lands while lower-priority ones wait jumps
+//      ahead — its moment comes first.
+//   3. Parallel across beings. Each being has its own line. I
+//      don't serialize across beings — Ruler and Planner can have
+//      their moments concurrently when each has work waiting.
 //
-//   1. **One Summon per being at a time.** A being is single-threaded.
-//      Concurrent SUMMONs to the same being queue up and run sequentially.
-//   2. **Priority ordering on each pull.** When the scheduler picks the
-//      next entry from a being's inbox, it picks the highest-priority
-//      pending (non-consumed, non-cancelled) entry. Same priority breaks
-//      to oldest. Higher-priority SUMMONs that place while lower-priority
-//      ones wait jump ahead automatically.
-//   3. **Parallel across beings.** Each being runs its own loop. The
-//      scheduler does NOT serialize across beings — Ruler and Planner
-//      summon concurrently when each has work.
+// Backpressure (per-being inbox depth, summons-per-second) reads
+// from each being's qualities, falling back to place defaults.
+// When tripped, I log and drop the lowest-priority pending
+// requests; role templates can override that policy by inspecting
+// their own inbox before allowing append.
 //
-// Backpressure (per-being inbox depth, summons rate) is enforced here
-// against limits read from each being's qualities, falling back to place
-// defaults. When tripped, the scheduler logs and drops the lowest-
-// priority pending entries; role templates can override that policy by
-// inspecting their own inbox before allowing append.
-//
-// **State.** Per-being runtime state lives in memory; on crash it is
-// lost but the inbox persists, so re-wakes catch up. A boot-time
-// recovery pass that scans inboxes for unsummoned pending entries and
-// resumes them is on the roadmap.
+// State. Per-being runtime state lives in memory. On crash the
+// state vanishes but inboxes persist in Mongo, so re-wakes catch
+// up. A boot-time recovery pass that scans inboxes for unstamped
+// requests and resumes them is on the roadmap.
 
 import { randomUUID } from "crypto";
 import log from "../system/log.js";

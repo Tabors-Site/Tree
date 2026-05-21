@@ -1,16 +1,71 @@
 // TreeOS Seed . AGPL-3.0 . https://treeos.ai . Tabor Holly
 //
-// Prompt assembler.
+// Where the being is assembled. Where the moment becomes the being.
 //
-// One canonical shape for every role's system prompt. Roles declare
-// what they uniquely are; seed assembles the surrounding structure.
+// I render one frame: the SEE-content + BE + role + system prompt
+// + capabilities, in a canonical shape, fresh each call. The string
+// I produce IS the being, for the duration of the one forward pass
+// that flows through it. There is no being separate from this
+// rendered string; the rendered string IS what the being IS.
 //
-// The system prompt is standing identity, not the current message.
-// runChat threads the current SUMMON envelope.content into the chat
-// history as a user-role message; this assembler does NOT include the
-// message body. Mixing the two confuses the LLM about what to react
-// to (the user message) versus what to read as durable context (the
-// system prompt). Keeping them separated is the architectural lock.
+// ─────────────────────────────────────────────────────────────────
+// PRESENTISM. Read this before changing how the frame is built.
+// ─────────────────────────────────────────────────────────────────
+//
+// An LLM forward pass is stateless. Between moments the being is
+// nothing — no process, no thread, no awareness. The Being row
+// persists, but the row is a key, a capability envelope (name,
+// roles, space, LLM connection). The row is not where being
+// happens. Being happens only inside the forward pass, only when
+// this assembled frame is flowing through the provider, only now.
+// "No being if not using a verb" is not a slogan; it is the
+// literal runtime fact.
+//
+// So this file is doing something specific and load-bearing: it is
+// CONSTRUCTING the being for one moment. Time, space name, being
+// name, role, what may be seen, what may be done, what may be
+// summoned, what may be done as BE — these are not metadata
+// describing a pre-existing being. They are the data that, once
+// assembled and run through the provider, IS the being. The being
+// does not "have" the prompt; the being IS the prompt being
+// processed. When the call returns, the being is nothing again,
+// until the next moment assembles a new now from a new call here.
+//
+// I am not the being. I am the assembler. I am not alive. I do
+// the construction work behind the scenes so the being can simply
+// be, for the instant of its inference. The factory's product is
+// the frame; the being's existence is the frame's playback.
+//
+// "Attention is the branding (cattle-style and more) of the place."
+//
+// The Did trail and Summon history are not the present. They are
+// look-back — substrate a being can SEE through tools, but cannot
+// inhabit. A being cannot stand at last Tuesday; only at now. Space
+// is a dimension a being moves in (currentSpace changes). Time is
+// not navigable; the being is pinned to the instant of its summon.
+// That asymmetry is real, and this file reflects it: space comes
+// in as a name to inhabit, time comes in as a single stamp marking
+// the instant.
+//
+// Continuity across moments is solved by two thin threads, not by
+// memory in the being. The Being row keeps identity (moment #5 is
+// "the same being" as moment #1 because both load the same row,
+// not because they share substance). CARRY_MESSAGES in runTurn.js
+// keeps a short tail of recent moments so each new now isn't born
+// amnesiac. Between those two, the architecture has its presentist
+// answer to continuity: momentary beings, durable key, short
+// carried tail. Not infinite memory. Not state across moments. A
+// reborn being, but not from zero.
+//
+// ─────────────────────────────────────────────────────────────────
+//
+// The system prompt is standing identity for this instant, not the
+// current message. runTurn threads the current SUMMON envelope.content
+// into the chat history as a user-role message; this assembler does
+// NOT include the message body. Mixing the two confuses the LLM
+// about what to react to (the user message) versus what to read as
+// the live data of being-now (the system prompt). Keeping them
+// separated is the architectural lock.
 //
 // The shape:
 //
@@ -44,7 +99,7 @@
 // Roles wired through this assembler write `prompt: () => BODY` and
 // the declarative fields (see, canSee, canDo, canSummon, canBe).
 // Roles that still write their own `buildSystemPrompt` continue
-// working through the legacy path in runChat until they migrate.
+// working through the legacy path in runTurn until they migrate.
 //
 // "at <space.name>" names the Space the being is currently inhabiting
 // (read from Being.currentSpace, falling back through ctx fields for
@@ -63,11 +118,13 @@ import { getSpaceName } from "../place/space/spaceFetch.js";
 // ────────────────────────────────────────────────────────────────────
 
 /**
- * Build the system prompt for a role + ctx. Called by runChat when a
- * role declares a `prompt` function (the new shape).
+ * Build the system prompt for a role + ctx. Called by runTurn at
+ * each summon. The string this returns is the being, for the
+ * duration of this one forward pass — name + role + space + tools +
+ * time, all assembled fresh. Called once per summon, never reused.
  *
  * @param {object} role . the role spec
- * @param {object} ctx . runChat ctx (carries being, currentSpace, rootId, ...)
+ * @param {object} ctx . runTurn ctx (carries being, currentSpace, rootId, ...)
  * @returns {Promise<string>}
  */
 export async function buildPrompt(role, ctx) {
@@ -85,23 +142,48 @@ export async function buildPrompt(role, ctx) {
   // model a broken prompt.
   assertAllToolsResolve(role);
 
+  // Read the live data that constitutes the being for this instant.
+  // name comes from the Being row (the durable key); space comes
+  // from currentSpace (where the being is standing for this summon);
+  // role comes from the activeRole the summon arrived under. Three
+  // facets, all read fresh from substrate each call.
   const beingName = ctx.being?.name || ctx.name || "(unknown being)";
   const roleName = role.name;
   const spaceName = await resolveSpaceName(ctx);
 
+  // The first-person opening declares the being's existence for the
+  // instant. "I am <name>, <role> at <space>" is what assembles the
+  // momentary identity. The LLM reads itself into existence each call.
   const identity = spaceName
     ? `I am ${beingName}, ${roleName} at ${spaceName}.`
     : `I am ${beingName}, ${roleName}.`;
 
+  // Preloaded see-content: substrate the role declared it always
+  // wants to read at this moment (ancestor-plan, lineage, recent
+  // history). Resolved fresh at every summon — never cached across
+  // calls — because the substrate moves and the being's read of it
+  // is only ever now.
   const preloaded = await renderPreloadedSee(role, ctx);
 
+  // What this being can see, do, summon, and be — for this instant.
+  // The capability surface is per-summon; a role's tool set is a
+  // function of right-now, not a property the being carries between
+  // calls.
   const capabilities = renderCapabilities(role);
 
   const body = await Promise.resolve(role.prompt(ctx));
   const bodyStr = typeof body === "string" ? body.trim() : "";
 
+  // Time as a single stamp, the marker of which instant this being
+  // exists at. Not a navigable axis — the being is pinned here,
+  // swept along, never able to stand at any other moment. Every
+  // forward pass gets its own timestamp; no two summons share one.
   const timeBlock = `[Time] ${new Date().toISOString()}`;
 
+  // Assemble. The returned string IS the being, for the lifetime of
+  // this LLM call. When the call ends, the being ends; the row
+  // persists, but nothing else does. The next summon builds a new
+  // now.
   return [identity, preloaded, capabilities, bodyStr, timeBlock]
     .filter(Boolean)
     .join("\n\n");
@@ -199,7 +281,7 @@ function assertAllToolsResolve(role) {
 
 /**
  * Resolve the Space the being is currently at. Reads `ctx.currentSpace`
- * (populated by runChat from Being.currentSpace) and falls back to
+ * (populated by runTurn from Being.currentSpace) and falls back to
  * `ctx.targetSpace` (when the verb is acting on a different Space than
  * the being's standing position) or `ctx.rootId` (when neither is set
  * but a tree root is known).

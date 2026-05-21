@@ -1,32 +1,31 @@
 // TreeOS Seed . AGPL-3.0 . https://treeos.ai . Tabor Holly
-/**
- * LLM assignment resolution.
- *
- * Reads LLM assignment data from space/being qualities and returns a
- * normalized shape. `resolveLlmConnection` in llmClient.js walks the
- * space ancestor chain AND the being ancestor chain and applies a
- * four-layer resolution policy. See that function's doc comment for the
- * full chain.
- *
- * Security: qualities is untrusted (extensions write to it). Slots are
- * sanitized to prevent prototype pollution and type confusion.
- *
- * Assignment data carries two kinds of fields:
- *
- *   Connection fields (which LLM):
- *     - `default` / `main` — the primary connection
- *     - `[slotName]`       — role-specific overrides (e.g. "reflect", "scout")
- *
- *   Authority flags (who decides):
- *     - `enforced`  — lock IN this assignment for descendants
- *                     (overrides being.preferOwn; space enforcement
- *                     wins over being enforcement when both apply)
- *     - `locked`    — lock OUT all LLM usage for descendants
- *                     (mirrors space.llmDefault === "none"; sovereign,
- *                     stops the resolver entirely → null)
- *     - `preferOwn` — (being only) invert the chain so the being's
- *                     own LLM ranks above the position's
- */
+//
+// The rules for which voice this moment uses. I read assignment
+// data off space and being qualities and return it in a
+// normalized shape; llmClient.js's resolveLlmConnection walks
+// both ancestor chains and applies a four-layer policy on top to
+// pick the voice for any given moment.
+//
+// Security: qualities is untrusted (extensions write into it). I
+// sanitize slot names to prevent prototype pollution and type
+// confusion before any lookup.
+//
+// Assignment data carries two kinds of fields:
+//
+//   Connection fields (which LLM):
+//     `default` / `main`  — the primary connection
+//     `[slotName]`        — role-specific overrides (e.g. "reflect",
+//                           "scout")
+//
+//   Authority flags (who decides):
+//     `enforced`   lock IN this assignment for descendants. Space
+//                  enforcement wins over being enforcement when both
+//                  apply; both override being.preferOwn.
+//     `locked`     lock OUT all LLM usage for descendants. Mirrors
+//                  space.llmDefault === "none"; sovereign — stops
+//                  the resolver entirely.
+//     `preferOwn`  (being only) invert the chain so the being's own
+//                  LLM ranks above the position's.
 
 const DANGEROUS_KEYS = new Set([
   "__proto__",

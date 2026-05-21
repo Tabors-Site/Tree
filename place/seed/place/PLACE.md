@@ -142,9 +142,9 @@ The architecture carries the extra fields that go beyond the tree shape:
 
 Two siblings at the root:
 
-- **`registryMirror.js`**: surfaces the I-Am's runtime registries (tools, roles, operations) as Space children under `.tools`, `.roles`, `.operations` so SEE can introspect them through the standard pipeline. It writes Space rows, so it belongs here alongside the world it shapes.
+- **`manifest.js`**: makes the I-Am's runtime collections (tools, roles, operations) manifest as Space children under `.tools`, `.roles`, `.operations` so SEE can introspect them through the standard pipeline. It writes Space rows, so it belongs here alongside the world it shapes.
 - **`space/threads.js`**: the `.threads` projection and the kernel cut handler. A thread is a live tree of coordinated SUMMONs sharing one `rootCorrelation`. Made addressable at `<place>/.threads/<id>` so SEE returns its descriptor (participants, depth, state) and SUMMON severs it. Pure derived view: no new persistence; the descriptor is computed from Summon + inbox rows. Same verb, same envelope; the address tells the kernel whether the operation is a call (to a being) or a cut (of a line). A cut is just SUMMONing the line itself.
-- **`integrityCheck.js`**: fsck for the world's tree-shaped primitives (Space, Matter, Being). Verifies parent/children agreement, repairs phantoms, soft-deletes orphans. Knows the world by name; lives where the world lives.
+- **`placeCheck.js`**: reconciler for the world's tree-shaped primitives (Space, Matter, Being). Verifies parent/children agreement, repairs phantoms, soft-deletes orphans. Knows the world by name; lives where the world lives.
 
 The schemas for all six primitives (the three above plus Did, Summon, LlmConnection) live at `seed/models/` so they sit in one place. The operations on the three world-shape primitives live here.
 

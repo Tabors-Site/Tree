@@ -1,10 +1,15 @@
 // TreeOS Seed . AGPL-3.0 . https://treeos.ai . Tabor Holly
 //
-// Role registry.
+// The role registry — the templates of what a being CAN BE.
 //
-// A **role** is the unit of behavior a being carries when summoned.
-// The role definition declares what the role uniquely IS; seed fills
-// in everything derivable.
+// A **role** is the template the being's frame is built around
+// when a moment is assembled. The being IS the rendered frame;
+// the role is the recipe for that frame. The role's prompt body,
+// see list, and capabilities together describe a kind-of-being —
+// a Planner, a Ruler, a Worker, a place manager. When a summon
+// arrives, the activeRole names which kind the moment will be a
+// moment of. The role file declares what the role uniquely IS;
+// I fill in everything derivable.
 //
 // What the role file writes:
 //   name             - kebab-case identifier
@@ -28,17 +33,12 @@
 // `buildSystemPrompt` and the assembler is skipped. The defaults
 // cover the common case; opt-in covers the rest.
 //
-// See [[project_role_subsumes_mode]], [[project_ibp_universal_grammar]],
-// [[project_role_permissions_not_envelope]].
-
-import { echoEmbodiment } from "./echo.js";
 import log from "../../system/log.js";
 
-// The role registry seeded with kernel-default roles. Extensions add
-// their own via registerRole.
-const REGISTRY = new Map([
-  ["echo", echoEmbodiment],
-]);
+// The role registry. Kernel-shipped roles (auth, llm-assigner,
+// place-manager) register through registerRole during genesis;
+// extensions add theirs the same way.
+const REGISTRY = new Map();
 
 const VALID_PERMISSIONS = new Set(["see", "do", "summon", "be"]);
 const VALID_REPLY_MODES = new Set(["asker", "chain-initial"]);
@@ -99,7 +99,7 @@ export function registerRole(name, def, extName = "role-registry") {
 
   // Build the final role spec. summon and buildSystemPrompt are wired
   // lazily because they depend on seed/cognition modules; importing
-  // them at module top would create a load-order cycle with runChat.
+  // them at module top would create a load-order cycle with runTurn.
   // The lazy refs resolve at first call.
   const spec = {
     name,
@@ -169,7 +169,7 @@ function validatePermissions(name, list) {
 }
 
 // Lazy default-summon wiring. Avoids a circular import: defaultSummon
-// imports runChat, runChat imports the registry. The closure resolves
+// imports runTurn, runTurn imports the registry. The closure resolves
 // defaultSummon on first invocation.
 function makeLazyDefaultSummon(role) {
   let cached = null;
@@ -189,7 +189,7 @@ function makeLazyDefaultSummon(role) {
  */
 export async function syncRolesToSubstrate() {
   const { SEED_SPACE } = await import("../../ibp/protocol.js");
-  const { syncRegistryToSubstrate } = await import("../../place/registryMirror.js");
+  const { manifestItems } = await import("../../place/manifest.js");
   const items = [];
   for (const [name, role] of REGISTRY) {
     items.push({
@@ -209,5 +209,5 @@ export async function syncRolesToSubstrate() {
       ]),
     });
   }
-  return syncRegistryToSubstrate({ seedSpace: SEED_SPACE.ROLES, items });
+  return manifestItems({ seedSpace: SEED_SPACE.ROLES, items });
 }

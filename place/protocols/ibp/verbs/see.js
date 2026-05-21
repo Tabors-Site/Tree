@@ -22,6 +22,7 @@ export async function handleSee(socket, env, ack) {
       identity,
       addressKind,
       currentUser: socket.name,
+      payload,
     });
 
     // Wire-layer concern: live updates need a socket to push patches

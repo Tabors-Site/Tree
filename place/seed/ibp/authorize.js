@@ -51,7 +51,7 @@ import { getAncestorChain } from "../place/space/ancestorCache.js";
 import { deriveStanceProperties } from "../ibp/stanceProperties.js";
 import log from "../system/log.js";
 import { IBP_ERR } from "./protocol.js";
-import { I_AM } from "../place/space/seedSpaces.js";
+import { I_AM } from "../place/being/seedBeings.js";
 
 // ─────────────────────────────────────────────────────────────────────
 // Default layer-2 stance permissions written on the place root.
@@ -74,11 +74,16 @@ const PLACE_ROOT_DEFAULT_PERMISSIONS = Object.freeze({
   summon: { "*": { requires: { arrival: false } } },
   // BE: arrival can register/claim (so anyone can sign up); only
   // authenticated callers can release/switch their own session.
+  // create-being: cherub summons beings forth on external
+  // callers' behalf; extensions add their own create-being rules
+  // (e.g., "my ruler role may create sub-rulers in its tree")
+  // through provides.defaultPermissions in their manifest.
   be: {
-    register: { requires: {} },
-    claim: { requires: {} },
-    release: { requires: { arrival: false } },
-    switch: { requires: { arrival: false } },
+    register:       { requires: {} },
+    claim:          { requires: {} },
+    release:        { requires: { arrival: false } },
+    switch:         { requires: { arrival: false } },
+    "create-being": { requires: { role: "cherub" } },
   },
 });
 
@@ -119,7 +124,7 @@ export async function authorize(args) {
 
   // BE bootstrap exception: register/claim from arrival are always
   // permitted, gated by place-level register_enabled/claim_enabled
-  // flags (enforced by the auth-being itself). Without this no one
+  // flags (enforced by the cherub itself). Without this no one
   // could ever sign up on a fresh place.
   if (
     verb === "be" &&

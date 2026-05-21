@@ -7,7 +7,7 @@
 // exposes the services this extension declared.
 //
 // Reach a service you didn't declare and it's undefined. Common bug:
-// `core.llm.runChat is not a function` means `llm` is missing from
+// `core.llm.runTurn is not a function` means `llm` is missing from
 // `needs.services`.
 
 export default {

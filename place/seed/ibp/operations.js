@@ -218,7 +218,7 @@ export function listOperations(filter = {}) {
  */
 export async function syncOperationsToSubstrate() {
   const { SEED_SPACE } = await import("./protocol.js");
-  const { syncRegistryToSubstrate } = await import("../place/registryMirror.js");
+  const { manifestItems } = await import("../place/manifest.js");
   const items = [];
   for (const op of REGISTRY.values()) {
     items.push({
@@ -236,5 +236,5 @@ export async function syncOperationsToSubstrate() {
       ]),
     });
   }
-  return syncRegistryToSubstrate({ seedSpace: SEED_SPACE.OPERATIONS, items });
+  return manifestItems({ seedSpace: SEED_SPACE.OPERATIONS, items });
 }

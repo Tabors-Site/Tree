@@ -1,9 +1,17 @@
 // TreeOS Seed . AGPL-3.0 . https://treeos.ai . Tabor Holly
 //
-// llm-assigner being.
+// llm-assigner being. The place's LLM-configuration character.
 //
-// The place's LLM-configuration character. One canonical implementation,
-// reached through `ibp:be <place>/@llm-assigner` from every transport.
+// Scripted cognition. I am my code; the factory does not assemble
+// a frame for me. When the operator summons me to configure which
+// voices a being or a tree will speak in, my summon() executes
+// deterministically and returns. The work I do is real — adding
+// connections, assigning slots, planting tutorial matter — but
+// it's code work, not inference. I have no presence lane and no
+// frame on the reel beyond the Summon row each call stamps.
+//
+// One canonical implementation, reached through `ibp:be
+// <place>/@llm-assigner` from every transport.
 //
 // Operations span three scopes:
 //
@@ -226,7 +234,7 @@ function requireAuthenticated(ctx) {
   if (!ctx?.identity?.beingId) {
     throw new IbpError(
       IBP_ERR.UNAUTHORIZED,
-      "This operation requires an authenticated being. Claim or register through @auth first.",
+      "This operation requires an authenticated being. Claim or register through @cherub first.",
     );
   }
 }
@@ -236,7 +244,7 @@ async function requireRootOperator(ctx) {
   if (!operator) {
     throw new IbpError(
       IBP_ERR.FORBIDDEN,
-      "No root operator exists on this place yet. Register the first human via @auth.",
+      "No root operator exists on this place yet. Register the first human via @cherub.",
     );
   }
   if (String(operator._id) !== String(ctx.identity.beingId)) {

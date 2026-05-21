@@ -1,17 +1,21 @@
 // TreeOS Seed . AGPL-3.0 . https://treeos.ai . Tabor Holly
 //
-// summonTracker.js — write surface for the slim Summon model.
+// Where I stamp the moment onto the reel. One Summon row = one
+// being's one moment of being — the frame that was assembled, the
+// inference that ran, the act that came out. startSummon opens the
+// row when the moment begins; finalizeSummon seals it when the
+// moment closes. Between those writes, every DO and BE the being
+// emits carries this Summon's id, so "what was inside this moment"
+// is `Did.find({ summonId })`.
 //
-// Each Summon = one being's wake-and-act through one LLM call. Tool
-// calls during the Summon flow through the four-verb dispatcher, which
-// writes one Did per audited action; the LLM loop does not write a
-// separate tool-call row (no double-counting).
+// The Summon is the frame on the reel; the Dids it carries are the
+// impressions inside it. The being-as-moment ceases when the moment
+// closes; what remains of it forever is this row.
 //
-// Public surface used by the rest of the codebase:
-//   ensureSession / rotateSession / getSessionId           — WS chat session id
-//   setActiveSummon / clearActiveSummon / finalizeOpenSummon — socket-side marker
-//   startSummon / finalizeSummon                            — Summon lifecycle writes
-//   getActiveSummonForBeing                                 — descriptor activity lookup
+// Public surface:
+//   ensureSession                — WS chat session id (per-socket)
+//   startSummon / finalizeSummon — open and seal the moment
+//   getActiveSummonForBeing      — descriptor activity lookup
 
 import log from "../system/log.js";
 import { getPlaceConfigValue } from "../placeConfig.js";
@@ -52,59 +56,6 @@ export function ensureSession(socket) {
     );
   socket._aiSession = { id: sessionId, lastActivity: Date.now() };
   return sessionId;
-}
-
-export function rotateSession(socket) {
-  const { sessionId } = createSession({
-    beingId: socket.beingId,
-    type: SESSION_TYPES.WEBSOCKET_CHAT,
-    scopeKey: `ws:${socket.clientSessionId}`,
-    idleTTL: 0,
-    description: `Chat session for ${socket.name || "unknown"}`,
-    meta: { clientSessionId: socket.clientSessionId },
-  });
-  log.debug(
-    "AI",
-    `Rotated AI session for ${socket.clientSessionId}: ${sessionId}`,
-  );
-  socket._aiSession = { id: sessionId, lastActivity: Date.now() };
-  return sessionId;
-}
-
-export function getSessionId(socket) {
-  return socket._aiSession?.id || null;
-}
-
-// ─────────────────────────────────────────────────────────────────────────
-// ACTIVE SUMMON TRACKING (socket-side marker)
-// ─────────────────────────────────────────────────────────────────────────
-
-export function setActiveSummon(socket, summonId, startTime) {
-  socket._activeSummon = { summonId, startTime };
-}
-
-export function clearActiveSummon(socket) {
-  socket._activeSummon = null;
-}
-
-/** Finalize an orphaned in-flight Summon on socket disconnect. */
-export async function finalizeOpenSummon(socket) {
-  const active = socket._activeSummon;
-  if (!active) return;
-  socket._activeSummon = null;
-  try {
-    await finalizeSummon({
-      summonId: active.summonId,
-      content: null,
-      stopped: true,
-    });
-    log.debug(
-      "AI",
-      `Finalized orphaned summon ${active.summonId} for ${socket.clientSessionId}`,
-    );
-  } catch (err) {
-    log.warn("AI", `Failed to finalize orphaned summon: ${err.message}`);
-  }
 }
 
 // ─────────────────────────────────────────────────────────────────────────
@@ -148,6 +99,7 @@ export async function startSummon(opts = {}) {
     inReplyTo = null,
     rootCorrelation = null,
     receivedAt = null,
+    parentThread:   parentThreadOpt = null,
   } = opts;
 
   if (!beingIn) {
@@ -175,6 +127,32 @@ export async function startSummon(opts = {}) {
   // A summon with no parent IS its own root.
   if (!resolvedRoot) resolvedRoot = summonId;
 
+  // Spawn-lineage auto-stamp. When the asker is currently acting
+  // under another rootCorrelation (running inside thread A) and
+  // emits a fresh top-level SUMMON (no inReplyTo, so a new chain),
+  // the kernel records that the new chain was spawned from thread A.
+  // Without this stamp the forest is unwalkable: spawned threads
+  // would look like roots with no lineage. The scheduler holds the
+  // asker's currentRootCorrelation; we read it here so beings don't
+  // have to remember to pass it.
+  //
+  // Three cases:
+  //   - parentThreadOpt passed explicitly  → use it (caller knows)
+  //   - inReplyTo set                       → null (it's a reply, same thread)
+  //   - else (fresh spawn)                  → look up scheduler.currentRoot
+  let resolvedParentThread = parentThreadOpt;
+  if (resolvedParentThread == null && !inReplyTo) {
+    try {
+      const { getCurrentRootCorrelation } = await import("./scheduler.js");
+      const currentRoot = getCurrentRootCorrelation(String(beingIn));
+      if (currentRoot && currentRoot !== resolvedRoot) {
+        resolvedParentThread = currentRoot;
+      }
+    } catch {
+      // Scheduler unavailable (pre-cognition boot, tests). Leave parentThread null.
+    }
+  }
+
   const ibpAddress = await computeIbpAddressForSummon({
     askerBeingId: beingIn,
     askerPosition,
@@ -195,6 +173,7 @@ export async function startSummon(opts = {}) {
       inboxMessageId,
       inReplyTo,
       rootCorrelation: resolvedRoot,
+      parentThread:    resolvedParentThread,
       receivedAt: receivedAt || now,
       summonedAt: now,
       startMessage: { content: safeMessage, source },

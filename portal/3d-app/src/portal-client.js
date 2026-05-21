@@ -151,7 +151,7 @@ export class PortalClient {
       throw new Error("SUMMON requires a message object");
     }
     const payload = { message, ...threading };
-    // SUMMON can route through runChat() (LLM round-trip); give it 90s.
+    // SUMMON can route through runTurn() (LLM round-trip); give it 90s.
     return this._call("summon", normalize(stance), payload, { timeoutMs: 90000 });
   }
 

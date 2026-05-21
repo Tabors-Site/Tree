@@ -1,36 +1,32 @@
 // TreeOS Seed . AGPL-3.0 . https://treeos.ai . Tabor Holly
 //
-// MCP client lifecycle.
+// The being's hand reaching outside the assembled frame. When the
+// being, mid-moment, calls a tool, that reach goes here. I open
+// or reuse an MCP connection and hand it back to runTurn. The
+// cache lives in cognition because each entry is per-presence
+// machinery, not transport.
 //
-// Outbound MCP connections — what the AI runtime uses when an LLM tool
-// call resolves to an MCP server. Lives in seed/cognition/ because the
-// connection cache is per-conversation LLM-stack state.
+// One MCP client per presence lane. The cache key names the lane:
 //
-// Each conversation gets one MCP client. The cache key — `cacheKey` —
-// identifies the conversation:
+//   Being-to-being. Key is the IBP Address (canonical
+//   stance::stance). Every reach in that presence shares one
+//   client — a web tab and a CLI standing at the same Ruler at
+//   /MyTree share one client because they're the same lane of
+//   moments.
 //
-//   - Being-to-being conversations key on `ibpAddress` (the canonical
-//     stance::stance IBP Address). Every reach in the same IBP Address
-//     shares one MCP client — web tab and CLI talking to the same
-//     Ruler at /MyTree use one client under the single-context being
-//     model.
+//   Stanceless internal cognition. Lanes with no being-to-being
+//   framing (compression, scout, dreams) key on the internal
+//   pipeline string: `pipeline:ephemeral:<uuid>` /
+//   `pipeline:tree:<rootId>:<purpose>`.
 //
-//   - Stanceless background pipelines (internal cognition without a
-//     being-to-being framing — compress, scout, intent, dreams, etc.)
-//     key on their internal-session-key (`pipeline:ephemeral:<uuid>`,
-//     `pipeline:tree:<rootId>:<purpose>`). Same string the rest of the
-//     pipeline uses.
+// The Map stores strings → MCP clients; it doesn't care which
+// shape the key takes. Callers pick the right one for context.
 //
-// The Map stores strings → MCP clients; it doesn't care which flavor.
-// Callers pick the right key for their context.
-//
-// Cleanup: periodic stale sweep + explicit closeMCPClient on pipeline
-// teardown. Socket disconnect is NOT a close trigger — other sockets
-// for the same being may still be in the conversation under the
-// shared ibpAddress cache key. The being-room broadcast model
-// ([[project_ibp_summon_unified_event]]) keeps every reach in sync;
-// MCP clients live until the stale sweep reaps them or a pipeline
-// owner calls closeMCPClient explicitly.
+// Cleanup happens two ways. A periodic stale sweep walks the
+// last-used timestamps, and pipeline teardown calls
+// closeMCPClient explicitly. Socket disconnect is NOT a close
+// trigger — other reaches into the same presence may still be
+// using the connection under the shared key.
 
 import log from "../system/log.js";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";

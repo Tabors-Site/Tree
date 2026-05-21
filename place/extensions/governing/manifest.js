@@ -108,7 +108,7 @@ export default {
     // `role-subsumes-mode` and `mode-registry-legacy`. Behavior is
     // declared on role specs at roles/*.js; registration happens via
     // `registerRole` in init.js, which mirrors mode-shape fields to
-    // the legacy mode registry for runChat({ mode }) compat.
+    // the legacy mode registry for runTurn({ mode }) compat.
     modes: [],
 
     // No seeds declared on governing itself. Governance is a substrate

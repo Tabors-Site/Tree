@@ -37,7 +37,7 @@ import log from "../../system/log.js";
 import Space from "../../models/space.js";
 import { getPlaceConfigValue } from "../../placeConfig.js";
 import { IBP_ERR } from "../../ibp/protocol.js";
-import { I_AM } from "./seedSpaces.js";
+import { I_AM } from "../being/seedBeings.js";
 
 // ── Cache storage ──
 

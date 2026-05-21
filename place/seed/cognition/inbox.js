@@ -1,60 +1,83 @@
 // TreeOS Seed . AGPL-3.0 . https://treeos.ai . Tabor Holly
 //
-// Inbox primitives.
+// The queue of pending moments for a being at a position. An entry
+// here is a moment that has been requested but not yet had — the
+// frame waiting to be assembled, the inference waiting to be run,
+// the being waiting to be. Per being, per position, stored under
+// `qualities.inbox.<beingId>` on the Space document. I treat the
+// `inbox` namespace as reserved: nothing writes it through DO
+// set-meta, only the primitives in this file, and only SUMMON
+// reaches those primitives.
 //
-// The inbox is a per-being-per-position quality, stored under
-// `qualities.inbox.<beingId>` on the Space document. The kernel treats
-// `inbox` as a reserved namespace: it cannot be written through DO
-// set-meta (see actions/set-meta.js), only through these primitives,
-// which SUMMON uses.
+// Three layers I want to keep straight:
 //
-// **Layering.** The inbox is *delivery infrastructure*, not conversation
-// history. Three distinct layers:
+//   IBP Address — protocol-level addressing (sender stance,
+//                 receiver stance).
+//   Summon      — the stamped record. The moment has been; this is
+//                 its frame on the reel.
+//   Inbox       — the queue of pending moments. A request waiting
+//                 for the scheduler to pull it down the line.
 //
-//   1. IBP Address — protocol-level addressing (sender / receiver stances).
-//   2. Summons — first-class exchange records. Conversation history. Stored
-//      with ibpAddress, beingIn, beingOut, content.
-//   3. Inbox — the delivery queue at a position. Pending SUMMON messages
-//      before they get processed into Summons.
+// An inbox entry is the moment-request before it becomes a stamped
+// Summon. Once the role's summon() runs (assembling the frame and
+// running the being's inference), the entry is marked consumed and
+// points at the resulting summonId. Tracing a thread walks SUMMON
+// → inbox entry → Summon record → IBP Address.
 //
-// An inbox entry is a *message in flight*. Once a being's summoning runs,
-// the message is processed into one or more Summon records; the inbox entry
-// is marked consumed and points at the resulting `summonId`. Trace from
-// incoming SUMMON → resulting summon record → IBP Address using these references.
-//
-// Each inbox entry:
+// Entry shape:
 //   {
 //     from, content, correlation, inReplyTo?, attachments?, sentAt,
-//     priority:    number   (LLM_PRIORITY-compatible: lower = higher precedence)
-//     rootCorrelation: string  (originating user message correlation, propagated through reply chains)
-//     activeRole: string | null  (the role the receiver should act in for this
-//                                 summon; resolves to beingOut.defaultRole when null.
-//                                 Lets one being act in different roles per summon —
-//                                 see project-identity-durable-role-composable.)
-//     consumed:    boolean,
-//     cancelledAt: ISO8601 | null  (set by cancelByRootCorrelation; scheduler skips cancelled entries)
-//     consumedAt?: ISO8601,
-//     summonedAt?: ISO8601,
-//     responseId?: <correlation id of the response, if any>,
-//     summonId?:   <id of the Summon record this message was processed into>,
+//     priority:        number   (lower wins; scheduler picks lowest first)
+//     rootCorrelation: string   (originating chain, propagates through replies)
+//     activeRole:      string|null  (the role the receiver acts in
+//                                    for this moment; null resolves
+//                                    to beingOut.defaultRole)
+//     consumed:        boolean,
+//     cancelledAt:     ISO8601|null  (cancelByRootCorrelation stamps this;
+//                                     scheduler skips cancelled entries —
+//                                     the moment never happens)
+//     consumedAt?:     ISO8601,
+//     summonedAt?:     ISO8601,
+//     responseId?:     <correlation of the response, if any>,
+//     summonId?:       <id of the Summon record this moment became>,
 //   }
 //
-// Operations are atomic against the Space document. No read-modify-write
-// races: $push appends and $set updates individual flags by array index.
+// Operations are atomic against the Space document. No
+// read-modify-write races: $push appends, $set updates individual
+// flags by array index.
 //
-// **Keying.** Keyed by beingId (the canonical Being._id) rather than role
-// type. Multiple beings of the same role at one position legitimately
-// have separate inboxes; the role name doesn't unique-identify a being.
+// I key by beingId rather than role. Multiple beings of the same
+// role at one position legitimately have separate inboxes; the role
+// name doesn't unique-identify a being.
 
 import { randomUUID } from "crypto";
 import Space from "../models/space.js";
 
 const INBOX_NS = "inbox";
 
-// Priority defaults track LLM_PRIORITY (lower number = higher precedence).
+// Priority field: lower number = picked first by scheduler.
 // Kept here as a local fallback so callers that don't pass priority still
 // get a deterministic, conservative HUMAN default.
 const DEFAULT_PRIORITY = 1;
+
+// Place-level cap on pending inbox entries. Pairs with maxRunTurns
+// (active LLM turns) to bound the rate of change a place can hold:
+// the inbox is the "pending work" backlog, runTurn is the "in
+// progress" set. When the backlog hits MAX_INBOX, appendToInbox
+// throws and the SUMMON caller decides whether to retry. Counter is
+// in-memory and starts at 0 on boot; entries that survived a
+// restart aren't reflected until reseed on first consume, which is
+// fine — the cap is a rate-of-change guard, not a hard quota.
+let MAX_INBOX = 5000;
+let _pendingInboxCount = 0;
+export function setMaxInbox(n) {
+  if (Number.isFinite(n) && n > 0) {
+    MAX_INBOX = Math.max(100, Math.min(Math.floor(n), 1_000_000));
+  }
+}
+export function getPendingInboxCount() {
+  return _pendingInboxCount;
+}
 
 /**
  * Append a message to a being's inbox at this position.
@@ -72,6 +95,16 @@ export async function appendToInbox(spaceId, beingId, message) {
   if (!beingId) throw new Error("appendToInbox requires beingId");
   if (!message || typeof message !== "object")
     throw new Error("appendToInbox requires a message object");
+
+  // Place-level backlog gate. Cap-and-reject: the caller decides
+  // whether to retry. The counter increments on append, decrements
+  // on markInboxConsumed.
+  if (_pendingInboxCount >= MAX_INBOX) {
+    throw new Error(
+      `Inbox cap reached: ${MAX_INBOX} pending entries place-wide. ` +
+        `Raise maxInbox in .config or wait for backlog to drain.`,
+    );
+  }
 
   const sentAt = message.sentAt || new Date().toISOString();
   const messageId = message.correlation || randomUUID();
@@ -109,6 +142,8 @@ export async function appendToInbox(spaceId, beingId, message) {
     { _id: spaceId },
     { $push: { [`qualities.${INBOX_NS}.${beingId}`]: entry } },
   );
+
+  _pendingInboxCount++;
 
   return { messageId, sentAt };
 }
@@ -204,6 +239,7 @@ export async function markInboxConsumed(
 
   if (consumed === 0) return { consumed: 0 };
   await Space.updateOne({ _id: spaceId }, { $set: updates });
+  _pendingInboxCount = Math.max(0, _pendingInboxCount - consumed);
   return { consumed };
 }
 
@@ -227,6 +263,8 @@ export async function pickNextEntry(spaceId, beingId) {
   const bucket = readMetaPath(space, [INBOX_NS, beingId]);
   if (!Array.isArray(bucket) || bucket.length === 0) return null;
 
+  // First pass: select the best entry by priority among non-consumed,
+  // non-cancelled candidates. Cheap, fully in-memory.
   let bestIdx = -1;
   let bestPriority = Number.POSITIVE_INFINITY;
   for (let i = 0; i < bucket.length; i++) {
@@ -242,7 +280,34 @@ export async function pickNextEntry(spaceId, beingId) {
     }
   }
   if (bestIdx < 0) return null;
-  return { entry: bucket[bestIdx], index: bestIdx };
+
+  // Ancestor-severance check. A live entry whose rootCorrelation
+  // has a severed ancestor in the parentThread chain is an orphan:
+  // its parent line has been cut and there's no one upstream to
+  // receive its reply. Mark it severedByAncestor and skip. We do
+  // the check after the pick, not during, so the cheap in-memory
+  // loop runs without async overhead on every candidate; only the
+  // chosen entry pays the (typically cached) ancestor lookup. If
+  // it's orphaned, recurse to pick the next candidate.
+  const entry = bucket[bestIdx];
+  if (entry.rootCorrelation) {
+    const { isAncestorSevered } = await import("../place/space/threads.js");
+    const check = await isAncestorSevered(entry.rootCorrelation);
+    if (check.severed) {
+      // Stamp the orphan reason on this entry and recurse for the next.
+      const now = new Date().toISOString();
+      await Space.updateOne(
+        { _id: spaceId },
+        { $set: {
+            [`qualities.${INBOX_NS}.${beingId}.${bestIdx}.cancelledAt`]: now,
+            [`qualities.${INBOX_NS}.${beingId}.${bestIdx}.severedByAncestor`]: check.ancestorId,
+          } },
+      );
+      return pickNextEntry(spaceId, beingId);
+    }
+  }
+
+  return { entry, index: bestIdx };
 }
 
 /**
@@ -283,6 +348,7 @@ export async function cancelByRootCorrelation(
   });
   if (correlations.length === 0) return { cancelled: 0, correlations: [] };
   await Space.updateOne({ _id: spaceId }, { $set: updates });
+  _pendingInboxCount = Math.max(0, _pendingInboxCount - correlations.length);
   return { cancelled: correlations.length, correlations };
 }
 

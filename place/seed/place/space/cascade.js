@@ -27,7 +27,7 @@ import { hooks } from "../../system/hooks.js";
 import { getPlaceConfigValue } from "../../placeConfig.js";
 import { SEED_SPACE } from "./seedSpaces.js";
 import { v4 as uuidv4 } from "uuid";
-import { checkWriteSize, estimateWriteSize } from "../documentGuard.js";
+import { checkWriteSize, estimateWriteSize } from "../doCeiling.js";
 
 // Cascade result statuses written into the .flow partitions and used by
 // the tree health equation (spaceCircuit.js) to count rejections + failures.

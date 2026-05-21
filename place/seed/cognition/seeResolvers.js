@@ -1,45 +1,44 @@
 // TreeOS Seed . AGPL-3.0 . https://treeos.ai . Tabor Holly
 //
-// seeResolver registry.
+// The see-resolver registry — preloaded sight for the moment. A
+// role's `see` field lists named content blocks the being must
+// already be looking at the instant its frame goes through the
+// inference. These are not tool calls the being decides to make;
+// they are things the being IS seeing as part of how the frame
+// is built. When buildPrompt assembles the frame, I walk the
+// role's `see` list in parallel, run each resolver against the
+// ctx, and inline the non-empty results between "seeing and
+// doing this:" and the capabilities list. The being's first
+// sight is whatever I produce.
 //
-// A role's `see` field lists names of preloaded content blocks that
-// must be embedded in the prompt at build time. Each name maps to a
-// resolver registered through this module. At prompt-build time, the
-// assembler walks the role's `see` list, runs each resolver against
-// the current ctx, joins the non-empty results, and inlines them
-// between "seeing and doing this:" and the "and can:" capability list.
-//
-// **Naming + namespacing.** Same pattern as the DO operation registry
+// Naming and namespacing follow the DO operation registry
 // (seed/ibp/operations.js):
 //
 //   Kernel resolvers register bare names ("ruler-snapshot",
-//   "this-scope"). Bare names are reserved for the kernel.
+//   "this-scope"). Bare names are reserved for me.
 //
-//   Extension resolvers are auto-namespaced to "<ext>:<name>". An
-//   extension calling `registerSeeResolver("snapshot", fn)` from inside
-//   its init gets recorded as `<extName>:snapshot`. The loader supplies
-//   the extName via the scoped core; direct callers from seed pass
-//   "kernel" explicitly.
+//   Extension resolvers are auto-namespaced to "<ext>:<name>". The
+//   loader's scoped core supplies the extName; direct seed callers
+//   pass "kernel".
 //
 //   Lookup is exact-key first, then a fallback search for `:<name>`
 //   suffix. A role declaring `see: ["snapshot"]` resolves to the
-//   kernel's `snapshot` if one exists, else falls through to a unique
-//   extension-owned `:snapshot`. If multiple extensions register a
-//   resolver of the same suffix, the bare lookup logs an ambiguity
-//   warning and asks the role to use the qualified name.
+//   kernel's `snapshot` if one exists, otherwise the first unique
+//   extension-owned `:snapshot`. If multiple extensions register
+//   the same suffix the bare lookup logs an ambiguity warning and
+//   asks the role to use the qualified name.
 //
-// Resolvers are registered by the extension that owns the data shape.
-// The Ruler's `ruler-snapshot` resolver lives in the governing
-// extension. Workspace extensions register their own. Seed itself
-// registers a small set of universal resolvers so every role can
-// reach for them.
+// Resolvers are owned by the extension whose data they render. The
+// governing extension owns `ruler-snapshot`. Workspace extensions
+// own their own. I register a small kernel set so every role has
+// something to reach for.
 //
-// A resolver returns either a string (rendered into the prompt) or
-// null / "" (skipped). Returning null is the correct way to opt out
-// for a ctx where the resolver does not apply.
+// A resolver returns a string (inlined) or null/"" (skipped).
+// Returning null is the correct opt-out for a ctx where the
+// resolver doesn't apply.
 //
-// Resolvers are async-tolerant; the assembler awaits each one in
-// parallel and collects the results in declaration order.
+// Resolvers are async-tolerant; I await them in parallel and
+// collect results in declaration order.
 
 import log from "../system/log.js";
 
@@ -150,7 +149,7 @@ export function getSeeResolver(name) {
  * Unknown names log a warning and contribute nothing.
  *
  * @param {string[]} names  the role's `see` list (qualified or bare)
- * @param {object} ctx      runChat ctx (carries being, position, message, etc.)
+ * @param {object} ctx      runTurn ctx (carries being, position, message, etc.)
  * @returns {Promise<string[]>}
  */
 export async function resolveSeeList(names, ctx) {

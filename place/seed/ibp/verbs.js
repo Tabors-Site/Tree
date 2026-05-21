@@ -38,23 +38,23 @@ import { getOperation, registerOperation, unregisterOperation, unregisterOperati
 import { logDid } from "../place/dids.js";
 import { IbpError, IBP_ERR } from "./protocol.js";
 import { MATTER_ORIGIN } from "../place/matter/origins.js";
-import { I_AM } from "../place/space/seedSpaces.js";
+import { I_AM } from "../place/being/seedBeings.js";
 import { isSourceSpaceId } from "../place/space/source.js";
 import { parseWithContext, expand, getPlaceDomain } from "../ibp/address.js";
 import { resolveStance } from "../ibp/resolver.js";
 import { buildPlaceDescriptor, buildDiscovery } from "../ibp/descriptor.js";
 import { authorize, getAuthConfig } from "./authorize.js";
 import { appendToInbox, markInboxConsumed } from "../cognition/inbox.js";
-import { threadIdFromPath, cutThread, getThreadsSpaceId } from "../place/space/threads.js";
+import { threadIdFromPath, cutThread, getThreadsSpaceId, describeThread } from "../place/space/threads.js";
 import { getRole } from "../cognition/roles/registry.js";
-import { authBeing } from "../cognition/roles/auth.js";
+import { cherubBeing } from "../cognition/roles/cherub.js";
 import { llmAssignerBeing } from "../cognition/roles/llmAssigner.js";
 import { registerBeHandler, getBeHandler } from "../place/being/beRegistry.js";
 
 // My two BE-honoring beings register at module load so the dispatcher
 // below can find them. Extensions add their own through
 // registerBeHandler.
-registerBeHandler("auth",         authBeing,         "kernel");
+registerBeHandler("cherub",         cherubBeing,         "kernel");
 registerBeHandler("llm-assigner", llmAssignerBeing,  "kernel");
 import { attachHandoff, wake } from "../cognition/scheduler.js";
 
@@ -206,7 +206,7 @@ export async function seeVerb(target, opts = {}) {
 
   assertVerbCaller("see", opts);
 
-  const { identity = null, currentUser = null, currentPlace = null } = opts;
+  const { identity = null, currentUser = null, currentPlace = null, payload = null } = opts;
   const addressKind = opts.addressKind
     || (target && typeof target === "object" && target.kind)
     || inferAddressKind(addrString);
@@ -217,6 +217,58 @@ export async function seeVerb(target, opts = {}) {
   };
   const parsed   = parseWithContext(addrString, parseCtx);
   const expanded = expand(parsed, parseCtx);
+
+  // Thread descriptor short-circuit. SEE on `<place>/.threads/<id>`
+  // returns the synthetic projection from describeThread instead of
+  // routing through resolveStance + placeAtSpace (the thread has no
+  // persistent space row). SEE on `<place>/.threads` itself still
+  // routes normally — placeAtSpace injects synthetic children for
+  // that case. See place/space/threads.js.
+  const targetThreadId = threadIdFromPath(expanded.right?.path);
+  if (targetThreadId) {
+    const threadsSpaceId = await getThreadsSpaceId();
+    const decision = await authorize({
+      identity,
+      verb: "see",
+      target: { kind: "position", spaceId: threadsSpaceId, isDiscovery: false },
+    });
+    if (!decision.ok) {
+      throw new IbpError(
+        identity ? IBP_ERR.FORBIDDEN : IBP_ERR.UNAUTHORIZED,
+        `SEE denied for stance "${decision.stance}": ${decision.reason}`,
+        { stance: decision.stance },
+      );
+    }
+    const desc = await describeThread(targetThreadId);
+    if (!desc) {
+      throw new IbpError(
+        IBP_ERR.SPACE_NOT_FOUND,
+        `No thread with id ${targetThreadId}`,
+      );
+    }
+    return {
+      address: {
+        place: getPlaceDomain(),
+        path: `/.threads/${targetThreadId}`,
+        being: null,
+        spaceId: threadsSpaceId,
+        beingId: null,
+        chain: [],
+        pathByNames: `/.threads/${targetThreadId}`,
+        pathByIds: `/.threads/${targetThreadId}`,
+        leafName: targetThreadId,
+        leafId: targetThreadId,
+      },
+      isPlaceRoot: false,
+      isHomeRoot:  false,
+      isThread:    true,
+      thread:      desc,
+      children:    [],
+      matters:     [],
+      qualities:   {},
+    };
+  }
+
   const resolved = await resolveStance(expanded.right);
 
   // Stance auth.
@@ -237,7 +289,7 @@ export async function seeVerb(target, opts = {}) {
     );
   }
 
-  return buildPlaceDescriptor(resolved, { identity });
+  return buildPlaceDescriptor(resolved, { identity, payload });
 }
 
 // SUMMON. Deliver a message to the being at `stance` and wake their
@@ -331,7 +383,7 @@ export async function summonVerb(stance, message, opts = {}) {
   }
 
   // Resolve the qualifier to a Being: direct name first (the canonical
-  // shape, @ruler435 / @auth), then role shorthand via
+  // shape, @ruler435 / @cherub), then role shorthand via
   // qualities.beings.<role>.beingId on the target space.
   const Being = (await import("../models/being.js")).default;
   let toBeing = await Being.findOne({ name: qualifier });
@@ -345,6 +397,33 @@ export async function summonVerb(stance, message, opts = {}) {
     if (homeBeingId) toBeing = await Being.findById(homeBeingId);
   }
   if (!toBeing) {
+    // Creation pathway. When the addressed @qualifier doesn't yet
+    // resolve to a Being row AND the message carries a creation spec
+    // AND the caller has identity, this SUMMON is a call-forth: the
+    // caller is summoning the @qualifier into existence. Authorize
+    // (via summonCreateBeing's internal authorize() check) decides
+    // whether the caller's stance permits creation at the target
+    // space. The audit chain (Summon row + BE.register Did) is
+    // written by summonCreateBeing.
+    const content = validatedMessage.content;
+    if (
+      identity &&
+      typeof content === "object" && content !== null &&
+      content.kind === "create-being" &&
+      content.spec && typeof content.spec === "object"
+    ) {
+      const spec = {
+        ...content.spec,
+        name:      content.spec.name      || qualifier,
+        homeSpace: content.spec.homeSpace || resolved.spaceId,
+      };
+      const result = await summonCreateBeing({ spec, identity });
+      return {
+        status:  "created",
+        beingId: result.beingId,
+        name:    result.name,
+      };
+    }
     throw new IbpError(
       IBP_ERR.ROLE_UNAVAILABLE,
       `No being addressable as "@${qualifier}" at this position`,
@@ -381,6 +460,155 @@ export async function summonVerb(stance, message, opts = {}) {
     resolved, toBeing, activeRole, role, validatedMessage,
     identity, onResponse, onError,
   });
+}
+
+/**
+ * SUMMON-creates-a-being. The kernel-internal primitive for one being
+ * calling another forth from non-being.
+ *
+ * BE is identity acting on itself (register/claim/release/switch);
+ * SUMMON is one being calling another. The act of creation is
+ * shaped like SUMMON: the caller names the not-yet, the new being
+ * answers by being.
+ *
+ * The caller is the *parent* of the creation act. They are
+ * attributed in the Summon audit. After the Being row lands, the
+ * parent also writes a BE.register Did on behalf of the new being.
+ * This preserves the "every being's first act is its own first BE"
+ * symmetry: the new being's identity declaration is witnessed and
+ * signed by the parent, because the new being is not yet running
+ * cognition to declare itself.
+ *
+ * Authorization runs through the standard authorize() check with
+ * verb="be" operation="create-being" against the new being's home
+ * space. I_AM passes inherently (kernel short-circuit). Auth-being
+ * is granted by the kernel-shipped default permission seeded at
+ * place root. Extensions grant their own roles by declaring
+ * defaultPermissions in their manifest:
+ *
+ *   provides: {
+ *     defaultPermissions: {
+ *       "be:create-being": { requires: { role: "ruler" } },
+ *     },
+ *   }
+ *
+ * @param {object} args
+ * @param {object} args.spec
+ * @param {string} args.spec.name
+ * @param {string} args.spec.role
+ * @param {string} args.spec.operatingMode  "human" | "llm" | "scripted" | "mixed"
+ * @param {string} args.spec.homeSpace      space the new being lives at
+ * @param {string} [args.spec.parentBeingId]  parent in the being-tree (defaults to I_AM)
+ * @param {object} args.identity            the calling being
+ * @returns {Promise<{ status, beingId, name }>}
+ */
+export async function summonCreateBeing({ spec, identity }) {
+  if (!spec || !spec.name || !spec.operatingMode) {
+    throw new IbpError(
+      IBP_ERR.INVALID_INPUT,
+      "summonCreateBeing requires spec.{name, operatingMode}",
+      { spec },
+    );
+  }
+  if (spec.operatingMode !== "human" && !spec.role) {
+    throw new IbpError(
+      IBP_ERR.INVALID_INPUT,
+      "summonCreateBeing: non-human spec requires role",
+      { spec },
+    );
+  }
+  if (!spec.homeSpace && !spec.homeParent) {
+    throw new IbpError(
+      IBP_ERR.INVALID_INPUT,
+      "summonCreateBeing: spec requires homeSpace or homeParent",
+      { spec },
+    );
+  }
+  // Authorize against the new being's home space. I_AM short-circuits
+  // inherently; cherub passes the kernel-shipped place-root
+  // default; extensions pass through Layer 3 rules they registered.
+  const decision = await authorize({
+    identity,
+    verb:      "be",
+    operation: "create-being",
+    target:    { kind: "space", spaceId: spec.homeSpace || spec.homeParent },
+  });
+  if (!decision.ok) {
+    throw new IbpError(
+      IBP_ERR.FORBIDDEN,
+      `Stance "${decision.stance}" not authorized to summon beings forth: ${decision.reason || "no rule matched"}`,
+      { caller: identity?.name || null, stance: decision.stance },
+    );
+  }
+
+  // The spec passes through to createBeingWithHome (the Mongoose
+  // primitive). The full shape (homeSpace | homeParent, password,
+  // llmDefault, scaffolding, homeName, etc.) is accepted because
+  // kernel-internal callers vary: I_AM at boot uses homeSpace; auth
+  // at runtime uses homeParent + password for humans.
+  const { createBeingWithHome } = await import("../place/being/identity.js");
+  const { being } = await createBeingWithHome(spec);
+
+  // Audit chain. Two rows in two tables, complementary:
+  //
+  //   1. Summon row — the parent's act of calling forth. Attributed
+  //      to the parent (the summoner). beingIn=parent, beingOut=new
+  //      being. Begin and finalize back-to-back because the act is
+  //      atomic; the new being is not yet running, so there is no
+  //      separate end-of-wake moment.
+  //
+  //   2. BE.register Did — the new being's first identity moment,
+  //      attributed to the new being but witnessed/signed by the
+  //      parent because the new being is not yet running cognition
+  //      to declare itself. Preserves the symmetry that every
+  //      being's first act is its own first BE.
+  const callerBeingId = String(identity?.beingId || I_AM);
+  const callerName    = identity?.name || I_AM;
+  const addresseePosition = spec.homeSpace || null;
+  try {
+    const { startSummon, finalizeSummon } =
+      await import("../cognition/summonTracker.js");
+    const summon = await startSummon({
+      beingIn:           callerBeingId,
+      beingOut:          String(being._id),
+      addresseePosition,
+      message:           `Summon forth: ${spec.name}`,
+      source:            callerName,
+      activeRole:        spec.role || null,
+    });
+    if (summon?._id) {
+      await finalizeSummon({
+        summonId: String(summon._id),
+        content:  `Summoned @${spec.name} forth`,
+      });
+    }
+  } catch (err) {
+    log.warn("Verbs", `Summon-row write for SUMMON.create-being @${spec.name} failed: ${err.message}`);
+  }
+
+  try {
+    await logDid({
+      verb:    "be",
+      action:  "register",
+      beingId: String(being._id),
+      target:  { kind: "being", id: String(being._id) },
+      params:  {
+        name:        spec.name,
+        role:        spec.role || null,
+        witnessedBy: callerBeingId,
+      },
+      result:  { note: `Summoned forth by @${callerName}` },
+    });
+  } catch (err) {
+    log.warn("Verbs", `BE.register Did write failed for @${spec.name}: ${err.message}`);
+  }
+
+  return {
+    status:   "created",
+    beingId:  String(being._id),
+    name:     being.name,
+    being,
+  };
 }
 
 /**
@@ -534,7 +762,7 @@ async function _dispatchSummon({
 // operation:  "register" | "claim" | "release" | "switch" | <being-honored>
 // payload:    operation-specific
 //   register  { name, password, ... }
-//   claim     { name, password }   (against the place's auth-being)
+//   claim     { name, password }   (against the place's cherub)
 //   claim     { }                  (re-claim a stance already held)
 //   release   { }
 //   switch    { from }             (target lives in opts.address)
@@ -604,7 +832,7 @@ export async function beVerb(operation, payload = {}, opts = {}) {
   // register + claim are identity-bind ops, not being-method
   // dispatches — the address carries which identity is being bound,
   // not which being to talk to. They always run through the
-  // auth-being, gated by the place-level config toggles.
+  // cherub, gated by the place-level config toggles.
   if (operation === "register" || operation === "claim") {
     const authConfig = await getAuthConfig();
     if (operation === "register" && !authConfig.register_enabled) {
@@ -614,15 +842,15 @@ export async function beVerb(operation, payload = {}, opts = {}) {
       throw new IbpError(IBP_ERR.FORBIDDEN, "Claim is disabled on this place", { operation });
     }
     const authResult = operation === "register"
-      ? await authBeing.register(payload, ctx)
+      ? await cherubBeing.register(payload, ctx)
       : await runClaim({ kind: addressKind, value: address }, payload, ctx);
     await writeBeDid({ operation, identity, authResult, payload });
     return authResult;
   }
 
   // Everything else dispatches to the addressed being. Bare-place
-  // addresses default to @auth, the welcome character.
-  const beingName = extractBeingFromAddress(address, addressKind) || "auth";
+  // addresses default to @cherub, the welcome character.
+  const beingName = extractBeingFromAddress(address, addressKind) || "cherub";
   const role = getBeHandler(beingName);
   if (!role) {
     throw new IbpError(
@@ -642,7 +870,7 @@ export async function beVerb(operation, payload = {}, opts = {}) {
   // Auth's switch derives from/to from the address; everything else
   // dispatches via kebab-case op name → camelCase method on the role.
   let beResult;
-  if (beingName === "auth" && operation === "switch") {
+  if (beingName === "cherub" && operation === "switch") {
     const from = payload.from;
     const to   = addressKind === "stance" ? address : null;
     beResult = await role.switch({ from, to }, ctx);
@@ -664,7 +892,7 @@ export async function beVerb(operation, payload = {}, opts = {}) {
 // One Did per BE op, same as DO. The actor is the calling identity;
 // register/claim from arrival has none, so the row names the newly-
 // bound being from authResult.
-async function writeBeDid({ operation, identity, authResult, payload, beingName = "auth" }) {
+async function writeBeDid({ operation, identity, authResult, payload, beingName = "cherub" }) {
   try {
     let actorBeingId = identity?.beingId || null;
     if (!actorBeingId && authResult && typeof authResult === "object") {
@@ -695,16 +923,16 @@ async function writeBeDid({ operation, identity, authResult, payload, beingName 
   }
 }
 
-// Two claim modes. Credentials: address is the place or <place>/@auth,
+// Two claim modes. Credentials: address is the place or <place>/@cherub,
 // payload carries name + password. Token re-claim: address is a
 // stance already held by the session, identity carries a valid token.
 async function runClaim(address, opPayload, ctx) {
   const isAuthBeingAddress =
     address.kind === "place" ||
-    (address.kind === "stance" && /\/@auth$/.test(address.value));
+    (address.kind === "stance" && /\/@cherub$/.test(address.value));
 
   if (isAuthBeingAddress) {
-    return authBeing.claim(opPayload, ctx);
+    return cherubBeing.claim(opPayload, ctx);
   }
 
   if (!ctx.identity) {

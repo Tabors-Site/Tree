@@ -10,7 +10,7 @@ Three concerns live at the top level: **what TreeOS is** (seed/), **what convers
 seed/              The kernel. Four folders, four roles. NEVER modify.
 
   place/         IS    — the world as substance. space/, matter/, being/,
-                       integrityCheck.js, registryMirror.js, PLACE.md.
+                       placeCheck.js, manifest.js, PLACE.md.
   ibp/          ACTS  — the world as acted-upon. SEE/DO/SUMMON/BE, address,
                        authorize, operations, descriptor, discovery,
                        pushChannel, resolver, stanceProperties.
@@ -19,7 +19,7 @@ seed/              The kernel. Four folders, four roles. NEVER modify.
                        (out-of-band, in their own heads) and route through
                        portals; scripted beings ARE their code, no apparatus
                        needed. This folder only matters when an LLM is in
-                       the loop: runChat, buildPrompt, llmClient, mcpClient,
+                       the loop: runTurn, buildPrompt, llmClient, mcpClient,
                        scheduler, inbox, wakeSchedule, session, subscriptions,
                        replyAggregator, defaultSummon, assignments,
                        connections, tools.js, roles/.
@@ -56,7 +56,7 @@ cli/ (reserved for the eventual CLI adapter)
 
 extensions/ Extensions. This is where you build.
 plant.js Operator's act. Plants the seed (writes .env, picks extensions). Once only.
-bigbang.js t=0. Opens HTTP/WebSocket senses; fires genesis().
+begin.js t=0. Opens HTTP/WebSocket senses; fires genesis().
 genesis.js The unfolding. Indexes, config, migrations, beings, extensions, jobs.
 
 ````
@@ -140,7 +140,7 @@ treeos?.exports?.registerSlot?.(
 
 **inApp query param** is set when pages load inside the app shell iframe. Dashboard pages should skip their own chatbar when `inApp` is truthy because the app shell provides the chat panel. Pass `inApp: !!req.query.inApp` to your renderer and conditionally exclude chatbar HTML/CSS/JS.
 
-**OrchestratorRuntime** is how you run multi-step AI pipelines. Single LLM call: use `core.llm.runChat()`. Multi-step background pipeline: use `new OrchestratorRuntime()` with init, runStep, trackStep, cleanup.
+**OrchestratorRuntime** is how you run multi-step AI pipelines. Single LLM call: use `core.llm.runTurn()`. Multi-step background pipeline: use `new OrchestratorRuntime()` with init, runStep, trackStep, cleanup.
 
 **LLM_PRIORITY** on every LLM call. BACKGROUND for jobs. INTERACTIVE for user-triggered tools. GATEWAY for external channels. Without priority, background work starves human responses.
 

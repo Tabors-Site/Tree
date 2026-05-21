@@ -11,7 +11,7 @@
 //   DO      position only      (mutations always place at a position;
 //                               a stance address has its @being stripped)
 //   SUMMON  stance only        (inboxes are per-being-per-position)
-//   BE      stance OR place     (auth-being stance, or bare-place shorthand)
+//   BE      stance OR place     (cherub stance, or bare-place shorthand)
 //
 // `payload` carries operation-specific data per verb:
 //   SEE     { live?: boolean, ... }
@@ -31,7 +31,7 @@ const VALID_VERBS = new Set(["see", "do", "summon", "be"]);
 /**
  * Classify an address string into its kind:
  *   "place"     bare domain, no slash, no @being (e.g. "treeos.ai")
- *   "stance"   has @being qualifier (e.g. "treeos.ai/abc-123@auth")
+ *   "stance"   has @being qualifier (e.g. "treeos.ai/abc-123@cherub")
  *   "position" has slash, no @being (e.g. "treeos.ai/abc-123")
  */
 export function classifyAddress(address) {
@@ -119,7 +119,7 @@ export function parseUnifiedEnvelope(msg) {
       if (addressKind !== "stance" && addressKind !== "place") {
         throw new IbpError(
           IBP_ERR.INVALID_INPUT,
-          `ibp BE address must be a stance (e.g. "${address}@auth") or a bare place (e.g. "${address.split("/")[0]}"). ` +
+          `ibp BE address must be a stance (e.g. "${address}@cherub") or a bare place (e.g. "${address.split("/")[0]}"). ` +
           `Got "${addressKind}" shape.`,
         );
       }

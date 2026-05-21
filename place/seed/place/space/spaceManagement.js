@@ -42,7 +42,8 @@ import { getPlaceRootId } from "../../placeRoot.js";
 import { getPlaceConfigValue } from "../../placeConfig.js";
 import log from "../../system/log.js";
 import { IBP_ERR, IbpError } from "../../ibp/protocol.js";
-import { DELETED, I_AM } from "./seedSpaces.js";
+import { DELETED } from "./seedSpaces.js";
+import { I_AM } from "../being/seedBeings.js";
 import { MATTER_ORIGIN } from "../matter/origins.js";
 
 // ─────────────────────────────────────────────────────────────────────────

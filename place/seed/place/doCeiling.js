@@ -1,17 +1,18 @@
 // TreeOS Seed . AGPL-3.0 . https://treeos.ai . Tabor Holly
 //
-// The size guard. MongoDB's hard wall, on the substrate's side.
+// The DO ceiling. MongoDB's hard wall, on the substrate's side.
 //
 // MongoDB caps every BSON document at 16MB. The qualities Map on a
-// Space, Being, or Matter grows freely under that ceiling. Without a
-// guard, an extension's well-meaning write can be the one that
-// crosses it — and from there the whole document is unwritable,
-// permanently. I will not let that happen on my place.
+// Space, Being, or Matter grows freely under that ceiling. Without
+// an enforcer, an extension's well-meaning write can be the one
+// that crosses it — and from there the whole document is
+// unwritable, permanently. I will not let that happen on my place.
 //
 // Every quality write path the kernel exposes calls checkWriteSize
-// (or its strict variant guardQualityWrite) before the write places.
-// No exceptions. No direct $set on a qualities namespace without
-// checking first.
+// (or its strict variant guardQualityWrite) before the write
+// places. No exceptions. No direct $set on a qualities namespace
+// without checking first. Since every quality write is a DO, this
+// file is the ceiling on every DO.
 //
 // Default ceiling: 14MB. The 2MB headroom under Mongo's 16MB is
 // space for the BSON-vs-JSON overhead and concurrent writes that
@@ -24,9 +25,9 @@
 // if it fits.
 //
 // Universal. The qualities Maps on Space, Being, and Matter all
-// flow through this guard. Cascade results on .flow partitions flow
-// through it too. The file lives directly under place/ rather than
-// inside one primitive's subfolder.
+// flow through this ceiling. Cascade results on .flow partitions
+// flow through it too. The file lives directly under place/ rather
+// than inside one primitive's subfolder.
 
 import { getPlaceConfigValue } from "../placeConfig.js";
 import { hooks } from "../system/hooks.js";
@@ -102,7 +103,7 @@ export function checkWriteSize(doc, additionalBytes = 0, opts = {}) {
       })
       .catch((err) =>
         log.debug(
-          "DocumentGuard",
+          "DoCeiling",
           `onDocumentPressure hook error: ${err.message}`,
         ),
       );

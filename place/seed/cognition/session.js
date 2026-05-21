@@ -1,15 +1,24 @@
 // TreeOS Seed . AGPL-3.0 . https://treeos.ai . Tabor Holly
 //
-// Session registry.
+// The session registry. A session is one reach into me — a web
+// tab, a CLI process, a future carrier I haven't met yet. Sessions
+// are transport-side machinery, not the being itself: a being
+// might have several reaches open (laptop tab, phone tab, CLI),
+// each is a session, but the being's moments are the same moments
+// regardless of which reach is looking in.
 //
-// Tracks all active sessions per being and gates iframe navigation so only
-// the designated "active navigator" session can redirect the user's view.
-// All session creation should go through createSession().
+// I keep one registry so any reach is addressable the same way.
+// I track every active session per being and gate iframe
+// navigation so only the designated "active navigator" session
+// can redirect the view. Everything that opens a session does it
+// through createSession; transports register their session-type
+// strings through registerSessionType.
 //
-// Lives in seed because a session is a "being-reach into the place" — the
-// concept is transport-agnostic. A web tab, a CLI process, and a future
-// CLI carrier all create sessions through the same API; transports just
-// register their session-type strings via registerSessionType.
+// Distinct from runTurn's `sessions` map (the carry between
+// moments, keyed by presenceKey) and from `presenceKey` itself
+// (the lane the being is continuously present in). A session is
+// "a reach exists right now"; a presence is "this lane carries
+// the being's moments." Multiple sessions can sit in one presence.
 
 import log from "../system/log.js";
 import { hooks } from "../system/hooks.js";
@@ -333,22 +342,6 @@ export function updateSessionMeta(sessionId, metaUpdates) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────
-// NAVIGATION GATING
-// ─────────────────────────────────────────────────────────────────────────
-
-export function canNavigate(sessionId) {
-  const session = sessions.get(sessionId);
-  if (!session || session.status !== "active") return false;
-  const isNav = activeNavigator.get(session.beingId) === sessionId;
-  if (isNav) session.lastActivity = Date.now();
-  return isNav;
-}
-
-export function isActiveNavigator(beingId, sessionId) {
-  return activeNavigator.get(String(beingId)) === sessionId;
-}
-
-// ─────────────────────────────────────────────────────────────────────────
 // NAVIGATOR CONTROL
 // ─────────────────────────────────────────────────────────────────────────
 
@@ -388,10 +381,6 @@ export function getSession(sessionId) {
   return s ? { ...s } : null;
 }
 
-export function registeredSessionCount() {
-  return sessions.size;
-}
-
 // ─────────────────────────────────────────────────────────────────────────
 // ABORT CONTROL
 // ─────────────────────────────────────────────────────────────────────────
@@ -415,23 +404,6 @@ export function abortSession(sessionId) {
 
 export function clearSessionAbort(sessionId) {
   sessionAbortControllers.delete(sessionId);
-}
-
-export function abortSessionsByScope(scopeKey) {
-  const scoped = scopedSessions.get(scopeKey);
-  if (!scoped) return 0;
-
-  const sessionId = scoped.sessionId;
-  const session = sessions.get(sessionId);
-  if (!session) {
-    scopedSessions.delete(scopeKey);
-    return 0;
-  }
-
-  abortSession(sessionId);
-  endSession(sessionId);
-  scopedSessions.delete(scopeKey);
-  return 1;
 }
 
 // ─────────────────────────────────────────────────────────────────────────
@@ -541,7 +513,7 @@ setInterval(
 //     `ibpAddress` per each Map's semantics.
 
 /**
- * Resolve the pipeline key for a runChat / OrchestratorRuntime call.
+ * Resolve the pipeline key for a runTurn / OrchestratorRuntime call.
  *
  * A pipeline key identifies a stanceless internal-cognition lane — the
  * conversation-equivalent cache key for work that has no addressee
@@ -613,10 +585,6 @@ export function resolvePipelineKey({
     typeof makeEphemeral === "function" ? makeEphemeral() : cryptoRandomUUID();
   return { key: `pipeline:ephemeral:${uuid}`, persist: false };
 }
-
-// Back-compat alias for callers still importing the old name. Slated
-// for removal once the codebase has converged on resolvePipelineKey.
-export const resolveInternalAiSessionKey = resolvePipelineKey;
 
 function cryptoRandomUUID() {
   if (globalThis.crypto?.randomUUID) return globalThis.crypto.randomUUID();

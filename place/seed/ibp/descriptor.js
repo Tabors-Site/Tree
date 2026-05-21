@@ -39,6 +39,8 @@ import Did from "../models/did.js";
 import { getPlaceRootId } from "../placeRoot.js";
 import { listSeeds } from "../place/seeds.js";
 import { listMattersAt } from "../place/matter/matters.js";
+import { SEED_SPACE } from "../place/space/seedSpaces.js";
+import { listLiveThreads } from "../place/space/threads.js";
 import {
   resolveSpaceAccess,
   listSpaceChildren,
@@ -61,7 +63,7 @@ export const IBP_PROTOCOL_VERSION = "1.0";
 // My BE-only beings — addressable through BE but not in the SUMMON
 // role registry, so they need an explicit listing for the discovery
 // payload.
-const SYSTEM_BE_BEINGS = ["auth", "llm-assigner"];
+const SYSTEM_BE_BEINGS = ["cherub", "llm-assigner"];
 
 export function buildDiscovery() {
   const placeUrl = getPlaceUrl();
@@ -247,7 +249,7 @@ async function placeAtPlaceRoot(resolved, { identity } = {}) {
   // qualities.beings. `available` reflects whether the role's
   // backing extension is currently registered.
   const placeRootBeings = [
-    { being: "auth",         invocableBy: "anyone",        available: isRegistered("auth") },
+    { being: "cherub",         invocableBy: "anyone",        available: isRegistered("cherub") },
     { being: "llm-assigner", invocableBy: "authenticated", available: isRegistered("llm-assigner") },
     { being: "place-manager", invocableBy: "owner",         available: isRegistered("place-manager") },
   ];
@@ -323,7 +325,7 @@ async function placeAtBeingHome(resolved, { identity } = {}) {
   };
 }
 
-async function placeAtSpace(resolved, { identity } = {}) {
+async function placeAtSpace(resolved, { identity, payload } = {}) {
   const placeDomain = getPlaceDomain();
   const space = resolved.leafSpace;
   if (!space) throw new Error("Resolved space missing leafSpace reference");
@@ -332,7 +334,15 @@ async function placeAtSpace(resolved, { identity } = {}) {
   const pathByIds   = "/" + resolved.chain.map((c) => c.id).join("/");
   const parentPath  = pathByNames.replace(/\/[^/]+$/, "") || "/";
 
-  const children = await childrenOf(space._id, pathByNames);
+  // .threads has no persisted children; the live forest is projected
+  // on demand from Summon records keyed by rootCorrelation. The SEE
+  // payload's filter fields (being, role, position, stance, priority)
+  // push down to the projection's $match so the listing scales.
+  // Each entry is shaped like a normal child so clients render it
+  // through the same path as any other space listing.
+  const children = space.seedSpace === SEED_SPACE.THREADS
+    ? await synthesizeThreadChildren(space._id, pathByNames, payload)
+    : await childrenOf(space._id, pathByNames);
   const matters  = await mattersAt(space._id);
   const lineage  = buildLineage(resolved);
   const siblings = space.parent
@@ -395,6 +405,39 @@ async function childrenOf(parentId, parentPath, opts = {}) {
     type: s.type || null,
     path: parentPath === "/" ? `/${s.name}` : `${parentPath}/${s.name}`,
     qualities: serializeQualities(s.qualities),
+  }));
+}
+
+// Synthetic children for `.threads`. Live rootCorrelation chains
+// surface as entries shaped like normal child spaces but with a
+// `synthetic: true` flag and a `thread` block carrying the lastAct
+// timestamp; full descriptor is one SEE deeper at .threads/<id>.
+// Pure projection — no persistence.
+//
+// `payload` is the SEE request's payload (query params on HTTP, the
+// envelope's payload on WS). Recognized filter fields — being, role,
+// position, stance, priority, limit — push down to the projection's
+// $match, so filtering scales on busy systems.
+async function synthesizeThreadChildren(parentId, parentPath, payload) {
+  const filters = payload && typeof payload === "object"
+    ? {
+        limit:    payload.limit    != null ? Number(payload.limit) : undefined,
+        being:    payload.being    || null,
+        role:     payload.role     || null,
+        position: payload.position || null,
+        stance:   payload.stance   || null,
+        priority: payload.priority || null,
+      }
+    : {};
+  const live = await listLiveThreads(filters);
+  return live.map((t) => ({
+    name:      t.id,
+    spaceId:   `thread:${t.id}`,
+    type:      "thread",
+    synthetic: true,
+    path:      parentPath === "/" ? `/${t.id}` : `${parentPath}/${t.id}`,
+    thread:    { id: t.id, lastAct: t.lastAct },
+    qualities: {},
   }));
 }
 

@@ -15,7 +15,7 @@
 // every resolution path within one conversation turn.
 
 import Space from "../../models/space.js";
-import { I_AM } from "./seedSpaces.js";
+import { I_AM } from "../being/seedBeings.js";
 import { IBP_ERR } from "../../ibp/protocol.js";
 import { getAncestorChain, resolveSpaceAccessFromChain } from "./ancestorCache.js";
 import { getPlaceRootId } from "../../placeRoot.js";

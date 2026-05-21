@@ -210,9 +210,9 @@ export const CONFIG_DEFAULTS = {
   staleSessionTimeout: 1800,
   maxSessions: 10000,
   maxConnectionsPerIp: 20,
-  maxConversationSessions: 50000,
+  maxPresences: 50000,
   maxScopedSessions: 20000,
-  staleConversationTimeout: 1800,
+  stalePresenceTimeout: 1800,
 
   // Matter limits
   matterMaxChars: 5000,
@@ -230,7 +230,7 @@ export const CONFIG_DEFAULTS = {
   ancestorCacheTTL: 30000,
   ancestorCacheMaxEntries: 50000,
   ancestorCacheMaxDepth: 100,
-  integrityCheckInterval: 86400000,
+  placeCheckInterval: 86400000,
 
   // Structural mutation locks
   spaceLockTimeoutMs: 30000,

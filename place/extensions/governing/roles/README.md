@@ -25,7 +25,7 @@ When the new roles are ready and verified end-to-end:
 ## What changes between `modes/` and `roles/`
 
 The old `modes/` files are "modes" — system prompts + tool lists.
-They run inside the orchestrator's runChat loop. Each mode is data
+They run inside the orchestrator's runTurn loop. Each mode is data
 the orchestrator interprets.
 
 The new `roles/` files are "role templates" — full `role.summon`
@@ -84,7 +84,7 @@ Start from Ruler outward. Each step uses the substrate already built
    of calling `dispatchSwarmPlan`. The orchestrator path retires.
 9. **Delete** `modes/`, `tree-orchestrator/dispatch.js`, `ruling.js`,
    `orchestrator.js`, `graph.js`, `steppedMode.js`. Delete the hook
-   subscribers in `governing/index.js`. Collapse `runChat` to a thin
+   subscribers in `governing/index.js`. Collapse `runTurn` to a thin
    "deliver SUMMON" wrapper. Simplify the WS layer.
 
 ## What the substrate already provides (so this rewrite is bounded)

@@ -7,7 +7,7 @@
 //
 //   1. **Judgment** (default): the Ruler routes-to-foreman for retry /
 //      escalate / freeze / pause / resume / status decisions. Same
-//      shape as Planner/Contractor — runChat with the foreman mode,
+//      shape as Planner/Contractor — runTurn with the foreman mode,
 //      reply to whoever asked via `_shared.emitReplyToAsker`.
 //
 //   2. **Dispatch** (content.kind === "dispatch-plan"): walk plan
@@ -16,13 +16,14 @@
 //      Ruler. Absorbs the work `dispatchSwarmPlan` did inside the
 //      orchestrator.
 //
-// **Reply mechanism for workers.** Within a single Foreman dispatch
-// summon, each worker SUMMON gets an `attachHandoff` whose
-// `onResponse` calls `aggregator.notify(reply)`. Workers just return
-// their content; the scheduler invokes the handoff; the aggregator
-// counts. No inbox-roundtrip per reply — handoffs are the in-flight
-// reply mechanism. Same as the existing scheduler handoff pattern;
-// the aggregator just bundles the call site.
+// **Reply mechanism for workers.** Each worker SUMMON goes through
+// `summonByResolved` (the single sanctioned kernel-internal SUMMON
+// entry) which writes the inbox entry, wires the reply-handoff, and
+// nudges the scheduler in one atomic act behind the envelope
+// contract. The handoff's `onResponse` calls `aggregator.notify(reply)`;
+// workers just return their content, the scheduler invokes the handoff,
+// the aggregator counts. No inbox-roundtrip per reply — handoffs are
+// the in-flight reply mechanism, just now hidden behind the verb.
 //
 // **Step ordering rule.** Sequential per-step gate: step N+1 cannot
 // dispatch until step N's full subtree settles. Within a leaf-batch
@@ -35,12 +36,18 @@
 
 import { randomUUID } from "crypto";
 import log from "../../../seed/system/log.js";
-import { runChat } from "../../../seed/cognition/runChat.js";
+import { runTurn } from "../../../seed/cognition/runTurn.js";
 import Space from "../../../seed/models/space.js";
 import Being from "../../../seed/models/being.js";
-import { appendToInbox } from "../../../seed/cognition/inbox.js";
-import { wake, attachHandoff } from "../../../seed/cognition/scheduler.js";
-import { aggregate } from "../../../seed/cognition/replyAggregator.js";
+// Only-SUMMONs-make-SUMMONs migration (2026-05-21): the legacy
+// appendToInbox + attachHandoff + wake triple retired. The single
+// sanctioned entry for kernel-internal SUMMONs with a known receiver
+// is summonByResolved in seed/ibp/verbs.js — it does the inbox
+// write, the wake, and the reply-handoff atomically behind the
+// envelope contract. No more direct scheduler pokes from extension
+// code. See [[project_thread_as_primitive]] for the design.
+import { summonByResolved } from "../../../seed/ibp/verbs.js";
+import { aggregate } from "../../../seed/cognition/replies.js";
 import { getPlaceDomain } from "../../../seed/ibp/address.js";
 import { emitReplyToAsker, readMetaPath } from "./_shared.js";
 import { renderExecutionStack } from "../state/executionStack.js";
@@ -398,7 +405,7 @@ async function runJudgment(message, ctx, executionSpaceId) {
 
   let result;
   try {
-    result = await runChat({
+    result = await runTurn({
       being:    ctx.toBeing,
       envelope: message,
       role:     foremanRole,
@@ -585,8 +592,13 @@ async function dispatchLeafBatch({ group, executionSpaceId, rulerSpaceId, ctx, a
     workerType, leafSpecs, allBranchNames, planEmission,
   });
 
-  // Emit the SUMMON + register handoff + wake. The handoff's
-  // onResponse feeds the aggregator.
+  // Emit the SUMMON through the verb. summonByResolved writes the
+  // inbox entry, wires the reply-handoff (onResponse/onError feed the
+  // aggregator), and nudges the scheduler — all atomically, all
+  // behind the envelope contract. The kernel stamps parentThread
+  // automatically because the Foreman is currently acting under its
+  // own rootCorrelation (the Ruler-driven dispatch), so the worker's
+  // chain links back to the Foreman's thread in `.threads`.
   const correlation = randomUUID();
   const rootCorrelation = ctx.message?.rootCorrelation
     || ctx.message?.correlation
@@ -594,24 +606,29 @@ async function dispatchLeafBatch({ group, executionSpaceId, rulerSpaceId, ctx, a
   const placeDomain = getPlaceDomain() || "place";
   const foremanStance = `${placeDomain}/${executionSpaceId}@${ctx.toBeing?.name || "foreman"}`;
 
-  await appendToInbox(executionSpaceId, String(workerBeing._id), {
-    from:            foremanStance,
-    content:         messageBody,
-    correlation,
-    rootCorrelation,
-    activeRole:      workerRoleName,
-    priority:        3,
-    sentAt:          new Date().toISOString(),
-  });
-
   const agg = aggregate({
     correlations: [correlation],
     minReplies:   1,
     timeoutMs:    20 * 60 * 1000, // 20 min per leaf-batch — matches legacy
     signal:       ctx.signal,
   });
-  attachHandoff(String(workerBeing._id), correlation, {
-    responseFromStance: `${placeDomain}/${executionSpaceId}@${workerRoleName}`,
+
+  await summonByResolved({
+    toBeingId:    String(workerBeing._id),
+    inboxSpaceId: executionSpaceId,
+    activeRole:   workerRoleName,
+    message: {
+      from:            foremanStance,
+      content:         messageBody,
+      correlation,
+      rootCorrelation,
+      activeRole:      workerRoleName,
+      priority:        "INTERACTIVE",
+      sentAt:          new Date().toISOString(),
+    },
+    identity: ctx.toBeing
+      ? { beingId: String(ctx.toBeing._id), name: ctx.toBeing.name }
+      : null,
     onResponse: (replyEntry) => agg.notify(replyEntry),
     onError:    (err) => agg.notify({
       inReplyTo: correlation,
@@ -619,7 +636,6 @@ async function dispatchLeafBatch({ group, executionSpaceId, rulerSpaceId, ctx, a
       error:     true,
     }),
   });
-  wake(String(workerBeing._id), executionSpaceId);
 
   log.info("Foreman",
     `🚦 → ${workerRoleName} dispatched ` +
@@ -641,7 +657,7 @@ async function dispatchLeafBatch({ group, executionSpaceId, rulerSpaceId, ctx, a
   // Outcome classification + step-status updates place here when the
   // dispatch absorption is fully wired — they mirror legacy
   // `classifyWorkerOutcome` + `applyLeafOutcomeToRecord`. For now
-  // the substrate writes happen inside the worker's runChat tool
+  // the substrate writes happen inside the worker's runTurn tool
   // calls (governing-emit-* etc.), same as today.
 }
 

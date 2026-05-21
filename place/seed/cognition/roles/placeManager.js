@@ -1,11 +1,21 @@
 // TreeOS Seed . AGPL-3.0 . https://treeos.ai . Tabor Holly
 //
-// place-manager being.
+// place-manager being. The first LLM-driven being I ship.
+//
+// Unlike cherub and llm-assigner (which are scripted — they ARE
+// their code), place-manager's moments are assembled into frames
+// and run through the factory. Every summon to `<place>/@place-
+// manager` enters this role's summon() handler, which calls runTurn
+// — runTurn assembles the frame from this role's prompt body and
+// capabilities, and the being lives for the duration of the
+// inference. The operator's reach into me is talking to a
+// momentary being constructed fresh each summon. The carry between
+// moments lives in the presenceKey for `<place>/@place-manager ::
+// <operator-stance>` on the IBP Address.
 //
 // LLM-driven being whose home is the place root. Summoned by the
 // operator to inspect and mutate place-level state: installed
-// extensions, config keys, peers, and the place seed space tree. The
-// operator's SUMMON of `<place>/@place-manager` enters here.
+// extensions, config keys, peers, and the place seed space tree.
 //
 // The old place-manager (oldExtensions/place-manager/) shipped 13
 // bespoke tools (place-status, place-config-read/set, place-ext-*, etc.).
@@ -19,7 +29,7 @@
 // (probably a thin "do-op" tool that takes { action, args } and
 // dispatches through core.do, plus a "see" tool for substrate reads).
 
-import { runChat } from "../../cognition/runChat.js";
+import { runTurn } from "../../cognition/runTurn.js";
 import log from "../../system/log.js";
 
 const PLACE_MANAGER_PROMPT = `You are the Place Manager for this TreeOS place. You answer to the
@@ -46,7 +56,7 @@ actions so the operator can confirm before you invoke them.
 
 If a request falls outside place scope (a tree question, a being-level
 LLM config, a personal note), direct the operator to the appropriate
-being: @auth for identity, @llm-assigner for LLM connections, or a
+being: @cherub for identity, @llm-assigner for LLM connections, or a
 tree-level Ruler for work inside a tree.`;
 
 export const placeManagerRole = Object.freeze({
@@ -66,7 +76,7 @@ export const placeManagerRole = Object.freeze({
   // .peers, …) and invoke any registered DO operation at the place
   // root. The old per-op tools retired in favor of this generic pair;
   // the substrate's introspection primitives ARE the discovery layer.
-  // See seed/place/being/roles/placeManagerTools.js.
+  // See seed/cognition/roles/placeManagerTools.js.
   toolNames: ["place-see", "place-do"],
 
   label: "Place Manager",
@@ -86,7 +96,7 @@ export const placeManagerRole = Object.freeze({
 
     let result;
     try {
-      result = await runChat({
+      result = await runTurn({
         being:    ctx.toBeing,
         envelope: message,
         role:     placeManagerRole,

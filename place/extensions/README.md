@@ -396,11 +396,11 @@ write through the new shape:
 
 | What | Where | What you get |
 |---|---|---|
-| Default summon dispatch | `seed/cognition/defaultSummon.js` | runChat invocation, abort handling, error wrapping, reply emission |
+| Default summon dispatch | `seed/cognition/defaultSummon.js` | runTurn invocation, abort handling, error wrapping, reply emission |
 | System prompt assembly | `seed/cognition/buildPrompt.js` | identity + see + capabilities + your prompt body + time |
 | Reply emission | `seed/cognition/replyEmission.js` | emitReplyToAsker, emitReplyToStance, findChainInitialCaller |
-| Tool resolution | `seed/cognition/runChat.js` | role.canX → registered tools, permission filter, per-position scope |
-| Exit-gate enforcement | `seed/cognition/runChat.js` | runs if you declared `exit.requires` |
+| Tool resolution | `seed/cognition/runTurn.js` | role.canX → registered tools, permission filter, per-position scope |
+| Exit-gate enforcement | `seed/cognition/runTurn.js` | runs if you declared `exit.requires` |
 | Permissions derivation | `seed/being/roles/registry.js` | computed from your canSee/canDo/canSummon/canBe |
 | Did audit logging | `seed/ibp/verbs.js` | every DO writes a Did unless `skipAudit` |
 | Stance authorization | `seed/ibp/authorize.js` | runs before every verb |
@@ -514,7 +514,7 @@ Things you might be tempted to do that the architecture rejects.
 The seed's default summon dispatch handles 90% of cases. Reach for a
 custom summon only when the role needs structural routing (the
 Foreman is the canonical case — it routes by content shape between
-dispatch and judgment). For a role that wakes, calls runChat, and
+dispatch and judgment). For a role that wakes, calls runTurn, and
 returns text, just declare `prompt` and let seed wrap.
 
 **Putting `create-being` on the DO verb.**

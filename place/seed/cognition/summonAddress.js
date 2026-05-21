@@ -1,22 +1,24 @@
 // TreeOS Seed . AGPL-3.0 . https://treeos.ai . Tabor Holly
 //
-// Summon address composition.
+// The canonical name of the lane two beings share. When two
+// beings exchange moments back and forth, every one of those
+// moments belongs to the same presence lane. The natural
+// identifier for the lane is the IBP Address itself in canonical
+// sorted form: `<smaller-stance> :: <larger>`. Sorting makes A→B
+// and B→A resolve to the same key, so both directions group into
+// one lane on the reel.
 //
-// A summon is one being addressing another. The natural identifier
-// for "every summon along this back-and-forth" is the IBP Address
-// itself in canonical sorted form: `<smaller-stance> :: <larger>`.
-// Sorting makes A→B and B→A resolve to the same key so the two
-// directions group into one record.
+// Path form. I store the spaceId-rooted form (`<place>/<spaceId>
+// @<name>`) so a saved lane name survives space renames. The
+// address grammar's display form (human-readable names) is a
+// separate expression of the same grammar — see
+// seed/ibp/address.js.
 //
-// Path form. Storage uses the spaceId-rooted form (`<place>/<spaceId>
-// @<name>`) so a stored address survives space renames. The address
-// grammar's display form (human-readable names) is a separate
-// expression; both are valid expressions of the same grammar. See
-// seed/ibp/address.js for the grammar itself.
-//
-// Only the cognition layer needs to compose these: summonTracker
-// writes them on every Summon row; runChat reads the composed form
-// for correlation. Hence this file lives in cognition/, not in ibp/.
+// Why I live in cognition. Only cognition needs to name the lane:
+// summonTracker stamps the canonical string onto every Summon
+// row, and runTurn uses it as the presenceKey to find the carry
+// between moments. This composition is moment-machinery, not
+// protocol surface.
 
 import Being from "../models/being.js";
 import log from "../system/log.js";

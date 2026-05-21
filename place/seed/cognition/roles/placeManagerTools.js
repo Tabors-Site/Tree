@@ -26,9 +26,9 @@
 // install an extension or write config get FORBIDDEN.
 
 import { z } from "zod";
-import { seeVerb, doVerb } from "../../../ibp/verbs.js";
-import { getPlaceDomain } from "../../../ibp/address.js";
-import { getPlaceRootId } from "../../../placeRoot.js";
+import { seeVerb, doVerb } from "../../ibp/verbs.js";
+import { getPlaceDomain } from "../../ibp/address.js";
+import { getPlaceRootId } from "../../placeRoot.js";
 
 export const placeManagerTools = [
   {

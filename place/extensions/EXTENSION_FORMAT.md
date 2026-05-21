@@ -87,20 +87,20 @@ export default {
 
 **If your extension uses a core service, you MUST declare it in `needs.services` or `optional.services`.** The loader builds a scoped core object that only contains declared services. Undeclared services are undefined.
 
-**Common failure:** `Cannot read properties of undefined (reading 'runChat')` means you used `core.llm.runChat` without declaring `services: ["llm"]` in your manifest.
+**Common failure:** `Cannot read properties of undefined (reading 'runTurn')` means you used `core.llm.runTurn` without declaring `services: ["llm"]` in your manifest.
 
 ### Available kernel services
 
 | Service | What it provides | Common functions |
 |---------|-----------------|-----------------|
-| `llm` | AI conversation | `runChat`, `processMessage`, `getClientForUser`, `switchMode` |
+| `llm` | AI conversation | `runTurn`, `stepTurn`, `getClientForUser`, `switchMode` |
 | `hooks` | Lifecycle events | `register`, `run` (always available, but declare for clarity) |
 | `session` | Session management | `createSession`, `endSession`, `getSession` |
 | `chat` | Chat tracking | `startChat`, `finalizeChat`, `setChatContext` |
 | `orchestrator` | Pipeline runtime | `OrchestratorRuntime`, `acquireLock`, `releaseLock` |
 | `contributions` | Audit trail | `logContribution` |
 | `ownership` | Tree ownership | `addContributor`, `removeContributor`, `transferOwnership` |
-| `tree` | Tree infrastructure | `getAncestorChain`, `checkIntegrity`, `isTreeAlive` |
+| `tree` | Tree infrastructure | `getAncestorChain`, `checkPlace`, `isTreeAlive` |
 | `cascade` | Signal propagation | `deliverCascade` |
 | `metadata` | Space metadata | `qualities.space.getQuality`, `readNs`, `qualities.space.setQuality`, `qualities.space.mergeQuality`, `qualities.space.incQuality`, `qualities.space.pushQuality`, `qualities.space.addToQualitySet`, `qualities.space.batchSetQuality`, `qualities.space.unsetQuality` |
 | `beingMetadata` | Being metadata (humans and AI beings) | `qualities.being.getQuality`, `readBeingNs`, `qualities.being.setQuality`, `mergeBeingMeta`, `incBeingMeta`, `pushBeingMeta`, `addToBeingMetaSet`, `batchSetBeingMeta`, `unsetBeingMeta` |
@@ -240,12 +240,12 @@ export async function init(core) {
 
 **Note on manifest `provides` fields:** The manifest's `provides.tools`, `provides.jobs`, `provides.orchestrator`, and `provides.modes` are metadata only. The loader uses them for display and route collision detection. What actually loads is determined by the init() return value.
 
-## Running AI Conversations (runChat)
+## Running AI Conversations (runTurn)
 
-Use `core.llm.runChat()` to run AI conversations from your extension. One call. No boilerplate.
+Use `core.llm.runTurn()` to run AI conversations from your extension. One call. No boilerplate.
 
 ```js
-const { answer } = await core.llm.runChat({
+const { answer } = await core.llm.runTurn({
   userId,
   username,
   message: "analyze this data",
@@ -264,16 +264,16 @@ When multiple sessions compete for LLM slots, priority determines who goes first
 
 | Priority | Value | Use case |
 |----------|-------|----------|
-| `HUMAN` | 1 | CLI and web sessions. Default for all `runChat` calls. |
+| `HUMAN` | 1 | CLI and web sessions. Default for all `runTurn` calls. |
 | `GATEWAY` | 2 | External channel responses (Telegram, Discord, email, SMS). |
 | `INTERACTIVE` | 3 | Human-initiated async (scout, explore, reroot analysis). |
 | `BACKGROUND` | 4 | Autonomous jobs (intent, dreams, codebook, compression). |
 
 Access via `core.llm.LLM_PRIORITY`. Background jobs should always set `llmPriority: core.llm.LLM_PRIORITY.BACKGROUND` so human interactions never wait behind autonomous work.
 
-## Session identity (runChat and OrchestratorRuntime)
+## Session identity (runTurn and OrchestratorRuntime)
 
-Both `runChat` and `OrchestratorRuntime` route every turn through a single **ai-chat session key**. Three ways to declare intent:
+Both `runTurn` and `OrchestratorRuntime` route every turn through a single **ai-chat session key**. Three ways to declare intent:
 
 1. **Pass-through** (`aiSessionKey`) — you received a key from an upstream caller and want this sub-call to join that session.
 2. **Declared lane** (`scope` + `purpose` + optional `extra`) — you want a persistent, named internal chain under `tree-internal:${rootId}:${purpose}`, `home-internal:${userId}:${purpose}`, or `place-internal:${purpose}`. Fork parallel sub-chains with `extra`.
@@ -326,23 +326,23 @@ try {
 | `init(startMessage)` | Create session, resolve LLM, connect MCP. Returns false if lock held. |
 | `attach({ sessionId, mainChatId, llmProvider, signal, connectMcp })` | Reuse existing session (for real-time orchestrators or chain steps). |
 | `runStep(modeKey, { prompt, modeCtx, input, treeContext })` | Switch mode, call LLM, track chain step. Returns `{ parsed, raw, llmProvider }`. |
-| `trackStep(modeKey, { input, output, startTime, endTime })` | Track a chain step without calling the LLM (for orchestrators that call processMessage themselves). |
+| `trackStep(modeKey, { input, output, startTime, endTime })` | Track a chain step without calling the LLM (for orchestrators that call stepTurn themselves). |
 | `setResult(content, modeKey)` | Mark pipeline as successful. |
 | `setError(message, modeKey)` | Mark pipeline as failed/stopped. |
 | `cleanup()` | Finalize Chat, close MCP, end session, release lock. |
 | `.aborted` | Boolean, true if abort signal fired. |
-| `.signal` | The AbortSignal for passing to processMessage. |
+| `.signal` | The AbortSignal for passing to stepTurn. |
 | `.chainIndex` | Current chain step index (auto-increments). |
 
 ### When to use what
 
 | Need | Use |
 |------|-----|
-| Single message, user-facing | `core.llm.runChat()` |
+| Single message, user-facing | `core.llm.runTurn()` |
 | Multi-step background pipeline | `OrchestratorRuntime` with `init()` + `runStep()` + `cleanup()` |
 | Real-time interactive orchestrator | `OrchestratorRuntime` with `attach()` + `trackStep()` |
 
-Never use `processMessage` directly unless building a custom real-time orchestrator.
+Never use `stepTurn` directly unless building a custom real-time orchestrator.
 
 ## Custom Orchestrator
 
@@ -369,7 +369,7 @@ export async function init(core) {
       bigMode: "tree",
       async handle({ visitorId, message, socket, userId, sessionId, rootId, spaceId, mode, ...ctx }) {
         // You have full control. Run LLM calls, use tools, navigate the tree.
-        const { content } = await core.conversation.processMessage({
+        const { content } = await core.conversation.stepTurn({
           userId,
           username: ctx.username,
           message,
@@ -412,8 +412,8 @@ Return value: `{ response, navigatedTo, ... }`. The response is sent to the clie
 
 | Utility | Access | Purpose |
 |---------|--------|---------|
-| `processMessage()` | `core.conversation.processMessage(opts)` | Run one LLM call with MCP tools |
-| `runChat()` | `core.llm.runChat(opts)` | Higher-level: handles session, abort, tracking |
+| `stepTurn()` | `core.conversation.stepTurn(opts)` | Run one LLM call with MCP tools |
+| `runTurn()` | `core.llm.runTurn(opts)` | Higher-level: handles session, abort, tracking |
 | `OrchestratorRuntime` | `core.orchestrator.OrchestratorRuntime` | Session lifecycle for multi-step flows |
 | `acquireLock/releaseLock` | `core.orchestrator.acquireLock(key)` | Concurrency control |
 | `parseJsonSafe` | `core.orchestrator.parseJsonSafe(str)` | Parse LLM JSON output (handles fences, trailing commas) |
@@ -1268,7 +1268,7 @@ optional: {
 
 ## Common Mistakes
 
-**Calling runChat without checking LLM availability.** If no LLM is configured (no user connection, no place default), `runChat` fails and leaves an empty chat record in the database. Always check before calling:
+**Calling runTurn without checking LLM availability.** If no LLM is configured (no user connection, no place default), `runTurn` fails and leaves an empty chat record in the database. Always check before calling:
 
 ```js
 // In your index.js setRunChat wrapper:
@@ -1276,7 +1276,7 @@ setRunChat(async (opts) => {
   if (opts.userId && opts.userId !== "SYSTEM" && !await core.llm.userHasLlm(opts.userId)) {
     return { answer: null };
   }
-  return core.llm.runChat({ ...opts, llmPriority: BG });
+  return core.llm.runTurn({ ...opts, llmPriority: BG });
 });
 ```
 

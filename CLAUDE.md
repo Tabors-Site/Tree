@@ -95,7 +95,7 @@ place/
 │   │   │                          beRegistry.
 │   │   ├── space/                 Tree ops: spaceManagement, ancestorCache,
 │   │   │                          ownership, cascade, spaceCircuit, spaceFetch,
-│   │   │                          spaceLocks, dids, documentGuard,
+│   │   │                          spaceLocks, dids, doCeiling,
 │   │   │                          extensionScope, seeds,
 │   │   │                          seedSpaces (SEED_SPACE/I_AM/DELETED),
 │   │   │                          source.
@@ -106,9 +106,10 @@ place/
 │   │   │                          (setQuality, mergeQuality, etc.).
 │   │   │                          Replaces the old beingMetadata /
 │   │   │                          extensionMetadata / matterMetadata trio.
-│   │   ├── integrityCheck.js      fsck for tree-shaped primitives.
-│   │   ├── registryMirror.js      Surfaces runtime registries as child
-│   │   │                          Spaces under .tools / .roles / .operations.
+│   │   ├── placeCheck.js          Reconciler for tree-shaped primitives.
+│   │   ├── manifest.js            Makes live in-memory collections
+│   │   │                          (tools / roles / operations) manifest as
+│   │   │                          child Spaces under .tools / .roles / .operations.
 │   │   └── PLACE.md                Philosophy of space/matter/being and the
 │   │                              constitutive (schema) vs characterizing
 │   │                              (qualities) two-layer model.
@@ -125,7 +126,7 @@ place/
 │   │                             through portals); scripted beings ARE their
 │   │                             code. This folder is the apparatus AI beings
 │   │                             use when an LLM is in the loop:
-│   │                             runChat, buildPrompt, llmClient, mcpClient,
+│   │                             runTurn, buildPrompt, llmClient, mcpClient,
 │   │                             scheduler, inbox, wakeSchedule, session,
 │   │                             subscriptions, replyAggregator, defaultSummon,
 │   │                             assignments, connections, summonTracker,
@@ -170,7 +171,7 @@ place/
 │   └── ... (manifest + index.js per extension)
 │
 ├── plant.js                    Operator's act. Plants the seed. Once only.
-├── bigbang.js                  t=0. Opens HTTP/WebSocket senses; fires genesis().
+├── begin.js                  t=0. Opens HTTP/WebSocket senses; fires genesis().
 └── genesis.js                  The unfolding. Indexes, config, migrations, beings, extensions, jobs.
 
 site/                           React landing/docs site

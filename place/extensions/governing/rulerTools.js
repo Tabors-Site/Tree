@@ -238,7 +238,7 @@ export default function getRulerTools(core) {
         //      Ruler wakeup path until Slice 7 retires the orchestrator.
         // The visible behavior is unchanged from the chainstep era:
         // tool returns "spawned" immediately; the Planner runs through
-        // the bridge being's runChat under the scheduler; when
+        // the bridge being's runTurn under the scheduler; when
         // it finishes, the Ruler wakes for synthesis.
         log.info("Governing",
           `🧭 Ruler hiring Planner at ${String(ruler._id).slice(0, 8)} ` +
@@ -358,7 +358,7 @@ export default function getRulerTools(core) {
         };
 
         // 6. Append + handoff + wake. The handoff carries the human's
-        //    identity so the bridge being's runChat sees beingIn
+        //    identity so the bridge being's runTurn sees beingIn
         //    = the human (matches chainstep behavior); responseFromStance
         //    is the Planner stance for the reply's `from` field. The
         //    response handler re-fires the existing governing hook so

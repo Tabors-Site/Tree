@@ -2,26 +2,29 @@
 //
 // llm-assigner DO operations.
 //
-// The llm-assigner being is programmatic but acts on substrate through
-// the same DO surface an LLM-driven being would use. These ops are its
-// tools — `create-matter` and `delete-matter` (the kernel primitives)
-// wrapped with the tutorial-marker logic so the being can spawn /
-// consume its own intro matter.
+// The llm-assigner being is scripted (it IS its code, no factory
+// frame). When its handlers turn around and act on substrate, they
+// do so AS THEMSELVES — going through the same DO verbs any other
+// caller uses, under the llm-assigner's own identity. No direct
+// Mongo writes; every substrate touch is grammar.
+//
+// First demonstration of the matter-crossing-worlds shape: the
+// matter's origin is `web` and its content is just a YouTube URL —
+// substrate holds the reference + lifecycle; the bytes live on the
+// web; the 3D portal renders it as a real placed object next to
+// the llm-assigner being.
 //
 // Naming convention: ops owned by a role use the `<role>:<action>`
 // prefix, same shape extensions use. ownerExtension is set to the
 // role name so the registry tracks who shipped them.
-//
-// First demonstration of the matter-crossing-worlds shape: the matter's
-// origin is `web` and its content is just a YouTube URL — substrate
-// holds the reference + lifecycle; the bytes live on the web; the 3D
-// portal renders it as a real placed object next to the llm-assigner
-// being.
 
 import log from "../../system/log.js";
-import Being from "../../models/being.js";
 import Matter from "../../models/matter.js";
 import { registerOperation } from "../../ibp/operations.js";
+import { doVerb } from "../../ibp/verbs.js";
+import { qualities } from "../../place/qualities.js";
+import { findBeingByName } from "../../place/being/identity.js";
+import { getMatter } from "../../place/matter/matters.js";
 import {
   LLM_ASSIGNER_TUTORIAL_MARK,
   LLM_ASSIGNER_TUTORIAL_URL,
@@ -30,32 +33,85 @@ import {
 
 const OWNER = "llm-assigner";
 
+// ────────────────────────────────────────────────────────────────────
+// Helpers
+// ────────────────────────────────────────────────────────────────────
+
+// The llm-assigner being's row, used as the author/owner stamp on
+// tutorial matter. Goes through `findBeingByName` (the canonical
+// being lookup) rather than reaching for Mongoose directly.
+// Cached after first read.
+let _llmAssignerCache = null;
+async function getLlmAssigner() {
+  if (_llmAssignerCache) return _llmAssignerCache;
+  const row = await findBeingByName("llm-assigner");
+  if (!row) throw new Error("llm-assigner being not found on this place");
+  _llmAssignerCache = row;
+  return row;
+}
+
+// Locate this place's tutorial matter at a space, scoped by the
+// marker so we never touch unrelated matter authored by the
+// llm-assigner. Returns the lean row, or null.
+async function findTutorialMatter(spaceId, llmAssignerId) {
+  return Matter.findOne({
+    beingId: String(llmAssignerId),
+    spaceId,
+    "qualities.tutorial.purpose": LLM_ASSIGNER_TUTORIAL_MARK,
+  }).lean();
+}
+
+// Two-part ownership gate: the matter must be authored by the
+// llm-assigner being AND carry the tutorial marker. Returns the
+// matter row when valid; throws otherwise. The save-playback and
+// complete-tutorial ops both gate through here.
+async function assertTutorialMatter(matterId, errPrefix) {
+  const matter = await getMatter(matterId);
+  if (!matter) throw new Error(`${errPrefix}: Matter ${matterId} not found`);
+
+  const llmAssigner = await getLlmAssigner();
+  const tutorialMeta = matter.qualities instanceof Map
+    ? matter.qualities.get("tutorial")
+    : matter.qualities?.tutorial;
+
+  if (
+    String(matter.beingId) !== String(llmAssigner._id) ||
+    tutorialMeta?.purpose !== LLM_ASSIGNER_TUTORIAL_MARK
+  ) {
+    throw new Error(`${errPrefix} only acts on llm-assigner tutorial matter`);
+  }
+
+  return { matter, tutorialMeta: tutorialMeta || {} };
+}
+
+// ────────────────────────────────────────────────────────────────────
+// Registration
+// ────────────────────────────────────────────────────────────────────
+
 export function registerLlmAssignerOps() {
   // Spawn the intro tutorial matter at the addressed space (typically
   // the place root). Idempotent: returns the existing matter when one
-  // with the marker is already present.
+  // with the marker is already present. The new matter is created
+  // through the kernel `create-matter` DO op under the llm-assigner's
+  // own identity, so beforeMatter / afterMatter hooks fire and a Did
+  // lands.
   registerOperation("llm-assigner:start-tutorial", {
     targets: ["space"],
     ownerExtension: OWNER,
     handler: async ({ target }) => {
-      log.info("llm-assigner", `start-tutorial hit at space=${String(target?._id || target?.spaceId || "?").slice(0, 8)}`);
       const spaceId = String(target?._id || target?.spaceId || target);
       if (!spaceId || spaceId === "[object Object]") {
         throw new Error("llm-assigner:start-tutorial: space target required");
       }
 
-      const llmAssigner = await Being.findOne({ name: "llm-assigner" })
-        .select("_id").lean();
-      if (!llmAssigner) {
-        throw new Error("llm-assigner being not found on this place");
-      }
+      log.info("llm-assigner",
+        `start-tutorial hit at space=${spaceId.slice(0, 8)}`);
 
-      // Idempotent — return the existing one if it's already there.
-      const existing = await Matter.findOne({
-        beingId: String(llmAssigner._id),
-        spaceId,
-        "qualities.tutorial.purpose": LLM_ASSIGNER_TUTORIAL_MARK,
-      }).select("_id").lean();
+      const llmAssigner = await getLlmAssigner();
+
+      // Idempotent — return the existing tutorial matter if one is
+      // already present at this space.
+      const existing = await findTutorialMatter(spaceId, llmAssigner._id);
       if (existing) {
         return {
           matterId: String(existing._id),
@@ -65,30 +121,39 @@ export function registerLlmAssignerOps() {
         };
       }
 
-      // Authored by the llm-assigner being so the eventual deletion
-      // passes the ownership gate.
-      const matter = await Matter.create({
-        spaceId,
+      // The llm-assigner being itself is the actor. Calling
+      // create-matter under its own identity makes it the matter's
+      // author (so the ownership gate on later delete passes) and
+      // routes the write through the verb (afterMatter fires, Did
+      // is written).
+      const llmAssignerIdentity = {
         beingId: String(llmAssigner._id),
-        name:    "Setting up an LLM connection",
-        origin:  "web",
-        content: {
-          contentType: "video/youtube",
-          url:         LLM_ASSIGNER_TUTORIAL_URL,
-          videoId:     LLM_ASSIGNER_TUTORIAL_VIDEO_ID,
-          title:       "Setting up an LLM connection",
+        name:    "llm-assigner",
+      };
+      const result = await doVerb(
+        target,
+        "create-matter",
+        {
+          name:    "Setting up an LLM connection",
+          origin:  "web",
+          content: {
+            contentType: "video/youtube",
+            url:         LLM_ASSIGNER_TUTORIAL_URL,
+            videoId:     LLM_ASSIGNER_TUTORIAL_VIDEO_ID,
+            title:       "Setting up an LLM connection",
+          },
+          qualities: {
+            tutorial: { purpose: LLM_ASSIGNER_TUTORIAL_MARK },
+          },
         },
-        parentMatterId: null,
-        qualities: new Map([
-          ["tutorial", { purpose: LLM_ASSIGNER_TUTORIAL_MARK }],
-        ]),
-      });
+        { identity: llmAssignerIdentity },
+      );
 
       log.info("llm-assigner",
-        `spawned tutorial matter ${String(matter._id).slice(0, 8)} at ${spaceId.slice(0, 8)}`);
+        `spawned tutorial matter ${result.matterId.slice(0, 8)} at ${spaceId.slice(0, 8)}`);
 
       return {
-        matterId: String(matter._id),
+        matterId: result.matterId,
         videoId:  LLM_ASSIGNER_TUTORIAL_VIDEO_ID,
         url:      LLM_ASSIGNER_TUTORIAL_URL,
         created:  true,
@@ -96,15 +161,18 @@ export function registerLlmAssignerOps() {
     },
   });
 
-  // Persist YouTube playback position on the tutorial matter so a page
-  // reload or navigation away/back resumes at the right spot.
-  // Idempotent overwrite; the marker check keeps this op scoped to the
-  // llm-assigner tutorial only.
+  // Persist YouTube playback position on the tutorial matter so a
+  // page reload or navigation resumes at the right spot. Atomic
+  // write through qualities.matter.setQuality (not a raw Mongo
+  // $set), so afterQualityWrite hooks fire and concurrent writers
+  // on other namespaces don't clobber each other.
   registerOperation("llm-assigner:save-playback", {
     targets: ["matter", "space"],
     ownerExtension: OWNER,
     handler: async ({ target, params }) => {
-      log.info("llm-assigner", `save-playback hit: matterId=${params?.matterId} t=${params?.currentTime}`);
+      log.info("llm-assigner",
+        `save-playback hit: matterId=${params?.matterId} t=${params?.currentTime}`);
+
       const matterId = String(
         params?.matterId || target?._id || target?.matterId || target,
       );
@@ -116,39 +184,31 @@ export function registerLlmAssignerOps() {
         throw new Error("llm-assigner:save-playback: currentTime (number, seconds) required");
       }
 
-      const matter = await Matter.findById(matterId).lean();
-      if (!matter) throw new Error(`Matter ${matterId} not found`);
+      const { matter, tutorialMeta } = await assertTutorialMatter(
+        matterId, "llm-assigner:save-playback",
+      );
 
-      const llmAssigner = await Being.findOne({ name: "llm-assigner" })
-        .select("_id").lean();
-      const tutorialMeta = matter.qualities instanceof Map
-        ? matter.qualities.get("tutorial")
-        : matter.qualities?.tutorial;
-      if (
-        String(matter.beingId) !== String(llmAssigner?._id) ||
-        tutorialMeta?.purpose !== LLM_ASSIGNER_TUTORIAL_MARK
-      ) {
-        throw new Error("llm-assigner:save-playback only writes to llm-assigner tutorial matter");
-      }
-
-      const nextMeta = { ...(tutorialMeta || {}), playbackSeconds: currentTime };
-      await Matter.updateOne(
-        { _id: matterId },
-        { $set: { "qualities.tutorial": nextMeta } },
+      await qualities.matter.setQuality(
+        matter,
+        "tutorial",
+        { ...tutorialMeta, playbackSeconds: currentTime },
       );
       return { saved: true, matterId, currentTime };
     },
   });
 
   // Consume the tutorial matter when the user finishes watching.
-  // Verifies the marker so the op stays narrowly scoped; calls
-  // `deleteMatterAndFile` internally acting as llm-assigner so the
-  // ownership gate (author or root-owner) passes.
+  // Goes through the kernel `delete-matter` DO under the llm-
+  // assigner's own identity (it IS the matter's author, so the
+  // ownership gate inside deleteMatterAndFile passes). The deletion
+  // is audited as a Did and afterMatter fires.
   registerOperation("llm-assigner:complete-tutorial", {
     targets: ["matter", "space"],
     ownerExtension: OWNER,
     handler: async ({ target, params }) => {
-      log.info("llm-assigner", `complete-tutorial hit: matterId=${params?.matterId}`);
+      log.info("llm-assigner",
+        `complete-tutorial hit: matterId=${params?.matterId}`);
+
       const matterId = String(
         params?.matterId || target?._id || target?.matterId || target,
       );
@@ -156,29 +216,25 @@ export function registerLlmAssignerOps() {
         throw new Error("llm-assigner:complete-tutorial: matterId required");
       }
 
-      const matter = await Matter.findById(matterId).lean();
-      if (!matter) throw new Error(`Matter ${matterId} not found`);
+      const { matter } = await assertTutorialMatter(
+        matterId, "llm-assigner:complete-tutorial",
+      );
 
-      const llmAssigner = await Being.findOne({ name: "llm-assigner" })
-        .select("_id").lean();
-      const tutorialMeta = matter.qualities instanceof Map
-        ? matter.qualities.get("tutorial")
-        : matter.qualities?.tutorial;
-      if (
-        String(matter.beingId) !== String(llmAssigner?._id) ||
-        tutorialMeta?.purpose !== LLM_ASSIGNER_TUTORIAL_MARK
-      ) {
-        throw new Error("llm-assigner:complete-tutorial only consumes llm-assigner tutorial matter");
-      }
-
-      const { deleteMatterAndFile } = await import("../matter/matters.js");
-      await deleteMatterAndFile({
-        matterId,
-        beingId: String(llmAssigner._id),
-      });
+      const llmAssigner = await getLlmAssigner();
+      await doVerb(
+        matter,
+        "delete-matter",
+        {},
+        {
+          identity: {
+            beingId: String(llmAssigner._id),
+            name:    "llm-assigner",
+          },
+        },
+      );
 
       log.info("llm-assigner",
-        `consumed tutorial matter ${String(matterId).slice(0, 8)}`);
+        `consumed tutorial matter ${matterId.slice(0, 8)}`);
       return { consumed: true, matterId };
     },
   });

@@ -11,14 +11,14 @@
  * The schema enum is updated; this migration rewrites existing rows
  * that carry the old value so the new validator accepts them. Specific
  * system beings (auth, llm-assigner, citizen) move to "script" because
- * their role specs do not call runChat; place-manager and every other
+ * their role specs do not call runTurn; place-manager and every other
  * role with an LLM-backed summon stay on "llm".
  */
 
 import mongoose from "mongoose";
 import log from "../log.js";
 
-const SCRIPT_DRIVEN_NAMES = new Set(["auth", "llm-assigner", "citizen"]);
+const SCRIPT_DRIVEN_NAMES = new Set(["cherub", "llm-assigner", "citizen"]);
 
 export default async function migrate() {
   const db = mongoose.connection.db;

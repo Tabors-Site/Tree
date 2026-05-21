@@ -1,30 +1,31 @@
 // TreeOS Seed . AGPL-3.0 . https://treeos.ai . Tabor Holly
 //
-// How I show my registries to the world I formed.
+// I make my live state manifest in the world I formed.
 //
-// My in-memory registries (tools, roles, DO operations) are the
-// runtime source of truth. They also surface as spaces under .tools,
-// .roles, and .operations so SEE can introspect them through the
-// same protocol as everything else; each registered item becomes a
-// child space. The sync is one-way: the registry leads; the mirror
-// follows. A mirror miss is cosmetic, not a functional break.
+// My in-memory collections (tools, roles, DO operations) are the
+// runtime source of truth. I also make them manifest as spaces
+// under .tools, .roles, and .operations so SEE can introspect
+// them through the same protocol as everything else; each
+// registered item becomes a child space. The sync is one-way:
+// memory leads; the manifest follows. A manifest miss is
+// cosmetic, not a functional break.
 
 import { v4 as uuidv4 } from "uuid";
 import Space from "../models/space.js";
 import log from "../system/log.js";
 
-export async function syncRegistryToSubstrate({
+export async function manifestItems({
   seedSpace,
   items,
   itemType = "resource",
 }) {
-  if (!seedSpace) throw new Error("syncRegistryToSubstrate requires seedSpace");
+  if (!seedSpace) throw new Error("manifestItems requires seedSpace");
   if (!Array.isArray(items)) items = [];
 
   const parent = await Space.findOne({ seedSpace });
   if (!parent) {
     log.warn(
-      "RegistryMirror",
+      "Manifest",
       `place seed space for ${seedSpace} not found; skipping sync`,
     );
     return { created: 0, removed: 0, kept: 0 };
@@ -83,7 +84,7 @@ export async function syncRegistryToSubstrate({
 }
 
 // Idempotent single-child add/refresh for runtime registrations.
-export async function addRegistryChild({
+export async function addManifestChild({
   seedSpace,
   name,
   qualities = null,
@@ -121,7 +122,7 @@ export async function addRegistryChild({
   return child._id;
 }
 
-export async function removeRegistryChild({
+export async function removeManifestChild({
   seedSpace,
   name,
   itemType = "resource",

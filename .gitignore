@@ -3,19 +3,19 @@ node_modules/
 dist/
 *.log
 
-land/node_modules
-land/uploads
-land/.land/
-land/.env
-land/extensions/.disabled
-.land/
-land/oldExtensions/
+place/node_modules
+place/uploads
+place/.place/
+place/.env
+place/extensions/.disabled
+.place/
+place/oldExtensions/
 
 create-treeos/template/uploads
 create-treeos/template/.env
 create-treeos/template/.treeos-profile
 create-treeos/template/node_modules
-create-treeos/template/.land/
+create-treeos/template/.place/
 
 site/node_modules
 site/dist/

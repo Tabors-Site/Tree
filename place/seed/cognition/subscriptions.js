@@ -1,50 +1,49 @@
 // TreeOS Seed . AGPL-3.0 . https://treeos.ai . Tabor Holly
 //
-// DO-trigger subscription registry.
+// Where substrate change becomes a request for a moment. One of
+// two paths that ask a being to have a moment when nothing
+// directly summoned it; the other is a direct SUMMON from another
+// being. When a DO lands at a position — matter write, status
+// change, qualities write — my post-DO hooks emit SUMMONs to
+// every subscriber whose interest covers the affected position
+// and event shape. The SUMMON content carries a small envelope
+// describing what changed; the receiving role's summon() decides
+// whether the moment should actually act on it.
 //
-// One of two coexisting paths that wake beings (the other being direct
-// being-to-being SUMMONs). When a DO action places at a position — a
-// matter write, a status change, a qualities write — the substrate's
-// post-DO hooks emit SUMMONs to every subscriber whose interest covers
-// the affected position and event shape. The SUMMON's content carries
-// a small envelope describing what changed (event name, action,
-// space/matter ids); the receiving being's role template interprets
-// the content and decides whether to act.
+// Why this layer. Without it, anonymous code (DOs emitted without
+// a being's perspective) is isolated from beings that care about
+// the substrate it touches. With it, code-driven changes feed the
+// same SUMMON-in-inbox mechanism as being-driven changes — the
+// reel of moments stays whole. Mode 1 (a being requesting a
+// moment) and Mode 2 (substrate change requesting a moment) reach
+// subscribers identically.
 //
-// **Why this layer exists.** Without it, infrastructure code (Mode 2:
-// pure DOs without a perspective) is isolated from beings that care
-// about the substrate it touches. With it, code-driven changes feed
-// the same SUMMON-in-inbox mechanism that being-driven changes use —
-// the substrate's narrative stays whole. Both Mode 1 (being-emitted)
-// and Mode 2 (code-emitted) DOs reach subscribers identically.
-//
-// **Subscription shape:**
+// Subscription shape:
 //
 //   {
-//     id:            string,                  // generated when subscribe() returns
-//     beingId:       string,                  // who gets summoned
-//     event:         "afterMatter"            // hook name to match
-//                  | "afterQualityWrite",    // extensions express
-//                                              // status-like changes via
-//                                              // afterQualitiesWrite +
-//                                              // a namespace filter
-//     scope:         { everywhere: true }     // any space in the place
-//                  | { spaceId: "<id>" }       // exact match
-//                  | { ancestor: "<id>" },    // payload.spaceId has this ancestor
-//     filter:        { <key>: <value> }       // payload field-equality, optional
-//                  | { <key>: [v1, v2, ...] },// any-of match, optional
-//     priority:      number,                  // SUMMON priority; default BACKGROUND (4)
-//     coalesceMs:    number,                  // 0 (default) = immediate emit per event;
-//                                             // N > 0 = batch matching events landing in
-//                                             // an N-ms window into ONE SUMMON whose
-//                                             // content carries content.events: [...]
+//     id:         string,
+//     beingId:    string,
+//     event:      "afterMatter"          // hook name
+//               | "afterQualityWrite",  // status-like changes
+//                                         // express here + a
+//                                         // namespace filter
+//     scope:      { everywhere: true }   // anywhere in the place
+//               | { spaceId: <id> }       // exact match
+//               | { ancestor: <id> },    // payload.spaceId descends from this
+//     filter:     { <key>: <value> }     // payload field equality
+//               | { <key>: [v1, v2] },   // any-of match
+//     priority:   number,                // SUMMON priority (default BACKGROUND)
+//     coalesceMs: number,                // 0 = immediate per event,
+//                                         // N>0 = batch events in N-ms window
+//                                         // into ONE SUMMON carrying
+//                                         // content.events: [...]
 //   }
 //
-// **Storage.** In-memory registry; subscriptions are re-registered at
-// boot by each extension that wires them. A qualities-backed registry
-// on each being's home space is on the roadmap so boot can rebuild
-// without re-running extension code; for now the in-memory registry
-// plus extension-init re-registration is enough.
+// Storage. I keep the registry in memory; each extension that
+// wires subscriptions re-registers at boot. A qualities-backed
+// version on each being's home space (so boot rebuilds without
+// re-running extension code) is on the roadmap; for now memory +
+// extension-init re-registration is sufficient.
 
 import { randomUUID } from "crypto";
 import log from "../system/log.js";
@@ -52,7 +51,7 @@ import { getAncestorChain } from "../place/space/ancestorCache.js";
 import { summonByResolved } from "../ibp/verbs.js";
 import { getPlaceDomain } from "../ibp/address.js";
 import { getPlaceRootId } from "../placeRoot.js";
-import { I_AM } from "../place/space/seedSpaces.js";
+import { I_AM } from "../place/being/seedBeings.js";
 import { iAmIdentity } from "../place/being/placeBeings.js";
 
 // beingId -> Map<subscriptionId, subscription>

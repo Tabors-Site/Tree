@@ -11,7 +11,7 @@ You need Node.js 18+ and MongoDB running.
 ```
 npx create-treeos my-place
 cd my-place
-node plant.js
+npm start
 ```
 
 First run walks you through setup: domain, name, MongoDB, and extension selection from the registry. After that, your place boots.
@@ -194,8 +194,8 @@ place/
   orchestrators/  Pipeline runtime, locks, helpers.
   mcp/            MCP server (AI tool execution).
   plant.js        Operator's act. Plants the seed. Once only.
-  bigbang.js      t=0. Opens senses, fires genesis. Big Bang on first boot, awakening after.
-  genesis.js      The unfolding. Forms the body of the place.
+  begin.js      t=0. Opens senses, fires genesis. Beginning on first boot, awakening after.
+  genesis.js      The unfolding. Forms the earth within the place.
 
 cli/              CLI client (treeos command). Separate install.
 site/             React + Vite frontend (treeos.ai). Separate deploy.

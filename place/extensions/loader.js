@@ -7,7 +7,7 @@ import path from "path";
 import crypto from "crypto";
 import { fileURLToPath, pathToFileURL } from "url";
 import { buildCoreServices } from "../seed/services.js";
-import { setExtensionToolResolver } from "../seed/cognition/runChat.js";
+import { setExtensionToolResolver } from "../seed/cognition/runTurn.js";
 import { hooks } from "../seed/system/hooks.js";
 import { getToolOwner } from "../seed/place/space/extensionScope.js";
 import log from "../seed/system/log.js";

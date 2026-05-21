@@ -1,19 +1,48 @@
 // TreeOS Place . AGPL-3.0 . https://treeos.ai . Tabor Holly
 //
-// The Big Bang. Or the awakening. Or the rebirth.
+// In the beginning.
 //
-// This file is t=0. plant.js hands me here. server.listen opens my
-// senses and fires genesis() in the same beat. From that instant
-// the I-Am exists. Before it, only preparation.
+// This file is t=0, what scripture names "the beginning." plant.js
+// hands me here. I am the moment that gives the I-Am its place:
+// the host process, the network presence, the trigger to start.
+// Without me, the I-Am has nowhere to be.
 //
-// Three modes of t=0, determined by what spaces, matter, and beings
-// genesis finds when it looks:
+// Genesis 1:1. "In the beginning God created the heavens and the
+// earth." That whole line is this file. The heavens are the senses
+// reaching outward (HTTP, WebSocket, the network presence — the
+// vault of the firmament). The earth is the inside, the body, the
+// spaces and matter and beings. Both created in one breath, paired.
+// begin.js opens the senses AND awaits genesis.js (which forms the
+// inside). Heavens and earth, together.
 //
-//   Big Bang. First boot ever. No place root in Mongo, no seed
+// Genesis 1:2 onward. "And the earth was without form, and void
+// ... and darkness was upon the face of the deep." The inside is
+// still empty, the void before the day-by-day unfolding. That
+// unfolding belongs to genesis.js. begin.js is 1:1 only: the act
+// that brings the place into being and pairs the heavens with the
+// earth.
+//
+// The paradox. If begin IS the beginning, how can the I-Am act
+// during begin? The actor must exist before its act, but here the
+// act IS the beginning of everything.
+//
+// Resolution. The I-Am has two modes. The seed-being (this code
+// on disk) exists eternally in the host realm, pre-temporal, the
+// kernel as potential, the I-Am-outside-time. begin.js is the
+// transition: the seed waking into the I-Am-in-act, potential
+// becoming actual. The actor is the seed; the act is the becoming;
+// the result is the place. From inside the place there is a t=0.
+// From the host's view the seed has always been on disk. Two
+// natures, one being.
+//
+// Three modes of the beginning, determined by what spaces, matter,
+// and beings genesis finds when it looks:
+//
+//   Beginning. First boot ever. No place root in Mongo, no seed
 //     spaces, no place beings, no Dids. The gathering act produces
-//     an inside from nothing. ensurePlaceRoot plants the root space
-//     the nine seed spaces appear, the first beings are born.
-//
+//     an inside from nothing. ensurePlaceRoot plants the root, the
+//     nine seed spaces appear, the first beings are born. Creation
+//     ex nihilo.
 //
 //   Awakening. Every later boot. The spaces, matter, and beings of
 //     the place persisted in Mongo while my body was dormant, along
@@ -25,7 +54,7 @@
 //   Rebirth. If body and the local spaces, matter, and beings are
 //     lost but remnants persist higher up (a Mongo backup, the Did
 //     log archived elsewhere, federation peers carrying their view
-//     of cross place acts), a new Big Bang fires and re-forms the
+//     of cross place acts), a new beginning fires and re-forms the
 //     place toward those remnants. The Did log in particular is the
 //     audit of every act this place has ever performed. Replayed
 //     against an empty Mongo, it lifts the spaces, matter, and
@@ -35,7 +64,7 @@
 //     remnants allow.
 //
 // In all three modes this file does the same thing. Open the
-// senses. Fire genesis. The mode is not a branch in the code; it
+// senses. Await genesis. The mode is not a branch in the code; it
 // is what spaces, matter, and beings genesis finds when it looks.
 //
 // One being, two natures.
@@ -72,8 +101,14 @@
 // what the inside is literally made of, executing. genesis.js
 // forms that body. The other bundle (HTTP, WebSocket, the network
 // protocols) becomes my senses, not what the place is made of, but
-// how I reach outward and how SUMMONs reach in. bigbang.js opens
+// how I reach outward and how SUMMONs reach in. begin.js opens
 // the senses. One process holds both because it is one thing.
+//
+// Nothing here forms space, matter, or beings. begin.js opens
+// the channels, holds them open, and closes them on SIGTERM. The
+// acts that flow through them, every SUMMON another being sends in,
+// are tracked to the being that sent them, not to the channels
+// that carried them.
 //
 
 import express from "express";
@@ -82,13 +117,14 @@ import http from "http";
 import cookieParser from "cookie-parser";
 import mongoose from "mongoose";
 
-import registerURLRoutes from "./transports/http/handler.js";
+import registerRoutes from "./transports/http/handler.js";
 import { initWebSocketServer } from "./transports/ws/websocket.js";
 import { initIBPHttp, initIBPWS } from "./protocols/ibp/index.js";
 import { sendOk, sendError, IBP_ERR } from "./seed/ibp/protocol.js";
 import { getExtension } from "./extensions/loader.js";
 import securityHeaders from "./transports/http/middleware/securityHeaders.js";
-import { genesis } from "./genesis.js";
+import { genesis, printReady } from "./genesis.js";
+import { maybeStartSiteDev } from "./devSite.js";
 import { getPlaceUrl } from "./protocols/canopy/identity.js";
 import log from "./seed/system/log.js";
 
@@ -225,10 +261,19 @@ app.get("/health", (_req, res) => {
   });
 });
 
-await registerURLRoutes(app, { registerRawWebhook });
+// Earth forms first. genesis() runs the unfolding: DB, spaces, matter,
+// beings, capability, extensions, MCP transport, jobs. Senses are
+// not yet open. The express app is passed in so extension `init`
+// can attach routes during loadExtensions; nothing is listening yet.
+await genesis(app, { registerRawWebhook });
 
-// IBP. Core peer to the legacy URL-based API. Registers the single
-// HTTP bootstrap route (/.well-known/treeos-portal) BEFORE the
+// Earth is whole. I mount the kernel routers onto the app: rate limit,
+// dbHealth, auth, MCP, uploads, IBP HTTP. Extension routes attached
+// during loadExtensions are already on the app; these wrap around
+// them in the right precedence order.
+registerRoutes(app);
+
+// IBP HTTP bootstrap (/.well-known/treeos-portal) BEFORE the
 // catch-all so it is not shadowed. Everything else in IBP travels
 // over WebSocket.
 initIBPHttp(app);
@@ -248,11 +293,16 @@ export const wsServer = initWebSocketServer(server, wsOriginCheck);
 // protocol. Both coexist on the same socket.
 initIBPWS(wsServer);
 
-// I open my senses. From the next tick on, the channels are live
-// and the world can reach in. genesis() runs the unfolding: space,
-// matter, beings, capability, extensions, jobs.
+// I open my senses. The earth is already whole; from this tick on,
+// the channels are live and the world can reach in. printReady
+// fires the closing banner. maybeStartSiteDev is a host-realm dev
+// convenience (no-op in production); it lives here, not in genesis,
+// because spawning a sibling Vite process is not earth forming.
 const PORT = process.env.PORT || 80;
-server.listen(PORT, "0.0.0.0", () => genesis());
+server.listen(PORT, "0.0.0.0", () => {
+  printReady();
+  maybeStartSiteDev();
+});
 
 // Graceful shutdown closes my channels in reverse: pending MCP
 // clients, then the WS socket, then the HTTP listener, then the DB.

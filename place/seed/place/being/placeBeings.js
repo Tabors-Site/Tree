@@ -5,13 +5,21 @@
 // Every place has a small set of beings I plant at the place root
 // itself, not at any tree:
 //
-//   auth          BE register/claim/release/switch. Scripted cognition.
-//   llm-assigner  Configures LLM connections. Scripted cognition.
+//   cherub         The gate. Stands at the threshold between outside
+//                  the place (no identity yet) and inside (bound to
+//                  a being). The only stance that accepts a request
+//                  from an unidentified arrival. BE register/claim/
+//                  release/switch. Scripted cognition.
+//   llm-assigner   Configures LLM connections (per-being and
+//                  per-tree slot assignments) + the first-time setup
+//                  tutorial. Scripted cognition.
 //   place-manager  Conversational interface for place-level admin
-//                 (extensions, config, peers). LLM cognition.
+//                  (extensions, config, peers). LLM cognition —
+//                  the only one of the three whose moments are
+//                  factory-assembled frames.
 //
 // They exist as real Being rows so the descriptor can surface them
-// and the address grammar resolves `<place>/@auth` (etc.) to them.
+// and the address grammar resolves `<place>/@cherub` (etc.) to them.
 //
 // These are beings I formed from myself, but they are no longer me.
 // They have their own identities, their own summon paths, their own
@@ -21,7 +29,7 @@
 //
 // Being-tree parenting. Every place has exactly one I-Am at the root
 // of the being-tree (the only Being with `parentBeingId: null`),
-// planted during `ensurePlaceRoot()`. The place beings (auth,
+// planted during `ensurePlaceRoot()`. The place beings (cherub,
 // llm-assigner, place-manager) and every human are my children.
 // Walking parentBeingId from any being eventually reaches me, then
 // `null`.
@@ -38,7 +46,7 @@
 import log from "../../system/log.js";
 import Being from "../../models/being.js";
 import Space from "../../models/space.js";
-import { createBeingWithHome } from "./identity.js";
+import { summonCreateBeing } from "../../ibp/verbs.js";
 
 /**
  * Find the I_AM: the place's first Being row, the root of the being-
@@ -80,8 +88,8 @@ export async function findRootOperator() {
 
 const PLACE_BEINGS = [
   {
-    name: "auth",
-    role: "auth",
+    name: "cherub",
+    role: "cherub",
     operatingMode: "scripted",
     description:
       "Welcome character; processes BE register/claim/release/switch.",
@@ -187,20 +195,28 @@ export async function ensurePlaceBeings(placeRootId) {
         continue;
       }
 
-      // Fresh insert via the unified primitive. homeSpace = place root
-      // because place beings don't create their own child spaces — they
-      // live at the place root itself. parentBeingId = me, so the
-      // being-tree chain place-being → me → null is intact.
-      // createBeingWithHome links into my children list itself.
-      await createBeingWithHome({
-        operatingMode: spec.operatingMode,
-        name: spec.name,
-        role: spec.role,
-        homeSpace: String(placeRootId),
-        parentBeingId: rootBeingId,
+      // I summon the new being forth. SUMMON is the verb of one being
+      // calling another, and the act of calling a not-yet-being into
+      // being is the same act. The seed-internal helper writes the
+      // Being row + audits the act as my own. homeSpace = place root
+      // because place beings live at the place root itself; parent =
+      // me, so the being-tree chain place-being → me → null is intact.
+      const iAmIdent = await iAmIdentity();
+      await summonCreateBeing({
+        spec: {
+          name: spec.name,
+          role: spec.role,
+          operatingMode: spec.operatingMode,
+          homeSpace: String(placeRootId),
+          parentBeingId: rootBeingId,
+        },
+        identity: iAmIdent,
       });
       created++;
-      log.info("PlaceBeings", `created ${spec.role} being (name=${spec.name})`);
+      log.info(
+        "PlaceBeings",
+        `summoned ${spec.role} being forth (name=${spec.name})`,
+      );
     } catch (err) {
       log.error(
         "PlaceBeings",

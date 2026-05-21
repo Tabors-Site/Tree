@@ -6,7 +6,7 @@ import { strict as assert } from "node:assert";
 import { resolvePipelineKey } from "../seed/cognition/session.js";
 
 // ─────────────────────────────────────────────────────────────────────────
-// resolvePipelineKey — runChat / OrchestratorRuntime stanceless pipeline
+// resolvePipelineKey — runTurn / OrchestratorRuntime stanceless pipeline
 //
 // Pipeline keys are namespaced under `pipeline:*` so they don't collide
 // with ibpAddress (being-to-being conversation identity) or clientSessionId

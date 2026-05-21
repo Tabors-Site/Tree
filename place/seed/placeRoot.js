@@ -16,7 +16,8 @@
 
 import log from "./system/log.js";
 import Space from "./models/space.js";
-import { SEED_SPACE, I_AM } from "./place/space/seedSpaces.js";
+import { SEED_SPACE } from "./place/space/seedSpaces.js";
+import { I_AM } from "./place/being/seedBeings.js";
 import { createPlaceSeedSpace } from "./place/space/spaceManagement.js";
 import { logDid } from "./place/dids.js";
 

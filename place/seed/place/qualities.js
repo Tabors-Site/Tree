@@ -65,7 +65,7 @@ import Being from "../models/being.js";
 import Space from "../models/space.js";
 import Matter from "../models/matter.js";
 import { hooks } from "../system/hooks.js";
-import { guardQualityWrite } from "./documentGuard.js";
+import { guardQualityWrite } from "./doCeiling.js";
 import { getPlaceConfigValue } from "../placeConfig.js";
 
 const MAX_KEY_LENGTH = 50;

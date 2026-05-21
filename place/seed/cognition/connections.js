@@ -1,19 +1,25 @@
 // TreeOS Seed . AGPL-3.0 . https://treeos.ai . Tabor Holly
-/**
- * LLM Connection Management
- *
- * CRUD for per-being LLM connections. Each connection stores an
- * encrypted API key, base URL, and model name. The resolution chain in
- * conversation.js picks which connection handles each request.
- *
- * Security model:
- *   - API keys encrypted at rest (AES-256-CBC)
- *   - Base URLs validated against SSRF blocklist (every connection,
- *     no admin bypass — local LLM hosts go in `allowedLlmDomains`)
- *   - DNS resolution checked at write time AND at request time
- *   - Slot names validated to prevent MongoDB path injection
- *   - Connection IDs validated as strings before querying
- */
+//
+// The catalog of provider voices. CRUD for per-being LLM
+// connections. Each connection holds an encrypted API key, a base
+// URL, and a model name — one possible voice the being's moments
+// could be spoken in. llmClient.js's resolution chain decides
+// which voice each moment actually uses.
+//
+// I am not part of any moment. I am the catalog the line consults
+// before running the inference.
+//
+// Security boundary I keep:
+//
+//   - API keys encrypted at rest (AES-256-CBC).
+//   - Base URLs validated against the SSRF blocklist on every
+//     write. No admin bypass; local LLM hosts must be listed in
+//     `allowedLlmDomains`.
+//   - DNS resolution checked both at write time and at request
+//     time so a hostname that was safe yesterday can't become a
+//     redirect to localhost today.
+//   - Slot names validated to prevent MongoDB path injection.
+//   - Connection IDs validated as strings before any query.
 
 import log from "../system/log.js";
 import Being from "../models/being.js";
@@ -66,9 +72,9 @@ const BLOCKED_HOSTS = new Set([
   "localhost",
   "0.0.0.0",
   "[::1]",
-  "qualities.google.internal",
+  "metadata.google.internal",
   "169.254.169.254",
-  "qualities.internal",
+  "metadata.internal",
 ]);
 
 // Auto-block this place's own hostname to prevent SSRF loops
@@ -286,12 +292,12 @@ export function getAllBeingLlmSlots() {
   return [...CORE_BEING_SLOTS, ..._extBeingSlots];
 }
 
-// Core tree slots. Extensions register additional via registerRootLlmSlot().
+// Core tree slots. Extensions register additional via registerRootSpaceLlmSlot().
 // Only "default" is kernel. Extensions register their own slots during init.
 const CORE_ROOT_SLOTS = new Set(["default"]);
 const _extRootSlots = new Set();
 
-export function registerRootLlmSlot(slot) {
+export function registerRootSpaceLlmSlot(slot) {
   if (
     typeof slot !== "string" ||
     !SLOT_NAME_PATTERN.test(slot) ||

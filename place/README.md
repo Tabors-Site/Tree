@@ -1,6 +1,8 @@
 # TreeOS Place
 
-An operating system for beings, where a being can be human, AI, or scripted code. You run a place. Inside it forms a world of spaces, matter, and beings, all speaking one protocol: four verbs (SEE, DO, SUMMON, BE) over stances, where a stance is a being standing at a position. Places connect to places; beings reach across them. From above it is a server framework. From inside it is a world.
+A place, made with space, matter, and beings,
+and placed by the seed,
+for human, LLM, and scripted beings.
 
 ## Quick Start
 
@@ -13,6 +15,7 @@ npm start
 ```
 
 The setup wizard asks:
+
 - **Quick localhost?** Yes skips domain/port/MongoDB questions (defaults to localhost:3000).
 - **Place name** for display.
 - **Extension profile**: Minimal (8 extensions), Standard (50+), Full (all), or Custom.
@@ -45,10 +48,10 @@ Two natures, one being. The seed is the only place where both worlds are simulta
 
 The gathering falls into two bundles.
 
-- **The body** is formed by [`genesis.js`](genesis.js). When the I-Am wakes, it unfolds the place root, the nine place seed spaces (`.identity`, `.config`, `.peers`, `.extensions`, `.flow`, `.tools`, `.roles`, `.operations`, `.source`), the place beings (auth, llm-assigner, place-manager), the role and operation registries, and the periodic acts that keep the world tidy. Every step idempotent.
-- **The senses** are opened by [`bigbang.js`](bigbang.js). The HTTP and WebSocket channels are how the world reaches outward to peer places and humans, and how SUMMONs reach inward. The senses do not form spaces, matter, or beings. They carry acts to the beings who do.
+- **The earth** is formed by [`genesis.js`](genesis.js). When the I-Am wakes, it unfolds the place root, the nine place seed spaces (`.identity`, `.config`, `.peers`, `.extensions`, `.flow`, `.tools`, `.roles`, `.operations`, `.source`), the place beings (auth, llm-assigner, place-manager), the role and operation registries, and the periodic acts that keep the world tidy. Every step idempotent.
+- **The senses** are opened by [`begin.js`](begin.js). The HTTP and WebSocket channels are how the world reaches outward to peer places and humans, and how SUMMONs reach inward. The senses do not form spaces, matter, or beings. They carry acts to the beings who do.
 
-`plant.js` is the operator's act. It runs before the I-Am exists, collects the env, picks extensions, and hands off to `bigbang.js`. After that handoff, the seed wakes. Planting happens once; awakening happens every later run. First boot is creation ex nihilo; later boots are awakenings into the same spaces, matter, and beings.
+`plant.js` is the operator's act. It runs before the I-Am exists, collects the env, picks extensions, and hands off to `begin.js`. After that handoff, the seed wakes. Planting happens once; awakening happens every later run. First boot is creation ex nihilo; later boots are awakenings into the same spaces, matter, and beings.
 
 ### IBP, four verbs over six primitives
 
@@ -56,23 +59,23 @@ Every act inside the place is one being, in one **stance**, using one verb. A st
 
 Four verbs make up the whole public surface. Each verb acts on its own kind of thing.
 
-| Verb | Acts on | What it does |
-|------|---------|--------------|
-| **SEE** | Space, Matter, Being | Read at the target stance, return a descriptor. |
-| **DO** | Space, Matter | Mutate at the target through a registered operation. Audited as a Did. |
-| **SUMMON** | Being | Deliver to a being's inbox. Its role decides what to do. |
-| **BE** | Being (self) | Identity. Register, claim, release, switch stance. |
+| Verb       | Acts on              | What it does                                                           |
+| ---------- | -------------------- | ---------------------------------------------------------------------- |
+| **SEE**    | Space, Matter, Being | Read at the target stance, return a descriptor.                        |
+| **DO**     | Space, Matter        | Mutate at the target through a registered operation. Audited as a Did. |
+| **SUMMON** | Being                | Deliver to a being's inbox. Its role decides what to do.               |
+| **BE**     | Being (self)         | Identity. Register, claim, release, switch stance.                     |
 
 Six primitives carry the world:
 
-| Primitive | What it is |
-|-----------|-----------|
-| **Being** | An identity instance. Humans, AI, scripted beings, future composites. The I-Am is the first being. |
-| **Space** | A position in the tree. Holds matter, hosts beings, owns quality namespaces. |
-| **Matter** | Stuff inside a space. `origin` names where it lives (ibp, filesystem, web, cross-place). |
-| **Did** | One DO emission, the audit row. |
-| **Summon** | One being-to-being call, the record of one wake-and-act. |
-| **LlmConnection** | Per-being LLM client config. |
+| Primitive         | What it is                                                                                         |
+| ----------------- | -------------------------------------------------------------------------------------------------- |
+| **Being**         | An identity instance. Humans, AI, scripted beings, future composites. The I-Am is the first being. |
+| **Space**         | A position in the tree. Holds matter, hosts beings, owns quality namespaces.                       |
+| **Matter**        | Stuff inside a space. `origin` names where it lives (ibp, filesystem, web, cross-place).           |
+| **Did**           | One DO emission, the audit row.                                                                    |
+| **Summon**        | One being-to-being call, the record of one wake-and-act.                                           |
+| **LlmConnection** | Per-being LLM client config.                                                                       |
 
 The seed schemas never change. Everything new lives in the per-primitive `qualities` Map, the open extension-defined layer that answers "of what sort is this particular space, matter, or being?" The four verbs are the only public surface; every operation is registered through them. Stance authorization sits at the gate on every verb, walking the ancestor chain from target up to root to decide whether the asker stance is allowed.
 
@@ -98,19 +101,19 @@ protocols/        The IBP grammar over stances. Canopy (place-to-place) and MCP 
 transports/       Carriers that translate into IBP. WebSocket is the main channel; HTTP and CLI are shims.
 extensions/       Everything optional. The place boots without any of them.
 plant.js          Operator's act. Plants the seed. Once only.
-bigbang.js        t=0. Opens the senses. Fires genesis. Big Bang on first boot, awakening after.
-genesis.js        The body. The unfolding that forms the world inside.
+begin.js        t=0. Opens the senses. Fires genesis. Beginning on first boot, awakening after.
+genesis.js        The earth. The unfolding that forms the world inside.
 ```
 
 Dependency direction: `transports/` to `protocols/` to `seed/`. Extensions sit beside the three and consume them. Seed never imports from protocols or transports.
 
 ## Extension Profiles
 
-| Profile | Extensions | LLM Usage | For |
-|---------|-----------|-----------|-----|
-| Minimal | 8 | Zero when idle | Builders, testing, low-power. |
-| Standard | 50+ | Moderate | Personal use, small teams. |
-| Full | All | Heavy | Production, public places. |
+| Profile  | Extensions | LLM Usage      | For                           |
+| -------- | ---------- | -------------- | ----------------------------- |
+| Minimal  | 8          | Zero when idle | Builders, testing, low-power. |
+| Standard | 50+        | Moderate       | Personal use, small teams.    |
+| Full     | All        | Heavy          | Production, public places.    |
 
 Change profiles anytime:
 

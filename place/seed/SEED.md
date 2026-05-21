@@ -23,9 +23,9 @@ I'm laid out in four folders, by the role each file plays in my work. For any fi
 
 | Folder | Role | What lives here |
 |--------|------|-----------------|
-| **[`place/`](place/)** | **IS** | The world as substance. `being/`, `space/`, `matter/`, `integrityCheck.js`, `registryMirror.js`, [`PLACE.md`](place/PLACE.md). What exists, how it is created and mutated, how it's checked for consistency. |
+| **[`place/`](place/)** | **IS** | The world as substance. `being/`, `space/`, `matter/`, `placeCheck.js`, `manifest.js`, [`PLACE.md`](place/PLACE.md). What exists, how it is created and mutated, how it's checked for consistency. |
 | **[`ibp/`](ibp/)** | **ACTS** | The world as acted-upon. The four verbs and their dispatch, address parsing, `authorize`, the operation registry, descriptor, discovery, pushChannel. Shared by every kind of being. |
-| **[`cognition/`](cognition/)** | **THINKS** | The thinking apparatus, **for LLM beings only**. Humans cognize on their own through portals; scripted beings ARE their code. This folder is the LLM loop, role specs, tools, scheduler, inbox, MCP. |
+| **[`cognition/`](cognition/)** | **THINKS** | The thinking apparatus. Most files are LLM-shaped (runTurn loop, llmClient resolution chain, mcpClient, buildPrompt) because LLMs need the most help. But the shared machinery here (inbox, scheduler, summonTracker, replyEmission, subscriptions, wakeSchedule, session) carries every cognition type: a SUMMON envelope lands the same way for an LLM, a scripted being, or a human — only `role.summon()` differs. See [`cognition/COGNITION.md`](cognition/COGNITION.md) for the full picture. |
 | **[`system/`](system/)** | **HOST** | The host-realm floor. DB connection, logging, hooks bus, indexes, version, retention, migrations. **Litmus**: a file here should never import the words `space`, `matter`, `being`, or `verb`. It deals in processes, files, env vars, connections. |
 
 Plus `models/` for schemas (the shape of all six primitives, sitting in one place), `services.js` (assembles `core` from the four folders), and the boot anchors (`placeRoot.js`, `placeConfig.js`).
@@ -324,7 +324,7 @@ All write functions accept a document or an id. No read-modify-write. No race co
 
 ### Conversation entry (`core.llm`)
 
-One primitive. `core.llm.runChat({ beingId, role, message, ... })` for one LLM call in one role. Returns `{ answer, chatId, modeKey, visitorId }`. Handles session, MCP, Summon record, `beforeResponse` hook, abort. User-facing chat flows through the same `runChat` driven by a role's `summon()`.
+One primitive. `core.llm.runTurn({ beingId, role, message, ... })` for one LLM call in one role. Returns `{ answer, chatId, modeKey, visitorId }`. Handles session, MCP, Summon record, `beforeResponse` hook, abort. User-facing chat flows through the same `runTurn` driven by a role's `summon()`.
 
 ## `.source` (how I show my body to the beings I form)
 

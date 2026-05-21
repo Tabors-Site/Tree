@@ -1,51 +1,63 @@
 // TreeOS Seed . AGPL-3.0 . https://treeos.ai . Tabor Holly
 //
-// defaultSummon . the generic dispatch every LLM-driven role used to
-// write by hand. Roles now declare what makes them different (prompt,
-// tools, permissions, reply mode) and the seed handles the rest.
+// The default-summon dispatch. The generic act of carrying one
+// moment from request to stamp, for any LLM-driven role that
+// hasn't overridden it. Roles declare only what makes their
+// moments different (prompt, tools, permissions, who they reply
+// to); I run the surrounding shape from here.
 //
-// The pattern extracted here lived inline in extensions/governing/
-// roles/rulerRole.js, plannerRole.js, contractorRole.js,
-// foremanRole.js, coderRole.js, etc. Each was ~60 lines of identical
-// boilerplate around runChat. This module is the single home for that
-// shape so role files become declarative.
+// I am infrastructure, not perspective. I prepare the moment, hand
+// it to runTurn (which assembles the frame and runs the inference),
+// receive what came back, decide whether the moment requests a
+// follow-up moment from someone, and step out. The being lived for
+// the duration of the inference inside runTurn — what I see is
+// only the text that came out.
 //
-// What the dispatch does, in order:
-//   1. Validate scope (ctx.spaceId / ctx.resolved.spaceId).
-//   2. Detect reply-wake (message.inReplyTo set).
-//   3. Build the LLM-facing message body (reply context wrapper on
-//      reply-wakes, raw content otherwise).
-//   4. Call runChat with the role spec.
-//   5. Handle abort signal and LLM errors.
-//   6. Emit a reply if the role declares one of the reply modes.
+// The shape lived inline in every governing role (rulerRole,
+// plannerRole, contractorRole, foremanRole, coderRole) at roughly
+// 60 lines of identical boilerplate around runTurn. Pulling it
+// here is what lets role files stay declarative.
+//
+// What I do, in order:
+//
+//   1. Validate the scope (ctx.spaceId / ctx.resolved.spaceId).
+//   2. Detect a reply-wake (message.inReplyTo set) — the asker is
+//      requesting the receiver have a follow-up moment.
+//   3. Compose the message body the moment will see — a reply-
+//      context wrapper on reply-wakes, raw content otherwise.
+//   4. Call runTurn. The being has its moment inside that call.
+//   5. Handle abort signal and inference errors.
+//   6. If the role declares a reply mode, request the next moment
+//      in the chain (someone else's, somewhere upstream).
 //   7. Return { text, summonId } for the scheduler.
 //
-// `text` is the terminal LLM turn — the final assistant message after
-// every tool call settled. Deliverables live in substrate (state that
-// tools wrote); `text` is the closing turn, not the deliverable.
+// `text` is the terminal LLM emission — the final assistant
+// message the being produced inside its moment. The deliverable
+// lives in the substrate (whatever the tools wrote during the
+// moment); `text` is the closing utterance, not the deliverable.
 //
 // Reply modes (declared on the role spec via `replyTo`):
-//   undefined           no reply emission; return value is the only output.
-//                       (Coder, Worker, anyone whose result is consumed
-//                       directly by the caller.)
-//   "asker"             reply places in the immediate sender's inbox.
-//                       (Planner, Contractor, Foreman . reports up to
-//                       whoever summoned them.)
-//   "chain-initial"     on reply-wakes only, reply places at the chain-
-//                       opening asker (user-being or parent Ruler).
-//                       (Ruler . synthesis back to whoever opened this
-//                       turn.)
 //
-// See [[project_card_is_a_summon]], [[project_role_subsumes_mode]], and
-// [[project_four_verbs_one_execution]].
+//   undefined        no follow-up moment requested. The return
+//                    value is consumed by the caller directly.
+//                    (Coder, Worker — leaf roles.)
+//
+//   "asker"          request the immediate sender have a follow-up
+//                    moment. (Planner, Contractor, Foreman
+//                    reporting up to whoever summoned them.)
+//
+//   "chain-initial"  on reply-wakes only, request the chain-opening
+//                    asker (user-being or parent Ruler) have the
+//                    follow-up moment. The Ruler's synthesis back
+//                    to whoever opened the chain.
 
 import log from "../system/log.js";
-import { runChat } from "./runChat.js";
+import { runTurn } from "./runTurn.js";
 import {
   emitReplyToAsker,
   emitReplyToStance,
   findChainInitialCaller,
-} from "./replyEmission.js";
+} from "./replies.js";
 
 /**
  * The generic summon implementation. The role registry wires this
@@ -94,7 +106,7 @@ export async function defaultSummon({ message, ctx, role }) {
 
   let result;
   try {
-    result = await runChat({
+    result = await runTurn({
       being: ctx.toBeing,
       envelope: { ...message, content: messageBody },
       role,

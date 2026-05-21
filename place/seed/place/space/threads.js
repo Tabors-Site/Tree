@@ -33,8 +33,81 @@
 
 import Summon from "../../models/summon.js";
 import Space from "../../models/space.js";
-import { SEED_SPACE, I_AM } from "./seedSpaces.js";
+import { SEED_SPACE } from "./seedSpaces.js";
+import { I_AM } from "../being/seedBeings.js";
 import { IbpError, IBP_ERR } from "../../ibp/protocol.js";
+
+// ─────────────────────────────────────────────────────────────────
+// Severed-roots cache
+// ─────────────────────────────────────────────────────────────────
+//
+// In-memory Set populated by cutThread. The scheduler reads it on
+// every inbox pickup via isAncestorSevered() to decide whether a
+// pending entry's chain still has a live ancestor. Source of truth
+// is severedAt on Summon rows; the Set is a fast hit. Rebuilds
+// lazily on cache misses by querying severedAt; rebuilds fully on
+// process boot via primeSeveredRootsCache() (called from genesis).
+
+const _severedRootsCache = new Set();
+
+/**
+ * Mark a rootCorrelation as severed in the in-memory cache. Called
+ * by cutThread after the DB write succeeds. Idempotent.
+ */
+export function noteRootSevered(rootCorrelation) {
+  if (!rootCorrelation) return;
+  _severedRootsCache.add(String(rootCorrelation));
+}
+
+/**
+ * Boot-time priming. Walks every Summon with severedAt set and
+ * populates the in-memory cache so cache hits work from t=0.
+ * Cheap: severedAt is indexed; query touches only the severed set.
+ */
+export async function primeSeveredRootsCache() {
+  try {
+    const rows = await Summon.aggregate([
+      { $match: { severedAt: { $ne: null } } },
+      { $group: { _id: "$rootCorrelation" } },
+    ]);
+    for (const r of rows) {
+      if (r._id) _severedRootsCache.add(String(r._id));
+    }
+    return _severedRootsCache.size;
+  } catch {
+    return 0;
+  }
+}
+
+/**
+ * Is this rootCorrelation severed, or does it have a severed
+ * ancestor in its parentThread chain? Used by the scheduler at
+ * inbox pickup to skip orphaned entries.
+ *
+ * Walk is bounded by spawn depth (typically 3-5). Cache hits short-
+ * circuit each level. Visited Set defends against cycles in
+ * parentThread (should be impossible by construction, but defensive).
+ *
+ * @param {string} rootCorrelation
+ * @returns {Promise<{ severed: boolean, ancestorId: string|null }>}
+ */
+export async function isAncestorSevered(rootCorrelation, visited = new Set()) {
+  if (!rootCorrelation) return { severed: false, ancestorId: null };
+  const id = String(rootCorrelation);
+  if (_severedRootsCache.has(id)) return { severed: true, ancestorId: id };
+  if (visited.has(id)) return { severed: false, ancestorId: null };
+  visited.add(id);
+
+  // Walk up the parentThread chain.
+  const root = await Summon.findById(id).select("parentThread severedAt").lean();
+  if (!root) return { severed: false, ancestorId: null };
+  if (root.severedAt) {
+    _severedRootsCache.add(id);
+    return { severed: true, ancestorId: id };
+  }
+  if (!root.parentThread) return { severed: false, ancestorId: null };
+  return isAncestorSevered(root.parentThread, visited);
+}
 
 // ─────────────────────────────────────────────────────────────────
 // Address recognition
@@ -106,7 +179,7 @@ export async function getThreadsSpaceId() {
 export async function describeThread(rootCorrelation) {
   if (!rootCorrelation) return null;
   const summons = await Summon.find({ rootCorrelation })
-    .select("_id beingIn beingOut activeRole ibpAddress inReplyTo summonedAt receivedAt endMessage severedAt priority")
+    .select("_id beingIn beingOut activeRole ibpAddress inReplyTo parentThread summonedAt receivedAt endMessage severedAt priority")
     .lean();
   if (!summons.length) return null;
 
@@ -132,13 +205,13 @@ export async function describeThread(rootCorrelation) {
 
   // Tree shape: parent thread (if this chain branched off another).
   // The root Summon is the one whose _id == rootCorrelation, or the
-  // first by time if convention drifted.
+  // first by time if convention drifted. parentThread is the
+  // canonical lineage pointer — auto-stamped at startSummon when a
+  // being acting under thread A emits a fresh top-level SUMMON.
   const rootSummon =
     summons.find((s) => String(s._id) === String(rootCorrelation)) ||
     summons.sort((a, b) => (a.summonedAt || 0) - (b.summonedAt || 0))[0];
-  const parentThread = rootSummon?.inReplyTo
-    ? await rootSummonOf(rootSummon.inReplyTo)
-    : null;
+  const parentThread = rootSummon?.parentThread || null;
 
   return {
     id:              rootCorrelation,
@@ -155,20 +228,56 @@ export async function describeThread(rootCorrelation) {
 }
 
 /**
- * List live threads on this place. Cheap when none, capped by
- * `limit`. Each item is a minimal preview; callers walk to
- * describeThread for the full descriptor.
+ * List live threads on this place, optionally filtered. Cheap when
+ * none, capped by `limit`. Each item is a minimal preview; callers
+ * walk to describeThread for the full descriptor.
+ *
+ * Filters (all optional, AND-combined; all pushed down to the
+ * aggregation $match so the projection scales):
+ *
+ *   being     — beingId of a participant (matches beingIn OR beingOut).
+ *               Pass with or without leading "@".
+ *   role      — activeRole the participant wore on the Summon.
+ *   position  — spaceId fragment; matches threads whose ibpAddress
+ *               includes this position (substring match).
+ *   stance    — full stance string (place/path@being); exact match.
+ *   priority  — HUMAN | GATEWAY | INTERACTIVE | BACKGROUND.
+ *
+ * Filters are row-level. A thread "matches" if any of its Summon rows
+ * match the filter; the projection groups by rootCorrelation after
+ * filtering. So `being=@me&role=planner` returns "threads where I had
+ * at least one Summon as planner."
  */
-export async function listLiveThreads({ limit = 100 } = {}) {
-  // Distinct rootCorrelation values from Summons that haven't ended
-  // and haven't been severed — those still have an open line.
+export async function listLiveThreads({
+  limit = 100,
+  being = null,
+  role = null,
+  position = null,
+  stance = null,
+  priority = null,
+} = {}) {
+  const match = {
+    severedAt: null,
+    "endMessage.time": null,
+    rootCorrelation: { $ne: null },
+  };
+  if (being) {
+    const beingId = String(being).replace(/^@/, "");
+    match.$or = [{ beingIn: beingId }, { beingOut: beingId }];
+  }
+  if (role)     match.activeRole = String(role);
+  if (stance)   match.ibpAddress = String(stance);
+  if (position) {
+    // Pragmatic substring match on ibpAddress (which carries the
+    // position segments). Escape regex metas so user input doesn't
+    // break the match.
+    const safe = String(position).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    match.ibpAddress = { $regex: safe };
+  }
+  if (priority) match.priority = String(priority);
+
   const roots = await Summon.aggregate([
-    { $match: {
-        severedAt: null,
-        "endMessage.time": null,
-        rootCorrelation: { $ne: null },
-      },
-    },
+    { $match: match },
     { $group: {
         _id: "$rootCorrelation",
         lastAct: { $max: "$summonedAt" },
@@ -273,6 +382,10 @@ export async function cutThread({
 
   // 1. Audit + state on the Summon rows.
   const severed = await markThreadSevered(rootCorrelation);
+  // Cache the severed root so subsequent ancestor-checks short-
+  // circuit without a DB walk. Always populate, even if severed===0
+  // (the chain may have already been marked but the cache lost).
+  noteRootSevered(rootCorrelation);
 
   // 2. Inbox sweep across every being that received a Summon under
   //    this chain. Each Summon row tells us (beingIn, spaceId) via

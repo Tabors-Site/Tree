@@ -40,6 +40,17 @@ const SummonSchema = new mongoose.Schema({
   inReplyTo:       { type: String, default: null, index: true },
   rootCorrelation: { type: String, default: null, index: true },
 
+  // When a being acting under thread A emits a fresh top-level SUMMON
+  // (one with no `inReplyTo`), the new SUMMON starts thread B. This
+  // field records that B was spawned from A. The kernel stamps it at
+  // emit time from the asker's current rootCorrelation (scheduler
+  // knows it via getCurrentRootCorrelation). Walks: B → A → ... give
+  // the cross-thread lineage SEE on `.threads/<id>` surfaces as
+  // `parentThread`. The ancestor-severance check on inbox pickup
+  // walks this same chain to decide whether a spawned thread should
+  // still run when its parent's been cut.
+  parentThread:    { type: String, default: null, index: true },
+
   receivedAt: { type: Date, default: null },
   summonedAt: { type: Date, default: null },
 

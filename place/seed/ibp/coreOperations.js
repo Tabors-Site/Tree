@@ -132,7 +132,7 @@ export function registerKernelOperations() {
   //   })
   //
   // The handler lives on the auth-being's `createBeing` method (see
-  // seed/cognition/roles/auth.js). Per the philosophy notes: BE acts on
+  // seed/cognition/roles/cherub.js). Per the philosophy notes: BE acts on
   // the being calling it, and identity creation is the BE side of the
   // grammar.
 
@@ -455,7 +455,7 @@ export function registerKernelOperations() {
         model,
       });
       // If this is the Being's first connection, auto-assign it to the
-      // default `main` slot so subsequent runChat calls find an LLM.
+      // default `main` slot so subsequent runTurn calls find an LLM.
       try {
         if (!target.llmDefault) {
           await assignConnection(beingId, "main", connection._id);

@@ -570,7 +570,7 @@ export const plannerRole = {
   canDo: ["governing-emit-plan"],
 
   // The Planner's turn cannot end without the plan emission landing.
-  // runChat enforces this: if the LLM tries to terminate with text
+  // runTurn enforces this: if the LLM tries to terminate with text
   // before governing-emit-plan fires, the loop pushes a corrective
   // system message and re-enters. Caps at maxIterations.
   exit: { requires: "governing-emit-plan" },

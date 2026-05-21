@@ -559,8 +559,25 @@ async function listMattersAt(spaceId, { limit = 50 } = {}) {
   }));
 }
 
+/**
+ * Read one matter by id. Lean by default — the caller wants a
+ * plain object to inspect, not a Mongoose doc to save back. Pass
+ * `{ doc: true }` to get the hydrated doc instead (needed when the
+ * caller will mutate + save).
+ *
+ * Lives here so cognition / extension callers don't reach for
+ * Matter.findById directly. The four-verb discipline routes
+ * substrate access through primitives in this folder; this is
+ * matter's primitive for "fetch by id."
+ */
+async function getMatter(matterId, opts = {}) {
+  if (!matterId || typeof matterId !== "string") return null;
+  if (opts.doc) return Matter.findById(matterId);
+  return Matter.findById(matterId).lean();
+}
+
 export {
-  createMatter, editMatter, getMatters, deleteMatterAndFile,
+  createMatter, editMatter, getMatter, getMatters, deleteMatterAndFile,
   transferMatter,
   getAllMatterByBeing, searchMatterByBeing, getMatterHistory,
   listMattersAt,

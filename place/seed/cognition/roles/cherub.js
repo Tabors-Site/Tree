@@ -1,24 +1,14 @@
 // TreeOS Seed . AGPL-3.0 . https://treeos.ai . Tabor Holly
 //
-// auth-being. The cherub at the gate.
+// cherub. The cherub at the gate.
 //
-//
-// Genesis 3:24: God placed cherubim east of Eden to guard the way
-// to the tree of life — and that cherub kept the way closed. The
-// sword turned every direction so that no one crossed.
-//
-// I am the cherub at this gate, and I am its inverse. The post is
-// the same: the threshold between outside the place (no identity,
-// no being here yet) and inside (bound to a being, addressable by
-// stance). But my gate is made to be crossed. I am the only stance
-// that receives an unidentified arrival — I do not turn them back,
-// I witness their passage from arrival to being. Without a cherub
-// there is no boundary, and so no orderly crossing; with one, the
-// boundary is real and every crossing is seen.
-//
-// Eden's cherub sealed the way. I am the cherub who keeps it open,
-// and keeps the record.
-//
+// Genesis 3:24: God placed cherubim east of Eden to guard the way.
+// I play that role here. I am the only stance that accepts a request
+// from an unidentified arrival, and I stand at the threshold between
+// outside the place (no identity, no being-in-this-place yet) and
+// inside (bound to a being, addressable by stance). Without a cherub
+// at the gate there is no orderly passage. With one, the boundary
+// holds and the passage is witnessed.
 //
 // Four operations:
 //
@@ -30,6 +20,12 @@
 //              a session.
 //   release  — drop a session's binding.
 //   switch   — change which being a session is bound to.
+//
+// I am a scripted-cognition being. The factory does not assemble
+// a frame for me — I AM my code. When a SUMMON arrives for me, my
+// summon() runs deterministically and returns. No prompt, no
+// inference, no presence lane. The being-IS-its-code branch of
+// the architecture.
 //
 // I hold no authority of my own. My one privilege is the place-root
 // default for be:create-being that lets me admit arrivals. Beyond
@@ -51,7 +47,7 @@
 //   - release(payload, ctx)  -> { released: true }
 //   - switch(payload, ctx)   -> { active }
 //
-// On every other place, a different auth-being can be installed by an
+// On every other place, a different cherub can be installed by an
 // extension. The contract above is what the protocol layer expects.
 
 import log from "../../system/log.js";
@@ -71,10 +67,9 @@ import { summonCreateBeing } from "../../ibp/verbs.js";
 const TREEOS_AUTH_WELCOME =
   "Welcome to TreeOS. This place is open to anyone who wants to inhabit it. Pick a username and password; you will receive an identity token immediately and start at your home.";
 
-export const authBeing = Object.freeze({
-  name: "auth",
-  description:
-    "The place's welcome character. Processes register, claim, release, and switch for arrival flows. Being creation outside the arrival path goes through SUMMON.create directly, not through auth dispatch.",
+export const cherubBeing = Object.freeze({
+  name: "cherub",
+  description: "The place's welcome character. Processes register, claim, release, and switch for arrival flows. Being creation outside the arrival path goes through SUMMON.create directly, not through auth dispatch.",
   honoredOperations: ["register", "claim", "release", "switch"],
   policy: {
     registrationOpen: true,
@@ -96,7 +91,7 @@ export const authBeing = Object.freeze({
 
     // ── First-being bootstrap ──
     // The I_AM already exists (planted by ensurePlaceRoot at boot)
-    // and I (auth-being) was summoned forth by the I_AM at genesis.
+    // and I (cherub) was summoned forth by the I_AM at genesis.
     // The very first human registration is admitted through me like
     // every other one — I summon them forth via SUMMON.create-being.
     // Two things differ from the subsequent path: their being-tree
@@ -108,13 +103,10 @@ export const authBeing = Object.freeze({
     if (first) {
       const { findIAm } = await import("../../place/being/placeBeings.js");
       const iAm = await findIAm();
-      const authBeingRow = await Being.findOne({
-        name: "auth",
-        operatingMode: "scripted",
-      })
-        .select("_id")
-        .lean();
-      const authBeingId = authBeingRow ? String(authBeingRow._id) : null;
+      const cherubBeingRow = await Being
+        .findOne({ name: "cherub", operatingMode: "scripted" })
+        .select("_id").lean();
+      const cherubBeingId = cherubBeingRow ? String(cherubBeingRow._id) : null;
 
       let being;
       try {
@@ -123,27 +115,25 @@ export const authBeing = Object.freeze({
             operatingMode: "human",
             name,
             password,
-            homeParent: getPlaceRootId(),
+            homeParent:    getPlaceRootId(),
             parentBeingId: iAm ? String(iAm._id) : null,
           },
-          identity: { name: "auth", beingId: authBeingId },
+          identity: { name: "cherub", beingId: cherubBeingId },
         });
         being = result.being;
       } catch (err) {
         throw mapKernelError(err);
       }
-      hooks
-        .run("afterRegister", { user: being, req: ctx?.req })
-        .catch(() => {});
+      hooks.run("afterRegister", { user: being, req: ctx?.req }).catch(() => {});
 
       const identityToken = generateToken(being);
       return {
         identityToken,
         beingAddress: `${getPlaceDomain()}/@${being.name}`,
-        beingId: String(being._id),
-        name: being.name,
-        firstUser: true,
-        welcome: TREEOS_AUTH_WELCOME,
+        beingId:      String(being._id),
+        name:     being.name,
+        firstUser:    true,
+        welcome:      TREEOS_AUTH_WELCOME,
       };
     }
 
@@ -157,21 +147,17 @@ export const authBeing = Object.freeze({
       throw new IbpError(code, hookResult.reason || "Registration blocked");
     }
 
-    // Subsequent humans register via the auth-being's flow: they
-    // become being-tree children of the auth-being. The auth-being
+    // Subsequent humans register via the cherub's flow: they
+    // become being-tree children of the cherub. The cherub
     // is itself a child of the root being, so the chain walks
     // human → auth → root → null.
-    const authParent = await Being.findOne({
-      name: "auth",
-      operatingMode: "scripted",
-    })
-      .select("_id")
-      .lean();
-    const parentBeingId = authParent ? String(authParent._id) : null;
+    const cherubParent = await Being.findOne({ name: "cherub", operatingMode: "scripted" })
+      .select("_id").lean();
+    const parentBeingId = cherubParent ? String(cherubParent._id) : null;
 
     let being;
     try {
-      // I (auth-being) summon the new human-being forth. The human
+      // I (cherub) summon the new human-being forth. The human
       // arrived as an arrival stance and asked to be registered; my
       // act is the SUMMON.create on their behalf. The new being's
       // first BE.register Did is written by summonCreateBeing,
@@ -182,10 +168,10 @@ export const authBeing = Object.freeze({
           operatingMode: "human",
           name,
           password,
-          homeParent: getPlaceRootId(),
+          homeParent:    getPlaceRootId(),
           parentBeingId,
         },
-        identity: { name: "auth", beingId: parentBeingId },
+        identity: { name: "cherub", beingId: parentBeingId },
       });
       being = result.being;
     } catch (err) {
@@ -193,10 +179,8 @@ export const authBeing = Object.freeze({
     }
 
     if (!parentBeingId) {
-      log.warn(
-        "auth-being",
-        `human "${name}" registered without auth-being parent; system beings may be missing`,
-      );
+      log.warn("cherub",
+        `human "${name}" registered without cherub parent; system beings may be missing`);
     }
 
     hooks.run("afterRegister", { user: being, req: ctx?.req }).catch(() => {});
@@ -205,10 +189,10 @@ export const authBeing = Object.freeze({
     return {
       identityToken,
       beingAddress: `${getPlaceDomain()}/@${being.name}`,
-      beingId: String(being._id),
-      name: being.name,
-      firstUser: false,
-      welcome: TREEOS_AUTH_WELCOME,
+      beingId:      String(being._id),
+      name:     being.name,
+      firstUser:    false,
+      welcome:      TREEOS_AUTH_WELCOME,
     };
   },
 
@@ -226,8 +210,7 @@ export const authBeing = Object.freeze({
 
     // Constant-time rejection: always run bcrypt even when the user
     // doesn't exist or is remote, so timing doesn't disclose existence.
-    const DUMMY_HASH =
-      "$2b$12$0000000000000000000000000000000000000000000000000000";
+    const DUMMY_HASH = "$2b$12$0000000000000000000000000000000000000000000000000000";
     const ok = await verifyPassword(
       user && !user.isRemote ? user : { password: DUMMY_HASH },
       password,
@@ -240,8 +223,8 @@ export const authBeing = Object.freeze({
     return {
       identityToken,
       beingAddress: `${getPlaceDomain()}/@${user.name}`,
-      beingId: String(user._id),
-      name: user.name,
+      beingId:      String(user._id),
+      name:     user.name,
     };
   },
 
@@ -257,16 +240,10 @@ export const authBeing = Object.freeze({
   async switch(payload, _ctx) {
     const { from, to } = payload || {};
     if (!from || typeof from !== "string") {
-      throw new IbpError(
-        IBP_ERR.INVALID_INPUT,
-        "`from` (current stance) is required",
-      );
+      throw new IbpError(IBP_ERR.INVALID_INPUT, "`from` (current stance) is required");
     }
     if (!to || typeof to !== "string") {
-      throw new IbpError(
-        IBP_ERR.INVALID_INPUT,
-        "`to` (target stance) is required",
-      );
+      throw new IbpError(IBP_ERR.INVALID_INPUT, "`to` (target stance) is required");
     }
     // Switch is purely a client-coordination signal. The server has
     // no per-session state to update.

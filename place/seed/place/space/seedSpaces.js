@@ -118,14 +118,8 @@ export const SEED_SPACE = Object.freeze({
 // DELETED. Placed in `parent` and (for matter) `beingId` when a space
 //          is soft-deleted. The deleted-revive extension can bring
 //          spaces back; matter stays soft-deleted.
-// I_AM. The first being's name. Used as:
-//                rootOwner: I_AM  → "I_AM owns this space"
-//                beingId:   I_AM  → "I_AM did this"
-//              The Being row is registered during ensurePlaceRoot's
-//              genesis pass (ensureIAm in seed/placeRoot.js).
-//              Resolves the stance `<place>/@I_AM`. See THE
-//              PHILOSOPHY OF THE SEED at the top of this file for
-//              why the constant exists and what I_AM is.
 
 export const DELETED = "deleted";
-export const I_AM = "I_AM";
+
+// I_AM moved to seed/place/being/seedBeings.js (it's a being constant,
+// not a space constant).

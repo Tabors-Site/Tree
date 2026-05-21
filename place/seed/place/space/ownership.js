@@ -28,7 +28,7 @@ import { invalidateSpace } from "./ancestorCache.js";
 import { hooks } from "../../system/hooks.js";
 import { getPlaceConfigValue } from "../../placeConfig.js";
 import { IBP_ERR, IbpError } from "../../ibp/protocol.js";
-import { I_AM } from "./seedSpaces.js";
+import { I_AM } from "../being/seedBeings.js";
 import { acquireSpaceLock, releaseSpaceLock } from "./spaceLocks.js";
 
 /**

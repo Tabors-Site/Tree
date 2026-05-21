@@ -257,7 +257,7 @@ export const contractorRole = {
   canDo: ["governing-emit-contracts"],
 
   // Architectural exit gate. The Contractor's turn cannot end without
-  // the emission landing. runChat re-prompts the LLM if it tries to
+  // the emission landing. runTurn re-prompts the LLM if it tries to
   // terminate without firing this tool.
   exit: { requires: "governing-emit-contracts" },
 

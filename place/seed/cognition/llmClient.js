@@ -1,24 +1,26 @@
 // TreeOS Seed . AGPL-3.0 . https://treeos.ai . Tabor Holly
 //
-// LLM connection resolution + per-being client cache.
+// Which provider voice will speak this being's moment. Each
+// moment, when the assembled frame is about to flow through an
+// inference, I tell the line which LLM connection that inference
+// uses. Given a being and (optionally) a role + tree, I return
+// the OpenAI-shape client configured with the right model, API
+// key, and base URL. The chain I walk: override → being slot →
+// being default → place default → no-LLM. A fifth step
+// ("summoner's home being") is reserved for cross-place fallback.
 //
-// Given a being and (optionally) a role + tree, returns the OpenAI-shape
-// client configured for the right model + API key + base URL. The
-// resolution chain walks: override → being slot → being default →
-// place default → no-LLM. A fifth step ("summoner's home being") is
-// reserved for cross-place fallback — see [[project_llm_on_being_retires_proxy]].
+// I cache by (beingId, slot) for normal resolution and by
+// ("conn:" + connectionId) for override paths, with TTL expiry.
+// clearBeingClientCache(beingId) invalidates after a config
+// change. The cache is equipment, not memory — it shortens the
+// lookup cost so each moment's setup stays cheap.
 //
-// The cache is keyed by (beingId, slot) for normal resolution and by
-// ("conn:" + connectionId) for override paths, with TTL-based expiry.
-// `clearBeingClientCache(beingId)` invalidates after an LLM-config
-// change.
-//
-// API-key decryption uses the unified encryption key from connections.js.
-// Every custom-connection baseUrl is validated against the SSRF host
-// allowlist before the client is built; bad hosts surface as a "Blocked
-// custom LLM connection" log entry and fall through to the next step in
-// the chain. Local-LLM-style usage (Ollama, etc.) requires whitelisting
-// the host via `allowedLlmDomains` in place config.
+// API keys decrypt through the unified encryption key in
+// connections.js. Every custom-connection baseUrl is validated
+// against the SSRF host allowlist before I build the client; a
+// blocked host logs and falls through to the next chain step.
+// Local-LLM hosts (Ollama, etc.) require explicit whitelisting
+// via `allowedLlmDomains` in place config.
 
 import OpenAI from "openai";
 import log from "../system/log.js";
@@ -125,7 +127,7 @@ export function clearBeingClientCache(beingId) {
  * on success, null if the connection is missing/invalid or its baseUrl
  * fails the SSRF gate.
  */
-async function resolveConnection(connectionId, cacheKey) {
+export async function resolveConnection(connectionId, cacheKey) {
   const conn = await LlmConnection.findById(connectionId).lean();
   // baseUrl is required; encryptedApiKey is optional (local LLMs like
   // Ollama / llama.cpp commonly need no auth).
@@ -156,7 +158,7 @@ async function resolveConnection(connectionId, cacheKey) {
     client: new OpenAI({
       baseURL,
       apiKey,
-      // SDK-side retry disabled. callWithFailover in runChat.js handles
+      // SDK-side retry disabled. callWithFailover in llmCall.js handles
       // retry decisions against our own RETRYABLE_CODES set so we can
       // fast-fail on deterministic backend parse failures (500 from
       // local inference stacks) instead of burning 15 minutes retrying.

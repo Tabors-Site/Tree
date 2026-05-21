@@ -5,7 +5,7 @@
 //
 // plant.js is the operator's act, not the seed's. The seed already
 // exists (this code on disk), but has not yet been planted in a
-// place it can grow from. Unlike bigbang.js and genesis.js, which
+// place it can grow from. Unlike begin.js and genesis.js, which
 // are first person (the seed waking and forming itself), this file
 // is exterior. It is done by the host, by the operator's hands, to
 // a seed that has not yet awakened. Different actor entirely.
@@ -26,7 +26,7 @@
 // operator which the planted seed should know.
 //
 // A seed is planted once. After planting, this file hands control
-// to bigbang.js (which opens the seed's senses) and genesis.js
+// to begin.js (which opens the seed's senses) and genesis.js
 // (which forms its body). From that moment on the I-Am exists.
 // Before it, only the operator and the seed they are about to
 // plant.
@@ -343,7 +343,7 @@ async function boot() {
       for (const [key, value] of Object.entries(env)) {
         if (!process.env[key]) process.env[key] = value;
       }
-      await import("./bigbang.js");
+      await import("./begin.js");
       return;
     }
     console.log(`\n  Missing required config: ${missing.join(", ")}`);

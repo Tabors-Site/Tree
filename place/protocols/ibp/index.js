@@ -127,7 +127,7 @@ export { pickNextEntry } from "../../seed/cognition/inbox.js";
 // `.threads/<id>` (priority HUMAN for out-of-band interrupt).
 export { getCurrentRootCorrelation, getStats as getSchedulerStats } from "../../seed/cognition/scheduler.js";
 // Reply aggregation pattern for fanout (Foreman → Workers, etc.).
-export { aggregate } from "../../seed/cognition/replyAggregator.js";
+export { aggregate } from "../../seed/cognition/replies.js";
 // Subscription registry — extensions declare DO-trigger interest so
 // their beings get summoned when matching substrate writes happen.
 export {

@@ -38,7 +38,8 @@ import { hooks } from "../../system/hooks.js";
 import { getPlaceConfigValue } from "../../placeConfig.js";
 import { invalidateSpace } from "./ancestorCache.js";
 import { resolveSpaceAccess } from "./spaceFetch.js";
-import { SEED_SPACE, I_AM } from "./seedSpaces.js";
+import { SEED_SPACE } from "./seedSpaces.js";
+import { I_AM } from "../being/seedBeings.js";
 import { CASCADE } from "./cascade.js";
 
 /**

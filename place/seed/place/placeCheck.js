@@ -1,6 +1,6 @@
 // TreeOS Seed . AGPL-3.0 . https://treeos.ai . Tabor Holly
 //
-// fsck for the world I form.
+// Checking the place. The reconciler for the world I form.
 //
 // Three primitives carry a dual-pointer tree:
 //
@@ -8,9 +8,11 @@
 //   Matter  parentMatterId   + children[]
 //   Being   parentBeingId    + children[]
 //
-// If a parent and its children[] array disagree, everything built on
-// the tree fails silently. I verify pointer agreement across all three
-// at genesis and again on a daily cadence, and auto-repair where safe.
+// If a parent and its children[] array disagree, everything built
+// on the tree fails silently. I verify pointer agreement across
+// all three at genesis and again on a daily cadence, and
+// auto-repair where safe. Where it isn't safe I log loudly and
+// leave the breach for the operator.
 //
 // Pointer-agreement repair (uniform across primitives):
 //   parent says A but A's children[] is missing this  →  add to children[]
@@ -23,10 +25,11 @@
 //   Being orphan   no auto-repair. Beings are durable identities;
 //                  log loudly, leave to the operator.
 //
-// Streams via cursor (memory-bounded on large places). Progress logged
-// every 10K records.
+// Streams via cursor (memory-bounded on large places). Progress
+// logged every 10K records.
 //
-// Runs at genesis, then daily, and on demand via core.system.checkIntegrity().
+// Runs at genesis, then daily, and on demand via
+// core.system.checkPlace().
 
 import log from "../system/log.js";
 import Space from "../models/space.js";
@@ -100,7 +103,7 @@ const PRIMITIVES = [
  * @param {boolean} [opts.silent=false] - suppress log output
  * @returns {Promise<{ duration, byPrimitive: { [label]: report } }>}
  */
-export async function checkIntegrity({ repair = true, silent = false } = {}) {
+export async function checkPlace({ repair = true, silent = false } = {}) {
   const startMs = Date.now();
   const byPrimitive = {};
 
@@ -257,12 +260,12 @@ async function checkOnePrimitive(def, { repair, silent }) {
 
 /**
  * Start the periodic integrity job. Default: once per day.
- * Configurable via integrityCheckInterval (ms).
+ * Configurable via placeCheckInterval (ms).
  */
-export function startIntegrityJob() {
-  const interval = parseInt(getPlaceConfigValue("integrityCheckInterval") || "86400000", 10);
+export function startPlaceCheckJob() {
+  const interval = parseInt(getPlaceConfigValue("placeCheckInterval") || "86400000", 10);
   const timer = setInterval(() => {
-    checkIntegrity({ repair: true, silent: false }).catch((err) => {
+    checkPlace({ repair: true, silent: false }).catch((err) => {
       log.error("Integrity", `Periodic check failed: ${err.message}`);
     });
   }, interval);

@@ -59,13 +59,12 @@ import {
 } from "./cognition/summonTracker.js";
 
 import {
-  processMessage,
+  stepTurn,
   switchRole,
-  runChat,
+  runTurn,
   getCurrentRole,
   registerFailoverResolver,
-  LLM_PRIORITY,
-} from "./cognition/runChat.js";
+} from "./cognition/runTurn.js";
 import {
   getClientForBeing,
   resolveRootLlmForRole,
@@ -83,7 +82,7 @@ import {
   MCP_SERVER_URL,
 } from "./cognition/mcpClient.js";
 import {
-  registerRootLlmSlot,
+  registerRootSpaceLlmSlot,
   registerBeingLlmSlot,
 } from "./cognition/connections.js";
 import {
@@ -136,7 +135,7 @@ import {
   invalidateAll,
   getCacheStats,
 } from "./place/space/ancestorCache.js";
-import { checkIntegrity } from "./place/integrityCheck.js";
+import { checkPlace } from "./place/placeCheck.js";
 import {
   checkTreeHealth,
   tripTree,
@@ -156,7 +155,7 @@ import {
 // extensions register roles, subscribe to events, declare wake
 // cadences, and aggregate fan-out replies without importing my
 // internals.
-import { aggregate as ibpAggregate } from "./cognition/replyAggregator.js";
+import { aggregate as ibpAggregate } from "./cognition/replies.js";
 import {
   subscribe as ibpSubscribe,
   unsubscribe as ibpUnsubscribe,
@@ -280,17 +279,16 @@ export function buildCoreServices({
       getClientForBeing,
       resolveRootLlmForRole,
       beingHasLlm,
-      processMessage,
+      stepTurn,
       switchRole,
       getSpaceRootId,
-      runChat,
+      runTurn,
       setCurrentSpace,
       getCurrentSpace,
       getCurrentRole,
-      registerRootLlmSlot,
+      registerRootSpaceLlmSlot,
       registerBeingLlmSlot,
       registerFailoverResolver,
-      LLM_PRIORITY,
     },
 
     mcp: { connectToMCP, closeMCPClient, getMCPClient, MCP_SERVER_URL },
@@ -364,7 +362,7 @@ export function buildCoreServices({
       invalidateSpace,
       invalidateAll,
       getCacheStats,
-      checkIntegrity,
+      checkPlace,
       checkTreeHealth,
       tripTree,
       reviveTree,

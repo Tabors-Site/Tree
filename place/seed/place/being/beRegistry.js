@@ -22,7 +22,7 @@
 // Spec shape:
 //
 //   {
-//     name:              "auth" | "llm-assigner" | <ext-name>,
+//     name:              "cherub" | "llm-assigner" | <ext-name>,
 //     description:       string,
 //     honoredOperations: string[],          // kebab-case op names
 //     <methodName>:      async (payload, ctx) => result,
@@ -34,7 +34,7 @@
 // `honoredOperations: ["release", "create-being"]` requires methods
 // `release()` and `createBeing()` on the spec.
 //
-// Naming. Bare names ("auth", "llm-assigner") are reserved for my
+// Naming. Bare names ("cherub", "llm-assigner") are reserved for my
 // own handlers. Extensions register theirs with an `<ext>-<name>`
 // shape (e.g. "court-being", "treasurer-being") to avoid colliding
 // with kernel reservations or other extensions.
@@ -44,7 +44,7 @@ import log from "../../system/log.js";
 const REGISTRY = new Map();
 
 // Reserved names. Extensions cannot register handlers under these.
-const KERNEL_RESERVED = new Set(["auth", "llm-assigner"]);
+const KERNEL_RESERVED = new Set(["cherub", "llm-assigner"]);
 
 const NAME_RE = /^[a-z][a-z0-9-]*$/;
 

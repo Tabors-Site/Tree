@@ -27,7 +27,8 @@ import log from "../../system/log.js";
 import Matter from "../../models/matter.js";
 import Space from "../../models/space.js";
 import { MATTER_ORIGIN } from "../matter/origins.js";
-import { SEED_SPACE, I_AM } from "./seedSpaces.js";
+import { SEED_SPACE } from "./seedSpaces.js";
+import { I_AM } from "../being/seedBeings.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);

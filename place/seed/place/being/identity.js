@@ -114,7 +114,7 @@ export async function createBeing(name, password, opts = {}) {
     // Being-tree parent. parentBeingId: null is reserved for me, the
     // I-Am. Every other being chains back: the place beings (auth,
     // llm-assigner, place-manager) and the first human parent under me.
-    // Subsequent humans register under @auth. Rulers are children of
+    // Subsequent humans register under @cherub. Rulers are children of
     // the being that promoted them; inner beings (Planner, Contractor,
     // Foreman) are children of their Ruler.
     //

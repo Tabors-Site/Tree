@@ -1,10 +1,12 @@
 // TreeOS Seed . AGPL-3.0 . https://treeos.ai . Tabor Holly
 //
-// My tool registry. The shared dictionary of every callable function
-// the LLM-driven beings I run can reach for. Extensions register tool
-// schemas through `registerToolBundle`; roles declare which tools they
-// can wield in `canSee / canDo / canSummon / canBe`; my LLM clients
-// resolve names to schemas at summon time via `resolveTools`.
+// What a being CAN reach for during its moment. The shared
+// dictionary of every callable function any LLM-driven being's
+// frame might list as an option. Extensions register tool
+// schemas through `registerToolBundle`; roles declare which tools
+// they can wield in `canSee / canDo / canSummon / canBe`; the
+// assembler resolves names to schemas at frame-build time via
+// `resolveTools`, so the being sees its options as part of being.
 //
 // Every tool has a shape. Each declares which of the four verbs it
 // fires (`see`, `do`, `summon`, `be`). Verb is REQUIRED at registration;
@@ -283,7 +285,7 @@ const MAX_WARNED = 500;
  * Given an array of tool name strings, return the OpenAI tool definition array.
  *
  * Optional `permissions` filter: when supplied, drops any tool whose
- * verb is not in the array. Used by runChat to scope an LLM call to
+ * verb is not in the array. Used by runTurn to scope an LLM call to
  * the active role's declared capacities.
  *
  * @param {string[]} toolNames
@@ -403,7 +405,7 @@ export async function auditToolDescriptions() {
 // (add new tools, remove gone ones).
 export async function syncToolsToSubstrate() {
   const { SEED_SPACE } = await import("../place/space/seedSpaces.js");
-  const { syncRegistryToSubstrate } = await import("../place/registryMirror.js");
+  const { manifestItems } = await import("../place/manifest.js");
   const items = Object.entries(toolDefs).map(([name, def]) => ({
     name,
     qualities: new Map([
@@ -417,5 +419,5 @@ export async function syncToolsToSubstrate() {
       ],
     ]),
   }));
-  return syncRegistryToSubstrate({ seedSpace: SEED_SPACE.TOOLS, items });
+  return manifestItems({ seedSpace: SEED_SPACE.TOOLS, items });
 }

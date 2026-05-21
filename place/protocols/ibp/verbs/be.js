@@ -8,17 +8,17 @@
 // Remaining payload fields carry operation-specific credentials/state:
 //
 //   register  { op, name, password, ... }
-//   claim     { op, name, password }         (against the place's auth-being)
+//   claim     { op, name, password }         (against the place's cherub)
 //   claim     { op }                          (re-claim a held stance)
 //   release   { op }
 //   switch    { op, from }                    (address is the target stance)
 //
-// BE addresses the place's auth-being. A bare-place address (e.g.
-// "treeos.ai") is shorthand for the auth-being stance "treeos.ai/@auth".
+// BE addresses the place's cherub. A bare-place address (e.g.
+// "treeos.ai") is shorthand for the cherub stance "treeos.ai/@cherub".
 // For release/switch/token-reclaim the address is the held stance.
 //
 // Thin wire adapter: extracts envelope fields, delegates to `beVerb`
-// in seed/ibp/verbs.js. The auth-being role (seed/cognition/roles/auth.js)
+// in seed/ibp/verbs.js. The cherub role (seed/cognition/roles/cherub.js)
 // runs there. See [[project_four_verbs_one_execution]].
 
 import log from "../../../seed/system/log.js";

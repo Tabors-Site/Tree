@@ -3,7 +3,7 @@
 // Where a being is standing. The per-being position cache.
 //
 // A being IS at a position. `Being.currentSpace` is the source of
-// truth; this module mirrors it in memory so the runChat tool loop
+// truth; this module mirrors it in memory so the runTurn tool loop
 // and websocket dispatch don't hit Mongo on every position read
 // (dozens per turn).
 //
