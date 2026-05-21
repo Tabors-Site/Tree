@@ -9,7 +9,7 @@
 // Three builder paths, picked by the resolved stance's flags:
 //   - buildLandDescriptor — `<land>` (land root)
 //   - buildHomeDescriptor — `<land>/~<being>` (a being's home view)
-//   - buildTreeDescriptor — any other position (tree node)
+//   - buildTreeDescriptor — any other position (tree space)
 
 import { getLandDomain } from "./address.js";
 import { getLandConfigValue } from "../landConfig.js";
@@ -22,7 +22,7 @@ import Space from "../models/space.js";
 import { getLandRootId } from "../landRoot.js";
 // NODE_STATUS retired 2026-05-18 — status is domain-specific extension
 // metadata, not a universal kernel field. Descriptor queries no longer
-// filter on a node-level status.
+// filter on a space-level status.
 import { getMatters } from "../matter/matters.js";
 import Matter from "../models/matter.js";
 import { resolveSpaceAccess } from "../space/spaceFetch.js";
@@ -90,7 +90,7 @@ function effectiveModel(meta) {
   return raw?.model ? { model: raw.model, scale: raw.scale ?? 1 } : null;
 }
 
-// Same idea for scenes — derive the per-node doorway/sceneType from
+// Same idea for scenes — derive the per-space doorway/sceneType from
 // explicit metadata.scenes plus fallbacks (e.g. governing.role).
 function effectiveScene(meta) {
   const derived = callDeriver("scenes", meta);
@@ -150,7 +150,7 @@ async function resolveSceneBlock(spaceId) {
 }
 
 // ─────────────────────────────────────────────────────────────────────
-// Beings list for a tree node
+// Beings list for a tree space
 //
 // A position's beings are the beings whose HOME is this position — not
 // "beings invocable here." Each being has a durable home (a place
@@ -160,20 +160,20 @@ async function resolveSceneBlock(spaceId) {
 // stays focused on its own residents.
 //
 // Two paths surface beings here:
-//   1. metadata.beings.<name> on this node — the canonical home
+//   1. metadata.beings.<name> on this space — the canonical home
 //      record. When an extension's lifecycle places a being at a
-//      position (Planner at a plan node, Foreman at a foreman node,
+//      position (Planner at a plan space, Foreman at a foreman space,
 //      etc.), it writes the namespace and the descriptor surfaces it.
 //   2. Derived signals for legacy / shorthand cases. Today only one:
 //      metadata.governing.role === "ruler" implies the Ruler is at
 //      home, even if metadata.beings.ruler hasn't been written
 //      explicitly. As governing's lifecycle migrates to creating real
-//      sub-positions (plan/contract/foreman child nodes with their own
-//      beings), it can drop the derived signal in favor of explicit
-//      being-home writes.
+//      sub-positions (plan/contract/foreman child spaces with their
+//      own beings), it can drop the derived signal in favor of
+//      explicit being-home writes.
 //
 // Workers, Planners, Contractors, Foremen are NOT listed here for a
-// rulership — they live at their own positions (plan child node,
+// rulership — they live at their own positions (plan child space,
 // contract child space, leaf matter positions) and surface through
 // those positions' descriptors. The renderer composes them visually
 // because they're inline children of the rulership.
@@ -199,16 +199,16 @@ const BEING_PRESENTATION = {
   archivist:  { label: "Archivist",  description: "Read-only inspection of matter.",             modeKey: "tree:archivist",        icon: "\u{1F4DA}", invocableBy: "anyone" },
 };
 
-function beingsForTreeNode(node, { writeAllowed, authorizedHere }) {
+function beingsForTreeSpace(space, { writeAllowed, authorizedHere }) {
   const beings = [];
 
-  // Read explicit being-home registrations on this node. Each entry
+  // Read explicit being-home registrations on this space. Each entry
   // under metadata.beings is either a being-home (Ruler/Planner/
   // Contractor/etc.) or a stance-permission profile (arrival/owner/
   // member). We treat any entry NOT in the well-known stance set as a
   // being-home — letting future extensions register their own beings
   // without changing this filter.
-  const beingHomes = readNsFrom(node?.metadata, "beings");
+  const beingHomes = readNsFrom(space?.metadata, "beings");
   if (!beingHomes) return beings;
   const STANCE_NAMES = new Set(["arrival", "owner", "member"]);
   const names = beingHomes instanceof Map
@@ -378,7 +378,7 @@ async function buildLandDescriptor(resolved, { identity } = {}) {
     // Beings whose home is the land root. All real Being rows (created
     // by ensureLandBeings). With the resolver exposing landRootId as
     // the spaceId for land-root stances, the SUMMON inbox sits on the
-    // land-root node like any other position — so these beings are
+    // land-root space like any other position — so these beings are
     // addressable via both BE (auth, llm-assigner — code cognition)
     // and SUMMON (land-manager — LLM-driven).
     beings: [
@@ -467,7 +467,7 @@ async function buildHomeDescriptor(resolved, { identity } = {}) {
     isHomeRoot: true,
     // The owning being is the only being at their home by default.
     // Extensions (or the operator) can place additional beings here
-    // by writing metadata.beings.<name> on the home node; they will
+    // by writing metadata.beings.<name> on the home space; they will
     // surface through the regular being-home reader.
     beings: [
       {
@@ -505,35 +505,35 @@ async function buildHomeDescriptor(resolved, { identity } = {}) {
 
 async function buildTreeDescriptor(resolved, { identity } = {}) {
   const landDomain = getLandDomain();
-  const node = resolved.leafSpace;
-  if (!node) {
-    throw new Error("Resolved node missing leafSpace reference");
+  const space = resolved.leafSpace;
+  if (!space) {
+    throw new Error("Resolved space missing leafSpace reference");
   }
 
   // Build the two convenience path strings from the chain.
   const pathByNames = "/" + resolved.chain.map((c) => c.name).join("/");
   const pathByIds = "/" + resolved.chain.map((c) => c.id).join("/");
 
-  // Children of this node (immediate descendants). Backfill `path` from
-  // this node's pathByNames so clients can navigate deeper.
-  const children = await listChildren(node._id);
+  // Children of this space (immediate descendants). Backfill `path` from
+  // this space's pathByNames so clients can navigate deeper.
+  const children = await listChildren(space._id);
   for (const c of children) {
     c.path = `${pathByNames}/${c.name}`;
   }
 
   // Matter attached to this space, as previews.
-  const matters = await listMatters(node._id);
+  const matters = await listMatters(space._id);
 
   // Lineage walk: parent chain back up to and including the tree root.
   // The chain we already have is the path-segments chain; lineage may
-  // include ancestor nodes that weren't named explicitly (intermediate
+  // include ancestor spaces that weren't named explicitly (intermediate
   // segments). Today we use the chain we already have plus a synthetic
   // "land root" entry at index 0.
   const lineage = buildLineage(resolved);
 
   // Siblings: other children of the parent. Backfill paths from the
-  // parent's path (this node's path minus the leaf segment).
-  const siblings = node.parent ? await listChildren(node.parent, { exclude: node._id }) : [];
+  // parent's path (this space's path minus the leaf segment).
+  const siblings = space.parent ? await listChildren(space.parent, { exclude: space._id }) : [];
   const parentPath = pathByNames.replace(/\/[^/]+$/, "") || "/";
   for (const s of siblings) {
     s.path = parentPath === "/" ? `/${s.name}` : `${parentPath}/${s.name}`;
@@ -544,7 +544,7 @@ async function buildTreeDescriptor(resolved, { identity } = {}) {
   let authorizedHere = false;
   if (identity?.beingId) {
     try {
-      const access = await resolveSpaceAccess(node._id, identity.beingId);
+      const access = await resolveSpaceAccess(space._id, identity.beingId);
       writeAllowed = access?.ok && access?.write === true;
       authorizedHere = access?.ok === true;
     } catch {
@@ -554,14 +554,14 @@ async function buildTreeDescriptor(resolved, { identity } = {}) {
 
   // Scene block: nearest doorway ancestor + resolved sceneType + ambient.
   // Null if the scenes extension is not installed.
-  const scene = await resolveSceneBlock(node._id);
+  const scene = await resolveSceneBlock(space._id);
 
   return {
     address: {
       land: landDomain,
       path: pathByNames,
       being: resolved.being || null,
-      spaceId: node._id,
+      spaceId: space._id,
       beingId: resolved.beingId || null,
       chain: resolved.chain,
       pathByNames,
@@ -571,15 +571,15 @@ async function buildTreeDescriptor(resolved, { identity } = {}) {
     },
     isLandRoot: false,
     isHomeRoot: false,
-    // Beings invocable at this node. Only beings that are actually
+    // Beings invocable at this space. Only beings that are actually
     // configured here appear — placeholder defaults (worker/archivist/
-    // echo on every node) were causing phantom figures in fresh trees.
+    // echo on every space) were causing phantom figures in fresh trees.
     // Each entry below is gated by a real signal:
-    //   - ruler: governing extension has promoted this node
+    //   - ruler: governing extension has promoted this space
     // Other beings (workers, planners, etc.) are transient chainstep
     // roles, not standing beings; they surface through the activity
     // field on the ruler's entry rather than as their own beings.
-    beings: await buildBeings(node._id, beingsForTreeNode(node, { writeAllowed, authorizedHere })),
+    beings: await buildBeings(space._id, beingsForTreeSpace(space, { writeAllowed, authorizedHere })),
     children,
     matters,
     lineage,
@@ -648,7 +648,7 @@ async function listMatters(spaceId) {
         totalBytes: isText ? Buffer.byteLength(m.content, "utf8") : 0,
         createdAt: m.createdAt,
         byUsername: m.name || null,
-        fullContentRef: `/api/v1/node/${spaceId}/matters/${m._id}`,
+        fullContentRef: `/api/v1/space/${spaceId}/matters/${m._id}`,
         ...matterPlacement(parentMetadata, String(m._id)),
       };
     });
@@ -744,7 +744,7 @@ async function readLandRootMatters(landRootId) {
 }
 
 /**
- * List the being's tree-root nodes. A being-tree-root is a node where:
+ * List the being's tree-root spaces. A being-tree-root is a space where:
  *   - parent === landRootId
  *   - rootOwner === beingId
  *   - seedSpace is null
@@ -798,7 +798,7 @@ async function listUserTrees(beingId, username) {
 /**
  * Enrich a beings list with registered being metadata
  * (honoredIntents, respondMode, triggerOn) and the per-being inbox
- * summary at this node.
+ * summary at this space.
  *
  * `entries` is the static portion (being, label, description, kind,
  * icon, invocableBy, available, modeKey). The function attaches:
@@ -811,7 +811,7 @@ async function buildBeings(spaceId, entries) {
   // descriptor entry's _activeSummonLookupBeingId is the canonical home-record
   // beingId, so it doubles as the inbox lookup key.
   const inboxByBeing = await getInboxSummary(spaceId);
-  // Per-being placement lives on the parent node (where the being is
+  // Per-being placement lives on the parent space (where the being is
   // listed): metadata.position.beings.<being>, metadata.models.beings.<...>.
   let parentMetadata = null;
   if (spaceId) {

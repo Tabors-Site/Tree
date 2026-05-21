@@ -51,7 +51,7 @@ transports/        Thin carriers. Translate transport-shape into protocol envelo
 extensions/        Extensions. This is where you build.
 boot.js            Entry point. First-run setup wizard.
 server.js          Express + WebSocket bring-up, graceful shutdown.
-startup.js         Boot sequence: indexes, config, migrations, extensions, jobs.
+genesis.js         Boot sequence: indexes, config, migrations, extensions, jobs.
 ```
 
 **The dependency direction.** transports → protocols → seed. Extensions sit beside the three and consume them. seed never imports from protocols or transports; protocols never import from transports.
@@ -67,11 +67,11 @@ startup.js         Boot sequence: indexes, config, migrations, extensions, jobs.
 
 ## Architectural patterns (read before building anything)
 
-**The tree has a grammar.** Four layers parse every message. Resolution (where): nouns are spaces, pronouns are position state, prepositions shift target spaces. Intent (what): tenses are modes (review=past, coach=future, plan=imperative, log=present), negation cancels, conjunctions chain, Qualification (how): adjectives focus, voice frames (active=execute, passive=observe), adverbs/instructions modify behavior, boundaries constrain scope. Planning + Execution: single dispatch, sequential chains, or cross-domain causal routing. Three orthogonal axes evolve independently: WHERE (noun+preposition+pronoun), WHAT (tense+negation+compound), HOW (adjectives+adverbs+voice+boundaries). The grammar debugger shows the full parse tree for every message.
+**The four verbs are the public surface.** SEE / DO / SUMMON / BE over IBP addresses (`<land>/<path>@<being>`). Every operation in the system maps to one of these. Small protocol; expressiveness lives in role templates, registered operations, and the substrate the seed materializes.
 
-**Resolution chains walk the ancestor cache.** Extension scope, tool scope, mode resolution, LLM connection, LLM config, persona resolution, perspective filter resolution. All walk the parent chain from the current space to the root. All use the same cached snapshot per message. One walk serves all chains. The ancestor cache is the performance backbone.
+**Resolution chains walk the ancestor cache.** Stance authorization, extension scope, tool scope, LLM connection, LLM config, perspective filter, descriptor derivers. All walk the parent chain from the current space to the land root. All use the same cached snapshot per message. One walk serves every chain.
 
-**Three zones. Position determines behavior.** `/` (land root) is the land zone: system management, config, users, peers. `~` (user home) is the home zone: personal space, raw ideas, settings. Inside a tree is the tree zone: chat/place/query, full orchestration. Navigate somewhere and the capability surface changes. The AI at each position has different tools, different modes, different context. `cd` is the most important command.
+**Position determines behavior.** No "zones" — that framing retired. A being at the land root sees one capability surface; the same being inside a tree sees another. Differences come from per-position stance rules, ownership, the role the summoned being carries, and the operations the loader has registered. Navigation IS attention shift; the substrate at each position is what changes the mind.
 
 **before hooks intercept. after hooks react.** Before hooks run sequentially because they can cancel. After hooks run in parallel because they react independently. Two overrides: enrichContext and onCascade are sequential because their handlers build cumulative output. Don't make a hook sequential without articulating why handlers depend on each other's output.
 
@@ -89,21 +89,25 @@ startup.js         Boot sequence: indexes, config, migrations, extensions, jobs.
 cp -r extensions/_template extensions/my-extension
 ```
 
-Edit `manifest.js` to declare what you need and what you provide. Edit `index.js` to register hooks, modes, and tools. The loader handles the rest.
+Edit `manifest.js` to declare what you need and what you provide. Edit `index.js` to register hooks, tools, roles, operations, and seeds. The loader handles the rest.
 
 Full reference: `extensions/EXTENSION_FORMAT.md`
 
 ### What an extension can provide
 
-- **Routes** (HTTP endpoints at /api/v1)
-- **Tools** (MCP tools the AI can call)
-- **Modes** (custom AI conversation modes with system prompts)
-- **Hooks** (lifecycle event handlers: beforeMatter, afterMatter, enrichContext, etc.)
-- **Jobs** (background tasks with start/stop)
-- **Orchestrator** (replace the entire conversation flow)
+- **Tools** (declared in `init()` return; registered via `registerToolBundle`. Verb-tagged: see/do/summon/be)
+- **Roles** (summonable being templates; declare `canSee/canDo/canSummon/canBe` and a prompt body)
+- **Operations** (DO actions registered through `core.do.registerOperation`; auto-namespaced `<ext>:<action>`)
+- **Seeds** (plantable scaffolds; recipes that fan a structure into existence when an operator plants them)
+- **Hooks** (lifecycle handlers: beforeMatter, afterMatter, enrichContext, afterMetadataWrite, beforeDid, ...)
+- **DO-trigger subscriptions** (wake a being when matching substrate writes happen)
+- **Scheduled wakes** (fire a SUMMON on a being's inbox at a cadence)
+- **Descriptor derivers** (contribute derived fields to the Position Description clients render)
+- **Default permissions** (stance-auth Layer 3 contributions; rules the kernel walks during authorize)
+- **Routes** (HTTP endpoints, mostly for legacy callers; the protocol is IBP first)
+- **Jobs** (background workers with start/stop)
+- **Models** (Mongoose schemas registered into `core.models`)
 - **CLI commands** (auto-generated from manifest declarations)
-- **UI Slots** (HTML fragments injected into pages: app cards, quick links, profile sections, dashboard panels)
-- **HTML Pages** (server-rendered pages registered via html-rendering extension)
 
 ### Key patterns
 
@@ -129,34 +133,22 @@ treeos?.exports?.registerSlot?.("apps-grid", "my-ext", (ctx) => {
 
 **scope: "confined"** for dangerous extensions. Inactive everywhere by default. Operators allow at specific positions with `ext-allow`.
 
-## The four primitives
+## The six primitives
 
-Everything in the kernel serves one of four primitives:
+Everything in the kernel serves one of six primitives (one per Mongoose schema):
 
 | Primitive | What it is |
 |-----------|-----------|
-| **Structure** | Two schemas (Space, User). Spaces in hierarchies. Metadata Maps hold everything else. |
-| **Intelligence** | Conversation loop. LLM, tool, mode, position resolution. The AI thinks at every position. |
-| **Extensibility** | Loader, 29 hooks, five registries. Spatial scoping. Extensions add all capabilities. |
-| **Communication** | Cascade signals, .flow system space, visible results. Signals propagate and get recorded. |
-
-## Extension ecosystem (95 extensions, 4 bundles)
-
-**Base TreeOS (21):** treeos-base, tree-orchestrator, land-manager, navigation, starter-types, console, dashboard, notifications, monitor, llm-response-formatting, team, user-tiers, html-rendering, water, heartbeat, purpose, phase, remember, breath, instructions, channels.
-
-**treeos-cascade (8):** The nervous system. Signals propagate, get filtered, compressed, monitored.
-
-**treeos-intelligence (14):** Self-awareness. Compression, contradiction detection, user profiling, autonomous intent, semantic search, exploration, tracing, boundary mapping, competence tracking, conversational awareness, extension proposal, temporal memory.
-
-**treeos-connect (11):** External channels. Telegram, Discord, Slack, email, SMS, webhooks, Matrix, Reddit, X, tree-to-tree.
-
-**treeos-maintenance (5):** Hygiene. Prune, reroot, changelog, daily digest, delegation.
-
-**Standalone (8):** persona, mycelium, peer-review, seed-export, governance, teach, split, approve.
+| **Being** | An identity instance. Carries roles, parents under another being, homes at a space. Humans, AI, scripted-cognition, future composites. The I-am — the Node process itself — is a Being too; the kernel is the first being, not a faceless layer beneath them. |
+| **Space** | A position in the tree. Holds matter, hosts beings, owns metadata namespaces. |
+| **Matter** | Stuff inside a space. `origin` field names where it actually lives (ibp, filesystem, web, cross-land). |
+| **Did** | One DO emission. The audit trail. Past tense — "a did is a thing that was done." |
+| **Summon** | One being-to-being call. The record of one wake-and-act, whatever cognition the receiving being has — LLM, scripted code, human reply, future composite. The kernel doesn't care which; the protocol is the same. |
+| **LlmConnection** | Per-being LLM client config (URL, key, model). |
 
 ## Security
 
-Extensions run in the same Space.js process as the kernel. They can access the filesystem, network, and database. Review all third-party extension code before installing. Three extensions declare `scope: "confined"` (shell, solana, scripts) and are inactive until explicitly allowed at a position.
+Extensions run in the same Node process as the seed. They can access the filesystem, network, and database. Review third-party extension code before installing. Extensions declaring `scope: "confined"` are inactive until explicitly allowed at a position.
 
 ## CLI
 

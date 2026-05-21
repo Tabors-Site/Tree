@@ -232,8 +232,8 @@ export function buildCoreServices({ loadedExtensions = new Map(), overrides = {}
     // --- Extension seeds (scaffolded shapes a land can plant) ---
     // Extensions declare seeds via init() return { seeds: [...] } or
     // manifest.provides.seeds; the loader registers them. Operators plant
-    // a seed at a node to bootstrap the extension's structure (Ruler,
-    // beings, sub-domain nodes, starter matter). See memory
+    // a seed at a space to bootstrap the extension's structure (Ruler,
+    // beings, sub-domain spaces, starter matter). See memory
     // `extension-seeds`.
     seeds: {
       register: registerSeed,

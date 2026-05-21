@@ -725,19 +725,19 @@ export function showLlmAssignerPanel({ client, land, currentNodeId, onClose, onS
       e.preventDefault();
       clearError();
       try {
-        await client.be("set-node-llm", `${land}/@llm-assigner`, {
+        await client.be("set-space-llm", `${land}/@llm-assigner`, {
           nodeId:       currentNodeId,
           slot:         slotI.value.trim() || "main",
           connectionId: connI.value || null,
         });
         showError("");  // clear
         renderActiveTab();
-      } catch (err) { showError(fmtErr(err, "set-node-llm failed")); }
+      } catch (err) { showError(fmtErr(err, "set-space-llm failed")); }
     });
     form.querySelector("button[data-act=clear]").addEventListener("click", async () => {
       clearError();
       try {
-        await client.be("set-node-llm", `${land}/@llm-assigner`, {
+        await client.be("set-space-llm", `${land}/@llm-assigner`, {
           nodeId: currentNodeId, slot: slotI.value.trim() || "main", connectionId: null,
         });
       } catch (err) { showError(fmtErr(err, "clear failed")); }

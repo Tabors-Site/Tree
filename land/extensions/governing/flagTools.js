@@ -232,7 +232,7 @@ export default function getFlagTools(_core) {
           flagged: true,
           id: flag.id,
           kind: flag.kind,
-          rulerNodeId: String(ruler._id),
+          rulerSpaceId: String(ruler._id),
           rulerName: ruler.name || null,
           contentHash: flag.contentHash,
           blocking: flag.blocking,
@@ -279,7 +279,7 @@ export default function getFlagTools(_core) {
         const flags = await readPendingIssues(ruler._id);
         return text(JSON.stringify({
           ok: true,
-          rulerNodeId: String(ruler._id),
+          rulerSpaceId: String(ruler._id),
           rulerName: ruler.name || null,
           total: flags.length,
           flags: flags.map((f) => ({

@@ -36,9 +36,9 @@ export async function ancestorChain(spaceId) {
     }
     visited.add(cursor);
     chain.unshift(cursor);
-    const node = await Space.findById(cursor).select("parent").lean();
+    const space = await Space.findById(cursor).select("parent").lean();
     if (!node?.parent) break;
-    cursor = String(node.parent);
+    cursor = String(space.parent);
   }
   return chain;
 }

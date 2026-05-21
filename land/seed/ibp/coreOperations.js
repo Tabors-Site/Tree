@@ -6,19 +6,19 @@
 // on module load. Same surface extensions use; no special treatment.
 //
 // Current set:
-//   create-child            (polymorphic over node/being/matter)
+//   create-child            (polymorphic over space/being/matter)
 //   create-matter, create-being
-//   set-name                (polymorphic over node/being/matter)
-//   set-type                (node)
-//   set-parent              (node)
-//   delete-node             (node)
+//   set-name                (polymorphic over space/being/matter)
+//   set-type                (space)
+//   set-parent              (space)
+//   delete-space            (space)
 //   set-meta                (polymorphic; namespace + data)
 //   plant-seed              (extension scaffolding)
-//   cascade                 (fire an awareness signal at a node)
+//   cascade                 (fire an awareness signal at a space)
 //   add-llm-connection      (being)
 //   update-llm-connection   (being)
 //   delete-llm-connection   (being)
-//   assign-llm-slot         (polymorphic over being/node)
+//   assign-llm-slot         (polymorphic over being/space)
 //   install-extension       (write files; reload-required)
 //   uninstall-extension     (remove files; reload-required)
 //   enable-extension        (toggle disabledExtensions list)
@@ -68,14 +68,14 @@ export function registerKernelOperations() {
   // a being-tree / matter-tree at that space), use the dedicated
   // create-being / create-matter operations.
   registerOperation("create-child", {
-    targets: ["node", "being", "matter"],
+    targets: ["space", "being", "matter"],
     ownerExtension: "kernel",
     didAction: "create",
     handler: async ({ target, params, identity }) => {
       const kind = detectTargetKind(target);
       if (kind === "being")  return createBeingChild({ parentBeing: target, params, identity });
       if (kind === "matter") return createMatterChild({ parentMatter: target, params, identity });
-      return createNodeChild({ target, params, identity, kind });
+      return createSpaceChild({ target, params, identity, kind });
     },
   });
 
@@ -83,7 +83,7 @@ export function registerKernelOperations() {
   // at that space, parentMatterId: null). For child matter under existing
   // matter, use create-child.
   registerOperation("create-matter", {
-    targets: ["node"],
+    targets: ["space"],
     ownerExtension: "kernel",
     didAction: "create",
     handler: async ({ target, params, identity }) => {
@@ -131,7 +131,7 @@ export function registerKernelOperations() {
   //                       USERNAME_TAKEN on collision)
   //   Matter   target → mutates Matter.name (new field; nullable)
   registerOperation("set-name", {
-    targets: ["node", "being", "matter"],
+    targets: ["space", "being", "matter"],
     ownerExtension: "kernel",
     didAction: "edit",
     handler: async ({ target, params, identity }) => {
@@ -175,9 +175,9 @@ export function registerKernelOperations() {
   // [[project_substrate_as_universal_workspace]] for the framing.
 
   // set-type: change a Space's type field. Used by editType HTTP route
-  // and any caller that needs to mutate the type taxonomy at a node.
+  // and any caller that needs to mutate the type taxonomy at a space.
   registerOperation("set-type", {
-    targets: ["node"],
+    targets: ["space"],
     ownerExtension: "kernel",
     didAction: "edit",
     handler: async ({ target, params, identity }) => {
@@ -195,18 +195,18 @@ export function registerKernelOperations() {
     },
   });
 
-  // delete-node: remove a node (and its subtree) from the tree.
-  // Returns { deletedNodeId }. The actual seed primitive handles
+  // delete-space: remove a space (and its subtree) from the tree.
+  // Returns { deletedSpaceId }. The actual seed primitive handles
   // cascades, hooks, and rollback semantics; this op is the public
   // verb surface.
-  registerOperation("delete-node", {
-    targets: ["node"],
+  registerOperation("delete-space", {
+    targets: ["space"],
     ownerExtension: "kernel",
     didAction: "remove",
     handler: async ({ target, params: _params, identity }) => {
       const spaceId = targetIdOf(target);
       const deleted = await deleteSpaceBranch(spaceId, identity?.beingId || null);
-      return { deletedNodeId: String(deleted?._id || spaceId) };
+      return { deletedSpaceId: String(deleted?._id || spaceId) };
     },
   });
 
@@ -237,10 +237,10 @@ export function registerKernelOperations() {
   });
 
 
-  // set-parent: reparent a node. The target IS the node being moved;
+  // set-parent: reparent a space. The target IS the space being moved;
   // params.parentId names the new parent.
   registerOperation("set-parent", {
-    targets: ["node"],
+    targets: ["space"],
     ownerExtension: "kernel",
     didAction: "move",
     handler: async ({ target, params, identity }) => {
@@ -269,7 +269,7 @@ export function registerKernelOperations() {
   //
   // Reserved namespaces (e.g. "inbox") rejected for all target kinds.
   registerOperation("set-meta", {
-    targets: ["node", "being", "matter"],
+    targets: ["space", "being", "matter"],
     ownerExtension: "kernel",
     didAction: "edit",
     handler: async ({ target, params, identity }) => {
@@ -297,14 +297,14 @@ export function registerKernelOperations() {
         return { written: true, matterId: String(target._id), namespace, kind: "matter" };
       }
       if (kind === "stance") return setMetaAtStance({ resolved: target, namespace, data, merge, identity });
-      // kind === "node": Mongoose Space doc passed directly (extension path).
+      // kind === "space": Mongoose Space doc passed directly (extension path).
       const op = merge !== false ? mergeExtMeta : setExtMeta;
       await op(target, namespace, data);
-      return { written: true, spaceId: String(target._id), namespace, kind: "node" };
+      return { written: true, spaceId: String(target._id), namespace, kind: "space" };
     },
   });
 
-  // plant-seed: invoke a registered seed recipe at the target node.
+  // plant-seed: invoke a registered seed recipe at the target space.
   // The recipe scaffolds the structure (Ruler beings, sub-domain
   // nodes, starter matter, metadata) on the target. See
   // seed/space/seeds.js and memory `extension-seeds`.
@@ -317,7 +317,7 @@ export function registerKernelOperations() {
   //            defines its own schema in prose; the kernel just
   //            threads the object through to the scaffold ctx.
   registerOperation("plant-seed", {
-    targets: ["node"],
+    targets: ["space"],
     ownerExtension: "kernel",
     handler: async ({ target, params, identity }) => {
       const { name } = params || {};
@@ -325,7 +325,7 @@ export function registerKernelOperations() {
         throw new Error("plant-seed: `name` is required (the seed's registered name)");
       }
       const spaceId = targetIdOf(target);
-      if (!spaceId) throw new Error("plant-seed: target must resolve to a node id");
+      if (!spaceId) throw new Error("plant-seed: target must resolve to a space id");
       const { plantSeed } = await import("../space/seeds.js");
       const { getCoreServices } = await import("../services.js");
       const core = getCoreServices();
@@ -334,7 +334,7 @@ export function registerKernelOperations() {
         : {};
       const { plantedSeedId, plantedThings } = await plantSeed({
         name,
-        atNodeId: spaceId,
+        atSpaceId: spaceId,
         identity,
         core,
         params: seedParams,
@@ -344,14 +344,14 @@ export function registerKernelOperations() {
   });
 
   // ────────────────────────────────────────────────────────────────
-  // Cascade — fire an awareness signal from a node.
+  // Cascade — fire an awareness signal from a space.
   // ────────────────────────────────────────────────────────────────
   //
-  // Target: the node the signal arrives at. Payload carries the signal
+  // Target: the space the signal arrives at. Payload carries the signal
   // content + source. See [[project_cascade]] for the architecture and
   // seed/space/cascade.js for the delivery semantics.
   registerOperation("cascade", {
-    targets: ["node"],
+    targets: ["space"],
     ownerExtension: "kernel",
     handler: async ({ target, params, identity: _identity }) => {
       const spaceId = targetIdOf(target);
@@ -442,19 +442,19 @@ export function registerKernelOperations() {
   //   Space  target → Space.llmDefault  (slot="main") or
   //                  Space.metadata.llm.slots.<slot>
   registerOperation("assign-llm-slot", {
-    targets: ["being", "node"],
+    targets: ["being", "space"],
     ownerExtension: "kernel",
     handler: async ({ target, params, identity }) => {
       const { slot, connectionId } = params || {};
       if (!slot) throw new Error("assign-llm-slot: `slot` is required");
       const kind = detectTargetKind(target);
-      const { assignConnection, assignNodeConnection } = await import("../cognition/connections.js");
+      const { assignConnection, assignSpaceConnection } = await import("../cognition/connections.js");
       if (kind === "being") {
         return assignConnection(String(target._id), slot, connectionId || null);
       }
       const spaceId = targetIdOf(target);
-      if (!spaceId) throw new Error("assign-llm-slot: target must resolve to a node id");
-      return assignNodeConnection(spaceId, slot, connectionId || null, {
+      if (!spaceId) throw new Error("assign-llm-slot: target must resolve to a space id");
+      return assignSpaceConnection(spaceId, slot, connectionId || null, {
         ownerBeingId: identity?.beingId || null,
       });
     },
@@ -465,8 +465,8 @@ export function registerKernelOperations() {
   // installed-state is substrate. These ops drive the loader.
   // ────────────────────────────────────────────────────────────────
   //
-  // Target: any node on this land — typically the land root. The
-  // extension's installed-state isn't bound to a particular node; the
+  // Target: any space on this land — typically the land root. The
+  // extension's installed-state isn't bound to a particular space; the
   // target lets stance authorization gate who can install.
 
   // Extension management ops (install / uninstall / enable / disable)
@@ -482,14 +482,14 @@ export function registerKernelOperations() {
   // ────────────────────────────────────────────────────────────────
   //
   // Land config is one of the meta-positions ([[project_meta_positions]]):
-  // `<land>/.config` resolves to the SEED_SPACE.CONFIG node. Reads go
+  // `<land>/.config` resolves to the SEED_SPACE.CONFIG space. Reads go
   // through `ibp:see` on that address (returns the cached config snapshot);
   // writes go through these DO ops which wrap the kernel's
   // setLandConfigValue helper. The helper handles cache invalidation,
   // validation, and PROTECTED_KEYS gating.
 
   registerOperation("set-config", {
-    targets: ["node"],
+    targets: ["space"],
     ownerExtension: "kernel",
     handler: async ({ params, scaffold }) => {
       const { key, value } = params || {};
@@ -510,7 +510,7 @@ export function registerKernelOperations() {
   });
 
   registerOperation("delete-config", {
-    targets: ["node"],
+    targets: ["space"],
     ownerExtension: "kernel",
     handler: async ({ params, scaffold }) => {
       const { key } = params || {};
@@ -534,22 +534,22 @@ const RESERVED_SET_META_NS = new Set([
  *   "stance"   — resolved stance from the IBP wire (carries `.chain`)
  *   "being"    — Mongoose Being doc
  *   "matter"   — Mongoose Matter doc
- *   "node"     — Mongoose Space doc OR anything else (default; covers
+ *   "space"    — Mongoose Space doc OR anything else (default; covers
  *                plain `{ _id }` shapes and raw string ids that the
- *                node primitives already handle)
+ *                space primitives already handle)
  *
  * Detection priority:
  *   1. `.chain` is an array → resolver output (every resolved stance
  *      carries a top-down chain, including `[]` for bare land root)
  *   2. Mongoose `.constructor.modelName` → model-typed doc
- *   3. Default → "node"
+ *   3. Default → "space"
  */
 function detectTargetKind(target) {
   if (target && typeof target === "object" && Array.isArray(target.chain)) return "stance";
   const modelName = target?.constructor?.modelName;
   if (modelName === "Being")    return "being";
   if (modelName === "Matter")   return "matter";
-  return "node";
+  return "space";
 }
 
 /**
@@ -572,7 +572,7 @@ function targetIdOf(target) {
 //
 // When an op's target arrives from the IBP wire, it's a resolved stance
 // (carries `.chain`, `.spaceId`, `.isLandRoot`, `.isHomeRoot`, etc.). The
-// inline node/being/matter branches above handle Mongoose-doc shapes
+// inline space/being/matter branches above handle Mongoose-doc shapes
 // that internal callers pass; these helpers handle the wire shape.
 //
 // They do three things the inline paths don't:
@@ -606,7 +606,7 @@ const KERNEL_ERROR_PATTERNS = {
   ],
 };
 
-async function createNodeChild({ target, params, identity, kind }) {
+async function createSpaceChild({ target, params, identity, kind }) {
   const beingId = identity?.beingId || null;
   const { name, type = null } = params || {};
   if (!name || typeof name !== "string") {
@@ -622,7 +622,7 @@ async function createNodeChild({ target, params, identity, kind }) {
         parentId: target?._id ? String(target._id) : null,
         beingId,
       });
-      return shapeNewNode(newSpace);
+      return shapeNewSpace(newSpace);
     } catch (err) {
       throw mapPatternsToIbpError(err, KERNEL_ERROR_PATTERNS.createChild);
     }
@@ -641,7 +641,7 @@ async function createNodeChild({ target, params, identity, kind }) {
     }
     try {
       const newSpace = await createSpace({ name, type, isRoot: true, beingId });
-      return shapeNewNode(newSpace);
+      return shapeNewSpace(newSpace);
     } catch (err) {
       throw mapPatternsToIbpError(err, KERNEL_ERROR_PATTERNS.createChild);
     }
@@ -651,13 +651,13 @@ async function createNodeChild({ target, params, identity, kind }) {
   }
   try {
     const newSpace = await createSpace({ name, type, parentId: target.spaceId, beingId });
-    return shapeNewNode(newSpace);
+    return shapeNewSpace(newSpace);
   } catch (err) {
     throw mapPatternsToIbpError(err, KERNEL_ERROR_PATTERNS.createChild);
   }
 }
 
-function shapeNewNode(newSpace) {
+function shapeNewSpace(newSpace) {
   const spaceId = String(newSpace._id);
   return {
     spaceId,
@@ -695,17 +695,17 @@ async function setMetaAtStance({ resolved, namespace, data, merge, identity }) {
   if (!access?.ok || access.write !== true) {
     throw new IbpError(IBP_ERR.FORBIDDEN, "Not authorized to write metadata at this place");
   }
-  const node = await Space.findById(resolved.spaceId);
-  if (!node) {
+  const space = await Space.findById(resolved.spaceId);
+  if (!space) {
     throw new IbpError(IBP_ERR.SPACE_NOT_FOUND, "Space disappeared between resolve and write");
   }
   try {
     if (merge === false) {
-      await setExtMeta(node, namespace, data);
+      await setExtMeta(space, namespace, data);
     } else {
-      await mergeExtMeta(node, namespace, data);
+      await mergeExtMeta(space, namespace, data);
     }
-    return { written: true, spaceId: String(node._id), namespace, kind: "node" };
+    return { written: true, spaceId: String(space._id), namespace, kind: "space" };
   } catch (err) {
     throw mapPatternsToIbpError(err, KERNEL_ERROR_PATTERNS.setMeta);
   }

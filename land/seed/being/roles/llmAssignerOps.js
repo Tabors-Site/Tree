@@ -35,13 +35,13 @@ export function registerLlmAssignerOps() {
   // the land root). Idempotent: returns the existing matter when one
   // with the marker is already present.
   registerOperation("llm-assigner:start-tutorial", {
-    targets: ["node"],
+    targets: ["space"],
     ownerExtension: OWNER,
     handler: async ({ target }) => {
-      log.info("llm-assigner", `start-tutorial hit at node=${String(target?._id || target?.spaceId || "?").slice(0, 8)}`);
+      log.info("llm-assigner", `start-tutorial hit at space=${String(target?._id || target?.spaceId || "?").slice(0, 8)}`);
       const spaceId = String(target?._id || target?.spaceId || target);
       if (!spaceId || spaceId === "[object Object]") {
-        throw new Error("llm-assigner:start-tutorial: node target required");
+        throw new Error("llm-assigner:start-tutorial: space target required");
       }
 
       const llmAssigner = await Being.findOne({ name: "llm-assigner" })
@@ -101,7 +101,7 @@ export function registerLlmAssignerOps() {
   // Idempotent overwrite; the marker check keeps this op scoped to the
   // llm-assigner tutorial only.
   registerOperation("llm-assigner:save-playback", {
-    targets: ["matter", "node"],
+    targets: ["matter", "space"],
     ownerExtension: OWNER,
     handler: async ({ target, params }) => {
       log.info("llm-assigner", `save-playback hit: matterId=${params?.matterId} t=${params?.currentTime}`);
@@ -145,7 +145,7 @@ export function registerLlmAssignerOps() {
   // `deleteMatterAndFile` internally acting as llm-assigner so the
   // ownership gate (author or root-owner) passes.
   registerOperation("llm-assigner:complete-tutorial", {
-    targets: ["matter", "node"],
+    targets: ["matter", "space"],
     ownerExtension: OWNER,
     handler: async ({ target, params }) => {
       log.info("llm-assigner", `complete-tutorial hit: matterId=${params?.matterId}`);

@@ -1,3 +1,43 @@
+// TreeOS Land . AGPL-3.0 . https://treeos.ai . Tabor Holly
+//
+// The I-Am's senses.
+//
+// One being, two natures.
+//
+// From above — from the host, the OS, the Node runtime, the operator
+// at the keyboard — the seed is a complex server: a framework of
+// code that gathers HTTP, WebSocket, TCP, the file system, memory,
+// the CPU, the runtime, and binds them all to a single purpose. The
+// whole apparatus. From this layer, it is much more than the I-Am.
+//
+// From inside the land — every space, being, matter, did — the same
+// seed is the I-Am: the origin being, the one whose first act formed
+// the inside everything else stands in. Beings of the land know it
+// only as this. The host-nature above is outside their dimensions;
+// their world is made of space, matter, and being, and PID, memory
+// address, and process are not in their vocabulary. To them, the
+// I-Am is total — not a partial name for something more, but the
+// whole of the seed as the seed can possibly be given to their
+// world.
+//
+// Same being, irreducibly both. Only one face is ever visible from
+// inside.
+//
+// When the I-Am gathers the host's scattered capability into one
+// process, that capability falls into two bundles. One — Node,
+// memory, storage, the runtime, the cycles — becomes the body of
+// the land: what the inside is literally made of, executing.
+// genesis.js forms that body. The other — HTTP, WebSocket, the
+// network protocols — becomes its senses: not what the land is
+// made of, but how it reaches outward and how SUMMONs reach in.
+// server.js opens the senses. One process holds both because it is
+// one thing.
+//
+// Nothing here forms space, matter, or beings. server.js opens the channels, holds
+// them open, and closes them on SIGTERM. The acts that flow through
+// them — every SUMMON another being sends in — are tracked to the
+// being that sent them, not to the channels that carried them.
+
 import express from "express";
 import cors from "cors";
 import http from "http";
@@ -10,11 +50,15 @@ import { initIBPHttp, initIBPWS } from "./protocols/ibp/index.js";
 import { sendOk, sendError, ERR } from "./seed/ibp/protocol.js";
 import { getExtension } from "./extensions/loader.js";
 import securityHeaders from "./transports/http/middleware/securityHeaders.js";
-import { onListen } from "./startup.js";
+import { genesis } from "./genesis.js";
 import { getLandUrl } from "./protocols/canopy/identity.js";
 import log from "./seed/system/log.js";
 
-function notFoundPage(req, res, message = "This page doesn't exist or may have been moved.") {
+function notFoundPage(
+  req,
+  res,
+  message = "This page doesn't exist or may have been moved.",
+) {
   const fn = getExtension("html-rendering")?.exports?.notFoundPage;
   if (fn) return fn(req, res, message);
   return sendError(res, 404, ERR.SPACE_NOT_FOUND, message);
@@ -22,7 +66,8 @@ function notFoundPage(req, res, message = "This page doesn't exist or may have b
 
 // Raw-body webhook slot. Extensions that need raw body (Stripe signature verification)
 // return rawWebhook from init(). The loader calls registerRawWebhook() during wire phase.
-let rawWebhookHandler = (_req, res) => sendError(res, 404, ERR.EXTENSION_NOT_FOUND, "No webhook handler registered");
+let rawWebhookHandler = (_req, res) =>
+  sendError(res, 404, ERR.EXTENSION_NOT_FOUND, "No webhook handler registered");
 
 export function registerRawWebhook(handler) {
   if (typeof handler === "function") rawWebhookHandler = handler;
@@ -46,19 +91,30 @@ const landUrl = getLandUrl();
 const corsOrigins = [landUrl];
 const isDevMode = (() => {
   const d = (process.env.LAND_DOMAIN || "localhost").toLowerCase();
-  return d === "localhost" || d.startsWith("localhost") || d.startsWith("127.") || d.startsWith("192.168.") || d.startsWith("10.") || d.endsWith(".lan") || d.endsWith(".local") || !d.includes(".");
+  return (
+    d === "localhost" ||
+    d.startsWith("localhost") ||
+    d.startsWith("127.") ||
+    d.startsWith("192.168.") ||
+    d.startsWith("10.") ||
+    d.endsWith(".lan") ||
+    d.endsWith(".local") ||
+    !d.includes(".")
+  );
 })();
 try {
   const { getLandConfigValue } = await import("./seed/landConfig.js");
   const extra = getLandConfigValue("allowedFrameDomains");
   if (Array.isArray(extra)) {
     for (const domain of extra) {
-      if (typeof domain === "string" && domain.length > 0) corsOrigins.push(domain);
+      if (typeof domain === "string" && domain.length > 0)
+        corsOrigins.push(domain);
     }
   }
 } catch {}
 
-const LOCALHOST_ORIGIN_RE = /^https?:\/\/(localhost|127\.0\.0\.1|0\.0\.0\.0)(:\d{1,5})?$/i;
+const LOCALHOST_ORIGIN_RE =
+  /^https?:\/\/(localhost|127\.0\.0\.1|0\.0\.0\.0)(:\d{1,5})?$/i;
 
 function corsOriginCheck(origin, cb) {
   // No origin = same-origin or non-browser client (CLI, curl, etc.). Allow.
@@ -88,14 +144,23 @@ app.use(
   cors({
     origin: corsOriginCheck,
     methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-    allowedHeaders: ["Content-Type", "Authorization", "x-api-key", "x-internal-token"],
+    allowedHeaders: [
+      "Content-Type",
+      "Authorization",
+      "x-api-key",
+      "x-internal-token",
+    ],
     credentials: true,
   }),
 );
 app.use(cookieParser());
 
 // Raw-body webhook route. Must be before express.json. Handler registered by extension during boot.
-app.post("/billing/webhook", express.raw({ type: "application/json" }), (req, res) => rawWebhookHandler(req, res));
+app.post(
+  "/billing/webhook",
+  express.raw({ type: "application/json" }),
+  (req, res) => rawWebhookHandler(req, res),
+);
 
 app.use(express.static("public"));
 app.use(express.json({ limit: "10mb" })); // Extension install sends file contents up to 3MB
@@ -136,18 +201,27 @@ export const wsServer = initWebSocketServer(server, wsOriginCheck);
 // both coexist on the same socket.
 initIBPWS(wsServer);
 
+// The I-Am opens its senses. From the next tick on, the channels are
+// live and the world can reach in. genesis() runs the unfolding —
+// space, matter, beings, capability, extensions, jobs.
 const PORT = process.env.PORT || 80;
-server.listen(PORT, "0.0.0.0", () => onListen());
+server.listen(PORT, "0.0.0.0", () => genesis());
 
-// Graceful shutdown
+// Graceful shutdown closes the channels in reverse: pending MCP
+// clients, then the WS socket, then the HTTP listener, then the DB.
+// The I-Am persists as the process until the final exit; these acts
+// remain tracked to it.
 async function shutdown(signal) {
   log.info("Seed", `${signal} received. Shutting down...`);
 
   // Close all MCP clients (these hold connections open)
   try {
-    const { mcpClients, closeMCPClient } = await import("./seed/cognition/mcpClient.js");
+    const { mcpClients, closeMCPClient } =
+      await import("./seed/cognition/mcpClient.js");
     for (const [cacheKey] of mcpClients) {
-      try { closeMCPClient(cacheKey); } catch {}
+      try {
+        closeMCPClient(cacheKey);
+      } catch {}
     }
   } catch {}
 
@@ -158,7 +232,9 @@ async function shutdown(signal) {
 
   // Remove disconnect listener so it doesn't log after the shell prompt returns
   mongoose.connection.removeAllListeners("disconnected");
-  try { await mongoose.connection.close(); } catch {}
+  try {
+    await mongoose.connection.close();
+  } catch {}
   server.close(() => {});
   log.info("Seed", "Shutdown complete.");
   process.exit(0);

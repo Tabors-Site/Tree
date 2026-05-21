@@ -256,7 +256,7 @@ async function handleMcpRequest(req, res) {
         } catch {}
       }
 
-      const spaceId = requestArgs.spaceId ?? requestArgs.rootId ?? requestArgs.parentNodeID ?? requestArgs.parentId ?? requestArgs.rootNodeId;
+      const spaceId = requestArgs.spaceId ?? requestArgs.rootId ?? requestArgs.parentSpaceID ?? requestArgs.parentId ?? requestArgs.rootSpaceId;
 
       // Tree access check. Read-only tools (annotation readOnlyHint: true)
       // only need canRead; write tools need canWrite. Without this split a

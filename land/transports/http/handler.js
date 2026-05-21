@@ -10,7 +10,7 @@ import ibp from "./api/ibp.js";
 // Deleted route files + their IBP equivalents:
 //   /api/v1/me                  → GET /ibp/see/<land>/@<myname>
 //   /api/v1/user/*              → ibp:see + ibp:do create-child
-//   /api/v1/node/*              → ibp:see + ibp:do set-meta
+//   /api/v1/space/*             → ibp:see + ibp:do set-meta
 //   /api/v1/root/*              → ibp:see + ibp:do set-meta
 //   /api/v1/..../matter/matters/*     → ibp:do create-artifact / set-name / etc.
 //   /api/v1/.../dids            → ibp:see (with dids field)

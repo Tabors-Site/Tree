@@ -71,9 +71,9 @@ const DEFAULT_IGNORE = new Set([
 // pulling huge binary blobs through the walk.
 const DEFAULT_MAX_FILE_BYTES = 50 * 1024 * 1024; // 50 MB
 
-// Cached source node id, looked up at boot and reused for the read-only
+// Cached source space id, looked up at boot and reused for the read-only
 // DO gate (ibp/verbs/do.js calls isSourceSpaceId).
-let sourceNodeIdCache = null;
+let sourceSpaceIdCache = null;
 
 // ────────────────────────────────────────────────────────────────────
 // PUBLIC API
@@ -101,7 +101,7 @@ export async function ensureSourceTree(opts = {}) {
     log.warn("Source", `.source land seed space missing; cannot populate source tree`);
     return null;
   }
-  sourceNodeIdCache = String(sourceSpace._id);
+  sourceSpaceIdCache = String(sourceSpace._id);
 
   if (!fs.existsSync(rootPath)) {
     log.warn("Source", `source root not found on disk: ${rootPath}`);
@@ -120,7 +120,7 @@ export async function ensureSourceTree(opts = {}) {
   })();
 
   if (!detached) await work;
-  return sourceNodeIdCache;
+  return sourceSpaceIdCache;
 }
 
 /**
@@ -136,15 +136,15 @@ export async function syncSourceTree({ rootPath, ignore = DEFAULT_IGNORE } = {})
 
   const sourceSpace = await Space.findOne({ seedSpace: SEED_SPACE.SOURCE }).select("_id").lean();
   if (!sourceSpace) throw new Error(".source land seed space not found");
-  const sourceNodeId = String(sourceSpace._id);
-  sourceNodeIdCache = sourceNodeId;
+  const sourceSpaceId = String(sourceSpace._id);
+  sourceSpaceIdCache = sourceSpaceId;
 
   const stats = { created: 0, updated: 0, removed: 0, kept: 0 };
 
-  // Root matter for targetPath. One root per .source node: lookup by
+  // Root matter for targetPath. One root per .source space: lookup by
   // (spaceId, parentMatterId: null, origin: filesystem).
   let rootMatter = await Matter.findOne({
-    spaceId: sourceNodeId,
+    spaceId: sourceSpaceId,
     parentMatterId: null,
     origin: MATTER_ORIGIN.FILESYSTEM,
   });
@@ -152,7 +152,7 @@ export async function syncSourceTree({ rootPath, ignore = DEFAULT_IGNORE } = {})
   const rootName = path.basename(targetPath) || "/";
   if (!rootMatter) {
     rootMatter = await createSourceMatter({
-      spaceId: sourceNodeId,
+      spaceId: sourceSpaceId,
       parentMatterId: null,
       name: rootName,
       diskPath: targetPath,
@@ -172,7 +172,7 @@ export async function syncSourceTree({ rootPath, ignore = DEFAULT_IGNORE } = {})
   await reconcileChildren({
     diskPath: targetPath,
     parentMatterId: String(rootMatter._id),
-    sourceNodeId,
+    sourceSpaceId,
     ignore,
     stats,
   });
@@ -182,11 +182,11 @@ export async function syncSourceTree({ rootPath, ignore = DEFAULT_IGNORE } = {})
 
 /**
  * Cached lookup of the .source land seed space id. Returns null before
- * ensureSourceTree has run, or if the node has not been created.
+ * ensureSourceTree has run, or if the space has not been created.
  * Used by the DO gate to deny writes against .source matters.
  */
 export function getSourceSpaceId() {
-  return sourceNodeIdCache;
+  return sourceSpaceIdCache;
 }
 
 /**
@@ -194,15 +194,15 @@ export function getSourceSpaceId() {
  * after ensureSourceTree has primed the cache.
  */
 export function isSourceSpaceId(spaceId) {
-  if (!sourceNodeIdCache || !spaceId) return false;
-  return String(spaceId) === sourceNodeIdCache;
+  if (!sourceSpaceIdCache || !spaceId) return false;
+  return String(spaceId) === sourceSpaceIdCache;
 }
 
 // ────────────────────────────────────────────────────────────────────
 // RECONCILIATION
 // ────────────────────────────────────────────────────────────────────
 
-async function reconcileChildren({ diskPath, parentMatterId, sourceNodeId, ignore, stats }) {
+async function reconcileChildren({ diskPath, parentMatterId, sourceSpaceId, ignore, stats }) {
   let entries;
   try {
     entries = await fs.promises.readdir(diskPath, { withFileTypes: true });
@@ -236,7 +236,7 @@ async function reconcileChildren({ diskPath, parentMatterId, sourceNodeId, ignor
       let matterId;
       if (!ex) {
         const created = await createSourceMatter({
-          spaceId: sourceNodeId,
+          spaceId: sourceSpaceId,
           parentMatterId,
           name,
           diskPath: full,
@@ -248,7 +248,7 @@ async function reconcileChildren({ diskPath, parentMatterId, sourceNodeId, ignor
         // Type changed (file became dir). Drop the old subtree and recreate.
         await removeMatterSubtree(ex._id, stats);
         const created = await createSourceMatter({
-          spaceId: sourceNodeId,
+          spaceId: sourceSpaceId,
           parentMatterId,
           name,
           diskPath: full,
@@ -266,7 +266,7 @@ async function reconcileChildren({ diskPath, parentMatterId, sourceNodeId, ignor
         }
         matterId = String(ex._id);
       }
-      await reconcileChildren({ diskPath: full, parentMatterId: matterId, sourceNodeId, ignore, stats });
+      await reconcileChildren({ diskPath: full, parentMatterId: matterId, sourceSpaceId, ignore, stats });
       continue;
     }
 
@@ -291,7 +291,7 @@ async function reconcileChildren({ diskPath, parentMatterId, sourceNodeId, ignor
 
     if (!ex) {
       await createSourceMatter({
-        spaceId: sourceNodeId,
+        spaceId: sourceSpaceId,
         parentMatterId,
         name,
         diskPath: full,
@@ -305,7 +305,7 @@ async function reconcileChildren({ diskPath, parentMatterId, sourceNodeId, ignor
     } else if (ex.content?.kind !== "file") {
       await removeMatterSubtree(ex._id, stats);
       await createSourceMatter({
-        spaceId: sourceNodeId,
+        spaceId: sourceSpaceId,
         parentMatterId,
         name,
         diskPath: full,
@@ -367,7 +367,7 @@ function contentChanged(prev, next) {
 }
 
 // ────────────────────────────────────────────────────────────────────
-// AUTHORING (kernel-internal; bypasses createMatter's system-node gate)
+// AUTHORING (kernel-internal; bypasses createMatter's system-space gate)
 // ────────────────────────────────────────────────────────────────────
 
 async function createSourceMatter({

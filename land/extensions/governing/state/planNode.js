@@ -31,23 +31,23 @@ export const DEFAULT_BUDGET = {
  * each caller hits this.
  */
 let _warnedPlan = false;
-export async function createPlanNode({ parentNodeId, core: _core } = {}) {
+export async function createPlanNode({ parentSpaceId, core: _core } = {}) {
   if (!_warnedPlan) {
     _warnedPlan = true;
     log.warn("Governing", "createPlanNode is retired; plans are artifacts authored by the Planner being. Caller should be updated.");
   }
-  if (!parentNodeId) return null;
-  return Space.findById(parentNodeId).lean();
+  if (!parentSpaceId) return null;
+  return Space.findById(parentSpaceId).lean();
 }
 
 let _warnedEnsure = false;
-export async function ensurePlanAtScope({ scopeNodeId, core: _core } = {}) {
+export async function ensurePlanAtScope({ scopeSpaceId, core: _core } = {}) {
   if (!_warnedEnsure) {
     _warnedEnsure = true;
     log.warn("Governing", "ensurePlanAtScope is retired; Planner being is spawned by promoteToRuler. Caller should read metadata.beings.planner instead.");
   }
-  if (!scopeNodeId) return null;
-  return Space.findById(scopeNodeId).lean();
+  if (!scopeSpaceId) return null;
+  return Space.findById(scopeSpaceId).lean();
 }
 
 // ─────────────────────────────────────────────────────────────────────
@@ -57,11 +57,11 @@ export async function ensurePlanAtScope({ scopeNodeId, core: _core } = {}) {
 
 export async function readPlan(spaceId) {
   if (!spaceId) return null;
-  const node = await Space.findById(spaceId).select("metadata").lean();
-  if (!node) return null;
-  const meta = node.metadata instanceof Map
-    ? Object.fromEntries(node.metadata)
-    : (node.metadata || {});
+  const space = await Space.findById(spaceId).select("metadata").lean();
+  if (!space) return null;
+  const meta = space.metadata instanceof Map
+    ? Object.fromEntries(space.metadata)
+    : (space.metadata || {});
   return meta[PLAN_NS] || null;
 }
 

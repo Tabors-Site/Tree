@@ -541,7 +541,7 @@ export async function init(core) {
 
 ### Cascade hooks
 
-`onCascade` is different from other hooks. It fires through the same hook system but handler return values become visible results stored in the `.flow` system space. This is the communication primitive. Extensions use it to react to signals, propagate to children, or deliver across lands.
+`onCascade` is different from other hooks. It fires through the same hook system but handler return values become visible results stored in the `.flow` land seed space. This is the communication primitive. Extensions use it to react to signals, propagate to children, or deliver across lands.
 
 ```js
 core.hooks.register("onCascade", async ({ space, spaceId, signalId, writeContext, source, depth }) => {
@@ -658,7 +658,7 @@ export default [
 ### How it works
 
 1. The loader reads `schemaVersion` from your manifest (e.g. `2`)
-2. It checks the `.extensions` system space for your extension's stored version (e.g. `1`)
+2. It checks the `.extensions` land seed space for your extension's stored version (e.g. `1`)
 3. If stored < declared, it loads your `migrations.js` and runs pending migrations in order
 4. After all migrations succeed, it updates the stored version to match
 5. If a migration fails, it stops and logs the error. Your extension still loads but data may be inconsistent.
@@ -751,11 +751,11 @@ export default [
 ];
 ```
 
-On boot, the loader checks each extension's stored schema version (in the .extensions system space) against the declared version, and runs pending migrations in order.
+On boot, the loader checks each extension's stored schema version (in the .extensions land seed space) against the declared version, and runs pending migrations in order.
 
-## .extensions System Space
+## .extensions Land Seed Space
 
-Each loaded extension is mirrored as a child space under the `.extensions` system space:
+Each loaded extension is mirrored as a child space under the `.extensions` land seed space:
 
 ```
 Land Root

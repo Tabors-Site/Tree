@@ -2,9 +2,9 @@
 /**
  * LLM assignment resolution.
  *
- * Reads LLM assignment data from node/being metadata and returns a
+ * Reads LLM assignment data from space/being metadata and returns a
  * normalized shape. `resolveLlmConnection` in llmClient.js walks the
- * node ancestor chain AND the being ancestor chain and applies a
+ * space ancestor chain AND the being ancestor chain and applies a
  * four-layer resolution policy. See that function's doc comment for the
  * full chain.
  *
@@ -19,10 +19,10 @@
  *
  *   Authority flags (who decides):
  *     - `enforced`  — lock IN this assignment for descendants
- *                     (overrides being.preferOwn; node enforcement
+ *                     (overrides being.preferOwn; space enforcement
  *                     wins over being enforcement when both apply)
  *     - `locked`    — lock OUT all LLM usage for descendants
- *                     (mirrors node.llmDefault === "none"; sovereign,
+ *                     (mirrors space.llmDefault === "none"; sovereign,
  *                     stops the resolver entirely → null)
  *     - `preferOwn` — (being only) invert the chain so the being's
  *                     own LLM ranks above the position's
@@ -51,27 +51,27 @@ function sanitizeSlots(raw) {
 function asBool(v) { return v === true; }
 
 /**
- * Get LLM assignments for a node.
+ * Get LLM assignments for a space.
  *
  * Reads:
- *   - `node.llmDefault` (kernel field; "none" sentinel = lockdown)
- *   - `node.metadata.llm.slots` (role-specific overrides at this node)
- *   - `node.metadata.llm.enforced` (lock IN for descendants)
+ *   - `space.llmDefault` (kernel field; "none" sentinel = lockdown)
+ *   - `space.metadata.llm.slots` (role-specific overrides at this space)
+ *   - `space.metadata.llm.enforced` (lock IN for descendants)
  *
  * Returns `{ default, [slot]: connId, enforced }`.
  *
  * Symmetric with `getBeingLlmAssignments`. Both feed
  * `resolveLlmConnection` in llmClient.js.
  */
-export function getNodeLlmAssignments(node) {
-  if (!node) return { default: null, enforced: false };
+export function getSpaceLlmAssignments(space) {
+  if (!space) return { default: null, enforced: false };
 
-  const meta = node.metadata instanceof Map ? node.metadata.get("llm") : node.metadata?.llm;
+  const meta = space.metadata instanceof Map ? space.metadata.get("llm") : space.metadata?.llm;
   const slots = sanitizeSlots(meta?.slots);
 
   const result = { ...slots };
-  result.default = (typeof node.llmDefault === "string" && node.llmDefault.length <= 100)
-    ? node.llmDefault
+  result.default = (typeof space.llmDefault === "string" && space.llmDefault.length <= 100)
+    ? space.llmDefault
     : null;
   result.enforced = asBool(meta?.enforced);
 

@@ -5,13 +5,13 @@
 // getLandConfigValue / setLandConfigValue in the system flows through
 // here.
 //
-// Lives in seed/, same reason landRoot does. The land holds what the
-// seed makes; config is one of those things. The .config space
-// exists because the seed planted it, and these helpers are the
+// Lives in seed/, same reason landRoot does. Config values are
+// matter on a space the seed formed — stored in the metadata Map
+// of the .config land seed space at boot. These helpers are the
 // seed reading and writing its own remembered settings across
-// reboots. There is no "land layer" beneath; the land is the
-// container, the seed is the maker, this file is the maker
-// remembering.
+// reboots. The land contains code peers around the seed (protocols,
+// transports, extensions, the boot files) but the configuration of
+// the runtime IS the seed's, and it lives where the seed runs.
 
 import log from "./system/log.js";
 import Space from "./models/space.js";
@@ -213,7 +213,7 @@ export const CONFIG_DEFAULTS = {
 
   // Matter limits
   matterMaxChars: 5000,
-  maxMatterPerNode: 1000,
+  maxMatterPerSpace: 1000,
   matterQueryLimit: 5000,
   matterSearchLimit: 500,
   maxDocumentSizeBytes: 14680064,
@@ -340,11 +340,11 @@ export function getConfigWithDefaults() {
 export async function initLandConfig() {
   await loadConfigFromDb();
   initialized = true;
-  log.verbose("Land", `Config loaded from .config node (${Object.keys(configCache).length} keys)`);
+  log.verbose("Land", `Config loaded from .config space (${Object.keys(configCache).length} keys)`);
 }
 
 // For when another process modifies .config directly (migration, manual repair).
 export async function reloadLandConfig() {
   await loadConfigFromDb();
-  log.info("Land", `Config reloaded from .config node (${Object.keys(configCache).length} keys)`);
+  log.info("Land", `Config reloaded from .config space (${Object.keys(configCache).length} keys)`);
 }

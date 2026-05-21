@@ -9,13 +9,13 @@
 //
 // Workspace binding lives in extensions/coders/index.js
 // (registerWorkspaceWorkerTypes). The seed's only job is to bring the
-// governance quartet into existence at the target node. Once the
+// governance quartet into existence at the target space. Once the
 // rulership is in place, any subsequent Planner emission picks
 // workerTypes and the Foreman finds the coder role names through the
 // workspace registry — beings materialize as needed.
 //
 // Active-workspace tagging: the seed stamps metadata.governing.workspace
-// = "coders" on the target node so governing's enrichContext hook can
+// = "coders" on the target space so governing's enrichContext hook can
 // surface the active workspace block to the Planner, and so
 // lookupWorkerRole's preferWorkspace argument resolves correctly when
 // multiple workspaces are registered.
@@ -25,12 +25,12 @@ import log from "../../../seed/system/log.js";
 export default {
   description:
     "Bootstrap a code-project rulership: plants Ruler/Planner/Contractor/Foreman " +
-    "at the target node and binds the coders workspace so the Foreman's leaf " +
+    "at the target space and binds the coders workspace so the Foreman's leaf " +
     "dispatches summon the typed coder beings (build/refine/review/integrate).",
 
   /**
    * @param {object} ctx
-   * @param {string} ctx.rootNodeId   target space where the rulership plants
+   * @param {string} ctx.rootSpaceId   target space where the rulership plants
    * @param {string} ctx.plantedSeedId
    * @param {object} ctx.identity     planter
    * @param {object} ctx.core         core services bundle
@@ -44,7 +44,7 @@ export default {
    *                                     optional at plant time so the operator
    *                                     can stamp it later if not known yet.
    */
-  async scaffold({ rootNodeId, plantedSeedId, identity, core, params = {} }) {
+  async scaffold({ rootSpaceId, plantedSeedId, identity, core, params = {} }) {
     // 1. Promote the target space to Ruler via governing's exported API.
     const { getExtension } = await import("../../loader.js");
     const governing = getExtension("governing")?.exports;
@@ -52,14 +52,14 @@ export default {
       throw new Error("governing:promoteToRuler not available — is the governing extension loaded?");
     }
     const promoted = await governing.promoteToRuler({
-      spaceId:       rootNodeId,
+      spaceId:       rootSpaceId,
       reason:        `planted by coder:governing-coder seed ${plantedSeedId.slice(0, 8)}`,
       promotedFrom:  governing.PROMOTED_FROM?.ROOT || "root",
       parentBeingId: null,
       identity,
     });
     if (!promoted) {
-      throw new Error(`Failed to promote space ${String(rootNodeId).slice(0, 8)} to Ruler`);
+      throw new Error(`Failed to promote space ${String(rootSpaceId).slice(0, 8)} to Ruler`);
     }
 
     // 2. Tag this scope as a coders-workspace rulership and stamp the
@@ -67,7 +67,7 @@ export default {
     //    relative to projectPath; without it, the operator must stamp
     //    metadata.coders.projectPath manually after plant.
     const Space = (await import("../../../seed/models/space.js")).default;
-    const space = await Space.findById(rootNodeId);
+    const space = await Space.findById(rootSpaceId);
     if (space) {
       await core.do(space, "set-meta", {
         namespace: "governing",
@@ -85,18 +85,18 @@ export default {
     }
 
     // Read the materialized governance beings for the return payload.
-    const node = await Space.findById(rootNodeId).select("metadata").lean();
-    const beingsMeta = node?.metadata instanceof Map
-      ? node.metadata.get("beings")
-      : node?.metadata?.beings;
+    const spaceLean = await Space.findById(rootSpaceId).select("metadata").lean();
+    const beingsMeta = spaceLean?.metadata instanceof Map
+      ? spaceLean.metadata.get("beings")
+      : spaceLean?.metadata?.beings;
 
     log.info("Coders",
-      `📜 governing-coder rulership at ${String(rootNodeId).slice(0, 8)} ` +
+      `📜 governing-coder rulership at ${String(rootSpaceId).slice(0, 8)} ` +
       `(coder beings materialize lazily on first dispatch)`);
 
     return {
       kind: "governing-coder",
-      spaceId: String(rootNodeId),
+      spaceId: String(rootSpaceId),
       beings: {
         ruler:      beingsMeta?.ruler?.beingId      || null,
         planner:    beingsMeta?.planner?.beingId    || null,

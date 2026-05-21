@@ -22,8 +22,8 @@ export {
  * be nested Maps depending on driver version.
  */
 export function readMetaPath(node, path) {
-  if (!node) return undefined;
-  let cursor = node.metadata;
+  if (!space) return undefined;
+  let cursor = space.metadata;
   for (const key of path) {
     if (cursor instanceof Map) cursor = cursor.get(key);
     else if (cursor && typeof cursor === "object") cursor = cursor[key];

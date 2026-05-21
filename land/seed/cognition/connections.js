@@ -456,15 +456,15 @@ export async function assignConnection(beingId, slot, connectionId) {
  * step of the LLM resolution chain (see [[project_node_being_llm_chain]]
  * and seed/cognition/llmClient.js).
  *
- * "main" goes to `node.llmDefault`; every other slot writes to
- * `node.metadata.llm.slots.<slot>`. Pass `connectionId: null` to clear.
+ * "main" goes to `space.llmDefault`; every other slot writes to
+ * `space.metadata.llm.slots.<slot>`. Pass `connectionId: null` to clear.
  *
  * Connection ownership is verified through the caller's identity: the
  * connection must belong to a being the caller can resolve. The caller
  * (the DO operation handler) is responsible for owner-of-tree checks
  * via stance authorization before reaching this function.
  */
-export async function assignNodeConnection(spaceId, slot, connectionId, { ownerBeingId } = {}) {
+export async function assignSpaceConnection(spaceId, slot, connectionId, { ownerBeingId } = {}) {
   if (!isValidUserSlot(slot)) {
     throw new Error("Invalid assignment slot: " + slot);
   }

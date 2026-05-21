@@ -80,12 +80,12 @@ function subscribeDashboard(rootId, res) {
  */
 router.get("/governing/plan/:spaceId/panel.html", authenticate, async (req, res) => {
   try {
-    const node = await Space.findById(req.params.spaceId).lean();
-    if (!node) return res.status(404).send("");
+    const space = await Space.findById(req.params.spaceId).lean();
+    if (!space) return res.status(404).send("");
     const qs = req.query.token ? `?token=${encodeURIComponent(req.query.token)}` : "";
     const out = await renderPlanPanel({
       node,
-      spaceId: String(node._id),
+      spaceId: String(space._id),
       qs,
       isPublicAccess: !!req.query.share || !!req.query.publicShare,
     });

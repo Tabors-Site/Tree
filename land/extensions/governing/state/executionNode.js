@@ -13,18 +13,18 @@ import Space from "../../../seed/models/space.js";
 import log from "../../../seed/system/log.js";
 
 let _warned = false;
-export async function ensureExecutionNode({ scopeNodeId, core: _core } = {}) {
+export async function ensureExecutionNode({ scopeSpaceId, core: _core } = {}) {
   if (!_warned) {
     _warned = true;
     log.warn("Governing", "ensureExecutionNode is retired; Foreman being is spawned by promoteToRuler. Caller should read metadata.beings.foreman instead.");
   }
-  if (!scopeNodeId) return null;
-  return Space.findById(scopeNodeId).lean();
+  if (!scopeSpaceId) return null;
+  return Space.findById(scopeSpaceId).lean();
 }
 
-export async function findExecutionNode(scopeNodeId) {
+export async function findExecutionNode(scopeSpaceId) {
   // Legacy callers used to walk to the execution-typed child. New shape:
   // the Foreman is at the rulership node; return that node.
-  if (!scopeNodeId) return null;
-  return Space.findById(scopeNodeId).lean();
+  if (!scopeSpaceId) return null;
+  return Space.findById(scopeSpaceId).lean();
 }

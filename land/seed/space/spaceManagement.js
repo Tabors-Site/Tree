@@ -10,15 +10,16 @@
 //
 // Everything else is rejected. This keeps every space addressable in a
 // URL path without encoding — no slashes, no spaces, no HTML, no @ /
-// ~ / ? / # prefixes that the IBP address grammar reserves. System
-// spaces (dot-prefixed) bypass these rules via `createSystemSpace`
-// because the kernel owns them.
+// ~ / ? / # prefixes that the IBP address grammar reserves. Land seed
+// spaces (dot-prefixed) bypass these rules via `createLandSeedSpace`
+// because the seed planted them.
 
 import mongoose from "mongoose";
 
 import Space from "../models/space.js";
 import Being from "../models/being.js";
 import { createMatter } from "../matter/matters.js";
+import { logDid } from "./dids.js";
 import { resolveSpaceAccess, isDescendant } from "./spaceFetch.js";
 import { acquireSpaceLock, releaseSpaceLock, acquireMultiple, releaseMultiple } from "./spaceLocks.js";
 import { invalidateAll, invalidateSpace } from "./ancestorCache.js";
@@ -252,12 +253,25 @@ export async function createSpace({
 }
 
 /**
- * Create a land seed space (dot-prefixed, no hooks, no Did rows).
- * Bypasses the name validator because dot-prefixed names are reserved
- * for kernel-owned spaces. Used at boot for .identity, .config, .peers,
- * .extensions, .flow, .tools, .roles, .operations, .source.
+ * Create a land seed space. Owner: I-am. Audited via logDid.
+ *
+ * Two kinds of Space exist; this function makes the second kind.
+ * Normal space (createSpace) is made BY beings FOR beings to live
+ * in — addressable by stance, gated by auth. Land seed space (this
+ * function) is made by I-am at boot: the fixed nine (.identity,
+ * .config, .peers, .extensions, .flow, .tools, .roles, .operations,
+ * .source) that hold I-am's own working memory, surfaced as spaces
+ * so SEE reads them through the same protocol everything else does.
+ * See point 5 of THE PHILOSOPHY OF THE SEED in seed/space/seedSpaces.js.
+ *
+ * Skips `createSpace`'s name validator (I-am owns the dot-namespace
+ * — the validator's job is to keep every OTHER being out) and the
+ * beforeSpaceCreate hook (extensions exist because I-am planted
+ * .extensions; authority flows outward and can't loop back to gate
+ * its own precondition — point 9). Everything else is the same
+ * write that `createSpace` performs.
  */
-export async function createSystemSpace({ name, parentId, metadata = null }) {
+export async function createLandSeedSpace({ name, parentId, seedSpace, metadata = null }) {
   if (!name || typeof name !== "string") throw new Error("Land seed space name is required");
   if (!parentId) throw new Error("Land seed space requires a parent");
 
@@ -268,12 +282,30 @@ export async function createSystemSpace({ name, parentId, metadata = null }) {
     _id: id,
     name,
     parent:       parentId,
+    rootOwner:    SEED_BEING,
+    seedSpace:    seedSpace || null,
     children:     [],
     contributors: [],
     metadata:     metadata instanceof Map ? metadata : new Map(),
   });
   await newSpace.save();
   await Space.findByIdAndUpdate(parentId, { $addToSet: { children: id } });
+
+  // Audit the genesis act. The I-am is doing it; the Did
+  // names it. Resolves via populate once ensureSeedBeing creates
+  // the Being row in the same boot pass.
+  try {
+    await logDid({
+      verb:    "do",
+      action:  "create",
+      beingId: SEED_BEING,
+      target:  { kind: "space", id },
+      params:  { name, seedSpace: seedSpace || null },
+    });
+  } catch (err) {
+    log.warn("Land", `Did write for seed-space "${name}" failed: ${err.message}`);
+  }
+
   return newSpace;
 }
 

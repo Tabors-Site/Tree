@@ -249,7 +249,7 @@ export default function getRulerTools(core) {
         // tool firing twice (MCP retry, double-click) shouldn't open
         // two SUMMONs to the same Planner.
         const claim = tryClaimSpawn({
-          rulerNodeId: ruler._id,
+          rulerSpaceId: ruler._id,
           kind: "hire-planner",
           briefing,
         });
@@ -269,7 +269,7 @@ export default function getRulerTools(core) {
         //    creation moves earlier in the lifecycle.
         const { ensurePlanAtScope } = await import("./state/planSpace.js");
         const planSpace = await ensurePlanAtScope({
-          scopeNodeId: String(ruler._id),
+          scopeSpaceId: String(ruler._id),
           beingId,
           summonId,
           sessionId,
@@ -388,7 +388,7 @@ export default function getRulerTools(core) {
             try {
               await hooks.fire("governing:plannerCompleted", {
                 spawnId:         correlation,
-                rulerNodeId:     String(ruler._id),
+                rulerSpaceId:     String(ruler._id),
                 beingId,
                 username,
                 rootId:          rootId || null,
@@ -409,7 +409,7 @@ export default function getRulerTools(core) {
             try {
               await hooks.fire("governing:plannerCompleted", {
                 spawnId:         correlation,
-                rulerNodeId:     String(ruler._id),
+                rulerSpaceId:     String(ruler._id),
                 beingId,
                 username,
                 rootId:          rootId || null,
@@ -432,7 +432,7 @@ export default function getRulerTools(core) {
           status: "spawned",
           decision: "hire-planner",
           spawnId: correlation,
-          rulerNodeId: String(ruler._id),
+          rulerSpaceId: String(ruler._id),
           plannerStance,
           briefing: briefing.slice(0, 200),
           note:
@@ -575,7 +575,7 @@ export default function getRulerTools(core) {
 
         // In-flight guard.
         const claim = tryClaimSpawn({
-          rulerNodeId: ruler._id,
+          rulerSpaceId: ruler._id,
           kind: "hire-contractor",
           briefing,
         });
@@ -593,7 +593,7 @@ export default function getRulerTools(core) {
         //    requires a concrete addressee with a unique username.
         const { ensureContractsNode } = await import("./state/contractsSpace.js");
         const contractsSpace = await ensureContractsNode({
-          scopeNodeId: String(ruler._id),
+          scopeSpaceId: String(ruler._id),
           beingId,
           summonId,
           sessionId,
@@ -698,7 +698,7 @@ export default function getRulerTools(core) {
             try {
               await hooks.fire("governing:contractorCompleted", {
                 spawnId:         correlation,
-                rulerNodeId:     String(ruler._id),
+                rulerSpaceId:     String(ruler._id),
                 beingId,
                 username,
                 rootId:          rootId || null,
@@ -719,7 +719,7 @@ export default function getRulerTools(core) {
             try {
               await hooks.fire("governing:contractorCompleted", {
                 spawnId:         correlation,
-                rulerNodeId:     String(ruler._id),
+                rulerSpaceId:     String(ruler._id),
                 beingId,
                 username,
                 rootId:          rootId || null,
@@ -742,7 +742,7 @@ export default function getRulerTools(core) {
           status: "spawned",
           decision: "hire-contractor",
           spawnId: correlation,
-          rulerNodeId: String(ruler._id),
+          rulerSpaceId: String(ruler._id),
           contractorStance,
           note:
             "Contractor SUMMON sent. This turn ends now. " +
@@ -806,7 +806,7 @@ export default function getRulerTools(core) {
 
         // In-flight guard.
         const claim = tryClaimSpawn({
-          rulerNodeId: ruler._id,
+          rulerSpaceId: ruler._id,
           kind: "route-to-foreman",
           briefing: wakeupReason,
         });
@@ -824,7 +824,7 @@ export default function getRulerTools(core) {
         //    requires a concrete addressee with a unique username.
         const { ensureExecutionNode } = await import("./state/executionSpace.js");
         const executionSpace = await ensureExecutionNode({
-          scopeNodeId: String(ruler._id),
+          scopeSpaceId: String(ruler._id),
           beingId,
           summonId,
           sessionId,
@@ -930,7 +930,7 @@ export default function getRulerTools(core) {
             try {
               await hooks.fire("governing:foremanRouted", {
                 spawnId:         correlation,
-                rulerNodeId:     String(ruler._id),
+                rulerSpaceId:     String(ruler._id),
                 beingId,
                 username,
                 rootId:          rootId || null,
@@ -951,7 +951,7 @@ export default function getRulerTools(core) {
             try {
               await hooks.fire("governing:foremanRouted", {
                 spawnId:         correlation,
-                rulerNodeId:     String(ruler._id),
+                rulerSpaceId:     String(ruler._id),
                 beingId,
                 username,
                 rootId:          rootId || null,
@@ -974,7 +974,7 @@ export default function getRulerTools(core) {
           status: "spawned",
           decision: "route-to-foreman",
           spawnId: correlation,
-          rulerNodeId: String(ruler._id),
+          rulerSpaceId: String(ruler._id),
           foremanStance,
           wakeupReason,
           note:
@@ -1078,8 +1078,8 @@ export default function getRulerTools(core) {
             const prior = await governing.readActivePlanApproval(ruler._id);
             if (prior?.planRef) {
               await governing.appendPlanApproval({
-                rulerNodeId: ruler._id,
-                planNodeId: prior.planRef.split(":")[0],
+                rulerSpaceId: ruler._id,
+                planSpaceId: prior.planRef.split(":")[0],
                 status: "archived",
                 supersedes: prior.planRef,
                 reason: `revise: ${revisionReason}`.slice(0, 500),
@@ -1108,7 +1108,7 @@ export default function getRulerTools(core) {
         // "hire-planner" claim key so a revise can't race a hire,
         // either direction.
         const claim = tryClaimSpawn({
-          rulerNodeId: ruler._id,
+          rulerSpaceId: ruler._id,
           kind: "hire-planner",
           briefing: revisionReason,
         });
@@ -1135,7 +1135,7 @@ export default function getRulerTools(core) {
         // emission visible in its next snapshot.
         const { ensurePlanAtScope } = await import("./state/planSpace.js");
         const planSpace = await ensurePlanAtScope({
-          scopeNodeId: String(ruler._id),
+          scopeSpaceId: String(ruler._id),
           beingId,
           summonId,
           sessionId,
@@ -1225,7 +1225,7 @@ export default function getRulerTools(core) {
             try {
               await hooks.fire("governing:planRevised", {
                 spawnId:         correlation,
-                rulerNodeId:     String(ruler._id),
+                rulerSpaceId:     String(ruler._id),
                 beingId,
                 username,
                 rootId:          rootId || null,
@@ -1246,7 +1246,7 @@ export default function getRulerTools(core) {
             try {
               await hooks.fire("governing:planRevised", {
                 spawnId:         correlation,
-                rulerNodeId:     String(ruler._id),
+                rulerSpaceId:     String(ruler._id),
                 beingId,
                 username,
                 rootId:          rootId || null,
@@ -1269,7 +1269,7 @@ export default function getRulerTools(core) {
           status: "spawned",
           decision: "revise-plan",
           spawnId: correlation,
-          rulerNodeId: String(ruler._id),
+          rulerSpaceId: String(ruler._id),
           revisionReason,
           priorArchived: archived,
           note:
@@ -1391,7 +1391,7 @@ export default function getRulerTools(core) {
         // In-flight guard. dispatch-execution still claims so a
         // duplicate fire doesn't double-spawn the sub-Rulers.
         const claim = tryClaimSpawn({
-          rulerNodeId: ruler._id,
+          rulerSpaceId: ruler._id,
           kind: "dispatch-execution",
         });
         if (!claim.ok) {
@@ -1420,7 +1420,7 @@ export default function getRulerTools(core) {
             // prefix.
             core.websocket.emitToBeing(String(beingId), "lifecycleActive", {
               active: true,
-              rulerNodeId: String(ruler._id),
+              rulerSpaceId: String(ruler._id),
               rootId: rootId || null,
               phase: "dispatch-execution",
               spawnId,
@@ -1559,7 +1559,7 @@ export default function getRulerTools(core) {
           const { hooks } = await import("../../seed/system/hooks.js");
           hooks.run("governing:swarmDispatched", {
             spawnId,
-            rulerNodeId: String(ruler._id),
+            rulerSpaceId: String(ruler._id),
             rootId: rootId || null,
             beingId: beingId || null,
             username: username || null,
@@ -1580,7 +1580,7 @@ export default function getRulerTools(core) {
           status: "spawned",
           decision: "dispatch-execution",
           spawnId,
-          rulerNodeId: String(ruler._id),
+          rulerSpaceId: String(ruler._id),
           dispatchedCount: dispatched.length,
           dispatched,
           failures,
@@ -1689,8 +1689,8 @@ export default function getRulerTools(core) {
         }
         try {
           await governing.appendPlanApproval({
-            rulerNodeId: ruler._id,
-            planNodeId: parsed.planNodeId,
+            rulerSpaceId: ruler._id,
+            planSpaceId: parsed.planSpaceId,
             status: "approved",
             supersedes: latest.planRef,
             reason: `ratified: ${reason}`.slice(0, 500),
@@ -1711,7 +1711,7 @@ export default function getRulerTools(core) {
         return text(JSON.stringify({
           status: "ratified",
           decision: "ratify-plan",
-          rulerNodeId: String(ruler._id),
+          rulerSpaceId: String(ruler._id),
           priorRef: latest.planRef,
           reason,
           note:
@@ -1782,8 +1782,8 @@ export default function getRulerTools(core) {
             if (prior?.planRef) {
               archivedRef = prior.planRef;
               await governing.appendPlanApproval({
-                rulerNodeId: ruler._id,
-                planNodeId: prior.planRef.split(":")[0],
+                rulerSpaceId: ruler._id,
+                planSpaceId: prior.planRef.split(":")[0],
                 status: "archived",
                 supersedes: prior.planRef,
                 reason: `archive: ${reason}`.slice(0, 500),
@@ -1949,7 +1949,7 @@ export default function getRulerTools(core) {
 
         // In-flight guard.
         const claim = tryClaimSpawn({
-          rulerNodeId: ruler._id,
+          rulerSpaceId: ruler._id,
           kind: "resume-execution",
           briefing: reason,
         });
@@ -1969,7 +1969,7 @@ export default function getRulerTools(core) {
         // `governing:foremanRouted` for dashboard SSE on settle.
         const { ensureExecutionNode } = await import("./state/executionSpace.js");
         const executionSpace = await ensureExecutionNode({
-          scopeNodeId: String(ruler._id),
+          scopeSpaceId: String(ruler._id),
           beingId,
           summonId,
           sessionId,
@@ -2048,7 +2048,7 @@ export default function getRulerTools(core) {
             try {
               await hooks.fire("governing:foremanRouted", {
                 spawnId:         correlation,
-                rulerNodeId:     String(ruler._id),
+                rulerSpaceId:     String(ruler._id),
                 beingId,
                 username,
                 rootId:          rootId || null,
@@ -2070,7 +2070,7 @@ export default function getRulerTools(core) {
             try {
               await hooks.fire("governing:foremanRouted", {
                 spawnId:         correlation,
-                rulerNodeId:     String(ruler._id),
+                rulerSpaceId:     String(ruler._id),
                 beingId,
                 username,
                 rootId:          rootId || null,
@@ -2094,7 +2094,7 @@ export default function getRulerTools(core) {
           status: "spawned",
           decision: "resume-execution",
           spawnId: correlation,
-          rulerNodeId: String(ruler._id),
+          rulerSpaceId: String(ruler._id),
           reason,
           note:
             "Pause cleared. Foreman SUMMON sent to decide next steps from the " +
@@ -2183,11 +2183,11 @@ export default function getRulerTools(core) {
         // turn-level choice.
         try {
           if (spaceId) {
-            const node = await Space.findById(spaceId);
+            const space = await Space.findById(spaceId);
             if (node) {
-              const meta = node.metadata instanceof Map
-                ? node.metadata.get("governing")
-                : node.metadata?.governing;
+              const meta = space.metadata instanceof Map
+                ? space.metadata.get("governing")
+                : space.metadata?.governing;
               const existingPending = Array.isArray(meta?.courtPending) ? meta.courtPending : [];
               // Phase 3 migration: verb-surface merge, atomic.
               await _core.do(node, "set-meta", {
@@ -2204,7 +2204,7 @@ export default function getRulerTools(core) {
           }
           const { hooks } = await import("../../seed/system/hooks.js");
           hooks.run("governing:courtConvened", {
-            rulerNodeId: spaceId ? String(spaceId) : null,
+            rulerSpaceId: spaceId ? String(spaceId) : null,
             reason,
           }).catch(() => {});
         } catch (err) {

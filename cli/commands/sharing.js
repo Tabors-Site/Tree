@@ -65,7 +65,7 @@ module.exports = (program) => {
         if (!id) return console.log(chalk.yellow("Usage: share note <noteId>"));
         if (!cfg.activeRootId) return console.log(chalk.yellow("Enter a tree first."));
         const nodeId = currentNodeId(cfg);
-        const url = `${getBaseSite()}/api/v1/node/${nodeId}/latest/notes/${id}?html`;
+        const url = `${getBaseSite()}/api/v1/space/${nodeId}/latest/notes/${id}?html`;
         return console.log(termLink(url, url));
       }
 
@@ -122,13 +122,13 @@ module.exports = (program) => {
               const api = getApi(cfg);
               const landRoot = await api.getLandRoot();
               const landNodeId = landRoot?._id || landRoot?.id;
-              if (landNodeId) { url = `${getBaseSite()}/api/v1/node/${landNodeId}${qs}`; }
+              if (landNodeId) { url = `${getBaseSite()}/api/v1/space/${landNodeId}${qs}`; }
             } catch {}
           }
           if (!url) url = `${getBaseSite()}/api/v1/user/${cfg.userId}${qs}`;
         } else {
           const nodeId = currentNodeId(cfg);
-          url = `${getBaseSite()}/api/v1/node/${nodeId}${qs}`;
+          url = `${getBaseSite()}/api/v1/space/${nodeId}${qs}`;
         }
       } else if (type === "root") {
         if (!cfg.activeRootId) return console.log(chalk.yellow("Enter a tree first."));
@@ -147,7 +147,7 @@ module.exports = (program) => {
       } else if (type === "note") {
         if (!id) return console.log(chalk.yellow("Usage: link note <noteId>"));
         const nodeId = currentNodeId(cfg);
-        url = `${getBaseSite()}/api/v1/node/${nodeId}/latest/notes/${id}/editor${qs}`;
+        url = `${getBaseSite()}/api/v1/space/${nodeId}/latest/notes/${id}/editor${qs}`;
       } else if (type === "gateway") {
         if (!cfg.activeRootId) return console.log(chalk.yellow("Enter a tree first."));
         url = `${getBaseSite()}/api/v1/root/${cfg.activeRootId}/gateway${qs}`;
@@ -163,7 +163,7 @@ module.exports = (program) => {
           } catch {}
         }
         if (!nodeId) return console.log(chalk.yellow("Navigate to a tree or land root first."));
-        url = `${getBaseSite()}/api/v1/node/${nodeId}/command-center${qs}`;
+        url = `${getBaseSite()}/api/v1/space/${nodeId}/command-center${qs}`;
       } else {
         if (cfg.activeRootId) {
           return console.log(chalk.yellow(`Unknown link type "${type}". Try: link, link root, link book, link gateway, link cc, link flow, link note <id>`));

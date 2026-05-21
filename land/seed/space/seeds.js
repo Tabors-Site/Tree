@@ -55,7 +55,7 @@ const MAX_SEEDS = 200;
  * @param {string} name - "<ext>:<seed-action>" — kernel namespace convention
  * @param {object} recipe
  * @param {string} recipe.description - one-line explanation of what planting creates
- * @param {Function} recipe.scaffold - async ({ rootNodeId, plantedSeedId, identity, core }) => plantedThings
+ * @param {Function} recipe.scaffold - async ({ rootSpaceId, plantedSeedId, identity, core }) => plantedThings
  * @param {string} [ownerExtension] - the registering extension; "kernel" if omitted
  * @returns {boolean} true on success
  */
@@ -150,7 +150,7 @@ export function listSeeds() {
  *
  * @param {object} args
  * @param {string} args.name - registered seed name
- * @param {string} args.atNodeId - target space id (the seed's plant point)
+ * @param {string} args.atSpaceId - target space id (the seed's plant point)
  * @param {object} args.identity - { beingId, username } of the planter
  * @param {object} args.core - core services bundle (passed to recipe)
  * @param {object} [args.params] - plant-time configuration the operator
@@ -161,14 +161,14 @@ export function listSeeds() {
  * @returns {Promise<{ plantedSeedId, plantedThings }>} on success
  * @throws when the seed isn't registered or the target space doesn't exist
  */
-export async function plantSeed({ name, atNodeId, identity, core, params = {} }) {
+export async function plantSeed({ name, atSpaceId, identity, core, params = {} }) {
   const recipe = SEEDS.get(name);
   if (!recipe) throw new Error(`Seed "${name}" not registered`);
-  if (!atNodeId) throw new Error("plantSeed requires atNodeId");
+  if (!atSpaceId) throw new Error("plantSeed requires atSpaceId");
   if (!identity?.beingId) throw new Error("plantSeed requires identity.beingId");
 
-  const target = await Space.findById(atNodeId).select("_id name").lean();
-  if (!target) throw new Error(`Target space ${String(atNodeId).slice(0, 8)} not found`);
+  const target = await Space.findById(atSpaceId).select("_id name").lean();
+  if (!target) throw new Error(`Target space ${String(atSpaceId).slice(0, 8)} not found`);
 
   // Defensive copy so the recipe cannot mutate the caller's params.
   // Reject obviously dangerous shapes (non-object, null, array).
@@ -180,7 +180,7 @@ export async function plantSeed({ name, atNodeId, identity, core, params = {} })
   const plantedAt = new Date().toISOString();
 
   const ctx = {
-    rootNodeId: String(atNodeId),
+    rootSpaceId: String(atSpaceId),
     plantedSeedId,
     identity,
     core,
@@ -191,7 +191,7 @@ export async function plantSeed({ name, atNodeId, identity, core, params = {} })
   try {
     plantedThings = await recipe.scaffold(ctx);
   } catch (err) {
-    log.error("Seeds", `Plant "${name}" at ${String(atNodeId).slice(0, 8)} failed: ${err.message}`);
+    log.error("Seeds", `Plant "${name}" at ${String(atSpaceId).slice(0, 8)} failed: ${err.message}`);
     throw err;
   }
 
@@ -199,7 +199,7 @@ export async function plantSeed({ name, atNodeId, identity, core, params = {} })
   // is a namespace blob keyed by plantedSeedId. Params land here too so
   // an audit / re-plant can see what the operator configured.
   const { setExtMeta, getExtMeta } = await import("../space/extensionMetadata.js");
-  const space = await Space.findById(atNodeId);
+  const space = await Space.findById(atSpaceId);
   if (space) {
     const existing = (await getExtMeta(space, "seeds")) || {};
     existing[plantedSeedId] = {
@@ -213,7 +213,7 @@ export async function plantSeed({ name, atNodeId, identity, core, params = {} })
   }
 
   log.info("Seeds",
-    `🌱 planted "${name}" at ${String(atNodeId).slice(0, 8)} ` +
+    `🌱 planted "${name}" at ${String(atSpaceId).slice(0, 8)} ` +
     `(plantedSeedId=${plantedSeedId.slice(0, 8)})`);
 
   return { plantedSeedId, plantedThings };
@@ -243,23 +243,23 @@ export async function listPlantedAt(spaceId) {
  * metadata entry. Recipes without `unscaffold` are best-effort —
  * plantedThings stays as the audit trail.
  */
-export async function unplantSeed({ atNodeId, plantedSeedId, identity, core }) {
-  if (!atNodeId || !plantedSeedId) {
-    throw new Error("unplantSeed requires atNodeId and plantedSeedId");
+export async function unplantSeed({ atSpaceId, plantedSeedId, identity, core }) {
+  if (!atSpaceId || !plantedSeedId) {
+    throw new Error("unplantSeed requires atSpaceId and plantedSeedId");
   }
-  const space = await Space.findById(atNodeId);
-  if (!space) throw new Error(`Target space ${String(atNodeId).slice(0, 8)} not found`);
+  const space = await Space.findById(atSpaceId);
+  if (!space) throw new Error(`Target space ${String(atSpaceId).slice(0, 8)} not found`);
 
   const { getExtMeta, setExtMeta } = await import("../space/extensionMetadata.js");
   const seeds = (await getExtMeta(space, "seeds")) || {};
   const entry = seeds[plantedSeedId];
-  if (!entry) throw new Error(`Planted seed ${plantedSeedId.slice(0, 8)} not found at ${String(atNodeId).slice(0, 8)}`);
+  if (!entry) throw new Error(`Planted seed ${plantedSeedId.slice(0, 8)} not found at ${String(atSpaceId).slice(0, 8)}`);
 
   const recipe = SEEDS.get(entry.name);
   if (recipe && typeof recipe.unscaffold === "function") {
     try {
       await recipe.unscaffold({
-        rootNodeId: String(atNodeId),
+        rootSpaceId: String(atSpaceId),
         plantedSeedId,
         identity,
         core,
@@ -278,5 +278,5 @@ export async function unplantSeed({ atNodeId, plantedSeedId, identity, core }) {
   await setExtMeta(space, "seeds", seeds);
 
   log.info("Seeds",
-    `🪦 unplanted ${plantedSeedId.slice(0, 8)} ("${entry.name}") from ${String(atNodeId).slice(0, 8)}`);
+    `🪦 unplanted ${plantedSeedId.slice(0, 8)} ("${entry.name}") from ${String(atSpaceId).slice(0, 8)}`);
 }

@@ -72,9 +72,9 @@ function emissionFingerprint(contracts) {
 /**
  * Compute the next emission ordinal under a contracts trio member.
  */
-async function nextEmissionOrdinal(contractsNodeId) {
+async function nextEmissionOrdinal(contractsSpaceId) {
   const count = await Space.countDocuments({
-    parent: contractsNodeId,
+    parent: contractsSpaceId,
     type: "contracts-emission",
   });
   return count + 1;
@@ -84,7 +84,7 @@ async function nextEmissionOrdinal(contractsNodeId) {
  * Create a contracts-emission-N child node under the contracts trio
  * member. Stamps role + the structured emission payload.
  */
-async function createContractsEmission({ contractsNodeId, ordinal, payload, beingId, identity = null, core }) {
+async function createContractsEmission({ contractsSpaceId, ordinal, payload, beingId, identity = null, core }) {
   const authIdentity = identity || (beingId ? { beingId } : null);
   // Slug derived from the Contractor's reasoning headline. Same
   // approach as plan-emission naming: descriptive at-a-glance, with
@@ -95,7 +95,7 @@ async function createContractsEmission({ contractsNodeId, ordinal, payload, bein
   // Phase 3 migration: verb-surface create. Fires kernel hooks + Did.
   let created = null;
   try {
-    created = await core.do(contractsNodeId, "create-child", {
+    created = await core.do(contractsSpaceId, "create-child", {
       name,
       type: "contracts-emission",
       beingId,
@@ -111,18 +111,18 @@ async function createContractsEmission({ contractsNodeId, ordinal, payload, bein
       _id: uuid(),
       name,
       type: "contracts-emission",
-      parent: contractsNodeId,
+      parent: contractsSpaceId,
       children: [],
       contributors: [],
       status: "active",
     });
-    await NodeModel.updateOne({ _id: contractsNodeId }, { $addToSet: { children: created._id } });
+    await NodeModel.updateOne({ _id: contractsSpaceId }, { $addToSet: { children: created._id } });
   }
 
   try {
     // Phase 3 migration ([[project_seed_four_verbs_only]]): verb-surface
     // write. merge:true preserves NS atomically.
-    const node = await Space.findById(created._id);
+    const space = await Space.findById(created._id);
     if (node) {
       await core.do(node, "set-meta", {
         namespace: NS,
@@ -152,7 +152,7 @@ async function createContractsEmission({ contractsNodeId, ordinal, payload, bein
  * one entry per emission, references the emission node id.
  */
 async function appendApproval({
-  rulerNodeId,
+  rulerSpaceId,
   contractsEmissionNodeId,
   supersedes,
   // Inheritance ratification fields. Set when the approval is for an
@@ -166,13 +166,13 @@ async function appendApproval({
   // so the metadata write goes through core.do (auto-Did).
   core,
 }) {
-  if (!rulerNodeId || !contractsEmissionNodeId) return null;
-  const node = await Space.findById(rulerNodeId);
-  if (!node) return null;
+  if (!rulerSpaceId || !contractsEmissionNodeId) return null;
+  const space = await Space.findById(rulerSpaceId);
+  if (!space) return null;
 
-  const meta = node.metadata instanceof Map
-    ? node.metadata.get(NS)
-    : node.metadata?.[NS];
+  const meta = space.metadata instanceof Map
+    ? space.metadata.get(NS)
+    : space.metadata?.[NS];
   const existing = Array.isArray(meta?.contractApprovals) ? meta.contractApprovals : [];
 
   const { v4: uuid } = await import("uuid");
@@ -216,9 +216,9 @@ function readApprovalLedger(rulerSpace) {
  * Find the most recent active (non-superseded, approved) contract
  * approval at a Ruler scope. Returns the entry or null.
  */
-async function readActiveContractApproval(rulerNodeId) {
-  const node = await Space.findById(rulerNodeId).select("_id metadata").lean();
-  if (!node) return null;
+async function readActiveContractApproval(rulerSpaceId) {
+  const space = await Space.findById(rulerSpaceId).select("_id metadata").lean();
+  if (!space) return null;
   const ledger = readApprovalLedger(node);
   if (!ledger.length) return null;
   const supersededSet = new Set();
@@ -242,18 +242,18 @@ async function readActiveContractApproval(rulerNodeId) {
  * emission node, returns the emission payload (with `_emissionNodeId`
  * + `_approvalId` for callers that need the refs).
  */
-export async function readActiveContractsEmission(rulerNodeId) {
-  const active = await readActiveContractApproval(rulerNodeId);
+export async function readActiveContractsEmission(rulerSpaceId) {
+  const active = await readActiveContractApproval(rulerSpaceId);
   if (!active?.contractsRef) return null;
-  const node = await Space.findById(active.contractsRef).select("_id metadata").lean();
-  if (!node) return null;
-  const meta = node.metadata instanceof Map
-    ? node.metadata.get(NS)
-    : node.metadata?.[NS];
+  const space = await Space.findById(active.contractsRef).select("_id metadata").lean();
+  if (!space) return null;
+  const meta = space.metadata instanceof Map
+    ? space.metadata.get(NS)
+    : space.metadata?.[NS];
   if (meta?.role !== "contracts-emission" || !meta?.emission) return null;
   return {
     ...meta.emission,
-    _emissionNodeId: String(node._id),
+    _emissionNodeId: String(space._id),
     _approvalId: active.id || null,
   };
 }
@@ -284,7 +284,7 @@ export async function readActiveContractsEmission(rulerNodeId) {
  * `emissionSpace` is null in that case.
  */
 export async function setContracts({
-  scopeNodeId,
+  scopeSpaceId,
   contracts,
   beingId,
   systemSpec = null,
@@ -299,7 +299,7 @@ export async function setContracts({
   inheritsFrom = null,
   parentContractsApplied = [],
 }) {
-  if (!scopeNodeId) return null;
+  if (!scopeSpaceId) return null;
 
   const incoming = Array.isArray(contracts) ? contracts : [];
   const isInheritance = !!inheritsFrom;
@@ -310,9 +310,9 @@ export async function setContracts({
   // Find or create the contracts trio member.
   let contractsSpace = null;
   try {
-    contractsSpace = await ensureContractsNode({ scopeNodeId, beingId, core });
+    contractsSpace = await ensureContractsNode({ scopeSpaceId, beingId, core });
   } catch (err) {
-    log.warn("Governing", `setContracts: ensureContractsNode failed at scope ${String(scopeNodeId).slice(0, 8)}: ${err.message}`);
+    log.warn("Governing", `setContracts: ensureContractsNode failed at scope ${String(scopeSpaceId).slice(0, 8)}: ${err.message}`);
     return null;
   }
   if (!contractsSpace) return null;
@@ -327,7 +327,7 @@ export async function setContracts({
     const consumers = Array.isArray(entry.consumerNodeIds) ? entry.consumerNodeIds : [];
     if (consumers.length >= 2 && scopeShape && typeof scopeShape === "object") {
       const result = await validateScopeAuthority({
-        emitterNodeId: scopeNodeId,
+        emitterNodeId: scopeSpaceId,
         consumerNodeIds: consumers,
       });
       if (!result.valid) {
@@ -358,12 +358,12 @@ export async function setContracts({
   // one structurally, no new emission. The Ruler's existing approval
   // already covers this set. Inheritance declarations skip this check
   // — re-declaring inheritance is always a fresh decision.
-  const priorActive = await readActiveContractsEmission(scopeNodeId);
+  const priorActive = await readActiveContractsEmission(scopeSpaceId);
   if (!isInheritance && accepted.length > 0) {
     const newFingerprint = emissionFingerprint(accepted);
     if (priorActive?.contracts && emissionFingerprint(priorActive.contracts) === newFingerprint) {
       log.verbose("Governing",
-        `setContracts at ${String(scopeNodeId).slice(0, 8)}: ${accepted.length} contract(s) match active ` +
+        `setContracts at ${String(scopeSpaceId).slice(0, 8)}: ${accepted.length} contract(s) match active ` +
         `emission-${priorActive.ordinal}; skipping idempotent re-emission`);
       return {
         contractsSpace,
@@ -393,7 +393,7 @@ export async function setContracts({
     } : {}),
   };
   const emissionSpace = await createContractsEmission({
-    contractsNodeId: contractsSpace._id,
+    contractsSpaceId: contractsSpace._id,
     ordinal,
     payload,
     beingId,
@@ -405,7 +405,7 @@ export async function setContracts({
   // fields stamped on the approval entry too, so Pass 2 courts can read
   // the inheritance commitment without dereferencing the emission node.
   const approvalEntry = await appendApproval({
-    rulerNodeId: scopeNodeId,
+    rulerSpaceId: scopeSpaceId,
     contractsEmissionNodeId: emissionSpace._id,
     supersedes: priorActive?._approvalId || null,
     inheritedFrom: isInheritance ? inheritsFrom : null,
@@ -414,7 +414,7 @@ export async function setContracts({
   });
 
   log.info("Governing",
-    `📜 contracts-emission-${ordinal} ratified at ruler ${String(scopeNodeId).slice(0, 8)} ` +
+    `📜 contracts-emission-${ordinal} ratified at ruler ${String(scopeSpaceId).slice(0, 8)} ` +
     `(${accepted.length} contract(s); ${rejected.length} rejected)` +
     (priorActive ? ` [supersedes emission-${priorActive.ordinal}]` : ""));
 
@@ -427,8 +427,8 @@ export async function setContracts({
   try {
     const { hooks } = await import("../../../seed/system/hooks.js");
     hooks.run("governing:contractRatified", {
-      rulerNodeId: String(scopeNodeId),
-      contractsNodeId: String(contractsSpace._id),
+      rulerSpaceId: String(scopeSpaceId),
+      contractsSpaceId: String(contractsSpace._id),
       emissionNodeId: String(emissionSpace._id),
       ordinal,
       accepted,
@@ -465,11 +465,11 @@ export async function readContracts(spaceId) {
   for (let depth = 0; depth < 64; depth++) {
     if (!cursor || visited.has(cursor)) break;
     visited.add(cursor);
-    const node = await Space.findById(cursor).select("_id parent metadata").lean();
-    if (!node) break;
-    const meta = node.metadata instanceof Map
-      ? Object.fromEntries(node.metadata)
-      : (node.metadata || {});
+    const space = await Space.findById(cursor).select("_id parent metadata").lean();
+    if (!space) break;
+    const meta = space.metadata instanceof Map
+      ? Object.fromEntries(space.metadata)
+      : (space.metadata || {});
     const isRuler = meta[NS]?.role === "ruler";
     if (isRuler) {
       const emission = await readActiveContractsEmission(cursor);
@@ -482,8 +482,8 @@ export async function readContracts(spaceId) {
         }
       }
     }
-    if (!node.parent) break;
-    cursor = String(node.parent);
+    if (!space.parent) break;
+    cursor = String(space.parent);
   }
 
   return out;
@@ -521,9 +521,9 @@ export async function readScopedContracts({ spaceId, branchName }) {
  * Read the full approval ledger at a Ruler scope. Includes superseded
  * and rejected entries — Pass 2 courts read this for the audit chain.
  */
-export async function readApprovalsAtRuler(rulerNodeId) {
-  if (!rulerNodeId) return [];
-  const node = await Space.findById(rulerNodeId).select("_id metadata").lean();
-  if (!node) return [];
+export async function readApprovalsAtRuler(rulerSpaceId) {
+  if (!rulerSpaceId) return [];
+  const space = await Space.findById(rulerSpaceId).select("_id metadata").lean();
+  if (!space) return [];
   return readApprovalLedger(node);
 }

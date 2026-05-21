@@ -101,7 +101,7 @@ export function registerToolDef(name, schema, opts = {}) {
 
 /**
  * Register a bundle of tools in one call. Sole entry point for both
- * kernel-shipped tools (called from startup.js with `ownerExt: "kernel"`)
+ * kernel-shipped tools (called from genesis.js with `ownerExt: "kernel"`)
  * and extension-shipped tools (called from extensions/loader.js with
  * `ownerExt: manifest.name`). Each tool object:
  *
@@ -294,7 +294,7 @@ export function getToolCount() {
 
 /**
  * List every registered tool name. Used by configuration UIs that show
- * the base set of tools available before per-node overlays apply.
+ * the base set of tools available before per-space overlays apply.
  */
 export function listToolNames() {
   return Object.keys(toolDefs);

@@ -180,7 +180,7 @@ async function findMatchingRule({ spaceId, verb, keyParts }) {
   if (!spaceId) {
     const landRootId = getLandRootId();
     if (!landRootId) return null;
-    return matchOnNode(landRootId, verb, keyParts);
+    return matchOnSpace(landRootId, verb, keyParts);
   }
 
   let chain;
@@ -194,15 +194,15 @@ async function findMatchingRule({ spaceId, verb, keyParts }) {
     : [String(spaceId)];
 
   for (const id of path) {
-    const match = await matchOnNode(id, verb, keyParts);
+    const match = await matchOnSpace(id, verb, keyParts);
     if (match) return match;
   }
   return null;
 }
 
-async function matchOnNode(spaceId, verb, keyParts) {
-  const node = await Space.findById(spaceId).select("metadata").lean();
-  const meta = node?.metadata;
+async function matchOnSpace(spaceId, verb, keyParts) {
+  const space = await Space.findById(spaceId).select("metadata").lean();
+  const meta = space?.metadata;
   if (!meta) return null;
   const perms = meta instanceof Map ? meta.get("permissions") : meta.permissions;
   if (!perms) return null;
@@ -286,7 +286,7 @@ function compareRequirement(propName, expected, props) {
 
   // Home-relation properties accept a string spaceId as the expected
   // value, in which case the comparator interprets it as "this
-  // specific node must be in the home's ancestor chain" (or, for
+  // specific space must be in the home's ancestor chain" (or, for
   // positionInHomeDomain, in the target's ancestor chain). Without
   // this, scoped rules like `homeInDomain: "<rulership-id>"` would
   // do a useless string-equality check against a boolean.

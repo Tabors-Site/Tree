@@ -14,21 +14,21 @@
 // have their own identities, their own summon paths, their own
 // stances — the seed birthed them and now they act as themselves,
 // not as the seed. Anything they do attributes to their own beingId,
-// not SEED_BEING. The distinction matters: the seed-being is the
+// not SEED_BEING. The distinction matters: the I-am is the
 // internal server acting; these are first-class participants the
 // substrate addresses by name.
 //
-// Being-tree parenting: every land has exactly ONE seed-being at the
+// Being-tree parenting: every land has exactly ONE I-am at the
 // root of the being-tree (the only Being with parentBeingId: null).
 // It is created during ensureLandRoot() — see seed/landRoot.js.
 // System beings (auth, llm-assigner, land-manager) and every human are
-// children of the seed-being. Walking parentBeingId from any being
-// eventually reaches the seed-being, then null.
+// children of the I-am. Walking parentBeingId from any being
+// eventually reaches the I-am, then null.
 //
-// `ensureLandBeings(landRootId)` runs at boot after the seed-being
+// `ensureLandBeings(landRootId)` runs at boot after the I-am
 // exists. Idempotent — safe to call on every boot. The drift
 // reconciler also keeps existing system beings' parentBeingId pointed
-// at the current seed-being.
+// at the current I-am.
 //
 // Each being's password is auto-generated random bytes, bcrypt-hashed
 // by the Being model's pre-save hook. The plaintext is discarded after
@@ -41,7 +41,7 @@ import Space from "../models/space.js";
 import { createBeingWithHome } from "./identity.js";
 
 /**
- * Find the seed-being — the land's first Being row, the root of the
+ * Find the I-am — the land's first Being row, the root of the
  * being-tree, identified by `parentBeingId: null`. Every other being on
  * the land chains back to it through parentBeingId. Created by
  * `ensureSeedBeing()` during `ensureLandRoot()` boot; absent only on a
@@ -55,7 +55,7 @@ export async function findSeedBeing() {
 
 /**
  * Find the land's root operator — the first human who registered.
- * The seed-being precedes them; the operator is the first being whose
+ * The I-am precedes them; the operator is the first being whose
  * `operatingMode === "human"`. Returns null on a fresh land before any
  * human has registered. Use this for "who runs this land" checks
  * (land-LLM config, root-only operations); use `findSeedBeing()` for
@@ -91,13 +91,13 @@ const LAND_BEINGS = [
 
 /**
  * Ensure each system being exists as a Being row, has the land root
- * as its home, is parented under the seed-being (the only Being with
+ * as its home, is parented under the I-am (the only Being with
  * parentBeingId: null) in the being-tree, and is registered in
  * metadata.beings at the land root. Returns a summary
  * { created, existing, deferred }.
  *
- * Deferred when the seed-being does not yet exist (pre-bootstrap land).
- * ensureLandRoot() creates the seed-being and then calls this; lands
+ * Deferred when the I-am does not yet exist (pre-bootstrap land).
+ * ensureLandRoot() creates the I-am and then calls this; lands
  * that already booted past first-ensure still re-run this idempotently
  * to backfill drift.
  */
@@ -115,7 +115,7 @@ export async function ensureLandBeings(landRootId) {
 
   const seedBeing = await findSeedBeing();
   if (!seedBeing) {
-    log.info("LandBeings", "no seed-being yet; deferring system-being setup until ensureLandRoot() runs");
+    log.info("LandBeings", "no I-am yet; deferring system-being setup until ensureLandRoot() runs");
     return { created: 0, existing: 0, deferred: true };
   }
   const rootBeingId = String(seedBeing._id);

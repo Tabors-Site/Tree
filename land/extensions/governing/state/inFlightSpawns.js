@@ -13,7 +13,7 @@
 //
 // This module is the substrate-level guard against that duplicate
 // spawn. Before a spawn starts, claim() records the spawn under a
-// key composed of rulerNodeId + kind. If a claim already exists, the
+// key composed of rulerSpaceId + kind. If a claim already exists, the
 // caller learns "already in-flight since T" and returns a pending
 // response without spawning a duplicate. release() runs in a finally
 // block so a thrown handler doesn't leak the claim.
@@ -27,19 +27,19 @@
 
 const _inFlight = new Map();
 
-function makeKey(rulerNodeId, kind) {
-  return `${String(rulerNodeId)}::${String(kind)}`;
+function makeKey(rulerSpaceId, kind) {
+  return `${String(rulerSpaceId)}::${String(kind)}`;
 }
 
 /**
- * Try to claim an in-flight slot for (rulerNodeId, kind).
+ * Try to claim an in-flight slot for (rulerSpaceId, kind).
  * Returns:
  *   { ok: true, key }                — claim succeeded; caller spawns
  *   { ok: false, existing, since }   — claim refused; caller returns pending
  */
-export function tryClaim({ rulerNodeId, kind, briefing = null }) {
-  if (!rulerNodeId || !kind) return { ok: true, key: null };
-  const key = makeKey(rulerNodeId, kind);
+export function tryClaim({ rulerSpaceId, kind, briefing = null }) {
+  if (!rulerSpaceId || !kind) return { ok: true, key: null };
+  const key = makeKey(rulerSpaceId, kind);
   const existing = _inFlight.get(key);
   if (existing) {
     return {
@@ -49,7 +49,7 @@ export function tryClaim({ rulerNodeId, kind, briefing = null }) {
     };
   }
   const entry = {
-    rulerNodeId: String(rulerNodeId),
+    rulerSpaceId: String(rulerSpaceId),
     kind: String(kind),
     briefing: briefing ? String(briefing).slice(0, 200) : null,
     since: new Date().toISOString(),
@@ -69,13 +69,13 @@ export function release(key) {
 }
 
 /**
- * Read all in-flight spawns at a scope (or all globally if rulerNodeId
+ * Read all in-flight spawns at a scope (or all globally if rulerSpaceId
  * is omitted). Used for diagnostics / dashboard / Foreman snapshot.
  */
-export function listInFlight(rulerNodeId = null) {
+export function listInFlight(rulerSpaceId = null) {
   const out = [];
   for (const [key, entry] of _inFlight) {
-    if (rulerNodeId && entry.rulerNodeId !== String(rulerNodeId)) continue;
+    if (rulerSpaceId && entry.rulerSpaceId !== String(rulerSpaceId)) continue;
     out.push({ key, ...entry, ageMs: Date.now() - entry.sinceMs });
   }
   return out;
@@ -110,7 +110,7 @@ export function buildPendingResponse({ existing, kind }) {
     ok: false,
     pending: true,
     kind,
-    rulerNodeId: existing.rulerNodeId,
+    rulerSpaceId: existing.rulerSpaceId,
     since: existing.since,
     ageSeconds: ageS,
     note:

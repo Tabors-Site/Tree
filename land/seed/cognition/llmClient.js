@@ -28,7 +28,7 @@ import Space from "../models/space.js";
 import LlmConnection from "../models/llmConnection.js";
 import { getLandConfigValue } from "../landConfig.js";
 import { getAncestorChain } from "../space/ancestorCache.js";
-import { getNodeLlmAssignments, getBeingLlmAssignments } from "./assignments.js";
+import { getSpaceLlmAssignments, getBeingLlmAssignments } from "./assignments.js";
 import { resolveAndValidateHost, hostInAllowedLlmDomains, getEncryptionKey } from "./connections.js";
 
 // ─────────────────────────────────────────────────────────────────────────
@@ -271,22 +271,22 @@ export async function getClientForBeing(beingId, slot, overrideConnectionId) {
 // Four layers of authority, evaluated top-down:
 //
 //   Layer 1 — Lockout (sovereign over everything):
-//     ANY ancestor in the node walk has `llmDefault === "none"`, OR
+//     ANY ancestor in the space walk has `llmDefault === "none"`, OR
 //     ANY ancestor in the being walk has `userLlm.locked === true`
 //     → returns null. "No LLM under this scope, period."
 //
 //   Layer 2 — Enforcement (sovereign over preferOwn):
-//     ANY ancestor in the node walk has `metadata.llm.enforced === true`
-//     → use that node's connection. Position locks the LLM in.
+//     ANY ancestor in the space walk has `metadata.llm.enforced === true`
+//     → use that space's connection. Position locks the LLM in.
 //
 //     ANY ancestor in the being walk has `userLlm.enforced === true`
 //     → use that being's connection. Parent being locks descendants in.
 //
-//     When both apply, node enforcement wins (position > identity).
+//     When both apply, space enforcement wins (position > identity).
 //
 //   Layer 3 — Default chain (substrate model; the common case):
-//     1. node.metadata.llm.slots[slot]   ← role-LLM at this exact position
-//     2. node.llmDefault                  ← default LLM at this position
+//     1. space.metadata.llm.slots[slot]  ← role-LLM at this exact position
+//     2. space.llmDefault                 ← default LLM at this position
 //     3. walk to parent, repeat 1+2
 //     4. ... up to land root ...
 //     5. land config: landLlmConnection  ← operator fallback for the land
@@ -304,7 +304,7 @@ export async function getClientForBeing(beingId, slot, overrideConnectionId) {
 //     instead of letting it resolve. Tests, special-case dispatch.
 //
 // Every level is data: set/unset any field to participate. Setting
-// overrides; unsetting falls through. The node ancestor walk uses the
+// overrides; unsetting falls through. The space ancestor walk uses the
 // per-request ancestor cache; the being walk follows parentBeingId.
 //
 // See [[project_seed_four_verbs_only]] (single named function, all
@@ -338,12 +338,12 @@ async function walkBeingChain(rootBeing) {
   return chain;
 }
 
-// Walk the node ancestor chain looking for: a lockout, an enforced
+// Walk the space ancestor chain looking for: a lockout, an enforced
 // connection, or a normal hit. Returns:
 //   - LOCKDOWN sentinel if any ancestor locks out
 //   - { connectionId, enforced } at the first hit
-//   - null if no node in the chain assigns anything
-async function nodeChainResolve(spaceId, slot) {
+//   - null if no space in the chain assigns anything
+async function spaceChainResolve(spaceId, slot) {
   if (!spaceId) return null;
   let chain;
   try {
@@ -353,8 +353,8 @@ async function nodeChainResolve(spaceId, slot) {
     chain = single ? [single] : [];
   }
   let firstHit = null;
-  for (const node of chain) {
-    const a = getNodeLlmAssignments(node);
+  for (const space of chain) {
+    const a = getSpaceLlmAssignments(space);
     if (a.default === "none") return LOCKDOWN;
     if (a.enforced) {
       const hit = a[slot] || a.default;
@@ -369,7 +369,7 @@ async function nodeChainResolve(spaceId, slot) {
 }
 
 // Walk the being ancestor chain (pre-loaded) looking for lockout,
-// enforcement, or a normal hit. Same return contract as nodeChainResolve.
+// enforcement, or a normal hit. Same return contract as spaceChainResolve.
 function beingChainResolve(beingChain, slot) {
   if (!beingChain.length) return null;
   let firstHit = null;
@@ -394,7 +394,7 @@ function beingChainResolve(beingChain, slot) {
  *
  * @param {object} opts
  * @param {string} [opts.beingId]  the being making the call
- * @param {string} [opts.spaceId]   the position (current node)
+ * @param {string} [opts.spaceId]  the position (current space)
  * @param {string} [opts.slot]     role-slot name (defaults to "main")
  * @returns {Promise<string|null>} connectionId, or null for noLlm
  */
@@ -409,15 +409,15 @@ export async function resolveLlmConnection({ beingId = null, spaceId = null, slo
   const beingChain = await walkBeingChain(being);
 
   // Walk both trees collecting lockout / enforcement / first-hit.
-  const nodeHit  = await nodeChainResolve(spaceId, slot);
+  const spaceHit  = await spaceChainResolve(spaceId, slot);
   const beingHit = beingChainResolve(beingChain, slot);
 
   // Layer 1: Lockout wins over everything.
-  if (nodeHit === LOCKDOWN || beingHit === LOCKDOWN) return null;
+  if (spaceHit === LOCKDOWN || beingHit === LOCKDOWN) return null;
 
   // Layer 2: Enforcement wins over preferOwn. Space enforcement beats
   // being enforcement when both apply (position-first philosophy).
-  if (nodeHit?.enforced)  return nodeHit.connectionId;
+  if (spaceHit?.enforced)  return spaceHit.connectionId;
   if (beingHit?.enforced) return beingHit.connectionId;
 
   // Layer 3 / 3′: normal chain. preferOwn (set on the calling being's
@@ -425,8 +425,8 @@ export async function resolveLlmConnection({ beingId = null, spaceId = null, slo
   const preferOwn = being?.metadata?.userLlm?.preferOwn === true;
   const landConnId = getLandConfigValue("landLlmConnection") || null;
   const candidates = preferOwn
-    ? [beingHit?.connectionId, nodeHit?.connectionId, landConnId]
-    : [nodeHit?.connectionId, landConnId, beingHit?.connectionId];
+    ? [beingHit?.connectionId, spaceHit?.connectionId, landConnId]
+    : [spaceHit?.connectionId, landConnId, beingHit?.connectionId];
 
   for (const c of candidates) if (c) return c;
   return null;

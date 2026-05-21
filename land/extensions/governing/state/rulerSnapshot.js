@@ -62,10 +62,10 @@ const LEDGER_TAIL = 3;
  *
  * Returns null if the node isn't a Ruler.
  */
-export async function buildRulerSnapshot(rulerNodeId) {
-  if (!rulerNodeId) return null;
+export async function buildRulerSnapshot(rulerSpaceId) {
+  if (!rulerSpaceId) return null;
 
-  const rulerSpace = await Space.findById(rulerNodeId).select("_id name parent metadata children").lean();
+  const rulerSpace = await Space.findById(rulerSpaceId).select("_id name parent metadata children").lean();
   if (!rulerSpace) return null;
   const rulerMeta = rulerSpace.metadata instanceof Map
     ? Object.fromEntries(rulerSpace.metadata)
@@ -144,14 +144,14 @@ export async function buildRulerSnapshot(rulerNodeId) {
   try {
     const fn = await getLatencyFn();
     if (fn) {
-      const lat = fn(rulerNodeId);
+      const lat = fn(rulerSpaceId);
       if (lat) out.reputation.recentDecisionLatency = lat;
     }
   } catch {}
 
   // Lineage — present iff this Ruler was promoted as a sub-Ruler.
   try {
-    const lineage = await readLineage(rulerNodeId);
+    const lineage = await readLineage(rulerSpaceId);
     if (lineage?.parentRulerId) out.lineage = lineage;
   } catch (err) {
     log.debug("Governing/Snapshot", `lineage read skipped: ${err.message}`);
@@ -165,9 +165,9 @@ export async function buildRulerSnapshot(rulerNodeId) {
   // delegate decision." See memory `card-is-a-summon`.
   let planPending = false;
   try {
-    let emission = await readActivePlanEmission(rulerNodeId);
+    let emission = await readActivePlanEmission(rulerSpaceId);
     if (!emission) {
-      const pending = await readPendingPlanEmission(rulerNodeId);
+      const pending = await readPendingPlanEmission(rulerSpaceId);
       if (pending) {
         emission = pending;
         planPending = true;
@@ -200,7 +200,7 @@ export async function buildRulerSnapshot(rulerNodeId) {
   // enrichContext separately and shouldn't double-render in the Ruler's
   // self-snapshot).
   try {
-    const ownEmission = await readActiveContractsEmission(rulerNodeId);
+    const ownEmission = await readActiveContractsEmission(rulerSpaceId);
     if (ownEmission?.contracts) {
       const byKind = {};
       const names = [];
@@ -233,7 +233,7 @@ export async function buildRulerSnapshot(rulerNodeId) {
 
   // Active execution-record state with rolled-up step counts.
   try {
-    const record = await readActiveExecutionRecord(rulerNodeId);
+    const record = await readActiveExecutionRecord(rulerSpaceId);
     if (record) {
       const stepStatuses = Array.isArray(record.stepStatuses) ? record.stepStatuses : [];
       const counts = {
@@ -304,15 +304,15 @@ export async function buildRulerSnapshot(rulerNodeId) {
 
   // Approval ledger tails (last LEDGER_TAIL entries each).
   try {
-    const planL = await readPlanApprovalsAtRuler(rulerNodeId);
+    const planL = await readPlanApprovalsAtRuler(rulerSpaceId);
     out.ledgers.planApprovals = planL.slice(-LEDGER_TAIL);
   } catch {}
   try {
-    const contractL = await readContractApprovalsAtRuler(rulerNodeId);
+    const contractL = await readContractApprovalsAtRuler(rulerSpaceId);
     out.ledgers.contractApprovals = contractL.slice(-LEDGER_TAIL);
   } catch {}
   try {
-    const execL = await readExecutionApprovalsAtRuler(rulerNodeId);
+    const execL = await readExecutionApprovalsAtRuler(rulerSpaceId);
     out.ledgers.executionApprovals = execL.slice(-LEDGER_TAIL);
   } catch {}
 
@@ -403,7 +403,7 @@ export async function buildRulerSnapshot(rulerNodeId) {
   // message. Pass 2 judge mode will read full depth (verbatim flag
   // content, affected artifacts, etc.) via a distinct snapshot.
   try {
-    const pending = await readPendingIssues(rulerNodeId);
+    const pending = await readPendingIssues(rulerSpaceId);
     if (pending.length > 0) {
       out.flags = summarizeFlags(pending, { lastN: 5 });
     }
@@ -691,8 +691,8 @@ export function formatRulerSnapshot(snapshot) {
  * Convenience: snapshot + format in one call. Most callers want the
  * formatted string, not the structured intermediate.
  */
-export async function renderRulerSnapshot(rulerNodeId) {
-  const snapshot = await buildRulerSnapshot(rulerNodeId);
+export async function renderRulerSnapshot(rulerSpaceId) {
+  const snapshot = await buildRulerSnapshot(rulerSpaceId);
   if (!snapshot) return "";
   return formatRulerSnapshot(snapshot);
 }

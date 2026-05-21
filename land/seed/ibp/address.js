@@ -21,20 +21,20 @@
 //   Position   := Land? Path?
 //   Land       := Domain (":" Port)?
 //   Path       := "/"                            (land zone)
-//               | "/" Segment ("/" Segment)*     (node — full chain or leaf-only)
+//               | "/" Segment ("/" Segment)*     (space — full chain or leaf-only)
 //               | "/~" UserSlug ("/" Segment)*   (home zone)
 //               | "~" ...                        (home shorthand; expands to /~<user>)
-//   Segment    := node-name | node-id (uuid)
+//   Segment    := space-name | space-id (uuid)
 //   Being      := "@" Identifier
 //
 // Path representations (portal switches between freely):
-//   Each node has a stable id (uuid) AND a display name. A path can be
+//   Each space has a stable id (uuid) AND a display name. A path can be
 //   written as either form, and at either depth:
 //     /tagay-book/chapter-1        full chain, names
 //     /chapter-1                   leaf only, name
 //     /<uuid-a>/<uuid-b>           full chain, ids
 //     /<uuid-b>                    leaf only, id
-//   All four resolve to the same node. The parser accepts any form; the
+//   All four resolve to the same space. The parser accepts any form; the
 //   server resolves to a canonical spaceId and returns BOTH forms (the
 //   id chain and the name chain) in the Position Description so the
 //   portal can render either.
@@ -210,7 +210,7 @@ function parseStance(input, ctx, opts = {}) {
   // Determine if `rest` includes a land identifier or is just a zone marker.
   // The three zone markers are:
   //   "/"            → land zone (literal slash IS the land)
-  //   "/<id>..."     → tree zone (slash followed by node id or full path)
+  //   "/<id>..."     → tree zone (slash followed by space id or full path)
   //   "~" / "~user"  → home zone (shorthand; expands to "/~<user>")
   // A land identifier (e.g. "treeos.ai") never starts with "/" or "~", so a
   // leading slash or tilde means we're already inside the current land.

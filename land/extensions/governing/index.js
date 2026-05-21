@@ -361,7 +361,7 @@ export async function init(core) {
         // execution node (Foreman). For each kind we query by governing
         // role marker and add the matching beings entry where it
         // does not already exist.
-        // Each backfill entry carries a `permissions(scopeNodeId)`
+        // Each backfill entry carries a `permissions(scopeSpaceId)`
         // function that produces the SUMMON rule for the node. Trio
         // rules use the scopeRulerId (read from the existing
         // governing metadata) as the homeInDomain bound, so beings
@@ -674,9 +674,9 @@ export async function init(core) {
           // Payload field varies per hook; try the common ones.
           const candidateNodeId =
             payload?.spaceId ||
-            payload?.rulerNodeId ||
+            payload?.rulerSpaceId ||
             payload?.recordNodeId ||
-            payload?.scopeNodeId ||
+            payload?.scopeSpaceId ||
             null;
           if (!candidateNodeId) return;
           const rootId = await resolveRootForNode(candidateNodeId);
@@ -761,10 +761,10 @@ export async function init(core) {
     // extension never types its own namespace . the namespace is
     // implicit from the registration context.
     core.do.registerOperation("flag-issue", {
-      targets: ["node"],
+      targets: ["space"],
       handler: async ({ target, params, identity }) => {
         return appendFlag({
-          rulerNodeId: idOf(target),
+          rulerSpaceId: idOf(target),
           payload: {
             kind: params.kind,
             artifactContext: params.artifactContext || {},
@@ -781,12 +781,12 @@ export async function init(core) {
     });
 
     core.do.registerOperation("hire-planner", {
-      targets: ["node"],
+      targets: ["space"],
       handler: async ({ target, params, identity }) => {
         // Materializes the plan trio child + Planner being at the
         // Ruler scope (target). Idempotent.
         return ensurePlanAtScope({
-          scopeNodeId: idOf(target),
+          scopeSpaceId: idOf(target),
           beingId:     identity?.beingId || params.beingId || null,
           name:        params.name || "plans",
           systemSpec:  params.systemSpec || null,
@@ -798,10 +798,10 @@ export async function init(core) {
     });
 
     core.do.registerOperation("hire-contractor", {
-      targets: ["node"],
+      targets: ["space"],
       handler: async ({ target, params, identity }) => {
         return ensureContractsNode({
-          scopeNodeId: idOf(target),
+          scopeSpaceId: idOf(target),
           beingId:     identity?.beingId || params.beingId || null,
           core,
         });
@@ -809,10 +809,10 @@ export async function init(core) {
     });
 
     core.do.registerOperation("route-to-foreman", {
-      targets: ["node"],
+      targets: ["space"],
       handler: async ({ target, params, identity }) => {
         return ensureExecutionNode({
-          scopeNodeId: idOf(target),
+          scopeSpaceId: idOf(target),
           beingId:     identity?.beingId || params.beingId || null,
           core,
         });
@@ -820,13 +820,13 @@ export async function init(core) {
     });
 
     core.do.registerOperation("ratify-plan", {
-      targets: ["node"],
+      targets: ["space"],
       handler: async ({ target, params }) => {
-        // target is the Ruler node; params.planNodeId is the plan
+        // target is the Ruler node; params.planSpaceId is the plan
         // emission being ratified. Status defaults to "approved".
         return appendPlanApproval({
-          rulerNodeId: idOf(target),
-          planNodeId:  params.planNodeId,
+          rulerSpaceId: idOf(target),
+          planSpaceId:  params.planSpaceId,
           status:      params.status || "approved",
           supersedes:  params.supersedes || null,
           reason:      params.reason || null,
@@ -836,14 +836,14 @@ export async function init(core) {
     });
 
     core.do.registerOperation("archive-plan", {
-      targets: ["node"],
+      targets: ["space"],
       handler: async ({ target, params }) => {
         // Marks the plan approval as "archived". Same primitive as
         // ratify, different status. Optionally freezes the active
         // execution-record as "cancelled" too (Pass 1 archive policy).
         return appendPlanApproval({
-          rulerNodeId: idOf(target),
-          planNodeId:  params.planNodeId,
+          rulerSpaceId: idOf(target),
+          planSpaceId:  params.planSpaceId,
           status:      "archived",
           supersedes:  params.supersedes || null,
           reason:      params.reason || null,
@@ -853,10 +853,10 @@ export async function init(core) {
     });
 
     core.do.registerOperation("emit-contracts", {
-      targets: ["node"],
+      targets: ["space"],
       handler: async ({ target, params, identity }) => {
         return setContracts({
-          scopeNodeId:           idOf(target),
+          scopeSpaceId:           idOf(target),
           contracts:             params.contracts || [],
           beingId:               identity?.beingId || null,
           systemSpec:            params.systemSpec || null,

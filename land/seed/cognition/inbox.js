@@ -123,12 +123,12 @@ export async function appendToInbox(spaceId, beingId, message) {
  */
 export async function readInbox(spaceId, beingId, options = {}) {
   if (!spaceId || !beingId) return [];
-  const node = await Space.findById(spaceId)
+  const space = await Space.findById(spaceId)
     .select(`metadata.${INBOX_NS}.${beingId}`)
     .lean();
-  if (!node) return [];
+  if (!space) return [];
 
-  const bucket = readMetaPath(node, [INBOX_NS, beingId]);
+  const bucket = readMetaPath(space, [INBOX_NS, beingId]);
   if (!Array.isArray(bucket)) return [];
 
   let entries = bucket;
@@ -169,10 +169,10 @@ export async function markInboxConsumed(spaceId, beingId, correlationIds, opts =
   }
 
   const consumedAt = new Date().toISOString();
-  const node = await Space.findById(spaceId)
+  const space = await Space.findById(spaceId)
     .select(`metadata.${INBOX_NS}.${beingId}`)
     .lean();
-  const bucket = readMetaPath(node, [INBOX_NS, beingId]);
+  const bucket = readMetaPath(space, [INBOX_NS, beingId]);
   if (!Array.isArray(bucket)) return { consumed: 0 };
 
   const idSet = new Set(correlationIds);
@@ -207,10 +207,10 @@ export async function markInboxConsumed(spaceId, beingId, correlationIds, opts =
  */
 export async function pickNextEntry(spaceId, beingId) {
   if (!spaceId || !beingId) return null;
-  const node = await Space.findById(spaceId)
+  const space = await Space.findById(spaceId)
     .select(`metadata.${INBOX_NS}.${beingId}`)
     .lean();
-  const bucket = readMetaPath(node, [INBOX_NS, beingId]);
+  const bucket = readMetaPath(space, [INBOX_NS, beingId]);
   if (!Array.isArray(bucket) || bucket.length === 0) return null;
 
   let bestIdx = -1;
@@ -246,10 +246,10 @@ export async function cancelByRootCorrelation(spaceId, beingId, rootCorrelation)
   if (!spaceId || !beingId || !rootCorrelation) {
     return { cancelled: 0, correlations: [] };
   }
-  const node = await Space.findById(spaceId)
+  const space = await Space.findById(spaceId)
     .select(`metadata.${INBOX_NS}.${beingId}`)
     .lean();
-  const bucket = readMetaPath(node, [INBOX_NS, beingId]);
+  const bucket = readMetaPath(space, [INBOX_NS, beingId]);
   if (!Array.isArray(bucket)) return { cancelled: 0, correlations: [] };
 
   const cancelledAt = new Date().toISOString();
@@ -301,9 +301,9 @@ export async function markSummoned(spaceId, beingId, index) {
  */
 export async function getInboxSummary(spaceId) {
   if (!spaceId) return {};
-  const node = await Space.findById(spaceId).select(`metadata.${INBOX_NS}`).lean();
-  if (!node) return {};
-  const inbox = readMetaPath(node, [INBOX_NS]);
+  const space = await Space.findById(spaceId).select(`metadata.${INBOX_NS}`).lean();
+  if (!space) return {};
+  const inbox = readMetaPath(space, [INBOX_NS]);
   if (!inbox || typeof inbox !== "object") return {};
   const out = {};
   const entries = inbox instanceof Map ? inbox.entries() : Object.entries(inbox);
@@ -336,9 +336,9 @@ export async function getInboxSummary(spaceId) {
 // Mongoose lean() returns metadata as a plain object whose entries may be
 // nested Maps depending on driver version. Resolve a path traversal that
 // handles both shapes.
-function readMetaPath(node, path) {
-  if (!node) return undefined;
-  let cursor = node.metadata;
+function readMetaPath(space, path) {
+  if (!space) return undefined;
+  let cursor = space.metadata;
   for (const key of path) {
     if (cursor instanceof Map) {
       cursor = cursor.get(key);

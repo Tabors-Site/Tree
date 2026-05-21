@@ -4,7 +4,7 @@
 //
 // LLM-driven being whose home is the land root. Summoned by the
 // operator to inspect and mutate land-level state: installed
-// extensions, config keys, peers, and the system-node tree. The
+// extensions, config keys, peers, and the land seed space tree. The
 // operator's SUMMON of `<land>/@land-manager` enters here.
 //
 // The old land-manager (oldExtensions/land-manager/) shipped 13

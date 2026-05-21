@@ -25,7 +25,7 @@ function esc(s) {
 }
 
 function readPlanMeta(node) {
-  const meta = node.metadata instanceof Map ? node.metadata.get(NS) : node.metadata?.[NS];
+  const meta = space.metadata instanceof Map ? space.metadata.get(NS) : space.metadata?.[NS];
   return meta || null;
 }
 
@@ -68,11 +68,11 @@ function renderStepRow(step, ctx) {
       : "";
 
     // Resolve the child from childrenIndex built by the caller.
-    const childEntry = step.childNodeId
-      ? childrenIndex.get(String(step.childNodeId)) || null
+    const childEntry = step.childSpaceId
+      ? childrenIndex.get(String(step.childSpaceId)) || null
       : childrenIndex.get(step.title) || null;
     const childLink = childEntry?.spaceId
-      ? `/api/v1/node/${childEntry.spaceId}?html${qs ? "&" + qs.slice(1) : ""}`
+      ? `/api/v1/space/${childEntry.spaceId}?html${qs ? "&" + qs.slice(1) : ""}`
       : null;
     const childHasPlan = childEntry?.hasPlan;
 
@@ -175,8 +175,8 @@ function renderStepRow(step, ctx) {
  * descendant Ruler scopes' active records, summing status counts.
  * Powers the panel's "Including descendants:" trailer line.
  */
-async function readRollupFromExecutionRecord(rulerNodeId) {
-  if (!rulerNodeId) return null;
+async function readRollupFromExecutionRecord(rulerSpaceId) {
+  if (!rulerSpaceId) return null;
   try {
     const { getExtension } = await import("../../loader.js");
     const governing = getExtension("governing")?.exports;
@@ -202,12 +202,12 @@ async function readRollupFromExecutionRecord(rulerNodeId) {
             const k = entry.status || "pending";
             if (k in counts) counts[k]++;
             counts.total++;
-            if (entry.childNodeId) await walk(entry.childNodeId, depth + 1);
+            if (entry.childSpaceId) await walk(entry.childSpaceId, depth + 1);
           }
         }
       }
     };
-    await walk(rulerNodeId, 0);
+    await walk(rulerSpaceId, 0);
     return counts;
   } catch {
     return null;
@@ -246,7 +246,7 @@ async function readStepsFromExecutionRecord(planSpace) {
             kind: "branch",
             title: entry.name,
             status,
-            childNodeId: entry.childNodeId || null,
+            childSpaceId: entry.childSpaceId || null,
             error: entry.error || null,
             blockedReason: entry.blockedReason || null,
           });
@@ -261,7 +261,7 @@ async function readStepsFromExecutionRecord(planSpace) {
 
 export async function renderPlanPanel({ node, spaceId, qs, isPublicAccess }) {
   try {
-    if (!node) return "";
+    if (!space) return "";
 
     const { steps, countBuckets } = await readStepsFromExecutionRecord(node);
     if (steps.length === 0) return "";
@@ -270,11 +270,11 @@ export async function renderPlanPanel({ node, spaceId, qs, isPublicAccess }) {
     // rows can resolve their "open plan" links quickly. The plan-type
     // node is a sibling of the Ruler's other children; we look at the
     // RULER's children (the plan node's siblings) to find branch
-    // childNodeId targets.
+    // childSpaceId targets.
     const childrenIndex = new Map();
     try {
       const Space = (await import("../../../seed/models/space.js")).default;
-      const rulerSpace = await Space.findById(node.parent).select("_id children").lean();
+      const rulerSpace = await Space.findById(space.parent).select("_id children").lean();
       if (rulerSpace && Array.isArray(rulerSpace.children) && rulerSpace.children.length > 0) {
         const kids = await Space.find({ _id: { $in: rulerSpace.children } })
           .select("_id name metadata.governing")
@@ -303,7 +303,7 @@ export async function renderPlanPanel({ node, spaceId, qs, isPublicAccess }) {
     // Rollup line: aggregated across this scope + descendant Rulers'
     // execution-records. Computed by walking the active records under
     // the parent Ruler scope.
-    const rollupCounts = await readRollupFromExecutionRecord(node.parent);
+    const rollupCounts = await readRollupFromExecutionRecord(space.parent);
     const rollup = rollupCounts && rollupCounts.total > 0 ? rollupCounts : null;
     const rollupLine = rollup
       ? `<div class="pp-rollup">Including descendants: ${rollup.done || 0} done, ${rollup.running || 0} running, ${rollup.pending || 0} pending, ${rollup.blocked || 0} blocked, ${rollup.failed || 0} failed</div>`

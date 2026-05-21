@@ -222,7 +222,7 @@ async function runLoop(beingId) {
   if (!state) return;
 
   try {
-    // Process every node that has wake-queued pending work. The loop
+    // Process every space that has wake-queued pending work. The loop
     // drains the wakeQueue, then picks one per iteration. New wakes
     // arriving mid-loop just add to wakeQueue and the next iteration
     // sees them.
@@ -230,7 +230,7 @@ async function runLoop(beingId) {
     // Cognition branch (agent vs human) lives inside processEntry,
     // after the receiver Being is loaded. For humans, processEntry
     // emits being-room notifications and returns { humanBreakNode },
-    // which signals this per-node loop to break — entries stay
+    // which signals this per-space loop to break — entries stay
     // pending in the inbox and the human responds by emitting a
     // new SUMMON, not by scheduler processing.
     while (state.wakeQueue.size > 0) {
@@ -241,7 +241,7 @@ async function runLoop(beingId) {
 
       let processedAny = false;
       for (const spaceId of spaceIds) {
-        // Drain THIS node's queue before moving on. Priority is enforced
+        // Drain THIS space's queue before moving on. Priority is enforced
         // by pickNextEntry, which always returns the current top.
         let safetyCounter = 1000; // hard cap so a runaway producer can't loop forever
         while (safetyCounter-- > 0) {
@@ -307,8 +307,8 @@ async function processEntry(beingId, spaceId, picked) {
     }
     // Human cognition branch. Entries stay pending; we emit
     // being-room notifications for each unconsumed entry at this
-    // node (dedup via state.humanNotified), release the controller,
-    // and signal the runLoop to break this node's loop. The human
+    // space (dedup via state.humanNotified), release the controller,
+    // and signal the runLoop to break this space's loop. The human
     // responds by emitting a new SUMMON, not by scheduler processing.
     if (toBeing.operatingMode === "human") {
       state.controller = null;

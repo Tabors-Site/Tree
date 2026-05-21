@@ -373,7 +373,7 @@ Wiring:
 
 - `land/ibp/protocol.js` registers the four ops on the Socket.IO instance
 - `land/ibp/bootstrap-route.js` the single HTTP bootstrap endpoint
-- `land/ibp/index.js` boot hook from `startup.js`
+- `land/ibp/index.js` boot hook from `genesis.js`
 
 ## Versioning
 

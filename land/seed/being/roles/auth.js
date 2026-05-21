@@ -65,11 +65,11 @@ export const authBeing = Object.freeze({
     }
 
     // ── First-being bootstrap ──
-    // The seed-being already exists (created by ensureLandRoot at
+    // The I-am already exists (created by ensureLandRoot at
     // boot). The very first human registration parents under the
-    // seed-being, becoming the land's root operator. Every subsequent
+    // I-am, becoming the land's root operator. Every subsequent
     // human registration parents under @auth, which itself parents
-    // under the seed-being. The chain walks human → auth → seed-being
+    // under the I-am. The chain walks human → auth → I-am
     // → null.
     //
     // Bypasses beforeRegister hook intentionally: on first boot the
@@ -133,7 +133,7 @@ export const authBeing = Object.freeze({
     try {
       // Use the home-creating primitive so the human gets a home
       // territory Space at registration. The home is the user's
-      // tree-root; their personal node hierarchy grows from there.
+      // tree-root; their personal space hierarchy grows from there.
       const result = await createBeingWithHome({
         operatingMode: "human",
         name,

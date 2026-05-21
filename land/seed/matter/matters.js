@@ -48,11 +48,11 @@ if (!fs.existsSync(uploadsFolder)) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────
-// CONFIG (all readable via land .config node)
+// CONFIG (all readable via land .config space)
 // ─────────────────────────────────────────────────────────────────────────
 
 function matterMaxChars()    { return Math.max(100, Number(getLandConfigValue("matterMaxChars"))    || 5000); }
-function maxMatterPerNode()  { return Math.max(1,   Number(getLandConfigValue("maxMatterPerNode")) || 1000); }
+function maxMatterPerSpace()  { return Math.max(1,   Number(getLandConfigValue("maxMatterPerSpace")) || 1000); }
 function matterQueryLimit()  { return Math.max(1,   Math.min(Number(getLandConfigValue("matterQueryLimit"))  || 5000, 50000)); }
 function searchQueryLimit()  { return Math.max(1,   Math.min(Number(getLandConfigValue("matterSearchLimit")) || 500, 10000)); }
 
@@ -137,7 +137,7 @@ async function createMatter({
   if (!targetSpace) throw new Error("Space not found or deleted");
   if (targetSpace.seedSpace) throw new Error("Cannot modify land seed spaces");
 
-  const max = maxMatterPerNode();
+  const max = maxMatterPerSpace();
   const count = await Matter.countDocuments({ spaceId });
   if (count >= max) {
     throw new Error(`Space has reached the maximum of ${max} matter entries. Delete old matter before adding new ones.`);
@@ -431,7 +431,7 @@ async function transferMatter({
 // BEING-FACING QUERIES
 // ─────────────────────────────────────────────────────────────────────────
 //
-// Read primitives keyed by being rather than by node. Substrate surface
+// Read primitives keyed by being rather than by space. Substrate surface
 // for "my matter" / "search my matter" / "edit history of this matter."
 // Wire these through IBP DO operations or extension tools when a UI
 // needs them.

@@ -15,9 +15,9 @@
  * writes to different namespaces on the same matter do not clobber each
  * other. There is no read-modify-write path.
  *
- * Spatial scoping: matter inherits scope from the node it lives on. There
+ * Spatial scoping: matter inherits scope from the space it lives on. There
  * is no per-matter extension-blocked list. Extensions blocked at the
- * containing node already have their hooks and tool resolutions filtered out
+ * containing space already have their hooks and tool resolutions filtered out
  * by the time they reach matter code, so a separate per-matter check
  * would be redundant.
  *

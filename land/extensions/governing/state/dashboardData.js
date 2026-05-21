@@ -42,7 +42,7 @@ import { readPendingIssues, summarizeFlags } from "./flagQueue.js";
  *     root: { rootId, treeName },
  *     rulers: [
  *       {
- *         depth, rulerNodeId, rulerName,
+ *         depth, rulerSpaceId, rulerName,
  *         snapshot,                  // buildRulerSnapshot output
  *         planEmission,              // full active plan (reasoning + steps[])
  *         contractsEmission,         // full active contracts (reasoning + contracts[])
@@ -84,7 +84,7 @@ export async function buildDashboardData(rootId) {
   // page-load latency tight.
   const rulers = await Promise.all(
     rulerList.map(async (entry) => {
-      const { depth, rulerNodeId, name } = entry;
+      const { depth, rulerSpaceId, name } = entry;
       // Each read is wrapped in try/catch so one failure doesn't
       // sink the whole page. Missing data renders as "absent" in
       // the card; the page stays usable.
@@ -99,31 +99,31 @@ export async function buildDashboardData(rootId) {
       let contractApprovals = [];
       let executionApprovals = [];
 
-      try { snapshot = await buildRulerSnapshot(rulerNodeId); } catch (err) {
-        log.debug("Governing/Dashboard", `snapshot ${rulerNodeId.slice(0, 8)}: ${err.message}`);
+      try { snapshot = await buildRulerSnapshot(rulerSpaceId); } catch (err) {
+        log.debug("Governing/Dashboard", `snapshot ${rulerSpaceId.slice(0, 8)}: ${err.message}`);
       }
-      try { planEmission = await readActivePlanEmission(rulerNodeId); } catch {}
-      try { contractsEmission = await readActiveContractsEmission(rulerNodeId); } catch {}
+      try { planEmission = await readActivePlanEmission(rulerSpaceId); } catch {}
+      try { contractsEmission = await readActiveContractsEmission(rulerSpaceId); } catch {}
       // Effective vocabulary at this scope: every in-force contract,
       // walking ancestors. Distinct from contractsEmission, which is
       // only what THIS scope's Contractor most recently ratified.
       // A scope that inherits has an empty emission but a populated
       // in-force list.
-      try { contractsInForce = await readContracts(rulerNodeId); } catch {}
-      try { executionRecord = await readActiveExecutionRecord(rulerNodeId); } catch {}
+      try { contractsInForce = await readContracts(rulerSpaceId); } catch {}
+      try { executionRecord = await readActiveExecutionRecord(rulerSpaceId); } catch {}
       try {
-        flagsAll = await readPendingIssues(rulerNodeId);
+        flagsAll = await readPendingIssues(rulerSpaceId);
         if (flagsAll.length > 0) {
           flagsSummary = summarizeFlags(flagsAll, { lastN: 5 });
         }
       } catch {}
-      try { planApprovals = await readPlanApprovalsAtRuler(rulerNodeId); } catch {}
-      try { contractApprovals = await readApprovalsAtRuler(rulerNodeId); } catch {}
-      try { executionApprovals = await readExecutionApprovalsAtRuler(rulerNodeId); } catch {}
+      try { planApprovals = await readPlanApprovalsAtRuler(rulerSpaceId); } catch {}
+      try { contractApprovals = await readApprovalsAtRuler(rulerSpaceId); } catch {}
+      try { executionApprovals = await readExecutionApprovalsAtRuler(rulerSpaceId); } catch {}
 
       return {
         depth,
-        rulerNodeId,
+        rulerSpaceId,
         rulerName: name,
         snapshot,
         planEmission,

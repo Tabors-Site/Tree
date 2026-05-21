@@ -93,14 +93,14 @@ function flagContentHash(payload) {
  * null on failure.
  *
  * @param {object} args
- * @param {string} args.rulerNodeId   the scope receiving the flag
+ * @param {string} args.rulerSpaceId   the scope receiving the flag
  * @param {object} args.payload       the flag content (kind, artifactContext, localChoice, blocking, proposedResolution?)
  * @param {string} [args.beingId]      Worker's user id (for audit)
  * @param {string} [args.sourceWorkerScopeId] the node id where the Worker ran
  * @param {string} [args.sourceWorkerType]    "build" | "refine" | "review" | "integrate"
  */
 export async function appendFlag({
-  rulerNodeId,
+  rulerSpaceId,
   payload,
   beingId = null,
   sourceWorkerScopeId = null,
@@ -110,7 +110,7 @@ export async function appendFlag({
   // so the write goes through core.do (auto-Did, one dispatcher).
   core,
 }) {
-  if (!rulerNodeId || !payload) return null;
+  if (!rulerSpaceId || !payload) return null;
   if (!core?.do) throw new Error("appendFlag requires `core` (verb surface)");
   const authIdentity = identity || (beingId ? { beingId } : null);
   if (!isValidFlagKind(payload.kind)) {
@@ -118,14 +118,14 @@ export async function appendFlag({
     return null;
   }
 
-  const node = await Space.findById(rulerNodeId);
-  if (!node) return null;
-  const meta = node.metadata instanceof Map
-    ? node.metadata.get(NS)
-    : node.metadata?.[NS];
+  const space = await Space.findById(rulerSpaceId);
+  if (!space) return null;
+  const meta = space.metadata instanceof Map
+    ? space.metadata.get(NS)
+    : space.metadata?.[NS];
   if (meta?.role !== "ruler") {
     log.warn("Governing/Flags",
-      `appendFlag: ${String(rulerNodeId).slice(0, 8)} is not a Ruler scope (role=${meta?.role || "(none)"})`);
+      `appendFlag: ${String(rulerSpaceId).slice(0, 8)} is not a Ruler scope (role=${meta?.role || "(none)"})`);
     return null;
   }
 
@@ -174,7 +174,7 @@ export async function appendFlag({
   }, { identity: authIdentity });
 
   log.info("Governing/Flags",
-    `🚩 Flag appended at Ruler ${String(rulerNodeId).slice(0, 8)}: ` +
+    `🚩 Flag appended at Ruler ${String(rulerSpaceId).slice(0, 8)}: ` +
     `kind=${flag.kind}, blocking=${flag.blocking}, ` +
     `scope=${flag.artifactContext.scope || "?"}, ` +
     `queueSize=${queue.length}`);
@@ -185,7 +185,7 @@ export async function appendFlag({
   try {
     const { hooks } = await import("../../../seed/system/hooks.js");
     hooks.run("governing:flagAppended", {
-      rulerNodeId: String(rulerNodeId),
+      rulerSpaceId: String(rulerSpaceId),
       flagId: flag.id,
       kind: flag.kind,
       blocking: flag.blocking,
@@ -202,13 +202,13 @@ export async function appendFlag({
  * Read all pending (unresolved) flags from a Ruler's queue. Returns
  * the full array, ordered by timestamp ascending.
  */
-export async function readPendingIssues(rulerNodeId) {
-  if (!rulerNodeId) return [];
-  const node = await Space.findById(rulerNodeId).select("metadata").lean();
-  if (!node) return [];
-  const meta = node.metadata instanceof Map
-    ? node.metadata.get(NS)
-    : node.metadata?.[NS];
+export async function readPendingIssues(rulerSpaceId) {
+  if (!rulerSpaceId) return [];
+  const space = await Space.findById(rulerSpaceId).select("metadata").lean();
+  if (!space) return [];
+  const meta = space.metadata instanceof Map
+    ? space.metadata.get(NS)
+    : space.metadata?.[NS];
   if (meta?.role !== "ruler") return [];
   const queue = Array.isArray(meta?.pendingContractIssues)
     ? meta.pendingContractIssues
@@ -221,14 +221,14 @@ export async function readPendingIssues(rulerNodeId) {
  * has no caller for this yet, but the primitive lands here so the
  * mark-resolved code path exists when courts arrive).
  */
-export async function markFlagResolved({ rulerNodeId, flagId, resolution, identity = null, core }) {
+export async function markFlagResolved({ rulerSpaceId, flagId, resolution, identity = null, core }) {
   if (!core?.do) throw new Error("markFlagResolved requires `core` (verb surface)");
-  if (!rulerNodeId || !flagId) return null;
-  const node = await Space.findById(rulerNodeId);
-  if (!node) return null;
-  const meta = node.metadata instanceof Map
-    ? node.metadata.get(NS)
-    : node.metadata?.[NS];
+  if (!rulerSpaceId || !flagId) return null;
+  const space = await Space.findById(rulerSpaceId);
+  if (!space) return null;
+  const meta = space.metadata instanceof Map
+    ? space.metadata.get(NS)
+    : space.metadata?.[NS];
   if (meta?.role !== "ruler") return null;
   const queue = Array.isArray(meta?.pendingContractIssues)
     ? meta.pendingContractIssues

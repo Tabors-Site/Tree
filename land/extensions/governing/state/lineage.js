@@ -58,12 +58,12 @@ export async function writeLineage({
   if (!core?.do) throw new Error("writeLineage requires `core` (verb surface)");
   if (!subRulerNodeId || !parentRulerId) return null;
 
-  const node = await Space.findById(subRulerNodeId);
-  if (!node) return null;
+  const space = await Space.findById(subRulerNodeId);
+  if (!space) return null;
 
-  const existingMeta = node.metadata instanceof Map
-    ? node.metadata.get(NS)
-    : node.metadata?.[NS];
+  const existingMeta = space.metadata instanceof Map
+    ? space.metadata.get(NS)
+    : space.metadata?.[NS];
   if (!force && existingMeta?.lineage?.parentRulerId) {
     return existingMeta.lineage;
   }
@@ -100,11 +100,11 @@ export async function writeLineage({
  */
 export async function readLineage(subRulerNodeId) {
   if (!subRulerNodeId) return null;
-  const node = await Space.findById(subRulerNodeId).select("_id metadata").lean();
-  if (!node) return null;
-  const meta = node.metadata instanceof Map
-    ? node.metadata.get(NS)
-    : node.metadata?.[NS];
+  const space = await Space.findById(subRulerNodeId).select("_id metadata").lean();
+  if (!space) return null;
+  const meta = space.metadata instanceof Map
+    ? space.metadata.get(NS)
+    : space.metadata?.[NS];
   return meta?.lineage || null;
 }
 

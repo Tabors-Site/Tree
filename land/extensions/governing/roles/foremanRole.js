@@ -368,8 +368,8 @@ export const foremanRole = {
 
   // Custom dispatch. Routes by message content shape.
   async summon(message, ctx) {
-    const executionNodeId = ctx.spaceId || ctx.resolved?.spaceId;
-    if (!executionNodeId) {
+    const executionSpaceId = ctx.spaceId || ctx.resolved?.spaceId;
+    if (!executionSpaceId) {
       log.warn("Foreman", "summon without spaceId; returning empty");
       return { text: "Internal error: no execution node." };
     }
@@ -380,9 +380,9 @@ export const foremanRole = {
       && message.content.kind === "dispatch-plan";
 
     if (isDispatch) {
-      return await runDispatch(message, ctx, executionNodeId);
+      return await runDispatch(message, ctx, executionSpaceId);
     }
-    return await runJudgment(message, ctx, executionNodeId);
+    return await runJudgment(message, ctx, executionSpaceId);
   },
 };
 
@@ -390,10 +390,10 @@ export const foremanRole = {
 // Judgment path — same shape as Planner/Contractor
 // ────────────────────────────────────────────────────────────────
 
-async function runJudgment(message, ctx, executionNodeId) {
+async function runJudgment(message, ctx, executionSpaceId) {
   const startMs = Date.now();
   log.info("Foreman",
-    `🔧 judgment summons at ${String(executionNodeId).slice(0, 8)} ` +
+    `🔧 judgment summons at ${String(executionSpaceId).slice(0, 8)} ` +
     `(from=${message.from || "?"}, correlation=${message.correlation?.slice(0, 8) || "?"})`);
 
   let result;
@@ -411,7 +411,7 @@ async function runJudgment(message, ctx, executionNodeId) {
     }
     log.warn("Foreman", `LLM call failed: ${err.message}`);
     await emitReplyToAsker({
-      fromNodeId:      executionNodeId,
+      fromSpaceId:      executionSpaceId,
       fromBeing:       ctx.toBeing,
       fromRoleName:    ctx.toBeing?.name || "foreman",
       originalMessage: message,
@@ -422,11 +422,11 @@ async function runJudgment(message, ctx, executionNodeId) {
 
   const exitText = result?.text || "(judgment recorded)";
   log.info("Foreman",
-    `🔧 judgment complete at ${String(executionNodeId).slice(0, 8)} in ${Date.now() - startMs}ms`);
+    `🔧 judgment complete at ${String(executionSpaceId).slice(0, 8)} in ${Date.now() - startMs}ms`);
 
   // Reply to whoever asked (Ruler in the normal chain).
   await emitReplyToAsker({
-    fromNodeId:      executionNodeId,
+    fromSpaceId:      executionSpaceId,
     fromBeing:       ctx.toBeing,
     fromRoleName:    ctx.toBeing?.name || "foreman",
     originalMessage: message,
@@ -443,20 +443,20 @@ async function runJudgment(message, ctx, executionNodeId) {
 // Dispatch path — absorbs dispatchSwarmPlan
 // ────────────────────────────────────────────────────────────────
 
-async function runDispatch(message, ctx, executionNodeId) {
+async function runDispatch(message, ctx, executionSpaceId) {
   const startMs = Date.now();
   log.info("Foreman",
-    `🚦 dispatch summons at ${String(executionNodeId).slice(0, 8)} ` +
+    `🚦 dispatch summons at ${String(executionSpaceId).slice(0, 8)} ` +
     `(from=${message.from || "?"}, correlation=${message.correlation?.slice(0, 8) || "?"})`);
 
   // ── Resolve Ruler scope. The execution node carries scopeRulerId
   //    in its governing metadata (stamped at ensureExecutionNode time).
-  const executionSpace = await Space.findById(executionNodeId).select("metadata").lean();
+  const executionSpace = await Space.findById(executionSpaceId).select("metadata").lean();
   const governing = readMetaPath(executionSpace, ["governing"]);
-  const rulerNodeId = governing?.scopeRulerId;
-  if (!rulerNodeId) {
+  const rulerSpaceId = governing?.scopeRulerId;
+  if (!rulerSpaceId) {
     log.warn("Foreman",
-      `dispatch: execution node ${String(executionNodeId).slice(0, 8)} ` +
+      `dispatch: execution node ${String(executionSpaceId).slice(0, 8)} ` +
       `has no scopeRulerId; cannot resolve plan`);
     return { text: "dispatch failed: no ruler scope" };
   }
@@ -467,11 +467,11 @@ async function runDispatch(message, ctx, executionNodeId) {
     log.warn("Foreman", "dispatch: governing.readActivePlanEmission unavailable");
     return { text: "dispatch failed: governing helpers missing" };
   }
-  const planEmission = await govExt.readActivePlanEmission(rulerNodeId);
+  const planEmission = await govExt.readActivePlanEmission(rulerSpaceId);
   if (!planEmission?.steps?.length) {
     log.warn("Foreman",
-      `dispatch: no plan emission at ruler ${String(rulerNodeId).slice(0, 8)}; nothing to dispatch`);
-    await replyDispatchResult(message, ctx, executionNodeId, {
+      `dispatch: no plan emission at ruler ${String(rulerSpaceId).slice(0, 8)}; nothing to dispatch`);
+    await replyDispatchResult(message, ctx, executionSpaceId, {
       ok: false,
       reason: "no plan emission",
     });
@@ -499,7 +499,7 @@ async function runDispatch(message, ctx, executionNodeId) {
       break;
     }
     // Halt-marker check — same gating as legacy dispatch.
-    const halt = await readStepHaltMarkers(govExt, rulerNodeId);
+    const halt = await readStepHaltMarkers(govExt, rulerSpaceId);
     if (halt.status === "cancelled" || halt.pendingCancel) {
       log.warn("Foreman", "dispatch: cancelled by Foreman halt marker; breaking");
       break;
@@ -517,11 +517,11 @@ async function runDispatch(message, ctx, executionNodeId) {
 
     if (group.kind === "leaves") {
       await dispatchLeafBatch({
-        group, executionNodeId, rulerNodeId, ctx, allBranchNames, planEmission,
+        group, executionSpaceId, rulerSpaceId, ctx, allBranchNames, planEmission,
       });
     } else if (group.kind === "branch") {
       const branchResult = await dispatchBranchStep({
-        group, executionNodeId, rulerNodeId, ctx, planEmission,
+        group, executionSpaceId, rulerSpaceId, ctx, planEmission,
       });
       if (branchResult?.summary) lastResult = branchResult;
     }
@@ -531,9 +531,9 @@ async function runDispatch(message, ctx, executionNodeId) {
   //    Mirrors the legacy `governing:swarmDispatched` hook payload.
   const durationMs = Date.now() - startMs;
   log.info("Foreman",
-    `🚦 dispatch complete at ${String(executionNodeId).slice(0, 8)} in ${durationMs}ms`);
+    `🚦 dispatch complete at ${String(executionSpaceId).slice(0, 8)} in ${durationMs}ms`);
 
-  await replyDispatchResult(message, ctx, executionNodeId, {
+  await replyDispatchResult(message, ctx, executionSpaceId, {
     ok: true,
     durationMs,
     summary: lastResult.summary,
@@ -558,7 +558,7 @@ async function runDispatch(message, ctx, executionNodeId) {
 // worker-being instance per leaf). Aggregator with minReplies=N
 // supports it directly. Today we mirror legacy.
 
-async function dispatchLeafBatch({ group, executionNodeId, rulerNodeId, ctx, allBranchNames, planEmission }) {
+async function dispatchLeafBatch({ group, executionSpaceId, rulerSpaceId, ctx, allBranchNames, planEmission }) {
   const workerType = group.workerType || "build";
   const workerRoleName = `worker-${workerType}`;
   const leafSpecs = group.steps
@@ -571,7 +571,7 @@ async function dispatchLeafBatch({ group, executionNodeId, rulerNodeId, ctx, all
 
   // Ensure the typed worker being exists at the execution node.
   const workerBeing = await ensureWorkerBeing({
-    executionNodeId,
+    executionSpaceId,
     workerRoleName,
   });
   if (!workerBeing) {
@@ -592,9 +592,9 @@ async function dispatchLeafBatch({ group, executionNodeId, rulerNodeId, ctx, all
     || ctx.message?.correlation
     || correlation;
   const landDomain = getLandDomain() || "land";
-  const foremanStance = `${landDomain}/${executionNodeId}@${ctx.toBeing?.name || "foreman"}`;
+  const foremanStance = `${landDomain}/${executionSpaceId}@${ctx.toBeing?.name || "foreman"}`;
 
-  await appendToInbox(executionNodeId, String(workerBeing._id), {
+  await appendToInbox(executionSpaceId, String(workerBeing._id), {
     from:            foremanStance,
     content:         messageBody,
     correlation,
@@ -611,7 +611,7 @@ async function dispatchLeafBatch({ group, executionNodeId, rulerNodeId, ctx, all
     signal:       ctx.signal,
   });
   attachHandoff(String(workerBeing._id), correlation, {
-    responseFromStance: `${landDomain}/${executionNodeId}@${workerRoleName}`,
+    responseFromStance: `${landDomain}/${executionSpaceId}@${workerRoleName}`,
     onResponse: (replyEntry) => agg.notify(replyEntry),
     onError:    (err) => agg.notify({
       inReplyTo: correlation,
@@ -619,7 +619,7 @@ async function dispatchLeafBatch({ group, executionNodeId, rulerNodeId, ctx, all
       error:     true,
     }),
   });
-  wake(String(workerBeing._id), executionNodeId);
+  wake(String(workerBeing._id), executionSpaceId);
 
   log.info("Foreman",
     `🚦 → ${workerRoleName} dispatched ` +
@@ -653,7 +653,7 @@ async function dispatchLeafBatch({ group, executionNodeId, rulerNodeId, ctx, all
 // sub-Ruler that runs its own lifecycle. The Foreman SUMMONs each
 // sub-Ruler in parallel; aggregator collects replies.
 
-async function dispatchBranchStep({ group, executionNodeId, rulerNodeId, ctx, planEmission }) {
+async function dispatchBranchStep({ group, executionSpaceId, rulerSpaceId, ctx, planEmission }) {
   const branches = (group.step?.branches || [])
     .filter((b) => b && typeof b.name === "string" && b.name.trim().length > 0);
   if (branches.length === 0) {
@@ -662,7 +662,7 @@ async function dispatchBranchStep({ group, executionNodeId, rulerNodeId, ctx, pl
   }
 
   log.info("Foreman",
-    `🚦 branch-step at ${String(rulerNodeId).slice(0, 8)}: ` +
+    `🚦 branch-step at ${String(rulerSpaceId).slice(0, 8)}: ` +
     `dispatching ${branches.length} sub-Ruler(s)`);
 
   // Future: ensure sub-Ruler nodes exist, promote each to Ruler if
@@ -682,10 +682,10 @@ async function dispatchBranchStep({ group, executionNodeId, rulerNodeId, ctx, pl
 // Ensure a typed-worker being at the execution node
 // ────────────────────────────────────────────────────────────────
 
-async function ensureWorkerBeing({ executionNodeId, workerRoleName }) {
+async function ensureWorkerBeing({ executionSpaceId, workerRoleName }) {
   // Read existing — metadata.beings.<workerRoleName>.beingId at the
   // execution node tells us if one's already materialized.
-  const execSpace = await Space.findById(executionNodeId).select("metadata").lean();
+  const execSpace = await Space.findById(executionSpaceId).select("metadata").lean();
   const beings = readMetaPath(execSpace, ["beings"]);
   const existingId = beings?.[workerRoleName]?.beingId;
   if (existingId) {
@@ -701,12 +701,12 @@ async function ensureWorkerBeing({ executionNodeId, workerRoleName }) {
     const { being } = await createBeingWithHome({
       operatingMode: "llm",
       role:          workerRoleName,
-      homeSpace:     String(executionNodeId),
+      homeSpace:     String(executionSpaceId),
     });
     if (being?._id) {
       // Stamp metadata.beings.<workerRoleName> so future dispatches
       // find this instance instead of creating duplicates.
-      const node = await Space.findById(executionNodeId);
+      const space = await Space.findById(executionSpaceId);
       if (node) {
         const { mergeExtMeta } = await import("../../../seed/space/extensionMetadata.js");
         await mergeExtMeta(node, "beings", {
@@ -719,7 +719,7 @@ async function ensureWorkerBeing({ executionNodeId, workerRoleName }) {
       }
       log.info("Foreman",
         `✨ materialized ${workerRoleName} being ${String(being._id).slice(0, 8)} ` +
-        `at ${String(executionNodeId).slice(0, 8)}`);
+        `at ${String(executionSpaceId).slice(0, 8)}`);
       return being;
     }
   } catch (err) {
@@ -808,12 +808,12 @@ function earliestStepIndex(group) {
   return Infinity;
 }
 
-async function readStepHaltMarkers(govExt, rulerNodeId) {
+async function readStepHaltMarkers(govExt, rulerSpaceId) {
   try {
     if (!govExt?.readActiveExecutionRecord) {
       return { status: null, pendingCancel: null, pendingPauseAt: null };
     }
-    const record = await govExt.readActiveExecutionRecord(rulerNodeId);
+    const record = await govExt.readActiveExecutionRecord(rulerSpaceId);
     return {
       status:         record?.status || null,
       pendingCancel:  record?.pendingCancel || null,
@@ -828,9 +828,9 @@ async function readStepHaltMarkers(govExt, rulerNodeId) {
 // Reply to Ruler with dispatch result
 // ────────────────────────────────────────────────────────────────
 
-async function replyDispatchResult(message, ctx, executionNodeId, payload) {
+async function replyDispatchResult(message, ctx, executionSpaceId, payload) {
   await emitReplyToAsker({
-    fromNodeId:      executionNodeId,
+    fromSpaceId:      executionSpaceId,
     fromBeing:       ctx.toBeing,
     fromRoleName:    ctx.toBeing?.name || "foreman",
     originalMessage: message,

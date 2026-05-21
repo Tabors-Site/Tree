@@ -175,9 +175,9 @@ async function resolveRuler(spaceId) {
  * governing.ensurePlanAtScope first; the Ruler cycle does this in
  * runRulerCycle).
  */
-async function findPlanTrioMember(rulerNodeId) {
+async function findPlanTrioMember(rulerSpaceId) {
   return Space.findOne({
-    parent: rulerNodeId,
+    parent: rulerSpaceId,
     type: "plan",
   }).select("_id name parent type children metadata").lean();
 }
@@ -186,9 +186,9 @@ async function findPlanTrioMember(rulerNodeId) {
  * Compute the next emission ordinal for naming the child node
  * "emission-N". Counts existing plan-emission children and increments.
  */
-async function nextEmissionOrdinal(planNodeId) {
+async function nextEmissionOrdinal(planSpaceId) {
   const count = await Space.countDocuments({
-    parent: planNodeId,
+    parent: planSpaceId,
     type: "plan-emission",
   });
   return count + 1;
@@ -199,7 +199,7 @@ async function nextEmissionOrdinal(planNodeId) {
  * Carries the structured emission in metadata.governing.emission.
  * Returns the created node.
  */
-async function createPlanEmission({ planNodeId, ordinal, payload, beingId, identity = null, core }) {
+async function createPlanEmission({ planSpaceId, ordinal, payload, beingId, identity = null, core }) {
   const authIdentity = identity || (beingId ? { beingId } : null);
   // Slug derived from the Planner's reasoning headline. Walking the
   // tree page tells you what each emission is about without
@@ -212,7 +212,7 @@ async function createPlanEmission({ planNodeId, ordinal, payload, beingId, ident
   // create. Fires kernel hooks + writes a "create-child" Did.
   let created = null;
   try {
-    created = await core.do(planNodeId, "create-child", {
+    created = await core.do(planSpaceId, "create-child", {
       name,
       type: "plan-emission",
       beingId,
@@ -228,13 +228,13 @@ async function createPlanEmission({ planNodeId, ordinal, payload, beingId, ident
       _id: uuid(),
       name,
       type: "plan-emission",
-      parent: planNodeId,
+      parent: planSpaceId,
       children: [],
       contributors: [],
       status: "active",
     });
     await NodeModel.updateOne(
-      { _id: planNodeId },
+      { _id: planSpaceId },
       { $addToSet: { children: created._id } },
     );
   }
@@ -247,7 +247,7 @@ async function createPlanEmission({ planNodeId, ordinal, payload, beingId, ident
   try {
     // Phase 3 migration: verb-surface write. merge:true keeps siblings
     // atomically; no manual read-spread-write needed.
-    const node = await Space.findById(created._id);
+    const space = await Space.findById(created._id);
     if (node) {
       await core.do(node, "set-meta", {
         namespace: "governing",
@@ -274,9 +274,9 @@ async function createPlanEmission({ planNodeId, ordinal, payload, beingId, ident
 // node name (case-insensitive) or by the legacy swarm `path` field
 // when the branch was dispatched with a custom path. Returns an array
 // the same length as `names` with nullable entries for unresolved.
-async function resolveConsumerNodeIds(rulerNodeId, names) {
+async function resolveConsumerNodeIds(rulerSpaceId, names) {
   if (!Array.isArray(names) || !names.length) return [];
-  const kids = await Space.find({ parent: rulerNodeId })
+  const kids = await Space.find({ parent: rulerSpaceId })
     .select("_id name metadata")
     .lean();
   const lookup = new Map();
@@ -509,7 +509,7 @@ export default function getGoverningTools(core) {
             const governing = getExtension("governing")?.exports;
             if (governing?.ensurePlanAtScope) {
               planSpace = await governing.ensurePlanAtScope({
-                scopeNodeId: String(ruler._id),
+                scopeSpaceId: String(ruler._id),
                 beingId,
               });
             }
@@ -566,7 +566,7 @@ export default function getGoverningTools(core) {
           `, reasoning=${payload.reasoning.length}c`);
 
         const emissionSpace = await createPlanEmission({
-          planNodeId: planSpace._id,
+          planSpaceId: planSpace._id,
           ordinal,
           payload,
           beingId,
@@ -636,8 +636,8 @@ export default function getGoverningTools(core) {
                   ? await governing.readActivePlanApproval(ruler._id)
                   : null);
             await governing.appendPlanApproval({
-              rulerNodeId: ruler._id,
-              planNodeId: emissionSpace._id,
+              rulerSpaceId: ruler._id,
+              planSpaceId: emissionSpace._id,
               status: approvalStatus,
               supersedes: prior?.planRef || null,
               reason: prior ? `re-plan supersedes prior emission (${prior.status})` : null,
@@ -656,8 +656,8 @@ export default function getGoverningTools(core) {
           ok: true,
           emissionId: String(emissionSpace._id),
           planRef,
-          rulerNodeId: String(ruler._id),
-          planNodeId: String(planSpace._id),
+          rulerSpaceId: String(ruler._id),
+          planSpaceId: String(planSpace._id),
           ordinal,
           stepsCount: payload.steps.length,
           emittedAt,
@@ -702,7 +702,7 @@ export default function getGoverningTools(core) {
         "LCA validation runs server-side: a contract whose scope reaches outside this Ruler's " +
         "domain is rejected. Server persists to the Ruler's contracts trio member and appends " +
         "approval entries to contractApprovals. Returns {ok, accepted, rejected, skipped, " +
-        "contractsNodeId, rulerNodeId, inheritsFrom?}. After this tool succeeds, you are done — exit.",
+        "contractsSpaceId, rulerSpaceId, inheritsFrom?}. After this tool succeeds, you are done — exit.",
       schema: {
         reasoning: z.string().describe(
           "2-6 sentences. Why this contract set takes this shape, or for an inheritance " +
@@ -818,7 +818,7 @@ export default function getGoverningTools(core) {
             return text(`governing-emit-contracts: setContracts unavailable (substrate misconfigured).`);
           }
           result = await governing.setContracts({
-            scopeNodeId: ruler._id,
+            scopeSpaceId: ruler._id,
             contracts: incoming,
             beingId,
             reasoning: validation.value.reasoning,
@@ -856,8 +856,8 @@ export default function getGoverningTools(core) {
 
         return text(JSON.stringify({
           ok: rejected.length === 0,
-          rulerNodeId: String(ruler._id),
-          contractsNodeId: result?.contractsSpace?._id ? String(result.contractsSpace._id) : null,
+          rulerSpaceId: String(ruler._id),
+          contractsSpaceId: result?.contractsSpace?._id ? String(result.contractsSpace._id) : null,
           emissionId: result?.emissionSpace?._id ? String(result.emissionSpace._id) : null,
           ...(validation.value.inheritsFrom ? {
             inheritsFrom: validation.value.inheritsFrom,

@@ -51,10 +51,10 @@ const ARRIVAL_PROPS = Object.freeze({
   homeAtPosition:       false,
   homeInDomain:         false,
   positionInHomeDomain: false,
-  // homeAncestors: the set of nodeIds along the home's ancestor chain
+  // homeAncestors: the set of spaceIds along the home's ancestor chain
   // (including the home itself). Layer 4's comparator uses this to
   // resolve scoped checks like `homeInDomain: "<rulership-spaceId>"`
-  // ("is this specific node anywhere in the home's ancestry?").
+  // ("is this specific space anywhere in the home's ancestry?").
   homeAncestors:        Object.freeze([]),
   homeOnThisLand:       true,
   federatedFrom:        null,

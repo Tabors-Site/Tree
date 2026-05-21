@@ -24,14 +24,14 @@ const EXT_NAME_RE    = /^[a-z][a-z0-9-]*:[a-z][a-z0-9-]*$/;
 const MAX_REGISTERED = 500;
 
 // Target kinds an operation may declare it accepts.
-const VALID_TARGETS = new Set(["node", "being", "matter", "land", "stance", "position"]);
+const VALID_TARGETS = new Set(["space", "being", "matter", "land", "stance", "position"]);
 
 /**
  * Register a DO operation.
  *
  * @param {string} name - "<action>" for kernel ops, "<ext>:<action>" for extensions
  * @param {object} spec
- * @param {string[]} spec.targets - target kinds the op accepts: node|being|matter|land|stance|position
+ * @param {string[]} spec.targets - target kinds the op accepts: space|being|matter|land|stance|position
  * @param {Function} spec.handler - async ({ target, params, identity, summonCtx }) => result
  * @param {object} [spec.schema] - payload validation (Zod / JSON schema). Currently stored only; enforcement is on the roadmap.
  * @param {string} [spec.didAction] - name written into the Did. Defaults to operation name.
@@ -140,7 +140,7 @@ export function getOperation(name) {
 /**
  * List registered operations. Optional filters:
  *   { ownerExtension: "food" }      -> only that extension's ops
- *   { target: "node" }              -> only ops accepting node targets
+ *   { target: "space" }             -> only ops accepting space targets
  */
 export function listOperations(filter = {}) {
   let entries = Array.from(REGISTRY.values());

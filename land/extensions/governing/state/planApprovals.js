@@ -25,22 +25,22 @@ const NS = "governing";
  * The seq is the plan node's metadata.plan._writeSeq at the moment of
  * approval, which uniquely identifies that draft of the plan.
  */
-export function buildPlanRef(planNodeId, writeSeq) {
-  return `${String(planNodeId)}:${String(writeSeq || "init")}`;
+export function buildPlanRef(planSpaceId, writeSeq) {
+  return `${String(planSpaceId)}:${String(writeSeq || "init")}`;
 }
 
 /**
- * Parse a planRef into { planNodeId, writeSeq }. Returns null on bad
+ * Parse a planRef into { planSpaceId, writeSeq }. Returns null on bad
  * shape. Mirrors parseContractRef.
  */
 export function parsePlanRef(ref) {
   if (typeof ref !== "string" || !ref) return null;
   const idx = ref.indexOf(":");
   if (idx <= 0) return null;
-  const planNodeId = ref.slice(0, idx);
+  const planSpaceId = ref.slice(0, idx);
   const writeSeq = ref.slice(idx + 1);
-  if (!planNodeId || !writeSeq) return null;
-  return { planNodeId, writeSeq };
+  if (!planSpaceId || !writeSeq) return null;
+  return { planSpaceId, writeSeq };
 }
 
 /**
@@ -49,12 +49,12 @@ export function parsePlanRef(ref) {
  * brand-new plan that hasn't been written yet); callers default to
  * "init" via buildPlanRef.
  */
-async function readPlanWriteSeq(planNodeId) {
-  const node = await Space.findById(planNodeId).select("_id metadata").lean();
-  if (!node) return null;
-  const meta = node.metadata instanceof Map
-    ? node.metadata.get("plan")
-    : node.metadata?.plan;
+async function readPlanWriteSeq(planSpaceId) {
+  const space = await Space.findById(planSpaceId).select("_id metadata").lean();
+  if (!space) return null;
+  const meta = space.metadata instanceof Map
+    ? space.metadata.get("plan")
+    : space.metadata?.plan;
   return meta?._writeSeq || null;
 }
 
@@ -66,8 +66,8 @@ async function readPlanWriteSeq(planNodeId) {
  * window is short (one Ruler approves at most one plan per cycle).
  */
 export async function appendPlanApproval({
-  rulerNodeId,
-  planNodeId,
+  rulerSpaceId,
+  planSpaceId,
   status = "approved",
   supersedes = null,
   reason = null,
@@ -75,18 +75,18 @@ export async function appendPlanApproval({
   // Phase 3 ([[project_seed_four_verbs_only]]): callers thread core.
   core,
 }) {
-  if (!rulerNodeId || !planNodeId) return null;
+  if (!rulerSpaceId || !planSpaceId) return null;
   if (!core?.do) throw new Error("appendPlanApproval requires `core` (verb surface)");
-  const node = await Space.findById(rulerNodeId);
-  if (!node) return null;
+  const space = await Space.findById(rulerSpaceId);
+  if (!space) return null;
 
-  const writeSeq = await readPlanWriteSeq(planNodeId);
-  const planRef = buildPlanRef(planNodeId, writeSeq);
+  const writeSeq = await readPlanWriteSeq(planSpaceId);
+  const planRef = buildPlanRef(planSpaceId, writeSeq);
   const approvedAt = new Date().toISOString();
 
-  const meta = node.metadata instanceof Map
-    ? node.metadata.get(NS)
-    : node.metadata?.[NS];
+  const meta = space.metadata instanceof Map
+    ? space.metadata.get(NS)
+    : space.metadata?.[NS];
   const existing = Array.isArray(meta?.planApprovals) ? meta.planApprovals : [];
 
   const entry = {
@@ -113,8 +113,8 @@ export async function appendPlanApproval({
   try {
     const { hooks } = await import("../../../seed/system/hooks.js");
     hooks.run("governing:planRatified", {
-      rulerNodeId: String(rulerNodeId),
-      planNodeId: String(planNodeId),
+      rulerSpaceId: String(rulerSpaceId),
+      planSpaceId: String(planSpaceId),
       planRef,
       approvedAt,
       status,
@@ -144,10 +144,10 @@ export function readPlanApprovalLedger(rulerSpace) {
  * Read the full plan-approval ledger at a Ruler scope by id, including
  * superseded entries. Pass 2 courts read this for the audit chain.
  */
-export async function readPlanApprovalsAtRuler(rulerNodeId) {
-  if (!rulerNodeId) return [];
-  const node = await Space.findById(rulerNodeId).select("_id metadata").lean();
-  if (!node) return [];
+export async function readPlanApprovalsAtRuler(rulerSpaceId) {
+  if (!rulerSpaceId) return [];
+  const space = await Space.findById(rulerSpaceId).select("_id metadata").lean();
+  if (!space) return [];
   return readPlanApprovalLedger(node);
 }
 
@@ -162,8 +162,8 @@ export async function readPlanApprovalsAtRuler(rulerNodeId) {
  * for any other transition (e.g., a pending entry replaces a prior
  * pending if it carries `supersedes`).
  */
-export async function readLatestPlanApproval(rulerNodeId) {
-  const ledger = await readPlanApprovalsAtRuler(rulerNodeId);
+export async function readLatestPlanApproval(rulerSpaceId) {
+  const ledger = await readPlanApprovalsAtRuler(rulerSpaceId);
   if (!ledger.length) return null;
   const supersededSet = new Set();
   for (const entry of ledger) {
@@ -182,8 +182,8 @@ export async function readLatestPlanApproval(rulerNodeId) {
  * Find the most recent approved (non-superseded) plan approval at a
  * Ruler scope. Returns the entry or null.
  */
-export async function readActivePlanApproval(rulerNodeId) {
-  const ledger = await readPlanApprovalsAtRuler(rulerNodeId);
+export async function readActivePlanApproval(rulerSpaceId) {
+  const ledger = await readPlanApprovalsAtRuler(rulerSpaceId);
   if (!ledger.length) return null;
   const supersededSet = new Set();
   for (const entry of ledger) {
@@ -212,39 +212,39 @@ export async function readActivePlanApproval(rulerNodeId) {
  * answer). The text path stays callable as a fallback for non-tool
  * Planners during the migration.
  */
-export async function readActivePlanEmission(rulerNodeId) {
-  const active = await readActivePlanApproval(rulerNodeId);
+export async function readActivePlanEmission(rulerSpaceId) {
+  const active = await readActivePlanApproval(rulerSpaceId);
   if (!active?.planRef) {
     log.debug("Governing",
-      `readActivePlanEmission(${String(rulerNodeId).slice(0, 8)}): no active planApproval`);
+      `readActivePlanEmission(${String(rulerSpaceId).slice(0, 8)}): no active planApproval`);
     return null;
   }
   const parsed = parsePlanRef(active.planRef);
   if (!parsed) {
     log.warn("Governing",
-      `readActivePlanEmission(${String(rulerNodeId).slice(0, 8)}): unparseable planRef "${active.planRef}"`);
+      `readActivePlanEmission(${String(rulerSpaceId).slice(0, 8)}): unparseable planRef "${active.planRef}"`);
     return null;
   }
-  const node = await Space.findById(parsed.planNodeId).select("_id type metadata").lean();
-  if (!node) {
+  const space = await Space.findById(parsed.planSpaceId).select("_id type metadata").lean();
+  if (!space) {
     log.warn("Governing",
-      `readActivePlanEmission(${String(rulerNodeId).slice(0, 8)}): planRef points at missing node ${String(parsed.planNodeId).slice(0, 8)}`);
+      `readActivePlanEmission(${String(rulerSpaceId).slice(0, 8)}): planRef points at missing node ${String(parsed.planSpaceId).slice(0, 8)}`);
     return null;
   }
-  const meta = node.metadata instanceof Map
-    ? node.metadata.get(NS)
-    : node.metadata?.[NS];
+  const meta = space.metadata instanceof Map
+    ? space.metadata.get(NS)
+    : space.metadata?.[NS];
   if (meta?.role !== "plan-emission") {
     log.warn("Governing",
-      `readActivePlanEmission(${String(rulerNodeId).slice(0, 8)}): planRef points at node ${String(parsed.planNodeId).slice(0, 8)} ` +
-      `(type=${node.type}) with governing.role=${meta?.role || "(none)"}, expected "plan-emission"`);
+      `readActivePlanEmission(${String(rulerSpaceId).slice(0, 8)}): planRef points at node ${String(parsed.planSpaceId).slice(0, 8)} ` +
+      `(type=${space.type}) with governing.role=${meta?.role || "(none)"}, expected "plan-emission"`);
     return null;
   }
   if (meta?.emission) {
-    return { ...meta.emission, _emissionNodeId: String(node._id) };
+    return { ...meta.emission, _emissionNodeId: String(space._id) };
   }
   log.warn("Governing",
-    `readActivePlanEmission(${String(rulerNodeId).slice(0, 8)}): emission node ${String(parsed.planNodeId).slice(0, 8)} ` +
+    `readActivePlanEmission(${String(rulerSpaceId).slice(0, 8)}): emission node ${String(parsed.planSpaceId).slice(0, 8)} ` +
     `has role=plan-emission but no metadata.governing.emission payload (likely depth-cap rejection during stamp)`);
   return null;
 }
@@ -259,16 +259,16 @@ export async function readActivePlanEmission(rulerNodeId) {
  * Returns the emission payload (`reasoning`, `steps[]`, `emittedAt`,
  * `_emissionNodeId`) or null.
  */
-export async function readPendingPlanEmission(rulerNodeId) {
-  const latest = await readLatestPlanApproval(rulerNodeId);
+export async function readPendingPlanEmission(rulerSpaceId) {
+  const latest = await readLatestPlanApproval(rulerSpaceId);
   if (!latest || latest.status !== "pending" || !latest.planRef) return null;
   const parsed = parsePlanRef(latest.planRef);
   if (!parsed) return null;
-  const node = await Space.findById(parsed.planNodeId).select("_id type metadata").lean();
-  if (!node) return null;
-  const meta = node.metadata instanceof Map
-    ? node.metadata.get(NS)
-    : node.metadata?.[NS];
+  const space = await Space.findById(parsed.planSpaceId).select("_id type metadata").lean();
+  if (!space) return null;
+  const meta = space.metadata instanceof Map
+    ? space.metadata.get(NS)
+    : space.metadata?.[NS];
   if (meta?.role !== "plan-emission" || !meta?.emission) return null;
-  return { ...meta.emission, _emissionNodeId: String(node._id), _planRef: latest.planRef };
+  return { ...meta.emission, _emissionNodeId: String(space._id), _planRef: latest.planRef };
 }

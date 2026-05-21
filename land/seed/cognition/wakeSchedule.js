@@ -207,7 +207,7 @@ export async function runOnce(nowMs) {
 /**
  * Swap the default emitter. Used by the embodied scheduler-being
  * extension to route scheduled wakes through itself (Mode 1) instead
- * of the synthesized @seed-being sender (Mode 2).
+ * of the synthesized @I-am sender (Mode 2).
  *
  * @param {function(entry, nowMs): Promise<void>} fn
  */

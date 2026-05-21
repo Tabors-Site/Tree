@@ -63,7 +63,7 @@ export async function init(core) {
   // ───────────────────────────────────────────────────────────────
   //
   // core.do.registerOperation("log-meal", {
-  //   targets: ["node"],
+  //   targets: ["space"],
   //   handler: async ({ target, params, identity }) => {
   //     await core.metadata.mergeExtMeta(target._id, "my-extension", {
   //       lastMeal: params.text,
@@ -109,7 +109,7 @@ export async function init(core) {
 
   // ───────────────────────────────────────────────────────────────
   // SCHEDULED WAKES — fire a SUMMON on a being's inbox at a
-  // cadence. The default emitter sends as `@seed-being`; install
+  // cadence. The default emitter sends as `@I-am`; install
   // a scheduler-being extension to swap in an embodied emitter.
   // ───────────────────────────────────────────────────────────────
   //

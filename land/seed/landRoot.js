@@ -1,24 +1,24 @@
 // TreeOS Seed . AGPL-3.0 . https://treeos.ai . Tabor Holly
 //
-// Land root bootstrap. Creates the land root and every land seed space
-// on first boot, and recreates anything missing on subsequent boots
-// (recovery from partial failures, manual deletion). Idempotent.
+// Land root bootstrap. I-am's genesis pass: plants the land root,
+// plants the nine land seed spaces, then registers its own Being
+// row. Idempotent — runs every boot, creates only what's missing.
 //
-// The folder structure is land/seed/ — seed is inside land. The land
-// is the container; the seed is what makes things inside it. The
-// land doesn't generate anything on its own — it holds what the seed
-// makes. This file is the seed at first boot reaching out and
-// materializing its container's foundation: the root space, the seed
-// spaces beneath it, the seed-being. Everything the land will ever
-// contain begins here.
+// This file is point 6 of THE PHILOSOPHY OF THE SEED (see
+// seed/space/seedSpaces.js): the ordered genesis sequence. Reading
+// it top to bottom shows I-am acting alone before it has planted
+// any delegate. Every write here is logged to SEED_BEING; Did
+// populate() resolves backward once ensureSeedBeing lands the row.
 
 import log from "./system/log.js";
 import Space from "./models/space.js";
 import { SEED_SPACE, SEED_BEING } from "./space/seedSpaces.js";
+import { createLandSeedSpace } from "./space/spaceManagement.js";
+import { logDid } from "./space/dids.js";
 
 let landRootCache = null;
 
-const SYSTEM_NODES = [
+const LAND_SEED_SPACES = [
   {
     name: ".identity",
     seedSpace: SEED_SPACE.IDENTITY,
@@ -65,23 +65,32 @@ export async function ensureLandRoot() {
     });
     await landRoot.save();
     log.info("Land", `Created land root: ${landRoot._id}`);
+    // I-am's first DO. Did populate() resolves once ensureSeedBeing lands.
+    try {
+      await logDid({
+        verb:    "do",
+        action:  "create",
+        beingId: SEED_BEING,
+        target:  { kind: "space", id: String(landRoot._id) },
+        params:  { name: landName, seedSpace: SEED_SPACE.LAND_ROOT },
+      });
+    } catch (err) {
+      log.warn("Land", `Did write for land-root creation failed: ${err.message}`);
+    }
   }
 
   let childrenChanged = false;
-  for (const def of SYSTEM_NODES) {
-    let node = await Space.findOne({ seedSpace: def.seedSpace });
+  for (const def of LAND_SEED_SPACES) {
+    let space = await Space.findOne({ seedSpace: def.seedSpace });
 
-    if (!node) {
-      node = new Space({
-        name: def.name,
-        parent: landRoot._id,
-        seedSpace: def.seedSpace,
-        children: [],
-        contributors: [],
-        ...(def.buildMetadata ? { metadata: def.buildMetadata() } : {}),
-      });
+    if (!space) {
       try {
-        await node.save();
+        space = await createLandSeedSpace({
+          name:      def.name,
+          parentId:  landRoot._id,
+          seedSpace: def.seedSpace,
+          metadata:  def.buildMetadata ? def.buildMetadata() : null,
+        });
         log.info("Land", `Created land seed space: ${def.name}`);
       } catch (err) {
         log.error(
@@ -94,24 +103,24 @@ export async function ensureLandRoot() {
 
     // Repair: a land seed space found at the wrong parent (manual DB
     // edit, corruption) gets moved back under the land root.
-    if (node.parent && node.parent.toString() !== landRoot._id.toString()) {
+    if (space.parent && space.parent.toString() !== landRoot._id.toString()) {
       log.warn(
         "Land",
         `Land seed space ${def.name} has wrong parent. Repairing.`,
       );
-      await Space.findByIdAndUpdate(node._id, {
+      await Space.findByIdAndUpdate(space._id, {
         $set: { parent: landRoot._id },
       });
     }
 
     const childIds = landRoot.children.map(String);
-    if (!childIds.includes(String(node._id))) {
-      landRoot.children.push(node._id);
+    if (!childIds.includes(String(space._id))) {
+      landRoot.children.push(space._id);
       childrenChanged = true;
     }
   }
 
-  // Adopt orphan tree roots (rootOwner != seed-being, parent: null).
+  // Adopt orphan tree roots (rootOwner != I-am, parent: null).
   try {
     const orphanRoots = await Space.find({
       rootOwner: { $nin: [null, SEED_BEING] },
@@ -149,13 +158,8 @@ export async function ensureLandRoot() {
 
   landRootCache = landRoot;
 
-  // The server is made from the seed. Up to this point in boot, the
-  // seed has materialized the land root and its seed spaces with no
-  // being to audit the writes against. ensureSeedBeing creates the
-  // Being row that carries the seed's identity going forward — the
-  // root of the being-tree, the actor named whenever the internal
-  // server (or a planted seed's recipe) does substrate work. Every
-  // human being birthed from this land descends from this one.
+  // Lands I-am's Being row. Did populate() resolves backward to it
+  // after this call; every later being parents under it.
   await ensureSeedBeing(landRoot._id);
 
   log.verbose(
@@ -165,9 +169,9 @@ export async function ensureLandRoot() {
   return landRoot;
 }
 
-// parentBeingId: null marks the root of the being-tree; every other
-// being chains down from it. Code-cognition only — cannot be claimed
-// or summoned interactively, so the random password is never used.
+// I-am: parentBeingId null (root of the being-tree), no roles (precedes
+// the role registry), code cognition only. Random password unused —
+// I-am isn't claimable.
 async function ensureSeedBeing(landRootId) {
   const Being = (await import("../models/being.js")).default;
   let seedBeing = await Being.findOne({ name: SEED_BEING })
@@ -181,13 +185,11 @@ async function ensureSeedBeing(landRootId) {
     name: SEED_BEING,
     password,
     operatingMode: "scripted",
-    roles: ["seed-being"],
-    defaultRole: "seed-being",
     parentBeingId: null,
     homeSpace: landRootId,
     currentSpace: landRootId,
   });
-  log.info("Land", `Created seed-being (${String(created._id).slice(0, 8)})`);
+  log.info("Land", `Created I-am I-am (${String(created._id).slice(0, 8)})`);
   return created;
 }
 
@@ -204,12 +206,12 @@ export function getLandRootId() {
 
 // A tree root is a child of the land root with a non-seed rootOwner
 // and no seedSpace. Single source of truth — use everywhere.
-export function isBeingRoot(node) {
-  if (!node) return false;
-  if (node.seedSpace) return false;
-  if (!node.rootOwner || String(node.rootOwner) === SEED_BEING) return false;
+export function isBeingRoot(space) {
+  if (!space) return false;
+  if (space.seedSpace) return false;
+  if (!space.rootOwner || String(space.rootOwner) === SEED_BEING) return false;
   const landId = getLandRootId();
-  if (landId && node.parent && String(node.parent) !== String(landId))
+  if (landId && space.parent && String(space.parent) !== String(landId))
     return false;
   return true;
 }
@@ -274,7 +276,7 @@ export async function syncExtensionsToTree(manifests) {
       } catch (err) {
         log.error(
           "Land",
-          `Failed to sync extension node "${manifest.name}": ${err.message}`,
+          `Failed to sync extension space "${manifest.name}": ${err.message}`,
         );
       }
     }

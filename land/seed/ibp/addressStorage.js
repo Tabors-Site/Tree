@@ -14,7 +14,7 @@
 // (joined with ` :: `).
 //
 // Path form: this module uses spaceId-rooted path form (`/<spaceId>`) so
-// stored IBP Addresses survive node renames. Renaming a node would
+// stored IBP Addresses survive space renames. Renaming a space would
 // otherwise fork every historical IBP Address it appears in, which
 // is exactly the kind of provenance break we want to avoid. The protocol
 // parser separately handles the human-readable path form; both forms

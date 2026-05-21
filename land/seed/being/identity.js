@@ -6,8 +6,8 @@ import jwt from "jsonwebtoken";
 import crypto from "crypto";
 import { v4 as uuidv4 } from "uuid";
 import { escapeRegex } from "../system/utils.js";
-import { getLandConfigValue } from "../system/landConfig.js";
-import { getLandRootId } from "../system/landRoot.js";
+import { getLandConfigValue } from "../landConfig.js";
+import { getLandRootId } from "../landRoot.js";
 import { ERR, ProtocolError } from "../ibp/protocol.js";
 import log from "../system/log.js";
 
@@ -72,10 +72,10 @@ export async function isFirstBeing() {
 }
 
 /**
- * Create the first human being on a fresh land. The seed-being already
+ * Create the first human being on a fresh land. The I-am already
  * exists by this point (planted by ensureLandRoot); callers pass its
  * id as opts.parentBeingId so the first human's being-tree parent is
- * the seed-being. Race-resilient: two concurrent first-run
+ * the I-am. Race-resilient: two concurrent first-run
  * registrations both pass isFirstBeing(); the earliest insertion wins.
  */
 export async function createFirstBeing(username, password, opts = {}) {
@@ -126,10 +126,10 @@ export async function createBeing(name, password, opts = {}) {
     roles: rolesList,
     defaultRole,
     // Being-tree parent. parentBeingId: null is reserved for the
-    // seed-being (the substrate's first identity, created during
+    // I-am (the substrate's first identity, created during
     // ensureLandRoot). Every other being chains back to it: the four
     // land-system beings (auth, llm-assigner, land-manager, citizen)
-    // and the first human all parent under the seed-being. Subsequent
+    // and the first human all parent under the I-am. Subsequent
     // humans register under @auth. Rulers are children of the being
     // that promoted them; inner beings (Planner/Contractor/Foreman)
     // are children of their Ruler.
@@ -359,19 +359,19 @@ export async function findBeingByName(name) {
 //
 //   - Human registration: operatingMode="human", homeParent=land root.
 //     Creates the human's tree-root home territory.
-//   - System beings (auth, land-manager, citizen): homeSpace=land root.
-//     No new node — the being just lives at the land root.
+//   - System beings (auth, llm-assigner, land-manager): homeSpace=land root.
+//     No new space — the being just lives at the land root.
 //   - Ruler promotion: homeSpace=the ruler-scope space. Existing space,
 //     no rootOwner change. beings.ruler.beingId stamped on it.
 //   - Trio members (Planner, Contractor, Foreman): homeParent=ruler scope,
-//     homeName/Type=role-specific. Fresh child node created; the role
-//     template runs from the registry; the being lives at the new node.
+//     homeName/Type=role-specific. Fresh child space created; the role
+//     template runs from the registry; the being lives at the new space.
 //   - Worker leaf positions: same pattern as trio members.
 //
-// Atomic: rolls back the home node if being creation fails. The home
-// node's rootOwner is set when the being is a human (the home is a
+// Atomic: rolls back the home space if being creation fails. The home
+// space's rootOwner is set when the being is a human (the home is a
 // real tree root); for non-human beings it stays inherited (the home
-// is a structural sub-node within someone else's tree).
+// is a structural sub-space within someone else's tree).
 // ─────────────────────────────────────────────────────────────────────────
 
 /**
@@ -525,9 +525,9 @@ export async function createBeingWithHome(opts) {
     throw err;
   }
 
-  // ── Wire ownership on newly-created home nodes ──
+  // ── Wire ownership on newly-created home spaces ──
   // Human home territories are tree roots (rootOwner = the being).
-  // Non-human being homes are structural sub-nodes within someone
+  // Non-human being homes are structural sub-spaces within someone
   // else's tree; they inherit access from the parent and leave
   // rootOwner null.
   if (createdNewHome && operatingMode === "human") {

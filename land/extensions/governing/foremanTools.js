@@ -82,7 +82,7 @@ export default function getForemanTools(_core) {
         if (r.length > REASON_CAP) return text(`foreman-retry-branch: reason exceeds ${REASON_CAP} chars; trim.`);
 
         // Resolve the branch's Ruler scope from the execution-record.
-        // The childNodeId field on the branch sub-status points at it.
+        // The childSpaceId field on the branch sub-status points at it.
         let branchScopeId = null;
         let priorError = null;
         let priorRetries = 0;
@@ -98,7 +98,7 @@ export default function getForemanTools(_core) {
             const branch = step.branches.find(
               (b) => String(b.name).toLowerCase() === String(branchName).toLowerCase());
             if (branch) {
-              branchScopeId = branch.childNodeId || null;
+              branchScopeId = branch.childSpaceId || null;
               priorError = branch.error || null;
               priorRetries = branch.retries || 0;
               branchSpec = branch.spec || "";
@@ -108,7 +108,7 @@ export default function getForemanTools(_core) {
 
         if (!branchScopeId) {
           return text(
-            `foreman-retry-branch: could not resolve childNodeId for branch ` +
+            `foreman-retry-branch: could not resolve childSpaceId for branch ` +
             `"${branchName}" at step ${stepIndex}. The branch may not have been ` +
             `dispatched yet, or the execution-record is in an inconsistent state.`,
           );
@@ -126,7 +126,7 @@ export default function getForemanTools(_core) {
         // — the original retry chain is still running and a second
         // would double-dispatch the branch Ruler.
         const claim = tryClaimSpawn({
-          rulerNodeId: branchScopeId,
+          rulerSpaceId: branchScopeId,
           kind: "foreman-retry-branch",
           briefing: r,
         });
@@ -216,7 +216,7 @@ export default function getForemanTools(_core) {
             try {
               await hooks.fire("governing:branchRetried", {
                 spawnId:         correlation,
-                rulerNodeId:     String(branchScopeId),
+                rulerSpaceId:     String(branchScopeId),
                 beingId,
                 username,
                 rootId:          rootId || null,
@@ -240,7 +240,7 @@ export default function getForemanTools(_core) {
             try {
               await hooks.fire("governing:branchRetried", {
                 spawnId:         correlation,
-                rulerNodeId:     String(branchScopeId),
+                rulerSpaceId:     String(branchScopeId),
                 beingId,
                 username,
                 rootId:          rootId || null,
@@ -476,8 +476,8 @@ export default function getForemanTools(_core) {
         try {
           const { getExtension } = await import("../loader.js");
           const governing = getExtension("governing")?.exports;
-          const node = await Space.findById(subRulerNodeId).select("_id name").lean();
-          if (!node) return text(`foreman-read-branch-detail: node ${subRulerNodeId.slice(0, 8)} not found.`);
+          const space = await Space.findById(subRulerNodeId).select("_id name").lean();
+          if (!space) return text(`foreman-read-branch-detail: node ${subRulerNodeId.slice(0, 8)} not found.`);
           const plan = governing?.readActivePlanEmission
             ? await governing.readActivePlanEmission(subRulerNodeId)
             : null;
@@ -486,7 +486,7 @@ export default function getForemanTools(_core) {
             : null;
           return text(JSON.stringify({
             ok: true,
-            name: node.name,
+            name: space.name,
             plan: plan
               ? { ordinal: plan.ordinal, reasoning: plan.reasoning, stepCount: plan.steps?.length || 0 }
               : null,

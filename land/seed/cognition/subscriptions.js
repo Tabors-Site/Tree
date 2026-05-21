@@ -28,7 +28,7 @@
 //                                              // status-like changes via
 //                                              // afterMetadataWrite +
 //                                              // a namespace filter
-//     scope:         { everywhere: true }     // any node in the land
+//     scope:         { everywhere: true }     // any space in the land
 //                  | { spaceId: "<id>" }       // exact match
 //                  | { ancestor: "<id>" },    // payload.spaceId has this ancestor
 //     filter:        { <key>: <value> }       // payload field-equality, optional
@@ -42,7 +42,7 @@
 //
 // **Storage.** In-memory registry; subscriptions are re-registered at
 // boot by each extension that wires them. A metadata-backed registry
-// on each being's home node is on the roadmap so boot can rebuild
+// on each being's home space is on the roadmap so boot can rebuild
 // without re-running extension code; for now the in-memory registry
 // plus extension-init re-registration is enough.
 
@@ -220,9 +220,9 @@ export async function getMatchingSubscribers(eventName, payload) {
 
   const spaceId = payload?.spaceId ? String(payload.spaceId) : null;
 
-  // Pre-compute the ancestor chain for the payload's node once per
+  // Pre-compute the ancestor chain for the payload's space once per
   // call; reuse it across every ancestor-scoped subscription this
-  // event fires for. Most events touch one node and have multiple
+  // event fires for. Most events touch one space and have multiple
   // subscribers spread along its chain — caching here avoids re-
   // walking for each subscriber.
   let ancestorChainIds = null;
@@ -237,7 +237,7 @@ export async function getMatchingSubscribers(eventName, payload) {
       ancestorChainIds = new Set(
         (Array.isArray(chain) ? chain : []).map((n) => String(n?._id)).filter(Boolean),
       );
-      // The node itself counts as ancestor=self for scope.ancestor checks.
+      // The space itself counts as ancestor=self for scope.ancestor checks.
       ancestorChainIds.add(spaceId);
     } catch (err) {
       log.debug("Subscriptions", `ancestor chain lookup failed for ${spaceId.slice(0, 8)}: ${err.message}`);
@@ -278,10 +278,11 @@ export async function getMatchingSubscribers(eventName, payload) {
  * + wake — the receiving being's scheduler picks the SUMMON up in
  * its normal priority order.
  *
- * Sender is the doing being when payload.beingId is present, else a
- * synthetic seed-being stance `<land>/@seed-being`. The receiver's role
- * template can inspect the sender to distinguish code-driven
- * (anonymous) events from being-driven ones.
+ * Sender is the doing being when payload.beingId is present, else
+ * the I-am's stance `<land>/@I-am`. The receiver's role
+ * template can inspect the sender to distinguish I-am-emitted
+ * events (substrate-internal triggers like .source sync) from
+ * other-being-emitted ones (explicit acts by named beings).
  *
  * @param {string} eventName
  * @param {object} payload
@@ -300,7 +301,7 @@ export async function emitToSubscribers(eventName, payload, options = {}) {
       const targetSpace = _inboxNodeIdForSubscriber(sub, payload);
       if (!targetSpace) {
         log.debug("Subscriptions",
-          `skipping ${eventName} → being ${sub.beingId.slice(0, 8)}: no resolvable inbox node`);
+          `skipping ${eventName} → being ${sub.beingId.slice(0, 8)}: no resolvable inbox space`);
         continue;
       }
       const eventContent = _renderTriggerContent(eventName, payload);
@@ -439,13 +440,13 @@ function _senderStanceForPayload(payload) {
     // role templates can resolve to username if they need display.
     return `${domain}/@<being:${payload.beingId}>`;
   }
-  return `${domain}/@seed-being`;
+  return `${domain}/@I-am`;
 }
 
 function _inboxNodeIdForSubscriber(sub, payload) {
   // Deliver to the subscriber's home position when known so the inbox
   // ends up at a single well-defined place per being. Fallback to the
-  // event's spaceId (the affected node) and ultimately the land root.
+  // event's spaceId (the affected space) and ultimately the land root.
   return (
     payload?.subscriberHomeId
     || payload?.spaceId
@@ -476,7 +477,7 @@ function _renderTriggerContent(eventName, payload) {
 
 function _scopeLabel(scope) {
   if (scope.everywhere) return "everywhere";
-  if (scope.spaceId) return `node:${String(scope.spaceId).slice(0, 8)}`;
+  if (scope.spaceId) return `space:${String(scope.spaceId).slice(0, 8)}`;
   if (scope.ancestor) return `ancestor:${String(scope.ancestor).slice(0, 8)}`;
   return "?";
 }

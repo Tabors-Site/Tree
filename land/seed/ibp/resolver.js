@@ -5,9 +5,9 @@
 // Resolution turns a parsed stance into the concrete substrate facts a
 // verb handler needs: which Space is being addressed, which tree contains
 // it, which being (if any) is invoked, and the top-down path the client
-// can use for breadcrumb-style rendering. Positions are flat node-IDs;
+// can use for breadcrumb-style rendering. Positions are flat space-IDs;
 // flags on the result describe what kind of position the leaf is
-// (land root, a being's home, or a plain node).
+// (land root, a being's home, or a plain space).
 //
 // Result shape:
 //   {
@@ -23,7 +23,7 @@
 //   }
 //
 // Per [[project_zones_retired]] the "zone" concept is gone; every
-// address resolves to a node and callers branch on positional flags.
+// address resolves to a space and callers branch on positional flags.
 
 import { IbpError, IBP_ERR } from "../ibp/errors.js";
 import { getLandDomain } from "./address.js";
@@ -64,7 +64,7 @@ export async function resolveStance(stance, opts = {}) {
   // LAND_ROOT row created by ensureLandRoot), so we surface its id as
   // spaceId. That makes beings whose home is the land root —
   // land-manager, llm-assigner, auth — summonable: the inbox sits on
-  // the land-root node like any other position.
+  // the land-root space like any other position.
   if (path === "/") {
     const landRootId = getLandRootId();
     return base({
@@ -111,7 +111,7 @@ export async function resolveStance(stance, opts = {}) {
     }
 
     // "/~name/<segments>" → walk the being's home tree.
-    return walkNodePath({
+    return walkSpacePath({
       segments:    subPath,
       ownerFilter: { rootOwner: beingDoc._id },
       contextBeing: beingDoc,
@@ -125,7 +125,7 @@ export async function resolveStance(stance, opts = {}) {
   if (segments.length === 0) {
     throw new IbpError(IBP_ERR.ADDRESS_PARSE_ERROR, `Invalid path "${path}"`);
   }
-  return walkNodePath({
+  return walkSpacePath({
     segments,
     ownerFilter:  {},
     contextBeing: null,
@@ -164,7 +164,7 @@ function base(over = {}) {
  * segment by UUID (preferred) or by name. Returns the resolved-stance
  * shape pointing at the final leaf.
  */
-async function walkNodePath({ segments, ownerFilter, contextBeing, being }) {
+async function walkSpacePath({ segments, ownerFilter, contextBeing, being }) {
   const landRootId = getLandRootId();
   if (!landRootId) {
     throw new IbpError(IBP_ERR.INTERNAL, "Land root not initialized yet");
@@ -187,14 +187,14 @@ async function walkNodePath({ segments, ownerFilter, contextBeing, being }) {
     };
 
     const fields = "_id name type status parent rootOwner contributors visibility metadata";
-    let node = null;
+    let space = null;
     if (UUID_RE.test(seg)) {
-      node = await Space.findOne({ ...baseQuery, _id: seg }).select(fields).lean();
+      space = await Space.findOne({ ...baseQuery, _id: seg }).select(fields).lean();
     }
-    if (!node) {
-      node = await Space.findOne({ ...baseQuery, name: seg }).select(fields).lean();
+    if (!space) {
+      space = await Space.findOne({ ...baseQuery, name: seg }).select(fields).lean();
     }
-    if (!node) {
+    if (!space) {
       throw new IbpError(
         IBP_ERR.SPACE_NOT_FOUND,
         `Segment "${seg}" not found at depth ${i} of path`,
@@ -202,13 +202,13 @@ async function walkNodePath({ segments, ownerFilter, contextBeing, being }) {
       );
     }
 
-    chain.push({ name: node.name, id: node._id });
-    currentParent = node._id;
-    leafSpace = node;
+    chain.push({ name: space.name, id: space._id });
+    currentParent = space._id;
+    leafSpace = space;
   }
 
-  // The enclosing tree root. Walk up to the nearest node with rootOwner;
-  // a node may itself be a root.
+  // The enclosing tree root. Walk up to the nearest space with rootOwner;
+  // a space may itself be a root.
   let rootId = null;
   try {
     const treeRoot = await resolveRootSpace(leafSpace._id);

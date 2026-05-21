@@ -77,20 +77,20 @@ const BeingSchema = new mongoose.Schema({
 
   // ── Being tree ──
   // Beings form a recursive tree parallel to the Space tree. Every
-  // land has exactly one root: the seed-being, created by
+  // land has exactly one root: the I-am, created by
   // ensureLandRoot() at boot, identified by parentBeingId: null.
   //
   // Every other Being chains back to it:
   //   - System beings (auth, llm-assigner, land-manager) are children
-  //     of the seed-being.
-  //   - The first human registers under the seed-being and becomes
+  //     of the I-am.
+  //   - The first human registers under the I-am and becomes
   //     the root operator. Subsequent humans register under the
   //     auth-being.
   //   - When any being promotes a Space to Ruler, the new Ruler is a
   //     child of the invoking being. The Ruler then spawns
   //     Planner / Contractor / Foreman as its own children.
   //
-  // null parent is reserved for the seed-being. All create-being /
+  // null parent is reserved for the I-am. All create-being /
   // create-child calls require a parent.
   //
   // Being-tree parent/child is independent of homeSpace: multiple
@@ -103,7 +103,7 @@ const BeingSchema = new mongoose.Schema({
   // homeSpace — the Space this Being treats as home. Humans get a home
   // territory at registration; non-human beings are placed by the
   // extension that creates them (governing places Planners at the plan
-  // node, Rulers at the rulership Space). Durable across summons; the
+  // space, Rulers at the rulership Space). Durable across summons; the
   // current-position field tracks navigation separately. Home grants,
   // transfers, and leases are a future direction not built yet.
   homeSpace: { type: String, ref: "Space", default: null, index: true },

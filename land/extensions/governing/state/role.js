@@ -85,12 +85,12 @@ export async function promoteToRuler({ spaceId, reason, promotedFrom, parentBein
     promotedFrom = PROMOTED_FROM.ROOT;
   }
 
-  const node = await Space.findById(spaceId);
-  if (!node) return null;
+  const space = await Space.findById(spaceId);
+  if (!space) return null;
 
-  const existing = node.metadata instanceof Map
-    ? node.metadata.get(NS)
-    : node.metadata?.[NS];
+  const existing = space.metadata instanceof Map
+    ? space.metadata.get(NS)
+    : space.metadata?.[NS];
 
   if (existing?.role === "ruler" && existing?.acceptedAt) {
     // Already promoted. Idempotent return.
@@ -109,12 +109,12 @@ export async function promoteToRuler({ spaceId, reason, promotedFrom, parentBein
   // inherit their higher being through their parentBeingId / the
   // parent Ruler. For root, governing records the tree's `rootOwner`
   // (the human being who spawned the tree).
-  if (!node.parent && node.rootOwner) {
-    data.delegateToHigherBeing = { beingId: String(node.rootOwner) };
+  if (!space.parent && space.rootOwner) {
+    data.delegateToHigherBeing = { beingId: String(space.rootOwner) };
   }
 
   // 1. Stamp governing role on the node.
-  await core.do(node, "set-meta", {
+  await core.do(space, "set-meta", {
     namespace: NS,
     data,
     merge: false,
@@ -166,7 +166,7 @@ export async function promoteToRuler({ spaceId, reason, promotedFrom, parentBein
     contractor: { beingId: innerBeings.contractor,  installedAt: acceptedAt, installedBy: "governing" },
     foreman:    { beingId: innerBeings.foreman,     installedAt: acceptedAt, installedBy: "governing" },
   };
-  await core.do(node, "set-meta", {
+  await core.do(space, "set-meta", {
     namespace: "beings",
     data: beingsRegistry,
     merge: true,
@@ -179,7 +179,7 @@ export async function promoteToRuler({ spaceId, reason, promotedFrom, parentBein
   //    (planner / contractor / foreman) are protected: only beings of
   //    governing roles whose home is within this rulership's subtree
   //    can summon them.
-  await core.do(node, "set-meta", {
+  await core.do(space, "set-meta", {
     namespace: "permissions",
     data: {
       summon: {
@@ -193,7 +193,7 @@ export async function promoteToRuler({ spaceId, reason, promotedFrom, parentBein
   }, { identity });
 
   log.info("Governing",
-    `🤴 Space ${String(spaceId).slice(0, 8)} ("${node.name || "?"}") promoted to Ruler ` +
+    `🤴 Space ${String(spaceId).slice(0, 8)} ("${space.name || "?"}") promoted to Ruler ` +
     `(from=${promotedFrom}, parent=${effectiveParentBeingId ? String(effectiveParentBeingId).slice(0, 8) : "none"}) ` +
     `+ spawned ${INNER_ROLES.length} inner beings`);
 
@@ -216,11 +216,11 @@ export async function promoteToRuler({ spaceId, reason, promotedFrom, parentBein
  */
 export async function readRole(spaceId) {
   if (!spaceId) return null;
-  const node = await Space.findById(spaceId).select("metadata").lean();
-  if (!node) return null;
-  const meta = node.metadata instanceof Map
-    ? Object.fromEntries(node.metadata)
-    : (node.metadata || {});
+  const space = await Space.findById(spaceId).select("metadata").lean();
+  if (!space) return null;
+  const meta = space.metadata instanceof Map
+    ? Object.fromEntries(space.metadata)
+    : (space.metadata || {});
   return meta[NS] || null;
 }
 
@@ -263,22 +263,22 @@ export async function walkRulers(rootId) {
     if (visited.has(idStr)) return;
     visited.add(idStr);
 
-    const node = await Space.findById(idStr).select("_id name metadata children").lean();
-    if (!node) return;
-    const meta = node.metadata instanceof Map
-      ? Object.fromEntries(node.metadata)
-      : (node.metadata || {});
+    const space = await Space.findById(idStr).select("_id name metadata children").lean();
+    if (!space) return;
+    const meta = space.metadata instanceof Map
+      ? Object.fromEntries(space.metadata)
+      : (space.metadata || {});
     if (meta[NS]?.role === "ruler") {
       out.push({
         depth,
-        rulerNodeId: idStr,
-        name: node.name || "(unnamed)",
+        rulerSpaceId: idStr,
+        name: space.name || "(unnamed)",
       });
       // Only descend below Ruler scopes — non-Ruler descendants of a
       // non-Ruler ancestor can't host Ruler grandchildren in this
       // architecture (Rulers are stamped at scope dispatch time, so
       // sub-Rulers always have a Ruler parent).
-      const childIds = Array.isArray(node.children) ? node.children.map(String) : [];
+      const childIds = Array.isArray(space.children) ? space.children.map(String) : [];
       for (const cid of childIds) {
         await visit(cid, depth + 1);
       }
@@ -288,7 +288,7 @@ export async function walkRulers(rootId) {
       // earlier session promoted a sub-tree without promoting the
       // root. Doesn't recurse deeper than direct children for
       // non-Ruler nodes to avoid scanning entire trees.
-      const childIds = Array.isArray(node.children) ? node.children.map(String) : [];
+      const childIds = Array.isArray(space.children) ? space.children.map(String) : [];
       for (const cid of childIds) {
         const child = await Space.findById(cid).select("_id metadata").lean();
         if (!child) continue;

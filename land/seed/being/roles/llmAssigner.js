@@ -18,8 +18,8 @@
 //            the root being is the land's operator by virtue of
 //            having no being-tree parent.
 //
-//   node     set-node-llm
-//            Sets metadata.llm.slots[slot] on a node the caller owns
+//   space    set-space-llm
+//            Sets metadata.llm.slots[slot] on a space the caller owns
 //            (rootOwner matches). Drives the tree-level resolution
 //            step in seed/cognition/llmClient.js.
 //
@@ -36,14 +36,14 @@ import { findRootOperator } from "../landBeings.js";
 
 export const llmAssignerBeing = Object.freeze({
   name: "llm-assigner",
-  description: "Configures LLM connections — on the caller's being, on a node they own, or on the land itself (root operator only).",
+  description: "Configures LLM connections — on the caller's being, on a space they own, or on the land itself (root operator only).",
   honoredOperations: [
     "add-llm",      // caller adds a connection to their own being
     "assign-slot",  // caller binds one of their connections to a slot
     "list-llms",    // caller lists their connections + slot assignments
     "delete-llm",   // caller removes one of their connections
     "set-land-llm", // root operator sets the land-level default
-    "set-node-llm", // tree owner sets a slot on a specific node
+    "set-space-llm", // tree owner sets a slot on a specific space
   ],
 
   // ────────────────────────────────────────────────────────────────
@@ -176,34 +176,34 @@ export const llmAssignerBeing = Object.freeze({
   // ────────────────────────────────────────────────────────────────
 
   /**
-   * Set an LLM slot on a node the caller owns (via rootOwner of the
-   * containing tree). Writes metadata.llm.slots[slot] on the node —
+   * Set an LLM slot on a space the caller owns (via rootOwner of the
+   * containing tree). Writes metadata.llm.slots[slot] on the space —
    * the tree-level step of the resolution chain in
    * seed/cognition/llmClient.js.
    *
    * @param {object} payload  { spaceId, slot, connectionId }
    *                          connectionId null to clear the slot
    */
-  async setNodeLlm(payload, ctx) {
+  async setSpaceLlm(payload, ctx) {
     requireAuthenticated(ctx);
     const { spaceId, slot, connectionId } = payload || {};
     if (!spaceId) throw new IbpError(IBP_ERR.INVALID_INPUT, "`spaceId` is required");
     if (!slot)   throw new IbpError(IBP_ERR.INVALID_INPUT, "`slot` is required");
 
-    const node = await Space.findById(spaceId);
-    if (!node) throw new IbpError(IBP_ERR.SPACE_NOT_FOUND, `Space ${spaceId} not found`);
+    const space = await Space.findById(spaceId);
+    if (!space) throw new IbpError(IBP_ERR.SPACE_NOT_FOUND, `Space ${spaceId} not found`);
 
     // Dispatch through the kernel DO op so the stance-authorization
     // gate runs uniformly (same path the wire-side DO uses). The op's
-    // handler routes node targets to assignNodeConnection, which also
+    // handler routes space targets to assignSpaceConnection, which also
     // verifies the connection belongs to the caller before binding.
     const { doVerb } = await import("../ibp/verbs.js");
-    const result = await doVerb(node, "assign-llm-slot", { slot, connectionId: connectionId || null }, {
+    const result = await doVerb(space, "assign-llm-slot", { slot, connectionId: connectionId || null }, {
       identity: ctx.identity,
     });
 
     log.verbose("llm-assigner",
-      `node ${spaceId} slot "${slot}" → ${connectionId || "(cleared)"} by being ${ctx.identity.beingId}`);
+      `space ${spaceId} slot "${slot}" → ${connectionId || "(cleared)"} by being ${ctx.identity.beingId}`);
     return result;
   },
 });

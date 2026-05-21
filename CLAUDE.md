@@ -145,7 +145,7 @@ land/
 │
 ├── boot.js                     First-run wizard
 ├── server.js                   Express + WebSocket bring-up
-└── startup.js                  Boot sequence: indexes, config, migrations, extensions, jobs
+└── genesis.js                  Boot sequence: indexes, config, migrations, extensions, jobs
 
 site/                           React landing/docs site
 horizon/                        Public registry (standalone)

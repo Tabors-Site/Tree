@@ -164,27 +164,23 @@ export async function doVerb(target, operation, params = {}, opts = {}) {
   if (shouldAudit) {
     try {
       // Audit actor: identity wins. A being who calls a verb is the
-      // actor on that verb's Did — including when the verb is
-      // plant-seed (the being is doing the planting, gated by their
-      // stance auth at the call site). The seed-being is the actor
-      // only when there is no identity and scaffold is set.
+      // actor on that verb's Did. This is uniform — there is no
+      // "internal" vs "external" act; there is only "which being
+      // did it." The I-am is just the first being, and it
+      // acts the same way every other being acts.
       //
-      // SEED_BEING fires in exactly the cases where the internal
-      // server is doing the operation instead of a being in the
-      // world that is birthed from the seed:
+      // When `opts.identity` is absent and `opts.scaffold` is set,
+      // the I-am is the doer. This is the I-am acting
+      // directly: during boot, during the recipe a planted seed
+      // runs, during reboot reconciliation. The Did names it the
+      // same way it would name any other being doing the same op.
       //
-      //   (a) the server itself running — boot writes after the
-      //       seed-being has been created (landRoot reconciliation,
-      //       migrations, source-tree sync).
-      //   (b) the internal `core.do` / `core.be` / `core.summon`
-      //       calls a seed's plant function fires from inside its
-      //       recipe. The trigger Did (the being calling plant-seed)
-      //       names the requester; the materialization Dids that
-      //       follow name the seed.
-      //
-      // Before the seed-being exists at all (its own Being.create
-      // during ensureLandRoot), Dids are suppressed via opts.skipAudit
-      // at the call site — there is no actor to name yet.
+      // The trigger Did for plant-seed names the being who called
+      // it (an operator, a Ruler, whoever); the materialization
+      // Dids the I-am writes from inside the plant recipe
+      // name the I-am. The audit chain is continuous: a
+      // human triggers, the I-am scaffolds, beings the seed-
+      // being planted go on to act, and every link names a doer.
       const actorBeingId = opts.identity?.beingId
         || (opts.scaffold === true ? SEED_BEING : null);
       await logDid({
@@ -330,7 +326,7 @@ export async function summonVerb(stance, message, opts = {}) {
     throw new IbpError(IBP_ERR.ROLE_UNAVAILABLE, "SUMMON requires a stance with an @qualifier");
   }
   if (!resolved.spaceId) {
-    throw new IbpError(IBP_ERR.SPACE_NOT_FOUND, "Stance does not resolve to a known node");
+    throw new IbpError(IBP_ERR.SPACE_NOT_FOUND, "Stance does not resolve to a known space");
   }
 
   // Resolve the qualifier to a specific Being:
@@ -394,7 +390,7 @@ export async function summonVerb(stance, message, opts = {}) {
     );
   }
 
-  // Resolve inbox-attach node.
+  // Resolve inbox-attach space.
   const inboxNodeId = resolved.spaceId || toBeing.homeSpace || null;
   if (!inboxNodeId) {
     throw new IbpError(

@@ -149,13 +149,13 @@ async function run(hookName, data) {
   const handlers = registry.get(hookName);
   if (!handlers || handlers.length === 0) return { cancelled: false };
 
-  const spaceId = data?.spaceId || data?.node?._id || null;
+  const spaceId = data?.spaceId || data?.space?._id || null;
   let blockedExtensions = null;
   if (spaceId && _getScopeFn) {
     try {
       blockedExtensions = await _getScopeFn(String(spaceId));
     } catch (scopeErr) {
-      log.warn("Hooks", `Scope resolution failed for node ${spaceId}: ${scopeErr.message}. Extensions not filtered.`);
+      log.warn("Hooks", `Scope resolution failed for space ${spaceId}: ${scopeErr.message}. Extensions not filtered.`);
     }
   }
 

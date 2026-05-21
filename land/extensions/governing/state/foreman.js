@@ -72,33 +72,33 @@ export const STEP_OUTPUT_PRODUCED_STATUSES = new Set(["done"]);
 
 /**
  * Build an executionRef string. Same shape as planRef / contractRef:
- * "<executionNodeId>:<recordId>".
+ * "<executionSpaceId>:<recordId>".
  */
-export function buildExecutionRef(executionNodeId, recordId) {
-  return `${String(executionNodeId)}:${String(recordId)}`;
+export function buildExecutionRef(executionSpaceId, recordId) {
+  return `${String(executionSpaceId)}:${String(recordId)}`;
 }
 
 /**
- * Parse an executionRef into { executionNodeId, recordId }. Returns
+ * Parse an executionRef into { executionSpaceId, recordId }. Returns
  * null on bad shape.
  */
 export function parseExecutionRef(ref) {
   if (typeof ref !== "string" || !ref) return null;
   const idx = ref.indexOf(":");
   if (idx <= 0) return null;
-  const executionNodeId = ref.slice(0, idx);
+  const executionSpaceId = ref.slice(0, idx);
   const recordId = ref.slice(idx + 1);
-  if (!executionNodeId || !recordId) return null;
-  return { executionNodeId, recordId };
+  if (!executionSpaceId || !recordId) return null;
+  return { executionSpaceId, recordId };
 }
 
 /**
  * Compute the next execution-record ordinal under an execution-node.
  * Counts existing execution-record children and increments.
  */
-async function nextRecordOrdinal(executionNodeId) {
+async function nextRecordOrdinal(executionSpaceId) {
   const count = await Space.countDocuments({
-    parent: executionNodeId,
+    parent: executionSpaceId,
     type: "execution-record",
   });
   return count + 1;
@@ -148,7 +148,7 @@ function buildInitialStepStatuses(planEmission) {
           name: b?.name || "",
           spec: b?.spec || "",
           status: "pending",
-          childNodeId: null,
+          childSpaceId: null,
           startedAt: null,
           completedAt: null,
           retries: 0,
@@ -169,14 +169,14 @@ function buildInitialStepStatuses(planEmission) {
  * already exists, returns it without creating a duplicate (race-safe
  * via the type+parent filter).
  *
- * Required: rulerNodeId, beingId, planEmissionRef, planEmission (the
+ * Required: rulerSpaceId, beingId, planEmissionRef, planEmission (the
  * payload, used to seed stepStatuses). Optional:
  * contractsEmissionRef.
  *
  * Returns { recordNode, executionRef, ordinal, supersedes }.
  */
 export async function appendExecutionRecord({
-  rulerNodeId,
+  rulerSpaceId,
   beingId,
   identity = null,
   core,
@@ -187,22 +187,22 @@ export async function appendExecutionRecord({
   // For stance auth: prefer explicit identity, fall back to {beingId}.
   // Legacy callers passing only beingId get authed as that being.
   const authIdentity = identity || (beingId ? { beingId } : null);
-  if (!rulerNodeId || !planEmissionRef) return null;
+  if (!rulerSpaceId || !planEmissionRef) return null;
 
   // Ensure the execution-node parent exists.
-  let executionSpace = await findExecutionNode(rulerNodeId);
+  let executionSpace = await findExecutionNode(rulerSpaceId);
   if (!executionSpace) {
-    executionSpace = await ensureExecutionNode({ scopeNodeId: rulerNodeId, beingId, core });
+    executionSpace = await ensureExecutionNode({ scopeSpaceId: rulerSpaceId, beingId, core });
   }
   if (!executionSpace) {
-    log.warn("Governing", `appendExecutionRecord: no execution-node resolvable at ${String(rulerNodeId).slice(0, 8)}`);
+    log.warn("Governing", `appendExecutionRecord: no execution-node resolvable at ${String(rulerSpaceId).slice(0, 8)}`);
     return null;
   }
 
   // Detect prior active record so we can mark it superseded and
   // freeze it before creating the new one. The prior record's content
   // stays readable as bark.
-  const priorActive = await readActiveExecutionRecord(rulerNodeId);
+  const priorActive = await readActiveExecutionRecord(rulerSpaceId);
   const priorApprovalRef = priorActive?._approvalRef || null;
   if (priorActive?._recordNodeId) {
     try {
@@ -278,7 +278,7 @@ export async function appendExecutionRecord({
     // Phase 3 migration ([[project_seed_four_verbs_only]]): verb-surface
     // write. merge:true preserves other NS keys atomically; no manual
     // read-spread-write.
-    const node = await Space.findById(recordNode._id);
+    const space = await Space.findById(recordNode._id);
     if (node) {
       await core.do(node, "set-meta", {
         namespace: NS,
@@ -300,7 +300,7 @@ export async function appendExecutionRecord({
   let approvalRef = null;
   try {
     approvalRef = await appendExecutionApproval({
-      rulerNodeId,
+      rulerSpaceId,
       executionRef,
       supersedes: priorApprovalRef || null,
       reason: priorActive ? "supersedes prior execution-record" : null,
@@ -311,7 +311,7 @@ export async function appendExecutionRecord({
   }
 
   log.info("Governing",
-    `🔧 execution-record-${ordinal} created at ruler ${String(rulerNodeId).slice(0, 8)} ` +
+    `🔧 execution-record-${ordinal} created at ruler ${String(rulerSpaceId).slice(0, 8)} ` +
     `(planRef=${String(planEmissionRef).slice(0, 16)}…, ${stepStatuses.length} step(s))`);
 
   return {
@@ -329,7 +329,7 @@ export async function appendExecutionRecord({
  * id (matches contractApprovals shape).
  */
 export async function appendExecutionApproval({
-  rulerNodeId,
+  rulerSpaceId,
   executionRef,
   status = "approved",
   supersedes = null,
@@ -338,14 +338,14 @@ export async function appendExecutionApproval({
   // Phase 3 ([[project_seed_four_verbs_only]]): callers thread core.
   core,
 }) {
-  if (!rulerNodeId || !executionRef) return null;
+  if (!rulerSpaceId || !executionRef) return null;
   if (!core?.do) throw new Error("appendExecutionApproval requires `core` (verb surface)");
-  const node = await Space.findById(rulerNodeId);
-  if (!node) return null;
+  const space = await Space.findById(rulerSpaceId);
+  if (!space) return null;
 
-  const meta = node.metadata instanceof Map
-    ? node.metadata.get(NS)
-    : node.metadata?.[NS];
+  const meta = space.metadata instanceof Map
+    ? space.metadata.get(NS)
+    : space.metadata?.[NS];
   const existing = Array.isArray(meta?.executionApprovals) ? meta.executionApprovals : [];
 
   const { v4: uuid } = await import("uuid");
@@ -372,7 +372,7 @@ export async function appendExecutionApproval({
   try {
     const { hooks } = await import("../../../seed/system/hooks.js");
     hooks.run("governing:executionRatified", {
-      rulerNodeId: String(rulerNodeId),
+      rulerSpaceId: String(rulerSpaceId),
       executionRef: String(executionRef),
       approvalId,
       supersedes,
@@ -390,13 +390,13 @@ export async function appendExecutionApproval({
  * Returns the full array (including superseded entries) for audit
  * walks.
  */
-export async function readExecutionApprovalsAtRuler(rulerNodeId) {
-  if (!rulerNodeId) return [];
-  const node = await Space.findById(rulerNodeId).select("_id metadata").lean();
-  if (!node) return [];
-  const meta = node.metadata instanceof Map
-    ? node.metadata.get(NS)
-    : node.metadata?.[NS];
+export async function readExecutionApprovalsAtRuler(rulerSpaceId) {
+  if (!rulerSpaceId) return [];
+  const space = await Space.findById(rulerSpaceId).select("_id metadata").lean();
+  if (!space) return [];
+  const meta = space.metadata instanceof Map
+    ? space.metadata.get(NS)
+    : space.metadata?.[NS];
   return Array.isArray(meta?.executionApprovals) ? meta.executionApprovals : [];
 }
 
@@ -404,8 +404,8 @@ export async function readExecutionApprovalsAtRuler(rulerNodeId) {
  * Find the most recent approved (non-superseded) execution approval
  * at a Ruler scope. Returns the approval entry or null.
  */
-export async function readActiveExecutionApproval(rulerNodeId) {
-  const ledger = await readExecutionApprovalsAtRuler(rulerNodeId);
+export async function readActiveExecutionApproval(rulerSpaceId) {
+  const ledger = await readExecutionApprovalsAtRuler(rulerSpaceId);
   if (!ledger.length) return null;
   const supersededSet = new Set();
   for (const entry of ledger) {
@@ -432,20 +432,20 @@ export async function readActiveExecutionApproval(rulerNodeId) {
  * Returns null when no execution-record is active (fresh Ruler before
  * the first emission, or all records superseded with no replacement).
  */
-export async function readActiveExecutionRecord(rulerNodeId) {
-  const active = await readActiveExecutionApproval(rulerNodeId);
+export async function readActiveExecutionRecord(rulerSpaceId) {
+  const active = await readActiveExecutionApproval(rulerSpaceId);
   if (!active?.executionRef) return null;
   const parsed = parseExecutionRef(active.executionRef);
   if (!parsed) return null;
-  const node = await Space.findById(parsed.recordId).select("_id metadata").lean();
-  if (!node) return null;
-  const meta = node.metadata instanceof Map
-    ? node.metadata.get(NS)
-    : node.metadata?.[NS];
+  const space = await Space.findById(parsed.recordId).select("_id metadata").lean();
+  if (!space) return null;
+  const meta = space.metadata instanceof Map
+    ? space.metadata.get(NS)
+    : space.metadata?.[NS];
   if (meta?.role !== "execution-record" || !meta?.execution) return null;
   return {
     ...meta.execution,
-    _recordNodeId: String(node._id),
+    _recordNodeId: String(space._id),
     _approvalRef: active.id || null,
   };
 }
@@ -459,7 +459,7 @@ export async function readActiveExecutionRecord(rulerNodeId) {
  * branchName } for branch sub-statuses. updates is a partial object
  * merged onto the matching status entry; supports any field on the
  * stepStatus shape (status, startedAt, completedAt, error, retries,
- * childNodeId).
+ * childSpaceId).
  */
 export async function updateStepStatus({
   recordNodeId,
@@ -472,12 +472,12 @@ export async function updateStepStatus({
 }) {
   if (!recordNodeId || typeof stepIndex !== "number" || !updates) return null;
   if (!core?.do) throw new Error("updateStepStatus requires `core` (verb surface)");
-  const node = await Space.findById(recordNodeId);
-  if (!node) return null;
+  const space = await Space.findById(recordNodeId);
+  if (!space) return null;
 
-  const meta = node.metadata instanceof Map
-    ? node.metadata.get(NS)
-    : node.metadata?.[NS];
+  const meta = space.metadata instanceof Map
+    ? space.metadata.get(NS)
+    : space.metadata?.[NS];
   if (meta?.role !== "execution-record" || !meta?.execution) return null;
 
   const execution = { ...meta.execution };
@@ -531,15 +531,15 @@ export async function updateStepStatus({
  * wins.
  */
 export async function updateStepStatusByBranchName({
-  rulerNodeId,
+  rulerSpaceId,
   branchName,
   updates,
   identity = null,
   // Phase 3: thread core through to the underlying updateStepStatus.
   core,
 }) {
-  if (!rulerNodeId || !branchName || !updates) return null;
-  const active = await readActiveExecutionRecord(rulerNodeId);
+  if (!rulerSpaceId || !branchName || !updates) return null;
+  const active = await readActiveExecutionRecord(rulerSpaceId);
   if (!active?._recordNodeId) return null;
   const lowerBranch = String(branchName).trim().toLowerCase();
   const stepStatuses = Array.isArray(active.stepStatuses) ? active.stepStatuses : [];
@@ -588,12 +588,12 @@ export async function freezeExecutionRecord({
 }) {
   if (!recordNodeId) return null;
   if (!core?.do) throw new Error("freezeExecutionRecord requires `core` (verb surface)");
-  const node = await Space.findById(recordNodeId);
-  if (!node) return null;
+  const space = await Space.findById(recordNodeId);
+  if (!space) return null;
 
-  const meta = node.metadata instanceof Map
-    ? node.metadata.get(NS)
-    : node.metadata?.[NS];
+  const meta = space.metadata instanceof Map
+    ? space.metadata.get(NS)
+    : space.metadata?.[NS];
   if (meta?.role !== "execution-record" || !meta?.execution) return null;
 
   const priorStatus = meta.execution.status;

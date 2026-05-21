@@ -99,13 +99,13 @@ async function buildSystemPromptForRole(role, ctx) {
   }
   if (currentSpace && currentSpace !== rootId) {
     positionLines.push(names.current
-      ? `Current node: ${names.current} (${currentSpace})`
-      : `Current node: ${currentSpace}`);
+      ? `Current space: ${names.current} (${currentSpace})`
+      : `Current space: ${currentSpace}`);
   }
   if (targetSpace && targetSpace !== rootId && targetSpace !== currentSpace) {
     positionLines.push(names.target
-      ? `Target node: ${names.target} (${targetSpace})`
-      : `Target node: ${targetSpace}`);
+      ? `Target space: ${names.target} (${targetSpace})`
+      : `Target space: ${targetSpace}`);
   }
   const positionBlock = positionLines.length > 0
     ? `[Position]\n${positionLines.join("\n")}\n\n`
@@ -180,7 +180,7 @@ let MAX_TOOL_ITERATIONS = 15;
 let LLM_MAX_RETRIES = 3;
 function MAX_MESSAGE_CONTENT_BYTES() { return Math.max(4096, Math.min(Number(getLandConfigValue("maxMessageContentBytes")) || 32768, 131072)); }
 
-// ── Kernel config setters (called from startup.js after land config loads) ──
+// ── Kernel config setters (called from genesis.js after land config loads) ──
 export function setKernelConfig(key, value) {
   const num = Number(value);
   // Clamp all numeric values to sane bounds. Zero or negative values for
@@ -214,7 +214,7 @@ let FAILOVER_TIMEOUT_MS = 15000;
 // inside their handler — single Planner/Contractor/Foreman turns)
 // can legitimately take a few minutes. 10 minutes is generous
 // enough to cover those cases without making the kernel aware of
-// which tools they are. Operators can tighten or extend per-node
+// which tools they are. Operators can tighten or extend per-space
 // via the toolCallTimeout config key.
 //
 // As of the fire-and-forget refactor in governing, the long-running
@@ -479,7 +479,7 @@ export function setLlmMaxRetries(n) { LLM_MAX_RETRIES = n; }
 //   - Role spec may declare `timeoutMs` and `maxRetries`. Per-role values
 //     win because the role knows its own budget (a Planner with a giant
 //     prompt expects longer than a one-shot Worker).
-//   - Per-node override via metadata.timeouts.<roleName> still wins
+//   - per-space override via metadata.timeouts.<roleName> still wins
 //     (operator escape hatch for slow specific scopes).
 //   - Land default is the floor.
 function getRetriesForRole(role) {
@@ -694,7 +694,7 @@ async function ensureSession(clientSessionId, ctx) {
   // Self-healing: detect rootId mismatch. If the caller says we're in a
   // different tree than the being thinks, clear messages and re-init.
   // The position update below (setCurrentSpace) re-derives rootId from
-  // the incoming node, so rootId catches up automatically.
+  // the incoming space, so rootId catches up automatically.
   const incomingRootId = ctx.rootId || null;
   const knownRootId = getRootId(beingId);
   if (knownRootId && incomingRootId && knownRootId !== incomingRootId) {
@@ -738,7 +738,7 @@ async function ensureSession(clientSessionId, ctx) {
  */
 function checkTreeCircuit(session) {
   if (session._ancestorSnapshot) {
-    // The owner node (root) is the last non-land seed space in the chain
+    // The owner space (root) is the last non-land seed space in the chain
     const rootAncestor = session._ancestorSnapshot.find(a => a.rootOwner && a.rootOwner !== SEED_BEING);
     if (rootAncestor?.metadata?.circuit?.tripped) {
       return {
@@ -840,7 +840,7 @@ async function prepareConversation(session, ctx, message, clientSessionId) {
 
   // Build/refresh system prompt every call so it reflects current tree state
   {
-    // Run enrichContext for the session's current node so mode buildSystemPrompt
+    // Run enrichContext for the session's current space so mode buildSystemPrompt
     // hooks (and facet shouldInject checks) get the same injected data the
     // tree-orchestrator sees. Cheap: the handlers already guard with data
     // checks and are designed to run per-turn.
@@ -856,7 +856,7 @@ async function prepareConversation(session, ctx, message, clientSessionId) {
           enrichedContext = {};
           await hooks.run("enrichContext", {
             context: enrichedContext,
-            node: posSpace,
+            space: posSpace,
             meta,
             spaceId: posNodeId,
             beingId: ctx.beingId,
@@ -1054,11 +1054,11 @@ const LLM_CONFIG_KEYS = {
 function resolveLlmConfig(ancestors, role) {
   const config = {};
 
-  // Layer 1: node config (walk ancestor chain, closest wins)
+  // Layer 1: space config (walk ancestor chain, closest wins)
   if (ancestors && ancestors.length > 0) {
-    for (const node of ancestors) {
-      if (node.seedSpace) break;
-      const llmConfig = node.metadata?.llm?.config;
+    for (const space of ancestors) {
+      if (space.seedSpace) break;
+      const llmConfig = space.metadata?.llm?.config;
       if (!llmConfig || typeof llmConfig !== "object") continue;
       for (const [key, maxVal] of Object.entries(LLM_CONFIG_KEYS)) {
         if (config[key] !== undefined) continue;
@@ -1071,7 +1071,7 @@ function resolveLlmConfig(ancestors, role) {
     }
   }
 
-  // Layer 2: role config (fills gaps not set by node). Roles can declare
+  // Layer 2: role config (fills gaps not set by space). Roles can declare
   // LLM-loop knobs directly (maxToolIterations, compressionThreshold, ...).
   if (role) {
     for (const [key, maxVal] of Object.entries(LLM_CONFIG_KEYS)) {
@@ -1109,9 +1109,9 @@ async function resolveToolsForPosition(session, beingId, rolePermissions = null)
         // Tool config: walk ancestor chain in memory
         const allowed = new Set();
         const blocked = new Set();
-        for (const node of ancestors) {
-          if (node.seedSpace) break;
-          const meta = node.metadata || {};
+        for (const space of ancestors) {
+          if (space.seedSpace) break;
+          const meta = space.metadata || {};
           if (meta.tools?.allowed) for (const t of meta.tools.allowed) allowed.add(t);
           if (meta.tools?.blocked) for (const t of meta.tools.blocked) blocked.add(t);
         }
@@ -1129,7 +1129,7 @@ async function resolveToolsForPosition(session, beingId, rolePermissions = null)
         if (scope.restricted.size) restrictedExtensions = scope.restricted;
       }
     } catch (scopeErr) {
-      log.warn("LLM", `Tool scope resolution failed for node ${currentSpace}: ${scopeErr.message}`);
+      log.warn("LLM", `Tool scope resolution failed for space ${currentSpace}: ${scopeErr.message}`);
     }
   }
   // Role-based tool resolution: each role declares its own tools.
@@ -1595,7 +1595,7 @@ async function executeTool(toolCall, session, ctx, client, clientSessionId) {
   //                      pendingPlan, pendingSwarmPlan) key on this
   //   sessionId      — chat-record-level session group for UI nesting
   //   rootId         — tree root the call originates from
-  //   spaceId         — current node position (per-being)
+  //   spaceId         — current space position (per-being)
   args.beingId = ctx.beingId;
   // summonId / sessionId travel from the call site through ctx so mcp/server.js
   // can stop doing Map lookups. The sender is the authority — we always know
@@ -1620,7 +1620,7 @@ async function executeTool(toolCall, session, ctx, client, clientSessionId) {
   if (ctx.rootId && !args.rootId) args.rootId = ctx.rootId;
   // Pinned position wins. When a turn is dispatched with an explicit
   // ctx.currentSpace (Worker-at-Ruler-scope, sub-Ruler turn, branch
-  // dispatch, etc.) tool calls land at THAT node — even if the user
+  // dispatch, etc.) tool calls land at THAT space — even if the user
   // navigates somewhere else mid-turn and the being's position state
   // shifts. Without this pin, a sub-Ruler's Worker writes into the
   // project root the moment the user clicks elsewhere in the dashboard,
@@ -1646,7 +1646,7 @@ async function executeTool(toolCall, session, ctx, client, clientSessionId) {
 
   // beforeToolCall: extensions can modify args or cancel. summonId +
   // sessionId + spaceId let forensics correlate the tool call to its
-  // originating chat step and the tree node whose signalInbox
+  // originating chat step and the tree space whose signalInbox
   // should be snapshotted for signal diffing.
   const _toolChatId = ctx?.summonId || null;
   const _toolSessionId = ctx?.sessionId || null;
@@ -1696,7 +1696,7 @@ async function executeTool(toolCall, session, ctx, client, clientSessionId) {
     // than the LLM timeout. Default 10 minutes covers both
     // fast-finishing tools (most) and the small handful that run
     // another LLM call inside their handler (extension-defined,
-    // kernel-agnostic). Operators can tighten or extend per-node.
+    // kernel-agnostic). Operators can tighten or extend per-space.
     //
     // CRITICAL: the MCP SDK has its own internal request timeout
     // (DEFAULT_REQUEST_TIMEOUT_MSEC = 60s) that fires error -32001
@@ -1874,7 +1874,7 @@ export async function processMessage(clientSessionId, message, ctx) {
     });
   }
 
-  // Phase 5b: Resolve LLM config. Three layers: node > role > land globals.
+  // Phase 5b: Resolve LLM config. Three layers: space > role > land globals.
   // Space config walks metadata.llm.config on ancestors. Role declares its own needs.
   // Stored on session so callLLM and executeTool can read overrides.
   session._nodeLlmConfig = resolveLlmConfig(session._ancestorSnapshot, role);
@@ -2004,9 +2004,9 @@ export async function processMessage(clientSessionId, message, ctx) {
     // Mid-conversation compression: when messages pile up during long tool chains,
     // compress older messages into a summary. Keeps the AI focused.
     // Config: conversationCompression (bool), compressionThreshold (int), compressionKeep (int)
-    // Per-node override: metadata.llm.config.compressionThreshold / compressionKeep
+    // per-space override: metadata.llm.config.compressionThreshold / compressionKeep
     const compEnabled = session._nodeLlmConfig?.compressionThreshold !== undefined
-      ? true // node-level config implies enabled
+      ? true // space-level config implies enabled
       : COMPRESSION_ENABLED();
     if (compEnabled) {
       const compThreshold = session._nodeLlmConfig?.compressionThreshold ?? COMPRESSION_THRESHOLD();
@@ -2189,8 +2189,8 @@ export async function runChat({ being, envelope, role, signal = null } = {}) {
     }
   }
 
-  // 2. Set position. rootId is derived from the current node, so
-  // callers only set the node; the tree-root follows. When only
+  // 2. Set position. rootId is derived from the current space, so
+  // callers only set the space; the tree-root follows. When only
   // rootId is known, treat it as the position itself.
   const targetSpace = spaceId || rootId;
   if (targetSpace) await setCurrentSpace(beingId, targetSpace);

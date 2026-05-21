@@ -1061,7 +1061,7 @@ export async function loadExtensions(app, mcpServer, opts = {}) {
 // ---------------------------------------------------------------------------
 
 // Mirror of the CORE_HOOKS list in seed/system/hooks.js plus afterBoot which
-// isn't in that list but is fired by startup.js after all extensions
+// isn't in that list but is fired by genesis.js after all extensions
 // initialize. Kept here so we don't import across the seed boundary for
 // one list.
 const CORE_HOOKS_VALID = new Set([
@@ -1505,7 +1505,7 @@ export function getBootReport() {
  * seed) because they touch loader-internal state: extension directory
  * writes, the disabledExtensions sync file. Seed never imports from
  * the loader; the dependency points outward — call this once at boot
- * from startup.js after the kernel operations are loaded.
+ * from genesis.js after the kernel operations are loaded.
  *
  * Registered ops (all under `ownerExtension: "kernel"`):
  *   install-extension     write extension files to disk
@@ -1520,7 +1520,7 @@ export async function registerExtensionManagementOps() {
   const EXT_NAME_RE = /^[a-z0-9-]+$/i;
 
   registerOperation("install-extension", {
-    targets: ["node"],
+    targets: ["space"],
     ownerExtension: "kernel",
     handler: async ({ params }) => {
       const { name, version, manifest, files } = params || {};
@@ -1542,7 +1542,7 @@ export async function registerExtensionManagementOps() {
   });
 
   registerOperation("uninstall-extension", {
-    targets: ["node"],
+    targets: ["space"],
     ownerExtension: "kernel",
     handler: async ({ params }) => {
       const { name } = params || {};
@@ -1559,7 +1559,7 @@ export async function registerExtensionManagementOps() {
   });
 
   registerOperation("disable-extension", {
-    targets: ["node"],
+    targets: ["space"],
     ownerExtension: "kernel",
     handler: async ({ params }) => {
       const { name } = params || {};
@@ -1577,7 +1577,7 @@ export async function registerExtensionManagementOps() {
   });
 
   registerOperation("enable-extension", {
-    targets: ["node"],
+    targets: ["space"],
     ownerExtension: "kernel",
     handler: async ({ params }) => {
       const { name } = params || {};
@@ -2175,9 +2175,9 @@ export function getRegisteredJobs() {
  *   provides.migrations: "./migrations.js"
  *
  * The migrations module exports an array of { version, up } objects.
- * Schema versions are tracked per extension in the .extensions system node values.
+ * Schema versions are tracked per extension in the .extensions land seed space values.
  *
- * Called from startup.js after DB connect.
+ * Called from genesis.js after DB connect.
  */
 export async function runExtensionMigrations() {
   let Space;
@@ -2188,7 +2188,7 @@ export async function runExtensionMigrations() {
     return;
   }
 
-  // Find the .extensions system node once, so per-extension queries are scoped correctly.
+  // Find the .extensions land seed space once, so per-extension queries are scoped correctly.
   // Without this, a user-created tree node named the same as an extension would be matched.
   const { SEED_SPACE } = await import("../seed/ibp/protocol.js");
   const extensionsParent = await Space.findOne({ seedSpace: SEED_SPACE.EXTENSIONS }).select("_id").lean();
@@ -2249,7 +2249,7 @@ export async function runExtensionMigrations() {
 }
 
 /**
- * Start all extension jobs. Called from startup.js after DB connect.
+ * Start all extension jobs. Called from genesis.js after DB connect.
  */
 export async function startExtensionJobs() {
   for (const job of registeredJobs) {

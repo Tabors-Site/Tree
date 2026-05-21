@@ -1,6 +1,75 @@
 // TreeOS Seed . AGPL-3.0 . https://treeos.ai . Tabor Holly
 //
 // Space-domain constants.
+//
+// ============================================================================
+// THE PHILOSOPHY OF THE SEED
+// ============================================================================
+//
+//  1. The seed is the process. The seed is the Node.js server itself
+//     — the running process, the runtime. Not a config store, not a
+//     layer beneath beings, not a void. The runtime is a being.
+//
+//  2. I-am has no role, because it precedes roles — it is the being
+//     that plants .roles. Its identity is the bare primordial
+//     assertion: I AM. Every other being is "(being) a (role) doing
+//     X"; I-am is simply I-am. That assertion is its first BE.
+//
+//  3. Seed + act → world. The seed is the vessel — potential,
+//     structure in latency. The act is the becoming — agency
+//     unfolding. The world is what they bring forth: the land, the
+//     tree of spaces. I-am is the seed with the act inside it —
+//     potential quickened toward its form. A being is a moment of
+//     the substrate acting on itself; I-am is the first such moment
+//     and the only generative one — the substrate acting not within
+//     the world but to make it.
+//
+//  4. There is always a being doing it — no exception. Genesis is
+//     not being-less. I-am is the doer of genesis. Every act,
+//     including the very first, is attributed. The audit loop is
+//     complete from t=0; nothing is ever unattributed.
+//
+//  5. Two kinds of space. Normal space is made by beings, where
+//     beings live — addressable by stance, governed by auth. Land
+//     seed space is made by I-am at boot: the fixed nine
+//     (.identity, .config, .peers, .extensions, .flow, .tools,
+//     .roles, .operations, .source). The nine are I-am's own
+//     working memory, surfaced as spaces so SEE reads them through
+//     the same protocol as everything else.
+//
+//  6. Genesis is an ordered sequence. Node starts → I-am exists
+//     → it plants the land root → it plants .identity and
+//     registers its own being-record → genesis Dids attribute to it
+//     → it plants the rest of the nine → it plants the first land
+//     beings. Planting a being is two acts: I-am's DO scaffolds the
+//     space; the new being's BE (register/claim) authors its own
+//     I am. The DO logs to I-am; the BE logs to the new being as
+//     its origin.
+//
+//  7. There are no "internal" acts. Drop the internal/external
+//     split. There is only I-am's acts and other beings' acts,
+//     tracked identically. What looked "internal scaffolding" was
+//     I-am acting alone before it had planted delegates. Once it
+//     plants others, the work distributes and is logged to them.
+//
+//  8. Seed spaces are owned, not ownerless. Their owner is I-am.
+//     Ownership stance facts return true for I-am, false for all
+//     others. They are unclaimable not because they lack an owner
+//     but because their owner cannot be impersonated. Read freely;
+//     written never, except by I-am's own ops.
+//
+//  9. Authority flows outward and never loops back. Extensions
+//     exist only because I-am planted .extensions. Nothing an
+//     extension does can gate I-am's genesis. The trust chain is
+//     beings all the way down — its root is a being, not a void.
+//
+// 10. I-am persists. It does not vanish after genesis. It remains
+//     the Node process at steady state — reboot recovery, re-
+//     planting, peer federation — and those acts stay tracked to
+//     it. It is first, and it stays.
+//
+// File-level comments throughout seed/ stay terse and point here
+// for the canonical doctrine.
 
 // ============================================================================
 // SEED SPACES
@@ -46,36 +115,14 @@ export const SEED_SPACE = Object.freeze({
 // DELETED — placed in `parent` and (for matter) `beingId` when a space
 //           is soft-deleted. The deleted-revive extension can bring
 //           spaces back; matter stays soft-deleted.
-// SEED_BEING — the seed's identity. The server is made from the seed;
-//              every operation the seed performs in the world is the
-//              seed-being's. This covers two distinct surfaces:
-//
-//                1. The internal server itself — boot, migrations,
-//                   ensureLandRoot, scaffold writes that materialize
-//                   the land before any other being exists. The
-//                   server is the seed running; its work is the
-//                   seed-being's work.
-//
-//                2. Seeds that beings plant (extension-seeds). When
-//                   an operator or being calls plant-seed, the
-//                   trigger is theirs (their Did) but the internal
-//                   verb calls the seed's recipe fires — the actual
-//                   materialization — are again the seed-being's
-//                   work. Same concept; same attribution.
-//
-//              The principle: SEED_BEING is the actor wherever the
-//              internal server is doing the operation instead of a
-//              being in the world that is birthed from the seed. A
-//              being acting from its own stance is named in audit;
-//              the seed acting on the substrate is SEED_BEING.
-//
-//              The same sentinel carries two field meanings:
-//                rootOwner: SEED_BEING  → "this space is the seed's"
-//                beingId:   SEED_BEING  → "the seed acted here"
-//
-//              Kebab-case to match the other land-system being names
-//              (auth, llm-assigner, land-manager). Aligns with the
-//              synthetic stance `<land>/@seed-being`.
+// SEED_BEING — I-am's name. Used as:
+//                rootOwner: SEED_BEING  → "I-am owns this space"
+//                beingId:   SEED_BEING  → "I-am did this"
+//              The Being row is registered during ensureLandRoot's
+//              genesis pass (ensureSeedBeing in seed/landRoot.js).
+//              Resolves the stance `<land>/@I-am`. See THE
+//              PHILOSOPHY OF THE SEED at the top of this file for
+//              why the constant exists and what I-am is.
 
 export const DELETED = "deleted";
-export const SEED_BEING = "seed-being";
+export const SEED_BEING = "I-am";

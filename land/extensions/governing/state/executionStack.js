@@ -53,26 +53,26 @@ const FAILURE_RENDER_CAP = 5;
  * execution-record (for step statuses + failures). Returns null if
  * the node isn't a Ruler or has no active execution-record.
  */
-async function buildFrame(rulerNodeId, depth) {
-  if (!rulerNodeId) return null;
+async function buildFrame(rulerSpaceId, depth) {
+  if (!rulerSpaceId) return null;
 
-  const node = await Space.findById(rulerNodeId).select("_id name metadata children").lean();
-  if (!node) return null;
-  const meta = node.metadata instanceof Map
-    ? Object.fromEntries(node.metadata)
-    : (node.metadata || {});
+  const space = await Space.findById(rulerSpaceId).select("_id name metadata children").lean();
+  if (!space) return null;
+  const meta = space.metadata instanceof Map
+    ? Object.fromEntries(space.metadata)
+    : (space.metadata || {});
   if (meta[ROLE_NS]?.role !== "ruler") return null;
 
-  const record = await readActiveExecutionRecord(rulerNodeId);
-  const emission = await readActivePlanEmission(rulerNodeId);
+  const record = await readActiveExecutionRecord(rulerSpaceId);
+  const emission = await readActivePlanEmission(rulerSpaceId);
   if (!record) {
     // Ruler exists but no execution-record yet (just promoted, plan
     // not yet approved). Render as an empty frame so the stack still
     // shows position.
     return {
       depth,
-      rulerNodeId: String(rulerNodeId),
-      rulerName: node.name || "(unnamed)",
+      rulerSpaceId: String(rulerSpaceId),
+      rulerName: space.name || "(unnamed)",
       recordNodeId: null,
       recordOrdinal: null,
       status: "no-execution",
@@ -165,8 +165,8 @@ async function buildFrame(rulerNodeId, depth) {
 
   return {
     depth,
-    rulerNodeId: String(rulerNodeId),
-    rulerName: node.name || "(unnamed)",
+    rulerSpaceId: String(rulerSpaceId),
+    rulerName: space.name || "(unnamed)",
     recordNodeId: record._recordNodeId,
     recordOrdinal: record.ordinal,
     status: record.status,
@@ -193,19 +193,19 @@ async function buildFrame(rulerNodeId, depth) {
  * are fully done (no failures, no in-flight) collapse via the renderer
  * later but stay in the data shape so callers can inspect them.
  */
-async function walkDown(rulerNodeId, depth, framesOut) {
+async function walkDown(rulerSpaceId, depth, framesOut) {
   if (framesOut.length >= MAX_FRAMES) return;
-  const frame = await buildFrame(rulerNodeId, depth);
+  const frame = await buildFrame(rulerSpaceId, depth);
   if (!frame) return;
   framesOut.push(frame);
 
   // Recurse into sub-Rulers (children with role=ruler). We use the
-  // execution-record's stepStatuses[].branches[].childNodeId when
+  // execution-record's stepStatuses[].branches[].childSpaceId when
   // present (the canonical sub-Ruler reference), and fall back to the
-  // tree's actual children with role=ruler when childNodeId is absent
+  // tree's actual children with role=ruler when childSpaceId is absent
   // (e.g., orphaned sub-Rulers from older runs).
   try {
-    const rulerSpace = await Space.findById(rulerNodeId).select("children").lean();
+    const rulerSpace = await Space.findById(rulerSpaceId).select("children").lean();
     if (!rulerSpace?.children?.length) return;
 
     // Collect known sub-Ruler IDs from stepStatuses (more authoritative).
@@ -213,7 +213,7 @@ async function walkDown(rulerNodeId, depth, framesOut) {
     for (const step of frame.stepStatuses || []) {
       if (step?.type !== "branch" || !Array.isArray(step.branches)) continue;
       for (const b of step.branches) {
-        if (b?.childNodeId) knownSubRulerIds.add(String(b.childNodeId));
+        if (b?.childSpaceId) knownSubRulerIds.add(String(b.childSpaceId));
       }
     }
 
@@ -246,9 +246,9 @@ async function walkDown(rulerNodeId, depth, framesOut) {
  *
  * Returns null when this scope has no parent (root Ruler).
  */
-async function walkUp(rulerNodeId) {
-  if (!rulerNodeId) return null;
-  const lineage = await readLineage(rulerNodeId);
+async function walkUp(rulerSpaceId) {
+  if (!rulerSpaceId) return null;
+  const lineage = await readLineage(rulerSpaceId);
   if (!lineage?.parentRulerId) return null;
 
   const parent = await Space.findById(lineage.parentRulerId)
@@ -425,7 +425,7 @@ function computeResumeAnchors(frames) {
     if (!frame.recordNodeId) continue;
     out.push({
       frameDepth: frame.depth,
-      rulerNodeId: frame.rulerNodeId,
+      rulerSpaceId: frame.rulerSpaceId,
       recordNodeId: frame.recordNodeId,
       currentStepIndex: frame.currentStepIndex,
     });
@@ -441,21 +441,21 @@ function computeResumeAnchors(frames) {
  * lands at depth 0; sub-frames descend; parent context (if any) lives
  * in `parentContext`.
  */
-export async function buildExecutionStackSnapshot(rulerNodeId) {
-  if (!rulerNodeId) return null;
-  const rootFrame = await buildFrame(rulerNodeId, 0);
+export async function buildExecutionStackSnapshot(rulerSpaceId) {
+  if (!rulerSpaceId) return null;
+  const rootFrame = await buildFrame(rulerSpaceId, 0);
   if (!rootFrame) return null;
 
   const frames = [];
-  await walkDown(rulerNodeId, 0, frames);
+  await walkDown(rulerSpaceId, 0, frames);
 
-  const parentContext = await walkUp(rulerNodeId);
+  const parentContext = await walkUp(rulerSpaceId);
   const blockedOn = computeBlockedOn(frames);
   const decisionHints = computeDecisionHints(frames, blockedOn);
   const resumeAnchors = computeResumeAnchors(frames);
 
   return {
-    rootRulerId: String(rulerNodeId),
+    rootRulerId: String(rulerSpaceId),
     rootRulerName: rootFrame.rulerName,
     frames,
     parentContext,
@@ -679,8 +679,8 @@ export function formatExecutionStack(snapshot) {
 /**
  * Convenience: build + format. Most callers want the formatted string.
  */
-export async function renderExecutionStack(rulerNodeId) {
-  const snapshot = await buildExecutionStackSnapshot(rulerNodeId);
+export async function renderExecutionStack(rulerSpaceId) {
+  const snapshot = await buildExecutionStackSnapshot(rulerSpaceId);
   if (!snapshot) return "";
   return formatExecutionStack(snapshot);
 }
@@ -709,24 +709,24 @@ const EVIDENCE_FLAGS_RENDER_CAP = 5;
  *
  * Returns null when the node isn't found.
  */
-export async function buildArtifactEvidence(rulerNodeId) {
-  if (!rulerNodeId) return null;
+export async function buildArtifactEvidence(rulerSpaceId) {
+  if (!rulerSpaceId) return null;
   let node;
   try {
-    node = await Space.findById(rulerNodeId)
+    node = await Space.findById(rulerSpaceId)
       .select("_id name type children")
       .lean();
   } catch (err) {
     log.debug("Governing/Evidence", `node lookup failed: ${err.message}`);
     return null;
   }
-  if (!node) return null;
+  if (!space) return null;
 
   // Probe the Ruler scope's own notes. getNotes returns { notes: [...] }.
   let scopeNotes = [];
   try {
     const { getArtifacts } = await import("../../../seed/matter/matters.js");
-    const got = await getArtifacts({ spaceId: String(node._id), limit: 50 });
+    const got = await getArtifacts({ spaceId: String(space._id), limit: 50 });
     scopeNotes = Array.isArray(got?.artifacts) ? got.artifacts : [];
   } catch (err) {
     log.debug("Governing/Evidence", `scope notes fetch failed: ${err.message}`);
@@ -735,7 +735,7 @@ export async function buildArtifactEvidence(rulerNodeId) {
   // Probe each child: name + note count. We cap the work at a
   // reasonable number of children so a wide scope doesn't blow up the
   // probe. Children beyond the cap collapse to a count line.
-  const childIds = Array.isArray(node.children) ? node.children.map(String) : [];
+  const childIds = Array.isArray(space.children) ? space.children.map(String) : [];
   const childRows = [];
   try {
     if (childIds.length > 0) {
@@ -782,7 +782,7 @@ export async function buildArtifactEvidence(rulerNodeId) {
   let pendingFlags = [];
   try {
     const { readPendingIssues } = await import("./flagQueue.js");
-    const all = await readPendingIssues(rulerNodeId);
+    const all = await readPendingIssues(rulerSpaceId);
     pendingFlags = Array.isArray(all) ? all : [];
   } catch (err) {
     log.debug("Governing/Evidence", `pending flags fetch failed: ${err.message}`);
@@ -802,9 +802,9 @@ export async function buildArtifactEvidence(rulerNodeId) {
   }
 
   return {
-    rulerNodeId: String(node._id),
-    rulerName: node.name || "(unnamed)",
-    rulerType: node.type || null,
+    rulerSpaceId: String(space._id),
+    rulerName: space.name || "(unnamed)",
+    rulerType: space.type || null,
     scopeNoteCount: scopeNotes.length,
     scopeFirstNotePreview,
     scopeMostRecentAt,
@@ -895,8 +895,8 @@ export function formatArtifactEvidence(evidence) {
 /**
  * Convenience: build + format the artifact-evidence block.
  */
-export async function renderArtifactEvidence(rulerNodeId) {
-  const evidence = await buildArtifactEvidence(rulerNodeId);
+export async function renderArtifactEvidence(rulerSpaceId) {
+  const evidence = await buildArtifactEvidence(rulerSpaceId);
   if (!evidence) return "";
   return formatArtifactEvidence(evidence);
 }

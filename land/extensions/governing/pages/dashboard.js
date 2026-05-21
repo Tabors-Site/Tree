@@ -237,7 +237,7 @@ function renderLifecyclePill(snapshot) {
 }
 
 function renderPositionHeader(entry, vitals) {
-  const { snapshot, rulerNodeId, rulerName } = entry;
+  const { snapshot, rulerSpaceId, rulerName } = entry;
   const scope = snapshot?.scope || {};
   const lineage = snapshot?.lineage;
   const promoted = scope.promotedAt
@@ -257,7 +257,7 @@ function renderPositionHeader(entry, vitals) {
     <div class="gov-position-header">
       <div class="gov-position-title">
         <span class="gov-position-name">${esc(rulerName || scope.name || "(unnamed)")}</span>
-        <code class="gov-position-id">${esc(String(rulerNodeId).slice(0, 8))}</code>
+        <code class="gov-position-id">${esc(String(rulerSpaceId).slice(0, 8))}</code>
         ${renderLifecyclePill(snapshot)}
       </div>
       <div class="gov-position-meta">${promoted} ${from} ${parent}</div>
@@ -498,7 +498,7 @@ function renderRunsSection(entry) {
   // renderPlansSection handles superseded plan emissions. Without this
   // the operator only sees the currently-active execution and assumes
   // earlier runs disappeared.
-  const activeId = executionRecord?._executionNodeId || executionRecord?.executionNodeId;
+  const activeId = executionRecord?._executionNodeId || executionRecord?.executionSpaceId;
   const priorRuns = (ledgers?.execution || [])
     .filter((e) => {
       const ref = e?.executionRef || e?.runRef || "";
@@ -740,7 +740,7 @@ function layoutRulershipMinimap(rulers, allVitals) {
   }
   const lookup = new Map();
   for (const n of nodes) {
-    lookup.set(String(n.entry.rulerNodeId), n);
+    lookup.set(String(n.entry.rulerSpaceId), n);
   }
   // Build edges from each child's parentRulerId
   const edges = [];
@@ -765,7 +765,7 @@ function renderMinimap(rulers, allVitals) {
   }).join("");
 
   const nodesSvg = nodes.map((n) => {
-    const idShort = String(n.entry.rulerNodeId).slice(0, 8);
+    const idShort = String(n.entry.rulerSpaceId).slice(0, 8);
     const stateKey = n.vitals.stateKey;
     const wRunning = n.vitals.workers.running;
     const flagsPending = n.vitals.flagTotal;
@@ -776,7 +776,7 @@ function renderMinimap(rulers, allVitals) {
     if (wFailed > 0) counts.push(`<text x="${(n.x - 26).toFixed(1)}" y="${(n.y + 2).toFixed(1)}" fill="#f87171" font-size="9" font-weight="700">${wFailed}✗</text>`);
     const title = `${esc(n.entry.rulerName || idShort)} · ${stateKey}`;
     return `
-      <a href="#ruler-${esc(String(n.entry.rulerNodeId))}" class="gov-minimap-node" data-state="${stateKey}">
+      <a href="#ruler-${esc(String(n.entry.rulerSpaceId))}" class="gov-minimap-node" data-state="${stateKey}">
         <title>${title}</title>
         <circle cx="${n.x.toFixed(1)}" cy="${n.y.toFixed(1)}" r="11" />
         <text class="gov-minimap-emoji" x="${n.x.toFixed(1)}" y="${(n.y + 4).toFixed(1)}" text-anchor="middle">👑</text>
@@ -821,9 +821,9 @@ function renderRulerCard(entry) {
   const openAttr = entry.depth <= 1 ? "open" : "";
   const indentStyle = `style="--gov-depth:${entry.depth}"`;
   const vitals = computeRulerVitals(entry);
-  const anchorId = `ruler-${esc(String(entry.rulerNodeId))}`;
+  const anchorId = `ruler-${esc(String(entry.rulerSpaceId))}`;
   return `
-    <details id="${anchorId}" class="gov-ruler-card" data-ruler-id="${esc(entry.rulerNodeId)}" data-depth="${entry.depth}" data-state="${vitals.stateKey}" ${indentStyle} ${openAttr}>
+    <details id="${anchorId}" class="gov-ruler-card" data-ruler-id="${esc(entry.rulerSpaceId)}" data-depth="${entry.depth}" data-state="${vitals.stateKey}" ${indentStyle} ${openAttr}>
       <summary class="gov-ruler-summary">
         ${renderPositionHeader(entry, vitals)}
       </summary>
