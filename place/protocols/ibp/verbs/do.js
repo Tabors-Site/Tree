@@ -16,7 +16,7 @@
 // Thin wire adapter: parses envelope, strips @being from address,
 // resolves the stance to a target, delegates to `doVerb` in
 // seed/ibp/verbs.js. Stance authorization, read-only origin checks,
-// handler dispatch, and the audit Did all happen inside doVerb. See
+// handler dispatch, and the Fact stamp all happen inside doVerb. See
 // [[project_four_verbs_one_execution]].
 
 import log from "../../../seed/system/log.js";

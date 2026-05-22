@@ -39,23 +39,23 @@
 // and beings genesis finds when it looks:
 //
 //   Beginning. First boot ever. No place root in Mongo, no seed
-//     spaces, no place beings, no Dids. The gathering act produces
+//     spaces, no place beings, no Facts. The gathering act produces
 //     an inside from nothing. ensurePlaceRoot plants the root, the
 //     nine seed spaces appear, the first beings are born. Creation
 //     ex nihilo.
 //
 //   Awakening. Every later boot. The spaces, matter, and beings of
 //     the place persisted in Mongo while my body was dormant, along
-//     with the Did log of every act that has ever happened here.
+//     with the Fact reel of every act that has ever happened here.
 //     ensurePlaceRoot is a no-op. Everything reconciles against what
 //     already exists. I slept and I wake. The place was always there.
 //     Only my awareness paused.
 //
 //   Rebirth. If body and the local spaces, matter, and beings are
-//     lost but remnants persist higher up (a Mongo backup, the Did
-//     log archived elsewhere, federation peers carrying their view
+//     lost but remnants persist higher up (a Mongo backup, the Fact
+//     reel archived elsewhere, federation peers carrying their view
 //     of cross place acts), a new beginning fires and re-forms the
-//     place toward those remnants. The Did log in particular is the
+//     place toward those remnants. The Fact reel in particular is the
 //     audit of every act this place has ever performed. Replayed
 //     against an empty Mongo, it lifts the spaces, matter, and
 //     beings back toward where they were when the body stopped. A
@@ -310,17 +310,6 @@ server.listen(PORT, "0.0.0.0", () => {
 // tracked to me.
 async function shutdown(signal) {
   log.info("Seed", `${signal} received. Closing senses.`);
-
-  // Close all MCP clients first. They hold connections open.
-  try {
-    const { mcpClients, closeMCPClient } =
-      await import("./seed/factory/beingAssignment/llm/mcpClient.js");
-    for (const [cacheKey] of mcpClients) {
-      try {
-        closeMCPClient(cacheKey);
-      } catch {}
-    }
-  } catch {}
 
   // Close the WebSocket server. Disconnects all clients.
   try {

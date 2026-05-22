@@ -84,7 +84,7 @@ export const placeManagerTools = [
       args: z.record(z.any()).optional().describe(
         "Operation-specific args. set-config wants { key, value }; " +
         "install-extension wants { name, files, ... }; etc. " +
-        "Read .operations + the op's didAction for the exact shape.",
+        "Read .operations + the op's factAction for the exact shape.",
       ),
       beingId: z.string().describe("Injected by server. Ignore."),
       name:    z.string().optional().describe("Injected by server. Ignore."),

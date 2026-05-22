@@ -9,7 +9,7 @@
 //
 // One registry. One gate. Both the IBP wire layer and in-process
 // callers (extensions, kernel internals) dispatch through here, so
-// authorization, schema validation, and Did audit run once at one
+// authorization, schema validation, and Fact stamping run once at one
 // place. Bare names ("create-child", "set-meta") are reserved for
 // the kernel; extensions register under "<extName>:<action>" so
 // every name's owner is structurally evident on the wire.
@@ -50,8 +50,8 @@ const VALID_TARGETS = new Set([
  * @param {string[]} spec.targets - target kinds the op accepts: space|being|matter|place|stance|position
  * @param {Function} spec.handler - async ({ target, params, identity, summonCtx }) => result
  * @param {object} [spec.schema] - payload validation (Zod / JSON schema). Currently stored only; enforcement is on the roadmap.
- * @param {string} [spec.didAction] - name written into the Did. Defaults to operation name.
- * @param {boolean} [spec.skipAudit] - if true, no Did is written. Reserve for ops where audit adds nothing.
+ * @param {string} [spec.factAction] - name written into the Fact. Defaults to operation name.
+ * @param {boolean} [spec.skipAudit] - if true, no Fact is stamped. Reserve for ops where audit adds nothing.
  * @param {string} [spec.ownerExtension] - registering extension name (default "kernel")
  * @returns {boolean} true on success
  */
@@ -140,9 +140,9 @@ export function registerOperation(name, spec) {
     targets: [...spec.targets],
     handler: spec.handler,
     schema: spec.schema || null,
-    didAction:
-      typeof spec.didAction === "string" && spec.didAction.length > 0
-        ? spec.didAction
+    factAction:
+      typeof spec.factAction === "string" && spec.factAction.length > 0
+        ? spec.factAction
         : name,
     skipAudit: spec.skipAudit === true,
     ownerExtension,
@@ -204,7 +204,7 @@ export function listOperations(filter = {}) {
   return entries.map((op) => ({
     name: op.name,
     targets: [...op.targets],
-    didAction: op.didAction,
+    factAction: op.factAction,
     skipAudit: op.skipAudit,
     ownerExtension: op.ownerExtension,
   }));
@@ -213,7 +213,7 @@ export function listOperations(filter = {}) {
 /**
  * Sync the operation registry into `<place>/.operations` as child Nodes.
  * One child per registered DO operation; qualities mirrors the op's
- * declaration (targets, owner extension, didAction, skipAudit). Called
+ * declaration (targets, owner extension, factAction, skipAudit). Called
  * at boot end after extensions register; idempotent.
  */
 export async function syncOperationsToSubstrate() {
@@ -228,7 +228,7 @@ export async function syncOperationsToSubstrate() {
           "operation",
           {
             targets: [...op.targets],
-            didAction: op.didAction,
+            factAction: op.factAction,
             skipAudit: op.skipAudit,
             ownerExtension: op.ownerExtension,
           },

@@ -33,7 +33,7 @@ operations (the DO vocabulary), hooks (lifecycle reactions), and seeds
 | Verb | Targets | Use |
 |---|---|---|
 | SEE | space, matter, being | Read state. Returns descriptors and content. |
-| DO | space, matter, being | Mutate state. Each call audits as a Did. |
+| DO | space, matter, being | Mutate state. Each call stamps a Fact. |
 | SUMMON | being | Wake a being with a message. Goes to its inbox. |
 | BE | self (left stance) | Identity operations: register, claim, release, switch, create-being. |
 
@@ -141,7 +141,7 @@ export const yourRole = {
 1. Builds the system prompt: identity + preloaded see + capability list + your `prompt()` body + time.
 2. Pushes the SUMMON envelope.content as the first user message.
 3. Loops: assistant turn → tool calls → tool results → assistant turn, until the LLM emits text with no tool call (or `exit.requires` is unsatisfied).
-4. Returns `{ text, summonId }` to the caller.
+4. Returns `{ text, stampId }` to the caller.
 5. If `replyTo` is set, emits a reply SUMMON to the appropriate stance.
 
 ---
@@ -254,7 +254,7 @@ export default {
 3. Runs the read-only-origin gate (filesystem-origin matter is
    rejected unless an extension opted out).
 4. Calls your handler.
-5. Auto-writes a Did unless `skipAudit: true`.
+5. Auto-stamps a Fact unless `skipAudit: true`.
 
 You write the handler; the dispatcher handles the surrounding policy.
 
@@ -306,7 +306,7 @@ before the capability list. Each name resolves through a registered
 ```javascript
 // extensions/your-extension/seeResolvers.js
 
-import { registerSeeResolver } from "../../seed/factory/seeResolvers.js";
+import { registerSeeResolver } from "../../seed/factory/stamper/face/seeResolvers.js";
 import { renderYourSnapshot } from "./state/yourSnapshot.js";
 
 export function registerYourExtensionResolvers() {
@@ -397,12 +397,12 @@ write through the new shape:
 | What | Where | What you get |
 |---|---|---|
 | Default summon dispatch | `seed/factory/defaultSummon.js` | runTurn invocation, abort handling, error wrapping, reply emission |
-| System prompt assembly | `seed/factory/stamp.js` | identity + see + capabilities + your prompt body + time |
-| Reply emission | `seed/factory/replies.js` | emitReplyToAsker, emitReplyToStance, findChainInitialCaller |
-| Tool resolution | `seed/factory/stamper.js` | role.canX → registered tools, permission filter, per-position scope |
-| Exit-gate enforcement | `seed/factory/stamper.js` | runs if you declared `exit.requires` |
+| System prompt assembly | `seed/factory/stamper/face/face.js` | identity + see + capabilities + your prompt body + time |
+| Reply emission | `seed/factory/intake/replies.js` | emitReplyToAsker, emitReplyToStance, findChainInitialCaller |
+| Tool resolution | `seed/factory/stamper/stamper.js` | role.canX → registered tools, permission filter, per-position scope |
+| Exit-gate enforcement | `seed/factory/stamper/stamper.js` | runs if you declared `exit.requires` |
 | Permissions derivation | `seed/being/roles/registry.js` | computed from your canSee/canDo/canSummon/canBe |
-| Did audit logging | `seed/ibp/verbs.js` | every DO writes a Did unless `skipAudit` |
+| Fact stamping | `seed/ibp/verbs.js` | every DO stamps a Fact unless `skipAudit` |
 | Stance authorization | `seed/ibp/authorize.js` | runs before every verb |
 
 You stop writing the same 60 lines of dispatch boilerplate that every
@@ -543,8 +543,8 @@ prompt says "at <space>," not "at <scope>." Reserve "scope" for the
 governance-specific term.
 
 **Bypassing the operation registry for direct database writes.**
-Operations write a Did automatically. Direct Mongoose calls do not.
-Audit trail diverges. Use `core.do(target, "operation-name", params)`
+Operations stamp a Fact automatically. Direct Mongoose calls do not.
+The reel diverges from reality. Use `core.do(target, "operation-name", params)`
 when you can.
 
 ---
@@ -557,10 +557,10 @@ when you can.
 - **Seed kernel internals:** `seed/SEED.md`.
 - **Role registry behavior:** `seed/being/roles/registry.js` (header
   comment).
-- **Prompt assembler:** `seed/factory/stamp.js` (header
+- **Prompt assembler:** `seed/factory/stamper/face/face.js` (header
   comment).
 - **Default summon:** `seed/factory/defaultSummon.js`.
-- **Reply emission helpers:** `seed/factory/replies.js`.
+- **Reply emission helpers:** `seed/factory/intake/replies.js`.
 - **The four verbs in code:** `seed/ibp/verbs.js`.
 
 If something here disagrees with the seed source, the source is right

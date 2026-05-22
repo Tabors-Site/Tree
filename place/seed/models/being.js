@@ -13,7 +13,7 @@
 // matters.
 //
 // The being is not the row, though. The row is where the trail of
-// acts attaches; the being IS the trail. Every Did the being emits
+// acts attaches; the being IS the trail. Every Fact the being stamps
 // is the being unfolding. Without acts, this row is potential;
 // with them, the row is something rather than nothing. See
 // [seed/place/PLACE.md](../place/PLACE.md) "And the beings are the
@@ -59,7 +59,7 @@ const BeingSchema = new mongoose.Schema({
   // Roles the being can act in. Identity is durable on this row;
   // active role composes per SUMMON. Each SUMMON resolves an active
   // role: the envelope's `activeRole` if it names one of `roles`,
-  // else `defaultRole`. The Summon row stamps the resolved role for
+  // else `defaultRole`. The Stamp row stamps the resolved role for
   // audit.
   roles:       { type: [String], default: [] },
   defaultRole: { type: String, default: null },

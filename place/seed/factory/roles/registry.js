@@ -175,7 +175,7 @@ function makeLazyDefaultSummon(role) {
   let cached = null;
   return async (message, ctx) => {
     if (!cached) {
-      const mod = await import("../../factory/defaultSummon.js");
+      const mod = await import("../voices/llm/defaultSummon.js");
       cached = mod.defaultSummon;
     }
     return cached({ message, ctx, role });

@@ -31,25 +31,23 @@
 // up. A boot-time recovery pass that scans inboxes for unstamped
 // requests and resumes them is on the roadmap.
 
-import { randomUUID } from "crypto";
-import log from "../system/log.js";
-import Being from "../models/being.js";
+import log from "../../system/log.js";
 import {
   pickNextEntry,
   markSummoned,
   markInboxConsumed,
-  readInbox,
 } from "./inbox.js";
-import { getRole } from "../factory/roles/registry.js";
-import { pushIbp } from "../ibp/pushChannel.js";
-import { getPlaceConfigValue } from "../placeConfig.js";
+import { assign } from "../stamper/assign.js";
+import { moment } from "../stamper/moment.js";
+import { buildResponseEntry } from "./replies.js";
+import { getPlaceConfigValue } from "../../placeConfig.js";
 
 // Per-being scheduler state.
 //
 //   beingId -> {
 //     running:        boolean,         // true while runLoop is processing
-//     controller:     AbortController, // signal for the current Summon
-//     currentRoot:    string | null,   // rootCorrelation of the running Summon
+//     controller:     AbortController, // signal for the current Stamp
+//     currentRoot:    string | null,   // rootCorrelation of the running Stamp
 //     wakeQueue:      Set<spaceId>,     // positions known to have pending work
 //   }
 const _state = new Map();
@@ -79,17 +77,6 @@ function CFG_MAX_AGE_SECONDS() {
 //   beingId -> { tokens, lastRefillMs }
 const _rate = new Map();
 
-// Cached cognition mode per being. Humans don't have schedulers
-// running their inboxes — they have browser observers joined to their
-// being-room (see ibp/verbs/summon.js::emitSummon pattern). On
-// wake() we branch to a notify path that emits to the being-room
-// instead of entering the runLoop. The cache avoids re-reading the
-// Being doc on every wake. operatingMode rarely changes; if a place
-// does mutate it the test-helper _resetAll() also clears this map.
-//
-//   beingId -> "human" | "agent"
-const _cognitionMode = new Map();
-
 // ────────────────────────────────────────────────────────────────
 // Public API
 // ────────────────────────────────────────────────────────────────
@@ -98,7 +85,7 @@ const _cognitionMode = new Map();
  * Tell the scheduler a being has new pending work. If the being is
  * idle, runs its inbox loop until empty. If the being is already
  * processing, the new wake folds into the running loop's next iteration
- * (the loop re-reads the inbox after each Summon).
+ * (the loop re-reads the inbox after each Stamp).
  *
  * Calls are cheap; SUMMON handlers can fire this without awaiting.
  *
@@ -112,10 +99,6 @@ export function wake(beingId, spaceId) {
   if (!state.running) {
     state.running = true;
     // Fire and forget — runLoop owns its own error handling.
-    // The cognition branch (agent vs human) happens at the top of
-    // runLoop so wake() stays synchronous and the test ordering
-    // contract holds: wake() returns → state.running === true →
-    // abortCurrent / getStats see the in-flight Summon.
     runLoop(beingId).catch((err) => {
       log.error(
         "Scheduler",
@@ -132,7 +115,7 @@ export function wake(beingId, spaceId) {
 }
 
 /**
- * Abort the currently-running Summon for this being. The AbortSignal
+ * Abort the currently-running Stamp for this being. The AbortSignal
  * propagates into the being's summon() call. Returns true when an
  * abort was actually fired (something was running and not already
  * aborted), false otherwise.
@@ -157,7 +140,7 @@ export function abortCurrent(beingId, reason = "cancelled") {
 }
 
 /**
- * Inspect a being's currently-running Summon root correlation. Used by
+ * Inspect a being's currently-running Stamp root correlation. Used by
  * role templates to decide whether an incoming cancel SUMMON applies
  * to the work in flight. Returns null when idle.
  */
@@ -167,12 +150,12 @@ export function getCurrentRootCorrelation(beingId) {
 }
 
 /**
- * Abort every in-flight Summon across all beings whose currentRoot
+ * Abort every in-flight Stamp across all beings whose currentRoot
  * matches one of the supplied rootCorrelations. Returns the count of
  * aborts actually fired.
  *
  * Cancel-button surface: the caller computes the set of rootCorrelations
- * the user originated (via Summon.find({ beingIn: user, "endMessage.time": null })
+ * the user originated (via Stamp.find({ beingIn: user, "endMessage.time": null })
  * and walking rootCorrelation), then calls this to halt the chain
  * cascade in one sweep. Pending inbox entries get cleaned separately
  * via cancelByRootCorrelation per (spaceId, beingId).
@@ -229,7 +212,6 @@ export function _resetAll() {
   }
   _state.clear();
   _rate.clear();
-  _cognitionMode.clear();
 }
 
 // ────────────────────────────────────────────────────────────────
@@ -245,13 +227,6 @@ async function runLoop(beingId) {
     // drains the wakeQueue, then picks one per iteration. New wakes
     // arriving mid-loop just add to wakeQueue and the next iteration
     // sees them.
-    //
-    // Cognition branch (agent vs human) lives inside processEntry,
-    // after the receiver Being is loaded. For humans, processEntry
-    // emits being-room notifications and returns { humanBreakNode },
-    // which signals this per-space loop to break — entries stay
-    // pending in the inbox and the human responds by emitting a
-    // new SUMMON, not by scheduler processing.
     while (state.wakeQueue.size > 0) {
       // Take a snapshot of spaceIds to check this iteration. Wakes
       // landing during the iteration get picked up on the next round.
@@ -275,11 +250,8 @@ async function runLoop(beingId) {
           }
           const picked = await pickNextEntry(spaceId, beingId);
           if (!picked) break;
-          const result = await processEntry(beingId, spaceId, picked);
+          await processEntry(beingId, spaceId, picked);
           processedAny = true;
-          // Humans: entries stay pending; we've notified observers
-          // and shouldn't re-pick the same entry forever.
-          if (result?.humanBreakNode) break;
         }
       }
 
@@ -301,143 +273,40 @@ async function processEntry(beingId, spaceId, picked) {
 
   await markSummoned(spaceId, beingId, index);
 
-  // Resolve the receiver Being + the active role for THIS summon.
-  //
-  // Active role resolution (mirrors verbs/summon.js):
-  //   1. The inbox entry's `activeRole` field (set when the SUMMON
-  //      envelope specified one).
-  //   2. `toBeing.defaultRole` (the being's default capacity).
-  //   3. Fallback to nothing — consume the entry and skip with a warn.
-  //
-  // Strict membership check on entry.activeRole: if specified, must be
-  // in the being's `roles[]`. Skip otherwise (the verb handler should
-  // have rejected; defensive double-check.)
-  let activeRole = null;
-  let role = null;
-  let toBeing = null;
-  try {
-    toBeing = await Being.findById(beingId);
-    if (!toBeing) {
-      log.warn(
-        "Scheduler",
-        `being ${beingId.slice(0, 8)} not found; marking entry consumed and skipping`,
-      );
-      await markInboxConsumed(spaceId, beingId, [entry.correlation]);
-      return;
-    }
-    // Cache cognition mode on first encounter so future wakes for this
-    // being don't re-resolve it (rarely changes; cleared on _resetAll).
-    if (!_cognitionMode.has(beingId)) {
-      _cognitionMode.set(
-        beingId,
-        toBeing.operatingMode === "human" ? "human" : "agent",
-      );
-    }
-    // Human cognition branch. Entries stay pending; we emit
-    // being-room notifications for each unconsumed entry at this
-    // space (dedup via state.humanNotified), release the controller,
-    // and signal the runLoop to break this space's loop. The human
-    // responds by emitting a new SUMMON, not by scheduler processing.
-    if (toBeing.operatingMode === "human") {
-      state.controller = null;
-      state.currentRoot = null;
-      await _notifyHumanObservers(beingId, spaceId, state);
-      return { humanBreakNode: true };
-    }
-    if (entry.activeRole) {
-      const carried = Array.isArray(toBeing.roles) ? toBeing.roles : [];
-      if (!carried.includes(entry.activeRole)) {
-        log.warn(
-          "Scheduler",
-          `entry's activeRole "${entry.activeRole}" not carried by being ${beingId.slice(0, 8)} ` +
-            `(roles: ${carried.join(", ") || "none"}); consuming without summon`,
-        );
-        await markInboxConsumed(spaceId, beingId, [entry.correlation]);
-        return;
-      }
-      activeRole = entry.activeRole;
-    } else {
-      activeRole = toBeing.defaultRole || null;
-    }
-    role = activeRole ? getRole(activeRole) : null;
-  } catch (err) {
-    log.error(
-      "Scheduler",
-      `resolution failed for being ${beingId.slice(0, 8)}: ${err.message}`,
-    );
-    await markInboxConsumed(spaceId, beingId, [entry.correlation]);
-    return;
-  }
-
-  if (!role) {
-    log.warn(
-      "Scheduler",
-      `no role registered for "${activeRole}" of being ${beingId.slice(0, 8)}; consuming without summon`,
-    );
-    await markInboxConsumed(spaceId, beingId, [entry.correlation]);
-    return;
-  }
-
-  // Build the summonCtx the being expects. Mirrors what
-  // verbs/summon.js builds at request time — the scheduler is the late
-  // executor for that handoff. `identity` carries the sender, `resolved`
-  // carries the receiver's resolved stance (best-effort: when the entry
-  // was written from a request the verb handler had the full resolved
-  // shape; the scheduler reconstructs the parts it needs from stored
-  // data).
-  const summonCtx = {
-    spaceId,
-    being: activeRole, // legacy field name; carries the active role
-    activeRole, // canonical
-    toBeing,
-    message: {
-      from: entry.from,
-      content: entry.content,
-      correlation: entry.correlation,
-      rootCorrelation: entry.rootCorrelation || entry.correlation,
-      activeRole,
-      inReplyTo: entry.inReplyTo,
-      attachments: entry.attachments,
-      sentAt: entry.sentAt,
-      priority: entry.priority,
-    },
-    resolved: {
-      being: activeRole,
-      activeRole,
-      spaceId,
-    },
-    identity: null, // populated by the caller-side enqueue path (set below if attached)
-    signal: controller.signal,
-  };
-
-  // Verb-handler-attached runtime context (sender identity, response
-  // dispatcher). The async branch of summon.js stashes a small handoff
-  // record on the entry's per-being state slot so the scheduler can
-  // reach the sender's socket without re-parsing.
+  // The factory takes over: assign does the setup (load being,
+  // resolve role, build ctx); moment dispatches role.summon. The
+  // scheduler stays out of voice, role, and ctx-building concerns —
+  // it only manages the line: abort lifecycle, inbox state, and the
+  // handoff callbacks the SUMMON verb stashed.
   const handoff = state.handoffs?.get(entry.correlation);
-  if (handoff) {
-    summonCtx.identity = handoff.identity || null;
-    summonCtx.resolved = handoff.resolved || summonCtx.resolved;
-  }
-
   let responseEntry = null;
+
   try {
-    const result = await role.summon(summonCtx.message, summonCtx);
-    if (result && typeof result === "object") {
-      responseEntry = {
-        from: handoff?.responseFromStance || null,
-        content: result.text ?? result.content ?? "",
-        correlation: result.correlation || randomUUID(),
-        inReplyTo: entry.correlation,
-        sentAt: new Date().toISOString(),
-        summonId: result.summonId || null,
-      };
+    const setup = await assign({
+      beingId,
+      spaceId,
+      entry,
+      handoff,
+      signal: controller.signal,
+    });
+    if (setup.skipped) {
+      // The factory couldn't run this entry (being missing, role not
+      // carried, role not registered). Already logged inside assign.
+    } else {
+      const outcome = await moment(setup);
+      if (outcome?.result) {
+        responseEntry = buildResponseEntry({
+          result: outcome.result,
+          handoff,
+          originalEntry: entry,
+        });
+      }
     }
   } catch (err) {
     if (controller.signal.aborted) {
       log.info(
         "Scheduler",
-        `Summon aborted for being ${beingId.slice(0, 8)} (${entry.correlation.slice(0, 8)}): ${err.message}`,
+        `Stamp aborted for being ${beingId.slice(0, 8)} (${entry.correlation.slice(0, 8)}): ${err.message}`,
       );
       // Treat aborted as a finalization — mark consumed but emit no reply.
       // Role templates that need to inform the sender about cancellation
@@ -445,7 +314,7 @@ async function processEntry(beingId, spaceId, picked) {
     } else {
       log.error(
         "Scheduler",
-        `Summon errored for being ${beingId.slice(0, 8)}: ${err.message}`,
+        `Stamp errored for being ${beingId.slice(0, 8)}: ${err.message}`,
       );
       if (handoff?.onError) {
         try {
@@ -457,7 +326,7 @@ async function processEntry(beingId, spaceId, picked) {
     try {
       await markInboxConsumed(spaceId, beingId, [entry.correlation], {
         responseId: responseEntry?.correlation || null,
-        summonId: responseEntry?.summonId || null,
+        stampId:    responseEntry?.stampId || null,
       });
     } catch (err) {
       log.warn("Scheduler", `markInboxConsumed failed: ${err.message}`);
@@ -499,33 +368,6 @@ export function attachHandoff(beingId, correlation, handoff) {
 // ────────────────────────────────────────────────────────────────
 // Internals
 // ────────────────────────────────────────────────────────────────
-
-/**
- * Notify a human being's connected browser observers that pending
- * inbox entries arrived at this position. Pushes an IBP envelope to
- * the being's socket room for each unconsumed entry that hasn't been
- * notified yet (tracked in `state.humanNotified`). Entries stay
- * pending — humans consume by replying (new SUMMON with `inReplyTo`),
- * not by scheduler processing.
- *
- * The push rides the unified `ibp` event with `{ verb: "summon",
- * payload: <inbox entry> }` per [[project_ibp_summon_unified_event]].
- * Direction (server → client) is implicit. The client routes on
- * envelope.verb and uses payload.correlation / payload.inReplyTo.
- */
-async function _notifyHumanObservers(beingId, spaceId, state) {
-  const entries = await readInbox(spaceId, beingId, { unconsumed: true });
-  if (!entries.length) return;
-  if (!state.humanNotified) state.humanNotified = new Set();
-  for (const entry of entries) {
-    if (!entry?.correlation) continue;
-    if (state.humanNotified.has(entry.correlation)) continue;
-    state.humanNotified.add(entry.correlation);
-    try {
-      pushIbp(beingId, { verb: "summon", payload: entry });
-    } catch {}
-  }
-}
 
 function _ensureState(beingId) {
   let state = _state.get(beingId);

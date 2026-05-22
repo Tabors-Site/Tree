@@ -140,6 +140,44 @@ export async function authorize(args) {
     return { ok: true, stance: stanceLabel };
   }
 
+  // ── Extension-scope gate ──
+  // If the operation being authorized is registered by an extension,
+  // and that extension is blocked at the target space (via
+  // qualities.extensions.blocked on the ancestor chain), reject before
+  // rule-matching. This is the same guarantee the MCP server used to
+  // enforce for LLM tool calls; pulling it into authorize makes the
+  // guarantee universal: ANY caller (the LLM voice, an extension
+  // emitting a DO directly, a script) gets gated identically.
+  //
+  // Only fires for DO with an extension-prefixed action ("ext:op").
+  // Kernel ops (bare names) and the other verbs don't have
+  // extension-association at the verb level today; tool-level scope
+  // checks for SEE/SUMMON/BE happen in the LLM voice's tool dispatcher.
+  if (verb === "do" && spaceId && typeof args.action === "string" && args.action.includes(":")) {
+    try {
+      const { getOperation } = await import("./operations.js");
+      const op = getOperation(args.action);
+      const ownerExt = op?.ownerExtension;
+      if (ownerExt && ownerExt !== "kernel") {
+        const { isExtensionBlockedAtSpace } = await import(
+          "../place/space/extensionScope.js"
+        );
+        const blocked = await isExtensionBlockedAtSpace(ownerExt, spaceId);
+        if (blocked) {
+          return {
+            ok: false,
+            stance: stanceLabel,
+            reason: `Extension "${ownerExt}" is blocked at this position`,
+          };
+        }
+      }
+    } catch {
+      // Lookup failure (registry not initialized in some test paths,
+      // dynamic-import flake) shouldn't lock the place out. Fall
+      // through to normal stance-rule matching.
+    }
+  }
+
   // ── Build the lookup key parts for this request ──
   const keyParts = buildKeyParts(args);
   if (!keyParts) {

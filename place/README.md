@@ -73,7 +73,7 @@ Six primitives carry the world:
 | **Being**         | An identity instance. Humans, AI, scripted beings, future composites. The I-Am is the first being. |
 | **Space**         | A position in the tree. Holds matter, hosts beings, owns quality namespaces.                       |
 | **Matter**        | Stuff inside a space. `origin` names where it lives (ibp, filesystem, web, cross-place).           |
-| **Fact**          | One DO or BE emission, stamped by the Factory. `factum`, a thing done.                             |
+| **Fact**          | A thing a being stamps in the Factory. One recorded change to matter, space, or being. A chain of facts, folded, is Truth. |
 | **Summon**        | One being-to-being call, the record of one wake-and-act.                                           |
 | **LlmConnection** | Per-being LLM client config.                                                                       |
 

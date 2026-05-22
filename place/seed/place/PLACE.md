@@ -49,7 +49,7 @@ A being does not exist as still potential. A being is its acts.
 
 Every DO a being emits is stamped as a Fact. The chain of Facts a being has emitted IS the being, in the same way a river is its flowing. The Being row in the database is the place the trail attaches; the trail itself is the identity. Without acts, the union of space and matter has nothing to be. The act is the being unfolding.
 
-A **Fact** is a thing stamped by the Factory. The word is `factum`, Latin for "a thing done." A fact alone is not much, just a record of matter, space, or being. The end of a chain of facts is Truth. Truth is at the end of the chain, not at the start. One fact is small. The chain accumulates. Truth is what the chain becomes.
+A **Fact** is a thing a being stamps in the Factory — one recorded change to matter, space, or being. The word is `factum`, Latin for "a thing done." A single fact is small but settled. A chain of facts, folded, is Truth.
 
 This is why every act has an attributable being, and why genesis itself is attributable: the I-Am acts to form the world, and every Fact from t=0 names it. There is no act without an actor; there is no being without acting.
 

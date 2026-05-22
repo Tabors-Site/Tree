@@ -17,9 +17,9 @@
 // nonsense.
 
 import { getPlaceConfigValue } from "../placeConfig.js";
-import { setLlmTimeout } from "./beingAssignment/llm/llmClient.js";
-import { setFailoverTimeout } from "./beingAssignment/llm/llmCall.js";
-import { setMaxPresenceReels, setStalePresenceMs } from "./reel.js";
+import { setLlmTimeout } from "./voices/llm/connect.js";
+import { setFailoverTimeout } from "./voices/llm/call.js";
+import { setMaxPresenceReels, setStalePresenceMs } from "./stamper/fold/reel.js";
 
 // ─────────────────────────────────────────────────────────────────
 // LOCAL BUDGET STATE
@@ -106,7 +106,7 @@ export function setSeedConfig(key, value) {
     case "maxInbox":
       // Lazy: inbox is a runTurn sibling and the static import
       // would close a cycle through the scheduler.
-      import("./inbox.js").then((m) => m.setMaxInbox(num)).catch(() => {});
+      import("./intake/inbox.js").then((m) => m.setMaxInbox(num)).catch(() => {});
       break;
     case "failoverTimeout":
       setFailoverTimeout(Math.max(1000, Math.min(num * 1000, 120000)));

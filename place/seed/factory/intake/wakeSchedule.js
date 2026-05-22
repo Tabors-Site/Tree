@@ -41,12 +41,12 @@
 // compression, peer-review).
 
 import { randomUUID } from "crypto";
-import log from "../system/log.js";
-import { summonByResolved } from "../ibp/verbs.js";
-import { getPlaceDomain } from "../ibp/address.js";
-import { getPlaceRootId } from "../placeRoot.js";
-import { I_AM } from "../place/being/seedBeings.js";
-import { iAmIdentity } from "../place/being/placeBeings.js";
+import log from "../../system/log.js";
+import { summonByResolved } from "../../ibp/verbs.js";
+import { getPlaceDomain } from "../../ibp/address.js";
+import { getPlaceRootId } from "../../placeRoot.js";
+import { I_AM } from "../../place/being/seedBeings.js";
+import { iAmIdentity } from "../../place/being/placeBeings.js";
 
 const MIN_INTERVAL_MS = 250;
 const DEFAULT_TICK_MS = 1000;

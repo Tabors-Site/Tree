@@ -230,7 +230,7 @@ export async function appendExecutionRecord({
     : planSlug;
   const startedAt = new Date().toISOString();
 
-  // Phase 3 migration: verb-surface create. Fires kernel hooks + Did.
+  // Phase 3 migration: verb-surface create. Fires kernel hooks + Fact.
   let recordNode = null;
   try {
     recordNode = await core.do(executionSpace._id, "create-child", {

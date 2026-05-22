@@ -2,12 +2,12 @@
 //
 // Periodic forgetting.
 //
-// Summons and Dids accumulate forever otherwise. I sweep both on a
+// Summons and Facts accumulate forever otherwise. I sweep both on a
 // cadence (default daily), deleting rows older than the configured
 // retention window. The configured zero means "keep forever":
 //
 //   summonRetentionDays  default 90,  0 to keep forever
-//   didRetentionDays     default 365, 0 to keep forever
+//   factRetentionDays    default 365, 0 to keep forever
 //
 // AWAITING cascade signals get their own short sweep. A signal stuck
 // in AWAITING past `awaitingTimeout` seconds transitions to FAILED
@@ -16,8 +16,8 @@
 
 import log from "./log.js";
 import { getPlaceConfigValue } from "../placeConfig.js";
-import Summon from "../models/summon.js";
-import Did from "../models/did.js";
+import Stamp from "../models/stamp.js";
+import Fact from "../models/fact.js";
 import Space from "../models/space.js";
 import { SEED_SPACE } from "../place/space/seedSpaces.js";
 import { CASCADE } from "../place/space/cascade.js";
@@ -31,7 +31,7 @@ const DELETE_BATCH_SIZE = 10000;
 export async function runRetentionCleanup() {
   const now = new Date();
 
-  // ── Summon cleanup ──
+  // ── Stamp cleanup ──
   const summonDays = Number(getPlaceConfigValue("summonRetentionDays"));
   if (summonDays > 0) {
     try {
@@ -42,11 +42,11 @@ export async function runRetentionCleanup() {
       // one massive delete could block the DB for minutes on large collections.
       let batchCount;
       do {
-        const ids = await Summon.find({ "startMessage.time": { $lt: cutoff } })
+        const ids = await Stamp.find({ "startMessage.time": { $lt: cutoff } })
           .select("_id").limit(DELETE_BATCH_SIZE).lean();
         batchCount = ids.length;
         if (batchCount > 0) {
-          await Summon.deleteMany({ _id: { $in: ids.map(d => d._id) } });
+          await Stamp.deleteMany({ _id: { $in: ids.map(d => d._id) } });
           totalDeleted += batchCount;
         }
       } while (batchCount >= DELETE_BATCH_SIZE);
@@ -54,31 +54,31 @@ export async function runRetentionCleanup() {
         log.info("Retention", `Deleted ${totalDeleted} summon records older than ${summonDays} days`);
       }
     } catch (err) {
-      log.error("Retention", `Summon cleanup failed: ${err.message}`);
+      log.error("Retention", `Stamp cleanup failed: ${err.message}`);
     }
   }
 
-  // ── Did cleanup ──
-  const didDays = Number(getPlaceConfigValue("didRetentionDays"));
-  if (didDays > 0) {
+  // ── Fact cleanup ──
+  const factDays = Number(getPlaceConfigValue("factRetentionDays"));
+  if (factDays > 0) {
     try {
-      const cutoff = new Date(now.getTime() - didDays * 24 * 60 * 60 * 1000);
+      const cutoff = new Date(now.getTime() - factDays * 24 * 60 * 60 * 1000);
       let totalDeleted = 0;
       let batchCount;
       do {
-        const ids = await Did.find({ date: { $lt: cutoff } })
+        const ids = await Fact.find({ date: { $lt: cutoff } })
           .select("_id").limit(DELETE_BATCH_SIZE).lean();
         batchCount = ids.length;
         if (batchCount > 0) {
-          await Did.deleteMany({ _id: { $in: ids.map(d => d._id) } });
+          await Fact.deleteMany({ _id: { $in: ids.map(d => d._id) } });
           totalDeleted += batchCount;
         }
       } while (batchCount >= DELETE_BATCH_SIZE);
       if (totalDeleted > 0) {
-        log.info("Retention", `Deleted ${totalDeleted} Did records older than ${didDays} days`);
+        log.info("Retention", `Deleted ${totalDeleted} Fact records older than ${factDays} days`);
       }
     } catch (err) {
-      log.error("Retention", `Did cleanup failed: ${err.message}`);
+      log.error("Retention", `Fact cleanup failed: ${err.message}`);
     }
   }
 

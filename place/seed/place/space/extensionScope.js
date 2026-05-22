@@ -214,7 +214,13 @@ function maxToolOwners() {
   return Number(getPlaceConfigValue("maxRegisteredTools")) || 1000;
 }
 
-export function registerToolOwner(toolName, extName, readOnly = false) {
+/**
+ * Register a tool's owning extension and its verb tag. The verb tag
+ * is what gates scope behavior — `verb: "see"` is read-only by
+ * definition; `verb: "do"` mutates. Restricted-access extensions get
+ * filtered down to their SEE-tagged tools via this verb.
+ */
+export function registerToolOwner(toolName, extName, verb = null) {
   if (
     typeof toolName !== "string" ||
     toolName.length === 0 ||
@@ -229,19 +235,11 @@ export function registerToolOwner(toolName, extName, readOnly = false) {
     );
     return;
   }
-  _toolOwnership.set(toolName, { extName, readOnly: !!readOnly });
+  _toolOwnership.set(toolName, { extName, verb: verb || null });
 }
 
 export function getToolOwner(toolName) {
   return _toolOwnership.get(toolName)?.extName || null;
-}
-
-/**
- * Check if a tool was registered as read-only (readOnlyHint: true).
- * Used by the kernel's query constraint to filter write tools.
- */
-export function isToolReadOnly(toolName) {
-  return _toolOwnership.get(toolName)?.readOnly ?? false;
 }
 
 /**
@@ -280,7 +278,7 @@ export function filterToolNamesByScope(
     if (blockedExtensions?.has(info.extName)) return false;
     if (restrictedExtensions?.has(info.extName)) {
       const access = restrictedExtensions.get(info.extName);
-      if (access === "read") return info.readOnly;
+      if (access === "read") return info.verb === "see";
     }
     return true;
   });
@@ -309,7 +307,7 @@ export function filterToolsByScope(
     if (blockedExtensions?.has(info.extName)) return false;
     if (restrictedExtensions?.has(info.extName)) {
       const access = restrictedExtensions.get(info.extName);
-      if (access === "read") return info.readOnly;
+      if (access === "read") return info.verb === "see";
     }
     return true;
   });

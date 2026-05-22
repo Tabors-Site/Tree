@@ -29,7 +29,7 @@
 // (probably a thin "do-op" tool that takes { action, args } and
 // dispatches through core.do, plus a "see" tool for substrate reads).
 
-import { runTurn } from "../../factory/stamper.js";
+import { runTurn } from "../voices/llm/runTurn.js";
 import log from "../../system/log.js";
 
 const PLACE_MANAGER_PROMPT = `You are the Place Manager for this TreeOS place. You answer to the
@@ -116,7 +116,7 @@ export const placeManagerRole = Object.freeze({
 
     return {
       text:     result?.text || "(place manager done)",
-      summonId: result?.summonId || null,
+      stampId: result?.stampId || null,
     };
   },
 });

@@ -133,10 +133,14 @@ export default async function migrate() {
   }
 
   // ── Step 4: ensure indexes ──────────────────────────────────────────
+  // (Historical migration. The model was renamed Did → Fact in 2026-05;
+  // the import targets the current file. syncIndexes here is a no-op
+  // on an empty `facts` collection at this version — the legacy data
+  // still sits in `dids` and is renamed by a later migration.)
   try {
-    const Did = (await import("../models/did.js")).default;
-    await Did.syncIndexes();
-    log.verbose("Seed/0.8.0", "did indexes synced");
+    const Fact = (await import("../models/fact.js")).default;
+    await Fact.syncIndexes();
+    log.verbose("Seed/0.8.0", "fact indexes synced");
   } catch (err) {
     log.warn("Seed/0.8.0", `index sync failed (will rebuild on next model use): ${err.message}`);
   }

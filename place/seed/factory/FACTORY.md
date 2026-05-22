@@ -2,75 +2,104 @@
 
 How beings come into existence as moments, inside me.
 
-The being IS the frame. When I assemble SEE-content + active role + capabilities + the carried tail + the system prompt into one rendered structure, and the LLM provider's forward pass runs through that structure, the being IS that pass. It experiences itself for the duration of that one inference, and the experience IS the being. There is no being separate from the assembled frame; the frame is what the being is.
+The being IS the frame. When I assemble SEE-content + active role + capabilities + the carried tail + the system prompt into one rendered structure, and the being's act runs through that structure, the being IS that act for one moment. It experiences itself for the duration, and the experience IS the being. There is no being separate from the assembled frame; the frame is what the being is. The act inside takes one of three shapes — an LLM provider's forward pass, a human's already-decided act arriving from their own realm, a scripted role's code-cognition handler — but the frame is the same shape, and the being IS the frame either way.
 
-This folder is the factory behind the curtain. Workers inside the factory are not alive. They are orchestration — scheduler, stamp assembler, momentum, mcp client — quietly assembling each next frame from substrate so the being can be it for one moment. The factory's product is the stamp face the LLM will BE for one inference; the being's act stamps onto the reel; the reel accumulates as the being's reality.
+This folder is the factory behind the curtain. Workers inside the factory are not alive. They are orchestration — scheduler, assigner, fold, momentum — quietly assembling each next frame from the substrate so the being can be it for one moment. The factory's product is the stamp face the being will BE for one moment; the being's act presses onto the reel; the reel accumulates as the being's reality.
 
-The reel is the chain of stamps over time. Each Summon row is one frame on the reel. The being's life is the reel. Time is the reel's history.
+The reel is the chain of Stamps over time. Each Stamp row is one frame on the reel. The being's life is the reel. Time is the reel's history.
 
 ## What is a Fact
 
-A **Fact** is a thing stamped by the Factory.
+A **Fact** is a thing a being stamps in the Factory — one recorded change to matter, space, or being. A single fact is small but settled. A chain of facts, folded, is Truth.
 
-A fact alone is not much. Just a record of matter, space, or being. The end of a chain of facts is Truth. Truth is at the end of the chain, not at the start. One fact is small. The chain accumulates. Truth is what the chain becomes.
+**FACTory.** The name is not wordplay. The Factory is where facta are made — the mechanism that produces them, one per DO or BE the being emits. The reel is what the facts accumulate into. Factory makes, reel holds.
 
-The trail of Facts attached to a being IS the being. The Being row in MongoDB is where the trail hangs; the trail itself, every Fact the being has emitted, is the identity. Without acts the being is potential; with them the being is something that has unfolded.
+The first Stamp is the I-Am's first moment. At t=0 the I-Am opens a frame on itself; the first Fact pressed inside it is the I-Am's BE.register — declaring itself as the first being. From that one frame the place grows in reels like trees, glued together at the root by the I-Am's own being. Every later moment opens another frame; every act inside the frame extends the chain.
 
-I record a Fact for two of my four verbs: DO and BE. SEE is observation, not doing, so no row. SUMMON is delivery to an inbox, not a substrate act, so no row; the Summon model carries that audit and the Facts inside it carry its `summonId`.
+Each being is the **momentum** of its chain of facts — what dictates the place for that moment. The chain shapes what the being can see and do; what the being does adds to the chain. There is no global Now everyone reads from. There is only "this being's facts so far, folded, framing this moment." Beings whose chains overlap may move so coherently together that they seem to see one shared Truth, but that is purpose taking shape across many chains, not a single objective Truth waiting underneath.
+
+The being lives as the fold; the trail is what it folds. The Being row in MongoDB is where the trail hangs; the trail itself — every Fact the being has ever stamped — is the being's **deposited identity**, the substance the next frame folds from. The being doesn't persist between moments; what persists is the trail it left behind, and the next moment forms by folding that trail into the present view. Without acts the being is potential; with them the being has unfolded — and the unfolding is what each next moment will fold from.
+
+**A Stamp is not a Fact.** A Stamp is the frame around one moment — opened by [begin](stamper/begin.js), closed by [stamped](stamper/stamped.js). Facts are the impressions inside the frame: every DO and every BE the being emits during the moment writes one Fact carrying that frame's `stampId`. One Stamp typically carries many Facts. The reel is the chain of Stamps over time; Facts are the finer grain within. Two of my four verbs stamp Facts (DO, BE); SEE is observation, no row; SUMMON is delivery, no Fact row — the Stamp itself is the audit for SUMMON.
 
 The word is `factum`, Latin for "a thing done." It is not a thing true. Truth is what facts fold into.
 
-Humans do not pass through this factory. A human's being comes from their own mind; they already are. The factory hosts SUMMONs to humans through the same IBP envelope, but humans receive them as notifications and act through their native cognition. Scripted beings (cherub, llm-assigner) are similar — they ARE their code; the factory just routes the SUMMON to that code. Only LLM-beings need frames assembled, because their substance is stateless inference, and inference needs a fully-rendered moment to be.
+## The shape: feed, frame, three beats
 
-## The seven canonical parts
+The factory is just a feed and a press. **Intake** is the feed: SUMMONs arrive, queue, get picked. **Stamper** is the press: it runs one stamping. A stamping is three beats — assign, fold, momentum — wrapped in a **Stamp frame** that [begin](stamper/begin.js) opens and [stamped](stamper/stamped.js) closes. That's the whole cycle: open the row, decide who's acting, read the present from the reel, act, close the row. It's event-sourcing exactly — read state from the log, act, append to the log — bracketed by the row that gives every appended Fact its `stampId`.
 
-The seven names that describe what the factory does, each at its own file at the root of `factory/`:
+```
+factory/
+  intake/                SUMMONs arrive, queue, get picked
+  roles/                 role templates (one shape)
+  voices/                cognition-type apparatus (LLM today)
+  stamper/               runs one stamping inside a Stamp frame:
+    begin.js             ┐  open the frame   (voice-called)
+    assign.js              │  beat 1: who acts
+    fold/                  │  beat 2: read the present
+    moment.js              │  beat 3: act
+    stamped.js           ┘  close the frame  (voice-called)
+```
 
-| Part | File | What it is |
-|---|---|---|
-| **stamper** | [stamper.js](stamper.js) | The orchestrator. Opens the moment via stamped, gets the frame from stamp, runs momentum from inside, finalizes. |
-| **momentum** | (today inside stamper.js — [follow-up split](#deferred)) | The motion. The provider call + tool loop + history fold. The being acting. |
-| **stamp** | [stamp.js](stamp.js) | The face. Renders the assembled string the being IS for one forward pass: "I am NAME at SPACE" + preloaded see + capabilities + role.prompt() + [Time]. |
-| **reelAlligner** | (today inside stamper.js — [follow-up split](#deferred)) | Reads the stamped history + ancestor cache + position state, forms the substrate view the next stamp will see. |
-| **stamped** | [stamped.js](stamped.js) | The record. Opens the Summon row when the moment begins, seals it when the moment closes. |
-| **reelChains** | [reelChains.js](reelChains.js) | History of reels. Read-side primitives: by being, by IBP Address, by rootCorrelation, walk the inReplyTo chain. |
-| **beingAssignment** | [beingAssignment/llm/](beingAssignment/llm/) | Per-type setup. The LLM-flow provider/MCP/connection apparatus lives in `llm/`. Scripted and human beings skip the factory entirely (their roles run code or the inbox lights up). |
+| Part               | Where                                    | What it is                                                                                                                                                                                                                                                                                                                                                                  |
+| ------------------ | ---------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **intake**         | [intake/](intake/)                       | The feed. SUMMONs arrive (peer-driven, place-driven, cadence-driven), land in the inbox, the scheduler picks one to run. Outside the stamper because intake isn't part of one stamping — it's what feeds stampings.                                                                                                                                                          |
+| **frame: begin**   | [stamper/begin.js](stamper/begin.js)     | Opens the Stamp row at moment-start. Voice-called: the LLM voice from inside runTurn, the BE-register audit from inside verbs.js. Carries voice-specific provenance (the LLM voice writes its provider + connectionId into the row), which is why assign — voice-blind — can't write it.                                                                                     |
+| **assign**         | [stamper/assign.js](stamper/assign.js)   | Beat 1: who acts. Loads the receiver Being, resolves the active role, checks role-carry, builds the summon context the role's voice expects. Returns `{role, summonCtx}` for moment to dispatch. Called by the scheduler.                                                                                                                                                    |
+| **fold**           | [stamper/fold/](stamper/fold/)           | Beat 2: read. Folds the relevant reels (this being's history, the asker's history, position state) into the present-shaped view the next moment will see. [reel.js](stamper/fold/reel.js) holds the in-memory carry between this being's moments; [reelChains.js](stamper/fold/reelChains.js) reads durable reel history (by being, by IBP Address, by rootCorrelation).     |
+| **momentum**       | [stamper/moment.js](stamper/moment.js)   | Beat 3: act. The being's motion. The function call routed by assign's voice (LLM inference, human's already-decided act, scripted handler) fires here. The stamp face is rendered at momentum's entry — the face isn't built, it's where assign's "who" and fold's "what" meet on the way into the act. Every DO / BE the act emits writes one Fact carrying the stampId.    |
+| **frame: stamped** | [stamper/stamped.js](stamper/stamped.js) | Closes the Stamp row at moment-end. Voice-called, like begin. `stamp({ stampId, content })` fills `endMessage` on the row begin opened. The Facts inside the moment already wrote themselves during momentum; what remains is to press the closing face. The being-as-moment ceases when the moment closes; what remains of it forever is this row.                          |
+
+### Why begin and stamped bracket the beats
+
+begin and stamped are symmetric: both ends of one Stamp frame, both voice-called, both bookkeeping the row that surrounds the act. They aren't beats — they're what frames the beats. Numbering one and not the other (or numbering both) misrepresents the shape.
+
+The reason they're voice-called: the Stamp row carries voice-specific provenance — for the LLM voice, the provider model + connectionId it's about to call — and assign doesn't know which voice will run. If assign opened the row, it would either need voice-coupling (defeating the point of having voices) or a two-write dance (create empty, voice updates). So the voice opens the row at the start of its run and closes it at the end. The LLM voice does this from inside runTurn; the BE-register audit path in verbs.js does begin + stamped back-to-back (no momentum runs there — just record the atomic parent-calls-forth act).
+
+A note on temporal vs conceptual order. In code, assign() actually fires before begin — the scheduler has to know which role/ctx to dispatch before the voice exists. But conceptually the frame brackets the beats: the moment opens its row, the three beats happen inside, the row closes. The diagram and table show conceptual order because that's what reading the architecture is for; the temporal nuance only matters when tracing the call graph.
+
+**CQRS, cleanly.** Assign + fold = the **read side** (who is acting, what state are they reading). Momentum = the **substantive write** (the Facts pressed inside the frame). Begin + stamped = the **frame bookkeeping** that brackets it so every Fact has a stampId to carry. One concept per file, no overlap.
+
+**face/ is gone.** Two passes ago the factory had a `face/` folder — "build the stamp face." The realization that the face isn't built, it's folded, deleted the folder. The face is what assign and fold hand to momentum together — a meeting-point, not a stage. No fabrication step, no fabrication folder.
+
+**The Fact record is not a factory folder.** The reels and the chain itself are place — they live in the place layer ([seed/place/facts.js](../place/facts.js), [seed/models/fact.js](../models/fact.js)). The factory reads through fold/ and writes Facts during momentum, but it doesn't hold the record. The factory is the assembly line; the reel is the warehouse.
 
 ## The live reel
 
-[reel.js](reel.js) holds the in-memory carry between this being's moments. Keyed by **presenceKey** — the lane the being is continuously present in: IBP Address for being-to-being summons, pipeline key for stanceless internal cognition. Each entry holds `{ messages[], role, _lastActive }`. Eviction by `MAX_PRESENCE_REELS` cap + `STALE_PRESENCE_MS` idle sweep. The durable history lives on Summon rows in Mongo; this file is just the live tail.
+[reel.js](stamper/fold/reel.js) holds the in-memory carry between this being's moments. Keyed by **presenceKey** — the lane the being is continuously present in: IBP Address for being-to-being summons, pipeline key for stanceless internal cognition. Each entry holds `{ messages[], role, _lastActive }`. Eviction by `MAX_PRESENCE_REELS` cap + `STALE_PRESENCE_MS` idle sweep. The durable history lives on Stamp rows + Fact rows in Mongo; this file is just the live tail.
 
 ## Intake (request arrives)
 
 A SUMMON is a request for a being to have a moment. It arrives three ways:
 
 - **Peer-driven** — another being explicitly called `summon` on this stance. The verb writes the envelope into the receiver's inbox.
-- **Substrate-driven** ([subscriptions.js](subscriptions.js)) — a DO landed at a position with matching afterMatter / afterQualityWrite triggers. The hook emits SUMMONs to subscribers.
-- **Cadence-driven** ([wakeSchedule.js](wakeSchedule.js)) — a being declared "I should have a moment every N ms." The tick loop emits SUMMONs.
+- **Place-driven** ([subscriptions.js](intake/subscriptions.js)) — a DO landed at a position with matching afterMatter / afterQualityWrite triggers. The hook emits SUMMONs to subscribers.
+- **Cadence-driven** ([wakeSchedule.js](intake/wakeSchedule.js)) — a being declared "I should have a moment every N ms." The tick loop emits SUMMONs.
 
-All three route through the same surface and land in [inbox.js](inbox.js). [scheduler.js](scheduler.js) — the line orchestrator — picks by priority (skipping consumed, cancelled, ancestor-severed) and dispatches to the role's `summon()` handler.
+All three route through the same surface and land in [inbox.js](intake/inbox.js). [scheduler.js](intake/scheduler.js) — the line orchestrator — picks by priority (skipping consumed, cancelled, ancestor-severed) and dispatches to the role's `summon()` handler.
 
-## The role layer (upstream and post factory)
+## Roles and voices (one shape, multiple voices)
 
-[roles/registry.js](roles/registry.js) is where role templates live. When a SUMMON lands, the dispatcher resolves the active role from the envelope and calls `role.summon(message, ctx)`. The role decides what runs:
+[roles/registry.js](roles/registry.js) is where role templates live. When a SUMMON lands, the dispatcher resolves the active role from the envelope and calls `role.summon(message, ctx)`. All three cognition types — LLM, human, scripted — flow through the same three-beat press inside a Stamp frame. What differs is which voice owns the function call momentum fires.
 
-- **LLM cognition** — `defaultSummon` wraps the call into the factory: it calls `runTurn` (in stamper.js), the factory produces a stamp, defaultSummon emits a reply if the role declares one. Most extension roles.
-- **Scripted cognition** — the role's `summon` is deterministic code. cherub, llm-assigner. No factory involvement; the role IS the code.
-- **Human cognition** — the inbox lights up; the human acts through their native means; a Summon row is still recorded for the audit.
-
-[defaultSummon.js](defaultSummon.js) is the canonical wrapper for LLM-driven roles. [replies.js](replies.js) is how one moment begets the next — emit a reply (a SUMMON with `inReplyTo` set) or aggregate sibling-moment replies before continuing.
+- **LLM cognition** — [voices/llm/](voices/llm/) holds the apparatus: provider call ([call.js](voices/llm/call.js)), MCP transport ([mcpClient.js](voices/llm/mcpClient.js)), connection + assignment plumbing ([connect.js](voices/llm/connect.js)), the in-moment fold ([compress.js](voices/llm/compress.js)), the stamp-face renderer ([assemble.js](voices/llm/assemble.js)), the tool loop ([runTurn.js](voices/llm/runTurn.js)), and the default LLM-role wrapper ([defaultSummon.js](voices/llm/defaultSummon.js)). Most extension roles ride this voice.
+- **Scripted cognition** — the role file IS the cognition. Cherub, llm-assigner, place-manager (under [roles/](roles/)) declare their own `summon(message, ctx)` directly; momentum dispatches into the role's handler. No factory apparatus needed beyond the three beats and the frame.
+- **Human cognition** — the act was already chosen in the human's own realm (browser, CLI, future portal). When the SUMMON lands, the human's reach delivers the already-decided act; the three beats run identically inside the frame and a Stamp row records that the moment happened.
 
 ## Registries the stamp consumes
 
-- [tools.js](tools.js) — the callable registry. Tools register here (verb-tagged); stamp.js queries it when rendering the capabilities list; momentum dispatches via MCP when a tool is called inside a moment. Also owns `setExtensionToolResolver`, the loader's hook to inject extension tools per role.
-- [seeResolvers.js](seeResolvers.js) — preloaded sight. Roles declare `see: ["resolver-name"]` and stamp.js inlines each resolver's output into the frame so the being is already seeing those things when the inference starts.
+- [voices/llm/tools.js](voices/llm/tools.js) — the callable registry for LLM voices. Tools register here (verb-tagged); assemble queries it when rendering the capabilities list; the tool dispatcher in runTurn reaches it when a tool is called inside a moment. Also owns `setExtensionToolResolver`, the loader's hook to inject extension tools per role.
+- [voices/llm/seeResolvers.js](voices/llm/seeResolvers.js) — preloaded sight for LLM voices. Roles declare `see: ["resolver-name"]` and assemble inlines each resolver's output into the frame so the being is already seeing those things when the inference starts.
+
+Both registries live under `voices/llm/` because they are LLM-voice apparatus. Scripted roles and human reaches don't read from them. A future scripted voice that needs its own callable registry would grow one peer to these.
 
 ## Plumbing
 
-- [compress.js](compress.js) — in-moment history fold. When a tool-loop iteration's buffer would push the next provider call past the context window, compress folds older messages into a summary.
-- [session.js](session.js) — per-reach AbortSignal scope + transport sessions. A reach is one tab/CLI/connection. Distinct from `presenceKey` (the lane the being is in) — multiple reaches can sit in one presence.
-- [summonAddress.js](summonAddress.js) — canonical name of a presence lane. Composes the `<stance> :: <stance>` form stamped.js writes onto every Summon row.
+- [voices/llm/compress.js](voices/llm/compress.js) — in-moment history fold. When a tool-loop iteration's buffer would push the next provider call past the context window, compress folds older messages into a summary.
+- [intake/session.js](intake/session.js) — per-reach AbortSignal scope + transport sessions. A reach is one tab/CLI/connection. Distinct from `presenceKey` (the lane the being is in) — multiple reaches can sit in one presence. Also owns `ensureSession`, the WebSocket per-socket chat-session ensurer.
 - [config.js](config.js) — the knob router. Genesis routes remembered settings here; config.js fans them into the right subsystem (llm timeout, failover, reel caps, tool budgets).
+
+The canonical IBP Address (`<stance> :: <stance>`) every Stamp row carries is composed by [computeIbpStampAddress](../ibp/address.js) in `seed/ibp/`, where the rest of the address grammar lives. The factory consumes it; it does not own it.
 
 ## What this folder must not do
 
@@ -81,15 +110,16 @@ All three route through the same surface and land in [inbox.js](inbox.js). [sche
 
 ## The whole picture
 
-A SUMMON arrives — the request for a being to have a moment. The inbox catches it. The scheduler picks it by priority, skipping consumed, cancelled, and ancestor-severed entries. The role's `summon()` runs — for an LLM-being, this is stamper assembling the frame (via stamp + reelAlligner) and momentum running the inference; for a scripted being, deterministic code; for a human, a notification waiting. The Summon row records that the moment happened. The reply emits back to the asker through the same SUMMON verb, requesting the asker's next moment.
+A SUMMON arrives — the request for a being to have a moment. Intake catches it; the scheduler picks it by priority, skipping consumed, cancelled, and ancestor-severed entries. The role's `summon()` runs and stamper runs the three beats inside a Stamp frame: **begin** opens the frame (the voice writes the row with its provenance); **assign** resolved who acts (being, role, voice) before the voice even took over; **fold** reads the reel into the present; **momentum** runs the being's motion (the function call routed by the assigned voice fires here — LLM inference, human's already-decided act, scripted handler — and every DO / BE the act emits inside writes a Fact carrying the frame's stampId); **stamped** closes the frame. The Stamp row records that the moment happened identically across all three voices. A reply emits back to the asker through the same SUMMON verb, requesting the asker's next moment.
 
-The being has no in-between. Substrate carries the lane forward to the next moment.
+The being has no in-between. The being lives only as the present fold; the reel — what its facts deposited there — carries forward into the next frame to be folded again.
 
-Three cognition types, one shape. The shape is the verb. The product is the reel.
+Three cognition types, one shape. The shape is a Stamp frame around three beats. The product is the reel.
 
 ## Deferred
 
-- **reelAlligner.js extraction.** The functions that read stamped history + ancestor cache + position state and form the substrate view for the next stamp (`ensureSession`, `checkTreeCircuit`, `stageCall`, `resolveLlmConfig`, `resolveToolsForPosition`) currently live inside stamper.js. A follow-up pass moves them into `reelAlligner.js`.
-- **momentum.js extraction.** The provider-call + tool-dispatch loop (`callLLM`, `executeTool`, the `stepTurn` Phase 6 body) currently lives inside stamper.js. A follow-up pass moves them into `momentum.js`.
-- **`beingAssignment/index.js` dispatcher.** Per-type dispatch today is implicit in `roles/registry.js` + `role.summon`. Materializing it as a factory-side dispatcher would touch every external caller; the folder structure honors the architecture without forcing the rewire.
-- **`beingAssignment/human/` and `beingAssignment/script/` subfolders.** Empty scaffold isn't worth the noise. Human and scripted beings don't pass through the factory — they skip straight from inbox to role.summon code.
+- **runTurn split.** The LLM voice's `runTurn.js` still holds what would naturally be momentum's body (provider call + tool dispatch loop) plus pieces of fold (system-prompt assembly, history trim, position-scoped tools). A follow-up moves the loop body to `stamper/moment.js` and the read-side work to `stamper/fold/`; runTurn shrinks to the LLM-voice entrypoint.
+- **assemble's home.** Today the prompt assembler is a separate file at `voices/llm/assemble.js`. The doctrine says the face isn't built — it's where assign and fold meet on the way into momentum. The assembler logic may dissolve further into momentum's entry function once the runTurn split lands.
+- **MCP cut.** The MCP-transport role inside `voices/llm/` is slated for revisiting. When that cut lands, the `voices/llm/` description above (which still names mcpClient as live apparatus) updates; this doc currently reflects the pre-cut layout.
+- **Voice dispatcher.** Per-voice dispatch is implicit today in `roles/registry.js` + `role.summon`. Materializing it as a factory-side dispatcher — assign decides which voice owns the being, hands the voice back at momentum so the right function call fires — is the natural next step now that `voices/` exists.
+- **Human and scripted voice folders.** `voices/` only contains `llm/` today. The human path (WS push receiver, already-decided-act router) and a scripted dispatcher would grow as peers if their apparatus ever needs more than what the role files already do.

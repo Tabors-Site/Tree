@@ -436,7 +436,7 @@ Return value: `{ response, navigatedTo, ... }`. The response is sent to the clie
 
 | Service | Key | Always Available |
 |---------|-----|-----------------|
-| Models | `core.models.{User,Space,Did,Matter}` | Yes |
+| Models | `core.models.{Being,Space,Fact,Matter}` | Yes |
 | Auth | `core.auth.resolveTreeAccess` | Yes |
 | Contributions | `core.contributions.logContribution` | Yes |
 | Sessions | `core.session.*` | Yes |

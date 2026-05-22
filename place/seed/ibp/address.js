@@ -558,3 +558,141 @@ export function parseWithContext(input, ctx = {}) {
  * A Stance carries both a Position (place + path) and a Being.
  * When `being` is null, the Stance reduces to a bare Position.
  */
+
+
+// ─────────────────────────────────────────────────────────────────────────
+// CANONICAL STANCE-PAIR ADDRESS (the lane two beings share)
+// ─────────────────────────────────────────────────────────────────────────
+//
+// When two beings exchange moments, every one of those moments belongs
+// to the same presence lane. The lane's natural identifier is the IBP
+// Address itself in canonical sorted form: `<smaller> :: <larger>`.
+// Sorting makes A→B and B→A resolve to the same key — both directions
+// group into one lane on the reel.
+//
+// I store the spaceId-rooted form (`<place>/<spaceId>@<name>`) so a
+// saved lane name survives space renames. The address grammar's
+// display form (human-readable names) is a separate expression of the
+// same grammar — see parse / format above. Stamp records carry this
+// composed string in their `ibpAddress` field; presenceKey lookups
+// use it; thread descriptors group by it.
+
+import Being from "../models/being.js";
+
+const STANCE_PAIR_SEPARATOR = " :: ";
+
+/**
+ * Compose a stance into its canonical storage string.
+ * Accepts:
+ *   - string         — pass-through (assumed already formatted)
+ *   - { place?, spaceId, name }
+ *
+ * Output: `<place>/<spaceId>@<name>` (spaceId-rooted path form).
+ * Returns null when spaceId or name is missing.
+ */
+function stanceString(input) {
+  if (input == null) return null;
+  if (typeof input === "string") return input.length > 0 ? input : null;
+  const { place, spaceId, name } = input;
+  if (!spaceId || !name) return null;
+  const placePart = place || getPlaceDomain();
+  return `${placePart}/${spaceId}@${name}`;
+}
+
+/**
+ * Canonical sorted IBP Address for a stance pair. A→B and B→A produce
+ * the same string. Self-addressed (same stance twice) returns the
+ * single stance string.
+ */
+function canonicalStancePair(stanceA, stanceB) {
+  const a = stanceString(stanceA);
+  const b = stanceString(stanceB);
+  if (!a || !b) return null;
+  if (a === b) return a;
+  return a < b ? `${a}${STANCE_PAIR_SEPARATOR}${b}` : `${b}${STANCE_PAIR_SEPARATOR}${a}`;
+}
+
+// Bounded LRU cache for being stance fields. name + homeSpace rarely
+// change; renames are explicit (invalidateStanceCache) so stale damage
+// is bounded.
+const STANCE_CACHE_MAX = 2048;
+const stanceCache = new Map();
+
+async function loadBeingStanceFields(beingId) {
+  if (!beingId) return null;
+  const key = String(beingId);
+  if (stanceCache.has(key)) {
+    const v = stanceCache.get(key);
+    stanceCache.delete(key);
+    stanceCache.set(key, v);
+    return v;
+  }
+  let row = null;
+  try {
+    row = await Being.findById(key).select("name homeSpace").lean();
+  } catch {
+    row = null;
+  }
+  if (!row) return null;
+  const value = {
+    name: row.name,
+    homeSpace: row.homeSpace || null,
+  };
+  if (stanceCache.size >= STANCE_CACHE_MAX) {
+    const first = stanceCache.keys().next().value;
+    stanceCache.delete(first);
+  }
+  stanceCache.set(key, value);
+  return value;
+}
+
+/**
+ * Invalidate a being's cached stance fields. Call after rename or
+ * home change so the next composition picks up the new values.
+ */
+export function invalidateStanceCache(beingId) {
+  if (!beingId) return;
+  stanceCache.delete(String(beingId));
+}
+
+async function composeStanceForBeing(beingId, { currentPosition = null, place = null } = {}) {
+  if (!beingId) return null;
+  const fields = await loadBeingStanceFields(beingId);
+  if (!fields) return null;
+  const spaceId = currentPosition || fields.homeSpace;
+  if (!spaceId || !fields.name) return null;
+  return {
+    place: place || getPlaceDomain(),
+    spaceId: String(spaceId),
+    name: fields.name,
+  };
+}
+
+/**
+ * Compose the canonical IBP Address (stance::stance) for a stamp
+ * between two beings. Returns null when either side can't be
+ * resolved. Called by beginStamping at Stamp-row reservation so each row
+ * carries its lane identity for presenceKey lookup, replay, and
+ * grouping.
+ */
+export async function computeIbpStampAddress({
+  askerBeingId,
+  askerPosition = null,
+  addresseeBeingId,
+  addresseePosition = null,
+  place = null,
+}) {
+  try {
+    const askerStance = await composeStanceForBeing(askerBeingId, {
+      currentPosition: askerPosition,
+      place,
+    });
+    const addresseeStance = await composeStanceForBeing(addresseeBeingId, {
+      currentPosition: addresseePosition,
+      place,
+    });
+    return canonicalStancePair(askerStance, addresseeStance);
+  } catch {
+    return null;
+  }
+}

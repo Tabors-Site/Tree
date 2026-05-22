@@ -39,7 +39,7 @@
 //
 //  6. Genesis is an ordered sequence. Node starts → I_AM exists
 //     → it plants the place root → it plants .identity and
-//     registers its own being-record → genesis Dids attribute to it
+//     registers its own being-record → genesis Facts attribute to it
 //     → it plants the rest of the nine → it plants the first place
 //     beings. Planting a being is two acts: I_AM's DO scaffolds the
 //     space; the new being's BE (register/claim) authors its own
@@ -104,7 +104,7 @@ export const SEED_SPACE = Object.freeze({
   // The .threads space. A live tree of coordinated work (a
   // rootCorrelation chain) is addressable here as `.threads/<id>`. No
   // children are persisted; the projection is computed on demand from
-  // inbox + Summon records keyed by rootCorrelation. SUMMON to a
+  // inbox + Stamp records keyed by rootCorrelation. SUMMON to a
   // thread address is a cut (sever the line and everything hanging
   // off it). SEE returns the live forest. See
   // seed/place/space/threads.js.

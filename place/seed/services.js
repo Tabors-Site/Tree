@@ -50,13 +50,11 @@ import {
   clearSessionAbort,
   SESSION_TYPES,
   registerSessionType,
-} from "./factory/session.js";
-
-import {
-  startSummon,
-  finalizeSummon,
   ensureSession as ensureChatSession,
-} from "./factory/stamped.js";
+} from "./factory/intake/session.js";
+
+import { stamp } from "./factory/stamper/stamped.js";
+import { beginStamping } from "./factory/stamper/begin.js";
 
 import {
   stepTurn,
@@ -64,27 +62,21 @@ import {
   runTurn,
   getCurrentRole,
   registerFailoverResolver,
-} from "./factory/stamper.js";
+} from "./factory/voices/llm/runTurn.js";
 import {
   getClientForBeing,
   resolveRootLlmForRole,
   beingHasLlm,
-} from "./factory/beingAssignment/llm/llmClient.js";
+} from "./factory/voices/llm/connect.js";
 import {
   getSpaceRootId,
   setCurrentSpace,
   getCurrentSpace,
 } from "./place/being/position.js";
 import {
-  connectToMCP,
-  closeMCPClient,
-  getMCPClient,
-  MCP_SERVER_URL,
-} from "./factory/beingAssignment/llm/mcpClient.js";
-import {
   registerRootSpaceLlmSlot,
   registerBeingLlmSlot,
-} from "./factory/beingAssignment/llm/connections.js";
+} from "./factory/voices/llm/connect.js";
 import {
   emitNavigate,
   emitToBeing,
@@ -118,7 +110,6 @@ import {
   isExtensionBlockedAtSpace,
   getBlockedExtensionsAtSpace,
   getExtensionAtScope,
-  isToolReadOnly,
   getToolOwner,
 } from "./place/space/extensionScope.js";
 import {
@@ -155,19 +146,19 @@ import {
 // extensions register roles, subscribe to events, declare wake
 // cadences, and aggregate fan-out replies without importing my
 // internals.
-import { aggregate as ibpAggregate } from "./factory/replies.js";
+import { aggregate as ibpAggregate } from "./factory/intake/replies.js";
 import {
   subscribe as ibpSubscribe,
   unsubscribe as ibpUnsubscribe,
   unsubscribeAllForBeing as ibpUnsubscribeAllForBeing,
-} from "./factory/subscriptions.js";
+} from "./factory/intake/subscriptions.js";
 import {
   schedule as ibpSchedule,
   unschedule as ibpUnschedule,
   unscheduleAllForBeing as ibpUnscheduleAllForBeing,
   setEmitter as ibpSetScheduleEmitter,
   resetEmitter as ibpResetScheduleEmitter,
-} from "./factory/wakeSchedule.js";
+} from "./factory/intake/wakeSchedule.js";
 import {
   registerRole as ibpRegisterRole,
   unregisterRole as ibpUnregisterRole,
@@ -270,8 +261,8 @@ export function buildCoreServices({
     },
 
     summon: {
-      startSummon,
-      finalizeSummon,
+      beginStamping,
+      stamp,
       ensureSession: ensureChatSession,
     },
 
@@ -291,7 +282,9 @@ export function buildCoreServices({
       registerFailoverResolver,
     },
 
-    mcp: { connectToMCP, closeMCPClient, getMCPClient, MCP_SERVER_URL },
+    // MCP retired 2026-05-22. The LLM voice dispatches tool calls
+    // directly through the kernel tool registry; the verb dispatcher
+    // gates per-verb auth + extension-scope. No protocol layer.
 
     // Push channel. Proxies from seed/ibp/pushChannel.js that route to
     // the registered transport (today: WebSocket via initWebSocketServer).
@@ -416,7 +409,6 @@ export function buildCoreServices({
       isExtensionBlockedAtSpace,
       getBlockedExtensionsAtSpace,
       getExtensionAtScope,
-      isToolReadOnly,
       getToolOwner,
     },
 

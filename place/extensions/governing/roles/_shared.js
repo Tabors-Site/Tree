@@ -1,10 +1,10 @@
 // TreeOS governing . shared helpers for the role templates.
 //
-// Reply emission lives in seed/factory/replies.js (substrate-
+// Reply emission lives in seed/factory/intake/replies.js (substrate-
 // generic; not governing-specific). This file is a thin re-export so
 // existing imports in plannerRole, contractorRole, foremanRole, and
 // workerRoles keep working without a sweeping rename. New code should
-// import directly from seed/factory/replies.js.
+// import directly from seed/factory/intake/replies.js.
 //
 // `readMetaPath` stays here . it is a small Mongoose-lean metadata-Map
 // traversal utility used by governing state helpers; not yet promoted
@@ -14,7 +14,7 @@ export {
   emitReplyToAsker,
   emitReplyToStance,
   findChainInitialCaller,
-} from "../../../seed/factory/replies.js";
+} from "../../../seed/factory/intake/replies.js";
 
 /**
  * Walk a metadata path against both Map and plain-object shapes.

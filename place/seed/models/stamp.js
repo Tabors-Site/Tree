@@ -1,32 +1,32 @@
 // TreeOS Seed . AGPL-3.0 . https://treeos.ai . Tabor Holly
 //
-// Summon. One wake-and-act between two beings.
+// Stamp. One moment a being had, recorded onto the reel.
 //
-// When a SUMMON verb places at a being's inbox, that being wakes,
-// their role runs once — one LLM call for an llm-mode being, one
-// code dispatch for scripted, one notification for a human — and
-// they produce one output. This row is the audit of that wake.
-// The verb SUMMON does the delivery; the noun Summon is what got
-// delivered and what came back.
+// SUMMON is the verb — one being calling another into a moment.
+// Stamp is the noun the verb produces. A Stamp begins life
+// un-pressed (queued in the receiver's inbox), gets pressed when
+// the stamper's momentum runs the moment, and seals when stamped
+// writes its endMessage. The row is the record of that one
+// moment, end to end.
 //
-// Conversation is the graph these rows form. `inReplyTo` points at
-// the Summon that dispatched this one — parent in the reply tree.
-// `rootCorrelation` propagates through a whole chain (Ruler →
-// Planner → Contractor → Worker) so I can walk it for cancellation
-// and group it for conversation views. A thread between two beings
-// at one position is the set of Summons sharing one `ibpAddress`,
-// the canonical sorted stance pair I compute in
-// seed/factory/summonAddress.js.
+// Reply chains form the graph these stamps make. `inReplyTo`
+// points at the Stamp whose moment requested this one — parent in
+// the reply tree. `rootCorrelation` propagates through a whole
+// chain (Ruler → Planner → Contractor → Worker) so I can walk it
+// for cancellation and group it for conversation views. A thread
+// between two beings at one position is the set of Stamps sharing
+// one `ibpAddress`, the canonical sorted stance pair I compute in
+// seed/factory/stamper/stamped/stampIBPAddress.js.
 //
 // I do not store tool calls or substrate writes inside this row.
-// Whatever the summoned being then does in response — every DO,
-// every BE — places as a Did with this Summon's id. "What happened
-// during this summon?" is Did.find({ summonId }).
+// Whatever the summoned being then does during the moment — every
+// DO, every BE — stamps as a Fact carrying this Stamp's id.
+// "What happened inside this moment?" is Fact.find({ stampId }).
 
 import mongoose from "mongoose";
 import { v4 as uuidv4 } from "uuid";
 
-const SummonSchema = new mongoose.Schema({
+const StampSchema = new mongoose.Schema({
   _id: { type: String, default: uuidv4 },
 
   beingIn:  { type: String, ref: "Being", required: true, index: true },
@@ -52,7 +52,7 @@ const SummonSchema = new mongoose.Schema({
   parentThread:    { type: String, default: null, index: true },
 
   receivedAt: { type: Date, default: null },
-  summonedAt: { type: Date, default: null },
+  stampedAt: { type: Date, default: null },
 
   startMessage: {
     content: { type: String, required: true },
@@ -67,7 +67,7 @@ const SummonSchema = new mongoose.Schema({
     _id: false,
   },
 
-  // Set by the cut handler when a thread (this Summon's
+  // Set by the cut handler when a thread (this Stamp's
   // rootCorrelation) is severed via SUMMON to .threads/<id>.
   // Distinct from endMessage.stopped (which means the role itself
   // halted its loop): severedAt records that the line was cut from
@@ -92,19 +92,19 @@ const SummonSchema = new mongoose.Schema({
   },
 });
 
-// All Summons under one chain (rootCorrelation walk).
-SummonSchema.index({ rootCorrelation: 1, summonedAt: 1 }, { sparse: true });
+// All Stamps under one chain (rootCorrelation walk).
+StampSchema.index({ rootCorrelation: 1, stampedAt: 1 }, { sparse: true });
 // Per-Being newest-first activity.
-SummonSchema.index({ beingIn: 1, summonedAt: -1 });
-SummonSchema.index({ beingOut: 1, summonedAt: -1 });
+StampSchema.index({ beingIn: 1, stampedAt: -1 });
+StampSchema.index({ beingOut: 1, stampedAt: -1 });
 // Conversation between two Beings.
-SummonSchema.index({ beingIn: 1, beingOut: 1, summonedAt: -1 }, { sparse: true });
+StampSchema.index({ beingIn: 1, beingOut: 1, stampedAt: -1 }, { sparse: true });
 // "Every time beingOut acted in activeRole" — audit query.
-SummonSchema.index({ beingOut: 1, activeRole: 1, summonedAt: -1 }, { sparse: true });
-// All Summons at one IBPA (the thread).
-SummonSchema.index({ ibpAddress: 1, summonedAt: -1 }, { sparse: true });
+StampSchema.index({ beingOut: 1, activeRole: 1, stampedAt: -1 }, { sparse: true });
+// All Stamps at one IBPA (the thread).
+StampSchema.index({ ibpAddress: 1, stampedAt: -1 }, { sparse: true });
 // Retention sweep cursor.
-SummonSchema.index({ summonedAt: 1 });
+StampSchema.index({ stampedAt: 1 });
 
-const Summon = mongoose.model("Summon", SummonSchema, "summons");
-export default Summon;
+const Stamp = mongoose.model("Stamp", StampSchema, "stamps");
+export default Stamp;

@@ -25,9 +25,10 @@
 // X. Permissions belong to role identity, not envelopes. Summoners
 // cannot cripple a role by stripping its capacities at call time.
 
-import log from "../system/log.js";
+import log from "../../../system/log.js";
 const toolDefs = {};
-const toolVerbs = {}; // name → "see" | "do" | "summon" | "be"
+const toolVerbs = {};    // name → "see" | "do" | "summon" | "be"
+const toolHandlers = {}; // name → async (args) => result
 let MAX_TOOLS = 500;
 const TOOL_NAME_RE = /^[a-z][a-z0-9_-]{0,63}$/;
 const VALID_VERBS = new Set(["see", "do", "summon", "be"]);
@@ -147,7 +148,7 @@ export function registerToolDef(name, schema, opts = {}) {
  *   - `schema` may be a raw shape (`{ key: z.string() }`) or a
  *     pre-built zod object. Wrapped in `z.object().passthrough()` for
  *     the MCP server so it does not strip context fields the MCP HTTP
- *     middleware injects (beingId, summonId, ...).
+ *     middleware injects (beingId, stampId, ...).
  *   - `verb` is REQUIRED ("see" | "do" | "summon" | "be").
  *   - Tools without a `handler` are def-only (registered for
  *     `resolveTools` but not callable via MCP).
@@ -166,7 +167,7 @@ export async function registerToolBundle(tools, { ownerExt, mcpServer }) {
   const { z } = await import("zod");
   const { zodToJsonSchema } = await import("zod-to-json-schema");
   const { registerToolOwner, getToolOwner } =
-    await import("../place/space/extensionScope.js");
+    await import("../../../place/space/extensionScope.js");
 
   for (const tool of tools) {
     // Description gate first. Without it, the MCP server would get a
@@ -190,46 +191,14 @@ export async function registerToolBundle(tools, { ownerExt, mcpServer }) {
       );
       continue;
     }
-    registerToolOwner(
-      tool.name,
-      ownerExt,
-      tool.annotations?.readOnlyHint ?? false,
-    );
+    registerToolOwner(tool.name, ownerExt, tool.verb);
 
-    // MCP input schema. Wrap raw shapes in passthrough; pass through
-    // pre-built zod objects with .passthrough() to keep injected
-    // context fields (beingId, summonId, spaceId, sessionId).
-    let inputSchema;
-    if (
-      tool.schema &&
-      typeof tool.schema === "object" &&
-      !tool.schema._def &&
-      !tool.schema._zod
-    ) {
-      inputSchema = z.object(tool.schema).passthrough();
-    } else if (tool.schema && typeof tool.schema.passthrough === "function") {
-      inputSchema = tool.schema.passthrough();
-    } else {
-      inputSchema = tool.schema;
-    }
-
-    if (tool.handler && mcpServer) {
-      try {
-        mcpServer.registerTool(
-          tool.name,
-          {
-            description: tool.description,
-            inputSchema,
-            annotations: tool.annotations || undefined,
-          },
-          tool.handler,
-        );
-      } catch (err) {
-        log.warn(
-          "Tools",
-          `${ownerExt}: MCP register "${tool.name}" failed: ${err.message}`,
-        );
-      }
+    // Stash the handler so runTurn can dispatch it directly. The verb
+    // dispatcher's authorize gate already covers per-verb auth + the
+    // extension-scope block; no protocol layer is needed between the
+    // LLM voice's tool call and the handler.
+    if (typeof tool.handler === "function") {
+      toolHandlers[tool.name] = tool.handler;
     }
 
     // JSON schema for the LLM's function-calling format.
@@ -270,6 +239,7 @@ export function unregisterToolDef(name) {
   if (toolDefs[name]) {
     delete toolDefs[name];
     delete toolVerbs[name];
+    delete toolHandlers[name];
     _warnedTools.delete(name);
     return true;
   }
@@ -285,9 +255,19 @@ export function unregisterToolsForExtension(extName, getToolOwnerFn) {
     if (getToolOwnerFn(name) === extName) {
       delete toolDefs[name];
       delete toolVerbs[name];
+      delete toolHandlers[name];
       _warnedTools.delete(name);
     }
   }
+}
+
+/**
+ * Look up a tool's handler. Returns null for unregistered tools or
+ * def-only tools (registered for resolveTools but not callable).
+ * runTurn's executeTool invokes this directly — no MCP transport.
+ */
+export function getToolHandler(name) {
+  return toolHandlers[name] || null;
 }
 
 const _warnedTools = new Set();
@@ -376,7 +356,7 @@ export function listToolNames() {
  * empty `missing` map means the tree is wired correctly.
  */
 export async function auditToolDescriptions() {
-  const { listRoles, getRole } = await import("./roles/registry.js");
+  const { listRoles, getRole } = await import("../../roles/registry.js");
   const roleNames = listRoles();
   const missing = {};
   let scanned = 0;
@@ -417,8 +397,8 @@ export async function auditToolDescriptions() {
 // reflects current state. Idempotent; subsequent calls reconcile
 // (add new tools, remove gone ones).
 export async function syncToolsToSubstrate() {
-  const { SEED_SPACE } = await import("../place/space/seedSpaces.js");
-  const { manifestItems } = await import("../place/manifest.js");
+  const { SEED_SPACE } = await import("../../../place/space/seedSpaces.js");
+  const { manifestItems } = await import("../../../place/manifest.js");
   const items = Object.entries(toolDefs).map(([name, def]) => ({
     name,
     qualities: new Map([

@@ -4,11 +4,11 @@
 // is genesis. I act before any other being exists. My first DO
 // creates the place root; the next eight plant the rest of the seed
 // spaces beneath it; my last act in this file creates my own Being
-// row so every Did from t=0 has me as its actor.
+// row so every Fact from t=0 has me as its actor.
 //
 // Reading this file top to bottom shows me acting alone, before I
 // have planted any delegate. Every write here logs to I_AM.
-// Dids written before ensureIAm's call cannot resolve their
+// Facts written before ensureIAm's call cannot resolve their
 // beingId at write time; populate() resolves backward to my row
 // once it places.
 //
@@ -55,7 +55,7 @@ const PLACE_SEED_SPACES = [
   { name: ".source", seedSpace: SEED_SPACE.SOURCE },
   // .threads is a derived projection. Live rootCorrelation chains
   // surface as synthetic children at `<place>/.threads/<id>`; the
-  // descriptor is computed on demand from inbox + Summon records.
+  // descriptor is computed on demand from inbox + Stamp records.
   // SUMMON to a thread address is a cut. See seed/place/space/threads.js.
   { name: ".threads", seedSpace: SEED_SPACE.THREADS },
 ];
@@ -172,7 +172,7 @@ export async function ensurePlaceRoot() {
   placeRootCache = placeRoot;
 
   // Plant my own Being row. Every later being parents under it;
-  // every Did written before this call resolves backward to me.
+  // every Fact written before this call resolves backward to me.
   await ensureIAm(placeRoot._id);
 
   log.verbose(

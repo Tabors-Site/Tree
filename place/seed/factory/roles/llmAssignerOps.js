@@ -93,7 +93,7 @@ export function registerLlmAssignerOps() {
   // the place root). Idempotent: returns the existing matter when one
   // with the marker is already present. The new matter is created
   // through the kernel `create-matter` DO op under the llm-assigner's
-  // own identity, so beforeMatter / afterMatter hooks fire and a Did
+  // own identity, so beforeMatter / afterMatter hooks fire and a Fact
   // lands.
   registerOperation("llm-assigner:start-tutorial", {
     targets: ["space"],
@@ -124,8 +124,8 @@ export function registerLlmAssignerOps() {
       // The llm-assigner being itself is the actor. Calling
       // create-matter under its own identity makes it the matter's
       // author (so the ownership gate on later delete passes) and
-      // routes the write through the verb (afterMatter fires, Did
-      // is written).
+      // routes the write through the verb (afterMatter fires, Fact
+      // is stamped).
       const llmAssignerIdentity = {
         beingId: String(llmAssigner._id),
         name:    "llm-assigner",
@@ -201,7 +201,7 @@ export function registerLlmAssignerOps() {
   // Goes through the kernel `delete-matter` DO under the llm-
   // assigner's own identity (it IS the matter's author, so the
   // ownership gate inside deleteMatterAndFile passes). The deletion
-  // is audited as a Did and afterMatter fires.
+  // is stamped as a Fact and afterMatter fires.
   registerOperation("llm-assigner:complete-tutorial", {
     targets: ["matter", "space"],
     ownerExtension: OWNER,

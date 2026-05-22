@@ -98,7 +98,7 @@ export async function appendPlanApproval({
   };
 
   // Phase 3 migration ([[project_seed_four_verbs_only]]): write through
-  // the verb surface so plan-approval writes auto-audit as Dids.
+  // the verb surface so plan-approval writes auto-stamp as Facts.
   // merge:true preserves other keys in NS atomically (the prior
   // read-spread-write would clobber concurrent writes to sibling keys).
   await core.do(space, "set-meta", {

@@ -230,7 +230,7 @@ export function generateToken(being) {
  * Distinct from `generateToken` (which issues session credentials to
  * clients): internal tokens are short-lived (24h default), have no
  * `jti`, and never leave the server. The MCP middleware
- * ([transports/http/middleware/authenticateMCP.js]) decodes them with
+ * ([transports/http/middleware/authenticate.js]) decodes them with
  * `decodeToken` and reads beingId + name.
  *
  * @param {object} args

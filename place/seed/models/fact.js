@@ -1,12 +1,13 @@
 // TreeOS Seed . AGPL-3.0 . https://treeos.ai . Tabor Holly
 //
-// Fact. A thing stamped by the Factory.
+// Fact. A thing a being stamps in the Factory — one recorded change
+// to matter, space, or being.
 //
-// `factum` (Latin, "a thing done"). It is not a thing true. A fact
-// alone is not much, just a record of matter, space, or being. The
-// end of a chain of facts is Truth. Truth is at the end of the
-// chain, not at the start. One fact is small. The chain accumulates.
-// Truth is what the chain becomes.
+// `factum` (Latin, "a thing done"). It is not a thing true. A single
+// fact is small but settled. A chain of facts, folded, is Truth.
+// The first fact is the I-Am; the place grows from there in reels.
+// There is no global Now everyone reads from — each being is the
+// momentum of its own chain, framing its own moment.
 //
 // The trail of Facts attached to a being IS the being. The Being row
 // in MongoDB is where the trail hangs; the trail itself, every Fact
@@ -17,10 +18,10 @@
 //
 // I stamp a Fact for two of my four verbs: DO and BE. SEE is
 // observation, not doing — no row. SUMMON is delivery to an inbox,
-// not a substrate act — the Summon model is the audit row for that
+// not a substrate act — the Stamp model is the audit row for that
 // delivery, and whatever the summoned being then does in response
-// is itself a DO or BE Fact carrying its summonId. "What happened
-// inside this summon?" is Fact.find({ summonId }).
+// is itself a DO or BE Fact carrying its stampId. "What happened
+// inside this summon?" is Fact.find({ stampId }).
 //
 // I attribute every Fact. The actor is the being whose stance
 // emitted the act. I am the actor only when no being yet exists —
@@ -63,9 +64,9 @@ const FactSchema = new mongoose.Schema({
   result:    { type: mongoose.Schema.Types.Mixed, default: null },
   truncated: { type: Boolean, default: false },
 
-  // Correlation. summonId binds the Fact to a wake; sessionId binds
+  // Correlation. stampId binds the Fact to a wake; sessionId binds
   // it to a transport session (WS, CLI, HTTP).
-  summonId:  { type: String, ref: "Summon", default: null },
+  stampId:  { type: String, ref: "Stamp", default: null },
   sessionId: { type: String, default: null, index: true },
 
   // Federation provenance. Set when the verb call arrived from
@@ -76,7 +77,7 @@ const FactSchema = new mongoose.Schema({
 
 FactSchema.index({ beingId: 1, date: -1 });                                          // a being's reel
 FactSchema.index({ "target.kind": 1, "target.id": 1, date: -1 }, { sparse: true }); // a target's reel
-FactSchema.index({ summonId: 1 }, { sparse: true });                                 // facts within a summon
+FactSchema.index({ stampId: 1 }, { sparse: true });                                 // facts within a summon
 FactSchema.index({ verb: 1, action: 1, date: -1 });                                  // "every register, newest first"
 
 const Fact = mongoose.model("Fact", FactSchema, "facts");

@@ -3,7 +3,7 @@
 // The scheduler itself is small; the value of these tests is verifying
 // the guarantees the design doc commits to: priority ordering on each
 // pull, per-being serialization, abortable Summons, and clean state
-// teardown after a Summon completes.
+// teardown after a Stamp seals.
 //
 // We stub the inbox + Being + embodiment dependencies so the tests are
 // fully in-memory and fast. Integration with the real inbox places in
@@ -25,7 +25,7 @@ let summonImpl = async (message, ctx) => ({ content: `default for ${message.corr
 function freshBucket(beingId, entries) { fakeBucket.set(beingId, entries); }
 function setSummonImpl(fn) { summonImpl = fn; summonCalls = []; }
 
-mock.module("../seed/factory/inbox.js", {
+mock.module("../seed/factory/intake/inbox.js", {
   namedExports: {
     pickNextEntry: async (spaceId, beingId) => {
       const bucket = fakeBucket.get(beingId) || [];
@@ -41,7 +41,7 @@ mock.module("../seed/factory/inbox.js", {
     },
     markSummoned: async (spaceId, beingId, index) => {
       const bucket = fakeBucket.get(beingId) || [];
-      if (bucket[index]) bucket[index].summonedAt = new Date().toISOString();
+      if (bucket[index]) bucket[index].stampedAt = new Date().toISOString();
     },
     markInboxConsumed: async (spaceId, beingId, correlationIds) => {
       const bucket = fakeBucket.get(beingId) || [];
@@ -63,11 +63,6 @@ mock.module("../seed/factory/inbox.js", {
   },
 });
 
-// Per-being operatingMode override. Tests put a beingId in this set
-// to mark that being as human; everything else stays "agent".
-const humanBeings = new Set();
-function markHuman(beingId) { humanBeings.add(beingId); }
-
 mock.module("../seed/models/being.js", {
   defaultExport: {
     findById: async (id) => ({
@@ -75,31 +70,8 @@ mock.module("../seed/models/being.js", {
       username:    `user-${id}`,
       roles:       [fakeBeingRole],
       defaultRole: fakeBeingRole,
-      operatingMode: humanBeings.has(id) ? "human" : "llm",
+      operatingMode: "llm",
     }),
-  },
-});
-
-// Mock the push channel so the human-cognition path can emit without
-// booting the real WS server. Tests inspect `humanEmits` to verify
-// being-room delivery.
-const humanEmits = [];
-mock.module("../seed/ibp/pushChannel.js", {
-  namedExports: {
-    IBP_EVENT: "ibp",
-    pushIbp: (beingId, envelope) => {
-      humanEmits.push({ room: `being:${beingId}`, event: "ibp", payload: envelope });
-    },
-    emitToBeing:             () => {},
-    emitToBeingRoom:         () => {},
-    emitNavigate:            () => {},
-    getIO:                   () => null,
-    getHttpServer:           () => null,
-    registerSocketHandler:   () => {},
-    unregisterSocketHandler: () => {},
-    setPushChannel:          () => {},
-    resetPushChannel:        () => {},
-    hasPushChannel:          () => false,
   },
 });
 
@@ -118,7 +90,7 @@ mock.module("../seed/factory/roles/registry.js", {
   },
 });
 
-const { wake, abortCurrent, getCurrentRootCorrelation, attachHandoff, _resetAll, getStats } = await import("../seed/factory/scheduler.js");
+const { wake, abortCurrent, getCurrentRootCorrelation, attachHandoff, _resetAll, getStats } = await import("../seed/factory/intake/scheduler.js");
 
 beforeEach(() => {
   _resetAll();
@@ -126,8 +98,6 @@ beforeEach(() => {
   summonCalls = [];
   summonImpl = async (message) => ({ content: `default for ${message.correlation}` });
   fakeBeingRole = "echo";
-  humanBeings.clear();
-  humanEmits.length = 0;
 });
 afterEach(() => _resetAll());
 
@@ -143,7 +113,7 @@ function makeEntry(correlation, priority = 1, extras = {}) {
     sentAt: extras.sentAt || new Date().toISOString(),
     consumed: false,
     cancelledAt: null,
-    summonedAt: null,
+    stampedAt: null,
     ...extras,
   };
 }
@@ -265,7 +235,7 @@ describe("scheduler — cancellation", () => {
     assert.equal(summonCalls[0].message.correlation, "alive");
   });
 
-  test("abortCurrent aborts the in-flight Summon", async () => {
+  test("abortCurrent aborts the in-flight Stamp", async () => {
     let abortedSignal = false;
     setSummonImpl(async (msg, ctx) => {
       ctx.signal.addEventListener("abort", () => { abortedSignal = true; });
@@ -296,7 +266,7 @@ describe("scheduler — cancellation", () => {
 
 describe("scheduler — handoff (response dispatch)", () => {
   test("onResponse fires with the constructed response entry", async () => {
-    setSummonImpl(async () => ({ content: "hello back", summonId: "sum-42" }));
+    setSummonImpl(async () => ({ content: "hello back", stampId: "sum-42" }));
     freshBucket("being-1", [makeEntry("ask")]);
     let received = null;
     attachHandoff("being-1", "ask", {
@@ -308,7 +278,7 @@ describe("scheduler — handoff (response dispatch)", () => {
     assert.equal(received.from, "treeos.ai/@responder");
     assert.equal(received.content, "hello back");
     assert.equal(received.inReplyTo, "ask");
-    assert.equal(received.summonId, "sum-42");
+    assert.equal(received.stampId, "sum-42");
   });
 
   test("onError fires when summon throws (non-abort)", async () => {
@@ -325,7 +295,7 @@ describe("scheduler — handoff (response dispatch)", () => {
 });
 
 describe("scheduler — stats", () => {
-  test("getStats reports running and currentRoot during a Summon", async () => {
+  test("getStats reports running and currentRoot during a Stamp", async () => {
     setSummonImpl(async () => {
       await new Promise((r) => setTimeout(r, 30));
       return { content: "ok" };
@@ -339,48 +309,10 @@ describe("scheduler — stats", () => {
   });
 });
 
-describe("scheduler — human cognition", () => {
-  test("human being: entry stays pending, role.summon not invoked, being-room emits", async () => {
-    markHuman("being-h");
-    freshBucket("being-h", [makeEntry("plan-approve", 1, { rootCorrelation: "root-h" })]);
-    wake("being-h", "node-h");
-
-    await waitUntil(() => humanEmits.length > 0);
-    assert.equal(humanEmits[0].room, "being:being-h");
-    assert.equal(humanEmits[0].event, "ibp");
-    // Unified `ibp` envelope: { verb: "summon", payload: <inbox entry> }.
-    assert.equal(humanEmits[0].payload.verb, "summon");
-    assert.equal(humanEmits[0].payload.payload.correlation, "plan-approve");
-
-    // The runLoop should have exited and role.summon should never have run.
-    await waitUntil(() => getStats()["being-h"]?.running === false);
-    assert.equal(summonCalls.length, 0);
-
-    // Entry stays pending — humans consume by replying.
-    assert.equal(fakeBucket.get("being-h")[0].consumed, false);
-  });
-
-  test("human being: re-wake on same node does not re-emit already-notified entries", async () => {
-    markHuman("being-h");
-    freshBucket("being-h", [makeEntry("once", 1)]);
-    wake("being-h", "node-h");
-    await waitUntil(() => humanEmits.length === 1);
-
-    // Second wake at the same node with no new entries — should NOT re-emit.
-    wake("being-h", "node-h");
-    await waitUntil(() => getStats()["being-h"]?.running === false);
-    assert.equal(humanEmits.length, 1);
-  });
-
-  test("human being: newly appended entry emits on next wake", async () => {
-    markHuman("being-h");
-    freshBucket("being-h", [makeEntry("first", 1)]);
-    wake("being-h", "node-h");
-    await waitUntil(() => humanEmits.length === 1);
-
-    fakeBucket.get("being-h").push(makeEntry("second", 1));
-    wake("being-h", "node-h");
-    await waitUntil(() => humanEmits.length === 2);
-    assert.equal(humanEmits[1].payload.payload.correlation, "second");
-  });
-});
+// (The legacy "scheduler — human cognition" suite tested an old
+// human-notify branch the scheduler used to carry. It was removed:
+// humans get SUMMONs through the standard transport push, not through
+// a special scheduler path; beings without an active role get rejected
+// at the SUMMON verb (ROLE_UNAVAILABLE) and never reach the scheduler.
+// If a human-cognition path lands in the factory later, its tests
+// belong with that path, not here.)

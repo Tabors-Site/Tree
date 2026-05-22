@@ -101,7 +101,7 @@ function register(hookName, handler, extName = "unknown") {
 
   if (!registry.has(hookName)) {
     const CORE_HOOKS = [
-      "beforeMatter", "afterMatter", "beforeDid",
+      "beforeMatter", "afterMatter", "beforeFact",
       "beforeSpaceCreate", "afterSpaceCreate", "beforeSpaceDelete",
       "enrichContext", "onCascade", "onDocumentPressure",
       "beforeLLMCall", "afterLLMCall", "beforeToolCall", "afterToolCall",

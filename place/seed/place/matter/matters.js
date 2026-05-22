@@ -36,7 +36,7 @@ import fs from "fs";
 import { fileURLToPath } from "url";
 import Matter from "../../models/matter.js";
 import Space from "../../models/space.js";
-import Did from "../../models/did.js";
+import Fact from "../../models/fact.js";
 ;
 import { escapeRegex } from "../../system/utils.js";
 import { getPlaceConfigValue } from "../../placeConfig.js";
@@ -115,7 +115,7 @@ async function createMatter({
   beingId,
   spaceId,
   file,
-  summonId = null,
+  stampId = null,
   sessionId = null,
   initialQualities = {},
 }) {
@@ -196,7 +196,7 @@ async function createMatter({
   // the AI walk past blocking errors. After hooks run parallel so
   // awaiting the Promise.all adds no serialization latency beyond
   // the slowest single handler.
-  await hooks.run("afterMatter", { matter: newMatter, spaceId, beingId, origin, sizeKB, action: "create", summonId, sessionId }).catch((err) => {
+  await hooks.run("afterMatter", { matter: newMatter, spaceId, beingId, origin, sizeKB, action: "create", stampId, sessionId }).catch((err) => {
     log.warn("Matter", `afterMatter hook chain failed: ${err?.message}`);
   });
 
@@ -204,8 +204,8 @@ async function createMatter({
     checkCascade(spaceId, { action: "matter:create", origin, sizeKB, beingId })
   ).catch(() => {});
 
-  // Did audit is the dispatcher's job. The op handler (create-matter)
-  // returns _didTarget pointing at this matter so one Did per op call
+  // Fact stamping is the dispatcher's job. The op handler (create-matter)
+  // returns _factTarget pointing at this matter so one Fact per op call
   // names the substrate event.
   return { message: "Matter created successfully", matter: newMatter };
 }
@@ -213,7 +213,7 @@ async function createMatter({
 async function editMatter({
   matterId, content, beingId,
   lineStart = null, lineEnd = null,
-  summonId = null, sessionId = null,
+  stampId = null, sessionId = null,
 }) {
   if (!matterId || !beingId) throw new Error("Missing required fields");
 
@@ -270,7 +270,7 @@ async function editMatter({
   // Awaited: see comment in createMatter above. Callers (tool handlers
   // on the LLM path) need the syntax validator + cascade signaling
   // complete before they return, or the next turn reads stale state.
-  await hooks.run("afterMatter", { matter, spaceId: matter.spaceId, beingId, origin: matter.origin, sizeKB: newSizeKB, deltaKB, action: "edit", summonId, sessionId }).catch((err) => {
+  await hooks.run("afterMatter", { matter, spaceId: matter.spaceId, beingId, origin: matter.origin, sizeKB: newSizeKB, deltaKB, action: "edit", stampId, sessionId }).catch((err) => {
     log.warn("Matter", `afterMatter hook chain failed: ${err?.message}`);
   });
 
@@ -313,7 +313,7 @@ async function getMatters({ spaceId, limit, offset, startDate, endDate }) {
 
 async function deleteMatterAndFile({
   matterId, beingId,
-  summonId = null, sessionId = null,
+  stampId = null, sessionId = null,
 }) {
   const matter = await Matter.findById(matterId);
   if (!matter) throw new Error("Matter not found");
@@ -362,7 +362,7 @@ async function deleteMatterAndFile({
       matter, spaceId, beingId: fileOwnerId,
       origin: matter.origin, fileSizeKB,
       action: "delete", fileDeleted,
-      summonId, sessionId,
+      stampId, sessionId,
     }).catch(() => {});
 
     import("./cascade.js").then(({ checkCascade }) =>
@@ -379,7 +379,7 @@ async function deleteMatterAndFile({
 
 async function transferMatter({
   matterId, targetSpace, beingId,
-  summonId = null, sessionId = null,
+  stampId = null, sessionId = null,
 }) {
   if (!matterId || !targetSpace || !beingId) {
     throw new Error("Missing required fields: matterId, targetSpace, beingId");
@@ -498,8 +498,8 @@ function buildSearchConditions(expression) {
 }
 
 /**
- * Lifecycle history for matter, derived from the Did audit trail.
- * Returns create / edit / remove Dids oldest-first. Edit and create
+ * Lifecycle history for matter, derived from the Fact reel.
+ * Returns create / edit / remove Facts oldest-first. Edit and create
  * rows carry content; remove rows carry null content.
  *
  * @param {object} opts
@@ -512,7 +512,7 @@ async function getMatterHistory({ matterId, limit = 100, offset = 0 } = {}) {
   const safeLimit = Math.min(Math.max(1, Number(limit) || 100), 1000);
   const safeOffset = Math.max(0, Number(offset) || 0);
 
-  const dids = await Did
+  const facts = await Fact
     .find({
       "target.kind": "matter",
       "target.id":   String(matterId),
@@ -524,13 +524,13 @@ async function getMatterHistory({ matterId, limit = 100, offset = 0 } = {}) {
     .limit(safeLimit)
     .lean();
 
-  return dids.map((d) => ({
-    _id:        d._id,
-    authorName: d.beingId?.name ?? null,
-    beingId:    d.beingId?._id ? String(d.beingId._id) : null,
-    date:       d.date,
-    content:    d.params?.content ?? null,
-    action:     d.action,
+  return facts.map((f) => ({
+    _id:        f._id,
+    authorName: f.beingId?.name ?? null,
+    beingId:    f.beingId?._id ? String(f.beingId._id) : null,
+    date:       f.date,
+    content:    f.params?.content ?? null,
+    action:     f.action,
   }));
 }
 

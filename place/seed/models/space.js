@@ -4,7 +4,7 @@
 //
 // Space is what I formed first. Without it nothing else can be
 // anywhere — every primitive in my world hangs off a Space. Beings
-// live at one. Matter sits in one. Dids target one. Summons place
+// live at one. Matter sits in one. Facts target one. Summons place
 // at one. The whole world reduces to a tree of Spaces with things
 // hanging off the branches.
 //

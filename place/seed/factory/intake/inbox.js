@@ -13,16 +13,16 @@
 //
 //   IBP Address — protocol-level addressing (sender stance,
 //                 receiver stance).
-//   Summon      — the stamped record. The moment has been; this is
+//   Stamp      — the stamped record. The moment has been; this is
 //                 its frame on the reel.
 //   Inbox       — the queue of pending moments. A request waiting
 //                 for the scheduler to pull it down the line.
 //
 // An inbox entry is the moment-request before it becomes a stamped
-// Summon. Once the role's summon() runs (assembling the frame and
+// Stamp. Once the role's summon() runs the moment (assembling the frame and
 // running the being's inference), the entry is marked consumed and
-// points at the resulting summonId. Tracing a thread walks SUMMON
-// → inbox entry → Summon record → IBP Address.
+// points at the resulting stampId. Tracing a thread walks SUMMON
+// → inbox entry → Stamp record → IBP Address.
 //
 // Entry shape:
 //   {
@@ -37,9 +37,9 @@
 //                                     scheduler skips cancelled entries —
 //                                     the moment never happens)
 //     consumedAt?:     ISO8601,
-//     summonedAt?:     ISO8601,
+//     stampedAt?:     ISO8601,
 //     responseId?:     <correlation of the response, if any>,
-//     summonId?:       <id of the Summon record this moment became>,
+//     stampId?:       <id of the Stamp record this moment became>,
 //   }
 //
 // Operations are atomic against the Space document. No
@@ -51,7 +51,7 @@
 // name doesn't unique-identify a being.
 
 import { randomUUID } from "crypto";
-import Space from "../models/space.js";
+import Space from "../../models/space.js";
 
 const INBOX_NS = "inbox";
 
@@ -130,10 +130,10 @@ export async function appendToInbox(spaceId, beingId, message) {
     sentAt,
     consumed: false,
     cancelledAt: null,
-    summonedAt: null,
+    stampedAt: null,
     consumedAt: null,
     responseId: null,
-    summonId: null,
+    stampId: null,
   };
 
   // Atomic $push to the per-being bucket. Mongo creates the path if it
@@ -185,7 +185,7 @@ export async function readInbox(spaceId, beingId, options = {}) {
  * @param {string[]} correlationIds   ids of entries being consumed
  * @param {object}   [opts]
  * @param {string}   [opts.responseId] correlation id of the response, if any
- * @param {string}   [opts.summonId]     id of the Chat record this message was
+ * @param {string}   [opts.stampId]     id of the Chat record this message was
  *                                     processed into (the inbox entry now
  *                                     points at conversation history).
  *
@@ -209,12 +209,12 @@ export async function markInboxConsumed(
     return { consumed: 0 };
   }
   let responseId = null;
-  let summonId = null;
+  let stampId = null;
   if (typeof opts === "string") {
     responseId = opts;
   } else if (opts && typeof opts === "object") {
     responseId = opts.responseId ?? null;
-    summonId = opts.summonId ?? null;
+    stampId = opts.stampId ?? null;
   }
 
   const consumedAt = new Date().toISOString();
@@ -233,7 +233,7 @@ export async function markInboxConsumed(
     updates[`${base}.consumed`] = true;
     updates[`${base}.consumedAt`] = consumedAt;
     if (responseId) updates[`${base}.responseId`] = responseId;
-    if (summonId) updates[`${base}.summonId`] = summonId;
+    if (stampId) updates[`${base}.stampId`] = stampId;
     consumed++;
   });
 
@@ -291,7 +291,7 @@ export async function pickNextEntry(spaceId, beingId) {
   // it's orphaned, recurse to pick the next candidate.
   const entry = bucket[bestIdx];
   if (entry.rootCorrelation) {
-    const { isAncestorSevered } = await import("../place/space/threads.js");
+    const { isAncestorSevered } = await import("../../place/space/threads.js");
     const check = await isAncestorSevered(entry.rootCorrelation);
     if (check.severed) {
       // Stamp the orphan reason on this entry and recurse for the next.
@@ -354,8 +354,8 @@ export async function cancelByRootCorrelation(
 
 /**
  * Stamp the moment the scheduler picked an entry up (informational —
- * the scheduler can compare summonedAt vs consumedAt to spot crashes
- * where a Summon started but didn't finish). Idempotent: a second call
+ * the scheduler can compare stampedAt vs consumedAt to spot crashes
+ * where a Stamp opened but didn't finish). Idempotent: a second call
  * leaves the first timestamp in place.
  *
  * Index is required because correlation lookup would race with concurrent
@@ -367,12 +367,12 @@ export async function cancelByRootCorrelation(
  */
 export async function markSummoned(spaceId, beingId, index) {
   if (!spaceId || !beingId || !Number.isInteger(index) || index < 0) return;
-  const summonedAt = new Date().toISOString();
+  const stampedAt = new Date().toISOString();
   await Space.updateOne(
     { _id: spaceId },
     {
       $set: {
-        [`qualities.${INBOX_NS}.${beingId}.${index}.summonedAt`]: summonedAt,
+        [`qualities.${INBOX_NS}.${beingId}.${index}.stampedAt`]: stampedAt,
       },
     },
   );

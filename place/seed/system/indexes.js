@@ -52,8 +52,8 @@ const KERNEL_COLLECTIONS = new Set([
   "spaces",                // Space (default pluralization of "Space")
   "beings",                // Being
   "matters",               // Matter
-  "dids",                  // Did
-  "summons",               // Summon
+  "facts",                 // Fact
+  "stamps",                // Stamp
   "customllmconnections",  // LlmConnection (legacy collection name preserved)
 ]);
 

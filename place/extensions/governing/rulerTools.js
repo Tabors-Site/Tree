@@ -209,7 +209,7 @@ export default function getRulerTools(core) {
       },
       annotations: { readOnlyHint: false },
       async handler(args) {
-        const { beingId, username, spaceId, rootId, summonId, sessionId } = args;
+        const { beingId, username, spaceId, rootId, stampId, sessionId } = args;
         const briefing = typeof args.briefing === "string" ? args.briefing.trim() : "";
         if (!briefing) return text("governing-hire-planner: briefing is required.");
         if (briefing.length > BRIEFING_CAP) {
@@ -271,7 +271,7 @@ export default function getRulerTools(core) {
         const planSpace = await ensurePlanAtScope({
           scopeSpaceId: String(ruler._id),
           beingId,
-          summonId,
+          stampId,
           sessionId,
           core: _core,
         });
@@ -347,7 +347,7 @@ export default function getRulerTools(core) {
         //    can find every entry in the same chain.
         const { randomUUID } = await import("crypto");
         const correlation = randomUUID();
-        const rootCorrelation = args.rootSummonId || summonId || correlation;
+        const rootCorrelation = args.rootStampId || stampId || correlation;
         const message = {
           from:            rulerStance,
           content:         briefing,
@@ -363,8 +363,8 @@ export default function getRulerTools(core) {
         //    is the Planner stance for the reply's `from` field. The
         //    response handler re-fires the existing governing hook so
         //    the Ruler wakeup path stays unchanged.
-        const { appendToInbox } = await import("../../seed/factory/inbox.js");
-        const { attachHandoff, wake } = await import("../../seed/factory/scheduler.js");
+        const { appendToInbox } = await import("../../seed/factory/intake/inbox.js");
+        const { attachHandoff, wake } = await import("../../seed/factory/intake/scheduler.js");
         const { hooks } = await import("../../seed/system/hooks.js");
         const startMs = Date.now();
 
@@ -397,7 +397,7 @@ export default function getRulerTools(core) {
                 exitText:        responseEntry?.content || null,
                 durationMs:      Date.now() - startMs,
                 error:           null,
-                parentSummonId:  summonId || null,
+                parentStampId:  stampId || null,
                 parentSessionId: sessionId || null,
               });
             } catch (err) {
@@ -418,7 +418,7 @@ export default function getRulerTools(core) {
                 exitText:        null,
                 durationMs:      Date.now() - startMs,
                 error:           err?.message || String(err),
-                parentSummonId:  summonId || null,
+                parentStampId:  stampId || null,
                 parentSessionId: sessionId || null,
               });
             } catch (hookErr) {
@@ -489,7 +489,7 @@ export default function getRulerTools(core) {
       },
       annotations: { readOnlyHint: false },
       async handler(args) {
-        const { beingId, username, spaceId, rootId, summonId, sessionId } = args;
+        const { beingId, username, spaceId, rootId, stampId, sessionId } = args;
         if (!beingId) return text("governing-hire-contractor: missing beingId; substrate bug.");
 
         const briefing = typeof args.briefing === "string" ? args.briefing.trim() : "";
@@ -595,7 +595,7 @@ export default function getRulerTools(core) {
         const contractsSpace = await ensureContractsNode({
           scopeSpaceId: String(ruler._id),
           beingId,
-          summonId,
+          stampId,
           sessionId,
           core: _core,
         });
@@ -660,7 +660,7 @@ export default function getRulerTools(core) {
 
         const { randomUUID } = await import("crypto");
         const correlation = randomUUID();
-        const rootCorrelation = args.rootSummonId || summonId || correlation;
+        const rootCorrelation = args.rootStampId || stampId || correlation;
         const message = {
           from:            rulerStance,
           content:         contractorMessage,
@@ -673,8 +673,8 @@ export default function getRulerTools(core) {
         // 5. Append + handoff + wake. Handoff onResponse re-fires the
         //    existing governing:contractorCompleted hook so the Ruler
         //    wake-up path stays unchanged.
-        const { appendToInbox } = await import("../../seed/factory/inbox.js");
-        const { attachHandoff, wake } = await import("../../seed/factory/scheduler.js");
+        const { appendToInbox } = await import("../../seed/factory/intake/inbox.js");
+        const { attachHandoff, wake } = await import("../../seed/factory/intake/scheduler.js");
         const { hooks } = await import("../../seed/system/hooks.js");
         const startMs = Date.now();
 
@@ -707,7 +707,7 @@ export default function getRulerTools(core) {
                 exitText:        responseEntry?.content || null,
                 durationMs:      Date.now() - startMs,
                 error:           null,
-                parentSummonId:  summonId || null,
+                parentStampId:  stampId || null,
                 parentSessionId: sessionId || null,
               });
             } catch (err) {
@@ -728,7 +728,7 @@ export default function getRulerTools(core) {
                 exitText:        null,
                 durationMs:      Date.now() - startMs,
                 error:           err?.message || String(err),
-                parentSummonId:  summonId || null,
+                parentStampId:  stampId || null,
                 parentSessionId: sessionId || null,
               });
             } catch (hookErr) {
@@ -787,7 +787,7 @@ export default function getRulerTools(core) {
       },
       annotations: { readOnlyHint: false },
       async handler(args) {
-        const { beingId, username, spaceId, rootId, summonId, sessionId } = args;
+        const { beingId, username, spaceId, rootId, stampId, sessionId } = args;
         const wakeupReason = typeof args.wakeupReason === "string" ? args.wakeupReason.trim() : "";
         if (!wakeupReason) return text("governing-route-to-foreman: wakeupReason is required.");
         if (!beingId) return text("governing-route-to-foreman: missing beingId; substrate bug.");
@@ -826,7 +826,7 @@ export default function getRulerTools(core) {
         const executionSpace = await ensureExecutionNode({
           scopeSpaceId: String(ruler._id),
           beingId,
-          summonId,
+          stampId,
           sessionId,
           core: _core,
         });
@@ -889,7 +889,7 @@ export default function getRulerTools(core) {
 
         const { randomUUID } = await import("crypto");
         const correlation = randomUUID();
-        const rootCorrelation = args.rootSummonId || summonId || correlation;
+        const rootCorrelation = args.rootStampId || stampId || correlation;
         const foremanMessage =
           `Wakeup: ${wakeupReason}\n\n` +
           "Read the execution-stack snapshot in your prompt and decide.";
@@ -905,8 +905,8 @@ export default function getRulerTools(core) {
         // 5. Append + handoff + wake. Handoff onResponse re-fires the
         //    existing governing:foremanRouted hook so the Ruler wake-up
         //    path stays unchanged.
-        const { appendToInbox } = await import("../../seed/factory/inbox.js");
-        const { attachHandoff, wake } = await import("../../seed/factory/scheduler.js");
+        const { appendToInbox } = await import("../../seed/factory/intake/inbox.js");
+        const { attachHandoff, wake } = await import("../../seed/factory/intake/scheduler.js");
         const { hooks } = await import("../../seed/system/hooks.js");
         const startMs = Date.now();
 
@@ -939,7 +939,7 @@ export default function getRulerTools(core) {
                 exitText:        responseEntry?.content || null,
                 durationMs:      Date.now() - startMs,
                 error:           null,
-                parentSummonId:  summonId || null,
+                parentStampId:  stampId || null,
                 parentSessionId: sessionId || null,
               });
             } catch (err) {
@@ -960,7 +960,7 @@ export default function getRulerTools(core) {
                 exitText:        null,
                 durationMs:      Date.now() - startMs,
                 error:           err?.message || String(err),
-                parentSummonId:  summonId || null,
+                parentStampId:  stampId || null,
                 parentSessionId: sessionId || null,
               });
             } catch (hookErr) {
@@ -1055,7 +1055,7 @@ export default function getRulerTools(core) {
       },
       annotations: { readOnlyHint: false },
       async handler(args) {
-        const { beingId, username, spaceId, rootId, summonId, sessionId } = args;
+        const { beingId, username, spaceId, rootId, stampId, sessionId } = args;
         const revisionReason = typeof args.revisionReason === "string" ? args.revisionReason.trim() : "";
         if (!revisionReason) return text("governing-revise-plan: revisionReason is required.");
         if (revisionReason.length > REASON_CAP) {
@@ -1137,7 +1137,7 @@ export default function getRulerTools(core) {
         const planSpace = await ensurePlanAtScope({
           scopeSpaceId: String(ruler._id),
           beingId,
-          summonId,
+          stampId,
           sessionId,
           core: _core,
         });
@@ -1192,7 +1192,7 @@ export default function getRulerTools(core) {
 
         const { randomUUID } = await import("crypto");
         const correlation = randomUUID();
-        const rootCorrelation = args.rootSummonId || summonId || correlation;
+        const rootCorrelation = args.rootStampId || stampId || correlation;
         const message = {
           from:            rulerStance,
           content:         briefing,
@@ -1203,8 +1203,8 @@ export default function getRulerTools(core) {
           sentAt:          new Date().toISOString(),
         };
 
-        const { appendToInbox } = await import("../../seed/factory/inbox.js");
-        const { attachHandoff, wake } = await import("../../seed/factory/scheduler.js");
+        const { appendToInbox } = await import("../../seed/factory/intake/inbox.js");
+        const { attachHandoff, wake } = await import("../../seed/factory/intake/scheduler.js");
         const { hooks } = await import("../../seed/system/hooks.js");
         const startMs = Date.now();
         try {
@@ -1234,7 +1234,7 @@ export default function getRulerTools(core) {
                 exitText:        responseEntry?.content || null,
                 durationMs:      Date.now() - startMs,
                 error:           null,
-                parentSummonId:  summonId || null,
+                parentStampId:  stampId || null,
                 parentSessionId: sessionId || null,
               });
             } catch (err) {
@@ -1255,7 +1255,7 @@ export default function getRulerTools(core) {
                 exitText:        null,
                 durationMs:      Date.now() - startMs,
                 error:           err?.message || String(err),
-                parentSummonId:  summonId || null,
+                parentStampId:  stampId || null,
                 parentSessionId: sessionId || null,
               });
             } catch (hookErr) {
@@ -1326,7 +1326,7 @@ export default function getRulerTools(core) {
       schema: {},
       annotations: { readOnlyHint: false },
       async handler(args) {
-        const { beingId, username, spaceId, rootId, summonId, sessionId } = args;
+        const { beingId, username, spaceId, rootId, stampId, sessionId } = args;
         if (!beingId) return text("governing-dispatch-execution: missing beingId; substrate bug.");
 
         const ruler = await resolveRulerScope(spaceId);
@@ -1457,11 +1457,11 @@ export default function getRulerTools(core) {
         // is automatic via the parent-walk substrate reads; no
         // explicit pass needed.
         const { promoteToRuler, PROMOTED_FROM } = await import("./state/role.js");
-        const { appendToInbox } = await import("../../seed/factory/inbox.js");
-        const { wake } = await import("../../seed/factory/scheduler.js");
+        const { appendToInbox } = await import("../../seed/factory/intake/inbox.js");
+        const { wake } = await import("../../seed/factory/intake/scheduler.js");
         const { writeLineage } = await import("./state/lineage.js");
         const { randomUUID } = await import("crypto");
-        const rootCorrelation = args.rootSummonId || summonId || `${spawnId}-root`;
+        const rootCorrelation = args.rootStampId || stampId || `${spawnId}-root`;
 
         const dispatched = [];
         const failures = [];
@@ -1563,7 +1563,7 @@ export default function getRulerTools(core) {
             rootId: rootId || null,
             beingId: beingId || null,
             username: username || null,
-            parentSummonId: summonId || null,
+            parentStampId: stampId || null,
             parentSessionId: sessionId || null,
             source: "ruler-dispatch-execution",
             dispatchSummary: `dispatched ${dispatched.length}/${steps.length} sub-Rulers`,
@@ -1897,7 +1897,7 @@ export default function getRulerTools(core) {
       },
       annotations: { readOnlyHint: false },
       async handler(args) {
-        const { beingId, username, spaceId, rootId, summonId, sessionId } = args;
+        const { beingId, username, spaceId, rootId, stampId, sessionId } = args;
         const reason = typeof args.reason === "string" ? args.reason.trim() : "";
         if (!reason) return text("governing-resume-execution: reason is required.");
         if (!beingId) return text("governing-resume-execution: missing beingId; substrate bug.");
@@ -1971,7 +1971,7 @@ export default function getRulerTools(core) {
         const executionSpace = await ensureExecutionNode({
           scopeSpaceId: String(ruler._id),
           beingId,
-          summonId,
+          stampId,
           sessionId,
           core: _core,
         });
@@ -2014,7 +2014,7 @@ export default function getRulerTools(core) {
 
         const { randomUUID } = await import("crypto");
         const correlation = randomUUID();
-        const rootCorrelation = args.rootSummonId || summonId || correlation;
+        const rootCorrelation = args.rootStampId || stampId || correlation;
         const message = {
           from:            rulerStance,
           content:         `Wakeup: resume-requested\n\nReason: ${reason}\n\n` +
@@ -2026,8 +2026,8 @@ export default function getRulerTools(core) {
           sentAt:          new Date().toISOString(),
         };
 
-        const { appendToInbox } = await import("../../seed/factory/inbox.js");
-        const { attachHandoff, wake } = await import("../../seed/factory/scheduler.js");
+        const { appendToInbox } = await import("../../seed/factory/intake/inbox.js");
+        const { attachHandoff, wake } = await import("../../seed/factory/intake/scheduler.js");
         const { hooks } = await import("../../seed/system/hooks.js");
         const startMs = Date.now();
         try {
@@ -2058,7 +2058,7 @@ export default function getRulerTools(core) {
                 exitText:        responseEntry?.content || null,
                 durationMs:      Date.now() - startMs,
                 error:           null,
-                parentSummonId:  summonId || null,
+                parentStampId:  stampId || null,
                 parentSessionId: sessionId || null,
               });
             } catch (err) {
@@ -2080,7 +2080,7 @@ export default function getRulerTools(core) {
                 exitText:        null,
                 durationMs:      Date.now() - startMs,
                 error:           err?.message || String(err),
-                parentSummonId:  summonId || null,
+                parentStampId:  stampId || null,
                 parentSessionId: sessionId || null,
               });
             } catch (hookErr) {

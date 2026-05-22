@@ -61,7 +61,7 @@ export async function init(core) {
   // The loader auto-namespaces: declare "log-meal" here, callers
   // invoke `core.do(target, "my-extension:log-meal", { ... })`.
   // Every op handler receives { target, params, identity, scaffold }
-  // and runs through the Did audit unless `skipAudit: true`.
+  // and runs through the Fact stamp unless `skipAudit: true`.
   // ───────────────────────────────────────────────────────────────
   //
   // core.do.registerOperation("log-meal", {

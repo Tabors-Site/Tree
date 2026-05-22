@@ -7,7 +7,7 @@ import path from "path";
 import crypto from "crypto";
 import { fileURLToPath, pathToFileURL } from "url";
 import { buildCoreServices } from "../seed/services.js";
-import { setExtensionToolResolver } from "../seed/factory/tools.js";
+import { setExtensionToolResolver } from "../seed/factory/voices/llm/tools.js";
 import { hooks } from "../seed/system/hooks.js";
 import { getToolOwner } from "../seed/place/space/extensionScope.js";
 import log from "../seed/system/log.js";
@@ -40,14 +40,22 @@ function withExtensionTimeout(router, extName) {
       if (!done && !res.headersSent) {
         done = true;
         res.removeListener("finish", cleanup);
-        log.warn("Loader", `Extension router "${extName}" timed out on ${req.method} ${req.path}, falling through`);
+        log.warn(
+          "Loader",
+          `Extension router "${extName}" timed out on ${req.method} ${req.path}, falling through`,
+        );
         next();
       } else if (!done) {
         // Headers already sent but response not finished. Close the partial response.
         done = true;
         res.removeListener("finish", cleanup);
-        log.warn("Loader", `Extension router "${extName}" timed out mid-stream on ${req.method} ${req.path}, closing response`);
-        try { res.end(); } catch {}
+        log.warn(
+          "Loader",
+          `Extension router "${extName}" timed out mid-stream on ${req.method} ${req.path}, closing response`,
+        );
+        try {
+          res.end();
+        } catch {}
       }
     }, EXT_ROUTE_TIMEOUT_MS);
 
@@ -62,7 +70,11 @@ function withExtensionTimeout(router, extName) {
       });
     } catch (err) {
       cleanup();
-      log.error("Loader", `Extension router "${extName}" threw on ${req.method} ${req.path}:`, err.message);
+      log.error(
+        "Loader",
+        `Extension router "${extName}" threw on ${req.method} ${req.path}:`,
+        err.message,
+      );
       next();
     }
   };
@@ -78,7 +90,11 @@ let _profileFilter = null;
 try {
   const profilePath = path.join(__dirname, ".treeos-profile");
   if (fs.existsSync(profilePath)) {
-    const names = fs.readFileSync(profilePath, "utf8").split("\n").map(s => s.trim()).filter(Boolean);
+    const names = fs
+      .readFileSync(profilePath, "utf8")
+      .split("\n")
+      .map((s) => s.trim())
+      .filter(Boolean);
     if (names.length > 0) _profileFilter = new Set(names);
   }
 } catch {}
@@ -252,12 +268,16 @@ function needsNpmInstall(extDir, npmDeps) {
 async function runNpmInstall(extDir, npmDeps, extName, opts = {}) {
   const deps = parseNpmDeps(npmDeps);
 
-  const pkgJson = JSON.stringify({
-    name: `treeos-ext-${extName}`,
-    version: "1.0.0",
-    private: true,
-    dependencies: deps,
-  }, null, 2);
+  const pkgJson = JSON.stringify(
+    {
+      name: `treeos-ext-${extName}`,
+      version: "1.0.0",
+      private: true,
+      dependencies: deps,
+    },
+    null,
+    2,
+  );
 
   fs.writeFileSync(path.join(extDir, "package.json"), pkgJson, "utf8");
 
@@ -276,9 +296,14 @@ async function runNpmInstall(extDir, npmDeps, extName, opts = {}) {
       timeout,
       shell: true,
     });
-    log.verbose("Extensions", `${extName}: npm install complete (${npmDeps.length} packages)`);
+    log.verbose(
+      "Extensions",
+      `${extName}: npm install complete (${npmDeps.length} packages)`,
+    );
   } catch (err) {
-    const stderr = err.stderr ? err.stderr.toString().slice(0, 500) : err.message;
+    const stderr = err.stderr
+      ? err.stderr.toString().slice(0, 500)
+      : err.message;
     throw new Error(`npm install failed: ${stderr}`);
   }
 }
@@ -287,11 +312,11 @@ async function runNpmInstall(extDir, npmDeps, extName, opts = {}) {
 // State
 // ---------------------------------------------------------------------------
 
-const loaded = new Map();       // name -> { manifest, instance }
-let coreServices = null;        // the assembled core bundle
-const _bootSkipped = [];        // [{ name, reason }] extensions that failed to load
-const modeToolExtensions = [];  // [{ modeKey, toolNames }] from extensions
-const registeredJobs = [];      // [{ name, start, stop }] from extensions
+const loaded = new Map(); // name -> { manifest, instance }
+let coreServices = null; // the assembled core bundle
+const _bootSkipped = []; // [{ name, reason }] extensions that failed to load
+const modeToolExtensions = []; // [{ modeKey, toolNames }] from extensions
+const registeredJobs = []; // [{ name, start, stop }] from extensions
 
 // ---------------------------------------------------------------------------
 // Configuration: enable/disable extensions
@@ -303,7 +328,9 @@ const registeredJobs = [];      // [{ name, start, stop }] from extensions
  */
 function getDisabledExtensions(configFn) {
   const fromEnv = (process.env.DISABLED_EXTENSIONS || "")
-    .split(",").map((s) => s.trim().toLowerCase()).filter(Boolean);
+    .split(",")
+    .map((s) => s.trim().toLowerCase())
+    .filter(Boolean);
 
   // Read from local file (persisted by disable/enable endpoints)
   const fromFile = readDisabledFile();
@@ -327,9 +354,7 @@ function getDisabledExtensions(configFn) {
 // Derived from buildCoreServices() at load time. Set by loadExtensions().
 let AVAILABLE_SERVICES = new Set();
 
-const AVAILABLE_MODELS = new Set([
-  "Being", "Space", "Did", "Matter",
-]);
+const AVAILABLE_MODELS = new Set(["Being", "Space", "Fact", "Matter"]);
 
 function validateNeeds(manifest, core) {
   const missing = [];
@@ -358,8 +383,13 @@ function validateNeeds(manifest, core) {
         missing.push(`extension:${depName}`);
       } else if (constraint) {
         const depManifest = loaded.get(depName)?.manifest;
-        if (depManifest?.version && !semverSatisfies(depManifest.version, constraint)) {
-          missing.push(`extension:${depName} (need ${constraint}, have ${depManifest.version})`);
+        if (
+          depManifest?.version &&
+          !semverSatisfies(depManifest.version, constraint)
+        ) {
+          missing.push(
+            `extension:${depName} (need ${constraint}, have ${depManifest.version})`,
+          );
         }
       }
     }
@@ -423,12 +453,17 @@ function resolveExtensionEnv(manifest) {
 
     // Required but missing
     if (decl.required !== false) {
-      missing.push(`missing env ${decl.key}${decl.description ? ` (${decl.description})` : ""}`);
+      missing.push(
+        `missing env ${decl.key}${decl.description ? ` (${decl.description})` : ""}`,
+      );
     }
   }
 
   if (generated.length > 0) {
-    log.verbose("Extensions", `${manifest.name}: auto-generated ${generated.join(", ")}`);
+    log.verbose(
+      "Extensions",
+      `${manifest.name}: auto-generated ${generated.join(", ")}`,
+    );
   }
 
   return missing.length > 0 ? { ok: false, missing } : { ok: true };
@@ -541,7 +576,10 @@ function buildScopedCore(manifest, fullCore) {
   //
   // The verb function itself (`core.do(...)`) is passed through; only
   // the registerOperation method gets scoped.
-  if (typeof scoped.do === "function" && typeof scoped.do.registerOperation === "function") {
+  if (
+    typeof scoped.do === "function" &&
+    typeof scoped.do.registerOperation === "function"
+  ) {
     const extName = manifest.name;
     const origDo = scoped.do;
     const origRegister = scoped.do.registerOperation;
@@ -556,18 +594,22 @@ function buildScopedCore(manifest, fullCore) {
         if (prefix !== extName) {
           throw new Error(
             `registerOperation("${name}"): extension "${extName}" cannot register under prefix "${prefix}". ` +
-            `Use the bare name ("${name.split(":").slice(1).join(":")}") — namespacing is automatic.`,
+              `Use the bare name ("${name.split(":").slice(1).join(":")}") — namespacing is automatic.`,
           );
         }
         fullName = name;
       } else {
         fullName = `${extName}:${name}`;
       }
-      return origRegister(fullName, { ...(spec || {}), ownerExtension: extName });
+      return origRegister(fullName, {
+        ...(spec || {}),
+        ownerExtension: extName,
+      });
     };
     // Forward the rest of the registry surface unchanged.
     scopedDo.unregisterOperation = origDo.unregisterOperation;
-    scopedDo.unregisterOperationsFromExtension = origDo.unregisterOperationsFromExtension;
+    scopedDo.unregisterOperationsFromExtension =
+      origDo.unregisterOperationsFromExtension;
     scopedDo.getOperation = origDo.getOperation;
     scopedDo.listOperations = origDo.listOperations;
     scoped.do = scopedDo;
@@ -604,7 +646,7 @@ function buildScopedCore(manifest, fullCore) {
         if (prefix !== extName) {
           throw new Error(
             `emitToBeing("${event}"): extension "${extName}" cannot emit under prefix "${prefix}". ` +
-            `Use the bare name ("${event.split(":").slice(1).join(":")}") — namespacing is automatic.`,
+              `Use the bare name ("${event.split(":").slice(1).join(":")}") — namespacing is automatic.`,
           );
         }
         return event;
@@ -614,8 +656,10 @@ function buildScopedCore(manifest, fullCore) {
     const wsRaw = scoped.websocket;
     scoped.websocket = {
       ...wsRaw,
-      emitToBeing:     (beingId, event, data) => wsRaw.emitToBeing(beingId, namespaceEvent(event), data),
-      emitToBeingRoom: (beingId, event, data) => wsRaw.emitToBeingRoom(beingId, namespaceEvent(event), data),
+      emitToBeing: (beingId, event, data) =>
+        wsRaw.emitToBeing(beingId, namespaceEvent(event), data),
+      emitToBeingRoom: (beingId, event, data) =>
+        wsRaw.emitToBeingRoom(beingId, namespaceEvent(event), data),
     };
   }
 
@@ -629,17 +673,19 @@ function buildScopedCore(manifest, fullCore) {
   if (scoped.qualities) {
     const extName = manifest.name;
     const wrapWrites = (primitive) => {
-      const origSet   = primitive.setQuality;
+      const origSet = primitive.setQuality;
       const origMerge = primitive.mergeQuality;
       return {
         ...primitive,
-        setQuality:   (doc, ns, data)    => origSet(doc, ns, data, { callerExtName: extName }),
-        mergeQuality: (doc, ns, partial) => origMerge(doc, ns, partial, { callerExtName: extName }),
+        setQuality: (doc, ns, data) =>
+          origSet(doc, ns, data, { callerExtName: extName }),
+        mergeQuality: (doc, ns, partial) =>
+          origMerge(doc, ns, partial, { callerExtName: extName }),
       };
     };
     scoped.qualities = {
-      being:  scoped.qualities.being,
-      space:  wrapWrites(scoped.qualities.space),
+      being: scoped.qualities.being,
+      space: wrapWrites(scoped.qualities.space),
       matter: wrapWrites(scoped.qualities.matter),
     };
   }
@@ -648,7 +694,11 @@ function buildScopedCore(manifest, fullCore) {
   // core.llm, etc. But allow adding new properties (core.energy = {...})
   // which is the pattern for extension-provided services.
   for (const key of Object.keys(scoped)) {
-    if (scoped[key] && typeof scoped[key] === "object" && !Array.isArray(scoped[key])) {
+    if (
+      scoped[key] &&
+      typeof scoped[key] === "object" &&
+      !Array.isArray(scoped[key])
+    ) {
       Object.freeze(scoped[key]);
     }
   }
@@ -688,7 +738,10 @@ function topologicalSort(manifests) {
         const depItem = byName.get(depName);
         if (!depItem) continue;
         // Don't visit if it requires us (circular would invert required ordering)
-        const depNeeds = depItem.manifest.needs?.extensions?.map(d => parseDepString(d).name) || [];
+        const depNeeds =
+          depItem.manifest.needs?.extensions?.map(
+            (d) => parseDepString(d).name,
+          ) || [];
         if (depNeeds.includes(name)) continue;
         visit(depItem);
       }
@@ -730,7 +783,9 @@ export async function loadExtensions(app, mcpServer, opts = {}) {
 
   // Derive available services from what buildCoreServices actually produced.
   // No hardcoded list. If services.js adds a new service, it's automatically available.
-  AVAILABLE_SERVICES = new Set(Object.keys(coreServices).filter(k => k !== "models"));
+  AVAILABLE_SERVICES = new Set(
+    Object.keys(coreServices).filter((k) => k !== "models"),
+  );
 
   // Discover manifests
   const manifests = await discoverManifests();
@@ -744,7 +799,10 @@ export async function loadExtensions(app, mcpServer, opts = {}) {
   const disabled = getDisabledExtensions(opts.getConfigValue);
   const enabled = manifests.filter(({ manifest }) => {
     if (disabled.has(manifest.name)) {
-      log.verbose("Extensions", `Disabled: ${manifest.name} (DISABLED_EXTENSIONS)`);
+      log.verbose(
+        "Extensions",
+        `Disabled: ${manifest.name} (DISABLED_EXTENSIONS)`,
+      );
       return false;
     }
     return true;
@@ -752,7 +810,10 @@ export async function loadExtensions(app, mcpServer, opts = {}) {
 
   // Sort by dependencies (proper topological sort)
   const sorted = topologicalSort(enabled);
-  log.debug("Extensions", `Load order: ${sorted.map(s => s.manifest.name).join(", ")}`);
+  log.debug(
+    "Extensions",
+    `Load order: ${sorted.map((s) => s.manifest.name).join(", ")}`,
+  );
 
   // Load each extension
   for (let _si = 0; _si < sorted.length; _si++) {
@@ -761,9 +822,13 @@ export async function loadExtensions(app, mcpServer, opts = {}) {
       // Validate required dependencies
       const missing = validateNeeds(manifest, coreServices);
       if (missing.length > 0) {
-        log.debug("Extensions", `[${_si}/${sorted.length}] ${manifest.name} SKIP (missing: ${missing.join(", ")}). loaded: ${[...loaded.keys()].join(", ")}`);
-        log.warn("Extensions",
-          `Skipping "${manifest.name}": missing required deps: ${missing.join(", ")}`
+        log.debug(
+          "Extensions",
+          `[${_si}/${sorted.length}] ${manifest.name} SKIP (missing: ${missing.join(", ")}). loaded: ${[...loaded.keys()].join(", ")}`,
+        );
+        log.warn(
+          "Extensions",
+          `Skipping "${manifest.name}": missing required deps: ${missing.join(", ")}`,
         );
         _bootSkipped.push({ name: manifest.name, reason: "missing deps" });
         continue;
@@ -773,8 +838,9 @@ export async function loadExtensions(app, mcpServer, opts = {}) {
       if (manifest.provides?.env) {
         const envResult = resolveExtensionEnv(manifest);
         if (!envResult.ok) {
-          log.warn("Extensions",
-          `Skipping "${manifest.name}": ${envResult.missing.join(", ")}. Set in .env and restart.`
+          log.warn(
+            "Extensions",
+            `Skipping "${manifest.name}": ${envResult.missing.join(", ")}. Set in .env and restart.`,
           );
           _bootSkipped.push({ name: manifest.name, reason: "missing env" });
           continue;
@@ -784,12 +850,21 @@ export async function loadExtensions(app, mcpServer, opts = {}) {
       // Boot-time npm recovery: if manifest declares npm deps and node_modules is missing
       if (manifest.npm && manifest.npm.length > 0) {
         if (needsNpmInstall(dir, manifest.npm)) {
-          log.warn("Extensions", `"${manifest.name}": npm dependencies missing or outdated, running npm install...`);
+          log.warn(
+            "Extensions",
+            `"${manifest.name}": npm dependencies missing or outdated, running npm install...`,
+          );
           try {
             await runNpmInstall(dir, manifest.npm, manifest.name);
           } catch (npmErr) {
-            log.error("Extensions", `Skipping "${manifest.name}": npm install failed: ${npmErr.message}`);
-            _bootSkipped.push({ name: manifest.name, reason: "npm install failed" });
+            log.error(
+              "Extensions",
+              `Skipping "${manifest.name}": npm install failed: ${npmErr.message}`,
+            );
+            _bootSkipped.push({
+              name: manifest.name,
+              reason: "npm install failed",
+            });
             continue;
           }
         }
@@ -816,48 +891,82 @@ export async function loadExtensions(app, mcpServer, opts = {}) {
         instance = await Promise.race([
           extModule.init(scopedCore),
           new Promise((_, reject) =>
-            setTimeout(() => reject(new Error(`init() timed out after ${INIT_TIMEOUT_MS}ms`)), INIT_TIMEOUT_MS)
+            setTimeout(
+              () =>
+                reject(
+                  new Error(`init() timed out after ${INIT_TIMEOUT_MS}ms`),
+                ),
+              INIT_TIMEOUT_MS,
+            ),
           ),
         ]);
       } catch (initErr) {
         let hint = "";
         // Diagnose common init failures: extension accessing a service it didn't declare
-        if (initErr.message?.includes("Cannot read properties of undefined") ||
-            initErr.message?.includes("is not extensible") ||
-            initErr.message?.includes("Cannot set property")) {
+        if (
+          initErr.message?.includes("Cannot read properties of undefined") ||
+          initErr.message?.includes("is not extensible") ||
+          initErr.message?.includes("Cannot set property")
+        ) {
           const declared = new Set([
             ...(manifest.needs?.services || []),
             ...(manifest.optional?.services || []),
           ]);
-          const missing = [...AVAILABLE_SERVICES].filter(s => !declared.has(s) && coreServices[s]);
+          const missing = [...AVAILABLE_SERVICES].filter(
+            (s) => !declared.has(s) && coreServices[s],
+          );
           if (missing.length > 0) {
             hint = ` Hint: add missing services to manifest needs/optional: ${missing.join(", ")}`;
           }
         }
-        log.error("Extensions", `"${manifest.name}": ${initErr.message}.${hint} Skipped.`);
-        _bootSkipped.push({ name: manifest.name, reason: initErr.message.slice(0, 80) });
+        log.error(
+          "Extensions",
+          `"${manifest.name}": ${initErr.message}.${hint} Skipped.`,
+        );
+        _bootSkipped.push({
+          name: manifest.name,
+          reason: initErr.message.slice(0, 80),
+        });
         continue;
       }
 
       // Validate init() return
       if (!instance || typeof instance !== "object") {
-        log.warn("Extensions", `"${manifest.name}": init() must return an object. Got ${typeof instance}. Skipped.`);
+        log.warn(
+          "Extensions",
+          `"${manifest.name}": init() must return an object. Got ${typeof instance}. Skipped.`,
+        );
         continue;
       }
       if (instance.router && typeof instance.router.use !== "function") {
-        log.warn("Extensions", `"${manifest.name}": router is not a valid Express router. Skipped.`);
+        log.warn(
+          "Extensions",
+          `"${manifest.name}": router is not a valid Express router. Skipped.`,
+        );
         continue;
       }
       if (instance.tools !== undefined && !Array.isArray(instance.tools)) {
-        log.warn("Extensions", `"${manifest.name}": tools must be an array. Skipped.`);
+        log.warn(
+          "Extensions",
+          `"${manifest.name}": tools must be an array. Skipped.`,
+        );
         continue;
       }
       if (instance.jobs !== undefined && !Array.isArray(instance.jobs)) {
-        log.warn("Extensions", `"${manifest.name}": jobs must be an array. Skipped.`);
+        log.warn(
+          "Extensions",
+          `"${manifest.name}": jobs must be an array. Skipped.`,
+        );
         continue;
       }
-      if (instance.middleware !== undefined && !Array.isArray(instance.middleware)) {
-        log.warn("Extensions", `"${manifest.name}": middleware must be an array. Skipped.`);
+      if (
+        instance.middleware !== undefined &&
+        !Array.isArray(instance.middleware)
+      ) {
+        log.warn(
+          "Extensions",
+          `"${manifest.name}": middleware must be an array. Skipped.`,
+        );
         continue;
       }
 
@@ -865,7 +974,10 @@ export async function loadExtensions(app, mcpServer, opts = {}) {
       if (instance.middleware) {
         for (const mw of instance.middleware) {
           if (!mw.path || typeof mw.handler !== "function") {
-            log.warn("Extensions", `"${manifest.name}": middleware entry missing path or handler. Skipped.`);
+            log.warn(
+              "Extensions",
+              `"${manifest.name}": middleware entry missing path or handler. Skipped.`,
+            );
             continue;
           }
           app.use(mw.path, mw.handler);
@@ -889,7 +1001,10 @@ export async function loadExtensions(app, mcpServer, opts = {}) {
         for (const rpath of routePaths) {
           if (routeOwnership.has(rpath)) {
             const owner = routeOwnership.get(rpath);
-            log.error("Extensions", `Route collision: "${rpath}" claimed by both "${owner}" and "${manifest.name}". Skipping "${manifest.name}" routes.`);
+            log.error(
+              "Extensions",
+              `Route collision: "${rpath}" claimed by both "${owner}" and "${manifest.name}". Skipping "${manifest.name}" routes.`,
+            );
             hasCollision = true;
             break;
           }
@@ -904,28 +1019,39 @@ export async function loadExtensions(app, mcpServer, opts = {}) {
       }
 
       // Wire page routes (mounted at / for HTML pages like /login, /register)
-      if (instance.pageRouter && typeof instance.pageRouter.use === "function") {
+      if (
+        instance.pageRouter &&
+        typeof instance.pageRouter.use === "function"
+      ) {
         app.use("/", withExtensionTimeout(instance.pageRouter, manifest.name));
       }
 
       // Wire raw-body webhook (e.g. Stripe). Extension returns rawWebhook from init().
       // registerRawWebhook is passed in opts to avoid circular ESM import of server.js.
-      if (instance.rawWebhook && typeof instance.rawWebhook === "function" && opts.registerRawWebhook) {
+      if (
+        instance.rawWebhook &&
+        typeof instance.rawWebhook === "function" &&
+        opts.registerRawWebhook
+      ) {
         opts.registerRawWebhook(instance.rawWebhook);
         log.verbose("Extensions", `${manifest.name}: raw webhook registered`);
       }
 
-      // Wire MCP tools and register in the tool resolver. Same path
-      // the kernel uses for its own tools — see registerToolBundle in
-      // seed/factory/tools.js.
-      if (instance.tools && mcpServer) {
-        const { registerToolBundle } = await import("../seed/factory/tools.js");
-        await registerToolBundle(instance.tools, { ownerExt: manifest.name, mcpServer });
+      // Register tools into the kernel tool registry. Same path the
+      // kernel uses for its own tools — see registerToolBundle in
+      // seed/factory/voices/llm/tools.js. The LLM voice dispatches
+      // verb-tagged tool calls directly through getToolHandler.
+      if (instance.tools) {
+        const { registerToolBundle } =
+          await import("../seed/factory/voices/llm/tools.js");
+        await registerToolBundle(instance.tools, { ownerExt: manifest.name });
       }
 
       // Register models from manifest (add to core.models so other extensions can use them)
       if (manifest.provides?.models) {
-        for (const [modelName, modelPath] of Object.entries(manifest.provides.models)) {
+        for (const [modelName, modelPath] of Object.entries(
+          manifest.provides.models,
+        )) {
           if (!coreServices.models[modelName]) {
             try {
               const resolved = path.resolve(dir, modelPath);
@@ -933,18 +1059,30 @@ export async function loadExtensions(app, mcpServer, opts = {}) {
               coreServices.models[modelName] = mod.default || mod;
               AVAILABLE_MODELS.add(modelName);
             } catch (err) {
-              log.warn("Extensions", `${manifest.name}: failed to load model ${modelName}:`, err.message);
+              log.warn(
+                "Extensions",
+                `${manifest.name}: failed to load model ${modelName}:`,
+                err.message,
+              );
             }
           }
         }
       }
 
       // Register energy actions from manifest
-      if (manifest.provides?.energyActions && coreServices.energy?.registerAction) {
-        for (const [action, config] of Object.entries(manifest.provides.energyActions)) {
+      if (
+        manifest.provides?.energyActions &&
+        coreServices.energy?.registerAction
+      ) {
+        for (const [action, config] of Object.entries(
+          manifest.provides.energyActions,
+        )) {
           if (typeof config === "object" && config.costFn) {
             coreServices.energy.registerAction(action, config.costFn);
-          } else if (typeof config === "object" && typeof config.cost === "number") {
+          } else if (
+            typeof config === "object" &&
+            typeof config.cost === "number"
+          ) {
             coreServices.energy.registerAction(action, () => config.cost);
           }
         }
@@ -952,8 +1090,11 @@ export async function loadExtensions(app, mcpServer, opts = {}) {
 
       // Register session types
       if (manifest.provides?.sessionTypes) {
-        const { registerSessionType } = await import("../seed/factory/session.js");
-        for (const [key, value] of Object.entries(manifest.provides.sessionTypes)) {
+        const { registerSessionType } =
+          await import("../seed/factory/intake/session.js");
+        for (const [key, value] of Object.entries(
+          manifest.provides.sessionTypes,
+        )) {
           registerSessionType(key, value);
         }
       }
@@ -984,16 +1125,24 @@ export async function loadExtensions(app, mcpServer, opts = {}) {
           }
         }
         // Path 2: declared in manifest with relative module paths
-        if (manifest.provides?.seeds && typeof manifest.provides.seeds === "object") {
-          for (const [localName, relPath] of Object.entries(manifest.provides.seeds)) {
+        if (
+          manifest.provides?.seeds &&
+          typeof manifest.provides.seeds === "object"
+        ) {
+          for (const [localName, relPath] of Object.entries(
+            manifest.provides.seeds,
+          )) {
             try {
               const resolved = path.resolve(dir, relPath);
               const mod = await import(toImportURL(resolved));
               const recipe = mod.default || mod;
-              if (recipe) registerSeed(namespace(localName), recipe, manifest.name);
+              if (recipe)
+                registerSeed(namespace(localName), recipe, manifest.name);
             } catch (err) {
-              log.warn("Loader",
-                `Failed to load seed "${localName}" from "${relPath}" in ${manifest.name}: ${err.message}`);
+              log.warn(
+                "Loader",
+                `Failed to load seed "${localName}" from "${relPath}" in ${manifest.name}: ${err.message}`,
+              );
             }
           }
         }
@@ -1013,10 +1162,17 @@ export async function loadExtensions(app, mcpServer, opts = {}) {
       // Idempotent — re-registering replaces this extension's prior rules.
       if (manifest.provides?.defaultPermissions) {
         try {
-          const { registerDefaultPermissions } = await import("../seed/ibp/authorize.js");
-          registerDefaultPermissions(manifest.name, manifest.provides.defaultPermissions);
+          const { registerDefaultPermissions } =
+            await import("../seed/ibp/authorize.js");
+          registerDefaultPermissions(
+            manifest.name,
+            manifest.provides.defaultPermissions,
+          );
         } catch (err) {
-          log.warn("Extensions", `default-permissions registration failed for "${manifest.name}": ${err.message}`);
+          log.warn(
+            "Extensions",
+            `default-permissions registration failed for "${manifest.name}": ${err.message}`,
+          );
         }
       }
 
@@ -1028,12 +1184,17 @@ export async function loadExtensions(app, mcpServer, opts = {}) {
       if (instance.router) parts.push("routes");
       if (instance.tools?.length) parts.push(`${instance.tools.length} tools`);
       if (instance.jobs?.length) parts.push(`${instance.jobs.length} jobs`);
-      if (instance.modeTools?.length) parts.push(`${instance.modeTools.length} mode injections`);
-      if (instance.middleware?.length) parts.push(`${instance.middleware.length} middleware`);
+      if (instance.modeTools?.length)
+        parts.push(`${instance.modeTools.length} mode injections`);
+      if (instance.middleware?.length)
+        parts.push(`${instance.middleware.length} middleware`);
       log.verbose("Extensions", `Loaded: ${parts.join(" | ")}`);
-
     } catch (err) {
-      log.error("Extensions", `Failed to load "${manifest.name}":`, err.message);
+      log.error(
+        "Extensions",
+        `Failed to load "${manifest.name}":`,
+        err.message,
+      );
     }
   }
 
@@ -1044,7 +1205,8 @@ export async function loadExtensions(app, mcpServer, opts = {}) {
   // includes the installed extension list (used by `.well-known/treeos-portal`
   // discovery + future cross-place introspection).
   try {
-    const { setExtensionNamesProvider } = await import("../protocols/canopy/identity.js");
+    const { setExtensionNamesProvider } =
+      await import("../protocols/canopy/identity.js");
     setExtensionNamesProvider(getLoadedExtensionNames);
   } catch {}
 
@@ -1074,14 +1236,32 @@ export async function loadExtensions(app, mcpServer, opts = {}) {
 // initialize. Kept here so we don't import across the seed boundary for
 // one list.
 const CORE_HOOKS_VALID = new Set([
-  "beforeMatter", "afterMatter", "beforeDid",
-  "beforeSpaceCreate", "afterSpaceCreate", "beforeSpaceDelete",
-  "enrichContext", "onCascade", "onDocumentPressure",
-  "beforeLLMCall", "afterLLMCall", "beforeToolCall", "afterToolCall",
-  "beforeResponse", "beforeRegister", "afterRegister",
-  "afterSessionCreate", "afterSessionEnd",
-  "afterSpaceMove", "afterQualityWrite", "afterScopeChange", "afterOwnershipChange", "afterBoot",
-  "onTreeTripped", "onTreeRevived", "onCompress",
+  "beforeMatter",
+  "afterMatter",
+  "beforeFact",
+  "beforeSpaceCreate",
+  "afterSpaceCreate",
+  "beforeSpaceDelete",
+  "enrichContext",
+  "onCascade",
+  "onDocumentPressure",
+  "beforeLLMCall",
+  "afterLLMCall",
+  "beforeToolCall",
+  "afterToolCall",
+  "beforeResponse",
+  "beforeRegister",
+  "afterRegister",
+  "afterSessionCreate",
+  "afterSessionEnd",
+  "afterSpaceMove",
+  "afterQualityWrite",
+  "afterScopeChange",
+  "afterOwnershipChange",
+  "afterBoot",
+  "onTreeTripped",
+  "onTreeRevived",
+  "onCompress",
 ]);
 
 function validateHookListens(loadedMap) {
@@ -1110,15 +1290,17 @@ function validateHookListens(loadedMap) {
       // Invented / typo. Find the nearest valid name for a helpful hint.
       const suggestion = nearestHookName(h, knownValid);
       if (suggestion) {
-        log.warn("Extensions",
+        log.warn(
+          "Extensions",
           `"${extName}" listens to "${h}" but nothing fires it. ` +
-          `Did you mean "${suggestion}"? No handler will run.`,
+            `Did you mean "${suggestion}"? No handler will run.`,
         );
       } else {
-        log.warn("Extensions",
+        log.warn(
+          "Extensions",
           `"${extName}" listens to "${h}" but nothing fires it. ` +
-          `Not a core hook and no extension declares it in fires. ` +
-          `No handler will run.`,
+            `Not a core hook and no extension declares it in fires. ` +
+            `No handler will run.`,
         );
       }
     }
@@ -1178,8 +1360,12 @@ function validateManifest(manifest, dirName) {
   if (!manifest.name || typeof manifest.name !== "string") {
     errors.push(`${dirName}: missing or invalid "name"`);
   } else if (!/^[a-z][a-z0-9-]*$/.test(manifest.name)) {
-    errors.push(`${dirName}: name "${manifest.name}" must be lowercase alphanumeric with hyphens`);
-  } else if (["node_modules", ".disabled", "_template", "loader"].includes(manifest.name)) {
+    errors.push(
+      `${dirName}: name "${manifest.name}" must be lowercase alphanumeric with hyphens`,
+    );
+  } else if (
+    ["node_modules", ".disabled", "_template", "loader"].includes(manifest.name)
+  ) {
     errors.push(`${dirName}: name "${manifest.name}" is reserved`);
   }
   if (!manifest.version || typeof manifest.version !== "string") {
@@ -1196,7 +1382,10 @@ function validateManifest(manifest, dirName) {
     if (manifest.needs.models && !Array.isArray(manifest.needs.models)) {
       errors.push(`${dirName}: needs.models must be an array`);
     }
-    if (manifest.needs.extensions && !Array.isArray(manifest.needs.extensions)) {
+    if (
+      manifest.needs.extensions &&
+      !Array.isArray(manifest.needs.extensions)
+    ) {
       errors.push(`${dirName}: needs.extensions must be an array`);
     }
   }
@@ -1207,15 +1396,23 @@ function validateManifest(manifest, dirName) {
     } else {
       for (const cmd of manifest.provides.cli) {
         if (!cmd.command || !cmd.description || !cmd.method || !cmd.endpoint) {
-          errors.push(`${dirName}: CLI command missing required fields (command, description, method, endpoint)`);
+          errors.push(
+            `${dirName}: CLI command missing required fields (command, description, method, endpoint)`,
+          );
           break;
         }
       }
     }
   }
   // Validate provides.routes
-  if (manifest.provides?.routes !== undefined && manifest.provides.routes !== false && typeof manifest.provides.routes !== "string") {
-    errors.push(`${dirName}: provides.routes must be false or a file path string`);
+  if (
+    manifest.provides?.routes !== undefined &&
+    manifest.provides.routes !== false &&
+    typeof manifest.provides.routes !== "string"
+  ) {
+    errors.push(
+      `${dirName}: provides.routes must be false or a file path string`,
+    );
   }
   // Validate provides.env
   if (manifest.provides?.env) {
@@ -1271,8 +1468,12 @@ async function discoverManifests() {
 
           const errors = validateManifest(manifest, entry.name);
           if (errors.length > 0) {
-            for (const err of errors) log.error("Extensions", `Manifest validation: ${err}`);
-            log.warn("Extensions", `Skipping "${entry.name}" due to invalid manifest`);
+            for (const err of errors)
+              log.error("Extensions", `Manifest validation: ${err}`);
+            log.warn(
+              "Extensions",
+              `Skipping "${entry.name}" due to invalid manifest`,
+            );
             continue;
           }
 
@@ -1286,7 +1487,9 @@ async function discoverManifests() {
         const name = entry.name.replace(".manifest.js", "");
         const entryPath = path.join(__dirname, `${name}.js`);
 
-        const { default: manifest } = await import(path.join(__dirname, entry.name));
+        const { default: manifest } = await import(
+          path.join(__dirname, entry.name)
+        );
 
         if (fs.existsSync(entryPath)) {
           results.push({
@@ -1295,11 +1498,18 @@ async function discoverManifests() {
             entryPath,
           });
         } else {
-          log.warn("Extensions", `Manifest "${entry.name}" found but no entry point "${name}.js"`);
+          log.warn(
+            "Extensions",
+            `Manifest "${entry.name}" found but no entry point "${name}.js"`,
+          );
         }
       }
     } catch (err) {
-      log.error("Extensions", `Error reading manifest for "${entry.name}":`, err.message);
+      log.error(
+        "Extensions",
+        `Error reading manifest for "${entry.name}":`,
+        err.message,
+      );
     }
   }
 
@@ -1347,9 +1557,8 @@ export async function getExtensionAtScope(name, spaceId) {
   const entry = loaded.get(name);
   if (!entry) return null;
   try {
-    const { isExtensionBlockedAtSpace } = await import(
-      "../seed/place/space/extensionScope.js"
-    );
+    const { isExtensionBlockedAtSpace } =
+      await import("../seed/place/space/extensionScope.js");
     const blocked = await isExtensionBlockedAtSpace(name, spaceId);
     if (blocked) return null;
   } catch {
@@ -1399,7 +1608,8 @@ export function getLoadedExtensionNames() {
 export function flattenVocabulary(manifest) {
   const hints = [];
   if (Array.isArray(manifest?.classifierHints)) {
-    for (const h of manifest.classifierHints) if (h instanceof RegExp) hints.push(h);
+    for (const h of manifest.classifierHints)
+      if (h instanceof RegExp) hints.push(h);
   }
   const v = manifest?.vocabulary;
   if (v && typeof v === "object") {
@@ -1410,85 +1620,6 @@ export function flattenVocabulary(manifest) {
     }
   }
   return hints;
-}
-
-/**
- * Get the extension's territory vocabulary split by part of speech.
- * Returns { verbs, nouns, adjectives } as RegExp arrays, or null if none.
- * Legacy classifierHints are bucketed as verbs by default since territory
- * markers are most commonly verb-like action words.
- */
-export function getVocabularyForExtension(extName) {
-  try {
-    const entry = loaded.get(extName);
-    const manifest = entry?.manifest;
-    if (!manifest) return null;
-    const result = { verbs: [], nouns: [], adjectives: [] };
-    const v = manifest?.vocabulary;
-    if (v && typeof v === "object") {
-      if (Array.isArray(v.verbs)) result.verbs.push(...v.verbs.filter(r => r instanceof RegExp));
-      if (Array.isArray(v.nouns)) result.nouns.push(...v.nouns.filter(r => r instanceof RegExp));
-      if (Array.isArray(v.adjectives)) result.adjectives.push(...v.adjectives.filter(r => r instanceof RegExp));
-    }
-    if (Array.isArray(manifest.classifierHints)) {
-      result.verbs.push(...manifest.classifierHints.filter(r => r instanceof RegExp));
-    }
-    // Merge learned vocabulary from sidecar file (auto-promoted by misroute extension)
-    if (entry?.dir) {
-      const learned = readLearnedVocabularyFile(entry.dir);
-      if (learned) {
-        if (Array.isArray(learned.nouns)) result.nouns.push(...learned.nouns);
-        if (Array.isArray(learned.verbs)) result.verbs.push(...learned.verbs);
-        if (Array.isArray(learned.adjectives)) result.adjectives.push(...learned.adjectives);
-      }
-    }
-    if (result.verbs.length === 0 && result.nouns.length === 0 && result.adjectives.length === 0) return null;
-    return result;
-  } catch { return null; }
-}
-
-/**
- * Read an extension's learned vocabulary sidecar file if present.
- *
- * The file lives at `<extensionDir>/vocabulary.learned.json` and is written
- * by the misroute extension when a vocabulary suggestion crosses its
- * promotion threshold. The format is:
- *
- *   {
- *     "$schema": "vocabulary-learned-v1",
- *     "lastUpdated": "2026-04-12T...",
- *     "nouns":      [{ "pattern": "\\b(bill)\\b", "addedAt": "...", "trigger": "5 misroutes from finance" }, ...],
- *     "verbs":      [...],
- *     "adjectives": [...]
- *   }
- *
- * Each entry stores the raw regex source string, not a RegExp instance,
- * because JSON can't serialize RegExp. We compile to RegExp on read.
- *
- * Returns { verbs, nouns, adjectives } as RegExp arrays, or null if missing/invalid.
- */
-function readLearnedVocabularyFile(extDir) {
-  try {
-    const learnedPath = path.join(extDir, "vocabulary.learned.json");
-    if (!fs.existsSync(learnedPath)) return null;
-    const raw = fs.readFileSync(learnedPath, "utf8");
-    const parsed = JSON.parse(raw);
-    if (!parsed || typeof parsed !== "object") return null;
-    const compile = (arr) => {
-      if (!Array.isArray(arr)) return [];
-      const out = [];
-      for (const entry of arr) {
-        if (!entry?.pattern || typeof entry.pattern !== "string") continue;
-        try { out.push(new RegExp(entry.pattern, "i")); } catch {}
-      }
-      return out;
-    };
-    return {
-      nouns: compile(parsed.nouns),
-      verbs: compile(parsed.verbs),
-      adjectives: compile(parsed.adjectives),
-    };
-  } catch { return null; }
 }
 
 /**
@@ -1503,7 +1634,7 @@ export function getBootReport() {
   return {
     loaded: loaded.size,
     skipped: _bootSkipped.length,
-    skippedNames: _bootSkipped.map(s => s.name),
+    skippedNames: _bootSkipped.map((s) => s.name),
     details: _bootSkipped,
   };
 }
@@ -1524,7 +1655,8 @@ export function getBootReport() {
  */
 export async function registerExtensionManagementOps() {
   const { registerOperation } = await import("../seed/ibp/operations.js");
-  const { getPlaceConfigValue, setPlaceConfigValue } = await import("../seed/placeConfig.js");
+  const { getPlaceConfigValue, setPlaceConfigValue } =
+    await import("../seed/placeConfig.js");
 
   const EXT_NAME_RE = /^[a-z0-9-]+$/i;
 
@@ -1541,11 +1673,11 @@ export async function registerExtensionManagementOps() {
       }
       const result = await installExtensionFiles(name, files);
       return {
-        installed:    true,
+        installed: true,
         name,
-        version:      version || manifest?.version || "unknown",
+        version: version || manifest?.version || "unknown",
         filesWritten: result.filesWritten,
-        note:         "Restart the place to load the extension.",
+        note: "Restart the place to load the extension.",
       };
     },
   });
@@ -1560,7 +1692,9 @@ export async function registerExtensionManagementOps() {
       }
       const extDir = path.join(__dirname, name);
       if (!fs.existsSync(extDir)) {
-        throw new Error(`uninstall-extension: extension "${name}" not found on disk`);
+        throw new Error(
+          `uninstall-extension: extension "${name}" not found on disk`,
+        );
       }
       fs.rmSync(extDir, { recursive: true, force: true });
       return { uninstalled: true, name, note: "Restart the place to unload." };
@@ -1624,9 +1758,10 @@ export function getLoadedManifests() {
  */
 export function resolveDomainExtensionAtRoot(rootMetadata) {
   if (!rootMetadata) return null;
-  const meta = rootMetadata instanceof Map
-    ? Object.fromEntries(rootMetadata)
-    : rootMetadata;
+  const meta =
+    rootMetadata instanceof Map
+      ? Object.fromEntries(rootMetadata)
+      : rootMetadata;
   for (const [extName, data] of Object.entries(meta)) {
     if (!data || typeof data !== "object") continue;
     if (data.initialized !== true) continue;
@@ -1675,7 +1810,10 @@ export async function uninstallExtension(name) {
 
   const extDir = path.join(__dirname, name);
 
-  if (!fs.existsSync(extDir) || !fs.existsSync(path.join(extDir, "manifest.js"))) {
+  if (
+    !fs.existsSync(extDir) ||
+    !fs.existsSync(path.join(extDir, "manifest.js"))
+  ) {
     return { found: false };
   }
 
@@ -1695,33 +1833,31 @@ export async function uninstallExtension(name) {
   if (loaded.has(name)) {
     const entry = loaded.get(name);
     entry._unloading = true;
-    await new Promise(r => setTimeout(r, 2000));
+    await new Promise((r) => setTimeout(r, 2000));
     loaded.delete(name);
 
-    // Clean up tool definitions and mode registrations so stale entries
-    // don't linger in the registry after uninstall.
+    // Clean up tool definitions so stale entries don't linger in the
+    // registry after uninstall.
     try {
-      // Remove from MCP replay array and invalidate active sessions
-      const { mcpServerInstance } = await import("../protocols/mcp/server.js");
-      if (mcpServerInstance?.removeToolsByOwner) {
-        mcpServerInstance.removeToolsByOwner(name, getToolOwner);
-      }
-      // Remove from tool definition registry
-      const { unregisterToolsForExtension } = await import("../seed/factory/tools.js");
+      const { unregisterToolsForExtension } =
+        await import("../seed/factory/voices/llm/tools.js");
       unregisterToolsForExtension(name, getToolOwner);
     } catch {}
     try {
-      const { unregisterSeedsFromExtension } = await import("../seed/system/seeds.js");
+      const { unregisterSeedsFromExtension } =
+        await import("../seed/system/seeds.js");
       unregisterSeedsFromExtension(name);
     } catch {}
     try {
-      const { clearToolOwnersForExtension } = await import("../seed/place/space/extensionScope.js");
+      const { clearToolOwnersForExtension } =
+        await import("../seed/place/space/extensionScope.js");
       clearToolOwnersForExtension(name);
     } catch {}
     // Drop this extension's default permission rules from the registry
     // so authorize stops consulting them post-uninstall.
     try {
-      const { unregisterDefaultPermissions } = await import("../seed/ibp/authorize.js");
+      const { unregisterDefaultPermissions } =
+        await import("../seed/ibp/authorize.js");
       unregisterDefaultPermissions(name);
     } catch {}
   }
@@ -1730,7 +1866,8 @@ export async function uninstallExtension(name) {
   // confined. Without this, the confined set still references it and the
   // resolution chain treats a missing extension as blocked at every space.
   try {
-    const { loadConfinedExtensions } = await import("../seed/place/space/extensionScope.js");
+    const { loadConfinedExtensions } =
+      await import("../seed/place/space/extensionScope.js");
     await loadConfinedExtensions();
   } catch {}
 
@@ -1764,7 +1901,10 @@ export async function installExtensionFiles(name, files) {
     for (const file of files) {
       // Safety: resolve to absolute and verify it stays inside the staging directory.
       const filePath = path.resolve(stagingDir, file.path);
-      if (!filePath.startsWith(resolvedStaging + path.sep) && filePath !== resolvedStaging) {
+      if (
+        !filePath.startsWith(resolvedStaging + path.sep) &&
+        filePath !== resolvedStaging
+      ) {
         throw new Error(`Path traversal blocked: ${file.path}`);
       }
 
@@ -1791,7 +1931,9 @@ export async function installExtensionFiles(name, files) {
     fs.renameSync(stagingDir, extDir);
   } catch (err) {
     // Cleanup staging on any failure
-    try { fs.rmSync(stagingDir, { recursive: true, force: true }); } catch {}
+    try {
+      fs.rmSync(stagingDir, { recursive: true, force: true });
+    } catch {}
     throw err;
   }
 
@@ -1799,14 +1941,21 @@ export async function installExtensionFiles(name, files) {
   try {
     const manifestPath = path.join(extDir, "manifest.js");
     if (fs.existsSync(manifestPath)) {
-      const { default: manifest } = await import(toImportURL(manifestPath) + "?t=" + Date.now());
+      const { default: manifest } = await import(
+        toImportURL(manifestPath) + "?t=" + Date.now()
+      );
       if (manifest.npm && manifest.npm.length > 0) {
         await runNpmInstall(extDir, manifest.npm, name);
       }
     }
   } catch (npmErr) {
-    log.error("Extensions", `${name}: npm install failed, rolling back: ${npmErr.message}`);
-    try { fs.rmSync(extDir, { recursive: true, force: true }); } catch {}
+    log.error(
+      "Extensions",
+      `${name}: npm install failed, rolling back: ${npmErr.message}`,
+    );
+    try {
+      fs.rmSync(extDir, { recursive: true, force: true });
+    } catch {}
     throw new Error(`npm install failed for "${name}": ${npmErr.message}`);
   }
 
@@ -1848,7 +1997,11 @@ export async function readExtensionFiles(name) {
 
       if (entry.isDirectory()) {
         readDir(path.join(dir, entry.name), relativePath, depth + 1);
-      } else if (entry.name.endsWith(".js") || entry.name.endsWith(".json") || entry.name.endsWith(".md")) {
+      } else if (
+        entry.name.endsWith(".js") ||
+        entry.name.endsWith(".json") ||
+        entry.name.endsWith(".md")
+      ) {
         const content = fs.readFileSync(path.join(dir, entry.name), "utf8");
         files.push({ path: relativePath, content });
       }
@@ -1869,7 +2022,11 @@ export async function readExtensionFiles(name) {
 async function getHorizonUrl() {
   try {
     const { getPlaceConfigValue } = await import("../seed/placeConfig.js");
-    return getPlaceConfigValue("HORIZON_URL") || process.env.HORIZON_URL || "https://horizon.treeos.ai";
+    return (
+      getPlaceConfigValue("HORIZON_URL") ||
+      process.env.HORIZON_URL ||
+      "https://horizon.treeos.ai"
+    );
   } catch {
     return process.env.HORIZON_URL || "https://horizon.treeos.ai";
   }
@@ -1904,7 +2061,9 @@ async function installFromRepo(name, repoUrl, version) {
   try {
     // Clone the repo (using execFileSync to prevent shell injection)
     const args = ["clone", "--depth", "1"];
-    if (version) { args.push("--branch", version, "--single-branch"); }
+    if (version) {
+      args.push("--branch", version, "--single-branch");
+    }
     args.push(repoUrl, tmpDir);
     execFileSync("git", args, {
       stdio: "pipe",
@@ -1931,14 +2090,23 @@ async function installFromRepo(name, repoUrl, version) {
     // Run npm install if manifest declares npm dependencies
     const manifestPath = path.join(extDir, "manifest.js");
     if (fs.existsSync(manifestPath)) {
-      const { default: manifest } = await import(toImportURL(manifestPath) + "?t=" + Date.now());
+      const { default: manifest } = await import(
+        toImportURL(manifestPath) + "?t=" + Date.now()
+      );
       if (manifest.npm && manifest.npm.length > 0) {
         try {
           await runNpmInstall(extDir, manifest.npm, name);
         } catch (npmErr) {
-          log.error("Extensions", `${name}: npm install failed, rolling back: ${npmErr.message}`);
-          try { fs.rmSync(extDir, { recursive: true, force: true }); } catch {}
-          throw new Error(`npm install failed for "${name}": ${npmErr.message}`);
+          log.error(
+            "Extensions",
+            `${name}: npm install failed, rolling back: ${npmErr.message}`,
+          );
+          try {
+            fs.rmSync(extDir, { recursive: true, force: true });
+          } catch {}
+          throw new Error(
+            `npm install failed for "${name}": ${npmErr.message}`,
+          );
         }
       }
     }
@@ -1954,7 +2122,10 @@ async function installFromRepo(name, repoUrl, version) {
     }
     countFiles(extDir);
 
-    log.info("Extensions", `Installed from git: ${name} (${repoUrl}, ${filesWritten} files)`);
+    log.info(
+      "Extensions",
+      `Installed from git: ${name} (${repoUrl}, ${filesWritten} files)`,
+    );
     return { name, version: version || "latest", filesWritten };
   } catch (err) {
     // Clean up temp directory on failure
@@ -1987,7 +2158,9 @@ export async function installExtension(name, version) {
     : `${horizonUrl}/extensions/${encodeURIComponent(name)}`;
   const metaRes = await fetch(metaUrl);
   if (!metaRes.ok) {
-    const err = await metaRes.json().catch(() => ({ error: `HTTP ${metaRes.status}` }));
+    const err = await metaRes
+      .json()
+      .catch(() => ({ error: `HTTP ${metaRes.status}` }));
     throw new Error(err.error || `Registry error: ${metaRes.status}`);
   }
   const metaData = await metaRes.json();
@@ -1998,8 +2171,11 @@ export async function installExtension(name, version) {
 
   // Fetch full version with files if not included
   if (!ext.files) {
-    const fullRes = await fetch(`${horizonUrl}/extensions/${encodeURIComponent(name)}/${ext.version}`);
-    if (!fullRes.ok) throw new Error("Failed to fetch extension files from registry");
+    const fullRes = await fetch(
+      `${horizonUrl}/extensions/${encodeURIComponent(name)}/${ext.version}`,
+    );
+    if (!fullRes.ok)
+      throw new Error("Failed to fetch extension files from registry");
     ext = await fullRes.json();
   }
 
@@ -2014,24 +2190,35 @@ export async function installExtension(name, version) {
 
   // Verify integrity. Checksum is required for registry installs.
   if (!ext.checksum) {
-    throw new Error(`Registry extension "${name}" v${ext.version} has no checksum. Refusing to install.`);
+    throw new Error(
+      `Registry extension "${name}" v${ext.version} has no checksum. Refusing to install.`,
+    );
   }
   const computed = computeChecksum(ext.files);
   if (computed !== ext.checksum) {
-    throw new Error(`Integrity check failed for "${name}" v${ext.version}: expected ${ext.checksum.slice(0, 12)}..., got ${computed.slice(0, 12)}...`);
+    throw new Error(
+      `Integrity check failed for "${name}" v${ext.version}: expected ${ext.checksum.slice(0, 12)}..., got ${computed.slice(0, 12)}...`,
+    );
   }
-  log.verbose("Extensions", `Integrity verified: ${name} v${ext.version} (${ext.checksum.slice(0, 12)}...)`);
+  log.verbose(
+    "Extensions",
+    `Integrity verified: ${name} v${ext.version} (${ext.checksum.slice(0, 12)}...)`,
+  );
 
   // Write files to disk
   const result = await installExtensionFiles(ext.name || name, ext.files);
 
-  log.info("Extensions", `Installed from registry: ${name} v${ext.version} (${result.filesWritten} files)`);
+  log.info(
+    "Extensions",
+    `Installed from registry: ${name} v${ext.version} (${result.filesWritten} files)`,
+  );
 
   // Refresh confined extensions set. A newly installed extension might declare
   // scope: "confined" in its manifest. Without this, the confined set is stale
   // until restart and the extension resolves as global (active everywhere).
   try {
-    const { loadConfinedExtensions } = await import("../seed/place/space/extensionScope.js");
+    const { loadConfinedExtensions } =
+      await import("../seed/place/space/extensionScope.js");
     await loadConfinedExtensions();
   } catch {}
 
@@ -2061,8 +2248,13 @@ export async function disableExtension(name) {
   // Validate extension exists
   if (!loaded.has(name)) {
     const extDir = path.join(__dirname, name);
-    if (!fs.existsSync(extDir) || !fs.existsSync(path.join(extDir, "manifest.js"))) {
-      throw new Error(`Extension "${name}" not found. Run 'ext list' to see available extensions.`);
+    if (
+      !fs.existsSync(extDir) ||
+      !fs.existsSync(path.join(extDir, "manifest.js"))
+    ) {
+      throw new Error(
+        `Extension "${name}" not found. Run 'ext list' to see available extensions.`,
+      );
     }
   }
 
@@ -2074,7 +2266,8 @@ export async function disableExtension(name) {
 
   // Also persist to DB config if available
   try {
-    const { getPlaceConfigValue, setPlaceConfigValue } = await import("../seed/placeConfig.js");
+    const { getPlaceConfigValue, setPlaceConfigValue } =
+      await import("../seed/placeConfig.js");
     const dbList = getPlaceConfigValue("disabledExtensions") || [];
     if (!dbList.includes(name)) {
       dbList.push(name);
@@ -2091,7 +2284,10 @@ export async function disableExtension(name) {
         job.stop();
         log.verbose("Extensions", `Stopped job: ${job.name} (${name})`);
       } catch (err) {
-        log.warn("Extensions", `Failed to stop job ${job.name}: ${err.message}`);
+        log.warn(
+          "Extensions",
+          `Failed to stop job ${job.name}: ${err.message}`,
+        );
       }
     }
   }
@@ -2122,7 +2318,8 @@ export async function enableExtension(name) {
 
   // Also persist to DB config if available
   try {
-    const { getPlaceConfigValue, setPlaceConfigValue } = await import("../seed/placeConfig.js");
+    const { getPlaceConfigValue, setPlaceConfigValue } =
+      await import("../seed/placeConfig.js");
     const dbList = getPlaceConfigValue("disabledExtensions") || [];
     const dbUpdated = dbList.filter((n) => n !== name);
     await setPlaceConfigValue("disabledExtensions", dbUpdated);
@@ -2200,7 +2397,11 @@ export async function runExtensionMigrations() {
   // Find the .extensions place seed space once, so per-extension queries are scoped correctly.
   // Without this, a user-created tree space named the same as an extension would be matched.
   const { SEED_SPACE } = await import("../seed/ibp/protocol.js");
-  const extensionsParent = await Space.findOne({ seedSpace: SEED_SPACE.EXTENSIONS }).select("_id").lean();
+  const extensionsParent = await Space.findOne({
+    seedSpace: SEED_SPACE.EXTENSIONS,
+  })
+    .select("_id")
+    .lean();
 
   for (const [name, { manifest, instance }] of loaded) {
     const targetVersion = manifest.provides?.schemaVersion;
@@ -2211,7 +2412,10 @@ export async function runExtensionMigrations() {
       ? await Space.findOne({ parent: extensionsParent._id, name }).lean()
       : null;
 
-    const meta = extSpace?.qualities instanceof Map ? Object.fromEntries(extSpace.qualities) : (extSpace?.qualities || {});
+    const meta =
+      extSpace?.qualities instanceof Map
+        ? Object.fromEntries(extSpace.qualities)
+        : extSpace?.qualities || {};
     const currentVersion = meta.schemaVersion || 0;
 
     if (currentVersion >= targetVersion) continue; // Up to date
@@ -2219,26 +2423,43 @@ export async function runExtensionMigrations() {
     // Load migrations
     const migrationsPath = manifest.provides?.migrations;
     if (!migrationsPath) {
-      log.warn("Extensions", `${name}: schemaVersion ${targetVersion} declared but no migrations path`);
+      log.warn(
+        "Extensions",
+        `${name}: schemaVersion ${targetVersion} declared but no migrations path`,
+      );
       continue;
     }
 
     try {
       const entry = loaded.get(name);
-      const resolved = path.resolve(entry?.dir || path.join(__dirname, name), migrationsPath);
+      const resolved = path.resolve(
+        entry?.dir || path.join(__dirname, name),
+        migrationsPath,
+      );
       const migrationsModule = await import(toImportURL(resolved));
-      const migrations = migrationsModule.default || migrationsModule.migrations || [];
+      const migrations =
+        migrationsModule.default || migrationsModule.migrations || [];
 
       // Run pending migrations in order
       let ran = 0;
       for (const migration of migrations) {
-        if (migration.version > currentVersion && migration.version <= targetVersion) {
-          log.verbose("Extensions", `${name}: running migration v${migration.version}`);
+        if (
+          migration.version > currentVersion &&
+          migration.version <= targetVersion
+        ) {
+          log.verbose(
+            "Extensions",
+            `${name}: running migration v${migration.version}`,
+          );
           try {
             await migration.up(coreServices);
             ran++;
           } catch (err) {
-            log.error("Extensions", `${name}: migration v${migration.version} FAILED:`, err.message);
+            log.error(
+              "Extensions",
+              `${name}: migration v${migration.version} FAILED:`,
+              err.message,
+            );
             break; // Stop on first failure
           }
         }
@@ -2249,10 +2470,17 @@ export async function runExtensionMigrations() {
         await Space.findByIdAndUpdate(extSpace._id, {
           $set: { "qualities.schemaVersion": targetVersion },
         });
-        log.verbose("Extensions", `${name}: schema updated to v${targetVersion} (${ran} migration(s))`);
+        log.verbose(
+          "Extensions",
+          `${name}: schema updated to v${targetVersion} (${ran} migration(s))`,
+        );
       }
     } catch (err) {
-      log.error("Extensions", `${name}: failed to load migrations:`, err.message);
+      log.error(
+        "Extensions",
+        `${name}: failed to load migrations:`,
+        err.message,
+      );
     }
   }
 }
@@ -2265,7 +2493,10 @@ export async function startExtensionJobs() {
     try {
       if (typeof job.start === "function") {
         await job.start();
-        log.verbose("Extensions", `Job started: ${job.name} (${job.extensionName})`);
+        log.verbose(
+          "Extensions",
+          `Job started: ${job.name} (${job.extensionName})`,
+        );
       }
     } catch (err) {
       log.error("Extensions", `Job failed to start: ${job.name}:`, err.message);

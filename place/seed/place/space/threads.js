@@ -20,7 +20,7 @@
 //     resolves to a thread instead of a being.
 //
 // Nothing here is persisted as new storage. A thread is a derived
-// projection: the data lives in Summon records (one row per wake-
+// projection: the data lives in Stamp records (one row per wake-
 // and-act) and in inbox entries (per-being qualities under a known
 // namespace). This file is the read-side view over both, plus the
 // addressing helpers the verb router uses to recognize a thread
@@ -31,7 +31,7 @@
 // root reply places or the thread is cut, the projection's state
 // flips; the rows underneath remain for audit.
 
-import Summon from "../../models/summon.js";
+import Stamp from "../../models/stamp.js";
 import Space from "../../models/space.js";
 import { SEED_SPACE } from "./seedSpaces.js";
 import { I_AM } from "../being/seedBeings.js";
@@ -44,7 +44,7 @@ import { IbpError, IBP_ERR } from "../../ibp/protocol.js";
 // In-memory Set populated by cutThread. The scheduler reads it on
 // every inbox pickup via isAncestorSevered() to decide whether a
 // pending entry's chain still has a live ancestor. Source of truth
-// is severedAt on Summon rows; the Set is a fast hit. Rebuilds
+// is severedAt on Stamp rows; the Set is a fast hit. Rebuilds
 // lazily on cache misses by querying severedAt; rebuilds fully on
 // process boot via primeSeveredRootsCache() (called from genesis).
 
@@ -60,13 +60,13 @@ export function noteRootSevered(rootCorrelation) {
 }
 
 /**
- * Boot-time priming. Walks every Summon with severedAt set and
+ * Boot-time priming. Walks every Stamp with severedAt set and
  * populates the in-memory cache so cache hits work from t=0.
  * Cheap: severedAt is indexed; query touches only the severed set.
  */
 export async function primeSeveredRootsCache() {
   try {
-    const rows = await Summon.aggregate([
+    const rows = await Stamp.aggregate([
       { $match: { severedAt: { $ne: null } } },
       { $group: { _id: "$rootCorrelation" } },
     ]);
@@ -99,7 +99,7 @@ export async function isAncestorSevered(rootCorrelation, visited = new Set()) {
   visited.add(id);
 
   // Walk up the parentThread chain.
-  const root = await Summon.findById(id).select("parentThread severedAt").lean();
+  const root = await Stamp.findById(id).select("parentThread severedAt").lean();
   if (!root) return { severed: false, ancestorId: null };
   if (root.severedAt) {
     _severedRootsCache.add(id);
@@ -162,15 +162,15 @@ export async function getThreadsSpaceId() {
 // ─────────────────────────────────────────────────────────────────
 
 /**
- * Compute the descriptor for one thread. Returns null if no Summon
+ * Compute the descriptor for one thread. Returns null if no Stamp
  * row carries this rootCorrelation (the thread doesn't exist).
  *
  * State machine:
- *   live      — at least one Summon in this chain is unfinished
+ *   live      — at least one Stamp in this chain is unfinished
  *               (no endMessage.time AND no severedAt)
- *   severed   — at least one Summon carries severedAt and no
- *               Summons are still live (the line was cut)
- *   complete  — every Summon in this chain carries endMessage.time
+ *   severed   — at least one Stamp carries severedAt and no
+ *               Stamps are still live (the line was cut)
+ *   complete  — every Stamp in this chain carries endMessage.time
  *               with no severedAt (the chain ran to completion)
  *
  * @param {string} rootCorrelation
@@ -178,8 +178,8 @@ export async function getThreadsSpaceId() {
  */
 export async function describeThread(rootCorrelation) {
   if (!rootCorrelation) return null;
-  const summons = await Summon.find({ rootCorrelation })
-    .select("_id beingIn beingOut activeRole ibpAddress inReplyTo parentThread summonedAt receivedAt endMessage severedAt priority")
+  const summons = await Stamp.find({ rootCorrelation })
+    .select("_id beingIn beingOut activeRole ibpAddress inReplyTo parentThread stampedAt receivedAt endMessage severedAt priority")
     .lean();
   if (!summons.length) return null;
 
@@ -194,7 +194,7 @@ export async function describeThread(rootCorrelation) {
     if (s.severedAt) severed++;
     else if (s.endMessage?.time) complete++;
     else live++;
-    const t = s.endMessage?.time || s.severedAt || s.summonedAt || s.receivedAt;
+    const t = s.endMessage?.time || s.severedAt || s.stampedAt || s.receivedAt;
     if (t && (!lastAct || t > lastAct)) lastAct = t;
   }
 
@@ -204,14 +204,14 @@ export async function describeThread(rootCorrelation) {
   else state = "complete";
 
   // Tree shape: parent thread (if this chain branched off another).
-  // The root Summon is the one whose _id == rootCorrelation, or the
+  // The root Stamp is the one whose _id == rootCorrelation, or the
   // first by time if convention drifted. parentThread is the
-  // canonical lineage pointer — auto-stamped at startSummon when a
-  // being acting under thread A emits a fresh top-level SUMMON.
-  const rootSummon =
+  // canonical lineage pointer — auto-stamped at beginStamping when
+  // a being acting under thread A emits a fresh top-level SUMMON.
+  const rootStamp =
     summons.find((s) => String(s._id) === String(rootCorrelation)) ||
-    summons.sort((a, b) => (a.summonedAt || 0) - (b.summonedAt || 0))[0];
-  const parentThread = rootSummon?.parentThread || null;
+    summons.sort((a, b) => (a.stampedAt || 0) - (b.stampedAt || 0))[0];
+  const parentThread = rootStamp?.parentThread || null;
 
   return {
     id:              rootCorrelation,
@@ -222,7 +222,7 @@ export async function describeThread(rootCorrelation) {
     completeCount:   complete,
     participants:    [...participants],
     parentThread,
-    rootStartedAt:   rootSummon?.summonedAt || rootSummon?.receivedAt || null,
+    rootStartedAt:   rootStamp?.stampedAt || rootStamp?.receivedAt || null,
     lastAct,
   };
 }
@@ -237,16 +237,16 @@ export async function describeThread(rootCorrelation) {
  *
  *   being     — beingId of a participant (matches beingIn OR beingOut).
  *               Pass with or without leading "@".
- *   role      — activeRole the participant wore on the Summon.
+ *   role      — activeRole the participant wore on the Stamp.
  *   position  — spaceId fragment; matches threads whose ibpAddress
  *               includes this position (substring match).
  *   stance    — full stance string (place/path@being); exact match.
  *   priority  — HUMAN | GATEWAY | INTERACTIVE | BACKGROUND.
  *
- * Filters are row-level. A thread "matches" if any of its Summon rows
+ * Filters are row-level. A thread "matches" if any of its Stamp rows
  * match the filter; the projection groups by rootCorrelation after
  * filtering. So `being=@me&role=planner` returns "threads where I had
- * at least one Summon as planner."
+ * at least one Stamp as planner."
  */
 export async function listLiveThreads({
   limit = 100,
@@ -276,11 +276,11 @@ export async function listLiveThreads({
   }
   if (priority) match.priority = String(priority);
 
-  const roots = await Summon.aggregate([
+  const roots = await Stamp.aggregate([
     { $match: match },
     { $group: {
         _id: "$rootCorrelation",
-        lastAct: { $max: "$summonedAt" },
+        lastAct: { $max: "$stampedAt" },
       },
     },
     { $sort: { lastAct: -1 } },
@@ -290,14 +290,14 @@ export async function listLiveThreads({
 }
 
 /**
- * Mark every Summon in a thread's chain as severed. Idempotent:
- * Summons that already carry severedAt are left alone; Summons that
+ * Mark every Stamp in a thread's chain as severed. Idempotent:
+ * Stamps that already carry severedAt are left alone; Stamps that
  * already ended (endMessage.time) are left alone. Returns the count
  * of rows newly marked.
  */
 export async function markThreadSevered(rootCorrelation, now = new Date()) {
   if (!rootCorrelation) return 0;
-  const result = await Summon.updateMany(
+  const result = await Stamp.updateMany(
     {
       rootCorrelation,
       severedAt: null,
@@ -317,14 +317,14 @@ export async function markThreadSevered(rootCorrelation, now = new Date()) {
  *
  * Authorization (participation gate): the asker must be a participant
  * in the chain. A participant is any being that appears as `beingIn`
- * or `beingOut` on a Summon under this rootCorrelation. The I_AM has
+ * or `beingOut` on a Stamp under this rootCorrelation. The I_AM has
  * universal authority and always passes. Stance auth gates whether
  * the asker can address `.threads` at all (broad gate); this gate
  * narrows to "this specific thread." Both run.
  *
  * Three steps after auth, in this order:
  *
- *   1. Mark every Summon in the chain as severedAt (audit + state).
+ *   1. Mark every Stamp in the chain as severedAt (audit + state).
  *   2. Cancel pending inbox entries for every being that participated
  *      in the chain (scheduler skips cancelled entries on pickup).
  *   3. If priority demands urgency (HUMAN), interrupt anything still
@@ -368,7 +368,7 @@ export async function cutThread({
       );
     }
     const askerId = String(identity.beingId);
-    const participant = await Summon.exists({
+    const participant = await Stamp.exists({
       rootCorrelation,
       $or: [{ beingIn: askerId }, { beingOut: askerId }],
     });
@@ -380,15 +380,15 @@ export async function cutThread({
     }
   }
 
-  // 1. Audit + state on the Summon rows.
+  // 1. Audit + state on the Stamp rows.
   const severed = await markThreadSevered(rootCorrelation);
   // Cache the severed root so subsequent ancestor-checks short-
   // circuit without a DB walk. Always populate, even if severed===0
   // (the chain may have already been marked but the cache lost).
   noteRootSevered(rootCorrelation);
 
-  // 2. Inbox sweep across every being that received a Summon under
-  //    this chain. Each Summon row tells us (beingIn, spaceId) via
+  // 2. Inbox sweep across every being that received a Stamp under
+  //    this chain. Each Stamp row tells us (beingIn, spaceId) via
   //    the receiver's homeSpace or the spaceId derived from
   //    ibpAddress. We use the receiver's currentSpace as a pragmatic
   //    proxy for "where their inbox lives at the moment of cut."
@@ -396,10 +396,10 @@ export async function cutThread({
   try {
     const Being = (await import("../../models/being.js")).default;
     const { cancelByRootCorrelation } = await import(
-      "../../factory/inbox.js"
+      "../../factory/intake/inbox.js"
     );
 
-    const distinctReceivers = await Summon.aggregate([
+    const distinctReceivers = await Stamp.aggregate([
       { $match: { rootCorrelation, beingIn: { $ne: null } } },
       { $group: { _id: "$beingIn" } },
     ]);
@@ -419,7 +419,7 @@ export async function cutThread({
       cancelled += result?.cancelled || 0;
     }
   } catch {
-    // Inbox sweep is best-effort. Severed Summons + scheduler abort
+    // Inbox sweep is best-effort. Severed Stamps + scheduler abort
     // still close the line at the audit + runtime layers.
   }
 
@@ -429,12 +429,12 @@ export async function cutThread({
   if (priority === "HUMAN") {
     try {
       const { abortByRootCorrelations } = await import(
-        "../../factory/scheduler.js"
+        "../../factory/intake/scheduler.js"
       );
       aborted = abortByRootCorrelations([rootCorrelation], reason) || 0;
     } catch {
       // Scheduler unavailable (cognition not booted yet). The
-      // severed Summons + cancelled inbox still take effect on next
+      // severed Stamps + cancelled inbox still take effect on next
       // pickup; we just couldn't interrupt the live task.
     }
   }
@@ -446,9 +446,9 @@ export async function cutThread({
 // internals
 // ─────────────────────────────────────────────────────────────────
 
-async function rootSummonOf(summonId) {
-  if (!summonId) return null;
-  const s = await Summon.findById(summonId)
+async function rootStampOf(stampId) {
+  if (!stampId) return null;
+  const s = await Stamp.findById(stampId)
     .select("rootCorrelation")
     .lean();
   return s?.rootCorrelation || null;

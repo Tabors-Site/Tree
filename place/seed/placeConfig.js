@@ -201,7 +201,7 @@ export const CONFIG_DEFAULTS = {
   compressionThreshold: 20,
   compressionKeep: 8,
 
-  // Summon content limits
+  // Stamp content limits
   maxChatContentBytes: 100000,
   chatToolArgBytes: 2000,
 
@@ -271,11 +271,11 @@ export const CONFIG_DEFAULTS = {
   mcpConnectTimeout: 10000,
   mcpStaleTimeout: 3600000,
 
-  // Did (audit) queries
-  didQueryLimit: 5000,
+  // Fact (audit) queries
+  factQueryLimit: 5000,
 
   // Scheduler backpressure. Only summonsPerSecond is enforced today
-  // (token-bucket in factory/scheduler.js). InboxDepth + MaxAgeSeconds
+  // (token-bucket in factory/intake/scheduler.js). InboxDepth + MaxAgeSeconds
   // are declared so operator config places in lockstep with the planned
   // inbox-pressure + stale-entry sweeps.
   summonInboxDepth:    100,
@@ -295,7 +295,7 @@ export const CONFIG_DEFAULTS = {
 
   // Retention + cleanup
   summonRetentionDays: 90,
-  didRetentionDays: 365,
+  factRetentionDays: 365,
   retentionCleanupInterval: 86400000,
   uploadCleanupInterval: 21600000,
   uploadGracePeriodMs:   3600000,

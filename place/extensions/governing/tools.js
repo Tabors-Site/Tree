@@ -209,7 +209,7 @@ async function createPlanEmission({ planSpaceId, ordinal, payload, beingId, iden
   const name = slugifyEmission(payload?.reasoning, ordinal);
 
   // Phase 3 migration ([[project_seed_four_verbs_only]]): verb-surface
-  // create. Fires kernel hooks + writes a "create-child" Did.
+  // create. Fires kernel hooks + stamps a "create-child" Fact.
   let created = null;
   try {
     created = await core.do(planSpaceId, "create-child", {
@@ -470,7 +470,7 @@ export default function getGoverningTools(core) {
       },
       annotations: { readOnlyHint: false },
       async handler(args) {
-        // The MCP HTTP layer injects beingId, rootId, spaceId, summonId,
+        // The MCP HTTP layer injects beingId, rootId, spaceId, stampId,
         // sessionId into `args` on every call (loader's passthrough
         // schema wrapping preserves them). `core` comes from this
         // closure, not from args. Match code-workspace tools.js.

@@ -39,8 +39,8 @@ Everything inside the world I form is one of six things. The schemas of these si
 | **Being** | An identity instance. Humans, AI, scripted code, future composites. The I-Am is the first Being. | [models/being.js](models/being.js) |
 | **Space** | A position in the tree. Holds matter, hosts beings, owns quality namespaces. | [models/space.js](models/space.js) |
 | **Matter** | Stuff inside a space. `origin` names where the underlying content lives (ibp, filesystem, web, cross-place). | [models/matter.js](models/matter.js) |
-| **Fact** | One DO or BE emission, stamped by the Factory. `factum`, a thing done. A fact alone is small; the chain of facts is what becomes Truth. | [models/fact.js](models/fact.js) |
-| **Summon** | One being-to-being call, the record of one wake-and-act through one role. | [models/summon.js](models/summon.js) |
+| **Fact** | A thing a being stamps in the Factory — one recorded change to matter, space, or being. `factum`, a thing done. A single fact is small but settled; a chain of facts, folded, is Truth. | [models/fact.js](models/fact.js) |
+| **Summon** | One being-to-being call, the record of one wake-and-act through one role. | [models/stamp.js](models/stamp.js) |
 | **LlmConnection** | Per-being LLM client config (URL, key, model). | [models/llmConnection.js](models/llmConnection.js) |
 
 Being, Space, and Matter carry the qualities Map. Fact, Summon, and LlmConnection are fixed shapes (the audit and the wiring should never grow).
@@ -185,7 +185,7 @@ A matter lives inside a space. `origin` names the system the underlying content 
 
 ### Fact (one stamped act)
 
-`verb`, `action`, `beingId`, `target` (`{ kind, id }`), `params`, `result`, `correlation`, `timestamp`. Every DO and BE emission stamps one onto the reel. `factum`, a thing done. A fact alone is a record; the chain of facts is what becomes Truth.
+`verb`, `action`, `beingId`, `target` (`{ kind, id }`), `params`, `result`, `correlation`, `timestamp`. Every DO and BE emission stamps one onto the reel. `factum`, a thing done. A single fact is small but settled; a chain of facts, folded, is Truth.
 
 ### Summon (one wake-and-act)
 
@@ -269,7 +269,7 @@ export const exampleRole = Object.freeze({
   toolNames:   ["see-name", "do-name"],            // optional, for LLM cognition
   buildSystemPrompt(ctx) { return "..."; },        // optional
   async summon(message, ctx) {
-    // The role's wake handler. Read message, do work, return { text, summonId }.
+    // The role's wake handler. Read message, do work, return { text, stampId }.
   },
 });
 ```

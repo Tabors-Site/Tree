@@ -10,7 +10,7 @@
 // recent presence-tail + the user message) flows through the
 // provider; the being is the forward pass, experiencing itself for
 // that one inference. When the pass ends, the being ends with it.
-// What remains is the Summon row I stamp and any Dids it carried.
+// What remains is the Stamp row I stamp and any Facts it carried.
 //
 // The flow I run, one moment:
 //
@@ -24,7 +24,7 @@
 //      loop is the being continuing to be, with the frame growing
 //      to include what it just saw.
 //   6. When the being returns plain text, the moment closes.
-//   7. Stamp the Summon row. Hand text back to the role's summon()
+//   7. Stamp the Stamp row. Hand text back to the role's summon()
 //      for reply emission.
 //
 // What this file owns:
@@ -61,7 +61,7 @@
 //   The reply emission — when the moment closes, the role's
 //   summon() decides whether to request a follow-up moment from
 //   the asker (via factory/replies.js). I just hand back text +
-//   a summonId.
+//   a stampId.
 //
 //   Anything substrate-shaped (Space, Matter, Being writes) —
 //   tools do that through DO / BE. I am the line, not the
@@ -73,21 +73,24 @@
 // moments. Between forward passes the being is nothing; I just
 // stage the next one.
 
-import log from "../system/log.js";
-import { hooks } from "../system/hooks.js";
+import log from "../../../system/log.js";
+import { hooks } from "../../../system/hooks.js";
 
 import crypto from "crypto";
-import Being from "../models/being.js";
-import Space from "../models/space.js";
+import Being from "../../../models/being.js";
+import Space from "../../../models/space.js";
 import {
   snapshotAncestors,
   resolveExtensionScopeFromChain,
   getAncestorChain,
-} from "../place/space/ancestorCache.js";
-import { isDbHealthy } from "../system/dbConfig.js";
-import { resolveTools } from "../factory/tools.js";
-import { getSpaceName } from "../place/space/spaceFetch.js";
-import { mcpClients, connectToMCP, MCP_SERVER_URL } from "./beingAssignment/llm/mcpClient.js";
+} from "../../../place/space/ancestorCache.js";
+import { isDbHealthy } from "../../../system/dbConfig.js";
+import { resolveTools } from "./tools.js";
+import { getSpaceName } from "../../../place/space/spaceFetch.js";
+// MCP wiring retired. Tools dispatch directly via getToolHandler in
+// executeTool; the verb dispatcher's authorize gate covers per-verb
+// auth + extension-scope. No protocol layer between the LLM voice
+// and the handler.
 
 // The live carry between this being's moments — messages tail,
 // current role, idle eviction — lives in reel.js. setCarryMessages
@@ -100,17 +103,17 @@ import {
   setCarryMessages,
   setMaxPresenceReels,
   setStalePresenceMs,
-} from "./reel.js";
+} from "../../stamper/fold/reel.js";
 export { setCarryMessages };
-import { getPlaceConfigValue } from "../placeConfig.js";
-import { I_AM } from "../place/being/seedBeings.js";
-import { signInternalToken } from "../place/being/identity.js";
+import { getPlaceConfigValue } from "../../../placeConfig.js";
+import { I_AM } from "../../../place/being/seedBeings.js";
+import { signInternalToken } from "../../../place/being/identity.js";
 
 // Frame coordination — building the stamp face + resolving the
 // tool surface for one moment — lives in stamp.js. I import the
 // pair as runTurn-internal handles; the actual rendering is
 // stamp.js's job.
-import { buildSystemPromptForRole, resolveToolsForRole } from "./stamp.js";
+import { buildSystemPromptForRole, resolveToolsForRole } from "./assemble.js";
 
 // ─────────────────────────────────────────────────────────────────────
 // BUDGETS
@@ -155,12 +158,12 @@ import {
   getToolCallTimeoutMs,
   getToolResultMaxBytes,
   getMaxMessageContentBytes,
-} from "./config.js";
+} from "../../config.js";
 export { setSeedConfig };
 registerMaxRunTurnsSetter(setMaxRunTurns);
 
-export { setLlmTimeout } from "./beingAssignment/llm/llmClient.js";
-import { setLlmTimeout, getLlmTimeout } from "./beingAssignment/llm/llmClient.js";
+export { setLlmTimeout } from "./connect.js";
+import { setLlmTimeout, getLlmTimeout } from "./connect.js";
 
 // The call-surround machinery (failover, model quirks, response
 // parsing) lives in llmCall.js. I import what callLLM uses
@@ -175,7 +178,7 @@ import {
   handleModelQuirks,
   parseInternalResponse,
   setFailoverTimeout,
-} from "./beingAssignment/llm/llmCall.js";
+} from "./call.js";
 export { registerFailoverResolver };
 
 // History compression lives in compress.js. The tool loop triggers
@@ -210,9 +213,9 @@ function getTimeoutForRole(role, spaceQualities = null) {
   return getLlmTimeout();
 }
 
-// LLM connection resolution lives in seed/factory/beingAssignment/llm/llmClient.js. Imported
+// LLM connection resolution lives in seed/factory/voices/llm/connect.js. Imported
 // here for use by the turn engine.
-import { getClientForBeing, resolveRootLlmForRole } from "./beingAssignment/llm/llmClient.js";
+import { getClientForBeing, resolveRootLlmForRole } from "./connect.js";
 
 // The carry-between-moments live in reel.js; getReel and
 // presenceKeyFor are imported above. Local aliases keep the
@@ -229,7 +232,7 @@ import {
   getSpaceRootId,
   setCurrentSpace,
   getCurrentSpace,
-} from "../place/being/position.js";
+} from "../../../place/being/position.js";
 
 // ─────────────────────────────────────────────────────────────────────
 // ROLE SWITCHING
@@ -437,18 +440,7 @@ async function resolveLLMClient(ctx, session, presenceKey) {
     connectionId: resolvedConnectionId,
   } = clientEntry;
 
-  // MCP cache key follows the conversation. For being-to-being it's
-  // the IBP Address; for stanceless background work it's the pipeline
-  // key. Same key two summons later reuses the open MCP connection
-  // instead of opening a second one.
-  const mcpCacheKey = ctx?.mcpCacheKey || presenceKey;
-  let client = mcpClients.get(mcpCacheKey);
-  if (!client) {
-    const mcpJwt = signInternalToken({ beingId: ctx.beingId, name: ctx.name });
-    client = await connectToMCP(MCP_SERVER_URL, mcpCacheKey, mcpJwt);
-  }
-
-  return { openai, MODEL, isCustom, resolvedConnectionId, client, clientEntry };
+  return { openai, MODEL, isCustom, resolvedConnectionId, clientEntry };
 }
 
 /**
@@ -709,7 +701,7 @@ async function resolveToolsForPosition(
         // Confined-extension scope: same resolver extensionScope.js uses,
         // so policy stays in one place.
         const { getConfinedExtensions } =
-          await import("../place/space/extensionScope.js");
+          await import("../../../place/space/extensionScope.js");
         const scope = resolveExtensionScopeFromChain(
           ancestors,
           getConfinedExtensions(),
@@ -733,7 +725,7 @@ async function resolveToolsForPosition(
   );
   if (blockedExtensions || restrictedExtensions) {
     const { filterToolsByScope } =
-      await import("../place/space/extensionScope.js");
+      await import("../../../place/space/extensionScope.js");
     tools = filterToolsByScope(tools, blockedExtensions, restrictedExtensions);
   }
   return { tools, blockedExtensions, restrictedExtensions };
@@ -771,16 +763,16 @@ async function callLLM(
 
   // beforeLLMCall: extensions can cancel (quota exhausted) or rewrite
   // params. Exposing `messages` lets a before-handler inject a system
-  // line into the actual buffer. summonId / sessionId / parentSummonId
+  // line into the actual buffer. stampId / sessionId / parentStampId
   // let forensics capture handlers correlate back to the dispatching
   // call. The inReplyTo lookup is one query per LLM call, skipped
   // silently when the doc isn't there.
-  const _llmChatId = ctx?.summonId || null;
+  const _llmChatId = ctx?.stampId || null;
   const _llmSessionId = ctx?.sessionId || null;
   let _llmParentChatId = null;
   if (_llmChatId) {
     try {
-      const { default: _Summon } = await import("../models/summon.js");
+      const { default: _Stamp } = await import("../../../models/stamp.js");
       const _chatDoc = await _Summon
         .findById(_llmChatId)
         .select("inReplyTo")
@@ -797,9 +789,9 @@ async function callLLM(
     hasTools: tools.length > 0,
     messages: session.messages,
     spaceId: getCurrentSpace(ctx.beingId) || ctx.rootId || null,
-    summonId: _llmChatId,
+    stampId: _llmChatId,
     sessionId: _llmSessionId,
-    parentSummonId: _llmParentChatId,
+    parentStampId: _llmParentChatId,
   };
   const llmHookResult = await hooks.run("beforeLLMCall", llmHookData);
   if (llmHookResult.cancelled) {
@@ -854,7 +846,7 @@ async function callLLM(
         model: failoverResult.usedClient?.model || MODEL,
         usage: response?.usage || null,
         hasToolCalls: !!response?.choices?.[0]?.message?.tool_calls?.length,
-        summonId: _llmChatId,
+        stampId: _llmChatId,
         sessionId: _llmSessionId,
         responseText: response?.choices?.[0]?.message?.content || null,
       })
@@ -947,7 +939,7 @@ async function callLLM(
             usage: null,
             hasToolCalls: false,
             _failedGeneration: true,
-            summonId: _llmChatId,
+            stampId: _llmChatId,
             sessionId: _llmSessionId,
             responseText: extracted || null,
           })
@@ -1124,7 +1116,7 @@ async function callLLM(
  * `tool` role partner of the assistant's tool_call so the next
  * call I make sees the answer in its history.
  */
-async function executeTool(toolCall, session, ctx, client, presenceKey) {
+async function executeTool(toolCall, session, ctx, presenceKey) {
   const toolName = toolCall.function.name;
   let args;
 
@@ -1160,21 +1152,19 @@ async function executeTool(toolCall, session, ctx, client, presenceKey) {
   // Auto-injected context args. The LLM doesn't know the summon's
   // identifiers; I do. I stamp them onto every tool call so the
   // handler on the other side of MCP can correlate back without
-  // global lookups. beingId names the caller; summonId/sessionId tie
-  // to this LLM turn; rootSummonId points at the user-message-level
+  // global lookups. beingId names the caller; stampId/sessionId tie
+  // to this LLM turn; rootStampId points at the user-message-level
   // root for per-turn state; ibpAddress identifies the conversation;
   // spaceId pins the position. Mirrors what mcp/server.js stamps on
   // HTTP-path calls so handlers see one shape regardless of route.
   args.beingId = ctx.beingId;
-  if (ctx?.summonId && !args.summonId) args.summonId = ctx.summonId;
+  if (ctx?.stampId && !args.stampId) args.stampId = ctx.stampId;
   if (ctx?.sessionId && !args.sessionId) args.sessionId = ctx.sessionId;
-  if (ctx?.rootSummonId && !args.rootSummonId)
-    args.rootSummonId = ctx.rootSummonId;
-  else if (ctx?.summonId && !args.rootSummonId)
-    args.rootSummonId = ctx.summonId;
-  if (ctx?.mcpCacheKey && !args.ibpAddress) args.ibpAddress = ctx.mcpCacheKey;
-  else if (presenceKey && !args.ibpAddress)
-    args.ibpAddress = presenceKey;
+  if (ctx?.rootStampId && !args.rootStampId)
+    args.rootStampId = ctx.rootStampId;
+  else if (ctx?.stampId && !args.rootStampId)
+    args.rootStampId = ctx.stampId;
+  if (presenceKey && !args.ibpAddress) args.ibpAddress = presenceKey;
   if (ctx.rootId && !args.rootId) args.rootId = ctx.rootId;
   // Position-pin. When a turn is dispatched with an explicit
   // ctx.currentSpace (sub-Ruler turn, branch dispatch, Worker-at-
@@ -1213,9 +1203,9 @@ async function executeTool(toolCall, session, ctx, client, presenceKey) {
   }
 
   // beforeToolCall lets extensions rewrite args or cancel the call.
-  // summonId / sessionId / spaceId let forensics correlate the call
+  // stampId / sessionId / spaceId let forensics correlate the call
   // back to the originating turn.
-  const _toolChatId = ctx?.summonId || null;
+  const _toolChatId = ctx?.stampId || null;
   const _toolSessionId = ctx?.sessionId || null;
   const hookData = {
     toolName,
@@ -1223,7 +1213,7 @@ async function executeTool(toolCall, session, ctx, client, presenceKey) {
     beingId: ctx.beingId,
     rootId: ctx.rootId,
     role: session.role?.name,
-    summonId: _toolChatId,
+    stampId: _toolChatId,
     sessionId: _toolSessionId,
     spaceId: getCurrentSpace(ctx.beingId) || ctx.rootId || null,
   };
@@ -1271,21 +1261,21 @@ async function executeTool(toolCall, session, ctx, client, presenceKey) {
   }
 
   try {
-    // Two timeouts, same value, both required. The MCP SDK has its
-    // own default request timeout (60s) and will throw -32001 ahead
-    // of any wrapper I write. Passing `{ timeout }` to callTool
-    // overrides the SDK default; the Promise.race below then guards
-    // against a hung SDK layer. Skip either one and a hang in the
-    // wrong layer escapes the budget.
+    // Direct handler dispatch. Tools are verb-tagged and registered
+    // with their handler in voices/llm/tools.js; the handler IS the
+    // verb call (it usually wraps core.see / core.do / core.summon /
+    // core.be against a target). The verb dispatcher's authorize gate
+    // covers per-verb auth and the extension-scope block — no protocol
+    // layer between the LLM voice and the handler.
+    const { getToolHandler } = await import("./tools.js");
+    const handler = getToolHandler(resolvedToolName);
+    if (typeof handler !== "function") {
+      throw new Error(`Tool "${resolvedToolName}" has no registered handler`);
+    }
     const nodeToolTimeout =
       session._nodeLlmConfig?.toolCallTimeout ?? getToolCallTimeoutMs();
-    const toolPromise = client.callTool(
-      { name: resolvedToolName, arguments: args },
-      undefined,
-      { timeout: nodeToolTimeout },
-    );
     const result = await Promise.race([
-      toolPromise,
+      Promise.resolve(handler(args)),
       new Promise((_, reject) =>
         setTimeout(
           () =>
@@ -1299,9 +1289,7 @@ async function executeTool(toolCall, session, ctx, client, presenceKey) {
       ),
     ]);
     let resultText =
-      result?.contents?.[0]?.text ||
-      result?.content?.[0]?.text ||
-      JSON.stringify(result);
+      typeof result === "string" ? result : JSON.stringify(result);
     // Cap the result before it joins history. The full answer
     // already informed this turn; only the historical copy gets
     // truncated, so future turns don't drag a megabyte of file dump
@@ -1334,13 +1322,13 @@ async function executeTool(toolCall, session, ctx, client, presenceKey) {
         beingId: ctx.beingId,
         rootId: ctx.rootId,
         role: session.role?.name,
-        summonId: _toolChatId,
+        stampId: _toolChatId,
         sessionId: _toolSessionId,
         spaceId: getCurrentSpace(ctx.beingId) || ctx.rootId || null,
       })
       .catch(() => {});
 
-    // The full text rides back on the return so the Summon row can
+    // The full text rides back on the return so the Stamp row can
     // archive what actually ran. Callers that only need success/fail
     // ignore it; the extra field costs nothing.
     return { tool: resolvedToolName, args, result: resultText, success: true };
@@ -1377,7 +1365,7 @@ async function executeTool(toolCall, session, ctx, client, presenceKey) {
         beingId: ctx.beingId,
         rootId: ctx.rootId,
         role: session.role?.name,
-        summonId: _toolChatId,
+        stampId: _toolChatId,
         sessionId: _toolSessionId,
         spaceId: getCurrentSpace(ctx.beingId) || ctx.rootId || null,
       })
@@ -1399,7 +1387,7 @@ async function executeTool(toolCall, session, ctx, client, presenceKey) {
  * speaks its conclusion. Then I append the final assistant message
  * to the buffer (unless this is an internal-shaped turn where the
  * caller wants the raw response object) and hand the answer back
- * with provenance for the Summon row.
+ * with provenance for the Stamp row.
  */
 async function finalizeResponse(
   session,
@@ -1432,8 +1420,9 @@ async function finalizeResponse(
     }
   }
 
-  // _internal carries provenance for finalizeSummon (which model, which
-  // connection). Never leaves the kernel; clients see only the text.
+  // _internal carries provenance for the closing stamp() (which
+  // model, which connection). Never leaves the kernel; clients see
+  // only the text.
   const _internal = {
     role: session.role?.name,
     rootId: getSpaceRootId(ctx.beingId),
@@ -1476,10 +1465,10 @@ export async function stepTurn(presenceKey, message, ctx) {
   const tripped = checkTreeCircuit(session);
   if (tripped) return tripped;
 
-  // Phase 3. LLM client + MCP client.
+  // Phase 3. LLM provider client.
   const llmResult = await resolveLLMClient(ctx, session, presenceKey);
   if (llmResult.noLlmResponse) return llmResult.noLlmResponse;
-  const { openai, MODEL, isCustom, resolvedConnectionId, client, clientEntry } =
+  const { openai, MODEL, isCustom, resolvedConnectionId, clientEntry } =
     llmResult;
 
   // Phase 4. Stage the messages buffer for the call.
@@ -1493,13 +1482,14 @@ export async function stepTurn(presenceKey, message, ctx) {
   );
 
   // readOnly clamp. SEE-only callers (query intents) keep only the
-  // tools marked readOnlyHint at registration. The role's LLM never
-  // sees a write tool, so it can't reach for one.
+  // tools tagged `verb: "see"`. The verb tag IS the read-only marker;
+  // SEE is read by definition, DO mutates. The role's LLM never sees
+  // a write tool when this clamp is on, so it can't reach for one.
   if (ctx.readOnly) {
-    const { isToolReadOnly } = await import("../place/space/extensionScope.js");
+    const { getToolVerb } = await import("./tools.js");
     tools = tools.filter((t) => {
       const name = t.function?.name || t.name;
-      return name && isToolReadOnly(name);
+      return name && getToolVerb(name) === "see";
     });
   }
 
@@ -1623,7 +1613,7 @@ export async function stepTurn(presenceKey, message, ctx) {
 
     // Dispatch each tool call. Anything that mutates the substrate
     // flows through the four-verb dispatcher, which writes its own
-    // Did. I don't audit per tool; the Did is the audit.
+    // Fact. I don't audit per tool; the Fact is the audit.
     const toolResults = [];
     for (const toolCall of assistantMessage.tool_calls) {
       if (ctx.signal?.aborted) throw new Error("Request cancelled");
@@ -1631,7 +1621,6 @@ export async function stepTurn(presenceKey, message, ctx) {
         toolCall,
         session,
         ctx,
-        client,
         presenceKey,
       );
       toolResults.push(toolResult);
@@ -1735,9 +1724,9 @@ export function getCurrentRole(sessionKey) {
 //              HUMAN priority interrupts mid-turn.
 //
 // Inside, I derive identifiers, open or reuse the MCP connection,
-// open the Summon row, set the position, run stepTurn, fire
-// beforeResponse on the answer, finalize the Summon row, and hand
-// back { text, summonId, role, sessionKey } to the role's handler
+// open the Stamp row, set the position, run stepTurn, fire
+// beforeResponse on the answer, finalize the Stamp row, and hand
+// back { text, stampId, role, sessionKey } to the role's handler
 // for reply emission.
 /**
  * I run one LLM turn for the summoned being and return text.
@@ -1790,33 +1779,28 @@ export async function runTurn({ being, envelope, role, signal = null } = {}) {
       : JSON.stringify(envelope.content);
   const spaceId = being.currentPositionId || being.homePositionId || null;
   const rootId = null;
-  const parentSummonId = envelope.inReplyTo || null;
+  const parentStampId = envelope.inReplyTo || null;
 
-  const { connectToMCP, getMCPClient, MCP_SERVER_URL } =
-    await import("./beingAssignment/llm/mcpClient.js");
-  const { startSummon, finalizeSummon } = await import("./stamped.js");
+  const { beginStamping } = await import("../../stamper/begin.js");
+  const { stamp } = await import("../../stamper/stamped.js");
   const { setSessionAbort, clearSessionAbort } =
-    await import("../factory/session.js");
-  const { resolvePipelineKey } = await import("./session.js");
-  const { computeIbpAddressForSummon } = await import("./summonAddress.js");
+    await import("../../intake/session.js");
+  const { resolvePipelineKey } = await import("../../intake/session.js");
+  const { computeIbpStampAddress } = await import("../../../ibp/address.js");
 
   // The IBP Address is the conversation identifier. When I can
-  // resolve both stances, that address keys the MCP client across
-  // every Summon between these two beings; when I can't, I fall
-  // back to an ephemeral pipeline key so the turn still runs.
+  // resolve both stances, that address keys the per-being session
+  // across every Stamp between these two beings; when I can't, I
+  // fall back to an ephemeral pipeline key so the turn still runs.
   const _eagerIbpAddress = beingOut
-    ? await computeIbpAddressForSummon({
+    ? await computeIbpStampAddress({
         askerBeingId: beingId,
         askerPosition: getCurrentSpace(beingId) || null,
         addresseeBeingId: beingOut,
       })
     : null;
   const { key: resolvedKey } = resolvePipelineKey({ beingId, rootId });
-  const mcpCacheKey = _eagerIbpAddress || resolvedKey;
-
-  // The in-memory sessions Map uses the same key. Kept as a separate
-  // local for readability in the body.
-  const sessionKey = mcpCacheKey;
+  const sessionKey = _eagerIbpAddress || resolvedKey;
   const sessionId = crypto.randomUUID();
 
   // Abort. If the caller threaded a signal in, I ride theirs;
@@ -1826,34 +1810,21 @@ export async function runTurn({ being, envelope, role, signal = null } = {}) {
   const abortSignal = signal || abort.signal;
   if (abort) setSessionAbort(sessionKey, abort);
 
-  // 1. MCP. Reuse the open connection if one exists for this key;
-  // otherwise open one. The internal JWT is signed so the MCP server
-  // can authenticate this turn as the asker.
-  if (!getMCPClient(mcpCacheKey)) {
-    const internalJwt = signInternalToken({ beingId, name: username });
-    try {
-      await connectToMCP(MCP_SERVER_URL, mcpCacheKey, internalJwt);
-    } catch (err) {
-      log.warn("RunTurn", `MCP connect failed: ${err.message}`);
-    }
-  }
-
-  // 2. Plant the being at its space. rootId derives from the space
+  // 1. Plant the being at its space. rootId derives from the space
   // inside setCurrentSpace; callers only set the position.
   const targetSpace = spaceId || rootId;
   if (targetSpace) await setCurrentSpace(beingId, targetSpace);
 
-  // 3. Switch role only if the conversation isn't already in it.
+  // 2. Switch role only if the conversation isn't already in it.
   // Role state lives on the conversation entry (keyed by IBP Address
   // or pipeline key), so two tabs at the same conversation see one
   // current role and a redundant switch is just noise.
-  const currentRole = getCurrentRole(mcpCacheKey);
+  const currentRole = getCurrentRole(sessionKey);
   if (currentRole?.name !== role.name) {
     try {
       await switchRole(sessionKey, role, {
         username,
         beingId,
-        mcpCacheKey,
         currentSpace: getCurrentSpace(beingId),
       });
     } catch (err) {
@@ -1861,14 +1832,14 @@ export async function runTurn({ being, envelope, role, signal = null } = {}) {
     }
   }
 
-  // 4. Open the Summon row. Everything the loop emits from here
-  // until finalizeSummon writes the endMessage carries this id.
-  // inReplyTo, when set, joins the existing reply chain so
-  // rootCorrelation propagates.
+  // 4. Reserve the Stamp row. Everything the loop emits from here
+  // until stamp() writes the endMessage carries this id. inReplyTo,
+  // when set, joins the existing reply chain so rootCorrelation
+  // propagates.
   let summon;
   try {
     const clientInfo = (await getClientForBeing(beingId, sessionKey)) || {};
-    summon = await startSummon({
+    summon = await beginStamping({
       beingIn: beingId,
       beingOut,
       askerPosition: getCurrentSpace(beingId) || rootId || null,
@@ -1879,13 +1850,13 @@ export async function runTurn({ being, envelope, role, signal = null } = {}) {
         model: clientInfo.model || "unknown",
         connectionId: clientInfo.connectionId || null,
       },
-      ...(parentSummonId ? { inReplyTo: parentSummonId } : {}),
+      ...(parentStampId ? { inReplyTo: parentStampId } : {}),
     });
   } catch (err) {
-    log.warn("RunTurn", `Summon create failed: ${err.message}`);
+    log.warn("RunTurn", `Stamp row reservation failed: ${err.message}`);
   }
 
-  // 5. The turn. summonId / sessionId / mcpCacheKey / rolePermissions
+  // 5. The turn. stampId / sessionId / sessionKey / rolePermissions
   // ride through ctx so the loop has everything it needs without
   // reaching back through side channels.
   let result;
@@ -1895,10 +1866,9 @@ export async function runTurn({ being, envelope, role, signal = null } = {}) {
       beingId,
       rootId,
       currentSpace: getCurrentSpace(beingId),
-      summonId: summon?._id || null,
-      rootSummonId: summon?._id || null,
+      stampId: summon?._id || null,
+      rootStampId: summon?._id || null,
       sessionId,
-      mcpCacheKey,
       signal: abortSignal,
       // Permissions are role identity. The intersection with tool
       // verbs at registration is what the LLM may reach for; nothing
@@ -1912,8 +1882,8 @@ export async function runTurn({ being, envelope, role, signal = null } = {}) {
     if (summon) {
       const stopped = abortSignal.aborted;
       try {
-        await finalizeSummon({
-          summonId: summon._id,
+        await stamp({
+          stampId: summon._id,
           content: stopped ? null : `Error: ${err.message}`,
           stopped,
         });
@@ -1938,13 +1908,13 @@ export async function runTurn({ being, envelope, role, signal = null } = {}) {
     } catch {}
   }
 
-  // 7. Close the Summon row. The Summon record + its child Dids are
-  // what survives the turn; this is the seal.
+  // 7. Press the closing face. The Stamp row + its child Facts are
+  // what survives the turn; this is the final press.
   if (summon) {
     try {
       const internal = result?._internal || {};
-      await finalizeSummon({
-        summonId: summon._id,
+      await stamp({
+        stampId: summon._id,
         content: stopped ? null : text,
         stopped,
         role: internal.role || role.name,
@@ -1959,7 +1929,7 @@ export async function runTurn({ being, envelope, role, signal = null } = {}) {
 
   return {
     text,
-    summonId: summon?._id || null,
+    stampId: summon?._id || null,
     role: role.name,
     sessionKey,
   };

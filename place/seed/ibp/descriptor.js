@@ -35,7 +35,7 @@ import { getPlaceDomain } from "./address.js";
 import { getPlaceConfigValue, getPlaceUrl } from "../placeConfig.js";
 import Space from "../models/space.js";
 import Being from "../models/being.js";
-import Did from "../models/did.js";
+import Fact from "../models/fact.js";
 import { getPlaceRootId } from "../placeRoot.js";
 import { listSeeds } from "../place/seeds.js";
 import { listMattersAt } from "../place/matter/matters.js";
@@ -46,9 +46,9 @@ import {
   listSpaceChildren,
   listBeingSpaces,
 } from "../place/space/spaceFetch.js";
-import { getInboxSummary } from "../factory/inbox.js";
+import { getInboxSummary } from "../factory/intake/inbox.js";
 import { getRole, listRoles } from "../factory/roles/registry.js";
-import { getActiveSummonForBeing } from "../factory/stamped.js";
+import { findOpenForBeing } from "../factory/stamper/fold/reelChains.js";
 
 // Wire-shape versions. Bump when the descriptor / discovery shape
 // changes in a way clients must opt into.
@@ -121,7 +121,7 @@ function beingsAtSpace(space, { writeAllowed, authorizedHere }) {
       invocableBy,
       available: invocableBy === "anyone" ? authorizedHere : writeAllowed,
       // Internal-only, stripped before the wire — enrichBeings uses
-      // it to attach the being's currently-active Summon.
+      // it to attach the being's currently-active Stamp.
       _beingId: home?.beingId || null,
     });
   }
@@ -131,8 +131,8 @@ function beingsAtSpace(space, { writeAllowed, authorizedHere }) {
 
 // ── Activity derivation ──
 // For each being at a position, build an `activity` object from
-// their currently-active Summon. The latest Did keyed by summonId
-// names what the being is doing right now; when no Summon is active
+// their currently-active Stamp. The latest Fact keyed by stampId
+// names what the being is doing right now; when no Stamp is active
 // the being is idle and activity is null.
 
 const ACTIVITY_CONTENT_CAP = 240;
@@ -152,31 +152,31 @@ function truncate(s, n) {
   return s.length > n ? s.slice(0, n) + "..." : s;
 }
 
-// Convert a Summon into an activity object the descriptor surfaces
-// for the being whose Summon it is. Null when no Summon is given.
+// Convert a Stamp into an activity object the descriptor surfaces
+// for the being whose Stamp it is. Null when no Stamp is given.
 async function summonToActivity(summon) {
   if (!summon) return null;
-  let lastDid = null;
+  let lastFact = null;
   try {
-    lastDid = await Did.findOne({ summonId: summon._id })
+    lastFact = await Fact.findOne({ stampId: summon._id })
       .sort({ date: -1 })
       .select("action params date")
       .lean();
   } catch {
-    // The descriptor never blocks on a Did lookup.
+    // The descriptor never blocks on a Fact lookup.
   }
   const target = await inferActivityTarget(summon);
 
-  if (lastDid) {
+  if (lastFact) {
     return {
       kind: "acting",
       content: truncate(
-        `${lastDid.action}(${summarizeArgs(lastDid.params)})`,
+        `${lastFact.action}(${summarizeArgs(lastFact.params)})`,
         ACTIVITY_CONTENT_CAP,
       ),
       chainstepId: String(summon._id),
       target,
-      ts: lastDid.date,
+      ts: lastFact.date,
     };
   }
 
@@ -185,21 +185,21 @@ async function summonToActivity(summon) {
     content: truncate(summon.startMessage?.content || "", ACTIVITY_CONTENT_CAP),
     chainstepId: String(summon._id),
     target,
-    ts: summon.summonedAt || new Date(),
+    ts: summon.stampedAt || new Date(),
   };
 }
 
-// Infer what a Summon is acting on. The Summon schema doesn't carry an
+// Infer what a Stamp is acting on. The Stamp schema doesn't carry an
 // explicit target field, but the reply linkage tells us: when inReplyTo
-// is set, the Summon was spawned by another being. Treat the parent's
+// is set, the Stamp was spawned by another being. Treat the parent's
 // activeRole/position as the target so sub-beings animate walking toward
 // their spawner.
 async function inferActivityTarget(summon) {
   if (!summon?.inReplyTo) return null;
   let parent;
   try {
-    const Summon = (await import("../models/summon.js")).default;
-    parent = await Summon.findById(summon.inReplyTo)
+    const Stamp = (await import("../models/stamp.js")).default;
+    parent = await Stamp.findById(summon.inReplyTo)
       .select("activeRole beingOut")
       .lean();
   } catch {
@@ -335,7 +335,7 @@ async function placeAtSpace(resolved, { identity, payload } = {}) {
   const parentPath  = pathByNames.replace(/\/[^/]+$/, "") || "/";
 
   // .threads has no persisted children; the live forest is projected
-  // on demand from Summon records keyed by rootCorrelation. The SEE
+  // on demand from Stamp records keyed by rootCorrelation. The SEE
   // payload's filter fields (being, role, position, stance, priority)
   // push down to the projection's $match so the listing scales.
   // Each entry is shaped like a normal child so clients render it
@@ -478,7 +478,7 @@ function buildLineage(resolved) {
 }
 
 // Attach the registered role's wire fields, the per-being inbox, the
-// active Summon's activity, and the being's own qualities to each
+// active Stamp's activity, and the being's own qualities to each
 // entry produced by beingsAtSpace.
 async function enrichBeings(spaceId, entries) {
   const inboxByBeing = await getInboxSummary(spaceId);
@@ -493,7 +493,7 @@ async function enrichBeings(spaceId, entries) {
 
   const activities = await Promise.all(entries.map(async (e) => {
     if (!e._beingId) return null;
-    const summon = await getActiveSummonForBeing(e._beingId);
+    const summon = await findOpenForBeing(e._beingId);
     return summonToActivity(summon);
   }));
 

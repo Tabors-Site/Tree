@@ -200,7 +200,7 @@ export default function getFlagTools(_core) {
 
         const workerType = inferWorkerTypeFromRole(roleName);
         // Phase 3c ([[project_seed_four_verbs_only]]): dispatch through
-        // the registered DO operation. Same handler runs; auto-Did fires.
+        // the registered DO operation. Same handler runs; auto-Fact fires.
         // This proves the wire-verb-surface round-trip: extension code
         // and external callers (e.g. another extension, future MCP-over-
         // IBP) reach the same operation through the same dispatcher.

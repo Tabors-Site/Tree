@@ -29,7 +29,7 @@
 //   5. Handle abort signal and inference errors.
 //   6. If the role declares a reply mode, request the next moment
 //      in the chain (someone else's, somewhere upstream).
-//   7. Return { text, summonId } for the scheduler.
+//   7. Return { text, stampId } for the scheduler.
 //
 // `text` is the terminal LLM emission — the final assistant
 // message the being produced inside its moment. The deliverable
@@ -51,13 +51,13 @@
 //                    follow-up moment. The Ruler's synthesis back
 //                    to whoever opened the chain.
 
-import log from "../system/log.js";
+import log from "../../../system/log.js";
 import { runTurn } from "./runTurn.js";
 import {
   emitReplyToAsker,
   emitReplyToStance,
   findChainInitialCaller,
-} from "./replies.js";
+} from "../../intake/replies.js";
 
 /**
  * The generic summon implementation. The role registry wires this
@@ -70,7 +70,7 @@ import {
  * @param {object} opts.message . the inbox SUMMON envelope
  * @param {object} opts.ctx . the summon ctx (toBeing, spaceId, signal, ...)
  * @param {object} opts.role . the role spec
- * @returns {Promise<{ text, summonId } | null>}
+ * @returns {Promise<{ text, stampId } | null>}
  */
 export async function defaultSummon({ message, ctx, role }) {
   const startMs = Date.now();
@@ -144,7 +144,7 @@ export async function defaultSummon({ message, ctx, role }) {
 
   return {
     text,
-    summonId: result?.summonId || null,
+    stampId: result?.stampId || null,
   };
 }
 

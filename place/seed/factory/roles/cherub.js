@@ -160,7 +160,7 @@ export const cherubBeing = Object.freeze({
       // I (cherub) summon the new human-being forth. The human
       // arrived as an arrival stance and asked to be registered; my
       // act is the SUMMON.create on their behalf. The new being's
-      // first BE.register Did is written by summonCreateBeing,
+      // first BE.register Fact is stamped by summonCreateBeing,
       // witnessed by me — preserving the symmetry that every being's
       // first act is its own first BE, even though I sign it.
       const result = await summonCreateBeing({
@@ -168,6 +168,12 @@ export const cherubBeing = Object.freeze({
           operatingMode: "human",
           name,
           password,
+          // The human role is the addressable contract every human
+          // carries. Its summon handler is a no-op — humans respond
+          // out-of-band from their own transport. Without a role,
+          // SUMMONs to the new human would reject with ROLE_UNAVAILABLE.
+          roles:         ["human"],
+          defaultRole:   "human",
           homeParent:    getPlaceRootId(),
           parentBeingId,
         },

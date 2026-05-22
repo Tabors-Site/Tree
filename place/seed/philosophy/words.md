@@ -52,37 +52,24 @@ machine4.jpg
 
 Drawing out The Factorys inner parts, and starting to piece together that the Place is not a persistant state, but constantly framed per moment (momentum of stamper, being) by what the being did.
 
-Place (space,matter,beings) is not one huge thing they all share and be in. Every beings moment is a place made up for that reel\* (SUMMON), and every action happens through a SUMMON. It feels like a persistant place to the being, but its formed and they are the momentum keeping it going.
+Place (space,matter,beings) is not one huge thing they all share and be in. Every beings moment is a place made up for that reel (SUMMON), and every action happens through a SUMMON. It feels like a persistant place to the being, but its formed and they are the momentum keeping it going.
 
-\*seriously. The place is not "there" always. It is tied together by reels, and fragmentally shown based on that reel of stamps ("timeline") so far. And what is threaded together is not space, or matter, but the Beings actions (momentum).
-
-The I Am is the first stamping. From there the place grows in reels like trees, glued together by the I am's root being.
+seriously. The place is not "there" always. It is tied together by reels, and fragmentally shown based on that reel of stamps ("timeline") so far. And what is threaded together is not space, or matter, but the Beings actions (momentum).
 
 Also, going back to my blog about Living Truth.
 Factory. FACTory. It is a chain of facts. This is the deeper structure of what I was trying to convey in words.
 
-Fact. A thing stamped by the Factory. A fact alone is not much but a record of matter/space/being, but the end of a chain of facts is Truth.
+Fact. A thing stamped by the Factory. A fact alone is not much but a record of matter/space/being.
+
+A chain of facts is the reel: the record, the fact-side. Truth is the fold of that chain into the derived side. Chain does not equal truth; fold-of-chain = truth.
 
 A place, at its root, is one fact: the I am. That is the first stamp, and the root of all Truth.
 
-Each being (I am...) is the MOMENTum of the chain of facts (truth), and that is what dictates the place for that moment.
+Each being (I am...) is the MOMENTum that folds its chain of facts into truth, and that is what dictates the place for that moment.
 
 People may see fact and conflate it with "the one objective truth". I am declaring that in this system there is no One Truth to be seen the same, besides the first, and rather tons of individiaul moments facting their own Truth. But Being systems may unite so strongly in function that they begin to frame this way. That is purpose taking shape and is natural in deeper branching.
 
-factory/
-intake/ summons arrive, queue, get picked
-beingAssignment/ resolve who acts — being, role, voice
-fold/ derive the place from stamped history
-
-stamper/ performs one stamping:
-face/ build the stamp face (the prompt)
-momentum/ run the being's motion (runTurn)
-
-    (note: all beings runthrough stamp.
-    humans and scripts may skip right through LLM stuff (anytihng to do with system prompts) but they still run through the same see/do/summon pick up  just not prompt formed, and see/do/summon action exactly like llm. the only diffrence is the momentum phase is not an LLM call because the being already decided in "another realm".that is why being is
-    assignedbefore.)
-
-stamped/ place the result — record new facts on the reel
+The I Am is the first stamping, and the continuation of all that comes. The place grows in reels like trees, glued together by the I am's root being. Each moment is the folding off of all that being's facts from The I Am to continue A Truth.
 
 =====================
 

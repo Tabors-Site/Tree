@@ -6,7 +6,7 @@
  * for "the conversation context this chat belongs to." The shape is
  * `<stance> :: <stance>` (canonical sorted), matching the protocol's
  * IBP Address grammar (see /place/seed/ibp/address.js and
- * seed/factory/summonAddress.js). New chats compute and write it at
+ * seed/factory/stamper/stamped/stampIBPAddress.js). New chats compute and write it at
  * creation time.
  *
  * What this migration does:

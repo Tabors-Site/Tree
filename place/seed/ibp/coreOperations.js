@@ -81,7 +81,7 @@ export function registerKernelOperations() {
   registerOperation("create-child", {
     targets: ["space", "being", "matter"],
     ownerExtension: "kernel",
-    didAction: "create",
+    factAction: "create",
     handler: async ({ target, params, identity }) => {
       const kind = detectTargetKind(target);
       if (kind === "being")
@@ -98,7 +98,7 @@ export function registerKernelOperations() {
   registerOperation("create-matter", {
     targets: ["space"],
     ownerExtension: "kernel",
-    didAction: "create",
+    factAction: "create",
     handler: async ({ target, params, identity }) => {
       const spaceId = targetIdOf(target);
       const matter = await Matter.create({
@@ -112,12 +112,12 @@ export function registerKernelOperations() {
           ? new Map(Object.entries(params.qualities))
           : new Map(),
       });
-      // _didTarget hints the dispatcher to name the new matter (not the
+      // _factTarget hints the dispatcher to name the new matter (not the
       // parent space the call addressed) as the substrate-event target.
       return {
         matter,
         matterId: String(matter._id),
-        _didTarget: { kind: "matter", id: String(matter._id) },
+        _factTarget: { kind: "matter", id: String(matter._id) },
       };
     },
   });
@@ -146,7 +146,7 @@ export function registerKernelOperations() {
   registerOperation("set-name", {
     targets: ["space", "being", "matter"],
     ownerExtension: "kernel",
-    didAction: "edit",
+    factAction: "edit",
     handler: async ({ target, params, identity }) => {
       const { name } = params || {};
       if (!name || typeof name !== "string") {
@@ -193,7 +193,7 @@ export function registerKernelOperations() {
   registerOperation("set-type", {
     targets: ["space"],
     ownerExtension: "kernel",
-    didAction: "edit",
+    factAction: "edit",
     handler: async ({ target, params, identity }) => {
       const { type } = params || {};
       if (!type || typeof type !== "string") {
@@ -216,7 +216,7 @@ export function registerKernelOperations() {
   registerOperation("delete-space", {
     targets: ["space"],
     ownerExtension: "kernel",
-    didAction: "remove",
+    factAction: "remove",
     handler: async ({ target, params: _params, identity }) => {
       const spaceId = targetIdOf(target);
       const deleted = await deleteSpaceBranch(
@@ -236,7 +236,7 @@ export function registerKernelOperations() {
   registerOperation("delete-matter", {
     targets: ["matter"],
     ownerExtension: "kernel",
-    didAction: "remove",
+    factAction: "remove",
     handler: async ({ target, params: _params, identity, summonCtx }) => {
       const matterId = String(target?._id || target?.matterId || target);
       if (!matterId) throw new Error("delete-matter: matterId required");
@@ -247,7 +247,7 @@ export function registerKernelOperations() {
       await deleteMatterAndFile({
         matterId,
         beingId: String(beingId || ""),
-        summonId: summonCtx?.summonId || null,
+        stampId: summonCtx?.stampId || null,
         sessionId: summonCtx?.sessionId || null,
       });
       return { removed: true, matterId };
@@ -259,7 +259,7 @@ export function registerKernelOperations() {
   registerOperation("set-parent", {
     targets: ["space"],
     ownerExtension: "kernel",
-    didAction: "move",
+    factAction: "move",
     handler: async ({ target, params, identity }) => {
       const { parentId } = params || {};
       if (!parentId || typeof parentId !== "string") {
@@ -288,7 +288,7 @@ export function registerKernelOperations() {
   registerOperation("set-meta", {
     targets: ["space", "being", "matter"],
     ownerExtension: "kernel",
-    didAction: "edit",
+    factAction: "edit",
     handler: async ({ target, params, identity }) => {
       const { namespace, data, merge = true } = params || {};
       if (!namespace || typeof namespace !== "string") {
@@ -432,7 +432,7 @@ export function registerKernelOperations() {
   //
   // Target: the Being that owns the connection. Connection records are
   // stored in the LlmConnection collection, indexed by beingId. The ops
-  // wrap the seed/factory/beingAssignment/llm/connections.js helpers; the IBP grammar gives
+  // wrap the seed/factory/voices/llm/connect.js helpers; the IBP grammar gives
   // them a single dispatch surface.
 
   registerOperation("add-llm-connection", {
@@ -446,7 +446,7 @@ export function registerKernelOperations() {
         );
       }
       const { addLlmConnection, assignConnection } =
-        await import("../factory/beingAssignment/llm/connections.js");
+        await import("../factory/voices/llm/connect.js");
       const beingId = String(target._id);
       const connection = await addLlmConnection(beingId, {
         name,
@@ -478,7 +478,7 @@ export function registerKernelOperations() {
         );
       }
       const { updateLlmConnection } =
-        await import("../factory/beingAssignment/llm/connections.js");
+        await import("../factory/voices/llm/connect.js");
       const connection = await updateLlmConnection(
         String(target._id),
         connectionId,
@@ -496,7 +496,7 @@ export function registerKernelOperations() {
       if (!connectionId)
         throw new Error("delete-llm-connection: `connectionId` is required");
       const { deleteLlmConnection } =
-        await import("../factory/beingAssignment/llm/connections.js");
+        await import("../factory/voices/llm/connect.js");
       await deleteLlmConnection(String(target._id), connectionId);
       return { removed: true, connectionId };
     },
@@ -518,7 +518,7 @@ export function registerKernelOperations() {
       if (!slot) throw new Error("assign-llm-slot: `slot` is required");
       const kind = detectTargetKind(target);
       const { assignConnection, assignSpaceConnection } =
-        await import("../factory/beingAssignment/llm/connections.js");
+        await import("../factory/voices/llm/connect.js");
       if (kind === "being") {
         return assignConnection(String(target._id), slot, connectionId || null);
       }
@@ -751,9 +751,9 @@ function shapeNewSpace(newSpace) {
     spaceId,
     name: newSpace.name,
     position: `${getPlaceDomain()}/${spaceId}`,
-    // _didTarget hints the dispatcher to name the new space (not the
+    // _factTarget hints the dispatcher to name the new space (not the
     // parent the call addressed) as the substrate-event target.
-    _didTarget: { kind: "space", id: spaceId },
+    _factTarget: { kind: "space", id: spaceId },
   };
 }
 

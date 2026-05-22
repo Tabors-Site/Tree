@@ -46,13 +46,13 @@
 // extension-init re-registration is sufficient.
 
 import { randomUUID } from "crypto";
-import log from "../system/log.js";
-import { getAncestorChain } from "../place/space/ancestorCache.js";
-import { summonByResolved } from "../ibp/verbs.js";
-import { getPlaceDomain } from "../ibp/address.js";
-import { getPlaceRootId } from "../placeRoot.js";
-import { I_AM } from "../place/being/seedBeings.js";
-import { iAmIdentity } from "../place/being/placeBeings.js";
+import log from "../../system/log.js";
+import { getAncestorChain } from "../../place/space/ancestorCache.js";
+import { summonByResolved } from "../../ibp/verbs.js";
+import { getPlaceDomain } from "../../ibp/address.js";
+import { getPlaceRootId } from "../../placeRoot.js";
+import { I_AM } from "../../place/being/seedBeings.js";
+import { iAmIdentity } from "../../place/being/placeBeings.js";
 
 // beingId -> Map<subscriptionId, subscription>
 const _byBeing = new Map();
@@ -319,7 +319,7 @@ export async function emitToSubscribers(eventName, payload, options = {}) {
     return 0;
   }
   const senderStance = _senderStanceForPayload(payload);
-  const rootCorrelation = payload?.rootCorrelation || payload?.summonId || null;
+  const rootCorrelation = payload?.rootCorrelation || payload?.stampId || null;
 
   let emitted = 0;
   for (const sub of matches) {

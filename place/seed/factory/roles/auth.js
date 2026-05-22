@@ -123,6 +123,11 @@ export const authBeing = Object.freeze({
             operatingMode: "human",
             name,
             password,
+            // Receptive role so SUMMONs to this human resolve; the
+            // human role's summon is a no-op (humans respond
+            // out-of-band from their own transport).
+            roles:        ["human"],
+            defaultRole:  "human",
             homeParent: getPlaceRootId(),
             parentBeingId: iAm ? String(iAm._id) : null,
           },
@@ -174,7 +179,7 @@ export const authBeing = Object.freeze({
       // I (auth-being) summon the new human-being forth. The human
       // arrived as an arrival stance and asked to be registered; my
       // act is the SUMMON.create on their behalf. The new being's
-      // first BE.register Did is written by summonCreateBeing,
+      // first BE.register Fact is stamped by summonCreateBeing,
       // witnessed by me — preserving the symmetry that every being's
       // first act is its own first BE, even though I sign it.
       const result = await summonCreateBeing({
@@ -182,6 +187,8 @@ export const authBeing = Object.freeze({
           operatingMode: "human",
           name,
           password,
+          roles:        ["human"],
+          defaultRole:  "human",
           homeParent: getPlaceRootId(),
           parentBeingId,
         },

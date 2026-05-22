@@ -8,7 +8,7 @@
 // deterministically and returns. The work I do is real — adding
 // connections, assigning slots, planting tutorial matter — but
 // it's code work, not inference. I have no presence lane and no
-// frame on the reel beyond the Summon row each call stamps.
+// frame on the reel beyond the Stamp row each call stamps.
 //
 // One canonical implementation, reached through `ibp:be
 // <place>/@llm-assigner` from every transport.
@@ -29,7 +29,7 @@
 //   space    set-space-llm
 //            Sets qualities.llm.slots[slot] on a space the caller owns
 //            (rootOwner matches). Drives the tree-level resolution
-//            step in seed/factory/beingAssignment/llm/llmClient.js.
+//            step in seed/factory/voices/llm/connect.js.
 //
 // Authorization gates here are coarse for now (self / root operator /
 // tree ownership). The deferred stance-authorization framework will
@@ -83,7 +83,7 @@ export const llmAssignerBeing = Object.freeze({
     if (!model)   throw new IbpError(IBP_ERR.INVALID_INPUT, "`model` is required");
     // apiKey is optional — local LLMs (Ollama, llama.cpp) don't need it.
 
-    const { addLlmConnection } = await import("../../factory/beingAssignment/llm/connections.js");
+    const { addLlmConnection } = await import("../voices/llm/connect.js");
     const connection = await addLlmConnection(String(ctx.identity.beingId), { name, baseUrl, model, apiKey });
     return {
       connectionId: String(connection._id),
@@ -105,7 +105,7 @@ export const llmAssignerBeing = Object.freeze({
     const { slot, connectionId } = payload || {};
     if (!slot) throw new IbpError(IBP_ERR.INVALID_INPUT, "`slot` is required");
 
-    const { assignConnection } = await import("../../factory/beingAssignment/llm/connections.js");
+    const { assignConnection } = await import("../voices/llm/connect.js");
     return assignConnection(String(ctx.identity.beingId), slot, connectionId || null);
   },
 
@@ -118,7 +118,7 @@ export const llmAssignerBeing = Object.freeze({
     requireAuthenticated(ctx);
     const beingId = String(ctx.identity.beingId);
     const LlmConnection = (await import("../../models/llmConnection.js")).default;
-    const { getBeingLlmAssignments } = await import("../../factory/beingAssignment/llm/assignments.js");
+    const { getBeingLlmAssignments } = await import("../voices/llm/connect.js");
 
     const [connections, being] = await Promise.all([
       LlmConnection.find({ beingId }).select("_id name baseUrl model lastUsedAt").lean(),
@@ -148,7 +148,7 @@ export const llmAssignerBeing = Object.freeze({
     const { connectionId } = payload || {};
     if (!connectionId) throw new IbpError(IBP_ERR.INVALID_INPUT, "`connectionId` is required");
 
-    const { deleteLlmConnection } = await import("../../factory/beingAssignment/llm/connections.js");
+    const { deleteLlmConnection } = await import("../voices/llm/connect.js");
     await deleteLlmConnection(String(ctx.identity.beingId), connectionId);
     return { removed: true, connectionId };
   },
@@ -197,7 +197,7 @@ export const llmAssignerBeing = Object.freeze({
    * Set an LLM slot on a space the caller owns (via rootOwner of the
    * containing tree). Writes qualities.llm.slots[slot] on the space —
    * the tree-level step of the resolution chain in
-   * seed/factory/beingAssignment/llm/llmClient.js.
+   * seed/factory/voices/llm/connect.js.
    *
    * @param {object} payload  { spaceId, slot, connectionId }
    *                          connectionId null to clear the slot

@@ -10,7 +10,7 @@
 //
 // Referenced by Being.llmDefault, Space.llmDefault, and per-slot
 // assignments under qualities. The resolution chain in
-// seed/factory/beingAssignment/llm/llmClient.js walks space-tree → being → place to
+// seed/factory/voices/llm/connect.js walks space-tree → being → place to
 // pick which connection drives any given LLM call.
 //
 // What this schema fixes:
@@ -22,7 +22,7 @@
 //   secret      `encryptedApiKey` — optional; local LLMs (Ollama,
 //               llama.cpp) often need no auth. When present, the
 //               key is AES-256-CBC encrypted by
-//               seed/factory/beingAssignment/llm/connections.js; the plaintext never
+//               seed/factory/voices/llm/connect.js; the plaintext never
 //               persists.
 //   model       `model` — the model name the endpoint expects
 //   usage       `lastUsedAt` — for housekeeping and operator views

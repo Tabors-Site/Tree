@@ -20,8 +20,8 @@ import { attachIbpHandlers } from "./protocol.js";
 import { hooks } from "../../seed/system/hooks.js";
 import Space from "../../seed/models/space.js";
 import { emitPositionInvalidate } from "./live.js";
-import { emitToSubscribers } from "../../seed/factory/subscriptions.js";
-import { startTickLoop as startScheduleTick } from "../../seed/factory/wakeSchedule.js";
+import { emitToSubscribers } from "../../seed/factory/intake/subscriptions.js";
+import { startTickLoop as startScheduleTick } from "../../seed/factory/intake/wakeSchedule.js";
 
 // Kernel-signal-to-live-emit bridge. When kernel events touch data that
 // the Position Description reads, invalidate subscribers so they refetch.
@@ -118,16 +118,16 @@ export { IbpError, IBP_ERR, isIbpError } from "../../seed/ibp/protocol.js";
 // of work, emit a SUMMON whose target is `.threads/<rootCorrelation>`
 // (the cut handler in seed/place/space/threads.js does the
 // inbox sweep + scheduler abort). See [[project_thread_as_primitive]].
-export { pickNextEntry } from "../../seed/factory/inbox.js";
+export { pickNextEntry } from "../../seed/factory/intake/inbox.js";
 // Scheduler observability only. `wake`, `abortCurrent`,
 // `cancelByRootCorrelation` retired from this surface 2026-05-21:
 // they let callers fabricate or sever work without an envelope,
 // breaking the audit chain. The right way to wake a being is to
 // SUMMON them; the right way to cut a sub-tree is to SUMMON
 // `.threads/<id>` (priority HUMAN for out-of-band interrupt).
-export { getCurrentRootCorrelation, getStats as getSchedulerStats } from "../../seed/factory/scheduler.js";
+export { getCurrentRootCorrelation, getStats as getSchedulerStats } from "../../seed/factory/intake/scheduler.js";
 // Reply aggregation pattern for fanout (Foreman → Workers, etc.).
-export { aggregate } from "../../seed/factory/replies.js";
+export { aggregate } from "../../seed/factory/intake/replies.js";
 // Subscription registry — extensions declare DO-trigger interest so
 // their beings get summoned when matching substrate writes happen.
 export {
@@ -137,7 +137,7 @@ export {
   getMatchingSubscribers,
   emitToSubscribers,
   getStats as getSubscriptionStats,
-} from "../../seed/factory/subscriptions.js";
+} from "../../seed/factory/intake/subscriptions.js";
 // Schedule registry — extensions declare wake cadences so their
 // beings get scheduled-wake SUMMONs on intervals. Default emitter is
 // Mode 2 (@system sender); embodied flavor swaps via setEmitter.
@@ -148,4 +148,4 @@ export {
   setEmitter as setScheduleEmitter,
   resetEmitter as resetScheduleEmitter,
   getStats as getScheduleStats,
-} from "../../seed/factory/wakeSchedule.js";
+} from "../../seed/factory/intake/wakeSchedule.js";

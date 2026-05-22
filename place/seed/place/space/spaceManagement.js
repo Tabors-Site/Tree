@@ -162,7 +162,7 @@ export async function createSpace({
   note = null,
   qualities = null,
   validatedBeing = null,
-  summonId = null,
+  stampId = null,
   sessionId = null,
 } = {}) {
   name = assertValidSpaceName(name);
@@ -270,9 +270,9 @@ export async function createSpace({
     if (lockTarget) releaseSpaceLock(lockTarget, sessionId);
   }
 
-  // Did audit is the dispatcher's job (one Did per verb emission).
-  // Helpers no longer write Dids; the wrapping op's handler returns
-  // _didTarget hinting at the new space so the dispatcher names the
+  // Fact stamping is the dispatcher's job (one Fact per verb emission).
+  // Helpers no longer stamp Facts; the wrapping op's handler returns
+  // _factTarget hinting at the new space so the dispatcher names the
   // substrate event (not the call's parent target).
 
   if (note?.trim()) {
@@ -281,7 +281,7 @@ export async function createSpace({
       content: note,
       beingId: being._id,
       spaceId: newSpace._id,
-      summonId,
+      stampId,
       sessionId,
     });
   }
@@ -380,14 +380,14 @@ export async function createSpaceBranch(
   branchData,
   parentId,
   beingId,
-  summonId = null,
+  stampId = null,
   sessionId = null,
 ) {
   const being = await getBeingOrThrow(beingId);
-  return _createBranch(branchData, parentId, being, summonId, sessionId);
+  return _createBranch(branchData, parentId, being, stampId, sessionId);
 }
 
-async function _createBranch(branchData, parentId, being, summonId, sessionId) {
+async function _createBranch(branchData, parentId, being, stampId, sessionId) {
   const { name, note, type, qualities } = branchData;
   const children = Array.isArray(branchData.children)
     ? branchData.children
@@ -412,7 +412,7 @@ async function _createBranch(branchData, parentId, being, summonId, sessionId) {
     note: note || null,
     qualities: qualitiesMap,
     validatedBeing: being,
-    summonId,
+    stampId,
     sessionId,
   });
 
@@ -422,7 +422,7 @@ async function _createBranch(branchData, parentId, being, summonId, sessionId) {
       childData,
       newSpace._id,
       being,
-      summonId,
+      stampId,
       sessionId,
     );
     totalCreated += result.totalCreated;
@@ -438,7 +438,7 @@ export async function editSpaceName({
   spaceId,
   newName,
   beingId,
-  summonId = null,
+  stampId = null,
   sessionId = null,
 }) {
   newName = assertValidSpaceName(newName);
@@ -465,7 +465,7 @@ export async function editSpaceType({
   spaceId,
   newType,
   beingId,
-  summonId = null,
+  stampId = null,
   sessionId = null,
 }) {
   newType = assertValidSpaceType(newType);
@@ -502,7 +502,7 @@ export async function updateParentRelationship(
   childId,
   newParentId,
   beingId,
-  summonId = null,
+  stampId = null,
   sessionId = null,
   opts = {},
 ) {
@@ -632,7 +632,7 @@ export async function updateParentRelationship(
 export async function deleteSpaceBranch(
   spaceId,
   beingId,
-  summonId = null,
+  stampId = null,
   sessionId = null,
 ) {
   const spaceToDelete = await Space.findById(spaceId);
@@ -697,13 +697,13 @@ export async function deleteSpaceBranch(
 /**
  * Reorder a space's children. The new order must contain exactly the
  * same IDs as the current `children`, just in a different sequence.
- * Atomic `$set`. Did logged.
+ * Atomic `$set`. Fact stamped.
  */
 export async function reorderChildren({
   spaceId,
   children: newOrder,
   beingId,
-  summonId = null,
+  stampId = null,
   sessionId = null,
 }) {
   if (!Array.isArray(newOrder)) throw new Error("children must be an array");

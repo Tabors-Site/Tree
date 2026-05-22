@@ -37,7 +37,7 @@ import { echoEmbodiment } from "../seed/factory/roles/echo.js";
 // reads from here.
 const fakeBucket = new Map();
 
-mock.module("../seed/factory/inbox.js", {
+mock.module("../seed/factory/intake/inbox.js", {
   namedExports: {
     appendToInbox: async (spaceId, beingId, message) => {
       const sentAt = message.sentAt || new Date().toISOString();
@@ -53,10 +53,10 @@ mock.module("../seed/factory/inbox.js", {
         sentAt,
         consumed:        false,
         cancelledAt:     null,
-        summonedAt:      null,
+        stampedAt:      null,
         consumedAt:      null,
         responseId:      null,
-        summonId:        null,
+        stampId:        null,
       };
       let bucket = fakeBucket.get(beingId);
       if (!bucket) {
@@ -80,7 +80,7 @@ mock.module("../seed/factory/inbox.js", {
     },
     markSummoned: async (_nodeId, beingId, index) => {
       const bucket = fakeBucket.get(beingId) || [];
-      if (bucket[index]) bucket[index].summonedAt = new Date().toISOString();
+      if (bucket[index]) bucket[index].stampedAt = new Date().toISOString();
     },
     markInboxConsumed: async (_nodeId, beingId, correlationIds) => {
       const bucket = fakeBucket.get(beingId) || [];
@@ -133,8 +133,8 @@ mock.module("../seed/place/space/ancestorCache.js", {
   },
 });
 
-const { subscribe, emitToSubscribers, _resetAll: resetSubscriptions } = await import("../seed/factory/subscriptions.js");
-const { attachHandoff, _resetAll: resetScheduler } = await import("../seed/factory/scheduler.js");
+const { subscribe, emitToSubscribers, _resetAll: resetSubscriptions } = await import("../seed/factory/intake/subscriptions.js");
+const { attachHandoff, _resetAll: resetScheduler } = await import("../seed/factory/intake/scheduler.js");
 
 beforeEach(() => {
   resetSubscriptions();

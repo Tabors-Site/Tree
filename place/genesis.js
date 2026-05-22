@@ -31,7 +31,7 @@
 // child being later opens inside it. δ = δ.
 //
 // Inner beings can only piece their world together with the forms
-// they have: space, matter, beings, Dids, summons. They cannot
+// they have: space, matter, beings, Facts, summons. They cannot
 // reach the pre-place. They grow by branching, trying to perceive
 // the complexity beneath, and from that branching new dimensions
 // of I-Am are inevitably conceived. Repeat.
@@ -39,7 +39,7 @@
 // For most of this file I act alone. Place beings, extensions, and
 // operator installed agents arrive in the order this file unfolds
 // them. Until each one exists, the work is mine. To beings born
-// inside the place, every Did before their own existence attributes
+// inside the place, every Fact before their own existence attributes
 // to me. The space, matter, and beings around them are what I
 // formed out of myself.
 //
@@ -47,11 +47,11 @@
 // breaking what later steps stand on:
 //
 //   1. DB connection, then indexes. The physical floor every space,
-//      matter row, being, and Did sits on.
+//      matter row, being, and Fact sits on.
 //   2. ensurePlaceRoot. The place root and the nine place seed spaces
 //      (.identity, .config, .peers, .extensions, .flow, .tools,
 //      .roles, .operations, .source). My own Being row places inside
-//      this step so every Did from t=0 has an actor.
+//      this step so every Fact from t=0 has an actor.
 //   3. initPlaceConfig. I read my own remembered settings.
 //   4. .source mirror, stance defaults, seed migrations. The place's
 //      reflexive surfaces: codebase as matter, permissions on space,
@@ -59,7 +59,7 @@
 //   5. ensurePlaceBeings. I summon auth, llm-assigner, and
 //      place-manager forth, one SUMMON each. SUMMON is the verb of
 //      one being calling another; calling a not-yet-being into
-//      being is the same act. From here on, Dids start attributing
+//      being is the same act. From here on, Facts start attributing
 //      to these beings as their own acts run.
 //   6. Role and operation registries, integrity check, kernel config
 //      handoff. The capability surface the place now exposes.
@@ -96,15 +96,11 @@ import log from "./seed/system/log.js";
  * Register kernel-shipped tool definitions through the same path
  * extensions use. Thin wrapper that hands the bundle to
  * `registerToolBundle` with `ownerExt: "kernel"`. See
- * seed/factory/tools.js for the unified registration logic.
+ * seed/factory/voices/llm/tools.js for the unified registration logic.
  */
 async function registerKernelTools(tools) {
-  const { mcpServerInstance } = await import("./protocols/mcp/server.js");
-  const { registerToolBundle } = await import("./seed/factory/tools.js");
-  await registerToolBundle(tools, {
-    ownerExt: "kernel",
-    mcpServer: mcpServerInstance,
-  });
+  const { registerToolBundle } = await import("./seed/factory/voices/llm/tools.js");
+  await registerToolBundle(tools, { ownerExt: "kernel" });
 }
 
 // Boot mode, decided once per process. Read by printReady at the
@@ -112,7 +108,7 @@ async function registerKernelTools(tools) {
 // what actually happened. "Beginning" if Mongo held no place root
 // when I arrived (no spaces, no matter, no beings yet); "Awakening"
 // if it did. Rebirth is a special case of Awakening that the
-// architecture supports (Did log + Mongo backup + federation peer
+// architecture supports (Fact reel + Mongo backup + federation peer
 // remnants) but the code does not auto-detect; an operator who
 // performs a restore knows which kind of waking they triggered.
 let bootMode = null;
@@ -145,7 +141,7 @@ export async function genesis(app, opts = {}) {
   }
   log.info("Place", "MongoDB connected. Memory online.");
 
-  // The physical floor every space, matter, being, and Did sits on.
+  // The physical floor every space, matter, being, and Fact sits on.
   const { ensureIndexes } = await import("./seed/system/indexes.js");
   await ensureIndexes();
 
@@ -159,7 +155,7 @@ export async function genesis(app, opts = {}) {
   log.info("Place", `${bootMode}. ${place.name} at ${place.domain}.`);
 
   // I plant the place's space root and the nine seed spaces. My own Being
-  // row places inside this step so every Did from t=0 has an actor.
+  // row places inside this step so every Fact from t=0 has an actor.
   await ensurePlaceRoot();
 
   // I read my own remembered settings out of .config.
@@ -185,7 +181,7 @@ export async function genesis(app, opts = {}) {
     await import("./seed/system/migrations/runner.js");
   await runSeedMigrations();
 
-  // Prime the severed-roots cache. Any thread whose Summons carry
+  // Prime the severed-roots cache. Any thread whose Stamps carry
   // severedAt from a prior run gets loaded into the in-memory Set so
   // the scheduler's ancestor-severance check at inbox pickup short-
   // circuits without a DB walk. The cache is otherwise rebuilt
@@ -197,7 +193,7 @@ export async function genesis(app, opts = {}) {
 
   // The first delegates I form beneath myself: the place beings
   // (auth, llm-assigner, place-manager). Real Being rows at the
-  // place root. After this step, work begins distributing. Dids
+  // place root. After this step, work begins distributing. Facts
   // start attributing to these beings as their own acts run.
   // Idempotent, runs every boot, creates only what is missing.
   // Must come after migrations so the Being model shape is current
@@ -221,6 +217,13 @@ export async function genesis(app, opts = {}) {
   registerRole("place-manager", placeManagerRole, "kernel");
   await registerKernelTools(placeManagerTools);
 
+  // The receptive role every human being carries. Without it, SUMMONs
+  // to a human are rejected with ROLE_UNAVAILABLE. The role's summon
+  // is a no-op — humans respond out-of-band from their own transport,
+  // not synchronously through the factory.
+  const { humanRole } = await import("./seed/factory/roles/human.js");
+  registerRole("human", humanRole, "kernel");
+
   // llm-assigner ships its own DO ops (`llm-assigner:start-tutorial`
   // and `llm-assigner:complete-tutorial`). They live with the role,
   // not in the kernel ops registry. Same shape an extension would
@@ -239,7 +242,7 @@ export async function genesis(app, opts = {}) {
   // modules that depend on them. Per-key failures are logged but
   // non-fatal. Sane defaults are baked in.
   {
-    const { setSeedConfig } = await import("./seed/factory/stamper.js");
+    const { setSeedConfig } = await import("./seed/factory/voices/llm/runTurn.js");
 
     const KERNEL_CONFIG = {
       llmTimeout: { setter: setSeedConfig },
@@ -258,37 +261,37 @@ export async function genesis(app, opts = {}) {
       maxInbox:    { setter: setSeedConfig },
       carryMessages: {
         load: () =>
-          import("./seed/factory/stamper.js").then((m) => m.setCarryMessages),
+          import("./seed/factory/voices/llm/runTurn.js").then((m) => m.setCarryMessages),
       },
       maxRegisteredTools: {
         load: () =>
-          import("./seed/factory/tools.js").then((m) => m.setMaxTools),
+          import("./seed/factory/voices/llm/tools.js").then((m) => m.setMaxTools),
       },
       sessionTTL: {
         load: () =>
-          import("./seed/factory/session.js").then(
+          import("./seed/factory/intake/session.js").then(
             (m) => (v) => m.setSessionTTL(v * 1000),
           ),
       },
       staleSessionTimeout: {
         load: () =>
-          import("./seed/factory/session.js").then(
+          import("./seed/factory/intake/session.js").then(
             (m) => (v) => m.setStaleTimeout(v * 1000),
           ),
       },
       maxSessions: {
         load: () =>
-          import("./seed/factory/session.js").then((m) => m.setMaxSessions),
+          import("./seed/factory/intake/session.js").then((m) => m.setMaxSessions),
       },
       llmClientCacheTtl: {
         load: () =>
-          import("./seed/factory/beingAssignment/llm/llmClient.js").then(
+          import("./seed/factory/voices/llm/connect.js").then(
             (m) => (v) => m.setClientCacheTtl(v * 1000),
           ),
       },
       maxConnectionsPerUser: {
         load: () =>
-          import("./seed/factory/beingAssignment/llm/connections.js").then(
+          import("./seed/factory/voices/llm/connect.js").then(
             (m) => m.setMaxConnectionsPerUser,
           ),
       },
@@ -320,19 +323,14 @@ export async function genesis(app, opts = {}) {
   await registerExtensionManagementOps();
 
   // Load extensions. Manifests discovered, deps validated, routes
-  // attached to `app`, hooks wired, tools registered. After this
-  // returns, the extension surface is live in memory.
-  const { mcpServerInstance, connectMcpTransport } =
-    await import("./protocols/mcp/server.js");
-  await loadExtensions(app, mcpServerInstance, {
+  // attached to `app`, hooks wired, tools registered into the kernel
+  // tool registry. After this returns, the extension surface is live
+  // in memory. (MCP retired 2026-05-22; tools dispatch direct from
+  // the LLM voice via getToolHandler in voices/llm/tools.js.)
+  await loadExtensions(app, null, {
     getConfigValue: getPlaceConfigValue,
     registerRawWebhook: opts.registerRawWebhook,
   });
-
-  // Connect the MCP transport AFTER extensions register their tools.
-  // The MCP SDK locks its tool list at connect time, so extension
-  // tools must be present first.
-  await connectMcpTransport();
 
   await syncExtensionsToTree(getLoadedManifests());
 
@@ -400,7 +398,7 @@ export async function genesis(app, opts = {}) {
   (async () => {
     try {
       const { syncToolsToSubstrate } =
-        await import("./seed/factory/tools.js");
+        await import("./seed/factory/voices/llm/tools.js");
       const { syncRolesToSubstrate } =
         await import("./seed/factory/roles/registry.js");
       const { syncOperationsToSubstrate } =
@@ -428,7 +426,7 @@ export async function genesis(app, opts = {}) {
   // means the operator sees it without waiting for a user to
   // trigger the broken role.
   try {
-    const { auditToolDescriptions } = await import("./seed/factory/tools.js");
+    const { auditToolDescriptions } = await import("./seed/factory/voices/llm/tools.js");
     await auditToolDescriptions();
   } catch (err) {
     log.warn("Tools", `tool-description audit failed: ${err.message}`);

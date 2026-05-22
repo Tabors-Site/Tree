@@ -92,7 +92,7 @@ async function createContractsEmission({ contractsSpaceId, ordinal, payload, bei
   const { slugifyEmission } = await import("./slugifyEmission.js");
   const name = slugifyEmission(payload?.reasoning, ordinal);
 
-  // Phase 3 migration: verb-surface create. Fires kernel hooks + Did.
+  // Phase 3 migration: verb-surface create. Fires kernel hooks + Fact.
   let created = null;
   try {
     created = await core.do(contractsSpaceId, "create-child", {
@@ -163,7 +163,7 @@ async function appendApproval({
   parentContractsApplied = [],
   identity = null,
   // Phase 3 ([[project_seed_four_verbs_only]]): callers thread `core`
-  // so the metadata write goes through core.do (auto-Did).
+  // so the metadata write goes through core.do (auto-Fact).
   core,
 }) {
   if (!rulerSpaceId || !contractsEmissionNodeId) return null;

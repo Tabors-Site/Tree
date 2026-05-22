@@ -107,7 +107,7 @@ export async function appendFlag({
   sourceWorkerType = null,
   identity = null,
   // Phase 3 ([[project_seed_four_verbs_only]]): callers thread core
-  // so the write goes through core.do (auto-Did, one dispatcher).
+  // so the write goes through core.do (auto-Fact, one dispatcher).
   core,
 }) {
   if (!rulerSpaceId || !payload) return null;
@@ -163,7 +163,7 @@ export async function appendFlag({
   const queue = [...existingQueue, flag];
 
   // Phase 3 migration ([[project_seed_four_verbs_only]]): write through
-  // the verb surface so the change auto-audits as a Did and flows
+  // the verb surface so the change auto-stamps as a Fact and flows
   // through one dispatcher path. merge:true preserves other keys in NS
   // atomically (better than the previous read-spread-write pattern,
   // which would clobber concurrent writes to sibling keys).

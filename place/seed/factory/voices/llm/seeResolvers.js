@@ -40,7 +40,7 @@
 // Resolvers are async-tolerant; I await them in parallel and
 // collect results in declaration order.
 
-import log from "../system/log.js";
+import log from "../../../system/log.js";
 
 const RESOLVERS = new Map();
 

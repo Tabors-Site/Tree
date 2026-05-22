@@ -743,7 +743,7 @@ export async function init(core) {
   // Operations reachable via `core.do(target, "governing:<action>", ...)`
   // from anywhere with `core` in scope . extension code, wire dispatch,
   // future MCP tools that compile to DO calls. Each handler runs through
-  // the seed verb dispatcher, which auto-writes a Did and (when Phase 5
+  // the seed verb dispatcher, which auto-stamps a Fact and (when Phase 5
   // adds it) gates through authorize.
   //
   // Proof slice: `governing:flag-issue`. The existing
@@ -790,7 +790,7 @@ export async function init(core) {
           beingId:     identity?.beingId || params.beingId || null,
           name:        params.name || "plans",
           systemSpec:  params.systemSpec || null,
-          summonId:    params.summonId || null,
+          stampId:    params.stampId || null,
           sessionId:   params.sessionId || null,
           core,
         });

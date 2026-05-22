@@ -18,7 +18,7 @@
 // to push just see "nothing happened" without crashing.
 //
 // Same inversion pattern as the schedule emitter (see
-// seed/factory/wakeSchedule.js setScheduleEmitter).
+// seed/factory/intake/wakeSchedule.js setScheduleEmitter).
 
 import log from "../system/log.js";
 

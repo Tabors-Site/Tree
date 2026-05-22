@@ -73,7 +73,7 @@ export async function initPlan(_nodeId, _opts = {}) {
 
 export async function appendLedger(_nodeId, _entry) {
   // No-op in the new shape. Ledger entries live in artifact metadata or
-  // dids on the relevant plan-emission artifact.
+  // facts on the relevant plan-emission artifact.
   return null;
 }
 

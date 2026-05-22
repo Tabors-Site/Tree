@@ -9,9 +9,9 @@
  *
  * Schema changes:
  *   - Collection renamed: `aichats` → `summons`.
- *   - Field renamed on each Summon doc: `rootChatId` → `rootSummonId`,
- *     `parentChatId` → `parentSummonId`.
- *   - Field renamed on each Did doc: `chatId` → `summonId`.
+ *   - Field renamed on each Summon doc: `rootChatId` → `rootStampId`,
+ *     `parentChatId` → `parentStampId`.
+ *   - Field renamed on each Did doc: `chatId` → `stampId`.
  *
  * Bumps SEED_VERSION 0.8.0 → 0.9.0.
  */
@@ -66,46 +66,47 @@ export default async function migrate() {
     const summons = db.collection("summons");
     const rootRes = await summons.updateMany(
       { rootChatId: { $exists: true } },
-      { $rename: { rootChatId: "rootSummonId" } },
+      { $rename: { rootChatId: "rootStampId" } },
     );
     if (rootRes.modifiedCount > 0) {
-      log.info("Seed/0.9.0", `renamed rootChatId → rootSummonId on ${rootRes.modifiedCount} summon(s)`);
+      log.info("Seed/0.9.0", `renamed rootChatId → rootStampId on ${rootRes.modifiedCount} summon(s)`);
     }
     const parentRes = await summons.updateMany(
       { parentChatId: { $exists: true } },
-      { $rename: { parentChatId: "parentSummonId" } },
+      { $rename: { parentChatId: "parentStampId" } },
     );
     if (parentRes.modifiedCount > 0) {
-      log.info("Seed/0.9.0", `renamed parentChatId → parentSummonId on ${parentRes.modifiedCount} summon(s)`);
+      log.info("Seed/0.9.0", `renamed parentChatId → parentStampId on ${parentRes.modifiedCount} summon(s)`);
     }
   }
 
-  // ── Step 3: rename chatId → summonId on dids ────────────────────────
+  // ── Step 3: rename chatId → stampId on dids ────────────────────────
   const didsExist = (await db.listCollections({ name: "dids" }, { nameOnly: true }).toArray()).length > 0;
   if (didsExist) {
     const dids = db.collection("dids");
     const didRes = await dids.updateMany(
       { chatId: { $exists: true } },
-      { $rename: { chatId: "summonId" } },
+      { $rename: { chatId: "stampId" } },
     );
     if (didRes.modifiedCount > 0) {
-      log.info("Seed/0.9.0", `renamed chatId → summonId on ${didRes.modifiedCount} did(s)`);
+      log.info("Seed/0.9.0", `renamed chatId → stampId on ${didRes.modifiedCount} did(s)`);
     }
   }
 
   // ── Step 4: sync indexes ────────────────────────────────────────────
   try {
-    const Summon = (await import("../models/summon.js")).default;
+    const Summon = (await import("../models/stamp.js")).default;
     await Summon.syncIndexes();
     log.verbose("Seed/0.9.0", "summon indexes synced");
   } catch (err) {
     log.warn("Seed/0.9.0", `summon index sync failed: ${err.message}`);
   }
   try {
-    const Did = (await import("../models/did.js")).default;
-    await Did.syncIndexes();
-    log.verbose("Seed/0.9.0", "did indexes synced");
+    // (Historical migration. Model renamed Did → Fact in 2026-05.)
+    const Fact = (await import("../models/fact.js")).default;
+    await Fact.syncIndexes();
+    log.verbose("Seed/0.9.0", "fact indexes synced");
   } catch (err) {
-    log.warn("Seed/0.9.0", `did index sync failed: ${err.message}`);
+    log.warn("Seed/0.9.0", `fact index sync failed: ${err.message}`);
   }
 }

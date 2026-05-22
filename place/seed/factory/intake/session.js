@@ -20,9 +20,9 @@
 // "a reach exists right now"; a presence is "this lane carries
 // the being's moments." Multiple sessions can sit in one presence.
 
-import log from "../system/log.js";
-import { hooks } from "../system/hooks.js";
-import { getPlaceConfigValue } from "../placeConfig.js";
+import log from "../../system/log.js";
+import { hooks } from "../../system/hooks.js";
+import { getPlaceConfigValue } from "../../placeConfig.js";
 
 import { v4 as uuidv4 } from "uuid";
 
@@ -500,11 +500,11 @@ setInterval(
 //
 // What `clientSessionId` IS NOT:
 //   - Conversation identity. The canonical identifier for a conversation
-//     between two beings is `Summon.ibpAddress` (the stance pair).
+//     between two beings is `Stamp.ibpAddress` (the stance pair).
 //   - Position state. Lives on `Being.currentSpace`. Two tabs for the
 //     same being share position automatically.
-//   - Tool-call → summonId correlation. The SUMMON loop injects
-//     `summonId` / `rootCorrelation` / `ibpAddress` into MCP tool args
+//   - Tool-call → stampId correlation. The SUMMON loop injects
+//     `stampId` / `rootCorrelation` / `ibpAddress` into MCP tool args
 //     directly; mcp/server.js reads them without a Map lookup.
 //   - MCP client cache key. Keyed by `ibpAddress` so all the being's
 //     sockets share one MCP client.
@@ -589,4 +589,38 @@ export function resolvePipelineKey({
 function cryptoRandomUUID() {
   if (globalThis.crypto?.randomUUID) return globalThis.crypto.randomUUID();
   return require("node:crypto").randomUUID();
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// WS CHAT SESSION (per-socket scope)
+// ─────────────────────────────────────────────────────────────────────────
+//
+// A WebSocket socket carries one chat session. `ensureSession` mints
+// or reuses the session id for this socket's reach. Per-transport
+// scopeKey: socket.clientSessionId already encodes (being, clientKind,
+// clientInstance), so CLI and browser on the same being get
+// independent sessions. endSession(sessionId) aborts any registered
+// abort controller on that sessionId.
+//
+// Used by the WS transport at message intake. Distinct from
+// presenceKey (the lane the being is in) — multiple sockets can sit
+// in one presence.
+
+
+export function ensureSession(socket) {
+  const scopeKey = `ws:${socket.clientSessionId}`;
+  const { sessionId, reused } = createSession({
+    beingId: socket.beingId,
+    type: SESSION_TYPES.WEBSOCKET_CHAT,
+    scopeKey,
+    description: `Chat session for ${socket.name || "unknown"}`,
+    meta: { clientSessionId: socket.clientSessionId },
+  });
+  if (!reused)
+    log.debug(
+      "AI",
+      `New AI session for ${socket.clientSessionId}: ${sessionId}`,
+    );
+  socket._aiSession = { id: sessionId, lastActivity: Date.now() };
+  return sessionId;
 }

@@ -7,9 +7,10 @@
 // the identity. Without acts, the union of space and matter has
 // nothing to be. The being is made of the acts unfolding.
 //
-// `factum`, a thing done. A fact alone is small, just a record of
-// matter, space, or being. The end of a chain of facts is Truth.
-// Truth is what the chain becomes.
+// A Fact is a thing a being stamps in the Factory — one recorded
+// change to matter, space, or being. `factum`, a thing done.
+// A single fact is small but settled; a chain of facts, folded,
+// is Truth.
 //
 // This file writes and reads that reel. logFact is called from the
 // IBP verb dispatcher every time DO or BE places an act. The Fact
@@ -62,7 +63,7 @@ const VALID_TARGET_KINDS = new Set([
  * @param {{kind:string,id:string}|null} [params.target]  what was acted on
  * @param {*} [params.params]       input payload (any JSON; clipped on cap)
  * @param {*} [params.result]       output payload (any JSON; clipped on cap)
- * @param {string|null} [params.summonId]   correlation
+ * @param {string|null} [params.stampId]   correlation
  * @param {string|null} [params.sessionId]  correlation
  * @param {string|null} [params.homePlace]   federation provenance
  * @param {boolean} [params.wasRemote=false] federation provenance
@@ -81,7 +82,7 @@ export async function logFact(input) {
     target = null,
     params = null,
     result = null,
-    summonId = null,
+    stampId = null,
     sessionId = null,
     homePlace = null,
     wasRemote = false,
@@ -126,7 +127,7 @@ export async function logFact(input) {
     target: normalizedTarget,
     params,
     result,
-    summonId,
+    stampId,
     sessionId,
     homePlace,
     wasRemote,
@@ -151,7 +152,7 @@ export async function logFact(input) {
     params: cappedParams.value,
     result: cappedResult.value,
     truncated,
-    summonId,
+    stampId,
     sessionId,
     homePlace: hookData.homePlace ?? homePlace,
     wasRemote: Boolean(hookData.wasRemote ?? wasRemote),

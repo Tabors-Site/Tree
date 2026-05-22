@@ -17,12 +17,12 @@
 // verbs are how anything enters me; what happens after is the open
 // part of the system.
 //
-// I write a Did for each DO and each BE, a Summon row for each
+// I stamp a Fact for each DO and each BE, a Stamp row for each
 // SUMMON delivery, and nothing for SEE. Observation is not doing.
 // Delivery is recorded by its own model. The acts a summoned being
-// then performs in response are themselves DO and BE rows carrying
+// then performs in response are themselves DO and BE Facts carrying
 // the summon's id, so "what happened during this summon" answers
-// as Did.find({ summonId }).
+// as Fact.find({ stampId }).
 //
 // Every act names a being as the actor. When a being in the world
 // calls a verb, the act is theirs. When no other being is behind
@@ -44,7 +44,7 @@ import { parseWithContext, expand, getPlaceDomain } from "../ibp/address.js";
 import { resolveStance } from "../ibp/resolver.js";
 import { buildPlaceDescriptor, buildDiscovery } from "../ibp/descriptor.js";
 import { authorize, getAuthConfig } from "./authorize.js";
-import { appendToInbox, markInboxConsumed } from "../factory/inbox.js";
+import { appendToInbox, markInboxConsumed } from "../factory/intake/inbox.js";
 import { threadIdFromPath, cutThread, getThreadsSpaceId, describeThread } from "../place/space/threads.js";
 import { getRole } from "../factory/roles/registry.js";
 import { cherubBeing } from "../factory/roles/cherub.js";
@@ -56,10 +56,10 @@ import { registerBeHandler, getBeHandler } from "../place/being/beRegistry.js";
 // registerBeHandler.
 registerBeHandler("cherub",         cherubBeing,         "kernel");
 registerBeHandler("llm-assigner", llmAssignerBeing,  "kernel");
-import { attachHandoff, wake } from "../factory/scheduler.js";
+import { attachHandoff, wake } from "../factory/intake/scheduler.js";
 
 /**
- * DO. Run a registered operation against a target, write a Did, return
+ * DO. Run a registered operation against a target, stamp a Fact, return
  * the handler's result.
  *
  * @param {*}      target     space / being / matter / id / stance / ...
@@ -70,8 +70,8 @@ import { attachHandoff, wake } from "../factory/scheduler.js";
  * @param {object} [opts.identity]   { beingId, name } — the being acting.
  *                                   Required unless opts.scaffold is true
  *                                   and no being yet exists.
- * @param {object} [opts.summonCtx]  for summon correlation on the Did
- * @param {boolean}[opts.skipAudit]  skip the Did write (kernel-internal only)
+ * @param {object} [opts.summonCtx]  for summon correlation on the Fact
+ * @param {boolean}[opts.skipAudit]  skip the Fact stamp (kernel-internal only)
  * @param {boolean}[opts.scaffold]   marks a seed-plant / boot-scaffold flow.
  *                                   With NO identity, I am the actor (pre-
  *                                   being bootstrap); with identity, the
@@ -136,7 +136,7 @@ export async function doVerb(target, operation, params = {}, opts = {}) {
 
   const result = await op.handler(ctx);
 
-  // Auto-Did. Operations opt out via spec.skipAudit; callers via
+  // Auto-Fact. Operations opt out via spec.skipAudit; callers via
   // opts.skipAudit (kernel-trusted batches only).
   const shouldAudit = !op.skipAudit && !opts.skipAudit;
   if (shouldAudit) {
@@ -153,7 +153,7 @@ export async function doVerb(target, operation, params = {}, opts = {}) {
         target:   resolveAuditTarget(target, result),
         params:   ctx.params,
         result:   summarizeAuditResult(result),
-        summonId: opts.summonCtx?.summonId || null,
+        stampId: opts.summonCtx?.stampId || null,
       });
     } catch (err) {
       // Audit failure must never kill the operation. Log loudly.
@@ -354,7 +354,7 @@ export async function summonVerb(stance, message, opts = {}) {
     const reason   = validatedMessage.content || "thread cut";
     // Participation check happens inside cutThread: the asker must
     // be a participant in this specific rootCorrelation chain (or
-    // I_AM). Fact lives on Summon rows, not on Space ancestry —
+    // I_AM). Fact lives on Stamp rows, not on Space ancestry —
     // can't be expressed as a stance property today, so the cut
     // handler enforces it itself.
     const result = await cutThread({
@@ -403,8 +403,8 @@ export async function summonVerb(stance, message, opts = {}) {
     // caller is summoning the @qualifier into existence. Authorize
     // (via summonCreateBeing's internal authorize() check) decides
     // whether the caller's stance permits creation at the target
-    // space. The audit chain (Summon row + BE.register Did) is
-    // written by summonCreateBeing.
+    // space. The audit chain (Stamp row + BE.register Fact) is
+    // stamped by summonCreateBeing.
     const content = validatedMessage.content;
     if (
       identity &&
@@ -472,8 +472,8 @@ export async function summonVerb(stance, message, opts = {}) {
  * answers by being.
  *
  * The caller is the *parent* of the creation act. They are
- * attributed in the Summon audit. After the Being row lands, the
- * parent also writes a BE.register Did on behalf of the new being.
+ * attributed in the Stamp audit. After the Being row lands, the
+ * parent also stamps a BE.register Fact on behalf of the new being.
  * This preserves the "every being's first act is its own first BE"
  * symmetry: the new being's identity declaration is witnessed and
  * signed by the parent, because the new being is not yet running
@@ -551,13 +551,13 @@ export async function summonCreateBeing({ spec, identity }) {
 
   // Audit chain. Two rows in two tables, complementary:
   //
-  //   1. Summon row — the parent's act of calling forth. Attributed
+  //   1. Stamp row — the parent's act of calling forth. Attributed
   //      to the parent (the summoner). beingIn=parent, beingOut=new
   //      being. Begin and finalize back-to-back because the act is
   //      atomic; the new being is not yet running, so there is no
   //      separate end-of-wake moment.
   //
-  //   2. BE.register Did — the new being's first identity moment,
+  //   2. BE.register Fact — the new being's first identity moment,
   //      attributed to the new being but witnessed/signed by the
   //      parent because the new being is not yet running cognition
   //      to declare itself. Preserves the symmetry that every
@@ -566,24 +566,24 @@ export async function summonCreateBeing({ spec, identity }) {
   const callerName    = identity?.name || I_AM;
   const addresseePosition = spec.homeSpace || null;
   try {
-    const { startSummon, finalizeSummon } =
-      await import("../factory/stamped.js");
-    const summon = await startSummon({
+    const { beginStamping } = await import("../factory/stamper/begin.js");
+    const { stamp } = await import("../factory/stamper/stamped.js");
+    const row = await beginStamping({
       beingIn:           callerBeingId,
       beingOut:          String(being._id),
       addresseePosition,
-      message:           `Summon forth: ${spec.name}`,
+      message:           `Stamp forth: ${spec.name}`,
       source:            callerName,
       activeRole:        spec.role || null,
     });
-    if (summon?._id) {
-      await finalizeSummon({
-        summonId: String(summon._id),
-        content:  `Summoned @${spec.name} forth`,
+    if (row?._id) {
+      await stamp({
+        stampId: String(row._id),
+        content: `Summoned @${spec.name} forth`,
       });
     }
   } catch (err) {
-    log.warn("Verbs", `Summon-row write for SUMMON.create-being @${spec.name} failed: ${err.message}`);
+    log.warn("Verbs", `Stamp-row write for SUMMON.create-being @${spec.name} failed: ${err.message}`);
   }
 
   try {
@@ -600,7 +600,7 @@ export async function summonCreateBeing({ spec, identity }) {
       result:  { note: `Summoned forth by @${callerName}` },
     });
   } catch (err) {
-    log.warn("Verbs", `BE.register Did write failed for @${spec.name}: ${err.message}`);
+    log.warn("Verbs", `BE.register Fact stamp failed for @${spec.name}: ${err.message}`);
   }
 
   return {
@@ -661,8 +661,8 @@ export async function summonByResolved(args) {
 }
 
 // Shared dispatch tail: auth, inbox write, role dispatch. This is
-// the only place a being's inbox grows. SUMMON writes no Did; the
-// Summon row records the delivery and any DO/BE the receiving being
+// the only place a being's inbox grows. SUMMON stamps no Fact; the
+// Stamp row records the delivery and any DO/BE the receiving being
 // emits carries this summon's id.
 async function _dispatchSummon({
   resolved, toBeing, activeRole, role, validatedMessage,
@@ -713,7 +713,7 @@ async function _dispatchSummon({
       [messageId],
       {
         responseId: responseEntry?.correlation || null,
-        summonId:   responseEntry?.summonId || null,
+        stampId:   responseEntry?.stampId || null,
       },
     );
     if (!responseEntry) return { status: "accepted", messageId };
@@ -844,7 +844,7 @@ export async function beVerb(operation, payload = {}, opts = {}) {
     const authResult = operation === "register"
       ? await cherubBeing.register(payload, ctx)
       : await runClaim({ kind: addressKind, value: address }, payload, ctx);
-    await writeBeDid({ operation, identity, authResult, payload });
+    await writeBeFact({ operation, identity, authResult, payload });
     return authResult;
   }
 
@@ -885,14 +885,14 @@ export async function beVerb(operation, payload = {}, opts = {}) {
     }
     beResult = await method.call(role, payload, ctx);
   }
-  await writeBeDid({ operation, identity, authResult: beResult, payload, beingName });
+  await writeBeFact({ operation, identity, authResult: beResult, payload, beingName });
   return beResult;
 }
 
-// One Did per BE op, same as DO. The actor is the calling identity;
+// One Fact per BE op, same as DO. The actor is the calling identity;
 // register/claim from arrival has none, so the row names the newly-
 // bound being from authResult.
-async function writeBeDid({ operation, identity, authResult, payload, beingName = "cherub" }) {
+async function writeBeFact({ operation, identity, authResult, payload, beingName = "cherub" }) {
   try {
     let actorBeingId = identity?.beingId || null;
     if (!actorBeingId && authResult && typeof authResult === "object") {
@@ -1070,7 +1070,7 @@ async function runSummoning(role, ctx) {
     correlation: randomUUID(),
     inReplyTo:   ctx.message.correlation,
     sentAt:      new Date().toISOString(),
-    summonId:    result.summonId || null,
+    stampId:    result.stampId || null,
   };
 }
 
@@ -1107,34 +1107,34 @@ function isReadMostlyOrigin(origin) {
   return origin === MATTER_ORIGIN.FILESYSTEM || origin === MATTER_ORIGIN.WEB;
 }
 
-// Audit target for the Did. The handler's result is authoritative
+// Audit target for the Fact. The handler's result is authoritative
 // about what just changed; I consult it before the call's target so
-// the Did names the substrate event (the new space, the edited
+// the Fact names the substrate event (the new space, the edited
 // matter, the removed being), not the call shape.
 //
 // Lookup order:
-//   1. result._didTarget          (explicit { kind, id } hint)
+//   1. result._factTarget         (explicit { kind, id } hint)
 //   2. result.spaceId | matterId | beingId
-//   3. target._didKind + target._id
+//   3. target._factKind + target._id
 //   4. target.spaceId | matterId | beingId
 //   5. target._id                 (Mongoose doc; guess space)
 //   6. target.id                  (kind unknown)
 //   7. target as string           (raw id; kind unknown)
 //
-// Returns null when nothing is resolvable; the Did still writes,
+// Returns null when nothing is resolvable; the Fact still stamps,
 // since target is optional in the schema.
 function resolveAuditTarget(target, result) {
   if (result && typeof result === "object") {
-    if (result._didTarget && result._didTarget.id) {
-      return { kind: result._didTarget.kind || null, id: String(result._didTarget.id) };
+    if (result._factTarget && result._factTarget.id) {
+      return { kind: result._factTarget.kind || null, id: String(result._factTarget.id) };
     }
     if (result.spaceId)  return { kind: "space",  id: String(result.spaceId) };
     if (result.matterId) return { kind: "matter", id: String(result.matterId) };
     if (result.beingId)  return { kind: "being",  id: String(result.beingId) };
   }
   if (target && typeof target === "object") {
-    if (target._didKind && target._id) {
-      return { kind: target._didKind, id: String(target._id) };
+    if (target._factKind && target._id) {
+      return { kind: target._factKind, id: String(target._id) };
     }
     if (target.spaceId)  return { kind: "space",  id: String(target.spaceId) };
     if (target.matterId) return { kind: "matter", id: String(target.matterId) };

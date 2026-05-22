@@ -42,8 +42,6 @@ import { authApiRouter, authPageRouter } from "./auth.js";
 import ibp from "./api/ibp.js";
 import placeConfig from "./api/config.js";
 
-import { handleMcpRequest } from "../../protocols/mcp/server.js";
-import authenticateMCP from "./middleware/authenticateMCP.js";
 import dbHealth from "./middleware/dbHealth.js";
 
 import express from "express";
@@ -89,10 +87,6 @@ export default function registerRoutes(app) {
   app.use(apiLimiter);
   app.use("/api/v1", dbHealth);
   app.use("/", authPageRouter);
-
-  app.post("/mcp", authenticateMCP, handleMcpRequest);
-  app.get("/mcp", authenticateMCP, handleMcpRequest);
-  app.delete("/mcp", authenticateMCP, handleMcpRequest);
 
   const uploadsDir = process.env.UPLOADS_DIR || path.join(__dirname, "../uploads");
   app.use("/api/v1/uploads", express.static(uploadsDir));

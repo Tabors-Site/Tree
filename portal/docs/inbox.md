@@ -40,12 +40,12 @@ Each entry is a complete message envelope plus protocol-side bookkeeping:
   // Added by the protocol:
   consumed:    boolean,
   consumedAt?: <ISO8601>,
-  summonedAt?: <ISO8601>,
+  stampedAt?: <ISO8601>,
   responseId?: <correlation id of the response, if any>
 }
 ```
 
-`consumed` flips to true when the being's summoning has processed the message. `summonedAt` records when summoning was triggered (may be different from sentAt if summoning is gated by a hook or schedule). `responseId` ties the inbox entry to the response message it produced, if any.
+`consumed` flips to true when the being's summoning has processed the message. `stampedAt` records when summoning was triggered (may be different from sentAt if summoning is gated by a hook or schedule). `responseId` ties the inbox entry to the response message it produced, if any.
 
 ## Kernel helpers
 

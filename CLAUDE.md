@@ -28,8 +28,8 @@ Everything in seed serves one of six:
 | **Being** | An identity instance. Humans + AI + future composites. | `seed/models/being.js` |
 | **Space** | The substrate primitive. Structure that holds possibility; a position in the tree. | `seed/models/space.js` |
 | **Matter** | Stuff that sits in a space. `origin` tags where the content lives (`ibp`, `filesystem`, `web`, cross-place). | `seed/models/matter.js` |
-| **Fact** | One DO or BE emission stamped by the Factory. `factum`, a thing done. A fact alone is small; the chain of facts is what becomes Truth. | `seed/models/fact.js` |
-| **Summon** | One being's wake-and-act through one LLM call. | `seed/models/summon.js` |
+| **Fact** | A thing a being stamps in the Factory. One recorded change to matter, space, or being. `factum`, a thing done. A single fact is small but settled; a chain of facts, folded, is Truth. | `seed/models/fact.js` |
+| **Summon** | One being's wake-and-act through one LLM call. | `seed/models/stamp.js` |
 | **LlmConnection** | Per-being LLM client config (URL, key, model). | `seed/models/llmConnection.js` |
 
 Schemas never change. Extensions never add fields. Everything new lives in `qualities` (the open per-primitive Map; see [place/seed/place/PLACE.md](place/seed/place/PLACE.md) "Qualities" for why the field is named that way and the rule for where any new property belongs).

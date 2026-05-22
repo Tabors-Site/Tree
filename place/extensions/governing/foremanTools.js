@@ -72,7 +72,7 @@ export default function getForemanTools(_core) {
       },
       annotations: { readOnlyHint: false },
       async handler(args) {
-        const { beingId, username, rootId, summonId, sessionId, recordNodeId, stepIndex, branchName, reason } = args;
+        const { beingId, username, rootId, stampId, sessionId, recordNodeId, stepIndex, branchName, reason } = args;
         if (!beingId) return text("foreman-retry-branch: missing beingId; substrate bug.");
         if (!recordNodeId || typeof stepIndex !== "number" || !branchName) {
           return text("foreman-retry-branch: recordNodeId, stepIndex, branchName all required.");
@@ -183,7 +183,7 @@ export default function getForemanTools(_core) {
 
         const { randomUUID } = await import("crypto");
         const correlation = randomUUID();
-        const rootCorrelation = args.rootSummonId || summonId || correlation;
+        const rootCorrelation = args.rootStampId || stampId || correlation;
         const message = {
           from:            foremanStance,
           content:         briefing,
@@ -194,8 +194,8 @@ export default function getForemanTools(_core) {
           sentAt:          new Date().toISOString(),
         };
 
-        const { appendToInbox } = await import("../../seed/factory/inbox.js");
-        const { attachHandoff, wake } = await import("../../seed/factory/scheduler.js");
+        const { appendToInbox } = await import("../../seed/factory/intake/inbox.js");
+        const { attachHandoff, wake } = await import("../../seed/factory/intake/scheduler.js");
         const { hooks } = await import("../../seed/system/hooks.js");
         const startMs = Date.now();
         try {
@@ -228,7 +228,7 @@ export default function getForemanTools(_core) {
                 exitText:        responseEntry?.content || null,
                 durationMs:      Date.now() - startMs,
                 error:           null,
-                parentSummonId:  summonId || null,
+                parentStampId:  stampId || null,
                 parentSessionId: sessionId || null,
               });
             } catch (err) {
@@ -252,7 +252,7 @@ export default function getForemanTools(_core) {
                 exitText:        null,
                 durationMs:      Date.now() - startMs,
                 error:           err?.message || String(err),
-                parentSummonId:  summonId || null,
+                parentStampId:  stampId || null,
                 parentSessionId: sessionId || null,
               });
             } catch (hookErr) {
