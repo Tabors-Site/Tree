@@ -33,7 +33,7 @@
 
 import log from "../../system/log.js";
 import Space from "../../models/space.js";
-import Did from "../../models/did.js";
+import Fact from "../../models/fact.js";
 import { hooks } from "../../system/hooks.js";
 import { getPlaceConfigValue } from "../../placeConfig.js";
 import { invalidateSpace } from "./ancestorCache.js";
@@ -75,7 +75,7 @@ export async function isTreeAlive(treeId) {
  * Compute the tree's health score. Total > 1.0 means it should trip.
  *
  * Error rate aggregates from two sources:
- *   - Did log: rows whose `params.error` is set, targeting a space in
+ *   - Fact reel: rows whose `params.error` is set, targeting a space in
  *     this tree
  *   - .flow partitions: CASCADE.FAILED + CASCADE.REJECTED whose source
  *     is in this tree
@@ -122,11 +122,11 @@ export async function checkTreeHealth(treeId) {
   const checkInterval = parseInt(getPlaceConfigValue("circuitCheckInterval") || "3600000", 10);
   const since = new Date(Date.now() - checkInterval);
 
-  // Source A: Did log failures on spaces in this tree. Aggregation
+  // Source A: Fact reel failures on spaces in this tree. Aggregation
   // with $lookup so we don't load the descendant id list into memory.
-  let didErrors = 0;
+  let factErrors = 0;
   try {
-    const errResult = await Did.aggregate([
+    const errResult = await Fact.aggregate([
       {
         $match: {
           date: { $gte: since },
@@ -139,7 +139,7 @@ export async function checkTreeHealth(treeId) {
       { $match: { "_space.rootOwner": treeId } },
       { $count: "total" },
     ]);
-    didErrors = errResult[0]?.total || 0;
+    factErrors = errResult[0]?.total || 0;
   } catch {
     // Aggregation failure isn't itself an error to count.
   }
@@ -185,7 +185,7 @@ export async function checkTreeHealth(treeId) {
     log.debug("Circuit", `Flow error scan failed: ${err.message}`);
   }
 
-  const totalErrors = didErrors + flowErrors;
+  const totalErrors = factErrors + flowErrors;
 
   const spaceScore   = maxSpaces    > 0 ? (spaceCount       / maxSpaces)    * spaceWeight   : 0;
   const densityScore = maxQualBytes > 0 ? (qualitiesDensity  / maxQualBytes) * densityWeight : 0;
@@ -200,7 +200,7 @@ export async function checkTreeHealth(treeId) {
     raw: {
       spaceCount,
       qualitiesDensityBytes: Math.round(qualitiesDensity),
-      didErrors,
+      factErrors,
       flowErrors,
       totalErrors,
     },

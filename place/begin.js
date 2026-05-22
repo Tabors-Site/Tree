@@ -314,7 +314,7 @@ async function shutdown(signal) {
   // Close all MCP clients first. They hold connections open.
   try {
     const { mcpClients, closeMCPClient } =
-      await import("./seed/cognition/mcpClient.js");
+      await import("./seed/factory/beingAssignment/llm/mcpClient.js");
     for (const [cacheKey] of mcpClients) {
       try {
         closeMCPClient(cacheKey);

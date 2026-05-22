@@ -14,7 +14,7 @@ seed/              The kernel. Four folders, four roles. NEVER modify.
   ibp/          ACTS  — the world as acted-upon. SEE/DO/SUMMON/BE, address,
                        authorize, operations, descriptor, discovery,
                        pushChannel, resolver, stanceProperties.
-  cognition/    THINKS — the world as thought, for LLM beings. The thinking
+  factory/      THINKS — the world as thought, for LLM beings. The thinking
                        apparatus LLM beings use. Humans cognize on their own
                        (out-of-band, in their own heads) and route through
                        portals; scripted beings ARE their code, no apparatus
@@ -36,7 +36,7 @@ seed/              The kernel. Four folders, four roles. NEVER modify.
   LICENSE            AGPL-3.0 with a preamble naming the seed.
 ```
 
-**Placement rule.** For any seed file, ask: does this describe what a being **IS**, how it **ACTS**, or how it **THINKS**? → `place/` / `ibp/` / `cognition/`. Does it touch the host while knowing nothing of the world? → `system/`. Schemas live in `models/` (shape vs behavior is a separate axis).
+**Placement rule.** For any seed file, ask: does this describe what a being **IS**, how it **ACTS**, or how it **THINKS**? → `place/` / `ibp/` / `factory/`. Does it touch the host while knowing nothing of the world? → `system/`. Schemas live in `models/` (shape vs behavior is a separate axis).
 
 protocols/ What conversation over the wire looks like. Never owns transport.
 ibp/ Four-verb protocol (SEE/DO/SUMMON/BE) on stances/positions
@@ -106,7 +106,7 @@ Full reference: `extensions/EXTENSION_FORMAT.md`
 - **Roles** (summonable being templates; declare `canSee/canDo/canSummon/canBe` and a prompt body)
 - **Operations** (DO actions registered through `core.do.registerOperation`; auto-namespaced `<ext>:<action>`)
 - **Seeds** (plantable scaffolds; recipes that fan a structure into existence when an operator plants them)
-- **Hooks** (lifecycle handlers: beforeMatter, afterMatter, enrichContext, afterMetadataWrite, beforeDid, ...)
+- **Hooks** (lifecycle handlers: beforeMatter, afterMatter, enrichContext, afterMetadataWrite, beforeFact, ...)
 - **DO-trigger subscriptions** (wake a being when matching substrate writes happen)
 - **Scheduled wakes** (fire a SUMMON on a being's inbox at a cadence)
 - **Descriptor derivers** (contribute derived fields to the Position Description clients render)
@@ -155,7 +155,7 @@ Everything in the kernel serves one of six primitives (one per Mongoose schema):
 | **Being**         | An identity instance. Carries roles, parents under another being, homes at a space. Humans, AI, scripted-cognition, future composites. The I-am — the Node process itself — is a Being too; the kernel is the first being, not a faceless layer beneath them. |
 | **Space**         | A position in the tree. Holds matter, hosts beings, owns quality namespaces.                                                                                                                                                                                  |
 | **Matter**        | Stuff inside a space. `origin` field names where it actually lives (ibp, filesystem, web, cross-place).                                                                                                                                                        |
-| **Did**           | One DO emission. The audit trail. Past tense — "a did is a thing that was done."                                                                                                                                                                              |
+| **Fact**          | One DO or BE emission stamped by the Factory. `factum`, a thing done. A fact alone is a small record of space/matter/being; the chain of facts is what becomes Truth.                                                                                          |
 | **Summon**        | One being-to-being call. The record of one wake-and-act, whatever cognition the receiving being has — LLM, scripted code, human reply, future composite. The kernel doesn't care which; the protocol is the same.                                             |
 | **LlmConnection** | Per-being LLM client config (URL, key, model).                                                                                                                                                                                                                |
 

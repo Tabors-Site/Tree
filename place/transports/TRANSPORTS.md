@@ -90,7 +90,7 @@ WebSocket carries it on the single `"ibp"` event in both directions. HTTP carrie
 - Form space, matter, or beings. (That is `seed/place/`.)
 - Implement a verb. (Verb execution lives once, in `seed/ibp/verbs.js`.)
 - Define its own error codes or status mappings. (Single source is `seed/ibp/protocol.js`.)
-- Reach into `seed/cognition/` for scheduler internals (`wake`, `abortCurrent`, ...). The IBP dispatcher is the only path into seed from here.
+- Reach into `seed/factory/` for scheduler internals (`wake`, `abortCurrent`, ...). The IBP dispatcher is the only path into seed from here.
 - Decide authorization. (Stance authorization runs inside the verb, in `seed/ibp/authorize.js`.)
 
 A transport carries. The world it carries into is not its business. If something here grows logic that decides what may happen, that logic belongs upstream of this folder, never inside it.

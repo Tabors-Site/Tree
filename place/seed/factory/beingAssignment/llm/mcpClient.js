@@ -28,7 +28,7 @@
 // trigger — other reaches into the same presence may still be
 // using the connection under the shared key.
 
-import log from "../system/log.js";
+import log from "../../../system/log.js";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 
@@ -48,7 +48,7 @@ const clientTokens = new Map();
 // cacheKey -> timestamp of last use
 const clientLastUsed = new Map();
 
-import { getPlaceConfigValue } from "../placeConfig.js";
+import { getPlaceConfigValue } from "../../../placeConfig.js";
 
 function MAX_MCP_CLIENTS() {
   return Math.max(

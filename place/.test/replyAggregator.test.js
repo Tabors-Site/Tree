@@ -3,7 +3,7 @@
 
 import { test, describe } from "node:test";
 import { strict as assert } from "node:assert";
-import { aggregate } from "../seed/cognition/replies.js";
+import { aggregate } from "../seed/factory/replies.js";
 
 describe("aggregate — basic gathering", () => {
   test("resolves when all expected correlations arrive", async () => {

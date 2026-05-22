@@ -29,7 +29,7 @@
 // (probably a thin "do-op" tool that takes { action, args } and
 // dispatches through core.do, plus a "see" tool for substrate reads).
 
-import { runTurn } from "../../cognition/runTurn.js";
+import { runTurn } from "../../factory/stamper.js";
 import log from "../../system/log.js";
 
 const PLACE_MANAGER_PROMPT = `You are the Place Manager for this TreeOS place. You answer to the
@@ -76,7 +76,7 @@ export const placeManagerRole = Object.freeze({
   // .peers, …) and invoke any registered DO operation at the place
   // root. The old per-op tools retired in favor of this generic pair;
   // the substrate's introspection primitives ARE the discovery layer.
-  // See seed/cognition/roles/placeManagerTools.js.
+  // See seed/factory/roles/placeManagerTools.js.
   toolNames: ["place-see", "place-do"],
 
   label: "Place Manager",

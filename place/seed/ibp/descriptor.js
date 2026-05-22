@@ -46,9 +46,9 @@ import {
   listSpaceChildren,
   listBeingSpaces,
 } from "../place/space/spaceFetch.js";
-import { getInboxSummary } from "../cognition/inbox.js";
-import { getRole, listRoles } from "../cognition/roles/registry.js";
-import { getActiveSummonForBeing } from "../cognition/summonTracker.js";
+import { getInboxSummary } from "../factory/inbox.js";
+import { getRole, listRoles } from "../factory/roles/registry.js";
+import { getActiveSummonForBeing } from "../factory/stamped.js";
 
 // Wire-shape versions. Bump when the descriptor / discovery shape
 // changes in a way clients must opt into.

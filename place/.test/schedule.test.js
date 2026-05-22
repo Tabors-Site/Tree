@@ -14,7 +14,7 @@ import { mock } from "node:test";
 const appendCalls = [];
 const wakeCalls = [];
 
-mock.module("../seed/cognition/inbox.js", {
+mock.module("../seed/factory/inbox.js", {
   namedExports: {
     appendToInbox: async (spaceId, beingId, message) => {
       appendCalls.push({ spaceId, beingId, message });
@@ -23,7 +23,7 @@ mock.module("../seed/cognition/inbox.js", {
   },
 });
 
-mock.module("../seed/cognition/scheduler.js", {
+mock.module("../seed/factory/scheduler.js", {
   namedExports: {
     wake: (beingId, spaceId) => { wakeCalls.push({ beingId, spaceId }); },
   },
@@ -46,7 +46,7 @@ const {
   resetEmitter,
   getStats,
   _resetAll,
-} = await import("../seed/cognition/wakeSchedule.js");
+} = await import("../seed/factory/wakeSchedule.js");
 
 beforeEach(() => {
   _resetAll();

@@ -25,7 +25,7 @@ let summonImpl = async (message, ctx) => ({ content: `default for ${message.corr
 function freshBucket(beingId, entries) { fakeBucket.set(beingId, entries); }
 function setSummonImpl(fn) { summonImpl = fn; summonCalls = []; }
 
-mock.module("../seed/cognition/inbox.js", {
+mock.module("../seed/factory/inbox.js", {
   namedExports: {
     pickNextEntry: async (spaceId, beingId) => {
       const bucket = fakeBucket.get(beingId) || [];
@@ -103,7 +103,7 @@ mock.module("../seed/ibp/pushChannel.js", {
   },
 });
 
-mock.module("../seed/cognition/roles/registry.js", {
+mock.module("../seed/factory/roles/registry.js", {
   namedExports: {
     getRole: () => ({
       name: fakeBeingRole,
@@ -118,7 +118,7 @@ mock.module("../seed/cognition/roles/registry.js", {
   },
 });
 
-const { wake, abortCurrent, getCurrentRootCorrelation, attachHandoff, _resetAll, getStats } = await import("../seed/cognition/scheduler.js");
+const { wake, abortCurrent, getCurrentRootCorrelation, attachHandoff, _resetAll, getStats } = await import("../seed/factory/scheduler.js");
 
 beforeEach(() => {
   _resetAll();

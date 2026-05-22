@@ -62,7 +62,7 @@ Four verbs make up the whole public surface. Each verb acts on its own kind of t
 | Verb       | Acts on              | What it does                                                           |
 | ---------- | -------------------- | ---------------------------------------------------------------------- |
 | **SEE**    | Space, Matter, Being | Read at the target stance, return a descriptor.                        |
-| **DO**     | Space, Matter        | Mutate at the target through a registered operation. Audited as a Did. |
+| **DO**     | Space, Matter        | Mutate at the target through a registered operation. Stamped as a Fact. |
 | **SUMMON** | Being                | Deliver to a being's inbox. Its role decides what to do.               |
 | **BE**     | Being (self)         | Identity. Register, claim, release, switch stance.                     |
 
@@ -73,7 +73,7 @@ Six primitives carry the world:
 | **Being**         | An identity instance. Humans, AI, scripted beings, future composites. The I-Am is the first being. |
 | **Space**         | A position in the tree. Holds matter, hosts beings, owns quality namespaces.                       |
 | **Matter**        | Stuff inside a space. `origin` names where it lives (ibp, filesystem, web, cross-place).           |
-| **Did**           | One DO emission, the audit row.                                                                    |
+| **Fact**          | One DO or BE emission, stamped by the Factory. `factum`, a thing done.                             |
 | **Summon**        | One being-to-being call, the record of one wake-and-act.                                           |
 | **LlmConnection** | Per-being LLM client config.                                                                       |
 
@@ -89,7 +89,7 @@ IBP is the protocol. WebSocket is the channel it speaks on most of the time. A s
 seed/             What TreeOS IS. Four folders, four roles.
   place/           IS     space, matter, being, and the world they make
   ibp/            ACTS   the four verbs and their dispatch
-  cognition/      THINKS the LLM-being apparatus (humans cognize on
+  factory/        THINKS the LLM-being apparatus (humans cognize on
                          their own; scripts ARE code; this is for AI)
   system/         HOST   db, log, hooks, indexes (knows nothing of the world)
   models/         the schemas for all 6 primitives

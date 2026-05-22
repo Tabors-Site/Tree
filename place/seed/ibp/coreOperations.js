@@ -132,7 +132,7 @@ export function registerKernelOperations() {
   //   })
   //
   // The handler lives on the auth-being's `createBeing` method (see
-  // seed/cognition/roles/cherub.js). Per the philosophy notes: BE acts on
+  // seed/factory/roles/cherub.js). Per the philosophy notes: BE acts on
   // the being calling it, and identity creation is the BE side of the
   // grammar.
 
@@ -432,7 +432,7 @@ export function registerKernelOperations() {
   //
   // Target: the Being that owns the connection. Connection records are
   // stored in the LlmConnection collection, indexed by beingId. The ops
-  // wrap the seed/cognition/connections.js helpers; the IBP grammar gives
+  // wrap the seed/factory/beingAssignment/llm/connections.js helpers; the IBP grammar gives
   // them a single dispatch surface.
 
   registerOperation("add-llm-connection", {
@@ -446,7 +446,7 @@ export function registerKernelOperations() {
         );
       }
       const { addLlmConnection, assignConnection } =
-        await import("../cognition/connections.js");
+        await import("../factory/beingAssignment/llm/connections.js");
       const beingId = String(target._id);
       const connection = await addLlmConnection(beingId, {
         name,
@@ -478,7 +478,7 @@ export function registerKernelOperations() {
         );
       }
       const { updateLlmConnection } =
-        await import("../cognition/connections.js");
+        await import("../factory/beingAssignment/llm/connections.js");
       const connection = await updateLlmConnection(
         String(target._id),
         connectionId,
@@ -496,7 +496,7 @@ export function registerKernelOperations() {
       if (!connectionId)
         throw new Error("delete-llm-connection: `connectionId` is required");
       const { deleteLlmConnection } =
-        await import("../cognition/connections.js");
+        await import("../factory/beingAssignment/llm/connections.js");
       await deleteLlmConnection(String(target._id), connectionId);
       return { removed: true, connectionId };
     },
@@ -518,7 +518,7 @@ export function registerKernelOperations() {
       if (!slot) throw new Error("assign-llm-slot: `slot` is required");
       const kind = detectTargetKind(target);
       const { assignConnection, assignSpaceConnection } =
-        await import("../cognition/connections.js");
+        await import("../factory/beingAssignment/llm/connections.js");
       if (kind === "being") {
         return assignConnection(String(target._id), slot, connectionId || null);
       }

@@ -28,7 +28,7 @@ import mongoose from "mongoose";
 import Space from "../../models/space.js";
 import Being from "../../models/being.js";
 import { createMatter } from "../matter/matters.js";
-import { logDid } from "../dids.js";
+import { logFact } from "../facts.js";
 import { resolveSpaceAccess, isDescendant } from "./spaceFetch.js";
 import {
   acquireSpaceLock,
@@ -303,7 +303,7 @@ export async function createSpace({
 }
 
 /**
- * Create a place seed space. Owner: I_AM. Audited via logDid.
+ * Create a place seed space. Owner: I_AM. Stamps a Fact via logFact.
  *
  * Two kinds of Space exist; this function makes the second kind.
  * Normal space (createSpace) is made BY beings FOR beings to live
@@ -347,11 +347,11 @@ export async function createPlaceSeedSpace({
   await newSpace.save();
   await Space.findByIdAndUpdate(parentId, { $addToSet: { children: id } });
 
-  // Audit the genesis act. The I_AM is doing it; the Did
+  // Stamp the genesis act. The I_AM is doing it; the Fact
   // names it. Resolves via populate once ensureIAm creates
   // the Being row in the same boot pass.
   try {
-    await logDid({
+    await logFact({
       verb: "do",
       action: "create",
       beingId: I_AM,
@@ -361,7 +361,7 @@ export async function createPlaceSeedSpace({
   } catch (err) {
     log.warn(
       "Place",
-      `Did write for seed-space "${name}" failed: ${err.message}`,
+      `Fact stamp for seed-space "${name}" failed: ${err.message}`,
     );
   }
 

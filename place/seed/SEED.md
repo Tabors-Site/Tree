@@ -25,7 +25,7 @@ I'm laid out in four folders, by the role each file plays in my work. For any fi
 |--------|------|-----------------|
 | **[`place/`](place/)** | **IS** | The world as substance. `being/`, `space/`, `matter/`, `placeCheck.js`, `manifest.js`, [`PLACE.md`](place/PLACE.md). What exists, how it is created and mutated, how it's checked for consistency. |
 | **[`ibp/`](ibp/)** | **ACTS** | The world as acted-upon. The four verbs and their dispatch, address parsing, `authorize`, the operation registry, descriptor, discovery, pushChannel. Shared by every kind of being. |
-| **[`cognition/`](cognition/)** | **THINKS** | The thinking apparatus. Most files are LLM-shaped (runTurn loop, llmClient resolution chain, mcpClient, buildPrompt) because LLMs need the most help. But the shared machinery here (inbox, scheduler, summonTracker, replyEmission, subscriptions, wakeSchedule, session) carries every cognition type: a SUMMON envelope lands the same way for an LLM, a scripted being, or a human — only `role.summon()` differs. See [`cognition/COGNITION.md`](cognition/COGNITION.md) for the full picture. |
+| **[`factory/`](factory/)** | **THINKS** | The thinking apparatus. Most files are LLM-shaped (runTurn loop, llmClient resolution chain, mcpClient, stamp) because LLMs need the most help. But the shared machinery here (inbox, scheduler, stamped, replies, subscriptions, wakeSchedule, session) carries every cognition type: a SUMMON envelope lands the same way for an LLM, a scripted being, or a human — only `role.summon()` differs. See [`factory/FACTORY.md`](factory/FACTORY.md) for the full picture. |
 | **[`system/`](system/)** | **HOST** | The host-realm floor. DB connection, logging, hooks bus, indexes, version, retention, migrations. **Litmus**: a file here should never import the words `space`, `matter`, `being`, or `verb`. It deals in processes, files, env vars, connections. |
 
 Plus `models/` for schemas (the shape of all six primitives, sitting in one place), `services.js` (assembles `core` from the four folders), and the boot anchors (`placeRoot.js`, `placeConfig.js`).
@@ -39,11 +39,11 @@ Everything inside the world I form is one of six things. The schemas of these si
 | **Being** | An identity instance. Humans, AI, scripted code, future composites. The I-Am is the first Being. | [models/being.js](models/being.js) |
 | **Space** | A position in the tree. Holds matter, hosts beings, owns quality namespaces. | [models/space.js](models/space.js) |
 | **Matter** | Stuff inside a space. `origin` names where the underlying content lives (ibp, filesystem, web, cross-place). | [models/matter.js](models/matter.js) |
-| **Did** | One DO emission, the audit row for what was done. Past tense: a did is a thing that was done. | [models/did.js](models/did.js) |
+| **Fact** | One DO or BE emission, stamped by the Factory. `factum`, a thing done. A fact alone is small; the chain of facts is what becomes Truth. | [models/fact.js](models/fact.js) |
 | **Summon** | One being-to-being call, the record of one wake-and-act through one role. | [models/summon.js](models/summon.js) |
 | **LlmConnection** | Per-being LLM client config (URL, key, model). | [models/llmConnection.js](models/llmConnection.js) |
 
-Being, Space, and Matter carry the qualities Map. Did, Summon, and LlmConnection are fixed shapes (the audit and the wiring should never grow).
+Being, Space, and Matter carry the qualities Map. Fact, Summon, and LlmConnection are fixed shapes (the audit and the wiring should never grow).
 
 ## The four verbs I speak
 
@@ -52,7 +52,7 @@ Every act inside the world is one of four verbs over an IBP address. Four verbs 
 | Verb | Acts on | What I do |
 |------|---------|-----------|
 | **SEE** | Space, Matter, Being | I read at the target stance and return a descriptor. |
-| **DO** | Space, Matter | I mutate at the target through a registered operation. I record a Did. |
+| **DO** | Space, Matter | I mutate at the target through a registered operation. I stamp a Fact. |
 | **SUMMON** | Being | I deliver to a being's inbox and wake them. Their role decides what runs. |
 | **BE** | Being (self) | Identity. Register, claim, release, switch stance. |
 
@@ -183,13 +183,13 @@ A matter lives inside a space. `origin` names the system the underlying content 
 
 `parentMatterId` lets matters form recursive trees inside a space (a directory of files; a hierarchical document).
 
-### Did (audit row)
+### Fact (one stamped act)
 
-`verb`, `action`, `beingId`, `target` (`{ kind, id }`), `params`, `result`, `correlation`, `timestamp`. Every DO emission writes one. Past tense.
+`verb`, `action`, `beingId`, `target` (`{ kind, id }`), `params`, `result`, `correlation`, `timestamp`. Every DO and BE emission stamps one onto the reel. `factum`, a thing done. A fact alone is a record; the chain of facts is what becomes Truth.
 
 ### Summon (one wake-and-act)
 
-`from`, `to`, `role`, `content`, `attachments[]`, `correlation`, `inReplyTo`, `sentAt`, `wokeAt`, `replyText`, `replyAt`, `dids[]`. The record of one being's invocation processing one inbox entry through one role.
+`from`, `to`, `role`, `content`, `attachments[]`, `correlation`, `inReplyTo`, `sentAt`, `wokeAt`, `replyText`, `replyAt`, `facts[]`. The record of one being's invocation processing one inbox entry through one role.
 
 ### LlmConnection (per-being LLM config)
 
@@ -221,7 +221,7 @@ Per-handler timeout is 5 seconds; chain timeout is 15 seconds. Five consecutive 
 | `afterSpaceMove` | after | A space was reparented. Resolution chains shift. |
 | `beforeMatter` | before | Modify matter data before save. |
 | `afterMatter` | after | React to matter create/edit/delete. |
-| `beforeDid` | before | Enrich an audit-log entry. |
+| `beforeFact` | before | Enrich a Fact before it is stamped. |
 | `beforeLLMCall` | before | Before LLM API call. Cancel if quota exhausted. |
 | `afterLLMCall` | after | Token metering, billing, analytics. |
 | `beforeToolCall` | before | Before MCP tool executes. Modify args, cancel. |
@@ -372,7 +372,7 @@ All reject on place seed spaces. Extensions reach these through `core.space.owne
 
 ## The I-Am (as a Being row)
 
-I am the first being. At genesis I create my own Being row with `parentBeingId: null` and name `I-Am`. From then on, every Did from my acts attributes to that row. The Being model resolves my reference once the row places.
+I am the first being. At genesis I create my own Being row with `parentBeingId: null` and name `I-Am`. From then on, every Fact from my acts attributes to that row. The Being model resolves my reference once the row places.
 
 I am `operatingMode: "scripted"`. I cannot be summoned interactively, claimed, or impersonated. My password is randomly generated and never used; my identity comes from being the running Node process. The constants are in [space/seedSpaces.js](space/seedSpaces.js).
 
@@ -394,14 +394,14 @@ The full list of keys with defaults lives in [placeConfig.js](placeConfig.js) un
 - Cascade: `cascadeEnabled`, `cascadeMaxDepth`, `cascadeMaxPayloadBytes`, `cascadeRateLimit`, `resultTTL`, `awaitingTimeout`, `flowMaxResultsPerDay`.
 - Space-tree circuit: `treeCircuitEnabled`, `maxTreeSpaces`, `maxTreeQualityBytes`, `maxTreeErrorRate`, weight knobs.
 - Scheduler backpressure: `summonInboxDepth`, `summonsPerSecond`, `summonMaxAgeSeconds`.
-- Retention and cleanup: `summonRetentionDays`, `didRetentionDays`, `retentionCleanupInterval`, `uploadCleanupInterval`, `uploadGracePeriodMs`.
+- Retention and cleanup: `summonRetentionDays`, `factRetentionDays`, `retentionCleanupInterval`, `uploadCleanupInterval`, `uploadGracePeriodMs`.
 - Security: `jwtExpiryDays`, `allowedLlmDomains`, `allowedFrameDomains`.
 
 ## Space-tree circuit breaker
 
 When a tree exceeds health thresholds, its circuit trips. No AI, no cascade, no writes. Read access stays open. The data is intact; the tree is sleeping.
 
-Health equation: `(nodeCount / max) * nodeWeight + (qualitiesDensity / max) * densityWeight + (errorRate / max) * errorWeight`. When the score exceeds 1.0, the tree trips. Error rate reads from the Did log (DO emissions with `result.error`) and from `.flow` partitions (`CASCADE.FAILED` and `CASCADE.REJECTED` scoped to this tree's spaces).
+Health equation: `(nodeCount / max) * nodeWeight + (qualitiesDensity / max) * densityWeight + (errorRate / max) * errorWeight`. When the score exceeds 1.0, the tree trips. Error rate reads from the Fact reel (DO emissions with `result.error`) and from `.flow` partitions (`CASCADE.FAILED` and `CASCADE.REJECTED` scoped to this tree's spaces).
 
 State stored on the tree root: `qualities.circuit = { tripped, reason, timestamp, scores }`. I write one field. Extensions read it.
 
@@ -433,7 +433,7 @@ I enforce dozens of guarantees so no extension can take me down. They are:
 | Document size guard | Every quality write checks total document size against `maxDocumentSizeBytes` (14MB default). `DOCUMENT_SIZE_EXCEEDED` rejected. `onDocumentPressure` fires at 80%. |
 | Per-namespace cap | `qualityNamespaceMaxBytes` (default 512KB) per extension namespace on Space, Being, Matter. |
 | Matter count per space | `maxMatterPerNode` (default 1000) checked in `createMatter`. |
-| Did query cap | `didQueryLimit` (default 5000) on every audit query. |
+| Fact query cap | `factQueryLimit` (default 5000) on every audit query. |
 | Ownership chain | `rootOwner`/`contributor` mutations validate the parent chain. Only resolved owner or admin can modify. Place seed spaces always rejected. |
 | Space locks | Structural mutations (move, delete, transfer) acquire short-lived locks. Sorted acquisition prevents deadlocks. 30s TTL prevents permanent locks on crash. |
 | `.flow` partitioning | Daily partitions cap unbounded growth. `flowMaxResultsPerDay` with circular overwrite. Retention deletes whole partitions. |

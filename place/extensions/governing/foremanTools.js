@@ -194,8 +194,8 @@ export default function getForemanTools(_core) {
           sentAt:          new Date().toISOString(),
         };
 
-        const { appendToInbox } = await import("../../seed/cognition/inbox.js");
-        const { attachHandoff, wake } = await import("../../seed/cognition/scheduler.js");
+        const { appendToInbox } = await import("../../seed/factory/inbox.js");
+        const { attachHandoff, wake } = await import("../../seed/factory/scheduler.js");
         const { hooks } = await import("../../seed/system/hooks.js");
         const startMs = Date.now();
         try {

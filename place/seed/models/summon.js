@@ -16,7 +16,7 @@
 // and group it for conversation views. A thread between two beings
 // at one position is the set of Summons sharing one `ibpAddress`,
 // the canonical sorted stance pair I compute in
-// seed/cognition/summonAddress.js.
+// seed/factory/summonAddress.js.
 //
 // I do not store tool calls or substrate writes inside this row.
 // Whatever the summoned being then does in response — every DO,

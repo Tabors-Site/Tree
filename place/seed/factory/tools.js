@@ -32,6 +32,19 @@ let MAX_TOOLS = 500;
 const TOOL_NAME_RE = /^[a-z][a-z0-9_-]{0,63}$/;
 const VALID_VERBS = new Set(["see", "do", "summon", "be"]);
 
+// Extension tool injection hook. The loader calls
+// setExtensionToolResolver during boot with a function that returns
+// the extension-contributed tools for a given role name. Stamp uses
+// the resolver at frame-build time to merge extension tools into
+// the role's base toolNames before the permission filter runs.
+let _getExtToolsFn = () => [];
+export function setExtensionToolResolver(fn) {
+  _getExtToolsFn = typeof fn === "function" ? fn : () => [];
+}
+export function getExtensionToolsForRole(roleName) {
+  return _getExtToolsFn(roleName);
+}
+
 export function setMaxTools(n) {
   MAX_TOOLS = Math.max(10, Number(n) || 500);
 }
@@ -91,7 +104,7 @@ export function registerToolDef(name, schema, opts = {}) {
     return false;
   }
   // Description is required at registration. Without it, the role-summon
-  // gate (assertAllToolsResolve in buildPrompt.js) would block the role
+  // gate (assertAllToolsResolve in stamp.js) would block the role
   // anyway — better to fail at the registration call so the extension
   // surfaces the misconfiguration immediately, not at the first summon.
   if (schema.type === "function") {
@@ -357,7 +370,7 @@ export function listToolNames() {
  * each name resolves to a registered description. Misses are logged
  * loudly at genesis so the operator sees them before any summon
  * (where the same gap would block the role via assertAllToolsResolve
- * in buildPrompt.js).
+ * in stamp.js).
  *
  * Returns { roles: number, missing: { [roleName]: string[] } }. An
  * empty `missing` map means the tree is wired correctly.

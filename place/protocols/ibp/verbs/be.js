@@ -18,7 +18,7 @@
 // For release/switch/token-reclaim the address is the held stance.
 //
 // Thin wire adapter: extracts envelope fields, delegates to `beVerb`
-// in seed/ibp/verbs.js. The cherub role (seed/cognition/roles/cherub.js)
+// in seed/ibp/verbs.js. The cherub role (seed/factory/roles/cherub.js)
 // runs there. See [[project_four_verbs_one_execution]].
 
 import log from "../../../seed/system/log.js";

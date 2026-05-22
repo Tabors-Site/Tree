@@ -20,10 +20,10 @@ import {
 } from "./place/seeds.js";
 import Being from "./models/being.js";
 import Space from "./models/space.js";
-import Did from "./models/did.js";
+import Fact from "./models/fact.js";
 import Matter from "./models/matter.js";
 
-import { logDid } from "./place/dids.js";
+import { logFact } from "./place/facts.js";
 import { resolveSpaceAccess } from "./place/space/spaceFetch.js";
 import {
   createBeing,
@@ -50,13 +50,13 @@ import {
   clearSessionAbort,
   SESSION_TYPES,
   registerSessionType,
-} from "./cognition/session.js";
+} from "./factory/session.js";
 
 import {
   startSummon,
   finalizeSummon,
   ensureSession as ensureChatSession,
-} from "./cognition/summonTracker.js";
+} from "./factory/stamped.js";
 
 import {
   stepTurn,
@@ -64,12 +64,12 @@ import {
   runTurn,
   getCurrentRole,
   registerFailoverResolver,
-} from "./cognition/runTurn.js";
+} from "./factory/stamper.js";
 import {
   getClientForBeing,
   resolveRootLlmForRole,
   beingHasLlm,
-} from "./cognition/llmClient.js";
+} from "./factory/beingAssignment/llm/llmClient.js";
 import {
   getSpaceRootId,
   setCurrentSpace,
@@ -80,11 +80,11 @@ import {
   closeMCPClient,
   getMCPClient,
   MCP_SERVER_URL,
-} from "./cognition/mcpClient.js";
+} from "./factory/beingAssignment/llm/mcpClient.js";
 import {
   registerRootSpaceLlmSlot,
   registerBeingLlmSlot,
-} from "./cognition/connections.js";
+} from "./factory/beingAssignment/llm/connections.js";
 import {
   emitNavigate,
   emitToBeing,
@@ -155,23 +155,23 @@ import {
 // extensions register roles, subscribe to events, declare wake
 // cadences, and aggregate fan-out replies without importing my
 // internals.
-import { aggregate as ibpAggregate } from "./cognition/replies.js";
+import { aggregate as ibpAggregate } from "./factory/replies.js";
 import {
   subscribe as ibpSubscribe,
   unsubscribe as ibpUnsubscribe,
   unsubscribeAllForBeing as ibpUnsubscribeAllForBeing,
-} from "./cognition/subscriptions.js";
+} from "./factory/subscriptions.js";
 import {
   schedule as ibpSchedule,
   unschedule as ibpUnschedule,
   unscheduleAllForBeing as ibpUnscheduleAllForBeing,
   setEmitter as ibpSetScheduleEmitter,
   resetEmitter as ibpResetScheduleEmitter,
-} from "./cognition/wakeSchedule.js";
+} from "./factory/wakeSchedule.js";
 import {
   registerRole as ibpRegisterRole,
   unregisterRole as ibpUnregisterRole,
-} from "./cognition/roles/registry.js";
+} from "./factory/roles/registry.js";
 
 // The four-verb dispatcher. The whole of my public surface for
 // operations on space, matter, and beings.
@@ -226,7 +226,7 @@ export function buildCoreServices({
     be: beVerb,
 
     // --- Always-available services ---
-    dids: { logDid },
+    facts: { logFact },
     auth: {
       resolveSpaceAccess,
       createBeing,
@@ -325,7 +325,7 @@ export function buildCoreServices({
     // run on their behalf.
 
     // --- Shared models (core protocol, always available) ---
-    models: { Being, Space, Did, Matter },
+    models: { Being, Space, Fact, Matter },
 
     // --- Hook system ---
     hooks: hooksModule,

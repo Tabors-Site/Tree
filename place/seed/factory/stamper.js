@@ -16,7 +16,7 @@
 //
 //   1. Pull substrate together (Being row, role spec, current space,
 //      ancestor cache snapshot, recent presence-tail).
-//   2. Assemble the frame (buildPrompt.js).
+//   2. Assemble the frame (stamp.js).
 //   3. Resolve which provider voice the moment is spoken in (llmClient.js).
 //   4. Run the forward pass — the being now exists.
 //   5. If the being's act inside the moment is a tool call, run the
@@ -30,7 +30,7 @@
 // What this file owns:
 //
 //   PROMPT    coordination of frame assembly (delegates the actual
-//             render to buildPrompt.js).
+//             render to stamp.js).
 //
 //   TOOLS     per-moment resolution of which tools the being may
 //             reach for: role base + extension overlays +
@@ -41,7 +41,7 @@
 //             keyed by presenceKey (the lane the being is
 //             continuously present in: IBP Address, pipeline key,
 //             or transport reach). Distinct from
-//             cognition/session.js's per-moment AbortSignal scope.
+//             factory/session.js's per-moment AbortSignal scope.
 //
 //   CALL      callLLM is the iteration: one provider call + tool
 //             dispatch + repeat. The provider-side mechanics
@@ -60,7 +60,7 @@
 //
 //   The reply emission — when the moment closes, the role's
 //   summon() decides whether to request a follow-up moment from
-//   the asker (via cognition/replies.js). I just hand back text +
+//   the asker (via factory/replies.js). I just hand back text +
 //   a summonId.
 //
 //   Anything substrate-shaped (Space, Matter, Being writes) —
@@ -85,190 +85,32 @@ import {
   getAncestorChain,
 } from "../place/space/ancestorCache.js";
 import { isDbHealthy } from "../system/dbConfig.js";
-import { resolveTools } from "../cognition/tools.js";
+import { resolveTools } from "../factory/tools.js";
 import { getSpaceName } from "../place/space/spaceFetch.js";
-import { mcpClients, connectToMCP, MCP_SERVER_URL } from "./mcpClient.js";
+import { mcpClients, connectToMCP, MCP_SERVER_URL } from "./beingAssignment/llm/mcpClient.js";
 
-// The thin strand of continuity across calls within a session: how
-// many recent messages to carry when a role switch happens without a
-// full reset. Without this the next call would be born amnesiac —
-// the durable Being row stays, but no recent context goes with it.
-// Set low: the prompt is rebuilt fresh each call; this is just the
-// recent-turns echo, not memory.
-let CARRY_MESSAGES = 4;
-export function setCarryMessages(n) {
-  CARRY_MESSAGES = Math.max(0, Number(n) || 4);
-}
+// The live carry between this being's moments — messages tail,
+// current role, idle eviction — lives in reel.js. setCarryMessages
+// is re-exported because services.js wires it through the public
+// surface.
+import {
+  getReel,
+  presenceKeyFor,
+  getCarryMessages,
+  setCarryMessages,
+  setMaxPresenceReels,
+  setStalePresenceMs,
+} from "./reel.js";
+export { setCarryMessages };
 import { getPlaceConfigValue } from "../placeConfig.js";
 import { I_AM } from "../place/being/seedBeings.js";
 import { signInternalToken } from "../place/being/identity.js";
 
-// ─────────────────────────────────────────────────────────────────────
-// PROMPT + TOOL RESOLUTION
-// ─────────────────────────────────────────────────────────────────────
-//
-// A role spec carries: prompt body, tool names, permissions (verb
-// filter), optional LLM-call budget (timeoutMs, maxRetries), optional
-// llmSlot for resolution, optional loop config. The two helpers below
-// turn that spec into (a) the system prompt for this instant and
-// (b) the tools array the model is allowed to call this instant.
-// Both are computed fresh on every call. No caching, no carry; the
-// role IS the spec, this turn IS the assembly of it.
-
-/**
- * Build the system prompt for one call.
- *
- * Two paths still coexist:
- *
- *   NEW SHAPE (role.prompt) — buildPrompt.js assembles the canonical
- *   "I am NAME, ROLE at SCOPE" + preloaded see + capabilities +
- *   role.prompt(ctx) + [Time]. The locked shape; every role migrates
- *   here.
- *
- *   LEGACY SHAPE (role.buildSystemPrompt) — role hand-assembles its
- *   own body; I prepend the position block and append [Time]. Kept
- *   running until every role moves.
- *
- * A role declaring both uses the new shape (prompt wins).
- */
-async function buildSystemPromptForRole(role, ctx) {
-  if (!role) {
-    throw new Error("buildSystemPromptForRole: no role provided");
-  }
-
-  if (typeof role.prompt === "function") {
-    const { buildPrompt } = await import("./buildPrompt.js");
-    return buildPrompt(role, ctx);
-  }
-
-  if (typeof role.buildSystemPrompt !== "function") {
-    throw new Error(
-      `buildSystemPromptForRole: role "${role?.name || "(unnamed)"}" has neither prompt nor buildSystemPrompt`,
-    );
-  }
-
-  // ── Layer 1: position block ──
-  const positionLines = [];
-  if (ctx.name) positionLines.push(`User: ${ctx.name}`);
-  const rootId = ctx.rootId || null;
-  const currentSpace = ctx.currentSpace || ctx.targetSpace || null;
-  const targetSpace = ctx.targetSpace || null;
-
-  const idsToResolve = {};
-  if (rootId) idsToResolve.root = rootId;
-  if (currentSpace && currentSpace !== rootId)
-    idsToResolve.current = currentSpace;
-  if (targetSpace && targetSpace !== rootId && targetSpace !== currentSpace) {
-    idsToResolve.target = targetSpace;
-  }
-
-  const names = {};
-  try {
-    const entries = Object.entries(idsToResolve);
-    if (entries.length > 0) {
-      const resolved = await Promise.all(
-        entries.map(([, id]) => getSpaceName(id)),
-      );
-      entries.forEach(([key], i) => {
-        names[key] = resolved[i];
-      });
-    }
-  } catch (nameErr) {
-    log.debug("Role", `Space name resolution failed: ${nameErr.message}`);
-  }
-  if (rootId) {
-    positionLines.push(
-      names.root ? `Tree: ${names.root} (${rootId})` : `Tree: ${rootId}`,
-    );
-  }
-  if (currentSpace && currentSpace !== rootId) {
-    positionLines.push(
-      names.current
-        ? `Current space: ${names.current} (${currentSpace})`
-        : `Current space: ${currentSpace}`,
-    );
-  }
-  if (targetSpace && targetSpace !== rootId && targetSpace !== currentSpace) {
-    positionLines.push(
-      names.target
-        ? `Target space: ${names.target} (${targetSpace})`
-        : `Target space: ${targetSpace}`,
-    );
-  }
-  const positionBlock =
-    positionLines.length > 0
-      ? `[Position]\n${positionLines.join("\n")}\n\n`
-      : "";
-
-  // ── Layer 2: role prompt ──
-  let rolePrompt;
-  try {
-    rolePrompt = await Promise.resolve(role.buildSystemPrompt(ctx));
-  } catch (promptErr) {
-    log.error(
-      "Role",
-      `role "${role.name}" buildSystemPrompt failed: ${promptErr.message}`,
-    );
-    rolePrompt = `[Role prompt error: ${promptErr.message}]`;
-  }
-
-  // ── Layer 3: time block ──
-  const timeBlock = `\n\n[Time] ${new Date().toISOString()}`;
-
-  return `${positionBlock}${rolePrompt}${timeBlock}`;
-}
-
-/**
- * Resolve the OpenAI-compatible tools array for a role.
- *   1. role.toolNames (base)
- *   2. extension-injected tools (via _getExtToolsFn, keyed by role name)
- *   3. tree-specific overlays (qualities.tools.allowed / blocked)
- *   4. permission filter (drop tools whose verb isn't in role.permissions)
- */
-function resolveToolsForRole(
-  role,
-  treeToolConfig = null,
-  rolePermissions = null,
-) {
-  if (!role) return [];
-
-  // Layer 1: role base tools
-  let toolNames = Array.isArray(role.toolNames) ? [...role.toolNames] : [];
-
-  // Layer 2: extension-injected tools keyed by role name
-  const extTools = _getExtToolsFn(role.name);
-  if (extTools.length > 0) {
-    toolNames = [...new Set([...toolNames, ...extTools])];
-  }
-
-  // Layer 3: tree overlays
-  if (treeToolConfig) {
-    if (Array.isArray(treeToolConfig.allowed)) {
-      toolNames = [...new Set([...toolNames, ...treeToolConfig.allowed])];
-    }
-    if (Array.isArray(treeToolConfig.blocked)) {
-      const blockedSet = new Set(treeToolConfig.blocked);
-      toolNames = toolNames.filter((t) => !blockedSet.has(t));
-    }
-  }
-
-  // Layer 4: role-permissions filter (verb tag ∩ role.permissions).
-  // Permissions are role identity ([[project_role_permissions_not_envelope]]);
-  // envelopes never widen them.
-  const permsForFilter = Array.isArray(rolePermissions)
-    ? rolePermissions
-    : Array.isArray(role.permissions)
-      ? role.permissions
-      : null;
-  return resolveTools(toolNames, permsForFilter);
-}
-
-// Extension tool injection hook. Set by the loader after init via
-// setExtensionToolResolver. Keyed by role name (the role IS the unit).
-let _getExtToolsFn = () => [];
-export function setExtensionToolResolver(fn) {
-  _getExtToolsFn = typeof fn === "function" ? fn : () => [];
-}
+// Frame coordination — building the stamp face + resolving the
+// tool surface for one moment — lives in stamp.js. I import the
+// pair as runTurn-internal handles; the actual rendering is
+// stamp.js's job.
+import { buildSystemPromptForRole, resolveToolsForRole } from "./stamp.js";
 
 // ─────────────────────────────────────────────────────────────────────
 // BUDGETS
@@ -283,16 +125,12 @@ export function setExtensionToolResolver(fn) {
 // misconfig from bricking the loop — every path produces a working
 // system, even if a config value comes in nonsense.
 
-let MAX_MESSAGES = 30;
-let MAX_TOOL_ITERATIONS = 15;
-let LLM_MAX_RETRIES = 3;
-
 // Place-level cap on simultaneous in-flight runTurns. The shared LLM
 // pool throttling that used to gate this retired (each being now has
-// its own LlmConnection); but a hard ceiling on concurrent LLM
-// turns still matters as a rate-of-change guard against runaway
-// fan-out. Cap-and-reject: when a SUMMON arrives and we're already
-// at MAX_RUN_TURNS, runTurn throws and the caller decides what to do.
+// its own LlmConnection); a hard ceiling on concurrent LLM turns
+// still matters as a rate-of-change guard against runaway fan-out.
+// Cap-and-reject: when a SUMMON arrives and we're already at
+// MAX_RUN_TURNS, runTurn throws and the caller decides what to do.
 let MAX_RUN_TURNS = 50;
 let _activeRunTurns = 0;
 export function setMaxRunTurns(n) {
@@ -303,88 +141,26 @@ export function setMaxRunTurns(n) {
 export function getActiveRunTurnCount() {
   return _activeRunTurns;
 }
-function MAX_MESSAGE_CONTENT_BYTES() {
-  return Math.max(
-    4096,
-    Math.min(
-      Number(getPlaceConfigValue("maxMessageContentBytes")) || 32768,
-      131072,
-    ),
-  );
-}
 
-// Genesis hands me each remembered setting through this single
-// switch. Routes by key — the call-surround knobs (concurrency,
-// failover, waiter timeout) forward into llmCall.js's setters; the
-// loop-shape knobs (iterations, message cap, retries) clamp local
-// state; the tool-call timeout / tool-result cap stay here. One
-// entry, every clamp deliberate.
-export function setSeedConfig(key, value) {
-  const num = Number(value);
-  switch (key) {
-    case "llmTimeout":
-      setLlmTimeout(Math.max(5000, Math.min(num * 1000, 30 * 60 * 1000)));
-      break;
-    case "llmMaxRetries":
-      LLM_MAX_RETRIES = Math.max(0, Math.min(num, 10));
-      break;
-    case "maxToolIterations":
-      MAX_TOOL_ITERATIONS = Math.max(1, Math.min(num, 100));
-      break;
-    case "maxConversationMessages":
-      MAX_MESSAGES = Math.max(4, Math.min(num, 200));
-      break;
-    // "defaultModel" removed: model comes from the connection record, not a global default
-    // llmMaxConcurrent + llmWaiterTimeout retired with the shared-pool
-    // LLM throttling (see llmCall.js note). The place-level
-    // concurrency cap now lives at the runTurn layer as maxRunTurns.
-    case "maxRunTurns":
-      setMaxRunTurns(num);
-      break;
-    case "maxInbox":
-      // Loaded lazily because inbox is the runTurn sibling module
-      // and the static import would close a cycle through the
-      // scheduler.
-      import("./inbox.js").then((m) => m.setMaxInbox(num)).catch(() => {});
-      break;
-    case "failoverTimeout":
-      setFailoverTimeout(Math.max(1000, Math.min(num * 1000, 120000)));
-      break;
-    case "toolCallTimeout":
-      TOOL_CALL_TIMEOUT_MS = Math.max(5000, Math.min(num * 1000, 600000));
-      break;
-    case "toolResultMaxBytes":
-      TOOL_RESULT_MAX_BYTES = Math.max(1000, Math.min(num, 1000000));
-      break;
-    case "maxPresences":
-      MAX_PRESENCE_SESSIONS = Math.max(100, Math.min(num, 500000));
-      break;
-    case "stalePresenceTimeout":
-      STALE_SESSION_MS = Math.max(60000, Math.min(num * 1000, 86400000));
-      break;
-  }
-}
-export { setLlmTimeout } from "./llmClient.js";
-import { setLlmTimeout, getLlmTimeout } from "./llmClient.js";
+// Budget knobs + setSeedConfig live in config.js. I import the
+// getters for use in the loop and register my MAX_RUN_TURNS setter
+// so genesis-routed configs land. setSeedConfig is re-exported
+// because services.js wires it through the public surface.
+import {
+  setSeedConfig,
+  registerMaxRunTurnsSetter,
+  getMaxMessages,
+  getMaxToolIterations,
+  getLlmMaxRetries,
+  getToolCallTimeoutMs,
+  getToolResultMaxBytes,
+  getMaxMessageContentBytes,
+} from "./config.js";
+export { setSeedConfig };
+registerMaxRunTurnsSetter(setMaxRunTurns);
 
-// Per-tool-call ceiling. Most tools answer in under a minute. A few
-// (extensions whose handler runs another LLM call inside it — a
-// single Planner / Contractor / Foreman turn) take longer.
-// 10 minutes covers them without needing per-tool whitelists.
-// Cancellation runs through the caller's AbortSignal, not this
-// timeout; the timeout exists to keep a stuck tool from blocking
-// the loop, not as a cancellation path.
-let TOOL_CALL_TIMEOUT_MS = 600000;
-
-// Per-tool-result cap on what enters session.messages. The model
-// sees the full result for its immediate reasoning; only the
-// history version is truncated. Previously 50KB/result, which
-// stacked: four file reads in one branch session = 200KB of history
-// before the branch even started writing. Branches that read every
-// sibling before composing an entry routinely hit 413 on remote
-// providers with 32K / 16K / 8K ceilings. 15KB shows ~450 lines of
-// code comfortably and truncates cleanly for larger files.
-let TOOL_RESULT_MAX_BYTES = 15000;
+export { setLlmTimeout } from "./beingAssignment/llm/llmClient.js";
+import { setLlmTimeout, getLlmTimeout } from "./beingAssignment/llm/llmClient.js";
 
 // The call-surround machinery (failover, model quirks, response
 // parsing) lives in llmCall.js. I import what callLLM uses
@@ -399,7 +175,7 @@ import {
   handleModelQuirks,
   parseInternalResponse,
   setFailoverTimeout,
-} from "./llmCall.js";
+} from "./beingAssignment/llm/llmCall.js";
 export { registerFailoverResolver };
 
 // History compression lives in compress.js. The tool loop triggers
@@ -421,7 +197,7 @@ import {
 //     one-shot Worker)
 //   - place default (the floor)
 function getRetriesForRole(role) {
-  return role?.maxRetries ?? LLM_MAX_RETRIES;
+  return role?.maxRetries ?? getLlmMaxRetries();
 }
 function getTimeoutForRole(role, spaceQualities = null) {
   const meta =
@@ -434,38 +210,15 @@ function getTimeoutForRole(role, spaceQualities = null) {
   return getLlmTimeout();
 }
 
-// LLM connection resolution lives in seed/cognition/llmClient.js. Imported
+// LLM connection resolution lives in seed/factory/beingAssignment/llm/llmClient.js. Imported
 // here for use by the turn engine.
-import { getClientForBeing, resolveRootLlmForRole } from "./llmClient.js";
+import { getClientForBeing, resolveRootLlmForRole } from "./beingAssignment/llm/llmClient.js";
 
-// ─────────────────────────────────────────────────────────────────────
-// SESSION (the carry between moments)
-// ─────────────────────────────────────────────────────────────────────
-//
-// A being doesn't persist itself across moments. But each moment
-// needs to know what the recent moments looked like or the
-// LLM-being is born amnesiac every call. The session is that thin
-// strand of carry between moments: the last N messages, the
-// current role, the iteration count.
-//
-// Keyed by presenceKey — the lane the being is continuously
-// present in. For being-to-being summons that's the IBP Address
-// (stance::stance); for stanceless internal cognition it's the
-// pipeline key. Two reaches into the same presence (same IBPA, two
-// tabs) share one entry — the carry is the lane, not the device.
-//
-// What's here: `{ messages[], role, _lastActive }`. What's NOT
-// here: position state (rootId, currentSpace) lives in
-// place/being/position.js keyed by Being, because a being has one
-// position regardless of how many reaches sit in front of it. MCP
-// cache, push fanout, etc. each have their own first-class
-// identifier.
-//
-// MAX_PRESENCE_SESSIONS caps the Map size so a runaway reach
-// cannot leak entries forever. Oldest by _lastActive evicts on
-// overflow.
-const sessions = new Map();
-let MAX_PRESENCE_SESSIONS = 50000;
+// The carry-between-moments live in reel.js; getReel and
+// presenceKeyFor are imported above. Local aliases keep the
+// existing call sites readable.
+const getSession = getReel;
+const _convKey = presenceKeyFor;
 
 // Position state (rootId, currentSpace) lives in
 // place/being/position.js keyed by Being — one being, one position,
@@ -477,73 +230,6 @@ import {
   setCurrentSpace,
   getCurrentSpace,
 } from "../place/being/position.js";
-
-/**
- * Get or create the carry-between-moments entry keyed by presenceKey.
- * For being-to-being summons the key is the IBP Address; for
- * stanceless internal cognition it's the pipeline key. Two reaches
- * that share the key share the carry — switching tabs doesn't
- * fork the lane. On miss, creates a fresh entry; on overflow, evicts
- * the oldest by _lastActive.
- */
-function getSession(presenceKey) {
-  if (!sessions.has(presenceKey)) {
-    // Hard cap: if sessions exceed limit, evict oldest before creating new
-    if (sessions.size >= MAX_PRESENCE_SESSIONS) {
-      let oldestKey = null,
-        oldestTime = Infinity;
-      for (const [id, s] of sessions) {
-        if ((s._lastActive || 0) < oldestTime) {
-          oldestTime = s._lastActive || 0;
-          oldestKey = id;
-        }
-      }
-      if (oldestKey) sessions.delete(oldestKey);
-    }
-    sessions.set(presenceKey, {
-      // The role spec the LLM is currently driving. Null until first
-      // switchRole. Replaces the old modeKey/bigMode pair; the role IS
-      // the unit of behavior.
-      role: null,
-      messages: [],
-      _lastActive: Date.now(),
-    });
-  }
-  const s = sessions.get(presenceKey);
-  s._lastActive = Date.now();
-  return s;
-}
-
-// Resolve the presence key for this turn. Prefer the explicit lane
-// on ctx (IBPA / pipeline key) when present; otherwise fall back to
-// the caller-supplied key (typically a transport reach). Internal
-// call sites route through here so two reaches sitting in the same
-// IBPA share one carry end to end.
-function _convKey(ctx, presenceKey) {
-  return ctx?.mcpCacheKey || presenceKey;
-}
-
-// Safety-net sweep: any session idle past STALE_SESSION_MS gets
-// dropped every 10 minutes so a leaked entry doesn't stick around.
-let STALE_SESSION_MS = 30 * 60 * 1000;
-setInterval(
-  () => {
-    const now = Date.now();
-    let swept = 0;
-    for (const [id, s] of sessions) {
-      if (now - (s._lastActive || 0) > STALE_SESSION_MS) {
-        sessions.delete(id);
-        swept++;
-      }
-    }
-    if (swept > 0)
-      log.debug(
-        "LLM",
-        `🧹 Swept ${swept} stale conversation session(s) (${sessions.size} remaining)`,
-      );
-  },
-  10 * 60 * 1000,
-).unref();
 
 // ─────────────────────────────────────────────────────────────────────
 // ROLE SWITCHING
@@ -577,7 +263,7 @@ export async function switchRole(presenceKey, newRole, ctx) {
   let carriedContext = [];
 
   if (!ctx.clearHistory) {
-    let carryCount = CARRY_MESSAGES;
+    let carryCount = getCarryMessages();
     if (oldRole?.preserveContextOnSwitch) {
       carryCount = Math.min(oldMessages.length, 8);
     }
@@ -789,7 +475,7 @@ async function stageCall(session, ctx, message, presenceKey) {
     );
     const recentMessages = session.messages
       .filter((m) => m.role === "user" || m.role === "assistant")
-      .slice(-(CARRY_MESSAGES * 2)); // carry more on loop
+      .slice(-(getCarryMessages() * 2)); // carry more on loop
 
     const systemPrompt = await buildSystemPromptForRole(role, {
       name: ctx.name,
@@ -872,7 +558,7 @@ async function stageCall(session, ctx, message, presenceKey) {
   // results following). Any individual message that grew too large
   // gets capped to MAX_MESSAGE_CONTENT_BYTES.
   const maxMsgs =
-    session._nodeLlmConfig?.maxConversationMessages ?? MAX_MESSAGES;
+    session._nodeLlmConfig?.maxConversationMessages ?? getMaxMessages();
   if (session.messages.length > maxMsgs) {
     const systemMsg = session.messages[0];
     let recent = session.messages.slice(-(maxMsgs - 1));
@@ -889,7 +575,7 @@ async function stageCall(session, ctx, message, presenceKey) {
         recent.shift();
       }
     }
-    const maxBytes = MAX_MESSAGE_CONTENT_BYTES();
+    const maxBytes = getMaxMessageContentBytes();
     for (const msg of recent) {
       if (typeof msg.content === "string" && msg.content.length > maxBytes) {
         msg.content = msg.content.slice(0, maxBytes) + "\n... (truncated)";
@@ -902,7 +588,7 @@ async function stageCall(session, ctx, message, presenceKey) {
   // tool loop on the existing buffer — no new user turn to push,
   // otherwise the history fills with synthetic "continue" stamps.
   if (!ctx?.continuation) {
-    const maxMsgBytes = MAX_MESSAGE_CONTENT_BYTES();
+    const maxMsgBytes = getMaxMessageContentBytes();
     const safeUserMsg =
       message.length > maxMsgBytes
         ? message.slice(0, maxMsgBytes) + "\n... (message truncated)"
@@ -1592,7 +1278,7 @@ async function executeTool(toolCall, session, ctx, client, presenceKey) {
     // against a hung SDK layer. Skip either one and a hang in the
     // wrong layer escapes the budget.
     const nodeToolTimeout =
-      session._nodeLlmConfig?.toolCallTimeout ?? TOOL_CALL_TIMEOUT_MS;
+      session._nodeLlmConfig?.toolCallTimeout ?? getToolCallTimeoutMs();
     const toolPromise = client.callTool(
       { name: resolvedToolName, arguments: args },
       undefined,
@@ -1621,7 +1307,7 @@ async function executeTool(toolCall, session, ctx, client, presenceKey) {
     // truncated, so future turns don't drag a megabyte of file dump
     // across the wire on every call.
     const nodeResultMax =
-      session._nodeLlmConfig?.toolResultMaxBytes ?? TOOL_RESULT_MAX_BYTES;
+      session._nodeLlmConfig?.toolResultMaxBytes ?? getToolResultMaxBytes();
     if (resultText && Buffer.byteLength(resultText, "utf8") > nodeResultMax) {
       const charEstimate = Math.floor(nodeResultMax * 0.9);
       resultText =
@@ -1825,7 +1511,7 @@ export async function stepTurn(presenceKey, message, ctx) {
   let response;
   let iterations = 0;
   const maxIterations =
-    session._nodeLlmConfig.maxToolIterations ?? MAX_TOOL_ITERATIONS;
+    session._nodeLlmConfig.maxToolIterations ?? getMaxToolIterations();
 
   // Per-step tool budget. When a role pins maxToolCallsPerStep, I
   // break the loop after that many tool calls and hand back a
@@ -2044,7 +1730,7 @@ export function getCurrentRole(sessionKey) {
 //   envelope — the SUMMON envelope that woke this summon. from,
 //              content, ibpAddress, correlation, inReplyTo,
 //              rootCorrelation, priority.
-//   role     — the active role spec from cognition/roles/registry.js.
+//   role     — the active role spec from factory/roles/registry.js.
 //   signal   — the scheduler's AbortController signal so a cut at
 //              HUMAN priority interrupts mid-turn.
 //
@@ -2107,10 +1793,10 @@ export async function runTurn({ being, envelope, role, signal = null } = {}) {
   const parentSummonId = envelope.inReplyTo || null;
 
   const { connectToMCP, getMCPClient, MCP_SERVER_URL } =
-    await import("./mcpClient.js");
-  const { startSummon, finalizeSummon } = await import("./summonTracker.js");
+    await import("./beingAssignment/llm/mcpClient.js");
+  const { startSummon, finalizeSummon } = await import("./stamped.js");
   const { setSessionAbort, clearSessionAbort } =
-    await import("../cognition/session.js");
+    await import("../factory/session.js");
   const { resolvePipelineKey } = await import("./session.js");
   const { computeIbpAddressForSummon } = await import("./summonAddress.js");
 

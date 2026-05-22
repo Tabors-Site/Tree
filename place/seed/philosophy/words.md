@@ -34,8 +34,6 @@ In a way , the “big present” isn’t a thing but just what happens when mult
 
 "
 
-He said back "Your whole explanatoins of beings and stuff lowkey makes zero sence. It's way too over explained, and poorly written. RIP.
-
 ====================
 
 machine2.jpg:
@@ -58,7 +56,33 @@ Place (space,matter,beings) is not one huge thing they all share and be in. Ever
 
 \*seriously. The place is not "there" always. It is tied together by reels, and fragmentally shown based on that reel of stamps ("timeline") so far. And what is threaded together is not space, or matter, but the Beings actions (momentum).
 
-The I Am is the first stamping. From there the place grows in reels like trees, glued together but the I am's root being.
+The I Am is the first stamping. From there the place grows in reels like trees, glued together by the I am's root being.
+
+Also, going back to my blog about Living Truth.
+Factory. FACTory. It is a chain of facts. This is the deeper structure of what I was trying to convey in words.
+
+Fact. A thing stamped by the Factory. A fact alone is not much but a record of matter/space/being, but the end of a chain of facts is Truth.
+
+A place, at its root, is one fact: the I am. That is the first stamp, and the root of all Truth.
+
+Each being (I am...) is the MOMENTum of the chain of facts (truth), and that is what dictates the place for that moment.
+
+People may see fact and conflate it with "the one objective truth". I am declaring that in this system there is no One Truth to be seen the same, besides the first, and rather tons of individiaul moments facting their own Truth. But Being systems may unite so strongly in function that they begin to frame this way. That is purpose taking shape and is natural in deeper branching.
+
+factory/
+intake/ summons arrive, queue, get picked
+beingAssignment/ resolve who acts — being, role, voice
+fold/ derive the place from stamped history
+
+stamper/ performs one stamping:
+face/ build the stamp face (the prompt)
+momentum/ run the being's motion (runTurn)
+
+    (note: all beings runthrough stamp.
+    humans and scripts may skip right through LLM stuff (anytihng to do with system prompts) but they still run through the same see/do/summon pick up  just not prompt formed, and see/do/summon action exactly like llm. the only diffrence is the momentum phase is not an LLM call because the being already decided in "another realm".that is why being is
+    assignedbefore.)
+
+stamped/ place the result — record new facts on the reel
 
 =====================
 

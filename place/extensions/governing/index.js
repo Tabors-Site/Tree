@@ -25,7 +25,7 @@ import { plannerRole } from "./roles/plannerRole.js";
 import { contractorRole } from "./roles/contractorRole.js";
 import { foremanRole } from "./roles/foremanRole.js";
 import { allWorkerRoles } from "./roles/workerRoles.js";
-import { registerRole } from "../../seed/cognition/roles/registry.js";
+import { registerRole } from "../../seed/factory/roles/registry.js";
 import {
   WORKER_TYPES,
   DEFAULT_WORKER_TYPE,

@@ -396,7 +396,7 @@ export async function cutThread({
   try {
     const Being = (await import("../../models/being.js")).default;
     const { cancelByRootCorrelation } = await import(
-      "../../cognition/inbox.js"
+      "../../factory/inbox.js"
     );
 
     const distinctReceivers = await Summon.aggregate([
@@ -429,7 +429,7 @@ export async function cutThread({
   if (priority === "HUMAN") {
     try {
       const { abortByRootCorrelations } = await import(
-        "../../cognition/scheduler.js"
+        "../../factory/scheduler.js"
       );
       aborted = abortByRootCorrelations([rootCorrelation], reason) || 0;
     } catch {

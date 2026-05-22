@@ -29,7 +29,7 @@
 //   space    set-space-llm
 //            Sets qualities.llm.slots[slot] on a space the caller owns
 //            (rootOwner matches). Drives the tree-level resolution
-//            step in seed/cognition/llmClient.js.
+//            step in seed/factory/beingAssignment/llm/llmClient.js.
 //
 // Authorization gates here are coarse for now (self / root operator /
 // tree ownership). The deferred stance-authorization framework will
@@ -83,7 +83,7 @@ export const llmAssignerBeing = Object.freeze({
     if (!model)   throw new IbpError(IBP_ERR.INVALID_INPUT, "`model` is required");
     // apiKey is optional — local LLMs (Ollama, llama.cpp) don't need it.
 
-    const { addLlmConnection } = await import("../../cognition/connections.js");
+    const { addLlmConnection } = await import("../../factory/beingAssignment/llm/connections.js");
     const connection = await addLlmConnection(String(ctx.identity.beingId), { name, baseUrl, model, apiKey });
     return {
       connectionId: String(connection._id),
@@ -105,7 +105,7 @@ export const llmAssignerBeing = Object.freeze({
     const { slot, connectionId } = payload || {};
     if (!slot) throw new IbpError(IBP_ERR.INVALID_INPUT, "`slot` is required");
 
-    const { assignConnection } = await import("../../cognition/connections.js");
+    const { assignConnection } = await import("../../factory/beingAssignment/llm/connections.js");
     return assignConnection(String(ctx.identity.beingId), slot, connectionId || null);
   },
 
@@ -118,7 +118,7 @@ export const llmAssignerBeing = Object.freeze({
     requireAuthenticated(ctx);
     const beingId = String(ctx.identity.beingId);
     const LlmConnection = (await import("../../models/llmConnection.js")).default;
-    const { getBeingLlmAssignments } = await import("../../cognition/assignments.js");
+    const { getBeingLlmAssignments } = await import("../../factory/beingAssignment/llm/assignments.js");
 
     const [connections, being] = await Promise.all([
       LlmConnection.find({ beingId }).select("_id name baseUrl model lastUsedAt").lean(),
@@ -148,7 +148,7 @@ export const llmAssignerBeing = Object.freeze({
     const { connectionId } = payload || {};
     if (!connectionId) throw new IbpError(IBP_ERR.INVALID_INPUT, "`connectionId` is required");
 
-    const { deleteLlmConnection } = await import("../../cognition/connections.js");
+    const { deleteLlmConnection } = await import("../../factory/beingAssignment/llm/connections.js");
     await deleteLlmConnection(String(ctx.identity.beingId), connectionId);
     return { removed: true, connectionId };
   },
@@ -197,7 +197,7 @@ export const llmAssignerBeing = Object.freeze({
    * Set an LLM slot on a space the caller owns (via rootOwner of the
    * containing tree). Writes qualities.llm.slots[slot] on the space —
    * the tree-level step of the resolution chain in
-   * seed/cognition/llmClient.js.
+   * seed/factory/beingAssignment/llm/llmClient.js.
    *
    * @param {object} payload  { spaceId, slot, connectionId }
    *                          connectionId null to clear the slot

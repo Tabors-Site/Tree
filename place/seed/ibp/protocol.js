@@ -2,7 +2,7 @@
 //
 // Wire shape. The form every SEE, DO, SUMMON, and BE takes.
 //
-// IBP is my communication primitive. place/ is what I AM; cognition/
+// IBP is my communication primitive. place/ is what I AM; factory/
 // is how my LLM beings THINK; ibp/ is how any of it speaks to any
 // other. Without this folder a being could not SEE a position, DO
 // an action, SUMMON another being, or BE in any stance — every

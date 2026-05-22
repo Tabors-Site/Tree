@@ -15,8 +15,8 @@
 // The role file declares what the Ruler IS. Seed handles the rest:
 //   - permissions derived from canSee/canDo/canSummon/canBe
 //   - respondMode/triggerOn default ("async" / ["message"])
-//   - summon wrapped with seed/cognition/defaultSummon
-//   - system prompt assembled by seed/cognition/buildPrompt
+//   - summon wrapped with seed/factory/defaultSummon
+//   - system prompt assembled by seed/factory/buildPrompt
 //
 // See [[project_role_subsumes_mode]], [[project_ibp_universal_grammar]].
 

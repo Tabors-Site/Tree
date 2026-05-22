@@ -19,7 +19,7 @@ import Space from "./models/space.js";
 import { SEED_SPACE } from "./place/space/seedSpaces.js";
 import { I_AM } from "./place/being/seedBeings.js";
 import { createPlaceSeedSpace } from "./place/space/spaceManagement.js";
-import { logDid } from "./place/dids.js";
+import { logFact } from "./place/facts.js";
 
 let placeRootCache = null;
 
@@ -78,7 +78,7 @@ export async function ensurePlaceRoot() {
     // My first DO. populate() resolves the beingId backward to me
     // once ensureIAm's call places my Being row.
     try {
-      await logDid({
+      await logFact({
         verb:    "do",
         action:  "create",
         beingId: I_AM,
@@ -86,7 +86,7 @@ export async function ensurePlaceRoot() {
         params:  { name: placeName, seedSpace: SEED_SPACE.PLACE_ROOT },
       });
     } catch (err) {
-      log.warn("Place", `Did write for place-root creation failed: ${err.message}`);
+      log.warn("Place", `Fact stamp for place-root creation failed: ${err.message}`);
     }
   }
 

@@ -6,7 +6,7 @@
 // create that row, place it in the world with a home space, verify
 // passwords, mint tokens, and look up beings by name. Everything else
 // about a being (how it acts, how it thinks) lives in ibp/ and
-// cognition/. Here is only the "is."
+// factory/. Here is only the "is."
 
 import Being from "../../models/being.js";
 import Space from "../../models/space.js";

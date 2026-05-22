@@ -1,19 +1,23 @@
 // TreeOS Seed . AGPL-3.0 . https://treeos.ai . Tabor Holly
 //
-// Dids. The trail of acts.
+// Facts. The reel of stamped acts.
 //
-// A being is its acts. The Being row in MongoDB is the place the
-// trail attaches; the trail itself, every Did the being has
-// emitted, is the identity. Without acts, the union of space and
-// matter has nothing to be. The being is made of the acts unfolding.
+// A being is its acts. The Being row in MongoDB is where the reel
+// attaches; the reel itself, every Fact the being has stamped, is
+// the identity. Without acts, the union of space and matter has
+// nothing to be. The being is made of the acts unfolding.
 //
-// This file writes and reads that trail. logDid is called from the
-// IBP verb dispatcher every time DO or BE places an act. The Did row
-// names the actor (beingId), the kind of act (verb, action), the
+// `factum`, a thing done. A fact alone is small, just a record of
+// matter, space, or being. The end of a chain of facts is Truth.
+// Truth is what the chain becomes.
+//
+// This file writes and reads that reel. logFact is called from the
+// IBP verb dispatcher every time DO or BE places an act. The Fact
+// row names the actor (beingId), the kind of act (verb, action), the
 // target (space | matter | being | place | stance), and the input /
-// output. getDids and getDidsByBeing return the trail to readers.
+// output. getFacts and getFactsByBeing return the reel to readers.
 //
-// Universal over substrate. Dids attach to any target kind, so this
+// Universal over substrate. Facts attach to any target kind, so this
 // file lives directly under place/ rather than inside one primitive's
 // subfolder.
 //
@@ -21,10 +25,10 @@
 // dispatcher also accepts `opts.skipAudit` for kernel-trusted batches.
 //
 // See seed/place/PLACE.md "And the beings are the acts" for the
-// philosophy behind why this trail is identity-load-bearing.
+// philosophy behind why this reel is identity-load-bearing.
 
 import log from "../system/log.js";
-import Did from "../models/did.js";
+import Fact from "../models/fact.js";
 import { hooks } from "../system/hooks.js";
 import { IBP_ERR, IbpError } from "../ibp/protocol.js";
 import { getPlaceConfigValue } from "../placeConfig.js";
@@ -49,7 +53,7 @@ const VALID_TARGET_KINDS = new Set([
 ]);
 
 /**
- * Log a Did record.
+ * Stamp a Fact onto the reel.
  *
  * @param {object} params
  * @param {string} params.beingId   actor (I_AM for scaffold flows)
@@ -63,12 +67,12 @@ const VALID_TARGET_KINDS = new Set([
  * @param {string|null} [params.homePlace]   federation provenance
  * @param {boolean} [params.wasRemote=false] federation provenance
  *
- * The `beforeDid` hook receives a mutable view of these fields and may
- * cancel the write or enrich the payload before insert.
+ * The `beforeFact` hook receives a mutable view of these fields and may
+ * cancel the stamp or enrich the payload before insert.
  */
-export async function logDid(input) {
+export async function logFact(input) {
   if (!input || typeof input !== "object") {
-    throw new Error("logDid requires a params object");
+    throw new Error("logFact requires a params object");
   }
   const {
     beingId,
@@ -84,16 +88,16 @@ export async function logDid(input) {
   } = input;
 
   if (!beingId || !action) {
-    throw new Error("logDid requires beingId and action");
+    throw new Error("logFact requires beingId and action");
   }
   if (typeof action !== "string" || action.length > MAX_ACTION_LENGTH) {
     throw new Error(
-      `logDid: action must be a string under ${MAX_ACTION_LENGTH} chars`,
+      `logFact: action must be a string under ${MAX_ACTION_LENGTH} chars`,
     );
   }
   if (!VALID_VERBS.has(verb)) {
     throw new Error(
-      `logDid: verb must be one of ${[...VALID_VERBS].join("|")}`,
+      `logFact: verb must be one of ${[...VALID_VERBS].join("|")}`,
     );
   }
 
@@ -101,7 +105,7 @@ export async function logDid(input) {
   if (target && typeof target === "object") {
     if (target.kind && !VALID_TARGET_KINDS.has(target.kind)) {
       throw new Error(
-        `logDid: target.kind must be one of ${[...VALID_TARGET_KINDS].join("|")}`,
+        `logFact: target.kind must be one of ${[...VALID_TARGET_KINDS].join("|")}`,
       );
     }
     if (target.kind || target.id) {
@@ -112,9 +116,9 @@ export async function logDid(input) {
     }
   }
 
-  // beforeDid hook . extensions can modify or cancel. The hook sees a
+  // beforeFact hook . extensions can modify or cancel. The hook sees a
   // mutable view; only `params` and `result` are conventionally mutated
-  // for enrichment. Cancellations short-circuit the write.
+  // for enrichment. Cancellations short-circuit the stamp.
   const hookData = {
     beingId,
     verb,
@@ -127,11 +131,11 @@ export async function logDid(input) {
     homePlace,
     wasRemote,
   };
-  const hookResult = await hooks.run("beforeDid", hookData);
+  const hookResult = await hooks.run("beforeFact", hookData);
   if (hookResult.cancelled) {
     const code = hookResult.timedOut ? IBP_ERR.HOOK_TIMEOUT : IBP_ERR.HOOK_CANCELLED;
     throw new IbpError(code,
-      `Did cancelled: ${hookResult.reason || "extension"}`,
+      `Fact cancelled: ${hookResult.reason || "extension"}`,
     );
   }
 
@@ -155,10 +159,10 @@ export async function logDid(input) {
   };
 
   try {
-    await Did.create(doc);
+    await Fact.create(doc);
   } catch (err) {
-    log.error("DB", `Did save failed (${action}): ${err.message}`);
-    throw new Error("Failed to log Did");
+    log.error("DB", `Fact save failed (${action}): ${err.message}`);
+    throw new Error("Failed to stamp Fact");
   }
 }
 
@@ -191,7 +195,7 @@ function capPayload(value, label) {
 function MAX_QUERY_LIMIT() {
   return Math.max(
     1,
-    Math.min(Number(getPlaceConfigValue("didQueryLimit")) || 5000, 50000),
+    Math.min(Number(getPlaceConfigValue("factQueryLimit")) || 5000, 50000),
   );
 }
 const MAX_DATE_SPAN_MS = 365 * 24 * 60 * 60 * 1000;
@@ -215,11 +219,11 @@ function buildDateFilter(startDate, endDate) {
 }
 
 /**
- * Get the Did log for a space.
+ * Get the Fact reel for a space.
  * If beingId is provided, verifies the caller has access to the space's tree.
  * Kernel-internal callers (hooks, migrations) can omit beingId.
  */
-export async function getDids({
+export async function getFacts({
   spaceId,
   limit,
   offset,
@@ -246,20 +250,20 @@ export async function getDids({
   );
   const safeOffset = Math.max(0, Number(offset) || 0);
 
-  const dids = await Did.find(query)
+  const facts = await Fact.find(query)
     .populate("beingId", "name")
     .sort({ date: -1 })
     .skip(safeOffset)
     .limit(safeLimit)
     .lean();
 
-  return { dids, limit: safeLimit };
+  return { facts, limit: safeLimit };
 }
 
 /**
- * Get a being's Did history.
+ * Get a being's Fact reel.
  */
-export async function getDidsByBeing(beingId, limit, startDate, endDate) {
+export async function getFactsByBeing(beingId, limit, startDate, endDate) {
   if (!beingId) throw new Error("Missing required parameter: beingId");
 
   const query = { beingId, ...buildDateFilter(startDate, endDate) };
@@ -268,11 +272,11 @@ export async function getDidsByBeing(beingId, limit, startDate, endDate) {
     MAX_QUERY_LIMIT(),
   );
 
-  const dids = await Did.find(query)
+  const facts = await Fact.find(query)
     .populate("beingId", "name")
     .sort({ date: -1 })
     .limit(safeLimit)
     .lean();
 
-  return { dids };
+  return { facts };
 }

@@ -47,9 +47,11 @@ The same tree shape three times, all hung on space.
 
 A being does not exist as still potential. A being is its acts.
 
-Every DO a being emits is recorded as a Did. The chain of Dids a being has emitted IS the being, in the same way a river is its flowing. The Being row in the database is the place the trail attaches; the trail itself is the identity. Without acts, the union of space and matter has nothing to be. The act is the being unfolding.
+Every DO a being emits is stamped as a Fact. The chain of Facts a being has emitted IS the being, in the same way a river is its flowing. The Being row in the database is the place the trail attaches; the trail itself is the identity. Without acts, the union of space and matter has nothing to be. The act is the being unfolding.
 
-This is why every act has an attributable being, and why genesis itself is attributable: the I-Am acts to form the world, and every Did from t=0 names it. There is no act without an actor; there is no being without acting.
+A **Fact** is a thing stamped by the Factory. The word is `factum`, Latin for "a thing done." A fact alone is not much, just a record of matter, space, or being. The end of a chain of facts is Truth. Truth is at the end of the chain, not at the start. One fact is small. The chain accumulates. Truth is what the chain becomes.
+
+This is why every act has an attributable being, and why genesis itself is attributable: the I-Am acts to form the world, and every Fact from t=0 names it. There is no act without an actor; there is no being without acting.
 
 ## Qualities
 
@@ -146,12 +148,12 @@ Two siblings at the root:
 - **`space/threads.js`**: the `.threads` projection and the kernel cut handler. A thread is a live tree of coordinated SUMMONs sharing one `rootCorrelation`. Made addressable at `<place>/.threads/<id>` so SEE returns its descriptor (participants, depth, state) and SUMMON severs it. Pure derived view: no new persistence; the descriptor is computed from Summon + inbox rows. Same verb, same envelope; the address tells the kernel whether the operation is a call (to a being) or a cut (of a line). A cut is just SUMMONing the line itself.
 - **`placeCheck.js`**: reconciler for the world's tree-shaped primitives (Space, Matter, Being). Verifies parent/children agreement, repairs phantoms, soft-deletes orphans. Knows the world by name; lives where the world lives.
 
-The schemas for all six primitives (the three above plus Did, Summon, LlmConnection) live at `seed/models/` so they sit in one place. The operations on the three world-shape primitives live here.
+The schemas for all six primitives (the three above plus Fact, Summon, LlmConnection) live at `seed/models/` so they sit in one place. The operations on the three world-shape primitives live here.
 
 ## What does NOT live here
 
 - The IBP protocol grammar (SEE, DO, SUMMON, BE) lives at `seed/ibp/`. The protocol speaks ABOUT the world; it is not part of the world.
-- The runtime that drives LLM-cognition beings (the scheduler, the inbox, the LLM client, the prompt builder, the tool registry, the role specs) lives at `seed/cognition/`. **`cognition/` is for LLM beings only.** Humans cognize in their own heads and route through portals; scripted beings ARE their code and need no apparatus. The runtime serves a specific kind of being; it is not part of the world.
+- The runtime that drives LLM-cognition beings (the scheduler, the inbox, the LLM client, the prompt builder, the tool registry, the role specs) lives at `seed/factory/`. **`factory/` is for LLM beings only.** Humans cognize in their own heads and route through portals; scripted beings ARE their code and need no apparatus. The runtime serves a specific kind of being; it is not part of the world.
 - The kernel machinery (DB connection, indexes, hooks, logging, retention, version) lives at `seed/system/`. The machinery is the floor everything stands on; it is not part of the world.
 
 The place is the world the I-Am formed. The protocol is how the I-Am addresses that world. The cognition is how beings in the world think. The system is the host-realm floor under all of it. Four folders, four roles, one seed.

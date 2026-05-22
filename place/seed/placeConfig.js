@@ -275,7 +275,7 @@ export const CONFIG_DEFAULTS = {
   didQueryLimit: 5000,
 
   // Scheduler backpressure. Only summonsPerSecond is enforced today
-  // (token-bucket in cognition/scheduler.js). InboxDepth + MaxAgeSeconds
+  // (token-bucket in factory/scheduler.js). InboxDepth + MaxAgeSeconds
   // are declared so operator config places in lockstep with the planned
   // inbox-pressure + stale-entry sweeps.
   summonInboxDepth:    100,

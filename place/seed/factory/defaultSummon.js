@@ -62,7 +62,7 @@ import {
 /**
  * The generic summon implementation. The role registry wires this
  * automatically when a role declares no custom `summon` function (see
- * seed/cognition/roles/registry.js#makeLazyDefaultSummon). Roles needing
+ * seed/factory/roles/registry.js#makeLazyDefaultSummon). Roles needing
  * custom dispatch attach their own `summon` and the registry skips
  * the wrap.
  *

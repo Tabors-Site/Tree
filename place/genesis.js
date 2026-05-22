@@ -96,11 +96,11 @@ import log from "./seed/system/log.js";
  * Register kernel-shipped tool definitions through the same path
  * extensions use. Thin wrapper that hands the bundle to
  * `registerToolBundle` with `ownerExt: "kernel"`. See
- * seed/cognition/tools.js for the unified registration logic.
+ * seed/factory/tools.js for the unified registration logic.
  */
 async function registerKernelTools(tools) {
   const { mcpServerInstance } = await import("./protocols/mcp/server.js");
-  const { registerToolBundle } = await import("./seed/cognition/tools.js");
+  const { registerToolBundle } = await import("./seed/factory/tools.js");
   await registerToolBundle(tools, {
     ownerExt: "kernel",
     mcpServer: mcpServerInstance,
@@ -213,11 +213,11 @@ export async function genesis(app, opts = {}) {
   // registration. Place-manager is summonable (LLM-driven operator
   // dialog), so its role spec enters the registry here along with
   // its two generic tools (place-see, place-do).
-  const { registerRole } = await import("./seed/cognition/roles/registry.js");
+  const { registerRole } = await import("./seed/factory/roles/registry.js");
   const { placeManagerRole } =
-    await import("./seed/cognition/roles/placeManager.js");
+    await import("./seed/factory/roles/placeManager.js");
   const { placeManagerTools } =
-    await import("./seed/cognition/roles/placeManagerTools.js");
+    await import("./seed/factory/roles/placeManagerTools.js");
   registerRole("place-manager", placeManagerRole, "kernel");
   await registerKernelTools(placeManagerTools);
 
@@ -226,7 +226,7 @@ export async function genesis(app, opts = {}) {
   // not in the kernel ops registry. Same shape an extension would
   // use, just shipped in seed.
   const { registerLlmAssignerOps } =
-    await import("./seed/cognition/roles/llmAssignerOps.js");
+    await import("./seed/factory/roles/llmAssignerOps.js");
   registerLlmAssignerOps();
 
   // Check the place (before extensions load, after migrations).
@@ -239,7 +239,7 @@ export async function genesis(app, opts = {}) {
   // modules that depend on them. Per-key failures are logged but
   // non-fatal. Sane defaults are baked in.
   {
-    const { setSeedConfig } = await import("./seed/cognition/runTurn.js");
+    const { setSeedConfig } = await import("./seed/factory/stamper.js");
 
     const KERNEL_CONFIG = {
       llmTimeout: { setter: setSeedConfig },
@@ -258,37 +258,37 @@ export async function genesis(app, opts = {}) {
       maxInbox:    { setter: setSeedConfig },
       carryMessages: {
         load: () =>
-          import("./seed/cognition/runTurn.js").then((m) => m.setCarryMessages),
+          import("./seed/factory/stamper.js").then((m) => m.setCarryMessages),
       },
       maxRegisteredTools: {
         load: () =>
-          import("./seed/cognition/tools.js").then((m) => m.setMaxTools),
+          import("./seed/factory/tools.js").then((m) => m.setMaxTools),
       },
       sessionTTL: {
         load: () =>
-          import("./seed/cognition/session.js").then(
+          import("./seed/factory/session.js").then(
             (m) => (v) => m.setSessionTTL(v * 1000),
           ),
       },
       staleSessionTimeout: {
         load: () =>
-          import("./seed/cognition/session.js").then(
+          import("./seed/factory/session.js").then(
             (m) => (v) => m.setStaleTimeout(v * 1000),
           ),
       },
       maxSessions: {
         load: () =>
-          import("./seed/cognition/session.js").then((m) => m.setMaxSessions),
+          import("./seed/factory/session.js").then((m) => m.setMaxSessions),
       },
       llmClientCacheTtl: {
         load: () =>
-          import("./seed/cognition/llmClient.js").then(
+          import("./seed/factory/beingAssignment/llm/llmClient.js").then(
             (m) => (v) => m.setClientCacheTtl(v * 1000),
           ),
       },
       maxConnectionsPerUser: {
         load: () =>
-          import("./seed/cognition/connections.js").then(
+          import("./seed/factory/beingAssignment/llm/connections.js").then(
             (m) => m.setMaxConnectionsPerUser,
           ),
       },
@@ -400,9 +400,9 @@ export async function genesis(app, opts = {}) {
   (async () => {
     try {
       const { syncToolsToSubstrate } =
-        await import("./seed/cognition/tools.js");
+        await import("./seed/factory/tools.js");
       const { syncRolesToSubstrate } =
-        await import("./seed/cognition/roles/registry.js");
+        await import("./seed/factory/roles/registry.js");
       const { syncOperationsToSubstrate } =
         await import("./seed/ibp/operations.js");
       const [t, r, o] = await Promise.all([
@@ -424,11 +424,11 @@ export async function genesis(app, opts = {}) {
   // Tool-description audit. Walks every registered role's declared
   // tools and logs misconfigurations loudly before the first LLM
   // call. The same gap would block a summon at runtime via
-  // assertAllToolsResolve in buildPrompt.js. Surfacing it at boot
+  // assertAllToolsResolve in stamp.js. Surfacing it at boot
   // means the operator sees it without waiting for a user to
   // trigger the broken role.
   try {
-    const { auditToolDescriptions } = await import("./seed/cognition/tools.js");
+    const { auditToolDescriptions } = await import("./seed/factory/tools.js");
     await auditToolDescriptions();
   } catch (err) {
     log.warn("Tools", `tool-description audit failed: ${err.message}`);

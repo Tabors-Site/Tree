@@ -36,7 +36,7 @@
 
 import { randomUUID } from "crypto";
 import log from "../../../seed/system/log.js";
-import { runTurn } from "../../../seed/cognition/runTurn.js";
+import { runTurn } from "../../../seed/factory/stamper.js";
 import Space from "../../../seed/models/space.js";
 import Being from "../../../seed/models/being.js";
 // Only-SUMMONs-make-SUMMONs migration (2026-05-21): the legacy
@@ -47,7 +47,7 @@ import Being from "../../../seed/models/being.js";
 // envelope contract. No more direct scheduler pokes from extension
 // code. See [[project_thread_as_primitive]] for the design.
 import { summonByResolved } from "../../../seed/ibp/verbs.js";
-import { aggregate } from "../../../seed/cognition/replies.js";
+import { aggregate } from "../../../seed/factory/replies.js";
 import { getPlaceDomain } from "../../../seed/ibp/address.js";
 import { emitReplyToAsker, readMetaPath } from "./_shared.js";
 import { renderExecutionStack } from "../state/executionStack.js";

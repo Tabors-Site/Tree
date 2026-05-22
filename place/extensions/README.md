@@ -129,7 +129,7 @@ export const yourRole = {
 - `permissions` is computed from `canSee` / `canDo` / `canSummon` / `canBe` / `see`.
 - `respondMode` defaults to `"async"`. Override only if needed.
 - `triggerOn` defaults to `["message"]`. Override only for cron / hook triggers.
-- `summon(message, ctx)` is auto-wrapped with `seed/cognition/defaultSummon.js`
+- `summon(message, ctx)` is auto-wrapped with `seed/factory/defaultSummon.js`
   unless you provide a custom function. Custom dispatch is for roles
   with structural routing (e.g., the Foreman, which routes by content
   shape between dispatch and judgment).
@@ -306,7 +306,7 @@ before the capability list. Each name resolves through a registered
 ```javascript
 // extensions/your-extension/seeResolvers.js
 
-import { registerSeeResolver } from "../../seed/cognition/seeResolvers.js";
+import { registerSeeResolver } from "../../seed/factory/seeResolvers.js";
 import { renderYourSnapshot } from "./state/yourSnapshot.js";
 
 export function registerYourExtensionResolvers() {
@@ -396,11 +396,11 @@ write through the new shape:
 
 | What | Where | What you get |
 |---|---|---|
-| Default summon dispatch | `seed/cognition/defaultSummon.js` | runTurn invocation, abort handling, error wrapping, reply emission |
-| System prompt assembly | `seed/cognition/buildPrompt.js` | identity + see + capabilities + your prompt body + time |
-| Reply emission | `seed/cognition/replyEmission.js` | emitReplyToAsker, emitReplyToStance, findChainInitialCaller |
-| Tool resolution | `seed/cognition/runTurn.js` | role.canX → registered tools, permission filter, per-position scope |
-| Exit-gate enforcement | `seed/cognition/runTurn.js` | runs if you declared `exit.requires` |
+| Default summon dispatch | `seed/factory/defaultSummon.js` | runTurn invocation, abort handling, error wrapping, reply emission |
+| System prompt assembly | `seed/factory/stamp.js` | identity + see + capabilities + your prompt body + time |
+| Reply emission | `seed/factory/replies.js` | emitReplyToAsker, emitReplyToStance, findChainInitialCaller |
+| Tool resolution | `seed/factory/stamper.js` | role.canX → registered tools, permission filter, per-position scope |
+| Exit-gate enforcement | `seed/factory/stamper.js` | runs if you declared `exit.requires` |
 | Permissions derivation | `seed/being/roles/registry.js` | computed from your canSee/canDo/canSummon/canBe |
 | Did audit logging | `seed/ibp/verbs.js` | every DO writes a Did unless `skipAudit` |
 | Stance authorization | `seed/ibp/authorize.js` | runs before every verb |
@@ -557,10 +557,10 @@ when you can.
 - **Seed kernel internals:** `seed/SEED.md`.
 - **Role registry behavior:** `seed/being/roles/registry.js` (header
   comment).
-- **Prompt assembler:** `seed/cognition/buildPrompt.js` (header
+- **Prompt assembler:** `seed/factory/stamp.js` (header
   comment).
-- **Default summon:** `seed/cognition/defaultSummon.js`.
-- **Reply emission helpers:** `seed/cognition/replyEmission.js`.
+- **Default summon:** `seed/factory/defaultSummon.js`.
+- **Reply emission helpers:** `seed/factory/replies.js`.
 - **The four verbs in code:** `seed/ibp/verbs.js`.
 
 If something here disagrees with the seed source, the source is right

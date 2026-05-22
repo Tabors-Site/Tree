@@ -30,14 +30,14 @@
 import { test, describe, beforeEach, afterEach } from "node:test";
 import { strict as assert } from "node:assert";
 import { mock } from "node:test";
-import { echoEmbodiment } from "../seed/cognition/roles/echo.js";
+import { echoEmbodiment } from "../seed/factory/roles/echo.js";
 
 // In-memory inbox bucket: beingId -> entries[]. The subscription
 // registry's appendToInbox writes here; the scheduler's pickNextEntry
 // reads from here.
 const fakeBucket = new Map();
 
-mock.module("../seed/cognition/inbox.js", {
+mock.module("../seed/factory/inbox.js", {
   namedExports: {
     appendToInbox: async (spaceId, beingId, message) => {
       const sentAt = message.sentAt || new Date().toISOString();
@@ -113,7 +113,7 @@ mock.module("../seed/models/being.js", {
   },
 });
 
-mock.module("../seed/cognition/roles/registry.js", {
+mock.module("../seed/factory/roles/registry.js", {
   namedExports: {
     getRole: (name) => name === "echo" ? echoEmbodiment : null,
   },
@@ -133,8 +133,8 @@ mock.module("../seed/place/space/ancestorCache.js", {
   },
 });
 
-const { subscribe, emitToSubscribers, _resetAll: resetSubscriptions } = await import("../seed/cognition/subscriptions.js");
-const { attachHandoff, _resetAll: resetScheduler } = await import("../seed/cognition/scheduler.js");
+const { subscribe, emitToSubscribers, _resetAll: resetSubscriptions } = await import("../seed/factory/subscriptions.js");
+const { attachHandoff, _resetAll: resetScheduler } = await import("../seed/factory/scheduler.js");
 
 beforeEach(() => {
   resetSubscriptions();

@@ -23,13 +23,13 @@
 // via `allowedLlmDomains` in place config.
 
 import OpenAI from "openai";
-import log from "../system/log.js";
+import log from "../../../system/log.js";
 import crypto from "crypto";
-import Being from "../models/being.js";
-import Space from "../models/space.js";
-import LlmConnection from "../models/llmConnection.js";
-import { getPlaceConfigValue } from "../placeConfig.js";
-import { getAncestorChain } from "../place/space/ancestorCache.js";
+import Being from "../../../models/being.js";
+import Space from "../../../models/space.js";
+import LlmConnection from "../../../models/llmConnection.js";
+import { getPlaceConfigValue } from "../../../placeConfig.js";
+import { getAncestorChain } from "../../../place/space/ancestorCache.js";
 import {
   getSpaceLlmAssignments,
   getBeingLlmAssignments,

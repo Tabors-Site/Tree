@@ -8,7 +8,7 @@
 //
 // Called once from extensions/governing/index.js#init().
 
-import { registerSeeResolver } from "../../seed/cognition/seeResolvers.js";
+import { registerSeeResolver } from "../../seed/factory/seeResolvers.js";
 import { renderRulerSnapshot } from "./state/rulerSnapshot.js";
 import { renderExecutionStack } from "./state/executionStack.js";
 

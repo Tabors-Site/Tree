@@ -18,7 +18,7 @@
 // lazily on first dispatch.
 
 import log from "../../seed/system/log.js";
-import { registerRole } from "../../seed/cognition/roles/registry.js";
+import { registerRole } from "../../seed/factory/roles/registry.js";
 import { registerWorkspaceWorkerTypes } from "../governing/state/workerTypeRegistry.js";
 import { allCoderRoles } from "./roles/coderRole.js";
 import getCodersTools from "./tools.js";

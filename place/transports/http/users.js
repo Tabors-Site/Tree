@@ -1,7 +1,7 @@
 // Auth HTTP adapters.
 //
 // Thin shims over the IBP BE verb. The canonical registration /
-// claim / release logic lives in seed/cognition/roles/cherub.js
+// claim / release logic lives in seed/factory/roles/cherub.js
 // (the auth-being); HTTP is just a transport carrier.
 //
 // Per-route work that remains here is HTTP-specific:

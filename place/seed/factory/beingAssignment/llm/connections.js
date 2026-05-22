@@ -21,13 +21,13 @@
 //   - Slot names validated to prevent MongoDB path injection.
 //   - Connection IDs validated as strings before any query.
 
-import log from "../system/log.js";
-import Being from "../models/being.js";
-import LlmConnection from "../models/llmConnection.js";
-import Space from "../models/space.js";
+import log from "../../../system/log.js";
+import Being from "../../../models/being.js";
+import LlmConnection from "../../../models/llmConnection.js";
+import Space from "../../../models/space.js";
 import { clearBeingClientCache } from "./llmClient.js";
 import crypto from "crypto";
-import { getPlaceConfigValue } from "../placeConfig.js";
+import { getPlaceConfigValue } from "../../../placeConfig.js";
 import dns from "dns/promises";
 
 const ENCRYPTION_KEY = process.env.CUSTOM_LLM_API_SECRET_KEY;
@@ -533,7 +533,7 @@ export async function assignConnection(beingId, slot, connectionId) {
 /**
  * Space-scope counterpart to `assignConnection`. Writes the tree-level
  * step of the LLM resolution chain (see [[project_node_being_llm_chain]]
- * and seed/cognition/llmClient.js).
+ * and seed/factory/llmClient.js).
  *
  * "main" goes to `space.llmDefault`; every other slot writes to
  * `space.qualities.llm.slots.<slot>`. Pass `connectionId: null` to clear.

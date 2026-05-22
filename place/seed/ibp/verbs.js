@@ -35,7 +35,7 @@
 import { randomUUID } from "crypto";
 import log from "../system/log.js";
 import { getOperation, registerOperation, unregisterOperation, unregisterOperationsFromExtension, listOperations } from "./operations.js";
-import { logDid } from "../place/dids.js";
+import { logFact } from "../place/facts.js";
 import { IbpError, IBP_ERR } from "./protocol.js";
 import { MATTER_ORIGIN } from "../place/matter/origins.js";
 import { I_AM } from "../place/being/seedBeings.js";
@@ -44,11 +44,11 @@ import { parseWithContext, expand, getPlaceDomain } from "../ibp/address.js";
 import { resolveStance } from "../ibp/resolver.js";
 import { buildPlaceDescriptor, buildDiscovery } from "../ibp/descriptor.js";
 import { authorize, getAuthConfig } from "./authorize.js";
-import { appendToInbox, markInboxConsumed } from "../cognition/inbox.js";
+import { appendToInbox, markInboxConsumed } from "../factory/inbox.js";
 import { threadIdFromPath, cutThread, getThreadsSpaceId, describeThread } from "../place/space/threads.js";
-import { getRole } from "../cognition/roles/registry.js";
-import { cherubBeing } from "../cognition/roles/cherub.js";
-import { llmAssignerBeing } from "../cognition/roles/llmAssigner.js";
+import { getRole } from "../factory/roles/registry.js";
+import { cherubBeing } from "../factory/roles/cherub.js";
+import { llmAssignerBeing } from "../factory/roles/llmAssigner.js";
 import { registerBeHandler, getBeHandler } from "../place/being/beRegistry.js";
 
 // My two BE-honoring beings register at module load so the dispatcher
@@ -56,7 +56,7 @@ import { registerBeHandler, getBeHandler } from "../place/being/beRegistry.js";
 // registerBeHandler.
 registerBeHandler("cherub",         cherubBeing,         "kernel");
 registerBeHandler("llm-assigner", llmAssignerBeing,  "kernel");
-import { attachHandoff, wake } from "../cognition/scheduler.js";
+import { attachHandoff, wake } from "../factory/scheduler.js";
 
 /**
  * DO. Run a registered operation against a target, write a Did, return
@@ -146,9 +146,9 @@ export async function doVerb(target, operation, params = {}, opts = {}) {
       // wake, boot scaffolding, a seed plant's materialization).
       const actorBeingId = opts.identity?.beingId
         || (opts.scaffold === true ? I_AM : null);
-      await logDid({
+      await logFact({
         verb:     "do",
-        action:   op.didAction,
+        action:   op.factAction,
         beingId:  actorBeingId,
         target:   resolveAuditTarget(target, result),
         params:   ctx.params,
@@ -157,7 +157,7 @@ export async function doVerb(target, operation, params = {}, opts = {}) {
       });
     } catch (err) {
       // Audit failure must never kill the operation. Log loudly.
-      log.error("Verbs", `Did write failed for op "${operation}": ${err.message}`);
+      log.error("Verbs", `Fact stamp failed for op "${operation}": ${err.message}`);
     }
   }
 
@@ -567,7 +567,7 @@ export async function summonCreateBeing({ spec, identity }) {
   const addresseePosition = spec.homeSpace || null;
   try {
     const { startSummon, finalizeSummon } =
-      await import("../cognition/summonTracker.js");
+      await import("../factory/stamped.js");
     const summon = await startSummon({
       beingIn:           callerBeingId,
       beingOut:          String(being._id),
@@ -587,7 +587,7 @@ export async function summonCreateBeing({ spec, identity }) {
   }
 
   try {
-    await logDid({
+    await logFact({
       verb:    "be",
       action:  "register",
       beingId: String(being._id),
@@ -908,7 +908,7 @@ async function writeBeDid({ operation, identity, authResult, payload, beingName 
       ? { name: payload.name || null, from: payload.from || null }
       : null;
 
-    await logDid({
+    await logFact({
       verb:    "be",
       action:  operation,
       beingId: actorBeingId,
@@ -919,7 +919,7 @@ async function writeBeDid({ operation, identity, authResult, payload, beingName 
       result:  safeResult,
     });
   } catch (err) {
-    log.error("Verbs", `BE Did write failed for "${operation}" @${beingName}: ${err.message}`);
+    log.error("Verbs", `BE Fact stamp failed for "${operation}" @${beingName}: ${err.message}`);
   }
 }
 
@@ -1146,9 +1146,9 @@ function resolveAuditTarget(target, result) {
   return null;
 }
 
-// Summarize an op's return value for the Did. Primitives pass through;
+// Summarize an op's return value for the Fact. Primitives pass through;
 // Mongoose docs collapse to their id; plain objects pass through and
-// the size cap is enforced inside logDid.
+// the size cap is enforced inside logFact.
 function summarizeAuditResult(result) {
   if (result == null) return null;
   if (typeof result !== "object") return result;

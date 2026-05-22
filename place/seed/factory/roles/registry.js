@@ -26,7 +26,7 @@
 //   respondMode      - "async" by default
 //   triggerOn        - ["message"] by default
 //   summon           - auto-wrapped with defaultSummon when not provided
-//   buildSystemPrompt - auto-assembled via seed/cognition/buildPrompt when not provided
+//   buildSystemPrompt - auto-assembled via seed/factory/buildPrompt when not provided
 //
 // Roles with custom dispatch attach their own `summon` and seed leaves
 // it alone. Roles with custom prompt assembly attach
@@ -98,7 +98,7 @@ export function registerRole(name, def, extName = "role-registry") {
     : ["message"];
 
   // Build the final role spec. summon and buildSystemPrompt are wired
-  // lazily because they depend on seed/cognition modules; importing
+  // lazily because they depend on seed/factory modules; importing
   // them at module top would create a load-order cycle with runTurn.
   // The lazy refs resolve at first call.
   const spec = {
@@ -175,7 +175,7 @@ function makeLazyDefaultSummon(role) {
   let cached = null;
   return async (message, ctx) => {
     if (!cached) {
-      const mod = await import("../../cognition/defaultSummon.js");
+      const mod = await import("../../factory/defaultSummon.js");
       cached = mod.defaultSummon;
     }
     return cached({ message, ctx, role });

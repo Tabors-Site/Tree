@@ -26,7 +26,7 @@ mock.module("../seed/place/space/ancestorCache.js", {
 const appendCalls = [];   // { spaceId, beingId, message }
 const wakeCalls = [];     // { beingId, spaceId }
 
-mock.module("../seed/cognition/inbox.js", {
+mock.module("../seed/factory/inbox.js", {
   namedExports: {
     appendToInbox: async (spaceId, beingId, message) => {
       appendCalls.push({ spaceId, beingId, message });
@@ -35,7 +35,7 @@ mock.module("../seed/cognition/inbox.js", {
   },
 });
 
-mock.module("../seed/cognition/scheduler.js", {
+mock.module("../seed/factory/scheduler.js", {
   namedExports: {
     wake: (beingId, spaceId) => { wakeCalls.push({ beingId, spaceId }); },
   },
@@ -57,7 +57,7 @@ const {
   emitToSubscribers,
   getStats,
   _resetAll,
-} = await import("../seed/cognition/subscriptions.js");
+} = await import("../seed/factory/subscriptions.js");
 
 beforeEach(() => {
   _resetAll();

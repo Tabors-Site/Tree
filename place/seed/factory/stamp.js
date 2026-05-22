@@ -109,7 +109,7 @@
 // the LLM needs to know its frame of reference for this turn.
 
 import log from "../system/log.js";
-import { getToolDescription } from "../cognition/tools.js";
+import { getToolDescription, resolveTools, getExtensionToolsForRole } from "./tools.js";
 import { resolveSeeList, registerSeeResolver } from "./seeResolvers.js";
 import { getSpaceName } from "../place/space/spaceFetch.js";
 
@@ -322,3 +322,161 @@ registerSeeResolver(
 );
 
 log.verbose("BuildPrompt", "assembler ready; default resolvers registered");
+
+// ────────────────────────────────────────────────────────────────────
+// Frame coordination
+// ────────────────────────────────────────────────────────────────────
+//
+// stamper.js calls me through buildSystemPromptForRole when it
+// needs the assembled face for the next moment. The two paths below
+// reflect the old/new split in role specs: new-shape roles declare
+// `prompt(ctx)` and route through buildPrompt above (the canonical
+// "I am NAME at SPACE" shape); legacy-shape roles hand-assemble
+// through `buildSystemPrompt(ctx)` and I prepend a position block
+// + append a time block around their body. Both paths emit one
+// rendered string — the face the being IS for the next forward
+// pass.
+
+/**
+ * Build the system prompt for one moment.
+ *
+ * Two paths coexist:
+ *   NEW SHAPE (role.prompt) — buildPrompt above renders the canonical
+ *   "I am NAME at SPACE" + preloaded see + capabilities +
+ *   role.prompt(ctx) + [Time]. The locked shape; every role
+ *   migrates here.
+ *
+ *   LEGACY SHAPE (role.buildSystemPrompt) — role hand-assembles its
+ *   own body; I prepend the position block and append [Time]. Kept
+ *   running until every role moves.
+ *
+ * A role declaring both uses the new shape (prompt wins).
+ */
+export async function buildSystemPromptForRole(role, ctx) {
+  if (!role) {
+    throw new Error("buildSystemPromptForRole: no role provided");
+  }
+
+  if (typeof role.prompt === "function") {
+    return buildPrompt(role, ctx);
+  }
+
+  if (typeof role.buildSystemPrompt !== "function") {
+    throw new Error(
+      `buildSystemPromptForRole: role "${role?.name || "(unnamed)"}" has neither prompt nor buildSystemPrompt`,
+    );
+  }
+
+  // Layer 1: position block.
+  const positionLines = [];
+  if (ctx.name) positionLines.push(`User: ${ctx.name}`);
+  const rootId = ctx.rootId || null;
+  const currentSpace = ctx.currentSpace || ctx.targetSpace || null;
+  const targetSpace = ctx.targetSpace || null;
+
+  const idsToResolve = {};
+  if (rootId) idsToResolve.root = rootId;
+  if (currentSpace && currentSpace !== rootId)
+    idsToResolve.current = currentSpace;
+  if (targetSpace && targetSpace !== rootId && targetSpace !== currentSpace) {
+    idsToResolve.target = targetSpace;
+  }
+
+  const names = {};
+  try {
+    const entries = Object.entries(idsToResolve);
+    if (entries.length > 0) {
+      const resolved = await Promise.all(
+        entries.map(([, id]) => getSpaceName(id)),
+      );
+      entries.forEach(([key], i) => {
+        names[key] = resolved[i];
+      });
+    }
+  } catch (nameErr) {
+    log.debug("Role", `Space name resolution failed: ${nameErr.message}`);
+  }
+  if (rootId) {
+    positionLines.push(
+      names.root ? `Tree: ${names.root} (${rootId})` : `Tree: ${rootId}`,
+    );
+  }
+  if (currentSpace && currentSpace !== rootId) {
+    positionLines.push(
+      names.current
+        ? `Current space: ${names.current} (${currentSpace})`
+        : `Current space: ${currentSpace}`,
+    );
+  }
+  if (targetSpace && targetSpace !== rootId && targetSpace !== currentSpace) {
+    positionLines.push(
+      names.target
+        ? `Target space: ${names.target} (${targetSpace})`
+        : `Target space: ${targetSpace}`,
+    );
+  }
+  const positionBlock =
+    positionLines.length > 0
+      ? `[Position]\n${positionLines.join("\n")}\n\n`
+      : "";
+
+  // Layer 2: role prompt body.
+  let rolePrompt;
+  try {
+    rolePrompt = await Promise.resolve(role.buildSystemPrompt(ctx));
+  } catch (promptErr) {
+    log.error(
+      "Role",
+      `role "${role.name}" buildSystemPrompt failed: ${promptErr.message}`,
+    );
+    rolePrompt = `[Role prompt error: ${promptErr.message}]`;
+  }
+
+  // Layer 3: time stamp.
+  const timeBlock = `\n\n[Time] ${new Date().toISOString()}`;
+
+  return `${positionBlock}${rolePrompt}${timeBlock}`;
+}
+
+/**
+ * Resolve the OpenAI-compatible tools array for a role at this
+ * moment.
+ *   1. role.toolNames (base)
+ *   2. extension-injected tools (via getExtensionToolsForRole)
+ *   3. tree-specific overlays (qualities.tools.allowed / blocked)
+ *   4. permission filter (drop tools whose verb isn't in role.permissions)
+ */
+export function resolveToolsForRole(
+  role,
+  treeToolConfig = null,
+  rolePermissions = null,
+) {
+  if (!role) return [];
+
+  let toolNames = Array.isArray(role.toolNames) ? [...role.toolNames] : [];
+
+  const extTools = getExtensionToolsForRole(role.name);
+  if (extTools.length > 0) {
+    toolNames = [...new Set([...toolNames, ...extTools])];
+  }
+
+  if (treeToolConfig) {
+    if (Array.isArray(treeToolConfig.allowed)) {
+      toolNames = [...new Set([...toolNames, ...treeToolConfig.allowed])];
+    }
+    if (Array.isArray(treeToolConfig.blocked)) {
+      const blockedSet = new Set(treeToolConfig.blocked);
+      toolNames = toolNames.filter((t) => !blockedSet.has(t));
+    }
+  }
+
+  // Permissions are role identity ([[project_role_permissions_not_envelope]]);
+  // envelopes never widen them.
+  const permsForFilter = Array.isArray(rolePermissions)
+    ? rolePermissions
+    : Array.isArray(role.permissions)
+      ? role.permissions
+      : null;
+  return resolveTools(toolNames, permsForFilter);
+}
+

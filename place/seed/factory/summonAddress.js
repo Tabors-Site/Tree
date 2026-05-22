@@ -15,7 +15,7 @@
 // seed/ibp/address.js.
 //
 // Why I live in cognition. Only cognition needs to name the lane:
-// summonTracker stamps the canonical string onto every Summon
+// stamped stamps the canonical string onto every Summon
 // row, and runTurn uses it as the presenceKey to find the carry
 // between moments. This composition is moment-machinery, not
 // protocol surface.

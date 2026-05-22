@@ -40,7 +40,7 @@ import {
   markInboxConsumed,
   readInbox,
 } from "./inbox.js";
-import { getRole } from "../cognition/roles/registry.js";
+import { getRole } from "../factory/roles/registry.js";
 import { pushIbp } from "../ibp/pushChannel.js";
 import { getPlaceConfigValue } from "../placeConfig.js";
 

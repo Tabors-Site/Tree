@@ -363,8 +363,8 @@ export default function getRulerTools(core) {
         //    is the Planner stance for the reply's `from` field. The
         //    response handler re-fires the existing governing hook so
         //    the Ruler wakeup path stays unchanged.
-        const { appendToInbox } = await import("../../seed/cognition/inbox.js");
-        const { attachHandoff, wake } = await import("../../seed/cognition/scheduler.js");
+        const { appendToInbox } = await import("../../seed/factory/inbox.js");
+        const { attachHandoff, wake } = await import("../../seed/factory/scheduler.js");
         const { hooks } = await import("../../seed/system/hooks.js");
         const startMs = Date.now();
 
@@ -673,8 +673,8 @@ export default function getRulerTools(core) {
         // 5. Append + handoff + wake. Handoff onResponse re-fires the
         //    existing governing:contractorCompleted hook so the Ruler
         //    wake-up path stays unchanged.
-        const { appendToInbox } = await import("../../seed/cognition/inbox.js");
-        const { attachHandoff, wake } = await import("../../seed/cognition/scheduler.js");
+        const { appendToInbox } = await import("../../seed/factory/inbox.js");
+        const { attachHandoff, wake } = await import("../../seed/factory/scheduler.js");
         const { hooks } = await import("../../seed/system/hooks.js");
         const startMs = Date.now();
 
@@ -905,8 +905,8 @@ export default function getRulerTools(core) {
         // 5. Append + handoff + wake. Handoff onResponse re-fires the
         //    existing governing:foremanRouted hook so the Ruler wake-up
         //    path stays unchanged.
-        const { appendToInbox } = await import("../../seed/cognition/inbox.js");
-        const { attachHandoff, wake } = await import("../../seed/cognition/scheduler.js");
+        const { appendToInbox } = await import("../../seed/factory/inbox.js");
+        const { attachHandoff, wake } = await import("../../seed/factory/scheduler.js");
         const { hooks } = await import("../../seed/system/hooks.js");
         const startMs = Date.now();
 
@@ -1203,8 +1203,8 @@ export default function getRulerTools(core) {
           sentAt:          new Date().toISOString(),
         };
 
-        const { appendToInbox } = await import("../../seed/cognition/inbox.js");
-        const { attachHandoff, wake } = await import("../../seed/cognition/scheduler.js");
+        const { appendToInbox } = await import("../../seed/factory/inbox.js");
+        const { attachHandoff, wake } = await import("../../seed/factory/scheduler.js");
         const { hooks } = await import("../../seed/system/hooks.js");
         const startMs = Date.now();
         try {
@@ -1457,8 +1457,8 @@ export default function getRulerTools(core) {
         // is automatic via the parent-walk substrate reads; no
         // explicit pass needed.
         const { promoteToRuler, PROMOTED_FROM } = await import("./state/role.js");
-        const { appendToInbox } = await import("../../seed/cognition/inbox.js");
-        const { wake } = await import("../../seed/cognition/scheduler.js");
+        const { appendToInbox } = await import("../../seed/factory/inbox.js");
+        const { wake } = await import("../../seed/factory/scheduler.js");
         const { writeLineage } = await import("./state/lineage.js");
         const { randomUUID } = await import("crypto");
         const rootCorrelation = args.rootSummonId || summonId || `${spawnId}-root`;
@@ -2026,8 +2026,8 @@ export default function getRulerTools(core) {
           sentAt:          new Date().toISOString(),
         };
 
-        const { appendToInbox } = await import("../../seed/cognition/inbox.js");
-        const { attachHandoff, wake } = await import("../../seed/cognition/scheduler.js");
+        const { appendToInbox } = await import("../../seed/factory/inbox.js");
+        const { attachHandoff, wake } = await import("../../seed/factory/scheduler.js");
         const { hooks } = await import("../../seed/system/hooks.js");
         const startMs = Date.now();
         try {

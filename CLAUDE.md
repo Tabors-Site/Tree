@@ -28,7 +28,7 @@ Everything in seed serves one of six:
 | **Being** | An identity instance. Humans + AI + future composites. | `seed/models/being.js` |
 | **Space** | The substrate primitive. Structure that holds possibility; a position in the tree. | `seed/models/space.js` |
 | **Matter** | Stuff that sits in a space. `origin` tags where the content lives (`ibp`, `filesystem`, `web`, cross-place). | `seed/models/matter.js` |
-| **Did** | One DO emission, audit log. Past tense — "a did is a thing that was done." | `seed/models/did.js` |
+| **Fact** | One DO or BE emission stamped by the Factory. `factum`, a thing done. A fact alone is small; the chain of facts is what becomes Truth. | `seed/models/fact.js` |
 | **Summon** | One being's wake-and-act through one LLM call. | `seed/models/summon.js` |
 | **LlmConnection** | Per-being LLM client config (URL, key, model). | `seed/models/llmConnection.js` |
 
@@ -40,7 +40,7 @@ The wire protocol. One event in both directions: `"ibp"`. Envelope-discriminated
 
 ```
 SEE     observe a position or stance. Returns a descriptor.
-DO      mutate at a target through a registered operation. Audited via Did.
+DO      mutate at a target through a registered operation. Stamped as a Fact.
 SUMMON  deliver to a being's inbox, wake them, run their role's summoning.
 BE      identity. register / claim / release / switch.
 ```
@@ -66,7 +66,7 @@ Several primitives were renamed in 2026-05. Code, comments, and git history mix 
 |---|---|---|
 | **Being** (identity) + **Role** (template) | "Embodiment" conflated both | terminology shift 2026-05-18 |
 | **Artifact** + `origin` field | "Note" | 0.4.0 |
-| **Did** | "Contribution" | 0.8.0 |
+| **Fact** | "Contribution" → "Did" → "Fact" (2026-05-22) | 0.8.0, renamed Fact 2026-05-22 |
 | **Summon** | "Chat" | 0.9.0 |
 | **IBP Address** (`<stance> :: <stance>`) | "Portal Address" | 0.10.0 |
 | **Being.roles[]** + **defaultRole** | `Being.role` (one fixed role) | 0.11.0 |
@@ -121,15 +121,15 @@ place/
 │   │                             defaultPermissions, errors, protocol/ERR.
 │   │                             Wire layer in protocols/ibp/ is a thin envelope adapter.
 │   │
-│   ├── cognition/   THINKS — The world as thought, for LLM beings only.
+│   ├── factory/      THINKS — The world as thought, for LLM beings only.
 │   │                             Humans cognize in their own heads (out-of-band,
 │   │                             through portals); scripted beings ARE their
 │   │                             code. This folder is the apparatus AI beings
 │   │                             use when an LLM is in the loop:
-│   │                             runTurn, buildPrompt, llmClient, mcpClient,
+│   │                             runTurn, stamp, llmClient, mcpClient,
 │   │                             scheduler, inbox, wakeSchedule, session,
 │   │                             subscriptions, replyAggregator, defaultSummon,
-│   │                             assignments, connections, summonTracker,
+│   │                             assignments, connections, stamped,
 │   │                             seeResolvers, tools.js, roles/ (registry +
 │   │                             built-ins: auth, echo, placeManager, llmAssigner).
 │   │
@@ -180,7 +180,7 @@ cli/                            CLI package
 portal/3d-app/                  3D IBP client (Three.js + Vite)
 ```
 
-**Placement rule for seed/.** For any file, ask: does this describe what a being **IS**, how it **ACTS**, or how it **THINKS**? → `place/` / `ibp/` / `cognition/`. Does it touch the host while knowing nothing of the world? → `system/`. Schemas live in `models/` (shape vs behavior is a separate axis).
+**Placement rule for seed/.** For any file, ask: does this describe what a being **IS**, how it **ACTS**, or how it **THINKS**? → `place/` / `ibp/` / `factory/`. Does it touch the host while knowing nothing of the world? → `system/`. Schemas live in `models/` (shape vs behavior is a separate axis).
 
 ## Three registries
 
@@ -188,7 +188,7 @@ Every extension capability flows through one of three:
 
 1. **Operations** ([seed/ibp/operations.js](place/seed/ibp/operations.js)) — DO actions. Extensions register under `<ext>:<action>`; bare names reserved for the kernel. Schema validation declared but not enforced yet (roadmap).
 
-2. **Roles** ([seed/cognition/roles/registry.js](place/seed/cognition/roles/registry.js)) — SUMMON-honoring beings. Each role declares `permissions` (subset of see/do/summon/be), `respondMode` (sync/async/none), `summon(message, ctx)`, and optionally `buildSystemPrompt` / `toolNames` for LLM cognition.
+2. **Roles** ([seed/factory/roles/registry.js](place/seed/factory/roles/registry.js)) — SUMMON-honoring beings. Each role declares `permissions` (subset of see/do/summon/be), `respondMode` (sync/async/none), `summon(message, ctx)`, and optionally `buildSystemPrompt` / `toolNames` for LLM cognition.
 
 3. **Seeds** ([seed/place/seeds.js](place/seed/place/seeds.js)) — plantable scaffolds. Recipes that bootstrap a domain (Ruler/Planner/Contractor + workers, etc.). Operators plant via the `plant-seed` DO op.
 
@@ -244,7 +244,7 @@ BE register/claim from arrival is the bootstrap exception, gated by place-level 
 
 ## LLM Resolution Chain
 
-Four layers, walked from each call site ([seed/cognition/llmClient.js](place/seed/cognition/llmClient.js)):
+Four layers, walked from each call site ([seed/factory/beingAssignment/llm/llmClient.js](place/seed/factory/beingAssignment/llm/llmClient.js)):
 
 ```
 Space-tree lockout      (space.llmDefault === "none" anywhere in ancestor chain)
@@ -268,7 +268,7 @@ Two rules, no exceptions. **Before** hooks run sequentially because they can can
 | afterSpaceMove | after | Space reparented. Five resolution chains shift. |
 | beforeMatter | before | Modify matter data before save. |
 | afterMatter | after | React to matter create/edit/delete. |
-| beforeDid | before | Enrich audit-log entry. |
+| beforeFact | before | Enrich a Fact before it is stamped. |
 | beforeStatusChange | before | Validate, intercept. |
 | afterStatusChange | after | React to status changes. |
 | enrichContext | sequential | Inject extension data into AI context. |

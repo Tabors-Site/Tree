@@ -40,7 +40,7 @@
 // registerFailoverResolver through runTurn's re-exports;
 // public surface is unchanged.
 
-import log from "../system/log.js";
+import log from "../../../system/log.js";
 import { resolveConnection } from "./llmClient.js";
 
 // Note: the shared-pool LLM throttling (LLM_PRIORITY enum,

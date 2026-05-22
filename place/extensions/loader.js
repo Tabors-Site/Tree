@@ -7,7 +7,7 @@ import path from "path";
 import crypto from "crypto";
 import { fileURLToPath, pathToFileURL } from "url";
 import { buildCoreServices } from "../seed/services.js";
-import { setExtensionToolResolver } from "../seed/cognition/runTurn.js";
+import { setExtensionToolResolver } from "../seed/factory/tools.js";
 import { hooks } from "../seed/system/hooks.js";
 import { getToolOwner } from "../seed/place/space/extensionScope.js";
 import log from "../seed/system/log.js";
@@ -917,9 +917,9 @@ export async function loadExtensions(app, mcpServer, opts = {}) {
 
       // Wire MCP tools and register in the tool resolver. Same path
       // the kernel uses for its own tools — see registerToolBundle in
-      // seed/cognition/tools.js.
+      // seed/factory/tools.js.
       if (instance.tools && mcpServer) {
-        const { registerToolBundle } = await import("../seed/cognition/tools.js");
+        const { registerToolBundle } = await import("../seed/factory/tools.js");
         await registerToolBundle(instance.tools, { ownerExt: manifest.name, mcpServer });
       }
 
@@ -952,7 +952,7 @@ export async function loadExtensions(app, mcpServer, opts = {}) {
 
       // Register session types
       if (manifest.provides?.sessionTypes) {
-        const { registerSessionType } = await import("../seed/cognition/session.js");
+        const { registerSessionType } = await import("../seed/factory/session.js");
         for (const [key, value] of Object.entries(manifest.provides.sessionTypes)) {
           registerSessionType(key, value);
         }
@@ -1707,7 +1707,7 @@ export async function uninstallExtension(name) {
         mcpServerInstance.removeToolsByOwner(name, getToolOwner);
       }
       // Remove from tool definition registry
-      const { unregisterToolsForExtension } = await import("../seed/cognition/tools.js");
+      const { unregisterToolsForExtension } = await import("../seed/factory/tools.js");
       unregisterToolsForExtension(name, getToolOwner);
     } catch {}
     try {
