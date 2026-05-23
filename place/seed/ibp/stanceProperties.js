@@ -42,8 +42,8 @@
 // Pure: no side effects, no throws on missing data. Defensive against
 // stale beingIds (returns arrival shape).
 
-import Being from "../models/being.js";
-import { resolveSpaceAccess } from "../materials/space/spaceFetch.js";
+import Being from "../materials/being/being.js";
+import { resolveSpaceAccess } from "../materials/space/spaces.js";
 import { getAncestorChain } from "../materials/space/ancestorCache.js";
 
 const ARRIVAL_PROPS = Object.freeze({

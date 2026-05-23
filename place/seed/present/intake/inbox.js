@@ -42,7 +42,7 @@
 // mutates the bucket in place.
 
 import { randomUUID } from "crypto";
-import Space from "../../models/space.js";
+import Space from "../../materials/space/space.js";
 
 const INBOX_NS = "inbox";
 

@@ -18,11 +18,33 @@ const QUALITIES_PREFIX = "qualities.";
 // happened in the verb handler (which threw on bad input before the
 // fact was stamped); the reducer just records what the fact says.
 //
-// `parent` and `llmDefault` are intentionally NOT in this set —
-// parent is cross-aggregate (changes children[] on old/new parents)
-// and llmDefault delegates to assign-llm-slot's multi-write coord.
-// They land in later slices.
-const SCALAR_SET_FIELDS = new Set(["name", "type"]);
+// `parent` is intentionally NOT in this set — parent is cross-aggregate
+// (changes children[] on old/new parents) and lands in a later slice.
+//
+// `llmDefault` lives here as of slice F-llm (2026-05-23). It writes
+// to the same scalar field on both Being and Space aggregates; the
+// reducer for each just records value. Slot-name validation + per-being
+// connection-ownership happen in the verb handler before the fact
+// stamps. Cache invalidation (clearBeingClientCache) is the
+// connection helper's responsibility, after doVerb returns.
+//
+// `rootOwner` and `contributors` join the set in slice F-ownership
+// (2026-05-23). Both are scalar-shape on a single Space aggregate
+// (rootOwner = beingId or null; contributors = array of beingIds).
+// The cross-aggregate effects of an ownership change are propagation
+// via the read-side resolver chain (resolveSpaceAccess) walking the
+// parent chain, NOT writes to other aggregates — so set-on-one-Space
+// captures everything the fact needs to record. Read-modify-write
+// callers (addContributor / removeContributor) hold the space lock
+// around the read so the projection they recompute doesn't race a
+// concurrent fold.
+const SCALAR_SET_FIELDS = new Set([
+  "name",
+  "type",
+  "llmDefault",
+  "rootOwner",
+  "contributors",
+]);
 
 // Per-kind birth shapes. The reducer's job on `do:birth`: produce the
 // full initial row state from `fact.params.spec` (which the verb
@@ -137,6 +159,105 @@ export function applySetField(state, fact) {
     return next;
   }
   return { ...state, [field]: value };
+}
+
+/**
+ * Apply a `be:register` fact targeting a being. Produces the initial
+ * being row state from `fact.params.spec`.
+ *
+ * Important safety: when the fact's params don't carry `spec` (the
+ * legacy slim shape: `{name, role, witnessedBy}` from the pre-conversion
+ * summonCreateBeing path), this returns state unchanged. That keeps
+ * the reducer harmless while the legacy `new Being(...).save()` flow
+ * still runs in parallel. Once summonCreateBeing converts to emit a
+ * full spec, the reducer becomes the source.
+ *
+ * The verb handler is responsible for input normalization BEFORE the
+ * fact is stamped: bcrypt-hash the password, resolve home space,
+ * auto-generate name (non-humans), validate. Reducer reads what the
+ * handler wrote, stays pure.
+ *
+ * @param {object} state
+ * @param {object} fact
+ * @returns {object} new state
+ */
+export function applyBirthBeing(state, fact) {
+  if (fact?.verb !== "be" || fact?.action !== "register") return state;
+  if (fact?.target?.kind !== "being") return state;
+  const spec = fact?.params?.spec;
+  if (!spec || typeof spec !== "object") return state; // legacy slim params
+
+  // Normalize roles + defaultRole. Accept either {roles:[], defaultRole}
+  // or single {role} shape; produce the canonical {roles, defaultRole}.
+  let rolesList = [];
+  let defaultRole = null;
+  if (Array.isArray(spec.roles) && spec.roles.length > 0) {
+    rolesList = spec.roles.slice();
+    defaultRole = spec.defaultRole || rolesList[0];
+  } else if (spec.role) {
+    rolesList = [spec.role];
+    defaultRole = spec.role;
+  }
+
+  return {
+    ...state,
+    name:          spec.name,
+    password:      spec.password,
+    operatingMode: spec.operatingMode || "human",
+    roles:         rolesList,
+    defaultRole,
+    parentBeingId: spec.parentBeingId ?? null,
+    homeSpace:     spec.homeSpace ?? null,
+    currentSpace:  spec.currentSpace ?? spec.homeSpace ?? null,
+    llmDefault:    spec.llmDefault ?? null,
+    isRemote:      Boolean(spec.isRemote),
+    homePlace:     spec.homePlace ?? null,
+    qualities:     spec.qualities ?? {},
+    children:      [],
+    position:      spec.homeSpace ?? null,
+    createdAt:     fact.date,
+    updatedAt:     fact.date,
+  };
+}
+
+/**
+ * Apply a `do:birth` fact targeting a space. Produces the initial
+ * space row state from `fact.params.spec`.
+ *
+ * Same safety pattern as applyBirthBeing: when `fact.params.spec` is
+ * absent (the legacy createSpaceChild → createSpace path doesn't emit
+ * a spec on the fact today), this returns state unchanged. The
+ * reducer becomes load-bearing only when the space-birth handler
+ * converts to emit a spec-carrying fact.
+ *
+ * Verb handler responsibility (when converted): validate name/type,
+ * resolve parent, run beforeSpaceCreate hook, build the spec. Reducer
+ * reads what the handler wrote.
+ *
+ * @param {object} state
+ * @param {object} fact
+ * @returns {object} new state
+ */
+export function applyBirthSpace(state, fact) {
+  if (fact?.verb !== "do" || fact?.action !== "birth") return state;
+  if (fact?.target?.kind !== "space") return state;
+  const spec = fact?.params?.spec;
+  if (!spec || typeof spec !== "object") return state; // legacy birth fact
+
+  return {
+    ...state,
+    name:         spec.name,
+    type:         spec.type ?? null,
+    parent:       spec.parent ?? spec.parentId ?? null,
+    children:     [],
+    rootOwner:    spec.rootOwner ?? null,
+    contributors: [],
+    seedSpace:    spec.seedSpace ?? null,
+    llmDefault:   spec.llmDefault ?? null,
+    qualities:    spec.qualities ?? {},
+    dateCreated:  fact.date,
+    position:     spec.parent ?? spec.parentId ?? null,
+  };
 }
 
 /**

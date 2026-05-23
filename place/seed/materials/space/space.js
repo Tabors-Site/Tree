@@ -58,7 +58,7 @@ const SpaceSchema = new mongoose.Schema({
 });
 
 // Soft-delete only. Deleting a Space sets `parent = DELETED`
-// (see seed/materials/space/spaceManagement.js). I never hard-delete.
+// (see seed/materials/space/spaces.js). I never hard-delete.
 
 SpaceSchema.index({ parent: 1 });
 SpaceSchema.index({ rootOwner: 1 });

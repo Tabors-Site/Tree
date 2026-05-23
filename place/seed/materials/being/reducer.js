@@ -19,7 +19,7 @@
 // Pure-ness is what lets concurrent folds compute identical state
 // and what makes rebuild deterministic.
 
-import { applySetQualities, applySetField } from "../reducerHelpers.js";
+import { applySetQualities, applySetField, applyBirthBeing } from "../reducerHelpers.js";
 
 /**
  * Empty initial state. Reducers grow this as they take ownership of
@@ -45,13 +45,26 @@ export function initial() {
 export function reduce(state, fact) {
   let next = state;
 
+  // be:register — produces the initial row state from spec. No-op for
+  // legacy slim-params facts (no .spec); safe to compose now even
+  // before summonCreateBeing converts.
+  next = applyBirthBeing(next, fact);
+
   // do:set — scalar fields (name/type) and qualities paths.
   next = applySetField(next, fact);
   next = applySetQualities(next, fact);
 
-  // Position change.
+  // Position change. Writes BOTH `currentSpace` (legacy field, the
+  // source for in-memory position cache and most existing readers)
+  // AND `position` (the projection-index field that findByPosition
+  // queries). They're the same value semantically; the dual write
+  // keeps legacy readers working through the cutover.
   if (fact?.params?.toPosition !== undefined) {
-    next = { ...next, position: fact.params.toPosition };
+    next = {
+      ...next,
+      currentSpace: fact.params.toPosition,
+      position: fact.params.toPosition,
+    };
   }
 
   return next === state ? { ...state } : next;

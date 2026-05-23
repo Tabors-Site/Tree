@@ -59,8 +59,8 @@ import crypto from "crypto";
 import dns from "dns/promises";
 import { v4 as uuidv4 } from "uuid";
 import log from "../../../system/log.js";
-import Being from "../../../models/being.js";
-import Space from "../../../models/space.js";
+import Being from "../../../materials/being/being.js";
+import Space from "../../../materials/space/space.js";
 import { I_AM } from "../../../materials/being/seedBeings.js";
 import { getPlaceConfigValue } from "../../../placeConfig.js";
 import { getAncestorChain } from "../../../materials/space/ancestorCache.js";
@@ -758,7 +758,7 @@ export async function deleteLlmConnection(beingId, connectionId, { identity } = 
   return { removed: true };
 }
 
-export async function assignConnection(beingId, slot, connectionId) {
+export async function assignConnection(beingId, slot, connectionId, { identity } = {}) {
   if (!isValidUserSlot(slot)) {
     throw new Error("Invalid assignment slot: " + slot);
   }
@@ -770,15 +770,31 @@ export async function assignConnection(beingId, slot, connectionId) {
     if (!conn) throw new Error("Connection not found");
   }
 
-  // "main" slot goes to llmDefault, other slots go to qualities.beingLlm.slots
+  const being = await Being.findById(beingId);
+  if (!being) throw new Error("Being not found");
+
+  const { doVerb } = await import("../../../ibp/verbs.js");
+  const opts = identity ? { identity } : { scaffold: true };
+
+  // "main" slot goes to llmDefault (scalar field); other slots go to
+  // qualities.beingLlm.slots.<slot> (qualities-path). Both routes
+  // through do.set so the fact insert IS the commit; the reducer
+  // (applySetField for scalar, applySetQualities for qualities path)
+  // writes the projection.
   if (slot === "main") {
-    await Being.findByIdAndUpdate(beingId, {
-      $set: { llmDefault: safeConnId },
-    });
+    await doVerb(
+      being,
+      "set",
+      { field: "llmDefault", value: safeConnId },
+      opts,
+    );
   } else {
-    await Being.findByIdAndUpdate(beingId, {
-      $set: { [`qualities.beingLlm.slots.${slot}`]: safeConnId },
-    });
+    await doVerb(
+      being,
+      "set",
+      { field: `qualities.beingLlm.slots.${slot}`, value: safeConnId },
+      opts,
+    );
   }
 
   clearBeingClientCache(beingId);
@@ -796,7 +812,7 @@ export async function assignSpaceConnection(
   spaceId,
   slot,
   connectionId,
-  { ownerBeingId } = {},
+  { ownerBeingId, identity } = {},
 ) {
   if (!isValidUserSlot(slot)) {
     throw new Error("Invalid assignment slot: " + slot);
@@ -815,22 +831,28 @@ export async function assignSpaceConnection(
     }
   }
 
+  const space = await Space.findById(spaceId);
+  if (!space) throw new Error("Space not found");
+
+  const { doVerb } = await import("../../../ibp/verbs.js");
+  const opts = identity ? { identity } : { scaffold: true };
+
+  // "main" slot writes the Space's scalar llmDefault; other slots write
+  // the qualities path. Both flow through do.set; null clears.
   if (slot === "main") {
-    if (safeConnId) {
-      await Space.updateOne(
-        { _id: spaceId },
-        { $set: { llmDefault: safeConnId } },
-      );
-    } else {
-      await Space.updateOne({ _id: spaceId }, { $set: { llmDefault: null } });
-    }
+    await doVerb(
+      space,
+      "set",
+      { field: "llmDefault", value: safeConnId },
+      opts,
+    );
   } else {
-    const path = `qualities.llm.slots.${slot}`;
-    if (safeConnId) {
-      await Space.updateOne({ _id: spaceId }, { $set: { [path]: safeConnId } });
-    } else {
-      await Space.updateOne({ _id: spaceId }, { $unset: { [path]: "" } });
-    }
+    await doVerb(
+      space,
+      "set",
+      { field: `qualities.llm.slots.${slot}`, value: safeConnId },
+      opts,
+    );
   }
 
   return { spaceId: String(spaceId), slot, connectionId: safeConnId };

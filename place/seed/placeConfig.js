@@ -14,7 +14,7 @@
 // is mine, and it lives where I run.
 
 import log from "./system/log.js";
-import Space from "./models/space.js";
+import Space from "./materials/space/space.js";
 import { SEED_SPACE } from "./materials/space/seedSpaces.js";
 
 let configCache = null;

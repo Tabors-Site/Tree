@@ -16,7 +16,7 @@
 // emitFact pairs them under a per-reel append lock. This module
 // only owns the counter; the lock lives with the append flow.
 
-import ReelHead from "../past/reel/reelHead.js";
+import ReelHead from "./reelHead.js";
 
 const VALID_TYPES = new Set(["being", "space", "matter"]);
 

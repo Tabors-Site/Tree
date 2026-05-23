@@ -169,7 +169,7 @@ export async function runSeedMigrations() {
   // write goes through the seed-access gate's scaffold path. The
   // scaffold flag lets set-config write seedVersion (a protected key)
   // the same way an in-being call cannot.
-  const Space = (await import("../../models/space.js")).default;
+  const Space = (await import("../../materials/space/space.js")).default;
   const { SEED_SPACE } = await import("../../materials/space/seedSpaces.js");
   const { doVerb } = await import("../../ibp/verbs.js");
   const configNode = await Space.findOne({ seedSpace: SEED_SPACE.CONFIG });

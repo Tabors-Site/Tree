@@ -76,7 +76,7 @@
 
 import { v4 as uuidv4 } from "uuid";
 import log from "../system/log.js";
-import Space from "../models/space.js";
+import Space from "../materials/space/space.js";
 
 const SEEDS = new Map(); // name → recipe
 const SEED_OWNER = new Map(); // name → owning extension

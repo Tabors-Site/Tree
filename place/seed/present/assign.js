@@ -40,13 +40,13 @@
 //   moment.js   the being acting
 //   stamped.js  press the closing face
 
-import log from "../../system/log.js";
+import log from "../system/log.js";
 import { v4 as uuidv4 } from "uuid";
-import Being from "../../models/being.js";
-import Act from "../../past/act/act.js";
-import { getPlaceConfigValue } from "../../placeConfig.js";
-import { getRole } from "../roles/registry.js";
-import { computeIbpStampAddress } from "../../ibp/address.js";
+import Being from "../materials/being/being.js";
+import Act from "../past/act/act.js";
+import { getPlaceConfigValue } from "../placeConfig.js";
+import { getRole } from "./roles/registry.js";
+import { computeIbpStampAddress } from "../ibp/address.js";
 
 /**
  * Set up one moment for stamping. Loads the being, resolves the

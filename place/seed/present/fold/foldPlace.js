@@ -19,7 +19,7 @@
 // moment re-folds. The actor model holds.
 
 import { fold } from "./foldEngine.js";
-import { findByPosition } from "../../../materials/projections.js";
+import { findByPosition } from "../../materials/projections.js";
 
 /**
  * Fold the place a being sees for one moment.

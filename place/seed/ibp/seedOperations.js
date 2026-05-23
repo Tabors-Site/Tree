@@ -34,7 +34,7 @@
 //   delete-space, delete-matter, set-qualities, plant-seed
 //
 
-import { registerOperation, getOperation } from "./operations.js";
+import { registerOperation } from "./operations.js";
 import {
   createSpace,
   editSpaceName,
@@ -44,13 +44,13 @@ import {
   assertValidSpaceName,
   assertValidSpaceType,
   assertNameAvailableAt,
-} from "../materials/space/spaceManagement.js";
-import { resolveSpaceAccess } from "../materials/space/spaceFetch.js";
+} from "../materials/space/spaces.js";
+import { resolveSpaceAccess } from "../materials/space/spaces.js";
 import { getPlaceDomain } from "../ibp/address.js";
 import { IbpError, IBP_ERR, mapPatternsToIbpError } from "./protocol.js";
-import Being from "../models/being.js";
-import Matter from "../models/matter.js";
-import Space from "../models/space.js";
+import Being from "../materials/being/being.js";
+import Matter from "../materials/matter/matter.js";
+import Space from "../materials/space/space.js";
 
 import { qualities } from "../materials/qualities.js";
 import { v4 as uuidv4 } from "uuid";
@@ -114,7 +114,7 @@ export function registerSeedOperations() {
         );
       }
       const { addLlmConnection, assignConnection } =
-        await import("../factory/voices/llm/connect.js");
+        await import("../present/voices/llm/connect.js");
       const beingId = String(target._id);
       const connection = await addLlmConnection(
         beingId,
@@ -146,7 +146,7 @@ export function registerSeedOperations() {
         );
       }
       const { updateLlmConnection } =
-        await import("../factory/voices/llm/connect.js");
+        await import("../present/voices/llm/connect.js");
       const connection = await updateLlmConnection(
         String(target._id),
         connectionId,
@@ -166,7 +166,7 @@ export function registerSeedOperations() {
       if (!connectionId)
         throw new Error("delete-llm-connection: `connectionId` is required");
       const { deleteLlmConnection } =
-        await import("../factory/voices/llm/connect.js");
+        await import("../present/voices/llm/connect.js");
       await deleteLlmConnection(String(target._id), connectionId, { identity });
       return { removed: true, connectionId };
     },
@@ -183,20 +183,28 @@ export function registerSeedOperations() {
   registerOperation("assign-llm-slot", {
     targets: ["being", "space"],
     ownerExtension: "seed",
+    // Thin wrapper around connect.js helpers, which now route writes
+    // through do.set. The inner set IS the canonical audit Fact;
+    // skipAudit here prevents double-Fact (same pattern as
+    // add/update/delete-llm-connection above).
+    skipAudit: true,
     handler: async ({ target, params, identity }) => {
       const { slot, connectionId } = params || {};
       if (!slot) throw new Error("assign-llm-slot: `slot` is required");
       const kind = detectTargetKind(target);
       const { assignConnection, assignSpaceConnection } =
-        await import("../factory/voices/llm/connect.js");
+        await import("../present/voices/llm/connect.js");
       if (kind === "being") {
-        return assignConnection(String(target._id), slot, connectionId || null);
+        return assignConnection(String(target._id), slot, connectionId || null, {
+          identity,
+        });
       }
       const spaceId = targetIdOf(target);
       if (!spaceId)
         throw new Error("assign-llm-slot: target must resolve to a space id");
       return assignSpaceConnection(spaceId, slot, connectionId || null, {
         ownerBeingId: identity?.beingId || null,
+        identity,
       });
     },
   });
@@ -508,24 +516,81 @@ export function registerSeedOperations() {
       }
 
       if (field === "llmDefault") {
-        // assign-llm-slot still owns the multi-write coordination for
-        // LLM slot assignment (validates connection ownership, clears
-        // caches). Delegate through it for now; Phase 3.C (LlmConnection
-        // drop) will rework the whole LLM-slot surface.
-        const op = getOperation("assign-llm-slot");
-        if (!op)
-          throw new Error(
-            "set: assign-llm-slot not registered (required for field=llmDefault)",
-          );
-        return op.handler({
-          target,
-          params: { slot: "main", connectionId: value || null },
-          identity,
-        });
+        // Converted to fact-driven (2026-05-23). The handler validates
+        // and returns; the dispatcher's logFact stamps the fact, the
+        // reducer (see reducerHelpers.js applySetField — llmDefault is
+        // in SCALAR_SET_FIELDS) writes the projection.
+        //
+        // Connection-ownership: for being targets, the value (a
+        // connectionId) must exist in target.qualities.llmConnections.
+        // For space targets, ownership is enforced upstream in
+        // assignSpaceConnection (which threads ownerBeingId); the set
+        // call coming in here trusts the upstream check.
+        if (value !== null && value !== undefined && typeof value !== "string") {
+          throw new Error("set: `llmDefault` value must be a connectionId string or null");
+        }
+        if (kind === "being" && value) {
+          const conns =
+            target.qualities instanceof Map
+              ? target.qualities.get("llmConnections")
+              : target.qualities?.llmConnections;
+          if (!conns || !conns[value]) {
+            throw new Error(`set: connection "${value}" not found on @${target.name}`);
+          }
+          return { beingId: String(target._id), llmDefault: value };
+        }
+        if (kind === "being") {
+          return { beingId: String(target._id), llmDefault: null };
+        }
+        if (kind === "space") {
+          const spaceId = targetIdOf(target);
+          return { spaceId, llmDefault: value || null };
+        }
+        throw new Error(
+          `set: llmDefault not writable on target kind "${kind}" (being or space only)`,
+        );
+      }
+
+      if (field === "rootOwner") {
+        // Space's ownership delegate. Single-aggregate scalar (beingId
+        // string or null). Cross-aggregate effects are read-side only
+        // (resolveSpaceAccess walks parent chain); the write is one
+        // field on one Space, so the fact captures everything.
+        // Authorization (only the resolved owner can delegate) ran
+        // upstream in ownership.js setOwner/removeOwner; the set call
+        // here trusts the upstream check.
+        if (kind !== "space" && kind !== "stance") {
+          throw new Error("set: `rootOwner` is only settable on Space");
+        }
+        if (value !== null && value !== undefined && typeof value !== "string") {
+          throw new Error("set: `rootOwner` value must be a beingId string or null");
+        }
+        const spaceId = targetIdOf(target);
+        return { spaceId, rootOwner: value || null };
+      }
+
+      if (field === "contributors") {
+        // Space's contributors[]. Whole-array replacement. Callers in
+        // ownership.js hold the space lock around the read-modify-write
+        // so this write reflects current state. Same trust pattern as
+        // rootOwner — auth ran upstream.
+        if (kind !== "space" && kind !== "stance") {
+          throw new Error("set: `contributors` is only settable on Space");
+        }
+        if (!Array.isArray(value)) {
+          throw new Error("set: `contributors` value must be an array of beingIds");
+        }
+        for (const id of value) {
+          if (typeof id !== "string") {
+            throw new Error("set: `contributors` array must contain beingId strings");
+          }
+        }
+        const spaceId = targetIdOf(target);
+        return { spaceId, contributors: value };
       }
 
       throw new Error(
-        `set: unknown field "${field}". Supported: name, type, parent, llmDefault, qualities.<namespace>[.<innerKey>]`,
+        `set: unknown field "${field}". Supported: name, type, parent, llmDefault, rootOwner, contributors, qualities.<namespace>[.<innerKey>]`,
       );
     },
   });

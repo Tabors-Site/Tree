@@ -28,14 +28,14 @@
 // See seed/philosophy/MATERIALS.md "And the beings are the acts" for the
 // philosophy behind why this reel is identity-load-bearing.
 
-import log from "../system/log.js";
-import Fact from "../past/fact/fact.js";
-import { hooks } from "../system/hooks.js";
-import { IBP_ERR, IbpError } from "../ibp/protocol.js";
-import { getPlaceConfigValue } from "../placeConfig.js";
-import { resolveSpaceAccess } from "./space/spaceFetch.js";
-import { allocSeq } from "./reelHeads.js";
-import { withReelLock } from "./appendLock.js";
+import log from "../../system/log.js";
+import Fact from "./fact.js";
+import { hooks } from "../../system/hooks.js";
+import { IBP_ERR, IbpError } from "../../ibp/protocol.js";
+import { getPlaceConfigValue } from "../../placeConfig.js";
+import { resolveSpaceAccess } from "../../materials/space/spaces.js";
+import { allocSeq } from "../reel/reelHeads.js";
+import { withReelLock } from "../reel/appendLock.js";
 
 // Reel-bearing target kinds — those with their own seq counter. Other
 // kinds (place, stance) and target-less facts carry seq:null and stay
@@ -197,7 +197,7 @@ export async function logFact(input) {
     // (foldEngine imports from materials/, past/fact/facts is in
     // materials/ — keeping the dependency lazy keeps boot order clean).
     try {
-      const { fold } = await import("../factory/stamper/fold/foldEngine.js");
+      const { fold } = await import("../../present/fold/foldEngine.js");
       await fold(finalTarget.kind, finalTarget.id);
     } catch (err) {
       // Self-healing: the next fold catches up. Log but don't throw —

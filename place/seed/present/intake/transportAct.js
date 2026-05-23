@@ -43,7 +43,7 @@
 // ack immediately with a correlationId; push the result through
 // the same `ibp` channel (verb: "moment") when it arrives.
 
-import Being from "../../models/being.js";
+import Being from "../../materials/being/being.js";
 import { randomUUID } from "crypto";
 import { enqueueIntake } from "./intake.js";
 import { attachHandoff, wake } from "./scheduler.js";

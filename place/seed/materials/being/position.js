@@ -24,10 +24,11 @@
 // setCurrentSpace with the new Space and the derivation updates
 // both fields together.
 
-import Being from "../../models/being.js";
+import Being from "./being.js";
 import log from "../../system/log.js";
 import { getAncestorChain } from "../space/ancestorCache.js";
 import { getPlaceRootId } from "../../placeRoot.js";
+import { logFact } from "../../past/fact/facts.js";
 
 const beingPositions = new Map();
 const MAX_BEING_POSITIONS = 50000;
@@ -58,12 +59,28 @@ function getBeingPositionRecord(beingId) {
   return p;
 }
 
-// Fire-and-forget DB write to Being.currentSpace. Cache is the
-// hot path; DB persistence is best-effort for restart durability.
+// Fire-and-forget fact emit for being position change. The cache is
+// the hot path; DB persistence happens through the fact-driven flow:
+// logFact appends a be:switch Fact on the being's reel under the
+// append lock, eager-fold runs the being reducer (which derives
+// currentSpace + position from params.toPosition), and applyProjection
+// writes the row.
+//
+// Per STAMPER.md doctrine: the fact insert is the commit; the
+// projection (the Being row) is its self-healing cache. Direct
+// Being.findByIdAndUpdate would bypass the fold and corrupt the
+// event-sourced model.
+//
+// `beingId` doubles as actor and target — the being is acting on
+// itself (BE.switch is identity acting on identity).
 function persistBeingPosition(beingId, spaceId) {
   if (!beingId) return;
-  Being.findByIdAndUpdate(String(beingId), {
-    $set: { currentSpace: spaceId || null },
+  logFact({
+    verb:    "be",
+    action:  "switch",
+    beingId: String(beingId),
+    target:  { kind: "being", id: String(beingId) },
+    params:  { toPosition: spaceId || null },
   }).catch((err) => {
     log.debug(
       "Position",

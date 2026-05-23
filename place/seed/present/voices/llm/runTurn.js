@@ -77,8 +77,8 @@ import log from "../../../system/log.js";
 import { hooks } from "../../../system/hooks.js";
 
 import crypto from "crypto";
-import Being from "../../../models/being.js";
-import Space from "../../../models/space.js";
+import Being from "../../../materials/being/being.js";
+import Space from "../../../materials/space/space.js";
 import {
   snapshotAncestors,
   resolveExtensionScopeFromChain,
@@ -86,7 +86,7 @@ import {
 } from "../../../materials/space/ancestorCache.js";
 import { isDbHealthy } from "../../../system/dbConfig.js";
 import { resolveTools } from "./tools.js";
-import { getSpaceName } from "../../../materials/space/spaceFetch.js";
+import { getSpaceName } from "../../../materials/space/spaces.js";
 // MCP wiring retired. Tools dispatch directly via getToolHandler in
 // executeTool; the verb dispatcher's authorize gate covers per-verb
 // auth + extension-scope. No protocol layer between the LLM voice
@@ -103,7 +103,7 @@ import {
   setCarryMessages,
   setMaxPresenceReels,
   setStalePresenceMs,
-} from "../../stamper/fold/reel.js";
+} from "../../fold/reel.js";
 export { setCarryMessages };
 import { getPlaceConfigValue } from "../../../placeConfig.js";
 import { I_AM } from "../../../materials/being/seedBeings.js";

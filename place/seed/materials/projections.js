@@ -19,9 +19,9 @@
 // non-projection fields (today the source of truth) will be replaced
 // piece-by-piece as the bypass closure progresses.
 
-import Being from "../models/being.js";
-import Space from "../models/space.js";
-import Matter from "../models/matter.js";
+import Being from "../materials/being/being.js";
+import Space from "../materials/space/space.js";
+import Matter from "../materials/matter/matter.js";
 
 const MODELS = {
   being:  Being,

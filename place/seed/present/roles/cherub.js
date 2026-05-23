@@ -52,7 +52,7 @@
 
 import log from "../../system/log.js";
 import { hooks } from "../../system/hooks.js";
-import Being from "../../models/being.js";
+import Being from "../../materials/being/being.js";
 import {
   isFirstBeing,
   findBeingByName,
@@ -101,7 +101,7 @@ export const cherubBeing = Object.freeze({
     // first arrival the same way as every later one.
     const first = await isFirstBeing();
     if (first) {
-      const { findIAm } = await import("../../materials/being/placeBeings.js");
+      const { findIAm } = await import("../../materials/being/identity.js");
       const iAm = await findIAm();
       const cherubBeingRow = await Being
         .findOne({ name: "cherub", operatingMode: "scripted" })

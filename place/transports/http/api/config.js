@@ -11,7 +11,7 @@
 import express from "express";
 import { authenticateOptional } from "../middleware/authenticate.js";
 import { sendOk, sendError, IBP_ERR } from "../../../seed/ibp/protocol.js";
-import Space from "../../../seed/models/space.js";
+import Space from "../../../seed/materials/space/space.js";
 import { getPlaceRoot } from "../../../seed/placeRoot.js";
 
 const router = express.Router();

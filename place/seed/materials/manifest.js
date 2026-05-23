@@ -11,7 +11,7 @@
 // cosmetic, not a functional break.
 
 import { v4 as uuidv4 } from "uuid";
-import Space from "../models/space.js";
+import Space from "../materials/space/space.js";
 import log from "../system/log.js";
 
 export async function manifestItems({

@@ -46,7 +46,7 @@ import { summonByResolved } from "../../ibp/verbs.js";
 import { getPlaceDomain } from "../../ibp/address.js";
 import { getPlaceRootId } from "../../placeRoot.js";
 import { I_AM } from "../../materials/being/seedBeings.js";
-import { iAmIdentity } from "../../materials/being/placeBeings.js";
+import { iAmIdentity } from "../../materials/being/identity.js";
 
 const MIN_INTERVAL_MS = 250;
 const DEFAULT_TICK_MS = 1000;

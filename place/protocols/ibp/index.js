@@ -18,7 +18,7 @@ import log from "../../seed/system/log.js";
 import { registerIbpBootstrap } from "./bootstrap-route.js";
 import { attachIbpHandlers } from "./protocol.js";
 import { hooks } from "../../seed/system/hooks.js";
-import Space from "../../seed/models/space.js";
+import Space from "../../seed/materials/space/space.js";
 import { emitPositionInvalidate } from "./live.js";
 import { emitToSubscribers } from "../../seed/present/intake/subscriptions.js";
 import { startTickLoop as startScheduleTick } from "../../seed/present/intake/wakeSchedule.js";

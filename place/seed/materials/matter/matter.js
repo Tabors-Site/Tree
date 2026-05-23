@@ -30,7 +30,7 @@
 
 import mongoose from "mongoose";
 import { v4 as uuidv4 } from "uuid";
-import { MATTER_ORIGIN } from "../materials/matter/origins.js";
+import { MATTER_ORIGIN } from "./origins.js";
 
 const MatterSchema = new mongoose.Schema({
   _id: { type: String, default: uuidv4 },

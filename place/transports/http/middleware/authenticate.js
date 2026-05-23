@@ -12,7 +12,7 @@
 
 import log from "../../../seed/system/log.js";
 import { verifyTokenStrict } from "../../../seed/materials/being/identity.js";
-import { resolveSpaceAccess } from "../../../seed/materials/space/spaceFetch.js";
+import { resolveSpaceAccess } from "../../../seed/materials/space/spaces.js";
 import { authStrategies } from "../../../seed/services.js";
 import { sendError, IBP_ERR } from "../../../seed/ibp/protocol.js";
 

@@ -61,9 +61,9 @@
 // scoped place bundle passes opts.callerExtName (extensions can only
 // write to their own quality namespace).
 
-import Being from "../models/being.js";
-import Space from "../models/space.js";
-import Matter from "../models/matter.js";
+import Being from "../materials/being/being.js";
+import Space from "../materials/space/space.js";
+import Matter from "../materials/matter/matter.js";
 import { hooks } from "../system/hooks.js";
 import { guardQualityWrite } from "./doCeiling.js";
 import { getPlaceConfigValue } from "../placeConfig.js";

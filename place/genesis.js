@@ -56,7 +56,7 @@
 //   4. .source mirror, stance defaults, seed migrations. The place's
 //      reflexive surfaces: codebase as matter, permissions on space,
 //      schema forwards.
-//   5. ensurePlaceBeings. I summon auth, llm-assigner, and
+//   5. ensureSeedDelegates. I summon auth, llm-assigner, and
 //      place-manager forth, one SUMMON each. SUMMON is the verb of
 //      one being calling another; calling a not-yet-being into
 //      being is the same act. From here on, Facts start attributing
@@ -149,7 +149,7 @@ export async function genesis(app, opts = {}) {
   // anything. If one already exists (and the spaces, matter, and
   // beings of the place with it), this is an Awakening. If not, it
   // is the Beginning.
-  const Space = (await import("./seed/models/space.js")).default;
+  const Space = (await import("./seed/materials/space/space.js")).default;
   const existingRoot = await Space.findOne({ parent: null }).lean();
   bootMode = existingRoot ? "Awakening" : "Beginning";
   log.info("Place", `${bootMode}. ${place.name} at ${place.domain}.`);
@@ -198,10 +198,10 @@ export async function genesis(app, opts = {}) {
   // Idempotent, runs every boot, creates only what is missing.
   // Must come after migrations so the Being model shape is current
   // before I write into it.
-  const { ensurePlaceBeings } =
-    await import("./seed/materials/being/placeBeings.js");
+  const { ensureSeedDelegates } =
+    await import("./seed/materials/being/seedDelegates.js");
   const { getPlaceRootId } = await import("./seed/placeRoot.js");
-  await ensurePlaceBeings(getPlaceRootId());
+  await ensureSeedDelegates(getPlaceRootId());
 
   // Register seed-shipped role specs into the role registry so
   // SUMMON can dispatch to them. Auth and llm-assigner are BE only,

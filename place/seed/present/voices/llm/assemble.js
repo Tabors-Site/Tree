@@ -111,7 +111,7 @@
 import log from "../../../system/log.js";
 import { getToolDescription, resolveTools, getExtensionToolsForRole } from "./tools.js";
 import { resolveSeeList, registerSeeResolver } from "./seeResolvers.js";
-import { getSpaceName } from "../../../materials/space/spaceFetch.js";
+import { getSpaceName } from "../../../materials/space/spaces.js";
 
 // ────────────────────────────────────────────────────────────────────
 // The assembler

@@ -22,7 +22,7 @@
 // operations (sever, walk lineage, cut) belong in threads.js;
 // raw "give me Summons matching X" belongs here.
 
-import Act from "../../../past/act/act.js";
+import Act from "../../past/act/act.js";
 
 /**
  * Walk the inReplyTo chain backward from a Act to find the

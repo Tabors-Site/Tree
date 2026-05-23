@@ -17,8 +17,8 @@
 //   stamp          — press the final face when the moment closes
 //   capContent     — shared content-cap helper (also used by assign)
 
-import { getPlaceConfigValue } from "../../placeConfig.js";
-import Act from "../../past/act/act.js";
+import { getPlaceConfigValue } from "../placeConfig.js";
+import Act from "../past/act/act.js";
 
 function MAX_CHAT_CONTENT_BYTES() {
   return Math.max(

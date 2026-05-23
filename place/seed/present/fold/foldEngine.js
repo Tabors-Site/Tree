@@ -20,9 +20,9 @@
 // the case where two threads race the marker forward and the loser
 // shouldn't roll it back.
 
-import Fact from "../../../past/fact/fact.js";
-import * as reducers from "../../../materials/reducers.js";
-import { getProjection, applyProjection, initProjection } from "../../../materials/projections.js";
+import Fact from "../../past/fact/fact.js";
+import * as reducers from "../../materials/reducers.js";
+import { getProjection, applyProjection, initProjection } from "../../materials/projections.js";
 
 const REEL_TYPES = new Set(["being", "space", "matter"]);
 

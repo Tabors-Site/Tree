@@ -18,13 +18,13 @@ import {
   unplantSeed,
   listPlantedAt,
 } from "./materials/seeds.js";
-import Being from "./models/being.js";
-import Space from "./models/space.js";
+import Being from "./materials/being/being.js";
+import Space from "./materials/space/space.js";
 import Fact from "./past/fact/fact.js";
-import Matter from "./models/matter.js";
+import Matter from "./materials/matter/matter.js";
 
 import { logFact } from "./past/fact/facts.js";
-import { resolveSpaceAccess } from "./materials/space/spaceFetch.js";
+import { resolveSpaceAccess } from "./materials/space/spaces.js";
 import {
   createBeing,
   createFirstBeing,
@@ -51,9 +51,9 @@ import {
   SESSION_TYPES,
   registerSessionType,
   ensureSession as ensureChatSession,
-} from "./factory/intake/session.js";
+} from "./present/intake/session.js";
 
-import { stamp } from "./factory/stamper/stamped.js";
+import { stamp } from "./present/stamped.js";
 
 import {
   stepTurn,
@@ -61,12 +61,12 @@ import {
   runTurn,
   getCurrentRole,
   registerFailoverResolver,
-} from "./factory/voices/llm/runTurn.js";
+} from "./present/voices/llm/runTurn.js";
 import {
   getClientForBeing,
   resolveRootLlmForRole,
   beingHasLlm,
-} from "./factory/voices/llm/connect.js";
+} from "./present/voices/llm/connect.js";
 import {
   getSpaceRootId,
   setCurrentSpace,
@@ -75,7 +75,7 @@ import {
 import {
   registerRootSpaceLlmSlot,
   registerBeingLlmSlot,
-} from "./factory/voices/llm/connect.js";
+} from "./present/voices/llm/connect.js";
 import {
   emitNavigate,
   emitToBeing,
@@ -95,7 +95,7 @@ import {
   updateParentRelationship,
   editSpaceName,
   editSpaceType,
-} from "./materials/space/spaceManagement.js";
+} from "./materials/space/spaces.js";
 import {
   createMatter,
   editMatter,
@@ -135,23 +135,23 @@ import {
 // extensions register roles, subscribe to events, declare wake
 // cadences, and aggregate fan-out replies without importing my
 // internals.
-import { aggregate as ibpAggregate } from "./factory/intake/replies.js";
+import { aggregate as ibpAggregate } from "./present/intake/replies.js";
 import {
   subscribe as ibpSubscribe,
   unsubscribe as ibpUnsubscribe,
   unsubscribeAllForBeing as ibpUnsubscribeAllForBeing,
-} from "./factory/intake/subscriptions.js";
+} from "./present/intake/subscriptions.js";
 import {
   schedule as ibpSchedule,
   unschedule as ibpUnschedule,
   unscheduleAllForBeing as ibpUnscheduleAllForBeing,
   setEmitter as ibpSetScheduleEmitter,
   resetEmitter as ibpResetScheduleEmitter,
-} from "./factory/intake/wakeSchedule.js";
+} from "./present/intake/wakeSchedule.js";
 import {
   registerRole as ibpRegisterRole,
   unregisterRole as ibpUnregisterRole,
-} from "./factory/roles/registry.js";
+} from "./present/roles/registry.js";
 
 // The four-verb dispatcher. The whole of my public surface for
 // operations on space, matter, and beings.

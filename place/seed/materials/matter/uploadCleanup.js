@@ -24,7 +24,7 @@ import fs from "fs/promises";
 import fsSync from "fs";
 import path from "path";
 import log from "../../system/log.js";
-import Matter from "../../models/matter.js";
+import Matter from "./matter.js";
 import { getPlaceConfigValue } from "../../placeConfig.js";
 import { MATTER_ORIGIN } from "./origins.js";
 import { fileURLToPath } from "url";

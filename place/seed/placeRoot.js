@@ -15,10 +15,10 @@
 // Idempotent. Runs every boot, creates only what is missing.
 
 import log from "./system/log.js";
-import Space from "./models/space.js";
+import Space from "./materials/space/space.js";
 import { SEED_SPACE } from "./materials/space/seedSpaces.js";
 import { I_AM } from "./materials/being/seedBeings.js";
-import { createPlaceSeedSpace } from "./materials/space/spaceManagement.js";
+import { createPlaceSeedSpace } from "./materials/space/spaces.js";
 import { logFact } from "./past/fact/facts.js";
 
 let placeRootCache = null;
@@ -186,7 +186,7 @@ export async function ensurePlaceRoot() {
 // cognition only). The random password is never used; I cannot be
 // claimed or summoned interactively.
 async function ensureIAm(placeRootId) {
-  const Being = (await import("../models/being.js")).default;
+  const Being = (await import("../materials/being/being.js")).default;
   let iAm = await Being.findOne({ name: I_AM })
     .select("_id")
     .lean();

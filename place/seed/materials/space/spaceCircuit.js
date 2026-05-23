@@ -37,7 +37,7 @@ import Fact from "../../past/fact/fact.js";
 import { hooks } from "../../system/hooks.js";
 import { getPlaceConfigValue } from "../../placeConfig.js";
 import { invalidateSpace } from "./ancestorCache.js";
-import { resolveSpaceAccess } from "./spaceFetch.js";
+import { resolveSpaceAccess } from "./spaces.js";
 import { I_AM } from "../being/seedBeings.js";
 import { logFact } from "../../past/fact/facts.js";
 

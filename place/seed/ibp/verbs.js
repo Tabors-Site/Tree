@@ -44,12 +44,12 @@ import { parseWithContext, expand, getPlaceDomain } from "../ibp/address.js";
 import { resolveStance } from "../ibp/resolver.js";
 import { buildPlaceDescriptor, buildDiscovery } from "../ibp/descriptor.js";
 import { authorize, getAuthConfig } from "./authorize.js";
-import { appendToInbox } from "../factory/intake/inbox.js";
-import { enqueueIntake } from "../factory/intake/intake.js";
+import { appendToInbox } from "../present/intake/inbox.js";
+import { enqueueIntake } from "../present/intake/intake.js";
 import { threadIdFromPath, cutThread, getThreadsSpaceId, describeThread } from "../materials/space/threads.js";
-import { getRole } from "../factory/roles/registry.js";
-import { cherubBeing } from "../factory/roles/cherub.js";
-import { llmAssignerBeing } from "../factory/roles/llmAssigner.js";
+import { getRole } from "../present/roles/registry.js";
+import { cherubBeing } from "../present/roles/cherub.js";
+import { llmAssignerBeing } from "../present/roles/llmAssigner.js";
 import { registerBeHandler, getBeHandler } from "../materials/being/beRegistry.js";
 
 // My two BE-honoring beings register at module load so the dispatcher
@@ -57,7 +57,7 @@ import { registerBeHandler, getBeHandler } from "../materials/being/beRegistry.j
 // registerBeHandler.
 registerBeHandler("cherub",         cherubBeing,         "seed");
 registerBeHandler("llm-assigner", llmAssignerBeing,  "seed");
-import { attachHandoff, wake } from "../factory/intake/scheduler.js";
+import { attachHandoff, wake } from "../present/intake/scheduler.js";
 
 /**
  * DO. Run a registered operation against a target, stamp a Fact, return
@@ -405,10 +405,10 @@ export async function summonVerb(stance, message, opts = {}) {
   // Resolve the qualifier to a Being: direct name first (the canonical
   // shape, @ruler435 / @cherub), then role shorthand via
   // qualities.beings.<role>.beingId on the target space.
-  const Being = (await import("../models/being.js")).default;
+  const Being = (await import("../materials/being/being.js")).default;
   let toBeing = await Being.findOne({ name: qualifier });
   if (!toBeing && resolved.spaceId) {
-    const Space = (await import("../models/space.js")).default;
+    const Space = (await import("../materials/space/space.js")).default;
     const targetSpace = await Space.findById(resolved.spaceId).select("qualities").lean();
     const beings = targetSpace?.qualities instanceof Map
       ? targetSpace.qualities.get("beings")
@@ -643,7 +643,7 @@ export async function summonByResolved(args) {
 
   const validatedMessage = validateSummonMessage(message);
 
-  const Being = (await import("../models/being.js")).default;
+  const Being = (await import("../materials/being/being.js")).default;
   const toBeing = await Being.findById(toBeingId);
   if (!toBeing) {
     throw new IbpError(IBP_ERR.BEING_NOT_FOUND, `No being with id ${toBeingId}`);

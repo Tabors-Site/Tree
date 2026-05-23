@@ -37,15 +37,15 @@
 // checks inline.
 
 import log from "../../system/log.js";
-import Being from "../../models/being.js";
-import Space from "../../models/space.js";
+import Being from "../../materials/being/being.js";
+import Space from "../../materials/space/space.js";
 import { IbpError, IBP_ERR } from "../../ibp/protocol.js";
-import { findRootOperator } from "../../materials/being/placeBeings.js";
+import { findRootOperator } from "../../materials/being/identity.js";
 
 // Tutorial-matter markers. The llm-assigner's start-tutorial /
 // complete-tutorial BE ops use these to find and verify the intro
 // matter the role plants on first contact. Lives here with the role
-// spec rather than with the Being row in placeBeings.js because the
+// spec rather than with the Being row in seedDelegates.js because the
 // behavior these constants describe belongs to the role, not to the
 // identity.
 export const LLM_ASSIGNER_TUTORIAL_MARK = "llm-assigner-intro";

@@ -42,7 +42,7 @@
 
 import { randomUUID } from "crypto";
 import log from "../../system/log.js";
-import Being from "../../models/being.js";
+import Being from "../../materials/being/being.js";
 import { readInbox } from "./inbox.js";
 import { summonByResolved } from "../../ibp/verbs.js";
 import { getPlaceDomain } from "../../ibp/address.js";

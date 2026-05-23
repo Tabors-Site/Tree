@@ -48,7 +48,7 @@
 // fold, no scheduler).
 
 import { randomUUID } from "crypto";
-import Space from "../../models/space.js";
+import Space from "../../materials/space/space.js";
 
 const INTAKE_NS = "intake";
 

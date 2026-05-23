@@ -8,8 +8,8 @@
 // about a being (how it acts, how it thinks) lives in ibp/ and
 // factory/. Here is only the "is."
 
-import Being from "../../models/being.js";
-import Space from "../../models/space.js";
+import Being from "./being.js";
+import Space from "../space/space.js";
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
 import crypto from "crypto";
@@ -53,8 +53,46 @@ function validatePassword(password) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────
-// BEING CREATION
+// LOOKUPS
 // ─────────────────────────────────────────────────────────────────────────
+
+/**
+ * Find the I_AM: the place's first Being row, the root of the
+ * being-tree, identified by `parentBeingId: null`. Every other
+ * being on the place chains back to it. Created during
+ * `ensurePlaceRoot()`; absent only on a pre-bootstrap place.
+ */
+export async function findIAm() {
+  return Being.findOne({ parentBeingId: null }).select("_id name").lean();
+}
+
+// Cached I_AM identity object suitable for `opts.identity` on verb
+// calls. The I_AM has universal authority on its place; seed-internal
+// callers (DO-trigger fan-out, scheduled-wake tick, genesis
+// scaffolding) pass this identity so `authorize` shorts to allow.
+let _iAmIdentityCache = null;
+export async function iAmIdentity() {
+  if (_iAmIdentityCache) return _iAmIdentityCache;
+  const row = await findIAm();
+  if (!row) return null;
+  _iAmIdentityCache = { beingId: String(row._id), name: row.name };
+  return _iAmIdentityCache;
+}
+
+/**
+ * Find the place's root operator — the first human who registered.
+ * The I_AM precedes them; the operator is the first being whose
+ * `operatingMode === "human"`. Returns null on a fresh place before
+ * any human has registered. Use this for "who runs this place"
+ * checks (place-LLM config, root-only operations); use `findIAm()`
+ * for "who is the substrate's identity" checks.
+ */
+export async function findRootOperator() {
+  return Being.findOne({ operatingMode: "human" })
+    .sort({ _id: 1 })
+    .select("_id name")
+    .lean();
+}
 
 /**
  * Check if this is the first human being on the place.
@@ -62,6 +100,10 @@ function validatePassword(password) {
 export async function isFirstBeing() {
   return (await Being.countDocuments({ operatingMode: "human" })) === 0;
 }
+
+// ─────────────────────────────────────────────────────────────────────────
+// BEING CREATION
+// ─────────────────────────────────────────────────────────────────────────
 
 // First human on a fresh place. The I-Am already exists by this point
 // (planted by ensurePlaceRoot); callers pass my id as opts.parentBeingId

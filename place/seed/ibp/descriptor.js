@@ -33,8 +33,8 @@
 
 import { getPlaceDomain } from "./address.js";
 import { getPlaceConfigValue, getPlaceUrl } from "../placeConfig.js";
-import Space from "../models/space.js";
-import Being from "../models/being.js";
+import Space from "../materials/space/space.js";
+import Being from "../materials/being/being.js";
 import Fact from "../past/fact/fact.js";
 import { getPlaceRootId } from "../placeRoot.js";
 import { listSeeds } from "../materials/seeds.js";
@@ -45,10 +45,10 @@ import {
   resolveSpaceAccess,
   listSpaceChildren,
   listBeingSpaces,
-} from "../materials/space/spaceFetch.js";
-import { getInboxSummary } from "../factory/intake/inbox.js";
-import { getRole, listRoles } from "../factory/roles/registry.js";
-import { findOpenForBeing } from "../factory/stamper/fold/reelChains.js";
+} from "../materials/space/spaces.js";
+import { getInboxSummary } from "../present/intake/inbox.js";
+import { getRole, listRoles } from "../present/roles/registry.js";
+import { findOpenForBeing } from "../present/fold/reelChains.js";
 
 // Wire-shape versions. Bump when the descriptor / discovery shape
 // changes in a way clients must opt into.

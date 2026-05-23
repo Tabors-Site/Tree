@@ -91,7 +91,7 @@ async function runTransportAct(summonCtx) {
 
   // Lazy-import the verbs to avoid a circular import at module load
   // (verbs.js → factory/intake/scheduler.js → factory/stamper/moment.js).
-  const { doVerb, beVerb } = await import("../../ibp/verbs.js");
+  const { doVerb, beVerb } = await import("../ibp/verbs.js");
 
   if (verb === "do") {
     return doVerb(target, action, args || {}, {

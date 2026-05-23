@@ -1,6 +1,7 @@
 // TreeOS Seed . AGPL-3.0 . https://treeos.ai . Tabor Holly
 //
-// The place beings. My first delegates.
+// Seed delegates. My first delegates — pre-planted beings that
+// every place ships with.
 //
 // Every place has a small set of beings I plant at the place root
 // itself, not at any tree:
@@ -24,69 +25,31 @@
 // These are beings I formed from myself, but they are no longer me.
 // They have their own identities, their own summon paths, their own
 // stances. Anything they do attributes to their own beingId, not to
-// me. The distinction matters: I am the seed acting; they are
-// first-class participants the world addresses by name.
+// me.
 //
-// Being-tree parenting. Every place has exactly one I-Am at the root
-// of the being-tree (the only Being with `parentBeingId: null`),
-// planted during `ensurePlaceRoot()`. The place beings (cherub,
-// llm-assigner, place-manager) and every human are my children.
-// Walking parentBeingId from any being eventually reaches me, then
-// `null`.
+// Being-tree parenting. Every place has exactly one I-Am at the
+// root of the being-tree (the only Being with `parentBeingId:
+// null`), planted during `ensurePlaceRoot()`. The delegates here
+// and every human are my children. Walking parentBeingId from any
+// being eventually reaches me, then `null`.
 //
-// `ensurePlaceBeings(placeRootId)` runs at genesis after my Being row
-// exists. Idempotent: safe to call every boot. The drift reconciler
-// also keeps existing place beings' parentBeingId pointed at me.
+// `ensureSeedDelegates(placeRootId)` runs at genesis after my Being
+// row exists. Idempotent: safe to call every boot. The drift
+// reconciler also keeps existing delegate parentBeingId pointed at
+// me.
 //
-// Each place being's password is auto-generated random bytes,
-// bcrypt-hashed by the Being model's pre-save hook. The plaintext
-// is discarded after hashing. A future admin operation could reset
-// the password to allow a human to inhabit one of these beings.
+// Lookups for I_AM identity (`findIAm`, `iAmIdentity`,
+// `findRootOperator`) live alongside other identity primitives in
+// [identity.js](identity.js). This file owns the delegate roster
+// and the scaffold that ensures their rows exist.
 
 import log from "../../system/log.js";
-import Being from "../../models/being.js";
-import Space from "../../models/space.js";
+import Being from "./being.js";
+import Space from "../space/space.js";
 import { summonCreateBeing } from "../../ibp/verbs.js";
+import { findIAm, iAmIdentity } from "./identity.js";
 
-/**
- * Find the I_AM: the place's first Being row, the root of the being-
- * tree, identified by `parentBeingId: null`. Every other being on the
- * place chains back to it. Created during `ensurePlaceRoot()`; absent
- * only on a pre-bootstrap place.
- */
-export async function findIAm() {
-  return Being.findOne({ parentBeingId: null }).select("_id name").lean();
-}
-
-// Cached I_AM identity object suitable for `opts.identity` on verb
-// calls. The I_AM has universal authority on its place; seed-internal
-// callers (DO-trigger fan-out, scheduled-wake tick, genesis scaffolding)
-// pass this identity so `authorize` shorts to allow.
-let _iAmIdentityCache = null;
-export async function iAmIdentity() {
-  if (_iAmIdentityCache) return _iAmIdentityCache;
-  const row = await findIAm();
-  if (!row) return null;
-  _iAmIdentityCache = { beingId: String(row._id), name: row.name };
-  return _iAmIdentityCache;
-}
-
-/**
- * Find the place's root operator — the first human who registered.
- * The I_AM precedes them; the operator is the first being whose
- * `operatingMode === "human"`. Returns null on a fresh place before any
- * human has registered. Use this for "who runs this place" checks
- * (place-LLM config, root-only operations); use `findIAm()` for
- * "who is the substrate's identity" checks.
- */
-export async function findRootOperator() {
-  return Being.findOne({ operatingMode: "human" })
-    .sort({ _id: 1 })
-    .select("_id name")
-    .lean();
-}
-
-const PLACE_BEINGS = [
+export const SEED_DELEGATES = [
   {
     name: "cherub",
     role: "cherub",
@@ -111,26 +74,26 @@ const PLACE_BEINGS = [
 ];
 
 /**
- * Ensure each place being exists as a Being row, has the place root as
- * its home, is parented under me (the only Being with
+ * Ensure each seed delegate exists as a Being row, has the place
+ * root as its home, is parented under me (the only Being with
  * parentBeingId: null) in the being-tree, and is registered in
  * qualities.beings at the place root. Returns a summary
  * { created, existing, deferred }.
  *
  * Deferred when I do not yet exist as a Being row (pre-bootstrap
- * place). ensurePlaceRoot() creates my row first and then calls this.
- * Subsequent boots re-run idempotently to backfill any drift.
+ * place). ensurePlaceRoot() creates my row first and then calls
+ * this. Subsequent boots re-run idempotently to backfill any drift.
  */
-export async function ensurePlaceBeings(placeRootId) {
+export async function ensureSeedDelegates(placeRootId) {
   if (!placeRootId) {
-    log.warn("PlaceBeings", "ensurePlaceBeings called without a placeRootId");
+    log.warn("SeedDelegates", "ensureSeedDelegates called without a placeRootId");
     return { created: 0, existing: 0, deferred: false };
   }
 
   const placeRoot = await Space.findById(placeRootId);
   if (!placeRoot) {
     log.warn(
-      "PlaceBeings",
+      "SeedDelegates",
       `place root ${String(placeRootId).slice(0, 8)} not found; skipping`,
     );
     return { created: 0, existing: 0, deferred: false };
@@ -139,8 +102,8 @@ export async function ensurePlaceBeings(placeRootId) {
   const iAm = await findIAm();
   if (!iAm) {
     log.info(
-      "PlaceBeings",
-      "no I_AM yet; deferring system-being setup until ensurePlaceRoot() runs",
+      "SeedDelegates",
+      "no I_AM yet; deferring seed-delegate setup until ensurePlaceRoot() runs",
     );
     return { created: 0, existing: 0, deferred: true };
   }
@@ -149,7 +112,7 @@ export async function ensurePlaceBeings(placeRootId) {
   let created = 0;
   let existing = 0;
 
-  for (const spec of PLACE_BEINGS) {
+  for (const spec of SEED_DELEGATES) {
     try {
       // Look up by name (the canonical identifier per place).
       const existingBeing = await Being.findOne({ name: spec.name }).select(
@@ -162,9 +125,9 @@ export async function ensurePlaceBeings(placeRootId) {
           existingBeing.operatingMode = spec.operatingMode;
           dirty = true;
         }
-        // Sync roles[] + defaultRole to the spec's single role. System
-        // beings carry exactly the role the spec names; if the spec
-        // changes, the being is updated.
+        // Sync roles[] + defaultRole to the spec's single role. Seed
+        // delegates carry exactly the role the spec names; if the
+        // spec changes, the being is updated.
         const carried = Array.isArray(existingBeing.roles)
           ? existingBeing.roles
           : [];
@@ -181,7 +144,7 @@ export async function ensurePlaceBeings(placeRootId) {
           dirty = true;
         }
         // Re-parent under me if drift left parentBeingId out of date.
-        // The being-tree chain place-being → me → null must hold.
+        // The being-tree chain delegate → me → null must hold.
         if (existingBeing.parentBeingId !== rootBeingId) {
           existingBeing.parentBeingId = rootBeingId;
           dirty = true;
@@ -195,12 +158,13 @@ export async function ensurePlaceBeings(placeRootId) {
         continue;
       }
 
-      // I summon the new being forth. SUMMON is the verb of one being
-      // calling another, and the act of calling a not-yet-being into
-      // being is the same act. The seed-internal helper writes the
-      // Being row + audits the act as my own. homeSpace = place root
-      // because place beings live at the place root itself; parent =
-      // me, so the being-tree chain place-being → me → null is intact.
+      // I summon the new being forth. SUMMON is the verb of one
+      // being calling another, and the act of calling a not-yet-
+      // being into being is the same act. The seed-internal helper
+      // writes the Being row + audits the act as my own. homeSpace
+      // = place root because seed delegates live at the place root
+      // itself; parent = me, so the being-tree chain delegate → me
+      // → null is intact.
       const iAmIdent = await iAmIdentity();
       await summonCreateBeing({
         spec: {
@@ -215,21 +179,21 @@ export async function ensurePlaceBeings(placeRootId) {
       });
       created++;
       log.info(
-        "PlaceBeings",
-        `summoned ${spec.role} being forth (name=${spec.name})`,
+        "SeedDelegates",
+        `summoned ${spec.role} delegate forth (name=${spec.name})`,
       );
     } catch (err) {
       log.error(
-        "PlaceBeings",
-        `failed to ensure ${spec.role} being: ${err.message}`,
+        "SeedDelegates",
+        `failed to ensure ${spec.role} delegate: ${err.message}`,
       );
     }
   }
 
   if (created > 0 || existing > 0) {
     log.info(
-      "PlaceBeings",
-      `place beings ensured: ${created} created, ${existing} already present (parent=${rootBeingId.slice(0, 8)})`,
+      "SeedDelegates",
+      `seed delegates ensured: ${created} created, ${existing} already present (parent=${rootBeingId.slice(0, 8)})`,
     );
   }
   return { created, existing, deferred: false };

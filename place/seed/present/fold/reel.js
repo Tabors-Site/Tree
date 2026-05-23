@@ -28,7 +28,7 @@
 // STALE_PRESENCE_MS, the in-memory entry evicts. The history on
 // Mongo is forever; the live carry is just a tail.
 
-import log from "../../../system/log.js";
+import log from "../../system/log.js";
 
 // ─────────────────────────────────────────────────────────────────
 // CARRY CONFIG

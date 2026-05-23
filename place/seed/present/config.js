@@ -19,7 +19,7 @@
 import { getPlaceConfigValue } from "../placeConfig.js";
 import { setLlmTimeout } from "./voices/llm/connect.js";
 import { setFailoverTimeout } from "./voices/llm/call.js";
-import { setMaxPresenceReels, setStalePresenceMs } from "./stamper/fold/reel.js";
+import { setMaxPresenceReels, setStalePresenceMs } from "./fold/reel.js";
 
 // ─────────────────────────────────────────────────────────────────
 // LOCAL BUDGET STATE

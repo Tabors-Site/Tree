@@ -23,7 +23,7 @@
 
 import Space from "./space.js";
 import Being from "../being/being.js";
-import { resolveSpaceAccess } from "./spaceFetch.js";
+import { resolveSpaceAccess } from "./spaces.js";
 import { invalidateSpace } from "./ancestorCache.js";
 import { hooks } from "../../system/hooks.js";
 import { getPlaceConfigValue } from "../../placeConfig.js";

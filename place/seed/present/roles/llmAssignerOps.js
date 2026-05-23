@@ -19,7 +19,7 @@
 // role name so the registry tracks who shipped them.
 
 import log from "../../system/log.js";
-import Matter from "../../models/matter.js";
+import Matter from "../../materials/matter/matter.js";
 import { registerOperation } from "../../ibp/operations.js";
 import { doVerb } from "../../ibp/verbs.js";
 import { qualities } from "../../materials/qualities.js";

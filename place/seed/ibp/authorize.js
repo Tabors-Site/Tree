@@ -45,7 +45,7 @@
 // the loader calls registerDefaultPermissions(extName, perms) at
 // boot.
 
-import Space from "../models/space.js";
+import Space from "../materials/space/space.js";
 import { getPlaceRootId } from "../placeRoot.js";
 import { getAncestorChain } from "../materials/space/ancestorCache.js";
 import { deriveStanceProperties } from "../ibp/stanceProperties.js";

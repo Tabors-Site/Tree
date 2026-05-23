@@ -33,8 +33,8 @@
 import mongoose from "mongoose";
 import { v4 as uuidv4 } from "uuid";
 import log from "../log.js";
-import Being from "../../models/being.js";
-import Space from "../../models/space.js";
+import Being from "../../materials/being/being.js";
+import Space from "../../materials/space/space.js";
 import { getPlaceRootId } from "../../placeRoot.js";
 
 export default async function migrate() {

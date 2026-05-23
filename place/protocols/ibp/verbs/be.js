@@ -31,7 +31,7 @@
 // only legitimate processor of identity ops).
 
 import log from "../../../seed/system/log.js";
-import Being from "../../../seed/models/being.js";
+import Being from "../../../seed/materials/being/being.js";
 import { IbpError, IBP_ERR, isIbpError } from "../../../seed/ibp/protocol.js";
 import { ackOk, ackError } from "../envelope.js";
 import { dispatchTransportAct } from "../../../seed/present/intake/transportAct.js";
@@ -40,7 +40,7 @@ import { IBP_EVENT, buildTransportActReply } from "../events.js";
 
 // Cherub's beingId. Looked up lazily on first BE; cached for the
 // rest of the process lifetime. Cherub is a scripted place-being
-// planted by placeBeings.js at boot.
+// planted by seedDelegates.js at boot.
 let _cherubBeingIdCache = null;
 async function getCherubBeingId() {
   if (_cherubBeingIdCache) return _cherubBeingIdCache;
