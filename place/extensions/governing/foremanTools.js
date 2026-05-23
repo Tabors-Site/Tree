@@ -70,7 +70,6 @@ export default function getForemanTools(_core) {
         branchName: z.string().describe("The branch name to retry."),
         reason: z.string().describe("Your judgment — why this retry has a chance of succeeding."),
       },
-      annotations: { readOnlyHint: false },
       async handler(args) {
         const { beingId, username, rootId, stampId, sessionId, recordNodeId, stepIndex, branchName, reason } = args;
         if (!beingId) return text("foreman-retry-branch: missing beingId; substrate bug.");
@@ -305,7 +304,6 @@ export default function getForemanTools(_core) {
         reason: z.string().describe("Your judgment for the audit trail."),
         error: z.string().optional().describe("The worker's error string, if known."),
       },
-      annotations: { readOnlyHint: false },
       async handler(args) {
         const { recordNodeId, stepIndex, branchName, reason, error } = args;
         if (!recordNodeId || typeof stepIndex !== "number") {
@@ -343,7 +341,6 @@ export default function getForemanTools(_core) {
         terminalStatus: z.enum(["completed", "failed", "superseded", "paused"]),
         summary: z.string().optional().describe("Human-readable summary surfaced on the dashboard."),
       },
-      annotations: { readOnlyHint: false },
       async handler(args) {
         const { recordNodeId, terminalStatus, summary } = args;
         if (!recordNodeId || !TERMINAL_STATUSES.has(terminalStatus)) {
@@ -393,7 +390,6 @@ export default function getForemanTools(_core) {
           "what the Ruler should consider.",
         ),
       },
-      annotations: { readOnlyHint: false },
       async handler(args) {
         const { signal, payload } = args;
         const s = typeof signal === "string" ? signal.trim() : "";
@@ -436,7 +432,6 @@ export default function getForemanTools(_core) {
       schema: {
         response: z.string(),
       },
-      annotations: { readOnlyHint: true },
       async handler(args) {
         const { response } = args;
         const r = typeof response === "string" ? response.trim() : "";
@@ -469,7 +464,6 @@ export default function getForemanTools(_core) {
       schema: {
         subRulerNodeId: z.string(),
       },
-      annotations: { readOnlyHint: true },
       async handler(args) {
         const subRulerNodeId = typeof args?.subRulerNodeId === "string" ? args.subRulerNodeId.trim() : "";
         if (!subRulerNodeId) return text("foreman-read-branch-detail: subRulerNodeId required.");
@@ -541,7 +535,6 @@ export default function getForemanTools(_core) {
         recordNodeId: z.string(),
         reason: z.string().describe("Why cancelling. Pass 2 courts read this when adjudicating."),
       },
-      annotations: { readOnlyHint: false },
       async handler(args) {
         const { recordNodeId, reason } = args;
         if (!recordNodeId) return text("foreman-cancel-subtree: recordNodeId required.");
@@ -570,7 +563,6 @@ export default function getForemanTools(_core) {
         recordNodeId: z.string(),
         reason: z.string(),
       },
-      annotations: { readOnlyHint: false },
       async handler(args) {
         const { recordNodeId, reason } = args;
         if (!recordNodeId) return text("foreman-propagate-cancel-to-children: recordNodeId required.");
@@ -601,7 +593,6 @@ export default function getForemanTools(_core) {
         atStepIndex: z.number().int().optional(),
         reason: z.string(),
       },
-      annotations: { readOnlyHint: false },
       async handler(args) {
         const { recordNodeId, atStepIndex, reason } = args;
         if (!recordNodeId) return text("foreman-pause-frame: recordNodeId required.");
@@ -634,7 +625,6 @@ export default function getForemanTools(_core) {
         recordNodeId: z.string(),
         reason: z.string(),
       },
-      annotations: { readOnlyHint: false },
       async handler(args) {
         const { recordNodeId, reason } = args;
         if (!recordNodeId) return text("foreman-resume-frame: recordNodeId required.");
@@ -727,7 +717,6 @@ export default function getForemanTools(_core) {
           "decision; no extra branches; no duplicates.",
         ),
       },
-      annotations: { readOnlyHint: false },
       async handler(args) {
         const { decisions } = args;
         if (!Array.isArray(decisions) || decisions.length === 0) {
@@ -798,7 +787,6 @@ export default function getForemanTools(_core) {
         fromStepIndex: z.number().int(),
         reason: z.string().describe("Required for audit. Be specific about why this step is being skipped."),
       },
-      annotations: { readOnlyHint: false },
       async handler(args) {
         const { recordNodeId, fromStepIndex, reason } = args;
         if (!recordNodeId || typeof fromStepIndex !== "number") {

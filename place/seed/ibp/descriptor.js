@@ -206,7 +206,7 @@ async function inferActivityTarget(summon) {
     return null;
   }
   if (!parent || !parent.activeRole || !parent.beingOut) return null;
-  // Without aiContext/treeContext we no longer have a (spaceId, modeKey)
+  // Without aiContext/treeContext we no longer have a (spaceId, role)
   // tuple to hand the renderer. Surface the parent being + role so the
   // 3D portal can map "which mesh is this being" via its descriptor entry.
   return {

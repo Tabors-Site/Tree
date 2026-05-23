@@ -46,7 +46,6 @@ const PLACE_SEED_SPACES = [
   },
   { name: ".peers", seedSpace: SEED_SPACE.PEERS },
   { name: ".extensions", seedSpace: SEED_SPACE.EXTENSIONS },
-  { name: ".flow", seedSpace: SEED_SPACE.FLOW },
   { name: ".tools", seedSpace: SEED_SPACE.TOOLS },
   { name: ".roles", seedSpace: SEED_SPACE.ROLES },
   { name: ".operations", seedSpace: SEED_SPACE.OPERATIONS },

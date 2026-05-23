@@ -31,7 +31,7 @@
 //
 // Lookup key shape per verb:
 //   see:     "*"                                          (universal for now)
-//   do:      "<action>:<param>" or "<action>"             (e.g. "set-meta:position")
+//   do:      "<action>:<param>" or "<action>"             (e.g. "set-qualities:position")
 //   summon:  "@<qualifier>:<intent>" or "@<qualifier>"    (qualifier supports prefix wildcard)
 //   be:      "<operation>"                                (register|claim|release|switch)
 //
@@ -99,7 +99,7 @@ const PLACE_ROOT_DEFAULT_PERMISSIONS = Object.freeze({
  * @param {"see"|"do"|"summon"|"be"} args.verb
  * @param {object} args.target     { kind, value, spaceId?, being?, isDiscovery? }
  * @param {string} [args.action]   DO action name
- * @param {string} [args.namespace] set-meta namespace
+ * @param {string} [args.namespace] set-qualities namespace
  * @param {string} [args.intent]   SUMMON intent
  * @param {string} [args.operation] BE operation
  * @returns {Promise<{ ok: boolean, stance: string, reason?: string }>}
@@ -231,8 +231,16 @@ function buildKeyParts(args) {
       return ["*"];
     case "do": {
       if (!args.action) return null;
+      // Namespace-aware rules: a write to qualities.<namespace> uses
+      // a two-part key [action, namespace] so an operator can pin
+      // permissions per quality namespace. Covers both the legacy
+      // set-qualities/clear-qualities ops and the collapsed `set`
+      // op with field="qualities.<namespace>..." (verbs.js extracts
+      // namespace into args.namespace before this runs).
       if (
-        (args.action === "set-meta" || args.action === "clear-meta") &&
+        (args.action === "set-qualities" ||
+          args.action === "clear-qualities" ||
+          args.action === "set") &&
         args.namespace
       ) {
         return [args.action, args.namespace];
@@ -496,7 +504,7 @@ export { IBP_ERR };
 //     name: "position",
 //     provides: {
 //       defaultPermissions: {
-//         "do:set-meta:position": { requires: { contributor: true } },
+//         "do:set-qualities:position": { requires: { contributor: true } },
 //       },
 //     },
 //   };
@@ -509,7 +517,7 @@ export { IBP_ERR };
 //     deny.
 //
 // Data shape: `Map<key, rule>`. Keys are the same shape as
-// qualities.permissions entries ("do:set-meta:position",
+// qualities.permissions entries ("do:set-qualities:position",
 // "summon:@planner*", etc.). Rules carry `requires` (stance property
 // requirements). The registry also stores `_extName` so an uninstall
 // can remove only that extension's contributions.

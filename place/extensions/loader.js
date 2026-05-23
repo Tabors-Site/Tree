@@ -1243,7 +1243,6 @@ const CORE_HOOKS_VALID = new Set([
   "afterSpaceCreate",
   "beforeSpaceDelete",
   "enrichContext",
-  "onCascade",
   "onDocumentPressure",
   "beforeLLMCall",
   "afterLLMCall",

@@ -10,7 +10,7 @@
 // One registry. One gate. Both the IBP wire layer and in-process
 // callers (extensions, kernel internals) dispatch through here, so
 // authorization, schema validation, and Fact stamping run once at one
-// place. Bare names ("create-child", "set-meta") are reserved for
+// place. Bare names ("create-child", "set-qualities") are reserved for
 // the kernel; extensions register under "<extName>:<action>" so
 // every name's owner is structurally evident on the wire.
 //
@@ -23,7 +23,7 @@ import log from "../system/log.js";
 
 const REGISTRY = new Map();
 
-// Naming. Bare names ("create-child", "set-meta") are reserved for the
+// Naming. Bare names ("create-child", "set-qualities") are reserved for the
 // kernel. Extensions register under "<extName>:<action>" (e.g.,
 // "food:log-meal"). Same convention as modes (tree:fallback,
 // tree:food-log) and roles (governing:ruler).

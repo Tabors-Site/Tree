@@ -25,7 +25,8 @@ const SpaceSchema = new mongoose.Schema({
   type: { type: String, default: null },
   dateCreated: { type: Date, default: Date.now },
 
-  llmDefault: { type: String, ref: "LlmConnection", default: null },
+  // Connection uuid key into the owning being's qualities.llmConnections.
+  llmDefault: { type: String, default: null },
 
   parent: { type: String, ref: "Space", default: null },
   children: [{ type: String, ref: "Space" }],

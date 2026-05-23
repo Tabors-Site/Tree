@@ -81,7 +81,6 @@ const strategy = defineStrategy({
         stampId: z.string().nullable().optional().describe("Injected by server. Ignore."),
         sessionId: z.string().nullable().optional().describe("Injected by server. Ignore."),
       },
-      annotations: { readOnlyHint: false },
       async handler({ writeFile, ensureDeps, name, options, filePath }) {
         // If your emitted code requires npm packages, declare them here
         // BEFORE writeFile. The spawner's npm install will pick them up.
@@ -102,7 +101,6 @@ const strategy = defineStrategy({
         stampId: z.string().nullable().optional().describe("Injected by server. Ignore."),
         sessionId: z.string().nullable().optional().describe("Injected by server. Ignore."),
       },
-      annotations: { readOnlyHint: true },
       async handler({ readWorkspaceFiles }) {
         const files = await readWorkspaceFiles();
         if (files.length === 0) return text("my-domain-verify: no files in active project");

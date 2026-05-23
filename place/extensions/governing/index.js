@@ -437,9 +437,9 @@ export async function init(core) {
               // Phase 3 migration: verb-surface merge into beings ns.
               // Backfill runs at boot with no caller identity; pass
               // internal:true to bypass stance-auth (kernel-trusted).
-              await core.do(fresh, "set-meta", {
-                namespace: "beings",
-                data: {
+              await core.do(fresh, "set", {
+                field: "qualities.beings",
+                value: {
                   [beingRole]: {
                     installedBy:  "governing-backfill",
                     from:         gov?.promotedFrom || null,
@@ -456,9 +456,9 @@ export async function init(core) {
               // IS the space itself — passing the space id as scopeId
               // produces the open ruler rule (which doesn't consult it).
               const scopeId = gov?.scopeRulerId || String(fresh._id);
-              await core.do(fresh, "set-meta", {
-                namespace: "permissions",
-                data: permissions(scopeId),
+              await core.do(fresh, "set", {
+                field: "qualities.permissions",
+                value: permissions(scopeId),
                 merge: true,
               }, { internal: true });
             }

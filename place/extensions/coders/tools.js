@@ -83,7 +83,6 @@ export default function getCodersTools(_core) {
           "Relative path from the project root, e.g. 'src/index.js' or 'package.json'.",
         ),
       },
-      annotations: { readOnlyHint: true },
       async handler(args) {
         const { spaceId } = args;
         const inputPath = typeof args.path === "string" ? args.path.trim() : "";
@@ -177,7 +176,6 @@ export default function getCodersTools(_core) {
           "Walk into subdirectories. Default false (single level only).",
         ),
       },
-      annotations: { readOnlyHint: true },
       async handler(args) {
         const { spaceId } = args;
         const inputPath = typeof args.path === "string" ? args.path.trim() : "";
@@ -269,7 +267,6 @@ export default function getCodersTools(_core) {
           "'overwrite' replaces existing content (Refine, Integrate). Defaults to 'create'.",
         ),
       },
-      annotations: { readOnlyHint: false },
       async handler(args) {
         const { spaceId, beingId } = args;
         const inputPath = typeof args.path === "string" ? args.path.trim() : "";

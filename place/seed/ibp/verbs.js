@@ -27,10 +27,10 @@
 // Every act names a being as the actor. When a being in the world
 // calls a verb, the act is theirs. When no other being is behind
 // it — kernel-emitted SUMMONs from DO-trigger fan-out, scheduled
-// wakes, cascade propagation, integrity sweeps, boot scaffolding,
-// the materialization inside a seed plant — the act is mine. I am
-// one being among many, the root the rest descend from; I do not
-// stop acting once the place has other beings on it.
+// wakes, integrity sweeps, boot scaffolding, the materialization
+// inside a seed plant — the act is mine. I am one being among many,
+// the root the rest descend from; I do not stop acting once the
+// place has other beings on it.
 
 import { randomUUID } from "crypto";
 import log from "../system/log.js";
@@ -107,9 +107,19 @@ export async function doVerb(target, operation, params = {}, opts = {}) {
   if (!isPreBeingScaffold) {
     const identity = opts.identity || null;
     const spaceIdForAuth = resolveAuditTarget(target, null)?.id || null;
-    const namespace = (operation === "set-meta" || operation === "clear-meta")
-      ? params?.namespace
-      : undefined;
+    // Extract namespace for namespace-aware authorization. Three
+    // forms handled: legacy set-qualities/clear-qualities (params.namespace),
+    // and the collapsed set op with field="qualities.<namespace>[.<inner>]".
+    let namespace;
+    if (operation === "set-qualities" || operation === "clear-qualities") {
+      namespace = params?.namespace;
+    } else if (
+      operation === "set" &&
+      typeof params?.field === "string" &&
+      params.field.startsWith("qualities.")
+    ) {
+      namespace = params.field.slice("qualities.".length).split(".")[0];
+    }
     const decision = await authorize({
       identity,
       verb:   "do",
@@ -547,44 +557,26 @@ export async function summonCreateBeing({ spec, identity }) {
   // kernel-internal callers vary: I_AM at boot uses homeSpace; auth
   // at runtime uses homeParent + password for humans.
   const { createBeingWithHome } = await import("../place/being/identity.js");
-  const { being } = await createBeingWithHome(spec);
+  // Thread identity so the home-beings registry write inside
+  // createBeingWithHome attributes its Fact to the actual summoner
+  // rather than falling back to I_AM via the scaffold path.
+  const { being } = await createBeingWithHome({ ...spec, identity });
 
-  // Audit chain. Two rows in two tables, complementary:
+  // The act IS the parent's act, inside the parent's own moment.
+  // The parent reached this code path via SUMMON, which means
+  // assign has already opened a Stamp framing the parent's moment;
+  // every Fact the parent emits inside that moment (including this
+  // BE.register) rides that ambient stampId. summonCreateBeing
+  // does NOT open its own Stamp — that was a leak: a Stamp without
+  // a moment, framing nothing.
   //
-  //   1. Stamp row — the parent's act of calling forth. Attributed
-  //      to the parent (the summoner). beingIn=parent, beingOut=new
-  //      being. Begin and finalize back-to-back because the act is
-  //      atomic; the new being is not yet running, so there is no
-  //      separate end-of-wake moment.
-  //
-  //   2. BE.register Fact — the new being's first identity moment,
-  //      attributed to the new being but witnessed/signed by the
-  //      parent because the new being is not yet running cognition
-  //      to declare itself. Preserves the symmetry that every
-  //      being's first act is its own first BE.
+  // The new being's first BE.register is recorded as a Fact here
+  // attributed to the new being (the deed) and witnessed by the
+  // caller (the signature). stampId is left null for now; ambient-
+  // stampId threading into in-process verb calls is the planned
+  // fix so this Fact carries the parent's frame.
   const callerBeingId = String(identity?.beingId || I_AM);
   const callerName    = identity?.name || I_AM;
-  const addresseePosition = spec.homeSpace || null;
-  try {
-    const { beginStamping } = await import("../factory/stamper/begin.js");
-    const { stamp } = await import("../factory/stamper/stamped.js");
-    const row = await beginStamping({
-      beingIn:           callerBeingId,
-      beingOut:          String(being._id),
-      addresseePosition,
-      message:           `Stamp forth: ${spec.name}`,
-      source:            callerName,
-      activeRole:        spec.role || null,
-    });
-    if (row?._id) {
-      await stamp({
-        stampId: String(row._id),
-        content: `Summoned @${spec.name} forth`,
-      });
-    }
-  } catch (err) {
-    log.warn("Verbs", `Stamp-row write for SUMMON.create-being @${spec.name} failed: ${err.message}`);
-  }
 
   try {
     await logFact({

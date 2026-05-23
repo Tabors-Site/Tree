@@ -114,9 +114,9 @@ export async function promoteToRuler({ spaceId, reason, promotedFrom, parentBein
   }
 
   // 1. Stamp governing role on the space.
-  await core.do(space, "set-meta", {
-    namespace: NS,
-    data,
+  await core.do(space, "set", {
+    field: `qualities.${NS}`,
+    value: data,
     merge: false,
   }, { identity });
 
@@ -166,9 +166,9 @@ export async function promoteToRuler({ spaceId, reason, promotedFrom, parentBein
     contractor: { beingId: innerBeings.contractor,  installedAt: acceptedAt, installedBy: "governing" },
     foreman:    { beingId: innerBeings.foreman,     installedAt: acceptedAt, installedBy: "governing" },
   };
-  await core.do(space, "set-meta", {
-    namespace: "beings",
-    data: beingsRegistry,
+  await core.do(space, "set", {
+    field: "qualities.beings",
+    value: beingsRegistry,
     merge: true,
   }, { identity });
 
@@ -179,9 +179,9 @@ export async function promoteToRuler({ spaceId, reason, promotedFrom, parentBein
   //    (planner / contractor / foreman) are protected: only beings of
   //    governing roles whose home is within this rulership's subtree
   //    can summon them.
-  await core.do(space, "set-meta", {
-    namespace: "permissions",
-    data: {
+  await core.do(space, "set", {
+    field: "qualities.permissions",
+    value: {
       summon: {
         "@ruler*":      { requires: {} },
         "@planner*":    { requires: { role: ["ruler", "planner", "contractor", "foreman"], homeInDomain: String(spaceId) } },

@@ -101,7 +101,8 @@ const BeingSchema = new mongoose.Schema({
   // Null falls back through the resolution chain (extension slot →
   // tree → place default). Same field shape as Space.llmDefault so
   // the resolver treats both uniformly.
-  llmDefault: { type: String, ref: "LlmConnection", default: null },
+  // Connection uuid key into this being's qualities.llmConnections.
+  llmDefault: { type: String, default: null },
 
   // Federation. `isRemote: true` means this being is mirrored from
   // another place; `homePlace` carries the canonical place's domain.

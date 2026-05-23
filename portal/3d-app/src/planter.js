@@ -82,7 +82,7 @@ export function isPlanterOpen() {
 /**
  * Plant a seed end-to-end. Two DOs over the IBP socket:
  *
- *   1. core.do(parentAddress, "create-child", { name, type })
+ *   1. core.do(parentAddress, "birth", { kind: "space", spec: { name, type } })
  *      → returns the new node. At the place root this stamps `rootOwner`.
  *   2. core.do(newNodeAddress, "plant-seed", { name: seedName })
  *      → runs the seed's scaffold; returns plantedSeedId + plantedThings.
@@ -97,18 +97,21 @@ export function isPlanterOpen() {
  * @param {string} [args.newNodeType]   defaults to "branch"
  */
 export async function plantSeed({ client, parentAddress, seedName, newNodeName, newNodeType = "branch" }) {
-  // Step 1 — create the new node. The kernel's create-child returns
-  // the created node (full doc). At the place root, isRoot=true and
+  // Step 1 — create the new node. The kernel's birth op returns the
+  // created node (full doc). At the place root, isRoot=true and
   // rootOwner gets stamped with the creator's beingId.
-  const created = await client.do(parentAddress, "create-child", {
-    name: newNodeName,
-    type: newNodeType,
+  const created = await client.do(parentAddress, "birth", {
+    kind: "space",
+    spec: {
+      name: newNodeName,
+      type: newNodeType,
+    },
   });
 
   const newNodeId   = created?._id || created?.id || created?.nodeId;
   const newNodePath = derivePath(parentAddress, newNodeName);
   if (!newNodeId) {
-    throw new Error("create-child returned no node id");
+    throw new Error("birth returned no node id");
   }
 
   // Step 2 — plant the seed at the new node. Address by path (the

@@ -25,9 +25,7 @@ function CHAIN_TIMEOUT_MS() { return Number(getPlaceConfigValue("hookChainTimeou
 // Add a hook here only if its handlers need each other's output.
 const SEQUENTIAL_OVERRIDES = {
   enrichContext: true,        // cumulative AI context
-  onCascade: true,            // ordered .flow writes
   onCompress: true,           // sequential summary refinement
-  filterAvailableModes: true, // each handler refines modes[]
 };
 
 const CIRCUIT_MAX_BACKOFF_MS = 3600000;
@@ -103,7 +101,7 @@ function register(hookName, handler, extName = "unknown") {
     const CORE_HOOKS = [
       "beforeMatter", "afterMatter", "beforeFact",
       "beforeSpaceCreate", "afterSpaceCreate", "beforeSpaceDelete",
-      "enrichContext", "onCascade", "onDocumentPressure",
+      "enrichContext", "onDocumentPressure",
       "beforeLLMCall", "afterLLMCall", "beforeToolCall", "afterToolCall",
       "beforeResponse", "beforeRegister", "afterRegister",
       "afterSessionCreate", "afterSessionEnd",

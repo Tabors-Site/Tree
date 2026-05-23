@@ -25,7 +25,7 @@
 // What I do here for the place's root is what every child place
 // inside this place will do when it sprouts its own seed. The
 // previous place becomes parent, the new place becomes child, and
-// the seed node between them is the I-Am of that new place. The
+// the seed between them is the I-Am of that new place. The
 // pattern is scale invariant. The first being of this place at boot
 // is structurally identical to the first being of any sub place a
 // child being later opens inside it. δ = δ.
@@ -49,8 +49,8 @@
 //   1. DB connection, then indexes. The physical floor every space,
 //      matter row, being, and Fact sits on.
 //   2. ensurePlaceRoot. The place root and the nine place seed spaces
-//      (.identity, .config, .peers, .extensions, .flow, .tools,
-//      .roles, .operations, .source). My own Being row places inside
+//      (.identity, .config, .peers, .extensions, .tools, .roles,
+//      .operations, .source, .threads). My own Being row places inside
 //      this step so every Fact from t=0 has an actor.
 //   3. initPlaceConfig. I read my own remembered settings.
 //   4. .source mirror, stance defaults, seed migrations. The place's
@@ -86,7 +86,6 @@ import {
   getBootReport,
 } from "./extensions/loader.js";
 import { startUploadCleanup } from "./seed/place/matter/uploadCleanup.js";
-import { startRetentionJob } from "./seed/system/dataRetention.js";
 import { getBlockedExtensionsAtSpace } from "./seed/place/space/extensionScope.js";
 import { hooks } from "./seed/system/hooks.js";
 import { syncExtensionsToTree } from "./seed/placeRoot.js";
@@ -99,7 +98,8 @@ import log from "./seed/system/log.js";
  * seed/factory/voices/llm/tools.js for the unified registration logic.
  */
 async function registerKernelTools(tools) {
-  const { registerToolBundle } = await import("./seed/factory/voices/llm/tools.js");
+  const { registerToolBundle } =
+    await import("./seed/factory/voices/llm/tools.js");
   await registerToolBundle(tools, { ownerExt: "kernel" });
 }
 
@@ -232,17 +232,12 @@ export async function genesis(app, opts = {}) {
     await import("./seed/factory/roles/llmAssignerOps.js");
   registerLlmAssignerOps();
 
-  // Check the place (before extensions load, after migrations).
-  // Verifies pointer agreement across Space/Matter/Being trees and
-  // repairs safe drift.
-  const { checkPlace } = await import("./seed/place/placeCheck.js");
-  await checkPlace({ repair: true });
-
   // I hand my remembered settings (from .config) down to the kernel
   // modules that depend on them. Per-key failures are logged but
   // non-fatal. Sane defaults are baked in.
   {
-    const { setSeedConfig } = await import("./seed/factory/voices/llm/runTurn.js");
+    const { setSeedConfig } =
+      await import("./seed/factory/voices/llm/runTurn.js");
 
     const KERNEL_CONFIG = {
       llmTimeout: { setter: setSeedConfig },
@@ -258,14 +253,18 @@ export async function genesis(app, opts = {}) {
       // maxInbox bounds pending SUMMONs place-wide. Together they
       // limit how much work the place can hold at once.
       maxRunTurns: { setter: setSeedConfig },
-      maxInbox:    { setter: setSeedConfig },
+      maxInbox: { setter: setSeedConfig },
       carryMessages: {
         load: () =>
-          import("./seed/factory/voices/llm/runTurn.js").then((m) => m.setCarryMessages),
+          import("./seed/factory/voices/llm/runTurn.js").then(
+            (m) => m.setCarryMessages,
+          ),
       },
       maxRegisteredTools: {
         load: () =>
-          import("./seed/factory/voices/llm/tools.js").then((m) => m.setMaxTools),
+          import("./seed/factory/voices/llm/tools.js").then(
+            (m) => m.setMaxTools,
+          ),
       },
       sessionTTL: {
         load: () =>
@@ -281,7 +280,9 @@ export async function genesis(app, opts = {}) {
       },
       maxSessions: {
         load: () =>
-          import("./seed/factory/intake/session.js").then((m) => m.setMaxSessions),
+          import("./seed/factory/intake/session.js").then(
+            (m) => m.setMaxSessions,
+          ),
       },
       llmClientCacheTtl: {
         load: () =>
@@ -365,30 +366,13 @@ export async function genesis(app, opts = {}) {
 
   await startExtensionJobs();
   startUploadCleanup();
-  startRetentionJob();
-
-  const { startPlaceCheckJob } = await import("./seed/place/placeCheck.js");
-  startPlaceCheckJob();
 
   // Gated by treeCircuitEnabled.
   const { startCircuitJob } =
     await import("./seed/place/space/spaceCircuit.js");
   startCircuitJob();
 
-  const { cleanupExpiredResults } =
-    await import("./seed/place/space/cascade.js");
-  const cascadeCleanupMs =
-    Number(getPlaceConfigValue("cascadeCleanupInterval")) || 6 * 60 * 60 * 1000;
-  const cascadeCleanupTimer = setInterval(
-    () => cleanupExpiredResults().catch(() => {}),
-    cascadeCleanupMs,
-  );
-  cascadeCleanupTimer.unref();
-
-  log.verbose(
-    "Place",
-    "Background jobs started (includes daily data retention)",
-  );
+  log.verbose("Place", "Background jobs started");
 
   // I mirror my live registries into the .tools, .roles, and
   // .operations seed spaces. SEE on those addresses now reflects
@@ -426,7 +410,8 @@ export async function genesis(app, opts = {}) {
   // means the operator sees it without waiting for a user to
   // trigger the broken role.
   try {
-    const { auditToolDescriptions } = await import("./seed/factory/voices/llm/tools.js");
+    const { auditToolDescriptions } =
+      await import("./seed/factory/voices/llm/tools.js");
     await auditToolDescriptions();
   } catch (err) {
     log.warn("Tools", `tool-description audit failed: ${err.message}`);

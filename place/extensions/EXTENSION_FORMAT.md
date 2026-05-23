@@ -91,41 +91,41 @@ export default {
 
 ### Available kernel services
 
+The four verbs (`core.see`, `core.do`, `core.summon`, `core.be`) are always callable and are the only public surface for substrate operations. Everything below is a syntactic helper or an infrastructure surface those verbs sit on.
+
 | Service | What it provides | Common functions |
 |---------|-----------------|-----------------|
-| `llm` | AI conversation | `runTurn`, `stepTurn`, `getClientForUser`, `switchMode` |
-| `hooks` | Lifecycle events | `register`, `run` (always available, but declare for clarity) |
-| `session` | Session management | `createSession`, `endSession`, `getSession` |
-| `chat` | Chat tracking | `startChat`, `finalizeChat`, `setChatContext` |
-| `orchestrator` | Pipeline runtime | `OrchestratorRuntime`, `acquireLock`, `releaseLock` |
-| `contributions` | Audit trail | `logContribution` |
-| `ownership` | Tree ownership | `addContributor`, `removeContributor`, `transferOwnership` |
-| `tree` | Tree infrastructure | `getAncestorChain`, `checkPlace`, `isTreeAlive` |
-| `cascade` | Signal propagation | `deliverCascade` |
-| `metadata` | Space metadata | `qualities.space.getQuality`, `readNs`, `qualities.space.setQuality`, `qualities.space.mergeQuality`, `qualities.space.incQuality`, `qualities.space.pushQuality`, `qualities.space.addToQualitySet`, `qualities.space.batchSetQuality`, `qualities.space.unsetQuality` |
-| `beingMetadata` | Being metadata (humans and AI beings) | `qualities.being.getQuality`, `readBeingNs`, `qualities.being.setQuality`, `mergeBeingMeta`, `incBeingMeta`, `pushBeingMeta`, `addToBeingMetaSet`, `batchSetBeingMeta`, `unsetBeingMeta` |
-| `matterMetadata` | Matter metadata | `qualities.matter.getQuality`, `readMatterNs`, `qualities.matter.setQuality`, `mergeMatterMeta`, `incMatterMeta`, `pushMatterMeta`, `addToMatterMetaSet`, `batchSetMatterMeta`, `unsetMatterMeta` |
-| `protocol` | Error codes, constants | `sendOk`, `sendError`, `ERR`, `WS`, `CASCADE` |
-| `websocket` | Real-time events | `emitToUser`, `registerSocketHandler` |
-| `mcp` | MCP connections | `connectToMCP`, `closeMCPClient` |
-| `auth` | Authentication | `resolveTreeAccess`, `createUser` |
-| `modes` | AI mode registry | `registerMode`, `setDefaultMode` |
-| `orchestrators` | Orchestrator registry | `register`, `get` |
-| `spaceLocks` | Per-space locking | `acquireSpaceLock`, `releaseSpaceLock` |
+| `see` / `do` / `summon` / `be` | The four verbs. Always available. | `core.do(target, "set-qualities", { namespace, data })`, `core.see(address)`, etc. |
+| `facts` | Audit-row stamping. | `logFact` |
+| `auth` | Identity primitives. | `resolveSpaceAccess`, `createBeing`, `verifyPassword`, `generateToken`, `findBeingByName`, `registerStrategy` |
+| `session` | Per-reach session lifecycle. | `createSession`, `endSession`, `getSession`, `SESSION_TYPES`, `registerSessionType` |
+| `summon` | Stamp-row helpers. | `stamp`, `ensureSession` |
+| `llm` | LLM voice apparatus. | `runTurn`, `stepTurn`, `getClientForBeing`, `switchRole`, `registerBeingLlmSlot`, `registerFailoverResolver` |
+| `websocket` | Push channel (transport-agnostic). | `emitToBeing`, `emitNavigate`, `registerSocketHandler`, `getIO` |
+| `models` | Mongoose models. | `Being`, `Space`, `Fact`, `Matter` |
+| `hooks` | Lifecycle event bus. | `register`, `run` |
+| `seeds` | Plantable scaffolds. | `register`, `plant`, `unplant`, `list`, `listPlantedAt` |
+| `space` | Space CRUD + tree infrastructure. | `getAncestorChain`, `snapshotAncestors`, `createSpace`, `deleteSpaceBranch`, `checkTreeHealth`, `isTreeAlive`, `getPlaceRootId` |
+| `matters` | Programmatic matter CRUD. | `createMatter`, `editMatter`, `deleteMatterAndFile`, `transferMatter`, `getMatters` |
+| `spaceLocks` | Structural mutation locks. | `acquireSpaceLock`, `releaseSpaceLock`, `acquireMultiple` |
+| `qualities` | Per-primitive qualities Map. Three sub-namespaces: `core.qualities.being`, `core.qualities.space`, `core.qualities.matter`. Each carries the same nine atomic primitives. Namespace ownership is enforced for space and matter writes. | `getQuality`, `setQuality`, `mergeQuality`, `incQuality`, `pushQuality`, `addToQualitySet`, `batchSetQuality`, `unsetQuality`, `readQualityNamespace` |
+| `scope` | Extension-scope checks. | `isExtensionBlockedAtSpace`, `getBlockedExtensionsAtSpace`, `getExtensionAtScope`, `getToolOwner` |
+| `declare` | Setup voice — what extensions declare so the verbs have something to act on. | `registerRole`, `unregisterRole`, `subscribe`, `unsubscribe`, `schedule`, `unschedule`, `aggregate`, `setScheduleEmitter` |
+| `protocol` | Response shapes + error codes. | `ok`, `error`, `sendOk`, `sendError`, `IBP_ERR` |
 
 ### Dependency chains
 
 Extensions load in topological order. If extension A depends on extension B (`needs.extensions: ["b"]`), B loads first. If B fails to load, A is skipped.
 
-**Chain failures cascade.** If `propagation` fails, then `perspective-filter` (depends on propagation) skips, then `treeos-cascade` (depends on perspective-filter) skips. Fix the root cause (propagation) and the whole chain recovers.
+**Chain failures cascade.** If `propagation` fails, then any extension that depends on it skips, then any extension that depends on those skips. Fix the root cause and the whole chain recovers.
 
 **Always check the boot log for the FIRST error.** Later "missing required deps" warnings are consequences, not causes.
 
-### hooks and modes are always available
+### Always-available services
 
-`core.hooks`, `core.modes`, `core.qualities`, `core.beingMetadata`, and `core.matterMetadata` are injected into every scoped core regardless of declaration. You never need to declare them. They are core infrastructure available to all extensions.
+The four verbs (`core.see`, `core.do`, `core.summon`, `core.be`), `core.hooks`, and `core.qualities` are injected into every scoped core regardless of declaration. You never need to declare them.
 
-The three metadata modules mirror each other. Every namespaced operation that works on a space also works on a being and on a matter, with the function name carrying the target type (`qualities.space.setQuality` / `qualities.being.setQuality` / `qualities.matter.setQuality`, and so on). Pick the module that matches the document you are tagging. They are functionally peer modules, not a hierarchy.
+The three sub-namespaces of `core.qualities` mirror each other. Every namespaced operation that works on a space also works on a being and on a matter, with the same nine atomic primitives on each (`core.qualities.space.setQuality` / `core.qualities.being.setQuality` / `core.qualities.matter.setQuality`, and so on). Pick the sub-namespace that matches the primitive you are tagging.
 
 ### Extension-provided services
 
@@ -454,7 +454,6 @@ Return value: `{ response, navigatedTo, ... }`. The response is sent to the clie
 | Metadata | `core.qualities.*` (namespace-enforced, 7 functions) | Yes (always injected) |
 | User Metadata | `core.beingMetadata.*` (6 functions) | Yes (always injected) |
 | Scope | `core.scope.*` | Yes |
-| Cascade | `core.cascade.*` | Yes |
 | Protocol | `core.protocol.*` | Yes |
 | Energy | `core.energy.*` | No-op stub if extension not loaded |
 
@@ -537,23 +536,6 @@ export async function init(core) {
 | `enrichContext` | `{ context, space, meta }` | enrich | Inject extension data into AI context. |
 | `beforeRegister` | `{ username, password }` | before | Validate or modify registration. |
 | `afterRegister` | `{ user }` | after | Initialize user data after registration. |
-| `onCascade` | `{ space, spaceId, signalId, writeContext, source, depth, cascadeConfig }` | cascade | Fires when content is written at a cascade-enabled space or when a signal is delivered externally. Handler results are written to .flow. |
-
-### Cascade hooks
-
-`onCascade` is different from other hooks. It fires through the same hook system but handler return values become visible results stored in the `.flow` place seed space. This is the communication primitive. Extensions use it to react to signals, propagate to children, or deliver across places.
-
-```js
-core.hooks.register("onCascade", async ({ space, spaceId, signalId, writeContext, source, depth }) => {
-  // React to the signal
-  // Optionally propagate to children via deliverCascade
-  // Return value is written as result to .flow
-}, "my-extension");
-```
-
-Two entry points trigger onCascade:
-- **checkCascade** (kernel-internal): called on matter writes and status changes. The kernel originates.
-- **deliverCascade** (extension-external): called by extensions to deliver to other spaces. Never blocked.
 
 ### Extension hooks (examples)
 
@@ -852,7 +834,7 @@ await core.beingMetadata.batchSetBeingMeta(userId, "my-extension", { theme: "dar
 
 Both paths are valid. The scoped core path prevents accidental cross-namespace writes. The direct import path is for kernel code, migrations, and utilities that need to write to arbitrary namespaces.
 
-Five core namespaces (`tools`, `modes`, `extensions`, `cascade`, `llm`) are always writable regardless of caller. These are kernel-owned shared configuration.
+Four core namespaces (`tools`, `roles`, `extensions`, `llm`) are always writable regardless of caller. These are kernel-owned shared configuration.
 
 Convention:
 - Namespace key MUST match your manifest `name`
@@ -1300,7 +1282,7 @@ authorization. The walk has three layers:
 | **Layer 5** | default deny | When nothing else matched |
 
 **Why Layer 3 matters.** Per-position rules (Layer 2) require operators
-to write a `set-meta` on every space that needs the rule. Layer 3 lets
+to write a `set-qualities` on every space that needs the rule. Layer 3 lets
 an extension ship sensible defaults that apply everywhere the extension
 is installed, with no per-position write. The place operator can still
 override at any specific position via Layer 2.
@@ -1313,10 +1295,10 @@ Declare them in your manifest:
 provides: {
   defaultPermissions: {
     // DO actions. Key shape matches metadata.permissions.do.<action>
-    // (or .<action>:<namespace> for set-meta/clear-meta).
+    // (or .<action>:<namespace> for set-qualities/clear-qualities).
     "do:my-ext:run":          { requires: { owner: true } },
     "do:my-ext:read-only":    { requires: {} },          // anyone
-    "do:set-meta:my-ext":     { requires: { contributor: true } },
+    "do:set-qualities:my-ext":     { requires: { contributor: true } },
 
     // SUMMON. Key shape matches metadata.permissions.summon.@<role>.
     // Use prefix wildcards for role families.
@@ -1390,7 +1372,7 @@ export default {
 
 **`builtFor`** declares where this extension is designed to work:
 - `"seed"` (default): works on any place with no special extensions. Universal.
-- `"treeos-cascade"`: needs that bundle's extensions to be present.
+- `"treeos-base"`: needs that bundle's extensions to be present.
 - `"FarmOS"`: built specifically for that OS distribution.
 
 The Horizon directory groups extensions by `builtFor` automatically. Publish with `builtFor: "FarmOS"` and it appears under FarmOS in the directory. No manual curation.
@@ -1401,20 +1383,16 @@ A curated set of extensions that form a coherent stack. Dependency group. No cod
 
 ```js
 export default {
-  name: "treeos-cascade",
+  name: "treeos-base",
   type: "bundle",
   version: "1.0.0",
   builtFor: "seed",
-  description: "The cascade nervous system",
+  description: "Baseline TreeOS stack",
   includes: [
     "propagation@^1.0.0",
     "perspective-filter@^1.0.0",
-    "sealed-transport@^1.0.0",
     "codebook@^1.0.0",
-    "gap-detection@^1.0.0",
     "long-memory@^1.0.0",
-    "pulse@^1.0.0",
-    "flow@^1.0.0",
   ],
 };
 ```
@@ -1438,19 +1416,17 @@ export default {
   builtFor: "seed",
   description: "The first operating system built on the seed",
   bundles: [
-    "treeos-cascade@^1.0.0",
+    "treeos-base@^1.0.0",
     "treeos-connect@^1.0.0",
     "treeos-intelligence@^1.0.0",
     "treeos-maintenance@^1.0.0",
   ],
   standalone: [
-    "treeos-base@^1.0.0",
     "tree-orchestrator@^1.0.0",
     "fitness@^1.0.0",
     "food@^1.0.0",
   ],
   config: {
-    cascadeEnabled: true,
     treeCircuitEnabled: true,
   },
   orchestrators: {

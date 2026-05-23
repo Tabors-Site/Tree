@@ -203,7 +203,6 @@ export const CONFIG_DEFAULTS = {
 
   // Stamp content limits
   maxChatContentBytes: 100000,
-  chatToolArgBytes: 2000,
 
   // Sessions
   sessionTTL: 900,
@@ -230,7 +229,6 @@ export const CONFIG_DEFAULTS = {
   ancestorCacheTTL: 30000,
   ancestorCacheMaxEntries: 50000,
   ancestorCacheMaxDepth: 100,
-  placeCheckInterval: 86400000,
 
   // Structural mutation locks
   spaceLockTimeoutMs: 30000,
@@ -239,16 +237,6 @@ export const CONFIG_DEFAULTS = {
   // Quality namespace limits (per-namespace, all three primitive maps)
   qualityNamespaceMaxBytes: 524288,
   qualityMaxNestingDepth:   8,
-
-  // Cascade
-  cascadeEnabled: false,
-  cascadeMaxDepth: 50,
-  cascadeRateLimit: 60,
-  cascadeMaxDeliveriesPerSignal: 500,
-  cascadeMaxPayloadBytes: 51200,
-  resultTTL: 604800,
-  awaitingTimeout: 300,
-  flowMaxResultsPerDay: 10000,
 
   // Security
   jwtExpiryDays: 30,
@@ -262,14 +250,10 @@ export const CONFIG_DEFAULTS = {
   hookCircuitHalfOpenMs: 300000,
   hookChainTimeoutMs: 15000,
 
-  // Tools, modes, MCP
+  // Tools
   toolCircuitThreshold: 5,
   maxRegisteredTools: 500,
-  maxRegisteredModes: 200,
   maxExtensionIndexes: 20,
-  maxMcpClients: 5000,
-  mcpConnectTimeout: 10000,
-  mcpStaleTimeout: 3600000,
 
   // Fact (audit) queries
   factQueryLimit: 5000,
@@ -291,12 +275,8 @@ export const CONFIG_DEFAULTS = {
   circuitDensityWeight: 0.3,
   circuitErrorWeight: 0.3,
   circuitCheckInterval: 3600000,
-  circuitFlowScanLimit: 5000,
 
-  // Retention + cleanup
-  summonRetentionDays: 90,
-  factRetentionDays: 365,
-  retentionCleanupInterval: 86400000,
+  // Cleanup
   uploadCleanupInterval: 21600000,
   uploadGracePeriodMs:   3600000,
   uploadCleanupBatchSize: 1000,

@@ -69,16 +69,16 @@ export default {
     const Space = (await import("../../../seed/models/space.js")).default;
     const space = await Space.findById(rootSpaceId);
     if (space) {
-      await core.do(space, "set-meta", {
-        namespace: "governing",
-        data: { workspace: "coders" },
+      await core.do(space, "set", {
+        field: "qualities.governing",
+        value: { workspace: "coders" },
         merge: true,
       }, { identity });
 
       if (typeof params.projectPath === "string" && params.projectPath.length > 0) {
-        await core.do(space, "set-meta", {
-          namespace: "coders",
-          data: { projectPath: params.projectPath },
+        await core.do(space, "set", {
+          field: "qualities.coders",
+          value: { projectPath: params.projectPath },
           merge: true,
         }, { identity });
       }

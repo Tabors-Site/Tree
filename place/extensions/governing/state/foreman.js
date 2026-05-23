@@ -233,10 +233,13 @@ export async function appendExecutionRecord({
   // Phase 3 migration: verb-surface create. Fires kernel hooks + Fact.
   let recordNode = null;
   try {
-    recordNode = await core.do(executionSpace._id, "create-child", {
-      name: recordName,
-      type: "execution-record",
-      beingId,
+    recordNode = await core.do(executionSpace._id, "birth", {
+      kind: "space",
+      spec: {
+        name: recordName,
+        type: "execution-record",
+        beingId,
+      },
     }, { identity: authIdentity });
   } catch (err) {
     log.debug("Governing", `core.do(create-child) failed for execution-record: ${err.message}; falling back to direct insert`);
@@ -280,9 +283,9 @@ export async function appendExecutionRecord({
     // read-spread-write.
     const space = await Space.findById(recordNode._id);
     if (space) {
-      await core.do(space, "set-meta", {
-        namespace: NS,
-        data: {
+      await core.do(space, "set", {
+        field: `qualities.${NS}`,
+        value: {
           role: "execution-record",
           execution: payload,
           ordinal,
@@ -361,9 +364,9 @@ export async function appendExecutionApproval({
 
   // Phase 3 migration: verb-surface write. merge:true atomically adds
   // executionApprovals without clobbering other NS keys.
-  await core.do(space, "set-meta", {
-    namespace: NS,
-    data: { executionApprovals: [...existing, entry] },
+  await core.do(space, "set", {
+    field: `qualities.${NS}`,
+    value: { executionApprovals: [...existing, entry] },
     merge: true,
   }, { identity });
 
@@ -506,9 +509,9 @@ export async function updateStepStatus({
   execution.stepStatuses = stepStatuses;
 
   // Phase 3 migration: verb-surface write with atomic merge.
-  await core.do(space, "set-meta", {
-    namespace: NS,
-    data: { execution },
+  await core.do(space, "set", {
+    field: `qualities.${NS}`,
+    value: { execution },
     merge: true,
   }, { identity });
   return execution;
@@ -605,9 +608,9 @@ export async function freezeExecutionRecord({
 
   // Phase 3 migration: verb-surface write of the terminal execution
   // status. merge:true preserves siblings atomically.
-  await core.do(space, "set-meta", {
-    namespace: NS,
-    data: { execution },
+  await core.do(space, "set", {
+    field: `qualities.${NS}`,
+    value: { execution },
     merge: true,
   }, { identity });
 

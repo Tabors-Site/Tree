@@ -23,9 +23,9 @@ I'm laid out in four folders, by the role each file plays in my work. For any fi
 
 | Folder | Role | What lives here |
 |--------|------|-----------------|
-| **[`place/`](place/)** | **IS** | The world as substance. `being/`, `space/`, `matter/`, `placeCheck.js`, `manifest.js`, [`PLACE.md`](place/PLACE.md). What exists, how it is created and mutated, how it's checked for consistency. |
+| **[`place/`](place/)** | **IS** | The world as substance. `being/`, `space/`, `matter/`, `manifest.js`, [`PLACE.md`](place/PLACE.md). What exists, how it is created and mutated. |
 | **[`ibp/`](ibp/)** | **ACTS** | The world as acted-upon. The four verbs and their dispatch, address parsing, `authorize`, the operation registry, descriptor, discovery, pushChannel. Shared by every kind of being. |
-| **[`factory/`](factory/)** | **THINKS** | The thinking apparatus. Most files are LLM-shaped (runTurn loop, llmClient resolution chain, mcpClient, stamp) because LLMs need the most help. But the shared machinery here (inbox, scheduler, stamped, replies, subscriptions, wakeSchedule, session) carries every cognition type: a SUMMON envelope lands the same way for an LLM, a scripted being, or a human — only `role.summon()` differs. See [`factory/FACTORY.md`](factory/FACTORY.md) for the full picture. |
+| **[`factory/`](factory/)** | **THINKS** | The thinking apparatus. Most files are LLM-shaped (runTurn loop, llmClient resolution chain, stamp) because LLMs need the most help. But the shared machinery here (inbox, scheduler, stamped, replies, subscriptions, wakeSchedule, session) carries every cognition type: a SUMMON envelope lands the same way for an LLM, a scripted being, or a human — only `role.summon()` differs. See [`factory/FACTORY.md`](factory/FACTORY.md) for the full picture. |
 | **[`system/`](system/)** | **HOST** | The host-realm floor. DB connection, logging, hooks bus, indexes, version, retention, migrations. **Litmus**: a file here should never import the words `space`, `matter`, `being`, or `verb`. It deals in processes, files, env vars, connections. |
 
 Plus `models/` for schemas (the shape of all six primitives, sitting in one place), `services.js` (assembles `core` from the four folders), and the boot anchors (`placeRoot.js`, `placeConfig.js`).
@@ -94,9 +94,9 @@ The matcher derives stance properties from Being and Space at request time: `own
 
 Two special bootstrap cases. BE `register` and BE `claim` from `arrival` are allowed at the place root by a default rule installed by `seedDefaultStancePermissions()` at genesis. They can be revoked per place by setting `qualities.auth.register_enabled` or `qualities.auth.claim_enabled` to `false` on the place root.
 
-## The ten place seed spaces I plant
+## The nine place seed spaces I plant
 
-When I wake, I plant ten spaces beneath the place root. They hold my own working memory, surfaced as spaces so SEE reads them through the same protocol as everything else. Every boot I verify they exist; missing ones I recreate (recovery from partial boot failures). Their owner is me; they are unclaimable.
+When I wake, I plant nine spaces beneath the place root. They hold my own working memory, surfaced as spaces so SEE reads them through the same protocol as everything else. Every boot I verify they exist; missing ones I recreate (recovery from partial boot failures). Their owner is me; they are unclaimable.
 
 | Place seed space | Holds |
 |-----------------|-------|
@@ -104,7 +104,6 @@ When I wake, I plant ten spaces beneath the place root. They hold my own working
 | `.config` | Every runtime config key as a key in `.config`'s qualities Map. The I-Am's remembered settings between reboots. |
 | `.peers` | Canopy federation peer list. |
 | `.extensions` | Extension registry. Each loaded extension is a child space here. |
-| `.flow` | Cascade result store. Daily partitions hold results; retention deletes whole partitions. |
 | `.tools` | Mirror of the runtime tool registry. SEE reads the live registry through the standard pipeline. |
 | `.roles` | Mirror of the runtime role registry. |
 | `.operations` | Mirror of the runtime DO operation registry. |
@@ -200,7 +199,7 @@ A matter lives inside a space. `origin` names the system the underlying content 
 Every operation at a position walks at most five chains. Position determines capability. All chains walk the ancestor cache from the current position up to the place root, sharing one snapshot per message.
 
 1. **Stance authorization.** The gate above.
-2. **Extension scope.** Walk the parent chain, accumulate `qualities.extensions.blocked[]` and `restricted[]`. Blocked means no tools, hooks, modes, quality writes for that extension. Restricted means read-only tools only. Confined extensions are inactive until `qualities.extensions.allowed[]` opens them at a specific position.
+2. **Extension scope.** Walk the parent chain, accumulate `qualities.extensions.blocked[]` and `restricted[]`. Blocked means no tools, hooks, roles, quality writes for that extension. Restricted means read-only tools only. Confined extensions are inactive until `qualities.extensions.allowed[]` opens them at a specific position.
 3. **Tool scope.** Role base tools, plus extension tools, minus blocked extensions, plus per-position `qualities.tools.allowed`/`blocked` overrides.
 4. **LLM resolution.** Space-tree lockout, then space-tree enforcement, then being-tree lockout, then default order (space slot, space default, being slot, being default). `preferOwn` on Being flips the last two.
 5. **LLM config.** Per-position `qualities.llm.config` overrides for `maxToolIterations`, `toolCallTimeout`, `toolResultMaxBytes`, `maxConversationMessages`. Walked up to the place root.
@@ -209,7 +208,7 @@ The ancestor cache lives in [space/ancestorCache.js](space/ancestorCache.js). On
 
 ## Hooks
 
-I run a hook for every lifecycle event you can react to. Before-hooks I run sequentially; you can cancel by returning `false` or throwing. After-hooks I run in parallel; you react but cannot cancel. Two hooks (`enrichContext`, `onCascade`) I run sequentially because handlers build cumulative output.
+I run a hook for every lifecycle event you can react to. Before-hooks I run sequentially; you can cancel by returning `false` or throwing. After-hooks I run in parallel; you react but cannot cancel. `enrichContext` I run sequentially because handlers build cumulative output.
 
 Per-handler timeout is 5 seconds; chain timeout is 15 seconds. Five consecutive failures from one extension's handler trips a circuit breaker; the handler stops firing for 5 minutes, then a half-open test. Backoff doubles on repeat failures.
 
@@ -235,7 +234,6 @@ Per-handler timeout is 5 seconds; chain timeout is 15 seconds. Five consecutive 
 | `afterOwnershipChange` | after | After `rootOwner` or `contributors` changed. |
 | `afterBoot` | after | Once, after all extensions loaded, config initialized, server listening. |
 | `enrichContext` | sequential | Inject extension data into AI context. |
-| `onCascade` | sequential | Fires on content write at a cascade-enabled space. Results written to `.flow`. |
 | `onDocumentPressure` | after | A document exceeds 80% of `maxDocumentSizeBytes`. |
 | `onTreeTripped` / `onTreeRevived` | after | Space-tree circuit breaker state changes. |
 
@@ -308,7 +306,7 @@ All write functions accept a document or an id. No read-modify-write. No race co
 
 ### Extension scope (`core.scope`)
 
-`core.scope.isExtensionBlockedAtSpace(extName, spaceId)`, `core.scope.getBlockedExtensionsAtSpace(spaceId)`, `core.scope.isToolReadOnly(toolName)`, `core.scope.getToolOwner(toolName)`, `core.scope.getRolesOwnedBy(extName)`.
+`core.scope.isExtensionBlockedAtSpace(extName, spaceId)`, `core.scope.getBlockedExtensionsAtSpace(spaceId)`, `core.scope.getToolOwner(toolName)`, `core.scope.getRolesOwnedBy(extName)`.
 
 ### DO operations (`core.do`)
 
@@ -324,7 +322,7 @@ All write functions accept a document or an id. No read-modify-write. No race co
 
 ### Conversation entry (`core.llm`)
 
-One primitive. `core.llm.runTurn({ beingId, role, message, ... })` for one LLM call in one role. Returns `{ answer, chatId, modeKey, visitorId }`. Handles session, MCP, Summon record, `beforeResponse` hook, abort. User-facing chat flows through the same `runTurn` driven by a role's `summon()`.
+One primitive. `core.llm.runTurn({ beingId, role, message, ... })` for one LLM call in one role. Returns `{ answer }`. Handles session, Stamp record, `beforeResponse` hook, abort. User-facing chat flows through the same `runTurn` driven by a role's `summon()`.
 
 ## `.source` (how I show my body to the beings I form)
 
@@ -340,17 +338,6 @@ Through `.source` the inner beings I formed can SEE the same source I am made of
 `.source` is read-only by stance auth. DO writes against `.source` matters reject with `ORIGIN_READ_ONLY`. The host disk is the source of truth; the inner mirror reconciles toward it. Beings inside cannot edit me through their world. To edit me you must reach the host realm.
 
 The code is in [space/source.js](space/source.js).
-
-## Cascade
-
-When content is written at a space with `qualities.cascade.enabled = true` and `cascadeEnabled = true` in `.config`, I fire `onCascade`. Two paths:
-
-- `checkCascade(spaceId, writeContext)` is my internal trigger on content writes.
-- `deliverCascade({ spaceId, signalId, payload, source, depth })` is the extension-external propagation primitive. I never block it.
-
-Result shape: `{ status, source, payload, timestamp, signalId, extName }`. Six statuses: `succeeded`, `failed`, `rejected`, `queued`, `partial`, `awaiting`.
-
-`.flow` is partitioned by date. Each partition is a child space named `YYYY-MM-DD`. I create today's partition on first cascade write of the day. Retention deletes whole partitions older than `resultTTL`. `flowMaxResultsPerDay` (default 10,000) caps results per partition with circular overwrite. Query functions in [space/cascade.js](space/cascade.js) search across partitions transparently.
 
 ## Ownership
 
@@ -391,17 +378,16 @@ The full list of keys with defaults lives in [placeConfig.js](placeConfig.js) un
 - Sessions and conversations: `sessionTTL`, `staleSessionTimeout`, `maxSessions`, `maxConversationMessages`, `carryMessages`.
 - Matter and documents: `matterMaxChars`, `maxMatterPerNode`, `maxDocumentSizeBytes`, `maxUploadBytes`.
 - Hooks: `hookTimeoutMs`, `hookMaxHandlers`, `hookCircuitThreshold`, `hookCircuitHalfOpenMs`, `hookChainTimeoutMs`.
-- Cascade: `cascadeEnabled`, `cascadeMaxDepth`, `cascadeMaxPayloadBytes`, `cascadeRateLimit`, `resultTTL`, `awaitingTimeout`, `flowMaxResultsPerDay`.
 - Space-tree circuit: `treeCircuitEnabled`, `maxTreeSpaces`, `maxTreeQualityBytes`, `maxTreeErrorRate`, weight knobs.
 - Scheduler backpressure: `summonInboxDepth`, `summonsPerSecond`, `summonMaxAgeSeconds`.
-- Retention and cleanup: `summonRetentionDays`, `factRetentionDays`, `retentionCleanupInterval`, `uploadCleanupInterval`, `uploadGracePeriodMs`.
+- Cleanup: `uploadCleanupInterval`, `uploadGracePeriodMs`.
 - Security: `jwtExpiryDays`, `allowedLlmDomains`, `allowedFrameDomains`.
 
 ## Space-tree circuit breaker
 
-When a tree exceeds health thresholds, its circuit trips. No AI, no cascade, no writes. Read access stays open. The data is intact; the tree is sleeping.
+When a tree exceeds health thresholds, its circuit trips. No AI, no writes. Read access stays open. The data is intact; the tree is sleeping.
 
-Health equation: `(nodeCount / max) * nodeWeight + (qualitiesDensity / max) * densityWeight + (errorRate / max) * errorWeight`. When the score exceeds 1.0, the tree trips. Error rate reads from the Fact reel (DO emissions with `result.error`) and from `.flow` partitions (`CASCADE.FAILED` and `CASCADE.REJECTED` scoped to this tree's spaces).
+Health equation: `(spaceCount / max) * spaceWeight + (qualitiesDensity / max) * densityWeight + (errorRate / max) * errorWeight`. When the score exceeds 1.0, the tree trips. Error rate reads from the Fact reel (DO emissions with `result.error`) scoped to this tree's spaces.
 
 State stored on the tree root: `qualities.circuit = { tripped, reason, timestamp, scores }`. I write one field. Extensions read it.
 
@@ -419,7 +405,6 @@ I enforce dozens of guarantees so no extension can take me down. They are:
 
 | Protection | Detail |
 |-----------|--------|
-| Never block inbound | Cascade signals are always accepted, always produce a result. |
 | Hook timeout | 5s per handler. Hanging handlers killed and logged. |
 | Hook cap | 100 handlers per hook. |
 | Hook circuit breaker | 5 consecutive failures auto-disables a handler. Half-open recovery: after 5 minutes, one test call allowed through. Success resets. Failure re-opens. Backoff doubles on repeat failures, capped at 1 hour. |
@@ -427,7 +412,7 @@ I enforce dozens of guarantees so no extension can take me down. They are:
 | Extension init timeout | 10s per extension `init()`. Hanging init skipped, boot continues. |
 | LLM concurrency semaphore | `llmMaxConcurrent` (default 20) caps in-flight LLM calls globally. Excess queued with abort signal support. |
 | LLM priority queue | Human sessions acquire LLM slots first. Gateway second. Interactive third. Background jobs last. Prevents autonomous extensions from starving human responses. |
-| Namespace enforcement | The scoped `core` binds the calling extension name. `qualities.space.setQuality` rejects writes to namespaces not owned by the caller. Five core namespaces (`cascade`, `extensions`, `tools`, `modes`, `llm`) rejected for all extension callers. |
+| Namespace enforcement | The scoped `core` binds the calling extension name. `qualities.space.setQuality` rejects writes to namespaces not owned by the caller. Four core namespaces (`extensions`, `tools`, `roles`, `llm`) rejected for all extension callers. |
 | `enrichContext` chain timeout | 15s cumulative cap for the entire chain. Per-handler timeout reduced to the remaining budget. |
 | MCP spatial scoping | MCP tool calls check `isExtensionBlockedAtSpace` before dispatch. Same scoping guarantee as WebSocket conversations. |
 | Document size guard | Every quality write checks total document size against `maxDocumentSizeBytes` (14MB default). `DOCUMENT_SIZE_EXCEEDED` rejected. `onDocumentPressure` fires at 80%. |
@@ -436,7 +421,6 @@ I enforce dozens of guarantees so no extension can take me down. They are:
 | Fact query cap | `factQueryLimit` (default 5000) on every audit query. |
 | Ownership chain | `rootOwner`/`contributor` mutations validate the parent chain. Only resolved owner or admin can modify. Place seed spaces always rejected. |
 | Space locks | Structural mutations (move, delete, transfer) acquire short-lived locks. Sorted acquisition prevents deadlocks. 30s TTL prevents permanent locks on crash. |
-| `.flow` partitioning | Daily partitions cap unbounded growth. `flowMaxResultsPerDay` with circular overwrite. Retention deletes whole partitions. |
 | Space-tree circuit breaker | Health equation monitors space count, qualities density, error rate. Score > 1.0 trips the space-tree. Read access stays. Extensions revive. Off by default. |
 | Ancestor cache | Shared cache for parent chain walks. One walk serves every resolution chain. Snapshot per message. `moveSpace` clears entire cache. `deleteSpace` clears entries containing the deleted space. |
 | Session cap | 10K max (configurable). Oldest-first eviction. |

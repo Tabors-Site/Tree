@@ -192,7 +192,7 @@ export default {
 
 **Tool naming convention:**
 
-- Kernel tools: bare names (`create-child`, `set-meta`).
+- Kernel tools: bare names (`create-child`, `set-qualities`).
 - Extension tools: `<ext-name>-<action>` (`governing-emit-plan`,
   `coders-read-file`).
 - Operations the tools dispatch to follow the same naming with a colon:
@@ -203,7 +203,7 @@ export default {
 - **SEE** — reads state and returns it. No side effects. Examples:
   `read-plan-detail`, `get-tree-context`.
 - **DO** — writes state. Mutates space, matter, or being. Examples:
-  `ratify-plan` (writes metadata), `set-meta`, `archive-plan`.
+  `ratify-plan` (writes metadata), `set-qualities`, `archive-plan`.
 - **SUMMON** — wakes another being with a message. The being's inbox
   receives a SUMMON envelope. Examples: `hire-planner`,
   `route-to-foreman`, `respond-directly`. Behind the scenes the
@@ -220,7 +220,7 @@ export default {
 Operations are the substrate's write vocabulary. Tools are the LLM
 surface; operations are what tools and code call to actually mutate
 state. The kernel ships a core set (`create-child`, `set-name`,
-`set-meta`, etc.); extensions add their own under their namespace.
+`set-qualities`, etc.); extensions add their own under their namespace.
 
 ```javascript
 // extensions/your-extension/operations/ratify-plan.js
@@ -237,7 +237,7 @@ export default {
     // identity is the being doing it
     // summonCtx is the originating summon context (for audit attribution)
 
-    await core.do(target, "set-meta", {
+    await core.do(target, "set-qualities", {
       namespace: "your-extension",
       data: { ratifiedAt: new Date().toISOString() },
     });

@@ -80,9 +80,9 @@ export async function writeLineage({
   try {
     // Phase 3 migration ([[project_seed_four_verbs_only]]): verb-surface
     // write. merge:true preserves other governing keys at NS atomically.
-    await core.do(space, "set-meta", {
-      namespace: NS,
-      data: { lineage },
+    await core.do(space, "set", {
+      field: `qualities.${NS}`,
+      value: { lineage },
       merge: true,
     }, { identity });
   } catch (err) {

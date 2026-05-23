@@ -95,10 +95,13 @@ async function createContractsEmission({ contractsSpaceId, ordinal, payload, bei
   // Phase 3 migration: verb-surface create. Fires kernel hooks + Fact.
   let created = null;
   try {
-    created = await core.do(contractsSpaceId, "create-child", {
-      name,
-      type: "contracts-emission",
-      beingId,
+    created = await core.do(contractsSpaceId, "birth", {
+      kind: "space",
+      spec: {
+        name,
+        type: "contracts-emission",
+        beingId,
+      },
     }, { identity: authIdentity });
   } catch (err) {
     log.debug("Governing", `core.do(create-child) failed for contracts-emission: ${err.message}; falling back`);
@@ -124,9 +127,9 @@ async function createContractsEmission({ contractsSpaceId, ordinal, payload, bei
     // write. merge:true preserves NS atomically.
     const space = await Space.findById(created._id);
     if (space) {
-      await core.do(space, "set-meta", {
-        namespace: NS,
-        data: {
+      await core.do(space, "set", {
+        field: `qualities.${NS}`,
+        value: {
           role: "contracts-emission",
           emission: payload,
           ordinal: payload.ordinal,
@@ -193,9 +196,9 @@ async function appendApproval({
 
   // Phase 3 migration: verb-surface write. merge:true preserves NS atomically.
   if (!core?.do) throw new Error("appendApproval requires `core` (verb surface)");
-  await core.do(space, "set-meta", {
-    namespace: NS,
-    data: { contractApprovals: [...existing, entry] },
+  await core.do(space, "set", {
+    field: `qualities.${NS}`,
+    value: { contractApprovals: [...existing, entry] },
     merge: true,
   }, { identity });
   return entry;

@@ -54,7 +54,6 @@ import {
 } from "./factory/intake/session.js";
 
 import { stamp } from "./factory/stamper/stamped.js";
-import { beginStamping } from "./factory/stamper/begin.js";
 
 import {
   stepTurn,
@@ -87,9 +86,7 @@ import {
   getHttpServer,
 } from "./ibp/pushChannel.js";
 import { ok, error, sendOk, sendError, IBP_ERR } from "./ibp/protocol.js";
-import { CASCADE } from "./place/space/cascade.js";
 import { qualities } from "./place/qualities.js";
-import { deliverCascade } from "./place/space/cascade.js";
 import { isBeingRoot, getPlaceRootId } from "./placeRoot.js";
 import {
   createSpace,
@@ -113,20 +110,12 @@ import {
   getToolOwner,
 } from "./place/space/extensionScope.js";
 import {
-  addContributor,
-  removeContributor,
-  setOwner,
-  removeOwner,
-  transferOwnership,
-} from "./place/space/ownership.js";
-import {
   getAncestorChain,
   snapshotAncestors,
   invalidateSpace,
   invalidateAll,
   getCacheStats,
 } from "./place/space/ancestorCache.js";
-import { checkPlace } from "./place/placeCheck.js";
 import {
   checkTreeHealth,
   tripTree,
@@ -261,7 +250,6 @@ export function buildCoreServices({
     },
 
     summon: {
-      beginStamping,
       stamp,
       ensureSession: ensureChatSession,
     },
@@ -339,15 +327,6 @@ export function buildCoreServices({
       listPlantedAt,
     },
 
-    // --- Ownership (contributor and rootOwner mutations, chain-validated) ---
-    ownership: {
-      addContributor,
-      removeContributor,
-      setOwner,
-      removeOwner,
-      transferOwnership,
-    },
-
     // --- Space infrastructure (cache, integrity, circuit breaker, CRUD) ---
     space: {
       getAncestorChain,
@@ -355,7 +334,6 @@ export function buildCoreServices({
       invalidateSpace,
       invalidateAll,
       getCacheStats,
-      checkPlace,
       checkTreeHealth,
       tripTree,
       reviveTree,
@@ -412,9 +390,6 @@ export function buildCoreServices({
       getToolOwner,
     },
 
-    // --- Cascade (extensions call deliverCascade to propagate signals) ---
-    cascade: { deliverCascade },
-
     // declare: the setup voice. The four verbs above are how
     // extensions EMIT (act on space, mutate, summon a being, identify
     // themselves). Everything here is how extensions DECLARE the
@@ -463,7 +438,7 @@ export function buildCoreServices({
     },
 
     // --- Response protocol (shapes, error codes, event types) ---
-    protocol: { ok, error, sendOk, sendError, IBP_ERR, CASCADE },
+    protocol: { ok, error, sendOk, sendError, IBP_ERR },
   };
 
   // Apply overrides (places can swap any service)

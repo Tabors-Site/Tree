@@ -84,11 +84,11 @@
  */
 export function parse(input, ctx = {}) {
   if (typeof input !== "string") {
-    throw paError("input-not-string", input, "Portal address must be a string");
+    throw paError("input-not-string", input, "IBP address must be a string");
   }
   const trimmed = input.trim();
   if (!trimmed) {
-    throw paError("empty-input", input, "Portal address cannot be empty");
+    throw paError("empty-input", input, "IBP address cannot be empty");
   }
   // Bridge?
   const bridgeIdx = trimmed.indexOf("::");
@@ -671,7 +671,7 @@ async function composeStanceForBeing(beingId, { currentPosition = null, place = 
 /**
  * Compose the canonical IBP Address (stance::stance) for a stamp
  * between two beings. Returns null when either side can't be
- * resolved. Called by beginStamping at Stamp-row reservation so each row
+ * resolved. Called by assign when opening the Stamp row so each row
  * carries its lane identity for presenceKey lookup, replay, and
  * grouping.
  */

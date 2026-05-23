@@ -212,10 +212,13 @@ async function createPlanEmission({ planSpaceId, ordinal, payload, beingId, iden
   // create. Fires kernel hooks + stamps a "create-child" Fact.
   let created = null;
   try {
-    created = await core.do(planSpaceId, "create-child", {
-      name,
-      type: "plan-emission",
-      beingId,
+    created = await core.do(planSpaceId, "birth", {
+      kind: "space",
+      spec: {
+        name,
+        type: "plan-emission",
+        beingId,
+      },
     }, { identity: authIdentity });
   } catch (err) {
     log.debug("Governing", `core.do(create-child) failed for plan-emission: ${err.message}; falling back to direct insert`);
@@ -249,9 +252,9 @@ async function createPlanEmission({ planSpaceId, ordinal, payload, beingId, iden
     // atomically; no manual read-spread-write needed.
     const space = await Space.findById(created._id);
     if (space) {
-      await core.do(space, "set-meta", {
-        namespace: "governing",
-        data: {
+      await core.do(space, "set", {
+        field: "qualities.governing",
+        value: {
           role: "plan-emission",
           emission: payload,
           ordinal: payload.ordinal,
@@ -468,7 +471,6 @@ export default function getGoverningTools(core) {
           "Ordered numbered sequence. Each step executes in order. Leaf steps run at this scope; branch steps create sub-Rulers as siblings of the plan/contracts trio members.",
         ),
       },
-      annotations: { readOnlyHint: false },
       async handler(args) {
         // The MCP HTTP layer injects beingId, rootId, spaceId, stampId,
         // sessionId into `args` on every call (loader's passthrough
@@ -751,7 +753,6 @@ export default function getGoverningTools(core) {
           "(inheritance declaration). At root scope, this array must always have entries.",
         ),
       },
-      annotations: { readOnlyHint: false },
       async handler(args) {
         const { beingId, spaceId } = args;
 

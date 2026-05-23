@@ -142,7 +142,7 @@ export async function resolveCoderPath(spaceId, relativePath) {
     throw new Error(
       `No coders scope at ${String(spaceId).slice(0, 8)}. ` +
       `An ancestor rulership must carry metadata.coders.projectPath ` +
-      `(the absolute path on disk). Stamp it via set-meta on the ` +
+      `(the absolute path on disk). Stamp it via set-qualities on the ` +
       `coders-rulership before invoking coder tools.`,
     );
   }

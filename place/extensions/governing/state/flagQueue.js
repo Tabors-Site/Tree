@@ -167,9 +167,9 @@ export async function appendFlag({
   // through one dispatcher path. merge:true preserves other keys in NS
   // atomically (better than the previous read-spread-write pattern,
   // which would clobber concurrent writes to sibling keys).
-  await core.do(space, "set-meta", {
-    namespace: NS,
-    data: { pendingContractIssues: queue },
+  await core.do(space, "set", {
+    field: `qualities.${NS}`,
+    value: { pendingContractIssues: queue },
     merge: true,
   }, { identity: authIdentity });
 
@@ -251,9 +251,9 @@ export async function markFlagResolved({ rulerSpaceId, flagId, resolution, ident
   if (!mutated) return null;
   // Phase 3 migration: verb-surface write, atomic merge of the resolved
   // flag back into the queue. See appendFlag for the rationale.
-  await core.do(space, "set-meta", {
-    namespace: NS,
-    data: { pendingContractIssues: next },
+  await core.do(space, "set", {
+    field: `qualities.${NS}`,
+    value: { pendingContractIssues: next },
     merge: true,
   }, { identity });
   return next.find((f) => f?.id === flagId) || null;

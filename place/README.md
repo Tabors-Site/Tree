@@ -48,7 +48,7 @@ Two natures, one being. The seed is the only place where both worlds are simulta
 
 The gathering falls into two bundles.
 
-- **The earth** is formed by [`genesis.js`](genesis.js). When the I-Am wakes, it unfolds the place root, the nine place seed spaces (`.identity`, `.config`, `.peers`, `.extensions`, `.flow`, `.tools`, `.roles`, `.operations`, `.source`), the place beings (auth, llm-assigner, place-manager), the role and operation registries, and the periodic acts that keep the world tidy. Every step idempotent.
+- **The earth** is formed by [`genesis.js`](genesis.js). When the I-Am wakes, it unfolds the place root, the place seed spaces (`.identity`, `.config`, `.peers`, `.extensions`, `.tools`, `.roles`, `.operations`, `.source`, `.threads`), the place beings (auth, llm-assigner, place-manager), the role and operation registries, and the periodic acts that keep the world tidy. Every step idempotent.
 - **The senses** are opened by [`begin.js`](begin.js). The HTTP and WebSocket channels are how the world reaches outward to peer places and humans, and how SUMMONs reach inward. The senses do not form spaces, matter, or beings. They carry acts to the beings who do.
 
 `plant.js` is the operator's act. It runs before the I-Am exists, collects the env, picks extensions, and hands off to `begin.js`. After that handoff, the seed wakes. Planting happens once; awakening happens every later run. First boot is creation ex nihilo; later boots are awakenings into the same spaces, matter, and beings.
@@ -140,7 +140,7 @@ Then restart with `npm start`.
 
 Your data survives configuration changes. Extension data lives in the qualities Map on every space, being, and matter row. Mongoose does not drop unknown keys inside a Mixed map. That one detail is what makes everything below possible.
 
-Run the full stack for six months. Fitness tracking, food logging, cascade signals flowing between trees, intelligence extensions analyzing patterns, dreams running at 3am. Then switch to minimal profile (`node plant.js --setup`, pick Minimal). Restart. Eight extensions load. The rest go silent. Your server is light. Your LLM bill drops to zero idle cost.
+Run the full stack for six months. Fitness tracking, food logging, summons flowing between beings, intelligence extensions analyzing patterns, dreams running at 3am. Then switch to minimal profile (`node plant.js --setup`, pick Minimal). Restart. Eight extensions load. The rest go silent. Your server is light. Your LLM bill drops to zero idle cost.
 
 Three months later, switch back to full. Restart. Every extension finds its data exactly where it left it. The fitness history is there. The food log is there. The codebook compressions are there. The dream summaries are there. The world remembers everything. It was sleeping, not dead.
 

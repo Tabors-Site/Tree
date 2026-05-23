@@ -39,8 +39,8 @@
 // `sendCaughtError` consults it; explicit `sendError(res, status,
 // ...)` callers still pass a status if they want to.
 //
-// Domain-specific enums (CASCADE, SEED_SPACE, MATTER_ORIGIN, DELETED,
-// I_AM) live with their domain modules — not here.
+// Domain-specific enums (SEED_SPACE, MATTER_ORIGIN, DELETED, I_AM)
+// live with their domain modules — not here.
 
 import log from "../system/log.js";
 
@@ -71,11 +71,6 @@ export const IBP_ERR = Object.freeze({
   LLM_TIMEOUT:            "LLM_TIMEOUT",
   LLM_FAILED:             "LLM_FAILED",
   LLM_NOT_CONFIGURED:     "LLM_NOT_CONFIGURED",
-
-  // Cascade
-  CASCADE_DISABLED:       "CASCADE_DISABLED",
-  CASCADE_DEPTH_EXCEEDED: "CASCADE_DEPTH_EXCEEDED",
-  CASCADE_REJECTED:       "CASCADE_REJECTED",
 
   // Document size
   DOCUMENT_SIZE_EXCEEDED: "DOCUMENT_SIZE_EXCEEDED",
@@ -188,7 +183,6 @@ const STATUS_FOR_CODE = Object.freeze({
   FORBIDDEN:              403,
   EXTENSION_BLOCKED:      403,
   SESSION_EXPIRED:        403,
-  CASCADE_DISABLED:       403,
   UPLOAD_DISABLED:        403,
   ORIGIN_READ_ONLY:       403,
   NOT_A_BEING:            403,
@@ -209,7 +203,6 @@ const STATUS_FOR_CODE = Object.freeze({
 
   // 413 Payload too large
   DOCUMENT_SIZE_EXCEEDED: 413,
-  CASCADE_DEPTH_EXCEEDED: 413,
   UPLOAD_TOO_LARGE:       413,
 
   // 415 Unsupported media
@@ -217,7 +210,6 @@ const STATUS_FOR_CODE = Object.freeze({
 
   // 429 Rate limited
   RATE_LIMITED:           429,
-  CASCADE_REJECTED:       429,
 
   // 500 Internal
   INTERNAL:               500,

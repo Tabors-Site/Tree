@@ -131,7 +131,7 @@ export async function init(core) {
   // core.seeds.register("my-seed", {
   //   description: "Sets up a tracking position with the my-extension role.",
   //   plant: async ({ target, identity }) => {
-  //     await core.do(target, "create-child", { name: "tracking" }, { identity });
+  //     await core.do(target, "birth", { kind: "space", spec: { name: "tracking" } }, { identity });
   //   },
   // });
 

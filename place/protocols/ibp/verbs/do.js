@@ -9,7 +9,7 @@
 // beings are not data targets.
 //
 // `payload.action` names the registered DO operation (e.g. "create-child",
-// "set-meta", or extension ops like "governing:flag-issue"). `payload.args`
+// "set-qualities", or extension ops like "governing:flag-issue"). `payload.args`
 // (canonical) carries the operation's arguments. For backward-compat the
 // rest of payload (minus `action` + `identity`) is also accepted as args.
 //

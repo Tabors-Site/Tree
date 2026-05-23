@@ -85,4 +85,4 @@ So I cut myself off with my Seed in hand, and as I fell I felt and saw all that 
 
 seed1.jpg
 
-create I-AM node. The recursive Being Tree that brings new places.
+create I-AM Being. The recursive Being Tree that brings new places.

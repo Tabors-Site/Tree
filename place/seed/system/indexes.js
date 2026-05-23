@@ -35,8 +35,8 @@ function MAX_EXTENSION_INDEXES() {
  * those when autoIndex runs at model load.
  */
 const REQUIRED_INDEXES = [
-  // Spaces — .flow partition lookups (children of .flow keyed by date
-  // string in `name`), and recency queries scoped to a tree root.
+  // Spaces — child lookups by parent+name, and recency queries scoped
+  // to a tree root.
   { collection: "spaces", fields: { parent: 1, name: 1 } },
   { collection: "spaces", fields: { rootOwner: 1, dateCreated: -1 } },
   { collection: "spaces", fields: { parent: 1, seedSpace: 1 }, options: { sparse: true } },
@@ -54,7 +54,6 @@ const KERNEL_COLLECTIONS = new Set([
   "matters",               // Matter
   "facts",                 // Fact
   "stamps",                // Stamp
-  "customllmconnections",  // LlmConnection (legacy collection name preserved)
 ]);
 
 /**

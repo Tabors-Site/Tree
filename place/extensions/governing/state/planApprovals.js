@@ -101,9 +101,9 @@ export async function appendPlanApproval({
   // the verb surface so plan-approval writes auto-stamp as Facts.
   // merge:true preserves other keys in NS atomically (the prior
   // read-spread-write would clobber concurrent writes to sibling keys).
-  await core.do(space, "set-meta", {
-    namespace: NS,
-    data: { planApprovals: [...existing, entry] },
+  await core.do(space, "set", {
+    field: `qualities.${NS}`,
+    value: { planApprovals: [...existing, entry] },
     merge: true,
   }, { identity });
 

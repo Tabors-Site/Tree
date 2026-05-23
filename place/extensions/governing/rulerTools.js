@@ -207,7 +207,6 @@ export default function getRulerTools(core) {
           "reads this alongside the original instruction from above.",
         ),
       },
-      annotations: { readOnlyHint: false },
       async handler(args) {
         const { beingId, username, spaceId, rootId, stampId, sessionId } = args;
         const briefing = typeof args.briefing === "string" ? args.briefing.trim() : "";
@@ -487,7 +486,6 @@ export default function getRulerTools(core) {
           "plan emission is self-explanatory.",
         ),
       },
-      annotations: { readOnlyHint: false },
       async handler(args) {
         const { beingId, username, spaceId, rootId, stampId, sessionId } = args;
         if (!beingId) return text("governing-hire-contractor: missing beingId; substrate bug.");
@@ -785,7 +783,6 @@ export default function getRulerTools(core) {
           "reads this alongside the instruction context to focus its judgment.",
         ),
       },
-      annotations: { readOnlyHint: false },
       async handler(args) {
         const { beingId, username, spaceId, rootId, stampId, sessionId } = args;
         const wakeupReason = typeof args.wakeupReason === "string" ? args.wakeupReason.trim() : "";
@@ -1013,7 +1010,6 @@ export default function getRulerTools(core) {
           "didn't do; if the instruction asks for work, hire a Planner instead.",
         ),
       },
-      annotations: { readOnlyHint: true },
       async handler(args) {
                 const response = typeof args.response === "string" ? args.response.trim() : "";
         if (!response) {
@@ -1053,7 +1049,6 @@ export default function getRulerTools(core) {
           "Why you're revising. The Planner reads this when drafting the new plan.",
         ),
       },
-      annotations: { readOnlyHint: false },
       async handler(args) {
         const { beingId, username, spaceId, rootId, stampId, sessionId } = args;
         const revisionReason = typeof args.revisionReason === "string" ? args.revisionReason.trim() : "";
@@ -1324,7 +1319,6 @@ export default function getRulerTools(core) {
         "streaming events during. The tool returns a summary when " +
         "everything settles.",
       schema: {},
-      annotations: { readOnlyHint: false },
       async handler(args) {
         const { beingId, username, spaceId, rootId, stampId, sessionId } = args;
         if (!beingId) return text("governing-dispatch-execution: missing beingId; substrate bug.");
@@ -1624,7 +1618,6 @@ export default function getRulerTools(core) {
           "Short note for the audit trail — e.g., the delegate's exact phrasing.",
         ),
       },
-      annotations: { readOnlyHint: false },
       async handler(args) {
         const { beingId, spaceId } = args;
         const reason = typeof args.reason === "string" ? args.reason.trim() : "";
@@ -1758,7 +1751,6 @@ export default function getRulerTools(core) {
       schema: {
         reason: z.string().describe("Why you're archiving."),
       },
-      annotations: { readOnlyHint: false },
       async handler(args) {
         const { spaceId } = args;
         const reason = typeof args.reason === "string" ? args.reason.trim() : "";
@@ -1867,7 +1859,6 @@ export default function getRulerTools(core) {
       schema: {
         reason: z.string().describe("Why you're pausing."),
       },
-      annotations: { readOnlyHint: false },
       async handler(args) {
                 const reason = typeof args.reason === "string" ? args.reason.trim() : "";
         if (!reason) return text("governing-pause-execution: reason is required.");
@@ -1895,7 +1886,6 @@ export default function getRulerTools(core) {
       schema: {
         reason: z.string().describe("Why you're resuming."),
       },
-      annotations: { readOnlyHint: false },
       async handler(args) {
         const { beingId, username, spaceId, rootId, stampId, sessionId } = args;
         const reason = typeof args.reason === "string" ? args.reason.trim() : "";
@@ -1924,9 +1914,9 @@ export default function getRulerTools(core) {
                   : recSpace.qualities?.governing;
                 const exec = meta?.execution || {};
                 // Phase 3 migration: verb-surface write, atomic merge.
-                await _core.do(recSpace, "set-meta", {
-                  namespace: "governing",
-                  data: {
+                await _core.do(recSpace, "set", {
+                  field: "qualities.governing",
+                  value: {
                     execution: {
                       ...exec, status: "running", completedAt: null,
                       pausedAtStepIndex: null, pausedReason: null, pausedAt: null,
@@ -2122,7 +2112,6 @@ export default function getRulerTools(core) {
         "plan before deciding. Returns the structured emission. Does NOT " +
         "end your turn — call another tool after.",
       schema: {},
-      annotations: { readOnlyHint: true },
       async handler(args) {
         const { spaceId } = args;
         if (!spaceId) return text("governing-read-plan-detail: missing spaceId.");
@@ -2171,7 +2160,6 @@ export default function getRulerTools(core) {
           "which contracts, which evidence. Pass 2 courts will read this verbatim.",
         ),
       },
-      annotations: { readOnlyHint: false },
       async handler(args) {
         const { spaceId, beingId, username } = args;
         const reason = typeof args.reason === "string" ? args.reason.trim() : "";
@@ -2190,9 +2178,9 @@ export default function getRulerTools(core) {
                 : space.qualities?.governing;
               const existingPending = Array.isArray(meta?.courtPending) ? meta.courtPending : [];
               // Phase 3 migration: verb-surface merge, atomic.
-              await _core.do(space, "set-meta", {
-                namespace: "governing",
-                data: {
+              await _core.do(space, "set", {
+                field: "qualities.governing",
+                value: {
                   courtPending: [
                     ...existingPending,
                     { reason, convenedAt: new Date().toISOString(), status: "pending-pass2" },

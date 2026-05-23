@@ -148,7 +148,6 @@ export default function getFlagTools(_core) {
           "if you don't — Workers shouldn't invent rationalizations.",
         ),
       },
-      annotations: { readOnlyHint: false },
       async handler(args) {
         const { beingId, spaceId, role: roleName } = args;
         if (!spaceId) {
@@ -264,7 +263,6 @@ export default function getFlagTools(_core) {
         "judging whether the situation has accumulated enough material to " +
         "warrant escalation. Read-only — does NOT end your turn.",
       schema: {},
-      annotations: { readOnlyHint: true },
       async handler(args) {
         const { spaceId } = args;
         if (!spaceId) {
