@@ -38,9 +38,9 @@ export function getRealityIdentity() {
   const domain = cleanDomain(process.env.REALITY_DOMAIN || "localhost");
   const name = process.env.REALITY_NAME || "My Place";
   const keyDir = process.env.REALITY_KEY_DIR || path.join(process.cwd(), ".reality");
-  const privateKeyPath = path.join(keyDir, "place.key");
-  const publicKeyPath = path.join(keyDir, "place.key.pub");
-  const idPath = path.join(keyDir, "place.id");
+  const privateKeyPath = path.join(keyDir, "reality.key");
+  const publicKeyPath = path.join(keyDir, "reality.key.pub");
+  const idPath = path.join(keyDir, "reality.id");
 
   if (!fs.existsSync(keyDir)) {
     fs.mkdirSync(keyDir, { recursive: true });

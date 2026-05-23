@@ -17,7 +17,7 @@ import { spawn } from "child_process";
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
-import log from "./seed/system/log.js";
+import log from "./seed/seedReality/log.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 

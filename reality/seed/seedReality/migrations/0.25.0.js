@@ -123,12 +123,14 @@ export default async function migrate() {
     const finalHead = nextSeq - 1;
     if (finalHead >= startSeq || finalHead > 0) {
       const reelKey = `${kind}:${id}`;
-      const upsertResult = await reelHeads.findOneAndUpdate(
+      // Modern Mongoose driver: findOneAndUpdate returns the doc
+      // directly (or null), not { value: doc }.
+      const updated = await reelHeads.findOneAndUpdate(
         { _id: reelKey, head: { $lt: finalHead } },
         { $set: { head: finalHead, type: kind, id: id } },
         { upsert: false, returnDocument: "after" },
       );
-      if (!upsertResult.value) {
+      if (!updated) {
         // Either head was already >= finalHead, or no doc exists.
         const existing = await reelHeads.findOne({ _id: reelKey });
         if (!existing) {

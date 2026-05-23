@@ -109,9 +109,19 @@ async function loadConfigFromDb() {
       configCache = {};
       return;
     }
-    const raw = configSpace.qualities instanceof Map
-      ? Object.fromEntries(configSpace.qualities)
-      : { ...configSpace.qualities };
+    // All config keys live under qualities.config.<key> so the set
+    // handler treats each entry as a field inside the "config"
+    // namespace (where scalars are allowed) instead of as its own
+    // top-level namespace (which must be an object).
+    const q = configSpace.qualities;
+    const configNs = q instanceof Map ? q.get("config") : q.config;
+    if (!configNs || typeof configNs !== "object") {
+      configCache = {};
+      return;
+    }
+    const raw = configNs instanceof Map
+      ? Object.fromEntries(configNs)
+      : { ...configNs };
 
     // Strip keys that would fail validation (manual DB edits, proto
     // pollution injected directly into MongoDB, Mongoose lean() leaks).
@@ -178,7 +188,7 @@ export async function setRealityConfigValue(key, value, { internal, identity } =
   await doVerb(
     configSpace,
     "set",
-    { field: `qualities.${key}`, value },
+    { field: `qualities.config.${key}`, value },
     opts,
   );
 
@@ -206,7 +216,7 @@ export async function deleteRealityConfigValue(key, { internal, identity } = {})
   await doVerb(
     configSpace,
     "set",
-    { field: `qualities.${key}`, value: null },
+    { field: `qualities.config.${key}`, value: null },
     opts,
   );
 

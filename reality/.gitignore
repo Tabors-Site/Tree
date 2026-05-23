@@ -12,8 +12,9 @@ node_modules
 
 # Operational state that belongs to this specific running I-Am, not
 # to the kernel's shape. Each land's .land/ is its own.
-.place
+.reality
 
+.test
 # File system uploaded matter. Lives on disk, addressed by matter rows.
 uploads
 

@@ -2378,7 +2378,7 @@ export async function runExtensionMigrations() {
 
   // Find the .extensions place seed space once, so per-extension queries are scoped correctly.
   // Without this, a user-created tree space named the same as an extension would be matched.
-  const { SEED_SPACE } = await import("../seed/ibp/protocol.js");
+  const { SEED_SPACE } = await import("../seed/materials/space/seedSpaces.js");
   const extensionsParent = await Space.findOne({
     seedSpace: SEED_SPACE.EXTENSIONS,
   })
