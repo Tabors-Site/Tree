@@ -35,7 +35,7 @@ const VALID_VERBS = new Set(["see", "do", "summon", "be"]);
 
 // Extension tool injection hook. The loader calls
 // setExtensionToolResolver during boot with a function that returns
-// the extension-contributed tools for a given role name. Stamp uses
+// the extension-contributed tools for a given role name. Act uses
 // the resolver at frame-build time to merge extension tools into
 // the role's base toolNames before the permission filter runs.
 let _getExtToolsFn = () => [];
@@ -139,7 +139,7 @@ export function registerToolDef(name, schema, opts = {}) {
 
 /**
  * Register a bundle of tools in one call. Sole entry point for both
- * kernel-shipped tools (called from genesis.js with `ownerExt: "kernel"`)
+ * seed-shipped tools (called from genesis.js with `ownerExt: "seed"`)
  * and extension-shipped tools (called from extensions/loader.js with
  * `ownerExt: manifest.name`). Each tool object:
  *
@@ -148,13 +148,13 @@ export function registerToolDef(name, schema, opts = {}) {
  *   - `schema` may be a raw shape (`{ key: z.string() }`) or a
  *     pre-built zod object. Wrapped in `z.object().passthrough()` for
  *     the MCP server so it does not strip context fields the MCP HTTP
- *     middleware injects (beingId, stampId, ...).
+ *     middleware injects (beingId, actId, ...).
  *   - `verb` is REQUIRED ("see" | "do" | "summon" | "be").
  *   - Tools without a `handler` are def-only (registered for
  *     `resolveTools` but not callable via MCP).
  *
- * Collisions across namespaces are rejected. The kernel claims its
- * tools first (under `ownerExt: "kernel"`); any extension trying to
+ * Collisions across namespaces are rejected. The seed claims its
+ * tools first (under `ownerExt: "seed"`); any extension trying to
  * register a tool with the same name is skipped with a log entry.
  */
 export async function registerToolBundle(tools, { ownerExt }) {
@@ -164,7 +164,7 @@ export async function registerToolBundle(tools, { ownerExt }) {
   const { z } = await import("zod");
   const { zodToJsonSchema } = await import("zod-to-json-schema");
   const { registerToolOwner, getToolOwner } =
-    await import("../../../place/space/extensionScope.js");
+    await import("../../../materials/space/extensionScope.js");
 
   for (const tool of tools) {
     // Description gate first. The LLM's tool-call prompt needs a
@@ -393,8 +393,8 @@ export async function auditToolDescriptions() {
 // reflects current state. Idempotent; subsequent calls reconcile
 // (add new tools, remove gone ones).
 export async function syncToolsToSubstrate() {
-  const { SEED_SPACE } = await import("../../../place/space/seedSpaces.js");
-  const { manifestItems } = await import("../../../place/manifest.js");
+  const { SEED_SPACE } = await import("../../../materials/space/seedSpaces.js");
+  const { manifestItems } = await import("../../../materials/manifest.js");
   const items = Object.entries(toolDefs).map(([name, def]) => ({
     name,
     qualities: new Map([

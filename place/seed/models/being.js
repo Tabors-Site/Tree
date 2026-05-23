@@ -16,7 +16,7 @@
 // acts attaches; the being IS the trail. Every Fact the being stamps
 // is the being unfolding. Without acts, this row is potential;
 // with them, the row is something rather than nothing. See
-// [seed/place/PLACE.md](../place/PLACE.md) "And the beings are the
+// [seed/philosophy/MATERIALS.md](../philosophy/MATERIALS.md) "And the beings are the
 // acts."
 //
 // I keep the schema below closed. The fields I need to handle a
@@ -50,16 +50,17 @@ const BeingSchema = new mongoose.Schema({
     default: "human",
   },
 
-  // Bcrypt-hashed. Humans choose theirs; non-humans auto-generate
-  // and discard the plaintext. Storing one on every being preserves
-  // the path for a human to later inhabit a non-human being by
-  // resetting it.
+  // Bcrypt-hashed. Hook below hashes plaintext on save; the
+  // fact-driven path will pass already-hashed values via $set and
+  // skip the hook. Schema constraints stay until every legacy
+  // `new Being(...).save()` path is gone (then this whole block
+  // becomes a pure cache).
   password: { type: String, select: false, required: true },
 
   // Roles the being can act in. Identity is durable on this row;
   // active role composes per SUMMON. Each SUMMON resolves an active
   // role: the envelope's `activeRole` if it names one of `roles`,
-  // else `defaultRole`. The Stamp row stamps the resolved role for
+  // else `defaultRole`. The Act row stamps the resolved role for
   // audit.
   roles:       { type: [String], default: [] },
   defaultRole: { type: String, default: null },
@@ -111,10 +112,19 @@ const BeingSchema = new mongoose.Schema({
 
   // What kind a being is. The open layer. Each extension writes to
   // its own quality namespace via qualities.being.setQuality from
-  // seed/place/qualities.js. Default empty Map; everything an
+  // seed/materials/qualities.js. Default empty Map; everything an
   // extension contributes to a being lives here. See PLACE.md
   // "Qualities" for the constitutive-vs-characterizing distinction.
   qualities: { type: Map, of: mongoose.Schema.Types.Mixed, default: new Map() },
+
+  // Projection cache markers. Per FOLD.md / STAMPER.md, the Being
+  // row is a cache of the fold over this being's reel — not the
+  // source of truth. `foldedSeq` is the highest fact-seq the fold has
+  // applied here. `position` mirrors `currentSpace` once the position-
+  // fact bypass closes; for now it's reducer output kept null until
+  // facts carry position changes.
+  foldedSeq: { type: Number, default: null },
+  position:  { type: String, default: null },
 }, {
   timestamps: true,
 });
@@ -125,8 +135,18 @@ BeingSchema.index({ roles: 1 });
 BeingSchema.index({ defaultRole: 1 });
 BeingSchema.index({ homePlace: 1, isRemote: 1 });
 
-// Hash on save. Pre-hashed passwords (migration inserts) must bypass
-// this hook via $set so a double-hash does not corrupt the credential.
+// Position index — what beings are at a given space. Used by foldPlace
+// to find a space's being-occupants.
+BeingSchema.index({ position: 1 }, { sparse: true });
+
+// Pre-save bcrypt hook stays in place until ALL legacy create-paths
+// route through the fact-driven flow (where the verb handler hashes
+// before emitting the fact and the reducer reads the already-hashed
+// value via $set). The hook is a no-op on $set-based updates (which
+// is the fact-driven write path), and harmless for already-hashed
+// inputs because of the isModified guard. Once createBeing is fully
+// fact-driven and the last `new Being(...).save()` site is gone,
+// remove this hook.
 BeingSchema.pre("save", async function (next) {
   if (!this.isModified("password") || !this.password) return next();
   const salt = await bcrypt.genSalt(12);

@@ -58,7 +58,7 @@ import {
   findBeingByName,
   verifyPassword,
   generateToken,
-} from "../../place/being/identity.js";
+} from "../../materials/being/identity.js";
 import { getPlaceRootId } from "../../placeRoot.js";
 import { IbpError, IBP_ERR } from "../../ibp/protocol.js";
 import { getPlaceDomain } from "../../ibp/address.js";
@@ -101,7 +101,7 @@ export const cherubBeing = Object.freeze({
     // first arrival the same way as every later one.
     const first = await isFirstBeing();
     if (first) {
-      const { findIAm } = await import("../../place/being/placeBeings.js");
+      const { findIAm } = await import("../../materials/being/placeBeings.js");
       const iAm = await findIAm();
       const cherubBeingRow = await Being
         .findOne({ name: "cherub", operatingMode: "scripted" })
@@ -118,11 +118,12 @@ export const cherubBeing = Object.freeze({
             homeParent:    getPlaceRootId(),
             parentBeingId: iAm ? String(iAm._id) : null,
           },
-          identity: { name: "cherub", beingId: cherubBeingId },
+          identity:  { name: "cherub", beingId: cherubBeingId },
+          summonCtx: ctx?.summonCtx || null,
         });
         being = result.being;
       } catch (err) {
-        throw mapKernelError(err);
+        throw mapSeedError(err);
       }
       hooks.run("afterRegister", { user: being, req: ctx?.req }).catch(() => {});
 
@@ -177,11 +178,12 @@ export const cherubBeing = Object.freeze({
           homeParent:    getPlaceRootId(),
           parentBeingId,
         },
-        identity: { name: "cherub", beingId: parentBeingId },
+        identity:  { name: "cherub", beingId: parentBeingId },
+        summonCtx: ctx?.summonCtx || null,
       });
       being = result.being;
     } catch (err) {
-      throw mapKernelError(err);
+      throw mapSeedError(err);
     }
 
     if (!parentBeingId) {
@@ -266,7 +268,7 @@ export const cherubBeing = Object.freeze({
   // human has no identity yet to be the summoner).
 });
 
-function mapKernelError(err) {
+function mapSeedError(err) {
   if (err && err.name === "IbpError" && err.code) {
     return err;
   }

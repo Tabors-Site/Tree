@@ -23,17 +23,24 @@
 // subfolder.
 //
 // Recorded by default. Operations opt out via `spec.skipAudit`; the
-// dispatcher also accepts `opts.skipAudit` for kernel-trusted batches.
+// dispatcher also accepts `opts.skipAudit` for seed-trusted batches.
 //
-// See seed/place/PLACE.md "And the beings are the acts" for the
+// See seed/philosophy/MATERIALS.md "And the beings are the acts" for the
 // philosophy behind why this reel is identity-load-bearing.
 
 import log from "../system/log.js";
-import Fact from "../models/fact.js";
+import Fact from "../past/fact/fact.js";
 import { hooks } from "../system/hooks.js";
 import { IBP_ERR, IbpError } from "../ibp/protocol.js";
 import { getPlaceConfigValue } from "../placeConfig.js";
 import { resolveSpaceAccess } from "./space/spaceFetch.js";
+import { allocSeq } from "./reelHeads.js";
+import { withReelLock } from "./appendLock.js";
+
+// Reel-bearing target kinds — those with their own seq counter. Other
+// kinds (place, stance) and target-less facts carry seq:null and stay
+// outside the fold model for now.
+const REEL_KINDS = new Set(["being", "space", "matter"]);
 
 // ─────────────────────────────────────────────────────────────────────────
 // WRITE
@@ -54,7 +61,7 @@ const VALID_TARGET_KINDS = new Set([
 ]);
 
 /**
- * Stamp a Fact onto the reel.
+ * Act a Fact onto the reel.
  *
  * @param {object} params
  * @param {string} params.beingId   actor (I_AM for scaffold flows)
@@ -63,7 +70,7 @@ const VALID_TARGET_KINDS = new Set([
  * @param {{kind:string,id:string}|null} [params.target]  what was acted on
  * @param {*} [params.params]       input payload (any JSON; clipped on cap)
  * @param {*} [params.result]       output payload (any JSON; clipped on cap)
- * @param {string|null} [params.stampId]   correlation
+ * @param {string|null} [params.actId]   correlation
  * @param {string|null} [params.sessionId]  correlation
  * @param {string|null} [params.homePlace]   federation provenance
  * @param {boolean} [params.wasRemote=false] federation provenance
@@ -82,7 +89,7 @@ export async function logFact(input) {
     target = null,
     params = null,
     result = null,
-    stampId = null,
+    actId = null,
     sessionId = null,
     homePlace = null,
     wasRemote = false,
@@ -127,7 +134,7 @@ export async function logFact(input) {
     target: normalizedTarget,
     params,
     result,
-    stampId,
+    actId,
     sessionId,
     homePlace,
     wasRemote,
@@ -144,26 +151,67 @@ export async function logFact(input) {
   const cappedResult = capPayload(hookData.result, "result");
   const truncated = cappedParams.truncated || cappedResult.truncated;
 
-  const doc = {
+  const finalTarget = hookData.target || normalizedTarget;
+
+  const baseDoc = {
     beingId,
     verb,
     action,
-    target: hookData.target || normalizedTarget,
+    target: finalTarget,
     params: cappedParams.value,
     result: cappedResult.value,
     truncated,
-    stampId,
+    actId,
     sessionId,
     homePlace: hookData.homePlace ?? homePlace,
     wasRemote: Boolean(hookData.wasRemote ?? wasRemote),
     date: new Date(),
   };
 
-  try {
-    await Fact.create(doc);
-  } catch (err) {
-    log.error("DB", `Fact save failed (${action}): ${err.message}`);
-    throw new Error("Failed to stamp Fact");
+  // Reel-bearing path: allocate seq + insert under the per-reel append
+  // lock. Per STAMPER.md, pairing them eliminates the transient-gap
+  // window where a slow inserter could leave its seq stranded behind
+  // the fold marker. The critical section is microscopic: one $inc and
+  // one insert. Different reels run in parallel; only same-reel writes
+  // serialize at this instant.
+  //
+  // Target-less or place/stance facts skip the lock — they have no
+  // reel and stay outside the fold model.
+  if (finalTarget && REEL_KINDS.has(finalTarget.kind) && finalTarget.id) {
+    try {
+      await withReelLock(finalTarget.kind, finalTarget.id, async () => {
+        const seq = await allocSeq(finalTarget.kind, finalTarget.id);
+        await Fact.create({ ...baseDoc, seq });
+      });
+    } catch (err) {
+      log.error("DB", `Fact append failed (${action} on ${finalTarget.kind}:${finalTarget.id}): ${err.message}`);
+      throw new Error("Failed to stamp Fact");
+    }
+
+    // Eager-fold. Per STAMPER.md Decision: "eager-fold is an inline
+    // call to `fold(target)`. Not a second projection-writer." The
+    // fold engine's compare-and-set handles concurrency; failure here
+    // is harmless — the next fold round self-heals.
+    //
+    // Dynamic import to avoid a hard cycle at module load time
+    // (foldEngine imports from materials/, past/fact/facts is in
+    // materials/ — keeping the dependency lazy keeps boot order clean).
+    try {
+      const { fold } = await import("../factory/stamper/fold/foldEngine.js");
+      await fold(finalTarget.kind, finalTarget.id);
+    } catch (err) {
+      // Self-healing: the next fold catches up. Log but don't throw —
+      // the fact is the source of truth and is already on disk.
+      log.debug("Fold", `eager-fold failed for ${finalTarget.kind}:${finalTarget.id}: ${err.message}`);
+    }
+  } else {
+    // Non-reel-bearing path: simple insert, seq stays null.
+    try {
+      await Fact.create({ ...baseDoc, seq: null });
+    } catch (err) {
+      log.error("DB", `Fact save failed (${action}): ${err.message}`);
+      throw new Error("Failed to stamp Fact");
+    }
   }
 }
 
@@ -222,7 +270,7 @@ function buildDateFilter(startDate, endDate) {
 /**
  * Get the Fact reel for a space.
  * If beingId is provided, verifies the caller has access to the space's tree.
- * Kernel-internal callers (hooks, migrations) can omit beingId.
+ * Seed-internal callers (hooks, migrations) can omit beingId.
  */
 export async function getFacts({
   spaceId,

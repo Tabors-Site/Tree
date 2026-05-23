@@ -2,7 +2,7 @@
 /**
  * Seed Migration 0.18.0 — retire layer-4 (legacy place-stance permissions).
  *
- * The kernel's authorize() used to fall back to per-stance permission
+ * The seed's authorize() used to fall back to per-stance permission
  * rows stored at metadata.beings.arrival.permissions and
  * metadata.beings.owner.permissions on the place root. Layer 4 is gone;
  * the same semantics now live as layer-2 rules at
@@ -12,7 +12,7 @@
  * This migration drops the legacy permission rows. The next boot's
  * seedDefaultStancePermissions() writes the layer-2 defaults idempotently;
  * operators who customized the legacy rows lose those customizations
- * (rare — the legacy shape was kernel-internal). If your place has
+ * (rare — the legacy shape was seed-internal). If your place has
  * customized stance permissions, port them to the new shape before
  * upgrading.
  */

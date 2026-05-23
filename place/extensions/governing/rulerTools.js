@@ -170,7 +170,7 @@ async function resolveRulerScope(spaceId) {
 // via its own being-room broadcast (`io.to('being:'+beingId)`), not via
 // the caller's socket. Hook payloads no longer carry `socket`/`signal`.
 
-export default function getRulerTools(core) {
+export default function getRulerTools(place) {
   return [
     // ─────────────────────────────────────────────────────────────────
     // governing-hire-planner
@@ -272,7 +272,7 @@ export default function getRulerTools(core) {
           beingId,
           stampId,
           sessionId,
-          core: _core,
+          place: _core,
         });
         if (!planSpace) {
           releaseSpawn(claim.key);
@@ -595,7 +595,7 @@ export default function getRulerTools(core) {
           beingId,
           stampId,
           sessionId,
-          core: _core,
+          place: _core,
         });
         if (!contractsSpace) {
           releaseSpawn(claim.key);
@@ -825,7 +825,7 @@ export default function getRulerTools(core) {
           beingId,
           stampId,
           sessionId,
-          core: _core,
+          place: _core,
         });
         if (!executionSpace) {
           releaseSpawn(claim.key);
@@ -1078,7 +1078,7 @@ export default function getRulerTools(core) {
                 status: "archived",
                 supersedes: prior.planRef,
                 reason: `revise: ${revisionReason}`.slice(0, 500),
-                core: _core,
+                place: _core,
               });
               archived = true;
             }
@@ -1134,7 +1134,7 @@ export default function getRulerTools(core) {
           beingId,
           stampId,
           sessionId,
-          core: _core,
+          place: _core,
         });
         if (!planSpace) {
           releaseSpawn(claim.key);
@@ -1408,11 +1408,11 @@ export default function getRulerTools(core) {
         // chain reaches the parent).
         if (beingId) {
           try {
-            // `core.websocket.emitToBeing` auto-namespaces the event
+            // `place.websocket.emitToBeing` auto-namespaces the event
             // name to "governing:lifecycleActive" via the loader's
-            // scoped-core binding — extensions never type their own
+            // scoped-place binding — extensions never type their own
             // prefix.
-            core.websocket.emitToBeing(String(beingId), "lifecycleActive", {
+            place.websocket.emitToBeing(String(beingId), "lifecycleActive", {
               active: true,
               rulerSpaceId: String(ruler._id),
               rootId: rootId || null,
@@ -1481,7 +1481,7 @@ export default function getRulerTools(core) {
               // here pins the being-tree edge; without it the promote
               // would fall back to identity or the tree's rootOwner.
               parentBeingId: rulerBeingIdAtScope,
-              core: _core,
+              place: _core,
             });
 
             // Lineage: record parent Ruler + parent step index so the
@@ -1492,7 +1492,7 @@ export default function getRulerTools(core) {
                 subRulerNodeId:  String(childSpace._id),
                 parentRulerId:   String(ruler._id),
                 parentStepIndex: i + 1,
-                core: _core,
+                place: _core,
               });
             } catch (linErr) {
               log.debug("Governing", `lineage write skipped for step ${i + 1}: ${linErr.message}`);
@@ -1687,7 +1687,7 @@ export default function getRulerTools(core) {
             status: "approved",
             supersedes: latest.planRef,
             reason: `ratified: ${reason}`.slice(0, 500),
-            core: _core,
+            place: _core,
           });
         } catch (err) {
           return text(JSON.stringify({
@@ -1779,7 +1779,7 @@ export default function getRulerTools(core) {
                 status: "archived",
                 supersedes: prior.planRef,
                 reason: `archive: ${reason}`.slice(0, 500),
-                core: _core,
+                place: _core,
               });
               archived = true;
             }
@@ -1808,7 +1808,7 @@ export default function getRulerTools(core) {
                 await governing.freezeExecutionRecord({
                   recordNodeId: rec._recordNodeId,
                   nextStatus: "cancelled",
-                  core: _core,
+                  place: _core,
                 });
                 executionCancelled = true;
               }
@@ -1963,7 +1963,7 @@ export default function getRulerTools(core) {
           beingId,
           stampId,
           sessionId,
-          core: _core,
+          place: _core,
         });
         if (!executionSpace) {
           releaseSpawn(claim.key);

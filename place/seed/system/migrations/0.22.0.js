@@ -6,7 +6,7 @@
  * earlier versions: "seed-being" (pre-0.16), "I-am" (0.16–0.21), and
  * "i-am" (a brief lowercase variant). 0.22.0 settles on a single
  * canonical value: "I_AM". The JS constant changes name in the same
- * release (SEED_BEING -> I_AM in seed/place/space/seedSpaces.js).
+ * release (SEED_BEING -> I_AM in seed/materials/space/seedSpaces.js).
  *
  * This migration rewrites every reference to the prior names in the
  * three places they appear in the DB:
@@ -67,7 +67,7 @@ export default async function migrate() {
     }
   }
 
-  // 2) dids.beingId — actor attribution. The kernel writes the name
+  // 2) dids.beingId — actor attribution. The seed writes the name
   //    string (not an ObjectId) for the I_AM actor, so a $set sweep
   //    covers every audit row attributed to the seed being.
   let didsPatched = 0;

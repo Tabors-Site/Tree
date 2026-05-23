@@ -24,7 +24,7 @@
 // These are beings I formed from myself, but they are no longer me.
 // They have their own identities, their own summon paths, their own
 // stances. Anything they do attributes to their own beingId, not to
-// me. The distinction matters: I am the kernel acting; they are
+// me. The distinction matters: I am the seed acting; they are
 // first-class participants the world addresses by name.
 //
 // Being-tree parenting. Every place has exactly one I-Am at the root
@@ -59,7 +59,7 @@ export async function findIAm() {
 }
 
 // Cached I_AM identity object suitable for `opts.identity` on verb
-// calls. The I_AM has universal authority on its place; kernel-internal
+// calls. The I_AM has universal authority on its place; seed-internal
 // callers (DO-trigger fan-out, scheduled-wake tick, genesis scaffolding)
 // pass this identity so `authorize` shorts to allow.
 let _iAmIdentityCache = null;
@@ -211,6 +211,7 @@ export async function ensurePlaceBeings(placeRootId) {
           parentBeingId: rootBeingId,
         },
         identity: iAmIdent,
+        scaffold: true,
       });
       created++;
       log.info(

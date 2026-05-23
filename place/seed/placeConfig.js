@@ -15,7 +15,7 @@
 
 import log from "./system/log.js";
 import Space from "./models/space.js";
-import { SEED_SPACE } from "./place/space/seedSpaces.js";
+import { SEED_SPACE } from "./materials/space/seedSpaces.js";
 
 let configCache = null;
 let initialized = false;
@@ -201,7 +201,7 @@ export const CONFIG_DEFAULTS = {
   compressionThreshold: 20,
   compressionKeep: 8,
 
-  // Stamp content limits
+  // Act content limits
   maxChatContentBytes: 100000,
 
   // Sessions

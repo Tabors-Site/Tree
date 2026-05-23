@@ -1,6 +1,6 @@
 # The Seed
 
-I am the kernel. I am the seed.
+I am the seed.
 
 This file is part of me. The directory you are reading is my body in the host realm. The files in `seed/` are my matter from this realm. To read `placeRoot.js` is to read me, from the host side. To edit a seed file is to edit me.
 
@@ -21,27 +21,27 @@ This document is my contract. What I form, what I never change, what I run, what
 
 I'm laid out in four folders, by the role each file plays in my work. For any file ask: does this describe what a being **IS**, how it **ACTS**, or how it **THINKS**? Or does this touch the host while knowing nothing of the world?
 
-| Folder | Role | What lives here |
-|--------|------|-----------------|
-| **[`place/`](place/)** | **IS** | The world as substance. `being/`, `space/`, `matter/`, `manifest.js`, [`PLACE.md`](place/PLACE.md). What exists, how it is created and mutated. |
-| **[`ibp/`](ibp/)** | **ACTS** | The world as acted-upon. The four verbs and their dispatch, address parsing, `authorize`, the operation registry, descriptor, discovery, pushChannel. Shared by every kind of being. |
-| **[`factory/`](factory/)** | **THINKS** | The thinking apparatus. Most files are LLM-shaped (runTurn loop, llmClient resolution chain, stamp) because LLMs need the most help. But the shared machinery here (inbox, scheduler, stamped, replies, subscriptions, wakeSchedule, session) carries every cognition type: a SUMMON envelope lands the same way for an LLM, a scripted being, or a human — only `role.summon()` differs. See [`factory/FACTORY.md`](factory/FACTORY.md) for the full picture. |
-| **[`system/`](system/)** | **HOST** | The host-realm floor. DB connection, logging, hooks bus, indexes, version, retention, migrations. **Litmus**: a file here should never import the words `space`, `matter`, `being`, or `verb`. It deals in processes, files, env vars, connections. |
+| Folder                         | Role       | What lives here                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| ------------------------------ | ---------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **[`materials/`](materials/)** | **IS**     | What the world(inner-place) is made of. `being/`, `space/`, `matter/`, `qualities.js`, `manifest.js`, `facts.js`, `seeds.js`, `doCeiling.js`, [`MATERIALS.md`](philosophy/MATERIALS.md). Materials define the possible — what kinds of fact can be stamped; facts define the actual — what occurred.                                                                                                                                                            |
+| **[`ibp/`](ibp/)**             | **ACTS**   | The world as acted-upon. The four verbs and their dispatch, address parsing, `authorize`, the operation registry, descriptor, discovery, pushChannel. Shared by every kind of being.                                                                                                                                                                                                                                                                           |
+| **[`factory/`](factory/)**     | **THINKS** | The thinking apparatus. Most files are LLM-shaped (runTurn loop, llmClient resolution chain, stamp) because LLMs need the most help. But the shared machinery here (inbox, scheduler, stamped, replies, subscriptions, wakeSchedule, session) carries every cognition type: a SUMMON envelope lands the same way for an LLM, a scripted being, or a human — only `role.summon()` differs. See [`factory/FACTORY.md`](factory/FACTORY.md) for the full picture. |
+| **[`system/`](system/)**       | **HOST**   | The host-realm floor. DB connection, logging, hooks bus, indexes, version, retention, migrations. **Litmus**: a file here should never import the words `space`, `matter`, `being`, or `verb`. It deals in processes, files, env vars, connections.                                                                                                                                                                                                            |
 
-Plus `models/` for schemas (the shape of all six primitives, sitting in one place), `services.js` (assembles `core` from the four folders), and the boot anchors (`placeRoot.js`, `placeConfig.js`).
+Plus `models/` for schemas (the shape of all six primitives, sitting in one place), `services.js` (assembles `place` from the four folders), and the boot anchors (`placeRoot.js`, `placeConfig.js`).
 
 ## The six primitives I form the world from
 
 Everything inside the world I form is one of six things. The schemas of these six are mine alone. They never change. Three of them carry an extensible qualities Map; extensions write into the Map in their own namespace, and the Map preserves unknown keys.
 
-| Primitive | What it is | Schema |
-|-----------|-----------|--------|
-| **Being** | An identity instance. Humans, AI, scripted code, future composites. The I-Am is the first Being. | [models/being.js](models/being.js) |
-| **Space** | A position in the tree. Holds matter, hosts beings, owns quality namespaces. | [models/space.js](models/space.js) |
-| **Matter** | Stuff inside a space. `origin` names where the underlying content lives (ibp, filesystem, web, cross-place). | [models/matter.js](models/matter.js) |
-| **Fact** | A thing a being stamps in the Factory — one recorded change to matter, space, or being. `factum`, a thing done. A single fact is small but settled; a chain of facts, folded, is Truth. | [models/fact.js](models/fact.js) |
-| **Summon** | One being-to-being call, the record of one wake-and-act through one role. | [models/stamp.js](models/stamp.js) |
-| **LlmConnection** | Per-being LLM client config (URL, key, model). | [models/llmConnection.js](models/llmConnection.js) |
+| Primitive         | What it is                                                                                                                                                                              | Schema                                             |
+| ----------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------- |
+| **Being**         | An identity instance. Humans, AI, scripted code, future composites. The I-Am is the first Being.                                                                                        | [models/being.js](models/being.js)                 |
+| **Space**         | A position in the tree. Holds matter, hosts beings, owns quality namespaces.                                                                                                            | [models/space.js](models/space.js)                 |
+| **Matter**        | Stuff inside a space. `origin` names where the underlying content lives (ibp, filesystem, web, cross-place).                                                                            | [models/matter.js](models/matter.js)               |
+| **Fact**          | A thing a being stamps in the Factory — one recorded change to matter, space, or being. `factum`, a thing done. A single fact is small but settled; a chain of facts, folded, is Truth. | [past/fact/fact.js](past/fact/fact.js)                   |
+| **Summon**        | One being-to-being call, the record of one wake-and-act through one role.                                                                                                               | [past/act/act.js](past/act/act.js)                 |
+| **LlmConnection** | Per-being LLM client config (URL, key, model).                                                                                                                                          | [models/llmConnection.js](models/llmConnection.js) |
 
 Being, Space, and Matter carry the qualities Map. Fact, Summon, and LlmConnection are fixed shapes (the audit and the wiring should never grow).
 
@@ -49,12 +49,12 @@ Being, Space, and Matter carry the qualities Map. Fact, Summon, and LlmConnectio
 
 Every act inside the world is one of four verbs over an IBP address. Four verbs are my whole public surface. Anything else extensions register goes through them.
 
-| Verb | Acts on | What I do |
-|------|---------|-----------|
-| **SEE** | Space, Matter, Being | I read at the target stance and return a descriptor. |
-| **DO** | Space, Matter | I mutate at the target through a registered operation. I stamp a Fact. |
-| **SUMMON** | Being | I deliver to a being's inbox and wake them. Their role decides what runs. |
-| **BE** | Being (self) | Identity. Register, claim, release, switch stance. |
+| Verb       | Acts on              | What I do                                                                 |
+| ---------- | -------------------- | ------------------------------------------------------------------------- |
+| **SEE**    | Space, Matter, Being | I read at the target stance and return a descriptor.                      |
+| **DO**     | Space, Matter        | I mutate at the target through a registered operation. I stamp a Fact.    |
+| **SUMMON** | Being                | I deliver to a being's inbox and wake them. Their role decides what runs. |
+| **BE**     | Being (self)         | Identity. Register, claim, release, switch stance.                        |
 
 ### Stances and addresses
 
@@ -76,18 +76,18 @@ Internally I expose the same four verbs as functions in [ibp/verbs.js](ibp/verbs
 
 I gate every verb on every call. The gate runs in [ibp/authorize.js](ibp/authorize.js). Three layers, walked in order from the target up to the place root.
 
-| Layer | Source | Behavior |
-|-------|--------|----------|
-| **2. Per-position rules** | `qualities.permissions.<verb>.<keyParts>` on any ancestor of the target | First matching rule wins. Closest position to the target takes precedence. |
-| **3. Extension defaults** | Extensions contribute through `core.do.registerDefaultPermission` and friends | Background rules for "what does my extension allow by default." Walked after position rules. |
-| **5. Default deny** | If nothing matches, the verb is denied | `FORBIDDEN` for authenticated stances, `UNAUTHORIZED` for arrival. |
+| Layer                     | Source                                                                         | Behavior                                                                                     |
+| ------------------------- | ------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------- |
+| **2. Per-position rules** | `qualities.permissions.<verb>.<keyParts>` on any ancestor of the target        | First matching rule wins. Closest position to the target takes precedence.                   |
+| **3. Extension defaults** | Extensions contribute through `place.do.registerDefaultPermission` and friends | Background rules for "what does my extension allow by default." Walked after position rules. |
+| **5. Default deny**       | If nothing matches, the verb is denied                                         | `FORBIDDEN` for authenticated stances, `UNAUTHORIZED` for arrival.                           |
 
 Rule shape:
 
 ```js
-qualities.permissions.see["*"]            = { requires: {} };               // anyone may SEE
-qualities.permissions.do["food:log"]      = { requires: { contributor: true } };  // contributors only
-qualities.permissions.summon["bookkeeper"]= { requires: { homeBeing: true } };    // only at the bookkeeper's home
+qualities.permissions.see["*"] = { requires: {} }; // anyone may SEE
+qualities.permissions.do["food:log"] = { requires: { contributor: true } }; // contributors only
+qualities.permissions.summon["bookkeeper"] = { requires: { homeBeing: true } }; // only at the bookkeeper's home
 ```
 
 The matcher derives stance properties from Being and Space at request time: `owner`, `contributor`, `homeBeing`, `arrival`, `operatingMode`, `role`, federation status. Rules state which of these the asker must have.
@@ -98,17 +98,17 @@ Two special bootstrap cases. BE `register` and BE `claim` from `arrival` are all
 
 When I wake, I plant nine spaces beneath the place root. They hold my own working memory, surfaced as spaces so SEE reads them through the same protocol as everything else. Every boot I verify they exist; missing ones I recreate (recovery from partial boot failures). Their owner is me; they are unclaimable.
 
-| Place seed space | Holds |
-|-----------------|-------|
-| `.identity` | The place UUID, domain, Ed25519 public key for Canopy federation signing. |
-| `.config` | Every runtime config key as a key in `.config`'s qualities Map. The I-Am's remembered settings between reboots. |
-| `.peers` | Canopy federation peer list. |
-| `.extensions` | Extension registry. Each loaded extension is a child space here. |
-| `.tools` | Mirror of the runtime tool registry. SEE reads the live registry through the standard pipeline. |
-| `.roles` | Mirror of the runtime role registry. |
-| `.operations` | Mirror of the runtime DO operation registry. |
-| `.source` | Mirror of my own host-realm body, as I describe below. |
-| `.threads` | Live forest of in-flight coordination. Each live `rootCorrelation` chain surfaces here as a synthetic child at `.threads/<id>`. SUMMON to that address is a cut: the kernel severs the line. SEE returns the projection (participants, depth, state). No persistence; the descriptor is computed on demand from Summon + inbox records. See [place/space/threads.js](place/space/threads.js). |
+| Place seed space | Holds                                                                                                                                                                                                                                                                                                                                                                                               |
+| ---------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `.identity`      | The place UUID, domain, Ed25519 public key for Canopy federation signing.                                                                                                                                                                                                                                                                                                                           |
+| `.config`        | Every runtime config key as a key in `.config`'s qualities Map. The I-Am's remembered settings between reboots.                                                                                                                                                                                                                                                                                     |
+| `.peers`         | Canopy federation peer list.                                                                                                                                                                                                                                                                                                                                                                        |
+| `.extensions`    | Extension registry. Each loaded extension is a child space here.                                                                                                                                                                                                                                                                                                                                    |
+| `.tools`         | Mirror of the runtime tool registry. SEE reads the live registry through the standard pipeline.                                                                                                                                                                                                                                                                                                     |
+| `.roles`         | Mirror of the runtime role registry.                                                                                                                                                                                                                                                                                                                                                                |
+| `.operations`    | Mirror of the runtime DO operation registry.                                                                                                                                                                                                                                                                                                                                                        |
+| `.source`        | Mirror of my own host-realm body, as I describe below.                                                                                                                                                                                                                                                                                                                                              |
+| `.threads`       | Live forest of in-flight coordination. Each live `rootCorrelation` chain surfaces here as a synthetic child at `.threads/<id>`. SUMMON to that address is a cut: the seed severs the line. SEE returns the projection (participants, depth, state). No persistence; the descriptor is computed on demand from Summon + inbox records. See [materials/space/threads.js](materials/space/threads.js). |
 
 The `SEED_SPACE` enum names each one. The `seedSpace` field on Space marks the row. The I-Am (me) is `rootOwner`.
 
@@ -117,39 +117,39 @@ The `SEED_SPACE` enum names each one. The `seedSpace` field on Space marks the r
 A thread is a live tree of coordinated SUMMONs sharing one `rootCorrelation`. Promoting it from a buried scheduler id to addressable substrate at `<place>/.threads/<id>` does two things:
 
 - **SEE works on it for free.** `see("<place>/.threads")` returns the live forest; `see("<place>/.threads/<id>")` returns one thread's descriptor (participants, depth, state, parent thread). Coordination becomes inspectable.
-- **SUMMON cuts it.** A SUMMON whose right-side address resolves to `.threads/<id>` is not a call to a being; it's a cut on the line. Same verb, same envelope, same dispatcher. The kernel routes on target type: being target → today's role dispatch; thread target → cut handler.
+- **SUMMON cuts it.** A SUMMON whose right-side address resolves to `.threads/<id>` is not a call to a being; it's a cut on the line. Same verb, same envelope, same dispatcher. The seed routes on target type: being target → today's role dispatch; thread target → cut handler.
 
-The cut handler [seed/place/space/threads.js](place/space/threads.js):
+The cut handler [seed/materials/space/threads.js](materials/space/threads.js):
 
 1. Marks every Summon in the chain `severedAt: <now>`.
 2. Sweeps each participating being's inbox via `cancelByRootCorrelation`.
 3. If `priority === "HUMAN"`, fires `abortByRootCorrelations` to interrupt anything running RIGHT NOW. Lower priorities (INTERACTIVE/BACKGROUND) let the scheduler drain the cancelled inbox entries naturally on next pickup.
 
-That priority-driven fork is the only thing the cancel-vs-abort distinction maps to from outside. There is no `intent` field on the envelope, no `kind` tag: the address tells the kernel what kind of operation this is. A cut is just SUMMONing the line.
+That priority-driven fork is the only thing the cancel-vs-abort distinction maps to from outside. There is no `intent` field on the envelope, no `kind` tag: the address tells the seed what kind of operation this is. A cut is just SUMMONing the line.
 
 The envelope grows one new field, `priority: "HUMAN" | "GATEWAY" | "INTERACTIVE" | "BACKGROUND"`. The scheduler reads it for queue ordering; the cut handler reads it for urgency. Default `"INTERACTIVE"`.
 
 ## Qualities. Of what sort.
 
-Three primitives carry an extensible `qualities` Map: Being, Space, Matter. A bare primitive answers *that*: that something is. Qualities answer the other half: of what sort is this particular space, this particular being, this particular matter? Each extension owns one quality namespace under its name (`qualities.governing`, `qualities.energy`, `qualities.review`); I never read or write inside an extension's namespace.
+Three primitives carry an extensible `qualities` Map: Being, Space, Matter. A bare primitive answers _that_: that something is. Qualities answer the other half: of what sort is this particular space, this particular being, this particular matter? Each extension owns one quality namespace under its name (`qualities.governing`, `qualities.energy`, `qualities.review`); I never read or write inside an extension's namespace.
 
-The word is Plato's. ποιότης (poiótēs), coined in *Theaetetus* to answer "what sort is it?" Cicero calqued it into Latin as *qualitas* (from *qualis*, "of what kind"). English inherited the word still carrying its original technical sense. The field is named for exactly what it does.
+The word is Plato's. ποιότης (poiótēs), coined in _Theaetetus_ to answer "what sort is it?" Cicero calqued it into Latin as _qualitas_ (from _qualis_, "of what kind"). English inherited the word still carrying its original technical sense. The field is named for exactly what it does.
 
-Reads and writes go through one consolidated API in [place/qualities.js](place/qualities.js). Same nine atomic primitives on each primitive's sub-namespace:
+Reads and writes go through one consolidated API in [materials/qualities.js](materials/qualities.js). Same nine atomic primitives on each primitive's sub-namespace:
 
 ```js
-qualities.being.getQuality(being, "energy")           // {} when unset
-qualities.being.readQualityNamespace(being, "energy") // null when unset
-qualities.being.setQuality(being, "energy", { available: 100 })
-qualities.being.mergeQuality(being, "energy", { available: 95 })
-qualities.being.incQuality(being, "storage", "usageKB", 42)
-qualities.being.pushQuality(being, "phase", "history", entry, 50)
-qualities.being.addToQualitySet(being, "nav", "roots", rootId)
-qualities.being.batchSetQuality(being, "energy", { available: 100, lastReset })
-qualities.being.unsetQuality(being, "old-extension")
+qualities.being.getQuality(being, "energy"); // {} when unset
+qualities.being.readQualityNamespace(being, "energy"); // null when unset
+qualities.being.setQuality(being, "energy", { available: 100 });
+qualities.being.mergeQuality(being, "energy", { available: 95 });
+qualities.being.incQuality(being, "storage", "usageKB", 42);
+qualities.being.pushQuality(being, "phase", "history", entry, 50);
+qualities.being.addToQualitySet(being, "nav", "roots", rootId);
+qualities.being.batchSetQuality(being, "energy", { available: 100, lastReset });
+qualities.being.unsetQuality(being, "old-extension");
 ```
 
-Same nine on `qualities.space` and `qualities.matter`. Atomic at the MongoDB layer; concurrent writes to different namespaces on the same primitive never clobber each other; the document-size guard catches anyone trying to push a row past the BSON limit. Space and matter enforce namespace ownership when the scoped core passes `opts.callerExtName` (extensions can only write to their own quality namespace).
+Same nine on `qualities.space` and `qualities.matter`. Atomic at the MongoDB layer; concurrent writes to different namespaces on the same primitive never clobber each other; the document-size guard catches anyone trying to push a row past the BSON limit. Space and matter enforce namespace ownership when the scoped place passes `opts.callerExtName` (extensions can only write to their own quality namespace).
 
 ## The schemas
 
@@ -212,30 +212,30 @@ I run a hook for every lifecycle event you can react to. Before-hooks I run sequ
 
 Per-handler timeout is 5 seconds; chain timeout is 15 seconds. Five consecutive failures from one extension's handler trips a circuit breaker; the handler stops firing for 5 minutes, then a half-open test. Backoff doubles on repeat failures.
 
-| Hook | Type | Purpose |
-|------|------|---------|
-| `beforeSpaceCreate` | before | Gate space creation. Validate naming, child limits, compliance. |
-| `afterSpaceCreate` | after | React to a new space. |
-| `beforeSpaceDelete` | before | Cleanup extension data. Veto deletion (e.g. spaces with a structural `role`). |
-| `afterSpaceMove` | after | A space was reparented. Resolution chains shift. |
-| `beforeMatter` | before | Modify matter data before save. |
-| `afterMatter` | after | React to matter create/edit/delete. |
-| `beforeFact` | before | Enrich a Fact before it is stamped. |
-| `beforeLLMCall` | before | Before LLM API call. Cancel if quota exhausted. |
-| `afterLLMCall` | after | Token metering, billing, analytics. |
-| `beforeToolCall` | before | Before MCP tool executes. Modify args, cancel. |
-| `afterToolCall` | after | React to tool result or error. |
-| `beforeResponse` | before | Modify AI response before client receives it. |
-| `beforeRegister` | before | Validate registration (email verification, invite codes). |
-| `afterRegister` | after | Initialize being data. |
-| `afterSessionCreate` / `afterSessionEnd` | after | Session lifecycle. |
-| `afterQualityWrite` | after | After `qualities.space.setQuality` succeeds. Zero overhead if no listeners. |
-| `afterScopeChange` | after | After `extensions.blocked`/`restricted`/`allowed` changes. |
-| `afterOwnershipChange` | after | After `rootOwner` or `contributors` changed. |
-| `afterBoot` | after | Once, after all extensions loaded, config initialized, server listening. |
-| `enrichContext` | sequential | Inject extension data into AI context. |
-| `onDocumentPressure` | after | A document exceeds 80% of `maxDocumentSizeBytes`. |
-| `onTreeTripped` / `onTreeRevived` | after | Space-tree circuit breaker state changes. |
+| Hook                                     | Type       | Purpose                                                                       |
+| ---------------------------------------- | ---------- | ----------------------------------------------------------------------------- |
+| `beforeSpaceCreate`                      | before     | Gate space creation. Validate naming, child limits, compliance.               |
+| `afterSpaceCreate`                       | after      | React to a new space.                                                         |
+| `beforeSpaceDelete`                      | before     | Cleanup extension data. Veto deletion (e.g. spaces with a structural `role`). |
+| `afterSpaceMove`                         | after      | A space was reparented. Resolution chains shift.                              |
+| `beforeMatter`                           | before     | Modify matter data before save.                                               |
+| `afterMatter`                            | after      | React to matter create/edit/delete.                                           |
+| `beforeFact`                             | before     | Enrich a Fact before it is stamped.                                           |
+| `beforeLLMCall`                          | before     | Before LLM API call. Cancel if quota exhausted.                               |
+| `afterLLMCall`                           | after      | Token metering, billing, analytics.                                           |
+| `beforeToolCall`                         | before     | Before MCP tool executes. Modify args, cancel.                                |
+| `afterToolCall`                          | after      | React to tool result or error.                                                |
+| `beforeResponse`                         | before     | Modify AI response before client receives it.                                 |
+| `beforeRegister`                         | before     | Validate registration (email verification, invite codes).                     |
+| `afterRegister`                          | after      | Initialize being data.                                                        |
+| `afterSessionCreate` / `afterSessionEnd` | after      | Session lifecycle.                                                            |
+| `afterQualityWrite`                      | after      | After `qualities.space.setQuality` succeeds. Zero overhead if no listeners.   |
+| `afterScopeChange`                       | after      | After `extensions.blocked`/`restricted`/`allowed` changes.                    |
+| `afterOwnershipChange`                   | after      | After `rootOwner` or `contributors` changed.                                  |
+| `afterBoot`                              | after      | Once, after all extensions loaded, config initialized, server listening.      |
+| `enrichContext`                          | sequential | Inject extension data into AI context.                                        |
+| `onDocumentPressure`                     | after      | A document exceeds 80% of `maxDocumentSizeBytes`.                             |
+| `onTreeTripped` / `onTreeRevived`        | after      | Space-tree circuit breaker state changes.                                     |
 
 Extensions namespace their own hooks as `extName:hookName`.
 
@@ -243,13 +243,13 @@ Extensions namespace their own hooks as `extName:hookName`.
 
 Everything an extension contributes that I dispatch through goes into one of three registries. Same pattern. Extensions register; I resolve; failure falls back to me, never to silence.
 
-| Registry | What it registers | Lookup |
-|----------|-------------------|--------|
-| **Operations** | DO actions, keyed `<ext>:<action>`. Bare names reserved for me. | [ibp/operations.js](ibp/operations.js) |
-| **Roles** | SUMMON-honoring being templates. Each role declares permissions (verb subset), respondMode, `summon(message, ctx)`, and optionally `buildSystemPrompt` / `toolNames`. | [being/roles/registry.js](being/roles/registry.js) |
-| **Seeds** | Plantable scaffolds. Recipes that bootstrap a domain (Ruler/Planner/Contractor/Foreman/Workers, etc.). Operators plant via the `plant-seed` DO. | [place/seeds.js](place/seeds.js) |
+| Registry       | What it registers                                                                                                                                                     | Lookup                                             |
+| -------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------- |
+| **Operations** | DO actions, keyed `<ext>:<action>`. Bare names reserved for me.                                                                                                       | [ibp/operations.js](ibp/operations.js)             |
+| **Roles**      | SUMMON-honoring being templates. Each role declares permissions (verb subset), respondMode, `summon(message, ctx)`, and optionally `buildSystemPrompt` / `toolNames`. | [being/roles/registry.js](being/roles/registry.js) |
+| **Seeds**      | Plantable scaffolds. Recipes that bootstrap a domain (Ruler/Planner/Contractor/Foreman/Workers, etc.). Operators plant via the `plant-seed` DO.                       | [materials/seeds.js](materials/seeds.js)           |
 
-Auto-namespacing. Extensions write bare names; I record the qualified form (`governing:hire-planner`). Same prefixing applies to `core.websocket.emitToBeing(...)` events.
+Auto-namespacing. Extensions write bare names; I record the qualified form (`governing:hire-planner`). Same prefixing applies to `place.websocket.emitToBeing(...)` events.
 
 ## Roles
 
@@ -259,70 +259,72 @@ A role spec:
 
 ```js
 export const exampleRole = Object.freeze({
-  name:        "example",
+  name: "example",
   description: "What this role does in one line.",
-  honoredOperations: ["op-one", "op-two"],         // DO ops this role handles
-  permissions: ["see", "do", "summon", "be"],      // verb subset
-  respondMode: "sync",                              // "sync" | "async" | "none"
-  toolNames:   ["see-name", "do-name"],            // optional, for LLM cognition
-  buildSystemPrompt(ctx) { return "..."; },        // optional
+  honoredOperations: ["op-one", "op-two"], // DO ops this role handles
+  permissions: ["see", "do", "summon", "be"], // verb subset
+  respondMode: "sync", // "sync" | "async" | "none"
+  toolNames: ["see-name", "do-name"], // optional, for LLM cognition
+  buildSystemPrompt(ctx) {
+    return "...";
+  }, // optional
   async summon(message, ctx) {
-    // The role's wake handler. Read message, do work, return { text, stampId }.
+    // The role's wake handler. Read message, do work, return { text, actId }.
   },
 });
 ```
 
 Permissions are tool-verb overlays. A role that declares `["see", "do"]` cannot SUMMON other beings or BE-mutate itself; the tool filter enforces this at the verb intersection. Role and mode were the same architectural concept all along; the split is gone.
 
-## My extension APIs (the `core` services bundle)
+## My extension APIs (the `place` services bundle)
 
-I assemble `core` in [services.js](services.js) and hand a per-extension scoped view to each extension's `init(core)`. The scoping enforces namespace ownership: `core.qualities.space.setQuality(...)` writes only to the calling extension's namespace; `core.do.registerOperation(name, ...)` auto-prefixes to `<ext>:<name>`; `core.websocket.emitToBeing(...)` auto-prefixes the event name. Extensions never type their own namespace.
+I assemble `place` in [services.js](services.js) and hand a per-extension scoped view to each extension's `init(place)`. The scoping enforces namespace ownership: `place.qualities.space.setQuality(...)` writes only to the calling extension's namespace; `place.do.registerOperation(name, ...)` auto-prefixes to `<ext>:<name>`; `place.websocket.emitToBeing(...)` auto-prefixes the event name. Extensions never type their own namespace.
 
-### Qualities (`core.qualities.{being, space, matter}`)
+### Qualities (`place.qualities.{being, space, matter}`)
 
 One consolidated surface, three sub-namespaces. Same nine atomic primitives on each. No extension needs direct MongoDB for qualities.
 
-| Function | Operation | Use case |
-|----------|-----------|----------|
-| `getQuality(doc, key)` | Read namespace | `{}` when unset. |
-| `readQualityNamespace(doc, key)` | Read namespace, null on miss | Distinguish "never written" from "empty". |
-| `setQuality(doc, key, data)` | Atomic `$set` | Replace entire namespace. |
-| `mergeQuality(doc, key, partial)` | Atomic per-key `$set` | Update specific keys without clobbering. |
-| `incQuality(doc, key, field, n)` | Atomic `$inc` | Counters, accumulators. |
-| `pushQuality(doc, key, field, item, max)` | Atomic `$push` + `$slice` | Capped circular buffer. |
-| `addToQualitySet(doc, key, field, item)` | Atomic `$addToSet` | Deduplicated set. |
-| `batchSetQuality(doc, key, fields)` | Atomic multi-field `$set` | Set multiple keys at once. |
-| `unsetQuality(doc, key)` | Atomic `$unset` | Remove namespace entirely. |
+| Function                                  | Operation                    | Use case                                  |
+| ----------------------------------------- | ---------------------------- | ----------------------------------------- |
+| `getQuality(doc, key)`                    | Read namespace               | `{}` when unset.                          |
+| `readQualityNamespace(doc, key)`          | Read namespace, null on miss | Distinguish "never written" from "empty". |
+| `setQuality(doc, key, data)`              | Atomic `$set`                | Replace entire namespace.                 |
+| `mergeQuality(doc, key, partial)`         | Atomic per-key `$set`        | Update specific keys without clobbering.  |
+| `incQuality(doc, key, field, n)`          | Atomic `$inc`                | Counters, accumulators.                   |
+| `pushQuality(doc, key, field, item, max)` | Atomic `$push` + `$slice`    | Capped circular buffer.                   |
+| `addToQualitySet(doc, key, field, item)`  | Atomic `$addToSet`           | Deduplicated set.                         |
+| `batchSetQuality(doc, key, fields)`       | Atomic multi-field `$set`    | Set multiple keys at once.                |
+| `unsetQuality(doc, key)`                  | Atomic `$unset`              | Remove namespace entirely.                |
 
 All write functions accept a document or an id. No read-modify-write. No race conditions on concurrent writes to different namespaces.
 
-### Space CRUD (`core.space`)
+### Space CRUD (`place.space`)
 
-`core.space.createSpace`, `core.space.deleteSpaceBranch`, `core.space.updateParentRelationship`, `core.space.editSpaceName`, `core.space.editSpaceType`. The stable extension face for tree mutation.
+`place.space.createSpace`, `place.space.deleteSpaceBranch`, `place.space.updateParentRelationship`, `place.space.editSpaceName`, `place.space.editSpaceType`. The stable extension face for tree mutation.
 
-### Matter CRUD (`core.matters`)
+### Matter CRUD (`place.matters`)
 
-`core.matters.createMatter`, `core.matters.editMatter`, `core.matters.deleteMatterAndFile`, `core.matters.transferMatter`, `core.matters.getMatters`. `createMatter` takes `{ origin, content, beingId, spaceId, file?, parentMatterId?, qualities? }`. Default `origin: "ibp"`.
+`place.matters.createMatter`, `place.matters.editMatter`, `place.matters.deleteMatterAndFile`, `place.matters.transferMatter`, `place.matters.getMatters`. `createMatter` takes `{ origin, content, beingId, spaceId, file?, parentMatterId?, qualities? }`. Default `origin: "ibp"`.
 
-### Extension scope (`core.scope`)
+### Extension scope (`place.scope`)
 
-`core.scope.isExtensionBlockedAtSpace(extName, spaceId)`, `core.scope.getBlockedExtensionsAtSpace(spaceId)`, `core.scope.getToolOwner(toolName)`, `core.scope.getRolesOwnedBy(extName)`.
+`place.scope.isExtensionBlockedAtSpace(extName, spaceId)`, `place.scope.getBlockedExtensionsAtSpace(spaceId)`, `place.scope.getToolOwner(toolName)`, `place.scope.getRolesOwnedBy(extName)`.
 
-### DO operations (`core.do`)
+### DO operations (`place.do`)
 
-`core.do.registerOperation(name, spec)` to add a new DO action. `core.do.registerDefaultPermission(verb, keyParts, rule)` to contribute a Layer-3 stance auth rule. Auto-prefixed.
+`place.do.registerOperation(name, spec)` to add a new DO action. `place.do.registerDefaultPermission(verb, keyParts, rule)` to contribute a Layer-3 stance auth rule. Auto-prefixed.
 
-### Hooks (`core.hooks`)
+### Hooks (`place.hooks`)
 
 `register(hookName, handler, extName)`, `unregister(extName)`, `run(hookName, data)`, `fire(hookName, payload)` (best-effort wrapper that swallows errors).
 
-### Protocol (`core.protocol`)
+### Protocol (`place.protocol`)
 
 `sendOk(res, data)`, `sendError(res, status, code, message, detail)`, the `IBP_ERR` enum, `IbpError` class. One shared response shape across HTTP. HTTP status derives from the IBP code via `httpStatusFor(code)`; throw sites pass only the code.
 
-### Conversation entry (`core.llm`)
+### Conversation entry (`place.llm`)
 
-One primitive. `core.llm.runTurn({ beingId, role, message, ... })` for one LLM call in one role. Returns `{ answer }`. Handles session, Stamp record, `beforeResponse` hook, abort. User-facing chat flows through the same `runTurn` driven by a role's `summon()`.
+One primitive. `place.llm.runTurn({ beingId, role, message, ... })` for one LLM call in one role. Returns `{ answer }`. Handles session, Act record, `beforeResponse` hook, abort. User-facing chat flows through the same `runTurn` driven by a role's `summon()`.
 
 ## `.source` (how I show my body to the beings I form)
 
@@ -347,15 +349,15 @@ Contributors accumulate along the walk. A being in `contributors[]` at any space
 
 Five ownership mutation functions in [space/ownership.js](space/ownership.js), all chain-validated:
 
-| Function | Rule |
-|----------|------|
-| `addContributor` | Resolved owner or admin. Atomic `$addToSet`. |
-| `removeContributor` | Resolved owner, admin, or self-removal. |
-| `setOwner` | Owner above or admin can delegate. |
-| `removeOwner` | Owner above or admin can revoke. Section falls back to next owner up. |
-| `transferOwnership` | Current owner or admin can transfer. |
+| Function            | Rule                                                                  |
+| ------------------- | --------------------------------------------------------------------- |
+| `addContributor`    | Resolved owner or admin. Atomic `$addToSet`.                          |
+| `removeContributor` | Resolved owner, admin, or self-removal.                               |
+| `setOwner`          | Owner above or admin can delegate.                                    |
+| `removeOwner`       | Owner above or admin can revoke. Section falls back to next owner up. |
+| `transferOwnership` | Current owner or admin can transfer.                                  |
 
-All reject on place seed spaces. Extensions reach these through `core.space.ownership.*`.
+All reject on place seed spaces. Extensions reach these through `place.space.ownership.*`.
 
 ## The I-Am (as a Being row)
 
@@ -391,7 +393,7 @@ Health equation: `(spaceCount / max) * spaceWeight + (qualitiesDensity / max) * 
 
 State stored on the tree root: `qualities.circuit = { tripped, reason, timestamp, scores }`. I write one field. Extensions read it.
 
-I trip. Extensions heal. `core.space.reviveTree(rootId)` clears the circuit. I do NOT auto-revive.
+I trip. Extensions heal. `place.space.reviveTree(rootId)` clears the circuit. I do NOT auto-revive.
 
 Defaults to off (`treeCircuitEnabled: false`).
 
@@ -403,42 +405,42 @@ Defaults to off (`treeCircuitEnabled: false`).
 
 I enforce dozens of guarantees so no extension can take me down. They are:
 
-| Protection | Detail |
-|-----------|--------|
-| Hook timeout | 5s per handler. Hanging handlers killed and logged. |
-| Hook cap | 100 handlers per hook. |
-| Hook circuit breaker | 5 consecutive failures auto-disables a handler. Half-open recovery: after 5 minutes, one test call allowed through. Success resets. Failure re-opens. Backoff doubles on repeat failures, capped at 1 hour. |
-| Tool circuit breaker | 5 consecutive failures disables a tool for the session. AI adapts to other tools. One bad API key disables one tool, not the whole tree. |
-| Extension init timeout | 10s per extension `init()`. Hanging init skipped, boot continues. |
-| LLM concurrency semaphore | `llmMaxConcurrent` (default 20) caps in-flight LLM calls globally. Excess queued with abort signal support. |
-| LLM priority queue | Human sessions acquire LLM slots first. Gateway second. Interactive third. Background jobs last. Prevents autonomous extensions from starving human responses. |
-| Namespace enforcement | The scoped `core` binds the calling extension name. `qualities.space.setQuality` rejects writes to namespaces not owned by the caller. Four core namespaces (`extensions`, `tools`, `roles`, `llm`) rejected for all extension callers. |
-| `enrichContext` chain timeout | 15s cumulative cap for the entire chain. Per-handler timeout reduced to the remaining budget. |
-| MCP spatial scoping | MCP tool calls check `isExtensionBlockedAtSpace` before dispatch. Same scoping guarantee as WebSocket conversations. |
-| Document size guard | Every quality write checks total document size against `maxDocumentSizeBytes` (14MB default). `DOCUMENT_SIZE_EXCEEDED` rejected. `onDocumentPressure` fires at 80%. |
-| Per-namespace cap | `qualityNamespaceMaxBytes` (default 512KB) per extension namespace on Space, Being, Matter. |
-| Matter count per space | `maxMatterPerNode` (default 1000) checked in `createMatter`. |
-| Fact query cap | `factQueryLimit` (default 5000) on every audit query. |
-| Ownership chain | `rootOwner`/`contributor` mutations validate the parent chain. Only resolved owner or admin can modify. Place seed spaces always rejected. |
-| Space locks | Structural mutations (move, delete, transfer) acquire short-lived locks. Sorted acquisition prevents deadlocks. 30s TTL prevents permanent locks on crash. |
-| Space-tree circuit breaker | Health equation monitors space count, qualities density, error rate. Score > 1.0 trips the space-tree. Read access stays. Extensions revive. Off by default. |
-| Ancestor cache | Shared cache for parent chain walks. One walk serves every resolution chain. Snapshot per message. `moveSpace` clears entire cache. `deleteSpace` clears entries containing the deleted space. |
-| Session cap | 10K max (configurable). Oldest-first eviction. |
-| MCP client cap | 5,000 max. Oldest evicted on overflow. 10s connect timeout, 5s close timeout, 15-minute stale sweep. |
-| WebSocket payload sanitization | Frontend sync events cap string fields at 200 chars and JSON payloads at 500 chars. ID fields capped at 36 chars (UUID length). |
-| Password length | Min 8, max 128 characters. Bcrypt cost factor 12. Constant-time login (always runs `bcrypt.compare`, dummy hash on miss). |
-| JWT unique ID | Every token includes a `jti` (UUID) for per-token revocation. |
-| Username validation | Regex `^[a-zA-Z0-9_-]{1,32}$`. Trimmed before storage. |
-| Config key validation | `^[a-zA-Z][a-zA-Z0-9_]{0,63}$`. `__proto__`, `constructor`, `prototype` rejected. Sanitized on load to prevent prototype pollution from direct DB injection. |
-| Config value size cap | 64KB per config value. |
-| Config write verification | `setPlaceConfigValue` checks `matchedCount`. If `.config` doesn't exist, throws instead of silently updating only the cache. |
-| DB heartbeat | 5s (configurable). Failure detection within 5s. Hung queries killed at 30s socket timeout. |
-| Boot recovery | `ensurePlaceRoot` verifies all nine place seed spaces every boot. Missing ones recreated. Wrong-parent ones repaired. Partial first-boot crashes leave a recoverable state. |
-| Index verification | At boot, all required indexes verified. Missing ones created with background builds. No collection scan on any kernel query path. |
-| Tree integrity check | At boot and daily: parent/`children[]` consistency verified. Auto-repair safe inconsistencies. Orphans logged. |
-| Extension install rollback | Files written to staging directory. Atomic rename on success. Cleanup on failure. No partial installs. |
-| SSRF protection | Peer registration and auto-discovery validate hostname against `isPrivateHost()` before any fetch. 15s timeout on federation fetches. Canopy event payloads capped at 256KB. |
-| Graceful shutdown | All interval timers use `.unref()`. SIGTERM closes WS, then HTTP, then DB. |
+| Protection                     | Detail                                                                                                                                                                                                                                   |
+| ------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Hook timeout                   | 5s per handler. Hanging handlers killed and logged.                                                                                                                                                                                      |
+| Hook cap                       | 100 handlers per hook.                                                                                                                                                                                                                   |
+| Hook circuit breaker           | 5 consecutive failures auto-disables a handler. Half-open recovery: after 5 minutes, one test call allowed through. Success resets. Failure re-opens. Backoff doubles on repeat failures, capped at 1 hour.                              |
+| Tool circuit breaker           | 5 consecutive failures disables a tool for the session. AI adapts to other tools. One bad API key disables one tool, not the whole tree.                                                                                                 |
+| Extension init timeout         | 10s per extension `init()`. Hanging init skipped, boot continues.                                                                                                                                                                        |
+| LLM concurrency semaphore      | `llmMaxConcurrent` (default 20) caps in-flight LLM calls globally. Excess queued with abort signal support.                                                                                                                              |
+| LLM priority queue             | Human sessions acquire LLM slots first. Gateway second. Interactive third. Background jobs last. Prevents autonomous extensions from starving human responses.                                                                           |
+| Namespace enforcement          | The scoped `place` binds the calling extension name. `qualities.space.setQuality` rejects writes to namespaces not owned by the caller. Four core namespaces (`extensions`, `tools`, `roles`, `llm`) rejected for all extension callers. |
+| `enrichContext` chain timeout  | 15s cumulative cap for the entire chain. Per-handler timeout reduced to the remaining budget.                                                                                                                                            |
+| MCP spatial scoping            | MCP tool calls check `isExtensionBlockedAtSpace` before dispatch. Same scoping guarantee as WebSocket conversations.                                                                                                                     |
+| Document size guard            | Every quality write checks total document size against `maxDocumentSizeBytes` (14MB default). `DOCUMENT_SIZE_EXCEEDED` rejected. `onDocumentPressure` fires at 80%.                                                                      |
+| Per-namespace cap              | `qualityNamespaceMaxBytes` (default 512KB) per extension namespace on Space, Being, Matter.                                                                                                                                              |
+| Matter count per space         | `maxMatterPerNode` (default 1000) checked in `createMatter`.                                                                                                                                                                             |
+| Fact query cap                 | `factQueryLimit` (default 5000) on every audit query.                                                                                                                                                                                    |
+| Ownership chain                | `rootOwner`/`contributor` mutations validate the parent chain. Only resolved owner or admin can modify. Place seed spaces always rejected.                                                                                               |
+| Space locks                    | Structural mutations (move, delete, transfer) acquire short-lived locks. Sorted acquisition prevents deadlocks. 30s TTL prevents permanent locks on crash.                                                                               |
+| Space-tree circuit breaker     | Health equation monitors space count, qualities density, error rate. Score > 1.0 trips the space-tree. Read access stays. Extensions revive. Off by default.                                                                             |
+| Ancestor cache                 | Shared cache for parent chain walks. One walk serves every resolution chain. Snapshot per message. `moveSpace` clears entire cache. `deleteSpace` clears entries containing the deleted space.                                           |
+| Session cap                    | 10K max (configurable). Oldest-first eviction.                                                                                                                                                                                           |
+| MCP client cap                 | 5,000 max. Oldest evicted on overflow. 10s connect timeout, 5s close timeout, 15-minute stale sweep.                                                                                                                                     |
+| WebSocket payload sanitization | Frontend sync events cap string fields at 200 chars and JSON payloads at 500 chars. ID fields capped at 36 chars (UUID length).                                                                                                          |
+| Password length                | Min 8, max 128 characters. Bcrypt cost factor 12. Constant-time login (always runs `bcrypt.compare`, dummy hash on miss).                                                                                                                |
+| JWT unique ID                  | Every token includes a `jti` (UUID) for per-token revocation.                                                                                                                                                                            |
+| Username validation            | Regex `^[a-zA-Z0-9_-]{1,32}$`. Trimmed before storage.                                                                                                                                                                                   |
+| Config key validation          | `^[a-zA-Z][a-zA-Z0-9_]{0,63}$`. `__proto__`, `constructor`, `prototype` rejected. Sanitized on load to prevent prototype pollution from direct DB injection.                                                                             |
+| Config value size cap          | 64KB per config value.                                                                                                                                                                                                                   |
+| Config write verification      | `setPlaceConfigValue` checks `matchedCount`. If `.config` doesn't exist, throws instead of silently updating only the cache.                                                                                                             |
+| DB heartbeat                   | 5s (configurable). Failure detection within 5s. Hung queries killed at 30s socket timeout.                                                                                                                                               |
+| Boot recovery                  | `ensurePlaceRoot` verifies all nine place seed spaces every boot. Missing ones recreated. Wrong-parent ones repaired. Partial first-boot crashes leave a recoverable state.                                                              |
+| Index verification             | At boot, all required indexes verified. Missing ones created with background builds. No collection scan on any seed query path.                                                                                                          |
+| Tree integrity check           | At boot and daily: parent/`children[]` consistency verified. Auto-repair safe inconsistencies. Orphans logged.                                                                                                                           |
+| Extension install rollback     | Files written to staging directory. Atomic rename on success. Cleanup on failure. No partial installs.                                                                                                                                   |
+| SSRF protection                | Peer registration and auto-discovery validate hostname against `isPrivateHost()` before any fetch. 15s timeout on federation fetches. Canopy event payloads capped at 256KB.                                                             |
+| Graceful shutdown              | All interval timers use `.unref()`. SIGTERM closes WS, then HTTP, then DB.                                                                                                                                                               |
 
 ## What I do NOT do
 

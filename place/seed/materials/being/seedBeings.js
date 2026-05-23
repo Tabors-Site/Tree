@@ -1,10 +1,10 @@
 // TreeOS Seed . AGPL-3.0 . https://treeos.ai . Tabor Holly
 //
-// Kernel-known being constants.
+// Seed-known being constants.
 //
 // Mirrors seedSpaces.js but for beings. seedSpaces.js holds the
 // SEED_SPACE enum (the nine seed spaces); this file holds the
-// constants that name kernel-shipped beings.
+// constants that name seed-shipped beings.
 //
 // I_AM. The first being's name. Used as:
 //   rootOwner: I_AM   → "I_AM owns this space"

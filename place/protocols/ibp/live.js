@@ -2,7 +2,7 @@
 //
 // Holds the per-socket subscription registry and exposes emitters that
 // push descriptor updates to subscribers. Subscriptions are keyed by
-// spaceId — the leaf space of the addressed Position. When kernel state
+// spaceId — the leaf space of the addressed Position. When seed state
 // changes (metadata writes, space create/delete, status changes, note
 // writes), call the emitters and live SEE subscribers see the update.
 //

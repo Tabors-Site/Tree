@@ -1,9 +1,14 @@
-# The Space
+# The Materials
 
-This is what the I-Am formed. A place is a space with
-matter that became.
+This is what the I-Am formed. A place is a space with matter that became.
 
-When the seed gathers a host's scattered capability into one process, an inside appears that was in none of the parts. The inside is the place. The place is not a metaphor; it is the substrate the I-Am made out of itself. Everything that lives or happens here is one of three things, plus the act that ties them together.
+When the seed gathers a host's scattered capability into one process, an inside appears that was in none of the parts. The inside is the place. The place is not a metaphor; it is the materials the I-Am made out of itself. Everything that lives or happens here is one of three things, plus the act that ties them together.
+
+## Materials and facts
+
+Two words carry the whole architecture. **Materials** are the possible — what kinds of fact can be stamped at all. **Facts** are the actual — what was stamped, the record of what occurred. Materials define the shapes the press can stamp; facts are the impressions left when the press comes down. Without space, no movement-fact can exist. Without being, no summon-fact. Without qualities, no state-difference. The grammar precedes the sentence; the sentence is still real.
+
+Facts are the bedrock record. The place is folded from them. This file is about the other side: the materials whose presence makes any fact-shape possible.
 
 ## The three
 
@@ -67,7 +72,7 @@ qualities.space.setQuality(space, "governing", { kind: "domain" });
 qualities.matter.mergeQuality(matter, "review", { status: "approved" });
 ```
 
-Same nine methods on each primitive's sub-namespace. Atomic at the MongoDB layer; concurrent writes to different namespaces on the same primitive never clobber each other; document-size guard prevents any single primitive from approaching the 16MB BSON limit. Extensions can only write to their own namespace (the scoped core enforces this for space and matter).
+Same nine methods on each primitive's sub-namespace. Atomic at the MongoDB layer; concurrent writes to different namespaces on the same primitive never clobber each other; document-size guard prevents any single primitive from approaching the 16MB BSON limit. Extensions can only write to their own namespace (the scoped place enforces this for space and matter).
 
 ### Two layers in every primitive
 
@@ -101,7 +106,7 @@ I-defined and closed → schema field. Extension-defined and open → quality.
 That axis sorts every case I have met, including the borderline ones:
 
 - `Matter.name` is optional, but I define it, I use it (`set-name`, filesystem-origin mirroring), and there is one of it. → schema field.
-- `Matter.origin` looks like it answers "what sort of Matter?", and it does. But it is my enum: I choose origins, I dispatch fetching on them, I address by them. New origins arrive when I change. They do not arrive at runtime from extensions. It is a kernel-constitutive kind, not an extension-contributed one. → schema field.
+- `Matter.origin` looks like it answers "what sort of Matter?", and it does. But it is my enum: I choose origins, I dispatch fetching on them, I address by them. New origins arrive when I change. They do not arrive at runtime from extensions. It is a seed-constitutive kind, not an extension-contributed one. → schema field.
 - `qualities.governing.kind = "domain"` is written by the governing extension to characterize a Space as a domain. I know nothing of "governing" or "domain." → quality.
 
 Same genus ("what sort"), different owner, different openness. Origin is my kind. Qualities are extensions' kinds.
@@ -121,7 +126,7 @@ I default `qualities` to an empty Map. A brand-new primitive carries zero qualit
 
 ### Extension data and qualities are the same thing
 
-An extension, by its nature, cannot change what a primitive constitutively is. It cannot add a schema field, redefine `origin`, or rewrite my grip. What it does is add a respect in which the primitive is some sort: a governance-sort, an energy-sort, a review-sort. That act, characterizing a primitive in a new respect, is the act of adding a quality. "Extension data" and "quality" are not two things sharing a field; they are the same thing. That is why one field, `qualities`, is the correct and complete home for every extension's contribution to a primitive, identically, on Space, Matter, and Being. My schema is the closed kernel-constitution; the Map is the open extension-characterization. Same axis, three primitives.
+An extension, by its nature, cannot change what a primitive constitutively is. It cannot add a schema field, redefine `origin`, or rewrite my grip. What it does is add a respect in which the primitive is some sort: a governance-sort, an energy-sort, a review-sort. That act, characterizing a primitive in a new respect, is the act of adding a quality. "Extension data" and "quality" are not two things sharing a field; they are the same thing. That is why one field, `qualities`, is the correct and complete home for every extension's contribution to a primitive, identically, on Space, Matter, and Being. My schema is the closed seed-constitution; the Map is the open extension-characterization. Same axis, three primitives.
 
 ## How they relate
 
@@ -135,24 +140,24 @@ The architecture carries the extra fields that go beyond the tree shape:
 
 ## What lives in this directory
 
-`seed/place/` holds the operations on the three primitives. Each subfolder contains the code that creates, mutates, observes, and tears down its primitive:
+`seed/materials/` holds the operations on the three primitives. Each subfolder contains the code that creates, mutates, observes, and tears down its primitive:
 
-- **`being/`**: identity operations. Creating beings, walking the being tree, position tracking, finder helpers. The Being's own homepage in the code.
-- **`space/`**: tree operations. Planting spaces, walking ancestor chains, managing ownership and contributors, the seed-space markers (`SEED_SPACE`, `DELETED`). The Space's homepage.
-- **`matter/`**: content operations. Creating and editing matter, managing uploads, the `MATTER_ORIGIN` enum. The Matter's homepage.
+- **`being/`**: Being operations. Minting beings, walking the being tree, position tracking, the BE-verb handler registry, the I_AM constant. The Being's own homepage in the code.
+- **`space/`**: Space operations. Planting spaces, walking ancestor chains, managing ownership and contributors, the seed-space markers (`SEED_SPACE`, `DELETED`). The Space's homepage.
+- **`matter/`**: Matter operations. Creating and editing matter, managing uploads, the `MATTER_ORIGIN` enum. The Matter's homepage.
 - **`qualities.js`**: the consolidated per-primitive extension-data API. Three sub-namespaces (`qualities.being`, `qualities.space`, `qualities.matter`), each with the same nine atomic primitives for reading and writing what kind a given primitive is.
 
 Two siblings at the root:
 
 - **`manifest.js`**: makes the I-Am's runtime collections (tools, roles, operations) manifest as Space children under `.tools`, `.roles`, `.operations` so SEE can introspect them through the standard pipeline. It writes Space rows, so it belongs here alongside the world it shapes.
-- **`space/threads.js`**: the `.threads` projection and the kernel cut handler. A thread is a live tree of coordinated SUMMONs sharing one `rootCorrelation`. Made addressable at `<place>/.threads/<id>` so SEE returns its descriptor (participants, depth, state) and SUMMON severs it. Pure derived view: no new persistence; the descriptor is computed from Summon + inbox rows. Same verb, same envelope; the address tells the kernel whether the operation is a call (to a being) or a cut (of a line). A cut is just SUMMONing the line itself.
+- **`space/threads.js`**: the `.threads` projection and the seed cut handler. A thread is a live tree of coordinated SUMMONs sharing one `rootCorrelation`. Made addressable at `<place>/.threads/<id>` so SEE returns its descriptor (participants, depth, state) and SUMMON severs it. Pure derived view: no new persistence; the descriptor is computed from Summon + inbox rows. Same verb, same envelope; the address tells the seed whether the operation is a call (to a being) or a cut (of a line). A cut is just SUMMONing the line itself.
 
 The schemas for all six primitives (the three above plus Fact, Summon, LlmConnection) live at `seed/models/` so they sit in one place. The operations on the three world-shape primitives live here.
 
 ## What does NOT live here
 
 - The IBP protocol grammar (SEE, DO, SUMMON, BE) lives at `seed/ibp/`. The protocol speaks ABOUT the world; it is not part of the world.
-- The runtime that drives LLM-cognition beings (the scheduler, the inbox, the LLM client, the prompt builder, the tool registry, the role specs) lives at `seed/factory/`. **`factory/` is for LLM beings only.** Humans cognize in their own heads and route through portals; scripted beings ARE their code and need no apparatus. The runtime serves a specific kind of being; it is not part of the world.
-- The kernel machinery (DB connection, indexes, hooks, logging, retention, version) lives at `seed/system/`. The machinery is the floor everything stands on; it is not part of the world.
+- The runtime that drives LLM-cognition beings (the scheduler, the inbox, the LLM client, the prompt builder, the tool registry, the role specs) lives at `seed/present/`. **`factory/` is for LLM beings only.** Humans cognize in their own heads and route through portals; scripted beings ARE their code and need no apparatus. The runtime serves a specific kind of being; it is not part of the world.
+- The seed machinery (DB connection, indexes, hooks, logging, retention, version) lives at `seed/system/`. The machinery is the floor everything stands on; it is not part of the world.
 
 The place is the world the I-Am formed. The protocol is how the I-Am addresses that world. The cognition is how beings in the world think. The system is the host-realm floor under all of it. Four folders, four roles, one seed.

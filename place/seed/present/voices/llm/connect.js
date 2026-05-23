@@ -29,7 +29,7 @@
 //                     in via `allowedLlmDomains` place config.
 //
 //   SLOT REGISTRY     Extensions register additional being/space
-//                     slots (e.g. "reflect", "scout"). The kernel
+//                     slots (e.g. "reflect", "scout"). The seed
 //                     ships only "main" (being) and "default"
 //                     (space).
 //
@@ -61,9 +61,9 @@ import { v4 as uuidv4 } from "uuid";
 import log from "../../../system/log.js";
 import Being from "../../../models/being.js";
 import Space from "../../../models/space.js";
-import { I_AM } from "../../../place/being/seedBeings.js";
+import { I_AM } from "../../../materials/being/seedBeings.js";
 import { getPlaceConfigValue } from "../../../placeConfig.js";
-import { getAncestorChain } from "../../../place/space/ancestorCache.js";
+import { getAncestorChain } from "../../../materials/space/ancestorCache.js";
 
 // Connections live in `Being.qualities.llmConnections` as a Map keyed by
 // connection uuid. Each entry is { name, baseUrl, encryptedApiKey, model,
@@ -534,11 +534,21 @@ export function clearBeingClientCache(beingId) {
 // CONNECTIONS CRUD
 // ─────────────────────────────────────────────────────────────────────────
 
+// Helper signature pattern: (beingId, spec, { identity } = {})
+//
+// All three CRUD helpers below generate the uuid (add only), validate
+// the spec, and route the write through `do.set` so a single Fact
+// stamps. The outer add/update/delete-llm-connection DO ops carry
+// `skipAudit: true` to avoid double-Facting; the inner set IS the
+// canonical audit. Identity threads through so the Fact attributes
+// to the operator (defaults to scaffold/I_AM if absent).
+
 export async function addLlmConnection(
   beingId,
   { name, baseUrl, apiKey, model },
+  { identity } = {},
 ) {
-  const being = await Being.findById(beingId).select("qualities").lean();
+  const being = await Being.findById(beingId);
   if (!being) throw new Error("Being not found");
 
   const existing = readConnectionsFrom(being);
@@ -571,9 +581,12 @@ export async function addLlmConnection(
     lastUsedAt:      null,
   };
 
-  await Being.updateOne(
-    { _id: beingId },
-    { $set: { [`qualities.llmConnections.${connectionId}`]: conn } },
+  const { doVerb } = await import("../../../ibp/verbs.js");
+  await doVerb(
+    being,
+    "set",
+    { field: `qualities.llmConnections.${connectionId}`, value: conn },
+    identity ? { identity } : { scaffold: true },
   );
 
   return {
@@ -588,10 +601,9 @@ export async function updateLlmConnection(
   beingId,
   connectionId,
   { name, baseUrl, apiKey, model },
+  { identity } = {},
 ) {
-  const being = await Being.findById(beingId)
-    .select("llmDefault qualities")
-    .lean();
+  const being = await Being.findById(beingId);
   if (!being) throw new Error("Being not found");
 
   const safeConnId = validateConnectionId(connectionId);
@@ -631,14 +643,18 @@ export async function updateLlmConnection(
     };
   }
 
-  // Per-field merge into the connection entry — atomic $set on the
-  // specific keys so concurrent updates to other connections of the
-  // same being don't clobber each other.
-  const setPaths = {};
-  for (const [k, v] of Object.entries(update)) {
-    setPaths[`qualities.llmConnections.${safeConnId}.${k}`] = v;
-  }
-  await Being.updateOne({ _id: beingId }, { $set: setPaths });
+  // Merge update into the existing entry and write the whole entry back
+  // via do.set. One Fact captures the new entry shape; the previous
+  // shape is recoverable from the chain by walking earlier set Facts
+  // on this same field path.
+  const merged = { ...existing, ...update };
+  const { doVerb } = await import("../../../ibp/verbs.js");
+  await doVerb(
+    being,
+    "set",
+    { field: `qualities.llmConnections.${safeConnId}`, value: merged },
+    identity ? { identity } : { scaffold: true },
+  );
 
   // Bust cache if this connection is currently assigned
   const beingLlmMeta =
@@ -655,33 +671,43 @@ export async function updateLlmConnection(
 
   return {
     _id:     safeConnId,
-    name:    update.name    ?? existing.name,
-    baseUrl: update.baseUrl ?? existing.baseUrl,
-    model:   update.model   ?? existing.model,
+    name:    merged.name,
+    baseUrl: merged.baseUrl,
+    model:   merged.model,
   };
 }
 
-export async function deleteLlmConnection(beingId, connectionId) {
+export async function deleteLlmConnection(beingId, connectionId, { identity } = {}) {
   const safeConnId = validateConnectionId(connectionId);
-  const being = await Being.findById(beingId)
-    .select("llmDefault qualities")
-    .lean();
+  const being = await Being.findById(beingId);
   if (!being) throw new Error("Being not found");
 
   const conn = readConnectionsFrom(being)[safeConnId];
   if (!conn) throw new Error("Connection not found");
 
-  // Unset the connection entry on this being's qualities.
-  await Being.updateOne(
-    { _id: beingId },
-    { $unset: { [`qualities.llmConnections.${safeConnId}`]: "" } },
+  const { doVerb } = await import("../../../ibp/verbs.js");
+  const opts = identity ? { identity } : { scaffold: true };
+
+  // Unset the connection entry on this being's qualities (do.set with
+  // value=null on a 2-deep path unsets via Mongo $unset).
+  await doVerb(
+    being,
+    "set",
+    { field: `qualities.llmConnections.${safeConnId}`, value: null },
+    opts,
   );
 
-  // Clear being's slot assignments that pointed at this connection.
-  const updates = {};
+  // Clear being's main slot if it pointed here.
   if (being.llmDefault === connectionId) {
-    updates.llmDefault = null;
+    await doVerb(
+      being,
+      "set",
+      { field: "llmDefault", value: null },
+      opts,
+    );
   }
+
+  // Clear being's named slots that pointed here.
   const beingLlmMeta =
     being.qualities instanceof Map
       ? being.qualities.get("beingLlm")
@@ -689,27 +715,44 @@ export async function deleteLlmConnection(beingId, connectionId) {
   const beingSlots = beingLlmMeta?.slots || {};
   for (const [s, val] of Object.entries(beingSlots)) {
     if (val === connectionId) {
-      updates[`qualities.beingLlm.slots.${s}`] = null;
+      await doVerb(
+        being,
+        "set",
+        { field: `qualities.beingLlm.slots.${s}`, value: null },
+        opts,
+      );
     }
   }
-  if (Object.keys(updates).length > 0) {
-    await Being.findByIdAndUpdate(beingId, { $set: updates });
-    clearBeingClientCache(beingId);
+
+  clearBeingClientCache(beingId);
+
+  // Cascade: every space whose llmDefault points here gets cleared.
+  // Per-space do.set so each clear is its own Fact (the projection
+  // records the chain of cleanups, not a silent bulk update).
+  const matchingMain = await Space.find({ llmDefault: connectionId }).select("_id").lean();
+  for (const s of matchingMain) {
+    await doVerb(
+      await Space.findById(s._id),
+      "set",
+      { field: "llmDefault", value: null },
+      opts,
+    );
   }
 
-  // Clear tree assignments pointing to deleted connection (batched).
-  await Space.updateMany(
-    { llmDefault: connectionId },
-    { $set: { llmDefault: null } },
-  );
-
-  // Clear extension slots on spaces in one pass per slot.
+  // Extension-slot cascades on spaces, per slot.
   const extSlots = getAllRootLlmSlots().filter((s) => s !== "default");
   for (const slot of extSlots) {
-    await Space.updateMany(
-      { [`qualities.llm.slots.${slot}`]: connectionId },
-      { $set: { [`qualities.llm.slots.${slot}`]: null } },
-    );
+    const matchingSlot = await Space.find({
+      [`qualities.llm.slots.${slot}`]: connectionId,
+    }).select("_id").lean();
+    for (const s of matchingSlot) {
+      await doVerb(
+        await Space.findById(s._id),
+        "set",
+        { field: `qualities.llm.slots.${slot}`, value: null },
+        opts,
+      );
+    }
   }
 
   return { removed: true };
@@ -762,7 +805,7 @@ export async function assignSpaceConnection(
 
   if (safeConnId) {
     // With qualities-based storage, connections are scoped to a being —
-    // ownership lookup requires the owner's beingId. Kernel-internal
+    // ownership lookup requires the owner's beingId. Seed-internal
     // callers without ownerBeingId trust the caller (gate happens
     // upstream); operator callers supply ownerBeingId from their
     // identity so the check runs.

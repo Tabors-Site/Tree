@@ -43,8 +43,8 @@
 // stale beingIds (returns arrival shape).
 
 import Being from "../models/being.js";
-import { resolveSpaceAccess } from "../place/space/spaceFetch.js";
-import { getAncestorChain } from "../place/space/ancestorCache.js";
+import { resolveSpaceAccess } from "../materials/space/spaceFetch.js";
+import { getAncestorChain } from "../materials/space/ancestorCache.js";
 
 const ARRIVAL_PROPS = Object.freeze({
   beingId:              null,

@@ -59,9 +59,10 @@ const SPACE_TYPE_RE = /^[A-Za-z0-9][A-Za-z0-9._-]*$/;
 
 /**
  * Validate (and trim) a space name. Throws on rejection. Returns the
- * trimmed name on success.
+ * trimmed name on success. Exported so the verb-side `do:set` handler
+ * can validate without going through editSpaceName (which writes).
  */
-function assertValidSpaceName(raw) {
+export function assertValidSpaceName(raw) {
   if (typeof raw !== "string") throw new Error("Space name must be a string");
   const name = raw.trim();
   if (!name) throw new Error("Space name is required");
@@ -79,9 +80,10 @@ function assertValidSpaceName(raw) {
 
 /**
  * Validate (and trim) a space type. Null is allowed (untyped space).
- * Returns the normalized type (string or null).
+ * Returns the normalized type (string or null). Exported alongside
+ * assertValidSpaceName for verb-side validation.
  */
-function assertValidSpaceType(raw) {
+export function assertValidSpaceType(raw) {
   if (raw === null || raw === undefined) return null;
   if (typeof raw !== "string")
     throw new Error("Space type must be a string or null");
@@ -118,7 +120,7 @@ async function getBeingOrThrow(beingId) {
  * Pass `excludeSpaceId` for renames so the space whose name we're
  * changing doesn't count itself as a collision.
  */
-async function assertNameAvailableAt(
+export async function assertNameAvailableAt(
   parentId,
   name,
   { excludeSpaceId = null } = {},
@@ -162,7 +164,7 @@ export async function createSpace({
   note = null,
   qualities = null,
   validatedBeing = null,
-  stampId = null,
+  actId = null,
   sessionId = null,
 } = {}) {
   name = assertValidSpaceName(name);
@@ -281,7 +283,7 @@ export async function createSpace({
       content: note,
       beingId: being._id,
       spaceId: newSpace._id,
-      stampId,
+      actId,
       sessionId,
     });
   }
@@ -312,7 +314,7 @@ export async function createSpace({
  * .peers, .extensions, .tools, .roles, .operations, .source,
  * .threads) that hold I_AM's own working memory, surfaced as spaces
  * so SEE reads them through the same protocol everything else does.
- * See point 5 of THE PHILOSOPHY OF THE SEED in seed/place/space/seedSpaces.js.
+ * See point 5 of THE PHILOSOPHY OF THE SEED in seed/materials/space/seedSpaces.js.
  *
  * Skips `createSpace`'s name validator (I_AM owns the dot-namespace
  * — the validator's job is to keep every OTHER being out) and the
@@ -347,7 +349,7 @@ export async function createPlaceSeedSpace({
   await newSpace.save();
   await Space.findByIdAndUpdate(parentId, { $addToSet: { children: id } });
 
-  // Stamp the genesis act. The I_AM is doing it; the Fact
+  // Act the genesis act. The I_AM is doing it; the Fact
   // names it. Resolves via populate once ensureIAm creates
   // the Being row in the same boot pass.
   try {
@@ -380,14 +382,14 @@ export async function createSpaceBranch(
   branchData,
   parentId,
   beingId,
-  stampId = null,
+  actId = null,
   sessionId = null,
 ) {
   const being = await getBeingOrThrow(beingId);
-  return _createBranch(branchData, parentId, being, stampId, sessionId);
+  return _createBranch(branchData, parentId, being, actId, sessionId);
 }
 
-async function _createBranch(branchData, parentId, being, stampId, sessionId) {
+async function _createBranch(branchData, parentId, being, actId, sessionId) {
   const { name, note, type, qualities } = branchData;
   const children = Array.isArray(branchData.children)
     ? branchData.children
@@ -412,7 +414,7 @@ async function _createBranch(branchData, parentId, being, stampId, sessionId) {
     note: note || null,
     qualities: qualitiesMap,
     validatedBeing: being,
-    stampId,
+    actId,
     sessionId,
   });
 
@@ -422,7 +424,7 @@ async function _createBranch(branchData, parentId, being, stampId, sessionId) {
       childData,
       newSpace._id,
       being,
-      stampId,
+      actId,
       sessionId,
     );
     totalCreated += result.totalCreated;
@@ -438,7 +440,7 @@ export async function editSpaceName({
   spaceId,
   newName,
   beingId,
-  stampId = null,
+  actId = null,
   sessionId = null,
 }) {
   newName = assertValidSpaceName(newName);
@@ -465,7 +467,7 @@ export async function editSpaceType({
   spaceId,
   newType,
   beingId,
-  stampId = null,
+  actId = null,
   sessionId = null,
 }) {
   newType = assertValidSpaceType(newType);
@@ -502,7 +504,7 @@ export async function updateParentRelationship(
   childId,
   newParentId,
   beingId,
-  stampId = null,
+  actId = null,
   sessionId = null,
   opts = {},
 ) {
@@ -632,7 +634,7 @@ export async function updateParentRelationship(
 export async function deleteSpaceBranch(
   spaceId,
   beingId,
-  stampId = null,
+  actId = null,
   sessionId = null,
 ) {
   const spaceToDelete = await Space.findById(spaceId);
@@ -703,7 +705,7 @@ export async function reorderChildren({
   spaceId,
   children: newOrder,
   beingId,
-  stampId = null,
+  actId = null,
   sessionId = null,
 }) {
   if (!Array.isArray(newOrder)) throw new Error("children must be an array");

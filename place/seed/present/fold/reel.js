@@ -23,7 +23,7 @@
 // class identifier.
 //
 // What's stamped onto the reel forever (the historical record)
-// lives on Stamp rows in Mongo. This file is only the LIVE carry
+// lives on Act rows in Mongo. This file is only the LIVE carry
 // across moments; once a presence goes idle past
 // STALE_PRESENCE_MS, the in-memory entry evicts. The history on
 // Mongo is forever; the live carry is just a tail.
@@ -53,7 +53,7 @@ export function setMaxPresenceReels(n) {
 }
 
 // Idle-eviction window. A reel untouched for this long gets swept.
-// The Mongo-side Stamp record is the durable history; this is
+// The Mongo-side Act record is the durable history; this is
 // just the live carry.
 let STALE_PRESENCE_MS = 30 * 60 * 1000;
 export function setStalePresenceMs(ms) {
@@ -124,7 +124,7 @@ export function getReelCount() {
 //
 // Safety net: any reel idle past STALE_PRESENCE_MS gets dropped
 // every 10 minutes so a leaked entry doesn't stick around. The
-// durable history is in Mongo (Stamp rows); the live carry can
+// durable history is in Mongo (Act rows); the live carry can
 // evict freely.
 
 setInterval(

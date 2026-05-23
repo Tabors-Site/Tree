@@ -58,7 +58,7 @@ export default async function migrate() {
 
   // ── Step 3: sync new indexes from the model ─────────────────────────
   try {
-    const Summon = (await import("../models/stamp.js")).default;
+    const Summon = (await import("../past/act/act.js")).default;
     await Summon.syncIndexes();
     log.verbose("Seed/0.10.0", "summon indexes synced");
   } catch (err) {

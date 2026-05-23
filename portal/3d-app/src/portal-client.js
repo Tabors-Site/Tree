@@ -5,17 +5,27 @@
 // (except the single /.well-known/treeos-portal bootstrap before a
 // socket is open).
 //
-// Wire shape per [[project_ibp_wire_shape]] +
-// [[project_protocol_transport_separation]]:
+// Wire shape:
 //
 //   socket.emit("ibp", { id, verb, address, payload, identity? }, ack)
 //
-// Async updates the server pushes back ride the SAME `ibp` event with
-// a server→client envelope:
+// Server pushes ride the SAME `ibp` event:
+//
 //   { verb: "summon", payload: <inbox entry> }
 //   { verb: "see",    payload: { kind: "patch"|"replace"|"invalidate",
-//                                nodeId, data } }
-// One event, both directions, envelope-discriminated.
+//                                spaceId, data } }
+//
+// DO is asynchronous on the wire. A DO request acks with
+// `{ correlation, status: "accepted" }`; the result arrives later as
+// a SUMMON push whose `payload.correlation` matches the one acked.
+// `.do(...)` awaits that matching push and resolves with
+// `payload.result`. Idempotency: the correlation is the dedupe key
+// server-side, so retries collapse to one moment.
+//
+// SUMMON-replies and out-of-band SUMMONs use the same `verb:"summon"`
+// envelope. The portal first checks pending DO awaiters by
+// correlation; non-matching summons fall through to the inbox
+// handler.
 
 import { io } from "socket.io-client";
 
@@ -30,6 +40,8 @@ export class PortalClient {
     this._onConnectionChange  = onConnectionChange  || (() => {});
     this._onSummon            = onSummon            || (() => {});
     this._onDescriptorEvent   = onDescriptorEvent   || (() => {});
+    // correlation → { resolve, reject, timer } for awaiting moment pushes (DO/BE)
+    this._pendingMoments      = new Map();
   }
 
   /** Async SUMMON updates (server emits `ibp:update`). */
@@ -85,17 +97,38 @@ export class PortalClient {
 
     // Single IBP wire event — one listener, route by envelope.verb.
     // Server-push envelopes:
-    //   { verb: "summon", payload: <inbox entry> }
-    //   { verb: "see",    payload: { kind, nodeId, data } }
+    //   { verb: "summon", payload: <inbox entry, optionally w/ result> }
+    //   { verb: "see",    payload: { kind, spaceId, data } }
     this.socket.on("ibp", (envelope) => {
       if (!envelope || typeof envelope !== "object") return;
       if (envelope.verb === "summon") {
-        safeCall(this._onSummon, envelope.payload);
+        const p = envelope.payload || {};
+        // First: match against pending DO awaiters by correlation.
+        // Transport-act results ride the SUMMON push shape — the
+        // server fills `result` and the matching correlation.
+        const pending = p.correlation ? this._pendingMoments.get(p.correlation) : null;
+        if (pending) {
+          this._pendingMoments.delete(p.correlation);
+          if (pending.timer) clearTimeout(pending.timer);
+          const result = p.result;
+          if (result && typeof result === "object" && result.error) {
+            const err = new Error(result.error.message || "transport-act failed");
+            err.code = result.error.code || "TRANSPORT_ACT_FAILED";
+            pending.reject(err);
+          } else {
+            pending.resolve(result);
+          }
+          return;
+        }
+        // Otherwise fall through: an unsolicited SUMMON or a reply
+        // the caller isn't tracking with .do() — fire the inbox
+        // handler.
+        safeCall(this._onSummon, p);
         return;
       }
       if (envelope.verb === "see") {
         const p = envelope.payload || {};
-        safeCall(this._onDescriptorEvent, { kind: p.kind, payload: p.data, nodeId: p.nodeId });
+        safeCall(this._onDescriptorEvent, { kind: p.kind, payload: p.data, spaceId: p.spaceId, nodeId: p.spaceId });
         return;
       }
     });
@@ -125,18 +158,51 @@ export class PortalClient {
   }
 
   /**
-   * DO: mutate at a position. Stance addresses are accepted; the server
-   * strips the @being qualifier internally.
+   * DO: mutate at a position. Asynchronous on the wire — the server
+   * acks `{ correlation, status: "accepted" }` immediately and pushes
+   * the actual result later as a `moment` envelope. This method awaits
+   * the matching push and resolves with the verb's return value.
+   *
+   * The correlation is a client-generated idempotency key. Re-sending
+   * the same correlation collapses to one moment on the server; the
+   * second call will receive the same result.
    *
    * @param {string} address  position (or stance; @being is stripped server-side)
-   * @param {string} action   registered op name ("create-child", "set-meta", "food:log-meal", ...)
+   * @param {string} action   registered op name ("birth", "set", "death", "plant", "food:log-meal", ...)
    * @param {object} [args]   op-specific arguments
+   * @param {object} [opts]   { correlation?: string, timeoutMs?: number }
    */
-  async do(address, action, args = {}) {
+  async do(address, action, args = {}, opts = {}) {
     if (typeof action !== "string" || !action) {
       throw new Error("DO requires an action (string)");
     }
-    return this._call("do", normalize(address), { action, args });
+    const correlation = opts.correlation || cryptoRandomId();
+    const timeoutMs   = opts.timeoutMs   || 90000;
+
+    // Register the awaiter before emitting so a fast server push
+    // doesn't arrive before we're listening.
+    const momentPromise = new Promise((resolve, reject) => {
+      const timer = setTimeout(() => {
+        this._pendingMoments.delete(correlation);
+        const err = new Error(`ibp DO result push timed out (correlation=${correlation.slice(0, 8)})`);
+        err.code = "TIMEOUT";
+        reject(err);
+      }, timeoutMs);
+      this._pendingMoments.set(correlation, { resolve, reject, timer });
+    });
+
+    try {
+      const ack = await this._call("do", normalize(address), { action, args, correlation });
+      if (!ack || ack.status !== "accepted") {
+        this._pendingMoments.delete(correlation);
+        throw new Error(`ibp DO not accepted: ${JSON.stringify(ack)}`);
+      }
+    } catch (err) {
+      this._pendingMoments.delete(correlation);
+      throw err;
+    }
+
+    return momentPromise;
   }
 
   /**
@@ -237,4 +303,26 @@ function normalize(address) {
 function safeCall(fn, arg) {
   try { fn(arg); }
   catch (err) { console.warn("[portal] handler threw:", err); }
+}
+
+/**
+ * Generate a UUID-shaped string in the browser without depending on
+ * crypto.randomUUID (still missing on older Safari). Used as the DO
+ * correlation when the caller doesn't supply one.
+ */
+function cryptoRandomId() {
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+    try { return crypto.randomUUID(); } catch {}
+  }
+  // Fallback: 16 random bytes formatted as a UUID v4.
+  const bytes = new Uint8Array(16);
+  if (typeof crypto !== "undefined" && crypto.getRandomValues) {
+    crypto.getRandomValues(bytes);
+  } else {
+    for (let i = 0; i < 16; i++) bytes[i] = Math.floor(Math.random() * 256);
+  }
+  bytes[6] = (bytes[6] & 0x0f) | 0x40;
+  bytes[8] = (bytes[8] & 0x3f) | 0x80;
+  const hex = Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
+  return `${hex.slice(0,8)}-${hex.slice(8,12)}-${hex.slice(12,16)}-${hex.slice(16,20)}-${hex.slice(20)}`;
 }

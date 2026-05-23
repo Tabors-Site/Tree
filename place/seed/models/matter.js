@@ -30,7 +30,7 @@
 
 import mongoose from "mongoose";
 import { v4 as uuidv4 } from "uuid";
-import { MATTER_ORIGIN } from "../place/matter/origins.js";
+import { MATTER_ORIGIN } from "../materials/matter/origins.js";
 
 const MatterSchema = new mongoose.Schema({
   _id: { type: String, default: uuidv4 },
@@ -68,6 +68,14 @@ const MatterSchema = new mongoose.Schema({
     default: () => new Map(),
   },
 
+  // Projection cache markers. Per FOLD.md / STAMPER.md, the Matter
+  // row is a cache of the fold over this matter's reel — not the
+  // source of truth. `foldedSeq` is the highest fact-seq applied
+  // here. `position` mirrors `spaceId` once position-facts land; for
+  // now reducer output stays null.
+  foldedSeq: { type: Number, default: null },
+  position:  { type: String, default: null },
+
   createdAt: { type: Date, default: Date.now },
   updatedAt: { type: Date, default: Date.now },
 });
@@ -75,6 +83,10 @@ const MatterSchema = new mongoose.Schema({
 MatterSchema.index({ spaceId: 1, createdAt: -1 });
 MatterSchema.index({ beingId: 1, createdAt: -1 });
 MatterSchema.index({ origin: 1 });
+
+// Position index — what matter occupies a given space. Used by
+// foldPlace to find a space's matter-occupants.
+MatterSchema.index({ position: 1 }, { sparse: true });
 
 MatterSchema.pre("save", function (next) {
   if (!this.isNew) this.updatedAt = new Date();

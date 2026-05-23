@@ -7,10 +7,13 @@ This is a TreeOS place. An operating system for AI agents. You are inside a runn
 Three concerns live at the top level: **what TreeOS is** (seed/), **what conversation over the wire looks like** (protocols/), and **how it gets carried** (transports/). Plus extensions.
 
 ```
-seed/              The kernel. Four folders, four roles. NEVER modify.
+seed/              The seed. Four folders, four roles. NEVER modify.
 
-  place/         IS    — the world as substance. space/, matter/, being/,
-                       manifest.js, PLACE.md.
+  materials/     IS    — what the world is made of. space/, matter/, being/,
+                       qualities.js, facts.js, seeds.js, doCeiling.js,
+                       manifest.js, MATERIALS.md. Materials define the
+                       possible (what kinds of fact can be stamped); facts
+                       define the actual (what occurred).
   ibp/          ACTS  — the world as acted-upon. SEE/DO/SUMMON/BE, address,
                        authorize, operations, descriptor, discovery,
                        pushChannel, resolver, stanceProperties.
@@ -29,14 +32,14 @@ seed/              The kernel. Four folders, four roles. NEVER modify.
 
   models/            Mongoose schemas for all 6 primitives:
                      being, space, matter, did, summon, llmConnection.
-  services.js        Assembles `core` from the four folders above.
+  services.js        Assembles `place` from the four folders above.
   placeRoot.js        This place's root + the nine place seed spaces.
   placeConfig.js      This place's config.
-  SEED.md            Kernel internals doc (first-person, from the I-Am).
+  SEED.md            Seed internals doc (first-person, from the I-Am).
   LICENSE            AGPL-3.0 with a preamble naming the seed.
 ```
 
-**Placement rule.** For any seed file, ask: does this describe what a being **IS**, how it **ACTS**, or how it **THINKS**? → `place/` / `ibp/` / `factory/`. Does it touch the host while knowing nothing of the world? → `system/`. Schemas live in `models/` (shape vs behavior is a separate axis).
+**Placement rule.** For any seed file, ask: does this describe what a being **IS**, how it **ACTS**, or how it **THINKS**? → `materials/` / `ibp/` / `factory/`. Does it touch the host while knowing nothing of the world? → `system/`. Schemas live in `models/` (shape vs behavior is a separate axis).
 
 protocols/ What conversation over the wire looks like. Never owns transport.
 ibp/ Four-verb protocol (SEE/DO/SUMMON/BE) on stances/positions
@@ -65,12 +68,12 @@ genesis.js The unfolding. Indexes, config, migrations, beings, extensions, jobs.
 
 ## The six rules (never violated)
 
-1. **Seed never imports from extensions.** The kernel does not know extensions exist.
+1. **Seed never imports from extensions.** The seed does not know extensions exist.
 2. **Extensions import from seed.** One-way dependency.
 3. **Extensions reach each other through `getExtension()` or hooks.** No direct imports between extensions.
-4. **Extension data lives in the `qualities` Map.** Never in seed schemas. See [seed/place/PLACE.md](seed/place/PLACE.md) "Qualities" for why the field is named that way and the constitutive-vs-characterizing test for where any new property belongs.
+4. **Extension data lives in the `qualities` Map.** Never in seed schemas. See [seed/philosophy/MATERIALS.md](seed/philosophy/MATERIALS.md) "Qualities" for why the field is named that way and the constitutive-vs-characterizing test for where any new property belongs.
 5. **Seed schemas never change.** Space has 12 fields. User has 7. The Map grows anything.
-6. **Zero `getExtension()` calls in seed.** The kernel can't be tricked into loading extension code.
+6. **Zero `getExtension()` calls in seed.** The seed can't be tricked into loading extension code.
 
 ## Architectural patterns (read before building anything)
 
@@ -82,7 +85,7 @@ genesis.js The unfolding. Indexes, config, migrations, beings, extensions, jobs.
 
 **before hooks intercept. after hooks react.** Before hooks run sequentially because they can cancel. After hooks run in parallel because they react independently. `enrichContext` is the sequential override because its handlers build cumulative output. Don't make a hook sequential without articulating why handlers depend on each other's output.
 
-**The `qualities` Map is the real invention.** The schema fields are the bones — kernel-defined, closed, constitutive. The Map is the flesh — extension-defined, open, characterizing. Every extension writes to its own namespace: `qualities.values`, `qualities.prestige`, `qualities.permissions`. The schemas never change. The Map grows anything. Two concurrent writes to different namespaces on the same primitive do not clobber each other because `qualities.{being,space,matter}.setQuality` uses atomic `$set` on the specific namespace key. Full rationale (why "qualities" not "metadata", the test for where new properties belong) lives in [seed/place/PLACE.md](seed/place/PLACE.md) "Qualities".
+**The `qualities` Map is the real invention.** The schema fields are the bones — seed-defined, closed, constitutive. The Map is the flesh — extension-defined, open, characterizing. Every extension writes to its own namespace: `qualities.values`, `qualities.prestige`, `qualities.permissions`. The schemas never change. The Map grows anything. Two concurrent writes to different namespaces on the same primitive do not clobber each other because `qualities.{being,space,matter}.setQuality` uses atomic `$set` on the specific namespace key. Full rationale (why "qualities" not "metadata", the test for where new properties belong) lives in [seed/philosophy/MATERIALS.md](seed/philosophy/MATERIALS.md) "Qualities".
 
 **The tree is not a filesystem.** Spaces aren't files. They're concepts. Parent-child isn't a directory structure. It's how meaning relates to other meaning. When you navigate, you don't change directories. You change what the mind is attending to. The AI at each position thinks from that position's perspective, with that position's tools, roles, and context.
 
@@ -102,23 +105,23 @@ Full reference: `extensions/EXTENSION_FORMAT.md`
 
 - **Tools** (declared in `init()` return; registered via `registerToolBundle`. Verb-tagged: see/do/summon/be)
 - **Roles** (summonable being templates; declare `canSee/canDo/canSummon/canBe` and a prompt body)
-- **Operations** (DO actions registered through `core.do.registerOperation`; auto-namespaced `<ext>:<action>`)
+- **Operations** (DO actions registered through `place.do.registerOperation`; auto-namespaced `<ext>:<action>`)
 - **Seeds** (plantable scaffolds; recipes that fan a structure into existence when an operator plants them)
 - **Hooks** (lifecycle handlers: beforeMatter, afterMatter, enrichContext, afterMetadataWrite, beforeFact, ...)
 - **DO-trigger subscriptions** (wake a being when matching substrate writes happen)
 - **Scheduled wakes** (fire a SUMMON on a being's inbox at a cadence)
 - **Descriptor derivers** (contribute derived fields to the Position Description clients render)
-- **Default permissions** (stance-auth Layer 3 contributions; rules the kernel walks during authorize)
+- **Default permissions** (stance-auth Layer 3 contributions; rules the seed walks during authorize)
 - **Routes** (HTTP endpoints, mostly for legacy callers; the protocol is IBP first)
 - **Jobs** (background workers with start/stop)
-- **Models** (Mongoose schemas registered into `core.models`)
+- **Models** (Mongoose schemas registered into `place.models`)
 - **CLI commands** (auto-generated from manifest declarations)
 
 ### Key patterns
 
-**enrichContext** is how you speak to the AI. The kernel builds the prompt. Your extension injects context through this hook. Always guard: check if relevant data exists before injecting. Never run expensive queries unconditionally.
+**enrichContext** is how you speak to the AI. The seed builds the prompt. Your extension injects context through this hook. Always guard: check if relevant data exists before injecting. Never run expensive queries unconditionally.
 
-**`qualities.{being,space,matter}.setQuality`** is how you write data. Each extension gets its own namespace in the `qualities` Map. `core.qualities.space.setQuality(space, "my-extension", data)` writes atomically. You can only write to your own namespace. Same nine atomic primitives (`setQuality`, `mergeQuality`, `incQuality`, `pushQuality`, `addToQualitySet`, `batchSetQuality`, `unsetQuality`, `getQuality`, `readQualityNamespace`) on each sub-namespace.
+**`qualities.{being,space,matter}.setQuality`** is how you write data. Each extension gets its own namespace in the `qualities` Map. `place.qualities.space.setQuality(space, "my-extension", data)` writes atomically. You can only write to your own namespace. Same nine atomic primitives (`setQuality`, `mergeQuality`, `incQuality`, `pushQuality`, `addToQualitySet`, `batchSetQuality`, `unsetQuality`, `getQuality`, `readQualityNamespace`) on each sub-namespace.
 
 **registerSlot** is how you add UI to pages. Extensions register HTML fragments for named slots (e.g. `apps-grid`, `user-quick-links`, `user-profile-sections`, `space-detail-sections`). Pages resolve slots by name. Whatever's installed appears. Whatever's not doesn't. Same pattern as hooks, roles, tools. Spatial scoping filters slots per position. Get it from treeos-base exports:
 
@@ -138,7 +141,7 @@ treeos?.exports?.registerSlot?.(
 
 **inApp query param** is set when pages load inside the app shell iframe. Dashboard pages should skip their own chatbar when `inApp` is truthy because the app shell provides the chat panel. Pass `inApp: !!req.query.inApp` to your renderer and conditionally exclude chatbar HTML/CSS/JS.
 
-**OrchestratorRuntime** is how you run multi-step AI pipelines. Single LLM call: use `core.llm.runTurn()`. Multi-step background pipeline: use `new OrchestratorRuntime()` with init, runStep, trackStep, cleanup.
+**OrchestratorRuntime** is how you run multi-step AI pipelines. Single LLM call: use `place.llm.runTurn()`. Multi-step background pipeline: use `new OrchestratorRuntime()` with init, runStep, trackStep, cleanup.
 
 **LLM_PRIORITY** on every LLM call. BACKGROUND for jobs. INTERACTIVE for user-triggered tools. GATEWAY for external channels. Without priority, background work starves human responses.
 
@@ -146,15 +149,15 @@ treeos?.exports?.registerSlot?.(
 
 ## The six primitives
 
-Everything in the kernel serves one of six primitives (one per Mongoose schema):
+Everything in the seed serves one of six primitives (one per Mongoose schema):
 
 | Primitive         | What it is                                                                                                                                                                                                                                                    |
 | ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Being**         | An identity instance. Carries roles, parents under another being, homes at a space. Humans, AI, scripted-cognition, future composites. The I-am — the Node process itself — is a Being too; the kernel is the first being, not a faceless layer beneath them. |
+| **Being**         | An identity instance. Carries roles, parents under another being, homes at a space. Humans, AI, scripted-cognition, future composites. The I-am — the Node process itself — is a Being too; the seed is the first being, not a faceless layer beneath them. |
 | **Space**         | A position in the tree. Holds matter, hosts beings, owns quality namespaces.                                                                                                                                                                                  |
 | **Matter**        | Stuff inside a space. `origin` field names where it actually lives (ibp, filesystem, web, cross-place).                                                                                                                                                        |
 | **Fact**          | A thing a being stamps in the Factory. One recorded change to matter, space, or being. `factum`, a thing done. A single fact is small but settled; a chain of facts, folded, is Truth.                                                                          |
-| **Summon**        | One being-to-being call. The record of one wake-and-act, whatever cognition the receiving being has — LLM, scripted code, human reply, future composite. The kernel doesn't care which; the protocol is the same.                                             |
+| **Summon**        | One being-to-being call. The record of one wake-and-act, whatever cognition the receiving being has — LLM, scripted code, human reply, future composite. The seed doesn't care which; the protocol is the same.                                             |
 | **LlmConnection** | Per-being LLM client config (URL, key, model).                                                                                                                                                                                                                |
 
 ## Security
@@ -176,7 +179,7 @@ treeos ext install <name>       # install from registry
 
 ## Learn more
 
-- `seed/SEED.md` for kernel internals
+- `seed/SEED.md` for seed internals
 - `extensions/EXTENSION_FORMAT.md` for the full extension contract
 - `extensions/_template/` for a scaffold to copy
 - https://treeos.ai for documentation

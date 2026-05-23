@@ -1,7 +1,7 @@
 # governing/roles/ — new-shape role templates (in-progress)
 
 Parallel folder to `modes/` for the queue-driven rewrite. Both directories
-coexist during the migration; the kernel reads from `modes/` until the
+coexist during the migration; the seed reads from `modes/` until the
 new roles are wired and validated, then the old `modes/` directory is
 deleted.
 
@@ -29,7 +29,7 @@ They run inside the orchestrator's runTurn loop. Each mode is data
 the orchestrator interprets.
 
 The new `roles/` files are "role templates" — full `role.summon`
-functions that the kernel's scheduler invokes when a SUMMON arrives
+functions that the seed's scheduler invokes when a SUMMON arrives
 in the inbox. Each role is the BEING ACTING. The orchestrator is gone.
 
 Same LLM cognition inside; different scaffolding outside.
@@ -39,7 +39,7 @@ Same LLM cognition inside; different scaffolding outside.
 | `mode.buildSystemPrompt(ctx)` reads snapshot, returns prompt string | `role.summon(message, ctx)` does it all — read substrate, build prompt, run LLM call, return result |
 | `mode.toolNames: [...]` declares tools; orchestrator wires them | `role.summon` itself uses the tool layer the same way (MCP); the tool list is enumerated in the prompt build |
 | Wakeup is a side-channel (`setRulerWakeup`, hook-bridge) | Wakeup is the SUMMON itself — `message.inReplyTo` + sender stance tells the role this is a reply |
-| `runRulerTurn` in tree-orchestrator wires Ruler invocation | Kernel scheduler invokes `role.summon` directly; no orchestrator |
+| `runRulerTurn` in tree-orchestrator wires Ruler invocation | Seed scheduler invokes `role.summon` directly; no orchestrator |
 | Multi-step pipelines via `OrchestratorRuntime` | Multi-step is composition: role emits SUMMONs to other roles; `aggregate()` collects replies for fanout |
 | Tool-driven dispatch via `setRulerDecision` + post-LLM dispatcher | Tools emit SUMMONs inline; no central dispatcher |
 
@@ -99,7 +99,7 @@ Start from Ruler outward. Each step uses the substrate already built
 - `core.declare.subscribe(beingId, opts)` — DO-trigger subscriptions if
   any role wants to react to substrate writes
 - `Being.roles[]` + `defaultRole` + envelope.activeRole — role-
-  composition kernel-level (per identity-durable-role-composable memo)
+  composition seed-level (per identity-durable-role-composable memo)
 
 The roles only have to be the role.summon functions. The substrate
 plumbing carries everything else.

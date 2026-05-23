@@ -3,11 +3,11 @@
 // Declares dependencies, capabilities, and metadata. The loader reads
 // this before init() runs to (a) validate that needed services and
 // extensions are present, (b) install npm deps into an extension-local
-// node_modules, and (c) build a scoped `core` bundle that only
+// node_modules, and (c) build a scoped `place` bundle that only
 // exposes the services this extension declared.
 //
 // Reach a service you didn't declare and it's undefined. Common bug:
-// `core.llm.runTurn is not a function` means `llm` is missing from
+// `place.llm.runTurn is not a function` means `llm` is missing from
 // `needs.services`.
 
 export default {
@@ -37,7 +37,7 @@ export default {
 
   provides: {
     // Mongoose models the extension contributes. Each places in
-    // core.models for cross-extension access.
+    // place.models for cross-extension access.
     models: {
       // MyModel: "./model.js",
     },
@@ -51,7 +51,7 @@ export default {
     // `true` means init() returns a tools[] array. The loader passes
     // it through registerToolBundle (MCP register + tool-def registry
     // + ownership). Each tool needs { name, description, schema,
-    // handler, verb }. Description is required; the kernel refuses
+    // handler, verb }. Description is required; the seed refuses
     // to register tools without one.
     tools: false,
 
@@ -60,7 +60,7 @@ export default {
     jobs: false,                    // or "./jobs.js"
 
     // Plantable seeds. An operator plants a seed at a position with
-    // `core.do(space, "plant-seed", { name: "<ext>:<seed>" })`.
+    // `place.do(space, "plant", { seed: "<ext>:<seed>" })`.
     // Each recipe file exports { plant(ctx) } and the loader auto-
     // namespaces the seed name with the extension.
     seeds: {
@@ -81,7 +81,7 @@ export default {
     // Hooks this extension fires / listens to. The `fires` list lets
     // other extensions discover hook names declaratively; the
     // `listens` list documents the contract (the actual registration
-    // happens in init() via core.hooks.register).
+    // happens in init() via place.hooks.register).
     hooks: {
       fires: [
         // { name: "my-ext:something", data: "{ field }", description: "What it means" },

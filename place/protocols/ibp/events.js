@@ -2,43 +2,35 @@
 //
 // IBP wire events.
 //
-// The wire principle (see [[project_ibp_wire_shape]],
-// [[project_seed_four_verbs_only]], [[project_ibp_summon_unified_event]]):
-//
-//   one event name, both directions, envelope-discriminated.
-//
-// Every IBP message — client → server, server → client — rides the
-// single socket event `IBP_EVENT`. Direction is implicit (who emitted).
-// What the envelope carries is implicit in `verb` + payload shape:
+// One event name, both directions, envelope-discriminated.
 //
 //   Client → server (request):
 //     { id, verb: "see"|"do"|"summon"|"be", address, payload }
 //
-//   Server → client push (async reply or live update):
+//   Server → client push:
 //     { verb: "see"|"summon", address?, payload }
 //
-// No `*:reply`, no `*:update`, no per-shape event names. The client
-// listens once on IBP_EVENT and routes by envelope.verb +
-// payload.kind. Same on the server side, dispatchIbp routes by verb.
+// Four request verbs. Two push verbs (the seed-side directions
+// for which the server reaches out unprompted). No fifth surface.
 //
-// Push payload kinds for the two server-push verbs:
+// Push payload shapes:
 //
-//   verb: "summon"  → payload is a SUMMON inbox entry (the reply or
-//                     out-of-band SUMMON delivered to the being's room):
-//                     { from, to, content, intent, correlation,
-//                       inReplyTo?, sentAt, ... }
-//
-//   verb: "see"     → payload is a live-update envelope keyed by `kind`:
-//                     { kind: "patch"|"replace"|"invalidate",
+//   verb: "see"     → { kind: "patch"|"replace"|"invalidate",
 //                       spaceId, data }
-//                     `data` carries the descriptor delta (patch) or the
-//                     full descriptor (replace) or just the reason
-//                     (invalidate).
+//
+//   verb: "summon"  → an inbox-shaped entry. Unsolicited SUMMONs
+//                     and SUMMON-replies share this shape:
+//                       { from, content, correlation, inReplyTo?,
+//                         actId?, sentAt, ... }
+//                     Transport-act results (DO/BE moments triggered
+//                     by the receiving being's own transport) also
+//                     push through this envelope. The payload adds:
+//                       { result, actId, correlation, inReplyTo:
+//                         <originating correlation> }
+//                     The client matches on `correlation` to resolve
+//                     its awaiter; unmatched summons fall through to
+//                     the inbox handler.
 
-// The wire event name lives in seed/ibp/pushChannel.js (the seed-side
-// wire boundary). Re-exported here so protocol-side adapters that own
-// the receive end can speak of `IBP_EVENT` symmetrically with seed-side
-// pushers, without seed having to import from protocols.
 export { IBP_EVENT } from "../../seed/ibp/pushChannel.js";
 
 /**
@@ -50,3 +42,29 @@ export const SEE_PUSH = Object.freeze({
   REPLACE:    "replace",
   INVALIDATE: "invalidate",
 });
+
+/**
+ * Build a server→client SUMMON push envelope for a transport-act
+ * moment-result. The result and actId land alongside the standard
+ * SUMMON entry shape so the client can route by correlation.
+ *
+ * @param {object} opts
+ * @param {string} opts.correlation   — the moment's correlation; matches what the wire acked
+ * @param {string} [opts.inReplyTo]   — defaults to correlation (self-reply)
+ * @param {string|null} [opts.actId]
+ * @param {any}    opts.result        — the verb's raw return (or { error } shape on failure)
+ * @param {string} [opts.from]        — sender stance; defaults to "system"
+ */
+export function buildTransportActReply({ correlation, inReplyTo, actId = null, result, from = "system" }) {
+  return {
+    verb: "summon",
+    payload: {
+      from,
+      correlation,
+      inReplyTo:   inReplyTo || correlation,
+      actId,
+      sentAt:      new Date().toISOString(),
+      result,
+    },
+  };
+}

@@ -138,7 +138,7 @@ export function listWorkerTypeRegistrations() {
 /**
  * Find which registered workspace is active at a tree scope.
  *
- * Reads the scope's effective ext-allow chain (via the kernel's
+ * Reads the scope's effective ext-allow chain (via the seed's
  * scope resolver) and returns the first registered workspace name
  * that appears in the allowed set. Returns null when no workspace
  * is allowed here.
@@ -156,7 +156,7 @@ export async function findActiveWorkspaceAtScope(spaceId) {
   if (REGISTRY.size === 0) return null;
   try {
     const { getBlockedExtensionsAtSpace } = await import(
-      "../../../seed/place/space/extensionScope.js"
+      "../../../seed/materials/space/extensionScope.js"
     );
     const { allowed } = await getBlockedExtensionsAtSpace(spaceId);
     if (!allowed || allowed.size === 0) return null;
@@ -200,11 +200,11 @@ export async function shouldGovernAtScope(spaceId) {
   if (REGISTRY.size === 0) return true;
 
   // Case 1: a registered workspace is ext-allow'd at this scope.
-  // Walk the ancestor chain via the kernel's scope resolver and
+  // Walk the ancestor chain via the seed's scope resolver and
   // check the `allowed` set for any registered workspace name.
   try {
     const { getBlockedExtensionsAtSpace } = await import(
-      "../../../seed/place/space/extensionScope.js"
+      "../../../seed/materials/space/extensionScope.js"
     );
     const { allowed } = await getBlockedExtensionsAtSpace(spaceId);
     if (!allowed || allowed.size === 0) return false;

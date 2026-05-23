@@ -19,7 +19,7 @@
 //   ok / error            the two reply shapes
 //   sendOk / sendError    Express-side wrappers
 //   sendCaughtError       route-level catch helper
-//   mapPatternsToIbpError translate kernel-internal Errors to wire shape
+//   mapPatternsToIbpError translate seed-internal Errors to wire shape
 //
 // Verb handlers catch IbpError and translate it to
 //   { id, status: "error", error: { code, message, detail? } }
@@ -136,12 +136,12 @@ export function isIbpError(e) {
 }
 
 /**
- * Translate a kernel-internal Error into an IbpError by matching its
+ * Translate a seed-internal Error into an IbpError by matching its
  * message against an ordered rule list. Each rule is `[regex, code]`;
  * the first regex that matches wins. Errors that already are IbpErrors
  * pass through unchanged. Otherwise the fallback code is used.
  *
- * Used by DO operation handlers that wrap low-level kernel helpers
+ * Used by DO operation handlers that wrap low-level seed helpers
  * (createSpace, editSpaceName, setQuality, ...) and want clean
  * wire-shape errors instead of opaque internal messages.
  *

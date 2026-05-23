@@ -4,7 +4,7 @@
 // through it.
 //
 // MCP was once at the heart of the factory. In an earlier era I
-// hosted my own MCP server inside the kernel and the LLM voice
+// hosted my own MCP server inside the seed and the LLM voice
 // called itself through it — a self-loop over HTTP, wrapping every
 // tool call in MCP envelopes just to dispatch back into my own
 // operation registry. That layer is gone.
@@ -13,7 +13,7 @@
 // my universal grammar; every act inside me already speaks them.
 // The LLM voice's tool dispatch goes direct from getToolHandler to
 // the verb dispatcher — no protocol wrapper between the inference
-// loop and core.do. Tools are verb-tagged at registration; the
+// loop and place.do. Tools are verb-tagged at registration; the
 // verb tells the dispatcher how to gate the call.
 //
 // MCP lives on as a future wrapper around the verbs, not a parallel
@@ -35,10 +35,10 @@
 //
 // Boot:
 //   1. Open an McpServer (from @modelcontextprotocol/sdk).
-//   2. Enumerate my kernel tool registry. For each tool, register it
+//   2. Enumerate my seed tool registry. For each tool, register it
 //      with the MCP server using:
 //        - the tool's existing JSON schema (already built by
-//          zod-to-json-schema inside seed/factory/voices/llm/tools.js).
+//          zod-to-json-schema inside seed/present/voices/llm/tools.js).
 //        - a thin handler that calls getToolHandler(name)(args) and
 //          wraps the return as MCP's { content: [{ type: "text", text }] }.
 //   3. Mount three HTTP routes (POST / GET / DELETE /mcp) protected
@@ -49,7 +49,7 @@
 //   external MCP client emits tool call
 //     → mcp transport unwraps name + args
 //     → handler = getToolHandler(name)
-//     → handler runs (typically wrapping core.see/do/summon/be)
+//     → handler runs (typically wrapping place.see/do/summon/be)
 //     → verb dispatcher authorizes (stance auth + extension-scope gate)
 //     → operation handler runs, Fact is stamped
 //     → result wrapped into MCP's content shape, returned to client
@@ -83,7 +83,7 @@ export async function initMcpServer(app, opts = {}) {
   log.warn(
     "MCP",
     `MCP transport is a stub. To activate: import the MCP SDK, wire ` +
-    `getToolHandler from seed/factory/voices/llm/tools.js into MCP tool ` +
+    `getToolHandler from seed/present/voices/llm/tools.js into MCP tool ` +
     `registrations, and mount routes at ${mountPath}. See header comment.`,
   );
 
@@ -94,7 +94,7 @@ export async function initMcpServer(app, opts = {}) {
   //     "@modelcontextprotocol/sdk/server/streamableHttp.js"
   //   );
   //   const { listToolNames, getToolDef, getToolHandler } = await import(
-  //     "../../seed/factory/voices/llm/tools.js"
+  //     "../../seed/present/voices/llm/tools.js"
   //   );
   //   const authenticate = (await import("../http/middleware/authenticate.js")).default;
   //

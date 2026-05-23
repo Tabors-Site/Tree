@@ -61,7 +61,7 @@
 //      one being calling another; calling a not-yet-being into
 //      being is the same act. From here on, Facts start attributing
 //      to these beings as their own acts run.
-//   6. Role and operation registries, integrity check, kernel config
+//   6. Role and operation registries, integrity check, seed config
 //      handoff. The capability surface the place now exposes.
 //   7. Extension load, MCP transport, scope wiring, and jobs. I open
 //      the place to operator installed beings and the periodic acts
@@ -85,22 +85,22 @@ import {
   getLoadedExtensionNames,
   getBootReport,
 } from "./extensions/loader.js";
-import { startUploadCleanup } from "./seed/place/matter/uploadCleanup.js";
-import { getBlockedExtensionsAtSpace } from "./seed/place/space/extensionScope.js";
+import { startUploadCleanup } from "./seed/materials/matter/uploadCleanup.js";
+import { getBlockedExtensionsAtSpace } from "./seed/materials/space/extensionScope.js";
 import { hooks } from "./seed/system/hooks.js";
 import { syncExtensionsToTree } from "./seed/placeRoot.js";
 import log from "./seed/system/log.js";
 
 /**
- * Register kernel-shipped tool definitions through the same path
+ * Register seed-shipped tool definitions through the same path
  * extensions use. Thin wrapper that hands the bundle to
- * `registerToolBundle` with `ownerExt: "kernel"`. See
- * seed/factory/voices/llm/tools.js for the unified registration logic.
+ * `registerToolBundle` with `ownerExt: "seed"`. See
+ * seed/present/voices/llm/tools.js for the unified registration logic.
  */
-async function registerKernelTools(tools) {
+async function registerSeedTools(tools) {
   const { registerToolBundle } =
-    await import("./seed/factory/voices/llm/tools.js");
-  await registerToolBundle(tools, { ownerExt: "kernel" });
+    await import("./seed/present/voices/llm/tools.js");
+  await registerToolBundle(tools, { ownerExt: "seed" });
 }
 
 // Boot mode, decided once per process. Read by printReady at the
@@ -166,7 +166,7 @@ export async function genesis(app, opts = {}) {
   // DO gate, then the disk walk runs detached so a multi-thousand
   // file scan does not block boot. Subsequent boots reconcile
   // incrementally.
-  const { ensureSourceTree } = await import("./seed/place/space/source.js");
+  const { ensureSourceTree } = await import("./seed/materials/space/source.js");
   await ensureSourceTree();
 
   // Default stance permissions (arrival, owner) and BE config flags
@@ -188,7 +188,7 @@ export async function genesis(app, opts = {}) {
   // lazily on cache misses; this is a startup optimization, not a
   // correctness step.
   const { primeSeveredRootsCache } =
-    await import("./seed/place/space/threads.js");
+    await import("./seed/materials/space/threads.js");
   await primeSeveredRootsCache();
 
   // The first delegates I form beneath myself: the place beings
@@ -199,45 +199,45 @@ export async function genesis(app, opts = {}) {
   // Must come after migrations so the Being model shape is current
   // before I write into it.
   const { ensurePlaceBeings } =
-    await import("./seed/place/being/placeBeings.js");
+    await import("./seed/materials/being/placeBeings.js");
   const { getPlaceRootId } = await import("./seed/placeRoot.js");
   await ensurePlaceBeings(getPlaceRootId());
 
-  // Register kernel-shipped role specs into the role registry so
+  // Register seed-shipped role specs into the role registry so
   // SUMMON can dispatch to them. Auth and llm-assigner are BE only,
   // routed via PLACE_BEINGS in seed/ibp/verbs.js, and need no role
   // registration. Place-manager is summonable (LLM-driven operator
   // dialog), so its role spec enters the registry here along with
   // its two generic tools (place-see, place-do).
-  const { registerRole } = await import("./seed/factory/roles/registry.js");
+  const { registerRole } = await import("./seed/present/roles/registry.js");
   const { placeManagerRole } =
-    await import("./seed/factory/roles/placeManager.js");
+    await import("./seed/present/roles/placeManager.js");
   const { placeManagerTools } =
-    await import("./seed/factory/roles/placeManagerTools.js");
-  registerRole("place-manager", placeManagerRole, "kernel");
-  await registerKernelTools(placeManagerTools);
+    await import("./seed/present/roles/placeManagerTools.js");
+  registerRole("place-manager", placeManagerRole, "seed");
+  await registerSeedTools(placeManagerTools);
 
   // The receptive role every human being carries. Without it, SUMMONs
   // to a human are rejected with ROLE_UNAVAILABLE. The role's summon
   // is a no-op — humans respond out-of-band from their own transport,
   // not synchronously through the factory.
-  const { humanRole } = await import("./seed/factory/roles/human.js");
-  registerRole("human", humanRole, "kernel");
+  const { humanRole } = await import("./seed/present/roles/human.js");
+  registerRole("human", humanRole, "seed");
 
   // llm-assigner ships its own DO ops (`llm-assigner:start-tutorial`
   // and `llm-assigner:complete-tutorial`). They live with the role,
-  // not in the kernel ops registry. Same shape an extension would
+  // not in the seed ops registry. Same shape an extension would
   // use, just shipped in seed.
   const { registerLlmAssignerOps } =
-    await import("./seed/factory/roles/llmAssignerOps.js");
+    await import("./seed/present/roles/llmAssignerOps.js");
   registerLlmAssignerOps();
 
-  // I hand my remembered settings (from .config) down to the kernel
+  // I hand my remembered settings (from .config) down to the seed
   // modules that depend on them. Per-key failures are logged but
   // non-fatal. Sane defaults are baked in.
   {
     const { setSeedConfig } =
-      await import("./seed/factory/voices/llm/runTurn.js");
+      await import("./seed/present/voices/llm/runTurn.js");
 
     const KERNEL_CONFIG = {
       llmTimeout: { setter: setSeedConfig },
@@ -250,49 +250,49 @@ export async function genesis(app, opts = {}) {
       maxPresences: { setter: setSeedConfig },
       stalePresenceTimeout: { setter: setSeedConfig },
       // Rate-of-change caps. maxRunTurns bounds active LLM turns;
-      // maxInbox bounds pending SUMMONs place-wide. Together they
-      // limit how much work the place can hold at once.
+      // maxIntake bounds pending moments-to-run place-wide. Together
+      // they limit how much work the place can hold at once.
       maxRunTurns: { setter: setSeedConfig },
-      maxInbox: { setter: setSeedConfig },
+      maxIntake: { setter: setSeedConfig },
       carryMessages: {
         load: () =>
-          import("./seed/factory/voices/llm/runTurn.js").then(
+          import("./seed/present/voices/llm/runTurn.js").then(
             (m) => m.setCarryMessages,
           ),
       },
       maxRegisteredTools: {
         load: () =>
-          import("./seed/factory/voices/llm/tools.js").then(
+          import("./seed/present/voices/llm/tools.js").then(
             (m) => m.setMaxTools,
           ),
       },
       sessionTTL: {
         load: () =>
-          import("./seed/factory/intake/session.js").then(
+          import("./seed/present/intake/session.js").then(
             (m) => (v) => m.setSessionTTL(v * 1000),
           ),
       },
       staleSessionTimeout: {
         load: () =>
-          import("./seed/factory/intake/session.js").then(
+          import("./seed/present/intake/session.js").then(
             (m) => (v) => m.setStaleTimeout(v * 1000),
           ),
       },
       maxSessions: {
         load: () =>
-          import("./seed/factory/intake/session.js").then(
+          import("./seed/present/intake/session.js").then(
             (m) => m.setMaxSessions,
           ),
       },
       llmClientCacheTtl: {
         load: () =>
-          import("./seed/factory/voices/llm/connect.js").then(
+          import("./seed/present/voices/llm/connect.js").then(
             (m) => (v) => m.setClientCacheTtl(v * 1000),
           ),
       },
       maxConnectionsPerUser: {
         load: () =>
-          import("./seed/factory/voices/llm/connect.js").then(
+          import("./seed/present/voices/llm/connect.js").then(
             (m) => m.setMaxConnectionsPerUser,
           ),
       },
@@ -324,7 +324,7 @@ export async function genesis(app, opts = {}) {
   await registerExtensionManagementOps();
 
   // Load extensions. Manifests discovered, deps validated, routes
-  // attached to `app`, hooks wired, tools registered into the kernel
+  // attached to `app`, hooks wired, tools registered into the seed
   // tool registry. After this returns, the extension surface is live
   // in memory. (MCP retired 2026-05-22; tools dispatch direct from
   // the LLM voice via getToolHandler in voices/llm/tools.js.)
@@ -338,11 +338,11 @@ export async function genesis(app, opts = {}) {
   // Confined extensions must be known before any scope resolution
   // walks the ancestor chain, or queries during this window race.
   const { loadConfinedExtensions, setExtensionInstanceLookup } =
-    await import("./seed/place/space/extensionScope.js");
+    await import("./seed/materials/space/extensionScope.js");
   await loadConfinedExtensions();
 
-  // Register the loader's instance lookup with the kernel so
-  // core.scope.getExtensionAtScope can resolve names without the
+  // Register the loader's instance lookup with the seed so
+  // place.scope.getExtensionAtScope can resolve names without the
   // seed importing from extensions/loader.js (which would violate
   // the one-way layering rule). Looked up lazily so the loader
   // module is not pulled on places that skip it.
@@ -350,7 +350,7 @@ export async function genesis(app, opts = {}) {
     const { getExtension } = await import("./extensions/loader.js");
     setExtensionInstanceLookup(getExtension);
   } catch {
-    // Loader unavailable (test rig, kernel-only boot, etc.).
+    // Loader unavailable (test rig, seed-only boot, etc.).
     // getExtensionAtScope returns null in that environment and
     // callers fall back gracefully.
   }
@@ -369,7 +369,7 @@ export async function genesis(app, opts = {}) {
 
   // Gated by treeCircuitEnabled.
   const { startCircuitJob } =
-    await import("./seed/place/space/spaceCircuit.js");
+    await import("./seed/materials/space/spaceCircuit.js");
   startCircuitJob();
 
   log.verbose("Place", "Background jobs started");
@@ -382,9 +382,9 @@ export async function genesis(app, opts = {}) {
   (async () => {
     try {
       const { syncToolsToSubstrate } =
-        await import("./seed/factory/voices/llm/tools.js");
+        await import("./seed/present/voices/llm/tools.js");
       const { syncRolesToSubstrate } =
-        await import("./seed/factory/roles/registry.js");
+        await import("./seed/present/roles/registry.js");
       const { syncOperationsToSubstrate } =
         await import("./seed/ibp/operations.js");
       const [t, r, o] = await Promise.all([
@@ -411,7 +411,7 @@ export async function genesis(app, opts = {}) {
   // trigger the broken role.
   try {
     const { auditToolDescriptions } =
-      await import("./seed/factory/voices/llm/tools.js");
+      await import("./seed/present/voices/llm/tools.js");
     await auditToolDescriptions();
   } catch (err) {
     log.warn("Tools", `tool-description audit failed: ${err.message}`);

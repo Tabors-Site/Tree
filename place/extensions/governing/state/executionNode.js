@@ -13,7 +13,7 @@ import Space from "../../../seed/models/space.js";
 import log from "../../../seed/system/log.js";
 
 let _warned = false;
-export async function ensureExecutionNode({ scopeSpaceId, core: _core } = {}) {
+export async function ensureExecutionNode({ scopeSpaceId, place: _core } = {}) {
   if (!_warned) {
     _warned = true;
     log.warn("Governing", "ensureExecutionNode is retired; Foreman being is spawned by promoteToRuler. Caller should read metadata.beings.foreman instead.");

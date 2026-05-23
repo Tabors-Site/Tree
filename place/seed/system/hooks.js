@@ -1,6 +1,6 @@
 // TreeOS Seed . AGPL-3.0 . https://treeos.ai . Tabor Holly
 //
-// Hook system. Open pub/sub for kernel and extension events. Any hook
+// Hook system. Open pub/sub for seed and extension events. Any hook
 // name is valid; extensions namespace their own as "extName:hookName".
 //
 // Execution:

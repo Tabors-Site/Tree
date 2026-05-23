@@ -15,7 +15,7 @@
 // against projectPath and checked: the resolved absolute path must
 // stay within projectPath. Path-traversal attempts (`../../etc/passwd`,
 // symlink-following to outside) are rejected. This is scope discipline
-// at the kernel layer; the coder's prompt body teaches the why, but
+// at the seed layer; the coder's prompt body teaches the why, but
 // the tools enforce.
 
 import path from "path";

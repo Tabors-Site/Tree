@@ -84,7 +84,7 @@ async function nextEmissionOrdinal(contractsSpaceId) {
  * Create a contracts-emission-N child space under the contracts trio
  * member. Stamps role + the structured emission payload.
  */
-async function createContractsEmission({ contractsSpaceId, ordinal, payload, beingId, identity = null, core }) {
+async function createContractsEmission({ contractsSpaceId, ordinal, payload, beingId, identity = null, place }) {
   const authIdentity = identity || (beingId ? { beingId } : null);
   // Slug derived from the Contractor's reasoning headline. Same
   // approach as plan-emission naming: descriptive at-a-glance, with
@@ -92,10 +92,10 @@ async function createContractsEmission({ contractsSpaceId, ordinal, payload, bei
   const { slugifyEmission } = await import("./slugifyEmission.js");
   const name = slugifyEmission(payload?.reasoning, ordinal);
 
-  // Phase 3 migration: verb-surface create. Fires kernel hooks + Fact.
+  // Phase 3 migration: verb-surface create. Fires seed hooks + Fact.
   let created = null;
   try {
-    created = await core.do(contractsSpaceId, "birth", {
+    created = await place.do(contractsSpaceId, "birth", {
       kind: "space",
       spec: {
         name,
@@ -104,7 +104,7 @@ async function createContractsEmission({ contractsSpaceId, ordinal, payload, bei
       },
     }, { identity: authIdentity });
   } catch (err) {
-    log.debug("Governing", `core.do(create-child) failed for contracts-emission: ${err.message}; falling back`);
+    log.debug("Governing", `place.do(create-child) failed for contracts-emission: ${err.message}; falling back`);
   }
 
   if (!created) {
@@ -127,7 +127,7 @@ async function createContractsEmission({ contractsSpaceId, ordinal, payload, bei
     // write. merge:true preserves NS atomically.
     const space = await Space.findById(created._id);
     if (space) {
-      await core.do(space, "set", {
+      await place.do(space, "set", {
         field: `qualities.${NS}`,
         value: {
           role: "contracts-emission",
@@ -165,9 +165,9 @@ async function appendApproval({
   inheritedFrom = null,
   parentContractsApplied = [],
   identity = null,
-  // Phase 3 ([[project_seed_four_verbs_only]]): callers thread `core`
-  // so the metadata write goes through core.do (auto-Fact).
-  core,
+  // Phase 3 ([[project_seed_four_verbs_only]]): callers thread `place`
+  // so the metadata write goes through place.do (auto-Fact).
+  place,
 }) {
   if (!rulerSpaceId || !contractsEmissionNodeId) return null;
   const space = await Space.findById(rulerSpaceId);
@@ -195,8 +195,8 @@ async function appendApproval({
   };
 
   // Phase 3 migration: verb-surface write. merge:true preserves NS atomically.
-  if (!core?.do) throw new Error("appendApproval requires `core` (verb surface)");
-  await core.do(space, "set", {
+  if (!place?.do) throw new Error("appendApproval requires `place` (verb surface)");
+  await place.do(space, "set", {
     field: `qualities.${NS}`,
     value: { contractApprovals: [...existing, entry] },
     merge: true,
@@ -291,7 +291,7 @@ export async function setContracts({
   contracts,
   beingId,
   systemSpec = null,
-  core,
+  place,
   reasoning = null,
   // Inheritance declaration form. When inheritsFrom is set, the
   // emission represents "this child scope's contracts are the parent's"
@@ -313,7 +313,7 @@ export async function setContracts({
   // Find or create the contracts trio member.
   let contractsSpace = null;
   try {
-    contractsSpace = await ensureContractsNode({ scopeSpaceId, beingId, core });
+    contractsSpace = await ensureContractsNode({ scopeSpaceId, beingId, place });
   } catch (err) {
     log.warn("Governing", `setContracts: ensureContractsNode failed at scope ${String(scopeSpaceId).slice(0, 8)}: ${err.message}`);
     return null;
@@ -400,7 +400,7 @@ export async function setContracts({
     ordinal,
     payload,
     beingId,
-    core,
+    place,
   });
 
   // Append the approval ledger entry. Supersedes the prior active.
@@ -413,7 +413,7 @@ export async function setContracts({
     supersedes: priorActive?._approvalId || null,
     inheritedFrom: isInheritance ? inheritsFrom : null,
     parentContractsApplied: isInheritance ? parentContractsApplied : [],
-    core,
+    place,
   });
 
   log.info("Governing",

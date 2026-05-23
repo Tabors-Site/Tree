@@ -187,14 +187,14 @@ All DO actions target positions. Position data has many namespaces; different ac
 
 DO accepts `position` only. There is no `stance` form. The world is data at positions; beings are not data targets. If authorization checks need to know the requester's being, they read it from the identity token, not from the address. Asking for `stance` here would suggest the being is itself being mutated, which it never is.
 
-The kernel mints a small set of primitive actions; extensions can register additional named DO actions on top. The kernel primitives, grouped by what part of position data they modify:
+The seed mints a small set of primitive actions; extensions can register additional named DO actions on top. The seed primitives, grouped by what part of position data they modify:
 
 - **Structural actions** write Space-schema fields: `create-child`, `rename`, `move`, `delete`, `change-status`, `set-visibility`, `transfer-owner`, `invite`, `accept-invite`, `revoke`.
 - **Position-level content**: `write-note`, `edit-note`, `delete-note`, `upload-matter`.
-- **Namespaced metadata**: `set-meta` and `clear-meta` are the generic writes; `scope-extension` and `assign-llm-slot` are named conveniences over specific namespaces with kernel-aware semantics.
+- **Namespaced metadata**: `set-meta` and `clear-meta` are the generic writes; `scope-extension` and `assign-llm-slot` are named conveniences over specific namespaces with seed-aware semantics.
 - **Place-level operations** (targeted at `<place>/`): `install-extension`, `enable-extension`, `disable-extension`, `uninstall-extension`, `publish-extension`, `set-config`, `set-llm-connection`, `remove-llm-connection`.
 
-**Extension-registered actions** (examples, NOT kernel-minted): `compress` (tree-compress), `prune` and `reroot` (treeos-maintenance), `split` (standalone), and any other action an extension registers. They go through the same dispatcher; the extension owns the payload + behavior. See [do-actions.md](do-actions.md#extension-registered-do-actions).
+**Extension-registered actions** (examples, NOT seed-minted): `compress` (tree-compress), `prune` and `reroot` (treeos-maintenance), `split` (standalone), and any other action an extension registers. They go through the same dispatcher; the extension owns the payload + behavior. See [do-actions.md](do-actions.md#extension-registered-do-actions).
 
 The generic `set-meta` writes any namespace within position data. The `namespace` payload field names which:
 
@@ -203,7 +203,7 @@ The generic `set-meta` writes any namespace within position data. The `namespace
 { verb: "do", action: "set-meta", position: "<position>", identity, payload: { namespace: "ruler",  data: { systemInstructions: "...", tools: [...] } } }
 ```
 
-The first writes the `values` extension's data. The second writes the `@ruler` being's configuration at this position (the configuration the being will read when summoned here). Same action shape; the namespace value tells the kernel where to write.
+The first writes the `values` extension's data. The second writes the `@ruler` being's configuration at this position (the configuration the being will read when summoned here). Same action shape; the namespace value tells the seed where to write.
 
 Full catalog: [do-actions.md](do-actions.md).
 
@@ -326,9 +326,9 @@ The default arrival permissions are conservative: BE register and claim are enab
 
 ## Stance Authorization
 
-**Stance Authorization** is the kernel system that determines what one stance can do toward another stance or position through a portal connection. Every authorization decision in IBP flows through it.
+**Stance Authorization** is the seed system that determines what one stance can do toward another stance or position through a portal connection. Every authorization decision in IBP flows through it.
 
-The function the kernel runs on every verb call:
+The function the seed runs on every verb call:
 
 ```
 authorize({ acting, target, verb, action?, namespace? })
@@ -344,7 +344,7 @@ Inputs:
 
 Output: allow or deny, plus the resolved acting stance that was checked.
 
-Per request the kernel resolves the acting stance at the addressed place (arrival if unestablished, otherwise the stance the place has assigned to this identity), reads the stance's permissions from place metadata, and decides. One function. One configuration shape. Every verb call.
+Per request the seed resolves the acting stance at the addressed place (arrival if unestablished, otherwise the stance the place has assigned to this identity), reads the stance's permissions from place metadata, and decides. One function. One configuration shape. Every verb call.
 
 ### Phase 5 stances
 
@@ -357,7 +357,7 @@ Phase 5 ships two real stances at the protocol level. Additional stance vocabula
 
 Authenticated requesters who are not owners of the addressed scope fall through to the existing access checks (contributors via `resolveTreeAccess`, visibility filters on SEE). They do not yet have a named protocol stance; introducing `member`, `guest`, `contributor`, `moderator` as configurable stances is Phase 7 work.
 
-The authorize function is **load-bearing for every IBP request.** It is one of the most important pieces of the kernel. Performance matters (it runs on every verb call). Correctness matters (bugs have system-wide blast radius). Place owners' permission configurations become security policy; tooling to compute "what can stance X actually do at this place" is part of the supporting surface, not a nicety.
+The authorize function is **load-bearing for every IBP request.** It is one of the most important pieces of the seed. Performance matters (it runs on every verb call). Correctness matters (bugs have system-wide blast radius). Place owners' permission configurations become security policy; tooling to compute "what can stance X actually do at this place" is part of the supporting surface, not a nicety.
 
 ### What "arrival" means precisely
 
@@ -375,7 +375,7 @@ The protocol cleanly separates two concerns: **authorization** answers "given th
 These are deliberately deferred until real places surface real configuration needs:
 
 - **Richer permission semantics**: glob/prefix path matching, allowed-vs-denied conflict resolution, inheritance of permissions through descendant positions. The Phase 5 shape uses simple lists; extending to a richer DSL is incremental.
-- **Additional stance vocabularies**: `member`, `guest`, `contributor`, `moderator`, and custom stances configured per place. The kernel's authorize function reads `metadata.beings.<stance>.permissions` regardless of stance name; Phase 7 work is the resolver that assigns these stances to authenticated identities at a place.
+- **Additional stance vocabularies**: `member`, `guest`, `contributor`, `moderator`, and custom stances configured per place. The seed's authorize function reads `metadata.beings.<stance>.permissions` regardless of stance name; Phase 7 work is the resolver that assigns these stances to authenticated identities at a place.
 - **Cross-place stance assignment** (Phase 8+ federation). When an identified visitor from another place contacts this place, the receiving place needs to look up its policy for that identity and assign a stance. Requires cross-place identity infrastructure (Canopy or successor). The authorize function is designed so this resolver plugs in without changing the verb-side flow.
 - **Place-tooling presets** (personal / community / service) that configure arrival permissions out of the box. Not protocol features; convenience configurations the place installer provides.
 - **Auth-being customization** beyond defaults. Places that want different welcome characters, invite-only registration flows, contract acceptance, etc. Today's default auth-being is open registration.
@@ -459,7 +459,7 @@ IBP intentionally does not specify:
 - **How coordination works.** A Ruler firing-and-forgetting background work uses hooks and fire-and-forget primitives; the protocol sees only individual SUMMON deliveries.
 - **Whether responses stream.** Sync responses may stream chunks within an ack, but the protocol does not require it; that is a transport detail.
 - **What an address means semantically.** The stance / IBP Address grammar (see [ibp-address.md](ibp-address.md)) defines the syntax; resolving a stance to a space + being is the place's job; what a being at that stance is for is the being's job.
-- **What a position is structurally.** That is the Space schema in the kernel.
+- **What a position is structurally.** That is the Space schema in the seed.
 
 IBP does message delivery to beings and operations on the world from be-ers. Everything that is not those two things lives somewhere else.
 

@@ -31,13 +31,13 @@
 // arrival is intentionally supported — that's how a fresh place's
 // first human comes in.
 //
-// Every operation an extension registers via core.do.registerOperation
+// Every operation an extension registers via place.do.registerOperation
 // is instantly callable here. No per-feature route files. The
 // protocol IS the API.
 
 import express from "express";
 import { verifyIncoming } from "../../../protocols/canopy/dispatch.js";
-import { decodeToken } from "../../../seed/place/being/identity.js";
+import { decodeToken } from "../../../seed/materials/being/identity.js";
 import { makeHttpCarrier, dispatchAndWait, sendAck } from "../dispatch.js";
 
 const router = express.Router();

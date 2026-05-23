@@ -1,6 +1,6 @@
 # Extension Format
 
-> **WARNING:** This is a new community and we are developing extensions together. There may be bad actors, and while the kernel is safe, extensions can reach into your filesystem and much more. Review all extension code yourself if it's unknown. Extensions have full access to the Node.js process. The blocklist on shell is defense in depth, not a sandbox. The real security boundary is the operator's judgment. Install what you trust. Review what you don't.
+> **WARNING:** This is a new community and we are developing extensions together. There may be bad actors, and while the seed is safe, extensions can reach into your filesystem and much more. Review all extension code yourself if it's unknown. Extensions have full access to the Node.js process. The blocklist on shell is defense in depth, not a sandbox. The real security boundary is the operator's judgment. Install what you trust. Review what you don't.
 
 ## The Grammar
 
@@ -21,7 +21,7 @@ The routing pipeline parses every message: noun (whose territory?) then tense (w
 ```
 extensions/<name>/
   manifest.js    # Required: declares dependencies, capabilities, metadata
-  index.js       # Required: exports init(core) function
+  index.js       # Required: exports init(place) function
   routes.js      # Optional: Express router for HTTP endpoints
   model.js       # Optional: Mongoose model(s)
   ...            # Any other files the extension needs
@@ -49,7 +49,7 @@ export default {
 
   provides: {
     models: {
-      MyModel: "./model.js",            // Registered in core.models
+      MyModel: "./model.js",            // Registered in place.models
     },
     routes: "./routes.js",              // Mounted at /api/v1
     tools: false,                       // Or true if init() returns tools[]
@@ -72,7 +72,7 @@ export default {
     },
     defaultPermissions: {               // Stance-auth Layer 3 contributions.
       // Default permission rules the extension contributes to the
-      // authorize walk. The kernel checks these AFTER per-position
+      // authorize walk. The seed checks these AFTER per-position
       // rules (Layer 2) and BEFORE default-deny. Keys are the same
       // shape as metadata.permissions entries.
       "do:my-ext:run":      { requires: { owner: true } },
@@ -85,17 +85,17 @@ export default {
 
 ## CRITICAL: Service and Dependency Declarations
 
-**If your extension uses a core service, you MUST declare it in `needs.services` or `optional.services`.** The loader builds a scoped core object that only contains declared services. Undeclared services are undefined.
+**If your extension uses a core service, you MUST declare it in `needs.services` or `optional.services`.** The loader builds a scoped place object that only contains declared services. Undeclared services are undefined.
 
-**Common failure:** `Cannot read properties of undefined (reading 'runTurn')` means you used `core.llm.runTurn` without declaring `services: ["llm"]` in your manifest.
+**Common failure:** `Cannot read properties of undefined (reading 'runTurn')` means you used `place.llm.runTurn` without declaring `services: ["llm"]` in your manifest.
 
-### Available kernel services
+### Available seed services
 
-The four verbs (`core.see`, `core.do`, `core.summon`, `core.be`) are always callable and are the only public surface for substrate operations. Everything below is a syntactic helper or an infrastructure surface those verbs sit on.
+The four verbs (`place.see`, `place.do`, `place.summon`, `place.be`) are always callable and are the only public surface for substrate operations. Everything below is a syntactic helper or an infrastructure surface those verbs sit on.
 
 | Service | What it provides | Common functions |
 |---------|-----------------|-----------------|
-| `see` / `do` / `summon` / `be` | The four verbs. Always available. | `core.do(target, "set-qualities", { namespace, data })`, `core.see(address)`, etc. |
+| `see` / `do` / `summon` / `be` | The four verbs. Always available. | `place.do(target, "set-qualities", { namespace, data })`, `place.see(address)`, etc. |
 | `facts` | Audit-row stamping. | `logFact` |
 | `auth` | Identity primitives. | `resolveSpaceAccess`, `createBeing`, `verifyPassword`, `generateToken`, `findBeingByName`, `registerStrategy` |
 | `session` | Per-reach session lifecycle. | `createSession`, `endSession`, `getSession`, `SESSION_TYPES`, `registerSessionType` |
@@ -108,7 +108,7 @@ The four verbs (`core.see`, `core.do`, `core.summon`, `core.be`) are always call
 | `space` | Space CRUD + tree infrastructure. | `getAncestorChain`, `snapshotAncestors`, `createSpace`, `deleteSpaceBranch`, `checkTreeHealth`, `isTreeAlive`, `getPlaceRootId` |
 | `matters` | Programmatic matter CRUD. | `createMatter`, `editMatter`, `deleteMatterAndFile`, `transferMatter`, `getMatters` |
 | `spaceLocks` | Structural mutation locks. | `acquireSpaceLock`, `releaseSpaceLock`, `acquireMultiple` |
-| `qualities` | Per-primitive qualities Map. Three sub-namespaces: `core.qualities.being`, `core.qualities.space`, `core.qualities.matter`. Each carries the same nine atomic primitives. Namespace ownership is enforced for space and matter writes. | `getQuality`, `setQuality`, `mergeQuality`, `incQuality`, `pushQuality`, `addToQualitySet`, `batchSetQuality`, `unsetQuality`, `readQualityNamespace` |
+| `qualities` | Per-primitive qualities Map. Three sub-namespaces: `place.qualities.being`, `place.qualities.space`, `place.qualities.matter`. Each carries the same nine atomic primitives. Namespace ownership is enforced for space and matter writes. | `getQuality`, `setQuality`, `mergeQuality`, `incQuality`, `pushQuality`, `addToQualitySet`, `batchSetQuality`, `unsetQuality`, `readQualityNamespace` |
 | `scope` | Extension-scope checks. | `isExtensionBlockedAtSpace`, `getBlockedExtensionsAtSpace`, `getExtensionAtScope`, `getToolOwner` |
 | `declare` | Setup voice — what extensions declare so the verbs have something to act on. | `registerRole`, `unregisterRole`, `subscribe`, `unsubscribe`, `schedule`, `unschedule`, `aggregate`, `setScheduleEmitter` |
 | `protocol` | Response shapes + error codes. | `ok`, `error`, `sendOk`, `sendError`, `IBP_ERR` |
@@ -123,13 +123,13 @@ Extensions load in topological order. If extension A depends on extension B (`ne
 
 ### Always-available services
 
-The four verbs (`core.see`, `core.do`, `core.summon`, `core.be`), `core.hooks`, and `core.qualities` are injected into every scoped core regardless of declaration. You never need to declare them.
+The four verbs (`place.see`, `place.do`, `place.summon`, `place.be`), `place.hooks`, and `place.qualities` are injected into every scoped place regardless of declaration. You never need to declare them.
 
-The three sub-namespaces of `core.qualities` mirror each other. Every namespaced operation that works on a space also works on a being and on a matter, with the same nine atomic primitives on each (`core.qualities.space.setQuality` / `core.qualities.being.setQuality` / `core.qualities.matter.setQuality`, and so on). Pick the sub-namespace that matches the primitive you are tagging.
+The three sub-namespaces of `place.qualities` mirror each other. Every namespaced operation that works on a space also works on a being and on a matter, with the same nine atomic primitives on each (`place.qualities.space.setQuality` / `place.qualities.being.setQuality` / `place.qualities.matter.setQuality`, and so on). Pick the sub-namespace that matches the primitive you are tagging.
 
 ### Extension-provided services
 
-Extensions can register services on the core object during init: `core.energy = { useEnergy, ... }`. Later extensions that declare `needs.services: ["energy"]` or `optional.services: ["energy"]` receive it. If the providing extension hasn't loaded yet, optional services get a no-op stub. Required services cause the dependent extension to skip.
+Extensions can register services on the core object during init: `place.energy = { useEnergy, ... }`. Later extensions that declare `needs.services: ["energy"]` or `optional.services: ["energy"]` receive it. If the providing extension hasn't loaded yet, optional services get a no-op stub. Required services cause the dependent extension to skip.
 
 ## npm Dependencies
 
@@ -168,22 +168,22 @@ import { Client, GatewayIntentBits } from "discord.js";
 ```js
 import { z } from "zod";
 
-export async function init(core) {
+export async function init(place) {
   // Register hooks
-  core.hooks.register("enrichContext", async ({ context, meta }) => {
+  place.hooks.register("enrichContext", async ({ context, meta }) => {
     if (meta.myData) context.myData = meta.myData;
   }, "my-extension");
 
   // Register modes
-  core.modes.registerMode("tree:my-mode", myModeConfig, "my-extension");
+  place.modes.registerMode("tree:my-mode", myModeConfig, "my-extension");
 
   // Register LLM slot mapping (optional)
-  if (core.llm?.registerModeAssignment) {
-    core.llm.registerModeAssignment("tree:my-mode", "my-slot");
+  if (place.llm?.registerModeAssignment) {
+    place.llm.registerModeAssignment("tree:my-mode", "my-slot");
   }
 
   // Register energy service (optional, no-ops if energy not loaded)
-  if (core.energy) setEnergyService(core.energy);
+  if (place.energy) setEnergyService(place.energy);
 
   return {
     // Express router (mounted at /api/v1)
@@ -242,17 +242,17 @@ export async function init(core) {
 
 ## Running AI Conversations (runTurn)
 
-Use `core.llm.runTurn()` to run AI conversations from your extension. One call. No boilerplate.
+Use `place.llm.runTurn()` to run AI conversations from your extension. One call. No boilerplate.
 
 ```js
-const { answer } = await core.llm.runTurn({
+const { answer } = await place.llm.runTurn({
   userId,
   username,
   message: "analyze this data",
   mode: "tree:structure",
   rootId: "...",            // optional, for tree modes
   res,                      // optional, Express response for auto-abort on disconnect
-  llmPriority: core.llm.LLM_PRIORITY.BACKGROUND, // optional, default HUMAN
+  llmPriority: place.llm.LLM_PRIORITY.BACKGROUND, // optional, default HUMAN
 });
 ```
 
@@ -269,7 +269,7 @@ When multiple sessions compete for LLM slots, priority determines who goes first
 | `INTERACTIVE` | 3 | Human-initiated async (scout, explore, reroot analysis). |
 | `BACKGROUND` | 4 | Autonomous jobs (intent, dreams, codebook, compression). |
 
-Access via `core.llm.LLM_PRIORITY`. Background jobs should always set `llmPriority: core.llm.LLM_PRIORITY.BACKGROUND` so human interactions never wait behind autonomous work.
+Access via `place.llm.LLM_PRIORITY`. Background jobs should always set `llmPriority: place.llm.LLM_PRIORITY.BACKGROUND` so human interactions never wait behind autonomous work.
 
 ## Session identity (runTurn and OrchestratorRuntime)
 
@@ -279,7 +279,7 @@ Both `runTurn` and `OrchestratorRuntime` route every turn through a single **ai-
 2. **Declared lane** (`scope` + `purpose` + optional `extra`) — you want a persistent, named internal chain under `tree-internal:${rootId}:${purpose}`, `home-internal:${userId}:${purpose}`, or `place-internal:${purpose}`. Fork parallel sub-chains with `extra`.
 3. **Default** — nothing declared → ephemeral one-shot. No cross-call memory. Safest default for parsers, classifiers, one-shot scorers.
 
-Never mint your own session-key string. The kernel builds the key.
+Never mint your own session-key string. The seed builds the key.
 
 ## Running Multi-Step Pipelines (OrchestratorRuntime)
 
@@ -290,7 +290,7 @@ import { OrchestratorRuntime } from "../../orchestrators/runtime.js";
 
 const rt = new OrchestratorRuntime({
   rootId, userId, username,
-  scope: "tree", purpose: "my-pipeline",  // kernel mints the session key
+  scope: "tree", purpose: "my-pipeline",  // seed mints the session key
   sessionType: "my-pipeline",
   description: "Processing tree",
   modeKeyForLlm: "tree:my-mode",
@@ -338,7 +338,7 @@ try {
 
 | Need | Use |
 |------|-----|
-| Single message, user-facing | `core.llm.runTurn()` |
+| Single message, user-facing | `place.llm.runTurn()` |
 | Multi-step background pipeline | `OrchestratorRuntime` with `init()` + `runStep()` + `cleanup()` |
 | Real-time interactive orchestrator | `OrchestratorRuntime` with `attach()` + `trackStep()` |
 
@@ -346,7 +346,7 @@ Never use `stepTurn` directly unless building a custom real-time orchestrator.
 
 ## Custom Orchestrator
 
-Extensions can replace the entire conversation orchestrator for a bigMode (tree, home, place). The orchestrator controls how messages are classified, planned, and executed. This is the most powerful customization point in TreeOS. Replace it and you have a completely different AI product on the same kernel.
+Extensions can replace the entire conversation orchestrator for a bigMode (tree, home, place). The orchestrator controls how messages are classified, planned, and executed. This is the most powerful customization point in TreeOS. Replace it and you have a completely different AI product on the same seed.
 
 **Discovery:** `GET /api/v1/place/orchestrators` returns which extension owns each bigMode.
 
@@ -363,13 +363,13 @@ export default {
 };
 
 // index.js
-export async function init(core) {
+export async function init(place) {
   return {
     orchestrator: {
       bigMode: "tree",
       async handle({ visitorId, message, socket, userId, sessionId, rootId, spaceId, mode, ...ctx }) {
         // You have full control. Run LLM calls, use tools, navigate the tree.
-        const { content } = await core.conversation.stepTurn({
+        const { content } = await place.conversation.stepTurn({
           userId,
           username: ctx.username,
           message,
@@ -412,11 +412,11 @@ Return value: `{ response, navigatedTo, ... }`. The response is sent to the clie
 
 | Utility | Access | Purpose |
 |---------|--------|---------|
-| `stepTurn()` | `core.conversation.stepTurn(opts)` | Run one LLM call with MCP tools |
-| `runTurn()` | `core.llm.runTurn(opts)` | Higher-level: handles session, abort, tracking |
-| `OrchestratorRuntime` | `core.orchestrator.OrchestratorRuntime` | Session lifecycle for multi-step flows |
-| `acquireLock/releaseLock` | `core.orchestrator.acquireLock(key)` | Concurrency control |
-| `parseJsonSafe` | `core.orchestrator.parseJsonSafe(str)` | Parse LLM JSON output (handles fences, trailing commas) |
+| `stepTurn()` | `place.conversation.stepTurn(opts)` | Run one LLM call with MCP tools |
+| `runTurn()` | `place.llm.runTurn(opts)` | Higher-level: handles session, abort, tracking |
+| `OrchestratorRuntime` | `place.orchestrator.OrchestratorRuntime` | Session lifecycle for multi-step flows |
+| `acquireLock/releaseLock` | `place.orchestrator.acquireLock(key)` | Concurrency control |
+| `parseJsonSafe` | `place.orchestrator.parseJsonSafe(str)` | Parse LLM JSON output (handles fences, trailing commas) |
 
 ### When to Build One
 
@@ -436,26 +436,26 @@ Return value: `{ response, navigatedTo, ... }`. The response is sent to the clie
 
 | Service | Key | Always Available |
 |---------|-----|-----------------|
-| Models | `core.models.{Being,Space,Fact,Matter}` | Yes |
-| Auth | `core.auth.resolveTreeAccess` | Yes |
-| Contributions | `core.contributions.logContribution` | Yes |
-| Sessions | `core.session.*` | Yes |
-| Chat | `core.chat.*` | Yes |
-| LLM | `core.llm.*` (includes `LLM_PRIORITY`) | Yes |
-| MCP | `core.mcp.*` | Yes |
-| WebSocket | `core.websocket.*` | Yes (no-op if headless) |
-| Orchestrator | `core.orchestrator.*` | Yes |
-| Hooks | `core.hooks.*` | Yes (always injected) |
-| Modes | `core.modes.*` | Yes (always injected) |
-| Orchestrators | `core.orchestrators.*` | Yes |
-| Ownership | `core.ownership.*` | Yes |
-| Space | `core.space.*` | Yes |
-| Space Locks | `core.spaceLocks.*` | Yes |
-| Metadata | `core.qualities.*` (namespace-enforced, 7 functions) | Yes (always injected) |
-| User Metadata | `core.beingMetadata.*` (6 functions) | Yes (always injected) |
-| Scope | `core.scope.*` | Yes |
-| Protocol | `core.protocol.*` | Yes |
-| Energy | `core.energy.*` | No-op stub if extension not loaded |
+| Models | `place.models.{Being,Space,Fact,Matter}` | Yes |
+| Auth | `place.auth.resolveTreeAccess` | Yes |
+| Contributions | `place.contributions.logContribution` | Yes |
+| Sessions | `place.session.*` | Yes |
+| Chat | `place.chat.*` | Yes |
+| LLM | `place.llm.*` (includes `LLM_PRIORITY`) | Yes |
+| MCP | `place.mcp.*` | Yes |
+| WebSocket | `place.websocket.*` | Yes (no-op if headless) |
+| Orchestrator | `place.orchestrator.*` | Yes |
+| Hooks | `place.hooks.*` | Yes (always injected) |
+| Modes | `place.modes.*` | Yes (always injected) |
+| Orchestrators | `place.orchestrators.*` | Yes |
+| Ownership | `place.ownership.*` | Yes |
+| Space | `place.space.*` | Yes |
+| Space Locks | `place.spaceLocks.*` | Yes |
+| Metadata | `place.qualities.*` (namespace-enforced, 7 functions) | Yes (always injected) |
+| User Metadata | `place.beingMetadata.*` (6 functions) | Yes (always injected) |
+| Scope | `place.scope.*` | Yes |
+| Protocol | `place.protocol.*` | Yes |
+| Energy | `place.energy.*` | No-op stub if extension not loaded |
 
 ## Logging
 
@@ -504,27 +504,27 @@ Endpoint placeholders are resolved automatically by the CLI:
 
 ## Hooks
 
-The hook system is an open pub/sub bus. Core fires kernel hooks. Extensions can fire their own hooks and listen to each other's. Any hook name is valid. No whitelist.
+The hook system is an open pub/sub bus. Core fires seed hooks. Extensions can fire their own hooks and listen to each other's. Any hook name is valid. No whitelist.
 
 ```js
-export async function init(core) {
+export async function init(place) {
   // Listen to a core hook
-  core.hooks.register("enrichContext", async ({ context, space, meta }) => {
+  place.hooks.register("enrichContext", async ({ context, space, meta }) => {
     const myData = meta["my-extension"] || {};
     if (Object.keys(myData).length > 0) context.myData = myData;
   }, "my-extension");
 
   // Listen to another extension's hook
-  core.hooks.register("gateway:beforeDispatch", async (data) => {
+  place.hooks.register("gateway:beforeDispatch", async (data) => {
     // modify or react to gateway dispatches
   }, "my-extension");
 
   // Fire your own hook for other extensions to listen to
-  await core.hooks.run("my-extension:afterProcess", { result, userId });
+  await place.hooks.run("my-extension:afterProcess", { result, userId });
 }
 ```
 
-### Core hooks (fired by kernel)
+### Core hooks (fired by seed)
 
 | Hook | Data shape | Type | Purpose |
 |------|-----------|------|---------|
@@ -563,15 +563,15 @@ Extensions define their own hooks using the `extName:hookName` naming convention
 
 ### Structural mutations in hooks
 
-If your hook handler creates, moves, or deletes spaces, acquire a space lock via `core.spaceLocks.acquireSpaceLock`. Release in a `finally` block. The kernel does not know which hooks do structural work. Extensions that do take responsibility.
+If your hook handler creates, moves, or deletes spaces, acquire a space lock via `place.spaceLocks.acquireSpaceLock`. Release in a `finally` block. The seed does not know which hooks do structural work. Extensions that do take responsibility.
 
 ```js
-core.hooks.register("afterMatter", async ({ spaceId }) => {
-  const lock = await core.spaceLocks.acquireSpaceLock(parentId, sessionId);
+place.hooks.register("afterMatter", async ({ spaceId }) => {
+  const lock = await place.spaceLocks.acquireSpaceLock(parentId, sessionId);
   try {
     await createSpace({ name: "Child", parentId, beingId });
   } finally {
-    core.spaceLocks.releaseSpaceLock(parentId, sessionId);
+    place.spaceLocks.releaseSpaceLock(parentId, sessionId);
   }
 }, "my-ext");
 ```
@@ -766,7 +766,7 @@ Both sources are merged. Disabled extensions are skipped during loading.
 Extensions return `jobs` from `init()` with start/stop functions:
 
 ```js
-export async function init(core) {
+export async function init(place) {
   return {
     jobs: [
       {
@@ -784,57 +784,57 @@ Jobs are auto-started after DB connect via `startExtensionJobs()`.
 ## Per-Space Data Storage (metadata)
 
 Extensions MUST store per-space data in `space.qualities` under their extension name.
-Do NOT add fields to the core Space schema. Use `core.qualities` from the services bundle:
+Do NOT add fields to the core Space schema. Use `place.qualities` from the services bundle:
 
 ```js
-// In init(core) or any function with core in scope:
+// In init(place) or any function with core in scope:
 
 // Read
-const data = core.qualities.qualities.space.getQuality(space, "my-extension");  // returns {} if empty
+const data = place.qualities.qualities.space.getQuality(space, "my-extension");  // returns {} if empty
 
 // Write (full replace, needs document)
-await core.qualities.qualities.space.setQuality(space, "my-extension", { wallets: {}, config: {} });
+await place.qualities.qualities.space.setQuality(space, "my-extension", { wallets: {}, config: {} });
 
 // Partial update (shallow merge, needs document)
-await core.qualities.qualities.space.mergeQuality(space, "my-extension", { lastSync: new Date() });
+await place.qualities.qualities.space.mergeQuality(space, "my-extension", { lastSync: new Date() });
 
 // Atomic increment (by ID or document, no read-modify-write)
-await core.qualities.qualities.space.incQuality(spaceId, "my-extension", "counter", 1);
+await place.qualities.qualities.space.incQuality(spaceId, "my-extension", "counter", 1);
 
 // Atomic capped array push (by ID or document)
-await core.qualities.qualities.space.pushQuality(spaceId, "my-extension", "history", { ts: Date.now() }, 50);
+await place.qualities.qualities.space.pushQuality(spaceId, "my-extension", "history", { ts: Date.now() }, 50);
 
 // Atomic multi-field set (by ID or document)
-await core.qualities.qualities.space.batchSetQuality(spaceId, "my-extension", { a: 1, b: 2, c: 3 });
+await place.qualities.qualities.space.batchSetQuality(spaceId, "my-extension", { a: 1, b: 2, c: 3 });
 
 // Remove namespace entirely (on uninstall or cleanup)
-await core.qualities.qualities.space.unsetQuality(spaceId, "my-extension");
+await place.qualities.qualities.space.unsetQuality(spaceId, "my-extension");
 ```
 
-For files outside `init()` (core.js, tools.js, routes.js), receive metadata through a configure pattern:
+For files outside `init()` (place.js, tools.js, routes.js), receive metadata through a configure pattern:
 
 ```js
-// In core.js:
+// In place.js:
 let _metadata = null;
 export function configure({ metadata }) { _metadata = metadata; }
 // Then use _metadata.qualities.space.getQuality, _metadata.qualities.space.setQuality, etc.
 
-// In index.js init(core):
-import { configure } from "./core.js";
-configure({ metadata: core.qualities });
+// In index.js init(place):
+import { configure } from "./place.js";
+configure({ metadata: place.qualities });
 ```
 
-User metadata follows the same pattern via `core.beingMetadata`:
+User metadata follows the same pattern via `place.beingMetadata`:
 
 ```js
-const prefs = core.beingMetadata.qualities.being.getQuality(user, "my-extension");
-await core.beingMetadata.incBeingMeta(userId, "my-extension", "visits", 1);
-await core.beingMetadata.batchSetBeingMeta(userId, "my-extension", { theme: "dark" });
+const prefs = place.beingMetadata.qualities.being.getQuality(user, "my-extension");
+await place.beingMetadata.incBeingMeta(userId, "my-extension", "visits", 1);
+await place.beingMetadata.batchSetBeingMeta(userId, "my-extension", { theme: "dark" });
 ```
 
-Both paths are valid. The scoped core path prevents accidental cross-namespace writes. The direct import path is for kernel code, migrations, and utilities that need to write to arbitrary namespaces.
+Both paths are valid. The scoped place path prevents accidental cross-namespace writes. The direct import path is for seed code, migrations, and utilities that need to write to arbitrary namespaces.
 
-Four core namespaces (`tools`, `roles`, `extensions`, `llm`) are always writable regardless of caller. These are kernel-owned shared configuration.
+Four core namespaces (`tools`, `roles`, `extensions`, `llm`) are always writable regardless of caller. These are seed-owned shared configuration.
 
 Convention:
 - Namespace key MUST match your manifest `name`
@@ -848,9 +848,9 @@ Convention:
 Extensions that create a tree structure on install (food, fitness, recovery, kb, etc.) MUST set a `role` field in their metadata namespace on every scaffolded space:
 
 ```js
-await core.qualities.qualities.space.setQuality(logSpace, "food", { role: "log" });
-await core.qualities.qualities.space.setQuality(mealsSpace, "food", { role: "meals" });
-await core.qualities.qualities.space.setQuality(profileSpace, "food", { role: "profile" });
+await place.qualities.qualities.space.setQuality(logSpace, "food", { role: "log" });
+await place.qualities.qualities.space.setQuality(mealsSpace, "food", { role: "meals" });
+await place.qualities.qualities.space.setQuality(profileSpace, "food", { role: "profile" });
 ```
 
 The `role` field is the structural marker. It means "this space is load-bearing for my extension." TreeOS base registers a generic `beforeSpaceDelete` hook that checks every space being deleted. If any extension namespace in the space's metadata contains a `role` field, the delete is cancelled with a message naming the extension and role.
@@ -921,8 +921,8 @@ export default {
 Or register during init():
 
 ```js
-export async function init(core) {
-  core.modes.registerMode("tree:research", {
+export async function init(place) {
+  place.modes.registerMode("tree:research", {
     emoji: "🔬",
     label: "Research",
     bigMode: "tree",
@@ -996,10 +996,10 @@ tools-clear                      Remove all local config (inherit from parent)
 
 **From extension code:**
 ```js
-// Allow a tool programmatically (use core.qualities, never import directly)
-const tools = core.qualities.qualities.space.getQuality(space, "tools") || {};
+// Allow a tool programmatically (use place.qualities, never import directly)
+const tools = place.qualities.qualities.space.getQuality(space, "tools") || {};
 tools.allowed = [...(tools.allowed || []), "my-custom-tool"];
-await core.qualities.qualities.space.setQuality(space, "tools", tools);
+await place.qualities.qualities.space.setQuality(space, "tools", tools);
 ```
 
 ## Per-Space Mode Overrides
@@ -1069,15 +1069,15 @@ ext-restrict food read            Restrict to read-only tools
 Extensions should check spatial scope before running AI conversations:
 
 ```js
-// In your route handler (core.scope is always available):
-if (await core.scope.isExtensionBlockedAtSpace("my-extension", rootId)) {
+// In your route handler (place.scope is always available):
+if (await place.scope.isExtensionBlockedAtSpace("my-extension", rootId)) {
   return res.status(403).json({ error: "This extension is blocked on this branch." });
 }
 ```
 
 **How restricted "read" works:**
 
-Every MCP tool declares `readOnlyHint` in its annotations. When an extension is restricted to "read" at a space, the kernel filters its tools to only those with `readOnlyHint: true`. The extension's hooks still fire (it can observe) but it can only read, not write. This lets two extensions coexist on a tree where each can see the other's data but not modify it.
+Every MCP tool declares `readOnlyHint` in its annotations. When an extension is restricted to "read" at a space, the seed filters its tools to only those with `readOnlyHint: true`. The extension's hooks still fire (it can observe) but it can only read, not write. This lets two extensions coexist on a tree where each can see the other's data but not modify it.
 
 **Example: Health tree with fitness and food:**
 
@@ -1141,21 +1141,21 @@ No action = default GET. Unknown action shows available subcommands. Missing req
 
 ## Per-User Data Storage (metadata)
 
-Same pattern as per-space metadata. Use `core.beingMetadata` (always available, no declaration needed):
+Same pattern as per-space metadata. Use `place.beingMetadata` (always available, no declaration needed):
 
 ```js
 // Read
-const energy = core.beingMetadata.qualities.being.getQuality(user, "energy");  // returns {} if empty
+const energy = place.beingMetadata.qualities.being.getQuality(user, "energy");  // returns {} if empty
 
 // Write (sync, caller must save)
-core.beingMetadata.qualities.being.setQuality(user, "energy", { available: { amount: 100 } });
+place.beingMetadata.qualities.being.setQuality(user, "energy", { available: { amount: 100 } });
 await user.save();
 
 // Atomic operations (by ID or document, no need to save)
-await core.beingMetadata.incBeingMeta(userId, "energy", "used", 5);
-await core.beingMetadata.pushBeingMeta(userId, "energy", "history", { ts: Date.now() }, 50);
-await core.beingMetadata.batchSetBeingMeta(userId, "energy", { available: 95, lastUsed: Date.now() });
-await core.beingMetadata.unsetBeingMeta(userId, "old-extension");
+await place.beingMetadata.incBeingMeta(userId, "energy", "used", 5);
+await place.beingMetadata.pushBeingMeta(userId, "energy", "history", { ts: Date.now() }, 50);
+await place.beingMetadata.batchSetBeingMeta(userId, "energy", { available: 95, lastUsed: Date.now() });
+await place.beingMetadata.unsetBeingMeta(userId, "old-extension");
 ```
 
 Convention: namespace key matches your manifest name. Same rules as space metadata.
@@ -1169,7 +1169,7 @@ Extensions never import each other's files directly. They communicate through de
 Return an `exports` object from `init()`:
 
 ```js
-export async function init(core) {
+export async function init(place) {
   return {
     router,
     exports: {
@@ -1210,14 +1210,14 @@ if (treeOrch) {
 For services like energy that may or may not be installed, use a setter pattern:
 
 ```js
-// core.js
+// place.js
 let useEnergy = async () => ({ energyUsed: 0 });
 export function setEnergyService(energy) { useEnergy = energy.useEnergy; }
 
 // index.js
-import { setEnergyService } from "./core.js";
-export async function init(core) {
-  if (core.energy) setEnergyService(core.energy);
+import { setEnergyService } from "./place.js";
+export async function init(place) {
+  if (place.energy) setEnergyService(place.energy);
   // ...
 }
 ```
@@ -1255,10 +1255,10 @@ optional: {
 ```js
 // In your index.js setRunChat wrapper:
 setRunChat(async (opts) => {
-  if (opts.userId && opts.userId !== "SYSTEM" && !await core.llm.userHasLlm(opts.userId)) {
+  if (opts.userId && opts.userId !== "SYSTEM" && !await place.llm.userHasLlm(opts.userId)) {
     return { answer: null };
   }
-  return core.llm.runTurn({ ...opts, llmPriority: BG });
+  return place.llm.runTurn({ ...opts, llmPriority: BG });
 });
 ```
 
@@ -1266,13 +1266,13 @@ setRunChat(async (opts) => {
 
 **Injecting into enrichContext without guarding.** Every enrichContext handler should check if relevant data exists before injecting. If your extension has no data for this space, return early. Do not inject empty objects. Do not run database queries on every context build unless you have data to contribute.
 
-**Writing to metadata without the kernel API.** Direct `space.qualities.set()` or `Space.updateOne({ $set: ... })` bypasses namespace ownership, document size guards, and the afterQualityWrite hook. Always use `core.qualities.*` functions. The kernel provides atomic operations for every pattern: `qualities.space.incQuality` for counters, `qualities.space.pushQuality` for capped arrays, `qualities.space.batchSetQuality` for multi-field writes, `qualities.space.unsetQuality` for cleanup. There is no reason to use direct MongoDB for metadata.
+**Writing to metadata without the seed API.** Direct `space.qualities.set()` or `Space.updateOne({ $set: ... })` bypasses namespace ownership, document size guards, and the afterQualityWrite hook. Always use `place.qualities.*` functions. The seed provides atomic operations for every pattern: `qualities.space.incQuality` for counters, `qualities.space.pushQuality` for capped arrays, `qualities.space.batchSetQuality` for multi-field writes, `qualities.space.unsetQuality` for cleanup. There is no reason to use direct MongoDB for metadata.
 
 **Missing LLM_PRIORITY on background calls.** Every LLM call needs a priority. BACKGROUND for hooks and jobs. INTERACTIVE for user-triggered tools. GATEWAY for external channels. Without priority, background extensions compete with human chat.
 
 ## Stance Authorization Defaults (Layer 3)
 
-The kernel gates every verb (`see` / `do` / `summon` / `be`) through stance
+The seed gates every verb (`see` / `do` / `summon` / `be`) through stance
 authorization. The walk has three layers:
 
 | Layer | Source | When it matches |
@@ -1308,7 +1308,7 @@ provides: {
 },
 ```
 
-The loader picks these up at boot and feeds them into the kernel's
+The loader picks these up at boot and feeds them into the seed's
 default-permission registry. Uninstalling the extension removes its
 defaults automatically; reinstalling re-registers them.
 
@@ -1335,16 +1335,16 @@ rules). All entries must pass for the rule to allow.
 ### Picking specificity
 
 If multiple extensions ship a rule for the same key, the first installed
-wins (kernel doesn't merge). Use namespaced action prefixes
+wins (seed doesn't merge). Use namespaced action prefixes
 (`do:my-ext:*`) so your rules don't collide with another extension's
 defaults.
 
 ## Security Model
 
-Extensions run in the same Node.js process as core. There is no sandbox or import restriction.
+Extensions run in the same Node.js process as place. There is no sandbox or import restriction.
 
 - Manifests declare dependencies for documentation and scoped injection via `buildScopedCore`, but **do not enforce access boundaries**. Any extension can `import` any file on disk.
-- The `needs` and `optional` fields determine what is injected into `core` during `init()`, not what the extension can access.
+- The `needs` and `optional` fields determine what is injected into `place` during `init()`, not what the extension can access.
 - Extensions have full read/write access to the database via Mongoose models.
 - Extensions can register routes, tools, hooks, and jobs that run with full system privileges.
 

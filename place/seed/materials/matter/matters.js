@@ -5,7 +5,7 @@
 // Space is the where; Matter is the what-sits-there. Together they
 // make a position something rather than empty potential. This file
 // is the place I create, edit, and retire Matter — the operations
-// behind the kernel's create-matter / edit-matter / delete-matter
+// behind the seed's create-matter / edit-matter / delete-matter
 // verbs.
 //
 // I do not split Matter by what it carries. Text, a file, a URL, a
@@ -36,7 +36,7 @@ import fs from "fs";
 import { fileURLToPath } from "url";
 import Matter from "../../models/matter.js";
 import Space from "../../models/space.js";
-import Fact from "../../models/fact.js";
+import Fact from "../../past/fact/fact.js";
 ;
 import { escapeRegex } from "../../system/utils.js";
 import { getPlaceConfigValue } from "../../placeConfig.js";
@@ -46,7 +46,7 @@ import { MATTER_ORIGIN } from "./origins.js";
 import { DELETED } from "../space/seedSpaces.js";
 import { IBP_ERR, IbpError } from "../../ibp/protocol.js";
 
-// `__dirname` resolves to seed/place/matter/. Three ups reach the
+// `__dirname` resolves to seed/materials/matter/. Three ups reach the
 // place/ root where the uploads/ folder sits beside seed/.
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -114,7 +114,7 @@ async function createMatter({
   beingId,
   spaceId,
   file,
-  stampId = null,
+  actId = null,
   sessionId = null,
   initialQualities = {},
 }) {
@@ -178,7 +178,7 @@ async function createMatter({
 
   // Size attributed to the matter owner. Passed through to afterMatter
   // for the future projection. Per the every-write-through-DO/BE
-  // rule, the kernel no longer maintains a being.qualities.storage cache
+  // rule, the seed no longer maintains a being.qualities.storage cache
   // by direct incQuality; storage is a projection of the matter Facts.
   let sizeKB = 0;
   if (isFilesystemOrigin(origin) && file?.size) {
@@ -195,7 +195,7 @@ async function createMatter({
   // the AI walk past blocking errors. After hooks run parallel so
   // awaiting the Promise.all adds no serialization latency beyond
   // the slowest single handler.
-  await hooks.run("afterMatter", { matter: newMatter, spaceId, beingId, origin, sizeKB, action: "create", stampId, sessionId }).catch((err) => {
+  await hooks.run("afterMatter", { matter: newMatter, spaceId, beingId, origin, sizeKB, action: "create", actId, sessionId }).catch((err) => {
     log.warn("Matter", `afterMatter hook chain failed: ${err?.message}`);
   });
 
@@ -208,7 +208,7 @@ async function createMatter({
 async function editMatter({
   matterId, content, beingId,
   lineStart = null, lineEnd = null,
-  stampId = null, sessionId = null,
+  actId = null, sessionId = null,
 }) {
   if (!matterId || !beingId) throw new Error("Missing required fields");
 
@@ -265,7 +265,7 @@ async function editMatter({
   // Awaited: see comment in createMatter above. Callers (tool handlers
   // on the LLM path) need the syntax validator complete before they
   // return, or the next turn reads stale state.
-  await hooks.run("afterMatter", { matter, spaceId: matter.spaceId, beingId, origin: matter.origin, sizeKB: newSizeKB, deltaKB, action: "edit", stampId, sessionId }).catch((err) => {
+  await hooks.run("afterMatter", { matter, spaceId: matter.spaceId, beingId, origin: matter.origin, sizeKB: newSizeKB, deltaKB, action: "edit", actId, sessionId }).catch((err) => {
     log.warn("Matter", `afterMatter hook chain failed: ${err?.message}`);
   });
 
@@ -304,7 +304,7 @@ async function getMatters({ spaceId, limit, offset, startDate, endDate }) {
 
 async function deleteMatterAndFile({
   matterId, beingId,
-  stampId = null, sessionId = null,
+  actId = null, sessionId = null,
 }) {
   const matter = await Matter.findById(matterId);
   if (!matter) throw new Error("Matter not found");
@@ -352,7 +352,7 @@ async function deleteMatterAndFile({
       matter, spaceId, beingId: fileOwnerId,
       origin: matter.origin, fileSizeKB,
       action: "delete", fileDeleted,
-      stampId, sessionId,
+      actId, sessionId,
     }).catch(() => {});
   }
 
@@ -365,7 +365,7 @@ async function deleteMatterAndFile({
 
 async function transferMatter({
   matterId, targetSpace, beingId,
-  stampId = null, sessionId = null,
+  actId = null, sessionId = null,
 }) {
   if (!matterId || !targetSpace || !beingId) {
     throw new Error("Missing required fields: matterId, targetSpace, beingId");

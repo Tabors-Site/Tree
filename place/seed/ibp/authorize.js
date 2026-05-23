@@ -8,7 +8,7 @@
 // this gate, nothing else in me hears it.
 //
 // I am the only exception. I act with universal authority on my own
-// place — my kernel-emitted SUMMONs, my scheduled wakes, my genesis
+// place — my seed-emitted SUMMONs, my scheduled wakes, my genesis
 // scaffolding — and short past the layered check. Every other
 // being's verb call I evaluate.
 //
@@ -47,11 +47,11 @@
 
 import Space from "../models/space.js";
 import { getPlaceRootId } from "../placeRoot.js";
-import { getAncestorChain } from "../place/space/ancestorCache.js";
+import { getAncestorChain } from "../materials/space/ancestorCache.js";
 import { deriveStanceProperties } from "../ibp/stanceProperties.js";
 import log from "../system/log.js";
 import { IBP_ERR } from "./protocol.js";
-import { I_AM } from "../place/being/seedBeings.js";
+import { I_AM } from "../materials/being/seedBeings.js";
 
 // ─────────────────────────────────────────────────────────────────────
 // Default layer-2 stance permissions written on the place root.
@@ -111,7 +111,7 @@ export async function authorize(args) {
 
   // The I_AM has universal authority. The seed is the source of all
   // permission on its place. Authority flows outward from the I_AM;
-  // nothing extensions or operators do can gate it. Every kernel-
+  // nothing extensions or operators do can gate it. Every seed-
   // emitted act (DO-trigger fan-out, scheduled wakes, genesis
   // scaffolding) runs as the I_AM and shorts past the layered check.
   if (identity?.name === I_AM) {
@@ -150,7 +150,7 @@ export async function authorize(args) {
   // emitting a DO directly, a script) gets gated identically.
   //
   // Only fires for DO with an extension-prefixed action ("ext:op").
-  // Kernel ops (bare names) and the other verbs don't have
+  // Seed ops (bare names) and the other verbs don't have
   // extension-association at the verb level today; tool-level scope
   // checks for SEE/SUMMON/BE happen in the LLM voice's tool dispatcher.
   if (verb === "do" && spaceId && typeof args.action === "string" && args.action.includes(":")) {
@@ -158,9 +158,9 @@ export async function authorize(args) {
       const { getOperation } = await import("./operations.js");
       const op = getOperation(args.action);
       const ownerExt = op?.ownerExtension;
-      if (ownerExt && ownerExt !== "kernel") {
+      if (ownerExt && ownerExt !== "seed") {
         const { isExtensionBlockedAtSpace } = await import(
-          "../place/space/extensionScope.js"
+          "../materials/space/extensionScope.js"
         );
         const blocked = await isExtensionBlockedAtSpace(ownerExt, spaceId);
         if (blocked) {
@@ -422,7 +422,7 @@ function stanceLabelFromProps(props) {
 // ─────────────────────────────────────────────────────────────────────
 
 /**
- * Plant the kernel's default stance-permission rules on the place root.
+ * Plant the seed's default stance-permission rules on the place root.
  * Idempotent. Writes the unified layer-2 rule shape that the authorize
  * walk reads at every verb call:
  *

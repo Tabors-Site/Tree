@@ -16,7 +16,7 @@ import { mock } from "node:test";
 // objects with `_id` to mirror the real Mongoose lean() shape.
 let fakeAncestorChain = [];
 
-mock.module("../seed/place/space/ancestorCache.js", {
+mock.module("../seed/materials/space/ancestorCache.js", {
   namedExports: {
     getAncestorChain: async (_nodeId) => fakeAncestorChain.map((id) => ({ _id: id })),
   },

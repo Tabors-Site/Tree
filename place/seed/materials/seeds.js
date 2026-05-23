@@ -35,8 +35,8 @@
 // world-as-fact for the first time.
 //
 // A planted seed is the same act, later in time, with the operator
-// as the trigger. The scaffold function runs through `core` —
-// kernel-trusted; the writes flow through verbs with the I_AM's
+// as the trigger. The scaffold function runs through `place` —
+// seed-trusted; the writes flow through verbs with the I_AM's
 // authority; the planted structure stamps an audit trail naming
 // the operator who triggered it and the I_AM that performed it.
 // Genesis at boot and seed-plant at runtime are not different in
@@ -44,7 +44,7 @@
 // shape grows the way the place was first formed: a being scaffolds
 // substrate from a recipe.
 //
-// This is why the registry sits in the kernel and not in any one
+// This is why the registry sits in the seed and not in any one
 // extension. Seeds are the I_AM's own mechanism for extending the
 // world, offered as a surface extensions can declare against. The
 // extension supplies the recipe; the I_AM does the planting.
@@ -56,7 +56,7 @@
 //     description: "what planting this does",
 //     ownerExtension: "<ext>",          // set by the loader
 //     scaffold: async (ctx) => {
-//       // free-form: the recipe calls core verbs to create structure
+//       // free-form: the recipe calls place verbs to create structure
 //       // returns a `plantedThings` descriptor used by unplantSeed
 //     },
 //   }
@@ -85,17 +85,17 @@ const SEED_NAME_RE = /^[a-z][a-z0-9-]*:[a-z][a-z0-9-]*$/;
 const MAX_SEEDS = 200;
 
 /**
- * Register a seed recipe. Extensions call this via core.seeds.register
+ * Register a seed recipe. Extensions call this via place.seeds.register
  * (or declare seeds in their init() return value and the loader registers).
  *
- * @param {string} name - "<ext>:<seed-action>" — kernel namespace convention
+ * @param {string} name - "<ext>:<seed-action>" — seed namespace convention
  * @param {object} recipe
  * @param {string} recipe.description - one-line explanation of what planting creates
- * @param {Function} recipe.scaffold - async ({ rootSpaceId, plantedSeedId, identity, core }) => plantedThings
- * @param {string} [ownerExtension] - the registering extension; "kernel" if omitted
+ * @param {Function} recipe.scaffold - async ({ rootSpaceId, plantedSeedId, identity, place }) => plantedThings
+ * @param {string} [ownerExtension] - the registering extension; "seed" if omitted
  * @returns {boolean} true on success
  */
-export function registerSeed(name, recipe, ownerExtension = "kernel") {
+export function registerSeed(name, recipe, ownerExtension = "seed") {
   if (typeof name !== "string" || !SEED_NAME_RE.test(name)) {
     log.error(
       "Seeds",
@@ -122,7 +122,7 @@ export function registerSeed(name, recipe, ownerExtension = "kernel") {
     return false;
   }
   const declaredPrefix = name.split(":")[0];
-  if (ownerExtension !== "kernel" && declaredPrefix !== ownerExtension) {
+  if (ownerExtension !== "seed" && declaredPrefix !== ownerExtension) {
     log.error(
       "Seeds",
       `Seed "${name}" rejected: prefix "${declaredPrefix}" does not match owner "${ownerExtension}".`,
@@ -199,14 +199,14 @@ export function listSeeds() {
 
 /**
  * Plant a seed at a space. Runs the recipe's `scaffold` function with
- * the kernel's core services and stamps the result on the target
+ * the seed's place services and stamps the result on the target
  * space's qualities.seeds namespace.
  *
  * @param {object} args
  * @param {string} args.name - registered seed name
  * @param {string} args.atSpaceId - target space id (the seed's plant point)
  * @param {object} args.identity - { beingId, username } of the planter
- * @param {object} args.core - core services bundle (passed to recipe)
+ * @param {object} args.place - place services bundle (passed to recipe)
  * @param {object} [args.params] - plant-time configuration the operator
  *   passes through to the seed (e.g. projectPath for a code workspace,
  *   theme for a UI extension). Free-shape object; the seed defines its
@@ -219,7 +219,7 @@ export async function plantSeed({
   name,
   atSpaceId,
   identity,
-  core,
+  place,
   params = {},
 }) {
   const recipe = SEEDS.get(name);
@@ -246,7 +246,7 @@ export async function plantSeed({
     rootSpaceId: String(atSpaceId),
     plantedSeedId,
     identity,
-    core,
+    place,
     params: safeParams,
   };
 
@@ -261,7 +261,7 @@ export async function plantSeed({
     throw err;
   }
 
-  // Stamp the planted-seed record on the target space. The "seeds"
+  // Act the planted-seed record on the target space. The "seeds"
   // quality namespace is a blob keyed by plantedSeedId. Params place
   // here too so an audit / re-plant can see what the operator
   // configured.
@@ -317,7 +317,7 @@ export async function unplantSeed({
   atSpaceId,
   plantedSeedId,
   identity,
-  core,
+  place,
 }) {
   if (!atSpaceId || !plantedSeedId) {
     throw new Error("unplantSeed requires atSpaceId and plantedSeedId");
@@ -341,7 +341,7 @@ export async function unplantSeed({
         rootSpaceId: String(atSpaceId),
         plantedSeedId,
         identity,
-        core,
+        place,
         plantedThings: entry.plantedThings,
       });
     } catch (err) {

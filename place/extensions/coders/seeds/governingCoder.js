@@ -33,7 +33,7 @@ export default {
    * @param {string} ctx.rootSpaceId   target space where the rulership plants
    * @param {string} ctx.plantedSeedId
    * @param {object} ctx.identity     planter
-   * @param {object} ctx.core         core services bundle
+   * @param {object} ctx.place         place services bundle
    * @param {object} ctx.params       plant-time configuration:
    *                                   - projectPath: absolute path on disk
    *                                     where the code project lives. Stamped
@@ -44,7 +44,7 @@ export default {
    *                                     optional at plant time so the operator
    *                                     can stamp it later if not known yet.
    */
-  async scaffold({ rootSpaceId, plantedSeedId, identity, core, params = {} }) {
+  async scaffold({ rootSpaceId, plantedSeedId, identity, place, params = {} }) {
     // 1. Promote the target space to Ruler via governing's exported API.
     const { getExtension } = await import("../../loader.js");
     const governing = getExtension("governing")?.exports;
@@ -69,14 +69,14 @@ export default {
     const Space = (await import("../../../seed/models/space.js")).default;
     const space = await Space.findById(rootSpaceId);
     if (space) {
-      await core.do(space, "set", {
+      await place.do(space, "set", {
         field: "qualities.governing",
         value: { workspace: "coders" },
         merge: true,
       }, { identity });
 
       if (typeof params.projectPath === "string" && params.projectPath.length > 0) {
-        await core.do(space, "set", {
+        await place.do(space, "set", {
           field: "qualities.coders",
           value: { projectPath: params.projectPath },
           merge: true,

@@ -1,5 +1,5 @@
 // TreeOS Seed . AGPL-3.0 . https://treeos.ai . Tabor Holly
-// Kernel string utilities.
+// Seed string utilities.
 
 /**
  * Escape a string for safe use in a RegExp constructor.

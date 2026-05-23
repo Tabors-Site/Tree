@@ -13,7 +13,7 @@
 //
 // Extensions declare their own indexes through `ensureExtensionIndexes`
 // (called by the loader during the wire phase). They cannot touch the
-// kernel's collections, cannot enforce uniqueness on shared ones, and
+// seed's collections, cannot enforce uniqueness on shared ones, and
 // are capped per-extension to keep one runaway from degrading writes.
 
 import log from "./log.js";
@@ -25,7 +25,7 @@ function MAX_EXTENSION_INDEXES() {
 }
 
 /**
- * Additional kernel indexes — only those NOT already declared in a
+ * Additional seed indexes — only those NOT already declared in a
  * model's schema. Each entry:
  *   collection : MongoDB collection name (matches the model's third arg)
  *   fields     : index key specification
@@ -43,7 +43,7 @@ const REQUIRED_INDEXES = [
 ];
 
 /**
- * Kernel collection names. Extensions cannot create indexes on these.
+ * Seed collection names. Extensions cannot create indexes on these.
  * Must match the third arg of each `mongoose.model(Name, Schema, COLL)`
  * call in seed/models/, or the default Mongoose pluralization where
  * the third arg is omitted.
@@ -53,11 +53,11 @@ const KERNEL_COLLECTIONS = new Set([
   "beings",                // Being
   "matters",               // Matter
   "facts",                 // Fact
-  "stamps",                // Stamp
+  "stamps",                // Act
 ]);
 
 /**
- * Ensure required kernel indexes exist. Creates anything missing.
+ * Ensure required seed indexes exist. Creates anything missing.
  * Schema-declared indexes are left to Mongoose's autoIndex.
  *
  * @returns {Promise<{ verified: number, created: number, errors: string[] }>}
@@ -123,7 +123,7 @@ export async function ensureIndexes() {
   if (report.created > 0) {
     log.info("Indexes", `${report.verified} verified, ${report.created} created`);
   } else {
-    log.verbose("Indexes", `all ${report.verified} kernel indexes verified`);
+    log.verbose("Indexes", `all ${report.verified} seed indexes verified`);
   }
   if (report.errors.length > 0) {
     log.warn("Indexes", `${report.errors.length} index error(s)`);
@@ -157,12 +157,12 @@ export async function ensureExtensionIndexes(indexes, extName) {
 
     if (KERNEL_COLLECTIONS.has(idx.collection)) {
       log.warn("Indexes",
-        `Extension ${extName} tried to create index on kernel collection "${idx.collection}". Rejected.`);
+        `Extension ${extName} tried to create index on seed collection "${idx.collection}". Rejected.`);
       continue;
     }
 
     // Strip any unique flag — extensions can't enforce uniqueness on a
-    // collection they share with the kernel or with other extensions.
+    // collection they share with the seed or with other extensions.
     const opts = { ...(idx.options || {}) };
     if (opts.unique) {
       log.warn("Indexes",

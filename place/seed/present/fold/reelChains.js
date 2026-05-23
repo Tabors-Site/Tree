@@ -8,7 +8,7 @@
 // by chain root, by reply.
 //
 // Today this file is sparse on purpose. Most history reads still
-// live as inline `Stamp.find()` calls in their callers
+// live as inline `Act.find()` calls in their callers
 // (descriptor.js walks inReplyTo; place/space/threads.js gathers
 // by rootCorrelation; data retention sweeps by age). As those
 // callers consolidate around the same query shapes, the primitives
@@ -22,29 +22,29 @@
 // operations (sever, walk lineage, cut) belong in threads.js;
 // raw "give me Summons matching X" belongs here.
 
-import Stamp from "../../../models/stamp.js";
+import Act from "../../../past/act/act.js";
 
 /**
- * Walk the inReplyTo chain backward from a Stamp to find the
- * chain-opener. The chain-opener is the Stamp whose `inReplyTo`
+ * Walk the inReplyTo chain backward from a Act to find the
+ * chain-opener. The chain-opener is the Act whose `inReplyTo`
  * is null — the first stamp in this lane's reply tree.
  *
  * Used by descriptor and reply-routing when a Ruler needs to
  * address back to the user-being or parent Ruler that opened the
  * chain, rather than to the immediate sub-being sender.
  *
- * @param {string} stampId  the starting Stamp
+ * @param {string} actId  the starting Act
  * @param {number} maxDepth  safety cap (default 100)
- * @returns {Promise<object|null>} the chain-opening Stamp row, or null
+ * @returns {Promise<object|null>} the chain-opening Act row, or null
  */
-export async function findChainOpener(stampId, maxDepth = 100) {
-  if (!stampId) return null;
-  let current = await Stamp.findById(stampId)
+export async function findChainOpener(actId, maxDepth = 100) {
+  if (!actId) return null;
+  let current = await Act.findById(actId)
     .select("_id inReplyTo")
     .lean();
   let depth = 0;
   while (current && current.inReplyTo && depth < maxDepth) {
-    const next = await Stamp.findById(current.inReplyTo)
+    const next = await Act.findById(current.inReplyTo)
       .select("_id inReplyTo from beingIn beingOut rootCorrelation ibpAddress")
       .lean();
     if (!next) break;
@@ -68,7 +68,7 @@ export async function findChainOpener(stampId, maxDepth = 100) {
  */
 export async function findByRootCorrelation(rootCorrelation, opts = {}) {
   if (!rootCorrelation) return [];
-  const q = Stamp.find({ rootCorrelation })
+  const q = Act.find({ rootCorrelation })
     .sort({ createdAt: -1 })
     .lean();
   if (typeof opts.limit === "number") q.limit(opts.limit);
@@ -87,14 +87,14 @@ export async function findByRootCorrelation(rootCorrelation, opts = {}) {
  */
 export async function findByIbpAddress(ibpAddress, opts = {}) {
   if (!ibpAddress) return [];
-  return Stamp.find({ ibpAddress })
+  return Act.find({ ibpAddress })
     .sort({ createdAt: -1 })
     .limit(opts.limit || 50)
     .lean();
 }
 
 /**
- * The most recently opened Stamp where the given being is the
+ * The most recently opened Act where the given being is the
  * responder (beingOut) and the moment is still un-sealed
  * (endMessage.time is null). Used by descriptor.js to surface
  * "this being is currently doing X" — the live activity readout
@@ -106,7 +106,7 @@ export async function findByIbpAddress(ibpAddress, opts = {}) {
 export async function findOpenForBeing(beingOut) {
   if (!beingOut) return null;
   try {
-    return await Stamp.findOne({
+    return await Act.findOne({
       beingOut,
       "endMessage.time": null,
     })
@@ -135,9 +135,9 @@ export async function findByBeing(beingId, opts = {}) {
   if (!beingId) return [];
   const side = opts.side || "either";
   let q;
-  if (side === "in") q = Stamp.find({ beingIn: beingId });
-  else if (side === "out") q = Stamp.find({ beingOut: beingId });
-  else q = Stamp.find({ $or: [{ beingIn: beingId }, { beingOut: beingId }] });
+  if (side === "in") q = Act.find({ beingIn: beingId });
+  else if (side === "out") q = Act.find({ beingOut: beingId });
+  else q = Act.find({ $or: [{ beingIn: beingId }, { beingOut: beingId }] });
   return q
     .sort({ createdAt: -1 })
     .limit(opts.limit || 50)

@@ -567,7 +567,7 @@ addEventListener("keydown", (e) => {
 });
 
 // Try to plant whatever's in the selected hotbar slot at the current
-// position. Bounces the user to auth if unauthenticated (the kernel
+// position. Bounces the user to auth if unauthenticated (the seed
 // would reject anyway; better to ask before the round-trip).
 async function attemptPlant() {
   const item = state.hotbar?.getSelected();

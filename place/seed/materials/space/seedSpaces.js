@@ -77,7 +77,7 @@
 //
 // Kinds of Space the seed plants and owns. Every seed-space is dot-
 // prefixed (.identity, .config, .peers, .extensions, .tools, .roles,
-// .operations, .source, .threads) and reserved by the kernel. They sit
+// .operations, .source, .threads) and reserved by the seed. They sit
 // directly under the place root and are the substrate the seed plants
 // at first boot. The Space schema field `seedSpace` carries one of
 // these values; beings' own spaces have `seedSpace: null`.
@@ -103,10 +103,10 @@ export const SEED_SPACE = Object.freeze({
   // The .threads space. A live tree of coordinated work (a
   // rootCorrelation chain) is addressable here as `.threads/<id>`. No
   // children are persisted; the projection is computed on demand from
-  // inbox + Stamp records keyed by rootCorrelation. SUMMON to a
+  // inbox + Act records keyed by rootCorrelation. SUMMON to a
   // thread address is a cut (sever the line and everything hanging
   // off it). SEE returns the live forest. See
-  // seed/place/space/threads.js.
+  // seed/materials/space/threads.js.
   THREADS: "threads",
 });
 
@@ -120,5 +120,5 @@ export const SEED_SPACE = Object.freeze({
 
 export const DELETED = "deleted";
 
-// I_AM moved to seed/place/being/seedBeings.js (it's a being constant,
+// I_AM moved to seed/materials/being/seedBeings.js (it's a being constant,
 // not a space constant).

@@ -7,12 +7,12 @@
 //   2. Extension auth strategies (api-keys, custom schemes).
 //   3. Reject (or pass through for `authenticateOptional`).
 //
-// JWT verification lives in seed/place/being/identity.js so every transport
+// JWT verification lives in seed/materials/being/identity.js so every transport
 // (HTTP middleware, WS, IBP adapter, MCP) shares one source of truth.
 
 import log from "../../../seed/system/log.js";
-import { verifyTokenStrict } from "../../../seed/place/being/identity.js";
-import { resolveSpaceAccess } from "../../../seed/place/space/spaceFetch.js";
+import { verifyTokenStrict } from "../../../seed/materials/being/identity.js";
+import { resolveSpaceAccess } from "../../../seed/materials/space/spaceFetch.js";
 import { authStrategies } from "../../../seed/services.js";
 import { sendError, IBP_ERR } from "../../../seed/ibp/protocol.js";
 

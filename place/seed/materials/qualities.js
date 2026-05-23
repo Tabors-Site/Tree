@@ -3,7 +3,7 @@
 // Qualities. What kind a thing is.
 //
 // Every primitive (Space, Being, Matter) carries two layers. My schema
-// is the constitutive layer: closed, kernel-defined, the necessary
+// is the constitutive layer: closed, seed-defined, the necessary
 // grip that makes a primitive a primitive I can handle. The `qualities`
 // Map is the characterizing layer: open, extension-defined, the
 // answer to Plato's question "of what sort is this particular one?"
@@ -44,7 +44,7 @@
 //
 // API:
 //
-//   import { qualities } from "../place/qualities.js";
+//   import { qualities } from "../materials/qualities.js";
 //
 //   qualities.being.getQuality(being, "energy")          // {} when unset
 //   qualities.being.readQualityNamespace(being, "energy") // null when unset
@@ -58,8 +58,8 @@
 //
 // Same nine methods on `qualities.space` and `qualities.matter`. The
 // space and matter variants enforce namespace ownership when the
-// scoped core passes opts.callerExtName (extensions can only write
-// to their own quality namespace).
+// scoped place bundle passes opts.callerExtName (extensions can only
+// write to their own quality namespace).
 
 import Being from "../models/being.js";
 import Space from "../models/space.js";

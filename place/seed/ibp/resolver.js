@@ -36,7 +36,7 @@ import { getPlaceDomain } from "./address.js";
 import Being from "../models/being.js";
 import Space from "../models/space.js";
 import { getPlaceRootId } from "../placeRoot.js";
-import { resolveRootSpace } from "../place/space/spaceFetch.js";
+import { resolveRootSpace } from "../materials/space/spaceFetch.js";
 
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;

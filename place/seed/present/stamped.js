@@ -2,11 +2,11 @@
 //
 // stamped.js — the post stamping. The closing press.
 //
-// A Stamp is a frame on the reel. assign reserved the row at the
+// A Act is a frame on the reel. assign reserved the row at the
 // front so every DO and BE emitted during the moment could carry
-// the stampId. This file presses the closing face — endMessage —
+// the actId. This file presses the closing face — endMessage —
 // onto the reserved row when the moment ends. "What was inside
-// this moment" is then recovered as `Fact.find({ stampId })`.
+// this moment" is then recovered as `Fact.find({ actId })`.
 //
 // This file owns nothing of the stamping itself. The face was
 // assembled by assemble.js; the looking-back was folded inside the
@@ -18,7 +18,7 @@
 //   capContent     — shared content-cap helper (also used by assign)
 
 import { getPlaceConfigValue } from "../../placeConfig.js";
-import Stamp from "../../models/stamp.js";
+import Act from "../../past/act/act.js";
 
 function MAX_CHAT_CONTENT_BYTES() {
   return Math.max(
@@ -37,21 +37,21 @@ export function capContent(s) {
 }
 
 /**
- * Press the final face onto a reserved Stamp row when the moment
+ * Press the final face onto a reserved Act row when the moment
  * closes. Writes endMessage.{content,time,stopped}. Atomic guard
  * against double-press: only fires when endMessage.time is null.
  */
 export async function stamp({
-  stampId,
+  actId,
   content,
   stopped = false,
 } = {}) {
-  if (!stampId) return null;
+  if (!actId) return null;
   const endTime = new Date();
   const safeContent = content != null ? capContent(content) : null;
 
-  const updated = await Stamp.findOneAndUpdate(
-    { _id: stampId, "endMessage.time": null },
+  const updated = await Act.findOneAndUpdate(
+    { _id: actId, "endMessage.time": null },
     {
       $set: {
         "endMessage.content": safeContent,

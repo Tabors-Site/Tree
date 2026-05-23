@@ -166,11 +166,11 @@ export async function runSeedMigrations() {
   }
 
   // Update stored version. Migrations run pre-being during boot, so the
-  // write goes through the kernel-access gate's scaffold path. The
+  // write goes through the seed-access gate's scaffold path. The
   // scaffold flag lets set-config write seedVersion (a protected key)
   // the same way an in-being call cannot.
   const Space = (await import("../../models/space.js")).default;
-  const { SEED_SPACE } = await import("../../place/space/seedSpaces.js");
+  const { SEED_SPACE } = await import("../../materials/space/seedSpaces.js");
   const { doVerb } = await import("../../ibp/verbs.js");
   const configNode = await Space.findOne({ seedSpace: SEED_SPACE.CONFIG });
   if (!configNode) {

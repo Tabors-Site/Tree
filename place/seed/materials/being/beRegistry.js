@@ -37,7 +37,7 @@
 // Naming. Bare names ("cherub", "llm-assigner") are reserved for my
 // own handlers. Extensions register theirs with an `<ext>-<name>`
 // shape (e.g. "court-being", "treasurer-being") to avoid colliding
-// with kernel reservations or other extensions.
+// with seed reservations or other extensions.
 
 import log from "../../system/log.js";
 
@@ -53,19 +53,19 @@ const NAME_RE = /^[a-z][a-z0-9-]*$/;
  *
  * @param {string} name              kebab-case identifier (the @qualifier in the address)
  * @param {object} spec              the handler spec (see header for shape)
- * @param {string} [extName="kernel"] owning extension; "kernel" for my pre-registrations
+ * @param {string} [extName="seed"] owning extension; "seed" for my pre-registrations
  * @returns {boolean} true on success
  */
-export function registerBeHandler(name, spec, extName = "kernel") {
+export function registerBeHandler(name, spec, extName = "seed") {
   if (typeof name !== "string" || !NAME_RE.test(name)) {
     log.error("BeRegistry",
       `Invalid BE handler name "${String(name).slice(0, 30)}". ` +
       `Must match /^[a-z][a-z0-9-]*$/.`);
     return false;
   }
-  if (KERNEL_RESERVED.has(name) && extName !== "kernel") {
+  if (KERNEL_RESERVED.has(name) && extName !== "seed") {
     log.error("BeRegistry",
-      `BE handler name "${name}" is reserved for the kernel; extension "${extName}" cannot claim it.`);
+      `BE handler name "${name}" is reserved for the seed; extension "${extName}" cannot claim it.`);
     return false;
   }
   if (!spec || typeof spec !== "object") {

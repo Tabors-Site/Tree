@@ -17,7 +17,7 @@
 
 import mongoose from "mongoose";
 import { v4 as uuidv4 } from "uuid";
-import { SEED_SPACE } from "../place/space/seedSpaces.js";
+import { SEED_SPACE } from "../materials/space/seedSpaces.js";
 
 const SpaceSchema = new mongoose.Schema({
   _id: { type: String, default: uuidv4 },
@@ -37,7 +37,7 @@ const SpaceSchema = new mongoose.Schema({
   contributors: [{ type: String, ref: "Being" }],
 
   // Non-null marks one of the spaces I plant at boot. The enum
-  // values are in seed/place/space/seedSpaces.js.
+  // values are in seed/materials/space/seedSpaces.js.
   seedSpace: {
     type: String,
     enum: [null, ...Object.values(SEED_SPACE)],
@@ -45,10 +45,20 @@ const SpaceSchema = new mongoose.Schema({
   },
 
   qualities: { type: Map, of: mongoose.Schema.Types.Mixed, default: new Map() },
+
+  // Projection cache markers. Per FOLD.md / STAMPER.md, the Space row
+  // is a cache of the fold over this space's reel — not the source of
+  // truth. `foldedSeq` is the highest fact-seq the fold has applied
+  // here. `position` is reducer output; for a Space, it's the parent
+  // space (same as `parent` for a real space, null for the root).
+  // Compare-and-set on foldedSeq during fold writes prevents marker
+  // regression when concurrent folds race.
+  foldedSeq: { type: Number, default: null },
+  position:  { type: String, default: null },
 });
 
 // Soft-delete only. Deleting a Space sets `parent = DELETED`
-// (see seed/place/space/spaceManagement.js). I never hard-delete.
+// (see seed/materials/space/spaceManagement.js). I never hard-delete.
 
 SpaceSchema.index({ parent: 1 });
 SpaceSchema.index({ rootOwner: 1 });
@@ -70,6 +80,10 @@ SpaceSchema.index(
     name: "unique_plan_per_scope",
   },
 );
+
+// Position index — what spaces occupy a given parent. Used by
+// foldPlace to find a space's child-space occupants.
+SpaceSchema.index({ position: 1 }, { sparse: true });
 
 const Space = mongoose.model("Space", SpaceSchema);
 export default Space;

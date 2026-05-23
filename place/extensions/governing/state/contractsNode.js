@@ -12,7 +12,7 @@ import Space from "../../../seed/models/space.js";
 import log from "../../../seed/system/log.js";
 
 let _warned = false;
-export async function ensureContractsNode({ scopeSpaceId, core: _core } = {}) {
+export async function ensureContractsNode({ scopeSpaceId, place: _core } = {}) {
   if (!_warned) {
     _warned = true;
     log.warn("Governing", "ensureContractsNode is retired; Contractor being is spawned by promoteToRuler. Caller should read metadata.beings.contractor instead.");

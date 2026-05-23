@@ -52,7 +52,7 @@ import { getPlaceDomain } from "../../ibp/address.js";
 // ─────────────────────────────────────────────────────────────────
 
 // Map the legacy numeric priority (1=HUMAN .. 4=BACKGROUND) used by
-// inbox entries to the SUMMON envelope's enum. The Stamp record
+// inbox entries to the SUMMON envelope's enum. The Act record
 // stores the enum; the scheduler still reads numerics from inbox
 // entries for queue ordering, but new emits flow through the
 // envelope contract and carry the enum.
@@ -93,7 +93,7 @@ function parseAskerStance(stance) {
 /**
  * Shape a moment's result into the response inbox row the scheduler
  * pushes back through handoff.onResponse. The mapping (text/content/
- * stampId) is what role.summon returned; intake just routes the row.
+ * actId) is what role.summon returned; intake just routes the row.
  *
  * Sits with reply emission because it produces the same shape: an
  * inbox-bound envelope from a moment's outcome. moment.js stays pure
@@ -107,7 +107,7 @@ export function buildResponseEntry({ result, handoff, originalEntry }) {
     correlation: result.correlation || randomUUID(),
     inReplyTo:   originalEntry.correlation,
     sentAt:      new Date().toISOString(),
-    stampId:     result.stampId || null,
+    actId:     result.actId || null,
   };
 }
 
@@ -404,7 +404,7 @@ export async function findChainInitialCaller(
 // consulting the inbox.
 //
 // **Cancellation.** Aggregators carry an AbortSignal. When the
-// caller's surrounding Stamp aborts, the aggregator settles with
+// caller's surrounding Act aborts, the aggregator settles with
 // `cancelled: true` and any pending promise resolves with the
 // partial replies it had so far. Used to keep Foreman from sitting
 // on a dead aggregation when the Ruler cancels.

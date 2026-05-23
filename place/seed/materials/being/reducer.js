@@ -1,0 +1,58 @@
+// TreeOS Seed . AGPL-3.0 . https://treeos.ai . Tabor Holly
+//
+// Being reducer. (state, fact) → state.
+//
+// One pure function per material type, per FOLD.md. The fold engine
+// hands this reducer each fact in seq order and accumulates the
+// returned state into the projection cache.
+//
+// As the bypass closure progresses, this reducer grows to handle
+// more (verb, action) cases. Today it handles:
+//   - `do:set` with field=`qualities.<ns>...` → derive qualities state
+//   - any fact carrying params.toPosition → derive position
+// Other Being fields (name, password, roles, etc.) still come from
+// direct-mutation paths; their reducer cases land when their write
+// sites convert.
+//
+// The reducer is pure: same (state, fact) → same state, every time.
+// No I/O. No clocks. No reads of anything outside `state` and `fact`.
+// Pure-ness is what lets concurrent folds compute identical state
+// and what makes rebuild deterministic.
+
+import { applySetQualities, applySetField } from "../reducerHelpers.js";
+
+/**
+ * Empty initial state. Reducers grow this as they take ownership of
+ * more fields. Today: empty — the fold derives qualities + position;
+ * other fields land as their write sites convert.
+ */
+export function initial() {
+  return {};
+}
+
+/**
+ * Apply one fact to the state.
+ *
+ * Recognized facts:
+ *   - `do:set` with field=`qualities.<ns>...` → derive qualities state
+ *     (see reducerHelpers.applySetQualities for the rules).
+ *   - any fact whose `params.toPosition` is set → derive `position`.
+ *
+ * @param {object} state  current accumulated state
+ * @param {object} fact   the fact to apply
+ * @returns {object} new state
+ */
+export function reduce(state, fact) {
+  let next = state;
+
+  // do:set — scalar fields (name/type) and qualities paths.
+  next = applySetField(next, fact);
+  next = applySetQualities(next, fact);
+
+  // Position change.
+  if (fact?.params?.toPosition !== undefined) {
+    next = { ...next, position: fact.params.toPosition };
+  }
+
+  return next === state ? { ...state } : next;
+}

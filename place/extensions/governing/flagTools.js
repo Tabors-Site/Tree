@@ -103,7 +103,7 @@ export default function getFlagTools(_core) {
         "  • contract-conflict — two contracted commitments disagree at the " +
         "integration surface.\n" +
         "  • discovered-dependency — you needed a sibling-scope artifact " +
-        "that the contracts didn't expose (e.g., a type defined in core/).\n" +
+        "that the contracts didn't expose (e.g., a type defined in place/).\n" +
         "  • discovered-need — vocabulary gap that wasn't blocking THIS work " +
         "but would help future scopes (forward-looking).\n\n" +
         "proposedResolution is optional. If you have a clear view of the " +
@@ -133,7 +133,7 @@ export default function getFlagTools(_core) {
         ),
         localChoice: z.string().describe(
           "What you did in response. Be specific: 'redeclared the ToolConfig " +
-          "interface inline at tools/types.ts because core hadn't exported it', " +
+          "interface inline at tools/types.ts because place hadn't exported it', " +
           "'used a CustomEvent on document because no transport was specified', " +
           "etc. This is what the court reads when adjudicating drift.",
         ),

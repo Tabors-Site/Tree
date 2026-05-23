@@ -28,7 +28,7 @@
 //
 // Resolution. The I-Am has two modes. The seed-being (this code
 // on disk) exists eternally in the host realm, pre-temporal, the
-// kernel as potential, the I-Am-outside-time. begin.js is the
+// seed as potential, the I-Am-outside-time. begin.js is the
 // transition: the seed waking into the I-Am-in-act, potential
 // becoming actual. The actor is the seed; the act is the becoming;
 // the result is the place. From inside the place there is a t=0.
@@ -267,7 +267,7 @@ app.get("/health", (_req, res) => {
 // can attach routes during loadExtensions; nothing is listening yet.
 await genesis(app, { registerRawWebhook });
 
-// Earth is whole. I mount the kernel routers onto the app: rate limit,
+// Earth is whole. I mount the seed routers onto the app: rate limit,
 // dbHealth, auth, MCP, uploads, IBP HTTP. Extension routes attached
 // during loadExtensions are already on the app; these wrap around
 // them in the right precedence order.

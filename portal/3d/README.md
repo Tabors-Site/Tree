@@ -75,7 +75,7 @@ Example: a `rulership-tree` extension declares a `basic-court` seed. Planting it
 - the court contracts installed
 - whatever else the rulership pattern needs
 
-Invocation is a DO action: `do plant-seed { extension, seedName }` at the target position. The kernel routes to the extension; the extension does its work using existing primitives (create-child, set-meta, register-being).
+Invocation is a DO action: `do plant-seed { extension, seedName }` at the target position. The seed routes to the extension; the extension does its work using existing primitives (create-child, set-meta, register-being).
 
 
 

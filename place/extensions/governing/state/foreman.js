@@ -179,7 +179,7 @@ export async function appendExecutionRecord({
   rulerSpaceId,
   beingId,
   identity = null,
-  core,
+  place,
   planEmissionRef,
   planEmission,
   contractsEmissionRef = null,
@@ -192,7 +192,7 @@ export async function appendExecutionRecord({
   // Ensure the execution-space parent exists.
   let executionSpace = await findExecutionNode(rulerSpaceId);
   if (!executionSpace) {
-    executionSpace = await ensureExecutionNode({ scopeSpaceId: rulerSpaceId, beingId, core });
+    executionSpace = await ensureExecutionNode({ scopeSpaceId: rulerSpaceId, beingId, place });
   }
   if (!executionSpace) {
     log.warn("Governing", `appendExecutionRecord: no execution-space resolvable at ${String(rulerSpaceId).slice(0, 8)}`);
@@ -210,7 +210,7 @@ export async function appendExecutionRecord({
         recordNodeId: priorActive._recordNodeId,
         nextStatus: "superseded",
         identity: authIdentity,
-        core,
+        place,
       });
     } catch (err) {
       log.debug("Governing", `appendExecutionRecord: prior freeze skipped: ${err.message}`);
@@ -230,10 +230,10 @@ export async function appendExecutionRecord({
     : planSlug;
   const startedAt = new Date().toISOString();
 
-  // Phase 3 migration: verb-surface create. Fires kernel hooks + Fact.
+  // Phase 3 migration: verb-surface create. Fires seed hooks + Fact.
   let recordNode = null;
   try {
-    recordNode = await core.do(executionSpace._id, "birth", {
+    recordNode = await place.do(executionSpace._id, "birth", {
       kind: "space",
       spec: {
         name: recordName,
@@ -242,7 +242,7 @@ export async function appendExecutionRecord({
       },
     }, { identity: authIdentity });
   } catch (err) {
-    log.debug("Governing", `core.do(create-child) failed for execution-record: ${err.message}; falling back to direct insert`);
+    log.debug("Governing", `place.do(create-child) failed for execution-record: ${err.message}; falling back to direct insert`);
   }
 
   if (!recordNode) {
@@ -283,7 +283,7 @@ export async function appendExecutionRecord({
     // read-spread-write.
     const space = await Space.findById(recordNode._id);
     if (space) {
-      await core.do(space, "set", {
+      await place.do(space, "set", {
         field: `qualities.${NS}`,
         value: {
           role: "execution-record",
@@ -307,7 +307,7 @@ export async function appendExecutionRecord({
       executionRef,
       supersedes: priorApprovalRef || null,
       reason: priorActive ? "supersedes prior execution-record" : null,
-      core,
+      place,
     });
   } catch (err) {
     log.warn("Governing", `appendExecutionRecord: approval write failed: ${err.message}`);
@@ -338,11 +338,11 @@ export async function appendExecutionApproval({
   supersedes = null,
   reason = null,
   identity = null,
-  // Phase 3 ([[project_seed_four_verbs_only]]): callers thread core.
-  core,
+  // Phase 3 ([[project_seed_four_verbs_only]]): callers thread place.
+  place,
 }) {
   if (!rulerSpaceId || !executionRef) return null;
-  if (!core?.do) throw new Error("appendExecutionApproval requires `core` (verb surface)");
+  if (!place?.do) throw new Error("appendExecutionApproval requires `place` (verb surface)");
   const space = await Space.findById(rulerSpaceId);
   if (!space) return null;
 
@@ -364,7 +364,7 @@ export async function appendExecutionApproval({
 
   // Phase 3 migration: verb-surface write. merge:true atomically adds
   // executionApprovals without clobbering other NS keys.
-  await core.do(space, "set", {
+  await place.do(space, "set", {
     field: `qualities.${NS}`,
     value: { executionApprovals: [...existing, entry] },
     merge: true,
@@ -470,11 +470,11 @@ export async function updateStepStatus({
   branchName = null,
   updates,
   identity = null,
-  // Phase 3 ([[project_seed_four_verbs_only]]): callers thread core.
-  core,
+  // Phase 3 ([[project_seed_four_verbs_only]]): callers thread place.
+  place,
 }) {
   if (!recordNodeId || typeof stepIndex !== "number" || !updates) return null;
-  if (!core?.do) throw new Error("updateStepStatus requires `core` (verb surface)");
+  if (!place?.do) throw new Error("updateStepStatus requires `place` (verb surface)");
   const space = await Space.findById(recordNodeId);
   if (!space) return null;
 
@@ -509,7 +509,7 @@ export async function updateStepStatus({
   execution.stepStatuses = stepStatuses;
 
   // Phase 3 migration: verb-surface write with atomic merge.
-  await core.do(space, "set", {
+  await place.do(space, "set", {
     field: `qualities.${NS}`,
     value: { execution },
     merge: true,
@@ -538,8 +538,8 @@ export async function updateStepStatusByBranchName({
   branchName,
   updates,
   identity = null,
-  // Phase 3: thread core through to the underlying updateStepStatus.
-  core,
+  // Phase 3: thread place through to the underlying updateStepStatus.
+  place,
 }) {
   if (!rulerSpaceId || !branchName || !updates) return null;
   const active = await readActiveExecutionRecord(rulerSpaceId);
@@ -556,7 +556,7 @@ export async function updateStepStatusByBranchName({
         branchName,
         updates,
         identity,
-        core,
+        place,
       });
     }
   }
@@ -586,11 +586,11 @@ export async function freezeExecutionRecord({
   recordNodeId,
   nextStatus = "completed",
   identity = null,
-  // Phase 3 ([[project_seed_four_verbs_only]]): callers thread core.
-  core,
+  // Phase 3 ([[project_seed_four_verbs_only]]): callers thread place.
+  place,
 }) {
   if (!recordNodeId) return null;
-  if (!core?.do) throw new Error("freezeExecutionRecord requires `core` (verb surface)");
+  if (!place?.do) throw new Error("freezeExecutionRecord requires `place` (verb surface)");
   const space = await Space.findById(recordNodeId);
   if (!space) return null;
 
@@ -608,7 +608,7 @@ export async function freezeExecutionRecord({
 
   // Phase 3 migration: verb-surface write of the terminal execution
   // status. merge:true preserves siblings atomically.
-  await core.do(space, "set", {
+  await place.do(space, "set", {
     field: `qualities.${NS}`,
     value: { execution },
     merge: true,

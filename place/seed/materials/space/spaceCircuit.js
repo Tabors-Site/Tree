@@ -33,7 +33,7 @@
 
 import log from "../../system/log.js";
 import Space from "../../models/space.js";
-import Fact from "../../models/fact.js";
+import Fact from "../../past/fact/fact.js";
 import { hooks } from "../../system/hooks.js";
 import { getPlaceConfigValue } from "../../placeConfig.js";
 import { invalidateSpace } from "./ancestorCache.js";

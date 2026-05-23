@@ -10,7 +10,7 @@
 // (Note: this is mid-moment compression — folding within one
 // running summon's tool loop. Across moments, the
 // CARRY_MESSAGES-length tail is the only thread, and the rest of
-// the past lives on the reel as Stamp rows, not in any
+// the past lives on the reel as Act rows, not in any
 // in-memory tail.)
 //
 // Default behavior is mechanical: pull assistant prose from the

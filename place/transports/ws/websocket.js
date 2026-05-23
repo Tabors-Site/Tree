@@ -19,7 +19,7 @@
 
 import log from "../../seed/system/log.js";
 import { Server } from "socket.io";
-import { decodeToken } from "../../seed/place/being/identity.js";
+import { decodeToken } from "../../seed/materials/being/identity.js";
 import { getPlaceConfigValue } from "../../seed/placeConfig.js";
 import { setPushChannel, IBP_EVENT } from "../../seed/ibp/pushChannel.js";
 
@@ -281,7 +281,7 @@ export function emitNavigate({ beingId, url, replace = false }) {
 
 /**
  * Direct emit to every socket the being has connected. Extensions
- * reach this through the loader's scoped `core.websocket.emitToBeing`
+ * reach this through the loader's scoped `place.websocket.emitToBeing`
  * (which auto-namespaces the event name to the extension's prefix).
  */
 export function emitToBeing(beingId, event, data) {

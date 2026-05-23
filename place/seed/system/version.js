@@ -5,4 +5,4 @@
 // version and this one runs in order before the rest of genesis
 // proceeds. Bump this when adding a new migrations/<version>.js.
 
-export const SEED_VERSION = "0.24.0";
+export const SEED_VERSION = "0.25.0";

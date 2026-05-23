@@ -22,9 +22,9 @@ import log from "../../system/log.js";
 import Matter from "../../models/matter.js";
 import { registerOperation } from "../../ibp/operations.js";
 import { doVerb } from "../../ibp/verbs.js";
-import { qualities } from "../../place/qualities.js";
-import { findBeingByName } from "../../place/being/identity.js";
-import { getMatter } from "../../place/matter/matters.js";
+import { qualities } from "../../materials/qualities.js";
+import { findBeingByName } from "../../materials/being/identity.js";
+import { getMatter } from "../../materials/matter/matters.js";
 import {
   LLM_ASSIGNER_TUTORIAL_MARK,
   LLM_ASSIGNER_TUTORIAL_URL,
@@ -92,7 +92,7 @@ export function registerLlmAssignerOps() {
   // Spawn the intro tutorial matter at the addressed space (typically
   // the place root). Idempotent: returns the existing matter when one
   // with the marker is already present. The new matter is created
-  // through the kernel `create-matter` DO op under the llm-assigner's
+  // through the seed `create-matter` DO op under the llm-assigner's
   // own identity, so beforeMatter / afterMatter hooks fire and a Fact
   // lands.
   registerOperation("llm-assigner:start-tutorial", {
@@ -201,7 +201,7 @@ export function registerLlmAssignerOps() {
   });
 
   // Consume the tutorial matter when the user finishes watching.
-  // Goes through the kernel `delete-matter` DO under the llm-
+  // Goes through the seed `delete-matter` DO under the llm-
   // assigner's own identity (it IS the matter's author, so the
   // ownership gate inside deleteMatterAndFile passes). The deletion
   // is stamped as a Fact and afterMatter fires.

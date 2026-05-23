@@ -9,18 +9,32 @@
 //
 // "Carried but not shaped by." The role doesn't define how a human
 // thinks or acts — their cognition happens in their own realm
-// (browser, CLI, IDE) and arrives as fresh incoming verb calls from
-// their transport. The role is purely receptive: the SUMMON lands in
-// the inbox, the role's summon() handler returns null (no synchronous
-// act), and the entry waits there until the human chooses to respond
-// by emitting their own SUMMON back.
+// (portal, browser, CLI, etc) and arrives as fresh incoming verb calls from
+// their transport. The role is purely receptive: a SUMMON to a human
+// lands in their inbox as a notification ONLY. It is not enqueued on
+// the intake feed; the scheduler does not auto-process it. The human
+// answers when they choose, by emitting their own verb call from
+// their transport — which arrives as a "transport-act" intake entry
+// through a separate path.
+//
+// inbox vs intake. Today (2026-05) the kernel splits these explicitly:
+//
+//   inbox  = messages received (mailbox; UI surfaces it)
+//   intake = scheduler run-feed (moments to dispatch)
+//
+// LLM/scripted beings declare `triggerOn: ["message"]` so an incoming
+// SUMMON populates BOTH (mailbox record + scheduler run trigger). The
+// human role omits "message" — SUMMONs to humans hit inbox only. The
+// human's own transport-acts populate intake only, via a wire-layer
+// path that bypasses inbox entirely.
 //
 // No voice apparatus. Unlike the LLM role surface (which wires
 // through defaultSummon → runTurn) and unlike scripted roles (whose
 // summon code IS their behavior), the human role's summon is an
-// explicit no-op. There is no voices/human/ folder because there is
-// no shared cognition machinery to share — humans cognize on their
-// own.
+// explicit no-op for the SUMMON case. Their transport-acts dispatch
+// the wrapped verb at momentum directly. There is no voices/human/
+// folder because there is no shared cognition machinery to share —
+// humans cognize on their own.
 //
 // Cherub assigns this role to every human at register-time
 // ([cherub.js](cherub.js)).
@@ -28,16 +42,21 @@
 export const humanRole = Object.freeze({
   name: "human",
   description:
-    "The receptive role every human being carries. Lets a human be SUMMONed; the entry sits in their inbox until they respond from their own transport.",
+    "The receptive role every human being carries. Lets a human be SUMMONed; the SUMMON sits in their inbox as a notification until they respond from their own transport.",
   permissions: ["see", "do", "summon", "be"],
   respondMode: "async",
-  triggerOn: ["message"],
+  // No "message" trigger: humans don't auto-process incoming SUMMONs.
+  // SUMMONs to a human stay in the inbox until the human surfaces them
+  // through their transport.
+  triggerOn: [],
 
   /**
-   * No synchronous act. A SUMMON to a human is a request; the human
-   * answers in their own time by emitting a fresh verb call from their
-   * transport (browser click, CLI command, IDE event). The factory has
-   * nothing to dispatch on their behalf here.
+   * No synchronous act for the SUMMON path. A SUMMON to a human is a
+   * notification; the human answers in their own time by emitting a
+   * fresh verb call from their transport. The factory has nothing to
+   * dispatch on their behalf here. Transport-acts are handled at
+   * momentum directly (kind: "transport-act"), not through this
+   * handler.
    */
   async summon(_message, _ctx) {
     return null;

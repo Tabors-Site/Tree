@@ -534,7 +534,7 @@ export function parseFromSocket(socket, input, extraCtx = {}) {
   }
 }
 
-// Parse without a socket — HTTP bootstrap path, internal kernel callers,
+// Parse without a socket — HTTP bootstrap path, internal seed callers,
 // tests. Same shape; caller supplies any extra context.
 export function parseWithContext(input, ctx = {}) {
   const fullCtx = { currentPlace: getPlaceDomain(), ...ctx };
@@ -573,7 +573,7 @@ export function parseWithContext(input, ctx = {}) {
 // I store the spaceId-rooted form (`<place>/<spaceId>@<name>`) so a
 // saved lane name survives space renames. The address grammar's
 // display form (human-readable names) is a separate expression of the
-// same grammar — see parse / format above. Stamp records carry this
+// same grammar — see parse / format above. Act records carry this
 // composed string in their `ibpAddress` field; presenceKey lookups
 // use it; thread descriptors group by it.
 
@@ -671,7 +671,7 @@ async function composeStanceForBeing(beingId, { currentPosition = null, place = 
 /**
  * Compose the canonical IBP Address (stance::stance) for a stamp
  * between two beings. Returns null when either side can't be
- * resolved. Called by assign when opening the Stamp row so each row
+ * resolved. Called by assign when opening the Act row so each row
  * carries its lane identity for presenceKey lookup, replay, and
  * grouping.
  */

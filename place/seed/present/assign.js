@@ -3,24 +3,36 @@
 // assign.js — beat one of the stamping. Who acts, and the moment
 // opens its frame.
 //
-// Scheduler picks an inbox entry off a being's line and hands it
+// Scheduler picks an intake entry off a being's line and hands it
 // here. assign loads the receiver Being, resolves the active role,
-// checks role-carry, opens the Stamp row that frames this moment,
-// and builds the summon context the role's voice expects. It
-// returns { stampId, role, summonCtx } for moment to dispatch, or
+// checks role-carry, opens the Act row that frames this moment,
+// and builds the summon context the moment's dispatch needs. It
+// returns { actId, role, summonCtx } for moment to dispatch, or
 // { skipped } when the entry can't run.
 //
+// Two intake kinds reach assign:
+//
+//   kind: "summon"
+//     A SUMMON the being received. summonCtx carries the message
+//     shape; moment.js calls role.summon(message, ctx).
+//
+//   kind: "transport-act"
+//     The being acted from their own transport (portal/browser/CLI).
+//     summonCtx carries the act payload { verb, target, action, args };
+//     moment.js dispatches it directly through doVerb/beVerb. No
+//     role.summon handler runs — the act was already decided
+//     externally.
+//
 // Opening the row IS part of beat one. presentism: a being only
-// exists as a moment, and a moment only exists because a SUMMON
-// created it — so when the scheduler picks an inbox entry and
-// assign resolves who acts, the Stamp that frames the moment opens
-// here. Every DO and BE the being emits during the moment carries
-// this stampId. stamped.js presses the closing face when the
-// moment ends.
+// exists as a moment, so when the scheduler picks an intake entry
+// and assign resolves who acts, the Act that frames the moment
+// opens here. Every DO and BE the being emits during the moment
+// carries this actId. stamped.js presses the closing face when
+// the moment ends.
 //
 // genesis is the one exception: the I-Am's first BE has no
-// summoner, so it bootstraps its own first Stamp out-of-band in
-// boot code. Every other Stamp opens here.
+// summoner, so it bootstraps its own first Act out-of-band in
+// boot code. Every other Act opens here.
 //
 // The four beats of a stamping:
 //   assign.js   who acts + open the frame   (this file)
@@ -31,30 +43,36 @@
 import log from "../../system/log.js";
 import { v4 as uuidv4 } from "uuid";
 import Being from "../../models/being.js";
-import Stamp from "../../models/stamp.js";
+import Act from "../../past/act/act.js";
 import { getPlaceConfigValue } from "../../placeConfig.js";
 import { getRole } from "../roles/registry.js";
 import { computeIbpStampAddress } from "../../ibp/address.js";
 
 /**
  * Set up one moment for stamping. Loads the being, resolves the
- * active role, opens the Stamp row, and builds the summon ctx.
+ * active role, opens the Act row, and builds the summon ctx.
+ *
+ * Dispatches by entry.kind:
+ *   "summon"        — message-shaped ctx; moment calls role.summon
+ *   "transport-act" — act-shaped ctx ({ verb, target, action, args });
+ *                     moment dispatches the wrapped verb directly
  *
  * @param {object} opts
- * @param {string} opts.beingId       — receiver
- * @param {string} opts.spaceId       — inbox position the entry landed at
- * @param {object} opts.entry         — the inbox row (correlation, content, activeRole, ...)
+ * @param {string} opts.beingId       — receiver / acting being
+ * @param {string} opts.spaceId       — position the entry landed at
+ * @param {object} opts.entry         — the intake row (kind, correlation, ...)
  * @param {object} [opts.handoff]     — runtime context stashed by SUMMON (identity, resolved, ...)
  * @param {AbortSignal} [opts.signal] — abort propagating from the scheduler's controller
  *
- * @returns {Promise<{ stampId?, role?, summonCtx?, skipped? }>}
- *   stampId    — the Stamp row this moment opened (always present on success)
+ * @returns {Promise<{ actId?, role?, summonCtx?, skipped? }>}
+ *   actId    — the Act row this moment opened (always present on success)
  *   role       — resolved role spec
- *   summonCtx  — the prepared context the role's summon handler expects (carries stampId)
+ *   summonCtx  — the prepared context moment.js dispatches on (carries actId + kind)
  *   skipped    — reason string when the entry can't run
  *                ("being-not-found" | "role-not-carried" | "role-unavailable")
  */
 export async function assign({ beingId, spaceId, entry, handoff = null, signal = null } = {}) {
+  const kind = entry?.kind || "summon";
   // ── assign: load the being ───────────────────────────────────────
   const toBeing = await Being.findById(beingId);
   if (!toBeing) {
@@ -91,21 +109,33 @@ export async function assign({ beingId, spaceId, entry, handoff = null, signal =
     return { skipped: "role-unavailable" };
   }
 
-  // ── assign: open the Stamp row for this moment ───────────────────
-  // The asker identity comes from handoff when SUMMON registered one
-  // (async respondMode); when it didn't (place-driven subscriptions,
-  // cadence wakes, internal verb-without-handoff paths), the asker is
-  // the receiver itself acting on its own behalf.
-  const askerBeingId = handoff?.identity?.beingId || beingId;
-  const askerName    = handoff?.identity?.name    || null;
+  // ── assign: open the Act row for this moment ───────────────────
+  // For kind="summon" the asker is the SUMMON's sender (from handoff
+  // when present, else the receiver acting on its own behalf for
+  // place-driven wakes). For kind="transport-act" the asker IS the
+  // acting being — they entered through their own transport, no
+  // SUMMON envelope.
+  const askerBeingId = kind === "transport-act"
+    ? String(beingId)
+    : (handoff?.identity?.beingId || beingId);
+  const askerName = kind === "transport-act"
+    ? (entry?.identity?.name || null)
+    : (handoff?.identity?.name || null);
+
+  const stampMessage = kind === "transport-act"
+    ? describeTransportAct(entry.act)
+    : entry.content;
+  const stampSource = kind === "transport-act"
+    ? (askerName || "transport")
+    : (askerName || entry.from || "user");
 
   const stamp = await openStampRow({
     beingIn:           String(askerBeingId),
     beingOut:          String(beingId),
     addresseePosition: spaceId,
     askerPosition:    handoff?.resolved?.spaceId || null,
-    message:           entry.content,
-    source:            askerName || entry.from || "user",
+    message:           stampMessage,
+    source:            stampSource,
     activeRole,
     inboxMessageId:    entry.correlation,
     inReplyTo:         entry.inReplyTo || null,
@@ -114,47 +144,70 @@ export async function assign({ beingId, spaceId, entry, handoff = null, signal =
     priority:          entry.priority || null,
   });
 
-  // ── assign: build the summon ctx the role expects ────────────────
-  // Mirrors verbs/summon.js's same-shape build at request time. The
-  // handoff record (registered by the SUMMON verb when respondMode is
-  // "async") carries the asker's identity and the resolved stance.
-  const stampId = stamp?._id ? String(stamp._id) : null;
-  const summonCtx = {
+  // ── assign: build the summon ctx moment.js dispatches on ─────────
+  // Two shapes by kind. moment.js reads ctx.kind and routes.
+  const actId = stamp?._id ? String(stamp._id) : null;
+
+  const baseCtx = {
+    kind,
     spaceId,
     being:       activeRole,             // legacy field name; carries the active role
     activeRole,
     toBeing,
-    stampId,
-    message: {
-      from:            entry.from,
-      content:         entry.content,
-      correlation:     entry.correlation,
-      rootCorrelation: entry.rootCorrelation || entry.correlation,
-      activeRole,
-      inReplyTo:       entry.inReplyTo,
-      attachments:     entry.attachments,
-      sentAt:          entry.sentAt,
-      priority:        entry.priority,
-      stampId,
-    },
+    actId,
     resolved: handoff?.resolved || {
       being:       activeRole,
       activeRole,
       spaceId,
     },
-    identity: handoff?.identity || null,
+    identity: handoff?.identity || entry?.identity || null,
     signal,
   };
 
-  return { stampId, role, summonCtx };
+  let summonCtx;
+  if (kind === "transport-act") {
+    summonCtx = {
+      ...baseCtx,
+      act: entry.act || null,
+    };
+  } else {
+    summonCtx = {
+      ...baseCtx,
+      message: {
+        from:            entry.from,
+        content:         entry.content,
+        correlation:     entry.correlation,
+        rootCorrelation: entry.rootCorrelation || entry.correlation,
+        activeRole,
+        inReplyTo:       entry.inReplyTo,
+        attachments:     entry.attachments,
+        sentAt:          entry.sentAt,
+        priority:        entry.priority,
+        actId,
+      },
+    };
+  }
+
+  return { actId, role, summonCtx };
+}
+
+// Render a one-line description of a transport-act for the Act's
+// startMessage. The full payload lives on the intake entry; this is
+// what shows up when humans skim a Summon row.
+function describeTransportAct(act) {
+  if (!act || typeof act !== "object") return "[transport-act]";
+  const verb   = act.verb || "?";
+  const target = act.target || "?";
+  const action = act.action || "?";
+  return `${verb.toUpperCase()} ${target} ${action}`;
 }
 
 // ─────────────────────────────────────────────────────────────────────
-// Private helper: open the Stamp row.
+// Private helper: open the Act row.
 //
 // This is the moment-open write. It's private to assign because
-// assign is the only legitimate Stamp opener — genesis bootstraps
-// the I-Am's first Stamp out-of-band in boot code; everything else
+// assign is the only legitimate Act opener — genesis bootstraps
+// the I-Am's first Act out-of-band in boot code; everything else
 // runs through SUMMON, lands in an inbox, and reaches assign.
 //
 // Resolves rootCorrelation (inherits from parent), spawn-lineage
@@ -208,7 +261,7 @@ async function openStampRow(opts = {}) {
   // chain rooted at the originating user message.
   if (!resolvedRoot && inReplyTo) {
     try {
-      const parent = await Stamp.findById(inReplyTo)
+      const parent = await Act.findById(inReplyTo)
         .select("rootCorrelation")
         .lean();
       resolvedRoot = parent?.rootCorrelation || inReplyTo;
@@ -217,9 +270,9 @@ async function openStampRow(opts = {}) {
     }
   }
 
-  const stampId = uuidv4();
+  const actId = uuidv4();
   // A summon with no parent IS its own root.
-  if (!resolvedRoot) resolvedRoot = stampId;
+  if (!resolvedRoot) resolvedRoot = actId;
 
   // Spawn-lineage. When the asker is currently acting under another
   // rootCorrelation (running inside thread A) and emits a fresh
@@ -251,8 +304,8 @@ async function openStampRow(opts = {}) {
   const safeMessage = capContent(message);
 
   try {
-    const row = await Stamp.create({
-      _id: stampId,
+    const row = await Act.create({
+      _id: actId,
       beingIn,
       beingOut: beingOut || null,
       ibpAddress,

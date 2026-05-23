@@ -24,7 +24,7 @@ verbs. Spaces and Matter are what verbs act on.
 An extension extends the substrate by registering some combination of:
 roles (templates of being behavior), tools (LLM-callable functions),
 operations (the DO vocabulary), hooks (lifecycle reactions), and seeds
-(plantable scaffolds). The kernel hosts; you compose.
+(plantable scaffolds). The seed hosts; you compose.
 
 ---
 
@@ -49,12 +49,12 @@ each contain tool names whose verb tags match.
 ```
 extensions/your-extension/
 ├── manifest.js           Declares what you need and what you provide.
-├── index.js              init(core) returns live registrations.
+├── index.js              init(place) returns live registrations.
 ├── roles/                One file per role.
 │   └── yourRole.js
 ├── tools/                One file per tool (or grouped — your call).
 │   └── yourTool.js
-├── operations/           DO operations (kernel + extension vocabulary).
+├── operations/           DO operations (seed + extension vocabulary).
 │   └── yourOp.js
 ├── seeResolvers.js       (Optional) Named resolvers for role.see.
 ├── state/                (Optional) Your domain state helpers.
@@ -181,7 +181,7 @@ export default {
   async handler({ params, ctx }) {
     // params.target, params.value
     // ctx.being, ctx.position, ctx.role, ctx.signal
-    await core.do(ctx.position, "your-extension:write-thing", {
+    await place.do(ctx.position, "your-extension:write-thing", {
       target: params.target,
       value:  params.value,
     });
@@ -192,7 +192,7 @@ export default {
 
 **Tool naming convention:**
 
-- Kernel tools: bare names (`create-child`, `set-qualities`).
+- Seed tools: bare names (`create-child`, `set-qualities`).
 - Extension tools: `<ext-name>-<action>` (`governing-emit-plan`,
   `coders-read-file`).
 - Operations the tools dispatch to follow the same naming with a colon:
@@ -219,7 +219,7 @@ export default {
 
 Operations are the substrate's write vocabulary. Tools are the LLM
 surface; operations are what tools and code call to actually mutate
-state. The kernel ships a core set (`create-child`, `set-name`,
+state. The seed ships a core set (`create-child`, `set-name`,
 `set-qualities`, etc.); extensions add their own under their namespace.
 
 ```javascript
@@ -237,7 +237,7 @@ export default {
     // identity is the being doing it
     // summonCtx is the originating summon context (for audit attribution)
 
-    await core.do(target, "set-qualities", {
+    await place.do(target, "set-qualities", {
       namespace: "your-extension",
       data: { ratifiedAt: new Date().toISOString() },
     });
@@ -262,12 +262,12 @@ You write the handler; the dispatcher handles the surrounding policy.
 
 ## Creating beings (use BE, not DO)
 
-Identity operations belong on the BE verb. Use `core.be(...)`, not
-`core.do(...)`, when creating beings:
+Identity operations belong on the BE verb. Use `place.be(...)`, not
+`place.do(...)`, when creating beings:
 
 ```javascript
 // Creating a sub-being (Planner, Contractor, Foreman, etc.)
-const planner = await core.be("create-being", {
+const planner = await place.be("create-being", {
   name:           `planner-${shortId()}`,    // optional for AI; auto-generated if omitted
   password:       null,                       // optional for AI; auto-generated
   operatingMode:  "ai",                       // "human" | "ai"
@@ -323,7 +323,7 @@ export function registerYourExtensionResolvers() {
 
 ```javascript
 // extensions/your-extension/index.js
-export async function init(core) {
+export async function init(place) {
   const { registerYourExtensionResolvers } = await import("./seeResolvers.js");
   registerYourExtensionResolvers();
   // ... register roles, tools, operations
@@ -384,7 +384,7 @@ deliverable via a specific tool. Planner (must emit-plan). Contractor
 
 **When not to use it:** the role's exit is free-form. Ruler (writes
 prose synthesis). Worker (returns a summary). Coder (returns what it
-changed). For these, the prompt body teaches exit shape; the kernel
+changed). For these, the prompt body teaches exit shape; the seed
 does not enforce it because there is no specific tool to enforce.
 
 ---
@@ -455,7 +455,7 @@ export default {
     required: ["text"],
   },
   async handler({ params, ctx }) {
-    await core.do(ctx.position, "feedback:append", { text: params.text });
+    await place.do(ctx.position, "feedback:append", { text: params.text });
     return { ok: true };
   },
 };
@@ -468,7 +468,7 @@ export default {
   name: "feedback:append",
   targets: ["node"],
   async handler({ target, params }) {
-    await core.qualities.qualities.space.pushQuality(
+    await place.qualities.qualities.space.pushQuality(
       target,
       "feedback",
       "notes",
@@ -486,7 +486,7 @@ export default {
 import { registerRole } from "../../seed/being/roles/registry.js";
 import { collectorRole } from "./roles/collector.js";
 
-export async function init(core) {
+export async function init(place) {
   registerRole("feedback-collector", collectorRole, "feedback");
   return {
     tools: [
@@ -518,7 +518,7 @@ dispatch and judgment). For a role that wakes, calls runTurn, and
 returns text, just declare `prompt` and let seed wrap.
 
 **Putting `create-being` on the DO verb.**
-Identity is BE's territory. Use `core.be("create-being", ...)`. The
+Identity is BE's territory. Use `place.be("create-being", ...)`. The
 auth-being honors this operation. Putting it on DO confuses the verb
 matrix.
 
@@ -544,7 +544,7 @@ governance-specific term.
 
 **Bypassing the operation registry for direct database writes.**
 Operations stamp a Fact automatically. Direct Mongoose calls do not.
-The reel diverges from reality. Use `core.do(target, "operation-name", params)`
+The reel diverges from reality. Use `place.do(target, "operation-name", params)`
 when you can.
 
 ---
@@ -554,7 +554,7 @@ when you can.
 - **Manifest contract:** [EXTENSION_FORMAT.md](./EXTENSION_FORMAT.md).
 - **Substrate philosophy:** `seed/philosophy/` (the four hand-written
   pages from Tabor Holly, 2026-05-18).
-- **Seed kernel internals:** `seed/SEED.md`.
+- **Seed seed internals:** `seed/SEED.md`.
 - **Role registry behavior:** `seed/being/roles/registry.js` (header
   comment).
 - **Prompt assembler:** `seed/factory/stamper/face/face.js` (header

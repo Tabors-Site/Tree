@@ -31,7 +31,7 @@ export const DEFAULT_BUDGET = {
  * each caller hits this.
  */
 let _warnedPlan = false;
-export async function createPlanNode({ parentSpaceId, core: _core } = {}) {
+export async function createPlanNode({ parentSpaceId, place: _core } = {}) {
   if (!_warnedPlan) {
     _warnedPlan = true;
     log.warn("Governing", "createPlanNode is retired; plans are artifacts authored by the Planner being. Caller should be updated.");
@@ -41,7 +41,7 @@ export async function createPlanNode({ parentSpaceId, core: _core } = {}) {
 }
 
 let _warnedEnsure = false;
-export async function ensurePlanAtScope({ scopeSpaceId, core: _core } = {}) {
+export async function ensurePlanAtScope({ scopeSpaceId, place: _core } = {}) {
   if (!_warnedEnsure) {
     _warnedEnsure = true;
     log.warn("Governing", "ensurePlanAtScope is retired; Planner being is spawned by promoteToRuler. Caller should read metadata.beings.planner instead.");

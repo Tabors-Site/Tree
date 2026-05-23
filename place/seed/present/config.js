@@ -65,8 +65,8 @@ export function getMaxMessageContentBytes() {
 //
 // stamper.js owns the max-run-turns counter (it accounts for live
 // runs as they happen), so the setter lives there and is registered
-// with me via registerMaxRunTurnsSetter. Same pattern for inbox's
-// setMaxInbox — loaded lazily to avoid a load-order cycle through
+// with me via registerMaxRunTurnsSetter. Same pattern for intake's
+// setMaxIntake — loaded lazily to avoid a load-order cycle through
 // the scheduler.
 
 let _setMaxRunTurns = null;
@@ -83,7 +83,7 @@ export function registerMaxRunTurnsSetter(fn) {
 // timeout) forward into llmCall's setter; the reel knobs forward
 // into reel's setters; the loop-shape knobs clamp my local state;
 // the run-turn cap forwards into the registered stamper setter;
-// the inbox cap loads lazily. One entry, every clamp deliberate.
+// the intake cap loads lazily. One entry, every clamp deliberate.
 
 export function setSeedConfig(key, value) {
   const num = Number(value);
@@ -103,10 +103,11 @@ export function setSeedConfig(key, value) {
     case "maxRunTurns":
       if (_setMaxRunTurns) _setMaxRunTurns(num);
       break;
-    case "maxInbox":
-      // Lazy: inbox is a runTurn sibling and the static import
-      // would close a cycle through the scheduler.
-      import("./intake/inbox.js").then((m) => m.setMaxInbox(num)).catch(() => {});
+    case "maxIntake":
+      // Lazy: intake imports the scheduler, which imports the
+      // stamper, which imports back into config.js. Defer the
+      // load to avoid the cycle.
+      import("./intake/intake.js").then((m) => m.setMaxIntake(num)).catch(() => {});
       break;
     case "failoverTimeout":
       setFailoverTimeout(Math.max(1000, Math.min(num * 1000, 120000)));

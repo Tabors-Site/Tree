@@ -26,7 +26,7 @@
 //   respondMode      - "async" by default
 //   triggerOn        - ["message"] by default
 //   summon           - auto-wrapped with defaultSummon when not provided
-//   buildSystemPrompt - auto-assembled via seed/factory/buildPrompt when not provided
+//   buildSystemPrompt - auto-assembled via seed/present/buildPrompt when not provided
 //
 // Roles with custom dispatch attach their own `summon` and seed leaves
 // it alone. Roles with custom prompt assembly attach
@@ -35,7 +35,7 @@
 //
 import log from "../../system/log.js";
 
-// The role registry. Kernel-shipped roles (auth, llm-assigner,
+// The role registry. Seed-shipped roles (auth, llm-assigner,
 // place-manager) register through registerRole during genesis;
 // extensions add theirs the same way.
 const REGISTRY = new Map();
@@ -98,7 +98,7 @@ export function registerRole(name, def, extName = "role-registry") {
     : ["message"];
 
   // Build the final role spec. summon and buildSystemPrompt are wired
-  // lazily because they depend on seed/factory modules; importing
+  // lazily because they depend on seed/present modules; importing
   // them at module top would create a load-order cycle with runTurn.
   // The lazy refs resolve at first call.
   const spec = {
@@ -189,7 +189,7 @@ function makeLazyDefaultSummon(role) {
  */
 export async function syncRolesToSubstrate() {
   const { SEED_SPACE } = await import("../../ibp/protocol.js");
-  const { manifestItems } = await import("../../place/manifest.js");
+  const { manifestItems } = await import("../../materials/manifest.js");
   const items = [];
   for (const [name, role] of REGISTRY) {
     items.push({

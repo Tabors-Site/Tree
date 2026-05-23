@@ -4,7 +4,7 @@
  * noteAction → artifactAction sub-shape rename.
  *
  * Contribution rows are the audit log of IBP DO emissions. The model is
- * renamed Did (past tense — a "did" is a thing that was done) so the kernel
+ * renamed Did (past tense — a "did" is a thing that was done) so the seed
  * pairs cleanly with SUMMON ↔ Summon. The schema stays the same except:
  *
  *   - Collection renamed: `contributions` → `dids`.
@@ -122,7 +122,7 @@ export default async function migrate() {
   }
 
   // Step 3b: also normalize the `action` enum value when it's the literal
-  // "note". The kernel now logs `action: "artifact"` for artifact CRUD.
+  // "note". The seed now logs `action: "artifact"` for artifact CRUD.
   // Existing rows with `action: "note"` are migrated for consistency.
   const actionResult = await dids.updateMany(
     { action: "note" },
@@ -138,7 +138,7 @@ export default async function migrate() {
   // on an empty `facts` collection at this version — the legacy data
   // still sits in `dids` and is renamed by a later migration.)
   try {
-    const Fact = (await import("../models/fact.js")).default;
+    const Fact = (await import("../past/fact/fact.js")).default;
     await Fact.syncIndexes();
     log.verbose("Seed/0.8.0", "fact indexes synced");
   } catch (err) {

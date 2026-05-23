@@ -6,8 +6,8 @@
 // retry-branch) spawn another role as a chainstep and await its
 // completion synchronously inside the tool handler. When the spawned
 // chain is long-running (especially dispatch-execution which recurses
-// through sub-Rulers), the MCP request can exceed the kernel's
-// TOOL_CALL_TIMEOUT_MS. The kernel surfaces -32001 to the LLM; the
+// through sub-Rulers), the MCP request can exceed the seed's
+// TOOL_CALL_TIMEOUT_MS. The seed surfaces -32001 to the LLM; the
 // LLM commonly responds by re-emitting the same tool call — which
 // starts a SECOND concurrent spawn at the same scope.
 //

@@ -500,11 +500,11 @@ setInterval(
 //
 // What `clientSessionId` IS NOT:
 //   - Conversation identity. The canonical identifier for a conversation
-//     between two beings is `Stamp.ibpAddress` (the stance pair).
+//     between two beings is `Act.ibpAddress` (the stance pair).
 //   - Position state. Lives on `Being.currentSpace`. Two tabs for the
 //     same being share position automatically.
-//   - Tool-call → stampId correlation. The SUMMON loop injects
-//     `stampId` / `rootCorrelation` / `ibpAddress` into MCP tool args
+//   - Tool-call → actId correlation. The SUMMON loop injects
+//     `actId` / `rootCorrelation` / `ibpAddress` into MCP tool args
 //     directly; mcp/server.js reads them without a Map lookup.
 //   - MCP client cache key. Keyed by `ibpAddress` so all the being's
 //     sockets share one MCP client.

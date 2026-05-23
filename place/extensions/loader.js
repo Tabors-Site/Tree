@@ -6,10 +6,10 @@ import fs from "fs";
 import path from "path";
 import crypto from "crypto";
 import { fileURLToPath, pathToFileURL } from "url";
-import { buildCoreServices } from "../seed/services.js";
+import { buildPlaceServices } from "../seed/services.js";
 import { setExtensionToolResolver } from "../seed/factory/voices/llm/tools.js";
 import { hooks } from "../seed/system/hooks.js";
-import { getToolOwner } from "../seed/place/space/extensionScope.js";
+import { getToolOwner } from "../seed/materials/space/extensionScope.js";
 import log from "../seed/system/log.js";
 
 /** Convert a file path to a URL string for dynamic import (Windows compat) */
@@ -22,7 +22,7 @@ const EXT_ROUTE_TIMEOUT_MS = 5000;
 /**
  * Wrap an extension router with a timeout safety net.
  * If the extension doesn't respond or call next() within 5 seconds,
- * the wrapper calls next() so kernel routes can handle the request.
+ * the wrapper calls next() so seed routes can handle the request.
  *
  * Uses res "finish" event instead of monkey-patching res.end.
  */
@@ -313,7 +313,7 @@ async function runNpmInstall(extDir, npmDeps, extName, opts = {}) {
 // ---------------------------------------------------------------------------
 
 const loaded = new Map(); // name -> { manifest, instance }
-let coreServices = null; // the assembled core bundle
+let placeServices = null; // the assembled place bundle
 const _bootSkipped = []; // [{ name, reason }] extensions that failed to load
 const modeToolExtensions = []; // [{ modeKey, toolNames }] from extensions
 const registeredJobs = []; // [{ name, start, stop }] from extensions
@@ -351,17 +351,17 @@ function getDisabledExtensions(configFn) {
 // Validation
 // ---------------------------------------------------------------------------
 
-// Derived from buildCoreServices() at load time. Set by loadExtensions().
+// Derived from buildPlaceServices() at load time. Set by loadExtensions().
 let AVAILABLE_SERVICES = new Set();
 
 const AVAILABLE_MODELS = new Set(["Being", "Space", "Fact", "Matter"]);
 
-function validateNeeds(manifest, core) {
+function validateNeeds(manifest, place) {
   const missing = [];
 
   if (manifest.needs?.services) {
     for (const svc of manifest.needs.services) {
-      if (!AVAILABLE_SERVICES.has(svc) && !core[svc]) {
+      if (!AVAILABLE_SERVICES.has(svc) && !place[svc]) {
         missing.push(`service:${svc}`);
       }
     }
@@ -369,7 +369,7 @@ function validateNeeds(manifest, core) {
 
   if (manifest.needs?.models) {
     for (const model of manifest.needs.models) {
-      if (!AVAILABLE_MODELS.has(model) && !core.models[model]) {
+      if (!AVAILABLE_MODELS.has(model) && !place.models[model]) {
         missing.push(`model:${model}`);
       }
     }
@@ -399,17 +399,17 @@ function validateNeeds(manifest, core) {
 }
 
 /**
- * Inject no-op stubs for optional kernel services the host place doesn't have.
- * Only stubs kernel-provided services (AVAILABLE_SERVICES). Extension-provided
+ * Inject no-op stubs for optional seed services the host place doesn't have.
+ * Only stubs seed-provided services (AVAILABLE_SERVICES). Extension-provided
  * services (like energy) are either present because that extension loaded first,
- * or absent. Extensions guard with if (core.svc) for those.
+ * or absent. Extensions guard with if (place.svc) for those.
  */
-function applyOptionalStubs(manifest, core) {
+function applyOptionalStubs(manifest, place) {
   if (!manifest.optional?.services) return;
 
   for (const svc of manifest.optional.services) {
-    if (AVAILABLE_SERVICES.has(svc) && !core[svc]) {
-      core[svc] = {};
+    if (AVAILABLE_SERVICES.has(svc) && !place[svc]) {
+      place[svc] = {};
     }
   }
 }
@@ -482,15 +482,15 @@ function appendToEnvFile(key, value, description) {
 }
 
 // ---------------------------------------------------------------------------
-// Scoped core (permission boundary)
+// Scoped place (permission boundary)
 // ---------------------------------------------------------------------------
 
 /**
- * Build a scoped core services bundle that only includes what the manifest
+ * Build a scoped place services bundle that only includes what the manifest
  * declares in needs + optional. Extensions cannot access services they
  * didn't declare.
  */
-function buildScopedCore(manifest, fullCore) {
+function buildScopedPlace(manifest, fullPlace) {
   const allowed = new Set();
 
   // Collect all declared services (required + optional)
@@ -504,48 +504,48 @@ function buildScopedCore(manifest, fullCore) {
   // Build scoped object
   const scoped = {};
 
-  // Services: inject declared kernel services
+  // Services: inject declared seed services
   for (const key of AVAILABLE_SERVICES) {
-    if (allowed.has(key) && fullCore[key]) {
-      scoped[key] = fullCore[key];
+    if (allowed.has(key) && fullPlace[key]) {
+      scoped[key] = fullPlace[key];
     }
   }
 
   // Also inject declared services that were dynamically registered by other
-  // extensions (e.g. energy registers core.energy during its init). The kernel
+  // extensions (e.g. energy registers place.energy during its init). The seed
   // doesn't name these. Extensions discover them by declaration.
   for (const svc of allowed) {
-    if (!AVAILABLE_SERVICES.has(svc) && fullCore[svc]) {
-      scoped[svc] = fullCore[svc];
+    if (!AVAILABLE_SERVICES.has(svc) && fullPlace[svc]) {
+      scoped[svc] = fullPlace[svc];
     }
   }
 
   // Models: only inject declared ones (plus any registered by other extensions)
   scoped.models = {};
   for (const name of allowedModels) {
-    if (fullCore.models[name]) {
-      scoped.models[name] = fullCore.models[name];
+    if (fullPlace.models[name]) {
+      scoped.models[name] = fullPlace.models[name];
     }
   }
 
-  // Hooks: always available (core infrastructure, not a declared service)
-  if (fullCore.hooks) {
-    scoped.hooks = fullCore.hooks;
+  // Hooks: always available (place infrastructure, not a declared service)
+  if (fullPlace.hooks) {
+    scoped.hooks = fullPlace.hooks;
   }
 
   // Metadata: always available (every extension reads/writes metadata)
-  if (fullCore.qualities) {
-    scoped.qualities = fullCore.qualities;
+  if (fullPlace.qualities) {
+    scoped.qualities = fullPlace.qualities;
   }
 
   // Being metadata: always available (extensions store per-being state)
-  if (fullCore.beingMetadata) {
-    scoped.beingMetadata = fullCore.beingMetadata;
+  if (fullPlace.beingMetadata) {
+    scoped.beingMetadata = fullPlace.beingMetadata;
   }
 
   // Matter metadata: always available (extensions tag matter in their namespace)
-  if (fullCore.matterMetadata) {
-    scoped.matterMetadata = fullCore.matterMetadata;
+  if (fullPlace.matterMetadata) {
+    scoped.matterMetadata = fullPlace.matterMetadata;
   }
 
   // Auth strategy binding: wrap registerStrategy to auto-inject extension name.
@@ -564,8 +564,8 @@ function buildScopedCore(manifest, fullCore) {
 
   // DO verb binding: auto-namespace operation registrations.
   // Same principle as modes/orchestrators above. Extensions write
-  //   core.do.registerOperation("hire-planner", { ... })
-  // and the kernel records as "governing:hire-planner" with
+  //   place.do.registerOperation("hire-planner", { ... })
+  // and the seed records as "governing:hire-planner" with
   // ownerExtension: "governing" automatically. Extensions never type
   // their own namespace — the namespace is implicit from the
   // registration context.
@@ -574,7 +574,7 @@ function buildScopedCore(manifest, fullCore) {
   // prefix matches the extension's own name; mismatches are rejected
   // to make namespace-impersonation a structural impossibility.
   //
-  // The verb function itself (`core.do(...)`) is passed through; only
+  // The verb function itself (`place.do(...)`) is passed through; only
   // the registerOperation method gets scoped.
   if (
     typeof scoped.do === "function" &&
@@ -617,10 +617,10 @@ function buildScopedCore(manifest, fullCore) {
 
   // Push-channel event binding: auto-namespace event names.
   // Same principle as registerOperation above — extensions write the
-  // local event name; the kernel prefixes their extension name on the
+  // local event name; the seed prefixes their extension name on the
   // way to the wire. Bare:
   //
-  //   core.websocket.emitToBeing(beingId, "lifecycleActive", payload)
+  //   place.websocket.emitToBeing(beingId, "lifecycleActive", payload)
   //
   // Wire receives: "governing:lifecycleActive".
   //
@@ -628,7 +628,7 @@ function buildScopedCore(manifest, fullCore) {
   // matches the calling extension's name; mismatches throw so
   // namespace-impersonation is a structural impossibility.
   //
-  // The kernel events `IBP_EVENT` ("ibp") and transport-private
+  // The seed events `IBP_EVENT` ("ibp") and transport-private
   // events (WS_REGISTERED, WS_NAVIGATE) are reserved and rejected
   // entirely — extensions can never emit them through this surface.
   if (scoped.websocket) {
@@ -639,7 +639,7 @@ function buildScopedCore(manifest, fullCore) {
         throw new Error(`emitToBeing: event name must be a non-empty string`);
       }
       if (RESERVED.has(event)) {
-        throw new Error(`emitToBeing: "${event}" is reserved by the kernel`);
+        throw new Error(`emitToBeing: "${event}" is reserved by the seed`);
       }
       if (event.includes(":")) {
         const prefix = event.split(":")[0];
@@ -666,7 +666,7 @@ function buildScopedCore(manifest, fullCore) {
   // Qualities binding: enforce namespace ownership on space + matter.
   // Extensions can only write to their own quality namespace (matching
   // manifest name). Reads are unbound (any namespace is readable). The
-  // kernel rejects cross-namespace writes when callerExtName is set on
+  // seed rejects cross-namespace writes when callerExtName is set on
   // the call, so we bind it here for the extension's scoped view.
   // Being qualities don't enforce ownership at this layer (beings can
   // carry data from many sources).
@@ -690,8 +690,8 @@ function buildScopedCore(manifest, fullCore) {
     };
   }
 
-  // Freeze existing kernel services so extensions can't replace core.hooks,
-  // core.llm, etc. But allow adding new properties (core.energy = {...})
+  // Freeze existing seed services so extensions can't replace place.hooks,
+  // place.llm, etc. But allow adding new properties (place.energy = {...})
   // which is the pattern for extension-provided services.
   for (const key of Object.keys(scoped)) {
     if (
@@ -767,7 +767,7 @@ function topologicalSort(manifests) {
  * @param {object} app         - Express app
  * @param {object} mcpServer   - MCP server instance (optional)
  * @param {object} opts
- * @param {object} opts.overrides - service overrides for buildCoreServices
+ * @param {object} opts.overrides - service overrides for buildPlaceServices
  * @param {Function} opts.getConfigValue - place config reader (key => value)
  * @returns {Map} loaded extensions
  */
@@ -775,16 +775,16 @@ export async function loadExtensions(app, mcpServer, opts = {}) {
   // Track route ownership for collision detection
   const routeOwnership = new Map();
 
-  // Build core services (initially with empty loadedExtensions)
-  coreServices = buildCoreServices({
+  // Build place services (initially with empty loadedExtensions)
+  placeServices = buildPlaceServices({
     loadedExtensions: loaded,
     overrides: opts.overrides || {},
   });
 
-  // Derive available services from what buildCoreServices actually produced.
+  // Derive available services from what buildPlaceServices actually produced.
   // No hardcoded list. If services.js adds a new service, it's automatically available.
   AVAILABLE_SERVICES = new Set(
-    Object.keys(coreServices).filter((k) => k !== "models"),
+    Object.keys(placeServices).filter((k) => k !== "models"),
   );
 
   // Discover manifests
@@ -820,7 +820,7 @@ export async function loadExtensions(app, mcpServer, opts = {}) {
     const { manifest, dir, entryPath } = sorted[_si];
     try {
       // Validate required dependencies
-      const missing = validateNeeds(manifest, coreServices);
+      const missing = validateNeeds(manifest, placeServices);
       if (missing.length > 0) {
         log.debug(
           "Extensions",
@@ -871,7 +871,7 @@ export async function loadExtensions(app, mcpServer, opts = {}) {
       }
 
       // Apply no-op stubs for optional deps
-      applyOptionalStubs(manifest, coreServices);
+      applyOptionalStubs(manifest, placeServices);
 
       // Load the extension's init function
       const extModule = await import(toImportURL(entryPath));
@@ -881,15 +881,15 @@ export async function loadExtensions(app, mcpServer, opts = {}) {
         continue;
       }
 
-      // Build scoped core: only inject what the manifest declares
-      const scopedCore = buildScopedCore(manifest, coreServices);
+      // Build scoped place: only inject what the manifest declares
+      const scopedPlace = buildScopedPlace(manifest, placeServices);
 
       // Initialize (with timeout to prevent a single extension from blocking boot)
       const INIT_TIMEOUT_MS = 10000;
       let instance;
       try {
         instance = await Promise.race([
-          extModule.init(scopedCore),
+          extModule.init(scopedPlace),
           new Promise((_, reject) =>
             setTimeout(
               () =>
@@ -913,7 +913,7 @@ export async function loadExtensions(app, mcpServer, opts = {}) {
             ...(manifest.optional?.services || []),
           ]);
           const missing = [...AVAILABLE_SERVICES].filter(
-            (s) => !declared.has(s) && coreServices[s],
+            (s) => !declared.has(s) && placeServices[s],
           );
           if (missing.length > 0) {
             hint = ` Hint: add missing services to manifest needs/optional: ${missing.join(", ")}`;
@@ -970,7 +970,7 @@ export async function loadExtensions(app, mcpServer, opts = {}) {
         continue;
       }
 
-      // Wire middleware (runs before kernel routes on matching paths)
+      // Wire middleware (runs before seed routes on matching paths)
       if (instance.middleware) {
         for (const mw of instance.middleware) {
           if (!mw.path || typeof mw.handler !== "function") {
@@ -1037,8 +1037,8 @@ export async function loadExtensions(app, mcpServer, opts = {}) {
         log.verbose("Extensions", `${manifest.name}: raw webhook registered`);
       }
 
-      // Register tools into the kernel tool registry. Same path the
-      // kernel uses for its own tools — see registerToolBundle in
+      // Register tools into the seed tool registry. Same path the
+      // seed uses for its own tools — see registerToolBundle in
       // seed/factory/voices/llm/tools.js. The LLM voice dispatches
       // verb-tagged tool calls directly through getToolHandler.
       if (instance.tools) {
@@ -1047,16 +1047,16 @@ export async function loadExtensions(app, mcpServer, opts = {}) {
         await registerToolBundle(instance.tools, { ownerExt: manifest.name });
       }
 
-      // Register models from manifest (add to core.models so other extensions can use them)
+      // Register models from manifest (add to place.models so other extensions can use them)
       if (manifest.provides?.models) {
         for (const [modelName, modelPath] of Object.entries(
           manifest.provides.models,
         )) {
-          if (!coreServices.models[modelName]) {
+          if (!placeServices.models[modelName]) {
             try {
               const resolved = path.resolve(dir, modelPath);
               const mod = await import(toImportURL(resolved));
-              coreServices.models[modelName] = mod.default || mod;
+              placeServices.models[modelName] = mod.default || mod;
               AVAILABLE_MODELS.add(modelName);
             } catch (err) {
               log.warn(
@@ -1072,18 +1072,18 @@ export async function loadExtensions(app, mcpServer, opts = {}) {
       // Register energy actions from manifest
       if (
         manifest.provides?.energyActions &&
-        coreServices.energy?.registerAction
+        placeServices.energy?.registerAction
       ) {
         for (const [action, config] of Object.entries(
           manifest.provides.energyActions,
         )) {
           if (typeof config === "object" && config.costFn) {
-            coreServices.energy.registerAction(action, config.costFn);
+            placeServices.energy.registerAction(action, config.costFn);
           } else if (
             typeof config === "object" &&
             typeof config.cost === "number"
           ) {
-            coreServices.energy.registerAction(action, () => config.cost);
+            placeServices.energy.registerAction(action, () => config.cost);
           }
         }
       }
@@ -1108,7 +1108,7 @@ export async function loadExtensions(app, mcpServer, opts = {}) {
 
       // Register extension seeds (plantable scaffolds). Two intake paths:
       //   1. instance.seeds: returned from init() — array of recipe objects
-      //      with local `name` (e.g. "rulership"); kernel namespaces it
+      //      with local `name` (e.g. "rulership"); seed namespaces it
       //      as "<ext>:<name>".
       //   2. manifest.provides.seeds: { "<local-name>": "./relative/path.js" }
       // Either form accepted; both register under the extension owner so
@@ -1212,17 +1212,17 @@ export async function loadExtensions(app, mcpServer, opts = {}) {
 
   // Hook-listen validation pass. Every extension's manifest declares
   // provides.hooks.listens: [...]. Cross-check those names against:
-  //   (a) the kernel's own hooks (fired by seed/*)
+  //   (a) the seed's own hooks (fired by seed/*)
   //   (b) every other extension's declared fires (custom events)
   // Any listen that matches neither is a silent-orphan — an invented
-  // name that the kernel will never fire, so the handler never runs.
+  // name that the seed will never fire, so the handler never runs.
   // Warn loudly at boot instead of letting the failure stay invisible.
   validateHookListens(loaded);
 
-  // All extensions loaded. Freeze the top-level core object.
-  // Extension service registration (core.energy = {...}) happened during init().
-  // No more property additions. core.hooks = "garbage" now fails.
-  if (coreServices) Object.freeze(coreServices);
+  // All extensions loaded. Freeze the top-level place object.
+  // Extension service registration (place.energy = {...}) happened during init().
+  // No more property additions. place.hooks = "garbage" now fails.
+  if (placeServices) Object.freeze(placeServices);
 
   return loaded;
 }
@@ -1264,7 +1264,7 @@ const CORE_HOOKS_VALID = new Set([
 ]);
 
 function validateHookListens(loadedMap) {
-  // Build the set of all hook names that SOMETHING fires — core + any
+  // Build the set of all hook names that SOMETHING fires — place + any
   // extension's declared customs.
   const firedByExt = new Map(); // hookName -> Set<extName>
   const knownValid = new Set(CORE_HOOKS_VALID);
@@ -1298,7 +1298,7 @@ function validateHookListens(loadedMap) {
         log.warn(
           "Extensions",
           `"${extName}" listens to "${h}" but nothing fires it. ` +
-            `Not a core hook and no extension declares it in fires. ` +
+            `Not a place hook and no extension declares it in fires. ` +
             `No handler will run.`,
         );
       }
@@ -1533,7 +1533,7 @@ export function getExtension(name) {
  * or when the lookup fails.
  *
  * This is the principled way for one extension to reach into another:
- *   const cw = await core.scope.getExtensionAtScope("code-workspace", spaceId);
+ *   const cw = await place.scope.getExtensionAtScope("code-workspace", spaceId);
  *   if (!cw?.exports?.someApi) return; // not active here
  *   await cw.exports.someApi(...);
  *
@@ -1541,9 +1541,9 @@ export function getExtension(name) {
  * silently bypasses spatial scoping — a blocked extension's data and
  * code stays callable even at scopes where the operator said no. That
  * is the single largest "scope is advisory not enforced" hole in the
- * kernel, and this function closes it for the callers that opt in.
+ * seed, and this function closes it for the callers that opt in.
  *
- * The legacy getExtension() stays for kernel-internal use (the loader
+ * The legacy getExtension() stays for seed-internal use (the loader
  * itself, the route mounting code, etc.) where scope doesn't apply.
  * Extensions reaching across should migrate to this helper over time.
  *
@@ -1557,14 +1557,14 @@ export async function getExtensionAtScope(name, spaceId) {
   if (!entry) return null;
   try {
     const { isExtensionBlockedAtSpace } =
-      await import("../seed/place/space/extensionScope.js");
+      await import("../seed/materials/space/extensionScope.js");
     const blocked = await isExtensionBlockedAtSpace(name, spaceId);
     if (blocked) return null;
   } catch {
     // If scope resolution fails (e.g., space not found), be
     // conservative and return null rather than handing back the
     // instance. Callers can fall back to the legacy getExtension
-    // for kernel-internal cases where scope doesn't apply.
+    // for seed-internal cases where scope doesn't apply.
     return null;
   }
   return entry.instance ?? null;
@@ -1639,14 +1639,14 @@ export function getBootReport() {
 }
 
 /**
- * Register the four extension-management DO ops with the kernel
+ * Register the four extension-management DO ops with the seed
  * operations registry. The handlers live here (in the loader, not in
  * seed) because they touch loader-internal state: extension directory
  * writes, the disabledExtensions sync file. Seed never imports from
  * the loader; the dependency points outward — call this once at boot
- * from genesis.js after the kernel operations are loaded.
+ * from genesis.js after the seed operations are loaded.
  *
- * Registered ops (all under `ownerExtension: "kernel"`):
+ * Registered ops (all under `ownerExtension: "seed"`):
  *   install-extension     write extension files to disk
  *   uninstall-extension   remove an extension directory
  *   disable-extension     add to disabledExtensions config list
@@ -1661,7 +1661,7 @@ export async function registerExtensionManagementOps() {
 
   registerOperation("install-extension", {
     targets: ["space"],
-    ownerExtension: "kernel",
+    ownerExtension: "seed",
     handler: async ({ params }) => {
       const { name, version, manifest, files } = params || {};
       if (!name || !Array.isArray(files) || files.length === 0) {
@@ -1683,7 +1683,7 @@ export async function registerExtensionManagementOps() {
 
   registerOperation("uninstall-extension", {
     targets: ["space"],
-    ownerExtension: "kernel",
+    ownerExtension: "seed",
     handler: async ({ params }) => {
       const { name } = params || {};
       if (!name || !EXT_NAME_RE.test(name)) {
@@ -1702,7 +1702,7 @@ export async function registerExtensionManagementOps() {
 
   registerOperation("disable-extension", {
     targets: ["space"],
-    ownerExtension: "kernel",
+    ownerExtension: "seed",
     handler: async ({ params }) => {
       const { name } = params || {};
       if (!name || !EXT_NAME_RE.test(name)) {
@@ -1720,7 +1720,7 @@ export async function registerExtensionManagementOps() {
 
   registerOperation("enable-extension", {
     targets: ["space"],
-    ownerExtension: "kernel",
+    ownerExtension: "seed",
     handler: async ({ params }) => {
       const { name } = params || {};
       if (!name || !EXT_NAME_RE.test(name)) {
@@ -1778,19 +1778,19 @@ export function hasExtension(name) {
 }
 
 /**
- * Get the core services bundle (for late-binding or testing).
+ * Get the place services bundle (for late-binding or testing).
  */
-export function getCoreServices() {
-  return coreServices;
+export function getPlaceServices() {
+  return placeServices;
 }
 
 /**
- * Replace a core service at runtime (e.g., when energy extension loads
+ * Replace a place service at runtime (e.g., when energy extension loads
  * and wants to replace the no-op stub with the real implementation).
  */
 export function setCoreService(serviceName, serviceImpl) {
-  if (coreServices) {
-    coreServices[serviceName] = serviceImpl;
+  if (placeServices) {
+    placeServices[serviceName] = serviceImpl;
   }
 }
 
@@ -1849,7 +1849,7 @@ export async function uninstallExtension(name) {
     } catch {}
     try {
       const { clearToolOwnersForExtension } =
-        await import("../seed/place/space/extensionScope.js");
+        await import("../seed/materials/space/extensionScope.js");
       clearToolOwnersForExtension(name);
     } catch {}
     // Drop this extension's default permission rules from the registry
@@ -1866,7 +1866,7 @@ export async function uninstallExtension(name) {
   // resolution chain treats a missing extension as blocked at every space.
   try {
     const { loadConfinedExtensions } =
-      await import("../seed/place/space/extensionScope.js");
+      await import("../seed/materials/space/extensionScope.js");
     await loadConfinedExtensions();
   } catch {}
 
@@ -2217,7 +2217,7 @@ export async function installExtension(name, version) {
   // until restart and the extension resolves as global (active everywhere).
   try {
     const { loadConfinedExtensions } =
-      await import("../seed/place/space/extensionScope.js");
+      await import("../seed/materials/space/extensionScope.js");
     await loadConfinedExtensions();
   } catch {}
 
@@ -2451,7 +2451,7 @@ export async function runExtensionMigrations() {
             `${name}: running migration v${migration.version}`,
           );
           try {
-            await migration.up(coreServices);
+            await migration.up(placeServices);
             ran++;
           } catch (err) {
             log.error(

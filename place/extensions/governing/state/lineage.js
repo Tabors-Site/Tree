@@ -52,10 +52,10 @@ export async function writeLineage({
   expandingFromSpec = null,
   force = false,
   identity = null,
-  // Phase 3 ([[project_seed_four_verbs_only]]): callers thread core.
-  core,
+  // Phase 3 ([[project_seed_four_verbs_only]]): callers thread place.
+  place,
 }) {
-  if (!core?.do) throw new Error("writeLineage requires `core` (verb surface)");
+  if (!place?.do) throw new Error("writeLineage requires `place` (verb surface)");
   if (!subRulerNodeId || !parentRulerId) return null;
 
   const space = await Space.findById(subRulerNodeId);
@@ -80,7 +80,7 @@ export async function writeLineage({
   try {
     // Phase 3 migration ([[project_seed_four_verbs_only]]): verb-surface
     // write. merge:true preserves other governing keys at NS atomically.
-    await core.do(space, "set", {
+    await place.do(space, "set", {
       field: `qualities.${NS}`,
       value: { lineage },
       merge: true,

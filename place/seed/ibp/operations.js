@@ -4,30 +4,30 @@
 //
 // SEE / SUMMON / BE each have a single execution shape. DO is the
 // open-ended verb — its meaning is whatever the caller's action
-// name says, and the kernel + extensions together teach me a
+// name says, and the seed + extensions together teach me a
 // growing vocabulary of actions through this registry.
 //
 // One registry. One gate. Both the IBP wire layer and in-process
-// callers (extensions, kernel internals) dispatch through here, so
+// callers (extensions, seed internals) dispatch through here, so
 // authorization, schema validation, and Fact stamping run once at one
 // place. Bare names ("create-child", "set-qualities") are reserved for
-// the kernel; extensions register under "<extName>:<action>" so
+// the seed; extensions register under "<extName>:<action>" so
 // every name's owner is structurally evident on the wire.
 //
-// The kernel's own DO ops register at module load through
-// coreOperations.js. Extensions register theirs through the loader
+// The seed's own DO ops register at module load through
+// seedOperations.js. Extensions register theirs through the loader
 // reading manifest provides + init() return. Both go through
-// registerOperation here; there is no privileged kernel path.
+// registerOperation here; there is no privileged seed path.
 
 import log from "../system/log.js";
 
 const REGISTRY = new Map();
 
 // Naming. Bare names ("create-child", "set-qualities") are reserved for the
-// kernel. Extensions register under "<extName>:<action>" (e.g.,
+// seed. Extensions register under "<extName>:<action>" (e.g.,
 // "food:log-meal"). Same convention as modes (tree:fallback,
 // tree:food-log) and roles (governing:ruler).
-const KERNEL_NAME_RE = /^[a-z][a-z0-9-]*$/;
+const SEED_NAME_RE = /^[a-z][a-z0-9-]*$/;
 const EXT_NAME_RE = /^[a-z][a-z0-9-]*:[a-z][a-z0-9-]*$/;
 
 const MAX_REGISTERED = 500;
@@ -45,14 +45,14 @@ const VALID_TARGETS = new Set([
 /**
  * Register a DO operation.
  *
- * @param {string} name - "<action>" for kernel ops, "<ext>:<action>" for extensions
+ * @param {string} name - "<action>" for seed ops, "<ext>:<action>" for extensions
  * @param {object} spec
  * @param {string[]} spec.targets - target kinds the op accepts: space|being|matter|place|stance|position
  * @param {Function} spec.handler - async ({ target, params, identity, summonCtx }) => result
  * @param {object} [spec.schema] - payload validation (Zod / JSON schema). Currently stored only; enforcement is on the roadmap.
  * @param {string} [spec.factAction] - name written into the Fact. Defaults to operation name.
  * @param {boolean} [spec.skipAudit] - if true, no Fact is stamped. Reserve for ops where audit adds nothing.
- * @param {string} [spec.ownerExtension] - registering extension name (default "kernel")
+ * @param {string} [spec.ownerExtension] - registering extension name (default "seed")
  * @returns {boolean} true on success
  */
 export function registerOperation(name, spec) {
@@ -91,21 +91,21 @@ export function registerOperation(name, spec) {
     }
   }
 
-  const ownerExtension = spec.ownerExtension || "kernel";
-  const isKernelName = KERNEL_NAME_RE.test(name);
+  const ownerExtension = spec.ownerExtension || "seed";
+  const isSeedName = SEED_NAME_RE.test(name);
   const isExtName = EXT_NAME_RE.test(name);
 
-  if (!isKernelName && !isExtName) {
+  if (!isSeedName && !isExtName) {
     log.warn(
       "Operations",
-      `registerOperation("${name}"): invalid name format. Use "action" (kernel) or "ext:action" (extension).`,
+      `registerOperation("${name}"): invalid name format. Use "action" (seed) or "ext:action" (extension).`,
     );
     return false;
   }
-  if (isKernelName && ownerExtension !== "kernel") {
+  if (isSeedName && ownerExtension !== "seed") {
     log.warn(
       "Operations",
-      `registerOperation("${name}"): bare names are reserved for the kernel. Extension "${ownerExtension}" must register as "${ownerExtension}:${name}".`,
+      `registerOperation("${name}"): bare names are reserved for the seed. Extension "${ownerExtension}" must register as "${ownerExtension}:${name}".`,
     );
     return false;
   }
@@ -218,7 +218,7 @@ export function listOperations(filter = {}) {
  */
 export async function syncOperationsToSubstrate() {
   const { SEED_SPACE } = await import("./protocol.js");
-  const { manifestItems } = await import("../place/manifest.js");
+  const { manifestItems } = await import("../materials/manifest.js");
   const items = [];
   for (const op of REGISTRY.values()) {
     items.push({

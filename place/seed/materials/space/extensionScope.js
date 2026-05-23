@@ -51,7 +51,7 @@ import { hooks } from "../../system/hooks.js";
 let _confinedExtensions = new Set();
 
 // Loader-provided extension-instance lookup. Registered at boot so the
-// kernel can offer a scope-aware getExtensionAtScope without importing
+// seed can offer a scope-aware getExtensionAtScope without importing
 // from extensions/loader.js (which would violate the one-way layering
 // rule). Null until the loader calls setExtensionInstanceLookup; if a
 // caller hits getExtensionAtScope before boot completes, the function
@@ -60,7 +60,7 @@ let _extensionInstanceLookup = null;
 
 /**
  * Called by the loader at boot to register the in-memory extension
- * instance lookup. The kernel uses this only via getExtensionAtScope;
+ * instance lookup. The seed uses this only via getExtensionAtScope;
  * extensions never call it.
  */
 export function setExtensionInstanceLookup(fn) {
@@ -132,12 +132,12 @@ export async function isExtensionBlockedAtSpace(extName, spaceId) {
  *
  * This is the principled way for one extension to reach into another:
  *
- *   const cw = await core.scope.getExtensionAtScope("code-workspace", spaceId);
+ *   const cw = await place.scope.getExtensionAtScope("code-workspace", spaceId);
  *   if (!cw?.exports?.someApi) return; // not active here
  *   await cw.exports.someApi(...);
  *
  * The legacy getExtension() (in extensions/loader.js) stays for
- * kernel-internal use and for cases where scope is genuinely
+ * seed-internal use and for cases where scope is genuinely
  * irrelevant. Extensions reaching across should migrate to this
  * helper over time — it closes the "blocked extension is still
  * callable through getExtension(...).exports" hole.
@@ -274,7 +274,7 @@ export function filterToolNamesByScope(
   }
   return toolNames.filter((name) => {
     const info = _toolOwnership.get(name);
-    if (!info) return true; // core tool, no owner, always passes
+    if (!info) return true; // seed tool, no owner, always passes
     if (blockedExtensions?.has(info.extName)) return false;
     if (restrictedExtensions?.has(info.extName)) {
       const access = restrictedExtensions.get(info.extName);

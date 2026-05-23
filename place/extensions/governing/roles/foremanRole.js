@@ -12,12 +12,12 @@
 //
 //   2. **Dispatch** (content.kind === "dispatch-plan"): walk plan
 //      steps, fan out SUMMONs per leaf-batch and per branch-step,
-//      aggregate replies via `core.declare.aggregate`, settle, reply to
+//      aggregate replies via `place.declare.aggregate`, settle, reply to
 //      Ruler. Absorbs the work `dispatchSwarmPlan` did inside the
 //      orchestrator.
 //
 // **Reply mechanism for workers.** Each worker SUMMON goes through
-// `summonByResolved` (the single sanctioned kernel-internal SUMMON
+// `summonByResolved` (the single sanctioned seed-internal SUMMON
 // entry) which writes the inbox entry, wires the reply-handoff, and
 // nudges the scheduler in one atomic act behind the envelope
 // contract. The handoff's `onResponse` calls `aggregator.notify(reply)`;
@@ -41,7 +41,7 @@ import Space from "../../../seed/models/space.js";
 import Being from "../../../seed/models/being.js";
 // Only-SUMMONs-make-SUMMONs migration (2026-05-21): the legacy
 // appendToInbox + attachHandoff + wake triple retired. The single
-// sanctioned entry for kernel-internal SUMMONs with a known receiver
+// sanctioned entry for seed-internal SUMMONs with a known receiver
 // is summonByResolved in seed/ibp/verbs.js — it does the inbox
 // write, the wake, and the reply-handoff atomically behind the
 // envelope contract. No more direct scheduler pokes from extension
@@ -595,7 +595,7 @@ async function dispatchLeafBatch({ group, executionSpaceId, rulerSpaceId, ctx, a
   // Emit the SUMMON through the verb. summonByResolved writes the
   // inbox entry, wires the reply-handoff (onResponse/onError feed the
   // aggregator), and nudges the scheduler — all atomically, all
-  // behind the envelope contract. The kernel stamps parentThread
+  // behind the envelope contract. The seed stamps parentThread
   // automatically because the Foreman is currently acting under its
   // own rootCorrelation (the Ruler-driven dispatch), so the worker's
   // chain links back to the Foreman's thread in `.threads`.
@@ -713,7 +713,7 @@ async function ensureWorkerBeing({ executionSpaceId, workerRoleName }) {
   // same space carrying different roles; multi-being-at-one-space is
   // exactly this pattern (see project-multi-being-domain-space).
   try {
-    const { createBeingWithHome } = await import("../../../seed/place/being/identity.js");
+    const { createBeingWithHome } = await import("../../../seed/materials/being/identity.js");
     const { being } = await createBeingWithHome({
       operatingMode: "llm",
       role:          workerRoleName,
@@ -724,7 +724,7 @@ async function ensureWorkerBeing({ executionSpaceId, workerRoleName }) {
       // find this instance instead of creating duplicates.
       const space = await Space.findById(executionSpaceId);
       if (space) {
-        const { qualities } = await import("../../../seed/place/qualities.js");
+        const { qualities } = await import("../../../seed/materials/qualities.js");
         await qualities.space.mergeQuality(space, "beings", {
           [workerRoleName]: {
             beingId:     String(being._id),

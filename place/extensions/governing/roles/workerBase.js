@@ -139,7 +139,7 @@ ${COMMON_UNDERSHOOT_BLOCK}`.trim();
 // Ruler's queue for Pass 2 court adjudication.
 //
 // Deliberately NOT in the base set:
-//   • get-tree-context — kernel tool that reads the whole tree;
+//   • get-tree-context — seed tool that reads the whole tree;
 //     Workers must not see outside their scope. Cross-scope visibility
 //     is the Ruler's concern, not the Worker's.
 //   • navigate-tree — same reason; lets Workers move position
@@ -148,7 +148,7 @@ ${COMMON_UNDERSHOOT_BLOCK}`.trim();
 // Workspace typed Workers extend this list with their workspace tools
 // (workspace-add-file, workspace-read-file, etc.). Those tools are
 // scope-aware — workspace-read-file knows about the worker's scope
-// and rejects paths outside it. The kernel's tree tools are NOT
+// and rejects paths outside it. The seed's tree tools are NOT
 // scope-aware; including them would let Workers reach across.
 export const WORKER_BASE_TOOLS = [
   "governing-flag-issue",

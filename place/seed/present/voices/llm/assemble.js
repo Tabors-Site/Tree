@@ -38,7 +38,7 @@
 //
 // "Attention is the branding (cattle-style and more) of the place."
 //
-// The Fact trail and Stamp history are not the present. They are
+// The Fact trail and Act history are not the present. They are
 // look-back — substrate a being can SEE through tools, but cannot
 // inhabit. A being cannot stand at last Tuesday; only at now. Space
 // is a dimension a being moves in (currentSpace changes). Time is
@@ -111,7 +111,7 @@
 import log from "../../../system/log.js";
 import { getToolDescription, resolveTools, getExtensionToolsForRole } from "./tools.js";
 import { resolveSeeList, registerSeeResolver } from "./seeResolvers.js";
-import { getSpaceName } from "../../../place/space/spaceFetch.js";
+import { getSpaceName } from "../../../materials/space/spaceFetch.js";
 
 // ────────────────────────────────────────────────────────────────────
 // The assembler

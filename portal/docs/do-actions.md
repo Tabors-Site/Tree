@@ -8,12 +8,12 @@ Read [protocol.md](protocol.md) first.
 
 Everything in TreeOS reduces to: positions have data. The data has namespaces. DO mutates position data through one of these channels:
 
-- **Structural fields** of the Space schema: `name`, `parent`, `status`, `visibility`, `contributors`. These are kernel-known and changed through named actions (`set-name`, `move`, `set-status`, etc.).
+- **Structural fields** of the Space schema: `name`, `parent`, `status`, `visibility`, `contributors`. These are seed-known and changed through named actions (`set-name`, `move`, `set-status`, etc.).
 - **Position-level content**: notes, file matters. Changed through named actions (`write-note`, `edit-note`, `upload-matter`).
 - **Namespaced metadata** in `metadata.<namespace>`. Many kinds:
   - extension namespaces (`metadata.values`, `metadata.codebook`, ...) carry extension-specific data.
   - being namespaces (`metadata.ruler`, `metadata.archivist`, ...) carry being configuration: system instructions, tools, permissions. When an being is summoned at this position, the summoning reads its configuration from this namespace.
-  - kernel-aware namespaces (`metadata.modes`, `metadata.tools`, `metadata.scope`, `metadata.inbox`) carry first-class protocol state.
+  - seed-aware namespaces (`metadata.modes`, `metadata.tools`, `metadata.scope`, `metadata.inbox`) carry first-class protocol state.
 
   All namespaces are written through the same `set-meta` action. The namespace's name is in the payload.
 - **Inbox writes**, technically a kind of namespaced metadata, but happen through **SUMMON** rather than DO. SUMMON is its own verb because it triggers summoning; DO would not.
@@ -41,11 +41,11 @@ Action names are kebab-case strings. Payload shape varies per action; this docum
 
 ## Action catalog
 
-The kernel mints the primitives below. Extensions can register additional named DO actions on top (see "Extension-registered DO actions" further down). The primitives are grouped by what part of position data they modify.
+The seed mints the primitives below. Extensions can register additional named DO actions on top (see "Extension-registered DO actions" further down). The primitives are grouped by what part of position data they modify.
 
 ### Structural actions
 
-Mutate fields on the Space schema (`name`, `parent`, `status`, `visibility`, `rootOwner`, `contributors`). Kernel-known because each has specific validation and side-effect semantics.
+Mutate fields on the Space schema (`name`, `parent`, `status`, `visibility`, `rootOwner`, `contributors`). Seed-known because each has specific validation and side-effect semantics.
 
 #### create-child
 
@@ -94,7 +94,7 @@ Returns: `{ deleted: true }`.
 
 #### set-status
 
-Writes `Space.status`. Value must be a registered status (kernel: `active`, `completed`, `trimmed`; extensions may register more via the status registry).
+Writes `Space.status`. Value must be a registered status (seed: `active`, `completed`, `trimmed`; extensions may register more via the status registry).
 
 ```
 { verb: "do", action: "set-status", position: "<position>", identity, payload: { status, isInherited?: boolean } }
@@ -160,7 +160,7 @@ Returns: `{ noteId, position }`.
 
 #### edit-note
 
-Updates the content of an existing note. The kernel writes a new version under `note.history` and updates the current content.
+Updates the content of an existing note. The seed writes a new version under `note.history` and updates the current content.
 
 ```
 { verb: "do", action: "edit-note", position: "<position>/notes/<noteId>", identity, payload: { content } }
@@ -186,7 +186,7 @@ Returns: `{ matterId, position: "<position>/matters/<matterId>" }`.
 
 ### Namespaced metadata
 
-Writes to `metadata.<namespace>` on the Space document. The same action shape covers every kind of namespace: extension data, being configuration, kernel-aware namespaces (`modes`, `tools`, `scope`).
+Writes to `metadata.<namespace>` on the Space document. The same action shape covers every kind of namespace: extension data, being configuration, seed-aware namespaces (`modes`, `tools`, `scope`).
 
 #### set-meta
 
@@ -199,12 +199,12 @@ Writes data into a metadata namespace at the position.
 - `namespace` (required): the namespace key. Examples:
   - An extension name: `"values"`, `"codebook"`, `"governance"`. Writes the extension's data.
   - An being name: `"ruler"`, `"archivist"`, `"<custom-being>"`. Writes that being's configuration at this position. When the being is summoned here, the summoning reads from this namespace.
-  - A kernel-aware namespace: `"modes"`, `"tools"`, `"scope"`. Writes first-class protocol state.
+  - A seed-aware namespace: `"modes"`, `"tools"`, `"scope"`. Writes first-class protocol state.
 - `data` (required): the object to write into `metadata[namespace]`.
 - `merge` (optional, default true): when true, performs a shallow merge with existing data. When false, replaces the namespace contents.
 
-The kernel enforces:
-- Reserved namespace names cannot be written through this action (the kernel owns them: `inbox` for example, which is written through SUMMON).
+The seed enforces:
+- Reserved namespace names cannot be written through this action (the seed owns them: `inbox` for example, which is written through SUMMON).
 - For extension namespaces: the extension must not be blocked at this position (scope check).
 - The requesting identity must be authorized to write to this namespace at this position. Authorization is action+namespace-keyed: writing `metadata.ruler` may require ruler-level role; writing `metadata.values` may only require contributor role.
 
@@ -222,17 +222,17 @@ Returns: `{ cleared: true, spaceId, namespace }`.
 
 #### scope-extension
 
-Allows or blocks an extension at a position. The kernel walks the inheritance chain when resolving scope.
+Allows or blocks an extension at a position. The seed walks the inheritance chain when resolving scope.
 
 ```
 { verb: "do", action: "scope-extension", position: "<position>", identity, payload: { name, scope: "allow" | "block" | "unallow" | "unblock" } }
 ```
 
-This is structurally a metadata write to `metadata.scope`, but the kernel exposes it as a named action because the scope semantics (confined vs global, allowance vs block, inheritance) carry rules `set-meta` would not validate.
+This is structurally a metadata write to `metadata.scope`, but the seed exposes it as a named action because the scope semantics (confined vs global, allowance vs block, inheritance) carry rules `set-meta` would not validate.
 
 #### assign-llm-slot
 
-Assigns an LLM connection to a slot at a position or user. Writes `metadata.llm.slots`. The kernel exposes it as a named action because slot semantics (slot name registry, connection ownership check) carry rules `set-meta` would not validate.
+Assigns an LLM connection to a slot at a position or user. Writes `metadata.llm.slots`. The seed exposes it as a named action because slot semantics (slot name registry, connection ownership check) carry rules `set-meta` would not validate.
 
 ```
 { verb: "do", action: "assign-llm-slot", position: "<position>", identity, payload: { slot, connectionId } }
@@ -290,9 +290,9 @@ Registers a custom LLM connection on the identity's user record.
 
 ## Extension-registered DO actions
 
-The kernel mints only the primitives listed above. **Extensions can register their own named DO actions** when they expose a direct manipulation surface that doesn't reduce to a single metadata write. The action goes through the same `ibp:do` dispatcher; the action's payload schema and behavior are owned by the extension.
+The seed mints only the primitives listed above. **Extensions can register their own named DO actions** when they expose a direct manipulation surface that doesn't reduce to a single metadata write. The action goes through the same `ibp:do` dispatcher; the action's payload schema and behavior are owned by the extension.
 
-Common examples from existing extensions (each implemented by an extension, not by the kernel):
+Common examples from existing extensions (each implemented by an extension, not by the seed):
 
 | Action | Extension | What it does |
 |---|---|---|
@@ -301,7 +301,7 @@ Common examples from existing extensions (each implemented by an extension, not 
 | `reroot` | `reroot` (treeos-maintenance) | Reorganizes the tree's root assignment. |
 | `split` | `split` (standalone) | Partitions a tree into multiple trees by some criterion. |
 
-These actions compose kernel primitives. The kernel does not know what `compress` means. The `tree-compress` extension registers it, the dispatcher routes the call, and the extension internally invokes kernel `set-meta` and `delete` actions on the affected spaces.
+These actions compose seed primitives. The seed does not know what `compress` means. The `tree-compress` extension registers it, the dispatcher routes the call, and the extension internally invokes seed `set-meta` and `delete` actions on the affected spaces.
 
 If an extension only needs to write to its metadata namespace, it does NOT register a named action. It uses `set-meta` with its namespace. Named actions are reserved for operations whose payload semantics are not "write this data here."
 
@@ -317,7 +317,7 @@ No new route. No new action name. The extension's logic for handling the write m
 - A hook on `afterMetadataWrite` listening for its namespace, OR
 - A wrapper helper the extension exposes in its `init.exports` for convenience.
 
-The kernel does the dispatching. The extension does the reacting.
+The seed does the dispatching. The extension does the reacting.
 
 ## What configuring an being looks like in DO terms
 
@@ -344,11 +344,11 @@ DO authorization is action+namespace-keyed. The chain:
 
 1. Identity must be valid (`UNAUTHORIZED` if not).
 2. Identity must have write access at the position (`FORBIDDEN` if not).
-3. The action must be permitted for this identity at this position. The kernel resolves the active role from the address (the being qualifier in `stance`, if present) and checks per-action permission. Some actions (`install-extension`, `set-config`) require `isAdmin`.
+3. The action must be permitted for this identity at this position. The seed resolves the active role from the address (the being qualifier in `stance`, if present) and checks per-action permission. Some actions (`install-extension`, `set-config`) require `isAdmin`.
 4. For namespaced-metadata writes (`set-meta`, `clear-meta`):
-   - The namespace must not be a reserved kernel namespace (`inbox` is not writable via set-meta).
+   - The namespace must not be a reserved seed namespace (`inbox` is not writable via set-meta).
    - For extension namespaces: the extension must not be blocked at this position (scope check).
-   - For being namespaces: writing the being's configuration may require a higher-trust role than writing extension data; the kernel applies the per-namespace policy.
+   - For being namespaces: writing the being's configuration may require a higher-trust role than writing extension data; the seed applies the per-namespace policy.
 
 Hooks `beforeSpaceCreate`, `beforeNote`, `beforeContribution`, `beforeStatusChange`, `beforeSpaceDelete`, `beforeMetadataWrite` continue to fire as today. Extensions can gate DO actions through these hooks.
 

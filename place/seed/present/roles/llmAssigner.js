@@ -8,7 +8,7 @@
 // deterministically and returns. The work I do is real — adding
 // connections, assigning slots, planting tutorial matter — but
 // it's code work, not inference. I have no presence lane and no
-// frame on the reel beyond the Stamp row each call stamps.
+// frame on the reel beyond the Act row each call stamps.
 //
 // One canonical implementation, reached through `ibp:be
 // <place>/@llm-assigner` from every transport.
@@ -29,7 +29,7 @@
 //   space    set-space-llm
 //            Sets qualities.llm.slots[slot] on a space the caller owns
 //            (rootOwner matches). Drives the tree-level resolution
-//            step in seed/factory/voices/llm/connect.js.
+//            step in seed/present/voices/llm/connect.js.
 //
 // Authorization gates here are coarse for now (self / root operator /
 // tree ownership). The deferred stance-authorization framework will
@@ -40,7 +40,7 @@ import log from "../../system/log.js";
 import Being from "../../models/being.js";
 import Space from "../../models/space.js";
 import { IbpError, IBP_ERR } from "../../ibp/protocol.js";
-import { findRootOperator } from "../../place/being/placeBeings.js";
+import { findRootOperator } from "../../materials/being/placeBeings.js";
 
 // Tutorial-matter markers. The llm-assigner's start-tutorial /
 // complete-tutorial BE ops use these to find and verify the intro
@@ -71,7 +71,7 @@ export const llmAssignerBeing = Object.freeze({
   /**
    * Add an LLM connection to the caller's being. If this is the
    * being's first connection, it auto-binds to the "main" slot
-   * (handled by the kernel add-llm-connection DO op).
+   * (handled by the seed add-llm-connection DO op).
    *
    * @param {object} payload  { name?, baseUrl, model, apiKey }
    * @returns {object}        { connectionId, name, baseUrl, model }
@@ -84,7 +84,11 @@ export const llmAssignerBeing = Object.freeze({
     // apiKey is optional — local LLMs (Ollama, llama.cpp) don't need it.
 
     const { addLlmConnection } = await import("../voices/llm/connect.js");
-    const connection = await addLlmConnection(String(ctx.identity.beingId), { name, baseUrl, model, apiKey });
+    const connection = await addLlmConnection(
+      String(ctx.identity.beingId),
+      { name, baseUrl, model, apiKey },
+      { identity: ctx.identity },
+    );
     return {
       connectionId: String(connection._id),
       name:         connection.name,
@@ -105,7 +109,7 @@ export const llmAssignerBeing = Object.freeze({
     const { slot, connectionId } = payload || {};
     if (!slot) throw new IbpError(IBP_ERR.INVALID_INPUT, "`slot` is required");
 
-    // Dispatch through the kernel DO op so the assign-llm-slot Fact
+    // Dispatch through the seed DO op so the assign-llm-slot Fact
     // stamps and the stance-authorization gate runs uniformly. Same
     // path setSpaceLlm uses below for space targets.
     const being = await Being.findById(String(ctx.identity.beingId));
@@ -146,7 +150,7 @@ export const llmAssignerBeing = Object.freeze({
   },
 
   /**
-   * Delete one of the caller's LLM connections. The kernel cascades
+   * Delete one of the caller's LLM connections. The seed cascades
    * the removal: clears Being.llmDefault, every Being.qualities.beingLlm
    * slot pointing at it, and every Space.qualities.llm.slots reference.
    *
@@ -158,7 +162,11 @@ export const llmAssignerBeing = Object.freeze({
     if (!connectionId) throw new IbpError(IBP_ERR.INVALID_INPUT, "`connectionId` is required");
 
     const { deleteLlmConnection } = await import("../voices/llm/connect.js");
-    await deleteLlmConnection(String(ctx.identity.beingId), connectionId);
+    await deleteLlmConnection(
+      String(ctx.identity.beingId),
+      connectionId,
+      { identity: ctx.identity },
+    );
     return { removed: true, connectionId };
   },
 
@@ -183,7 +191,7 @@ export const llmAssignerBeing = Object.freeze({
     // Route through the verb so this being's identity gates the write
     // the same way place-manager's set-config call does. placeLlmConnection
     // is not a protected key; no scaffold flag needed.
-    const { SEED_SPACE } = await import("../../place/space/seedSpaces.js");
+    const { SEED_SPACE } = await import("../../materials/space/seedSpaces.js");
     const { doVerb } = await import("../../ibp/verbs.js");
     const configNode = await Space.findOne({ seedSpace: SEED_SPACE.CONFIG });
     if (!configNode) {
@@ -206,7 +214,7 @@ export const llmAssignerBeing = Object.freeze({
    * Set an LLM slot on a space the caller owns (via rootOwner of the
    * containing tree). Writes qualities.llm.slots[slot] on the space —
    * the tree-level step of the resolution chain in
-   * seed/factory/voices/llm/connect.js.
+   * seed/present/voices/llm/connect.js.
    *
    * @param {object} payload  { spaceId, slot, connectionId }
    *                          connectionId null to clear the slot
@@ -220,7 +228,7 @@ export const llmAssignerBeing = Object.freeze({
     const space = await Space.findById(spaceId);
     if (!space) throw new IbpError(IBP_ERR.SPACE_NOT_FOUND, `Space ${spaceId} not found`);
 
-    // Dispatch through the kernel DO op so the stance-authorization
+    // Dispatch through the seed DO op so the stance-authorization
     // gate runs uniformly (same path the wire-side DO uses). The op's
     // handler routes space targets to assignSpaceConnection, which also
     // verifies the connection belongs to the caller before binding.

@@ -13,7 +13,7 @@
 // Examples:
 //   "Decomposed by client/server domain split"
 //     → "client-server-domain-split"
-//   "Single React component with canvas, toolbar, and core drawing features"
+//   "Single React component with canvas, toolbar, and place drawing features"
 //     → "single-react-component-canvas-toolbar"
 //   "Identified shared vocabulary for game canvas events"
 //     → "shared-vocabulary-game-canvas-events"

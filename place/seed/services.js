@@ -2,8 +2,8 @@
 //
 // My public face.
 //
-// This file assembles the `core` object I hand to every extension's
-// `init(core)`. Whatever I expose here is the whole of me an
+// This file assembles the `place` object I hand to every extension's
+// `init(place)`. Whatever I expose here is the whole of me an
 // extension can reach. Services not implemented on this place get
 // no-op proxies so extension code stays safe to call.
 
@@ -17,14 +17,14 @@ import {
   plantSeed,
   unplantSeed,
   listPlantedAt,
-} from "./place/seeds.js";
+} from "./materials/seeds.js";
 import Being from "./models/being.js";
 import Space from "./models/space.js";
-import Fact from "./models/fact.js";
+import Fact from "./past/fact/fact.js";
 import Matter from "./models/matter.js";
 
-import { logFact } from "./place/facts.js";
-import { resolveSpaceAccess } from "./place/space/spaceFetch.js";
+import { logFact } from "./past/fact/facts.js";
+import { resolveSpaceAccess } from "./materials/space/spaceFetch.js";
 import {
   createBeing,
   createFirstBeing,
@@ -32,7 +32,7 @@ import {
   generateToken,
   isFirstBeing,
   findBeingByName,
-} from "./place/being/identity.js";
+} from "./materials/being/identity.js";
 
 import {
   createSession,
@@ -71,7 +71,7 @@ import {
   getSpaceRootId,
   setCurrentSpace,
   getCurrentSpace,
-} from "./place/being/position.js";
+} from "./materials/being/position.js";
 import {
   registerRootSpaceLlmSlot,
   registerBeingLlmSlot,
@@ -86,7 +86,7 @@ import {
   getHttpServer,
 } from "./ibp/pushChannel.js";
 import { ok, error, sendOk, sendError, IBP_ERR } from "./ibp/protocol.js";
-import { qualities } from "./place/qualities.js";
+import { qualities } from "./materials/qualities.js";
 import { isBeingRoot, getPlaceRootId } from "./placeRoot.js";
 import {
   createSpace,
@@ -95,33 +95,33 @@ import {
   updateParentRelationship,
   editSpaceName,
   editSpaceType,
-} from "./place/space/spaceManagement.js";
+} from "./materials/space/spaceManagement.js";
 import {
   createMatter,
   editMatter,
   deleteMatterAndFile,
   transferMatter,
   getMatters,
-} from "./place/matter/matters.js";
+} from "./materials/matter/matters.js";
 import {
   isExtensionBlockedAtSpace,
   getBlockedExtensionsAtSpace,
   getExtensionAtScope,
   getToolOwner,
-} from "./place/space/extensionScope.js";
+} from "./materials/space/extensionScope.js";
 import {
   getAncestorChain,
   snapshotAncestors,
   invalidateSpace,
   invalidateAll,
   getCacheStats,
-} from "./place/space/ancestorCache.js";
+} from "./materials/space/ancestorCache.js";
 import {
   checkTreeHealth,
   tripTree,
   reviveTree,
   isTreeAlive,
-} from "./place/space/spaceCircuit.js";
+} from "./materials/space/spaceCircuit.js";
 import {
   acquireSpaceLock,
   releaseSpaceLock,
@@ -129,9 +129,9 @@ import {
   releaseMultiple,
   isSpaceLocked,
   getLockStats as getSpaceLockStats,
-} from "./place/space/spaceLocks.js";
+} from "./materials/space/spaceLocks.js";
 
-// The declarative primitives. Re-exposed through `core.declare` so
+// The declarative primitives. Re-exposed through `place.declare` so
 // extensions register roles, subscribe to events, declare wake
 // cadences, and aggregate fan-out replies without importing my
 // internals.
@@ -156,9 +156,9 @@ import {
 // The four-verb dispatcher. The whole of my public surface for
 // operations on space, matter, and beings.
 import { doVerb, seeVerb, summonVerb, beVerb } from "./ibp/verbs.js";
-// Side-effect import. Registers kernel DO operations with the
-// registry on load. See seed/ibp/coreOperations.js for the current set.
-import "./ibp/coreOperations.js";
+// Side-effect import. Registers seed DO operations with the
+// registry on load. See seed/ibp/seedOperations.js for the current set.
+import "./ibp/seedOperations.js";
 
 // ---------------------------------------------------------------------------
 // Auth strategy registry (extensions register additional auth methods)
@@ -174,31 +174,31 @@ const _allowedStrategyExtensions = new Set();
 // proxy functions without a separate fallback path.
 
 /**
- * Build the core services bundle.
+ * Build the place services bundle.
  *
  * @param {object} opts
  * @param {Map}    opts.loadedExtensions  - already-loaded extensions (for availability checks)
  * @param {object} opts.overrides         - swap any service with a custom implementation
- * @returns {object} the core services bundle
+ * @returns {object} the place services bundle
  */
 
-// I stash the last-built bundle so kernel-internal callers (e.g. the
-// plant-seed DO operation handing `core` to a seed's scaffold) don't
-// have to thread it through every signature. buildCoreServices runs
+// I stash the last-built bundle so seed-internal callers (e.g. the
+// plant-seed DO operation handing `place` to a seed's scaffold) don't
+// have to thread it through every signature. buildPlaceServices runs
 // once at boot; the bundle stays stable for the process lifetime.
-let _lastBuiltCore = null;
-export function getCoreServices() {
-  return _lastBuiltCore;
+let _lastBuiltPlace = null;
+export function getPlaceServices() {
+  return _lastBuiltPlace;
 }
 
-export function buildCoreServices({
+export function buildPlaceServices({
   loadedExtensions = new Map(),
   overrides = {},
 } = {}) {
-  const core = {
+  const place = {
     // The four verbs. The whole of my public surface for operations
     // on space, matter, and beings. Per-target helpers below
-    // (core.space, core.matters, core.qualities, etc.) are syntactic
+    // (place.space, place.matters, place.qualities, etc.) are syntactic
     // surfaces over the same grammar; new code prefers the verbs.
     see: seeVerb,
     do: doVerb,
@@ -271,7 +271,7 @@ export function buildCoreServices({
     },
 
     // MCP retired 2026-05-22. The LLM voice dispatches tool calls
-    // directly through the kernel tool registry; the verb dispatcher
+    // directly through the seed tool registry; the verb dispatcher
     // gates per-verb auth + extension-scope. No protocol layer.
 
     // Push channel. Proxies from seed/ibp/pushChannel.js that route to
@@ -305,7 +305,7 @@ export function buildCoreServices({
     // Pipelines are what beings working together look like, not what I
     // run on their behalf.
 
-    // --- Shared models (core protocol, always available) ---
+    // --- Shared models (always available) ---
     models: { Being, Space, Fact, Matter },
 
     // --- Hook system ---
@@ -368,11 +368,11 @@ export function buildCoreServices({
     },
 
     // --- Qualities. Per-primitive extension-data Map.
-    //     core.qualities.{being,space,matter}.{getQuality, setQuality,
+    //     place.qualities.{being,space,matter}.{getQuality, setQuality,
     //     mergeQuality, incQuality, pushQuality, addToQualitySet,
     //     batchSetQuality, unsetQuality, readQualityNamespace}.
     //     Namespace ownership is enforced on space and matter when the
-    //     scoped core passes opts.callerExtName.
+    //     scoped place bundle passes opts.callerExtName.
     qualities,
 
     // --- Extension scope (check blocked/allowed status at positions) ---
@@ -443,15 +443,15 @@ export function buildCoreServices({
 
   // Apply overrides (places can swap any service)
   for (const [key, value] of Object.entries(overrides)) {
-    if (core[key] && typeof value === "object") {
-      core[key] = { ...core[key], ...value };
+    if (place[key] && typeof value === "object") {
+      place[key] = { ...place[key], ...value };
     } else {
-      core[key] = value;
+      place[key] = value;
     }
   }
 
-  _lastBuiltCore = core;
-  return core;
+  _lastBuiltPlace = place;
+  return place;
 }
 
 export { authStrategies };

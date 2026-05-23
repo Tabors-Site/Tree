@@ -253,7 +253,7 @@ async function discoverLocalExtensions() {
 async function pickExtensions() {
   const extensions = await discoverLocalExtensions();
   if (extensions.length === 0) {
-    console.log("  No extensions found on disk. I will awaken kernel only.");
+    console.log("  No extensions found on disk. I will awaken seed only.");
     console.log("");
     return;
   }
@@ -297,7 +297,7 @@ async function pickExtensions() {
   if (selected.length === 0) {
     if (fs.existsSync(profilePath)) fs.unlinkSync(profilePath);
     console.log("");
-    console.log("  Profile cleared. I will awaken kernel only.");
+    console.log("  Profile cleared. I will awaken seed only.");
     console.log("");
     return;
   }

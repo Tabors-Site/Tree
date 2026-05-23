@@ -31,7 +31,7 @@ import { fileURLToPath } from "url";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-// __dirname is seed/place/matter/. Three ups reach the place/ root where
+// __dirname is seed/materials/matter/. Three ups reach the place/ root where
 // the uploads/ folder sits beside seed/.
 const uploadsFolder = process.env.UPLOADS_DIR || path.join(__dirname, "../../../uploads");
 

@@ -1,35 +1,64 @@
 // TreeOS IBP — DO verb (wire adapter).
 //
-// Consumes the unified envelope per [[project_ibp_wire_shape]]:
+// Consumes the unified envelope:
 //
-//   { id, verb: "do", address, payload: { action, args?, ... }, identity? }
+//   { id, verb: "do", address, payload: { action, args?, correlation? }, identity? }
 //
 // `address` is a position; a stance shape is accepted but its @being
 // qualifier is informational (stripped). The world is data at positions;
 // beings are not data targets.
 //
-// `payload.action` names the registered DO operation (e.g. "create-child",
-// "set-qualities", or extension ops like "governing:flag-issue"). `payload.args`
-// (canonical) carries the operation's arguments. For backward-compat the
-// rest of payload (minus `action` + `identity`) is also accepted as args.
+// `payload.action` names the registered DO operation. `payload.args`
+// carries the operation's arguments (legacy: any non-reserved field).
+// `payload.correlation` is the client-generated idempotency key — a
+// retry with the same correlation collapses to one moment.
 //
-// Thin wire adapter: parses envelope, strips @being from address,
-// resolves the stance to a target, delegates to `doVerb` in
-// seed/ibp/verbs.js. Stance authorization, read-only origin checks,
-// handler dispatch, and the Fact stamp all happen inside doVerb. See
-// [[project_four_verbs_one_execution]].
+// ── Async by design ──────────────────────────────────────────────
+// Every DO rides ambient actId, and assign is the sole legitimate
+// Act opener. So the wire adapter does NOT call `doVerb` directly.
+// It enqueues a transport-act on the actor's intake; the stamper
+// picks it up, opens the frame, momentum runs the wrapped verb. The
+// adapter acks with the correlation immediately and pushes the
+// result through the `ibp` channel as a `moment` envelope when the
+// moment seals.
+//
+// Two ack modes per transport's needs:
+//   WS  → ack { correlation, status: "accepted" }; result pushes
+//         to the being-room when sealed.
+//   HTTP → await the moment (no push channel for HTTP), then
+//          ack the result inline. Reserved for an HTTP shim that
+//          chooses long-poll semantics. The seed helper supports
+//          both — it returns both correlation and awaitResult.
+//
+// ── Auth ─────────────────────────────────────────────────────────
+// Unauth DO is rejected. The model is "no act without a being." A
+// DO with no actor has no reel, no stamp, no fact — a contradiction.
+// Pre-auth flows (register / claim from arrival) are BE, not DO,
+// and ride the cherub-as-actor path in be.js.
 
 import log from "../../../seed/system/log.js";
 import { parseFromSocket, expand, getPlaceDomain } from "../../../seed/ibp/address.js";
 import { resolveStance } from "../../../seed/ibp/resolver.js";
 import { IbpError, IBP_ERR, isIbpError } from "../../../seed/ibp/protocol.js";
 import { ackOk, ackError, stripBeingQualifier } from "../envelope.js";
-import { doVerb } from "../../../seed/ibp/verbs.js";
 import { getOperation, listOperations } from "../../../seed/ibp/operations.js";
+import { dispatchTransportAct } from "../../../seed/present/intake/transportAct.js";
+import { emitToBeingRoom } from "../../../seed/ibp/pushChannel.js";
+import { IBP_EVENT, buildTransportActReply } from "../events.js";
 
 export async function handleDo(socket, env, ack) {
   const id = env?.id || null;
   try {
+    // ── Auth gate ─────────────────────────────────────────────
+    // No acting being → no moment. Reject before anything else.
+    const beingId = socket?.beingId || null;
+    if (!beingId) {
+      throw new IbpError(
+        IBP_ERR.UNAUTHORIZED,
+        "DO requires an authenticated being. BE.claim or BE.register first.",
+      );
+    }
+
     const { address, payload } = env;
     const action = typeof payload?.action === "string" ? payload.action : null;
     if (!action) {
@@ -54,18 +83,58 @@ export async function handleDo(socket, env, ack) {
     const resolved = await resolveStance(expanded.right);
 
     // Resolve operation args. Canonical: payload.args. Fallback: every
-    // payload field except `action` + `identity`.
+    // payload field except reserved keys.
     const args = payload.args !== undefined
       ? payload.args
       : (() => {
-          const { action: _a, identity: _i, ...rest } = payload;
+          const { action: _a, identity: _i, correlation: _c, ...rest } = payload;
           return rest;
         })();
 
-    const identity = socket.beingId ? { beingId: socket.beingId, name: socket.name } : null;
+    const identity = { beingId, name: socket.name };
+    const correlation = typeof payload?.correlation === "string" ? payload.correlation : null;
 
-    const data = await doVerb(resolved, action, args, { identity });
-    return ackOk(ack, id, data);
+    // Enqueue the transport-act. Returns immediately with the
+    // moment's correlation; the moment runs on the scheduler's
+    // own time. The handoff attached inside dispatchTransportAct
+    // fires when the moment seals; we hook it to push the result.
+    const { correlation: momentCorrelation, awaitResult } = await dispatchTransportAct({
+      beingId,
+      act: {
+        verb:   "do",
+        target: resolved,
+        action,
+        args,
+      },
+      correlation,
+      identity,
+    });
+
+    // Fire-and-forget: when the moment seals, push the result to
+    // every socket the being holds. The originating socket gets it
+    // through the room; other sockets the being has open also see
+    // it. Failures push as well so clients can unblock awaiters.
+    // Reuses the SUMMON push envelope — "summon" already names the
+    // server reaching out to a being; transport-act results ride
+    // the same channel, matched on correlation.
+    awaitResult
+      .then(({ result, actId }) => {
+        const envelope = buildTransportActReply({
+          correlation: momentCorrelation,
+          actId,
+          result,
+        });
+        try { emitToBeingRoom(beingId, IBP_EVENT, envelope); } catch {}
+      })
+      .catch((err) => {
+        const envelope = buildTransportActReply({
+          correlation: momentCorrelation,
+          result:      { error: { message: err?.message || "transport-act failed" } },
+        });
+        try { emitToBeingRoom(beingId, IBP_EVENT, envelope); } catch {}
+      });
+
+    return ackOk(ack, id, { correlation: momentCorrelation, status: "accepted" });
   } catch (err) {
     if (isIbpError(err)) {
       return ackError(ack, id, err.code, err.message, err.detail);

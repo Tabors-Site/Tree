@@ -77,7 +77,7 @@ Mutation path. Three or four named actions prove the dispatcher pattern; `set-me
 
 ## Phase 4: SUMMON and the inbox
 
-The hardest piece. Inbox kernel helpers, summoning triggers, sync respond-mode first.
+The hardest piece. Inbox seed helpers, summoning triggers, sync respond-mode first.
 
 **Work:**
 
@@ -133,7 +133,7 @@ Identity bootstrap. Establishes the protocol's full surface.
 
 ## Phase 5.5: Stance Authorization
 
-The kernel system that determines what one stance can do toward another stance or position through a portal connection. Every IBP verb call routes through one authorize call.
+The seed system that determines what one stance can do toward another stance or position through a portal connection. Every IBP verb call routes through one authorize call.
 
 Phase 5 wired BE but left per-verb auth checks ad-hoc. Phase 5.5 builds the infrastructure with a deliberately simple permission shape — expressive enough for the patterns places want today, with room to extend when real places surface real needs.
 
@@ -225,7 +225,7 @@ For each existing extension, migrate its HTTP routes off the legacy `place/route
 5. **Everything else.**
 
 Each extension migration:
-- Replace HTTP route handlers with `set-meta` consumption and/or kernel-named DO actions.
+- Replace HTTP route handlers with `set-meta` consumption and/or seed-named DO actions.
 - Migrate AI-engagement paths (chat / place / query / be) to SUMMON with appropriate intent.
 - Update extension-supplied descriptor surfaces.
 - Retire the extension's HTTP routes.
@@ -276,7 +276,7 @@ Resist these temptations:
 - **HTTP versions of the four verbs.** No `/api/v1/see/...` or `/api/v1/do/...` routes. The protocol is WS-only.
 - **Bridge HTTP routes for backwards compatibility.** The legacy `place/routes/api/*` routes stay live during migration but are not extended; they retire per extension.
 - **Heavy UI frameworks.** Stick with React + Vite. No Material-UI / heavy component libraries. Visual style is TreeOS-shaped.
-- **Re-implementation of TreeOS features.** All governance / planning / contracting logic stays in the place kernel + extensions. The portal renders state and emits verb requests.
+- **Re-implementation of TreeOS features.** All governance / planning / contracting logic stays in the place seed + extensions. The portal renders state and emits verb requests.
 - **Mobile-first.** Desktop first. Mobile shape is a Phase 11 concern.
 - **Cross-browser compatibility.** This IS the portal. There is no "render in Chrome too" requirement.
 - **A fifth verb.** If something does not fit SEE / DO / SUMMON / BE, it belongs in an being, an extension, or a layer above the protocol.

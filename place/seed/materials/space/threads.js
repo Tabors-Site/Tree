@@ -13,14 +13,14 @@
 //     live forest. Coordination becomes inspectable.
 //
 //   - SUMMON can cut it. `summon` with target = `.threads/<id>`
-//     severs the thread: the kernel cut handler walks every pending
+//     severs the thread: the seed cut handler walks every pending
 //     inbox entry under that rootCorrelation and marks it severed,
 //     and (when priority demands) interrupts whatever is running
 //     right now. Same envelope as a normal SUMMON; the address
 //     resolves to a thread instead of a being.
 //
 // Nothing here is persisted as new storage. A thread is a derived
-// projection: the data lives in Stamp records (one row per wake-
+// projection: the data lives in Act records (one row per wake-
 // and-act) and in inbox entries (per-being qualities under a known
 // namespace). This file is the read-side view over both, plus the
 // addressing helpers the verb router uses to recognize a thread
@@ -31,7 +31,7 @@
 // root reply places or the thread is cut, the projection's state
 // flips; the rows underneath remain for audit.
 
-import Stamp from "../../models/stamp.js";
+import Act from "../../past/act/act.js";
 import Space from "../../models/space.js";
 import { SEED_SPACE } from "./seedSpaces.js";
 import { I_AM } from "../being/seedBeings.js";
@@ -44,7 +44,7 @@ import { IbpError, IBP_ERR } from "../../ibp/protocol.js";
 // In-memory Set populated by cutThread. The scheduler reads it on
 // every inbox pickup via isAncestorSevered() to decide whether a
 // pending entry's chain still has a live ancestor. Source of truth
-// is severedAt on Stamp rows; the Set is a fast hit. Rebuilds
+// is severedAt on Act rows; the Set is a fast hit. Rebuilds
 // lazily on cache misses by querying severedAt; rebuilds fully on
 // process boot via primeSeveredRootsCache() (called from genesis).
 
@@ -60,13 +60,13 @@ export function noteRootSevered(rootCorrelation) {
 }
 
 /**
- * Boot-time priming. Walks every Stamp with severedAt set and
+ * Boot-time priming. Walks every Act with severedAt set and
  * populates the in-memory cache so cache hits work from t=0.
  * Cheap: severedAt is indexed; query touches only the severed set.
  */
 export async function primeSeveredRootsCache() {
   try {
-    const rows = await Stamp.aggregate([
+    const rows = await Act.aggregate([
       { $match: { severedAt: { $ne: null } } },
       { $group: { _id: "$rootCorrelation" } },
     ]);
@@ -99,7 +99,7 @@ export async function isAncestorSevered(rootCorrelation, visited = new Set()) {
   visited.add(id);
 
   // Walk up the parentThread chain.
-  const root = await Stamp.findById(id).select("parentThread severedAt").lean();
+  const root = await Act.findById(id).select("parentThread severedAt").lean();
   if (!root) return { severed: false, ancestorId: null };
   if (root.severedAt) {
     _severedRootsCache.add(id);
@@ -162,15 +162,15 @@ export async function getThreadsSpaceId() {
 // ─────────────────────────────────────────────────────────────────
 
 /**
- * Compute the descriptor for one thread. Returns null if no Stamp
+ * Compute the descriptor for one thread. Returns null if no Act
  * row carries this rootCorrelation (the thread doesn't exist).
  *
  * State machine:
- *   live      — at least one Stamp in this chain is unfinished
+ *   live      — at least one Act in this chain is unfinished
  *               (no endMessage.time AND no severedAt)
- *   severed   — at least one Stamp carries severedAt and no
+ *   severed   — at least one Act carries severedAt and no
  *               Stamps are still live (the line was cut)
- *   complete  — every Stamp in this chain carries endMessage.time
+ *   complete  — every Act in this chain carries endMessage.time
  *               with no severedAt (the chain ran to completion)
  *
  * @param {string} rootCorrelation
@@ -178,7 +178,7 @@ export async function getThreadsSpaceId() {
  */
 export async function describeThread(rootCorrelation) {
   if (!rootCorrelation) return null;
-  const summons = await Stamp.find({ rootCorrelation })
+  const summons = await Act.find({ rootCorrelation })
     .select("_id beingIn beingOut activeRole ibpAddress inReplyTo parentThread stampedAt receivedAt endMessage severedAt priority")
     .lean();
   if (!summons.length) return null;
@@ -204,7 +204,7 @@ export async function describeThread(rootCorrelation) {
   else state = "complete";
 
   // Tree shape: parent thread (if this chain branched off another).
-  // The root Stamp is the one whose _id == rootCorrelation, or the
+  // The root Act is the one whose _id == rootCorrelation, or the
   // first by time if convention drifted. parentThread is the
   // canonical lineage pointer — auto-stamped when assign opens a
   // moment for a being acting under thread A who emits a fresh
@@ -238,16 +238,16 @@ export async function describeThread(rootCorrelation) {
  *
  *   being     — beingId of a participant (matches beingIn OR beingOut).
  *               Pass with or without leading "@".
- *   role      — activeRole the participant wore on the Stamp.
+ *   role      — activeRole the participant wore on the Act.
  *   position  — spaceId fragment; matches threads whose ibpAddress
  *               includes this position (substring match).
  *   stance    — full stance string (place/path@being); exact match.
  *   priority  — HUMAN | GATEWAY | INTERACTIVE | BACKGROUND.
  *
- * Filters are row-level. A thread "matches" if any of its Stamp rows
+ * Filters are row-level. A thread "matches" if any of its Act rows
  * match the filter; the projection groups by rootCorrelation after
  * filtering. So `being=@me&role=planner` returns "threads where I had
- * at least one Stamp as planner."
+ * at least one Act as planner."
  */
 export async function listLiveThreads({
   limit = 100,
@@ -277,7 +277,7 @@ export async function listLiveThreads({
   }
   if (priority) match.priority = String(priority);
 
-  const roots = await Stamp.aggregate([
+  const roots = await Act.aggregate([
     { $match: match },
     { $group: {
         _id: "$rootCorrelation",
@@ -291,14 +291,14 @@ export async function listLiveThreads({
 }
 
 /**
- * Mark every Stamp in a thread's chain as severed. Idempotent:
+ * Mark every Act in a thread's chain as severed. Idempotent:
  * Stamps that already carry severedAt are left alone; Stamps that
  * already ended (endMessage.time) are left alone. Returns the count
  * of rows newly marked.
  */
 export async function markThreadSevered(rootCorrelation, now = new Date()) {
   if (!rootCorrelation) return 0;
-  const result = await Stamp.updateMany(
+  const result = await Act.updateMany(
     {
       rootCorrelation,
       severedAt: null,
@@ -314,18 +314,18 @@ export async function markThreadSevered(rootCorrelation, now = new Date()) {
 // ─────────────────────────────────────────────────────────────────
 
 /**
- * Sever a thread. The kernel implementation of SUMMON-to-thread.
+ * Sever a thread. The seed implementation of SUMMON-to-thread.
  *
  * Authorization (participation gate): the asker must be a participant
  * in the chain. A participant is any being that appears as `beingIn`
- * or `beingOut` on a Stamp under this rootCorrelation. The I_AM has
+ * or `beingOut` on a Act under this rootCorrelation. The I_AM has
  * universal authority and always passes. Stance auth gates whether
  * the asker can address `.threads` at all (broad gate); this gate
  * narrows to "this specific thread." Both run.
  *
  * Three steps after auth, in this order:
  *
- *   1. Mark every Stamp in the chain as severedAt (audit + state).
+ *   1. Mark every Act in the chain as severedAt (audit + state).
  *   2. Cancel pending inbox entries for every being that participated
  *      in the chain (scheduler skips cancelled entries on pickup).
  *   3. If priority demands urgency (HUMAN), interrupt anything still
@@ -343,7 +343,7 @@ export async function markThreadSevered(rootCorrelation, now = new Date()) {
  * @param {string} [params.priority="INTERACTIVE"]
  * @param {string} [params.reason]
  * @param {object|null} [params.identity]  { beingId, name } of the asker.
- *   Required unless the call is kernel-internal (then pass null only
+ *   Required unless the call is seed-internal (then pass null only
  *   when you intentionally want to bypass the participation check;
  *   never bypass from extension code).
  * @returns {Promise<{ severed: number, cancelled: number, aborted: number }>}
@@ -369,7 +369,7 @@ export async function cutThread({
       );
     }
     const askerId = String(identity.beingId);
-    const participant = await Stamp.exists({
+    const participant = await Act.exists({
       rootCorrelation,
       $or: [{ beingIn: askerId }, { beingOut: askerId }],
     });
@@ -381,26 +381,27 @@ export async function cutThread({
     }
   }
 
-  // 1. Audit + state on the Stamp rows.
+  // 1. Audit + state on the Act rows.
   const severed = await markThreadSevered(rootCorrelation);
   // Cache the severed root so subsequent ancestor-checks short-
   // circuit without a DB walk. Always populate, even if severed===0
   // (the chain may have already been marked but the cache lost).
   noteRootSevered(rootCorrelation);
 
-  // 2. Inbox sweep across every being that received a Stamp under
-  //    this chain. Each Stamp row tells us (beingIn, spaceId) via
-  //    the receiver's homeSpace or the spaceId derived from
-  //    ibpAddress. We use the receiver's currentSpace as a pragmatic
-  //    proxy for "where their inbox lives at the moment of cut."
+  // 2. Intake sweep across every being that received a Act under
+  //    this chain. Each Act row tells us beingIn; the intake bucket
+  //    lives on the being's currentSpace (or homeSpace) under
+  //    qualities.intake.<beingId>. Cancelling there drops queued
+  //    moments that haven't started yet. Inbox records (mailbox) are
+  //    untouched — they're permanent audit of arrival.
   let cancelled = 0;
   try {
     const Being = (await import("../../models/being.js")).default;
-    const { cancelByRootCorrelation } = await import(
-      "../../factory/intake/inbox.js"
+    const { cancelIntakeByRoot } = await import(
+      "../../factory/intake/intake.js"
     );
 
-    const distinctReceivers = await Stamp.aggregate([
+    const distinctReceivers = await Act.aggregate([
       { $match: { rootCorrelation, beingIn: { $ne: null } } },
       { $group: { _id: "$beingIn" } },
     ]);
@@ -412,7 +413,7 @@ export async function cutThread({
         .lean();
       const spaceId = String(being?.currentSpace || being?.homeSpace || "");
       if (!spaceId) continue;
-      const result = await cancelByRootCorrelation(
+      const result = await cancelIntakeByRoot(
         spaceId,
         beingId,
         rootCorrelation,
@@ -420,7 +421,7 @@ export async function cutThread({
       cancelled += result?.cancelled || 0;
     }
   } catch {
-    // Inbox sweep is best-effort. Severed Stamps + scheduler abort
+    // Intake sweep is best-effort. Severed Stamps + scheduler abort
     // still close the line at the audit + runtime layers.
   }
 
@@ -447,9 +448,9 @@ export async function cutThread({
 // internals
 // ─────────────────────────────────────────────────────────────────
 
-async function rootStampOf(stampId) {
-  if (!stampId) return null;
-  const s = await Stamp.findById(stampId)
+async function rootStampOf(actId) {
+  if (!actId) return null;
+  const s = await Act.findById(actId)
     .select("rootCorrelation")
     .lean();
   return s?.rootCorrelation || null;

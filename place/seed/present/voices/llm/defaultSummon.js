@@ -29,7 +29,7 @@
 //   5. Handle abort signal and inference errors.
 //   6. If the role declares a reply mode, request the next moment
 //      in the chain (someone else's, somewhere upstream).
-//   7. Return { text, stampId } for the scheduler.
+//   7. Return { text, actId } for the scheduler.
 //
 // `text` is the terminal LLM emission — the final assistant
 // message the being produced inside its moment. The deliverable
@@ -62,7 +62,7 @@ import {
 /**
  * The generic summon implementation. The role registry wires this
  * automatically when a role declares no custom `summon` function (see
- * seed/factory/roles/registry.js#makeLazyDefaultSummon). Roles needing
+ * seed/present/roles/registry.js#makeLazyDefaultSummon). Roles needing
  * custom dispatch attach their own `summon` and the registry skips
  * the wrap.
  *
@@ -70,7 +70,7 @@ import {
  * @param {object} opts.message . the inbox SUMMON envelope
  * @param {object} opts.ctx . the summon ctx (toBeing, spaceId, signal, ...)
  * @param {object} opts.role . the role spec
- * @returns {Promise<{ text, stampId } | null>}
+ * @returns {Promise<{ text, actId } | null>}
  */
 export async function defaultSummon({ message, ctx, role }) {
   const startMs = Date.now();
@@ -144,7 +144,7 @@ export async function defaultSummon({ message, ctx, role }) {
 
   return {
     text,
-    stampId: result?.stampId || null,
+    actId: result?.actId || null,
   };
 }
 

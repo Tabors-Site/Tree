@@ -169,7 +169,7 @@ place responds with ack { id, status: "ok", data: <action-specific> }
 1. `position` present and parseable (`INVALID_INPUT` or `ADDRESS_PARSE_ERROR`).
 2. `position` resolves to a known place (`NODE_NOT_FOUND` if not).
 3. Identity check (`UNAUTHORIZED` if missing or invalid).
-4. Address-level authorization (`FORBIDDEN` if not authorized at this position). The kernel reads the requester's role from the identity token (not from the address).
+4. Address-level authorization (`FORBIDDEN` if not authorized at this position). The seed reads the requester's role from the identity token (not from the address).
 5. Action-level authorization (some actions need `isAdmin`).
 6. Payload schema validation per action (`INVALID_INPUT` if mismatch).
 7. Pre-hooks (`beforeSpaceCreate`, etc.) fire and may cancel.
@@ -365,9 +365,9 @@ Shared utilities:
 - `place/ibp/address.js` IBPA parser + server-context injection (existing)
 - `place/ibp/resolver.js` IBPA to position resolution (existing, internal only)
 - `place/ibp/descriptor.js` Position Description builder (existing, extended)
-- `place/ibp/inbox.js` inbox kernel helpers (new)
+- `place/ibp/inbox.js` inbox seed helpers (new)
 - `place/ibp/errors.js` PortalError + error codes (existing, extended)
-- `place/ibp/actions/` one file per kernel-named DO action (new)
+- `place/ibp/actions/` one file per seed-named DO action (new)
 
 Wiring:
 

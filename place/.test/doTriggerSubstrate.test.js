@@ -127,7 +127,7 @@ mock.module("../seed/placeRoot.js", {
   namedExports: { getPlaceRootId: () => "place-root-id" },
 });
 
-mock.module("../seed/place/space/ancestorCache.js", {
+mock.module("../seed/materials/space/ancestorCache.js", {
   namedExports: {
     getAncestorChain: async () => [],   // empty chain — only "everywhere" scope used here
   },

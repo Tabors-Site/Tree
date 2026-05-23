@@ -21,7 +21,7 @@
 //   7. /api/v1 authApiRouter — JSON auth.
 //   8. /api/v1 placeConfig — config read/write.
 //   9. /ibp/:verb/<addr> — the single IBP HTTP adapter. Same
-//      dispatcher the WebSocket layer uses; every kernel and
+//      dispatcher the WebSocket layer uses; every seed and
 //      extension operation is automatically callable here.
 //
 // The protocol IS the API. Cross-place federation flows through
@@ -50,7 +50,7 @@ import { fileURLToPath } from "url";
 import rateLimit from "express-rate-limit";
 import { sendError, IBP_ERR } from "../../seed/ibp/protocol.js";
 
-import { DELETED } from "../../seed/place/space/seedSpaces.js";
+import { DELETED } from "../../seed/materials/space/seedSpaces.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -96,7 +96,7 @@ export default function registerRoutes(app) {
 
   // IBP HTTP adapter: POST /ibp/:verb/<encoded-address>.
   // No /api/v1 prefix. The protocol IS the API. Same handler the
-  // WebSocket layer uses; every registered IBP operation (kernel or
+  // WebSocket layer uses; every registered IBP operation (seed or
   // extension) is automatically callable here.
   app.use("/", ibp);
 }

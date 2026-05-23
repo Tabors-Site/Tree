@@ -220,7 +220,7 @@ export {
   listValidators,
 };
 
-export async function init(core) {
+export async function init(place) {
   // See-resolvers: register before role specs are exercised so the
   // prompt assembler can resolve names in role.see. Idempotent and
   // safe to call once per boot.
@@ -256,10 +256,10 @@ export async function init(core) {
   const { default: getForemanTools } = await import("./foremanTools.js");
   const { default: getFlagTools } = await import("./flagTools.js");
   const tools = [
-    ...getGoverningTools(core),
-    ...getRulerTools(core),
-    ...getForemanTools(core),
-    ...getFlagTools(core),
+    ...getGoverningTools(place),
+    ...getRulerTools(place),
+    ...getForemanTools(place),
+    ...getFlagTools(place),
   ];
 
   // Tree quick-link slot. Adds a "Governance" link to every tree
@@ -332,7 +332,7 @@ export async function init(core) {
   // re-invented per branch instead of building off the parent's.
   // readContracts already walks the ancestor chain via ruler-role
   // markers; we just format and inject.
-  if (core?.hooks?.register) {
+  if (place?.hooks?.register) {
     // One-time backfill on boot: every space that has been promoted to
     // Ruler in a prior session may be missing the explicit
     // `qualities.beings.ruler` home declaration that the descriptor
@@ -346,7 +346,7 @@ export async function init(core) {
     // returning immediately and running the backfill in the background, the
     // hook stays under its timeout and the work logs its own completion
     // ("backfilled being homes: ...") when done.
-    core.hooks.register("afterBoot", async () => {
+    place.hooks.register("afterBoot", async () => {
       runGoverningBackfill().catch((err) => {
         log.warn("Governing", `being-home backfill error: ${err.message}`);
       });
@@ -407,7 +407,7 @@ export async function init(core) {
             } } }),
           },
         ];
-        const { createBeingWithHome } = await import("../../seed/place/being/identity.js");
+        const { createBeingWithHome } = await import("../../seed/materials/being/identity.js");
         const counts = {};
         for (const { nodeType, beingRole, permissions } of BACKFILLS) {
           const nodes = await Space.find({ "qualities.governing.role": nodeType })
@@ -436,8 +436,8 @@ export async function init(core) {
               });
               // Phase 3 migration: verb-surface merge into beings ns.
               // Backfill runs at boot with no caller identity; pass
-              // internal:true to bypass stance-auth (kernel-trusted).
-              await core.do(fresh, "set", {
+              // internal:true to bypass stance-auth (seed-trusted).
+              await place.do(fresh, "set", {
                 field: "qualities.beings",
                 value: {
                   [beingRole]: {
@@ -456,7 +456,7 @@ export async function init(core) {
               // IS the space itself — passing the space id as scopeId
               // produces the open ruler rule (which doesn't consult it).
               const scopeId = gov?.scopeRulerId || String(fresh._id);
-              await core.do(fresh, "set", {
+              await place.do(fresh, "set", {
                 field: "qualities.permissions",
                 value: permissions(scopeId),
                 merge: true,
@@ -477,7 +477,7 @@ export async function init(core) {
       }
     }
 
-    core.hooks.register(
+    place.hooks.register(
       "enrichContext",
       async ({ context, spaceId }) => {
         if (!context || !spaceId) return;
@@ -645,7 +645,7 @@ export async function init(core) {
     return null;
   }
 
-  if (core?.hooks?.register) {
+  if (place?.hooks?.register) {
     const { broadcastGovernanceUpdate } = await import("./routes.js");
     const dashboardEvents = [
       "governing:rulerPromoted",
@@ -669,7 +669,7 @@ export async function init(core) {
       "governing:branchRetried",
     ];
     for (const eventName of dashboardEvents) {
-      core.hooks.register(eventName, async (payload) => {
+      place.hooks.register(eventName, async (payload) => {
         try {
           // Payload field varies per hook; try the common ones.
           const candidateNodeId =
@@ -729,19 +729,19 @@ export async function init(core) {
   }
 
   // Phase 3 ([[project_seed_four_verbs_only]]): utility functions that
-  // write through the verb surface need `core` in scope. Wrapping them
-  // here injects core at the export boundary so external callers
+  // write through the verb surface need `place` in scope. Wrapping them
+  // here injects place at the export boundary so external callers
   // (tree-orchestrator/dispatch.js, rulerTools, flagTools, etc.)
   // continue calling these helpers with their existing signatures.
-  // The helper functions inside state/* and roles/* require core to
+  // The helper functions inside state/* and roles/* require place to
   // be present; the wrapper guarantees it.
-  const bindCore = (fn) => (args = {}) => fn({ ...args, core });
+  const bindCore = (fn) => (args = {}) => fn({ ...args, place });
 
   // ────────────────────────────────────────────────────────────────────
   // Phase 3c: Register governing's DO operations.
   //
-  // Operations reachable via `core.do(target, "governing:<action>", ...)`
-  // from anywhere with `core` in scope . extension code, wire dispatch,
+  // Operations reachable via `place.do(target, "governing:<action>", ...)`
+  // from anywhere with `place` in scope . extension code, wire dispatch,
   // future MCP tools that compile to DO calls. Each handler runs through
   // the seed verb dispatcher, which auto-stamps a Fact and (when Phase 5
   // adds it) gates through authorize.
@@ -751,7 +751,7 @@ export async function init(core) {
   // dispatch through this operation instead of calling appendFlag
   // directly; for now both paths reach the same handler (appendFlag).
   // ────────────────────────────────────────────────────────────────────
-  if (typeof core.do?.registerOperation === "function") {
+  if (typeof place.do?.registerOperation === "function") {
     // Helper: extract a spaceId from whatever target shape arrived.
     const idOf = (t) =>
       (t && typeof t === "object" && (t._id || t.spaceId)) || t || null;
@@ -760,7 +760,7 @@ export async function init(core) {
     // wrapper auto-prepends "governing:" and stamps ownerExtension. The
     // extension never types its own namespace . the namespace is
     // implicit from the registration context.
-    core.do.registerOperation("flag-issue", {
+    place.do.registerOperation("flag-issue", {
       targets: ["space"],
       handler: async ({ target, params, identity }) => {
         return appendFlag({
@@ -775,12 +775,12 @@ export async function init(core) {
           beingId: identity?.beingId || null,
           sourceWorkerScopeId: params.sourceWorkerScopeId || null,
           sourceWorkerType:    params.sourceWorkerType || null,
-          core,
+          place,
         });
       },
     });
 
-    core.do.registerOperation("hire-planner", {
+    place.do.registerOperation("hire-planner", {
       targets: ["space"],
       handler: async ({ target, params, identity }) => {
         // Materializes the plan trio child + Planner being at the
@@ -792,34 +792,34 @@ export async function init(core) {
           systemSpec:  params.systemSpec || null,
           stampId:    params.stampId || null,
           sessionId:   params.sessionId || null,
-          core,
+          place,
         });
       },
     });
 
-    core.do.registerOperation("hire-contractor", {
+    place.do.registerOperation("hire-contractor", {
       targets: ["space"],
       handler: async ({ target, params, identity }) => {
         return ensureContractsNode({
           scopeSpaceId: idOf(target),
           beingId:     identity?.beingId || params.beingId || null,
-          core,
+          place,
         });
       },
     });
 
-    core.do.registerOperation("route-to-foreman", {
+    place.do.registerOperation("route-to-foreman", {
       targets: ["space"],
       handler: async ({ target, params, identity }) => {
         return ensureExecutionNode({
           scopeSpaceId: idOf(target),
           beingId:     identity?.beingId || params.beingId || null,
-          core,
+          place,
         });
       },
     });
 
-    core.do.registerOperation("ratify-plan", {
+    place.do.registerOperation("ratify-plan", {
       targets: ["space"],
       handler: async ({ target, params }) => {
         // target is the Ruler space; params.planSpaceId is the plan
@@ -830,12 +830,12 @@ export async function init(core) {
           status:      params.status || "approved",
           supersedes:  params.supersedes || null,
           reason:      params.reason || null,
-          core,
+          place,
         });
       },
     });
 
-    core.do.registerOperation("archive-plan", {
+    place.do.registerOperation("archive-plan", {
       targets: ["space"],
       handler: async ({ target, params }) => {
         // Marks the plan approval as "archived". Same primitive as
@@ -847,12 +847,12 @@ export async function init(core) {
           status:      "archived",
           supersedes:  params.supersedes || null,
           reason:      params.reason || null,
-          core,
+          place,
         });
       },
     });
 
-    core.do.registerOperation("emit-contracts", {
+    place.do.registerOperation("emit-contracts", {
       targets: ["space"],
       handler: async ({ target, params, identity }) => {
         return setContracts({
@@ -863,7 +863,7 @@ export async function init(core) {
           reasoning:             params.reasoning || null,
           inheritsFrom:          params.inheritsFrom || null,
           parentContractsApplied: params.parentContractsApplied || [],
-          core,
+          place,
         });
       },
     });
@@ -872,7 +872,7 @@ export async function init(core) {
       "Registered DO operations (auto-namespaced): flag-issue, hire-planner, " +
       "hire-contractor, route-to-foreman, ratify-plan, archive-plan, emit-contracts");
   } else {
-    log.debug("Governing", "core.do.registerOperation unavailable; skipping operation registrations");
+    log.debug("Governing", "place.do.registerOperation unavailable; skipping operation registrations");
   }
 
   return {
@@ -1012,7 +1012,7 @@ export async function init(core) {
       // per-turn state context. Slice 7 retired the rulerDecisions
       // per-visitor register and the runRulerTurn dispatcher that read
       // it — tools now emit SUMMONs inline. The Ruler is the addressable
-      // being; its kernel-scheduler-driven role.summon (roles/rulerRole.js)
+      // being; its seed-scheduler-driven role.summon (roles/rulerRole.js)
       // replaces the orchestrator-side dispatch loop.
       buildRulerSnapshot,
       formatRulerSnapshot,

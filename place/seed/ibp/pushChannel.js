@@ -18,7 +18,7 @@
 // to push just see "nothing happened" without crashing.
 //
 // Same inversion pattern as the schedule emitter (see
-// seed/factory/intake/wakeSchedule.js setScheduleEmitter).
+// seed/present/intake/wakeSchedule.js setScheduleEmitter).
 
 import log from "../system/log.js";
 
@@ -92,7 +92,7 @@ export function emitToBeingRoom(beingId, event, data) {
 /**
  * Push an IBP envelope to every socket the being has joined. The
  * canonical seed-side push for SUMMON replies / out-of-band inbox
- * arrivals: kernel callers describe the envelope, the channel handles
+ * arrivals: seed callers describe the envelope, the channel handles
  * the wire event name.
  */
 export function pushIbp(beingId, envelope) {

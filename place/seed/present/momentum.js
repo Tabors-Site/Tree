@@ -1,41 +1,42 @@
 // TreeOS Seed . AGPL-3.0 . https://treeos.ai . Tabor Holly
 //
-// moment.js — the act. A being is the momentum of the stamper.
-// Beat three of the stamping.
+// momentum.js — beat three. The being's act.
 //
-// stamper.js handed off the prepared { role, summonCtx }. moment
-// dispatches: role.summon emits the being's verbs.
+// moment.js orchestrates the four beats; momentum is just beat 3.
+// assign opens and fold mounts the face; momentum applies the
+// being's motion; stamped seals. Same shape for every moment, four
+// files at this folder's root.
 //
-// Everything past intake speaks raw IBP verbs. SEE / DO / SUMMON / BE
-// is the universal currency; every act, every voice, expresses itself
-// as one or more verb calls. moment.js doesn't invent a new abstraction
-// above the verbs — it calls role.summon and returns what came back.
+// momentum dispatches by `summonCtx.kind` — the trigger-kind the
+// intake entry carried in. Every other beat (assign, fold, stamped)
+// is identical regardless of kind; momentum is the one beat that
+// differs because the act itself differs.
 //
-// One contract, three wirings:
+// Two kinds today:
 //
-//   llm voice      — the role's `summon` is auto-wrapped by the role
-//                    registry to defaultSummon → runTurn. runTurn is
-//                    the inference loop; it turns each tool call the
-//                    LLM emits into a raw IBP verb dispatched through
-//                    the verb dispatcher. The translation step lives
-//                    inside runTurn — not here.
+//   kind: "summon"
+//     The intake entry was a SUMMON received by the being. The role's
+//     summon() runs, dispatching the being's inference (LLM voice),
+//     scripted code (scripted voice), or returning null (human role
+//     for the receptive path — but humans don't enqueue intake on
+//     incoming SUMMONs, so this path rarely fires for kind="summon"
+//     on a human).
 //
-//   scripted voice — the role's `summon` is the role's own code (cherub,
-//                    llm-assigner, extension-defined scripted roles).
-//                    The code calls core.do / core.see / core.summon /
-//                    core.be directly. Already verb-shaped at write
-//                    time; no translation needed.
+//   kind: "transport-act"
+//     The being acted from their own transport (portal, browser, CLI,
+//     IDE). The intake entry carries a verb payload — verb + target
+//     + action + args. Momentum dispatches that verb directly through
+//     doVerb / beVerb, threading summonCtx so the auto-Fact picks up
+//     the ambient actId opened by assign. The role isn't involved
+//     at this beat — the act was already decided externally; momentum
+//     just applies it inside the moment's frame.
 //
-//   human          — the human role's `summon` returns null. The SUMMON
-//                    lands in the human's inbox; the human responds
-//                    out-of-band by emitting fresh verb calls from
-//                    their own transport. moment.js still runs for
-//                    humans (uniform dispatch), it just doesn't have
-//                    a synchronous act to wait on. See
-//                    [roles/human.js](../roles/human.js).
+// Everything past momentum speaks raw IBP verbs. SEE / DO / SUMMON /
+// BE is the universal currency. momentum doesn't invent a new
+// abstraction above the verbs — it dispatches and returns.
 
 /**
- * Run the moment: dispatch role.summon and return what came back.
+ * Beat 3: run the act. Dispatch by summonCtx.kind and return what came back.
  *
  * @param {object} prepared          — the result of assign(...)
  * @param {object} prepared.role     — the active role spec
@@ -43,7 +44,68 @@
  *
  * @returns {Promise<{ result, role }>}
  */
-export async function moment({ role, summonCtx } = {}) {
+export async function momentum({ role, summonCtx } = {}) {
+  const kind = summonCtx?.kind || "summon";
+
+  if (kind === "transport-act") {
+    const result = await runTransportAct(summonCtx);
+    return { result, role };
+  }
+
+  // Default: summon-kind. Role's summon handler dispatches.
   const result = await role.summon(summonCtx.message, summonCtx);
   return { result, role };
+}
+
+/**
+ * Apply a transport-act payload as the being's act inside the moment.
+ * The wrapped verb runs through doVerb / beVerb with summonCtx
+ * threaded so the auto-Fact rides the ambient actId.
+ *
+ * Transport-act payloads carry { verb, target, action, args }. The
+ * shape's meaning differs by verb because doVerb and beVerb have
+ * different signatures:
+ *
+ *   verb: "do"  → doVerb(target, action, args, opts)
+ *     target  = resolved position/stance object
+ *     action  = DO op name ("birth", "set", ...)
+ *     args    = op-specific params
+ *
+ *   verb: "be"  → beVerb(operation, opPayload, ctx)
+ *     target  = BE op name ("register", "claim", "release", "switch")
+ *     args    = { opPayload, address, addressKind, callerIdentity }
+ *     action  = ignored
+ *
+ * SEE never reaches here — reads are synchronous folds that bypass
+ * intake entirely.
+ */
+async function runTransportAct(summonCtx) {
+  const act = summonCtx?.act;
+  if (!act || typeof act !== "object") {
+    throw new Error("moment: transport-act missing `act` payload");
+  }
+  const { verb, target, action, args } = act;
+  if (verb !== "do" && verb !== "be") {
+    throw new Error(`moment: transport-act verb must be "do" or "be" (got "${verb}")`);
+  }
+
+  // Lazy-import the verbs to avoid a circular import at module load
+  // (verbs.js → factory/intake/scheduler.js → factory/stamper/moment.js).
+  const { doVerb, beVerb } = await import("../../ibp/verbs.js");
+
+  if (verb === "do") {
+    return doVerb(target, action, args || {}, {
+      identity:  summonCtx.identity || null,
+      summonCtx: { actId: summonCtx.actId || null },
+    });
+  }
+
+  // verb === "be" — cherub-as-actor path
+  const { opPayload = {}, address, addressKind, callerIdentity = null } = args || {};
+  return beVerb(target, opPayload, {
+    address,
+    addressKind,
+    identity:  callerIdentity,
+    summonCtx: { actId: summonCtx.actId || null },
+  });
 }

@@ -3,7 +3,7 @@
 // Orchestrates the two-step flow that turns a held seed into living
 // substrate: (1) DO create-child at the current position to spawn a
 // fresh node — when that position is the place root, the creator is
-// stamped as `rootOwner` by the kernel — and (2) DO plant-seed at the
+// stamped as `rootOwner` by the seed — and (2) DO plant-seed at the
 // newly-created node id, which runs the seed's scaffold recipe
 // (materializing Ruler/Planner/Contractor/Foreman/coder beings for
 // `coder:governing-coder`).
@@ -82,9 +82,9 @@ export function isPlanterOpen() {
 /**
  * Plant a seed end-to-end. Two DOs over the IBP socket:
  *
- *   1. core.do(parentAddress, "birth", { kind: "space", spec: { name, type } })
+ *   1. place.do(parentAddress, "birth", { kind: "space", spec: { name, type } })
  *      → returns the new node. At the place root this stamps `rootOwner`.
- *   2. core.do(newNodeAddress, "plant-seed", { name: seedName })
+ *   2. place.do(newNodeAddress, "plant", { seed: seedName })
  *      → runs the seed's scaffold; returns plantedSeedId + plantedThings.
  *
  * Resolves with `{ newNodeAddress, plantedSeedId, plantedThings }`.
@@ -97,7 +97,7 @@ export function isPlanterOpen() {
  * @param {string} [args.newNodeType]   defaults to "branch"
  */
 export async function plantSeed({ client, parentAddress, seedName, newNodeName, newNodeType = "branch" }) {
-  // Step 1 — create the new node. The kernel's birth op returns the
+  // Step 1 — create the new node. The seed's birth op returns the
   // created node (full doc). At the place root, isRoot=true and
   // rootOwner gets stamped with the creator's beingId.
   const created = await client.do(parentAddress, "birth", {
@@ -116,8 +116,8 @@ export async function plantSeed({ client, parentAddress, seedName, newNodeName, 
 
   // Step 2 — plant the seed at the new node. Address by path (the
   // resolver will place on the same node we just created).
-  const planted = await client.do(newNodePath, "plant-seed", {
-    name: seedName,
+  const planted = await client.do(newNodePath, "plant", {
+    seed: seedName,
   });
 
   return {

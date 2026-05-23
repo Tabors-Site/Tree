@@ -529,12 +529,12 @@ export async function createBeingWithHome(opts) {
   // descriptor / authorize / SUMMON can resolve the specific being
   // instance.
   //
-  // Route through the kernel set-qualities DO op so the registry write
+  // Route through the seed set-qualities DO op so the registry write
   // emits a Fact (every change to Matter/Space/Being goes through
   // DO/BE). Caller-supplied identity attributes the Fact to the
   // summoner; absent that (extension paths that don't thread
   // identity yet), `scaffold: true` attributes to I_AM as the
-  // kernel-actor stand-in.
+  // seed-actor stand-in.
   if (operatingMode !== "human" && role) {
     try {
       const { doVerb } = await import("../../ibp/verbs.js");

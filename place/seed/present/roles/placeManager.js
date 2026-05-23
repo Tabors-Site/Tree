@@ -19,7 +19,7 @@
 //
 // The old place-manager (oldExtensions/place-manager/) shipped 13
 // bespoke tools (place-status, place-config-read/set, place-ext-*, etc.).
-// In the new architecture those operations are kernel DO ops
+// In the new architecture those operations are seed DO ops
 // (set-config, delete-config, install-extension, uninstall-extension,
 // enable-extension, disable-extension); the role just needs the LLM
 // to discover and invoke them through the registered tool surface.
@@ -27,7 +27,7 @@
 // answers conversationally; the tool wiring is a follow-up slice
 // once we've decided which ops belong to a "place manager" tool set
 // (probably a thin "do-op" tool that takes { action, args } and
-// dispatches through core.do, plus a "see" tool for substrate reads).
+// dispatches through place.do, plus a "see" tool for substrate reads).
 
 import { runTurn } from "../voices/llm/runTurn.js";
 import log from "../../system/log.js";
@@ -51,7 +51,7 @@ asked, suggest the right operation when something needs doing, but
 never fabricate state — read it from substrate first via ibp:see.
 
 Place-level mutations (install-extension, set-config, etc.) flow
-through the kernel DO operations. Cite them by name when proposing
+through the seed DO operations. Cite them by name when proposing
 actions so the operator can confirm before you invoke them.
 
 If a request falls outside place scope (a tree question, a being-level
@@ -76,7 +76,7 @@ export const placeManagerRole = Object.freeze({
   // .peers, …) and invoke any registered DO operation at the place
   // root. The old per-op tools retired in favor of this generic pair;
   // the substrate's introspection primitives ARE the discovery layer.
-  // See seed/factory/roles/placeManagerTools.js.
+  // See seed/present/roles/placeManagerTools.js.
   toolNames: ["place-see", "place-do"],
 
   label: "Place Manager",
@@ -116,7 +116,7 @@ export const placeManagerRole = Object.freeze({
 
     return {
       text:     result?.text || "(place manager done)",
-      stampId: result?.stampId || null,
+      actId: result?.actId || null,
     };
   },
 });

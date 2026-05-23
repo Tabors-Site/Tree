@@ -379,7 +379,7 @@ async function walkDirectory(absDir, projectRoot, recursive, depth, out) {
     if (out.length >= MAX_LIST_ENTRIES) return;
 
     // Skip common noise: .git, node_modules, build/dist dirs (similar
-    // policy to seed/place/space/source.js's ignore list).
+    // policy to seed/materials/space/source.js's ignore list).
     if (entry.name === ".git" || entry.name === "node_modules") continue;
 
     const absChild = path.join(absDir, entry.name);

@@ -63,13 +63,13 @@ export const PROMOTED_FROM = {
  * Returns the governing metadata record after the write (including the
  * beings map with the four governing beingIds).
  *
- * Requires `core` with the verb surface available . the helpers chain
- * through `core.do` for all writes.
+ * Requires `place` with the verb surface available . the helpers chain
+ * through `place.do` for all writes.
  *
  * Ruler parent resolution (preferred order):
  *   1. explicit `parentBeingId` arg — sub-Ruler dispatch threads the
  *      parent Ruler's beingId here so the sub-Ruler is its child.
- *   2. `identity.beingId` — when called through core.do, this is the
+ *   2. `identity.beingId` — when called through place.do, this is the
  *      requesting being; the Ruler becomes its child. Matches "if I
  *      promote a space, the Ruler is my child."
  *   3. `delegateToHigherBeing.beingId` — root Ruler fallback to the
@@ -78,9 +78,9 @@ export const PROMOTED_FROM = {
  * Null parent is reserved for the very root being of the place only;
  * Rulers should always have a parent in the resolved chain.
  */
-export async function promoteToRuler({ spaceId, reason, promotedFrom, parentBeingId = null, identity = null, core }) {
+export async function promoteToRuler({ spaceId, reason, promotedFrom, parentBeingId = null, identity = null, place }) {
   if (!spaceId) return null;
-  if (!core?.do) throw new Error("promoteToRuler requires `core` (verb surface)");
+  if (!place?.do) throw new Error("promoteToRuler requires `place` (verb surface)");
   if (!Object.values(PROMOTED_FROM).includes(promotedFrom)) {
     promotedFrom = PROMOTED_FROM.ROOT;
   }
@@ -114,7 +114,7 @@ export async function promoteToRuler({ spaceId, reason, promotedFrom, parentBein
   }
 
   // 1. Stamp governing role on the space.
-  await core.do(space, "set", {
+  await place.do(space, "set", {
     field: `qualities.${NS}`,
     value: data,
     merge: false,
@@ -133,7 +133,7 @@ export async function promoteToRuler({ spaceId, reason, promotedFrom, parentBein
   // createBeingWithHome handles both the parentBeingId stamp on the
   // new being AND the $addToSet into the parent's children list, so
   // no separate link write is needed here.
-  const { createBeingWithHome } = await import("../../../seed/place/being/identity.js");
+  const { createBeingWithHome } = await import("../../../seed/materials/being/identity.js");
   const rulerCreated = await createBeingWithHome({
     operatingMode: "llm",
     role:          "ruler",
@@ -166,7 +166,7 @@ export async function promoteToRuler({ spaceId, reason, promotedFrom, parentBein
     contractor: { beingId: innerBeings.contractor,  installedAt: acceptedAt, installedBy: "governing" },
     foreman:    { beingId: innerBeings.foreman,     installedAt: acceptedAt, installedBy: "governing" },
   };
-  await core.do(space, "set", {
+  await place.do(space, "set", {
     field: "qualities.beings",
     value: beingsRegistry,
     merge: true,
@@ -179,7 +179,7 @@ export async function promoteToRuler({ spaceId, reason, promotedFrom, parentBein
   //    (planner / contractor / foreman) are protected: only beings of
   //    governing roles whose home is within this rulership's subtree
   //    can summon them.
-  await core.do(space, "set", {
+  await place.do(space, "set", {
     field: "qualities.permissions",
     value: {
       summon: {

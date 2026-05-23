@@ -16,10 +16,10 @@
 
 import log from "./system/log.js";
 import Space from "./models/space.js";
-import { SEED_SPACE } from "./place/space/seedSpaces.js";
-import { I_AM } from "./place/being/seedBeings.js";
-import { createPlaceSeedSpace } from "./place/space/spaceManagement.js";
-import { logFact } from "./place/facts.js";
+import { SEED_SPACE } from "./materials/space/seedSpaces.js";
+import { I_AM } from "./materials/being/seedBeings.js";
+import { createPlaceSeedSpace } from "./materials/space/spaceManagement.js";
+import { logFact } from "./past/fact/facts.js";
 
 let placeRootCache = null;
 
@@ -49,13 +49,13 @@ const PLACE_SEED_SPACES = [
   { name: ".tools", seedSpace: SEED_SPACE.TOOLS },
   { name: ".roles", seedSpace: SEED_SPACE.ROLES },
   { name: ".operations", seedSpace: SEED_SPACE.OPERATIONS },
-  // .source is read-only. Populated by seed/place/space/source.js as a filesystem
+  // .source is read-only. Populated by seed/materials/space/source.js as a filesystem
   // mirror of place/. DO writes against children reject with ORIGIN_READ_ONLY.
   { name: ".source", seedSpace: SEED_SPACE.SOURCE },
   // .threads is a derived projection. Live rootCorrelation chains
   // surface as synthetic children at `<place>/.threads/<id>`; the
-  // descriptor is computed on demand from inbox + Stamp records.
-  // SUMMON to a thread address is a cut. See seed/place/space/threads.js.
+  // descriptor is computed on demand from inbox + Act records.
+  // SUMMON to a thread address is a cut. See seed/materials/space/threads.js.
   { name: ".threads", seedSpace: SEED_SPACE.THREADS },
 ];
 
@@ -295,7 +295,7 @@ export async function syncExtensionsToTree(manifests) {
     }
   }
 
-  // Mark unloaded extensions in their own namespace; the kernel doesn't
+  // Mark unloaded extensions in their own namespace; the seed doesn't
   // carry a universal "trimmed" status.
   for (const [name, spaceId] of existingByName) {
     if (!currentNames.has(name)) {

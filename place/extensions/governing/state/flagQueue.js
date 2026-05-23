@@ -106,12 +106,12 @@ export async function appendFlag({
   sourceWorkerScopeId = null,
   sourceWorkerType = null,
   identity = null,
-  // Phase 3 ([[project_seed_four_verbs_only]]): callers thread core
-  // so the write goes through core.do (auto-Fact, one dispatcher).
-  core,
+  // Phase 3 ([[project_seed_four_verbs_only]]): callers thread place
+  // so the write goes through place.do (auto-Fact, one dispatcher).
+  place,
 }) {
   if (!rulerSpaceId || !payload) return null;
-  if (!core?.do) throw new Error("appendFlag requires `core` (verb surface)");
+  if (!place?.do) throw new Error("appendFlag requires `place` (verb surface)");
   const authIdentity = identity || (beingId ? { beingId } : null);
   if (!isValidFlagKind(payload.kind)) {
     log.warn("Governing/Flags", `appendFlag rejected: invalid kind=${payload.kind}`);
@@ -167,7 +167,7 @@ export async function appendFlag({
   // through one dispatcher path. merge:true preserves other keys in NS
   // atomically (better than the previous read-spread-write pattern,
   // which would clobber concurrent writes to sibling keys).
-  await core.do(space, "set", {
+  await place.do(space, "set", {
     field: `qualities.${NS}`,
     value: { pendingContractIssues: queue },
     merge: true,
@@ -221,8 +221,8 @@ export async function readPendingIssues(rulerSpaceId) {
  * has no caller for this yet, but the primitive places here so the
  * mark-resolved code path exists when courts arrive).
  */
-export async function markFlagResolved({ rulerSpaceId, flagId, resolution, identity = null, core }) {
-  if (!core?.do) throw new Error("markFlagResolved requires `core` (verb surface)");
+export async function markFlagResolved({ rulerSpaceId, flagId, resolution, identity = null, place }) {
+  if (!place?.do) throw new Error("markFlagResolved requires `place` (verb surface)");
   if (!rulerSpaceId || !flagId) return null;
   const space = await Space.findById(rulerSpaceId);
   if (!space) return null;
@@ -251,7 +251,7 @@ export async function markFlagResolved({ rulerSpaceId, flagId, resolution, ident
   if (!mutated) return null;
   // Phase 3 migration: verb-surface write, atomic merge of the resolved
   // flag back into the queue. See appendFlag for the rationale.
-  await core.do(space, "set", {
+  await place.do(space, "set", {
     field: `qualities.${NS}`,
     value: { pendingContractIssues: next },
     merge: true,

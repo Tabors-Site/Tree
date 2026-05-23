@@ -8,7 +8,7 @@
 // that crosses it — and from there the whole document is
 // unwritable, permanently. I will not let that happen on my place.
 //
-// Every quality write path the kernel exposes calls checkWriteSize
+// Every quality write path the seed exposes calls checkWriteSize
 // (or its strict variant guardQualityWrite) before the write
 // places. No exceptions. No direct $set on a qualities namespace
 // without checking first. Since every quality write is a DO, this

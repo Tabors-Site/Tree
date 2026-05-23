@@ -47,12 +47,12 @@
 
 import { randomUUID } from "crypto";
 import log from "../../system/log.js";
-import { getAncestorChain } from "../../place/space/ancestorCache.js";
+import { getAncestorChain } from "../../materials/space/ancestorCache.js";
 import { summonByResolved } from "../../ibp/verbs.js";
 import { getPlaceDomain } from "../../ibp/address.js";
 import { getPlaceRootId } from "../../placeRoot.js";
-import { I_AM } from "../../place/being/seedBeings.js";
-import { iAmIdentity } from "../../place/being/placeBeings.js";
+import { I_AM } from "../../materials/being/seedBeings.js";
+import { iAmIdentity } from "../../materials/being/placeBeings.js";
 
 // beingId -> Map<subscriptionId, subscription>
 const _byBeing = new Map();
@@ -319,7 +319,7 @@ export async function emitToSubscribers(eventName, payload, options = {}) {
     return 0;
   }
   const senderStance = _senderStanceForPayload(payload);
-  const rootCorrelation = payload?.rootCorrelation || payload?.stampId || null;
+  const rootCorrelation = payload?.rootCorrelation || payload?.actId || null;
 
   let emitted = 0;
   for (const sub of matches) {
@@ -492,7 +492,7 @@ function _readPath(obj, path) {
 }
 
 function _senderStanceForPayload(payload) {
-  // Every kernel-emitted SUMMON has the I_AM as its asker. The
+  // Every seed-emitted SUMMON has the I_AM as its asker. The
   // subscriber registered an interest; the I_AM holds that
   // declaration and emits the SUMMON when a matching DO fires.
   // The position carries where the DO happened, so the receiver

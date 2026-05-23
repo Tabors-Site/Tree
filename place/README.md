@@ -79,7 +79,7 @@ Six primitives carry the world:
 
 The seed schemas never change. Everything new lives in the per-primitive `qualities` Map, the open extension-defined layer that answers "of what sort is this particular space, matter, or being?" The four verbs are the only public surface; every operation is registered through them. Stance authorization sits at the gate on every verb, walking the ancestor chain from target up to root to decide whether the asker stance is allowed.
 
-See [`seed/philosophy/`](seed/philosophy/) for the IBP diagrams. See [`seed/place/PLACE.md`](seed/place/PLACE.md) "Qualities" for why the field is named that way, the constitutive (schema) vs characterizing (qualities) layer test, and the rule for where any new property belongs.
+See [`seed/philosophy/`](seed/philosophy/) for the IBP diagrams. See [`seed/philosophy/MATERIALS.md`](seed/philosophy/MATERIALS.md) "Qualities" for why the field is named that way, the constitutive (schema) vs characterizing (qualities) layer test, and the rule for where any new property belongs.
 
 ## What's Inside
 
@@ -93,7 +93,7 @@ seed/             What TreeOS IS. Four folders, four roles.
                          their own; scripts ARE code; this is for AI)
   system/         HOST   db, log, hooks, indexes (knows nothing of the world)
   models/         the schemas for all 6 primitives
-  services.js     assembles `core` for extensions
+  services.js     assembles `place` for extensions
   placeRoot.js     plants the place root + nine place seed spaces
   placeConfig.js   remembered settings across reboots
 
@@ -151,15 +151,15 @@ This works because:
 - MongoDB keeps every key in the Map whether the extension is loaded or not.
 - Extensions read their namespace on boot. If the data is there, they resume. If not, they initialize.
 
-Build a full OS distribution. Test it. Strip it to the kernel. Build a different one on the same database. Switch back. The data layer is permanent. The capability layer is swappable. That is the architecture.
+Build a full OS distribution. Test it. Strip it to the seed. Build a different one on the same database. Switch back. The data layer is permanent. The capability layer is swappable. That is the architecture.
 
 Extensions with custom models (their own MongoDB collections) survive too. The collections stay in the database whether the extension is loaded or not. Reload the extension and the data is there.
 
-**Trust model.** Extensions run in the same Node.js process as the seed. The seed enforces quality namespace isolation, spatial scoping, and circuit breakers. This protects against bugs, not against deliberately malicious code. Review extension code before installing. Same trust model as npm packages and Linux kernel modules.
+**Trust model.** Extensions run in the same Node.js process as the seed. The seed enforces quality namespace isolation, spatial scoping, and circuit breakers. This protects against bugs, not against deliberately malicious code. Review extension code before installing. Same trust model as npm packages and Linux seed modules.
 
 ## Learn More
 
-- [`seed/SEED.md`](seed/SEED.md) for kernel internals.
+- [`seed/SEED.md`](seed/SEED.md) for seed internals.
 - [`extensions/EXTENSION_FORMAT.md`](extensions/EXTENSION_FORMAT.md) for the full extension contract.
 - [`extensions/_template/`](extensions/_template/) for a scaffold to copy.
 - https://treeos.ai for documentation.

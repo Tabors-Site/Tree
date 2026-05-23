@@ -23,7 +23,7 @@
 // data)` to put it there, and their client reads
 // `descriptor.qualities.<extName>` (or `child.qualities.<extName>`,
 // `matter.qualities.<extName>`, `being.qualities.<extName>`) and
-// renders. The kernel hosts; it does not compose.
+// renders. The seed hosts; it does not compose.
 //
 // I also produce the place's discovery payload (buildDiscovery) — the
 // bootstrap-time wire shape that names protocol version, descriptor
@@ -35,17 +35,17 @@ import { getPlaceDomain } from "./address.js";
 import { getPlaceConfigValue, getPlaceUrl } from "../placeConfig.js";
 import Space from "../models/space.js";
 import Being from "../models/being.js";
-import Fact from "../models/fact.js";
+import Fact from "../past/fact/fact.js";
 import { getPlaceRootId } from "../placeRoot.js";
-import { listSeeds } from "../place/seeds.js";
-import { listMattersAt } from "../place/matter/matters.js";
-import { SEED_SPACE } from "../place/space/seedSpaces.js";
-import { listLiveThreads } from "../place/space/threads.js";
+import { listSeeds } from "../materials/seeds.js";
+import { listMattersAt } from "../materials/matter/matters.js";
+import { SEED_SPACE } from "../materials/space/seedSpaces.js";
+import { listLiveThreads } from "../materials/space/threads.js";
 import {
   resolveSpaceAccess,
   listSpaceChildren,
   listBeingSpaces,
-} from "../place/space/spaceFetch.js";
+} from "../materials/space/spaceFetch.js";
 import { getInboxSummary } from "../factory/intake/inbox.js";
 import { getRole, listRoles } from "../factory/roles/registry.js";
 import { findOpenForBeing } from "../factory/stamper/fold/reelChains.js";
@@ -70,7 +70,7 @@ export function buildDiscovery() {
   const wsUrl = placeUrl.replace(/^http/, "ws");
 
   // Merge two sources: the live role registry (SUMMON-honoring roles
-  // registered by the kernel + extensions) and the canonical system
+  // registered by the seed + extensions) and the canonical system
   // beings (BE-only). Dedupe + sort.
   const roles = Array.from(
     new Set([...listRoles(), ...SYSTEM_BE_BEINGS]),
@@ -121,7 +121,7 @@ function beingsAtSpace(space, { writeAllowed, authorizedHere }) {
       invocableBy,
       available: invocableBy === "anyone" ? authorizedHere : writeAllowed,
       // Internal-only, stripped before the wire — enrichBeings uses
-      // it to attach the being's currently-active Stamp.
+      // it to attach the being's currently-active Act.
       _beingId: home?.beingId || null,
     });
   }
@@ -131,8 +131,8 @@ function beingsAtSpace(space, { writeAllowed, authorizedHere }) {
 
 // ── Activity derivation ──
 // For each being at a position, build an `activity` object from
-// their currently-active Stamp. The latest Fact keyed by stampId
-// names what the being is doing right now; when no Stamp is active
+// their currently-active Act. The latest Fact keyed by actId
+// names what the being is doing right now; when no Act is active
 // the being is idle and activity is null.
 
 const ACTIVITY_CONTENT_CAP = 240;
@@ -152,13 +152,13 @@ function truncate(s, n) {
   return s.length > n ? s.slice(0, n) + "..." : s;
 }
 
-// Convert a Stamp into an activity object the descriptor surfaces
-// for the being whose Stamp it is. Null when no Stamp is given.
+// Convert a Act into an activity object the descriptor surfaces
+// for the being whose Act it is. Null when no Act is given.
 async function summonToActivity(summon) {
   if (!summon) return null;
   let lastFact = null;
   try {
-    lastFact = await Fact.findOne({ stampId: summon._id })
+    lastFact = await Fact.findOne({ actId: summon._id })
       .sort({ date: -1 })
       .select("action params date")
       .lean();
@@ -189,17 +189,17 @@ async function summonToActivity(summon) {
   };
 }
 
-// Infer what a Stamp is acting on. The Stamp schema doesn't carry an
+// Infer what a Act is acting on. The Act schema doesn't carry an
 // explicit target field, but the reply linkage tells us: when inReplyTo
-// is set, the Stamp was spawned by another being. Treat the parent's
+// is set, the Act was spawned by another being. Treat the parent's
 // activeRole/position as the target so sub-beings animate walking toward
 // their spawner.
 async function inferActivityTarget(summon) {
   if (!summon?.inReplyTo) return null;
   let parent;
   try {
-    const Stamp = (await import("../models/stamp.js")).default;
-    parent = await Stamp.findById(summon.inReplyTo)
+    const Act = (await import("../past/act/act.js")).default;
+    parent = await Act.findById(summon.inReplyTo)
       .select("activeRole beingOut")
       .lean();
   } catch {
@@ -335,7 +335,7 @@ async function placeAtSpace(resolved, { identity, payload } = {}) {
   const parentPath  = pathByNames.replace(/\/[^/]+$/, "") || "/";
 
   // .threads has no persisted children; the live forest is projected
-  // on demand from Stamp records keyed by rootCorrelation. The SEE
+  // on demand from Act records keyed by rootCorrelation. The SEE
   // payload's filter fields (being, role, position, stance, priority)
   // push down to the projection's $match so the listing scales.
   // Each entry is shaped like a normal child so clients render it
@@ -478,7 +478,7 @@ function buildLineage(resolved) {
 }
 
 // Attach the registered role's wire fields, the per-being inbox, the
-// active Stamp's activity, and the being's own qualities to each
+// active Act's activity, and the being's own qualities to each
 // entry produced by beingsAtSpace.
 async function enrichBeings(spaceId, entries) {
   const inboxByBeing = await getInboxSummary(spaceId);

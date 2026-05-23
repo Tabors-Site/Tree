@@ -1,39 +1,38 @@
 // TreeOS Seed . AGPL-3.0 . https://treeos.ai . Tabor Holly
 //
-// Kernel DO operations. My native vocabulary.
+// Seed DO operations. My native vocabulary.
 //
 // Every DO action that touches the substrate flows through the
 // registry in operations.js. The actions extensions add are their
-// own concerns; the actions the kernel needs to be itself live here.
+// own concerns; the actions the seed needs to be itself live here.
 // I register them at module load through the same surface extensions
-// use — no privileged kernel path, no special treatment. The bare
+// use — no privileged seed path, no special treatment. The bare
 // names are reserved for me because they describe the substrate
 // shape; extensions get prefixes so every action's owner is
 // structurally evident.
 //
 // What I ship:
 //
-//   create-child           (polymorphic over space/being/matter)
-//   create-matter
-//   set-name               (polymorphic)
-//   set-type               (space)
-//   set-parent             (space)
-//   delete-space
-//   set-qualities               (polymorphic; namespace + data)
-//   plant-seed             (extension scaffolding)
-//   add-llm-connection     (being)
-//   update-llm-connection  (being)
-//   delete-llm-connection  (being)
-//   assign-llm-slot        (polymorphic over being/space)
+//   birth                  (bring a material into existence under a target)
+//   set                    (write a field; schema or qualities path)
+//   death                  (chain-disconnect — soft-delete a material)
+//   plant                  (scaffold install; one act fans into many writes)
+//
+//   add-llm-connection     (being — thin wrapper; emits a `set` Fact)
+//   update-llm-connection  (being — same)
+//   delete-llm-connection  (being — same)
+//   assign-llm-slot        (polymorphic over being/space; multi-write coord)
 //   install-extension      (write files; reload-required)
 //   uninstall-extension    (remove files; reload-required)
 //   enable-extension       (toggle disabledExtensions list)
 //   disable-extension      (toggle disabledExtensions list)
-//   set-config             (place config key/value write)
+//   set-config             (place config key/value write — protected keys)
 //   delete-config          (place config key removal)
 //
-// create-being moved to BE on 2026-05-20 — minting identity is a BE
-// concern, not a state mutation on space or matter.
+// Retired 2026-05-23 (folded into birth/set/death/plant):
+//   create-child, create-matter, set-name, set-type, set-parent,
+//   delete-space, delete-matter, set-qualities, plant-seed
+//
 
 import { registerOperation, getOperation } from "./operations.js";
 import {
@@ -42,361 +41,51 @@ import {
   editSpaceType,
   deleteSpaceBranch,
   updateParentRelationship,
-} from "../place/space/spaceManagement.js";
-import { resolveSpaceAccess } from "../place/space/spaceFetch.js";
+  assertValidSpaceName,
+  assertValidSpaceType,
+  assertNameAvailableAt,
+} from "../materials/space/spaceManagement.js";
+import { resolveSpaceAccess } from "../materials/space/spaceFetch.js";
 import { getPlaceDomain } from "../ibp/address.js";
 import { IbpError, IBP_ERR, mapPatternsToIbpError } from "./protocol.js";
 import Being from "../models/being.js";
 import Matter from "../models/matter.js";
 import Space from "../models/space.js";
 
-import { qualities } from "../place/qualities.js";
+import { qualities } from "../materials/qualities.js";
+import { v4 as uuidv4 } from "uuid";
+
 let _registered = false;
 
 /**
- * Register the kernel DO operations. Idempotent; calling twice is a no-op.
+ * Register the seed DO operations. Idempotent; calling twice is a no-op.
  * Invoked by services.js at module load so the registry is populated
  * before anyone dispatches.
  */
-export function registerKernelOperations() {
+export function registerSeedOperations() {
   if (_registered) return;
   _registered = true;
-
-  // create-child is polymorphic: the target's kind determines the kind
-  // of the child created. Symmetric across all three substrate primitives.
-  //
-  //   Space    target → creates a child Space    (existing IBP path)
-  //   Being    target → creates a child Being    (being-tree child;
-  //                       generates username + password, places at
-  //                       parent's home position unless overridden,
-  //                       atomically links into parent.children)
-  //   Matter   target → creates a child Matter   (matter-tree child;
-  //                       inherits parent's spaceId, atomically links
-  //                       into parent.children)
-  //
-  // For spawning Beings or Matter where the parent is a Space (root of
-  // a being-tree / matter-tree at that space), use the dedicated
-  // create-being / create-matter operations.
-  registerOperation("create-child", {
-    targets: ["space", "being", "matter"],
-    ownerExtension: "kernel",
-    factAction: "create",
-    handler: async ({ target, params, identity }) => {
-      const kind = detectTargetKind(target);
-      if (kind === "being")
-        return createBeingChild({ parentBeing: target, params, identity });
-      if (kind === "matter")
-        return createMatterChild({ parentMatter: target, params, identity });
-      return createSpaceChild({ target, params, identity, kind });
-    },
-  });
-
-  // create-matter: spawn new matter at a Space (root of the matter-tree
-  // at that space, parentMatterId: null). For child matter under existing
-  // matter, use create-child.
-  registerOperation("create-matter", {
-    targets: ["space"],
-    ownerExtension: "kernel",
-    factAction: "create",
-    handler: async ({ target, params, identity }) => {
-      const spaceId = targetIdOf(target);
-      const matter = await Matter.create({
-        spaceId,
-        beingId: identity?.beingId || params.beingId || null,
-        name: params.name || null,
-        content: params.content ?? null,
-        origin: params.origin || "ibp",
-        parentMatterId: null,
-        qualities: params.qualities
-          ? new Map(Object.entries(params.qualities))
-          : new Map(),
-      });
-      // _factTarget hints the dispatcher to name the new matter (not the
-      // parent space the call addressed) as the substrate-event target.
-      return {
-        matter,
-        matterId: String(matter._id),
-        _factTarget: { kind: "matter", id: String(matter._id) },
-      };
-    },
-  });
 
   // create-being moved to BE 2026-05-20. Creating a being is an
   // identity operation, not a state mutation on space or matter, so
   // it belongs on the BE verb. Callers now use:
   //
-  //   await core.be("create-being", {
+  //   await place.be("create-being", {
   //     name, password, operatingMode, role,
   //     homeSpace | homeParent, parentBeingId?,
   //   })
   //
   // The handler lives on the auth-being's `createBeing` method (see
-  // seed/factory/roles/cherub.js). Per the philosophy notes: BE acts on
+  // seed/present/roles/cherub.js). Per the philosophy notes: BE acts on
   // the being calling it, and identity creation is the BE side of the
   // grammar.
-
-  // Field-update operations follow `set-<field>` pattern, parallel to
-  // set-qualities. Polymorphic across target kinds.
   //
-  //   Space     target → mutates Space.name (existing rename path)
-  //   Being    target → mutates Being.name (unique-indexed; throws
-  //                       USERNAME_TAKEN on collision)
-  //   Matter   target → mutates Matter.name (new field; nullable)
-  registerOperation("set-name", {
-    targets: ["space", "being", "matter"],
-    ownerExtension: "kernel",
-    factAction: "edit",
-    handler: async ({ target, params, identity }) => {
-      const { name } = params || {};
-      if (!name || typeof name !== "string") {
-        throw new Error("set-name: `name` is required");
-      }
-      const kind = detectTargetKind(target);
-
-      if (kind === "being") {
-        // Uniqueness pre-check + update. Mongoose unique index throws
-        // on collision; surface a friendly error.
-        const existing = await Being.findOne({ name: name }).select("_id");
-        if (existing && String(existing._id) !== String(target._id)) {
-          throw new Error(`set-name: username "${name}" already taken`);
-        }
-        await Being.updateOne({ _id: target._id }, { $set: { name: name } });
-        return { beingId: String(target._id), name };
-      }
-
-      if (kind === "matter") {
-        await Matter.updateOne({ _id: target._id }, { $set: { name } });
-        return { matterId: String(target._id), name };
-      }
-
-      if (kind === "stance")
-        return renameAtStance({ resolved: target, name, identity });
-
-      // Mongoose Space doc path: call the seed primitive directly.
-      await editSpaceName({
-        spaceId: String(target._id),
-        newName: name,
-        beingId: identity?.beingId || null,
-      });
-      return { spaceId: String(target._id), name };
-    },
-  });
-
-  // set-status retired from seed 2026-05-18. Status is domain-specific
-  // and lives in extension qualities; extensions register their own
-  // <ext>:set-<field> ops for state transitions. See
-  // [[project_substrate_as_universal_workspace]] for the framing.
-
-  // set-type: change a Space's type field. Used by editType HTTP route
-  // and any caller that needs to mutate the type taxonomy at a space.
-  registerOperation("set-type", {
-    targets: ["space"],
-    ownerExtension: "kernel",
-    factAction: "edit",
-    handler: async ({ target, params, identity }) => {
-      const { type } = params || {};
-      if (!type || typeof type !== "string") {
-        throw new Error("set-type: `type` is required");
-      }
-      const spaceId = targetIdOf(target);
-      await editSpaceType({
-        spaceId,
-        newType: type,
-        beingId: identity?.beingId || null,
-      });
-      return { spaceId, type };
-    },
-  });
-
-  // delete-space: remove a space (and its subtree) from the tree.
-  // Returns { deletedSpaceId }. The actual seed primitive handles
-  // subtree teardown, hooks, and rollback semantics; this op is the
-  // public verb surface.
-  registerOperation("delete-space", {
-    targets: ["space"],
-    ownerExtension: "kernel",
-    factAction: "remove",
-    handler: async ({ target, params: _params, identity }) => {
-      const spaceId = targetIdOf(target);
-      const deleted = await deleteSpaceBranch(
-        spaceId,
-        identity?.beingId || null,
-      );
-      return { deletedSpaceId: String(deleted?._id || spaceId) };
-    },
-  });
-
-  // delete-matter: remove matter (and its child matter via the seed
-  // primitive's subtree teardown). The target is the Matter doc (or a `{ _id }`
-  // envelope). The kernel primitive enforces the ownership gate —
-  // caller must be the matter's author or the containing tree's
-  // rootOwner — so passing internal:true is only safe for kernel-
-  // internal callers acting on substrate they manage.
-  registerOperation("delete-matter", {
-    targets: ["matter"],
-    ownerExtension: "kernel",
-    factAction: "remove",
-    handler: async ({ target, params: _params, identity, summonCtx }) => {
-      const matterId = String(target?._id || target?.matterId || target);
-      if (!matterId) throw new Error("delete-matter: matterId required");
-      const { deleteMatterAndFile } = await import("../place/matter/matters.js");
-      const beingId =
-        identity?.beingId ||
-        (await Matter.findById(matterId).select("beingId").lean())?.beingId;
-      await deleteMatterAndFile({
-        matterId,
-        beingId: String(beingId || ""),
-        stampId: summonCtx?.stampId || null,
-        sessionId: summonCtx?.sessionId || null,
-      });
-      return { removed: true, matterId };
-    },
-  });
-
-  // set-parent: reparent a space. The target IS the space being moved;
-  // params.parentId names the new parent.
-  registerOperation("set-parent", {
-    targets: ["space"],
-    ownerExtension: "kernel",
-    factAction: "move",
-    handler: async ({ target, params, identity }) => {
-      const { parentId } = params || {};
-      if (!parentId || typeof parentId !== "string") {
-        throw new Error("set-parent: `parentId` is required");
-      }
-      const spaceId = targetIdOf(target);
-      const result = await updateParentRelationship(
-        spaceId,
-        parentId,
-        identity?.beingId || null,
-      );
-      return result || { spaceId, parentId };
-    },
-  });
-
-  // Unified set-qualities. Accepts a Mongoose Space / Being / Matter doc,
-  // or (from the IBP wire path) a resolved stance that carries `.chain`
-  // and `.spaceId`. Detects which and routes to the appropriate seed
-  // primitive.
-  //
-  // The merge flag is the safe default (true): partial writes don't
-  // wipe sibling keys. merge:false replaces the whole namespace; that
-  // is the explicit destructive opt-in.
-  //
-  // Reserved namespaces (e.g. "inbox") rejected for all target kinds.
-  registerOperation("set-qualities", {
-    targets: ["space", "being", "matter"],
-    ownerExtension: "kernel",
-    factAction: "edit",
-    handler: async ({ target, params, identity }) => {
-      const { namespace, data, merge = true } = params || {};
-      if (!namespace || typeof namespace !== "string") {
-        throw new Error("set-qualities: `namespace` is required");
-      }
-      if (RESERVED_SET_META_NS.has(namespace)) {
-        throw new Error(
-          `set-qualities: namespace "${namespace}" is not writable through set-qualities`,
-        );
-      }
-      if (data === undefined || data === null || typeof data !== "object") {
-        throw new Error("set-qualities: `data` must be an object");
-      }
-
-      const kind = detectTargetKind(target);
-
-      if (kind === "being") {
-        const op =
-          merge !== false
-            ? qualities.being.mergeQuality
-            : qualities.being.setQuality;
-        await op(target, namespace, data);
-        return {
-          written: true,
-          beingId: String(target._id),
-          namespace,
-          kind: "being",
-        };
-      }
-      if (kind === "matter") {
-        const op =
-          merge !== false
-            ? qualities.matter.mergeQuality
-            : qualities.matter.setQuality;
-        await op(target, namespace, data);
-        return {
-          written: true,
-          matterId: String(target._id),
-          namespace,
-          kind: "matter",
-        };
-      }
-      if (kind === "stance")
-        return setMetaAtStance({
-          resolved: target,
-          namespace,
-          data,
-          merge,
-          identity,
-        });
-      // kind === "space": Mongoose Space doc passed directly (extension path).
-      const op =
-        merge !== false
-          ? qualities.space.mergeQuality
-          : qualities.space.setQuality;
-      await op(target, namespace, data);
-      return {
-        written: true,
-        spaceId: String(target._id),
-        namespace,
-        kind: "space",
-      };
-    },
-  });
-
-  // plant-seed: invoke a registered seed recipe at the target space.
-  // The recipe scaffolds the structure (Ruler beings, sub-domain
-  // spaces, starter matter, qualities) on the target. See
-  // seed/place/seeds.js.
-  //
-  // params:
-  //   name   — required. The seed's registered name.
-  //   params — optional. Plant-time configuration the operator passes
-  //            to the seed (free-shape object: projectPath for a code
-  //            workspace, theme for a UI extension, etc.). The seed
-  //            defines its own schema in prose; the kernel just
-  //            threads the object through to the scaffold ctx.
-  registerOperation("plant-seed", {
-    targets: ["space"],
-    ownerExtension: "kernel",
-    handler: async ({ target, params, identity }) => {
-      const { name } = params || {};
-      if (!name || typeof name !== "string") {
-        throw new Error(
-          "plant-seed: `name` is required (the seed's registered name)",
-        );
-      }
-      const spaceId = targetIdOf(target);
-      if (!spaceId)
-        throw new Error("plant-seed: target must resolve to a space id");
-      const { plantSeed } = await import("../place/seeds.js");
-      const { getCoreServices } = await import("../services.js");
-      const core = getCoreServices();
-      const seedParams =
-        params?.params &&
-        typeof params.params === "object" &&
-        !Array.isArray(params.params)
-          ? params.params
-          : {};
-      const { plantedSeedId, plantedThings } = await plantSeed({
-        name,
-        atSpaceId: spaceId,
-        identity,
-        core,
-        params: seedParams,
-      });
-      return { planted: true, plantedSeedId, name, spaceId, plantedThings };
-    },
-  });
+  // The earlier named ops (create-child, create-matter, set-name,
+  // set-type, set-parent, delete-space, delete-matter, set-qualities,
+  // plant-seed) retired 2026-05-23. Their work folded into the four
+  // collapsed verbs below — birth, set, death, plant — which dispatch
+  // to the same helpers via switch on params. See the corresponding
+  // handlers below for the mapping.
 
   // ────────────────────────────────────────────────────────────────
   // LLM connections — per-Being LLM provider credentials.
@@ -404,13 +93,20 @@ export function registerKernelOperations() {
   //
   // Target: the Being that owns the connection. Connection records are
   // stored in the LlmConnection collection, indexed by beingId. The ops
-  // wrap the seed/factory/voices/llm/connect.js helpers; the IBP grammar gives
+  // wrap the seed/present/voices/llm/connect.js helpers; the IBP grammar gives
   // them a single dispatch surface.
 
+  // The add/update/delete-llm-connection DO ops are kept as
+  // operator/CLI-facing surfaces, but their handlers delegate to the
+  // shared helpers in connect.js which now route writes through
+  // `do.set`. `skipAudit: true` prevents double-Fact: the inner set
+  // call emits the canonical Fact; this outer op is just the shape
+  // CLI clients reach for.
   registerOperation("add-llm-connection", {
     targets: ["being"],
-    ownerExtension: "kernel",
-    handler: async ({ target, params }) => {
+    ownerExtension: "seed",
+    skipAudit: true,
+    handler: async ({ target, params, identity }) => {
       const { name, baseUrl, apiKey, model } = params || {};
       if (!name || !baseUrl || !model) {
         throw new Error(
@@ -420,12 +116,11 @@ export function registerKernelOperations() {
       const { addLlmConnection, assignConnection } =
         await import("../factory/voices/llm/connect.js");
       const beingId = String(target._id);
-      const connection = await addLlmConnection(beingId, {
-        name,
-        baseUrl,
-        apiKey: apiKey || "none",
-        model,
-      });
+      const connection = await addLlmConnection(
+        beingId,
+        { name, baseUrl, apiKey: apiKey || "none", model },
+        { identity },
+      );
       // If this is the Being's first connection, auto-assign it to the
       // default `main` slot so subsequent runTurn calls find an LLM.
       try {
@@ -439,8 +134,9 @@ export function registerKernelOperations() {
 
   registerOperation("update-llm-connection", {
     targets: ["being"],
-    ownerExtension: "kernel",
-    handler: async ({ target, params }) => {
+    ownerExtension: "seed",
+    skipAudit: true,
+    handler: async ({ target, params, identity }) => {
       const { connectionId, name, baseUrl, apiKey, model } = params || {};
       if (!connectionId)
         throw new Error("update-llm-connection: `connectionId` is required");
@@ -455,6 +151,7 @@ export function registerKernelOperations() {
         String(target._id),
         connectionId,
         { name, baseUrl, apiKey, model },
+        { identity },
       );
       return { connection };
     },
@@ -462,14 +159,15 @@ export function registerKernelOperations() {
 
   registerOperation("delete-llm-connection", {
     targets: ["being"],
-    ownerExtension: "kernel",
-    handler: async ({ target, params }) => {
+    ownerExtension: "seed",
+    skipAudit: true,
+    handler: async ({ target, params, identity }) => {
       const { connectionId } = params || {};
       if (!connectionId)
         throw new Error("delete-llm-connection: `connectionId` is required");
       const { deleteLlmConnection } =
         await import("../factory/voices/llm/connect.js");
-      await deleteLlmConnection(String(target._id), connectionId);
+      await deleteLlmConnection(String(target._id), connectionId, { identity });
       return { removed: true, connectionId };
     },
   });
@@ -484,7 +182,7 @@ export function registerKernelOperations() {
   //                  Space.qualities.llm.slots.<slot>
   registerOperation("assign-llm-slot", {
     targets: ["being", "space"],
-    ownerExtension: "kernel",
+    ownerExtension: "seed",
     handler: async ({ target, params, identity }) => {
       const { slot, connectionId } = params || {};
       if (!slot) throw new Error("assign-llm-slot: `slot` is required");
@@ -527,13 +225,13 @@ export function registerKernelOperations() {
   // Place config is one of the meta-positions ([[project_meta_positions]]):
   // `<place>/.config` resolves to the SEED_SPACE.CONFIG space. Reads go
   // through `ibp:see` on that address (returns the cached config snapshot);
-  // writes go through these DO ops which wrap the kernel's
+  // writes go through these DO ops which wrap the seed's
   // setPlaceConfigValue helper. The helper handles cache invalidation,
   // validation, and PROTECTED_KEYS gating.
 
   registerOperation("set-config", {
     targets: ["space"],
-    ownerExtension: "kernel",
+    ownerExtension: "seed",
     handler: async ({ params, scaffold }) => {
       const { key, value } = params || {};
       if (!key || typeof key !== "string") {
@@ -556,7 +254,7 @@ export function registerKernelOperations() {
 
   registerOperation("delete-config", {
     targets: ["space"],
-    ownerExtension: "kernel",
+    ownerExtension: "seed",
     handler: async ({ params, scaffold }) => {
       const { key } = params || {};
       if (!key || typeof key !== "string") {
@@ -579,41 +277,64 @@ export function registerKernelOperations() {
   // to this surface they retire.
   // ────────────────────────────────────────────────────────────────
 
-  // birth: bring a primitive into existence under target.
+  // birth: bring a material into existence under target.
   //   params: { kind: "space"|"matter", spec: {...} }
   //   (kind "being" is reserved for BE.register; minting identity
   //    belongs on the BE verb, not DO.)
   registerOperation("birth", {
     targets: ["space", "matter", "being"],
-    ownerExtension: "kernel",
+    ownerExtension: "seed",
     factAction: "birth",
-    handler: async ({ target, params, identity }) => {
+    handler: async (ctx) => {
+      const { target, params, identity } = ctx;
       const { kind, spec = {} } = params || {};
       if (!kind) throw new Error("birth: `kind` is required (space|matter)");
       if (kind === "being") {
-        throw new Error("birth: kind 'being' belongs on BE.register, not DO.birth");
+        throw new Error(
+          "birth: kind 'being' belongs on BE.register, not DO.birth",
+        );
       }
       const targetKind = detectTargetKind(target);
       if (kind === "space") {
-        return createSpaceChild({ target, params: spec, identity, kind: targetKind });
+        return createSpaceChild({
+          target,
+          params: spec,
+          identity,
+          kind: targetKind,
+        });
       }
       if (kind === "matter") {
-        const spaceId = targetIdOf(target);
-        const matter = await Matter.create({
+        // Converted to fact-driven (2026-05-23). The handler:
+        //   1. allocates the new matter's id,
+        //   2. enriches the spec with derived fields (spaceId, parentMatterId,
+        //      beingId) so the reducer can produce the full row state from
+        //      the fact alone,
+        //   3. mutates ctx.params so the verb dispatcher's logFact stamps
+        //      the enriched spec onto the fact,
+        //   4. returns _factTarget so the fact targets the new matter's reel.
+        //
+        // The actual Matter row is created by the reducer + initProjection
+        // chain inside eager-fold (see materials/reducerHelpers.js
+        // applyBirthMatter + foldEngine.js rebuild). No Matter.create here.
+        const matterId = uuidv4();
+        const spaceId = targetKind === "space" ? targetIdOf(target) : (spec.spaceId ?? null);
+        const parentMatterId = targetKind === "matter" ? String(target._id) : (spec.parentMatterId ?? null);
+        const enrichedSpec = {
+          ...spec,
           spaceId,
+          parentMatterId,
           beingId: identity?.beingId || spec.beingId || null,
-          name: spec.name || null,
-          content: spec.content ?? null,
           origin: spec.origin || "ibp",
-          parentMatterId: targetKind === "matter" ? String(target._id) : null,
-          qualities: spec.qualities
-            ? new Map(Object.entries(spec.qualities))
-            : new Map(),
-        });
+        };
+        // Replace ctx.params (NOT the caller's input) with the enriched
+        // version so the verb dispatcher's logFact stamps the enriched
+        // spec onto the fact. The dispatcher reads ctx.params after the
+        // handler returns; we reassign on ctx, not on the destructured
+        // local, so the caller's input object stays untouched.
+        ctx.params = { ...params, spec: enrichedSpec };
         return {
-          matter,
-          matterId: String(matter._id),
-          _factTarget: { kind: "matter", id: String(matter._id) },
+          matterId,
+          _factTarget: { kind: "matter", id: matterId },
         };
       }
       throw new Error(`birth: unknown kind "${kind}"`);
@@ -629,7 +350,7 @@ export function registerKernelOperations() {
   //     value=null on a qualities path             → unset
   registerOperation("set", {
     targets: ["space", "being", "matter"],
-    ownerExtension: "kernel",
+    ownerExtension: "seed",
     factAction: "set",
     handler: async ({ target, params, identity }) => {
       const { field, value, merge = true } = params || {};
@@ -639,6 +360,20 @@ export function registerKernelOperations() {
       const kind = detectTargetKind(target);
 
       // ── qualities paths ────────────────────────────────────
+      //
+      // Converted to fact-driven (2026-05-22). The handler validates
+      // input + resolves the target, but DOES NOT write the qualities
+      // value. The actual write happens inside the verb dispatcher's
+      // logFact → eager-fold pipeline: the fact is stamped, the
+      // reducer (see seed/materials/reducerHelpers.js applySetQualities)
+      // derives the new qualities state, and applyProjection writes
+      // it. One projection-writer in the system — fold — per STAMPER.md.
+      //
+      // Per-reel append lock serializes concurrent writes to the same
+      // aggregate; the atomic-per-subpath property that the legacy
+      // direct-Mongo path used to provide is now serialized via the
+      // lock + reducer recompute (read-current-state, set sub-path,
+      // write-back). Different aggregates remain parallel.
       if (field.startsWith("qualities.")) {
         const rest = field.slice("qualities.".length);
         const parts = rest.split(".");
@@ -649,42 +384,63 @@ export function registerKernelOperations() {
           );
         }
 
-        // stance-shaped target (resolved from the wire) goes through
-        // the resolver helper.
         if (kind === "stance") {
           if (parts.length > 2) {
-            throw new Error(`set: deep qualities path "${field}" not supported (max depth: qualities.<namespace>.<innerKey>)`);
+            throw new Error(
+              `set: deep qualities path "${field}" not supported (max depth: qualities.<namespace>.<innerKey>)`,
+            );
           }
-          const data = parts.length === 1 ? value : { [parts[1]]: value };
-          return setMetaAtStance({ resolved: target, namespace, data, merge, identity });
+          // Resolve the stance to a space id for auth + audit. The
+          // reducer fold consumes the fact stamped after the handler
+          // returns; it writes the projection. We only validate + auth.
+          if (!target.spaceId) {
+            throw new IbpError(
+              IBP_ERR.SPACE_NOT_FOUND,
+              "Resolved address has no spaceId",
+            );
+          }
+          const access = await resolveSpaceAccess(
+            target.spaceId,
+            identity?.beingId || null,
+          );
+          if (!access?.ok || access.write !== true) {
+            throw new IbpError(
+              IBP_ERR.FORBIDDEN,
+              "Not authorized to write qualities at this place",
+            );
+          }
+          return {
+            written: true,
+            spaceId: String(target.spaceId),
+            namespace,
+            kind: "space",
+            _factTarget: { kind: "space", id: String(target.spaceId) },
+          };
         }
 
-        const qApi = qualities[kind];
-        if (!qApi) throw new Error(`set: no qualities API for kind "${kind}"`);
-
-        if (parts.length === 1) {
-          // whole-namespace write (or unset when value === null)
-          if (value === null) {
-            await qApi.unsetQuality(target, namespace);
-            return { written: true, [`${kind}Id`]: String(target._id), namespace, unset: true };
-          }
+        if (parts.length === 1 && value !== null) {
           if (typeof value !== "object") {
             throw new Error("set: qualities-namespace value must be an object");
           }
-          const op = merge !== false ? qApi.mergeQuality : qApi.setQuality;
-          await op(target, namespace, value);
-          return { written: true, [`${kind}Id`]: String(target._id), namespace };
         }
-        if (parts.length === 2) {
-          // inner-key merge: build a single-key partial and merge it
-          // into the namespace.
-          await qApi.mergeQuality(target, namespace, { [parts[1]]: value });
-          return { written: true, [`${kind}Id`]: String(target._id), namespace, field: parts[1] };
-        }
-        throw new Error(`set: deep qualities path "${field}" not supported (max depth: qualities.<namespace>.<innerKey>)`);
+
+        return {
+          written: true,
+          [`${kind}Id`]: String(target._id),
+          ...(parts.length === 1 ? { namespace } : { field }),
+          ...(value === null ? { unset: true } : {}),
+        };
       }
 
       // ── schema-field writes ────────────────────────────────
+      //
+      // Converted to fact-driven (2026-05-22). The handler validates
+      // (uniqueness, format, sibling-collision) but does NOT write the
+      // field. The actual write happens in the verb dispatcher's
+      // logFact → eager-fold → reducer chain (see reducerHelpers.js
+      // applySetField). Stance branches still go through the legacy
+      // helpers — converting them needs the stance-resolver path
+      // rewired too.
       if (field === "name") {
         if (!value || typeof value !== "string") {
           throw new Error("set: `value` must be a string for field=name");
@@ -694,21 +450,28 @@ export function registerKernelOperations() {
           if (existing && String(existing._id) !== String(target._id)) {
             throw new Error(`set: name "${value}" already taken`);
           }
-          await Being.updateOne({ _id: target._id }, { $set: { name: value } });
           return { beingId: String(target._id), name: value };
         }
         if (kind === "matter") {
-          await Matter.updateOne({ _id: target._id }, { $set: { name: value } });
           return { matterId: String(target._id), name: value };
         }
-        if (kind === "stance") return renameAtStance({ resolved: target, name: value, identity });
-        // space (Mongoose doc passed directly)
-        await editSpaceName({
-          spaceId: String(target._id),
-          newName: value,
-          beingId: identity?.beingId || null,
-        });
-        return { spaceId: String(target._id), name: value };
+        if (kind === "stance") {
+          // Stance-shaped target still legacy until the stance resolver
+          // path is rewired. Calls editSpaceName which writes directly.
+          return renameAtStance({ resolved: target, name: value, identity });
+        }
+        // space (Mongoose doc passed directly). Validate name format +
+        // sibling collision; reducer writes the projection.
+        const normalized = assertValidSpaceName(value);
+        if (target.seedSpace) {
+          throw new Error("set: cannot rename place seed spaces");
+        }
+        if (target.name !== normalized) {
+          await assertNameAvailableAt(target.parent, normalized, {
+            excludeSpaceId: String(target._id),
+          });
+        }
+        return { spaceId: String(target._id), name: normalized };
       }
 
       if (field === "type") {
@@ -716,12 +479,19 @@ export function registerKernelOperations() {
           throw new Error("set: `type` is only settable on Space");
         }
         const spaceId = targetIdOf(target);
-        await editSpaceType({
-          spaceId,
-          newType: value,
-          beingId: identity?.beingId || null,
-        });
-        return { spaceId, type: value };
+        const normalized = assertValidSpaceType(value);
+        if (kind === "space" && target.seedSpace) {
+          throw new Error("set: cannot change type on place seed spaces");
+        }
+        if (kind === "stance") {
+          // Stance still legacy until rewired.
+          await editSpaceType({
+            spaceId,
+            newType: normalized,
+            beingId: identity?.beingId || null,
+          });
+        }
+        return { spaceId, type: normalized };
       }
 
       if (field === "parent") {
@@ -743,21 +513,30 @@ export function registerKernelOperations() {
         // caches). Delegate through it for now; Phase 3.C (LlmConnection
         // drop) will rework the whole LLM-slot surface.
         const op = getOperation("assign-llm-slot");
-        if (!op) throw new Error("set: assign-llm-slot not registered (required for field=llmDefault)");
-        return op.handler({ target, params: { slot: "main", connectionId: value || null }, identity });
+        if (!op)
+          throw new Error(
+            "set: assign-llm-slot not registered (required for field=llmDefault)",
+          );
+        return op.handler({
+          target,
+          params: { slot: "main", connectionId: value || null },
+          identity,
+        });
       }
 
-      throw new Error(`set: unknown field "${field}". Supported: name, type, parent, llmDefault, qualities.<namespace>[.<innerKey>]`);
+      throw new Error(
+        `set: unknown field "${field}". Supported: name, type, parent, llmDefault, qualities.<namespace>[.<innerKey>]`,
+      );
     },
   });
 
   // death: chain-disconnect the target from the projection. The
   // birth-Fact remains in the chain; the fold respects the death-Fact
-  // and the primitive (and its subtree where it has one) stops
+  // and the material (and its subtree where it has one) stops
   // appearing in the stamp face going forward.
   registerOperation("death", {
     targets: ["space", "matter"],
-    ownerExtension: "kernel",
+    ownerExtension: "seed",
     factAction: "death",
     handler: async ({ target, identity, summonCtx }) => {
       const kind = detectTargetKind(target);
@@ -772,14 +551,15 @@ export function registerKernelOperations() {
       if (kind === "matter") {
         const matterId = String(target?._id || target?.matterId || target);
         if (!matterId) throw new Error("death: matterId required");
-        const { deleteMatterAndFile } = await import("../place/matter/matters.js");
+        const { deleteMatterAndFile } =
+          await import("../materials/matter/matters.js");
         const beingId =
           identity?.beingId ||
           (await Matter.findById(matterId).select("beingId").lean())?.beingId;
         await deleteMatterAndFile({
           matterId,
           beingId: String(beingId || ""),
-          stampId: summonCtx?.stampId || null,
+          actId: summonCtx?.actId || null,
           sessionId: summonCtx?.sessionId || null,
         });
         return { removed: true, matterId };
@@ -793,28 +573,36 @@ export function registerKernelOperations() {
   //   params: { seed, spec }
   registerOperation("plant", {
     targets: ["space"],
-    ownerExtension: "kernel",
+    ownerExtension: "seed",
     factAction: "plant",
     handler: async ({ target, params, identity }) => {
       const { seed, spec } = params || {};
       if (!seed || typeof seed !== "string") {
-        throw new Error("plant: `seed` is required (the seed's registered name)");
+        throw new Error(
+          "plant: `seed` is required (the seed's registered name)",
+        );
       }
       const spaceId = targetIdOf(target);
       if (!spaceId) throw new Error("plant: target must resolve to a space id");
-      const { plantSeed } = await import("../place/seeds.js");
-      const { getCoreServices } = await import("../services.js");
-      const core = getCoreServices();
+      const { plantSeed } = await import("../materials/seeds.js");
+      const { getPlaceServices } = await import("../services.js");
+      const place = getPlaceServices();
       const seedParams =
         spec && typeof spec === "object" && !Array.isArray(spec) ? spec : {};
       const { plantedSeedId, plantedThings } = await plantSeed({
         name: seed,
         atSpaceId: spaceId,
         identity,
-        core,
+        place,
         params: seedParams,
       });
-      return { planted: true, plantedSeedId, name: seed, spaceId, plantedThings };
+      return {
+        planted: true,
+        plantedSeedId,
+        name: seed,
+        spaceId,
+        plantedThings,
+      };
     },
   });
 }
@@ -831,7 +619,7 @@ const RESERVED_SET_META_NS = new Set([
  *   "matter"   — Mongoose Matter doc
  *   "space"    — Mongoose Space doc OR anything else (default; covers
  *                plain `{ _id }` shapes and raw string ids that the
- *                space primitives already handle)
+ *                space materials helpers already handle)
  *
  * Detection priority:
  *   1. `.chain` is an array → resolver output (every resolved stance
@@ -875,12 +663,12 @@ function targetIdOf(target) {
 //   1. Stance-specific gating (can't create-child at the place root;
 //      home roots only by the home's being).
 //   2. Tree-ownership + circuit-breaker check via resolveSpaceAccess.
-//   3. Map kernel-internal Error messages to IBP error codes so the
+//   3. Map seed-internal Error messages to IBP error codes so the
 //      wire ack carries a precise code instead of generic INTERNAL.
 //
 // Note: the verb-level Stance Authorization gate in seed/ibp/verbs.js
 // runs before these — they're the second layer covering tree-ownership
-// (which authorize() doesn't know about) and shape-conversion (kernel
+// (which authorize() doesn't know about) and shape-conversion (seed
 // helper Errors → IbpError on the wire).
 
 const KERNEL_ERROR_PATTERNS = {
@@ -1042,5 +830,5 @@ async function setMetaAtStance({ resolved, namespace, data, merge, identity }) {
 }
 
 // Auto-register on import so the registry is populated whether the caller
-// is `core.do(...)` from extension code or the IBP wire dispatcher.
-registerKernelOperations();
+// is `place.do(...)` from extension code or the IBP wire dispatcher.
+registerSeedOperations();

@@ -12,7 +12,7 @@
 // cap) and UP via lineage to capture parent-step context. Trees that
 // legitimately need 12+ levels of nesting are allowed to nest as
 // deep as the work demands; depth itself isn't a failure mode.
-// Uncontrolled depth IS — and the kernel's tree circuit breaker is
+// Uncontrolled depth IS — and the seed's tree circuit breaker is
 // where that's caught, not here.
 //
 // Rendering applies a budget separately: the formatter shows the
@@ -725,7 +725,7 @@ export async function buildArtifactEvidence(rulerSpaceId) {
   // Probe the Ruler scope's own notes. getNotes returns { notes: [...] }.
   let scopeNotes = [];
   try {
-    const { getArtifacts } = await import("../../../seed/place/matter/matters.js");
+    const { getArtifacts } = await import("../../../seed/materials/matter/matters.js");
     const got = await getArtifacts({ spaceId: String(space._id), limit: 50 });
     scopeNotes = Array.isArray(got?.artifacts) ? got.artifacts : [];
   } catch (err) {
@@ -744,7 +744,7 @@ export async function buildArtifactEvidence(rulerSpaceId) {
         .select("_id name type")
         .lean();
       const byId = new Map(childNodes.map((c) => [String(c._id), c]));
-      const { getArtifacts } = await import("../../../seed/place/matter/matters.js");
+      const { getArtifacts } = await import("../../../seed/materials/matter/matters.js");
       for (const cid of probeIds) {
         const c = byId.get(cid);
         if (!c) continue;

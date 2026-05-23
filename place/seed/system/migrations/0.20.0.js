@@ -3,7 +3,7 @@
  * Seed Migration 0.20.0 — Space schema field rename:
  * `systemRole` → `seedSpace`.
  *
- * The enum that names kernel-managed Space kinds (`.identity`,
+ * The enum that names seed-managed Space kinds (`.identity`,
  * `.config`, `.peers`, etc.) renamed SEED_SPACE / SYSTEM_ROLE →
  * SEED_SPACE. The Space schema's field carrying that value renamed
  * `systemRole` → `seedSpace` to match. This migration copies the

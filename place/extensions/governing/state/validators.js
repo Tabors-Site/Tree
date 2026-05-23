@@ -1,7 +1,7 @@
 // Declarative validator registry for governing.
 //
 // Pass 1's existing validators (smoke test, contract conformance, scout
-// loop, chapter validation) register through the kernel hook system on
+// loop, chapter validation) register through the seed hook system on
 // names like "swarm:afterBranchComplete" and fire in registration order.
 // That works while only one or two validators run per scope, but Pass 2's
 // court system will introduce validators that MUST run in a specific
@@ -10,14 +10,14 @@
 // order can't express that.
 //
 // This module owns the parallel, declarative registry that swarm fires
-// alongside its kernel hooks. Validators registered here carry an
+// alongside its seed hooks. Validators registered here carry an
 // explicit `phase` (pre | main | post) and `order` (numeric tiebreaker;
 // lower = innermost = fires first within the phase). Callers sort by
 // (phase, order) before invocation, so registration order doesn't affect
 // semantics.
 //
 // Backward-compatible by design: extensions that don't register here
-// continue to fire through their kernel hook subscriptions exactly as
+// continue to fire through their seed hook subscriptions exactly as
 // before. New validators (especially Pass 2's court system) opt into
 // declarative ordering by calling registerValidator(...).
 //

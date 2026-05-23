@@ -8,7 +8,7 @@ Read [being-summoned.md](being-summoned.md) and [message-envelope.md](message-en
 
 The inbox is per-being-per-position metadata, stored under the well-known namespace `metadata.inbox` on the position's space.
 
-Although `metadata` is the same Map that extensions use, the inbox is **not an extension namespace.** The kernel knows about `metadata.inbox` the same way it knows about `metadata.modes` and `metadata.tools`. It is part of the protocol's commitment, not optional.
+Although `metadata` is the same Map that extensions use, the inbox is **not an extension namespace.** The seed knows about `metadata.inbox` the same way it knows about `metadata.modes` and `metadata.tools`. It is part of the protocol's commitment, not optional.
 
 A space may host multiple beings (one per being invocable at that position). Each being gets its own inbox bucket:
 
@@ -47,9 +47,9 @@ Each entry is a complete message envelope plus protocol-side bookkeeping:
 
 `consumed` flips to true when the being's summoning has processed the message. `stampedAt` records when summoning was triggered (may be different from sentAt if summoning is gated by a hook or schedule). `responseId` ties the inbox entry to the response message it produced, if any.
 
-## Kernel helpers
+## Seed helpers
 
-The kernel exposes three operations for inbox access. Extensions and beings use these; direct Map manipulation is not supported.
+The seed exposes three operations for inbox access. Extensions and beings use these; direct Map manipulation is not supported.
 
 ```
 appendToInbox(spaceId, being, message) -> { messageId }
@@ -59,7 +59,7 @@ markInboxConsumed(spaceId, being, correlationIds, responseId?) -> void
 
 ### appendToInbox
 
-Atomic. Writes one message into the being's bucket and fires the inbox-write event the kernel uses to drive summoning. Used by the SUMMON handler and by any system code that wants to deliver a message (cascade-deliver, completion hooks, scheduler).
+Atomic. Writes one message into the being's bucket and fires the inbox-write event the seed uses to drive summoning. Used by the SUMMON handler and by any system code that wants to deliver a message (cascade-deliver, completion hooks, scheduler).
 
 
 
@@ -80,7 +80,7 @@ Consumed messages stay in the inbox as history; they are not deleted. The being'
 
 ## Summoning triggers
 
-Beings declare in their manifest when they want to be summoned. The kernel listens for triggers and fires summonings accordingly.
+Beings declare in their manifest when they want to be summoned. The seed listens for triggers and fires summonings accordingly.
 
 ```
 manifest.triggerOn = ["message", "hook", "cascade", "schedule"]
@@ -95,7 +95,7 @@ Summon immediately when a new SUMMON is appended to the inbox. The most common t
 ```
 appendToInbox(...)
   -> fires inbox-write event
-    -> kernel matches against triggerOn
+    -> seed matches against triggerOn
       -> if "message" in triggerOn:
         -> summon the being now
 ```
@@ -111,7 +111,7 @@ manifest.triggerOn = ["message", "hook"]
 manifest.hookSubscriptions = ["governing:plannerCompleted", "governing:branchRetried", "governing:executionCompleted"]
 ```
 
-When the hook fires, the kernel summons the being. The summoning sees the hook payload alongside the inbox.
+When the hook fires, the seed summons the being. The summoning sees the hook payload alongside the inbox.
 
 ### cascade
 
@@ -128,7 +128,7 @@ manifest.triggerOn = ["schedule"]
 manifest.scheduleCron = "0 */6 * * *"   // every six hours
 ```
 
-The kernel runs the scheduler and summons accordingly.
+The seed runs the scheduler and summons accordingly.
 
 ## Response delivery
 

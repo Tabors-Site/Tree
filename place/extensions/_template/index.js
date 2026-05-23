@@ -1,7 +1,7 @@
 // TreeOS extension entry point.
 //
-// The loader calls init(core) once at boot, after validating manifest
-// deps and building a scoped `core` services bundle. Return whatever
+// The loader calls init(place) once at boot, after validating manifest
+// deps and building a scoped `place` services bundle. Return whatever
 // the extension provides — tools, router, jobs, exports — and the
 // loader wires the rest.
 //
@@ -11,34 +11,34 @@
 
 import log from "../../seed/system/log.js";
 
-export async function init(core) {
+export async function init(place) {
   // log.verbose("MyExt", "init starting");
 
   // ───────────────────────────────────────────────────────────────
   // QUALITIES — extension data lives in the qualities Map on each
   // primitive (Space, Being, Matter), under your extension's name.
-  // The kernel never writes inside your namespace; the scoped core
+  // The seed never writes inside your namespace; the scoped place
   // refuses writes to anyone else's. Same nine methods on each
   // primitive's qualities namespace.
   // ───────────────────────────────────────────────────────────────
   //
   // Space qualities:
-  //   const data = core.qualities.space.getQuality(space, "my-extension");
-  //   await core.qualities.space.setQuality(spaceId, "my-extension", { key: "value" });
-  //   await core.qualities.space.mergeQuality(spaceId, "my-extension", { extraKey: "value" });
-  //   await core.qualities.space.incQuality(spaceId, "my-extension", "counter", 1);
-  //   await core.qualities.space.pushQuality(spaceId, "my-extension", "history", item, 50);
-  //   await core.qualities.space.batchSetQuality(spaceId, "my-extension", { a: 1, b: 2 });
-  //   await core.qualities.space.unsetQuality(spaceId, "my-extension");
+  //   const data = place.qualities.space.getQuality(space, "my-extension");
+  //   await place.qualities.space.setQuality(spaceId, "my-extension", { key: "value" });
+  //   await place.qualities.space.mergeQuality(spaceId, "my-extension", { extraKey: "value" });
+  //   await place.qualities.space.incQuality(spaceId, "my-extension", "counter", 1);
+  //   await place.qualities.space.pushQuality(spaceId, "my-extension", "history", item, 50);
+  //   await place.qualities.space.batchSetQuality(spaceId, "my-extension", { a: 1, b: 2 });
+  //   await place.qualities.space.unsetQuality(spaceId, "my-extension");
   //
   // Being qualities (per-being data; persists across role changes):
-  //   const prefs = core.qualities.being.getQuality(being, "my-extension");
-  //   await core.qualities.being.setQuality(beingId, "my-extension", { ... });
-  //   await core.qualities.being.incQuality(beingId, "my-extension", "visits", 1);
+  //   const prefs = place.qualities.being.getQuality(being, "my-extension");
+  //   await place.qualities.being.setQuality(beingId, "my-extension", { ... });
+  //   await place.qualities.being.incQuality(beingId, "my-extension", "visits", 1);
   //
   // Matter qualities (per-piece-of-matter data):
-  //   const tags = core.qualities.matter.getQuality(matter, "my-extension");
-  //   await core.qualities.matter.setQuality(matterId, "my-extension", { ... });
+  //   const tags = place.qualities.matter.getQuality(matter, "my-extension");
+  //   await place.qualities.matter.setQuality(matterId, "my-extension", { ... });
 
   // ───────────────────────────────────────────────────────────────
   // HOOKS — react to substrate events. Always available; no needs
@@ -46,28 +46,28 @@ export async function init(core) {
   // hook list and payload shapes.
   // ───────────────────────────────────────────────────────────────
   //
-  // core.hooks.register("enrichContext", async ({ context, space, meta }) => {
+  // place.hooks.register("enrichContext", async ({ context, space, meta }) => {
   //   const data = meta["my-extension"] || {};
   //   if (Object.keys(data).length === 0) return; // guard: only enrich when relevant
   //   context.myExtension = data;
   // }, "my-extension");
   //
-  // core.hooks.register("afterMatter", async ({ matter, spaceId, beingId, origin }) => {
+  // place.hooks.register("afterMatter", async ({ matter, spaceId, beingId, origin }) => {
   //   // react to any matter write at any position
   // }, "my-extension");
 
   // ───────────────────────────────────────────────────────────────
   // DO OPERATIONS — register custom write actions on the DO verb.
   // The loader auto-namespaces: declare "log-meal" here, callers
-  // invoke `core.do(target, "my-extension:log-meal", { ... })`.
+  // invoke `place.do(target, "my-extension:log-meal", { ... })`.
   // Every op handler receives { target, params, identity, scaffold }
   // and runs through the Fact stamp unless `skipAudit: true`.
   // ───────────────────────────────────────────────────────────────
   //
-  // core.do.registerOperation("log-meal", {
+  // place.do.registerOperation("log-meal", {
   //   targets: ["space"],
   //   handler: async ({ target, params, identity }) => {
-  //     await core.qualities.space.mergeQuality(target._id, "my-extension", {
+  //     await place.qualities.space.mergeQuality(target._id, "my-extension", {
   //       lastMeal: params.text,
   //     });
   //     return { logged: true };
@@ -83,7 +83,7 @@ export async function init(core) {
   // see below) before any being is summoned in this role.
   // ───────────────────────────────────────────────────────────────
   //
-  // core.declare.registerRole("my-role", {
+  // place.declare.registerRole("my-role", {
   //   name:       "my-role",
   //   canSee:     ["my-extension:read-status"],
   //   canDo:      ["my-extension:log-meal"],
@@ -101,7 +101,7 @@ export async function init(core) {
   // receiving role's summon handler interprets the event.
   // ───────────────────────────────────────────────────────────────
   //
-  // core.declare.subscribe(beingId, {
+  // place.declare.subscribe(beingId, {
   //   event:    "afterMatter",
   //   scope:    { ancestor: someSpaceId },     // | { everywhere: true } | { spaceId }
   //   filter:   { origin: "web" },             // optional payload equality / any-of
@@ -115,7 +115,7 @@ export async function init(core) {
   // a scheduler-being extension to swap in an embodied emitter.
   // ───────────────────────────────────────────────────────────────
   //
-  // core.declare.schedule(beingId, {
+  // place.declare.schedule(beingId, {
   //   intervalMs: 60_000 * 30,                  // every 30 minutes
   //   content:    { event: "tick" },
   //   priority:   4,
@@ -125,13 +125,13 @@ export async function init(core) {
   // ───────────────────────────────────────────────────────────────
   // SEEDS — plantable scaffolds. Register a recipe here (or via
   // the manifest's provides.seeds path) and the operator plants
-  // it with `core.do(space, "plant-seed", { name: "my-ext:my-seed" })`.
+  // it with `place.do(space, "plant", { seed: "my-ext:my-seed" })`.
   // ───────────────────────────────────────────────────────────────
   //
-  // core.seeds.register("my-seed", {
+  // place.seeds.register("my-seed", {
   //   description: "Sets up a tracking position with the my-extension role.",
   //   plant: async ({ target, identity }) => {
-  //     await core.do(target, "birth", { kind: "space", spec: { name: "tracking" } }, { identity });
+  //     await place.do(target, "birth", { kind: "space", spec: { name: "tracking" } }, { identity });
   //   },
   // });
 
@@ -148,7 +148,7 @@ export async function init(core) {
     //     schema:      { text: z.string() },   // zod shape; injected ctx (beingId, spaceId, ...) passes through
     //     verb:        "do",                   // "see" | "do" | "summon" | "be"
     //     handler:     async (args) => {
-    //       await core.do(args.spaceId, "my-extension:log-meal", { text: args.text }, {
+    //       await place.do(args.spaceId, "my-extension:log-meal", { text: args.text }, {
     //         identity: { beingId: args.beingId },
     //       });
     //       return { ok: true };
@@ -162,7 +162,7 @@ export async function init(core) {
     // },
     //
     // exports: {                               // cross-extension API — other extensions read via
-    //   helperFn,                              //   core.scope.getExtensionAtScope("my-extension", spaceId)
+    //   helperFn,                              //   place.scope.getExtensionAtScope("my-extension", spaceId)
     // },                                       //   then ext?.exports?.helperFn(...)
   };
 }

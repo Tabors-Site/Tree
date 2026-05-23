@@ -14,23 +14,23 @@
 // Naming and namespacing follow the DO operation registry
 // (seed/ibp/operations.js):
 //
-//   Kernel resolvers register bare names ("ruler-snapshot",
+//   Seed resolvers register bare names ("ruler-snapshot",
 //   "this-scope"). Bare names are reserved for me.
 //
 //   Extension resolvers are auto-namespaced to "<ext>:<name>". The
-//   loader's scoped core supplies the extName; direct seed callers
-//   pass "kernel".
+//   loader's scoped place bundle supplies the extName; direct seed
+//   callers pass "seed".
 //
 //   Lookup is exact-key first, then a fallback search for `:<name>`
 //   suffix. A role declaring `see: ["snapshot"]` resolves to the
-//   kernel's `snapshot` if one exists, otherwise the first unique
+//   seed's `snapshot` if one exists, otherwise the first unique
 //   extension-owned `:snapshot`. If multiple extensions register
 //   the same suffix the bare lookup logs an ambiguity warning and
 //   asks the role to use the qualified name.
 //
 // Resolvers are owned by the extension whose data they render. The
 // governing extension owns `ruler-snapshot`. Workspace extensions
-// own their own. I register a small kernel set so every role has
+// own their own. I register a small seed set so every role has
 // something to reach for.
 //
 // A resolver returns a string (inlined) or null/"" (skipped).
@@ -48,17 +48,17 @@ const NAME_RE = /^[a-z][a-z0-9-]*$/;
 const QUALIFIED_RE = /^[a-z][a-z0-9-]*:[a-z][a-z0-9-]*$/;
 
 /**
- * Register a named see-resolver. Kernel resolvers (extName === "kernel")
+ * Register a named see-resolver. Seed resolvers (extName === "seed")
  * keep their bare name; extension resolvers are auto-prefixed to
  * `<extName>:<name>` and roles can resolve them by either the qualified
  * key or the bare suffix.
  *
  * @param {string} name      kebab-case identifier
  * @param {function} fn      async (ctx) => string | null
- * @param {string} [extName] owner; defaults to "kernel"
+ * @param {string} [extName] owner; defaults to "seed"
  * @returns {string|null}    the registered key on success, else null
  */
-export function registerSeeResolver(name, fn, extName = "kernel") {
+export function registerSeeResolver(name, fn, extName = "seed") {
   if (typeof name !== "string" || !NAME_RE.test(name)) {
     log.error(
       "SeeResolvers",
@@ -71,7 +71,7 @@ export function registerSeeResolver(name, fn, extName = "kernel") {
     return null;
   }
 
-  const key = extName === "kernel" ? name : `${extName}:${name}`;
+  const key = extName === "seed" ? name : `${extName}:${name}`;
   if (RESOLVERS.has(key)) {
     const existing = RESOLVERS.get(key);
     log.warn(
@@ -87,7 +87,7 @@ export function registerSeeResolver(name, fn, extName = "kernel") {
 
 /**
  * Remove a previously-registered resolver. Accepts either the qualified
- * key (`coders:source-tree`) or — for kernel resolvers — the bare name.
+ * key (`coders:source-tree`) or — for seed resolvers — the bare name.
  */
 export function unregisterSeeResolver(key) {
   return RESOLVERS.delete(key);
@@ -110,7 +110,7 @@ export function unregisterResolversForExtension(extName) {
 
 /**
  * Look up a resolver. Accepts both qualified (`ext:name`) and bare
- * names. Bare lookups try the exact key first (kernel resolvers) then
+ * names. Bare lookups try the exact key first (seed resolvers) then
  * search for a `:<name>` suffix among extension resolvers. Ambiguous
  * bare lookups (two extensions own the same suffix) log a warning and
  * return null so the role file uses the qualified name.
@@ -123,7 +123,7 @@ export function getSeeResolver(name) {
     return RESOLVERS.get(name)?.fn || null;
   }
 
-  // Bare: kernel match wins outright.
+  // Bare: seed match wins outright.
   if (RESOLVERS.has(name)) return RESOLVERS.get(name).fn;
 
   // Otherwise scan extensions for a `:<name>` suffix.

@@ -13,7 +13,7 @@
 // Validation here is strict: the structured shape is the contract
 // between Planner and Ruler. A malformed emission is rejected with a
 // structured error message that tells the model how to fix the call,
-// so the kernel's tool retry loop can recover without prose drift.
+// so the seed's tool retry loop can recover without prose drift.
 
 import { z } from "zod";
 import Space from "../../seed/models/space.js";
@@ -199,7 +199,7 @@ async function nextEmissionOrdinal(planSpaceId) {
  * Carries the structured emission in metadata.governing.emission.
  * Returns the created space.
  */
-async function createPlanEmission({ planSpaceId, ordinal, payload, beingId, identity = null, core }) {
+async function createPlanEmission({ planSpaceId, ordinal, payload, beingId, identity = null, place }) {
   const authIdentity = identity || (beingId ? { beingId } : null);
   // Slug derived from the Planner's reasoning headline. Walking the
   // tree page tells you what each emission is about without
@@ -209,10 +209,10 @@ async function createPlanEmission({ planSpaceId, ordinal, payload, beingId, iden
   const name = slugifyEmission(payload?.reasoning, ordinal);
 
   // Phase 3 migration ([[project_seed_four_verbs_only]]): verb-surface
-  // create. Fires kernel hooks + stamps a "create-child" Fact.
+  // create. Fires seed hooks + stamps a "birth" Fact.
   let created = null;
   try {
-    created = await core.do(planSpaceId, "birth", {
+    created = await place.do(planSpaceId, "birth", {
       kind: "space",
       spec: {
         name,
@@ -221,7 +221,7 @@ async function createPlanEmission({ planSpaceId, ordinal, payload, beingId, iden
       },
     }, { identity: authIdentity });
   } catch (err) {
-    log.debug("Governing", `core.do(create-child) failed for plan-emission: ${err.message}; falling back to direct insert`);
+    log.debug("Governing", `place.do(create-child) failed for plan-emission: ${err.message}; falling back to direct insert`);
   }
 
   if (!created) {
@@ -243,16 +243,16 @@ async function createPlanEmission({ planSpaceId, ordinal, payload, beingId, iden
   }
 
   // Stamp governing role + the structured emission. Role marker makes
-  // this space structural for the kernel's beforeSpaceDelete guard. The
+  // this space structural for the seed's beforeSpaceDelete guard. The
   // structured plan nests up to 7 levels (governing → emission →
-  // steps[] → step → branches[] → branch); kernel default depth cap
+  // steps[] → step → branches[] → branch); seed default depth cap
   // is 8 to accommodate this and similar coordination shapes.
   try {
     // Phase 3 migration: verb-surface write. merge:true keeps siblings
     // atomically; no manual read-spread-write needed.
     const space = await Space.findById(created._id);
     if (space) {
-      await core.do(space, "set", {
+      await place.do(space, "set", {
         field: "qualities.governing",
         value: {
           role: "plan-emission",
@@ -416,7 +416,7 @@ function validateContractsArgs(args) {
  * Dispatch / sub-Ruler context / re-invocation triggers are deferred to
  * phase 2 main.
  */
-export default function getGoverningTools(core) {
+export default function getGoverningTools(place) {
   return [
     {
       name: "governing-emit-plan",
@@ -474,7 +474,7 @@ export default function getGoverningTools(core) {
       async handler(args) {
         // The MCP HTTP layer injects beingId, rootId, spaceId, stampId,
         // sessionId into `args` on every call (loader's passthrough
-        // schema wrapping preserves them). `core` comes from this
+        // schema wrapping preserves them). `place` comes from this
         // closure, not from args. Match code-workspace tools.js.
         const { beingId, spaceId } = args;
 
@@ -572,11 +572,11 @@ export default function getGoverningTools(core) {
           ordinal,
           payload,
           beingId,
-          core,
+          place,
         });
 
         // Verify the stamp actually landed by re-reading the space.
-        // If the kernel's depth guard rejected it (still happening
+        // If the seed's depth guard rejected it (still happening
         // despite the cap bump?), we surface that explicitly here.
         try {
           const verify = await Space.findById(emissionSpace._id).select("_id metadata").lean();
@@ -643,7 +643,7 @@ export default function getGoverningTools(core) {
               status: approvalStatus,
               supersedes: prior?.planRef || null,
               reason: prior ? `re-plan supersedes prior emission (${prior.status})` : null,
-              core,
+              place,
             });
             const fresh = governing.readLatestPlanApproval
               ? await governing.readLatestPlanApproval(ruler._id)
@@ -823,7 +823,7 @@ export default function getGoverningTools(core) {
             contracts: incoming,
             beingId,
             reasoning: validation.value.reasoning,
-            core,
+            place,
             // Inheritance declaration form: child scope inherits parent
             // contracts. The emission still materializes a ratified
             // space + approval entry so dispatch-execution sees the

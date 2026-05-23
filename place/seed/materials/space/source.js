@@ -34,7 +34,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 // Default root: the place/ directory (three levels above this file,
-// which lives at seed/place/space/). SOURCE_TREE_ROOT env var overrides
+// which lives at seed/materials/space/). SOURCE_TREE_ROOT env var overrides
 // for tests or non-standard layouts.
 const DEFAULT_SOURCE_ROOT = path.resolve(__dirname, "../../..");
 
@@ -408,7 +408,7 @@ function contentChanged(prev, next) {
 }
 
 // ────────────────────────────────────────────────────────────────────
-// AUTHORING (kernel-internal; bypasses createMatter's system-space gate)
+// AUTHORING (seed-internal; bypasses createMatter's system-space gate)
 // ────────────────────────────────────────────────────────────────────
 
 async function createSourceMatter({
