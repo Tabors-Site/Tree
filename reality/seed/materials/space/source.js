@@ -23,7 +23,7 @@ import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
 
-import log from "../../parentReality/log.js";
+import log from "../../seedReality/log.js";
 import Matter from "../matter/matter.js";
 import Space from "./space.js";
 import { MATTER_ORIGIN } from "../matter/origins.js";

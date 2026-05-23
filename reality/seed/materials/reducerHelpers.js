@@ -18,9 +18,6 @@ const QUALITIES_PREFIX = "qualities.";
 // happened in the verb handler (which threw on bad input before the
 // fact was stamped); the reducer just records what the fact says.
 //
-// `parent` is intentionally NOT in this set — parent is cross-aggregate
-// (changes children[] on old/new parents) and lands in a later slice.
-//
 // `llmDefault` lives here as of slice F-llm (2026-05-23). It writes
 // to the same scalar field on both Being and Space aggregates; the
 // reducer for each just records value. Slot-name validation + per-being
@@ -38,12 +35,37 @@ const QUALITIES_PREFIX = "qualities.";
 // callers (addContributor / removeContributor) hold the space lock
 // around the read so the projection they recompute doesn't race a
 // concurrent fold.
+//
+// `parent` (Space) + `parentBeingId` (Being) join the set in genesis
+// cleanup (2026-05-23) once the parent-side children[] caches retired.
+// A parent reassignment is one write on one aggregate now; downward
+// walks query by parent / parentBeingId, no cross-aggregate update
+// needed. The Space reducer also derives `position` from a parent
+// set so foldPlace's occupant query sees the move.
 const SCALAR_SET_FIELDS = new Set([
   "name",
   "type",
   "llmDefault",
   "rootOwner",
   "contributors",
+  "parent",
+  "parentBeingId",
+  // Being identity scalars added during genesis cleanup (2026-05-23).
+  // seedDelegates drift correction stamps do:set facts for each
+  // when an existing delegate's row drifts from spec.
+  "operatingMode",
+  "roles",
+  "defaultRole",
+  "homeSpace",
+  // Matter scalars added in Slice C-matter-full (2026-05-23). The
+  // editMatter content update, deleteMatterAndFile soft-delete
+  // (spaceId/beingId=DELETED), and transferMatter cross-space move
+  // all stamp do:set facts on these fields. The shared reducer is
+  // safe because the verb handler enforces kind=matter before
+  // emitting; cross-kind writes never reach the reducer.
+  "content",
+  "spaceId",
+  "beingId",
 ]);
 
 // Per-kind birth shapes. The reducer's job on `do:birth`: produce the
@@ -211,9 +233,10 @@ export function applyBirthBeing(state, fact) {
     currentSpace:  spec.currentSpace ?? spec.homeSpace ?? null,
     llmDefault:    spec.llmDefault ?? null,
     isRemote:      Boolean(spec.isRemote),
-    homePlace:     spec.homePlace ?? null,
+    homeReality:     spec.homeReality ?? null,
     qualities:     spec.qualities ?? {},
-    children:      [],
+    // Being.children retired 2026-05-23; downward walks query by
+    // parentBeingId (parallel to Space.children retirement).
     position:      spec.homeSpace ?? null,
     createdAt:     fact.date,
     updatedAt:     fact.date,

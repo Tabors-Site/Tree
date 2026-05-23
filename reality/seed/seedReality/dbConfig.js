@@ -4,7 +4,7 @@
 //
 // Every read and write in the world I form goes through Mongoose,
 // which goes through this connection. The connection's state is the
-// place's lifeline; transitions are logged loudly so the operator
+// reality's lifeline; transitions are logged loudly so the operator
 // sees exactly when the DB dropped and when it came back.
 // isDbHealthy() is the single source of truth for DB availability.
 

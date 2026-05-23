@@ -4,7 +4,7 @@
 // machine operates — LLM call shape, session caches, scheduler
 // backpressure, hook timeouts, fold limits, cleanup intervals.
 //
-// Distinct from realityConfig.js, which holds the place's outward-
+// Distinct from realityConfig.js, which holds the reality's outward-
 // facing identity (REALITY_NAME, realityUrl, federation directory,
 // security domains). Reality config is about what the reality IS to
 // the outside world; seed config is about how the apparatus runs

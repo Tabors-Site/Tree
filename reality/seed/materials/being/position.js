@@ -25,9 +25,9 @@
 // both fields together.
 
 import Being from "./being.js";
-import log from "../../parentReality/log.js";
+import log from "../../seedReality/log.js";
 import { getAncestorChain } from "../space/ancestorCache.js";
-import { getSpaceRootId } from "../../seedRoot.js";
+import { getSpaceRootId } from "../../sprout.js";
 import { logFact } from "../../past/fact/facts.js";
 
 const beingPositions = new Map();

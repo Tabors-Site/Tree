@@ -1,6 +1,6 @@
-import log from "../../seed/parentReality/log.js";
+import log from "../../seed/seedReality/log.js";
 import { getRealityConfigValue } from "../../seed/realityConfig.js";
-import { SEED_VERSION } from "../../seed/parentReality/version.js";
+import { SEED_VERSION } from "../../seed/seedReality/version.js";
 import crypto from "crypto";
 import fs from "fs";
 import path from "path";
@@ -37,7 +37,7 @@ export function getRealityIdentity() {
 
   const domain = cleanDomain(process.env.REALITY_DOMAIN || "localhost");
   const name = process.env.REALITY_NAME || "My Place";
-  const keyDir = process.env.PLACE_KEY_DIR || path.join(process.cwd(), ".place");
+  const keyDir = process.env.REALITY_KEY_DIR || path.join(process.cwd(), ".reality");
   const privateKeyPath = path.join(keyDir, "place.key");
   const publicKeyPath = path.join(keyDir, "place.key.pub");
   const idPath = path.join(keyDir, "place.id");
@@ -157,7 +157,7 @@ export async function verifyCanopyToken(token, remoteRealityPublicKey) {
 }
 
 /**
- * Sign arbitrary data with this place's private key.
+ * Sign arbitrary data with this reality's private key.
  */
 export function signData(data) {
   const identity = getRealityIdentity();

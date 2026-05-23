@@ -59,7 +59,7 @@ import { getFactoryConfigValue } from "../../../factoryConfig.js";
 import crypto from "crypto";
 import dns from "dns/promises";
 import { v4 as uuidv4 } from "uuid";
-import log from "../../../parentReality/log.js";
+import log from "../../../seedReality/log.js";
 import Being from "../../../materials/being/being.js";
 import Space from "../../../materials/space/space.js";
 import { I_AM } from "../../../materials/being/seedBeings.js";
@@ -384,7 +384,7 @@ function validateBaseUrl(baseUrl) {
   const allowed = getRealityConfigValue("allowedLlmDomains");
   if (Array.isArray(allowed) && allowed.length > 0) {
     throw new Error(
-      `LLM domain "${hostname}" is not in this place's allowed list.`,
+      `LLM domain "${hostname}" is not in this reality's allowed list.`,
     );
   }
   return parsed.href.replace(/\/+$/, "");

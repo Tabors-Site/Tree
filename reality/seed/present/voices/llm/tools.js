@@ -25,7 +25,7 @@
 // X. Permissions belong to role identity, not envelopes. Summoners
 // cannot cripple a role by stripping its capacities at call time.
 
-import log from "../../../parentReality/log.js";
+import log from "../../../seedReality/log.js";
 const toolDefs = {};
 const toolVerbs = {};    // name → "see" | "do" | "summon" | "be"
 const toolHandlers = {}; // name → async (args) => result
@@ -386,10 +386,10 @@ export async function auditToolDescriptions() {
   return { roles: scanned, missing };
 }
 
-// Sync the full tool registry into `<place>/.tools` as child spaces.
+// Sync the full tool registry into `<reality>/.tools` as child spaces.
 // One child per tool, name = tool name, qualities carries the
 // registered shape info. Called at the end of genesis (after
-// extensions have registered their tools) so SEE on `<place>/.tools`
+// extensions have registered their tools) so SEE on `<reality>/.tools`
 // reflects current state. Idempotent; subsequent calls reconcile
 // (add new tools, remove gone ones).
 export async function syncToolsToSubstrate() {

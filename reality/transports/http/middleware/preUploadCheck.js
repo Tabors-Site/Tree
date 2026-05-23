@@ -18,7 +18,7 @@ export default function preUploadCheck(req, res, next) {
   // Master switch
   const enabled = getRealityConfigValue("uploadEnabled");
   if (enabled === false || enabled === "false") {
-    return sendError(res, 403, IBP_ERR.UPLOAD_DISABLED, "Uploads are disabled on this place");
+    return sendError(res, 403, IBP_ERR.UPLOAD_DISABLED, "Uploads are disabled on this reality");
   }
 
   // Size ceiling

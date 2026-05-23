@@ -18,7 +18,7 @@
 // prefix, same shape extensions use. ownerExtension is set to the
 // role name so the registry tracks who shipped them.
 
-import log from "../../parentReality/log.js";
+import log from "../../seedReality/log.js";
 import Matter from "../../materials/matter/matter.js";
 import { registerOperation } from "../../ibp/operations.js";
 import { doVerb } from "../../ibp/verbs.js";
@@ -44,12 +44,12 @@ let _llmAssignerCache = null;
 async function getLlmAssigner() {
   if (_llmAssignerCache) return _llmAssignerCache;
   const row = await findBeingByName("llm-assigner");
-  if (!row) throw new Error("llm-assigner being not found on this place");
+  if (!row) throw new Error("llm-assigner being not found on this reality");
   _llmAssignerCache = row;
   return row;
 }
 
-// Locate this place's tutorial matter at a space, scoped by the
+// Locate this reality's tutorial matter at a space, scoped by the
 // marker so we never touch unrelated matter authored by the
 // llm-assigner. Returns the lean row, or null.
 async function findTutorialMatter(spaceId, llmAssignerId) {

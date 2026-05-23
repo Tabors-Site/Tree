@@ -108,7 +108,7 @@
 // Coder the space is just where they stand. The space's name is what
 // the LLM needs to know its frame of reference for this turn.
 
-import log from "../../../parentReality/log.js";
+import log from "../../../seedReality/log.js";
 import { getToolDescription, resolveTools, getExtensionToolsForRole } from "./tools.js";
 import { resolveSeeList, registerSeeResolver } from "./seeResolvers.js";
 import { getSpaceName } from "../../../materials/space/spaces.js";

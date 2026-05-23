@@ -10,7 +10,7 @@ import { buildRealityServices } from "../seed/services.js";
 import { setExtensionToolResolver } from "../seed/present/voices/llm/tools.js";
 import { hooks } from "../seed/hooks.js";
 import { getToolOwner } from "../seed/materials/space/extensionScope.js";
-import log from "../seed/parentReality/log.js";
+import log from "../seed/seedReality/log.js";
 
 /** Convert a file path to a URL string for dynamic import (Windows compat) */
 function toImportURL(filePath) {
@@ -490,7 +490,7 @@ function appendToEnvFile(key, value, description) {
  * declares in needs + optional. Extensions cannot access services they
  * didn't declare.
  */
-function buildScopedPlace(manifest, fullPlace) {
+function buildScopedReality(manifest, fullReality) {
   const allowed = new Set();
 
   // Collect all declared services (required + optional)
@@ -506,8 +506,8 @@ function buildScopedPlace(manifest, fullPlace) {
 
   // Services: inject declared seed services
   for (const key of AVAILABLE_SERVICES) {
-    if (allowed.has(key) && fullPlace[key]) {
-      scoped[key] = fullPlace[key];
+    if (allowed.has(key) && fullReality[key]) {
+      scoped[key] = fullReality[key];
     }
   }
 
@@ -515,37 +515,37 @@ function buildScopedPlace(manifest, fullPlace) {
   // extensions (e.g. energy registers place.energy during its init). The seed
   // doesn't name these. Extensions discover them by declaration.
   for (const svc of allowed) {
-    if (!AVAILABLE_SERVICES.has(svc) && fullPlace[svc]) {
-      scoped[svc] = fullPlace[svc];
+    if (!AVAILABLE_SERVICES.has(svc) && fullReality[svc]) {
+      scoped[svc] = fullReality[svc];
     }
   }
 
   // Models: only inject declared ones (plus any registered by other extensions)
   scoped.models = {};
   for (const name of allowedModels) {
-    if (fullPlace.models[name]) {
-      scoped.models[name] = fullPlace.models[name];
+    if (fullReality.models[name]) {
+      scoped.models[name] = fullReality.models[name];
     }
   }
 
   // Hooks: always available (place infrastructure, not a declared service)
-  if (fullPlace.hooks) {
-    scoped.hooks = fullPlace.hooks;
+  if (fullReality.hooks) {
+    scoped.hooks = fullReality.hooks;
   }
 
   // Metadata: always available (every extension reads/writes metadata)
-  if (fullPlace.qualities) {
-    scoped.qualities = fullPlace.qualities;
+  if (fullReality.qualities) {
+    scoped.qualities = fullReality.qualities;
   }
 
   // Being metadata: always available (extensions store per-being state)
-  if (fullPlace.beingMetadata) {
-    scoped.beingMetadata = fullPlace.beingMetadata;
+  if (fullReality.beingMetadata) {
+    scoped.beingMetadata = fullReality.beingMetadata;
   }
 
   // Matter metadata: always available (extensions tag matter in their namespace)
-  if (fullPlace.matterMetadata) {
-    scoped.matterMetadata = fullPlace.matterMetadata;
+  if (fullReality.matterMetadata) {
+    scoped.matterMetadata = fullReality.matterMetadata;
   }
 
   // Auth strategy binding: wrap registerStrategy to auto-inject extension name.
@@ -865,7 +865,7 @@ export async function loadExtensions(app, mcpServer, opts = {}) {
       }
 
       // Build scoped place: only inject what the manifest declares
-      const scopedReality = buildScopedPlace(manifest, realityServices);
+      const scopedReality = buildScopedReality(manifest, realityServices);
 
       // Initialize (with timeout to prevent a single extension from blocking boot)
       const INIT_TIMEOUT_MS = 10000;
@@ -1659,7 +1659,7 @@ export async function registerExtensionManagementOps() {
         name,
         version: version || manifest?.version || "unknown",
         filesWritten: result.filesWritten,
-        note: "Restart the place to load the extension.",
+        note: "Restart to load the extension.",
       };
     },
   });
@@ -1679,7 +1679,7 @@ export async function registerExtensionManagementOps() {
         );
       }
       fs.rmSync(extDir, { recursive: true, force: true });
-      return { uninstalled: true, name, note: "Restart the place to unload." };
+      return { uninstalled: true, name, note: "Restart to unload." };
     },
   });
 

@@ -33,7 +33,7 @@
 // place has other beings on it.
 
 import { randomUUID } from "crypto";
-import log from "../parentReality/log.js";
+import log from "../seedReality/log.js";
 import { getOperation, registerOperation, unregisterOperation, unregisterOperationsFromExtension, listOperations } from "./operations.js";
 import { logFact } from "../past/fact/facts.js";
 import { IbpError, IBP_ERR } from "./protocol.js";
@@ -195,16 +195,16 @@ doVerb.listOperations = listOperations;
 
 // SEE. Read a position and return its descriptor.
 //
-// `target` is a stance / position / place string ("<place>/<path>@<being>",
-// "<place>/<path>", "<place>") or a pre-parsed `{ kind, value }` envelope.
+// `target` is a stance / position / place string ("<reality>/<path>@<being>",
+// "<reality>/<path>", "<place>") or a pre-parsed `{ kind, value }` envelope.
 //
 // opts:
 //   identity     { beingId, name } | null — for stance-auth gating
 //   addressKind  explicit "stance" | "position" | "place" (else inferred)
 //   currentUser  name for pronoun resolution (default identity.name)
-//   currentPlace  place domain for relative addresses (default mine)
+//   currentReality  place domain for relative addresses (default mine)
 //
-// `<place>/.discovery` short-circuits to the discovery payload before the
+// `<reality>/.discovery` short-circuits to the discovery payload before the
 // caller gate runs — it's the pre-identity surface every client reads
 // on socket open. Otherwise I parse the address, resolve the stance,
 // gate through authorize, and return the descriptor.
@@ -226,22 +226,22 @@ export async function seeVerb(target, opts = {}) {
 
   assertVerbCaller("see", opts);
 
-  const { identity = null, currentUser = null, currentPlace = null, payload = null } = opts;
+  const { identity = null, currentUser = null, currentReality = null, payload = null } = opts;
   const addressKind = opts.addressKind
     || (target && typeof target === "object" && target.kind)
     || inferAddressKind(addrString);
 
   const parseCtx = {
-    currentPlace: currentPlace || getRealityDomain(),
+    currentReality: currentReality || getRealityDomain(),
     currentUser: currentUser || identity?.name || null,
   };
   const parsed   = parseWithContext(addrString, parseCtx);
   const expanded = expand(parsed, parseCtx);
 
-  // Thread descriptor short-circuit. SEE on `<place>/.threads/<id>`
+  // Thread descriptor short-circuit. SEE on `<reality>/.threads/<id>`
   // returns the synthetic projection from describeThread instead of
   // routing through resolveStance + placeAtSpace (the thread has no
-  // persistent space row). SEE on `<place>/.threads` itself still
+  // persistent space row). SEE on `<reality>/.threads` itself still
   // routes normally — placeAtSpace injects synthetic children for
   // that case. See place/space/threads.js.
   const targetThreadId = threadIdFromPath(expanded.right?.path);
@@ -268,7 +268,7 @@ export async function seeVerb(target, opts = {}) {
     }
     return {
       address: {
-        place: getRealityDomain(),
+        reality: getRealityDomain(),
         path: `/.threads/${targetThreadId}`,
         being: null,
         spaceId: threadsSpaceId,
@@ -315,14 +315,14 @@ export async function seeVerb(target, opts = {}) {
 // SUMMON. Deliver a message to the being at `stance` and wake their
 // scheduler so their role runs.
 //
-// `stance` is a stance string with @qualifier ("<place>/<path>@<being>").
+// `stance` is a stance string with @qualifier ("<reality>/<path>@<being>").
 // `message` is { from, content, correlation?, inReplyTo?, attachments?,
 // sentAt?, activeRole? }.
 //
 // opts:
 //   identity     { beingId, name } | null
 //   currentUser  pronoun resolution (default identity.name)
-//   currentPlace  place domain (default mine)
+//   currentReality  place domain (default mine)
 //   onResponse   async-mode reply callback (the wire layer composes one
 //                that emits via the being-room; in-process callers can
 //                pass their own or omit and drop replies on the floor)
@@ -336,14 +336,14 @@ export async function summonVerb(stance, message, opts = {}) {
   assertVerbCaller("summon", opts);
   const validatedMessage = validateSummonMessage(message);
 
-  const { identity = null, currentUser = null, currentPlace = null, onResponse = null, onError = null } = opts;
-  const place = currentPlace || getRealityDomain();
+  const { identity = null, currentUser = null, currentReality = null, onResponse = null, onError = null } = opts;
+  const realityDomain = currentReality || getRealityDomain();
 
   const parsed = parseWithContext(stance, {
-    currentPlace: place,
+    currentReality: realityDomain,
     currentUser: currentUser || identity?.name || null,
   });
-  const expanded = expand(parsed, { currentPlace: place, currentUser: currentUser || identity?.name || null });
+  const expanded = expand(parsed, { currentReality: realityDomain, currentUser: currentUser || identity?.name || null });
 
   // Thread-target branch. SUMMON whose right-side path names
   // `.threads/<id>` is a cut, not a call. The thread is addressable
@@ -356,7 +356,7 @@ export async function summonVerb(stance, message, opts = {}) {
   const targetThreadId = threadIdFromPath(expanded.right?.path);
   if (targetThreadId) {
     // Stance auth: broad gate. Is the asker allowed to address
-    // `.threads` on this place at all? The default rule
+    // `.threads` on this reality at all? The default rule
     // `summon:.threads:*` matches against the place root and
     // requires non-arrival (an authenticated being). Per-position
     // overrides at `.threads` can tighten this.
@@ -561,32 +561,9 @@ export async function summonCreateBeing({ spec, identity, summonCtx = null, scaf
     );
   }
 
-  // The spec passes through to createBeingWithHome (the Mongoose
-  // primitive). The full shape (homeSpace | homeParent, password,
-  // llmDefault, scaffolding, homeName, etc.) is accepted because
-  // seed-internal callers vary: I_AM at boot uses homeSpace; auth
-  // at runtime uses homeParent + password for humans.
-  const { createBeingWithHome } = await import("../materials/being/identity.js");
-  // Thread identity so the home-beings registry write inside
-  // createBeingWithHome attributes its Fact to the actual summoner
-  // rather than falling back to I_AM via the scaffold path.
-  const { being } = await createBeingWithHome({ ...spec, identity });
-
-  // The act IS the parent's act, inside the parent's own moment.
-  // The parent reached this code path via SUMMON, which means
-  // assign has already opened a Act framing the parent's moment;
-  // every Fact the parent emits inside that moment (including this
-  // BE.register) rides that ambient actId. summonCreateBeing
-  // does NOT open its own Act — that was a leak: a Act without
-  // a moment, framing nothing.
-  //
-  // The new being's first BE.register is recorded as a Fact here
-  // attributed to the new being (the deed) and witnessed by the
-  // caller (the signature). actId comes from the caller's
-  // summonCtx so this Fact rides the caller's frame.
-  const callerBeingId = String(identity?.beingId || I_AM);
-  const callerName    = identity?.name || I_AM;
-
+  // Thread the caller's moment so the be:register Fact stamped inside
+  // createBeing rides the parent's frame. Genesis flows (scaffold:true)
+  // pass no actId — the chain has a root and this is it.
   const factStampId = summonCtx?.actId || null;
   if (!factStampId && !scaffold) {
     throw new IbpError(
@@ -594,17 +571,21 @@ export async function summonCreateBeing({ spec, identity, summonCtx = null, scaf
       `summonCreateBeing for @${spec.name}: missing ambient actId. Thread summonCtx from the caller's moment, or scaffold:true for boot.`,
     );
   }
-  await logFact({
-    verb:    "be",
-    action:  "register",
-    beingId: String(being._id),
-    target:  { kind: "being", id: String(being._id) },
-    params:  {
-      name:        spec.name,
-      role:        spec.role || null,
-      witnessedBy: callerBeingId,
-    },
-    result:  { note: `Summoned forth by @${callerName}` },
+
+  // The spec passes through to createBeingWithHome (the Mongoose
+  // primitive). The full shape (homeSpace | homeParent, password,
+  // llmDefault, scaffolding, homeName, etc.) is accepted because
+  // seed-internal callers vary: I_AM at boot uses homeSpace; auth
+  // at runtime uses homeParent + password for humans. The be:register
+  // Fact is stamped INSIDE createBeing (Slice D-full, 2026-05-23) —
+  // one canonical birth Fact per being, on the new being's reel,
+  // carrying the full spec for the reducer to materialize. No
+  // separate witness Fact at this layer; the caller's actId on the
+  // birth Fact threads the witness relation through the act chain.
+  const { createBeingWithHome } = await import("../materials/being/identity.js");
+  const { being } = await createBeingWithHome({
+    ...spec,
+    identity,
     actId: factStampId,
   });
 
@@ -791,7 +772,7 @@ async function _dispatchSummon({
 //   identity     authenticated identity (required for release/switch)
 //   socket       optional WS socket passed through to auth hooks
 //   req          optional Express req for HTTP-arrival flows
-//   currentPlace  defaults to this place
+//   currentReality  defaults to this place
 //
 // Returns the being's operation result (typically { identityToken,
 // beingAddress, ... } for auth flows).
@@ -814,11 +795,11 @@ export async function beVerb(operation, payload = {}, opts = {}) {
     identity    = null,
     socket      = null,
     req         = null,
-    currentPlace = null,
+    currentReality = null,
     summonCtx   = null,
   } = opts;
 
-  const place = currentPlace || getRealityDomain();
+  const realityDomain = currentReality || getRealityDomain();
 
   // Address must point at this place.
   const targetReality = extractRealityFromAddress(address, addressKind);
@@ -855,10 +836,10 @@ export async function beVerb(operation, payload = {}, opts = {}) {
   if (operation === "register" || operation === "claim") {
     const authConfig = await getAuthConfig();
     if (operation === "register" && !authConfig.register_enabled) {
-      throw new IbpError(IBP_ERR.FORBIDDEN, "Registration is disabled on this place", { operation });
+      throw new IbpError(IBP_ERR.FORBIDDEN, "Registration is disabled on this reality", { operation });
     }
     if (operation === "claim" && !authConfig.claim_enabled) {
-      throw new IbpError(IBP_ERR.FORBIDDEN, "Claim is disabled on this place", { operation });
+      throw new IbpError(IBP_ERR.FORBIDDEN, "Claim is disabled on this reality", { operation });
     }
     const authResult = operation === "register"
       ? await cherubBeing.register(payload, ctx)
@@ -881,7 +862,7 @@ export async function beVerb(operation, payload = {}, opts = {}) {
   if (!role) {
     throw new IbpError(
       IBP_ERR.ROLE_UNAVAILABLE,
-      `No being @${beingName} registered for BE operations on this place`,
+      `No being @${beingName} registered for BE operations on this reality`,
       { beingName },
     );
   }
@@ -965,7 +946,7 @@ async function writeBeFact({ operation, identity, authResult, payload, beingName
   });
 }
 
-// Two claim modes. Credentials: address is the place or <place>/@cherub,
+// Two claim modes. Credentials: address is the place or <reality>/@cherub,
 // payload carries name + password. Token re-claim: address is a
 // stance already held by the session, identity carries a valid token.
 async function runClaim(address, opPayload, ctx) {
@@ -1122,7 +1103,7 @@ function pathOfResolved(resolved) {
 }
 
 // Returns null when the DO target is writable, or a reason string when
-// it sits in a read-only realm (fileparentReality/web origin matter, or
+// it sits in a read-only realm (fileseedReality/web origin matter, or
 // anything under the .source self-tree). The caller throws
 // IbpError(ORIGIN_READ_ONLY, reason).
 function checkReadOnlyOrigin(target) {

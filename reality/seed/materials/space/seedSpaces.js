@@ -90,7 +90,7 @@ export const SEED_SPACE = Object.freeze({
   EXTENSIONS: "extensions",
   // Registry-mirror place seed spaces. Each runtime registry (tool defs,
   // role specs, DO operations) syncs its contents into a child Space
-  // here so SEE on `<place>/.tools` (etc.) returns the current registry
+  // here so SEE on `<reality>/.tools` (etc.) returns the current registry
   // through the standard descriptor pipeline.
   TOOLS: "tools",
   ROLES: "roles",

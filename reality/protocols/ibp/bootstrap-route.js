@@ -8,7 +8,7 @@
 //
 // The response is intentionally minimal: just enough information for the
 // client to open a socket. Full capability discovery (zones, beings,
-// supported actions, version negotiation) moves to `see <place>/.discovery`
+// supported actions, version negotiation) moves to `see <reality>/.discovery`
 // once the socket is open.
 //
 // CORS: this endpoint is **structurally cross-origin**. Any Portal client
@@ -45,7 +45,7 @@ export function registerIbpBootstrap(app) {
     res.json({
       ws: wsUrl,
       protocolVersion: IBP_PROTOCOL_VERSION,
-      place: getRealityDomain(),
+      reality: getRealityDomain(),
       timezone: getRealityConfigValue("timezone") || null,
     });
   });

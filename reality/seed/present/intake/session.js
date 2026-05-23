@@ -20,7 +20,7 @@
 // "a reach exists right now"; a presence is "this lane carries
 // the being's moments." Multiple sessions can sit in one presence.
 
-import log from "../../parentReality/log.js";
+import log from "../../seedReality/log.js";
 import { getFactoryConfigValue } from "../../factoryConfig.js";
 import { hooks } from "../../hooks.js";
 import { getRealityConfigValue } from "../../realityConfig.js";

@@ -41,7 +41,7 @@
 // nothing else: no LLM client, no scheduler, no inbox. I am
 // in-moment maintenance machinery.
 
-import log from "../../../parentReality/log.js";
+import log from "../../../seedReality/log.js";
 import { getFactoryConfigValue } from "../../../factoryConfig.js";
 import { hooks } from "../../../hooks.js";
 import { getRealityConfigValue } from "../../../realityConfig.js";

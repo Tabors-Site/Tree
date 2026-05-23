@@ -42,7 +42,7 @@
 // Domain-specific enums (SEED_SPACE, MATTER_ORIGIN, DELETED, I_AM)
 // live with their domain modules — not here.
 
-import log from "../parentReality/log.js";
+import log from "../seedReality/log.js";
 
 // ============================================================================
 // CODE ENUM

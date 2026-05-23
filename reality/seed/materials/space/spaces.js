@@ -6,7 +6,7 @@
 //
 // Space comes first. Without it nothing else has a where to be —
 // so the writes that shape the tree are the most consequential
-// substrate mutations on the place. They run under tier-3 locks
+// substrate mutations on the reality. They run under tier-3 locks
 // (spaceLocks.js) and they all flow through this file. Reads sit
 // alongside writes here, mirroring matter/matters.js — one ops
 // file per material.
@@ -26,6 +26,7 @@
 // OTHER being out of the dot-namespace.
 
 import mongoose from "mongoose";
+import { v4 as uuidv4 } from "uuid";
 import { getFactoryConfigValue } from "../../factoryConfig.js";
 
 import Space from "./space.js";
@@ -45,9 +46,9 @@ import {
   resolveSpaceAccessFromChain,
 } from "./ancestorCache.js";
 import { hooks } from "../../hooks.js";
-import { getSpaceRootId } from "../../seedRoot.js";
+import { getSpaceRootId } from "../../sprout.js";
 import { getRealityConfigValue } from "../../realityConfig.js";
-import log from "../../parentReality/log.js";
+import log from "../../seedReality/log.js";
 import { IBP_ERR, IbpError } from "../../ibp/protocol.js";
 import { DELETED } from "./seedSpaces.js";
 import { I_AM } from "../being/seedBeings.js";
@@ -214,19 +215,17 @@ export async function createSpace({
   const siblingParentId = isRoot ? getSpaceRootId() : parentId;
   await assertNameAvailableAt(siblingParentId, name);
 
-  const newSpace = new Space({
-    name,
-    type,
-    parent: isRoot ? getSpaceRootId() : parentId || null,
-    rootOwner: isRoot ? being._id : null,
-    contributors: [],
-    qualities:
-      hookData.qualities instanceof Map ? hookData.qualities : new Map(),
-  });
-  await newSpace.save();
-
-  // Child-count guard runs under the parent lock; no parent-side write.
-  const lockTarget = isRoot ? getSpaceRootId() : parentId;
+  // Fact-driven (Slice C, 2026-05-23). The new space's row is NOT
+  // written directly. Instead the handler stamps a `do:birth` Fact on
+  // the new space's reel; eager-fold runs the Space reducer's
+  // applyBirthSpace and applyProjection materializes the row. Per
+  // STAMPER.md / FOLD.md: one writer (fold), one source of truth (facts).
+  //
+  // The parent's space lock guards the max-children check + the fact
+  // stamp window. Concurrent creates under the same parent serialize;
+  // creates under different parents stay parallel.
+  const resolvedParentId = isRoot ? getSpaceRootId() : (parentId || null);
+  const lockTarget = resolvedParentId;
   if (lockTarget) {
     const locked = await acquireSpaceLock(lockTarget, sessionId);
     if (!locked)
@@ -234,28 +233,24 @@ export async function createSpace({
         "Parent space is being modified",
       );
   }
+
+  const id = uuidv4();
   try {
-    // Children cap: a wide space loads its entire children[] on every
-    // parent query, so we cap one space's children to prevent memory
-    // spikes. Default 1000; configurable via `maxChildrenPerSpace`.
+    // Children cap: count by parent (the parent-side children[] cache
+    // is retired). countDocuments is O(1) on the parent index.
     const maxChildren = parseInt(
       getFactoryConfigValue("maxChildrenPerSpace") || "1000",
       10,
     );
 
-    // Child-count guard via parent query — the parent-side children[]
-    // cache is retired (FOLD.md: position index replaces it). Single
-    // countDocuments hits the parent index and stays O(1).
     if (isRoot) {
-      const spaceRootId = getSpaceRootId();
-      if (spaceRootId) {
-        const childCount = await Space.countDocuments({ parent: spaceRootId });
+      if (resolvedParentId) {
+        const childCount = await Space.countDocuments({ parent: resolvedParentId });
         if (childCount >= maxChildren) {
           throw new IbpError(IBP_ERR.INVALID_INPUT,
             `Place root has reached the maximum of ${maxChildren} children`,
           );
         }
-        // newSpace.parent already set above; no parent.children write.
       }
     } else if (parentId) {
       const parentSpace = await Space.findById(parentId)
@@ -270,16 +265,41 @@ export async function createSpace({
           `Parent space has reached the maximum of ${maxChildren} children`,
         );
       }
-      // newSpace.parent already set above; no parent.children write.
     }
+
+    // Stamp the birth Fact. The reducer (applyBirthSpace) derives the
+    // full row from the spec; eager-fold + initProjection materializes
+    // it via the per-reel append lock on the new space's reel.
+    const specQualities = hookData.qualities instanceof Map
+      ? Object.fromEntries(hookData.qualities)
+      : (hookData.qualities || {});
+    await logFact({
+      verb:    "do",
+      action:  "birth",
+      beingId: String(being._id),
+      target:  { kind: "space", id },
+      params:  {
+        spec: {
+          name,
+          type:      type ?? null,
+          parent:    resolvedParentId,
+          rootOwner: isRoot ? String(being._id) : null,
+          qualities: specQualities,
+        },
+      },
+      actId,
+      sessionId,
+    });
   } finally {
     if (lockTarget) releaseSpaceLock(lockTarget, sessionId);
   }
 
-  // Fact stamping is the dispatcher's job (one Fact per verb emission).
-  // Helpers no longer stamp Facts; the wrapping op's handler returns
-  // _factTarget hinting at the new space so the dispatcher names the
-  // substrate event (not the call's parent target).
+  // Read back the row the fold materialized. Eager-fold completed
+  // inside logFact so the row is in place.
+  const newSpace = await Space.findById(id);
+  if (!newSpace) {
+    throw new Error(`createSpace: birth Fact stamped but row ${id} not materialized`);
+  }
 
   if (note?.trim()) {
     await createMatter({
@@ -337,41 +357,41 @@ export async function createRealitySeedSpace({
     throw new Error("Place seed space name is required");
   if (!parentId) throw new Error("Place seed space requires a parent");
 
-  const { v4: uuidv4 } = await import("uuid");
+  // Fact-driven genesis (2026-05-23). Stamps a do:birth Fact carrying
+  // the full spec; eager-fold's applyBirthSpace + initProjection
+  // materializes the row. Genesis exception lives on the actor side:
+  // beingId="I_AM" is a string ref to a Being row that may not yet
+  // exist (ensureIAm runs after the first seed-space creation in the
+  // same boot pass) — the Fact accepts the string; readers resolve
+  // backward via populate once I_AM is planted.
   const id = uuidv4();
+  const specQualities = qualities instanceof Map
+    ? Object.fromEntries(qualities)
+    : (qualities || {});
 
-  const newSpace = new Space({
-    _id: id,
-    name,
-    parent: parentId,
-    rootOwner: I_AM,
-    seedSpace: seedSpace || null,
-    contributors: [],
-    qualities: qualities instanceof Map ? qualities : new Map(),
+  await logFact({
+    verb:    "do",
+    action:  "birth",
+    beingId: I_AM,
+    target:  { kind: "space", id },
+    params:  {
+      spec: {
+        name,
+        type:      null,
+        parent:    String(parentId),
+        rootOwner: I_AM,
+        seedSpace: seedSpace || null,
+        qualities: specQualities,
+      },
+    },
   });
-  await newSpace.save();
-  // No parent.children write — parent-side cache retired; child's
-  // `parent` is the source of truth, queried via findByPosition /
-  // listSpaceChildren / countDocuments({parent: ...}).
 
-  // Act the genesis act. The I_AM is doing it; the Fact
-  // names it. Resolves via populate once ensureIAm creates
-  // the Being row in the same boot pass.
-  try {
-    await logFact({
-      verb: "do",
-      action: "create",
-      beingId: I_AM,
-      target: { kind: "space", id },
-      params: { name, seedSpace: seedSpace || null },
-    });
-  } catch (err) {
-    log.warn(
-      "Place",
-      `Fact stamp for seed-space "${name}" failed: ${err.message}`,
+  const newSpace = await Space.findById(id);
+  if (!newSpace) {
+    throw new Error(
+      `createRealitySeedSpace: birth Fact stamped but row ${id} not materialized`,
     );
   }
-
   return newSpace;
 }
 
@@ -671,11 +691,31 @@ export async function deleteSpaceBranch(
     );
 
   try {
+    // Fact-driven soft-delete (2026-05-23). Two do:set facts on the
+    // space's reel: rootOwner becomes the deleter (revival audit),
+    // parent flips to DELETED (the sentinel that hides the space
+    // from parent-query readers). The per-reel lock around the
+    // (rootOwner, parent) pair keeps them visible-together to a
+    // concurrent fold.
+    const { doVerb } = await import("../../ibp/verbs.js");
+    const opts = beingId
+      ? { identity: { beingId: String(beingId) }, summonCtx: actId ? { actId } : null, scaffold: !actId }
+      : { scaffold: true };
+    await doVerb(
+      spaceToDelete,
+      "set",
+      { field: "rootOwner", value: String(beingId) },
+      opts,
+    );
+    const refreshed = await Space.findById(spaceId);
+    await doVerb(
+      refreshed,
+      "set",
+      { field: "parent", value: DELETED },
+      opts,
+    );
     spaceToDelete.rootOwner = beingId;
     spaceToDelete.parent = DELETED;
-    await spaceToDelete.save();
-    // No parent.children $pull — parent-side cache retired; the
-    // child's parent flip to DELETED is the whole deletion.
   } finally {
     releaseMultiple(lockIds, sessionId);
   }

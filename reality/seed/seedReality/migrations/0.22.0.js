@@ -83,7 +83,7 @@ export default async function migrate() {
 
   // 3) spaces.rootOwner — ownership pointer. Same logic; the seed-
   //    owned spaces (.identity, .config, .peers, .extensions, .flow,
-  //    .tools, .roles, .operations, .source, and the place root) carry
+  //    .tools, .roles, .operations, .source, and the space root) carry
   //    the I_AM name string in rootOwner.
   let spacesPatched = 0;
   if (names.has("spaces")) {

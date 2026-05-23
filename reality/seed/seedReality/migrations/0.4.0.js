@@ -47,7 +47,7 @@ export default async function migrate() {
 
   // ── Step 1: rename collection notes → artifacts ─────────────────────
   // If both exist, fold notes into artifacts; otherwise straight rename.
-  // If neither exists (fresh place), nothing to do.
+  // If neither exists (fresh reality), nothing to do.
   const collections = await db.listCollections({}, { nameOnly: true }).toArray();
   const collNames = new Set(collections.map(c => c.name));
 
@@ -85,7 +85,7 @@ export default async function migrate() {
     }
   }
 
-  // If the artifacts collection doesn't exist (fresh place or pre-Notes
+  // If the artifacts collection doesn't exist (fresh reality or pre-Notes
   // place), nothing else to do.
   const postCollections = await db.listCollections({ name: "artifacts" }, { nameOnly: true }).toArray();
   if (postCollections.length === 0) {

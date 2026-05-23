@@ -15,7 +15,7 @@
 // code via httpStatusFor() in seed/ibp/protocol.js — one canonical
 // mapping.
 
-import log from "../../seed/parentReality/log.js";
+import log from "../../seed/seedReality/log.js";
 import { sendOk, sendError, IBP_ERR, httpStatusFor } from "../../seed/ibp/protocol.js";
 import { getRealityConfigValue } from "../../seed/realityConfig.js";
 import { getRealityDomain } from "../../seed/ibp/address.js";

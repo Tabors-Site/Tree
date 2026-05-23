@@ -40,7 +40,7 @@ export default async function migrate() {
 
   // MongoDB doesn't support copy-from-other-field in a single update,
   // so we fetch the affected rows and rewrite each. The set is small
-  // (one row per place-seed space, typically <10 per place).
+  // (one row per seed-space, typically <10 per reality).
   const cursor = spaces.find(
     { systemRole: { $exists: true, $ne: null }, seedSpace: { $exists: false } },
     { projection: { _id: 1, systemRole: 1 } },

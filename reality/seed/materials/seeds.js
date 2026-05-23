@@ -3,12 +3,12 @@
 // Seeds.
 //
 
-// Space, matter, and beings a place can plant through
-// the I AM as "packages". Used to form your place beyond
+// Space, matter, and beings a reality can plant through
+// the I AM as "packages". Used to form your reality beyond
 // the default codebase.
 
 //
-// Place seeds to place place
+// Plant seeds to grow a reality
 //
 
 // ── What a seed is ──────────────────────────────────────────────
@@ -20,7 +20,7 @@
 // "if you plant me at a space, I will create this structure to
 // bootstrap what I do."
 //
-// A place grows only the populations its operator plants. Nothing
+// A reality grows only the populations its operator plants. Nothing
 // auto-installs; installing an extension is not the same as planting
 // it. The seed is potential; planting is the act that turns potential
 // into world.
@@ -29,19 +29,19 @@
 // ── Seeds are how the I_AM extends ──────────────────────────────
 //
 // Every act in the world has a being behind it; genesis is no
-// exception. At boot the I_AM acts alone: it plants the place root,
+// exception. At boot the I_AM acts alone: it plants the space root,
 // the nine place seed spaces, its own Being row, and the first place
 // beings. That sequence is the I_AM turning seed-as-potential into
 // world-as-fact for the first time.
 //
 // A planted seed is the same act, later in time, with the operator
-// as the trigger. The scaffold function runs through `place` —
+// as the trigger. The scaffold function runs through `reality` —
 // seed-trusted; the writes flow through verbs with the I_AM's
 // authority; the planted structure stamps an audit trail naming
 // the operator who triggered it and the I_AM that performed it.
 // Genesis at boot and seed-plant at runtime are not different in
 // kind; they are the same operation at different times. The place's
-// shape grows the way the place was first formed: a being scaffolds
+// shape grows the way the reality was first formed: a being scaffolds
 // substrate from a recipe.
 //
 // This is why the registry sits in the seed and not in any one
@@ -56,7 +56,7 @@
 //     description: "what planting this does",
 //     ownerExtension: "<ext>",          // set by the loader
 //     scaffold: async (ctx) => {
-//       // free-form: the recipe calls place verbs to create structure
+//       // free-form: the recipe calls reality verbs to create structure
 //       // returns a `plantedThings` descriptor used by unplantSeed
 //     },
 //   }
@@ -75,7 +75,7 @@
 // unload time stays clean.
 
 import { v4 as uuidv4 } from "uuid";
-import log from "../parentReality/log.js";
+import log from "../seedReality/log.js";
 import Space from "../materials/space/space.js";
 
 const SEEDS = new Map(); // name → recipe
@@ -91,7 +91,7 @@ const MAX_SEEDS = 200;
  * @param {string} name - "<ext>:<seed-action>" — seed namespace convention
  * @param {object} recipe
  * @param {string} recipe.description - one-line explanation of what planting creates
- * @param {Function} recipe.scaffold - async ({ rootSpaceId, plantedSeedId, identity, place }) => plantedThings
+ * @param {Function} recipe.scaffold - async ({ rootSpaceId, plantedSeedId, identity, reality }) => plantedThings
  * @param {string} [ownerExtension] - the registering extension; "seed" if omitted
  * @returns {boolean} true on success
  */
@@ -206,7 +206,7 @@ export function listSeeds() {
  * @param {string} args.name - registered seed name
  * @param {string} args.atSpaceId - target space id (the seed's plant point)
  * @param {object} args.identity - { beingId, username } of the planter
- * @param {object} args.place - place services bundle (passed to recipe)
+ * @param {object} args.reality - reality services bundle (passed to recipe)
  * @param {object} [args.params] - plant-time configuration the operator
  *   passes through to the seed (e.g. projectPath for a code workspace,
  *   theme for a UI extension). Free-shape object; the seed defines its
@@ -219,7 +219,7 @@ export async function plantSeed({
   name,
   atSpaceId,
   identity,
-  place,
+  reality,
   params = {},
   summonCtx = null,
 }) {
@@ -330,7 +330,7 @@ export async function unplantSeed({
   atSpaceId,
   plantedSeedId,
   identity,
-  place,
+  reality,
   summonCtx = null,
 }) {
   if (!atSpaceId || !plantedSeedId) {

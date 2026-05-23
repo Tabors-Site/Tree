@@ -16,7 +16,7 @@
 // being-room). See [[project_four_verbs_one_execution]] and
 // [[project_protocol_transport_separation]].
 
-import log from "../../../seed/parentReality/log.js";
+import log from "../../../seed/seedReality/log.js";
 import { IbpError, IBP_ERR, isIbpError } from "../../../seed/ibp/protocol.js";
 import { ackOk, ackError } from "../envelope.js";
 import { summonVerb } from "../../../seed/ibp/verbs.js";

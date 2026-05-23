@@ -41,7 +41,7 @@
 // last request.
 
 import { randomUUID } from "crypto";
-import log from "../../parentReality/log.js";
+import log from "../../seedReality/log.js";
 import Being from "../../materials/being/being.js";
 import { readInbox } from "./inbox.js";
 import { summonByResolved } from "../../ibp/verbs.js";
@@ -68,7 +68,7 @@ function priorityEnumFor(n) {
   return _PRIORITY_NUM_TO_ENUM[n] || "INTERACTIVE";
 }
 
-// Parse a stance string of the form `<place>/<spaceId>@<qualifier>` into
+// Parse a stance string of the form `<reality>/<spaceId>@<qualifier>` into
 // its parts. Replies build `from` fields in this shape; this is the
 // inverse. Returns null on mismatch — callers log and skip the reply.
 //
@@ -83,7 +83,7 @@ function parseAskerStance(stance) {
   if (typeof stance !== "string") return null;
   const m = STANCE_RE.exec(stance.trim());
   if (!m) return null;
-  return { place: m[1], spaceId: m[2], qualifier: m[3] };
+  return { reality: m[1], spaceId: m[2], qualifier: m[3] };
 }
 
 // ═════════════════════════════════════════════════════════════════

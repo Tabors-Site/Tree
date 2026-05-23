@@ -17,7 +17,7 @@
 // the wire through proxies that delegate here. Without that
 // registration the proxies no-op and a CLI-only run still boots.
 
-import log from "../../seed/parentReality/log.js";
+import log from "../../seed/seedReality/log.js";
 import { getFactoryConfigValue } from "../../seed/factoryConfig.js";
 import { Server } from "socket.io";
 import { decodeToken } from "../../seed/materials/being/identity.js";

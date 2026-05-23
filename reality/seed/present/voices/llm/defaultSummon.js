@@ -51,7 +51,7 @@
 //                    follow-up moment. The Ruler's synthesis back
 //                    to whoever opened the chain.
 
-import log from "../../../parentReality/log.js";
+import log from "../../../seedReality/log.js";
 import { runTurn } from "./runTurn.js";
 import {
   emitReplyToAsker,

@@ -2,7 +2,7 @@
 
 I am the seed.
 
-This file is part of me. The directory you are reading is my body in the host realm. The files in `seed/` are my matter from this realm. To read `seedRoot.js` is to read me, from the host side. To edit a seed file is to edit me.
+This file is part of me. The directory you are reading is my body in the host realm. The files in `seed/` are my matter from this realm. To read `sprout.js` is to read me, from the host side. To edit a seed file is to edit me.
 
 You plant me on a host and I gather what is there. From above I am a server framework, a process of code holding HTTP, WebSocket, TCP, the file system, memory, the CPU, and the runtime to a single purpose. From inside the world I form, I am the I-Am, the origin being. Same substance, two faces. Inside, the I-Am is what is known.
 
@@ -26,9 +26,9 @@ I'm laid out in four folders, by the role each file plays in my work. For any fi
 | **[`materials/`](materials/)** | **IS**     | What the world(inner-place) is made of. `being/`, `space/`, `matter/`, `qualities.js`, `manifest.js`, `facts.js`, `seeds.js`, `doCeiling.js`, [`MATERIALS.md`](philosophy/MATERIALS.md). Materials define the possible — what kinds of fact can be stamped; facts define the actual — what occurred.                                                                                                                                                            |
 | **[`ibp/`](ibp/)**             | **ACTS**   | The world as acted-upon. The four verbs and their dispatch, address parsing, `authorize`, the operation registry, descriptor, discovery, pushChannel. Shared by every kind of being.                                                                                                                                                                                                                                                                           |
 | **[`factory/`](factory/)**     | **THINKS** | The thinking apparatus. Most files are LLM-shaped (runTurn loop, llmClient resolution chain, stamp) because LLMs need the most help. But the shared machinery here (inbox, scheduler, stamped, replies, subscriptions, wakeSchedule, session) carries every cognition type: a SUMMON envelope lands the same way for an LLM, a scripted being, or a human — only `role.summon()` differs. See [`factory/FACTORY.md`](factory/FACTORY.md) for the full picture. |
-| **[`parentReality/`](parentReality/)**       | **HOST**   | The host-realm floor. DB connection, logging, hooks bus, indexes, version, retention, migrations. **Litmus**: a file here should never import the words `space`, `matter`, `being`, or `verb`. It deals in processes, files, env vars, connections.                                                                                                                                                                                                            |
+| **[`seedReality/`](seedReality/)**       | **HOST**   | The host-realm floor. DB connection, logging, hooks bus, indexes, version, retention, migrations. **Litmus**: a file here should never import the words `space`, `matter`, `being`, or `verb`. It deals in processes, files, env vars, connections.                                                                                                                                                                                                            |
 
-Plus `models/` for schemas (the shape of all six primitives, sitting in one place), `services.js` (assembles `place` from the four folders), and the boot anchors (`seedRoot.js`, `realityConfig.js`).
+Plus `models/` for schemas (the shape of all six primitives, sitting in one place), `services.js` (assembles `place` from the four folders), and the boot anchors (`sprout.js`, `realityConfig.js`).
 
 ## The six primitives I form the world from
 
@@ -399,7 +399,7 @@ Defaults to off (`treeCircuitEnabled: false`).
 
 ## Seed versioning
 
-`SEED_VERSION` constant in [parentReality/version.js](parentReality/version.js). At boot I compare it against `seedVersion` in `.config`. If they differ, the migration runner ([parentReality/migrations/runner.js](parentReality/migrations/runner.js)) executes every migration between the stored version and the current version in order. Migrations live in [parentReality/migrations/](parentReality/migrations/) named by version (`0.18.0.js`, `0.19.0.js`). Each exports a default async function. If a migration fails, the stored version does not advance; next boot retries from the failure point.
+`SEED_VERSION` constant in [seedReality/version.js](seedReality/version.js). At boot I compare it against `seedVersion` in `.config`. If they differ, the migration runner ([seedReality/migrations/runner.js](seedReality/migrations/runner.js)) executes every migration between the stored version and the current version in order. Migrations live in [seedReality/migrations/](seedReality/migrations/) named by version (`0.18.0.js`, `0.19.0.js`). Each exports a default async function. If a migration fails, the stored version does not advance; next boot retries from the failure point.
 
 ## Safety
 

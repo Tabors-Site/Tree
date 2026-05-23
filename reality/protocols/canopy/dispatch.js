@@ -13,7 +13,7 @@
 //
 // See [[project_canopy_folds_into_ibp]].
 
-import log from "../../seed/parentReality/log.js";
+import log from "../../seed/seedReality/log.js";
 import { getRealityDomain } from "../../seed/ibp/address.js";
 import { signData, verifySignedData } from "./identity.js";
 import { getPeerByDomain, getPeerBaseUrl } from "./peers.js";
@@ -30,8 +30,8 @@ export function extractTargetReality(address) {
   // Stance pair: take the right side (the callee).
   const rhs = address.includes("::") ? address.split("::").pop().trim() : address;
   // Place is everything up to the first slash (or the whole string).
-  const place = rhs.split("/")[0].trim();
-  return place || null;
+  const realityDomain = rhs.split("/")[0].trim();
+  return realityDomain || null;
 }
 
 /**

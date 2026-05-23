@@ -64,7 +64,7 @@
 // (notifications/tools/list_changed) is a follow-up if hot reload
 // becomes a need.
 
-import log from "../../seed/parentReality/log.js";
+import log from "../../seed/seedReality/log.js";
 
 /**
  * Initialize the MCP server transport.

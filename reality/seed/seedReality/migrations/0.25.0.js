@@ -15,7 +15,7 @@
 //      (type, id) so future `allocSeq` calls continue from the
 //      backfilled max.
 //
-// Facts without a reel-bearing target (e.g. place-level config, multi-
+// Facts without a reel-bearing target (e.g. reality-level config, multi-
 // being ops) are left with `seq: null` — they sit outside the fold
 // model for now.
 //

@@ -19,7 +19,7 @@
 // reading manifest provides + init() return. Both go through
 // registerOperation here; there is no privileged seed path.
 
-import log from "../parentReality/log.js";
+import log from "../seedReality/log.js";
 
 const REGISTRY = new Map();
 
@@ -211,7 +211,7 @@ export function listOperations(filter = {}) {
 }
 
 /**
- * Sync the operation registry into `<place>/.operations` as child Nodes.
+ * Sync the operation registry into `<reality>/.operations` as child Nodes.
  * One child per registered DO operation; qualities mirrors the op's
  * declaration (targets, owner extension, factAction, skipAudit). Called
  * at boot end after extensions register; idempotent.

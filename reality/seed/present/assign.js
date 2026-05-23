@@ -40,7 +40,7 @@
 //   moment.js   the being acting
 //   stamped.js  press the closing face
 
-import log from "../parentReality/log.js";
+import log from "../seedReality/log.js";
 import { getFactoryConfigValue } from "../factoryConfig.js";
 import { v4 as uuidv4 } from "uuid";
 import Being from "../materials/being/being.js";

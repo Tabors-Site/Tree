@@ -1,9 +1,9 @@
 # The Seed
 
-The kernel is called the seed. You plant it on a place. It grows trees. The full specification lives in [place/seed/SEED.md](place/seed/SEED.md).
-
+The kernel is called the seed. You plant it. It grows a reality. The full specification lives in [reality/seed/SEED.md](place/seed/SEED.md).
 
 # NEVER MODIFY THE SEED WHEN BUILDING EXTENSIONS. ALL EXTENSIONS MUST BE DECOUPLED FROM KERNEL AND ONLY DEPEND ON EACHOTHER
+
 AND USE ALL APPROPRIATE HOOKS/TOOLS/ETC SEED
 PROVIDES TO TAKE MOST DIRECT DATA PATH
 TO MAKE WHAT IS NEEDED.

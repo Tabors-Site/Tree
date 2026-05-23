@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// TreeOS Place . AGPL-3.0 . https://treeos.ai . Tabor Holly
+// TreeOS Reality . AGPL-3.0 . https://treeos.ai . Tabor Holly
 //
 // Plant the seed.
 //
@@ -83,7 +83,7 @@ const REQUIRED_KEYS = ["MONGODB_URI", "JWT_SECRET", "PORT", "REALITY_DOMAIN"];
 
 const DEFAULTS = {
   REALITY_DOMAIN: "localhost",
-  REALITY_NAME: "My Place",
+  REALITY_NAME: "My Reality",
   PORT: "3000",
   MONGODB_URI: "mongodb://localhost:27017/place",
 };
@@ -151,7 +151,7 @@ async function interactiveSetup(existingEnv = {}) {
 
   console.log("");
   console.log("  ════════════════════════════════════════════════════════════");
-  console.log("   TreeOS. A new place prepares to awaken.");
+  console.log("   TreeOS. A new reality prepares to awaken.");
   console.log("  ════════════════════════════════════════════════════════════");
   console.log("");
   console.log("  I have not yet come alive. Before genesis can begin, the");

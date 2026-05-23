@@ -5,14 +5,14 @@
 // Genesis 3:24: God placed cherubim east of Eden to guard the way.
 // I play that role here. I am the only stance that accepts a request
 // from an unidentified arrival, and I stand at the threshold between
-// outside the place (no identity, no being-in-this-place yet) and
+// outside the reality (no identity, no being-in-this-reality yet) and
 // inside (bound to a being, addressable by stance). Without a cherub
 // at the gate there is no orderly passage. With one, the boundary
 // holds and the passage is witnessed.
 //
 // Four operations:
 //
-//   register — admit a new being into the place. The arrival has no
+//   register — admit a new being into the reality. The arrival has no
 //              identity yet; I summon their being-to-be forth via
 //              SUMMON.create-being internally and bind their session
 //              to it. The first ever caller becomes the rootOperator.
@@ -47,10 +47,10 @@
 //   - release(payload, ctx)  -> { released: true }
 //   - switch(payload, ctx)   -> { active }
 //
-// On every other place, a different cherub can be installed by an
+// On every other reality, a different cherub can be installed by an
 // extension. The contract above is what the protocol layer expects.
 
-import log from "../../parentReality/log.js";
+import log from "../../seedReality/log.js";
 import { hooks } from "../../hooks.js";
 import Being from "../../materials/being/being.js";
 import {
@@ -59,7 +59,7 @@ import {
   verifyPassword,
   generateToken,
 } from "../../materials/being/identity.js";
-import { getSpaceRootId } from "../../seedRoot.js";
+import { getSpaceRootId } from "../../sprout.js";
 import { IbpError, IBP_ERR } from "../../ibp/protocol.js";
 import { getRealityDomain } from "../../ibp/address.js";
 import { summonCreateBeing } from "../../ibp/verbs.js";
@@ -97,7 +97,7 @@ export const cherubBeing = Object.freeze({
     // Two things differ from the subsequent path: their being-tree
     // parent is the I_AM directly (so they become the rootOperator),
     // and beforeRegister is bypassed because hook listeners are not
-    // yet loaded on a fresh place. The cherub at the gate admits the
+    // yet loaded on a fresh reality. The cherub at the gate admits the
     // first arrival the same way as every later one.
     const first = await isFirstBeing();
     if (first) {

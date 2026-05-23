@@ -13,7 +13,7 @@
 //              mimeType }. Bytes live outside me.
 //   WEB        Bridges to a URL. content is { url, fetchedAt?,
 //              cache? }. Live content lives at the URL.
-//   CROSS_PLACE Bridges to matter on another place. content is
+//   CROSS_REALITY Bridges to matter on another reality. content is
 //              { place, matterRef }.
 //
 // New origins (git, database, stream, service) plug in as new
@@ -24,5 +24,5 @@ export const MATTER_ORIGIN = Object.freeze({
   IBP:        "ibp",
   FILESYSTEM: "filesystem",
   WEB:        "web",
-  CROSS_PLACE: "cross-place",
+  CROSS_REALITY: "cross-reality",
 });

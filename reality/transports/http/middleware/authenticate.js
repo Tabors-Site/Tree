@@ -10,7 +10,7 @@
 // JWT verification lives in seed/materials/being/identity.js so every transport
 // (HTTP middleware, WS, IBP adapter, MCP) shares one source of truth.
 
-import log from "../../../seed/parentReality/log.js";
+import log from "../../../seed/seedReality/log.js";
 import { verifyTokenStrict } from "../../../seed/materials/being/identity.js";
 import { resolveSpaceAccess } from "../../../seed/materials/space/spaces.js";
 import { authStrategies } from "../../../seed/services.js";

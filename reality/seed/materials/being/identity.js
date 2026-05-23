@@ -17,7 +17,8 @@ import { v4 as uuidv4 } from "uuid";
 import { escapeRegex } from "../../utils.js";
 import { getRealityConfigValue } from "../../realityConfig.js";
 import { IBP_ERR, IbpError } from "../../ibp/protocol.js";
-import log from "../../parentReality/log.js";
+import log from "../../seedReality/log.js";
+import { logFact } from "../../past/fact/facts.js";
 
 if (!process.env.JWT_SECRET)
   throw new Error(
@@ -67,7 +68,7 @@ export async function findIAm() {
 }
 
 // Cached I_AM identity object suitable for `opts.identity` on verb
-// calls. The I_AM has universal authority on its place; seed-internal
+// calls. The I_AM has universal authority on its reality; seed-internal
 // callers (DO-trigger fan-out, scheduled-wake tick, genesis
 // scaffolding) pass this identity so `authorize` shorts to allow.
 let _iAmIdentityCache = null;
@@ -82,7 +83,7 @@ export async function iAmIdentity() {
 /**
  * Find the place's root operator — the first human who registered.
  * The I_AM precedes them; the operator is the first being whose
- * `operatingMode === "human"`. Returns null on a fresh place before
+ * `operatingMode === "human"`. Returns null on a fresh reality before
  * any human has registered. Use this for "who runs this place"
  * checks (place-LLM config, root-only operations); use `findIAm()`
  * for "who is the substrate's identity" checks.
@@ -105,7 +106,7 @@ export async function isFirstBeing() {
 // BEING CREATION
 // ─────────────────────────────────────────────────────────────────────────
 
-// First human on a fresh place. The I-Am already exists by this point
+// First human on a fresh reality. The I-Am already exists by this point
 // (planted by ensureSpaceRoot); callers pass my id as opts.parentBeingId
 // so the first human's being-tree parent is me. Race-resilient: two
 // concurrent first-run registrations both pass isFirstBeing(); the
@@ -114,11 +115,15 @@ export async function createFirstBeing(name, password, opts = {}) {
   return createBeing(name, password, opts);
 }
 
-// Create a being. Defaults to operatingMode="human" with a chosen
-// password. LLM-driven being creation calls this with
-// opts.operatingMode="llm" (typically with an auto-generated password)
-// and opts.role/homeSpace. Password is hashed via Being schema's
-// pre-save hook.
+// Create a being. Fact-driven (Slice D, 2026-05-23). Hashes the
+// password explicitly, stamps a be:register Fact with the full spec
+// on the new being's reel, then reads back the row that eager-fold
+// materialized via applyBirthBeing + initProjection. The pre-save
+// bcrypt hook is retired (Slice E) — the fact path is the only path
+// that creates Being rows now, and it pre-hashes before stamping.
+//
+// opts.actId threads the calling moment so the be:register Fact rides
+// the caller's frame. Genesis flows (seedDelegates) pass null actId.
 export async function createBeing(name, password, opts = {}) {
   name = validateName(name);
   validatePassword(password);
@@ -147,36 +152,48 @@ export async function createBeing(name, password, opts = {}) {
     defaultRole = opts.role;
   }
 
-  const being = new Being({
+  // Hash the password manually so the fact carries the hashed value.
+  // The reducer's applyBirthBeing reads spec.password verbatim and
+  // applyProjection writes it via $set (which skips the pre-save hook).
+  const salt = await bcrypt.genSalt(12);
+  const hashedPassword = await bcrypt.hash(password, salt);
+
+  const id = uuidv4();
+  const spec = {
     name,
-    password,
+    password: hashedPassword,
     operatingMode: opts.operatingMode || "human",
     roles: rolesList,
     defaultRole,
-    // Being-tree parent. parentBeingId: null is reserved for me, the
-    // I-Am. Every other being chains back: the place beings (auth,
-    // llm-assigner, place-manager) and the first human parent under me.
-    // Subsequent humans register under @cherub. Rulers are children of
-    // the being that promoted them; inner beings (Planner, Contractor,
-    // Foreman) are children of their Ruler.
-    //
-    // Caller is responsible for $addToSet on parent.children (atomic)
-    // after this insert. createBeingWithHome does it automatically.
     parentBeingId: opts.parentBeingId || null,
     homeSpace: opts.homeSpace || null,
-    // Every being starts at home. Navigation updates currentSpace
-    // through the accessors in position.js.
     currentSpace: opts.currentSpace || opts.homeSpace || null,
     llmDefault: opts.llmDefault || null,
     isRemote: opts.isRemote || false,
-    homePlace: opts.homePlace || null,
-  });
+    homeReality: opts.homeReality || null,
+    qualities: {},
+  };
+
   try {
-    await being.save();
+    await logFact({
+      verb:    "be",
+      action:  "register",
+      beingId: id, // the new being is the actor (identity acting on identity)
+      target:  { kind: "being", id },
+      params:  { spec },
+      actId:   opts.actId || null,
+    });
   } catch (err) {
     if (err.code === 11000)
       throw new IbpError(IBP_ERR.RESOURCE_CONFLICT, "Name already taken");
     throw err;
+  }
+
+  const being = await Being.findById(id);
+  if (!being) {
+    throw new Error(
+      `createBeing: register Fact stamped but row ${id} not materialized`,
+    );
   }
   return being;
 }
@@ -379,10 +396,10 @@ export async function findBeingByName(name) {
 // `createBeingWithHome` is the single primitive for placing a being in
 // the world with a home. Same operation handles every case:
 //
-//   - Human registration: operatingMode="human", homeParent=place root.
+//   - Human registration: operatingMode="human", homeParent=space root.
 //     Creates the human's home territory directly under the place root.
-//   - Place beings (auth, llm-assigner, place-manager): homeSpace=place
-//     root. No new space; the being just lives at the place root.
+//   - Seed delegates (cherub, llm-assigner, reality-manager): homeSpace=space
+//     root. No new space; the delegate just lives at the space root.
 //   - Ruler promotion: homeSpace=the ruler-scope space. Existing space,
 //     no rootOwner change. beings.ruler.beingId stamped on it.
 //   - Trio members (Planner, Contractor, Foreman): homeParent=ruler
@@ -413,7 +430,7 @@ export async function findBeingByName(name) {
  * @param {object} [opts.homeQualities]       initial qualities for the new home Space
  * @param {function} [opts.scaffolding]       async ({being, home}) => {} for extra structure
  * @param {boolean} [opts.isRemote=false]
- * @param {string} [opts.homePlace=null]
+ * @param {string} [opts.homeReality=null]
  * @param {string} [opts.parentBeingId]       being-tree parent
  * @returns {Promise<{being: object, home: object}>}
  */
@@ -433,8 +450,10 @@ export async function createBeingWithHome(opts) {
     homeQualities = null,
     scaffolding = null,
     isRemote = false,
-    homePlace = null,
+    homeReality = null,
     parentBeingId = null,
+    identity = null,
+    actId = null,
   } = opts || {};
   let { name, password } = opts || {};
 
@@ -496,17 +515,39 @@ export async function createBeingWithHome(opts) {
       homeType ||
       (operatingMode === "human" ? "home-territory" : `${role}-home`);
 
-    home = await Space.create({
-      _id: uuidv4(),
-      name: resolvedName,
-      type: resolvedType,
-      parent: homeParent,
-      rootOwner: null, // set below for humans only
-      contributors: [],
-      ...(homeQualities ? { qualities: homeQualities } : {}),
+    // Fact-driven home-space birth (Slice D-extended, 2026-05-23).
+    // Stamps a do:birth Fact on the new home space's reel; eager-fold
+    // runs applyBirthSpace + initProjection to materialize the row.
+    // Bypasses createSpace because that helper rejects seedSpace
+    // parents — human homes live directly under the place root which
+    // IS the SPACE_ROOT seedSpace.
+    const homeId = uuidv4();
+    const specQualities = homeQualities instanceof Map
+      ? Object.fromEntries(homeQualities)
+      : (homeQualities || {});
+    const { I_AM } = await import("./seedBeings.js");
+    await logFact({
+      verb:    "do",
+      action:  "birth",
+      beingId: identity?.beingId ? String(identity.beingId) : I_AM,
+      target:  { kind: "space", id: homeId },
+      params:  {
+        spec: {
+          name:      resolvedName,
+          type:      resolvedType,
+          parent:    String(homeParent),
+          rootOwner: null, // set below for humans only via do.set
+          qualities: specQualities,
+        },
+      },
+      actId,
     });
-    // No parent.children[] update — Space.children retired; the home's
-    // `parent` field is the relation. listSpaceChildren queries by parent.
+    home = await Space.findById(homeId);
+    if (!home) {
+      throw new Error(
+        `createBeingWithHome: home-space birth Fact stamped but row ${homeId} not materialized`,
+      );
+    }
     createdNewHome = true;
   }
 
@@ -519,8 +560,9 @@ export async function createBeingWithHome(opts) {
       homeSpace: String(home._id),
       llmDefault,
       isRemote,
-      homePlace,
+      homeReality,
       parentBeingId,
+      actId, // ride the caller's moment when threaded through
     });
   } catch (err) {
     if (createdNewHome) {
@@ -541,24 +583,28 @@ export async function createBeingWithHome(opts) {
   // Human home territories are tree roots (rootOwner = the being).
   // Non-human being homes are structural sub-spaces within someone
   // else's tree; they inherit access from the parent and leave
-  // rootOwner null.
+  // rootOwner null. Fact-driven via do.set; scaffold attribution
+  // because createBeingWithHome is itself a higher-level orchestration
+  // already authorized at the caller (cherub.register, summonCreateBeing).
+  // Stamping under the new being's identity would face a chicken-and-egg
+  // with stance auth (the being is becoming the owner; auth needs them
+  // to already be the owner).
   if (createdNewHome && operatingMode === "human") {
-    await Space.updateOne(
-      { _id: home._id },
-      { $set: { rootOwner: being._id } },
+    const { doVerb } = await import("../../ibp/verbs.js");
+    const homeDoc = await Space.findById(home._id);
+    await doVerb(
+      homeDoc,
+      "set",
+      { field: "rootOwner", value: String(being._id) },
+      { scaffold: true },
     );
     home.rootOwner = being._id;
   }
 
-  // ── Link into the being-tree parent's children list ──
-  // The being itself carries parentBeingId; the parent also needs its
-  // `children` array updated for fast downward walks. Atomic, idempotent.
-  if (parentBeingId) {
-    await Being.updateOne(
-      { _id: parentBeingId },
-      { $addToSet: { children: String(being._id) } },
-    );
-  }
+  // The being-tree parent's children[] cache is retired. The being's
+  // `parentBeingId` is the single source of truth; downward walks
+  // query by parentBeingId (parallel to Space.children retirement,
+  // 2026-05-23).
 
   // ── Register the being home on the home Space ──
   // Skipped for humans — humans aren't surfaced as beings at their

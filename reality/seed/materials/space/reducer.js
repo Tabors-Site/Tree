@@ -53,5 +53,15 @@ export function reduce(state, fact) {
     next = { ...next, position: explicit };
   }
 
+  // do:set { field:"parent", value:X } also moves the space. applySetField
+  // updates state.parent above; mirror it onto position so foldPlace's
+  // occupant index reflects the move. (The free-form `params.parent`
+  // branch above handles facts that ship a parent in params directly,
+  // e.g. spec-bearing birth facts; this branch handles the do:set shape
+  // where the new value rides params.value.)
+  if (fact?.action === "set" && fact?.params?.field === "parent") {
+    next = { ...next, position: fact.params.value ?? null };
+  }
+
   return next === state ? { ...state } : next;
 }

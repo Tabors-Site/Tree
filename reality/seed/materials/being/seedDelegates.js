@@ -20,7 +20,7 @@
 //                  factory-assembled frames.
 //
 // They exist as real Being rows so the descriptor can surface them
-// and the address grammar resolves `<place>/@cherub` (etc.) to them.
+// and the address grammar resolves `<reality>/@cherub` (etc.) to them.
 //
 // These are beings I formed from myself, but they are no longer me.
 // They have their own identities, their own summon paths, their own
@@ -43,7 +43,7 @@
 // [identity.js](identity.js). This file owns the delegate roster
 // and the scaffold that ensures their rows exist.
 
-import log from "../../parentReality/log.js";
+import log from "../../seedReality/log.js";
 import Being from "./being.js";
 import Space from "../space/space.js";
 import { summonCreateBeing } from "../../ibp/verbs.js";
@@ -119,41 +119,34 @@ export async function ensureSeedDelegates(spaceRootId) {
         "_id roles defaultRole homeSpace operatingMode parentBeingId",
       );
       if (existingBeing) {
-        // Idempotent drift correction: keep mode/role/home/parent in sync.
-        let dirty = false;
+        // Idempotent drift correction: keep mode/role/home/parent in
+        // sync via do.set facts (one per field that drifted, on the
+        // delegate's reel). The legacy `existingBeing.save()` direct
+        // write retired (2026-05-23); fact-driven keeps the genesis
+        // exception list short (only the placeRoot/I_AM creation).
+        const { doVerb } = await import("../../ibp/verbs.js");
+        const opts = { scaffold: true };
+        const setField = (field, value) =>
+          doVerb(existingBeing, "set", { field, value }, opts);
+
         if (existingBeing.operatingMode !== spec.operatingMode) {
-          existingBeing.operatingMode = spec.operatingMode;
-          dirty = true;
+          await setField("operatingMode", spec.operatingMode);
         }
-        // Sync roles[] + defaultRole to the spec's single role. Seed
-        // delegates carry exactly the role the spec names; if the
-        // spec changes, the being is updated.
         const carried = Array.isArray(existingBeing.roles)
           ? existingBeing.roles
           : [];
         if (!carried.includes(spec.role) || carried.length !== 1) {
-          existingBeing.roles = [spec.role];
-          dirty = true;
+          await setField("roles", [spec.role]);
         }
         if (existingBeing.defaultRole !== spec.role) {
-          existingBeing.defaultRole = spec.role;
-          dirty = true;
+          await setField("defaultRole", spec.role);
         }
         if (existingBeing.homeSpace !== String(spaceRootId)) {
-          existingBeing.homeSpace = String(spaceRootId);
-          dirty = true;
+          await setField("homeSpace", String(spaceRootId));
         }
-        // Re-parent under me if drift left parentBeingId out of date.
-        // The being-tree chain delegate → me → null must hold.
         if (existingBeing.parentBeingId !== rootBeingId) {
-          existingBeing.parentBeingId = rootBeingId;
-          dirty = true;
-          await Being.updateOne(
-            { _id: rootBeingId },
-            { $addToSet: { children: String(existingBeing._id) } },
-          );
+          await setField("parentBeingId", rootBeingId);
         }
-        if (dirty) await existingBeing.save();
         existing++;
         continue;
       }

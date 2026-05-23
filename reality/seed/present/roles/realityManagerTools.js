@@ -11,7 +11,7 @@
 // So reality-manager ships just two generic tools and the LLM enumerates
 // the actual surface live:
 //
-//   place-see   →  SEE on any position on this place. Reads the .config,
+//   place-see   →  SEE on any position on this reality. Reads the .config,
 //                 .extensions, .peers, .operations, .roles, .tools, …
 //                 place seed spaces to enumerate current state.
 //
@@ -28,25 +28,25 @@
 import { z } from "zod";
 import { seeVerb, doVerb } from "../../ibp/verbs.js";
 import { getRealityDomain } from "../../ibp/address.js";
-import { getSpaceRootId } from "../../seedRoot.js";
+import { getSpaceRootId } from "../../sprout.js";
 
 export const realityManagerTools = [
   {
     name: "place-see",
     description:
-      "Read substrate at any position on this place. Returns a Position Descriptor. " +
+      "Read substrate at any position on this reality. Returns a Position Descriptor. " +
       "Use it to enumerate place-level state: " +
-      "SEE <place>/.config for runtime config keys; " +
-      "SEE <place>/.extensions for installed extensions; " +
-      "SEE <place>/.operations to discover what place-do can invoke; " +
-      "SEE <place>/.peers / .tools / .roles for the live registries; " +
-      "SEE <place>/.identity for this place's DID and public key.",
+      "SEE <reality>/.config for runtime config keys; " +
+      "SEE <reality>/.extensions for installed extensions; " +
+      "SEE <reality>/.operations to discover what place-do can invoke; " +
+      "SEE <reality>/.peers / .tools / .roles for the live registries; " +
+      "SEE <reality>/.identity for this reality's DID and public key.",
     verb: "see",
     schema: {
       address: z.string().describe(
         "Position address to read. Examples: " +
         "'.config', '.extensions', 'treeos.ai/.operations', 'treeos.ai/<spaceId>'. " +
-        "Relative addresses (starting with '.') resolve against this place's root.",
+        "Relative addresses (starting with '.') resolve against this reality's root.",
       ),
       beingId: z.string().describe("Injected by server. Ignore."),
       name:    z.string().optional().describe("Injected by server. Ignore."),
@@ -68,7 +68,7 @@ export const realityManagerTools = [
     name: "place-do",
     description:
       "Invoke a registered DO operation at the place root. " +
-      "Use place-see on <place>/.operations first to discover what's available " +
+      "Use place-see on <reality>/.operations first to discover what's available " +
       "and what args each operation expects. Typical place-level ops: " +
       "set-config, delete-config, install-extension, uninstall-extension, " +
       "enable-extension, disable-extension. " +

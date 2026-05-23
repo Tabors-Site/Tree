@@ -1,8 +1,8 @@
 // TreeOS Seed . AGPL-3.0 . https://treeos.ai . Tabor Holly
 //
-// I plant the place root and the nine place seed spaces here. This
+// I plant the reality root and the nine reality seed spaces here. This
 // is genesis. I act before any other being exists. My first DO
-// creates the place root; the next eight plant the rest of the seed
+// declares the reality root; the next eight plant the rest of the seed
 // spaces beneath it; my last act in this file creates my own Being
 // row so every Fact from t=0 has me as its actor.
 //
@@ -14,7 +14,8 @@
 //
 // Idempotent. Runs every boot, creates only what is missing.
 
-import log from "./parentReality/log.js";
+import log from "./seedReality/log.js";
+import { v4 as uuidv4 } from "uuid";
 import Space from "./materials/space/space.js";
 import { SEED_SPACE } from "./materials/space/seedSpaces.js";
 import { I_AM } from "./materials/being/seedBeings.js";
@@ -23,7 +24,7 @@ import { logFact } from "./past/fact/facts.js";
 
 let spaceRootCache = null;
 
-const PLACE_SEED_SPACES = [
+const REALITY_SEED_SPACES = [
   {
     name: ".identity",
     seedSpace: SEED_SPACE.IDENTITY,
@@ -50,10 +51,10 @@ const PLACE_SEED_SPACES = [
   { name: ".roles", seedSpace: SEED_SPACE.ROLES },
   { name: ".operations", seedSpace: SEED_SPACE.OPERATIONS },
   // .source is read-only. Populated by seed/materials/space/source.js as a filesystem
-  // mirror of place/. DO writes against children reject with ORIGIN_READ_ONLY.
+  // mirror of reality/. DO writes against children reject with ORIGIN_READ_ONLY.
   { name: ".source", seedSpace: SEED_SPACE.SOURCE },
   // .threads is a derived projection. Live rootCorrelation chains
-  // surface as synthetic children at `<place>/.threads/<id>`; the
+  // surface as synthetic children at `<reality>/.threads/<id>`; the
   // descriptor is computed on demand from inbox + Act records.
   // SUMMON to a thread address is a cut. See seed/materials/space/threads.js.
   { name: ".threads", seedSpace: SEED_SPACE.THREADS },
@@ -64,38 +65,46 @@ export async function ensureSpaceRoot() {
 
   if (!spaceRoot) {
     const realityName = process.env.REALITY_NAME || "My Place";
-    spaceRoot = new Space({
-      name: realityName,
-      rootOwner: I_AM,
-      parent: null,
-      seedSpace: SEED_SPACE.SPACE_ROOT,
-      contributors: [],
+    // Fact-driven genesis (2026-05-23). My first act issues my first
+    // Fact. Per MOMENT.md: "the I-Am is born of nothing, and its
+    // first act issues its own first fact." The fact carries
+    // beingId="I_AM" (a string ref to a Being row that doesn't yet
+    // exist — ensureIAm below materializes it). Eager-fold runs
+    // applyBirthSpace + initProjection; the SPACE_ROOT row appears.
+    const rootId = uuidv4();
+    await logFact({
+      verb: "do",
+      action: "birth",
+      beingId: I_AM,
+      target: { kind: "space", id: rootId },
+      params: {
+        spec: {
+          name: realityName,
+          type: null,
+          parent: null,
+          rootOwner: I_AM,
+          seedSpace: SEED_SPACE.SPACE_ROOT,
+          qualities: {},
+        },
+      },
     });
-    await spaceRoot.save();
-    log.info("Place", `Created place root: ${spaceRoot._id}`);
-    // My first DO. populate() resolves the beingId backward to me
-    // once ensureIAm's call places my Being row.
-    try {
-      await logFact({
-        verb:    "do",
-        action:  "create",
-        beingId: I_AM,
-        target:  { kind: "space", id: String(spaceRoot._id) },
-        params:  { name: realityName, seedSpace: SEED_SPACE.SPACE_ROOT },
-      });
-    } catch (err) {
-      log.warn("Place", `Fact stamp for place-root creation failed: ${err.message}`);
+    spaceRoot = await Space.findById(rootId);
+    if (!spaceRoot) {
+      throw new Error(
+        `ensureSpaceRoot: genesis birth Fact stamped but row ${rootId} not materialized`,
+      );
     }
+    log.info("Place", `Created place root: ${spaceRoot._id}`);
   }
 
-  for (const def of PLACE_SEED_SPACES) {
+  for (const def of REALITY_SEED_SPACES) {
     let space = await Space.findOne({ seedSpace: def.seedSpace });
 
     if (!space) {
       try {
         space = await createRealitySeedSpace({
-          name:      def.name,
-          parentId:  spaceRoot._id,
+          name: def.name,
+          parentId: spaceRoot._id,
           seedSpace: def.seedSpace,
           qualities: def.buildQualities ? def.buildQualities() : null,
         });
@@ -109,34 +118,43 @@ export async function ensureSpaceRoot() {
       }
     }
 
-    // Repair: a place seed space found at the wrong parent (manual DB
-    // edit, corruption) gets moved back under the place root. Parent
-    // is the only direction now — the parent-side children[] cache is
-    // retired; readers query by parent.
+    // Repair: a seed space found at the wrong parent (manual DB
+    // edit, corruption) gets moved back under the space root. Routes
+    // through do.set so the repair stamps a Fact (audit trail of the
+    // recovery action).
     if (space.parent && space.parent.toString() !== spaceRoot._id.toString()) {
       log.warn(
         "Place",
         `Place seed space ${def.name} has wrong parent. Repairing.`,
       );
-      await Space.findByIdAndUpdate(space._id, {
-        $set: { parent: spaceRoot._id },
-      });
+      const { doVerb } = await import("./ibp/verbs.js");
+      await doVerb(
+        space,
+        "set",
+        { field: "parent", value: String(spaceRoot._id) },
+        { scaffold: true },
+      );
     }
   }
 
   // Adopt orphan tree roots (rootOwner is not me, parent is null).
-  // These exist when a tree was created before the place root, or
-  // when a prior boot crashed mid-creation. Bring them home by setting
-  // parent — that's the whole adoption.
+  // These exist when a tree was created before the space root, or
+  // when a prior boot crashed mid-creation. Bring them home by
+  // stamping a do:set parent Fact (audit trail of the adoption).
   try {
     const orphanRoots = await Space.find({
       rootOwner: { $nin: [null, I_AM] },
       parent: null,
     });
+    const { doVerb } = await import("./ibp/verbs.js");
     for (const root of orphanRoots) {
       try {
-        root.parent = spaceRoot._id;
-        await root.save();
+        await doVerb(
+          root,
+          "set",
+          { field: "parent", value: String(spaceRoot._id) },
+          { scaffold: true },
+        );
       } catch (err) {
         log.error(
           "Place",
@@ -175,23 +193,56 @@ export async function ensureSpaceRoot() {
 // roles (I precede the role registry); operatingMode scripted (code
 // cognition only). The random password is never used; I cannot be
 // claimed or summoned interactively.
+//
+// Fact-driven (2026-05-23). The be:register Fact self-stamps:
+// beingId points at the not-yet-existing Being row whose
+// materialization the same Fact triggers. Per MOMENT.md: "the
+// I-Am's first act issues its own first fact." The Being row IS
+// the fold-so-far of that one fact.
 async function ensureIAm(spaceRootId) {
   const Being = (await import("./materials/being/being.js")).default;
-  let iAm = await Being.findOne({ name: I_AM })
-    .select("_id")
-    .lean();
+  let iAm = await Being.findOne({ name: I_AM }).select("_id").lean();
   if (iAm) return iAm;
 
+  const id = uuidv4();
+  // The random password is hashed and stored but never used (I cannot
+  // be claimed). Pre-hash because the fact path uses $set which skips
+  // the schema's pre-save bcrypt hook.
+  const bcrypt = (await import("bcrypt")).default;
   const password =
     Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2);
-  const created = await Being.create({
-    name: I_AM,
-    password,
-    operatingMode: "scripted",
-    parentBeingId: null,
-    homeSpace: spaceRootId,
-    currentSpace: spaceRootId,
+  const salt = await bcrypt.genSalt(12);
+  const hashedPassword = await bcrypt.hash(password, salt);
+
+  await logFact({
+    verb: "be",
+    action: "register",
+    beingId: id, // self-stamping — the not-yet-existing being is its own actor
+    target: { kind: "being", id },
+    params: {
+      spec: {
+        name: I_AM,
+        password: hashedPassword,
+        operatingMode: "scripted",
+        roles: [],
+        defaultRole: null,
+        parentBeingId: null,
+        homeSpace: String(spaceRootId),
+        currentSpace: String(spaceRootId),
+        llmDefault: null,
+        isRemote: false,
+        homeReality: null,
+        qualities: {},
+      },
+    },
   });
+
+  const created = await Being.findById(id);
+  if (!created) {
+    throw new Error(
+      `ensureIAm: genesis register Fact stamped but row ${id} not materialized`,
+    );
+  }
   log.info("Place", `Planted I_AM (${String(created._id).slice(0, 8)})`);
   return created;
 }
@@ -207,20 +258,24 @@ export function getSpaceRootId() {
   return spaceRootCache?._id || null;
 }
 
-// A tree root is a child of the place root with a non-seed rootOwner
+// A tree root is a child of the space root with a non-seed rootOwner
 // and no seedSpace. Single source of truth; use everywhere.
 export function isBeingRoot(space) {
   if (!space) return false;
   if (space.seedSpace) return false;
   if (!space.rootOwner || String(space.rootOwner) === I_AM) return false;
   const spaceRootId = getSpaceRootId();
-  if (spaceRootId && space.parent && String(space.parent) !== String(spaceRootId))
+  if (
+    spaceRootId &&
+    space.parent &&
+    String(space.parent) !== String(spaceRootId)
+  )
     return false;
   return true;
 }
 
-// Mirror loaded extensions into the .extensions place seed space so SEE
-// on `<place>/.extensions/<name>` returns the extension's surface
+// Mirror loaded extensions into the .extensions seed space so SEE
+// on `<reality>/.extensions/<name>` returns the extension's surface
 // (capabilities, deps, scope) via the standard descriptor pipeline.
 export async function syncExtensionsToTree(manifests) {
   const extSpace = await Space.findOne({ seedSpace: SEED_SPACE.EXTENSIONS });
@@ -277,22 +332,43 @@ export async function syncExtensionsToTree(manifests) {
         await doVerb(
           refreshed,
           "set",
-          { field: "qualities.extension", value: extensionQuality, merge: false },
+          {
+            field: "qualities.extension",
+            value: extensionQuality,
+            merge: false,
+          },
           { scaffold: true },
         );
       }
     } else {
       try {
-        const child = new Space({
-          name: manifest.name,
-          parent: extSpace._id,
-          type: "resource",
-          contributors: [],
-          qualities,
-        });
-        await child.save();
-        // No parent.children[] update — parent-side cache is retired;
-        // listSpaceChildren / findByPosition query by parent.
+        // Fact-driven extension-space birth (genesis cleanup, 2026-05-23).
+        // Stamps a do:birth Fact under the .extensions seed space; the
+        // reducer's applyBirthSpace + initProjection materializes the
+        // row. scaffold:true attribution because syncExtensionsToTree
+        // runs at extension load (I_AM is the actor).
+        const childId = uuidv4();
+        const { doVerb } = await import("./ibp/verbs.js");
+        await doVerb(
+          extSpace,
+          "birth",
+          {
+            kind: "space",
+            spec: {
+              name: manifest.name,
+              type: "resource",
+              parent: String(extSpace._id),
+              rootOwner: null,
+              qualities: Object.fromEntries(qualities),
+            },
+          },
+          { scaffold: true },
+        );
+        // Note: do.birth handler doesn't take an explicit child id; it
+        // allocates one. To preserve the existing fact-driven pattern
+        // here (where we want the manifest name as the addressable
+        // child), we let the reducer's spec.name handle naming.
+        void childId;
       } catch (err) {
         log.error(
           "Place",

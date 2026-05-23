@@ -2,16 +2,16 @@
 //
 // Place identity, remembered across reboots.
 //
-// What this place IS to the outside world — its name, public URL,
+// What this reality IS to the outside world — its name, public URL,
 // federation directory, accepted MIME types, boundary security
 // domains. Things the discovery payload surfaces, things a peer
-// place sees when it reaches in.
+// reality sees when it reaches in.
 //
-// At genesis I plant the `.config` place seed space and write the
+// At genesis I plant the `.config` seed space and write the
 // boot-time settings into its qualities Map. Every later boot, I
 // read that Map back through `initRealityConfig()`.
 // `getRealityConfigValue(key)` and `setRealityConfigValue(key, value)`
-// are the only sanctioned paths in or out for place-identity keys.
+// are the only sanctioned paths in or out for reality-identity keys.
 //
 // Seed runtime knobs (LLM call shape, scheduler backpressure, hook
 // timeouts, cleanup intervals — the apparatus's internal tuning)
@@ -20,7 +20,7 @@
 // the split is conceptual — readers reach the right surface at
 // import-site.
 
-import log from "./parentReality/log.js";
+import log from "./seedReality/log.js";
 import Space from "./materials/space/space.js";
 import { SEED_SPACE } from "./materials/space/seedSpaces.js";
 
@@ -28,7 +28,7 @@ let configCache = null;
 let initialized = false;
 let cachedRealityUrl = null;
 
-// The place's public connection URL. Other places, browsers, and the
+// The reality's public connection URL. Other realities, browsers, and the
 // IBP discovery endpoint all reach me at this URL. Derived from
 // REALITY_DOMAIN + PORT; REALITY_PUBLIC_URL overrides the whole value for
 // reverse-proxy deploys where the constructed URL would be wrong.
@@ -141,8 +141,8 @@ export function getRealityConfigValue(key) {
   return null;
 }
 
-// Cached _id of the .config place seed space. Looked up on first write
-// and stable thereafter — the place seed spaces are created once at
+// Cached _id of the .config seed space. Looked up on first write
+// and stable thereafter — the seed spaces are created once at
 // genesis and never deleted. Avoids the seedSpace-marker scan on every
 // config write during boot.
 let cachedConfigSpaceId = null;
@@ -214,7 +214,7 @@ export async function deleteRealityConfigValue(key, { internal, identity } = {})
   log.verbose("Place", `Config deleted: ${key}`);
 }
 
-// Place-identity defaults. What this place IS to the outside
+// Place-identity defaults. What this reality IS to the outside
 // world. Seed runtime knobs (LLM timeout, scheduler limits, hooks,
 // caches, etc.) live in [factoryConfig.js](factoryConfig.js).
 export const CONFIG_DEFAULTS = {
@@ -225,7 +225,7 @@ export const CONFIG_DEFAULTS = {
   timezone: null,
   realityLlmConnection: null,
 
-  // Boundary security (what the place accepts at its edge)
+  // Boundary security (what the reality accepts at its edge)
   allowedLlmDomains: [],
   allowedFrameDomains: [],
   allowedMimeTypes: null,

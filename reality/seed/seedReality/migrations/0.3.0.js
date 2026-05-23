@@ -7,7 +7,7 @@
  * 1. Every existing User row becomes a Being row with
  *    `operatingMode = "human"`. All existing fields carry forward
  *    unchanged (password stays bcrypt-hashed, llmDefault preserved,
- *    isAdmin/isRemote/homePlace/metadata preserved). AI beings are
+ *    isAdmin/isRemote/homeReality/metadata preserved). AI beings are
  *    created lazily by their extensions and are NOT part of this
  *    migration.
  *
@@ -35,14 +35,14 @@ import { v4 as uuidv4 } from "uuid";
 import log from "../log.js";
 import Being from "../../materials/being/being.js";
 import Space from "../../materials/space/space.js";
-import { getSpaceRootId } from "../../seedRoot.js";
+import { getSpaceRootId } from "../../sprout.js";
 
 export default async function migrate() {
   const usersColl = mongoose.connection.collection("users");
   const userDocs = await usersColl.find({}).toArray();
 
   if (userDocs.length === 0) {
-    log.info("Seed/0.3.0", "no User rows to migrate (fresh place or already migrated)");
+    log.info("Seed/0.3.0", "no User rows to migrate (fresh reality or already migrated)");
     return;
   }
 
@@ -73,7 +73,7 @@ export default async function migrate() {
           homePositionId: null,              // set in step 2
           llmDefault:    u.llmDefault || null,
           isRemote:      !!u.isRemote,
-          homePlace:      u.homePlace || null,
+          homeReality:      u.homeReality || null,
           metadata:      u.qualities || {},
           createdAt:     u.createdAt || new Date(),
           updatedAt:     u.updatedAt || new Date(),
@@ -111,7 +111,7 @@ export default async function migrate() {
           { _id: beingId },
           { $set: { homePositionId: String(homeSpace._id) } },
         );
-        // Add to the place root's children list so navigation works.
+        // Add to the space root's children list so navigation works.
         await Space.updateOne(
           { _id: spaceRootId },
           { $addToSet: { children: String(homeSpace._id) } },

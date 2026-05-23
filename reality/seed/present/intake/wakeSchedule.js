@@ -14,7 +14,7 @@
 // pending.
 //
 // Two-mode neutrality. The default emitter writes wake SUMMONs as
-// the I_AM (`<place>/<spaceRoot>@I_AM`) — the subscriber declared
+// the I_AM (`<reality>/<spaceRoot>@I_AM`) — the subscriber declared
 // the cadence, the I_AM holds the declaration and asks for the
 // moment when the tick fires. A place that wants an embodied
 // scheduler-being installs an extension that calls setEmitter()
@@ -41,10 +41,10 @@
 // compression, peer-review).
 
 import { randomUUID } from "crypto";
-import log from "../../parentReality/log.js";
+import log from "../../seedReality/log.js";
 import { summonByResolved } from "../../ibp/verbs.js";
 import { getRealityDomain } from "../../ibp/address.js";
-import { getSpaceRootId } from "../../seedRoot.js";
+import { getSpaceRootId } from "../../sprout.js";
 import { I_AM } from "../../materials/being/seedBeings.js";
 import { iAmIdentity } from "../../materials/being/identity.js";
 

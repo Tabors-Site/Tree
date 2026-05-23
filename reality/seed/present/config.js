@@ -8,7 +8,7 @@
 // many bytes per message, how long a single tool call may take.
 // The ceiling exists because a turn that loops forever or floods
 // context isn't thinking, it's burning. Defaults live here; the
-// operator overrides through place config; setFactoryConfig at the
+// operator overrides through reality config; setFactoryConfig at the
 // bottom of this file routes each remembered key to the right
 // subsystem.
 //

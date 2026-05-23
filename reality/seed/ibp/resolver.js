@@ -35,18 +35,18 @@ import { IbpError, IBP_ERR } from "../ibp/protocol.js";
 import { getRealityDomain } from "./address.js";
 import Being from "../materials/being/being.js";
 import Space from "../materials/space/space.js";
-import { getSpaceRootId } from "../seedRoot.js";
+import { getSpaceRootId } from "../sprout.js";
 import { resolveRootSpace } from "../materials/space/spaces.js";
 
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /**
- * @param {{ place: string|null, path: string|null, being: string|null }} stance
+ * @param {{ reality: string|null, path: string|null, being: string|null }} stance
  * @param {object} [opts]
  * @param {boolean} [opts.requireRealityMatch=true]
- *   reject stances whose place doesn't match this server (only false for
- *   cross-place previews that intentionally inspect remote paths).
+ *   reject stances whose reality doesn't match this server (only false for
+ *   cross-reality previews that intentionally inspect remote paths).
  */
 export async function resolveStance(stance, opts = {}) {
   const { requireRealityMatch = true } = opts;
@@ -55,7 +55,7 @@ export async function resolveStance(stance, opts = {}) {
   }
 
   const localReality = getRealityDomain();
-  const stanceReality = stance.place || localReality;
+  const stanceReality = stance.reality || localReality;
   if (requireRealityMatch && stanceReality !== localReality) {
     throw new IbpError(
       IBP_ERR.SPACE_NOT_FOUND,
@@ -98,7 +98,7 @@ export async function resolveStance(stance, opts = {}) {
     if (!beingDoc) {
       throw new IbpError(
         IBP_ERR.BEING_NOT_FOUND,
-        `No being named "${name}" on this place`,
+        `No being named "${name}" on this reality`,
         { name },
       );
     }

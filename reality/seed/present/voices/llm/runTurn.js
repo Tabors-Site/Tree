@@ -73,7 +73,7 @@
 // moments. Between forward passes the being is nothing; I just
 // stage the next one.
 
-import log from "../../../parentReality/log.js";
+import log from "../../../seedReality/log.js";
 import { getFactoryConfigValue } from "../../../factoryConfig.js";
 import { hooks } from "../../../hooks.js";
 
@@ -85,7 +85,7 @@ import {
   resolveExtensionScopeFromChain,
   getAncestorChain,
 } from "../../../materials/space/ancestorCache.js";
-import { isDbHealthy } from "../../../parentReality/dbConfig.js";
+import { isDbHealthy } from "../../../seedReality/dbConfig.js";
 import { resolveTools } from "./tools.js";
 import { getSpaceName } from "../../../materials/space/spaces.js";
 // MCP wiring retired. Tools dispatch directly via getToolHandler in

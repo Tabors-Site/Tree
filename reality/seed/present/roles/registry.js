@@ -33,7 +33,7 @@
 // `buildSystemPrompt` and the assembler is skipped. The defaults
 // cover the common case; opt-in covers the rest.
 //
-import log from "../../parentReality/log.js";
+import log from "../../seedReality/log.js";
 
 // The role registry. Seed-shipped roles (auth, llm-assigner,
 // place-manager) register through registerRole during genesis;
@@ -183,7 +183,7 @@ function makeLazyDefaultSummon(role) {
 }
 
 /**
- * Sync the role registry into `<place>/.roles` as child Spaces. One child
+ * Sync the role registry into `<reality>/.roles` as child Spaces. One child
  * per role; qualities mirror the role's surface. Called at boot end
  * after extensions register; idempotent.
  */

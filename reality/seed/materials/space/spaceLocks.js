@@ -29,7 +29,7 @@
 // check on next boot repairs any half-finished structural mutation
 // the lock-holder didn't get to clean up.
 
-import log from "../../parentReality/log.js";
+import log from "../../seedReality/log.js";
 import { getFactoryConfigValue } from "../../factoryConfig.js";
 import { getRealityConfigValue } from "../../realityConfig.js";
 

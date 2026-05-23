@@ -1,10 +1,10 @@
 // TreeOS Seed . AGPL-3.0 . https://treeos.ai . Tabor Holly
 //
 // Deferred HTTP endpoint(s). What's left here is the one shim
-// that hasn't moved onto the IBP surface yet (`GET /place/root`),
+// that hasn't moved onto the IBP surface yet (`GET /reality/root`),
 // kept so the legacy clients keep working. Every other place-level
-// surface is reachable through `ibp:see <place>/.config`,
-// `ibp:see <place>/.extensions`, `ibp:do <place>` with set-config /
+// surface is reachable through `ibp:see <reality>/.config`,
+// `ibp:see <reality>/.extensions`, `ibp:do <place>` with set-config /
 // install-extension / etc. The protocol is the API; this file
 // stays small.
 
@@ -12,7 +12,7 @@ import express from "express";
 import { authenticateOptional } from "../middleware/authenticate.js";
 import { sendOk, sendError, IBP_ERR } from "../../../seed/ibp/protocol.js";
 import Space from "../../../seed/materials/space/space.js";
-import { getSpaceRoot } from "../../../seed/seedRoot.js";
+import { getSpaceRoot } from "../../../seed/sprout.js";
 
 const router = express.Router();
 
@@ -23,16 +23,16 @@ const router = express.Router();
  *   - Place seed spaces (.identity, .config, .peers, ...)
  *   - Space-trees the being owns
  *   - Space-trees the being contributes to
- *   - Public space-trees on this place
+ *   - Public space-trees on this reality
  *
  * Folds into `ibp:see <place>` once stance authorization gates
  * visibility per-stance uniformly.
  */
-router.get("/place/root", authenticateOptional, async (req, res) => {
+router.get("/reality/root", authenticateOptional, async (req, res) => {
   try {
     const spaceRootCached = await getSpaceRoot();
     if (!spaceRootCached) {
-      return sendError(res, 404, IBP_ERR.SPACE_NOT_FOUND, "Place root not found");
+      return sendError(res, 404, IBP_ERR.SPACE_NOT_FOUND, "Reality root not found");
     }
 
     // Fetch fresh from DB so we see newly created trees (cache may be stale)

@@ -6,7 +6,7 @@
 // descriptor, then subscribes the socket to live updates when the
 // payload asks for them. See [[project_four_verbs_one_execution]].
 
-import log from "../../../seed/parentReality/log.js";
+import log from "../../../seed/seedReality/log.js";
 import { IbpError, IBP_ERR, isIbpError } from "../../../seed/ibp/protocol.js";
 import { ackOk, ackError } from "../envelope.js";
 import { seeVerb } from "../../../seed/ibp/verbs.js";

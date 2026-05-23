@@ -35,7 +35,7 @@ import { getRealityDomain } from "./address.js";
 import { getRealityConfigValue, getRealityUrl } from "../realityConfig.js";
 import Being from "../materials/being/being.js";
 import Fact from "../past/fact/fact.js";
-import { getSpaceRootId } from "../seedRoot.js";
+import { getSpaceRootId } from "../sprout.js";
 import { listSeeds } from "../materials/seeds.js";
 import { listMattersAt } from "../materials/matter/matters.js";
 import { SEED_SPACE } from "../materials/space/seedSpaces.js";
@@ -74,7 +74,7 @@ async function foldRead(type, id) {
 export const DESCRIPTOR_VERSION   = "1.0";
 export const IBP_PROTOCOL_VERSION = "1.0";
 // ── Place discovery payload ──
-// Returned by `ibp:see <place>/.discovery` once a socket is open. The
+// Returned by `ibp:see <reality>/.discovery` once a socket is open. The
 // pre-identity surface every client reads to learn what I speak:
 // protocol version, descriptor versions supported, WS URL, role
 // names registered, verb set, plantable seeds.
@@ -97,7 +97,7 @@ export function buildDiscovery() {
 
   return {
     name: getRealityConfigValue("REALITY_NAME") || "Unnamed Place",
-    place: getRealityDomain(),
+    reality: getRealityDomain(),
     protocolVersion: IBP_PROTOCOL_VERSION,
     descriptorVersionSupported: [DESCRIPTOR_VERSION],
     ws: wsUrl,

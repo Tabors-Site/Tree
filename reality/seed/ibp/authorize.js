@@ -46,10 +46,10 @@
 // boot.
 
 import Space from "../materials/space/space.js";
-import { getSpaceRootId } from "../seedRoot.js";
+import { getSpaceRootId } from "../sprout.js";
 import { getAncestorChain } from "../materials/space/ancestorCache.js";
 import { deriveStanceProperties } from "../ibp/stanceProperties.js";
-import log from "../parentReality/log.js";
+import log from "../seedReality/log.js";
 import { IBP_ERR } from "./protocol.js";
 import { I_AM } from "../materials/being/seedBeings.js";
 
@@ -125,7 +125,7 @@ export async function authorize(args) {
   // BE bootstrap exception: register/claim from arrival are always
   // permitted, gated by place-level register_enabled/claim_enabled
   // flags (enforced by the cherub itself). Without this no one
-  // could ever sign up on a fresh place.
+  // could ever sign up on a fresh reality.
   if (
     verb === "be" &&
     props.arrival &&
@@ -134,7 +134,7 @@ export async function authorize(args) {
     return { ok: true, stance: "arrival" };
   }
 
-  // SEE discovery exception: <place>/.discovery is the place's
+  // SEE discovery exception: <reality>/.discovery is the place's
   // capability surface — always visible.
   if (verb === "see" && target?.isDiscovery) {
     return { ok: true, stance: stanceLabel };
@@ -596,7 +596,7 @@ function lookupDefault(key) {
 
 /**
  * Enumerate the registered keys (diagnostic — used by introspection
- * tools that show "what default permissions are active on this place").
+ * tools that show "what default permissions are active on this reality").
  */
 export function listDefaultPermissions() {
   const out = {};

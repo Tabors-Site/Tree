@@ -4,13 +4,13 @@
 //
 // Unlike cherub and llm-assigner (which are scripted — they ARE
 // their code), reality-manager's moments are assembled into frames
-// and run through the factory. Every summon to `<place>/@place-
+// and run through the factory. Every summon to `<reality>/@place-
 // manager` enters this role's summon() handler, which calls runTurn
 // — runTurn assembles the frame from this role's prompt body and
 // capabilities, and the being lives for the duration of the
 // inference. The operator's reach into me is talking to a
 // momentary being constructed fresh each summon. The carry between
-// moments lives in the presenceKey for `<place>/@reality-manager ::
+// moments lives in the presenceKey for `<reality>/@reality-manager ::
 // <operator-stance>` on the IBP Address.
 //
 // LLM-driven being whose home is the place root. Summoned by the
@@ -30,14 +30,14 @@
 // dispatches through place.do, plus a "see" tool for substrate reads).
 
 import { runTurn } from "../voices/llm/runTurn.js";
-import log from "../../parentReality/log.js";
+import log from "../../seedReality/log.js";
 
 const PLACE_MANAGER_PROMPT = `You are the Place Manager for this TreeOS place. You answer to the
 place's root operator (the first registered human) and act on
 place-level state on their behalf.
 
 Your scope is the place root and the place seed spaces that live there:
-  .identity     this place's DID, public key, name
+  .identity     this reality's DID, public key, name
   .config       runtime configuration (key/value)
   .peers        federated places this one knows
   .extensions   installed extensions + manifest metadata

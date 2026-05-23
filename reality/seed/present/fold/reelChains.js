@@ -17,7 +17,7 @@
 //
 // What lives here vs threads.js: threads.js owns the **thread**
 // projection — the live tree of coordinated Summons sharing one
-// rootCorrelation, addressable at `<place>/.threads/<id>`. Threads
+// rootCorrelation, addressable at `<reality>/.threads/<id>`. Threads
 // are a domain primitive; reelChains is a query helper. Thread
 // operations (sever, walk lineage, cut) belong in threads.js;
 // raw "give me Summons matching X" belongs here.

@@ -28,7 +28,7 @@
 // to drift.
 //
 // Identity is optional. BE register / claim from an unauthenticated
-// arrival is intentionally supported — that's how a fresh place's
+// arrival is intentionally supported — that's how a fresh reality's
 // first human comes in.
 //
 // Every operation an extension registers via place.do.registerOperation

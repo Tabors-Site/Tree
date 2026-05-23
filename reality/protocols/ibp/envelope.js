@@ -83,7 +83,7 @@ export function parseUnifiedEnvelope(msg) {
 
   // Per-verb address-kind contract. Bare-place addresses (no slash) are
   // only valid for BE; every other verb needs at least the place-root
-  // marker — `<place>/` — to name a position. SUMMON additionally needs
+  // marker — `<reality>/` — to name a position. SUMMON additionally needs
   // an @being qualifier.
   switch (verb) {
     case "see":

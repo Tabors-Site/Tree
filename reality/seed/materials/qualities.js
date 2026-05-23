@@ -58,7 +58,7 @@
 //
 // Same nine methods on `qualities.space` and `qualities.matter`. The
 // space and matter variants enforce namespace ownership when the
-// scoped place bundle passes opts.callerExtName (extensions can only
+// scoped reality bundle passes opts.callerExtName (extensions can only
 // write to their own quality namespace).
 
 import Being from "../materials/being/being.js";
@@ -172,8 +172,8 @@ function validateData(key, data) {
 // addToQualitySet / batchSetQuality / unsetQuality) retired 2026-05-23
 // (Slice 3). The fact-driven path is the only writer now:
 //
-//   await place.do(target, "set", { field: "qualities.<ns>", value }, opts)
-//   await place.do(target, "set", { field: "qualities.<ns>.<inner>", value }, opts)
+//   await reality.do(target, "set", { field: "qualities.<ns>", value }, opts)
+//   await reality.do(target, "set", { field: "qualities.<ns>.<inner>", value }, opts)
 //
 // Every write stamps a Fact on the aggregate's reel; the reducer
 // (see materials/reducerHelpers.applySetQualities) derives the new

@@ -20,7 +20,7 @@
 // Same inversion pattern as the schedule emitter (see
 // seed/present/intake/wakeSchedule.js setScheduleEmitter).
 
-import log from "../parentReality/log.js";
+import log from "../seedReality/log.js";
 
 // The single wire event name for all IBP traffic in both directions
 // (see [[project_ibp_summon_unified_event]], [[project_ibp_wire_shape]]).

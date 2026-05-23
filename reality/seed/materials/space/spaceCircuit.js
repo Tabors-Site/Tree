@@ -28,10 +28,10 @@
 // being who can revive — the same being whose authority defines the
 // tree in the first place.
 //
-// Defaults to OFF (treeCircuitEnabled: false). A place that never
+// Defaults to OFF (treeCircuitEnabled: false). A reality that never
 // turns this on lives without it.
 
-import log from "../../parentReality/log.js";
+import log from "../../seedReality/log.js";
 import { getFactoryConfigValue } from "../../factoryConfig.js";
 import Space from "./space.js";
 import Fact from "../../past/fact/fact.js";
@@ -43,7 +43,7 @@ import { I_AM } from "../being/seedBeings.js";
 import { logFact } from "../../past/fact/facts.js";
 
 /**
- * Is the tree-circuit feature enabled on this place?
+ * Is the tree-circuit feature enabled on this reality?
  */
 function isEnabled() {
   const val = getFactoryConfigValue("treeCircuitEnabled");

@@ -50,6 +50,8 @@ import { getRealityDomain } from "../ibp/address.js";
 import { IbpError, IBP_ERR, mapPatternsToIbpError } from "./protocol.js";
 import Being from "../materials/being/being.js";
 import Matter from "../materials/matter/matter.js";
+import { I_AM } from "../materials/being/seedBeings.js";
+import { logFact } from "../past/fact/facts.js";
 import { v4 as uuidv4 } from "uuid";
 
 let _registered = false;
@@ -211,7 +213,7 @@ export function registerSeedOperations() {
   // installed-state is substrate. These ops drive the loader.
   // ────────────────────────────────────────────────────────────────
   //
-  // Target: any space on this place — typically the place root. The
+  // Target: any space on this reality — typically the place root. The
   // extension's installed-state isn't bound to a particular space; the
   // target lets stance authorization gate who can install.
 
@@ -228,7 +230,7 @@ export function registerSeedOperations() {
   // ────────────────────────────────────────────────────────────────
   //
   // Place config is one of the meta-positions ([[project_meta_positions]]):
-  // `<place>/.config` resolves to the SEED_SPACE.CONFIG space. Reads go
+  // `<reality>/.config` resolves to the SEED_SPACE.CONFIG space. Reads go
   // through `ibp:see` on that address (returns the cached config snapshot);
   // writes go through these DO ops which wrap the seed's
   // setRealityConfigValue helper. The helper handles cache invalidation,
@@ -298,12 +300,19 @@ export function registerSeedOperations() {
   //   params: { kind: "space"|"matter", spec: {...} }
   //   (kind "being" is reserved for BE.register; minting identity
   //    belongs on the BE verb, not DO.)
+  //
+  // skipAudit because every branch stamps its own birth Fact directly
+  // (handlers own the actId + target + spec they know about; dispatcher
+  // auto-fact would double-stamp). One Fact per birth, on the new
+  // aggregate's reel; eager-fold materializes the row via the reducer's
+  // applyBirthSpace / applyBirthMatter.
   registerOperation("birth", {
     targets: ["space", "matter", "being"],
     ownerExtension: "seed",
     factAction: "birth",
+    skipAudit: true,
     handler: async (ctx) => {
-      const { target, params, identity } = ctx;
+      const { target, params, identity, summonCtx, scaffold } = ctx;
       const { kind, spec = {} } = params || {};
       if (!kind) throw new Error("birth: `kind` is required (space|matter)");
       if (kind === "being") {
@@ -317,22 +326,15 @@ export function registerSeedOperations() {
           target,
           params: spec,
           identity,
+          summonCtx,
+          scaffold,
           kind: targetKind,
         });
       }
       if (kind === "matter") {
-        // Converted to fact-driven (2026-05-23). The handler:
-        //   1. allocates the new matter's id,
-        //   2. enriches the spec with derived fields (spaceId, parentMatterId,
-        //      beingId) so the reducer can produce the full row state from
-        //      the fact alone,
-        //   3. mutates ctx.params so the verb dispatcher's logFact stamps
-        //      the enriched spec onto the fact,
-        //   4. returns _factTarget so the fact targets the new matter's reel.
-        //
-        // The actual Matter row is created by the reducer + initProjection
-        // chain inside eager-fold (see materials/reducerHelpers.js
-        // applyBirthMatter + foldEngine.js rebuild). No Matter.create here.
+        // Fact-driven matter birth. The handler stamps the do:birth
+        // Fact directly on the new matter's reel; eager-fold inside
+        // logFact runs applyBirthMatter to materialize the row.
         const matterId = uuidv4();
         const spaceId = targetKind === "space" ? targetIdOf(target) : (spec.spaceId ?? null);
         const parentMatterId = targetKind === "matter" ? String(target._id) : (spec.parentMatterId ?? null);
@@ -343,16 +345,20 @@ export function registerSeedOperations() {
           beingId: identity?.beingId || spec.beingId || null,
           origin: spec.origin || "ibp",
         };
-        // Replace ctx.params (NOT the caller's input) with the enriched
-        // version so the verb dispatcher's logFact stamps the enriched
-        // spec onto the fact. The dispatcher reads ctx.params after the
-        // handler returns; we reassign on ctx, not on the destructured
-        // local, so the caller's input object stays untouched.
-        ctx.params = { ...params, spec: enrichedSpec };
-        return {
-          matterId,
-          _factTarget: { kind: "matter", id: matterId },
-        };
+        const actorBeingId = identity?.beingId || (scaffold ? I_AM : null);
+        if (!actorBeingId) {
+          throw new IbpError(IBP_ERR.UNAUTHORIZED,
+            "birth requires identity or scaffold flow");
+        }
+        await logFact({
+          verb:    "do",
+          action:  "birth",
+          beingId: String(actorBeingId),
+          target:  { kind: "matter", id: matterId },
+          params:  { spec: enrichedSpec },
+          actId:   summonCtx?.actId || null,
+        });
+        return { matterId, spaceId, parentMatterId };
       }
       throw new Error(`birth: unknown kind "${kind}"`);
     },
@@ -512,16 +518,33 @@ export function registerSeedOperations() {
       }
 
       if (field === "parent") {
+        // Converted to fact-driven (2026-05-23). The Space reducer's
+        // applySetField writes state.parent; the reducer also derives
+        // `position` from a do:set on parent so foldPlace's occupant
+        // index reflects the move. Cross-aggregate effects are dead
+        // (parent-side children[] caches retired) — one fact on one
+        // reel is the whole reparent.
         if (kind !== "space" && kind !== "stance") {
           throw new Error("set: `parent` is only settable on Space");
         }
+        if (value !== null && value !== undefined && typeof value !== "string") {
+          throw new Error("set: `parent` value must be a spaceId string or null");
+        }
         const spaceId = targetIdOf(target);
-        const result = await updateParentRelationship(
-          spaceId,
-          value,
-          identity?.beingId || null,
-        );
-        return result || { spaceId, parentId: value };
+        return { spaceId, parent: value || null };
+      }
+
+      if (field === "parentBeingId") {
+        // Being-tree reparent. Single-aggregate scalar; the parent-side
+        // children[] cache on Being is retired (2026-05-23) so this is
+        // a clean single-fact write.
+        if (kind !== "being") {
+          throw new Error("set: `parentBeingId` is only settable on Being");
+        }
+        if (value !== null && value !== undefined && typeof value !== "string") {
+          throw new Error("set: `parentBeingId` value must be a beingId string or null");
+        }
+        return { beingId: String(target._id), parentBeingId: value || null };
       }
 
       if (field === "llmDefault") {
@@ -576,6 +599,32 @@ export function registerSeedOperations() {
         }
         const spaceId = targetIdOf(target);
         return { spaceId, rootOwner: value || null };
+      }
+
+      if (
+        field === "operatingMode" ||
+        field === "roles" ||
+        field === "defaultRole" ||
+        field === "homeSpace"
+      ) {
+        // Being identity scalars added in genesis cleanup (2026-05-23).
+        // Reducer's applySetField writes state[field] = value; minimal
+        // type validation here since the caller is typically seed-internal
+        // (seedDelegates drift correction).
+        if (kind !== "being") {
+          throw new Error(`set: \`${field}\` is only settable on Being`);
+        }
+        if (field === "roles" && value !== null && !Array.isArray(value)) {
+          throw new Error("set: `roles` value must be an array or null");
+        }
+        if (
+          field !== "roles" &&
+          value !== null && value !== undefined &&
+          typeof value !== "string"
+        ) {
+          throw new Error(`set: \`${field}\` value must be a string or null`);
+        }
+        return { beingId: String(target._id), [field]: value };
       }
 
       if (field === "contributors") {
@@ -660,14 +709,14 @@ export function registerSeedOperations() {
       if (!spaceId) throw new Error("plant: target must resolve to a space id");
       const { plantSeed } = await import("../materials/seeds.js");
       const { getRealityServices } = await import("../services.js");
-      const place = getRealityServices();
+      const reality = getRealityServices();
       const seedParams =
         spec && typeof spec === "object" && !Array.isArray(spec) ? spec : {};
       const { plantedSeedId, plantedThings } = await plantSeed({
         name: seed,
         atSpaceId: spaceId,
         identity,
-        place,
+        reality,
         params: seedParams,
         summonCtx,
       });
@@ -759,8 +808,9 @@ const KERNEL_ERROR_PATTERNS = {
   ],
 };
 
-async function createSpaceChild({ target, params, identity, kind }) {
-  const beingId = identity?.beingId || null;
+async function createSpaceChild({ target, params, identity, summonCtx, scaffold, kind }) {
+  const beingId = identity?.beingId || (scaffold ? I_AM : null);
+  const actId = summonCtx?.actId || null;
   const { name, type = null } = params || {};
   if (!name || typeof name !== "string") {
     throw new IbpError(IBP_ERR.INVALID_INPUT, "`name` is required");
@@ -774,6 +824,7 @@ async function createSpaceChild({ target, params, identity, kind }) {
         type,
         parentId: target?._id ? String(target._id) : null,
         beingId,
+        actId,
       });
       return shapeNewSpace(newSpace);
     } catch (err) {
@@ -796,7 +847,7 @@ async function createSpaceChild({ target, params, identity, kind }) {
       );
     }
     try {
-      const newSpace = await createSpace({ name, type, isRoot: true, beingId });
+      const newSpace = await createSpace({ name, type, isRoot: true, beingId, actId });
       return shapeNewSpace(newSpace);
     } catch (err) {
       throw mapPatternsToIbpError(err, KERNEL_ERROR_PATTERNS.createChild);
@@ -814,6 +865,7 @@ async function createSpaceChild({ target, params, identity, kind }) {
       type,
       parentId: target.spaceId,
       beingId,
+      actId,
     });
     return shapeNewSpace(newSpace);
   } catch (err) {

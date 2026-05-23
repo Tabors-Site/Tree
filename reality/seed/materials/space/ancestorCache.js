@@ -33,7 +33,7 @@
 //   - TTL read once per operation for consistency.
 //   - Stats reset before counter overflow.
 
-import log from "../../parentReality/log.js";
+import log from "../../seedReality/log.js";
 import { getFactoryConfigValue } from "../../factoryConfig.js";
 import Space from "./space.js";
 import { IBP_ERR } from "../../ibp/protocol.js";
@@ -188,7 +188,7 @@ async function walkFromDb(spaceId, ttl) {
       contributors: (n.contributors || []).map(String),
     });
 
-    // Stop at place seed spaces (they're the boundary)
+    // Stop at seed spaces (they're the boundary)
     if (n.seedSpace) break;
 
     cursor = n.parent;
@@ -289,7 +289,7 @@ export function resolveSpaceAccessFromChain(startNodeId, beingId, ancestors) {
   for (const space of ancestors) {
     if (space.seedSpace) {
       // SOURCE is a traversable system tree (live mirror of
-      // place/extensions + place/seed, see code-workspace/source.js).
+      // reality/extensions + reality/seed, see code-workspace/source.js).
       // Treat .source itself as the root of its subtree so everything
       // beneath it is navigable. Read-only by default — canWrite is
       // gated on the code-workspace writeMode quality at the tool
@@ -330,7 +330,7 @@ export function resolveSpaceAccessFromChain(startNodeId, beingId, ancestors) {
     };
   }
 
-  // .source is a place-owned system tree. Everyone on the place can read it.
+  // .source is a reality-wide system tree. Everyone on the reality can read it.
   // Writes are gated elsewhere (code-workspace write-mode check).
   if (ownerNode.seedSpace === "source") {
     return {

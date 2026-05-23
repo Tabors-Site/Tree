@@ -46,11 +46,11 @@
 // extension-init re-registration is sufficient.
 
 import { randomUUID } from "crypto";
-import log from "../../parentReality/log.js";
+import log from "../../seedReality/log.js";
 import { getAncestorChain } from "../../materials/space/ancestorCache.js";
 import { summonByResolved } from "../../ibp/verbs.js";
 import { getRealityDomain } from "../../ibp/address.js";
-import { getSpaceRootId } from "../../seedRoot.js";
+import { getSpaceRootId } from "../../sprout.js";
 import { I_AM } from "../../materials/being/seedBeings.js";
 import { iAmIdentity } from "../../materials/being/identity.js";
 
@@ -293,7 +293,7 @@ export async function getMatchingSubscribers(eventName, payload) {
  * its normal priority order.
  *
  * Sender is the doing being when payload.beingId is present, else
- * the I_AM's stance `<place>/@I_AM`. The receiver's role
+ * the I_AM's stance `<reality>/@I_AM`. The receiver's role
  * template can inspect the sender to distinguish I_AM-emitted
  * events (substrate-internal triggers like .source sync) from
  * other-being-emitted ones (explicit acts by named beings).

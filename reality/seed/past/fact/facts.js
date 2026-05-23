@@ -28,7 +28,7 @@
 // See seed/philosophy/MATERIALS.md "And the beings are the acts" for the
 // philosophy behind why this reel is identity-load-bearing.
 
-import log from "../../parentReality/log.js";
+import log from "../../seedReality/log.js";
 import { getFactoryConfigValue } from "../../factoryConfig.js";
 import Fact from "./fact.js";
 import { hooks } from "../../hooks.js";
@@ -73,7 +73,7 @@ const VALID_TARGET_KINDS = new Set([
  * @param {*} [params.result]       output payload (any JSON; clipped on cap)
  * @param {string|null} [params.actId]   correlation
  * @param {string|null} [params.sessionId]  correlation
- * @param {string|null} [params.homePlace]   federation provenance
+ * @param {string|null} [params.homeReality]   federation provenance
  * @param {boolean} [params.wasRemote=false] federation provenance
  *
  * The `beforeFact` hook receives a mutable view of these fields and may
@@ -92,7 +92,7 @@ export async function logFact(input) {
     result = null,
     actId = null,
     sessionId = null,
-    homePlace = null,
+    homeReality = null,
     wasRemote = false,
   } = input;
 
@@ -137,7 +137,7 @@ export async function logFact(input) {
     result,
     actId,
     sessionId,
-    homePlace,
+    homeReality,
     wasRemote,
   };
   const hookResult = await hooks.run("beforeFact", hookData);
@@ -164,7 +164,7 @@ export async function logFact(input) {
     truncated,
     actId,
     sessionId,
-    homePlace: hookData.homePlace ?? homePlace,
+    homeReality: hookData.homeReality ?? homeReality,
     wasRemote: Boolean(hookData.wasRemote ?? wasRemote),
     date: new Date(),
   };

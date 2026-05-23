@@ -74,9 +74,9 @@
 // Every step is idempotent. Re-runs reconcile against what already
 // exists. Nothing is re-formed blindly.
 
-import mongoose from "./seed/parentReality/dbConfig.js";
+import mongoose from "./seed/seedReality/dbConfig.js";
 import { getRealityIdentity, getRealityUrl } from "./protocols/canopy/identity.js";
-import { ensureSpaceRoot } from "./seed/seedRoot.js";
+import { ensureSpaceRoot } from "./seed/sprout.js";
 import { initRealityConfig, getRealityConfigValue } from "./seed/realityConfig.js";
 import { getFactoryConfigValue } from "./seed/factoryConfig.js";
 import {
@@ -89,8 +89,8 @@ import {
 import { startUploadCleanup } from "./seed/materials/matter/uploadCleanup.js";
 import { getBlockedExtensionsAtSpace } from "./seed/materials/space/extensionScope.js";
 import { hooks } from "./seed/hooks.js";
-import { syncExtensionsToTree } from "./seed/seedRoot.js";
-import log from "./seed/parentReality/log.js";
+import { syncExtensionsToTree } from "./seed/sprout.js";
+import log from "./seed/seedReality/log.js";
 
 /**
  * Register seed-shipped tool definitions through the same path
@@ -127,10 +127,10 @@ let bootMode = null;
  *   begin.js and threaded through.
  */
 export async function genesis(app, opts = {}) {
-  const place = getRealityIdentity();
-  log.verbose("Place", `Place: ${place.name} at ${place.domain}`);
-  log.verbose("Place", `Reality ID: ${place.realityId}`);
-  log.verbose("Place", `Protocol: v${place.protocolVersion}`);
+  const reality = getRealityIdentity();
+  log.verbose("Reality", `Reality: ${reality.name} at ${reality.domain}`);
+  log.verbose("Reality", `Reality ID: ${reality.realityId}`);
+  log.verbose("Reality", `Protocol: v${reality.protocolVersion}`);
 
   // Mongo connection opens as a side effect of importing dbConfig.
   // Wait for it to land before any read or write fires.
@@ -140,10 +140,10 @@ export async function genesis(app, opts = {}) {
       mongoose.connection.once("error", reject);
     });
   }
-  log.info("Place", "MongoDB connected. Memory online.");
+  log.info("Reality", "MongoDB connected. Memory online.");
 
   // The physical floor every space, matter, being, and Fact sits on.
-  const { ensureIndexes } = await import("./seed/parentReality/indexes.js");
+  const { ensureIndexes } = await import("./seed/seedReality/indexes.js");
   await ensureIndexes();
 
   // Probe for an existing place root before ensureSpaceRoot creates
@@ -153,7 +153,7 @@ export async function genesis(app, opts = {}) {
   const Space = (await import("./seed/materials/space/space.js")).default;
   const existingRoot = await Space.findOne({ parent: null }).lean();
   bootMode = existingRoot ? "Awakening" : "Beginning";
-  log.info("Place", `${bootMode}. ${place.name} at ${place.domain}.`);
+  log.info("Reality", `${bootMode}. ${reality.name} at ${reality.domain}.`);
 
   // I plant the place's space root and the nine seed spaces. My own Being
   // row places inside this step so every Fact from t=0 has an actor.
@@ -179,7 +179,7 @@ export async function genesis(app, opts = {}) {
 
   // Seed migrations run after config is loaded and before extensions.
   const { runSeedMigrations } =
-    await import("./seed/parentReality/migrations/runner.js");
+    await import("./seed/seedReality/migrations/runner.js");
   await runSeedMigrations();
 
   // Prime the severed-roots cache. Any thread whose Stamps carry
@@ -201,7 +201,7 @@ export async function genesis(app, opts = {}) {
   // before I write into it.
   const { ensureSeedDelegates } =
     await import("./seed/materials/being/seedDelegates.js");
-  const { getSpaceRootId } = await import("./seed/seedRoot.js");
+  const { getSpaceRootId } = await import("./seed/sprout.js");
   await ensureSeedDelegates(getSpaceRootId());
 
   // Register seed-shipped role specs into the role registry so
@@ -341,7 +341,7 @@ export async function genesis(app, opts = {}) {
           fn(Number(val));
         }
       } catch (e) {
-        log.warn("Place", `Config "${key}" failed: ${e.message}`);
+        log.warn("Reality", `Config "${key}" failed: ${e.message}`);
       }
     }
   }
@@ -374,7 +374,7 @@ export async function genesis(app, opts = {}) {
   await loadConfinedExtensions();
 
   // Register the loader's instance lookup with the seed so
-  // place.scope.getExtensionAtScope can resolve names without the
+  // reality.scope.getExtensionAtScope can resolve names without the
   // seed importing from extensions/loader.js (which would violate
   // the one-way layering rule). Looked up lazily so the loader
   // module is not pulled on places that skip it.
@@ -404,7 +404,7 @@ export async function genesis(app, opts = {}) {
     await import("./seed/materials/space/spaceCircuit.js");
   startCircuitJob();
 
-  log.verbose("Place", "Background jobs started");
+  log.verbose("Reality", "Background jobs started");
 
   // I mirror my live registries into the .tools, .roles, and
   // .operations seed spaces. SEE on those addresses now reflects
@@ -467,13 +467,13 @@ export function printReady() {
 
   console.log("");
   console.log("  ════════════════════════════════════════════════════════════");
-  log.info("Place", bootMode === "Beginning" ? "I am born." : "I am awake.");
+  log.info("Reality", bootMode === "Beginning" ? "I am born." : "I am awake.");
   console.log("  ════════════════════════════════════════════════════════════");
   console.log("");
-  log.info("Place", `API:  ${apiUrl}`);
+  log.info("Reality", `API:  ${apiUrl}`);
 
   if (hasHtml) {
-    log.info("Place", `Web:  ${apiUrl}`);
+    log.info("Reality", `Web:  ${apiUrl}`);
     log.info(
       "Place",
       `      Open in a browser to manage your place, trees, and extensions.`,
@@ -487,13 +487,13 @@ export function printReady() {
   console.log("");
 
   if (boot.skipped === 0) {
-    log.info("Place", `Extensions: ${boot.loaded} loaded, all clear.`);
+    log.info("Reality", `Extensions: ${boot.loaded} loaded, all clear.`);
   } else {
     log.info(
       "Place",
       `Extensions: ${boot.loaded} loaded, ${boot.skipped} skipped.`,
     );
-    log.warn("Place", `Skipped: ${boot.skippedNames.join(", ")}`);
+    log.warn("Reality", `Skipped: ${boot.skippedNames.join(", ")}`);
   }
 
   if (hasHtml) {
@@ -505,7 +505,7 @@ export function printReady() {
 
   console.log("");
   console.log("  ────────────────────────────────────────────────────────────");
-  log.info("Place", "CLI quick start:");
+  log.info("Reality", "CLI quick start:");
   console.log("");
   console.log("  npm install -g treeos");
   console.log(`  treeos connect ${apiUrl}`);

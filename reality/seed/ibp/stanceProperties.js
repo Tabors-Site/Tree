@@ -36,7 +36,7 @@
 //
 //     // federation
 //     homeOnThisPlace,           // !being.isRemote
-//     federatedFrom,            // being.homePlace if remote, else null
+//     federatedFrom,            // being.homeReality if remote, else null
 //   }
 //
 // Pure: no side effects, no throws on missing data. Defensive against
@@ -76,7 +76,7 @@ export async function deriveStanceProperties({ beingId, targetSpace }) {
   if (!beingId) return { ...ARRIVAL_PROPS };
 
   const being = await Being.findById(beingId)
-    .select("name roles defaultRole operatingMode homeSpace isRemote homePlace")
+    .select("name roles defaultRole operatingMode homeSpace isRemote homeReality")
     .lean();
   if (!being) return { ...ARRIVAL_PROPS, beingId };
 
@@ -98,7 +98,7 @@ export async function deriveStanceProperties({ beingId, targetSpace }) {
     positionInHomeDomain: false,
     homeAncestors:        [],
     homeOnThisPlace:       !being.isRemote,
-    federatedFrom:        being.isRemote ? (being.homePlace || null) : null,
+    federatedFrom:        being.isRemote ? (being.homeReality || null) : null,
   };
 
   // Precompute the home's ancestor chain (as ids) so the comparator

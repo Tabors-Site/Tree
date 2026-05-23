@@ -30,7 +30,7 @@
 // the now-authed socket still route through cherub (cherub is the
 // only legitimate processor of identity ops).
 
-import log from "../../../seed/parentReality/log.js";
+import log from "../../../seed/seedReality/log.js";
 import Being from "../../../seed/materials/being/being.js";
 import { IbpError, IBP_ERR, isIbpError } from "../../../seed/ibp/protocol.js";
 import { ackOk, ackError } from "../envelope.js";

@@ -10,7 +10,7 @@
 // federation protocol. Liveness becomes a periodic `ibp:see <peer>/.identity`
 // when the wire-protocol federation slice places.
 
-import log from "../../seed/parentReality/log.js";
+import log from "../../seed/seedReality/log.js";
 import RealityPeer from "./models/realityPeer.js";
 
 /**

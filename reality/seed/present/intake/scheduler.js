@@ -31,7 +31,7 @@
 // up. A boot-time recovery pass that scans inboxes for unstamped
 // requests and resumes them is on the roadmap.
 
-import log from "../../parentReality/log.js";
+import log from "../../seedReality/log.js";
 import { getFactoryConfigValue } from "../../factoryConfig.js";
 import { pickNextIntake } from "./intake.js";
 import { runMoment } from "../moment.js";

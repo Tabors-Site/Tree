@@ -39,7 +39,7 @@
 // shape (e.g. "court-being", "treasurer-being") to avoid colliding
 // with seed reservations or other extensions.
 
-import log from "../../parentReality/log.js";
+import log from "../../seedReality/log.js";
 
 const REGISTRY = new Map();
 

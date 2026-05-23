@@ -47,7 +47,7 @@
 //   portal can render either.
 //
 // Both sides of a bridge are stances. They use the SAME grammar. A
-// human user is represented as `<place>/@<username>` — i.e. a being at
+// human user is represented as `<reality>/@<username>` — i.e. a being at
 // the place root space. A bare identifier on the left side (e.g. `tabor`) is
 // the display shorthand for that. In future, the left side of a bridge
 // may carry a deeper path so the request reflects WHERE in the user's
@@ -55,7 +55,7 @@
 // requests).
 //
 // The parser accepts shorthands and expands them against an optional
-// context (currentPlace / currentPath / currentUser / defaultBeing).
+// context (currentReality / currentPath / currentUser / defaultBeing).
 // The formatter round-trips: format(parse(s, ctx), ctx) yields the
 // canonical form.
 //
@@ -76,7 +76,7 @@
  *
  * @param {string} input
  * @param {object} [ctx]
- * @param {string} [ctx.currentPlace]   — e.g. "treeos.ai"
+ * @param {string} [ctx.currentReality]   — e.g. "treeos.ai"
  * @param {string} [ctx.currentPath]   — e.g. "/~tabor/flappybird"
  * @param {string} [ctx.currentUser]   — e.g. "tabor"
  * @param {string} [ctx.defaultBeing]  — being to assume when omitted
@@ -174,11 +174,11 @@ export function validate(pa) {
   const errors = [];
   const check = (stance, label) => {
     if (!stance) return;
-    if (stance.place != null && !isValidReality(stance.place)) {
+    if (stance.reality != null && !isValidReality(stance.reality)) {
       errors.push({
         side: label,
         field: "place",
-        value: stance.place,
+        value: stance.reality,
         reason: "invalid-place",
       });
     }
@@ -219,10 +219,10 @@ function parseStance(input, ctx, opts = {}) {
     // On the left side of a bridge, `@tabor` is the explicit-@ form of
     // the human-user shorthand: it means the user `tabor` at the place root.
     if (isLeftSide) {
-      return { place: ctx.currentPlace || null, path: "/", being: parseBeing(s) };
+      return { reality: ctx.currentReality || null, path: "/", being: parseBeing(s) };
     }
     return {
-      place: ctx.currentPlace || null,
+      reality: ctx.currentReality || null,
       path: ctx.currentPath || null,
       being: parseBeing(s),
     };
@@ -238,7 +238,7 @@ function parseStance(input, ctx, opts = {}) {
   // After stripping being, `rest` is a position (place+path).
   if (!rest) {
     return {
-      place: ctx.currentPlace || null,
+      reality: ctx.currentReality || null,
       path: ctx.currentPath || null,
       being,
     };
@@ -251,7 +251,7 @@ function parseStance(input, ctx, opts = {}) {
   // A place identifier (e.g. "treeos.ai") never starts with "/" or "~", so a
   // leading slash or tilde means we're already inside the current place.
   if (rest.startsWith("/") || rest.startsWith("~")) {
-    return { place: ctx.currentPlace || null, path: parsePath(rest, ctx), being };
+    return { reality: ctx.currentReality || null, path: parsePath(rest, ctx), being };
   }
   // Otherwise `rest` starts with a place identifier.
   // Find first "/" — that's the place/path boundary.
@@ -267,13 +267,13 @@ function parseStance(input, ctx, opts = {}) {
     // `tabor`. On either side without a path, this can also be a
     // place-only reference (rare).
     if (isLeftSide && !being) {
-      return { place: ctx.currentPlace || null, path: "/", being: rest };
+      return { reality: ctx.currentReality || null, path: "/", being: rest };
     }
-    return { place: parsePlace(rest), path: null, being };
+    return { reality: parseReality(rest), path: null, being };
   }
   const realityPart = rest.slice(0, boundary);
   const pathPart = rest.slice(boundary);
-  return { place: parsePlace(realityPart), path: parsePath(pathPart, ctx), being };
+  return { reality: parseReality(realityPart), path: parsePath(pathPart, ctx), being };
 }
 
 // Find an "@" that's NOT inside a path segment. The grammar puts the
@@ -300,7 +300,7 @@ function parseBeing(s) {
   return id;
 }
 
-function parsePlace(s) {
+function parseReality(s) {
   const trimmed = s.trim();
   if (!trimmed) return null;
   if (!isValidReality(trimmed)) {
@@ -354,10 +354,10 @@ function parsePath(s, ctx) {
 function formatStance(stance, opts = {}) {
   if (!stance) return "";
   let out = "";
-  if (stance.place) out += stance.place;
+  if (stance.reality) out += stance.reality;
   if (stance.path) {
     // "/" at place root with a being renders as "/" + "@xxx".
-    // The grammar shows the canonical form as `<place>/@<being>`,
+    // The grammar shows the canonical form as `<reality>/@<being>`,
     // i.e. the slash separates place from path. "/" + "@tabor" already
     // does that.
     out += stance.path;
@@ -380,7 +380,7 @@ function expandStance(stance, ctx) {
   if (!stance) return stance;
   return {
     ...stance,
-    place: stance.place || ctx.currentPlace || null,
+    reality: stance.reality || ctx.currentReality || null,
     path: stance.path || ctx.currentPath || null,
     being: stance.being || ctx.defaultBeing || null,
   };
@@ -484,12 +484,12 @@ export function toHttpRoute(stance) {
 // Server-side context helpers
 //
 // The pure parser above is environment-agnostic. The two helpers below
-// are server-only: they pull this place's bare domain from process.env
-// and inject it as `currentPlace`. Wire handlers use these so they don't
+// are server-only: they pull this reality's bare domain from process.env
+// and inject it as `currentReality`. Wire handlers use these so they don't
 // have to assemble the parse context themselves.
 //
 // Browser-side consumers (Portal, 3D) import the parser directly via
-// `parse(input, ctx)` and supply their own `currentPlace` from the
+// `parse(input, ctx)` and supply their own `currentReality` from the
 // client's address bar or socket bootstrap.
 // ─────────────────────────────────────────────────────────────────────
 
@@ -516,10 +516,10 @@ export function getRealityDomain() {
 // Throws IbpError on parse failure so wire handlers can ack-fail.
 //
 //   socket.name → currentUser (for ~ shorthand)
-//   getRealityDomain() → currentPlace
+//   getRealityDomain() → currentReality
 export function parseFromSocket(socket, input, extraCtx = {}) {
   const ctx = {
-    currentPlace: getRealityDomain(),
+    currentReality: getRealityDomain(),
     currentUser: socket?.name || null,
     ...extraCtx,
   };
@@ -537,7 +537,7 @@ export function parseFromSocket(socket, input, extraCtx = {}) {
 // Parse without a socket — HTTP bootstrap path, internal seed callers,
 // tests. Same shape; caller supplies any extra context.
 export function parseWithContext(input, ctx = {}) {
-  const fullCtx = { currentPlace: getRealityDomain(), ...ctx };
+  const fullCtx = { currentReality: getRealityDomain(), ...ctx };
   try {
     return parse(input, fullCtx);
   } catch (e) {
@@ -570,7 +570,7 @@ export function parseWithContext(input, ctx = {}) {
 // Sorting makes A→B and B→A resolve to the same key — both directions
 // group into one lane on the reel.
 //
-// I store the spaceId-rooted form (`<place>/<spaceId>@<name>`) so a
+// I store the spaceId-rooted form (`<reality>/<spaceId>@<name>`) so a
 // saved lane name survives space renames. The address grammar's
 // display form (human-readable names) is a separate expression of the
 // same grammar — see parse / format above. Act records carry this
@@ -587,15 +587,15 @@ const STANCE_PAIR_SEPARATOR = " :: ";
  *   - string         — pass-through (assumed already formatted)
  *   - { place?, spaceId, name }
  *
- * Output: `<place>/<spaceId>@<name>` (spaceId-rooted path form).
+ * Output: `<reality>/<spaceId>@<name>` (spaceId-rooted path form).
  * Returns null when spaceId or name is missing.
  */
 function stanceString(input) {
   if (input == null) return null;
   if (typeof input === "string") return input.length > 0 ? input : null;
-  const { place, spaceId, name } = input;
+  const { reality, spaceId, name } = input;
   if (!spaceId || !name) return null;
-  const realityPart = place || getRealityDomain();
+  const realityPart = reality || getRealityDomain();
   return `${realityPart}/${spaceId}@${name}`;
 }
 

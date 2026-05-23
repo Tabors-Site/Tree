@@ -2,12 +2,12 @@
 //
 // My public face.
 //
-// This file assembles the `place` object I hand to every extension's
-// `init(place)`. Whatever I expose here is the whole of me an
-// extension can reach. Services not implemented on this place get
-// no-op proxies so extension code stays safe to call.
+// This file assembles the `reality` object I hand to every
+// extension's `init(reality)`. Whatever I expose here is the whole
+// of me an extension can reach. Services not implemented on this
+// reality get no-op proxies so extension code stays safe to call.
 
-import log from "./parentReality/log.js";
+import log from "./seedReality/log.js";
 import { hooks as hooksModule } from "./hooks.js";
 import {
   registerSeed,
@@ -87,7 +87,7 @@ import {
 } from "./ibp/pushChannel.js";
 import { ok, error, sendOk, sendError, IBP_ERR } from "./ibp/protocol.js";
 import { qualities } from "./materials/qualities.js";
-import { isBeingRoot, getSpaceRootId } from "./seedRoot.js";
+import { isBeingRoot, getSpaceRootId } from "./sprout.js";
 import {
   createSpace,
   createSpaceBranch,
@@ -131,7 +131,7 @@ import {
   getLockStats as getSpaceLockStats,
 } from "./materials/space/spaceLocks.js";
 
-// The declarative primitives. Re-exposed through `place.declare` so
+// The declarative primitives. Re-exposed through `reality.declare` so
 // extensions register roles, subscribe to events, declare wake
 // cadences, and aggregate fan-out replies without importing my
 // internals.
@@ -174,16 +174,16 @@ const _allowedStrategyExtensions = new Set();
 // proxy functions without a separate fallback path.
 
 /**
- * Build the place services bundle.
+ * Build the reality services bundle.
  *
  * @param {object} opts
  * @param {Map}    opts.loadedExtensions  - already-loaded extensions (for availability checks)
  * @param {object} opts.overrides         - swap any service with a custom implementation
- * @returns {object} the place services bundle
+ * @returns {object} the reality services bundle
  */
 
 // I stash the last-built bundle so seed-internal callers (e.g. the
-// plant-seed DO operation handing `place` to a seed's scaffold) don't
+// plant-seed DO operation handing `reality` to a seed's scaffold) don't
 // have to thread it through every signature. buildRealityServices runs
 // once at boot; the bundle stays stable for the process lifetime.
 let _lastBuiltReality = null;
@@ -195,10 +195,10 @@ export function buildRealityServices({
   loadedExtensions = new Map(),
   overrides = {},
 } = {}) {
-  const place = {
+  const reality = {
     // The four verbs. The whole of my public surface for operations
     // on space, matter, and beings. Per-target helpers below
-    // (place.space, place.matters, place.qualities, etc.) are syntactic
+    // (reality.space, reality.matters, reality.qualities, etc.) are syntactic
     // surfaces over the same grammar; new code prefers the verbs.
     see: seeVerb,
     do: doVerb,
@@ -311,7 +311,7 @@ export function buildRealityServices({
     // --- Hook system ---
     hooks: hooksModule,
 
-    // --- Extension seeds (scaffolded shapes a place can plant) ---
+    // --- Extension seeds (scaffolded shapes a reality can plant) ---
     // Extensions declare seeds via init() return { seeds: [...] } or
     // manifest.provides.seeds; the loader registers them. Operators plant
     // a seed at a space to bootstrap the extension's structure (Ruler,
@@ -368,11 +368,11 @@ export function buildRealityServices({
     },
 
     // --- Qualities. Per-primitive extension-data Map.
-    //     place.qualities.{being,space,matter}.{getQuality, setQuality,
+    //     reality.qualities.{being,space,matter}.{getQuality, setQuality,
     //     mergeQuality, incQuality, pushQuality, addToQualitySet,
     //     batchSetQuality, unsetQuality, readQualityNamespace}.
     //     Namespace ownership is enforced on space and matter when the
-    //     scoped place bundle passes opts.callerExtName.
+    //     scoped reality bundle passes opts.callerExtName.
     qualities,
 
     // --- Extension scope (check blocked/allowed status at positions) ---
@@ -421,7 +421,7 @@ export function buildRealityServices({
 
       // Scheduled-wake registry. A being declares a wake cadence;
       // the tick loop emits a SUMMON on each interval. Default is
-      // an anonymous code emitter; a place may swap in a real
+      // an anonymous code emitter; a reality may swap in a real
       // scheduler-being via setScheduleEmitter so the wake is
       // attributable to a Being row.
       schedule: ibpSchedule,
@@ -443,15 +443,15 @@ export function buildRealityServices({
 
   // Apply overrides (places can swap any service)
   for (const [key, value] of Object.entries(overrides)) {
-    if (place[key] && typeof value === "object") {
-      place[key] = { ...place[key], ...value };
+    if (reality[key] && typeof value === "object") {
+      reality[key] = { ...reality[key], ...value };
     } else {
-      place[key] = value;
+      reality[key] = value;
     }
   }
 
-  _lastBuiltReality = place;
-  return place;
+  _lastBuiltReality = reality;
+  return reality;
 }
 
 export { authStrategies };

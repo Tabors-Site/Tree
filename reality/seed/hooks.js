@@ -12,9 +12,8 @@
 // run() returns { cancelled: false } or { cancelled: true, reason }.
 // fire() is the same but swallows errors.
 
-import log from "./parentReality/log.js";
+import log from "./seedReality/log.js";
 import { getFactoryConfigValue } from "./factoryConfig.js";
-import { getRealityConfigValue } from "./realityConfig.js";
 
 // Read at use time so config changes take effect without restart.
 function HOOK_TIMEOUT_MS() { return Number(getFactoryConfigValue("hookTimeoutMs")) || 5000; }

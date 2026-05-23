@@ -18,7 +18,38 @@
 
 import { v4 as uuidv4 } from "uuid";
 import Space from "../materials/space/space.js";
-import log from "../parentReality/log.js";
+import log from "../seedReality/log.js";
+import { logFact } from "../past/fact/facts.js";
+import { I_AM } from "./being/seedBeings.js";
+
+// Stamp a do:birth Fact for a new manifest child Space. Slice C
+// (2026-05-23): the legacy Space.create bypass is gone; eager-fold
+// inside logFact runs applyBirthSpace + initProjection to
+// materialize the row. scaffold-style attribution (I_AM as actor)
+// because manifest sync is seed-internal scaffolding — extension
+// load runs after I_AM is planted, so the Being row exists.
+async function birthChildByFact({ parentId, name, type, qualities }) {
+  const id = uuidv4();
+  const specQualities = qualities instanceof Map
+    ? Object.fromEntries(qualities)
+    : (qualities || {});
+  await logFact({
+    verb:    "do",
+    action:  "birth",
+    beingId: I_AM,
+    target:  { kind: "space", id },
+    params:  {
+      spec: {
+        name,
+        type:      type ?? null,
+        parent:    String(parentId),
+        rootOwner: null,
+        qualities: specQualities,
+      },
+    },
+  });
+  return id;
+}
 
 // Iterate over a qualities Map / Object and emit one do:set fact per
 // namespace key. The reducer derives the per-namespace state from each
@@ -95,20 +126,14 @@ export async function manifestItems({
       kept++;
       continue;
     }
-    // New child: legacy Space.create path until Slice C-space-full
-    // converts the birth handler to write through fact-driven space
-    // birth. Until then, this is the one mutation in this file that
-    // bypasses the fact stream.
-    const child = await Space.create({
-      _id: uuidv4(),
-      name: item.name,
-      type: itemType,
-      parent: parent._id,
-      contributors: [],
-      ...(item.qualities ? { qualities: item.qualities } : {}),
+    // Fact-driven (Slice C, 2026-05-23). Stamp a do:birth Fact;
+    // eager-fold materializes the new Space row via applyBirthSpace.
+    await birthChildByFact({
+      parentId:  parent._id,
+      name:      item.name,
+      type:      itemType,
+      qualities: item.qualities,
     });
-    // No parent.children write — parent-side cache retired; the
-    // child's `parent` is the single source of truth for the relation.
     created++;
   }
 
@@ -146,17 +171,13 @@ export async function addManifestChild({
     }
     return existing._id;
   }
-  // New child: legacy Space.create until Slice C-space-full lands.
-  const child = await Space.create({
-    _id: uuidv4(),
+  // Fact-driven new-child via birthChildByFact.
+  return await birthChildByFact({
+    parentId: parent._id,
     name,
     type: itemType,
-    parent: parent._id,
-    contributors: [],
-    ...(qualities ? { qualities } : {}),
+    qualities,
   });
-  // No parent.children write — parent-side cache retired.
-  return child._id;
 }
 
 export async function removeManifestChild({

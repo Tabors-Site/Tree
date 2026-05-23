@@ -2,7 +2,7 @@
 //
 // Being. The shape I give identity.
 //
-// I am the first being on this place — the row whose parentBeingId
+// I am the first being on this reality — the row whose parentBeingId
 // is null. Every other being chains back to me through this same
 // schema. When a human registers, when an extension scaffolds an
 // LLM-driven being, when a code-cognition role like auth or
@@ -34,7 +34,7 @@ const BeingSchema = new mongoose.Schema({
 
   // The being's name. Drives the @qualifier in stance addresses
   // (treeos.ai/<path>@<name>). Federation crosses places using
-  // <name>@<realityDomain>. Unique on this place.
+  // <name>@<realityDomain>. Unique on this reality.
   name: { type: String, required: true, unique: true },
 
   // How this being thinks. Scheduling and cognition dispatch branch
@@ -50,12 +50,14 @@ const BeingSchema = new mongoose.Schema({
     default: "human",
   },
 
-  // Bcrypt-hashed. Hook below hashes plaintext on save; the
-  // fact-driven path will pass already-hashed values via $set and
-  // skip the hook. Schema constraints stay until every legacy
-  // `new Being(...).save()` path is gone (then this whole block
-  // becomes a pure cache).
-  password: { type: String, select: false, required: true },
+  // Bcrypt-hashed. Stored on the row as a $set written by the fold
+  // engine (applyProjection), pre-hashed by the verb handler before
+  // the be:register Fact stamps. The schema is a cache shape now,
+  // not an authority: `required` is dropped because the source of
+  // truth is the fact chain, not the validator. The pre-save bcrypt
+  // hook is also retired (no .save() site needs it after Slice E,
+  // 2026-05-23) — see the file's commented-out hook block below.
+  password: { type: String, select: false },
 
   // Roles the being can act in. Identity is durable on this row;
   // active role composes per SUMMON. Each SUMMON resolves an active
@@ -78,7 +80,10 @@ const BeingSchema = new mongoose.Schema({
   // trio at a rulership space) while parenting through this tree
   // captures the cognitive hierarchy.
   parentBeingId: { type: String, ref: "Being", default: null, index: true },
-  children:      [{ type: String, ref: "Being" }],
+  // children[] retired (2026-05-23). The parent-side cache is gone;
+  // each being's `parentBeingId` is the single source of truth for
+  // the being-tree relation. Downward walks query by parentBeingId
+  // (parallel to Space.children retirement).
 
   // Where the being lives by default. Humans get a home territory at
   // registration; non-human beings are placed at creation by whatever
@@ -92,7 +97,7 @@ const BeingSchema = new mongoose.Schema({
   // but can shift during work that descends into a child space.
   //
   // Drives the asker's stance for new summons:
-  // `<place>/<currentSpace>@<name>`. When this changes, the being's
+  // `<reality>/<currentSpace>@<name>`. When this changes, the being's
   // next summon places at a new IBP Address; earlier summons stay
   // under their original address.
   currentSpace: { type: String, ref: "Space", default: null, index: true },
@@ -100,15 +105,15 @@ const BeingSchema = new mongoose.Schema({
   // For llm-mode beings: the LLM that drives their cognition each
   // summoning. For humans: the LLM used when they request AI help.
   // Null falls back through the resolution chain (extension slot →
-  // tree → place default). Same field shape as Space.llmDefault so
+  // tree → reality default). Same field shape as Space.llmDefault so
   // the resolver treats both uniformly.
   // Connection uuid key into this being's qualities.llmConnections.
   llmDefault: { type: String, default: null },
 
   // Federation. `isRemote: true` means this being is mirrored from
-  // another place; `homePlace` carries the canonical place's domain.
+  // another reality; `homeReality` carries the canonical reality's domain.
   isRemote: { type: Boolean, default: false },
-  homePlace: { type: String, default: null },
+  homeReality: { type: String, default: null },
 
   // What kind a being is. The open layer. Each extension writes to
   // its own quality namespace via qualities.being.setQuality from
@@ -133,26 +138,18 @@ BeingSchema.index({ homeSpace: 1, operatingMode: 1 });
 BeingSchema.index({ parentBeingId: 1, _id: 1 });
 BeingSchema.index({ roles: 1 });
 BeingSchema.index({ defaultRole: 1 });
-BeingSchema.index({ homePlace: 1, isRemote: 1 });
+BeingSchema.index({ homeReality: 1, isRemote: 1 });
 
 // Position index — what beings are at a given space. Used by foldPlace
 // to find a space's being-occupants.
 BeingSchema.index({ position: 1 }, { sparse: true });
 
-// Pre-save bcrypt hook stays in place until ALL legacy create-paths
-// route through the fact-driven flow (where the verb handler hashes
-// before emitting the fact and the reducer reads the already-hashed
-// value via $set). The hook is a no-op on $set-based updates (which
-// is the fact-driven write path), and harmless for already-hashed
-// inputs because of the isModified guard. Once createBeing is fully
-// fact-driven and the last `new Being(...).save()` site is gone,
-// remove this hook.
-BeingSchema.pre("save", async function (next) {
-  if (!this.isModified("password") || !this.password) return next();
-  const salt = await bcrypt.genSalt(12);
-  this.password = await bcrypt.hash(this.password, salt);
-  next();
-});
+// Pre-save bcrypt hook retired (Slice E, 2026-05-23). Every Being
+// creation path now stamps a be:register Fact carrying a pre-hashed
+// password; the fold engine writes the row via $set which skips
+// pre-save hooks. The hook served the legacy `new Being(...).save()`
+// flow, which is gone. Password verification (comparePassword) stays
+// — it reads the already-hashed row and bcrypt-compares.
 
 BeingSchema.methods.comparePassword = async function (candidatePassword) {
   if (!this.password) return false;

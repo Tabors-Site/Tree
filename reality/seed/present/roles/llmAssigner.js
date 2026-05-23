@@ -11,7 +11,7 @@
 // frame on the reel beyond the Act row each call stamps.
 //
 // One canonical implementation, reached through `ibp:be
-// <place>/@llm-assigner` from every transport.
+// <reality>/@llm-assigner` from every transport.
 //
 // Operations span three scopes:
 //
@@ -36,7 +36,7 @@
 // eventually express these rules uniformly; until then each method
 // checks inline.
 
-import log from "../../parentReality/log.js";
+import log from "../../seedReality/log.js";
 import Being from "../../materials/being/being.js";
 import Space from "../../materials/space/space.js";
 import { IbpError, IBP_ERR } from "../../ibp/protocol.js";
@@ -261,7 +261,7 @@ async function requireRootOperator(ctx) {
   if (!operator) {
     throw new IbpError(
       IBP_ERR.FORBIDDEN,
-      "No root operator exists on this place yet. Register the first human via @cherub.",
+      "No root operator exists on this reality yet. Register the first human via @cherub.",
     );
   }
   if (String(operator._id) !== String(ctx.identity.beingId)) {

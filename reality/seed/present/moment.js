@@ -27,7 +27,7 @@
 // business. The run loop that strings many moments together for
 // one summon lives in run.js.
 
-import log from "../parentReality/log.js";
+import log from "../seedReality/log.js";
 import { assign }   from "./assign.js";
 import { momentum } from "./momentum.js";
 import { stamp }    from "./stamped.js";

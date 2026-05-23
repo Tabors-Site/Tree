@@ -24,7 +24,7 @@ import fs from "fs/promises";
 import { getFactoryConfigValue } from "../../factoryConfig.js";
 import fsSync from "fs";
 import path from "path";
-import log from "../../parentReality/log.js";
+import log from "../../seedReality/log.js";
 import Matter from "./matter.js";
 import { getRealityConfigValue } from "../../realityConfig.js";
 import { MATTER_ORIGIN } from "./origins.js";

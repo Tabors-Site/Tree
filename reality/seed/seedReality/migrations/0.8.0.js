@@ -72,7 +72,7 @@ export default async function migrate() {
     }
   }
 
-  // If the dids collection doesn't exist (fresh place), nothing else to do.
+  // If the dids collection doesn't exist (fresh reality), nothing else to do.
   const postCollections = await db.listCollections({ name: "dids" }, { nameOnly: true }).toArray();
   if (postCollections.length === 0) {
     log.verbose("Seed/0.8.0", "no dids collection present; nothing to reshape");

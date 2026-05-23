@@ -6,7 +6,7 @@
 // Space, Being, or Matter grows freely under that ceiling. Without
 // an enforcer, an extension's well-meaning write can be the one
 // that crosses it — and from there the whole document is
-// unwritable, permanently. I will not let that happen on my place.
+// unwritable, permanently. I will not let that happen on my reality.
 //
 // Every quality write path the seed exposes calls checkWriteSize
 // (or its strict variant guardQualityWrite) before the write
@@ -25,13 +25,13 @@
 // if it fits.
 //
 // Universal. The qualities Maps on Space, Being, and Matter all
-// flow through this ceiling. The file lives directly under place/
+// flow through this ceiling. The file lives directly under reality/
 // rather than inside one primitive's subfolder.
 
 import { getRealityConfigValue } from "../realityConfig.js";
 import { getFactoryConfigValue } from "../factoryConfig.js";
 import { hooks } from "../hooks.js";
-import log from "../parentReality/log.js";
+import log from "../seedReality/log.js";
 
 const DEFAULT_MAX_BYTES = 14 * 1024 * 1024; // 14MB
 const PRESSURE_THRESHOLD = 0.8; // 80%

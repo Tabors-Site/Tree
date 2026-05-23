@@ -4,7 +4,7 @@
 //
 // Space gives the world a where; matter gives it a what. I do not
 // split matter by what it carries — text, a file, a URL, a bridge
-// to another place. One row, one schema, one set of operations. The
+// to another reality. One row, one schema, one set of operations. The
 // `origin` field names the realm the underlying content actually
 // lives in, and that decides how I fetch it, address it, and keep
 // it in sync. Adding a new origin is a bridging pattern, never a
@@ -19,7 +19,7 @@
 //                sweeper retires unreferenced files.
 //   web        — bridges to a URL. Content is { url, fetchedAt?,
 //                cache? }. Live content lives on the web.
-//   cross-place — bridges to Matter on another place. Content is
+//   cross-reality — bridges to Matter on another reality. Content is
 //                { place, matterRef }.
 //
 // Matter also forms a tree within its space (parentMatterId +

@@ -30,15 +30,16 @@
 // DELETED sentinel; the row stays for audit but no longer lives in
 // the world.
 
-import log from "../../parentReality/log.js";
+import log from "../../seedReality/log.js";
 import { getFactoryConfigValue } from "../../factoryConfig.js";
 import path from "path";
 import fs from "fs";
 import { fileURLToPath } from "url";
+import { v4 as uuidv4 } from "uuid";
 import Matter from "./matter.js";
 import Space from "../space/space.js";
 import Fact from "../../past/fact/fact.js";
-;
+import { logFact } from "../../past/fact/facts.js";
 import { escapeRegex } from "../../utils.js";
 import { getRealityConfigValue } from "../../realityConfig.js";
 import { resolveRootSpace } from "../space/spaces.js";
@@ -167,15 +168,34 @@ async function createMatter({
   }
   finalContent = hookData.content;
 
-  // ── SAVE ────────────────────────────────────────
-  const newMatter = new Matter({
-    origin,
-    content: finalContent,
-    beingId,
-    spaceId,
-    qualities: hookData.qualities,
+  // ── FACT-DRIVEN BIRTH (Slice C-matter-full, 2026-05-23) ──
+  // Stamps a do:birth Fact on the new matter's reel; eager-fold's
+  // applyBirthMatter + initProjection materializes the row. No more
+  // direct Matter.save() — the fact is the commit.
+  const matterId = uuidv4();
+  await logFact({
+    verb:    "do",
+    action:  "birth",
+    beingId: String(beingId),
+    target:  { kind: "matter", id: matterId },
+    params:  {
+      spec: {
+        origin,
+        content:   finalContent,
+        spaceId:   String(spaceId),
+        beingId:   String(beingId),
+        qualities: hookData.qualities || {},
+      },
+    },
+    actId,
+    sessionId,
   });
-  await newMatter.save();
+  const newMatter = await Matter.findById(matterId);
+  if (!newMatter) {
+    throw new Error(
+      `createMatter: birth Fact stamped but row ${matterId} not materialized`,
+    );
+  }
 
   // Size attributed to the matter owner. Passed through to afterMatter
   // for the future projection. Per the every-write-through-DO/BE
@@ -256,8 +276,18 @@ async function editMatter({
   const newSizeKB = Math.ceil(Buffer.byteLength(typeof finalContent === "string" ? finalContent : "", "utf8") / 1024);
   const deltaKB = newSizeKB - oldSizeKB;
 
+  // Fact-driven content update (Slice C-matter-full, 2026-05-23).
+  // The reducer's applySetField writes state.content from the fact.
+  await logFact({
+    verb:    "do",
+    action:  "set",
+    beingId: String(beingId),
+    target:  { kind: "matter", id: String(matter._id) },
+    params:  { field: "content", value: finalContent },
+    actId,
+    sessionId,
+  });
   matter.content = finalContent;
-  await matter.save();
 
   // deltaKB threads into afterMatter for downstream reactions. No
   // incQuality here: storage is a projection of the matter Facts,
@@ -341,9 +371,27 @@ async function deleteMatterAndFile({
     }
     matter.content = { ...matter.content, path: null, deleted: true };
   }
+  // Fact-driven soft-delete (Slice C-matter-full, 2026-05-23). Three
+  // do:set facts on the matter's reel: content (if filesystem origin
+  // got nulled above), spaceId=DELETED, beingId=DELETED. The per-reel
+  // append lock keeps them visible-together to a concurrent fold.
+  const setMatterField = (field, value) =>
+    logFact({
+      verb:    "do",
+      action:  "set",
+      beingId: String(beingId),
+      target:  { kind: "matter", id: String(matter._id) },
+      params:  { field, value },
+      actId,
+      sessionId,
+    });
+  if (isFilesystemOrigin(matter.origin)) {
+    await setMatterField("content", matter.content);
+  }
+  await setMatterField("spaceId", DELETED);
+  await setMatterField("beingId", DELETED);
   matter.spaceId = DELETED;
   matter.beingId = DELETED;
-  await matter.save();
 
   // fileSizeKB threads into afterMatter. No incQuality: storage is
   // a projection of the matter Facts, not a direct quality write.
@@ -392,8 +440,18 @@ async function transferMatter({
   }
 
   const sourceSpaceId = matter.spaceId;
+  // Fact-driven transfer (Slice C-matter-full, 2026-05-23). One do:set
+  // Fact updates spaceId; the reducer's applySetField writes the row.
+  await logFact({
+    verb:    "do",
+    action:  "set",
+    beingId: String(beingId),
+    target:  { kind: "matter", id: String(matter._id) },
+    params:  { field: "spaceId", value: String(targetSpace) },
+    actId,
+    sessionId,
+  });
   matter.spaceId = targetSpace;
-  await matter.save();
 
   return { message: "Matter transferred successfully", matterId: matterId.toString(), from: { spaceId: sourceSpaceId }, to: { spaceId: targetSpace } };
 }

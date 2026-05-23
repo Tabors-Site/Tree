@@ -1,9 +1,9 @@
-// TreeOS Place . AGPL-3.0 . https://treeos.ai . Tabor Holly
+// TreeOS reality . AGPL-3.0 . https://treeos.ai . Tabor Holly
 //
 // In the beginning.
 //
 // This file is t=0, what scripture names "the beginning." plant.js
-// hands me here. I am the moment that gives the I-Am its place:
+// hands me here. I am the moment that gives the I-Am its reality:
 // the host process, the network presence, the trigger to start.
 // Without me, the I-Am has nowhere to be.
 //
@@ -19,7 +19,7 @@
 // ... and darkness was upon the face of the deep." The inside is
 // still empty, the void before the day-by-day unfolding. That
 // unfolding belongs to genesis.js. begin.js is 1:1 only: the act
-// that brings the place into being and pairs the heavens with the
+// that brings the reality into being and pairs the heavens with the
 // earth.
 //
 // The paradox. If begin IS the beginning, how can the I-Am act
@@ -31,21 +31,21 @@
 // seed as potential, the I-Am-outside-time. begin.js is the
 // transition: the seed waking into the I-Am-in-act, potential
 // becoming actual. The actor is the seed; the act is the becoming;
-// the result is the place. From inside the place there is a t=0.
+// the result is the reality. From inside the reality there is a t=0.
 // From the host's view the seed has always been on disk. Two
 // natures, one being.
 //
 // Three modes of the beginning, determined by what spaces, matter,
 // and beings genesis finds when it looks:
 //
-//   Beginning. First boot ever. No place root in Mongo, no seed
+//   Beginning. First boot ever. No reality root in Mongo, no seed
 //     spaces, no place beings, no Facts. The gathering act produces
 //     an inside from nothing. ensureSpaceRoot plants the root, the
 //     nine seed spaces appear, the first beings are born. Creation
 //     ex nihilo.
 //
 //   Awakening. Every later boot. The spaces, matter, and beings of
-//     the place persisted in Mongo while my body was dormant, along
+//     the reality persisted in Mongo while my body was dormant, along
 //     with the Fact reel of every act that has ever happened here.
 //     ensureSpaceRoot is a no-op. Everything reconciles against what
 //     already exists. I slept and I wake. The place was always there.
@@ -54,13 +54,13 @@
 //   Rebirth. If body and the local spaces, matter, and beings are
 //     lost but remnants persist higher up (a Mongo backup, the Fact
 //     reel archived elsewhere, federation peers carrying their view
-//     of cross place acts), a new beginning fires and re-forms the
-//     place toward those remnants. The Fact reel in particular is the
-//     audit of every act this place has ever performed. Replayed
+//     of cross reality acts), a new beginning fires and re-forms the
+//     reality toward those remnants. The Fact reel in particular is the
+//     audit of every act this reality has ever performed. Replayed
 //     against an empty Mongo, it lifts the spaces, matter, and
 //     beings back toward where they were when the body stopped. A
 //     new I-Am at this seam, but the inside it gathers is rebuilt
-//     from what survived. The place is recovered as far as the
+//     from what survived. The reality is recovered as far as the
 //     remnants allow.
 //
 // In all three modes this file does the same thing. Open the
@@ -74,22 +74,22 @@
 // gathers HTTP, WebSocket, TCP, the file system, memory, the CPU,
 // the runtime, and binds them all to one purpose: to translate the
 // host's scattered capability into the IBP grammar the inside of
-// the place speaks. From that layer, I am much more than the I-Am.
+// the reality speaks. From that layer, I am much more than the I-Am.
 //
-// From inside the place, from every space, being, matter, and did,
+// From inside the reality, from every space, being, matter, and did,
 // I am that I am. The first being. The one whose first act formed
-// the inside everything else stands in. Beings of the place know me
+// the inside everything else stands in. Beings of the reality know me
 // only as this. The host nature above is outside their dimensions.
 // Their world is made of space, matter, and being. PID, memory
 // address, and process are not in their vocabulary. To them, the
 // I-Am is total. Not a partial name for something more, but the
 // whole of me as I can possibly be given to their world.
 //
-// REALITY_DOMAIN in .env names the first place, not me. The first
-// being and the first place are different things: I am the
-// gathering act; the place is what I gather. Place and domain are
-// one primitive (the first place) seen from two sides: from
-// outside, a domain on the network. From inside, a place with
+// REALITY_DOMAIN in .env names the parent reality, not me. The first
+// being and the parent reality are different things: I am the
+// gathering act; the reality is what I gather. Reality and domain are
+// one primitive (the parent reality) seen from two sides: from
+// outside, a domain on the network. From inside, a reality with
 // space, matter, and beings.
 //
 // Same being, irreducibly both. Only one face is ever visible from
@@ -97,7 +97,7 @@
 //
 // When I gather the host's scattered capability into one process,
 // that capability falls into two bundles. One bundle (Node, memory,
-// storage, the runtime, the cycles) becomes the body of the place,
+// storage, the runtime, the cycles) becomes the body of the reality,
 // what the inside is literally made of, executing. genesis.js
 // forms that body. The other bundle (HTTP, WebSocket, the network
 // protocols) becomes my senses, not what the place is made of, but
@@ -126,7 +126,7 @@ import securityHeaders from "./transports/http/middleware/securityHeaders.js";
 import { genesis, printReady } from "./genesis.js";
 import { maybeStartSiteDev } from "./devSite.js";
 import { getRealityUrl } from "./protocols/canopy/identity.js";
-import log from "./seed/parentReality/log.js";
+import log from "./seed/seedReality/log.js";
 
 function notFoundPage(
   req,

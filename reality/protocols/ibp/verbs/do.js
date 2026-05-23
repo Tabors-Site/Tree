@@ -36,7 +36,7 @@
 // Pre-auth flows (register / claim from arrival) are BE, not DO,
 // and ride the cherub-as-actor path in be.js.
 
-import log from "../../../seed/parentReality/log.js";
+import log from "../../../seed/seedReality/log.js";
 import { parseFromSocket, expand, getRealityDomain } from "../../../seed/ibp/address.js";
 import { resolveStance } from "../../../seed/ibp/resolver.js";
 import { IbpError, IBP_ERR, isIbpError } from "../../../seed/ibp/protocol.js";
@@ -77,7 +77,7 @@ export async function handleDo(socket, env, ack) {
 
     const parsed = parseFromSocket(socket, positionString);
     const expanded = expand(parsed, {
-      currentPlace: getRealityDomain(),
+      currentReality: getRealityDomain(),
       currentUser: socket.name,
     });
     const resolved = await resolveStance(expanded.right);

@@ -4,9 +4,9 @@
  *
  * The seed's authorize() used to fall back to per-stance permission
  * rows stored at metadata.beings.arrival.permissions and
- * metadata.beings.owner.permissions on the place root. Layer 4 is gone;
+ * metadata.beings.owner.permissions on the space root. Layer 4 is gone;
  * the same semantics now live as layer-2 rules at
- * metadata.permissions.<verb>.<keyParts> on the place root, planted by
+ * metadata.permissions.<verb>.<keyParts> on the space root, planted by
  * seedDefaultStancePermissions().
  *
  * This migration drops the legacy permission rows. The next boot's
@@ -36,7 +36,7 @@ export default async function migrate() {
   const spaces = db.collection("spaces");
 
   // Drop the legacy arrival + owner permission rows on every space
-  // (only the place root ever carried them in practice, but $unset on
+  // (only the space root ever carried them in practice, but $unset on
   // missing paths is a safe no-op).
   const res = await spaces.updateMany(
     {

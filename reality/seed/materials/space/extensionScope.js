@@ -33,7 +33,7 @@
 // owned by blocked extensions) and is colocated here because it
 // shares no consumer outside scope resolution.
 
-import log from "../../parentReality/log.js";
+import log from "../../seedReality/log.js";
 import { getFactoryConfigValue } from "../../factoryConfig.js";
 import Space from "./space.js";
 import { SEED_SPACE } from "./seedSpaces.js";

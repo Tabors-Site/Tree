@@ -1,6 +1,6 @@
 # TreeOS Place Server
 
-This is a TreeOS place. An operating system for AI agents. You are inside a running server that hosts trees, runs AI conversations, and connects to a federated network.
+This is a TreeOS reality. An operating system for AI agents. You are inside a running server that hosts trees, runs AI conversations, and connects to a federated network.
 
 ## What you are looking at
 
@@ -32,9 +32,9 @@ seed/              The seed. Four folders, four roles. NEVER modify.
 
   models/            Mongoose schemas for all 6 primitives:
                      being, space, matter, did, summon, llmConnection.
-  services.js        Assembles `place` from the four folders above.
-  spaceRoot.js        This place's root + the nine place seed spaces.
-  realityConfig.js      This place's config.
+  services.js        Assembles `reality` from the four folders above.
+  spaceRoot.js        This reality's space root + the nine seed spaces.
+  realityConfig.js      This reality's config.
   SEED.md            Seed internals doc (first-person, from the I-Am).
   LICENSE            AGPL-3.0 with a preamble naming the seed.
 ```
@@ -50,7 +50,7 @@ transports/ Thin carriers. Translate transport-shape into protocol envelopes.
 http/ Express handlers; canonical /ibp/<verb>/<addr> adapter
 handler.js Main router; wires middleware + extension routes
 api/ibp.js The single IBP HTTP adapter (every op derivable)
-api/config.js Horizon proxies + /place/root (deferred surface)
+api/config.js Horizon proxies + /reality/root (deferred surface)
 auth.js users.js Auth shims into IBP BE verb
 canopy.js Federation transport routes
 middleware/ authenticate, dbHealth, securityHeaders, ...
@@ -77,11 +77,11 @@ genesis.js The unfolding. Indexes, config, migrations, beings, extensions, jobs.
 
 ## Architectural patterns (read before building anything)
 
-**The four verbs are the public surface.** SEE / DO / SUMMON / BE over IBP addresses (`<place>/<path>@<being>`). Every operation in the system maps to one of these. Small protocol; expressiveness lives in role templates, registered operations, and the substrate the seed materializes.
+**The four verbs are the public surface.** SEE / DO / SUMMON / BE over IBP addresses (`<reality>/<path>@<being>`). Every operation in the system maps to one of these. Small protocol; expressiveness lives in role templates, registered operations, and the substrate the seed materializes.
 
-**Resolution chains walk the ancestor cache.** Stance authorization, extension scope, tool scope, LLM connection, LLM config, perspective filter, descriptor derivers. All walk the parent chain from the current space to the place root. All use the same cached snapshot per message. One walk serves every chain.
+**Resolution chains walk the ancestor cache.** Stance authorization, extension scope, tool scope, LLM connection, LLM config, perspective filter, descriptor derivers. All walk the parent chain from the current space to the space root. All use the same cached snapshot per message. One walk serves every chain.
 
-**Position determines behavior.** No "zones" — that framing retired. A being at the place root sees one capability surface; the same being inside a tree sees another. Differences come from per-position stance rules, ownership, the role the summoned being carries, and the operations the loader has registered. Navigation IS attention shift; the substrate at each position is what changes the mind.
+**Position determines behavior.** No "zones" — that framing retired. A being at the space root sees one capability surface; the same being inside a tree sees another. Differences come from per-position stance rules, ownership, the role the summoned being carries, and the operations the loader has registered. Navigation IS attention shift; the substrate at each position is what changes the mind.
 
 **before hooks intercept. after hooks react.** Before hooks run sequentially because they can cancel. After hooks run in parallel because they react independently. `enrichContext` is the sequential override because its handlers build cumulative output. Don't make a hook sequential without articulating why handlers depend on each other's output.
 
@@ -89,7 +89,7 @@ genesis.js The unfolding. Indexes, config, migrations, beings, extensions, jobs.
 
 **The tree is not a filesystem.** Spaces aren't files. They're concepts. Parent-child isn't a directory structure. It's how meaning relates to other meaning. When you navigate, you don't change directories. You change what the mind is attending to. The AI at each position thinks from that position's perspective, with that position's tools, roles, and context.
 
-**The operator always decides.** Extensions suggest. Intent proposes actions. Delegate matches work to humans. Evolve writes specs. Governance shows compatibility. Nothing forces. Nothing auto-installs. Nothing pushes code onto the place. The seed is sovereign. The directory coordinates through exclusion, not injection.
+**The operator always decides.** Extensions suggest. Intent proposes actions. Delegate matches work to humans. Evolve writes specs. Governance shows compatibility. Nothing forces. Nothing auto-installs. Nothing pushes code onto the reality. The seed is sovereign. The directory coordinates through exclusion, not injection.
 
 ## Building an extension
 
@@ -105,7 +105,7 @@ Full reference: `extensions/EXTENSION_FORMAT.md`
 
 - **Tools** (declared in `init()` return; registered via `registerToolBundle`. Verb-tagged: see/do/summon/be)
 - **Roles** (summonable being templates; declare `canSee/canDo/canSummon/canBe` and a prompt body)
-- **Operations** (DO actions registered through `place.do.registerOperation`; auto-namespaced `<ext>:<action>`)
+- **Operations** (DO actions registered through `reality.do.registerOperation`; auto-namespaced `<ext>:<action>`)
 - **Seeds** (plantable scaffolds; recipes that fan a structure into existence when an operator plants them)
 - **Hooks** (lifecycle handlers: beforeMatter, afterMatter, enrichContext, afterMetadataWrite, beforeFact, ...)
 - **DO-trigger subscriptions** (wake a being when matching substrate writes happen)
@@ -121,7 +121,7 @@ Full reference: `extensions/EXTENSION_FORMAT.md`
 
 **enrichContext** is how you speak to the AI. The seed builds the prompt. Your extension injects context through this hook. Always guard: check if relevant data exists before injecting. Never run expensive queries unconditionally.
 
-**`qualities.{being,space,matter}.setQuality`** is how you write data. Each extension gets its own namespace in the `qualities` Map. `place.qualities.space.setQuality(space, "my-extension", data)` writes atomically. You can only write to your own namespace. Same nine atomic primitives (`setQuality`, `mergeQuality`, `incQuality`, `pushQuality`, `addToQualitySet`, `batchSetQuality`, `unsetQuality`, `getQuality`, `readQualityNamespace`) on each sub-namespace.
+**`qualities.{being,space,matter}.setQuality`** is how you write data. Each extension gets its own namespace in the `qualities` Map. `reality.qualities.space.setQuality(space, "my-extension", data)` writes atomically. You can only write to your own namespace. Same nine atomic primitives (`setQuality`, `mergeQuality`, `incQuality`, `pushQuality`, `addToQualitySet`, `batchSetQuality`, `unsetQuality`, `getQuality`, `readQualityNamespace`) on each sub-namespace.
 
 **registerSlot** is how you add UI to pages. Extensions register HTML fragments for named slots (e.g. `apps-grid`, `user-quick-links`, `user-profile-sections`, `space-detail-sections`). Pages resolve slots by name. Whatever's installed appears. Whatever's not doesn't. Same pattern as hooks, roles, tools. Spatial scoping filters slots per position. Get it from treeos-base exports:
 

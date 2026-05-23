@@ -21,13 +21,13 @@
 // `ibp:update` event keyed by correlation id.
 //
 // Cross-domain calls flow through canopy: dispatchIbp detects a foreign
-// target place, signs the envelope with this place's private key, and
+// target place, signs the envelope with this reality's private key, and
 // POSTs to the peer's `/ibp/<verb>/<addr>` endpoint. The peer's
 // verifyIncoming middleware authenticates against the RealityPeer registry
 // before re-entering dispatchIbp on the receiving side. See
 // [[project_canopy_folds_into_ibp]].
 
-import log from "../../seed/parentReality/log.js";
+import log from "../../seed/seedReality/log.js";
 import { handleSee } from "./verbs/see.js";
 import { handleDo } from "./verbs/do.js";
 import { handleSummon } from "./verbs/summon.js";
@@ -68,7 +68,7 @@ export async function dispatchIbp(carrier, msg, ack) {
     return ackError(ack, id, IBP_ERR.INTERNAL, err.message || "Internal IBP error");
   }
 
-  // 2. Cross-domain check. If the target lives on another place AND this
+  // 2. Cross-domain check. If the target lives on another reality AND this
   //    call didn't already arrive verified from canopy (which would mean
   //    we're the receiving place, not the sender), canopy-sign and forward
   //    to the peer. The local verb handler is skipped.

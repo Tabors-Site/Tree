@@ -8,8 +8,8 @@
 // no parent); a thread is just that whole chain looked at as one
 // thing. Promoting it to addressable substrate means:
 //
-//   - SEE can return it. `see("<place>/.threads/<id>")` returns the
-//     thread's descriptor; `see("<place>/.threads")` returns the
+//   - SEE can return it. `see("<reality>/.threads/<id>")` returns the
+//     thread's descriptor; `see("<reality>/.threads")` returns the
 //     live forest. Coordination becomes inspectable.
 //
 //   - SUMMON can cut it. `summon` with target = `.threads/<id>`
@@ -141,7 +141,7 @@ export function threadIdFromPath(path) {
 }
 
 /**
- * The space _id of the .threads place seed space on this place. Cached
+ * The space _id of the .threads place seed space on this reality. Cached
  * after first lookup. Used by the resolver to return a stance whose
  * spaceId points at .threads even though the thread itself has no
  * persistent space row.
@@ -229,7 +229,7 @@ export async function describeThread(rootCorrelation) {
 }
 
 /**
- * List live threads on this place, optionally filtered. Cheap when
+ * List live threads on this reality, optionally filtered. Cheap when
  * none, capped by `limit`. Each item is a minimal preview; callers
  * walk to describeThread for the full descriptor.
  *
