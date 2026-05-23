@@ -223,10 +223,10 @@ module.exports = (program) => {
     .command("get [key]")
     .description("Get a single config value")
     .action(async (key) => {
-      if (!key) return console.log(chalk.yellow("Usage: config get <key>  (e.g. config get PLACE_NAME)"));
+      if (!key) return console.log(chalk.yellow("Usage: config get <key>  (e.g. config get REALITY_NAME)"));
       try {
         const api = getApi(requireAuth());
-        const data = await api.getPlaceConfigValue(key);
+        const data = await api.getRealityConfigValue(key);
         const val = data.value;
         if (val === null || val === undefined) {
           console.log(chalk.dim(`${key} is not set`));
@@ -242,7 +242,7 @@ module.exports = (program) => {
     .command("set [key] [value]")
     .description("Set a config value (admin only)")
     .action(async (key, value) => {
-      if (!key || !value) return console.log(chalk.yellow("Usage: config set <key> <value>  (e.g. config set PLACE_NAME \"My Place\")"));
+      if (!key || !value) return console.log(chalk.yellow("Usage: config set <key> <value>  (e.g. config set REALITY_NAME \"My Place\")"));
       try {
         const api = getApi(requireAuth());
         await api.setPlaceConfig(key, value);

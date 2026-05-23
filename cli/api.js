@@ -169,7 +169,7 @@ class TreeAPI {
   // ── Place Config ───────────────────────────────────────────────────────
   getPlaceRoot() { return this.get("/place/root"); }
   getPlaceConfig() { return this.get("/place/config"); }
-  getPlaceConfigValue(key) { return this.get(`/place/config/${encodeURIComponent(key)}`); }
+  getRealityConfigValue(key) { return this.get(`/place/config/${encodeURIComponent(key)}`); }
   setPlaceConfig(key, value) { return this.put(`/place/config/${encodeURIComponent(key)}`, { value }); }
 
   // ── Extensions ────────────────────────────────────────────────────────

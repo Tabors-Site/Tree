@@ -8,7 +8,7 @@ const { termLink } = require("../helpers");
 /** Check if the connected Place has frontend HTML enabled */
 async function checkFrontendEnabled(api) {
   try {
-    const data = await api.getPlaceConfigValue("ENABLE_FRONTEND_HTML");
+    const data = await api.getRealityConfigValue("ENABLE_FRONTEND_HTML");
     const val = data.value;
     return val === true || val === "true";
   } catch {

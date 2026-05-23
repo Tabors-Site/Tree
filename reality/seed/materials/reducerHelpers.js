@@ -1,0 +1,323 @@
+// TreeOS Seed . AGPL-3.0 . https://treeos.ai . Tabor Holly
+//
+// Shared reducer helpers. Logic the three material reducers
+// (being / space / matter) all need.
+//
+// Today: applying `do:set` facts to derive qualities state. The
+// `set` op's params shape is `{ field, value, merge=true }`. When
+// `field` starts with "qualities." the reducer needs to produce the
+// new qualities object from the fact alone (no Mongo round-trip).
+//
+// Pure functions. Same (state, fact) → same state every time. No
+// I/O. Concurrent calls compute identical results.
+
+const QUALITIES_PREFIX = "qualities.";
+
+// Plain scalar/array fields the `do:set` op writes on a single
+// aggregate. The reducer's job: set `state[field] = value`. Validation
+// happened in the verb handler (which threw on bad input before the
+// fact was stamped); the reducer just records what the fact says.
+//
+// `parent` is intentionally NOT in this set — parent is cross-aggregate
+// (changes children[] on old/new parents) and lands in a later slice.
+//
+// `llmDefault` lives here as of slice F-llm (2026-05-23). It writes
+// to the same scalar field on both Being and Space aggregates; the
+// reducer for each just records value. Slot-name validation + per-being
+// connection-ownership happen in the verb handler before the fact
+// stamps. Cache invalidation (clearBeingClientCache) is the
+// connection helper's responsibility, after doVerb returns.
+//
+// `rootOwner` and `contributors` join the set in slice F-ownership
+// (2026-05-23). Both are scalar-shape on a single Space aggregate
+// (rootOwner = beingId or null; contributors = array of beingIds).
+// The cross-aggregate effects of an ownership change are propagation
+// via the read-side resolver chain (resolveSpaceAccess) walking the
+// parent chain, NOT writes to other aggregates — so set-on-one-Space
+// captures everything the fact needs to record. Read-modify-write
+// callers (addContributor / removeContributor) hold the space lock
+// around the read so the projection they recompute doesn't race a
+// concurrent fold.
+const SCALAR_SET_FIELDS = new Set([
+  "name",
+  "type",
+  "llmDefault",
+  "rootOwner",
+  "contributors",
+]);
+
+// Per-kind birth shapes. The reducer's job on `do:birth`: produce the
+// full initial row state from `fact.params.spec` (which the verb
+// handler enriched with derived fields like spaceId, parentMatterId,
+// beingId before the fact was stamped). Different aggregate kinds
+// produce different shapes; the helper dispatches on the fact's
+// target.kind.
+//
+// Pure: same fact → same state. `fact.date` provides the wall-clock
+// (set when logFact created the fact); reducers MUST use that rather
+// than calling new Date() / Date.now() so concurrent folds compute
+// identical state and rebuild is deterministic.
+
+/**
+ * Apply a `do:set` fact's qualities-path update to state.
+ *
+ * `fact.params.field` shapes:
+ *   - "qualities.<namespace>"               → whole-namespace write/merge
+ *   - "qualities.<namespace>.<innerKey>"    → set/unset one inner key
+ *   - "qualities.<namespace>.<a>.<b>...."   → deeper path (max depth bounded
+ *                                              by qualityMaxNestingDepth)
+ *
+ * `fact.params.value`:
+ *   - any JSON value to set at the path
+ *   - null + whole-namespace → unset the namespace
+ *   - null + sub-path        → unset the inner key
+ *
+ * `fact.params.merge`:
+ *   - true (default for whole-namespace) → merge into existing namespace
+ *   - false                              → replace namespace entirely
+ *   - irrelevant for sub-paths           → always sets/unsets the leaf
+ *
+ * Returns the new state. If the fact doesn't apply (wrong action,
+ * non-qualities field, malformed input), returns state unchanged.
+ *
+ * @param {object} state  current reducer state
+ * @param {object} fact   the fact to apply
+ * @returns {object} new state
+ */
+export function applySetQualities(state, fact) {
+  if (fact?.action !== "set") return state;
+  const params = fact.params || {};
+  const field = params.field;
+  if (typeof field !== "string" || !field.startsWith(QUALITIES_PREFIX)) {
+    return state;
+  }
+
+  const rest = field.slice(QUALITIES_PREFIX.length);
+  if (!rest) return state;
+  const parts = rest.split(".");
+  const namespace = parts[0];
+  if (!namespace) return state;
+
+  const currentQualities = state.qualities || {};
+  const value = params.value;
+  const merge = params.merge !== false; // default true
+
+  if (parts.length === 1) {
+    // Whole-namespace write
+    if (value === null) {
+      // Unset namespace
+      const next = { ...currentQualities };
+      delete next[namespace];
+      return { ...state, qualities: next };
+    }
+    if (typeof value !== "object" || Array.isArray(value)) {
+      // Malformed — reducer is defensive; pass through
+      return state;
+    }
+    const currentNs = (currentQualities[namespace] && typeof currentQualities[namespace] === "object")
+      ? currentQualities[namespace]
+      : {};
+    const newNs = merge ? { ...currentNs, ...value } : value;
+    return {
+      ...state,
+      qualities: { ...currentQualities, [namespace]: newNs },
+    };
+  }
+
+  // Deep path: walk into the namespace and set the leaf
+  const currentNs = (currentQualities[namespace] && typeof currentQualities[namespace] === "object")
+    ? currentQualities[namespace]
+    : {};
+  const newNs = setDeepPath(currentNs, parts.slice(1), value);
+  return {
+    ...state,
+    qualities: { ...currentQualities, [namespace]: newNs },
+  };
+}
+
+/**
+ * Apply a `do:set` fact's scalar-field update (name, type) to state.
+ * Schema-field writes that the reducer can take ownership of without
+ * cross-aggregate effects.
+ *
+ * If the fact isn't `do:set`, or `field` isn't in SCALAR_SET_FIELDS,
+ * returns state unchanged. Null `value` unsets the field.
+ *
+ * @param {object} state
+ * @param {object} fact
+ * @returns {object} new state
+ */
+export function applySetField(state, fact) {
+  if (fact?.action !== "set") return state;
+  const { field, value } = fact.params || {};
+  if (typeof field !== "string" || !SCALAR_SET_FIELDS.has(field)) {
+    return state;
+  }
+  if (value === null) {
+    const next = { ...state };
+    delete next[field];
+    return next;
+  }
+  return { ...state, [field]: value };
+}
+
+/**
+ * Apply a `be:register` fact targeting a being. Produces the initial
+ * being row state from `fact.params.spec`.
+ *
+ * Important safety: when the fact's params don't carry `spec` (the
+ * legacy slim shape: `{name, role, witnessedBy}` from the pre-conversion
+ * summonCreateBeing path), this returns state unchanged. That keeps
+ * the reducer harmless while the legacy `new Being(...).save()` flow
+ * still runs in parallel. Once summonCreateBeing converts to emit a
+ * full spec, the reducer becomes the source.
+ *
+ * The verb handler is responsible for input normalization BEFORE the
+ * fact is stamped: bcrypt-hash the password, resolve home space,
+ * auto-generate name (non-humans), validate. Reducer reads what the
+ * handler wrote, stays pure.
+ *
+ * @param {object} state
+ * @param {object} fact
+ * @returns {object} new state
+ */
+export function applyBirthBeing(state, fact) {
+  if (fact?.verb !== "be" || fact?.action !== "register") return state;
+  if (fact?.target?.kind !== "being") return state;
+  const spec = fact?.params?.spec;
+  if (!spec || typeof spec !== "object") return state; // legacy slim params
+
+  // Normalize roles + defaultRole. Accept either {roles:[], defaultRole}
+  // or single {role} shape; produce the canonical {roles, defaultRole}.
+  let rolesList = [];
+  let defaultRole = null;
+  if (Array.isArray(spec.roles) && spec.roles.length > 0) {
+    rolesList = spec.roles.slice();
+    defaultRole = spec.defaultRole || rolesList[0];
+  } else if (spec.role) {
+    rolesList = [spec.role];
+    defaultRole = spec.role;
+  }
+
+  return {
+    ...state,
+    name:          spec.name,
+    password:      spec.password,
+    operatingMode: spec.operatingMode || "human",
+    roles:         rolesList,
+    defaultRole,
+    parentBeingId: spec.parentBeingId ?? null,
+    homeSpace:     spec.homeSpace ?? null,
+    currentSpace:  spec.currentSpace ?? spec.homeSpace ?? null,
+    llmDefault:    spec.llmDefault ?? null,
+    isRemote:      Boolean(spec.isRemote),
+    homePlace:     spec.homePlace ?? null,
+    qualities:     spec.qualities ?? {},
+    children:      [],
+    position:      spec.homeSpace ?? null,
+    createdAt:     fact.date,
+    updatedAt:     fact.date,
+  };
+}
+
+/**
+ * Apply a `do:birth` fact targeting a space. Produces the initial
+ * space row state from `fact.params.spec`.
+ *
+ * Same safety pattern as applyBirthBeing: when `fact.params.spec` is
+ * absent (the legacy createSpaceChild → createSpace path doesn't emit
+ * a spec on the fact today), this returns state unchanged. The
+ * reducer becomes load-bearing only when the space-birth handler
+ * converts to emit a spec-carrying fact.
+ *
+ * Verb handler responsibility (when converted): validate name/type,
+ * resolve parent, run beforeSpaceCreate hook, build the spec. Reducer
+ * reads what the handler wrote.
+ *
+ * @param {object} state
+ * @param {object} fact
+ * @returns {object} new state
+ */
+export function applyBirthSpace(state, fact) {
+  if (fact?.verb !== "do" || fact?.action !== "birth") return state;
+  if (fact?.target?.kind !== "space") return state;
+  const spec = fact?.params?.spec;
+  if (!spec || typeof spec !== "object") return state; // legacy birth fact
+
+  return {
+    ...state,
+    name:         spec.name,
+    type:         spec.type ?? null,
+    parent:       spec.parent ?? spec.parentId ?? null,
+    // Space.children retired 2026-05-23; parent-side cache replaced by
+    // findByPosition / parent-queries. The reducer doesn't write it.
+    rootOwner:    spec.rootOwner ?? null,
+    contributors: [],
+    seedSpace:    spec.seedSpace ?? null,
+    llmDefault:   spec.llmDefault ?? null,
+    qualities:    spec.qualities ?? {},
+    dateCreated:  fact.date,
+    position:     spec.parent ?? spec.parentId ?? null,
+  };
+}
+
+/**
+ * Apply a `do:birth` fact targeting a matter. Produces the initial
+ * matter row state from `fact.params.spec`.
+ *
+ * The verb handler is responsible for enriching the spec with derived
+ * fields BEFORE the fact is stamped (parent target → spaceId or
+ * parentMatterId; identity → beingId). The reducer just reads the
+ * enriched spec.
+ *
+ * @param {object} state
+ * @param {object} fact
+ * @returns {object} new state
+ */
+export function applyBirthMatter(state, fact) {
+  if (fact?.verb !== "do" || fact?.action !== "birth") return state;
+  if (fact?.target?.kind !== "matter") return state;
+  const spec = fact?.params?.spec || {};
+  return {
+    ...state,
+    spaceId:        spec.spaceId ?? null,
+    beingId:        spec.beingId ?? null,
+    name:           spec.name ?? null,
+    content:        spec.content ?? null,
+    origin:         spec.origin || "ibp",
+    parentMatterId: spec.parentMatterId ?? null,
+    qualities:      spec.qualities ?? {},
+    children:       [],
+    position:       spec.spaceId ?? null,
+    createdAt:      fact.date,
+    updatedAt:      fact.date,
+  };
+}
+
+/**
+ * Immutably set `value` at `pathParts` inside `obj`. Walks the path,
+ * cloning each level. null at leaf removes the leaf key.
+ *
+ * @param {object} obj
+ * @param {string[]} pathParts  non-empty
+ * @param {*} value
+ * @returns {object} new obj
+ */
+function setDeepPath(obj, pathParts, value) {
+  const [head, ...rest] = pathParts;
+  if (rest.length === 0) {
+    // Leaf
+    if (value === null) {
+      const next = { ...obj };
+      delete next[head];
+      return next;
+    }
+    return { ...obj, [head]: value };
+  }
+  // Recurse into child
+  const childRaw = obj[head];
+  const child = (childRaw && typeof childRaw === "object" && !Array.isArray(childRaw))
+    ? childRaw
+    : {};
+  return { ...obj, [head]: setDeepPath(child, rest, value) };
+}

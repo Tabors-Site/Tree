@@ -145,7 +145,7 @@ place/
 │   │                             being, space, matter, did, summon, llmConnection.
 │   ├── services.js               Assembles `place` from the four folders above.
 │   ├── placeRoot.js               Plants the place root + the nine place seed spaces.
-│   ├── placeConfig.js             This place's remembered settings.
+│   ├── realityConfig.js             This place's remembered settings.
 │   ├── philosophy/               Diagrams of the IBP grammar (jpgs).
 │   ├── SEED.md                   Seed internals doc (first-person, the I-Am).
 │   └── LICENSE                   AGPL-3.0 with a preamble naming the seed.
