@@ -32,7 +32,7 @@
 // flips; the rows underneath remain for audit.
 
 import Act from "../../past/act/act.js";
-import Space from "../../models/space.js";
+import Space from "./space.js";
 import { SEED_SPACE } from "./seedSpaces.js";
 import { I_AM } from "../being/seedBeings.js";
 import { IbpError, IBP_ERR } from "../../ibp/protocol.js";
@@ -396,9 +396,9 @@ export async function cutThread({
   //    untouched — they're permanent audit of arrival.
   let cancelled = 0;
   try {
-    const Being = (await import("../../models/being.js")).default;
+    const Being = (await import("../being/being.js")).default;
     const { cancelIntakeByRoot } = await import(
-      "../../factory/intake/intake.js"
+      "../../present/intake/intake.js"
     );
 
     const distinctReceivers = await Act.aggregate([
@@ -431,7 +431,7 @@ export async function cutThread({
   if (priority === "HUMAN") {
     try {
       const { abortByRootCorrelations } = await import(
-        "../../factory/intake/scheduler.js"
+        "../../present/intake/scheduler.js"
       );
       aborted = abortByRootCorrelations([rootCorrelation], reason) || 0;
     } catch {

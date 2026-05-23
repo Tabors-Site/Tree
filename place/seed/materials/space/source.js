@@ -24,8 +24,8 @@ import path from "path";
 import { fileURLToPath } from "url";
 
 import log from "../../system/log.js";
-import Matter from "../../models/matter.js";
-import Space from "../../models/space.js";
+import Matter from "../matter/matter.js";
+import Space from "./space.js";
 import { MATTER_ORIGIN } from "../matter/origins.js";
 import { SEED_SPACE } from "./seedSpaces.js";
 import { I_AM } from "../being/seedBeings.js";

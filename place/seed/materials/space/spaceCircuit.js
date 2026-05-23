@@ -32,13 +32,14 @@
 // turns this on lives without it.
 
 import log from "../../system/log.js";
-import Space from "../../models/space.js";
+import Space from "./space.js";
 import Fact from "../../past/fact/fact.js";
 import { hooks } from "../../system/hooks.js";
 import { getPlaceConfigValue } from "../../placeConfig.js";
 import { invalidateSpace } from "./ancestorCache.js";
 import { resolveSpaceAccess } from "./spaceFetch.js";
 import { I_AM } from "../being/seedBeings.js";
+import { logFact } from "../../past/fact/facts.js";
 
 /**
  * Is the tree-circuit feature enabled on this place?
@@ -178,10 +179,13 @@ export async function tripTree(treeId, reason, scores = {}) {
     scores,
   };
 
-  await Space.updateOne(
-    { _id: treeId },
-    { $set: { "qualities.circuit": circuit } },
-  );
+  await logFact({
+    verb:    "do",
+    action:  "set",
+    beingId: I_AM,
+    target:  { kind: "space", id: String(treeId) },
+    params:  { field: "qualities.circuit", value: circuit, merge: false },
+  });
   invalidateSpace(treeId);
 
   log.warn("Circuit", `Tree ${treeId} tripped: ${reason}`);
@@ -214,10 +218,13 @@ export async function reviveTree(treeId, beingId) {
     : anchor.qualities?.circuit;
   if (!circuit?.tripped) return; // already alive, no-op
 
-  await Space.updateOne(
-    { _id: treeId },
-    { $set: { "qualities.circuit": { tripped: false } } },
-  );
+  await logFact({
+    verb:    "do",
+    action:  "set",
+    beingId: String(beingId),
+    target:  { kind: "space", id: String(treeId) },
+    params:  { field: "qualities.circuit", value: { tripped: false }, merge: false },
+  });
   invalidateSpace(treeId);
 
   log.info("Circuit", `Tree ${treeId} revived by ${beingId}`);

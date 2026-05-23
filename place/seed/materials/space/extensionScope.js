@@ -34,7 +34,7 @@
 // shares no consumer outside scope resolution.
 
 import log from "../../system/log.js";
-import Space from "../../models/space.js";
+import Space from "./space.js";
 import { SEED_SPACE } from "./seedSpaces.js";
 import {
   getAncestorChain,

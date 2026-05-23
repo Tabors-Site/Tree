@@ -34,7 +34,7 @@
 //   - Stats reset before counter overflow.
 
 import log from "../../system/log.js";
-import Space from "../../models/space.js";
+import Space from "./space.js";
 import { getPlaceConfigValue } from "../../placeConfig.js";
 import { IBP_ERR } from "../../ibp/protocol.js";
 import { I_AM } from "../being/seedBeings.js";

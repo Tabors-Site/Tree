@@ -21,8 +21,8 @@
 // express these rules uniformly; until then each method checks
 // inline.
 
-import Space from "../../models/space.js";
-import Being from "../../models/being.js";
+import Space from "./space.js";
+import Being from "../being/being.js";
 import { resolveSpaceAccess } from "./spaceFetch.js";
 import { invalidateSpace } from "./ancestorCache.js";
 import { hooks } from "../../system/hooks.js";

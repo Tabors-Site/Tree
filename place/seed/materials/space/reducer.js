@@ -15,7 +15,7 @@
 // The root space has `position: null`. This lets `findByPosition(P)`
 // return every child space of P alongside beings and matter at P.
 
-import { applySetQualities, applySetField } from "../reducerHelpers.js";
+import { applySetQualities, applySetField, applyBirthSpace } from "../reducerHelpers.js";
 
 /**
  * Empty initial state. Today: empty — the fold derives qualities +
@@ -40,6 +40,11 @@ export function initial() {
 export function reduce(state, fact) {
   let next = state;
 
+  // do:birth — derives the initial row state from spec. No-op for
+  // legacy birth facts that lack .spec; safe to compose now.
+  next = applyBirthSpace(next, fact);
+
+  // do:set — scalar fields and qualities paths.
   next = applySetField(next, fact);
   next = applySetQualities(next, fact);
 
