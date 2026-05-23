@@ -17,12 +17,12 @@
 // are capped per-extension to keep one runaway from degrading writes.
 
 import log from "./log.js";
-import { getFactoryConfigValue } from "../factoryConfig.js";
+import { getInternalConfigValue } from "../internalConfig.js";
 import mongoose from "mongoose";
 import { getRealityConfigValue } from "../realityConfig.js";
 
 function MAX_EXTENSION_INDEXES() {
-  return Math.max(5, Math.min(Number(getFactoryConfigValue("maxExtensionIndexes")) || 20, 100));
+  return Math.max(5, Math.min(Number(getInternalConfigValue("maxExtensionIndexes")) || 20, 100));
 }
 
 /**

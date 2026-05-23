@@ -18,14 +18,16 @@
 //   capContent     — shared content-cap helper (also used by assign)
 
 import { getRealityConfigValue } from "../realityConfig.js";
-import { getFactoryConfigValue } from "../factoryConfig.js";
+import { getInternalConfigValue } from "../internalConfig.js";
 import Act from "../past/act/act.js";
+import { closeInboxOnAnswer } from "../past/act/inboxProjectionFold.js";
+import { noteActSealOnThread } from "../past/act/threadsProjectionFold.js";
 
 function MAX_CHAT_CONTENT_BYTES() {
   return Math.max(
     10000,
     Math.min(
-      Number(getFactoryConfigValue("maxChatContentBytes")) || 100000,
+      Number(getInternalConfigValue("maxChatContentBytes")) || 100000,
       1000000,
     ),
   );
@@ -62,6 +64,30 @@ export async function stamp({
     },
     { new: true },
   );
+
+  // Bucket 3 Option D (2026-05-23): two cross-cutting projections
+  // hook into the Act seal because Act seals are not Fact appends
+  // and don't flow through the foldEngine's per-fact dispatch.
+  //
+  //   1. If this Act answers a summon, evict the matching
+  //      InboxProjection row. Act.answers was set at assign-time
+  //      from the picked InboxProjection correlation. Atomic guard
+  //      on findOneAndUpdate makes this idempotent (updated is null
+  //      on second seal).
+  //   2. If this Act participates in a thread (rootCorrelation
+  //      set), bump the ThreadsProjection's lastAct so .threads
+  //      reads stay fresh.
+  //
+  // Both are best-effort — projections self-heal on the next fold
+  // round.
+  if (updated) {
+    if (updated.answers) {
+      try { await closeInboxOnAnswer(updated.answers); } catch {}
+    }
+    if (updated.rootCorrelation) {
+      try { await noteActSealOnThread(updated.rootCorrelation, endTime); } catch {}
+    }
+  }
 
   return updated;
 }

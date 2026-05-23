@@ -29,7 +29,7 @@
 // philosophy behind why this reel is identity-load-bearing.
 
 import log from "../../seedReality/log.js";
-import { getFactoryConfigValue } from "../../factoryConfig.js";
+import { getInternalConfigValue } from "../../internalConfig.js";
 import Fact from "./fact.js";
 import { hooks } from "../../hooks.js";
 import { IBP_ERR, IbpError } from "../../ibp/protocol.js";
@@ -48,7 +48,7 @@ const REEL_KINDS = new Set(["being", "space", "matter"]);
 // ─────────────────────────────────────────────────────────────────────────
 
 function MAX_PAYLOAD_BYTES() {
-  const raw = Number(getFactoryConfigValue("qualityNamespaceMaxBytes")) || 524288;
+  const raw = Number(getInternalConfigValue("qualityNamespaceMaxBytes")) || 524288;
   return Math.max(1024, Math.min(raw, 2 * 1024 * 1024));
 }
 const MAX_ACTION_LENGTH = 100;
@@ -245,7 +245,7 @@ function capPayload(value, label) {
 function MAX_QUERY_LIMIT() {
   return Math.max(
     1,
-    Math.min(Number(getFactoryConfigValue("factQueryLimit")) || 5000, 50000),
+    Math.min(Number(getInternalConfigValue("factQueryLimit")) || 5000, 50000),
   );
 }
 const MAX_DATE_SPAN_MS = 365 * 24 * 60 * 60 * 1000;

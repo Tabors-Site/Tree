@@ -68,7 +68,7 @@ export async function resolveStance(stance, opts = {}) {
   const being = stance.being || null;
 
   // Place root: path is "/". The place root IS a Space (the seedSpace:
-  // PLACE_ROOT row created by ensureSpaceRoot), so we surface its id as
+  // SPACE_ROOT row created by ensureSpaceRoot), so we surface its id as
   // spaceId. That makes beings whose home is the place root —
   // reality-manager, llm-assigner, auth — summonable: the inbox sits on
   // the place-root space like any other position.
@@ -174,7 +174,7 @@ function base(over = {}) {
 async function walkSpacePath({ segments, ownerFilter, contextBeing, being }) {
   const spaceRootId = getSpaceRootId();
   if (!spaceRootId) {
-    throw new IbpError(IBP_ERR.INTERNAL, "Place root not initialized yet");
+    throw new IbpError(IBP_ERR.INTERNAL, "Space root not initialized yet");
   }
 
   const chain = contextBeing

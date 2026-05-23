@@ -252,42 +252,26 @@ export async function describeThread(rootCorrelation) {
 export async function listLiveThreads({
   limit = 100,
   being = null,
-  role = null,
-  position = null,
-  stance = null,
-  priority = null,
-} = {}) {
-  const match = {
-    severedAt: null,
-    "endMessage.time": null,
-    rootCorrelation: { $ne: null },
-  };
+  role = null,            // intentionally unused; ThreadsProjection
+  position = null,        //   carries no per-Act-row metadata.
+  stance = null,          //   Cross-cutting projection is recipient-
+  priority = null,        //   participant-keyed only. (Future: extend
+} = {}) {                 //   if filtering by role/stance/priority is needed.)
+  // Route through the ThreadsProjection (Bucket 3 Option D, 2026-05-23).
+  // The legacy per-SEE Act aggregation retired; the cross-cutting fold
+  // maintains this projection from be:summon Facts + Act seals.
+  const ThreadsProjection = (await import("../../past/act/threadsProjection.js")).default;
+  const match = { severedAt: null };
   if (being) {
-    const beingId = String(being).replace(/^@/, "");
-    match.$or = [{ beingIn: beingId }, { beingOut: beingId }];
+    match.participants = String(being).replace(/^@/, "");
   }
-  if (role)     match.activeRole = String(role);
-  if (stance)   match.ibpAddress = String(stance);
-  if (position) {
-    // Pragmatic substring match on ibpAddress (which carries the
-    // position segments). Escape regex metas so user input doesn't
-    // break the match.
-    const safe = String(position).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-    match.ibpAddress = { $regex: safe };
-  }
-  if (priority) match.priority = String(priority);
+  void role; void position; void stance; void priority;
 
-  const roots = await Act.aggregate([
-    { $match: match },
-    { $group: {
-        _id: "$rootCorrelation",
-        lastAct: { $max: "$stampedAt" },
-      },
-    },
-    { $sort: { lastAct: -1 } },
-    { $limit: Math.max(1, Math.min(limit, 500)) },
-  ]);
-  return roots.map((r) => ({ id: r._id, lastAct: r.lastAct }));
+  const rows = await ThreadsProjection.find(match)
+    .sort({ lastAct: -1 })
+    .limit(Math.max(1, Math.min(limit, 500)))
+    .lean();
+  return rows.map((r) => ({ id: r._id, lastAct: r.lastAct }));
 }
 
 /**
@@ -388,41 +372,32 @@ export async function cutThread({
   // (the chain may have already been marked but the cache lost).
   noteRootSevered(rootCorrelation);
 
-  // 2. Intake sweep across every being that received a Act under
-  //    this chain. Each Act row tells us beingIn; the intake bucket
-  //    lives on the being's currentSpace (or homeSpace) under
-  //    qualities.intake.<beingId>. Cancelling there drops queued
-  //    moments that haven't started yet. Inbox records (mailbox) are
-  //    untouched — they're permanent audit of arrival.
+  // 2. Fact-driven sever (Bucket 3 Option D, 2026-05-23). The
+  //    severer stamps one be:sever Fact on its own reel (single-
+  //    writer); the cross-cutting fold in
+  //    past/act/inboxProjectionFold.js sweeps the InboxProjection
+  //    rows whose rootCorrelation matches. Queued moments drop in
+  //    one fold cycle; the legacy per-being intake sweep is gone.
+  //    Inbox audit (the be:summon Facts themselves) is untouched —
+  //    facts are the permanent arrival record.
   let cancelled = 0;
   try {
-    const Being = (await import("../being/being.js")).default;
-    const { cancelIntakeByRoot } = await import(
-      "../../present/intake/intake.js"
-    );
-
-    const distinctReceivers = await Act.aggregate([
-      { $match: { rootCorrelation, beingIn: { $ne: null } } },
-      { $group: { _id: "$beingIn" } },
-    ]);
-
-    for (const r of distinctReceivers) {
-      const beingId = String(r._id);
-      const being = await Being.findById(beingId)
-        .select("currentSpace homeSpace")
-        .lean();
-      const spaceId = String(being?.currentSpace || being?.homeSpace || "");
-      if (!spaceId) continue;
-      const result = await cancelIntakeByRoot(
-        spaceId,
-        beingId,
-        rootCorrelation,
-      );
-      cancelled += result?.cancelled || 0;
-    }
+    const { logFact } = await import("../../past/fact/facts.js");
+    const InboxProjection = (await import("../../past/act/inboxProjection.js")).default;
+    const severerBeingId = isIAm ? I_AM : String(identity.beingId);
+    cancelled = await InboxProjection.countDocuments({ rootCorrelation });
+    await logFact({
+      verb:    "be",
+      action:  "sever",
+      beingId: severerBeingId,
+      target:  { kind: "being", id: severerBeingId }, // severer's own reel
+      params:  { rootCorrelation, reason, priority },
+    });
+    // Eager-fold inside logFact ran the cross-cutting be:sever handler,
+    // which deleted the matching InboxProjection rows.
   } catch {
-    // Intake sweep is best-effort. Severed Stamps + scheduler abort
-    // still close the line at the audit + runtime layers.
+    // Best-effort. Severed Acts + scheduler abort still close the
+    // line at the audit + runtime layers.
   }
 
   // 3. HUMAN-priority cuts interrupt the live task immediately;

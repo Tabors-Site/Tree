@@ -44,8 +44,10 @@ import { parseWithContext, expand, getRealityDomain } from "../ibp/address.js";
 import { resolveStance } from "../ibp/resolver.js";
 import { buildPlaceDescriptor, buildDiscovery } from "../ibp/descriptor.js";
 import { authorize, getAuthConfig } from "./authorize.js";
-import { appendToInbox } from "../present/intake/inbox.js";
-import { enqueueIntake } from "../present/intake/intake.js";
+// inbox.js + intake.js writers retired in Bucket 3 Option D (2026-05-23).
+// The SUMMON path now stamps a be:summon Fact on the summoner's reel;
+// the cross-cutting fold (past/act/inboxProjectionFold.js) maintains
+// the InboxProjection collection from there.
 import { threadIdFromPath, cutThread, getThreadsSpaceId, describeThread } from "../materials/space/threads.js";
 import { getRole } from "../present/roles/registry.js";
 import { cherubBeing } from "../present/roles/cherub.js";
@@ -83,7 +85,7 @@ import { attachHandoff, wake } from "../present/intake/scheduler.js";
 export async function doVerb(target, operation, params = {}, opts = {}) {
   assertVerbCaller("do", opts);
   if (typeof operation !== "string" || operation.length === 0) {
-    throw new Error("place.do(target, operation, params): operation must be a non-empty string");
+    throw new Error("reality.do(target, operation, params): operation must be a non-empty string");
   }
 
   const op = getOperation(operation);
@@ -214,7 +216,7 @@ doVerb.listOperations = listOperations;
 // channel itself.
 export async function seeVerb(target, opts = {}) {
   if (target == null) {
-    throw new IbpError(IBP_ERR.INVALID_INPUT, "place.see requires a target");
+    throw new IbpError(IBP_ERR.INVALID_INPUT, "reality.see requires a target");
   }
 
   // Discovery short-circuit — pre-identity surface, runs before the
@@ -676,11 +678,50 @@ async function _dispatchSummon({
   }
 
   const recipientBeingId = String(toBeing._id);
-  const { messageId, sentAt } = await appendToInbox(inboxNodeId, recipientBeingId, validatedMessage);
+
+  // Fact-driven SUMMON (Bucket 3 Option D, 2026-05-23). The summon
+  // is the summoner's act; it stamps a be:summon Fact on the
+  // summoner's own reel. The recipient lives in params.recipient
+  // (NOT on target — single-writer: facts only land on the actor's
+  // reel for being-targeted ops). The cross-cutting fold handler in
+  // past/act/inboxProjectionFold.js upserts an InboxProjection row
+  // keyed by correlation; the scheduler picks from there.
+  //
+  // For seed-internal flows with no identity (DO-trigger fan-out,
+  // scheduled wakes, genesis scaffolding), the summoner is I_AM.
+  const summonerBeingId = identity?.beingId
+    ? String(identity.beingId)
+    : I_AM;
+  const messageId = randomUUID();
+  const sentAt = new Date().toISOString();
+
+  await logFact({
+    verb:    "be",
+    action:  "summon",
+    beingId: summonerBeingId,
+    target:  { kind: "being", id: summonerBeingId }, // summoner's own reel
+    params:  {
+      recipient:       recipientBeingId,
+      correlation:     messageId,
+      rootCorrelation: validatedMessage.rootCorrelation || messageId,
+      inReplyTo:       validatedMessage.inReplyTo || null,
+      sender:          validatedMessage.from,
+      content:         validatedMessage.content,
+      priority:        validatedMessage.priority || "INTERACTIVE",
+      activeRole,
+      attachments:     validatedMessage.attachments,
+      inboxSpaceId:    inboxNodeId,
+      sentAt,
+    },
+    // Genesis exception: pre-being scaffolding has no actId. The verb
+    // call itself may carry one via opts.summonCtx when chained from
+    // a moment.
+    actId: null,
+  });
 
   const summonCtx = {
     spaceId:     inboxNodeId,
-    being:      activeRole,
+    being:       activeRole,
     activeRole,
     toBeing,
     message:    { ...validatedMessage, correlation: messageId, sentAt, activeRole },
@@ -720,27 +761,12 @@ async function _dispatchSummon({
           },
     });
 
-    // Inbox vs intake split. The SUMMON ALWAYS appended to inbox (mailbox
-    // record above). It ADDITIONALLY enqueues intake (the scheduler
-    // run-feed) only when the role auto-processes incoming messages —
-    // LLM beings and scripted beings declare triggerOn:["message"]. The
-    // human role is purely receptive (no "message" trigger): the SUMMON
-    // sits in the inbox as a notification; the human responds in their
-    // own time by emitting a transport-act, which enqueues intake
-    // through a separate path.
+    // The scheduler-nudge. The InboxProjection row already exists (eager-
+    // fold ran the cross-cutting handler inside the logFact above). The
+    // human case (triggerOn not including "message") doesn't poke the
+    // scheduler — the row sits in the projection until the human
+    // responds via their own transport-act, which is its own summon.
     if (role.triggerOn?.includes("message")) {
-      await enqueueIntake(inboxNodeId, recipientBeingId, {
-        kind:            "summon",
-        correlation:     messageId,
-        from:            validatedMessage.from,
-        content:         validatedMessage.content,
-        rootCorrelation: validatedMessage.rootCorrelation || messageId,
-        priority:        validatedMessage.priority,
-        activeRole,
-        inReplyTo:       validatedMessage.inReplyTo,
-        attachments:     validatedMessage.attachments,
-        sentAt,
-      });
       wake(recipientBeingId, inboxNodeId);
     }
     return { status: "accepted", messageId };
@@ -778,7 +804,7 @@ async function _dispatchSummon({
 // beingAddress, ... } for auth flows).
 export async function beVerb(operation, payload = {}, opts = {}) {
   if (typeof operation !== "string" || !operation.length) {
-    throw new IbpError(IBP_ERR.INVALID_INPUT, "place.be requires an operation");
+    throw new IbpError(IBP_ERR.INVALID_INPUT, "reality.be requires an operation");
   }
 
   // Register and claim are identity-acquisition: the caller is binding
@@ -1059,7 +1085,7 @@ function kebabToCamel(s) {
 
 function validateSummonMessage(message) {
   if (!message || typeof message !== "object") {
-    throw new IbpError(IBP_ERR.INVALID_INPUT, "place.summon requires a `message` object");
+    throw new IbpError(IBP_ERR.INVALID_INPUT, "reality.summon requires a `message` object");
   }
   if (typeof message.from !== "string" || !message.from.length) {
     throw new IbpError(IBP_ERR.INVALID_INPUT, "`message.from` is required");

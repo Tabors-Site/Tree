@@ -11,11 +11,11 @@
 // So reality-manager ships just two generic tools and the LLM enumerates
 // the actual surface live:
 //
-//   place-see   →  SEE on any position on this reality. Reads the .config,
+//   reality-see   →  SEE on any position on this reality. Reads the .config,
 //                 .extensions, .peers, .operations, .roles, .tools, …
 //                 place seed spaces to enumerate current state.
 //
-//   place-do    →  Invoke a registered DO operation at the place root.
+//   reality-do    →  Invoke a registered DO operation at the space root.
 //                 `set-config` / `delete-config` / `install-extension` /
 //                 `uninstall-extension` / `enable-extension` /
 //                 `disable-extension` — discoverable via
@@ -32,13 +32,13 @@ import { getSpaceRootId } from "../../sprout.js";
 
 export const realityManagerTools = [
   {
-    name: "place-see",
+    name: "reality-see",
     description:
       "Read substrate at any position on this reality. Returns a Position Descriptor. " +
-      "Use it to enumerate place-level state: " +
+      "Use it to enumerate reality-level state: " +
       "SEE <reality>/.config for runtime config keys; " +
       "SEE <reality>/.extensions for installed extensions; " +
-      "SEE <reality>/.operations to discover what place-do can invoke; " +
+      "SEE <reality>/.operations to discover what reality-do can invoke; " +
       "SEE <reality>/.peers / .tools / .roles for the live registries; " +
       "SEE <reality>/.identity for this reality's DID and public key.",
     verb: "see",
@@ -65,10 +65,10 @@ export const realityManagerTools = [
   },
 
   {
-    name: "place-do",
+    name: "reality-do",
     description:
-      "Invoke a registered DO operation at the place root. " +
-      "Use place-see on <reality>/.operations first to discover what's available " +
+      "Invoke a registered DO operation at the space root. " +
+      "Use reality-see on <reality>/.operations first to discover what's available " +
       "and what args each operation expects. Typical place-level ops: " +
       "set-config, delete-config, install-extension, uninstall-extension, " +
       "enable-extension, disable-extension. " +
@@ -90,7 +90,7 @@ export const realityManagerTools = [
     async handler({ action, args, beingId, name }) {
       const spaceRootId = getSpaceRootId();
       if (!spaceRootId) {
-        return { content: [{ type: "text", text: "Error: place root not initialized." }] };
+        return { content: [{ type: "text", text: "Error: space root not initialized." }] };
       }
       const target = { _id: spaceRootId, spaceId: spaceRootId, chain: [] };
       try {
@@ -108,7 +108,7 @@ export const realityManagerTools = [
               ok:      false,
               action,
               code:    err.code || "ERROR",
-              message: err.message || "place-do failed",
+              message: err.message || "reality-do failed",
             }, null, 2),
           }],
         };

@@ -209,10 +209,10 @@ async function createPlanEmission({ planSpaceId, ordinal, payload, beingId, iden
   const name = slugifyEmission(payload?.reasoning, ordinal);
 
   // Phase 3 migration ([[project_seed_four_verbs_only]]): verb-surface
-  // create. Fires seed hooks + stamps a "birth" Fact.
+  // create. Fires seed hooks + stamps a "create" Fact.
   let created = null;
   try {
-    created = await place.do(planSpaceId, "birth", {
+    created = await place.do(planSpaceId, "create", {
       kind: "space",
       spec: {
         name,

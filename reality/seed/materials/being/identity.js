@@ -118,7 +118,7 @@ export async function createFirstBeing(name, password, opts = {}) {
 // Create a being. Fact-driven (Slice D, 2026-05-23). Hashes the
 // password explicitly, stamps a be:register Fact with the full spec
 // on the new being's reel, then reads back the row that eager-fold
-// materialized via applyBirthBeing + initProjection. The pre-save
+// materialized via applyCreateBeing + initProjection. The pre-save
 // bcrypt hook is retired (Slice E) — the fact path is the only path
 // that creates Being rows now, and it pre-hashes before stamping.
 //
@@ -153,7 +153,7 @@ export async function createBeing(name, password, opts = {}) {
   }
 
   // Hash the password manually so the fact carries the hashed value.
-  // The reducer's applyBirthBeing reads spec.password verbatim and
+  // The reducer's applyCreateBeing reads spec.password verbatim and
   // applyProjection writes it via $set (which skips the pre-save hook).
   const salt = await bcrypt.genSalt(12);
   const hashedPassword = await bcrypt.hash(password, salt);
@@ -517,7 +517,7 @@ export async function createBeingWithHome(opts) {
 
     // Fact-driven home-space birth (Slice D-extended, 2026-05-23).
     // Stamps a do:birth Fact on the new home space's reel; eager-fold
-    // runs applyBirthSpace + initProjection to materialize the row.
+    // runs applyCreateSpace + initProjection to materialize the row.
     // Bypasses createSpace because that helper rejects seedSpace
     // parents — human homes live directly under the place root which
     // IS the SPACE_ROOT seedSpace.
@@ -528,7 +528,7 @@ export async function createBeingWithHome(opts) {
     const { I_AM } = await import("./seedBeings.js");
     await logFact({
       verb:    "do",
-      action:  "birth",
+      action:  "create",
       beingId: identity?.beingId ? String(identity.beingId) : I_AM,
       target:  { kind: "space", id: homeId },
       params:  {

@@ -123,7 +123,7 @@ export async function ensureSeedDelegates(spaceRootId) {
         // sync via do.set facts (one per field that drifted, on the
         // delegate's reel). The legacy `existingBeing.save()` direct
         // write retired (2026-05-23); fact-driven keeps the genesis
-        // exception list short (only the placeRoot/I_AM creation).
+        // exception list short (only the spaceRoot/I_AM creation).
         const { doVerb } = await import("../../ibp/verbs.js");
         const opts = { scaffold: true };
         const setField = (field, value) =>

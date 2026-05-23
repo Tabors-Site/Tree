@@ -55,7 +55,7 @@
 //     it renders is voice-agnostic.
 
 import OpenAI from "openai";
-import { getFactoryConfigValue } from "../../../factoryConfig.js";
+import { getInternalConfigValue } from "../../../internalConfig.js";
 import crypto from "crypto";
 import dns from "dns/promises";
 import { v4 as uuidv4 } from "uuid";
@@ -324,7 +324,7 @@ export async function resolveAndValidateHost(hostname) {
       new Promise((_, reject) =>
         setTimeout(
           () => reject(new Error("DNS lookup timed out")),
-          Number(getFactoryConfigValue("dnsLookupTimeout")) || 5000,
+          Number(getInternalConfigValue("dnsLookupTimeout")) || 5000,
         ),
       ),
     ]);

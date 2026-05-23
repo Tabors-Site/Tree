@@ -27,7 +27,7 @@
 
 import mongoose from "mongoose";
 import { v4 as uuidv4 } from "uuid";
-import { getFactoryConfigValue } from "../../factoryConfig.js";
+import { getInternalConfigValue } from "../../internalConfig.js";
 
 import Space from "./space.js";
 import Being from "../being/being.js";
@@ -218,7 +218,7 @@ export async function createSpace({
   // Fact-driven (Slice C, 2026-05-23). The new space's row is NOT
   // written directly. Instead the handler stamps a `do:birth` Fact on
   // the new space's reel; eager-fold runs the Space reducer's
-  // applyBirthSpace and applyProjection materializes the row. Per
+  // applyCreateSpace and applyProjection materializes the row. Per
   // STAMPER.md / FOLD.md: one writer (fold), one source of truth (facts).
   //
   // The parent's space lock guards the max-children check + the fact
@@ -239,7 +239,7 @@ export async function createSpace({
     // Children cap: count by parent (the parent-side children[] cache
     // is retired). countDocuments is O(1) on the parent index.
     const maxChildren = parseInt(
-      getFactoryConfigValue("maxChildrenPerSpace") || "1000",
+      getInternalConfigValue("maxChildrenPerSpace") || "1000",
       10,
     );
 
@@ -258,7 +258,7 @@ export async function createSpace({
         .lean();
       if (!parentSpace) throw new Error("Parent space not found");
       if (parentSpace.seedSpace)
-        throw new Error("Cannot create spaces under place seed spaces");
+        throw new Error("Cannot create spaces under seed spaces");
       const childCount = await Space.countDocuments({ parent: parentId });
       if (childCount >= maxChildren) {
         throw new IbpError(IBP_ERR.INVALID_INPUT,
@@ -267,7 +267,7 @@ export async function createSpace({
       }
     }
 
-    // Stamp the birth Fact. The reducer (applyBirthSpace) derives the
+    // Stamp the birth Fact. The reducer (applyCreateSpace) derives the
     // full row from the spec; eager-fold + initProjection materializes
     // it via the per-reel append lock on the new space's reel.
     const specQualities = hookData.qualities instanceof Map
@@ -275,7 +275,7 @@ export async function createSpace({
       : (hookData.qualities || {});
     await logFact({
       verb:    "do",
-      action:  "birth",
+      action:  "create",
       beingId: String(being._id),
       target:  { kind: "space", id },
       params:  {
@@ -354,11 +354,11 @@ export async function createRealitySeedSpace({
   qualities = null,
 }) {
   if (!name || typeof name !== "string")
-    throw new Error("Place seed space name is required");
-  if (!parentId) throw new Error("Place seed space requires a parent");
+    throw new Error("Seed space name is required");
+  if (!parentId) throw new Error("Seed space requires a parent");
 
   // Fact-driven genesis (2026-05-23). Stamps a do:birth Fact carrying
-  // the full spec; eager-fold's applyBirthSpace + initProjection
+  // the full spec; eager-fold's applyCreateSpace + initProjection
   // materializes the row. Genesis exception lives on the actor side:
   // beingId="I_AM" is a string ref to a Being row that may not yet
   // exist (ensureIAm runs after the first seed-space creation in the
@@ -371,7 +371,7 @@ export async function createRealitySeedSpace({
 
   await logFact({
     verb:    "do",
-    action:  "birth",
+    action:  "create",
     beingId: I_AM,
     target:  { kind: "space", id },
     params:  {
@@ -472,7 +472,7 @@ export async function editSpaceName({
 
   const space = await Space.findById(spaceId);
   if (!space) throw new Error("Space not found");
-  if (space.seedSpace) throw new Error("Cannot modify place seed spaces");
+  if (space.seedSpace) throw new Error("Cannot modify seed spaces");
 
   // Reject collision with a sibling under the same parent. Skip the
   // check when the name isn't actually changing (re-saving same name).
@@ -499,7 +499,7 @@ export async function editSpaceType({
 
   const space = await Space.findById(spaceId);
   if (!space) throw new Error("Space not found");
-  if (space.seedSpace) throw new Error("Cannot modify place seed spaces");
+  if (space.seedSpace) throw new Error("Cannot modify seed spaces");
 
   const oldType = space.type;
   await Space.findByIdAndUpdate(spaceId, { $set: { type: newType } });
@@ -548,7 +548,7 @@ export async function updateParentRelationship(
 
   if (!newParent) throw new Error("New parent space not found");
   if (newParent.seedSpace)
-    throw new Error("Cannot move into a place seed space");
+    throw new Error("Cannot move into a seed space");
   if (await isDescendant(childId, newParentId)) {
     throw new Error("Cannot move a space into its own descendant");
   }
@@ -784,7 +784,7 @@ export async function resolveRootSpace(spaceId) {
     if (!space) throw new Error("Broken tree");
     if (space.seedSpace) {
       if (space.seedSpace === "source") return space;
-      throw new Error("Invalid tree: reached place seed space boundary");
+      throw new Error("Invalid tree: reached seed space boundary");
     }
   }
   return space;

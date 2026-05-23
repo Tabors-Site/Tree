@@ -34,7 +34,7 @@
 // shares no consumer outside scope resolution.
 
 import log from "../../seedReality/log.js";
-import { getFactoryConfigValue } from "../../factoryConfig.js";
+import { getInternalConfigValue } from "../../internalConfig.js";
 import Space from "./space.js";
 import { SEED_SPACE } from "./seedSpaces.js";
 import {
@@ -214,7 +214,7 @@ import { getRealityConfigValue } from "../../realityConfig.js";
 
 const _toolOwnership = new Map(); // toolName -> { extName, verb }
 function maxToolOwners() {
-  return Number(getFactoryConfigValue("maxRegisteredTools")) || 1000;
+  return Number(getInternalConfigValue("maxRegisteredTools")) || 1000;
 }
 
 /**

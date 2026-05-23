@@ -203,7 +203,7 @@ export function applySetField(state, fact) {
  * @param {object} fact
  * @returns {object} new state
  */
-export function applyBirthBeing(state, fact) {
+export function applyCreateBeing(state, fact) {
   if (fact?.verb !== "be" || fact?.action !== "register") return state;
   if (fact?.target?.kind !== "being") return state;
   const spec = fact?.params?.spec;
@@ -247,7 +247,7 @@ export function applyBirthBeing(state, fact) {
  * Apply a `do:birth` fact targeting a space. Produces the initial
  * space row state from `fact.params.spec`.
  *
- * Same safety pattern as applyBirthBeing: when `fact.params.spec` is
+ * Same safety pattern as applyCreateBeing: when `fact.params.spec` is
  * absent (the legacy createSpaceChild → createSpace path doesn't emit
  * a spec on the fact today), this returns state unchanged. The
  * reducer becomes load-bearing only when the space-birth handler
@@ -261,8 +261,8 @@ export function applyBirthBeing(state, fact) {
  * @param {object} fact
  * @returns {object} new state
  */
-export function applyBirthSpace(state, fact) {
-  if (fact?.verb !== "do" || fact?.action !== "birth") return state;
+export function applyCreateSpace(state, fact) {
+  if (fact?.verb !== "do" || fact?.action !== "create") return state;
   if (fact?.target?.kind !== "space") return state;
   const spec = fact?.params?.spec;
   if (!spec || typeof spec !== "object") return state; // legacy birth fact
@@ -297,8 +297,8 @@ export function applyBirthSpace(state, fact) {
  * @param {object} fact
  * @returns {object} new state
  */
-export function applyBirthMatter(state, fact) {
-  if (fact?.verb !== "do" || fact?.action !== "birth") return state;
+export function applyCreateMatter(state, fact) {
+  if (fact?.verb !== "do" || fact?.action !== "create") return state;
   if (fact?.target?.kind !== "matter") return state;
   const spec = fact?.params?.spec || {};
   return {

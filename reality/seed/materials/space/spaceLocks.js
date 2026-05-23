@@ -30,17 +30,17 @@
 // the lock-holder didn't get to clean up.
 
 import log from "../../seedReality/log.js";
-import { getFactoryConfigValue } from "../../factoryConfig.js";
+import { getInternalConfigValue } from "../../internalConfig.js";
 import { getRealityConfigValue } from "../../realityConfig.js";
 
 const locks = new Map(); // spaceId -> { sessionId, acquiredAt }
 
 function LOCK_TIMEOUT_MS() {
-  return Number(getFactoryConfigValue("spaceLockTimeoutMs")) || 30000;
+  return Number(getInternalConfigValue("spaceLockTimeoutMs")) || 30000;
 }
 
 function LOCK_WAIT_MS() {
-  return Number(getFactoryConfigValue("spaceLockWaitMs")) || 5000;
+  return Number(getInternalConfigValue("spaceLockWaitMs")) || 5000;
 }
 
 function isExpired(lock) {

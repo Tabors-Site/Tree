@@ -1,16 +1,16 @@
 // TreeOS Seed . AGPL-3.0 . https://treeos.ai . Tabor Holly
 //
-// Seed runtime configuration. The knobs that tune how the live
-// machine operates — LLM call shape, session caches, scheduler
+// Internal configuration. Inward-facing knobs that tune how
+// the factory runs internally — LLM call shape, session caches, scheduler
 // backpressure, hook timeouts, fold limits, cleanup intervals.
 //
-// Distinct from realityConfig.js, which holds the reality's outward-
+// Pair: realityConfig.js holds the reality's outward-
 // facing identity (REALITY_NAME, realityUrl, federation directory,
 // security domains). Reality config is about what the reality IS to
 // the outside world; seed config is about how the apparatus runs
 // internally.
 //
-// Both files write to the same underlying store — the .config seed
+// Both write to the same underlying store — the .config seed
 // space's qualities Map — through the storage primitives realityConfig
 // owns. This file is a thin facade: its own defaults table, its own
 // get/set names so callers reach the right surface at import time.
@@ -25,9 +25,9 @@ import {
  * Seed runtime defaults. Every knob the live machine reads. Each
  * caller falls back to this value when no override sits in
  * .config. Adding a knob means: add it here AND read it via
- * `getFactoryConfigValue(key)` at the use site.
+ * `getInternalConfigValue(key)` at the use site.
  */
-export const FACTORY_CONFIG_DEFAULTS = {
+export const INTERNAL_CONFIG_DEFAULTS = {
   // LLM call shape
   llmTimeout: 900,
   llmMaxRetries: 3,
@@ -126,14 +126,14 @@ export const FACTORY_CONFIG_DEFAULTS = {
 
 /**
  * Read a seed runtime knob. Returns the .config override when set,
- * otherwise the FACTORY_CONFIG_DEFAULTS entry, otherwise null. Callers
+ * otherwise the INTERNAL_CONFIG_DEFAULTS entry, otherwise null. Callers
  * that want to know whether a value came from override vs default
  * should compare against the defaults table directly.
  */
-export function getFactoryConfigValue(key) {
+export function getInternalConfigValue(key) {
   const stored = getRealityConfigValue(key);
   if (stored != null) return stored;
-  return key in FACTORY_CONFIG_DEFAULTS ? FACTORY_CONFIG_DEFAULTS[key] : null;
+  return key in INTERNAL_CONFIG_DEFAULTS ? INTERNAL_CONFIG_DEFAULTS[key] : null;
 }
 
 /**
@@ -141,17 +141,17 @@ export function getFactoryConfigValue(key) {
  * .config-space writer realityConfig uses; both surfaces share the
  * same store.
  */
-export const setFactoryConfigValue    = setRealityConfigValue;
-export const deleteFactoryConfigValue = deleteRealityConfigValue;
+export const setInternalConfigValue    = setRealityConfigValue;
+export const deleteInternalConfigValue = deleteRealityConfigValue;
 
 /**
  * Every seed runtime knob with effective value, default, and
  * whether overridden. Mirrors realityConfig.getConfigWithDefaults for
  * the seed side. Used by the dashboard surface to show full state.
  */
-export function getFactoryConfigWithDefaults() {
+export function getInternalConfigWithDefaults() {
   const result = {};
-  for (const [key, defaultValue] of Object.entries(FACTORY_CONFIG_DEFAULTS)) {
+  for (const [key, defaultValue] of Object.entries(INTERNAL_CONFIG_DEFAULTS)) {
     const override = getRealityConfigValue(key);
     const hasOverride = override != null;
     result[key] = {

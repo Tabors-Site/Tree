@@ -32,7 +32,7 @@
 // turns this on lives without it.
 
 import log from "../../seedReality/log.js";
-import { getFactoryConfigValue } from "../../factoryConfig.js";
+import { getInternalConfigValue } from "../../internalConfig.js";
 import Space from "./space.js";
 import Fact from "../../past/fact/fact.js";
 import { hooks } from "../../hooks.js";
@@ -46,7 +46,7 @@ import { logFact } from "../../past/fact/facts.js";
  * Is the tree-circuit feature enabled on this reality?
  */
 function isEnabled() {
-  const val = getFactoryConfigValue("treeCircuitEnabled");
+  const val = getInternalConfigValue("treeCircuitEnabled");
   return val === true || val === "true";
 }
 
@@ -81,12 +81,12 @@ export async function isTreeAlive(treeId) {
  * @returns {Promise<{ total, spaceCount, qualitiesDensity, errorRate, raw }>}
  */
 export async function checkTreeHealth(treeId) {
-  const maxSpaces     = parseInt(getFactoryConfigValue("maxTreeSpaces")        || "10000",      10);
-  const maxQualBytes  = parseInt(getFactoryConfigValue("maxTreeQualityBytes") || "1073741824", 10);
-  const maxErrors     = parseInt(getFactoryConfigValue("maxTreeErrorRate")     || "100",        10);
-  const spaceWeight   = parseFloat(getFactoryConfigValue("circuitSpaceWeight")   || "0.4");
-  const densityWeight = parseFloat(getFactoryConfigValue("circuitDensityWeight") || "0.3");
-  const errorWeight   = parseFloat(getFactoryConfigValue("circuitErrorWeight")   || "0.3");
+  const maxSpaces     = parseInt(getInternalConfigValue("maxTreeSpaces")        || "10000",      10);
+  const maxQualBytes  = parseInt(getInternalConfigValue("maxTreeQualityBytes") || "1073741824", 10);
+  const maxErrors     = parseInt(getInternalConfigValue("maxTreeErrorRate")     || "100",        10);
+  const spaceWeight   = parseFloat(getInternalConfigValue("circuitSpaceWeight")   || "0.4");
+  const densityWeight = parseFloat(getInternalConfigValue("circuitDensityWeight") || "0.3");
+  const errorWeight   = parseFloat(getInternalConfigValue("circuitErrorWeight")   || "0.3");
 
   // 1. Space count in this tree.
   const spaceCount = await Space.countDocuments({ rootOwner: treeId });
@@ -118,7 +118,7 @@ export async function checkTreeHealth(treeId) {
   // 3. Error rate. Fact reel failures on spaces in this tree.
   // Aggregation with $lookup so we don't load the descendant id list
   // into memory.
-  const checkInterval = parseInt(getFactoryConfigValue("circuitCheckInterval") || "3600000", 10);
+  const checkInterval = parseInt(getInternalConfigValue("circuitCheckInterval") || "3600000", 10);
   const since = new Date(Date.now() - checkInterval);
 
   let factErrors = 0;
@@ -241,7 +241,7 @@ export async function reviveTree(treeId, beingId) {
 export function startCircuitJob() {
   if (!isEnabled()) return null;
 
-  const interval = parseInt(getFactoryConfigValue("circuitCheckInterval") || "3600000", 10);
+  const interval = parseInt(getInternalConfigValue("circuitCheckInterval") || "3600000", 10);
 
   const timer = setInterval(async () => {
     try {

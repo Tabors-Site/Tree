@@ -31,7 +31,7 @@
 // the world.
 
 import log from "../../seedReality/log.js";
-import { getFactoryConfigValue } from "../../factoryConfig.js";
+import { getInternalConfigValue } from "../../internalConfig.js";
 import path from "path";
 import fs from "fs";
 import { fileURLToPath } from "url";
@@ -60,10 +60,10 @@ if (!fs.existsSync(uploadsFolder)) {
 
 // Place-config-driven knobs. Read at call time so config changes take
 // effect without restart.
-function matterMaxChars()    { return Math.max(100, Number(getFactoryConfigValue("matterMaxChars"))    || 5000); }
-function maxMatterPerSpace() { return Math.max(1,   Number(getFactoryConfigValue("maxMatterPerSpace")) || 1000); }
-function matterQueryLimit()  { return Math.max(1,   Math.min(Number(getFactoryConfigValue("matterQueryLimit"))  || 5000, 50000)); }
-function searchQueryLimit()  { return Math.max(1,   Math.min(Number(getFactoryConfigValue("matterSearchLimit")) || 500, 10000)); }
+function matterMaxChars()    { return Math.max(100, Number(getInternalConfigValue("matterMaxChars"))    || 5000); }
+function maxMatterPerSpace() { return Math.max(1,   Number(getInternalConfigValue("maxMatterPerSpace")) || 1000); }
+function matterQueryLimit()  { return Math.max(1,   Math.min(Number(getInternalConfigValue("matterQueryLimit"))  || 5000, 50000)); }
+function searchQueryLimit()  { return Math.max(1,   Math.min(Number(getInternalConfigValue("matterSearchLimit")) || 500, 10000)); }
 
 function isIbpOrigin(origin) {
   return origin === MATTER_ORIGIN.IBP;
@@ -132,7 +132,7 @@ async function createMatter({
     parent: { $exists: true, $ne: null },
   }).select("seedSpace parent").lean();
   if (!targetSpace) throw new Error("Space not found or deleted");
-  if (targetSpace.seedSpace) throw new Error("Cannot modify place seed spaces");
+  if (targetSpace.seedSpace) throw new Error("Cannot modify seed spaces");
 
   const max = maxMatterPerSpace();
   const count = await Matter.countDocuments({ spaceId });
@@ -170,12 +170,12 @@ async function createMatter({
 
   // ── FACT-DRIVEN BIRTH (Slice C-matter-full, 2026-05-23) ──
   // Stamps a do:birth Fact on the new matter's reel; eager-fold's
-  // applyBirthMatter + initProjection materializes the row. No more
+  // applyCreateMatter + initProjection materializes the row. No more
   // direct Matter.save() — the fact is the commit.
   const matterId = uuidv4();
   await logFact({
     verb:    "do",
-    action:  "birth",
+    action:  "create",
     beingId: String(beingId),
     target:  { kind: "matter", id: matterId },
     params:  {

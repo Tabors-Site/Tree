@@ -29,7 +29,7 @@
 // rather than inside one primitive's subfolder.
 
 import { getRealityConfigValue } from "../realityConfig.js";
-import { getFactoryConfigValue } from "../factoryConfig.js";
+import { getInternalConfigValue } from "../internalConfig.js";
 import { hooks } from "../hooks.js";
 import log from "../seedReality/log.js";
 
@@ -40,7 +40,7 @@ const PRESSURE_THRESHOLD = 0.8; // 80%
  * Get the configured max document size in bytes.
  */
 function getMaxBytes() {
-  const configured = getFactoryConfigValue("maxDocumentSizeBytes");
+  const configured = getInternalConfigValue("maxDocumentSizeBytes");
   if (configured && typeof configured === "number" && configured > 0) {
     // Floor 1MB, ceiling 16MB (MongoDB hard limit). Below 1MB bricks the system.
     return Math.max(1024 * 1024, Math.min(configured, 16 * 1024 * 1024));

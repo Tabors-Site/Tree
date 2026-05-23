@@ -15,7 +15,7 @@
 //
 // Seed runtime knobs (LLM call shape, scheduler backpressure, hook
 // timeouts, cleanup intervals — the apparatus's internal tuning)
-// live in [factoryConfig.js](factoryConfig.js). Both files write to the
+// live in [internalConfig.js](internalConfig.js). Both files write to the
 // SAME underlying store (this file owns the storage primitive);
 // the split is conceptual — readers reach the right surface at
 // import-site.
@@ -105,7 +105,7 @@ async function loadConfigFromDb() {
   try {
     const configSpace = await Space.findOne({ seedSpace: SEED_SPACE.CONFIG }).lean();
     if (!configSpace || !configSpace.qualities) {
-      log.warn("Place", "No .config place seed space found or qualities is empty. Using empty config.");
+      log.warn("Reality", "No .config seed space found or qualities is empty. Using empty config.");
       configCache = {};
       return;
     }
@@ -118,7 +118,7 @@ async function loadConfigFromDb() {
     const clean = {};
     for (const [k, v] of Object.entries(raw)) {
       if (DANGEROUS_KEYS.has(k)) {
-        log.warn("Place", `Dangerous config key "${k}" found in DB. Skipped.`);
+        log.warn("Reality", `Dangerous config key "${k}" found in DB. Skipped.`);
         continue;
       }
       if (k.startsWith("$") || k.startsWith("_")) continue;
@@ -126,7 +126,7 @@ async function loadConfigFromDb() {
     }
     configCache = clean;
   } catch (err) {
-    log.error("Place", `Failed to load config from DB: ${err.message}. Using empty config.`);
+    log.error("Reality", `Failed to load config from DB: ${err.message}. Using empty config.`);
     configCache = {};
   }
 }
@@ -166,7 +166,7 @@ export async function setRealityConfigValue(key, value, { internal, identity } =
 
   const configSpace = await getConfigSpace();
   if (!configSpace) {
-    throw new Error("Config write failed: .config place seed space not found. Place may need repair.");
+    throw new Error("Config write failed: .config seed space not found. Reality may need repair.");
   }
 
   // Route through do.set so the write IS a Fact on the .config space's
@@ -185,7 +185,7 @@ export async function setRealityConfigValue(key, value, { internal, identity } =
   if (!configCache) configCache = {};
   configCache[key] = value;
 
-  log.verbose("Place", `Config set: ${key}`);
+  log.verbose("Reality", `Config set: ${key}`);
 }
 
 export async function deleteRealityConfigValue(key, { internal, identity } = {}) {
@@ -196,7 +196,7 @@ export async function deleteRealityConfigValue(key, { internal, identity } = {})
 
   const configSpace = await getConfigSpace();
   if (!configSpace) {
-    throw new Error("Config delete failed: .config place seed space not found.");
+    throw new Error("Config delete failed: .config seed space not found.");
   }
 
   // value=null on a 2-deep qualities path (qualities.<key>) unsets the
@@ -211,12 +211,12 @@ export async function deleteRealityConfigValue(key, { internal, identity } = {})
   );
 
   if (configCache) delete configCache[key];
-  log.verbose("Place", `Config deleted: ${key}`);
+  log.verbose("Reality", `Config deleted: ${key}`);
 }
 
 // Place-identity defaults. What this reality IS to the outside
 // world. Seed runtime knobs (LLM timeout, scheduler limits, hooks,
-// caches, etc.) live in [factoryConfig.js](factoryConfig.js).
+// caches, etc.) live in [internalConfig.js](internalConfig.js).
 export const CONFIG_DEFAULTS = {
   // Identity + federation
   REALITY_NAME: "My Place",
@@ -276,11 +276,11 @@ export function getConfigWithDefaults() {
 export async function initRealityConfig() {
   await loadConfigFromDb();
   initialized = true;
-  log.verbose("Place", `Config loaded from .config space (${Object.keys(configCache).length} keys)`);
+  log.verbose("Reality", `Config loaded from .config space (${Object.keys(configCache).length} keys)`);
 }
 
 // For when another process modifies .config directly (migration, manual repair).
 export async function reloadRealityConfig() {
   await loadConfigFromDb();
-  log.info("Place", `Config reloaded from .config space (${Object.keys(configCache).length} keys)`);
+  log.info("Reality", `Config reloaded from .config space (${Object.keys(configCache).length} keys)`);
 }

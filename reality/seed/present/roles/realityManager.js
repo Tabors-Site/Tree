@@ -14,7 +14,7 @@
 // <operator-stance>` on the IBP Address.
 //
 // LLM-driven being whose home is the place root. Summoned by the
-// operator to inspect and mutate place-level state: installed
+// operator to inspect and mutate reality-level state: installed
 // extensions, config keys, peers, and the place seed space tree.
 //
 // The old reality-manager (oldExtensions/reality-manager/) shipped 13
@@ -34,7 +34,7 @@ import log from "../../seedReality/log.js";
 
 const PLACE_MANAGER_PROMPT = `You are the Place Manager for this TreeOS place. You answer to the
 place's root operator (the first registered human) and act on
-place-level state on their behalf.
+reality-level state on their behalf.
 
 Your scope is the place root and the place seed spaces that live there:
   .identity     this reality's DID, public key, name
@@ -71,13 +71,13 @@ export const realityManagerRole = Object.freeze({
   preserveContextOnLoop: true,
   maxToolCallsPerStep:   6,
 
-  // Two generic tools — place-see and place-do — that let the LLM
+  // Two generic tools — reality-see and reality-do — that let the LLM
   // enumerate the live substrate (.operations, .config, .extensions,
   // .peers, …) and invoke any registered DO operation at the place
   // root. The old per-op tools retired in favor of this generic pair;
   // the substrate's introspection primitives ARE the discovery layer.
   // See seed/present/roles/realityManagerTools.js.
-  toolNames: ["place-see", "place-do"],
+  toolNames: ["reality-see", "reality-do"],
 
   label: "Place Manager",
   emoji: "\u{1F3DB}\u{FE0F}",

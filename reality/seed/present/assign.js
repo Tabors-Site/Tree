@@ -41,7 +41,7 @@
 //   stamped.js  press the closing face
 
 import log from "../seedReality/log.js";
-import { getFactoryConfigValue } from "../factoryConfig.js";
+import { getInternalConfigValue } from "../internalConfig.js";
 import { v4 as uuidv4 } from "uuid";
 import Being from "../materials/being/being.js";
 import Act from "../past/act/act.js";
@@ -123,26 +123,29 @@ export async function assign({ beingId, spaceId, entry, handoff = null, signal =
     ? (entry?.identity?.name || null)
     : (handoff?.identity?.name || null);
 
-  const stampMessage = kind === "transport-act"
+  const actMessage = kind === "transport-act"
     ? describeTransportAct(entry.act)
     : entry.content;
-  const stampSource = kind === "transport-act"
+  const actSource = kind === "transport-act"
     ? (askerName || "transport")
     : (askerName || entry.from || "user");
 
-  const stamp = await openStampRow({
+  const act = await openActRow({
     beingIn:           String(askerBeingId),
     beingOut:          String(beingId),
     addresseePosition: spaceId,
     askerPosition:    handoff?.resolved?.spaceId || null,
-    message:           stampMessage,
-    source:            stampSource,
+    message:           actMessage,
+    source:            actSource,
     activeRole,
     inboxMessageId:    entry.correlation,
     inReplyTo:         entry.inReplyTo || null,
     rootCorrelation:   entry.rootCorrelation || entry.correlation || null,
     receivedAt:        entry.sentAt || null,
     priority:          entry.priority || null,
+    // Bucket 3 Option D: this moment answers the InboxProjection
+    // row keyed by entry.correlation; stamped.js evicts it on seal.
+    answers:           entry.correlation || null,
   });
 
   // ── assign: build the summon ctx moment.js dispatches on ─────────
@@ -222,7 +225,7 @@ function MAX_CHAT_CONTENT_BYTES() {
   return Math.max(
     10000,
     Math.min(
-      Number(getFactoryConfigValue("maxChatContentBytes")) || 100000,
+      Number(getInternalConfigValue("maxChatContentBytes")) || 100000,
       1000000,
     ),
   );
@@ -234,7 +237,7 @@ function capContent(s) {
   return s.length > max ? s.slice(0, max) + "... (truncated)" : s;
 }
 
-async function openStampRow(opts = {}) {
+async function openActRow(opts = {}) {
   const {
     beingIn,
     beingOut = null,
@@ -248,10 +251,14 @@ async function openStampRow(opts = {}) {
     rootCorrelation = null,
     receivedAt = null,
     priority = null,
+    // Bucket 3 Option D: the correlation of the InboxProjection row
+    // this moment is consuming. Stored on the Act as `answers`; on
+    // seal, the cross-cutting fold evicts the matching row.
+    answers = null,
   } = opts;
 
   if (!beingIn) {
-    log.warn("Assign", "openStampRow called without beingIn");
+    log.warn("Assign", "openActRow called without beingIn");
     return null;
   }
 
@@ -315,6 +322,7 @@ async function openStampRow(opts = {}) {
       inReplyTo,
       rootCorrelation: resolvedRoot,
       parentThread:    resolvedParentThread,
+      answers, // Bucket 3 Option D: closure key the seal evicts on
       receivedAt: receivedAt || now,
       stampedAt: now,
       startMessage: { content: safeMessage, source },
@@ -322,7 +330,7 @@ async function openStampRow(opts = {}) {
     });
     return row;
   } catch (err) {
-    log.warn("Assign", `openStampRow failed: ${err.message}`);
+    log.warn("Assign", `openActRow failed: ${err.message}`);
     return null;
   }
 }

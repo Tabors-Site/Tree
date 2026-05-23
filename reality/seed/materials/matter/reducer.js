@@ -16,7 +16,7 @@
 // this; until then the projection's `position` matches the matter's
 // `spaceId` field on creation.
 
-import { applySetQualities, applySetField, applyBirthMatter } from "../reducerHelpers.js";
+import { applySetQualities, applySetField, applyCreateMatter } from "../reducerHelpers.js";
 
 /**
  * Empty initial state. Today: empty — the fold derives qualities +
@@ -42,7 +42,7 @@ export function reduce(state, fact) {
   let next = state;
 
   // do:birth — produces the initial row state from spec.
-  next = applyBirthMatter(next, fact);
+  next = applyCreateMatter(next, fact);
 
   // do:set — scalar fields and qualities paths.
   next = applySetField(next, fact);

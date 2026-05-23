@@ -305,11 +305,11 @@ export function registerSeedOperations() {
   // (handlers own the actId + target + spec they know about; dispatcher
   // auto-fact would double-stamp). One Fact per birth, on the new
   // aggregate's reel; eager-fold materializes the row via the reducer's
-  // applyBirthSpace / applyBirthMatter.
-  registerOperation("birth", {
+  // applyCreateSpace / applyCreateMatter.
+  registerOperation("create", {
     targets: ["space", "matter", "being"],
     ownerExtension: "seed",
-    factAction: "birth",
+    factAction: "create",
     skipAudit: true,
     handler: async (ctx) => {
       const { target, params, identity, summonCtx, scaffold } = ctx;
@@ -334,7 +334,7 @@ export function registerSeedOperations() {
       if (kind === "matter") {
         // Fact-driven matter birth. The handler stamps the do:birth
         // Fact directly on the new matter's reel; eager-fold inside
-        // logFact runs applyBirthMatter to materialize the row.
+        // logFact runs applyCreateMatter to materialize the row.
         const matterId = uuidv4();
         const spaceId = targetKind === "space" ? targetIdOf(target) : (spec.spaceId ?? null);
         const parentMatterId = targetKind === "matter" ? String(target._id) : (spec.parentMatterId ?? null);
@@ -352,7 +352,7 @@ export function registerSeedOperations() {
         }
         await logFact({
           verb:    "do",
-          action:  "birth",
+          action:  "create",
           beingId: String(actorBeingId),
           target:  { kind: "matter", id: matterId },
           params:  { spec: enrichedSpec },
@@ -487,7 +487,7 @@ export function registerSeedOperations() {
         // sibling collision; reducer writes the projection.
         const normalized = assertValidSpaceName(value);
         if (target.seedSpace) {
-          throw new Error("set: cannot rename place seed spaces");
+          throw new Error("set: cannot rename seed spaces");
         }
         if (target.name !== normalized) {
           await assertNameAvailableAt(target.parent, normalized, {
@@ -504,7 +504,7 @@ export function registerSeedOperations() {
         const spaceId = targetIdOf(target);
         const normalized = assertValidSpaceType(value);
         if (kind === "space" && target.seedSpace) {
-          throw new Error("set: cannot change type on place seed spaces");
+          throw new Error("set: cannot change type on seed spaces");
         }
         if (kind === "stance") {
           // Stance still legacy until rewired.
@@ -657,10 +657,10 @@ export function registerSeedOperations() {
   // birth-Fact remains in the chain; the fold respects the death-Fact
   // and the material (and its subtree where it has one) stops
   // appearing in the stamp face going forward.
-  registerOperation("death", {
+  registerOperation("end", {
     targets: ["space", "matter"],
     ownerExtension: "seed",
-    factAction: "death",
+    factAction: "end",
     handler: async ({ target, identity, summonCtx }) => {
       const kind = detectTargetKind(target);
       if (kind === "space") {

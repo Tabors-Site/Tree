@@ -392,11 +392,11 @@ function expandStance(stance, ctx) {
 
 // Lenient: DNS-like, also allows bare identifiers for local places
 // ("localhost", "tabor-laptop") and explicit port.
-const PLACE_RE =
+const REALITY_RE =
   /^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)*(:\d{1,5})?$/i;
 
 export function isValidReality(place) {
-  return typeof place === "string" && PLACE_RE.test(place);
+  return typeof place === "string" && REALITY_RE.test(place);
 }
 
 const SEGMENT_RE = /^[a-z0-9_~][a-z0-9_.-]*$/i;

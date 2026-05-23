@@ -18,7 +18,7 @@
 // registration the proxies no-op and a CLI-only run still boots.
 
 import log from "../../seed/seedReality/log.js";
-import { getFactoryConfigValue } from "../../seed/factoryConfig.js";
+import { getInternalConfigValue } from "../../seed/internalConfig.js";
 import { Server } from "socket.io";
 import { decodeToken } from "../../seed/materials/being/identity.js";
 import { getRealityConfigValue } from "../../seed/realityConfig.js";
@@ -145,15 +145,15 @@ export function initWebSocketServer(httpServer, originPolicy) {
     cors: { origin: originCheck, methods: ["GET", "POST"], credentials: true },
     transports: ["websocket", "polling"],
     maxHttpBufferSize:
-      Number(getFactoryConfigValue("socketMaxBufferSize")) || 1048576,
-    pingTimeout: Number(getFactoryConfigValue("socketPingTimeout")) || 30000,
-    pingInterval: Number(getFactoryConfigValue("socketPingInterval")) || 25000,
-    connectTimeout: Number(getFactoryConfigValue("socketConnectTimeout")) || 10000,
+      Number(getInternalConfigValue("socketMaxBufferSize")) || 1048576,
+    pingTimeout: Number(getInternalConfigValue("socketPingTimeout")) || 30000,
+    pingInterval: Number(getInternalConfigValue("socketPingInterval")) || 25000,
+    connectTimeout: Number(getInternalConfigValue("socketConnectTimeout")) || 10000,
   });
 
   // Per-IP connection limit
   const ipCounts = new Map();
-  const MAX_PER_IP = Number(getFactoryConfigValue("maxConnectionsPerIp")) || 20;
+  const MAX_PER_IP = Number(getInternalConfigValue("maxConnectionsPerIp")) || 20;
 
   // Auth + IP-rate gate. JWT comes from the `token` cookie (browser)
   // or handshake.auth.token (CLI / programmatic); cookie wins when

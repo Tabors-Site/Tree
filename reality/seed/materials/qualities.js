@@ -62,7 +62,7 @@
 // write to their own quality namespace).
 
 import Being from "../materials/being/being.js";
-import { getFactoryConfigValue } from "../factoryConfig.js";
+import { getInternalConfigValue } from "../internalConfig.js";
 import Space from "../materials/space/space.js";
 import Matter from "../materials/matter/matter.js";
 import { hooks } from "../hooks.js";
@@ -76,7 +76,7 @@ function MAX_VALUE_BYTES() {
   return Math.max(
     1024,
     Math.min(
-      Number(getFactoryConfigValue("qualityNamespaceMaxBytes")) || 524288,
+      Number(getInternalConfigValue("qualityNamespaceMaxBytes")) || 524288,
       2 * 1024 * 1024,
     ),
   );
@@ -85,7 +85,7 @@ function MAX_VALUE_BYTES() {
 function maxNestingDepth() {
   return Math.max(
     2,
-    Math.min(Number(getFactoryConfigValue("qualityMaxNestingDepth")) || 5, 20),
+    Math.min(Number(getInternalConfigValue("qualityMaxNestingDepth")) || 5, 20),
   );
 }
 

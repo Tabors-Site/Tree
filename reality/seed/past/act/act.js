@@ -9,8 +9,8 @@
 // at beat 4 (stamped). The row is the record of that one moment,
 // end to end.
 //
-// "The sealed act is the act" — there is no separate Act noun.
-// Act survives only as the machine (the press), the verb (to
+// "The sealed act is the act" — there is no separate Stamp noun.
+// Stamp survives only as the machine (the press), the verb (to
 // stamp / beat 4 / stamped.js), and the act of sealing. The thing
 // on the reel is an Act.
 //
@@ -43,6 +43,21 @@ const ActSchema = new mongoose.Schema({
 
   inReplyTo:       { type: String, default: null, index: true },
   rootCorrelation: { type: String, default: null, index: true },
+
+  // Back-reference to the be:summon fact's correlation that this
+  // moment answered. SUMMON now stamps a be:summon Fact on the
+  // summoner's reel (single-writer: never on the recipient's), and
+  // the cross-cutting fold maintains InboxProjection from those
+  // facts. The scheduler picks an open InboxProjection row, hands
+  // the correlation to the moment via this `answers` field, and
+  // the seal commits the Act with it set. On seal, the cross-
+  // cutting fold sees Act-with-answers and evicts the matching
+  // InboxProjection row — that is the closure event. Not a reply-
+  // message; just the moment that took the summon, sealing. A being
+  // who summons B to "clean room 3" gets closure when B's moment
+  // seals, regardless of whether B sends any reply text.
+  // (Bucket 3 Option D, 2026-05-23.)
+  answers: { type: String, default: null, index: true },
 
   // When a being acting under thread A emits a fresh top-level SUMMON
   // (one with no `inReplyTo`), the new SUMMON starts thread B. This

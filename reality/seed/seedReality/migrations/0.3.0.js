@@ -48,7 +48,7 @@ export default async function migrate() {
 
   const spaceRootId = getSpaceRootId();
   if (!spaceRootId) {
-    throw new Error("Cannot run 0.3.0 migration — place root not initialized yet. Boot order issue.");
+    throw new Error("Cannot run 0.3.0 migration — space root not initialized yet. Boot order issue.");
   }
 
   let inserted = 0;

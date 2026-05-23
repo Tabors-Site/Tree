@@ -420,16 +420,28 @@ async function placeAtSpace(resolved, { identity, payload } = {}) {
 
 // Children of a space, shaped as descriptor entries. Each child's
 // own qualities ride along so a client SEE-ing the parent can render
-// extension-contributed fields on every child without re-SEE-ing each.
+// extension-contributed fields on every child without re-SEE-ing
+// each. Slice H completion (2026-05-23): each child folds before its
+// qualities surface — the leaf-vs-occupant asymmetry the earlier
+// pass left open is gone. Hot path: foldRead = one cache read per
+// child when foldedSeq is current (eager-fold-on-write keeps it
+// current). Cold path: occupant-by-occupant catch-up. Cost is K
+// folds per SEE where K is the visible-children count; the
+// in-flight fold-engine append lock + reducer keep each well-
+// bounded.
 async function childrenOf(parentId, parentPath, opts = {}) {
   const rows = await listSpaceChildren(parentId, opts);
-  return rows.map((s) => ({
-    name: s.name,
-    spaceId: s._id,
-    type: s.type || null,
-    path: parentPath === "/" ? `/${s.name}` : `${parentPath}/${s.name}`,
-    qualities: serializeQualities(s.qualities),
-  }));
+  const folded = await Promise.all(rows.map((s) => foldRead("space", s._id)));
+  return rows.map((s, i) => {
+    const f = folded[i] || s;
+    return {
+      name: f.name || s.name,
+      spaceId: s._id,
+      type: f.type ?? s.type ?? null,
+      path: parentPath === "/" ? `/${s.name}` : `${parentPath}/${s.name}`,
+      qualities: serializeQualities(f.qualities ?? s.qualities),
+    };
+  });
 }
 
 // Synthetic children for `.threads`. Live rootCorrelation chains
@@ -468,21 +480,26 @@ async function synthesizeThreadChildren(parentId, parentPath, payload) {
 // Matter at a space, shaped as descriptor entries. Each matter's
 // own qualities ride along so extensions characterizing matter
 // (review status, energy attribution, etc.) surface without an
-// extra round-trip.
+// extra round-trip. Slice H completion (2026-05-23): each matter
+// folds before its qualities surface, same shape as the children
+// loop above.
 async function mattersAt(spaceId) {
   if (!spaceId) return [];
   const rows = await listMattersAt(spaceId);
-  return rows.map((m) => {
-    const isText = typeof m.content === "string";
+  const folded = await Promise.all(rows.map((m) => foldRead("matter", m.matterId)));
+  return rows.map((m, i) => {
+    const f = folded[i] || {};
+    const content = f.content ?? m.content;
+    const isText = typeof content === "string";
     return {
       matterId: m.matterId,
-      name: m.name,
-      origin: m.origin,
-      preview: isText ? m.content.slice(0, 400) : null,
-      previewBytes: isText ? Buffer.byteLength(m.content, "utf8") : 0,
-      totalBytes: isText ? Buffer.byteLength(m.content, "utf8") : 0,
-      byBeingId: m.beingId,
-      qualities: m.qualities || {},
+      name: f.name ?? m.name,
+      origin: f.origin ?? m.origin,
+      preview: isText ? content.slice(0, 400) : null,
+      previewBytes: isText ? Buffer.byteLength(content, "utf8") : 0,
+      totalBytes: isText ? Buffer.byteLength(content, "utf8") : 0,
+      byBeingId: f.beingId ?? m.beingId,
+      qualities: serializeQualities(f.qualities ?? m.qualities ?? {}),
     };
   });
 }
@@ -564,7 +581,7 @@ function identityBlock(identity, { authorizedHere, writeAllowed }) {
 function meta(renderHints = []) {
   return {
     descriptorVersion: DESCRIPTOR_VERSION,
-    serverVersion:     process.env.PLACE_VERSION || "treeos-place",
+    serverVersion:     process.env.REALITY_VERSION || "treeos-reality",
     generatedAt:       new Date().toISOString(),
     renderHints,
   };

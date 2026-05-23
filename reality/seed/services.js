@@ -68,7 +68,7 @@ import {
   beingHasLlm,
 } from "./present/voices/llm/connect.js";
 import {
-  getBeingTreeRootId,
+  getRootIdFor,
   setCurrentSpace,
   getCurrentSpace,
 } from "./materials/being/position.js";
@@ -159,6 +159,14 @@ import { doVerb, seeVerb, summonVerb, beVerb } from "./ibp/verbs.js";
 // Side-effect import. Registers seed DO operations with the
 // registry on load. See seed/ibp/seedOperations.js for the current set.
 import "./ibp/seedOperations.js";
+// Side-effect import. Registers the InboxProjection cross-cutting
+// fold handlers (be:summon → upsert, be:sever → delete-by-root).
+// See seed/past/act/inboxProjectionFold.js.
+import "./past/act/inboxProjectionFold.js";
+// Side-effect import. Registers the ThreadsProjection cross-cutting
+// fold handlers (be:summon → upsert+addParticipant, be:sever →
+// mark severed). See seed/past/act/threadsProjectionFold.js.
+import "./past/act/threadsProjectionFold.js";
 
 // ---------------------------------------------------------------------------
 // Auth strategy registry (extensions register additional auth methods)
@@ -260,7 +268,7 @@ export function buildRealityServices({
       beingHasLlm,
       stepTurn,
       switchRole,
-      getBeingTreeRootId,
+      getRootIdFor,
       runTurn,
       setCurrentSpace,
       getCurrentSpace,

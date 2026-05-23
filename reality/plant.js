@@ -85,7 +85,7 @@ const DEFAULTS = {
   REALITY_DOMAIN: "localhost",
   REALITY_NAME: "My Reality",
   PORT: "3000",
-  MONGODB_URI: "mongodb://localhost:27017/place",
+  MONGODB_URI: "mongodb://localhost:27017/reality",
 };
 
 function parseEnv(content) {
@@ -178,7 +178,7 @@ async function interactiveSetup(existingEnv = {}) {
     values.MONGODB_URI = DEFAULTS.MONGODB_URI;
     console.log("");
     console.log("  Localhost defaults accepted. Port 3000. MongoDB at");
-    console.log("  localhost:27017/place.");
+    console.log("  localhost:27017/reality.");
     console.log("");
   } else {
     values.REALITY_DOMAIN = (

@@ -195,7 +195,7 @@ export const llmAssignerBeing = Object.freeze({
     const { doVerb } = await import("../../ibp/verbs.js");
     const configNode = await Space.findOne({ seedSpace: SEED_SPACE.CONFIG });
     if (!configNode) {
-      throw new IbpError(IBP_ERR.INTERNAL, "Place .config seed space not found");
+      throw new IbpError(IBP_ERR.INTERNAL, "Reality .config seed space not found");
     }
     await doVerb(
       configNode,

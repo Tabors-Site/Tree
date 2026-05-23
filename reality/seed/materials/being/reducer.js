@@ -19,7 +19,7 @@
 // Pure-ness is what lets concurrent folds compute identical state
 // and what makes rebuild deterministic.
 
-import { applySetQualities, applySetField, applyBirthBeing } from "../reducerHelpers.js";
+import { applySetQualities, applySetField, applyCreateBeing } from "../reducerHelpers.js";
 
 /**
  * Empty initial state. Reducers grow this as they take ownership of
@@ -48,7 +48,7 @@ export function reduce(state, fact) {
   // be:register — produces the initial row state from spec. No-op for
   // legacy slim-params facts (no .spec); safe to compose now even
   // before summonCreateBeing converts.
-  next = applyBirthBeing(next, fact);
+  next = applyCreateBeing(next, fact);
 
   // do:set — scalar fields (name/type) and qualities paths.
   next = applySetField(next, fact);

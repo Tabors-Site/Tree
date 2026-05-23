@@ -24,18 +24,18 @@ import { I_AM } from "./being/seedBeings.js";
 
 // Stamp a do:birth Fact for a new manifest child Space. Slice C
 // (2026-05-23): the legacy Space.create bypass is gone; eager-fold
-// inside logFact runs applyBirthSpace + initProjection to
+// inside logFact runs applyCreateSpace + initProjection to
 // materialize the row. scaffold-style attribution (I_AM as actor)
 // because manifest sync is seed-internal scaffolding — extension
 // load runs after I_AM is planted, so the Being row exists.
-async function birthChildByFact({ parentId, name, type, qualities }) {
+async function createChildByFact({ parentId, name, type, qualities }) {
   const id = uuidv4();
   const specQualities = qualities instanceof Map
     ? Object.fromEntries(qualities)
     : (qualities || {});
   await logFact({
     verb:    "do",
-    action:  "birth",
+    action:  "create",
     beingId: I_AM,
     target:  { kind: "space", id },
     params:  {
@@ -80,7 +80,7 @@ async function deleteChildByFact(childId) {
   const childDoc = await Space.findById(childId);
   if (!childDoc) return;
   const { doVerb } = await import("../ibp/verbs.js");
-  await doVerb(childDoc, "death", {}, { scaffold: true });
+  await doVerb(childDoc, "end", {}, { scaffold: true });
 }
 
 export async function manifestItems({
@@ -127,8 +127,8 @@ export async function manifestItems({
       continue;
     }
     // Fact-driven (Slice C, 2026-05-23). Stamp a do:birth Fact;
-    // eager-fold materializes the new Space row via applyBirthSpace.
-    await birthChildByFact({
+    // eager-fold materializes the new Space row via applyCreateSpace.
+    await createChildByFact({
       parentId:  parent._id,
       name:      item.name,
       type:      itemType,
@@ -171,8 +171,8 @@ export async function addManifestChild({
     }
     return existing._id;
   }
-  // Fact-driven new-child via birthChildByFact.
-  return await birthChildByFact({
+  // Fact-driven new-child via createChildByFact.
+  return await createChildByFact({
     parentId: parent._id,
     name,
     type: itemType,

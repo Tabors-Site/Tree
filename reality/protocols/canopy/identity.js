@@ -68,7 +68,7 @@ export function getRealityIdentity() {
     fs.writeFileSync(publicKeyPath, publicKey, { mode: 0o644 });
     fs.writeFileSync(idPath, realityId, { mode: 0o644 });
 
-    log.verbose("Place", "Generated new keypair for this place space");
+    log.verbose("Reality", "Generated new canopy keypair for this reality");
   }
 
   realityIdentity = {

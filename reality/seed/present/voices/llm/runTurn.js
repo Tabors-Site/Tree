@@ -74,7 +74,7 @@
 // stage the next one.
 
 import log from "../../../seedReality/log.js";
-import { getFactoryConfigValue } from "../../../factoryConfig.js";
+import { getInternalConfigValue } from "../../../internalConfig.js";
 import { hooks } from "../../../hooks.js";
 
 import crypto from "crypto";
@@ -124,7 +124,7 @@ import { buildSystemPromptForRole, resolveToolsForRole } from "./assemble.js";
 // how many tool iterations, how many retries, how many bytes per
 // message. The ceiling exists because a turn that loops forever or
 // floods context isn't thinking, it's burning. Defaults below; the
-// operator overrides through place config; the setFactoryConfig switch
+// operator overrides through place config; the setInternalConfig switch
 // at the bottom of this block routes each key. Clamps prevent a
 // misconfig from bricking the loop — every path produces a working
 // system, even if a config value comes in nonsense.
@@ -146,12 +146,12 @@ export function getActiveRunTurnCount() {
   return _activeRunTurns;
 }
 
-// Budget knobs + setFactoryConfig live in config.js. I import the
+// Budget knobs + setInternalConfig live in config.js. I import the
 // getters for use in the loop and register my MAX_RUN_TURNS setter
-// so genesis-routed configs land. setFactoryConfig is re-exported
+// so genesis-routed configs land. setInternalConfig is re-exported
 // because services.js wires it through the public surface.
 import {
-  setFactoryConfig,
+  setInternalConfig,
   registerMaxRunTurnsSetter,
   getMaxMessages,
   getMaxToolIterations,
@@ -160,7 +160,7 @@ import {
   getToolResultMaxBytes,
   getMaxMessageContentBytes,
 } from "../../config.js";
-export { setFactoryConfig };
+export { setInternalConfig };
 registerMaxRunTurnsSetter(setMaxRunTurns);
 
 // LLM connection resolution lives in connect.js. Imported once here:
@@ -238,7 +238,7 @@ const _convKey = presenceKeyFor;
 // setCurrentSpace, so callers only set the current Space; rootId
 // follows.
 import {
-  getBeingTreeRootId,
+  getRootIdFor,
   setCurrentSpace,
   getCurrentSpace,
 } from "../../../materials/being/position.js";
@@ -298,7 +298,7 @@ export async function switchRole(presenceKey, newRole, ctx) {
   const systemPrompt = await buildSystemPromptForRole(newRole, {
     ...ctx,
     presenceKey,
-    rootId: getBeingTreeRootId(beingId) || ctx.rootId,
+    rootId: getRootIdFor(beingId) || ctx.rootId,
     currentSpace: ctx.currentSpace || getCurrentSpace(beingId),
   });
 
@@ -350,7 +350,7 @@ async function ensureSession(presenceKey, ctx) {
   // and wipe the buffer. setCurrentSpace below re-derives rootId
   // from the new space.
   const incomingRootId = ctx.rootId || null;
-  const knownRootId = getBeingTreeRootId(beingId);
+  const knownRootId = getRootIdFor(beingId);
   if (knownRootId && incomingRootId && knownRootId !== incomingRootId) {
     log.debug(
       "LLM",
@@ -381,7 +381,7 @@ async function ensureSession(presenceKey, ctx) {
 
   // The per-turn ancestor memo. Every resolution chain reads this.
   const snapshotNodeId =
-    getCurrentSpace(beingId) || getBeingTreeRootId(beingId) || ctx.rootId;
+    getCurrentSpace(beingId) || getRootIdFor(beingId) || ctx.rootId;
   if (snapshotNodeId) {
     session._ancestorSnapshot = await snapshotAncestors(snapshotNodeId);
   }
@@ -423,7 +423,7 @@ async function resolveLLMClient(ctx, session, presenceKey) {
   // Role can pin its own connection at the tree root (llmSlot →
   // assignments). When the tree has a slot for this role, use it;
   // otherwise the being's defaults flow through.
-  const rootId = getBeingTreeRootId(ctx?.beingId) || ctx.rootId;
+  const rootId = getRootIdFor(ctx?.beingId) || ctx.rootId;
   const roleConnectionId =
     ctx.rootLlmConnectionId ||
     (rootId ? await resolveRootLlmForRole(rootId, session.role) : null);
@@ -482,7 +482,7 @@ async function stageCall(session, ctx, message, presenceKey) {
       name: ctx.name,
       beingId: ctx.beingId,
       presenceKey,
-      rootId: getBeingTreeRootId(ctx.beingId),
+      rootId: getRootIdFor(ctx.beingId),
       currentSpace: getCurrentSpace(ctx.beingId),
     });
 
@@ -506,7 +506,7 @@ async function stageCall(session, ctx, message, presenceKey) {
     try {
       const posNodeId =
         getCurrentSpace(ctx.beingId) ||
-        getBeingTreeRootId(ctx.beingId) ||
+        getRootIdFor(ctx.beingId) ||
         ctx.rootId ||
         null;
       if (posNodeId) {
@@ -540,7 +540,7 @@ async function stageCall(session, ctx, message, presenceKey) {
       name: ctx.name,
       beingId: ctx.beingId,
       presenceKey,
-      rootId: getBeingTreeRootId(ctx.beingId),
+      rootId: getRootIdFor(ctx.beingId),
       currentSpace: getCurrentSpace(ctx.beingId),
       enrichedContext: enrichedContext || null,
     });
@@ -681,7 +681,7 @@ async function resolveToolsForPosition(
   let treeToolConfig = null;
   let blockedExtensions = null;
   let restrictedExtensions = null;
-  const currentSpace = getCurrentSpace(beingId) || getBeingTreeRootId(beingId);
+  const currentSpace = getCurrentSpace(beingId) || getRootIdFor(beingId);
   if (currentSpace) {
     try {
       const ancestors =
@@ -1192,7 +1192,7 @@ async function executeTool(toolCall, session, ctx, presenceKey) {
   // bad API key kills one tool, not the whole turn.
   if (!session._toolFailures) session._toolFailures = {};
   const toolCircuitThreshold = parseInt(
-    getFactoryConfigValue("toolCircuitThreshold") || "5",
+    getInternalConfigValue("toolCircuitThreshold") || "5",
     10,
   );
   if ((session._toolFailures[toolName] || 0) >= toolCircuitThreshold) {
@@ -1434,7 +1434,7 @@ async function finalizeResponse(
   // only the text.
   const _internal = {
     role: session.role?.name,
-    rootId: getBeingTreeRootId(ctx.beingId),
+    rootId: getRootIdFor(ctx.beingId),
     isCustom,
     model: MODEL,
     connectionId: resolvedConnectionId || null,
@@ -1649,11 +1649,11 @@ export async function stepTurn(presenceKey, message, ctx) {
       ctx.onToolResults(toolResults);
     }
 
-    // Place mode. The whole point of the turn is the tool calls,
+    // Reality mode. The whole point of the turn is the tool calls,
     // not the prose; once at least one tool succeeds I stop. Saves
     // a round-trip generating an answer the user will never see.
     if (ctx.skipRespond && toolResults.some((r) => r?.success !== false)) {
-      continueReason = "place-done";
+      continueReason = "reality-done";
       break;
     }
 
@@ -1675,12 +1675,12 @@ export async function stepTurn(presenceKey, message, ctx) {
 
   // Phase 7. Close the turn. Two short-circuits skip finalizeResponse's
   // "make one more call for prose" step: tool-cap (the caller will
-  // re-enter on a new step with continuation: true) and place-done
+  // re-enter on a new step with continuation: true) and reality-done
   // (the tools were the answer, no prose needed).
-  if (continueReason === "tool-cap" || continueReason === "place-done") {
+  if (continueReason === "tool-cap" || continueReason === "reality-done") {
     const _internal = {
       role: session.role?.name,
-      rootId: getBeingTreeRootId(ctx.beingId),
+      rootId: getRootIdFor(ctx.beingId),
       isCustom,
       model: MODEL,
       connectionId: resolvedConnectionId || null,

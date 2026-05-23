@@ -78,7 +78,7 @@ import mongoose from "./seed/seedReality/dbConfig.js";
 import { getRealityIdentity, getRealityUrl } from "./protocols/canopy/identity.js";
 import { ensureSpaceRoot } from "./seed/sprout.js";
 import { initRealityConfig, getRealityConfigValue } from "./seed/realityConfig.js";
-import { getFactoryConfigValue } from "./seed/factoryConfig.js";
+import { getInternalConfigValue } from "./seed/internalConfig.js";
 import {
   startExtensionJobs,
   getLoadedManifests,
@@ -206,7 +206,7 @@ export async function genesis(app, opts = {}) {
 
   // Register seed-shipped role specs into the role registry so
   // SUMMON can dispatch to them. Auth and llm-assigner are BE only,
-  // routed via PLACE_BEINGS in seed/ibp/verbs.js, and need no role
+  // routed via seed delegates planted by ensureSeedDelegates, and need no role
   // registration. Place-manager is summonable (LLM-driven operator
   // dialog), so its role spec enters the registry here along with
   // its two generic tools (place-see, place-do).
@@ -266,24 +266,24 @@ export async function genesis(app, opts = {}) {
   // modules that depend on them. Per-key failures are logged but
   // non-fatal. Sane defaults are baked in.
   {
-    const { setFactoryConfig } =
+    const { setInternalConfig } =
       await import("./seed/present/voices/llm/runTurn.js");
 
     const KERNEL_CONFIG = {
-      llmTimeout: { setter: setFactoryConfig },
-      llmMaxRetries: { setter: setFactoryConfig },
-      maxToolIterations: { setter: setFactoryConfig },
-      maxConversationMessages: { setter: setFactoryConfig },
-      failoverTimeout: { setter: setFactoryConfig },
-      toolCallTimeout: { setter: setFactoryConfig },
-      toolResultMaxBytes: { setter: setFactoryConfig },
-      maxPresences: { setter: setFactoryConfig },
-      stalePresenceTimeout: { setter: setFactoryConfig },
+      llmTimeout: { setter: setInternalConfig },
+      llmMaxRetries: { setter: setInternalConfig },
+      maxToolIterations: { setter: setInternalConfig },
+      maxConversationMessages: { setter: setInternalConfig },
+      failoverTimeout: { setter: setInternalConfig },
+      toolCallTimeout: { setter: setInternalConfig },
+      toolResultMaxBytes: { setter: setInternalConfig },
+      maxPresences: { setter: setInternalConfig },
+      stalePresenceTimeout: { setter: setInternalConfig },
       // Rate-of-change caps. maxRunTurns bounds active LLM turns;
       // maxIntake bounds pending moments-to-run place-wide. Together
       // they limit how much work the place can hold at once.
-      maxRunTurns: { setter: setFactoryConfig },
-      maxIntake: { setter: setFactoryConfig },
+      maxRunTurns: { setter: setInternalConfig },
+      maxIntake: { setter: setInternalConfig },
       carryMessages: {
         load: () =>
           import("./seed/present/voices/llm/runTurn.js").then(
@@ -331,7 +331,7 @@ export async function genesis(app, opts = {}) {
     for (const [key, cfg] of Object.entries(KERNEL_CONFIG)) {
       // KERNEL_CONFIG keys are all seed-runtime knobs — read from seedConfig
       // so the default-fallback applies when .config has no override.
-      const val = getFactoryConfigValue(key);
+      const val = getInternalConfigValue(key);
       if (val == null) continue;
       try {
         if (cfg.setter) {

@@ -233,7 +233,7 @@ export async function appendExecutionRecord({
   // Phase 3 migration: verb-surface create. Fires seed hooks + Fact.
   let recordNode = null;
   try {
-    recordNode = await place.do(executionSpace._id, "birth", {
+    recordNode = await place.do(executionSpace._id, "create", {
       kind: "space",
       spec: {
         name: recordName,

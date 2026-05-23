@@ -26,6 +26,42 @@ import { getProjection, applyProjection, initProjection } from "../../materials/
 
 const REEL_TYPES = new Set(["being", "space", "matter"]);
 
+// Cross-cutting projection handlers. Per-aggregate reducers build
+// the aggregate's own state from its own reel; cross-cutting handlers
+// build views that span reels (the position index, the inbox
+// projection, future cross-reel indexes). Each handler is async and
+// receives (fact, aggregateType, aggregateId) for the fact just
+// applied. Handlers MUST be idempotent — the same fact may be
+// dispatched again on rebuild or via a re-fold catch-up.
+//
+// Registration is module-load wiring: feature modules import this
+// engine and call registerCrossCuttingHandler(fn). The engine knows
+// nothing about what handlers do.
+const _crossCuttingHandlers = [];
+export function registerCrossCuttingHandler(handler) {
+  if (typeof handler !== "function") {
+    throw new Error("registerCrossCuttingHandler: handler must be a function");
+  }
+  _crossCuttingHandlers.push(handler);
+}
+
+async function dispatchCrossCutting(fact, type, id) {
+  for (const handler of _crossCuttingHandlers) {
+    try {
+      await handler(fact, type, id);
+    } catch (err) {
+      // Cross-cutting projection failures are non-fatal: the source-of-
+      // truth is the fact-chain, and the projection self-heals on the
+      // next fold pass that touches the same fact (or on full rebuild).
+      // Log and continue so a single bad handler can't strand a fold.
+      // eslint-disable-next-line no-console
+      console.warn(
+        `cross-cutting handler failed on ${type}:${id} fact seq=${fact?.seq}: ${err?.message}`,
+      );
+    }
+  }
+}
+
 function assertType(type) {
   if (!REEL_TYPES.has(type)) {
     throw new Error(`fold: type must be one of being/space/matter, got "${type}"`);
@@ -96,6 +132,7 @@ export async function fold(type, id) {
   let state = projectionState(proj);
   for (const f of tail) {
     state = reducer.reduce(state, f);
+    await dispatchCrossCutting(f, type, id);
   }
   const newFoldedSeq = tail[tail.length - 1].seq;
   const position = state.position !== undefined ? state.position : undefined;
@@ -135,6 +172,7 @@ export async function rebuild(type, id) {
   let state = reducer.initial();
   for (const f of facts) {
     state = reducer.reduce(state, f);
+    await dispatchCrossCutting(f, type, id);
   }
   const lastSeq = facts.length > 0 ? facts[facts.length - 1].seq : 0;
   const position = state.position !== undefined ? state.position : undefined;

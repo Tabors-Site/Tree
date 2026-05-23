@@ -32,7 +32,7 @@
 // requests and resumes them is on the roadmap.
 
 import log from "../../seedReality/log.js";
-import { getFactoryConfigValue } from "../../factoryConfig.js";
+import { getInternalConfigValue } from "../../internalConfig.js";
 import { pickNextIntake } from "./intake.js";
 import { runMoment } from "../moment.js";
 import { getRealityConfigValue } from "../../realityConfig.js";
@@ -55,15 +55,15 @@ const _state = new Map();
 // summonInboxDepth + summonMaxAgeSeconds are declared so the planned
 // inbox-pressure + stale-entry sweeps place without another config pass.
 function CFG_INBOX_DEPTH() {
-  const v = Number(getFactoryConfigValue("summonInboxDepth"));
+  const v = Number(getInternalConfigValue("summonInboxDepth"));
   return Number.isFinite(v) && v > 0 ? v : 100;
 }
 function CFG_SUMMONS_PER_SECOND() {
-  const v = Number(getFactoryConfigValue("summonsPerSecond"));
+  const v = Number(getInternalConfigValue("summonsPerSecond"));
   return Number.isFinite(v) && v > 0 ? v : 10;
 }
 function CFG_MAX_AGE_SECONDS() {
-  const v = Number(getFactoryConfigValue("summonMaxAgeSeconds"));
+  const v = Number(getInternalConfigValue("summonMaxAgeSeconds"));
   return Number.isFinite(v) && v > 0 ? v : 3600;
 }
 

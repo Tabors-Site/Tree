@@ -28,7 +28,7 @@
 // changes on the same Space don't race.
 
 import Space from "./space.js";
-import { getFactoryConfigValue } from "../../factoryConfig.js";
+import { getInternalConfigValue } from "../../internalConfig.js";
 import Being from "../being/being.js";
 import { resolveSpaceAccess } from "./spaces.js";
 import { invalidateSpace } from "./ancestorCache.js";
@@ -45,7 +45,7 @@ import { acquireSpaceLock, releaseSpaceLock } from "./spaceLocks.js";
 export async function addContributor(spaceId, contributorId, beingId) {
   const space = await Space.findById(spaceId).select("seedSpace").lean();
   if (!space) throw new Error("Space not found");
-  if (space.seedSpace) throw new Error("Cannot modify place seed spaces");
+  if (space.seedSpace) throw new Error("Cannot modify seed spaces");
 
   await assertBeingExists(contributorId);
   await assertOwner(spaceId, beingId);
@@ -56,7 +56,7 @@ export async function addContributor(spaceId, contributorId, beingId) {
     throw new Error("Cannot add the owner as a contributor");
   }
 
-  const MAX_CONTRIBUTORS = Number(getFactoryConfigValue("maxContributorsPerSpace")) || 500;
+  const MAX_CONTRIBUTORS = Number(getInternalConfigValue("maxContributorsPerSpace")) || 500;
 
   const locked = await acquireSpaceLock(spaceId, beingId);
   if (!locked) {
@@ -94,7 +94,7 @@ export async function addContributor(spaceId, contributorId, beingId) {
 export async function removeContributor(spaceId, contributorId, beingId) {
   const space = await Space.findById(spaceId).select("seedSpace").lean();
   if (!space) throw new Error("Space not found");
-  if (space.seedSpace) throw new Error("Cannot modify place seed spaces");
+  if (space.seedSpace) throw new Error("Cannot modify seed spaces");
 
   await assertBeingExists(contributorId);
 
@@ -143,7 +143,7 @@ export async function removeContributor(spaceId, contributorId, beingId) {
 export async function setOwner(spaceId, newOwnerId, beingId) {
   const space = await Space.findById(spaceId).select("seedSpace rootOwner parent").lean();
   if (!space) throw new Error("Space not found");
-  if (space.seedSpace) throw new Error("Cannot set ownership on place seed spaces");
+  if (space.seedSpace) throw new Error("Cannot set ownership on seed spaces");
 
   await assertBeingExists(newOwnerId);
 
@@ -217,7 +217,7 @@ export async function setOwner(spaceId, newOwnerId, beingId) {
 export async function removeOwner(spaceId, beingId) {
   const space = await Space.findById(spaceId).select("seedSpace rootOwner parent").lean();
   if (!space) throw new Error("Space not found");
-  if (space.seedSpace) throw new Error("Cannot modify place seed spaces");
+  if (space.seedSpace) throw new Error("Cannot modify seed spaces");
   if (!space.rootOwner || space.rootOwner === I_AM) throw new Error("Space has no owner to remove");
 
   // Only the owner ABOVE this space can revoke. Top-level roots can't
@@ -261,7 +261,7 @@ export async function removeOwner(spaceId, beingId) {
 export async function transferOwnership(spaceId, newOwnerId, beingId) {
   const space = await Space.findById(spaceId).select("seedSpace rootOwner").lean();
   if (!space) throw new Error("Space not found");
-  if (space.seedSpace) throw new Error("Cannot modify place seed spaces");
+  if (space.seedSpace) throw new Error("Cannot modify seed spaces");
   if (!space.rootOwner || space.rootOwner === I_AM) throw new Error("Space has no owner to transfer from");
 
   await assertBeingExists(newOwnerId);

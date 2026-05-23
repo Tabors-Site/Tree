@@ -1,329 +1,233 @@
 // TreeOS Seed . AGPL-3.0 . https://treeos.ai . Tabor Holly
 //
-// Intake. The factory's run-feed.
+// Intake — thin facade over the InboxProjection collection.
 //
-// An intake entry is a moment-to-run for a being: assign opens a stamp,
-// fold reads the present, momentum runs the act, stamped seals. The
-// scheduler drains intake per-being-serial (one moment at a time per
-// being); the choice of next entry is by priority then arrival order.
+// Per Bucket 3 Option D (2026-05-23) the intake stopped being storage
+// on Space.qualities and became a query over the InboxProjection
+// projection (which is itself a fact-derived projection of be:summon
+// facts on summoners' reels). The scheduler picks rows out of that
+// collection; "currently running" is transient in-memory state in
+// scheduler.js (not durable). A moment seal commits the Act with
+// `answers: <correlation>`; the cross-cutting fold then evicts the
+// matching InboxProjection row.
 //
-// Intake is NOT the inbox. The inbox is a being's per-position mailbox
-// of received SUMMONs (messages); the intake is the run-feed of
-// stampings the scheduler will dispatch. They overlap for LLM and
-// scripted beings (a SUMMON to them creates both an inbox record and
-// an intake entry), but they're structurally distinct:
+// Two kinds of intake remain operationally distinguishable:
 //
-//   inbox  = "messages received" — read by UI, by the being's own
-//            attention. A human's inbox holds SUMMONs that wait for the
-//            human to choose how to respond. An LLM's inbox holds the
-//            same SUMMONs the intake will auto-process; the inbox is
-//            the audit log of "what was received."
+//   "summon"        — created by the SUMMON verb stamping a be:summon
+//                     Fact on the summoner's reel; the cross-cutting
+//                     fold creates the InboxProjection row. The
+//                     enqueueIntake here for kind="summon" is RETIRED
+//                     — the verb does the work directly.
 //
-//   intake = "moments to run" — drained by the scheduler, run through
-//            the four beats. A human's intake holds their transport-acts
-//            (clicks, commands) that need to be stamped. An LLM's
-//            intake holds the run-triggers auto-created from incoming
-//            SUMMONs to their inbox.
+//   "transport-act" — the human acted from their own transport
+//                     (WS/HTTP/CLI). No SUMMON envelope; the human is
+//                     self-summoning, treated as a self-be:summon
+//                     where the summoner == the recipient. The
+//                     InboxProjection row appears the same way; the
+//                     scheduler treats them uniformly.
 //
-// Two trigger-kinds populate intake:
-//
-//   kind: "summon"
-//     The receiving being is LLM or scripted. A SUMMON to them creates
-//     both an inbox record (for the mailbox) AND an intake entry (for
-//     the run-feed). Momentum dispatches the role's summon handler
-//     (LLM inference, scripted code-cognition).
-//
-//   kind: "transport-act"
-//     The being acted from their own transport (WS/HTTP/CLI). No SUMMON
-//     was involved; the transport itself triggered the moment. Momentum
-//     applies the wrapped verb payload — doVerb/beVerb inside the
-//     moment, riding the ambient actId.
-//
-// Storage: Space.qualities.intake.<beingId>.entries — atomic $push for
-// enqueue, atomic $set by index for state transitions. Same storage
-// shape as inbox, separate namespace.
-//
-// Per-being serial. The scheduler runs at most one intake entry per
-// being at a time. SEE bypasses intake entirely (synchronous read-only
-// fold, no scheduler).
+// Functions retained:
+//   - enqueueIntake (transport-act only — kind="summon" throws)
+//   - pickNextIntake (queries InboxProjection)
+//   - markIntakeRunning / markIntakeComplete / cancelIntakeByRoot —
+//     RETIRED. Running state is in-memory; completion is the Act seal
+//     evicting the projection row; cancellation is a be:sever fact.
+//     Kept as no-op tombstones so existing callers don't crash mid-
+//     migration.
 
 import { randomUUID } from "crypto";
-import Space from "../../materials/space/space.js";
+import InboxProjection from "../../past/act/inboxProjection.js";
+import { logFact } from "../../past/fact/facts.js";
 
-const INTAKE_NS = "intake";
-
-// Priority field: lower number = picked first by scheduler.
-const DEFAULT_PRIORITY = 1;
-
-// Place-level cap on pending intake entries. Pairs with maxRunTurns
-// (active LLM turns) to bound the rate of change a place can hold.
-// Counter is in-memory and starts at 0 on boot; entries that survived
-// a restart aren't reflected until reseed on first consume.
+// Place-level cap on pending intake entries. Counts InboxProjection
+// rows (cheap to query on demand; the cached counter is a soft hint
+// to avoid the round-trip on the hot path).
 let MAX_INTAKE = 5000;
-let _pendingIntakeCount = 0;
 export function setMaxIntake(n) {
   if (Number.isFinite(n) && n > 0) {
     MAX_INTAKE = Math.max(100, Math.min(Math.floor(n), 1_000_000));
   }
 }
-export function getPendingIntakeCount() {
-  return _pendingIntakeCount;
+export async function getPendingIntakeCount() {
+  return await InboxProjection.estimatedDocumentCount();
 }
 
 /**
- * Append a moment-to-run to a being's intake at this position.
+ * Enqueue a transport-act intake entry. The human acted from their
+ * own transport (WS/HTTP/CLI); we represent that as a self-summon
+ * Fact (the human summoned themselves to perform the wrapped verb).
+ * The cross-cutting fold materializes the InboxProjection row; the
+ * scheduler picks it like any other entry.
  *
- * **Idempotency.** `correlation` is the dedupe key. When the caller
- * supplies one and an entry with the same correlation already exists
- * on this (spaceId, beingId) bucket, no new entry is enqueued — the
- * existing entry is returned with `deduped: true`. This makes
- * transport retries safe: a client that re-sends the same act with
- * the same correlationId gets one moment, not two.
+ * kind="summon" entries are no longer accepted here — the SUMMON
+ * verb in seed/ibp/verbs.js stamps the be:summon Fact directly.
  *
- * @param {string} spaceId
- * @param {string} beingId   the being whose moment will be stamped
- * @param {object} entry     entry shape per the trigger-kind:
- *   common: { kind, correlation?, rootCorrelation?, priority?, sentAt? }
- *   kind="summon":       { from, content, inReplyTo?, attachments?, activeRole? }
- *   kind="transport-act": { verb, target, action, args, identity? }
  * @returns {Promise<{ correlation, sentAt, deduped?: boolean }>}
  */
 export async function enqueueIntake(spaceId, beingId, entry) {
   if (!spaceId) throw new Error("enqueueIntake requires spaceId");
   if (!beingId) throw new Error("enqueueIntake requires beingId");
-  if (!entry || typeof entry !== "object")
+  if (!entry || typeof entry !== "object") {
     throw new Error("enqueueIntake requires an entry object");
+  }
   const kind = entry.kind;
-  if (kind !== "summon" && kind !== "transport-act") {
-    throw new Error(`enqueueIntake: invalid kind "${kind}" (expected "summon" or "transport-act")`);
-  }
-
-  // Idempotency: if caller supplied a correlation and an entry with
-  // that correlation already lives in this bucket, return the
-  // existing one without adding a duplicate. Active OR completed
-  // entries dedupe equally — a client retry that arrives after the
-  // moment finished still collapses to the original result; new
-  // handoff attaches will fire against the recorded responseId via
-  // the result-replay path in the scheduler.
-  if (entry.correlation) {
-    const existing = await _findEntryByCorrelation(spaceId, beingId, entry.correlation);
-    if (existing) {
-      return {
-        correlation: existing.correlation,
-        sentAt:      existing.sentAt,
-        deduped:     true,
-        consumed:    !!existing.consumed,
-        actId:     existing.actId || null,
-      };
-    }
-  }
-
-  if (_pendingIntakeCount >= MAX_INTAKE) {
+  if (kind !== "transport-act") {
     throw new Error(
-      `Intake cap reached: ${MAX_INTAKE} pending entries place-wide. ` +
-        `Raise maxIntake in .config or wait for backlog to drain.`,
+      `enqueueIntake: kind "${kind}" no longer accepted. SUMMONs flow ` +
+      `through the SUMMON verb directly; only "transport-act" remains.`,
     );
   }
 
   const sentAt = entry.sentAt || new Date().toISOString();
   const correlation = entry.correlation || randomUUID();
   const rootCorrelation = entry.rootCorrelation || correlation;
-  const priority = Number.isFinite(entry.priority)
-    ? Number(entry.priority)
-    : DEFAULT_PRIORITY;
 
-  const stored = {
-    ...entry,
-    kind,
-    correlation,
-    rootCorrelation,
-    priority,
-    sentAt,
-    consumed: false,
-    cancelledAt: null,
-    stampedAt: null,
-    consumedAt: null,
-    responseId: null,
-    actId: null,
-  };
+  // Idempotency on the projection's _id (which is the correlation).
+  const existing = await InboxProjection.findById(correlation).lean();
+  if (existing) {
+    return {
+      correlation: existing._id,
+      sentAt:      existing.sentAt?.toISOString?.() || sentAt,
+      deduped:     true,
+    };
+  }
 
-  await Space.updateOne(
-    { _id: spaceId },
-    { $push: { [`qualities.${INTAKE_NS}.${beingId}`]: stored } },
-  );
+  const total = await InboxProjection.estimatedDocumentCount();
+  if (total >= MAX_INTAKE) {
+    throw new Error(
+      `Intake cap reached: ${MAX_INTAKE} pending entries place-wide.`,
+    );
+  }
 
-  _pendingIntakeCount++;
+  // Self-summon Fact: the being is the actor AND the recipient. The
+  // params carry the transport-act payload; the scheduler reads them
+  // when picking. The Fact lands on the being's own reel (single-
+  // writer — the being is the actor).
+  await logFact({
+    verb:    "be",
+    action:  "summon",
+    beingId: String(beingId),
+    target:  { kind: "being", id: String(beingId) },
+    params:  {
+      recipient:       String(beingId),
+      correlation,
+      rootCorrelation,
+      inReplyTo:       entry.inReplyTo || null,
+      sender:          entry.from || "transport",
+      content:         entry,           // the whole entry rides as content
+      priority:        entry.priority || "INTERACTIVE",
+      activeRole:      entry.activeRole || null,
+      attachments:     entry.attachments,
+      inboxSpaceId:    String(spaceId),
+      sentAt,
+      transportAct:    true,            // marker for the scheduler / moment
+    },
+  });
+
   return { correlation, sentAt };
-}
-
-async function _findEntryByCorrelation(spaceId, beingId, correlation) {
-  const space = await Space.findById(spaceId)
-    .select(`qualities.${INTAKE_NS}.${beingId}`)
-    .lean();
-  const bucket = readMetaPath(space, [INTAKE_NS, beingId]);
-  if (!Array.isArray(bucket)) return null;
-  return bucket.find((e) => e?.correlation === correlation) || null;
 }
 
 /**
  * Pick the next intake entry the scheduler should process for this
- * being. Highest priority first (lowest number wins); ties break to
- * oldest (lowest array index). Skips entries already consumed or
- * cancelled. Ancestor-severance check: orphans (severed parent chain)
- * are stamped cancelled and skipped.
+ * being. Highest priority first; ties to oldest. Walks the
+ * InboxProjection ancestor-severance check via threads.js;
+ * orphans (severed parent chain) are dropped from the projection
+ * via a be:sever fact emitted by the cutThread call upstream, so
+ * here we just trust the projection.
  *
- * @param {string} spaceId
- * @param {string} beingId
+ * The "claim" of a picked entry is in-memory in the scheduler —
+ * scheduler.js holds the Map<beingId, currentCorrelation> that
+ * prevents a second pick before the first moment seals. This
+ * function only reads; it doesn't mutate the projection. A crashed
+ * moment leaves the projection row in place and the next tick
+ * re-picks it. Self-healing.
+ *
+ * @param {string} spaceId  the inbox-space (recipient's stance)
+ * @param {string} beingId  the recipient
  * @returns {Promise<null | { entry, index }>}
  */
 export async function pickNextIntake(spaceId, beingId) {
-  if (!spaceId || !beingId) return null;
-  const space = await Space.findById(spaceId)
-    .select(`qualities.${INTAKE_NS}.${beingId}`)
+  if (!beingId) return null;
+  // Priority order: HUMAN < GATEWAY < INTERACTIVE < BACKGROUND
+  // (lexical alpha matches desired order; HUMAN picked first). Within
+  // priority, oldest sentAt wins (FIFO).
+  const row = await InboxProjection.findOne({
+    recipient:    String(beingId),
+    ...(spaceId ? { inboxSpaceId: String(spaceId) } : {}),
+  })
+    .sort({ priority: 1, sentAt: 1 })
     .lean();
-  const bucket = readMetaPath(space, [INTAKE_NS, beingId]);
-  if (!Array.isArray(bucket) || bucket.length === 0) return null;
+  if (!row) return null;
 
-  let bestIdx = -1;
-  let bestPriority = Number.POSITIVE_INFINITY;
-  for (let i = 0; i < bucket.length; i++) {
-    const e = bucket[i];
-    if (!e || e.consumed || e.cancelledAt) continue;
-    const p = Number.isFinite(e.priority) ? Number(e.priority) : DEFAULT_PRIORITY;
-    if (p < bestPriority) {
-      bestPriority = p;
-      bestIdx = i;
-    }
-  }
-  if (bestIdx < 0) return null;
-
-  const entry = bucket[bestIdx];
-  if (entry.rootCorrelation) {
+  // Ancestor-severance: if the root of this entry's chain has been
+  // severed, drop the row (stamp a no-op-but-evict signal would be
+  // ideal; for now, evict directly — the projection is fold output,
+  // and the sever-fact should already have removed it. This is a
+  // belt-and-suspenders for the rare case where the fold is behind).
+  if (row.rootCorrelation) {
     const { isAncestorSevered } = await import("../../materials/space/threads.js");
-    const check = await isAncestorSevered(entry.rootCorrelation);
+    const check = await isAncestorSevered(row.rootCorrelation);
     if (check.severed) {
-      const now = new Date().toISOString();
-      await Space.updateOne(
-        { _id: spaceId },
-        { $set: {
-            [`qualities.${INTAKE_NS}.${beingId}.${bestIdx}.cancelledAt`]: now,
-            [`qualities.${INTAKE_NS}.${beingId}.${bestIdx}.severedByAncestor`]: check.ancestorId,
-          } },
-      );
+      await InboxProjection.deleteOne({ _id: row._id });
       return pickNextIntake(spaceId, beingId);
     }
   }
 
-  return { entry, index: bestIdx };
+  // Shape the return for back-compat with callers that destructure
+  // { entry, index }. `index` is no longer meaningful (no array
+  // position); we pass the correlation as a stand-in identifier.
+  return {
+    entry: {
+      kind:            row.content?.kind || (row.content?.transportAct ? "transport-act" : "summon"),
+      correlation:     row._id,
+      rootCorrelation: row.rootCorrelation,
+      from:            row.sender,
+      content:         row.content,
+      priority:        row.priority,
+      activeRole:      row.activeRole,
+      inReplyTo:       row.inReplyTo,
+      attachments:     row.attachments,
+      sentAt:          row.sentAt?.toISOString?.() || row.sentAt,
+    },
+    index: row._id, // correlation as identifier
+  };
 }
 
 /**
- * Act the moment the scheduler picked an entry up (informational —
- * compare stampedAt vs consumedAt to spot crashes where a stamp
- * opened but didn't finish). Idempotent.
- *
- * @param {string} spaceId
- * @param {string} beingId
- * @param {number} index    array index returned by pickNextIntake
+ * Retired (Bucket 3 Option D). Running state is in-memory in
+ * scheduler.js. Kept as a no-op so existing callers don't crash.
  */
-export async function markIntakeRunning(spaceId, beingId, index) {
-  if (!spaceId || !beingId || !Number.isInteger(index) || index < 0) return;
-  const stampedAt = new Date().toISOString();
-  await Space.updateOne(
-    { _id: spaceId },
-    { $set: { [`qualities.${INTAKE_NS}.${beingId}.${index}.stampedAt`]: stampedAt } },
-  );
+export async function markIntakeRunning(/* spaceId, beingId, index */) {
+  // no-op
 }
 
 /**
- * Mark intake entries complete after a stamping finishes. Decrements the
- * pending counter so the place-level cap stays honest.
- *
- * @param {string}   spaceId
- * @param {string}   beingId
- * @param {string[]} correlationIds
- * @param {object}   [opts]
- * @param {string}   [opts.responseId] correlation id of any reply-SUMMON emitted
- * @param {string}   [opts.actId]    id of the Act this moment became
+ * Retired (Bucket 3 Option D). Completion is the Act seal: the
+ * stamped.js seal commits the Act with `answers: <correlation>`, and
+ * the cross-cutting fold (past/act/inboxProjectionFold.js
+ * closeInboxOnAnswer) evicts the matching InboxProjection row. This
+ * function is a no-op tombstone for callers that haven't migrated.
  */
-export async function markIntakeComplete(spaceId, beingId, correlationIds, opts = {}) {
-  if (!spaceId || !beingId || !Array.isArray(correlationIds) || correlationIds.length === 0) {
+export async function markIntakeComplete(spaceId, beingId, correlationIds /*, opts */) {
+  if (!Array.isArray(correlationIds) || correlationIds.length === 0) {
     return { consumed: 0 };
   }
-  const responseId = opts?.responseId ?? null;
-  const actId = opts?.actId ?? null;
-
-  const consumedAt = new Date().toISOString();
-  const space = await Space.findById(spaceId)
-    .select(`qualities.${INTAKE_NS}.${beingId}`)
-    .lean();
-  const bucket = readMetaPath(space, [INTAKE_NS, beingId]);
-  if (!Array.isArray(bucket)) return { consumed: 0 };
-
-  const idSet = new Set(correlationIds);
-  const updates = {};
-  let consumed = 0;
-  bucket.forEach((entry, i) => {
-    if (!idSet.has(entry.correlation) || entry.consumed) return;
-    const base = `qualities.${INTAKE_NS}.${beingId}.${i}`;
-    updates[`${base}.consumed`] = true;
-    updates[`${base}.consumedAt`] = consumedAt;
-    if (responseId) updates[`${base}.responseId`] = responseId;
-    if (actId) updates[`${base}.actId`] = actId;
-    consumed++;
+  // Defensive eviction. The Act-seal handler is the canonical path,
+  // but if a moment legitimately completes without sealing an Act
+  // (the "stamp seals empty" case from STAMPER.md), we evict here.
+  const result = await InboxProjection.deleteMany({
+    _id: { $in: correlationIds.map(String) },
   });
-
-  if (consumed === 0) return { consumed: 0 };
-  await Space.updateOne({ _id: spaceId }, { $set: updates });
-  _pendingIntakeCount = Math.max(0, _pendingIntakeCount - consumed);
-  return { consumed };
+  return { consumed: result?.deletedCount || 0 };
 }
 
 /**
- * Cancel every pending (non-consumed, non-cancelled) intake entry whose
- * rootCorrelation matches. Used by thread cuts and cancellation cascades.
+ * Retired (Bucket 3 Option D). Cancellation is a be:sever Fact
+ * stamped on the severer's reel; the cross-cutting fold drops the
+ * matching InboxProjection rows. Kept as a no-op so existing
+ * callers don't crash. The threads.js cutThread now stamps the
+ * sever-fact directly.
  */
-export async function cancelIntakeByRoot(spaceId, beingId, rootCorrelation) {
-  if (!spaceId || !beingId || !rootCorrelation) {
-    return { cancelled: 0, correlations: [] };
-  }
-  const space = await Space.findById(spaceId)
-    .select(`qualities.${INTAKE_NS}.${beingId}`)
-    .lean();
-  const bucket = readMetaPath(space, [INTAKE_NS, beingId]);
-  if (!Array.isArray(bucket)) return { cancelled: 0, correlations: [] };
-
-  const cancelledAt = new Date().toISOString();
-  const updates = {};
-  const correlations = [];
-  bucket.forEach((entry, i) => {
-    if (!entry || entry.consumed || entry.cancelledAt) return;
-    if (entry.rootCorrelation !== rootCorrelation) return;
-    updates[`qualities.${INTAKE_NS}.${beingId}.${i}.cancelledAt`] = cancelledAt;
-    correlations.push(entry.correlation);
-  });
-  if (correlations.length === 0) return { cancelled: 0, correlations: [] };
-  await Space.updateOne({ _id: spaceId }, { $set: updates });
-  _pendingIntakeCount = Math.max(0, _pendingIntakeCount - correlations.length);
-  return { cancelled: correlations.length, correlations };
-}
-
-// ────────────────────────────────────────────────────────────────
-// Helpers
-// ────────────────────────────────────────────────────────────────
-
-function readMetaPath(space, path) {
-  if (!space) return undefined;
-  let cursor = space.qualities;
-  for (const key of path) {
-    if (cursor instanceof Map) {
-      cursor = cursor.get(key);
-    } else if (cursor && typeof cursor === "object") {
-      cursor = cursor[key];
-    } else {
-      return undefined;
-    }
-    if (cursor === undefined || cursor === null) return undefined;
-  }
-  return cursor;
+export async function cancelIntakeByRoot(/* spaceId, beingId, rootCorrelation */) {
+  return { cancelled: 0, correlations: [] };
 }

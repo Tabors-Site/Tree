@@ -95,7 +95,7 @@ async function createContractsEmission({ contractsSpaceId, ordinal, payload, bei
   // Phase 3 migration: verb-surface create. Fires seed hooks + Fact.
   let created = null;
   try {
-    created = await place.do(contractsSpaceId, "birth", {
+    created = await place.do(contractsSpaceId, "create", {
       kind: "space",
       spec: {
         name,

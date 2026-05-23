@@ -68,7 +68,7 @@ export async function momentum({ role, summonCtx } = {}) {
  *
  *   verb: "do"  → doVerb(target, action, args, opts)
  *     target  = resolved position/stance object
- *     action  = DO op name ("birth", "set", ...)
+ *     action  = DO op name ("create", "set", ...)
  *     args    = op-specific params
  *
  *   verb: "be"  → beVerb(operation, opPayload, ctx)

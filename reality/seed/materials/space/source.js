@@ -148,7 +148,7 @@ export async function syncSourceTree({
   const sourceSpace = await Space.findOne({ seedSpace: SEED_SPACE.SOURCE })
     .select("_id")
     .lean();
-  if (!sourceSpace) throw new Error(".source place seed space not found");
+  if (!sourceSpace) throw new Error(".source seed space not found");
   const sourceSpaceId = String(sourceSpace._id);
   sourceSpaceIdCache = sourceSpaceId;
 

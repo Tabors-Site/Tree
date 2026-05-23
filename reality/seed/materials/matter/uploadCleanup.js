@@ -21,7 +21,7 @@
 //   - Matter query uses lean projection (path only).
 
 import fs from "fs/promises";
-import { getFactoryConfigValue } from "../../factoryConfig.js";
+import { getInternalConfigValue } from "../../internalConfig.js";
 import fsSync from "fs";
 import path from "path";
 import log from "../../seedReality/log.js";
@@ -40,7 +40,7 @@ let cleanupTimer = null;
 
 const DEFAULT_GRACE_MS = 60 * 60 * 1000;    // 1 hour
 const DEFAULT_INTERVAL_MS = 6 * 60 * 60 * 1000; // 6 hours
-function maxDeletionsPerCycle() { return Math.max(10, Math.min(Number(getFactoryConfigValue("uploadCleanupBatchSize")) || 1000, 50000)); }
+function maxDeletionsPerCycle() { return Math.max(10, Math.min(Number(getInternalConfigValue("uploadCleanupBatchSize")) || 1000, 50000)); }
 
 /**
  * Scan uploads directory and remove files not referenced by any
@@ -148,8 +148,8 @@ export async function cleanOrphanedUploads({ graceMs = DEFAULT_GRACE_MS } = {}) 
  * Start the periodic cleanup job.
  */
 export function startUploadCleanup({
-  intervalMs = Number(getFactoryConfigValue("uploadCleanupInterval")) || DEFAULT_INTERVAL_MS,
-  graceMs    = Number(getFactoryConfigValue("uploadGracePeriodMs"))   || DEFAULT_GRACE_MS,
+  intervalMs = Number(getInternalConfigValue("uploadCleanupInterval")) || DEFAULT_INTERVAL_MS,
+  graceMs    = Number(getInternalConfigValue("uploadGracePeriodMs"))   || DEFAULT_GRACE_MS,
 } = {}) {
   if (cleanupTimer) clearInterval(cleanupTimer);
   cleanupTimer = setInterval(() => {

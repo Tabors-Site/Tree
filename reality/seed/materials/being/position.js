@@ -134,7 +134,7 @@ export function getCurrentSpace(beingId) {
   return p.currentSpace || p.rootId || null;
 }
 
-export function getBeingTreeRootId(beingId) {
+export function getRootIdFor(beingId) {
   if (!beingId) return null;
   return getBeingPositionRecord(beingId).rootId;
 }

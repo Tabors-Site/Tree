@@ -8,7 +8,7 @@
 // many bytes per message, how long a single tool call may take.
 // The ceiling exists because a turn that loops forever or floods
 // context isn't thinking, it's burning. Defaults live here; the
-// operator overrides through reality config; setFactoryConfig at the
+// operator overrides through reality config; setInternalConfig at the
 // bottom of this file routes each remembered key to the right
 // subsystem.
 //
@@ -17,7 +17,7 @@
 // nonsense.
 
 import { getRealityConfigValue } from "../realityConfig.js";
-import { getFactoryConfigValue } from "../factoryConfig.js";
+import { getInternalConfigValue } from "../internalConfig.js";
 import { setLlmTimeout } from "./voices/llm/connect.js";
 import { setFailoverTimeout } from "./voices/llm/call.js";
 import { setMaxPresenceReels, setStalePresenceMs } from "./fold/reel.js";
@@ -54,7 +54,7 @@ export function getMaxMessageContentBytes() {
   return Math.max(
     4096,
     Math.min(
-      Number(getFactoryConfigValue("maxMessageContentBytes")) || 32768,
+      Number(getInternalConfigValue("maxMessageContentBytes")) || 32768,
       131072,
     ),
   );
@@ -86,7 +86,7 @@ export function registerMaxRunTurnsSetter(fn) {
 // the run-turn cap forwards into the registered stamper setter;
 // the intake cap loads lazily. One entry, every clamp deliberate.
 
-export function setFactoryConfig(key, value) {
+export function setInternalConfig(key, value) {
   const num = Number(value);
   switch (key) {
     case "llmTimeout":

@@ -13,14 +13,14 @@
 // fire() is the same but swallows errors.
 
 import log from "./seedReality/log.js";
-import { getFactoryConfigValue } from "./factoryConfig.js";
+import { getInternalConfigValue } from "./internalConfig.js";
 
 // Read at use time so config changes take effect without restart.
-function HOOK_TIMEOUT_MS() { return Number(getFactoryConfigValue("hookTimeoutMs")) || 5000; }
-function MAX_HANDLERS_PER_HOOK() { return Number(getFactoryConfigValue("hookMaxHandlers")) || 100; }
-function CIRCUIT_BREAKER_THRESHOLD() { return Number(getFactoryConfigValue("hookCircuitThreshold")) || 5; }
-function CIRCUIT_HALF_OPEN_MS() { return Number(getFactoryConfigValue("hookCircuitHalfOpenMs")) || 300000; }
-function CHAIN_TIMEOUT_MS() { return Number(getFactoryConfigValue("hookChainTimeoutMs")) || 15000; }
+function HOOK_TIMEOUT_MS() { return Number(getInternalConfigValue("hookTimeoutMs")) || 5000; }
+function MAX_HANDLERS_PER_HOOK() { return Number(getInternalConfigValue("hookMaxHandlers")) || 100; }
+function CIRCUIT_BREAKER_THRESHOLD() { return Number(getInternalConfigValue("hookCircuitThreshold")) || 5; }
+function CIRCUIT_HALF_OPEN_MS() { return Number(getInternalConfigValue("hookCircuitHalfOpenMs")) || 300000; }
+function CHAIN_TIMEOUT_MS() { return Number(getInternalConfigValue("hookChainTimeoutMs")) || 15000; }
 
 // Add a hook here only if its handlers need each other's output.
 const SEQUENTIAL_OVERRIDES = {

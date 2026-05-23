@@ -174,7 +174,7 @@ export async function runSeedMigrations() {
   const { doVerb } = await import("../../ibp/verbs.js");
   const configNode = await Space.findOne({ seedSpace: SEED_SPACE.CONFIG });
   if (!configNode) {
-    throw new Error("Cannot persist seedVersion: .config place seed space not found");
+    throw new Error("Cannot persist seedVersion: .config seed space not found");
   }
   await doVerb(
     configNode,

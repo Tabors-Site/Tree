@@ -42,20 +42,20 @@
 // in-moment maintenance machinery.
 
 import log from "../../../seedReality/log.js";
-import { getFactoryConfigValue } from "../../../factoryConfig.js";
+import { getInternalConfigValue } from "../../../internalConfig.js";
 import { hooks } from "../../../hooks.js";
 import { getRealityConfigValue } from "../../../realityConfig.js";
 
 // Getters resolve from place config at call time so an operator
 // flip lands without restart.
 export const COMPRESSION_ENABLED = () => {
-  const v = getFactoryConfigValue("conversationCompression");
+  const v = getInternalConfigValue("conversationCompression");
   return v !== false; // default true; only off when explicitly false
 };
 export const COMPRESSION_THRESHOLD = () =>
-  Number(getFactoryConfigValue("compressionThreshold")) || 20;
+  Number(getInternalConfigValue("compressionThreshold")) || 20;
 export const COMPRESSION_KEEP = () =>
-  Number(getFactoryConfigValue("compressionKeep")) || 8;
+  Number(getInternalConfigValue("compressionKeep")) || 8;
 
 /**
  * Fold the middle of session.messages into a summary. Idempotent

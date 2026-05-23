@@ -131,7 +131,7 @@ export function registerLlmAssignerOps() {
       };
       const result = await doVerb(
         target,
-        "birth",
+        "create",
         {
           kind: "matter",
           spec: {
@@ -229,7 +229,7 @@ export function registerLlmAssignerOps() {
       const llmAssigner = await getLlmAssigner();
       await doVerb(
         matter,
-        "death",
+        "end",
         {},
         {
           identity: {

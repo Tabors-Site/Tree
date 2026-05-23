@@ -70,11 +70,11 @@ export async function ensureSpaceRoot() {
     // first act issues its own first fact." The fact carries
     // beingId="I_AM" (a string ref to a Being row that doesn't yet
     // exist — ensureIAm below materializes it). Eager-fold runs
-    // applyBirthSpace + initProjection; the SPACE_ROOT row appears.
+    // applyCreateSpace + initProjection; the SPACE_ROOT row appears.
     const rootId = uuidv4();
     await logFact({
       verb: "do",
-      action: "birth",
+      action: "create",
       beingId: I_AM,
       target: { kind: "space", id: rootId },
       params: {
@@ -94,7 +94,7 @@ export async function ensureSpaceRoot() {
         `ensureSpaceRoot: genesis birth Fact stamped but row ${rootId} not materialized`,
       );
     }
-    log.info("Place", `Created place root: ${spaceRoot._id}`);
+    log.info("Reality", `Created space root: ${spaceRoot._id}`);
   }
 
   for (const def of REALITY_SEED_SPACES) {
@@ -108,11 +108,11 @@ export async function ensureSpaceRoot() {
           seedSpace: def.seedSpace,
           qualities: def.buildQualities ? def.buildQualities() : null,
         });
-        log.info("Place", `Created place seed space: ${def.name}`);
+        log.info("Reality", `Created seed space: ${def.name}`);
       } catch (err) {
         log.error(
           "Place",
-          `Failed to create ${def.name}: ${err.message}. Boot continues.`,
+          `Failed to create seed space ${def.name}: ${err.message}. Boot continues.`,
         );
         continue;
       }
@@ -125,7 +125,7 @@ export async function ensureSpaceRoot() {
     if (space.parent && space.parent.toString() !== spaceRoot._id.toString()) {
       log.warn(
         "Place",
-        `Place seed space ${def.name} has wrong parent. Repairing.`,
+        `Seed space ${def.name} has wrong parent. Repairing.`,
       );
       const { doVerb } = await import("./ibp/verbs.js");
       await doVerb(
@@ -165,7 +165,7 @@ export async function ensureSpaceRoot() {
     if (orphanRoots.length > 0) {
       log.info(
         "Place",
-        `Adopted ${orphanRoots.length} orphan tree root(s) under place root`,
+        `Adopted ${orphanRoots.length} orphan tree root(s) under space root`,
       );
     }
   } catch (err) {
@@ -184,7 +184,7 @@ export async function ensureSpaceRoot() {
   const childCount = await Space.countDocuments({ parent: spaceRoot._id });
   log.verbose(
     "Place",
-    `Place root verified: ${spaceRoot._id} (${childCount} children)`,
+    `Space root verified: ${spaceRoot._id} (${childCount} children)`,
   );
   return spaceRoot;
 }
@@ -243,7 +243,7 @@ async function ensureIAm(spaceRootId) {
       `ensureIAm: genesis register Fact stamped but row ${id} not materialized`,
     );
   }
-  log.info("Place", `Planted I_AM (${String(created._id).slice(0, 8)})`);
+  log.info("Reality", `Planted I_AM (${String(created._id).slice(0, 8)})`);
   return created;
 }
 
@@ -344,14 +344,14 @@ export async function syncExtensionsToTree(manifests) {
       try {
         // Fact-driven extension-space birth (genesis cleanup, 2026-05-23).
         // Stamps a do:birth Fact under the .extensions seed space; the
-        // reducer's applyBirthSpace + initProjection materializes the
+        // reducer's applyCreateSpace + initProjection materializes the
         // row. scaffold:true attribution because syncExtensionsToTree
         // runs at extension load (I_AM is the actor).
         const childId = uuidv4();
         const { doVerb } = await import("./ibp/verbs.js");
         await doVerb(
           extSpace,
-          "birth",
+          "create",
           {
             kind: "space",
             spec: {

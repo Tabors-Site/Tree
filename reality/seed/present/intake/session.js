@@ -21,7 +21,7 @@
 // the being's moments." Multiple sessions can sit in one presence.
 
 import log from "../../seedReality/log.js";
-import { getFactoryConfigValue } from "../../factoryConfig.js";
+import { getInternalConfigValue } from "../../internalConfig.js";
 import { hooks } from "../../hooks.js";
 import { getRealityConfigValue } from "../../realityConfig.js";
 
@@ -86,7 +86,7 @@ const scopedSessions = new Map();
 function MAX_SCOPED_SESSIONS() {
   return Math.max(
     100,
-    Math.min(Number(getFactoryConfigValue("maxScopedSessions")) || 20000, 100000),
+    Math.min(Number(getInternalConfigValue("maxScopedSessions")) || 20000, 100000),
   );
 }
 let DEFAULT_SCOPE_TTL = 15 * 60 * 1000; // 15 minutes
@@ -526,7 +526,7 @@ setInterval(
  *   2. `scope` + `purpose` — extension declares a named internal lane.
  *      Produces `pipeline:tree:${rootId}:${purpose}[:${extra}]`,
  *      `pipeline:home:${beingId}:${purpose}[:${extra}]`, or
- *      `pipeline:place:${purpose}[:${extra}]`.
+ *      `pipeline:reality:${purpose}[:${extra}]`.
  *   3. Neither — fresh `pipeline:ephemeral:${uuid}`. One-shot, no
  *      cross-call memory.
  *
@@ -575,10 +575,10 @@ export function resolvePipelineKey({
         persist: true,
       };
     }
-    if (scope === "place") {
+    if (scope === "reality") {
       if (!purpose)
-        throw new Error("resolvePipelineKey: scope='place' requires purpose");
-      return { key: `pipeline:place:${purpose}${suffix}`, persist: true };
+        throw new Error("resolvePipelineKey: scope='reality' requires purpose");
+      return { key: `pipeline:reality:${purpose}${suffix}`, persist: true };
     }
     throw new Error(`resolvePipelineKey: unknown scope "${scope}"`);
   }

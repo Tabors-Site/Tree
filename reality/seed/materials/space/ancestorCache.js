@@ -34,7 +34,7 @@
 //   - Stats reset before counter overflow.
 
 import log from "../../seedReality/log.js";
-import { getFactoryConfigValue } from "../../factoryConfig.js";
+import { getInternalConfigValue } from "../../internalConfig.js";
 import Space from "./space.js";
 import { IBP_ERR } from "../../ibp/protocol.js";
 import { I_AM } from "../being/seedBeings.js";
@@ -43,12 +43,12 @@ import { I_AM } from "../being/seedBeings.js";
 
 const _cache = new Map(); // spaceId -> { ancestors: [...], cachedAt: number }
 function MAX_ENTRIES() {
-  return Number(getFactoryConfigValue("ancestorCacheMaxEntries")) || 50000;
+  return Number(getInternalConfigValue("ancestorCacheMaxEntries")) || 50000;
 }
 function MAX_DEPTH() {
   return Math.max(
     10,
-    Math.min(Number(getFactoryConfigValue("ancestorCacheMaxDepth")) || 100, 500),
+    Math.min(Number(getInternalConfigValue("ancestorCacheMaxDepth")) || 100, 500),
   );
 }
 const STATS_RESET = 1_000_000_000; // reset counters before overflow
@@ -65,7 +65,7 @@ const ANCESTOR_FIELDS =
   "name qualities parent seedSpace rootOwner contributors";
 
 function getTTL() {
-  const configured = getFactoryConfigValue("ancestorCacheTTL");
+  const configured = getInternalConfigValue("ancestorCacheTTL");
   if (configured && typeof configured === "number" && configured > 0)
     return configured;
   return 30000; // 30 seconds default
