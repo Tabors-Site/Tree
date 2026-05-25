@@ -154,3 +154,34 @@ export function cognitionSuccess(content) {
   }
   return { ok: true, content };
 }
+
+/**
+ * Sentinel error used WITHIN a cognition implementation (the LLM
+ * voice, a scripted-with-result-type role) to bubble a failure to
+ * the cognition's boundary without forcing every intermediate
+ * frame to thread a CognitionResult. The outer boundary (runTurn,
+ * defaultSummon) catches this and converts to { ok: false }.
+ *
+ * The contract holds because the boundary is closed — one entry
+ * point, one catch. The exception's job is INTRA-MODULE
+ * control-flow; the type-gate at moment.js / momentum.js is the
+ * structural seal-side enforcement that doesn't depend on every
+ * frame remembering to re-throw.
+ *
+ * Do NOT throw this across the cognition boundary into
+ * moment.js/momentum.js. momentum's catch converts ANY throw to
+ * cognitionFailure("internal"), but the shape would be lost. Keep
+ * the throw inside the cognition layer.
+ */
+export function cognitionFailureError(shape, reason) {
+  const validShape = FAILURE_SHAPES.has(shape) ? shape : "internal";
+  const err = new Error(`Cognition failed: ${validShape}${reason ? ` (${reason})` : ""}`);
+  err._cognitionFailure = true;
+  err.shape = validShape;
+  err.reason = String(reason || "");
+  return err;
+}
+
+export function isCognitionFailure(err) {
+  return err && err._cognitionFailure === true;
+}

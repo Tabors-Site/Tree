@@ -206,7 +206,7 @@ function _isTypingInUI() {
   if (tag === "INPUT" || tag === "TEXTAREA") return true;
   if (el.isContentEditable) return true;
   // A modal panel is open ⇒ block hotbar input. We detect via the
-  // .overlay class the existing UI uses for sign-in / talk / etc.
+  // .overlay class the existing UI uses for sign-in / summon / etc.
   if (document.querySelector(".overlay")) return true;
   return false;
 }

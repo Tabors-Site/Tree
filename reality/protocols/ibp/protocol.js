@@ -34,7 +34,7 @@ import { handleSummon } from "./verbs/summon.js";
 import { handleBe } from "./verbs/be.js";
 import { parseUnifiedEnvelope, ackError } from "./envelope.js";
 import { IBP_ERR, isIbpError } from "../../seed/ibp/protocol.js";
-import { getForeignTargetDomain, forwardToPeer } from "../canopy/dispatch.js";
+import { getForeignTargetDomain, forwardToPeer } from "./canopy.js";
 
 const VERB_HANDLERS = {
   see:    handleSee,

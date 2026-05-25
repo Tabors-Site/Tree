@@ -1,21 +1,30 @@
-// Cross-domain IBP dispatch.
+// The canopy. This reality's portal to other realities.
 //
-// When an IBP envelope's target address resolves to a foreign place, we
-// canopy-sign the envelope and POST it to the peer's /ibp/<verb>/<addr>
-// endpoint. The peer verifies our signature against our public key
-// (which it has cached as a RealityPeer) and runs the verb locally.
+// A portal is what speaks IBP to a reality. The being-portal is the
+// client a human or LLM uses to enter a reality (reality/portal/3d-app/
+// is the bundled 3D one). The canopy is the same idea at the other scale:
+// it is the portal a REALITY uses to reach another reality. Same
+// protocol, different actor on the near side.
 //
-// On the receive side, `verifyIncoming` reads the X-Canopy-Sender +
+// Outbound. When an IBP envelope's target resolves to a foreign place,
+// the canopy signs the envelope and POSTs it to the peer's
+// /ibp/<verb>/<addr> endpoint. The peer verifies the signature against
+// our public key (which it has cached as a RealityPeer) and runs the
+// verb locally.
+//
+// Inbound. `verifyIncoming` reads the X-Canopy-Sender and
 // X-Canopy-Signature headers, looks up the sender in RealityPeer, and
 // verifies the signature over the raw body bytes. A verified request
 // has `req.canopySender = "<sender-domain>"` set; authorize.js uses
 // this to grant cross-place permissions.
 //
-// See [[project_canopy_folds_into_ibp]].
+// The address book the canopy consults lives next door at
+// [peers.js](peers.js). The signing keys it uses come from
+// [seed/realityIdentity.js](../../seed/realityIdentity.js).
 
 import log from "../../seed/seedReality/log.js";
 import { getRealityDomain } from "../../seed/ibp/address.js";
-import { signData, verifySignedData } from "./identity.js";
+import { signData, verifySignedData } from "../../seed/realityIdentity.js";
 import { getPeerByDomain, getPeerBaseUrl } from "./peers.js";
 
 const FORWARD_TIMEOUT_MS = 30 * 1000;

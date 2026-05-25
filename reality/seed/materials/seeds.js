@@ -247,7 +247,7 @@ export async function plantSeed({
     rootSpaceId: String(atSpaceId),
     plantedSeedId,
     identity,
-    place,
+    place: reality,
     params: safeParams,
   };
 
@@ -359,7 +359,7 @@ export async function unplantSeed({
         rootSpaceId: String(atSpaceId),
         plantedSeedId,
         identity,
-        place,
+        place: reality,
         plantedThings: entry.plantedThings,
       });
     } catch (err) {

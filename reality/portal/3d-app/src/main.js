@@ -436,14 +436,14 @@ function openLlmAssignerPanel() {
     openAuthPanel();
     return;
   }
-  // The Node tab needs a concrete nodeId. We pull it from the live
-  // descriptor — when the user is at a tree position, descriptor.address.nodeId
-  // is set. Place-root / arrival has nodeId: null and the panel disables
-  // the Node tab.
+  // The Space tab needs a concrete spaceId. We pull it from the live
+  // descriptor — when the user is at a tree position, descriptor.address.spaceId
+  // is set. Place-root / arrival has spaceId: null and the panel disables
+  // the Space tab.
   showLlmAssignerPanel({
-    client:        state.client,
-    place:          state.discovery.place,
-    currentNodeId: state.descriptor?.address?.nodeId || null,
+    client:         state.client,
+    place:           state.discovery.place,
+    currentSpaceId: state.descriptor?.address?.spaceId || null,
     onClose:       () => {},
     // Link in the panel: fires the llm-assigner:start-tutorial DO,
     // then re-fetches the descriptor so the new matter's 3D video

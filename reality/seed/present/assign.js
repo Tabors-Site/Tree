@@ -343,26 +343,24 @@ async function planActRow(opts = {}) {
   const now = new Date();
   const safeMessage = capContent(message);
 
-  try {
-    const row = await Act.create({
-      _id: actId,
-      beingIn,
-      beingOut: beingOut || null,
-      ibpAddress,
-      activeRole,
-      inboxMessageId,
-      inReplyTo,
-      rootCorrelation: resolvedRoot,
-      parentThread:    resolvedParentThread,
-      answers, // Bucket 3 Option D: closure key the seal evicts on
-      receivedAt: receivedAt || now,
-      stampedAt: now,
-      startMessage: { content: safeMessage, source },
-      ...(priority ? { priority } : {}),
-    });
-    return row;
-  } catch (err) {
-    log.warn("Assign", `openActRow failed: ${err.message}`);
-    return null;
-  }
+  // Plain object — no Mongo write. stamped.js writes this at seal
+  // time only when cognition returns ok:true. The `_id` is minted
+  // here so Facts emitted during the moment can carry actId; the
+  // Act row doesn't exist until seal materializes it.
+  return {
+    _id: actId,
+    beingIn,
+    beingOut: beingOut || null,
+    ibpAddress,
+    activeRole,
+    inboxMessageId,
+    inReplyTo,
+    rootCorrelation: resolvedRoot,
+    parentThread:    resolvedParentThread,
+    answers, // Bucket 3 Option D: closure key the seal evicts on
+    receivedAt: receivedAt || now,
+    stampedAt: now,
+    startMessage: { content: safeMessage, source },
+    ...(priority ? { priority } : {}),
+  };
 }

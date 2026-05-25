@@ -158,7 +158,6 @@ with a scoped view of the seed's service bundle, assembled in
 | `models` | Mongoose models: `Being`, `Space`, `Matter`, `Fact`, etc. |
 | `auth` | `createBeing`, `verifyPassword`, `generateToken`, `findBeingByName`, `registerStrategy`, ... |
 | `session` | `createSession`, `endSession`, `getSession`, `SESSION_TYPES`, `registerSessionType`, ... |
-| `summon` | `stamp`, `ensureSession` (low-level summon helpers) |
 | `llm` | `runTurn`, `stepTurn`, `getClientForBeing`, `switchRole`, `registerBeingLlmSlot`, ... |
 | `websocket` | `emitToBeing`, `emitNavigate`, `registerSocketHandler`, `getIO`. Event names auto-namespaced. |
 | `facts` | `logFact` (rarely called directly; DO stamps for you) |

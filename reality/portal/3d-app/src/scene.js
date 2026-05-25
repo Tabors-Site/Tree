@@ -768,8 +768,8 @@ export class Scene {
     return group;
   }
 
-  // Pyramid mesh used for rulership nodes (and any other node marked
-  // with metadata.models.model === "pyramid"). 4-sided cone, sandstone
+  // Pyramid mesh used for rulership spaces (and any other space marked
+  // with qualities.models.model === "pyramid"). 4-sided cone, sandstone
   // color, base + height grow with sizeHint so larger trees still feel
   // bigger. Rotated so an edge faces the player, not a face.
   _makePyramidMesh(sizeHint = 1) {
@@ -868,10 +868,10 @@ export class Scene {
     group.userData.matterId    = matter.matterId;
     group.userData.isVideoMesh = true;
 
-    // Resume position lives in the matter's substrate metadata so it
-    // survives across browsers/devices. Persisted by emitPlaybackTick →
+    // Resume position lives in the matter's qualities so it survives
+    // across browsers/devices. Persisted by emitPlaybackTick →
     // llm-assigner:save-playback DO.
-    const resumeAt = Number(matter?.metadata?.tutorial?.playbackSeconds);
+    const resumeAt = Number(matter?.qualities?.tutorial?.playbackSeconds);
 
     // Attach the Player API once it's ready so we can listen for ENDED
     // and tick the current time back to the substrate.

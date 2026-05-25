@@ -68,8 +68,17 @@ import { I_AM } from "../materials/being/seedBeings.js";
 // ─────────────────────────────────────────────────────────────────────
 
 const PLACE_ROOT_DEFAULT_PERMISSIONS = Object.freeze({
-  // Default SEE / DO / SUMMON: any authenticated being.
-  see: { "*": { requires: { arrival: false } } },
+  // SEE: anyone, including arrival (unauthenticated visitors). The
+  // place root is the public-facing first impression; the portal's
+  // "see what you're joining before committing" UX depends on this
+  // being open. Per-position rules at private trees can tighten by
+  // adding `qualities.permissions.see.<keyParts>` with stricter
+  // requires (e.g., `requires: { arrival: false }` or
+  // `requires: { contributor: true }`). See [[project-arrival-see]].
+  see: { "*": { requires: {} } },
+  // DO / SUMMON: still authenticated-only. Arrival can look but not
+  // act. (BE register/claim has its own bootstrap exception below
+  // for sign-up flows.)
   do: { "*": { requires: { arrival: false } } },
   summon: { "*": { requires: { arrival: false } } },
   // BE: arrival can register/claim (so anyone can sign up); only

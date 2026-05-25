@@ -50,10 +50,7 @@ import {
   clearSessionAbort,
   SESSION_TYPES,
   registerSessionType,
-  ensureSession as ensureChatSession,
 } from "./present/intake/session.js";
-
-import { stamp } from "./present/stamped.js";
 
 import {
   stepTurn,
@@ -255,11 +252,6 @@ export function buildRealityServices({
       clearSessionAbort,
       SESSION_TYPES,
       registerSessionType,
-    },
-
-    summon: {
-      stamp,
-      ensureSession: ensureChatSession,
     },
 
     llm: {

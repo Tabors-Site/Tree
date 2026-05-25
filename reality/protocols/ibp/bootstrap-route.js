@@ -21,7 +21,7 @@
 import cors from "cors";
 import { getRealityDomain } from "../../seed/ibp/address.js";
 import { IBP_PROTOCOL_VERSION } from "../../seed/ibp/descriptor.js";
-import { getRealityUrl } from "../canopy/identity.js";
+import { getRealityUrl } from "../../seed/realityIdentity.js";
 import { getRealityConfigValue } from "../../seed/realityConfig.js";
 
 // Permissive route-level CORS just for the bootstrap. Wins over the

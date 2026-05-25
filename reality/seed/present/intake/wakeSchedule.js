@@ -166,7 +166,7 @@ export function startTickLoop({ tickMs } = {}) {
   // shutdown handles its own lifecycle. Space's unref makes setInterval
   // non-blocking for exit purposes.
   if (typeof _tickHandle.unref === "function") _tickHandle.unref();
-  log.info("Schedule", `tick loop started (every ${_tickMs}ms)`);
+  log.verbose("Schedule", `tick loop started (every ${_tickMs}ms)`);
 }
 
 // Stop the tick loop. Idempotent. Module-private — used by _resetAll
@@ -175,7 +175,7 @@ function stopTickLoop() {
   if (!_tickHandle) return;
   clearInterval(_tickHandle);
   _tickHandle = null;
-  log.info("Schedule", "tick loop stopped");
+  log.verbose("Schedule", "tick loop stopped");
 }
 
 /**

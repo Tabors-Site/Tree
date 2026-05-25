@@ -36,7 +36,7 @@
 // protocol IS the API.
 
 import express from "express";
-import { verifyIncoming } from "../../../protocols/canopy/dispatch.js";
+import { verifyIncoming } from "../../../protocols/ibp/canopy.js";
 import { decodeToken } from "../../../seed/materials/being/identity.js";
 import { makeHttpCarrier, dispatchAndWait, sendAck } from "../dispatch.js";
 

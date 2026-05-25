@@ -75,7 +75,7 @@
 // exists. Nothing is re-formed blindly.
 
 import mongoose from "./seed/seedReality/dbConfig.js";
-import { getRealityIdentity, getRealityUrl } from "./protocols/canopy/identity.js";
+import { getRealityIdentity, getRealityUrl } from "./seed/realityIdentity.js";
 import { ensureSpaceRoot } from "./seed/sprout.js";
 import { initRealityConfig, getRealityConfigValue } from "./seed/realityConfig.js";
 import { getInternalConfigValue } from "./seed/internalConfig.js";
@@ -234,6 +234,12 @@ export async function genesis(app, opts = {}) {
   // not synchronously through the factory.
   const { humanRole } = await import("./seed/present/roles/human.js");
   registerRole("human", humanRole, "seed");
+
+  // The shared stance every unauthenticated visitor carries. SEE
+  // bypasses the scheduler so many concurrent visitors share one
+  // row without contention. See [[project-arrival-see]] memory note.
+  const { arrivalRole } = await import("./seed/present/roles/arrival.js");
+  registerRole("arrival", arrivalRole, "seed");
 
   // ── Operator being. The first human inhabitant. ──
   // plant.js gathered (name, password, consent) at first plant and
@@ -475,31 +481,12 @@ export async function genesis(app, opts = {}) {
  */
 export function printReady() {
   const apiUrl = getRealityUrl();
-
-  const loaded = getLoadedExtensionNames();
-  const hasHtml = loaded.includes("html-rendering");
-
   const boot = getBootReport();
 
   console.log("");
   console.log("  ════════════════════════════════════════════════════════════");
   log.info("Reality", bootMode === "Beginning" ? "I am born." : "I am awake.");
   console.log("  ════════════════════════════════════════════════════════════");
-  console.log("");
-  log.info("Reality", `API:  ${apiUrl}`);
-
-  if (hasHtml) {
-    log.info("Reality", `Web:  ${apiUrl}`);
-    log.info(
-      "Place",
-      `      Open in a browser to manage your place, trees, and extensions.`,
-    );
-    log.info(
-      "Place",
-      `      The CLI is more powerful but the web interface works for basics.`,
-    );
-  }
-
   console.log("");
 
   if (boot.skipped === 0) {
@@ -512,21 +499,10 @@ export function printReady() {
     log.warn("Reality", `Skipped: ${boot.skippedNames.join(", ")}`);
   }
 
-  if (hasHtml) {
-    log.info(
-      "Place",
-      `Admin:  ${apiUrl}/place (manage extensions, config, users)`,
-    );
-  }
-
   console.log("");
   console.log("  ────────────────────────────────────────────────────────────");
-  log.info("Reality", "CLI quick start:");
   console.log("");
-  console.log("  npm install -g treeos");
-  console.log(`  treeos connect ${apiUrl}`);
-  console.log("  treeos register");
-  console.log("  treeos start");
+  console.log(`  Open in your browser:  ${apiUrl}`);
   console.log("");
   console.log("  ────────────────────────────────────────────────────────────");
   console.log("");

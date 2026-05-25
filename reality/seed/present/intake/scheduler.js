@@ -229,6 +229,18 @@ async function runLoop(beingId) {
       state.wakeQueue.clear();
 
       let processedAny = false;
+      // Per-run "already attempted in this pass" set. Round 5: with the
+      // structural seal-gate, a failed cognition leaves its
+      // InboxProjection row open (no answering Act exists to close
+      // it). Without this guard, pickNextIntake would return the same
+      // row immediately on the next iteration and we'd retry-storm
+      // until rate-limited. The guard says: each correlation gets at
+      // most one attempt per runLoop pass. Subsequent passes (driven
+      // by a new external wake) reset the set and may re-attempt —
+      // that's the backoff for "operator retried" / "new work
+      // arrived alongside." No new policy knob; just "don't pick the
+      // same row twice in one run."
+      const seenCorrelations = new Set();
       for (const spaceId of spaceIds) {
         // Drain THIS space's intake before moving on. Priority is enforced
         // by pickNextIntake, which always returns the current top.
@@ -245,6 +257,14 @@ async function runLoop(beingId) {
           }
           const picked = await pickNextIntake(spaceId, beingId);
           if (!picked) break;
+          if (seenCorrelations.has(picked.entry.correlation)) {
+            // Already attempted in this run. Stop draining — the row
+            // stays open in the InboxProjection (the model's correct
+            // shape for a moment that didn't seal). A future external
+            // wake gets a fresh run and a fresh attempt.
+            break;
+          }
+          seenCorrelations.add(picked.entry.correlation);
           await processEntry(beingId, spaceId, picked);
           processedAny = true;
         }

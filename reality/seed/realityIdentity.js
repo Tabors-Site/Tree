@@ -1,6 +1,6 @@
-import log from "../../seed/seedReality/log.js";
-import { getRealityConfigValue } from "../../seed/realityConfig.js";
-import { SEED_VERSION } from "../../seed/seedReality/version.js";
+import log from "./seedReality/log.js";
+import { getRealityConfigValue } from "./realityConfig.js";
+import { SEED_VERSION } from "./seedReality/version.js";
 import crypto from "crypto";
 import fs from "fs";
 import path from "path";
@@ -25,7 +25,7 @@ function cleanDomain(raw) {
 // getRealityUrl moved to seed/realityConfig.js (it's a seed-level fact about
 // this place, not a canopy concern). Re-exported here so existing callers
 // continue to import it from this module.
-export { getRealityUrl } from "../../seed/realityConfig.js";
+export { getRealityUrl } from "./realityConfig.js";
 
 /**
  * Get or create the place identity (keypair + metadata).
@@ -84,8 +84,11 @@ export function getRealityIdentity() {
 }
 
 /**
- * Get the public info payload for GET /canopy/info.
- * Does not include the private key.
+ * The public info payload other realities and clients can read about
+ * this place: name, domain, public key, protocol version, loaded
+ * extensions. Does not include the private key. Surfaced today by
+ * IBP discovery (the `.identity` seed space) and the
+ * `/.well-known/treeos-portal` bootstrap route.
  */
 // Lazy reference to avoid circular import at module load time.
 // The loader populates this after extensions are loaded.

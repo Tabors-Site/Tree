@@ -76,6 +76,12 @@
 import log from "../../../seedReality/log.js";
 import { getInternalConfigValue } from "../../../internalConfig.js";
 import { hooks } from "../../../hooks.js";
+import {
+  cognitionFailureError,
+  isCognitionFailure,
+  cognitionFailure,
+  cognitionSuccess,
+} from "../../run.js";
 
 import crypto from "crypto";
 import Being from "../../../materials/being/being.js";
@@ -768,7 +774,21 @@ async function callLLM(
     requestParams.tool_choice = "auto";
   }
 
-  const requestOpts = ctx.signal ? { signal: ctx.signal } : {};
+  // Conduit-boundary timeout. The SDK's request timeout is provider-
+  // and-version-dependent; we don't trust it. A hang produces no
+  // moment, no failure, no release — the being is wedged forever and
+  // holds its per-being serial slot. Own the deadline here: link a
+  // self-owned AbortController to ctx.signal, and race the actual
+  // call against a timer. Timer wins → abort the SDK request AND
+  // throw cognitionFailureError("timeout") so the outer boundary
+  // converts to { ok:false } and the moment releases on time.
+  const deadlineMs = getTimeoutForRole(session.role);
+  const deadlineCtrl = new AbortController();
+  if (ctx.signal) {
+    if (ctx.signal.aborted) deadlineCtrl.abort();
+    else ctx.signal.addEventListener("abort", () => deadlineCtrl.abort(), { once: true });
+  }
+  const requestOpts = { signal: deadlineCtrl.signal };
 
   // beforeLLMCall: extensions can cancel (quota exhausted) or rewrite
   // params. Exposing `messages` lets a before-handler inject a system
@@ -827,9 +847,20 @@ async function callLLM(
   }
 
   let response;
+  let deadlineTimer = null;
 
   try {
-    const failoverResult = await callWithFailover(
+    // Promise.race: the actual call vs the deadline timer. Timer
+    // resolves to a sentinel that the caller distinguishes; on
+    // resolve we abort the in-flight SDK request and throw
+    // cognitionFailureError("timeout"). This is the conduit
+    // boundary's hard deadline, owned here regardless of SDK
+    // behavior.
+    const DEADLINE_SENTINEL = Symbol("deadline");
+    const deadline = new Promise((resolve) => {
+      deadlineTimer = setTimeout(() => resolve(DEADLINE_SENTINEL), deadlineMs);
+    });
+    const callPromise = callWithFailover(
       (client, model) =>
         client.chat.completions.create(
           { ...requestParams, model },
@@ -839,6 +870,28 @@ async function callLLM(
       ctx.beingId,
       ctx.rootId || null,
     );
+    let raceWinner;
+    try {
+      raceWinner = await Promise.race([callPromise, deadline]);
+    } finally {
+      // Clear the timer the moment one side resolves so it doesn't
+      // keep counting against the process. The finally runs on both
+      // the happy path (call returned first) and the timeout path
+      // (deadline returned first); the explicit abort below handles
+      // the timeout case's resource cleanup separately.
+      if (deadlineTimer) clearTimeout(deadlineTimer);
+    }
+    if (raceWinner === DEADLINE_SENTINEL) {
+      // Timer won. Abort the in-flight SDK request so it doesn't keep
+      // burning resources; the SDK rejects callPromise (we don't wait
+      // for it). Throw the sentinel; runTurn's outer boundary
+      // converts to { ok:false, shape:"timeout" }.
+      deadlineCtrl.abort();
+      callPromise.catch(() => {}); // swallow late rejection
+      log.warn("LLM", `LLM call exceeded deadline of ${deadlineMs}ms; releasing moment`);
+      throw cognitionFailureError("timeout", `LLM call exceeded ${deadlineMs}ms`);
+    }
+    const failoverResult = raceWinner;
     response = failoverResult.response;
     if (failoverResult.usedClient !== clientEntry) {
       Object.assign(clientEntry, failoverResult.usedClient);
@@ -861,105 +914,20 @@ async function callLLM(
       })
       .catch(() => {});
   } catch (apiErr) {
-    // Salvage path. Cheap models on aggregators sometimes attempt
-    // function-call syntax with hallucinated tool names; the provider
-    // rejects the call with tool_use_failed and stashes the model's
-    // actual prose in failed_generation. I dig the prose out so the
-    // turn produces an answer instead of a stack trace.
+    // tool_use_failed salvage retired Round 5. The path used to
+    // extract real model prose from `failed_generation` when a
+    // cheap model on an aggregator invented a tool name, and
+    // stuff it into a synthetic response. Per Tabor: salvage that
+    // re-enters the same act-validation as a normal response is
+    // legitimate; salvage that sneaks toward the seal is not.
+    // Today's pipeline has no validation step distinct from
+    // "trust the response," so the salvage was sneaking. Re-add
+    // through the front door once there's a real validate step
+    // (a separate task). For now: treat as cognition failure.
     if (apiErr.code === "tool_use_failed" && apiErr.error?.failed_generation) {
-      const inventedTool =
-        apiErr.error?.message?.match(/tool '(\w+)'/)?.[1] || "?";
-      let extracted = null;
-
-      // Three salvage passes, each one weaker than the last.
-      // 1. Parse as JSON, walk the common field names models stash
-      //    prose into.
-      try {
-        const gen = JSON.parse(apiErr.error.failed_generation);
-        const args = gen.arguments || gen;
-        extracted =
-          args.responseHint ||
-          args.response ||
-          args.content ||
-          args.summary ||
-          args.text ||
-          args.message ||
-          args.answer;
-        if (!extracted && gen.arguments && typeof gen.arguments === "object") {
-          extracted = JSON.stringify(gen.arguments);
-        }
-      } catch {
-        // 2. JSON parse failed. Regex the same field names out of the
-        //    raw text in case the JSON was malformed but the prose is
-        //    still recoverable.
-        const raw = apiErr.error.failed_generation;
-        for (const field of [
-          "responseHint",
-          "response",
-          "content",
-          "summary",
-          "text",
-          "message",
-          "answer",
-        ]) {
-          const match = raw.match(
-            new RegExp(`"${field}"\\s*:\\s*"([\\s\\S]*?)(?:"\\s*[,}])`),
-          );
-          if (match) {
-            extracted = match[1].replace(/\\n/g, "\n").replace(/\\"/g, '"');
-            break;
-          }
-        }
-        // 3. Last resort. If the raw text itself looks like prose
-        //    (not JSON, not XML, long enough to be meaningful), use
-        //    it directly.
-        if (
-          !extracted &&
-          raw &&
-          !raw.startsWith("{") &&
-          !raw.startsWith("<") &&
-          raw.length > 10
-        ) {
-          extracted = raw;
-        }
-      }
-
-      if (extracted && extracted !== "undefined" && extracted !== "null") {
-        log.warn(
-          "LLM",
-          `Model invented tool "${inventedTool}". Extracted response from failed_generation (${extracted.length} chars).`,
-        );
-        response = {
-          choices: [
-            {
-              message: { role: "assistant", content: extracted },
-              finish_reason: "stop",
-            },
-          ],
-        };
-
-        // Still fire afterLLMCall so metering tracks the call.
-        hooks
-          .run("afterLLMCall", {
-            beingId: ctx.beingId,
-            rootId: ctx.rootId,
-            role: session.role?.name,
-            model: clientEntry?.model || MODEL,
-            usage: null,
-            hasToolCalls: false,
-            _failedGeneration: true,
-            actId: _llmChatId,
-            sessionId: _llmSessionId,
-            responseText: extracted || null,
-          })
-          .catch(() => {});
-      } else {
-        log.error(
-          "LLM",
-          `Model invented tool "${inventedTool}" but no usable text could be extracted from failed_generation.`,
-        );
-        throw apiErr;
-      }
+      const inventedTool = apiErr.error?.message?.match(/tool '(\w+)'/)?.[1] || "?";
+      log.warn("LLM", `Model invented tool "${inventedTool}". Treating as cognition failure (salvage retired).`);
+      throw cognitionFailureError("garbage", `model invented tool "${inventedTool}"`);
     } else if (
       (isJsonEscapeError(apiErr) || isJsonStructuralError(apiErr)) &&
       !session._jsonRetryDone
@@ -1049,8 +1017,19 @@ async function callLLM(
           (isEscape ? escapeHint : structuralHint),
       });
       ctx._retryJsonEscape = true;
-    } else {
+    } else if (isCognitionFailure(apiErr)) {
+      // Re-throw the sentinel — we threw this ourselves (timeout or
+      // garbage from the response normalizer above) and the outer
+      // boundary in runTurn knows how to handle it.
       throw apiErr;
+    } else {
+      // Generic HTTP / SDK error (rate limit, 500, auth, etc.). Per
+      // Round 5: convert to a cognition failure so the outer
+      // boundary returns { ok:false, shape:"http-error" } and the
+      // moment releases without sealing. The error message is
+      // preserved as the reason for forensics.
+      log.warn("LLM", `LLM call failed (${apiErr.code || apiErr.status || "unknown"}): ${apiErr.message?.slice(0, 200)}`);
+      throw cognitionFailureError("http-error", apiErr.message || apiErr.code || "unknown HTTP failure");
     }
   }
 
@@ -1071,44 +1050,19 @@ async function callLLM(
   }
 
   // Provider response shapes vary. Some return null, some return an
-  // empty choices array, some return a choice with no message. I
-  // normalize to "the AI couldn't answer" so the loop can keep
-  // going instead of crashing on .choices[0].message.
+  // empty choices array, some return a choice with no message. Per
+  // Round 5: failure does not synthesize text. Each shape throws a
+  // cognitionFailureError("garbage"); runTurn's outer boundary
+  // converts to { ok:false } and the moment releases with no Act.
   if (!response || !response.choices || !Array.isArray(response.choices)) {
-    log.warn(
-      "LLM",
-      `LLM returned malformed response (no choices array). Model: ${MODEL}`,
-    );
-    response = {
-      choices: [
-        {
-          message: {
-            role: "assistant",
-            content: "I was unable to generate a response. Please try again.",
-          },
-          finish_reason: "stop",
-        },
-      ],
-    };
+    log.warn("LLM", `LLM returned malformed response (no choices array). Model: ${MODEL}`);
+    throw cognitionFailureError("garbage", `no choices array from ${MODEL}`);
   } else if (response.choices.length === 0) {
     log.warn("LLM", `LLM returned empty choices array. Model: ${MODEL}`);
-    response = {
-      choices: [
-        {
-          message: {
-            role: "assistant",
-            content: "I was unable to generate a response. Please try again.",
-          },
-          finish_reason: "stop",
-        },
-      ],
-    };
+    throw cognitionFailureError("garbage", `empty choices array from ${MODEL}`);
   } else if (!response.choices[0].message) {
     log.warn("LLM", `LLM returned choice without message. Model: ${MODEL}`);
-    response.choices[0].message = {
-      role: "assistant",
-      content: "I was unable to generate a response. Please try again.",
-    };
+    throw cognitionFailureError("garbage", `choice has no message from ${MODEL}`);
   }
 
   return response;
@@ -1868,37 +1822,52 @@ export async function runTurn({ being, envelope, role, signal = null } = {}) {
     });
   } catch (err) {
     if (abort) clearSessionAbort(sessionKey);
+    // Cognition-failure sentinel? Convert to CognitionResult.
+    // Other exceptions are unexpected — let them propagate; the
+    // caller (defaultSummon) catches and converts to internal.
+    if (isCognitionFailure(err)) {
+      return cognitionFailure(err.shape, err.reason);
+    }
+    if (abortSignal.aborted) {
+      return cognitionFailure("aborted", err.message);
+    }
     throw err;
   }
 
-  const stopped = abortSignal.aborted;
-  let text = stopped
-    ? null
-    : result?.content || result?.answer || "No response.";
+  if (abortSignal.aborted) {
+    if (abort) clearSessionAbort(sessionKey);
+    return cognitionFailure("aborted", "abort signal fired");
+  }
+
+  // Per Round 5: no fake-text fallback. The act IS the text. If
+  // stepTurn returned no usable content, this is a garbage
+  // cognition — no Act will seal.
+  const text = result?.content || result?.answer || null;
+  if (typeof text !== "string" || text.length === 0) {
+    if (abort) clearSessionAbort(sessionKey);
+    return cognitionFailure(
+      "garbage",
+      `stepTurn produced no usable content (have: ${result ? Object.keys(result).join(",") : "null"})`,
+    );
+  }
 
   // 5. Last shaping pass. beforeResponse lets extensions rewrite
   // the answer before it leaves (PII redaction, formatting, etc.).
-  // The scheduler reads this text and presses the closing face on
-  // the Act row with it.
-  if (text && !stopped) {
-    try {
-      const hookData = { content: text, beingId, rootId, role: role.name };
-      await hooks.run("beforeResponse", hookData);
-      text = hookData.content;
-    } catch {}
-  }
+  let finalText = text;
+  try {
+    const hookData = { content: finalText, beingId, rootId, role: role.name };
+    await hooks.run("beforeResponse", hookData);
+    if (typeof hookData.content === "string" && hookData.content.length > 0) {
+      finalText = hookData.content;
+    }
+  } catch {}
 
   // 6. Release the abort registration. The session buffer + MCP
   // connection stay alive for the next turn on this key; only the
   // cancel hook for this specific turn lets go.
   if (abort) clearSessionAbort(sessionKey);
 
-  return {
-    text,
-    actId,
-    role: role.name,
-    sessionKey,
-  };
+  return cognitionSuccess(finalText);
   } finally {
     _activeRunTurns--;
   }

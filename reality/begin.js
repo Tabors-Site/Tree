@@ -124,7 +124,7 @@ import { sendOk, sendError, IBP_ERR } from "./seed/ibp/protocol.js";
 import { getExtension } from "./extensions/loader.js";
 import securityHeaders from "./transports/http/middleware/securityHeaders.js";
 import { genesis, printReady } from "./genesis.js";
-import { getRealityUrl } from "./protocols/canopy/identity.js";
+import { getRealityUrl } from "./seed/realityIdentity.js";
 import log from "./seed/seedReality/log.js";
 
 function notFoundPage(

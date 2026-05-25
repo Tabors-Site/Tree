@@ -5,10 +5,14 @@
 // A moment is the atom (see philosophy/MOMENT.md). It has exactly
 // four beats:
 //
-//   1. assign     — open the moment, resolve the being (assign.js)
+//   1. assign     — mint actId, plan the Act, resolve who acts
+//                   (assign.js). DOES NOT WRITE the Act row.
 //   2. fold       — mount the face (fold/)
-//   3. momentum   — the being's act (momentum.js)
-//   4. stamped    — seal; facts hit reels (stamped.js)
+//   3. momentum   — the being's act (momentum.js). Returns a
+//                   CognitionResult: { ok: true, content } or
+//                   { ok: false, shape, reason }.
+//   4. stamped    — IF ok:true: write the Act row (seal). IF
+//                   ok:false: no Act row, no seal, release.
 //
 // moment.js is the conductor — it walks the four beats in order
 // and routes the moment's outcome (raw verb result for transport
@@ -16,27 +20,33 @@
 // waiting. It owns no business logic of its own; each beat is its
 // own file.
 //
-// fold runs inside assign today (assign returns the prepared
-// `summonCtx` which carries the folded face). Materializing fold
-// as a distinct beat is on the roadmap; the orchestrator below
-// will gain a fold() call between assign and momentum then.
+// **Round 5 structural change.** The seal is GATED on
+// CognitionResult.ok. Cognition cannot produce text — it produces
+// a discriminated result whose type makes failure unrepresentable
+// at the seal. A failed cognition is a moment whose act is ∅
+// (MODEL.md: SEE = a=∅ = seals nothing). No Act row is written.
+// The InboxProjection stays open automatically — no answering Act
+// exists to close it. The being's reel and act-chain are byte-
+// identical to before the failed moment. Zero trace.
+//
+// See seed/present/run.js for the CognitionResult contract.
 //
 // The intake queue and per-being serial behavior live in
 // intake/scheduler.js; the scheduler calls runMoment() once per
 // pending intake entry and is otherwise out of the moment's
-// business. The run loop that strings many moments together for
-// one summon lives in run.js.
+// business.
 
 import log from "../seedReality/log.js";
 import { assign }   from "./assign.js";
 import { momentum } from "./momentum.js";
-import { stamp }    from "./stamped.js";
+import { sealAct }  from "./stamped.js";
 import { markIntakeRunning, markIntakeComplete } from "./intake/intake.js";
 import { buildResponseEntry } from "./intake/replies.js";
 
 /**
  * Run one moment for a being. Walks all four beats; never throws —
- * errors land in the seal as `stopped: true` + content "Error: ...".
+ * errors land as a CognitionResult({ ok:false, shape:"internal" })
+ * and the moment releases with no Act row.
  *
  * @param {object} opts
  * @param {string} opts.beingId        the acting being's id
@@ -46,6 +56,9 @@ import { buildResponseEntry } from "./intake/replies.js";
  * @param {object} [opts.handoff]      runtime context stashed at SUMMON-time
  * @param {AbortController} opts.controller  the abort signal that propagates into the act
  * @returns {Promise<{ actId: string|null, result: any, responseEntry: object|null }>}
+ *   actId is non-null only when the Act row materialized (cognition
+ *   ok:true OR abort path). On ok:false failure, actId is null and
+ *   no Mongo state changed.
  */
 export async function runMoment({ beingId, spaceId, entry, index, handoff = null, controller } = {}) {
   if (!controller) throw new Error("runMoment requires an AbortController");
@@ -54,17 +67,15 @@ export async function runMoment({ beingId, spaceId, entry, index, handoff = null
 
   await markIntakeRunning(spaceId, beingId, index);
 
-  let actId = null;
-  let rawResult = null;
+  let setup = null;
+  let cognition = null;       // CognitionResult
+  let rawResult = null;       // transport-act verb return (ride-along)
   let responseEntry = null;
-  let sealContent = null;
-  let sealError = null;
+  let actInserted = null;     // the Act row, when one materializes
 
   try {
-    // ── Beat 1: assign opens the moment, resolves the being. ─────
-    // fold rides inside assign for now (the prepared summonCtx
-    // carries the folded face).
-    const setup = await assign({
+    // ── Beat 1: assign mints actId + plans the Act. No Mongo write. ──
+    setup = await assign({
       beingId,
       spaceId,
       entry,
@@ -72,94 +83,114 @@ export async function runMoment({ beingId, spaceId, entry, index, handoff = null
       signal: controller.signal,
     });
     if (setup.skipped) {
-      // The factory couldn't run this entry (being missing, role
-      // not carried, role not registered). Already logged inside
-      // assign. assign returned no actId so there's nothing to
-      // seal.
+      // assign couldn't run this entry (being missing, role not
+      // carried, role not registered). Already logged inside assign.
+      // No actId, no Act row, no inbox close.
       return { actId: null, result: null, responseEntry: null };
     }
 
-    actId = setup.actId || null;
-
-    // ── Beat 3: momentum runs the act. ─────────────────────────
-    const outcome = await momentum(setup);
-    if (outcome?.result) {
-      rawResult = outcome.result;
-      if (isTransportAct) {
-        // Transport-act results are raw verb returns. Don't shape
-        // them as SUMMON-reply rows — the wire layer wants the
-        // verb's return value verbatim. Seal content stays null;
-        // the act itself is what's audited.
-      } else {
-        responseEntry = buildResponseEntry({
-          result: outcome.result,
-          handoff,
-          originalEntry: entry,
-        });
-        // Seal content is the voice's response text. Roles that
-        // return null seal with null content; the human's eventual
-        // response opens its own Act via a fresh SUMMON.
-        sealContent = outcome.result.text
-          ?? outcome.result.content
-          ?? outcome.result.answer
-          ?? null;
-      }
-    }
+    // ── Beat 3: momentum runs the act. Returns CognitionResult. ──
+    cognition = await momentum(setup);
   } catch (err) {
-    sealError = err;
+    // Conductor-level failure (assign threw, momentum threw before
+    // its own try/catch). Treat as cognition failure: no Act row.
     if (controller.signal.aborted) {
-      log.info(
-        "Moment",
-        `aborted being=${beingId.slice(0, 8)} corr=${entry.correlation.slice(0, 8)}: ${err.message}`,
-      );
-      // Aborted is a finalization. Role templates that need to
-      // inform the sender about cancellation emit their own SUMMON;
-      // the conductor stays out of policy.
+      log.info("Moment", `aborted being=${beingId.slice(0, 8)} corr=${entry.correlation.slice(0, 8)}: ${err.message}`);
+      cognition = { ok: false, shape: "aborted", reason: err.message };
     } else {
-      log.error(
-        "Moment",
-        `errored being=${beingId.slice(0, 8)}: ${err.message}`,
-      );
+      log.error("Moment", `errored being=${beingId.slice(0, 8)}: ${err.message}`);
+      cognition = { ok: false, shape: "internal", reason: err.message };
       if (handoff?.onError) {
         try { handoff.onError(err, entry); } catch {}
       }
     }
-  } finally {
-    // ── Beat 4: stamped seals the moment. ──────────────────────
-    // assign opened the row; this is the symmetric close.
-    // stamp() is idempotent: a second seal is a no-op if the
-    // voice already sealed itself.
-    if (actId) {
-      const stopped = controller.signal.aborted;
-      const content = stopped
-        ? null
-        : (sealError ? `Error: ${sealError.message}` : sealContent);
-      try {
-        await stamp({ actId, content, stopped });
-      } catch (err) {
-        log.warn("Moment", `seal failed: ${err.message}`);
-      }
-    }
-
-    // Mark intake complete and fire the handoff with the result.
-    try {
-      await markIntakeComplete(spaceId, beingId, [entry.correlation], {
-        responseId: responseEntry?.correlation || null,
-        actId:      responseEntry?.actId || actId || null,
-      });
-    } catch (err) {
-      log.warn("Moment", `markIntakeComplete failed: ${err.message}`);
-    }
-    if (handoff?.onResponse) {
-      try {
-        if (isTransportAct) {
-          handoff.onResponse({ result: rawResult, actId });
-        } else if (responseEntry) {
-          handoff.onResponse(responseEntry);
-        }
-      } catch {}
-    }
   }
 
-  return { actId, result: rawResult, responseEntry };
+  // ── Beat 4: seal-gate. ──
+  // The structural rule: an Act row is written ONLY when cognition
+  // returned ok:true. ok:false → no Act, the InboxProjection stays
+  // open because no answering Act exists to close it.
+  //
+  // One legacy exception: abort path still produces an Act with
+  // content=null + stopped=true. That's the pre-CognitionResult
+  // shape; future work converts abort to release-with-no-Act too
+  // (noted in run.js doctrine). For now: aborted → seal with null.
+  try {
+    if (setup?.plannedAct && cognition?.ok === true) {
+      // ── Cognition succeeded. Build seal content + seal the Act. ──
+      let sealContent;
+      if (isTransportAct) {
+        // Transport-act: the act IS the verb call. endMessage.content
+        // is null (no closing utterance); the verb's return rides on
+        // cognition.verbResult for the handoff.
+        sealContent = null;
+        rawResult = cognition.verbResult ?? null;
+      } else {
+        sealContent = cognition.content;
+        responseEntry = buildResponseEntry({
+          result: { text: cognition.content },
+          handoff,
+          originalEntry: entry,
+        });
+      }
+
+      actInserted = await sealAct(setup.plannedAct, {
+        content: sealContent,
+        stopped: false,
+      });
+    } else if (setup?.plannedAct && cognition?.shape === "aborted") {
+      // Abort path. Legacy: still produces an Act with content=null
+      // and stopped=true. To be converted to release-with-no-Act
+      // in a future pass (see run.js doctrine).
+      actInserted = await sealAct(setup.plannedAct, {
+        content: null,
+        stopped: true,
+      });
+    } else if (setup?.plannedAct) {
+      // ok:false (and not aborted). NO Act row. NO inbox close.
+      // The summon stays open in the InboxProjection because no
+      // answering Act exists.
+      log.info(
+        "Moment",
+        `released being=${beingId.slice(0, 8)} ` +
+        `shape=${cognition?.shape || "unknown"} ` +
+        `reason="${(cognition?.reason || "").slice(0, 80)}" — no Act written`,
+      );
+    }
+  } catch (err) {
+    log.warn("Moment", `seal failed: ${err.message}`);
+  }
+
+  // ── Bookkeeping. ──
+  // markIntakeComplete is a no-op tombstone today (see intake.js)
+  // but we still call it for any callers that haven't migrated.
+  try {
+    await markIntakeComplete(spaceId, beingId, [entry.correlation], {
+      responseId: responseEntry?.correlation || null,
+      actId:      responseEntry?.actId || (actInserted ? String(actInserted._id) : null),
+    });
+  } catch (err) {
+    log.warn("Moment", `markIntakeComplete failed: ${err.message}`);
+  }
+
+  // Handoff: only fire onResponse when something actually happened.
+  // For transport-act: fire with the verb return + actId (when sealed).
+  // For summon: fire with the response entry (built only on ok:true).
+  // For ok:false: no handoff fires — the asker's onResponse is for
+  // delivering an answer, and there is no answer.
+  if (handoff?.onResponse && actInserted) {
+    try {
+      if (isTransportAct) {
+        handoff.onResponse({ result: rawResult, actId: String(actInserted._id) });
+      } else if (responseEntry) {
+        handoff.onResponse(responseEntry);
+      }
+    } catch {}
+  }
+
+  return {
+    actId: actInserted ? String(actInserted._id) : null,
+    result: rawResult,
+    responseEntry,
+  };
 }

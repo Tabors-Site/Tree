@@ -53,6 +53,7 @@
 
 import log from "../../../seedReality/log.js";
 import { runTurn } from "./runTurn.js";
+import { cognitionFailure, cognitionSuccess } from "../../run.js";
 import {
   emitReplyToAsker,
   emitReplyToStance,
@@ -79,8 +80,8 @@ export async function defaultSummon({ message, ctx, role }) {
   const logTag = capitalize(roleName);
 
   if (!scopeNodeId) {
-    log.warn(logTag, "summon without scopeNodeId; returning empty");
-    return { text: "Internal error: no scope." };
+    log.warn(logTag, "summon without scopeNodeId; cognition failed");
+    return cognitionFailure("internal", "no scope");
   }
 
   const isReply = !!message.inReplyTo;
@@ -104,6 +105,12 @@ export async function defaultSummon({ message, ctx, role }) {
       : buildReplyContextMessage(message)
     : String(message.content || "");
 
+  // runTurn now returns a CognitionResult directly. Exceptions from
+  // it are genuinely exceptional (assertion violations, missing
+  // deps) — we still wrap in try so the moment can never throw past
+  // momentum, but the normal failure shapes (timeout, http-error,
+  // garbage) come back as ok:false from runTurn itself, not as
+  // thrown errors.
   let result;
   try {
     result = await runTurn({
@@ -115,14 +122,28 @@ export async function defaultSummon({ message, ctx, role }) {
   } catch (err) {
     if (ctx.signal?.aborted) {
       log.info(logTag, `summon aborted (${err.message})`);
-      return null;
+      return cognitionFailure("aborted", err.message);
     }
-    log.warn(logTag, `LLM call failed: ${err.message}`);
-    return { text: `${logTag} error: ${err.message}` };
+    // Unexpected throw from runTurn (not the normal failure shapes).
+    // Treat as internal cognition failure — no Act will seal.
+    log.warn(logTag, `runTurn threw unexpectedly: ${err.message}`);
+    return cognitionFailure("internal", err.message);
   }
 
+  // Defensive: runTurn must return a CognitionResult. If it didn't,
+  // treat as garbage rather than synthesizing text.
+  if (!result || typeof result.ok !== "boolean") {
+    log.warn(logTag, `runTurn returned non-CognitionResult value`);
+    return cognitionFailure("garbage", "runTurn returned non-CognitionResult");
+  }
+
+  if (result.ok === false) {
+    log.info(logTag, `cognition failed: shape=${result.shape} reason=${(result.reason || "").slice(0, 80)}`);
+    return result;
+  }
+
+  // ── ok:true ──
   const durationMs = Date.now() - startMs;
-  const text = result?.text || "(no response)";
   log.info(
     logTag,
     `summons complete at ${String(scopeNodeId).slice(0, 8)} in ${durationMs}ms`,
@@ -131,21 +152,19 @@ export async function defaultSummon({ message, ctx, role }) {
   // Reply emission. The role spec's `replyTo` selects which shape.
   // "asker" and "chain-initial" both flow through the seed reply
   // helpers; they differ only in which stance receives the reply.
+  // Only fires on ok:true — there's no answer to emit on failure.
   await maybeEmitReply({
     role,
     isReply,
     message,
-    text,
+    text: result.content,
     ctx,
     scopeNodeId,
     roleName,
     logTag,
   });
 
-  return {
-    text,
-    actId: result?.actId || null,
-  };
+  return cognitionSuccess(result.content);
 }
 
 // ────────────────────────────────────────────────────────────────────

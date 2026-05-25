@@ -174,11 +174,21 @@ export async function createBeing(name, password, opts = {}) {
     qualities: {},
   };
 
+  // Actor attribution. Default: self-stamp (the new being is its
+  // own actor — the historical "identity acting on identity" pattern
+  // that ensureIAm uses for the I-Am's very first Fact). For beings
+  // created by another being (seed plants, operator-triggered
+  // create-being flows), `opts.actor` overrides so the be:register
+  // Fact records the CAUSE of this being's existence on the cause's
+  // own audit (Fact.beingId is the actor; target.kind/target.id =
+  // being/<newId> keeps the Fact on the new being's reel where the
+  // reducer materializes the row).
+  const actor = opts.actor || id;
   try {
     await logFact({
       verb:    "be",
       action:  "register",
-      beingId: id, // the new being is the actor (identity acting on identity)
+      beingId: actor,
       target:  { kind: "being", id },
       params:  { spec },
       actId:   opts.actId || null,

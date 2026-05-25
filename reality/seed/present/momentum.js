@@ -3,58 +3,85 @@
 // momentum.js — beat three. The being's act.
 //
 // moment.js orchestrates the four beats; momentum is just beat 3.
-// assign opens and fold mounts the face; momentum applies the
-// being's motion; stamped seals. Same shape for every moment, four
-// files at this folder's root.
+// assign minted actId and planned the Act (no Mongo write); fold
+// mounts the face; momentum applies the being's motion; stamped
+// seals — ONLY when momentum returned ok:true.
 //
 // momentum dispatches by `summonCtx.kind` — the trigger-kind the
-// intake entry carried in. Every other beat (assign, fold, stamped)
-// is identical regardless of kind; momentum is the one beat that
-// differs because the act itself differs.
-//
-// Two kinds today:
+// intake entry carried in. Same shape for every kind: momentum
+// returns a CognitionResult (see seed/present/run.js).
 //
 //   kind: "summon"
-//     The intake entry was a SUMMON received by the being. The role's
-//     summon() runs, dispatching the being's inference (LLM voice),
-//     scripted code (scripted voice), or returning null (human role
-//     for the receptive path — but humans don't enqueue intake on
-//     incoming SUMMONs, so this path rarely fires for kind="summon"
-//     on a human).
+//     The role's summon() handler runs. Its return value is
+//     normalized into CognitionResult: legacy `{ content: string }`
+//     becomes `{ ok: true, content }`; null/undefined/throw becomes
+//     `{ ok: false, shape, reason }`. New cognition paths
+//     (defaultSummon, scripted-with-result-type) return the
+//     discriminated form directly.
 //
 //   kind: "transport-act"
-//     The being acted from their own transport (portal, browser, CLI,
-//     IDE). The intake entry carries a verb payload — verb + target
-//     + action + args. Momentum dispatches that verb directly through
-//     doVerb / beVerb, threading summonCtx so the auto-Fact picks up
-//     the ambient actId opened by assign. The role isn't involved
-//     at this beat — the act was already decided externally; momentum
-//     just applies it inside the moment's frame.
+//     The being acted from their own transport. The wrapped verb
+//     runs through doVerb/beVerb. Success → { ok: true, content: "",
+//     verbResult: <verb return> }. Failure → { ok: false,
+//     shape: "internal", reason }.
 //
-// Everything past momentum speaks raw IBP verbs. SEE / DO / SUMMON /
-// BE is the universal currency. momentum doesn't invent a new
-// abstraction above the verbs — it dispatches and returns.
+// Per Round 5: failure is structural, not disciplined. A bad
+// cognition cannot reach the seal because the seal's input type
+// cannot represent a failure.
+
+import log from "../seedReality/log.js";
+import { normalizeCognitionResult, cognitionFailure } from "./run.js";
 
 /**
- * Beat 3: run the act. Dispatch by summonCtx.kind and return what came back.
+ * Beat 3: run the act. Dispatch by summonCtx.kind. Returns a
+ * CognitionResult ({ ok:true, content, verbResult? } | { ok:false,
+ * shape, reason }).
  *
- * @param {object} prepared          — the result of assign(...)
- * @param {object} prepared.role     — the active role spec
- * @param {object} prepared.summonCtx — the summon context the role expects
+ * Never throws — every exception path is captured and returned as
+ * ok:false. moment.js's seal-gate can therefore safely branch on
+ * result.ok without a try/catch wrapper at the conductor level.
  *
- * @returns {Promise<{ result, role }>}
+ * @param {object} setup       — the result of assign(...)
+ * @param {object} setup.role  — the active role spec
+ * @param {object} setup.summonCtx — the summon context the role expects
+ * @returns {Promise<CognitionResult>}
  */
-export async function momentum({ role, summonCtx } = {}) {
+export async function momentum(setup = {}) {
+  const { role, summonCtx } = setup;
   const kind = summonCtx?.kind || "summon";
 
   if (kind === "transport-act") {
-    const result = await runTransportAct(summonCtx);
-    return { result, role };
+    try {
+      const verbResult = await runTransportAct(summonCtx);
+      // Transport-act success: the verb ran. content is "" because
+      // the act was a substrate write, not a closing utterance.
+      // verbResult rides through for the handoff.
+      return { ok: true, content: "", verbResult };
+    } catch (err) {
+      log.warn("Momentum", `transport-act failed: ${err.message}`);
+      return cognitionFailure("internal", err.message);
+    }
   }
 
   // Default: summon-kind. Role's summon handler dispatches.
-  const result = await role.summon(summonCtx.message, summonCtx);
-  return { result, role };
+  let raw;
+  try {
+    raw = await role.summon(summonCtx.message, summonCtx);
+  } catch (err) {
+    // Cognition threw. Per MODEL.md, this is a SEE — no act
+    // produced. moment.js will not seal.
+    if (summonCtx?.signal?.aborted) {
+      return cognitionFailure("aborted", err.message);
+    }
+    log.warn("Momentum", `role.summon threw: ${err.message}`);
+    return cognitionFailure("internal", err.message);
+  }
+
+  // Normalize legacy + new return shapes into CognitionResult.
+  // null / undefined / non-object → { ok:false, shape:"garbage" }.
+  // { content: string } → { ok:true, content }.
+  // { ok: true|false, ... } → pass-through after shape validation.
+  return normalizeCognitionResult(raw);
 }
 
 /**
@@ -78,6 +105,9 @@ export async function momentum({ role, summonCtx } = {}) {
  *
  * SEE never reaches here — reads are synchronous folds that bypass
  * intake entirely.
+ *
+ * Throws on verb failure; momentum() catches and converts to
+ * cognitionFailure.
  */
 async function runTransportAct(summonCtx) {
   const act = summonCtx?.act;
@@ -89,8 +119,7 @@ async function runTransportAct(summonCtx) {
     throw new Error(`moment: transport-act verb must be "do" or "be" (got "${verb}")`);
   }
 
-  // Lazy-import the verbs to avoid a circular import at module load
-  // (verbs.js → factory/intake/scheduler.js → factory/stamper/moment.js).
+  // Lazy-import the verbs to avoid a circular import at module load.
   const { doVerb, beVerb } = await import("../ibp/verbs.js");
 
   if (verb === "do") {

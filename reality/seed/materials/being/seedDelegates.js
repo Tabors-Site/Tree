@@ -6,6 +6,11 @@
 // Every place has a small set of beings I plant at the place root
 // itself, not at any tree:
 //
+//   arrival        The shared stance every unauthenticated visitor
+//                  carries. One Being row, many concurrent users
+//                  (SEE bypasses the scheduler; no contention).
+//                  SEE-only by default. Surfaces as
+//                  `<reality>/@arrival` on the network.
 //   cherub         The gate. Stands at the threshold between outside
 //                  the place (no identity yet) and inside (bound to
 //                  a being). The only stance that accepts a request
@@ -50,6 +55,13 @@ import { summonCreateBeing } from "../../ibp/verbs.js";
 import { findIAm, iAmIdentity } from "./identity.js";
 
 export const SEED_DELEGATES = [
+  {
+    name: "arrival",
+    role: "arrival",
+    operatingMode: "scripted",
+    description:
+      "Shared stance for unauthenticated visitors. SEE-only; one row, many concurrent users.",
+  },
   {
     name: "cherub",
     role: "cherub",

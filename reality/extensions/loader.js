@@ -1189,7 +1189,7 @@ export async function loadExtensions(app, mcpServer, opts = {}) {
   // discovery + future cross-place introspection).
   try {
     const { setExtensionNamesProvider } =
-      await import("../protocols/canopy/identity.js");
+      await import("../seed/realityIdentity.js");
     setExtensionNamesProvider(getLoadedExtensionNames);
   } catch {}
 

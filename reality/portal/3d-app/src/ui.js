@@ -448,7 +448,7 @@ export function hideSkyClock() {
 //                pick which one is "main".
 //   This Node  — bind one of the caller's connections to a slot on a
 //                specific node. Only enabled when the user is on a
-//                node (currentNodeId provided).
+//                node (currentSpaceId provided).
 //   Place       — set the place-level default. Server gates with
 //                root-operator check; non-operators get FORBIDDEN.
 //
@@ -464,7 +464,7 @@ let _llmPanelState = {
   error:    "",
 };
 
-export function showLlmAssignerPanel({ client, place, currentNodeId, onClose, onSpawnTutorial }) {
+export function showLlmAssignerPanel({ client, place, currentSpaceId, onClose, onSpawnTutorial }) {
   if (_llmAssignerPanelEl) return;
   document.exitPointerLock?.();
 
@@ -508,7 +508,7 @@ export function showLlmAssignerPanel({ client, place, currentNodeId, onClose, on
     <div class="llm-tabs" style="display:flex; gap:4px; margin-bottom:12px;
       border-bottom:1px solid #2c3a32;">
       <button class="llm-tab" data-tab="being" type="button">My Being</button>
-      <button class="llm-tab" data-tab="node"  type="button" ${currentNodeId ? "" : "disabled"}>This Node</button>
+      <button class="llm-tab" data-tab="node"  type="button" ${currentSpaceId ? "" : "disabled"}>This Node</button>
       <button class="llm-tab" data-tab="place"  type="button">Place Default</button>
     </div>
 
@@ -546,7 +546,7 @@ export function showLlmAssignerPanel({ client, place, currentNodeId, onClose, on
   }
 
   function activateTab(tab) {
-    if (tab === "node" && !currentNodeId) return;
+    if (tab === "node" && !currentSpaceId) return;
     _llmPanelState.tab = tab;
     tabBtns.forEach(b => {
       const active = b.dataset.tab === tab;
@@ -684,7 +684,7 @@ export function showLlmAssignerPanel({ client, place, currentNodeId, onClose, on
 
   // ── This Node tab ──────────────────────────────────────────────
   function renderNodeTab() {
-    if (!currentNodeId) {
+    if (!currentSpaceId) {
       bodyEl.innerHTML = `<div style="color:#6b7d72; padding:8px 0;">
         Navigate to a tree node first. The node tab assigns an LLM to a
         specific position you own.
@@ -701,7 +701,7 @@ export function showLlmAssignerPanel({ client, place, currentNodeId, onClose, on
     bodyEl.innerHTML = `
       <div style="color:#6b7d72; margin-bottom:8px;">
         Setting LLM slot on node
-        <code style="color:#c8d3cb;">${escapeHtml(currentNodeId)}</code>.
+        <code style="color:#c8d3cb;">${escapeHtml(currentSpaceId)}</code>.
         Caller must own the tree.
       </div>
       <form class="llm-node-form">
@@ -727,7 +727,7 @@ export function showLlmAssignerPanel({ client, place, currentNodeId, onClose, on
       clearError();
       try {
         await client.be("set-space-llm", `${place}/@llm-assigner`, {
-          nodeId:       currentNodeId,
+          spaceId:      currentSpaceId,
           slot:         slotI.value.trim() || "main",
           connectionId: connI.value || null,
         });
@@ -739,7 +739,7 @@ export function showLlmAssignerPanel({ client, place, currentNodeId, onClose, on
       clearError();
       try {
         await client.be("set-space-llm", `${place}/@llm-assigner`, {
-          nodeId: currentNodeId, slot: slotI.value.trim() || "main", connectionId: null,
+          spaceId: currentSpaceId, slot: slotI.value.trim() || "main", connectionId: null,
         });
       } catch (err) { showError(fmtErr(err, "clear failed")); }
     });
@@ -823,7 +823,7 @@ export function showLlmAssignerPanel({ client, place, currentNodeId, onClose, on
   });
 
   // Spawn link: fires the llm-assigner:start-tutorial DO. The op is
-  // idempotent server-side (marker on metadata.tutorial.purpose), so
+  // idempotent server-side (marker on qualities.tutorial.purpose), so
   // only one is ever active at a time. On success the panel closes
   // and the caller's onSpawnTutorial refetches the descriptor — the
   // new matter's video screen mounts in the 3D scene.
@@ -856,7 +856,7 @@ export function showLlmAssignerPanel({ client, place, currentNodeId, onClose, on
     await refreshConnections();
     // Restore last-active tab; fall back to "being" if node was active
     // but we no longer have a current node.
-    const startTab = (_llmPanelState.tab === "node" && !currentNodeId) ? "being" : _llmPanelState.tab;
+    const startTab = (_llmPanelState.tab === "node" && !currentSpaceId) ? "being" : _llmPanelState.tab;
     activateTab(startTab);
     if (_llmPanelState.error) showError(_llmPanelState.error);
   })();

@@ -99,7 +99,6 @@ The four verbs (`place.see`, `place.do`, `place.summon`, `place.be`) are always 
 | `facts` | Audit-row stamping. | `logFact` |
 | `auth` | Identity primitives. | `resolveSpaceAccess`, `createBeing`, `verifyPassword`, `generateToken`, `findBeingByName`, `registerStrategy` |
 | `session` | Per-reach session lifecycle. | `createSession`, `endSession`, `getSession`, `SESSION_TYPES`, `registerSessionType` |
-| `summon` | Stamp-row helpers. | `stamp`, `ensureSession` |
 | `llm` | LLM voice apparatus. | `runTurn`, `stepTurn`, `getClientForBeing`, `switchRole`, `registerBeingLlmSlot`, `registerFailoverResolver` |
 | `websocket` | Push channel (transport-agnostic). | `emitToBeing`, `emitNavigate`, `registerSocketHandler`, `getIO` |
 | `models` | Mongoose models. | `Being`, `Space`, `Fact`, `Matter` |

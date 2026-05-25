@@ -158,7 +158,7 @@ export function startUploadCleanup({
     );
   }, intervalMs);
   if (cleanupTimer.unref) cleanupTimer.unref();
-  log.info("Uploads", `Orphan cleanup started (every ${Math.round(intervalMs / 60000)}m, grace ${Math.round(graceMs / 60000)}m)`);
+  log.verbose("Uploads", `Orphan cleanup started (every ${Math.round(intervalMs / 60000)}m, grace ${Math.round(graceMs / 60000)}m)`);
 }
 
 /**

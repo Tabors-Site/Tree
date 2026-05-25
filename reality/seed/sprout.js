@@ -163,7 +163,7 @@ export async function ensureSpaceRoot() {
       }
     }
     if (orphanRoots.length > 0) {
-      log.info(
+      log.verbose(
         "Place",
         `Adopted ${orphanRoots.length} orphan tree root(s) under space root`,
       );

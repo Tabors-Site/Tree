@@ -42,6 +42,7 @@
 
 import log from "../../../seedReality/log.js";
 import { resolveConnection } from "./connect.js";
+import { cognitionFailureError } from "../../run.js";
 
 // Note: the shared-pool LLM throttling (LLM_PRIORITY enum,
 // acquireLlmSlot / releaseLlmSlot, _llmWaiters queue, LLM_MAX_CONCURRENT
@@ -401,14 +402,17 @@ export function parseInternalResponse(raw, isCustom, MODEL, resolvedConnectionId
       return { _raw: true, content: raw, _llmProvider };
     }
 
-    // Last resort. The model didn't follow the structured-output
-    // instruction. Return action:"respond" with the raw text so the
-    // user sees the answer instead of an error.
-    return {
-      action: "respond",
-      content: raw,
-      _unstructured: true,
-      _llmProvider,
-    };
+    // Per Round 5: no last-resort fake-success fallback. The model
+    // didn't follow the structured-output instruction; the result
+    // is unparseable. Throw the cognition-failure sentinel so
+    // runTurn's outer boundary converts to { ok:false, shape:
+    // "garbage" } and the moment releases with no Act. The previous
+    // behavior wrapped the raw text in `action: "respond"` and let
+    // it flow downstream — that was the "show the user something
+    // rather than nothing" reflex the seal-gate is built against.
+    throw cognitionFailureError(
+      "garbage",
+      `internal-mode response could not be parsed (model=${MODEL})`,
+    );
   }
 }

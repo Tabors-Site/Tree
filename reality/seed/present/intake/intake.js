@@ -202,23 +202,23 @@ export async function markIntakeRunning(/* spaceId, beingId, index */) {
 }
 
 /**
- * Retired (Bucket 3 Option D). Completion is the Act seal: the
- * stamped.js seal commits the Act with `answers: <correlation>`, and
- * the cross-cutting fold (past/act/inboxProjectionFold.js
- * closeInboxOnAnswer) evicts the matching InboxProjection row. This
- * function is a no-op tombstone for callers that haven't migrated.
+ * Retired (Bucket 3 Option D + Round 5). True no-op. The ONLY path
+ * that closes an InboxProjection row is closeInboxOnAnswer firing
+ * from sealAct when an answering Act materializes with answers:C.
+ * A failed cognition produces no Act (Round 5), so no answers:C,
+ * so the inbox stays open — automatically, by the model.
+ *
+ * The previous "defensive eviction" here ran on EVERY moment
+ * completion (success or failure) and closed the row unconditionally,
+ * breaking the structural guarantee that "failed moment leaves zero
+ * trace including no inbox close." Removed.
+ *
+ * Kept as a no-op tombstone so callers that haven't migrated don't
+ * crash. Returns { consumed: 0 } so any caller that reads the
+ * return shape sees nothing was closed by this path.
  */
-export async function markIntakeComplete(spaceId, beingId, correlationIds /*, opts */) {
-  if (!Array.isArray(correlationIds) || correlationIds.length === 0) {
-    return { consumed: 0 };
-  }
-  // Defensive eviction. The Act-seal handler is the canonical path,
-  // but if a moment legitimately completes without sealing an Act
-  // (the "stamp seals empty" case from STAMPER.md), we evict here.
-  const result = await InboxProjection.deleteMany({
-    _id: { $in: correlationIds.map(String) },
-  });
-  return { consumed: result?.deletedCount || 0 };
+export async function markIntakeComplete(/* spaceId, beingId, correlationIds, opts */) {
+  return { consumed: 0 };
 }
 
 /**

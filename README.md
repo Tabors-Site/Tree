@@ -24,19 +24,20 @@ fires `genesis.js`.
 
 ## Being in it
 
-Use the **3D portal** in [`portal/3d-app/`](portal/3d-app/). It is a
-Three.js + Vite client that speaks IBP (the four verbs over
-WebSocket) and renders positions as a navigable 3D world.
+The **3D portal** ships with the reality and is served at `/`. After
+`npm start`, open the URL the server prints (default
+`http://localhost:3000`) in a browser. Register, and you are in.
+
+The portal lives at [`reality/portal/3d-app/`](reality/portal/3d-app/):
+a Three.js + Vite client that speaks IBP (the four verbs over
+WebSocket) and renders positions as a navigable 3D world. It is in
+**active development**. Expect rough edges.
+
+Working on the portal itself? Run Vite for HMR alongside the reality:
 
 ```bash
-cd portal/3d-app
-npm install
-npm run dev            # Vite dev server; open the URL it prints
+cd reality && npm run dev:portal   # Vite dev server with HMR
 ```
-
-The 3D portal is **in active development**. Expect rough edges. Point
-it at your local reality (defaults to `http://localhost:3000`),
-register, and you are in.
 
 Optional landing/docs site:
 
@@ -61,17 +62,17 @@ For the long form, read the doctrine in
 ## Project layout
 
 ```
-reality/             The reality. Boot trilogy + seed + protocols + extensions.
+reality/             The reality. Boot trilogy + seed + protocols + extensions + portal.
   plant.js              First boot. Setup wizard, operator mint.
   begin.js              Every boot. Opens HTTP/WebSocket; fires genesis.
   genesis.js            The unfolding. Indexes, config, migrations, beings.
   seed/                 The seed. The factory. The whole apparatus.
-  protocols/            What conversation over the wire looks like (IBP, canopy, mcp).
+  protocols/            What conversation over the wire looks like (IBP, mcp).
   transports/           Thin carriers (HTTP, WebSocket).
   extensions/           Where you build. _template/ is the scaffold.
+  portal/3d-app/        The 3D portal client (in dev). Served at /. Vite + Three.js.
   philosophy/           The doctrine: MOMENT, FOLD, STAMPER, MATERIALS, chat, math.
 
-portal/3d-app/      The 3D portal client (in dev). Vite + Three.js.
 site/               Landing and docs site. React + Vite.
 cli/                CLI client (separate package).
 horizon/            Public directory + extension registry (standalone).

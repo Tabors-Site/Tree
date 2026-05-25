@@ -128,7 +128,7 @@ export class PortalClient {
       }
       if (envelope.verb === "see") {
         const p = envelope.payload || {};
-        safeCall(this._onDescriptorEvent, { kind: p.kind, payload: p.data, spaceId: p.spaceId, nodeId: p.spaceId });
+        safeCall(this._onDescriptorEvent, { kind: p.kind, payload: p.data, spaceId: p.spaceId });
         return;
       }
     });

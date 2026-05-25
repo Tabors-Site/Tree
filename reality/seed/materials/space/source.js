@@ -117,7 +117,7 @@ export async function ensureSourceTree(opts = {}) {
     try {
       const stats = await syncSourceTree({ rootPath, ignore });
       const ms = Date.now() - started;
-      log.info(
+      log.verbose(
         "Source",
         `synced .source from ${rootPath} in ${ms}ms: +${stats.created} ~${stats.updated} -${stats.removed} =${stats.kept}`,
       );

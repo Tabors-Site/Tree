@@ -16,10 +16,12 @@
 //   3. /api/v1 dbHealth — 503 cleanly when MongoDB is down instead
 //      of letting Mongoose throw from inside a handler.
 //   4. authPageRouter — HTML form login / register / logout.
-//   5. /mcp routes — POST / GET / DELETE.
-//   6. /api/v1/uploads — static serving of uploaded matter.
-//   7. /api/v1 authApiRouter — JSON auth.
-//   8. /api/v1 realityConfig — config read/write.
+//   5. /api/v1/uploads — static serving of uploaded matter.
+//   6. /api/v1 authApiRouter — JSON auth.
+//   7. /api/v1 realityConfig — config read/write.
+//   8. Built 3D portal at / (fallthrough enabled so IBP/api/uploads
+//      keep working; SPA fallback to index.html for client routes).
+//      Skipped when portal/3d-app/dist is absent.
 //   9. /ibp/:verb/<addr> — the single IBP HTTP adapter. Same
 //      dispatcher the WebSocket layer uses; every seed and
 //      extension operation is automatically callable here.
@@ -45,10 +47,12 @@ import realityConfig from "./api/config.js";
 import dbHealth from "./middleware/dbHealth.js";
 
 import express from "express";
+import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
 import rateLimit from "express-rate-limit";
 import { sendError, IBP_ERR } from "../../seed/ibp/protocol.js";
+import log from "../../seed/seedReality/log.js";
 
 import { DELETED } from "../../seed/materials/space/seedSpaces.js";
 
@@ -93,6 +97,27 @@ export default function registerRoutes(app) {
 
   app.use("/api/v1", authApiRouter);
   app.use("/api/v1", realityConfig);
+
+  // Built 3D portal at /. Static files first (fallthrough: true lets
+  // /ibp, /api, /.well-known, etc. pass through to their handlers);
+  // SPA fallback to index.html for any GET that didn't match a static
+  // asset or another route. Skipped silently when the dist isn't built
+  // (npm run build:portal); operators who don't need the bundled
+  // client still get a working API.
+  const portalDist = path.resolve(__dirname, "../../portal/3d-app/dist");
+  if (fs.existsSync(path.join(portalDist, "index.html"))) {
+    app.use("/", express.static(portalDist, { fallthrough: true, index: "index.html" }));
+    app.get(/^\/(?!api\/|ibp\/|mcp\/?|\.well-known\/).*/, (req, res, next) => {
+      // SPA fallback: serve index.html for non-api GETs that no static
+      // asset matched. Skips api/ibp/mcp/.well-known so those reach
+      // their handlers (or fall through to the 404 below).
+      if (req.method !== "GET") return next();
+      res.sendFile(path.join(portalDist, "index.html"));
+    });
+    log.verbose("HTTP", `Portal mounted at / (${portalDist})`);
+  } else {
+    log.verbose("HTTP", `Portal dist not found at ${portalDist}; skipping (run: npm run build:portal)`);
+  }
 
   // IBP HTTP adapter: POST /ibp/:verb/<encoded-address>.
   // No /api/v1 prefix. The protocol IS the API. Same handler the
