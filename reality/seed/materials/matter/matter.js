@@ -27,6 +27,14 @@
 // hierarchies, anything where one piece of content contains
 // another. The schema below is closed; what an extension wants to
 // say about a piece of matter goes in `qualities`.
+//
+// Projection schema. Same three-slot structure as Being (see
+// seed/materials/being/being.js header for the canonical doctrine):
+// Identity (`_id`), Figure (everything the matter reducer writes
+// from the reel), Cache-control (`foldedSeq`). Fields declared below
+// are for Mongoose strict-mode mechanics, not figure authority. They
+// collapse into `strict: false` when verb-handler validation lands.
+// Deliberately deferred, not unprincipled.
 
 import mongoose from "mongoose";
 import { v4 as uuidv4 } from "uuid";
@@ -76,8 +84,14 @@ const MatterSchema = new mongoose.Schema({
   foldedSeq: { type: Number, default: null },
   position:  { type: String, default: null },
 
-  createdAt: { type: Date, default: Date.now },
-  updatedAt: { type: Date, default: Date.now },
+  // Reducer-owned timestamps. NO `default: Date.now` and NO pre-save
+  // hook. Mongoose-managed defaults would fire when the reducer
+  // doesn't set them and inject wall-clock values the reel never saw
+  // (second-writer bug — same shape as Being's removed `timestamps: true`).
+  // applyCreateMatter seeds both from fact.date on do:create; matter
+  // reducer's catch-all bumps updatedAt on any mutating apply.
+  createdAt: { type: Date, default: null },
+  updatedAt: { type: Date, default: null },
 });
 
 MatterSchema.index({ spaceId: 1, createdAt: -1 });
@@ -87,11 +101,6 @@ MatterSchema.index({ origin: 1 });
 // Position index — what matter occupies a given space. Used by
 // foldPlace to find a space's matter-occupants.
 MatterSchema.index({ position: 1 }, { sparse: true });
-
-MatterSchema.pre("save", function (next) {
-  if (!this.isNew) this.updatedAt = new Date();
-  next();
-});
 
 const Matter = mongoose.model("Matter", MatterSchema, "matters");
 export default Matter;

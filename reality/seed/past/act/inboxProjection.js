@@ -37,6 +37,16 @@
 // stores `status: "running"`. A picked summon stays in the projection
 // until its moment seals; a crashed moment leaves it open and it gets
 // re-picked. Self-healing.
+//
+// Cross-cutting projection schema. The fold handler in
+// inboxProjectionFold.js is the authority for what each row looks
+// like; the schema is Mongoose mechanics. Three-slot rule applies
+// in adapted form: Identity (`_id` = correlation), Figure (everything
+// the handler upserts from be:summon facts), Cache-control (no
+// foldedSeq here — cross-cutting projections don't carry one). See
+// seed/materials/being/being.js header for the canonical projection
+// doctrine. Fields declared below collapse into `strict: false` when
+// verb-handler validation lands. Deliberately deferred.
 
 import mongoose from "mongoose";
 
@@ -61,8 +71,10 @@ const InboxProjectionSchema = new mongoose.Schema({
     default: "INTERACTIVE",
   },
 
-  // Conversation threading (orthogonal to closure).
-  rootCorrelation: { type: String, default: null, index: true },
+  // Conversation threading (orthogonal to closure). rootCorrelation
+  // gets its sparse index declared below at the sever-sweep target;
+  // no duplicate `index: true` here.
+  rootCorrelation: { type: String, default: null },
   inReplyTo:       { type: String, default: null, index: true },
 
   // The space where the summon was addressed (the recipient's stance).

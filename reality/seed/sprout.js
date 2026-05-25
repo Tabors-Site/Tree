@@ -94,7 +94,7 @@ export async function ensureSpaceRoot() {
         `ensureSpaceRoot: genesis birth Fact stamped but row ${rootId} not materialized`,
       );
     }
-    log.info("Reality", `Created space root: ${spaceRoot._id}`);
+    log.verbose("Reality", `Created space root: ${spaceRoot._id}`);
   }
 
   for (const def of REALITY_SEED_SPACES) {
@@ -108,7 +108,7 @@ export async function ensureSpaceRoot() {
           seedSpace: def.seedSpace,
           qualities: def.buildQualities ? def.buildQualities() : null,
         });
-        log.info("Reality", `Created seed space: ${def.name}`);
+        log.verbose("Reality", `Created seed space: ${def.name}`);
       } catch (err) {
         log.error(
           "Place",
@@ -243,7 +243,7 @@ async function ensureIAm(spaceRootId) {
       `ensureIAm: genesis register Fact stamped but row ${id} not materialized`,
     );
   }
-  log.info("Reality", `Planted I_AM (${String(created._id).slice(0, 8)})`);
+  log.verbose("Reality", `Planted I_AM (${String(created._id).slice(0, 8)})`);
   return created;
 }
 

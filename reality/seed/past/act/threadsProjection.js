@@ -39,6 +39,17 @@
 // (not yet built; placeholder TODO) will GC rows past an
 // inactivity threshold. Until then rows accumulate; cheap to add
 // later because the fold engine doesn't depend on the GC.
+//
+// Cross-cutting projection schema. The fold handlers in
+// threadsProjectionFold.js are the authority for what each row looks
+// like; the schema is Mongoose mechanics. Three-slot rule applies
+// in adapted form: Identity (`_id` = rootCorrelation), Figure
+// (everything the handlers upsert from be:summon / be:sever facts
+// and the Act-seal callback), Cache-control (no foldedSeq here —
+// cross-cutting projections don't carry one). See
+// seed/materials/being/being.js header for the canonical projection
+// doctrine. Fields declared below collapse into `strict: false` when
+// verb-handler validation lands. Deliberately deferred.
 
 import mongoose from "mongoose";
 
@@ -56,7 +67,16 @@ const ThreadsProjectionSchema = new mongoose.Schema({
   lastAct:    { type: Date, default: null, index: true },
   startedAt:  { type: Date, default: null },
   severedAt:  { type: Date, default: null, index: true },
-}, { timestamps: true });
+
+  // Fold-handler-owned timestamps. NOT `timestamps: true` — Mongoose's
+  // auto-managed values would inject wall-clock on every updateOne,
+  // making the projection non-deterministic. The cross-cutting fold
+  // handlers set createdAt on $setOnInsert from the spawning fact's
+  // date, and updatedAt on every $set from the current fact's date.
+  // Same single-writer-at-the-persistence-layer rule as Being.
+  createdAt: { type: Date, default: null },
+  updatedAt: { type: Date, default: null },
+});
 
 // SEE on `<reality>/.threads` lists live threads sorted by recency.
 ThreadsProjectionSchema.index({ lastAct: -1 });

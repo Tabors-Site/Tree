@@ -124,7 +124,6 @@ import { sendOk, sendError, IBP_ERR } from "./seed/ibp/protocol.js";
 import { getExtension } from "./extensions/loader.js";
 import securityHeaders from "./transports/http/middleware/securityHeaders.js";
 import { genesis, printReady } from "./genesis.js";
-import { maybeStartSiteDev } from "./devSite.js";
 import { getRealityUrl } from "./protocols/canopy/identity.js";
 import log from "./seed/seedReality/log.js";
 
@@ -295,13 +294,10 @@ initIBPWS(wsServer);
 
 // I open my senses. The earth is already whole; from this tick on,
 // the channels are live and the world can reach in. printReady
-// fires the closing banner. maybeStartSiteDev is a host-realm dev
-// convenience (no-op in production); it lives here, not in genesis,
-// because spawning a sibling Vite process is not earth forming.
+// fires the closing banner.
 const PORT = process.env.PORT || 80;
 server.listen(PORT, "0.0.0.0", () => {
   printReady();
-  maybeStartSiteDev();
 });
 
 // Graceful shutdown closes my channels in reverse: pending MCP

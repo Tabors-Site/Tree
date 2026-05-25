@@ -171,10 +171,7 @@ export async function ensureSeedDelegates(spaceRootId) {
         scaffold: true,
       });
       created++;
-      log.info(
-        "SeedDelegates",
-        `summoned ${spec.role} delegate forth (name=${spec.name})`,
-      );
+      log.info("Genesis", `I create ${spec.name}.`);
     } catch (err) {
       log.error(
         "SeedDelegates",
@@ -184,7 +181,7 @@ export async function ensureSeedDelegates(spaceRootId) {
   }
 
   if (created > 0 || existing > 0) {
-    log.info(
+    log.verbose(
       "SeedDelegates",
       `seed delegates ensured: ${created} created, ${existing} already present (parent=${rootBeingId.slice(0, 8)})`,
     );

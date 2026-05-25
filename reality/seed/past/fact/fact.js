@@ -81,6 +81,27 @@ const FactSchema = new mongoose.Schema({
   // another reality via canopy.
   homeReality:  { type: String, default: null },
   wasRemote: { type: Boolean, default: false },
+
+  // INTEGRITY — per-reel hash chain.
+  //
+  //   p — prev-hash: the previous fact's `h` on the same reel
+  //       (GENESIS_PREV at seq=1). Folds the entire history behind
+  //       this fact into its hash.
+  //   h — self-hash: SHA-256(p || canonical(content)). Set inside
+  //       the seal so the fact and its correct hash land together.
+  //
+  // Per-reel, not global. Each (target.kind, target.id) reel is its
+  // own chain. The chain DETECTS tampering — alter any past fact and
+  // its `h` changes, breaking the `p` link of the next. The chain
+  // does not REPAIR. Repair is replication's job (a clean copy from
+  // another node). Logical "wrong-but-honest" facts are handled by
+  // appending a correction fact, never by rewriting the chain.
+  //
+  // Non-reel-bearing facts (target.kind ∈ {place, stance} or
+  // target-less) carry p=h=null and stay outside the verification
+  // model. They have no reel to chain against. See verifyReel.js.
+  p: { type: String, default: null },
+  h: { type: String, default: null },
 });
 
 FactSchema.index({ beingId: 1, date: -1 });                                          // a being's reel

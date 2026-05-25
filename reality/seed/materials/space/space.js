@@ -14,6 +14,14 @@
 // working memory exposed as substrate. The schema below is closed.
 // Anything an extension wants to attach to a space lives in
 // `qualities`, written through qualities.space.setQuality.
+//
+// Projection schema. Same three-slot structure as Being (see
+// seed/materials/being/being.js header for the canonical doctrine):
+// Identity (`_id`), Figure (everything the space reducer writes from
+// the reel), Cache-control (`foldedSeq`). Fields declared below are
+// for Mongoose strict-mode mechanics, not figure authority. They
+// collapse into `strict: false` when verb-handler validation lands.
+// Deliberately deferred, not unprincipled.
 
 import mongoose from "mongoose";
 import { v4 as uuidv4 } from "uuid";
@@ -23,7 +31,12 @@ const SpaceSchema = new mongoose.Schema({
   _id: { type: String, default: uuidv4 },
   name: { type: String, required: true },
   type: { type: String, default: null },
-  dateCreated: { type: Date, default: Date.now },
+
+  // Reducer-owned. NO `default: Date.now` — applyCreateSpace seeds
+  // this from fact.date on do:create. A schema default would inject
+  // wall-clock on inserts where the reducer didn't set it
+  // (second-writer bug — same shape as Being's removed `timestamps`).
+  dateCreated: { type: Date, default: null },
 
   // Connection uuid key into the owning being's qualities.llmConnections.
   llmDefault: { type: String, default: null },
@@ -48,7 +61,7 @@ const SpaceSchema = new mongoose.Schema({
     default: null,
   },
 
-  qualities: { type: Map, of: mongoose.Schema.Types.Mixed, default: new Map() },
+  qualities: { type: Map, of: mongoose.Schema.Types.Mixed, default: () => new Map() },
 
   // Projection cache markers. Per FOLD.md / STAMPER.md, the Space row
   // is a cache of the fold over this space's reel — not the source of

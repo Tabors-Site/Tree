@@ -48,11 +48,13 @@ async function handleBeSummonForThreads(fact /*, type, id*/) {
     {
       $set: {
         lastAct,
+        updatedAt: fact.date || new Date(),
         ...(params.parentThread ? { parentThread: String(params.parentThread) } : {}),
       },
       $setOnInsert: {
         _id:       root,
         startedAt: lastAct,
+        createdAt: fact.date || new Date(),
         severedAt: null,
       },
       $addToSet: {
@@ -67,9 +69,10 @@ async function handleBeSeverForThreads(fact /*, type, id*/) {
   if (fact?.verb !== "be" || fact?.action !== "sever") return;
   const root = fact.params?.rootCorrelation;
   if (!root) return;
+  const at = fact.date || new Date();
   await ThreadsProjection.updateOne(
     { _id: root },
-    { $set: { severedAt: fact.date || new Date() } },
+    { $set: { severedAt: at, updatedAt: at } },
   );
 }
 
@@ -92,6 +95,6 @@ export async function noteActSealOnThread(rootCorrelation, at = new Date()) {
   if (!rootCorrelation) return;
   await ThreadsProjection.updateOne(
     { _id: String(rootCorrelation) },
-    { $set: { lastAct: at } },
+    { $set: { lastAct: at, updatedAt: at } },
   );
 }

@@ -150,7 +150,7 @@ export async function assign({ beingId, spaceId, entry, handoff = null, signal =
 
   // ── assign: build the summon ctx moment.js dispatches on ─────────
   // Two shapes by kind. moment.js reads ctx.kind and routes.
-  const actId = stamp?._id ? String(stamp._id) : null;
+  const actId = act?._id ? String(act._id) : null;
 
   const baseCtx = {
     kind,

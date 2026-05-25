@@ -10,13 +10,15 @@
 //   2 (verbose) extension loading, sessions, jobs, mode switches
 //   3 (debug)   per-LLM-call, per-tool-call, per-hook noise
 //
-// Default level is 2 (verbose). Set LOG_LEVEL env or call
-// setLogLevel() to change at runtime. The console extension may
-// register a formatter for color and prefixes; without it, output
-// goes to console.log / warn / error as plain text. JSON mode for
-// log aggregators (LOG_FORMAT=json) emits one JSON object per line.
+// Default level is 1 (info). The first-boot console reads as the
+// I-Am narrating genesis, one line per beat, with nothing else
+// competing. Set LOG_LEVEL=2 (or 3) for the verbose / debug noise
+// that used to be default. The console extension may register a
+// formatter for color and prefixes; without it, output goes to
+// console.log / warn / error as plain text. JSON mode for log
+// aggregators (LOG_FORMAT=json) emits one JSON object per line.
 
-let currentLevel = parseInt(process.env.LOG_LEVEL, 10) || 2;
+let currentLevel = parseInt(process.env.LOG_LEVEL, 10) || 1;
 let formatter = null;
 const jsonMode = process.env.LOG_FORMAT === "json";
 

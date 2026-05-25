@@ -24,6 +24,46 @@
 // being lives in `qualities` — the open Map at the bottom, written
 // through qualities.being.setQuality. The constitutive layer is
 // mine; the characterizing layer is anyone's.
+//
+// THREE SLOTS, no fourth.
+//
+// Every field on this row belongs to exactly one of three categories:
+//
+//   1. IDENTITY — `_id`. The bare being itself (math.md's id_b).
+//      Minted once at birth, never folded, never rebuilt. Authoritative.
+//   2. FIGURE — everything else folded from the reel. Projection.
+//      The reducer produces these; rebuild reproduces them. The row
+//      minus _id IS figure(b).
+//   3. CACHE-CONTROL — `foldedSeq`. The projection's own watermark
+//      ("folded up to seq N"). Not data about the being; bookkeeping
+//      for the fold mechanism.
+//
+// The audit rule for any new field: ask "can it be folded from the
+// reel?" Yes → it's figure, the reducer owns it, write the reducer
+// case. No → it does not belong on the row. There is no fourth slot
+// for "an authoritative field that just lives here." If the wanting
+// for that fourth slot ever appears, that wanting is the smell.
+//
+// Fields declared below the three-slot categories (name, password,
+// roles, homeSpace, operatingMode, etc.) are declared for Mongoose
+// strict-mode mechanics, not as figure authority. The reducer is the
+// authority for what figure(b) looks like; the schema only declares
+// these so strict mode doesn't drop the reducer's output and so
+// indexes / type-coercion / enum-validation that today live in the
+// schema have a home. They collapse into `strict: false` when
+// verb-handler validation lands and the schema can stop shadowing the
+// figure shape. Deliberately deferred, not unprincipled.
+//
+// `unique: true` on `name` below is a BACKSTOP, not authority. The
+// authority is the pre-stamp uniqueness check in
+// identity.js#createBeing. The index is the safety net that must
+// never actually fire — if it ever does, a be:register Fact has
+// sealed but its projection write failed, and reel/projection have
+// diverged (the exact thing INTEGRITY exists to prevent). Today the
+// pre-stamp check + index combination leaves a narrow race window
+// between the check and the seal; closing that window collapses
+// into the same future-work item as multi-fact ΔF atomicity
+// (multi-doc Mongo transactions, replica-set required).
 
 import mongoose from "mongoose";
 import bcrypt from "bcrypt";
@@ -120,7 +160,7 @@ const BeingSchema = new mongoose.Schema({
   // seed/materials/qualities.js. Default empty Map; everything an
   // extension contributes to a being lives here. See PLACE.md
   // "Qualities" for the constitutive-vs-characterizing distinction.
-  qualities: { type: Map, of: mongoose.Schema.Types.Mixed, default: new Map() },
+  qualities: { type: Map, of: mongoose.Schema.Types.Mixed, default: () => new Map() },
 
   // Projection cache markers. Per FOLD.md / STAMPER.md, the Being
   // row is a cache of the fold over this being's reel — not the
@@ -130,8 +170,17 @@ const BeingSchema = new mongoose.Schema({
   // facts carry position changes.
   foldedSeq: { type: Number, default: null },
   position:  { type: String, default: null },
-}, {
-  timestamps: true,
+
+  // Reducer-owned timestamps. Set from fact.date so the row is
+  // deterministic from the reel alone (the replay test asserts
+  // byte-identity after Being.delete + foldEngine.rebuild). Plain
+  // schema fields — explicitly NOT `timestamps: true` since
+  // Mongoose's auto-managed values would overwrite the reducer's
+  // deterministic ones on every updateOne and break the
+  // "row is a cache of the fold" invariant. See
+  // reducerHelpers.applyCreateBeing and being/reducer.js.
+  createdAt: { type: Date, default: null },
+  updatedAt: { type: Date, default: null },
 });
 
 BeingSchema.index({ homeSpace: 1, operatingMode: 1 });

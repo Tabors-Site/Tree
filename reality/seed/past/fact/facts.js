@@ -29,8 +29,10 @@
 // philosophy behind why this reel is identity-load-bearing.
 
 import log from "../../seedReality/log.js";
+import { v4 as uuidv4 } from "uuid";
 import { getInternalConfigValue } from "../../internalConfig.js";
 import Fact from "./fact.js";
+import { computeHash, contentOf, GENESIS_PREV } from "./hash.js";
 import { hooks } from "../../hooks.js";
 import { IBP_ERR, IbpError } from "../../ibp/protocol.js";
 import { getRealityConfigValue } from "../../realityConfig.js";
@@ -169,20 +171,42 @@ export async function logFact(input) {
     date: new Date(),
   };
 
-  // Reel-bearing path: allocate seq + insert under the per-reel append
-  // lock. Per STAMPER.md, pairing them eliminates the transient-gap
-  // window where a slow inserter could leave its seq stranded behind
-  // the fold marker. The critical section is microscopic: one $inc and
-  // one insert. Different reels run in parallel; only same-reel writes
-  // serialize at this instant.
+  // Reel-bearing path: allocate seq, chain the hash, insert — all
+  // under the per-reel append lock. Per STAMPER.md, pairing seq alloc
+  // with insert eliminates the transient-gap window where a slow
+  // inserter could leave its seq stranded behind the fold marker.
+  // The lock also serializes the prev-hash lookup so concurrent
+  // appenders can't both read the same `prev` and fork the chain.
   //
   // Target-less or place/stance facts skip the lock — they have no
-  // reel and stay outside the fold model.
+  // reel and stay outside the fold model. They carry p=h=null.
   if (finalTarget && REEL_KINDS.has(finalTarget.kind) && finalTarget.id) {
     try {
       await withReelLock(finalTarget.kind, finalTarget.id, async () => {
         const seq = await allocSeq(finalTarget.kind, finalTarget.id);
-        await Fact.create({ ...baseDoc, seq });
+
+        // INTEGRITY chain: read prev fact's h. seq is monotonic per
+        // reel; under this lock, prev sits at exactly seq-1. A missing
+        // prev (legacy pre-INTEGRITY row, or a true gap from a crashed
+        // alloc) falls back to GENESIS_PREV — the backfill migration
+        // normalizes legacy rows so post-backfill all in-range prevs
+        // carry h.
+        let p = GENESIS_PREV;
+        if (seq > 1) {
+          const prev = await Fact.findOne(
+            { "target.kind": finalTarget.kind, "target.id": finalTarget.id, seq: seq - 1 },
+            { h: 1 },
+          ).lean();
+          if (prev?.h) p = prev.h;
+        }
+
+        // Mint _id explicitly so it lands in the hashed content; the
+        // schema default would generate it inside Mongoose, too late
+        // for inclusion in the digest.
+        const _id = uuidv4();
+        const fullDoc = { ...baseDoc, _id, seq, p };
+        const h = computeHash(p, contentOf(fullDoc));
+        await Fact.create({ ...fullDoc, h });
       });
     } catch (err) {
       log.error("DB", `Fact append failed (${action} on ${finalTarget.kind}:${finalTarget.id}): ${err.message}`);

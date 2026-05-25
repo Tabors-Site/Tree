@@ -67,5 +67,15 @@ export function reduce(state, fact) {
     };
   }
 
+  // updatedAt is reducer-owned (no Mongoose timestamps on Being). On
+  // any state-mutating apply, bump to the current fact's date so
+  // rebuild from the reel produces the same value the live fold
+  // landed on. applyCreateBeing already seeds both createdAt and
+  // updatedAt on be:register; this catches every later mutating
+  // fact and keeps the row deterministic from the reel alone.
+  if (next !== state) {
+    next = { ...next, updatedAt: fact.date };
+  }
+
   return next === state ? { ...state } : next;
 }

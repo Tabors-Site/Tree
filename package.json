@@ -10,7 +10,7 @@
   "scripts": {
     "reality": "cd reality && node plant.js",
     "start": "cd reality && node plant.js",
-    "dev": "cd reality && SITE_DEV=true node plant.js",
+    "dev": "cd reality && node plant.js",
     "build": "cd site && npm run build",
     "dev:site": "cd site && npm run dev",
     "postinstall": "cd reality && npm install && cd ../site && npm install --no-optional && cd ../cli && npm install",

@@ -98,7 +98,7 @@ truth; the projection is its self-healing cache.**
 
 `ctx` is built by the verb dispatcher: `{ being, verb, actId, provider }`.
 `actId` is required — assign opened it. A missing actId throws,
-because every act lives in a moment ([presentism](../FACTORY.md#presentism-and-what-it-forces)).
+because every act lives in a moment (see [FACTORY.md](../seed/FACTORY.md) "Genesis").
 
 `build` includes:
   - `target: {type, id}` — which reel
@@ -181,8 +181,8 @@ Suspect classes for the audit:
 - Reconciler or sweep code that "corrects" state without a fact.
 
 Boot scaffolding is the one legitimate bypass — the I-Am has to plant
-itself before the verb system exists. Per [presentism](../FACTORY.md),
-genesis is the exception. Everything else routes through `emitFact`.
+itself before the verb system exists. Per [FACTORY.md](../seed/FACTORY.md) "Genesis", genesis is the
+exception. Everything else routes through `emitFact`.
 
 ## Acceptance
 

@@ -34,6 +34,19 @@ treeos start
 - **Node.js** 18+
 - **MongoDB** running locally or accessible URI
 
+## Reality/ File Operation Order
+
+(Can always do npm start for auto)
+
+INITIAL ->
+
+Plant.js - Plant the seed. FIRST TIME ONLY
+This will auto run Begin.js -> Genesis.js
+
+-> then every other time
+
+Begin.js only
+
 ## Reality has two layers — read this once
 
 **Reality** is the whole world the seed makes. It is dual-natured. The seed sits at the membrane and forms both layers from one act of planting.
@@ -44,7 +57,7 @@ treeos start
 
 The seed is the only thing where both layers are simultaneously real. Above, it is the server. Inside, it is the I-Am. The `.source` seed space is the mirror — through it the inner beings can SEE the outer-realm matter they were made from, including this very file you are reading.
 
-**Place** is something else again. A place is one being's fold of the inner-realm reality in one moment — the materials assembled into a face for that being right then. *The place lives only inside the stamper.* Outside the moment window there is no place anywhere; only waiting beings and facts on reels. A place is never persisted; the descriptor a SEE returns is one place, composed for one SEE, gone after.
+**Place** is something else again. A place is one being's fold of the inner-realm reality in one moment — the materials assembled into a face for that being right then. _The place lives only inside the stamper._ Outside the moment window there is no place anywhere; only waiting beings and facts on reels. A place is never persisted; the descriptor a SEE returns is one place, composed for one SEE, gone after.
 
 So: two layers of reality (outer-realm host + inner-realm world), plus place (the per-moment per-being fold of the inner-realm). See [`philosophy/MOMENT.md`](philosophy/MOMENT.md) for the long version of the inner side.
 
@@ -73,23 +86,23 @@ Every act inside the inner-realm is one being, in one **stance**, using one verb
 
 Four verbs make up the whole public surface.
 
-| Verb       | Acts on              | What it does                                                                                  |
-| ---------- | -------------------- | --------------------------------------------------------------------------------------------- |
-| **SEE**    | Space, Matter, Being | Read at the target stance, return a descriptor. Writes nothing.                               |
-| **DO**     | Space, Matter        | Mutate at the target through a registered operation. Stamps a Fact on the target's reel.      |
-| **SUMMON** | Being                | Stamp a `be:summon` Fact on the summoner's reel; cross-cutting fold maintains the inbox.       |
-| **BE**     | Being (self)         | Identity. Register, claim, release, switch stance. Stamps a Fact on the actor's own reel.     |
+| Verb       | Acts on              | What it does                                                                              |
+| ---------- | -------------------- | ----------------------------------------------------------------------------------------- |
+| **SEE**    | Space, Matter, Being | Read at the target stance, return a descriptor. Writes nothing.                           |
+| **DO**     | Space, Matter        | Mutate at the target through a registered operation. Stamps a Fact on the target's reel.  |
+| **SUMMON** | Being                | Stamp a `be:summon` Fact on the summoner's reel; cross-cutting fold maintains the inbox.  |
+| **BE**     | Being (self)         | Identity. Register, claim, release, switch stance. Stamps a Fact on the actor's own reel. |
 
 Six primitives carry the world:
 
-| Primitive         | What it is                                                                                                |
-| ----------------- | --------------------------------------------------------------------------------------------------------- |
-| **Being**         | An identity instance. Humans, AI, scripted beings, future composites. The I-Am is the first being.        |
-| **Space**         | A position in the tree. Holds matter, hosts beings, owns quality namespaces.                              |
-| **Matter**        | Stuff inside a space. `origin` names where it lives (ibp, filesystem, web, cross-reality).                |
-| **Fact**          | One recorded change to a being / space / matter. A chain of facts, folded, is Truth.                      |
-| **Act**           | One sealed moment of one being — the doer's committed deed. Every Fact carries the `actId` of its Act.     |
-| **LlmConnection** | Per-being LLM client config. Stored as entries under `Being.qualities.llmConnections`.                    |
+| Primitive         | What it is                                                                                             |
+| ----------------- | ------------------------------------------------------------------------------------------------------ |
+| **Being**         | An identity instance. Humans, AI, scripted beings, future composites. The I-Am is the first being.     |
+| **Space**         | A position in the tree. Holds matter, hosts beings, owns quality namespaces.                           |
+| **Matter**        | Stuff inside a space. `origin` names where it lives (ibp, filesystem, web, cross-reality).             |
+| **Fact**          | One recorded change to a being / space / matter. A chain of facts, folded, is Truth.                   |
+| **Act**           | One sealed moment of one being — the doer's committed deed. Every Fact carries the `actId` of its Act. |
+| **LlmConnection** | Per-being LLM client config. Stored as entries under `Being.qualities.llmConnections`.                 |
 
 The seed schemas never change. Everything new lives in the per-primitive `qualities` Map — the open extension-defined layer that answers "of what sort is this particular space, matter, or being?" The four verbs are the only public surface; every operation is registered through them. Stance authorization sits at the gate on every verb.
 
@@ -184,8 +197,7 @@ Build a full OS distribution. Test it. Strip it to the seed. Build a different o
 
 ## Learn More
 
-- [`seed/SEED.md`](seed/SEED.md) — seed internals (the first-person contract).
-- [`seed/FACTORY.md`](seed/FACTORY.md) — the four folders: materials / ibp / present / past.
+- [`seed/FACTORY.md`](seed/FACTORY.md) — seed internals (the first-person contract; covers the four folders materials / ibp / present / past).
 - [`philosophy/MOMENT.md`](philosophy/MOMENT.md) — the moment is the atom.
 - [`extensions/EXTENSION_FORMAT.md`](extensions/EXTENSION_FORMAT.md) — the full extension contract.
 - [`extensions/_template/`](extensions/_template/) — a scaffold to copy.

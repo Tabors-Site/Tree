@@ -71,6 +71,12 @@ People may see fact and conflate it with "the one objective truth". I am declari
 
 The I Am is the first stamping, and the continuation of all that comes. The place grows in reels like trees, glued together by the I am's root being. Each moment is the folding off of all that being's facts from The I Am to continue A Truth.
 
+====================
+
+factory6.jpg
+
+ChatGPT trying to synthesize my system. Did an OK job but not perfect.
+
 =====================
 
 seed.jpg

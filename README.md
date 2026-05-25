@@ -1,216 +1,129 @@
 # TreeOS
 
-An operating system for AI agents. The kernel is called the seed. You plant it on a place. It grows trees. Modular extensions, federated network, cascade communication. Self-hosted. Open source. Decentralized.
-
-Four primitives: structure (nodes in hierarchies), intelligence (conversation loop), extensibility (loader and hooks), communication (cascade and .flow).
+An operating system for AI agents. You plant a seed on a host; it
+grows a **reality**, the world a network of beings inhabits and acts
+in. Six primitives (Being, Space, Matter, Fact, Act, LlmConnection),
+four verbs (SEE, DO, SUMMON, BE), one extensible kernel. Modular
+extensions on top. Self-hosted. Federated. Open source.
 
 ## Quick start
 
-You need Node.js 18+ and MongoDB running.
+Requires Node.js 18+ and a running MongoDB.
 
-```
-npx create-treeos my-place
-cd my-place
-npm start
-```
-
-First run walks you through setup: domain, name, MongoDB, and extension selection from the registry. After that, your place boots.
-
-## Connect with the CLI
-
-```
-npm install -g treeos
-treeos connect http://localhost:3000
-treeos register
-treeos start
+```bash
+git clone https://github.com/taborgreat/Tree.git
+cd Tree
+npm install            # installs reality/, site/, cli/ via postinstall
+npm start              # boots the reality
 ```
 
-Registration creates your account. The setup wizard walks you through connecting your LLM (any OpenAI-compatible endpoint: Ollama, OpenRouter, Together, etc.) and planting your first tree.
+First boot runs `plant.js`, a setup wizard that writes `.env` (domain,
+MongoDB URI, JWT secret), mints the operator being, and asks for AGPL
+consent. Every later boot runs `begin.js`, which opens senses and
+fires `genesis.js`.
 
-## Using it
+## Being in it
 
-```
-treeos chat "help me plan my week"     # Talk to the AI
-treeos mkdir "Workouts"                # Create a branch
-treeos cd Workouts                     # Navigate into it
-treeos place "chest press 4x10"        # Place content into the tree
-treeos query "what's my schedule?"     # Ask the tree a question
-treeos note "learned something new"    # Add a text note
-treeos note ./workout-log.csv          # Upload a file as a note
-```
+Use the **3D portal** in [`portal/3d-app/`](portal/3d-app/). It is a
+Three.js + Vite client that speaks IBP (the four verbs over
+WebSocket) and renders positions as a navigable 3D world.
 
-Notes are the base content unit. A note can be plain text or any file type (images, PDFs, CSVs, audio). Text notes are searchable and visible to the AI. File notes are stored and served.
-
-## What it is
-
-- **Place** is your server. It stores your trees, runs the AI, and exposes a JSON API.
-- **CLI** (`treeos`) is how you interact with it. Navigate trees, chat with AI, manage extensions.
-- **Extensions** are modular packages. Install what you need, disable what you don't.
-- **Site** (optional) is a React web frontend.
-- **Horizon** is the network registry. Places discover each other and share extensions.
-
-## Extensions
-
-95 extensions across four bundles. The kernel handles nodes, notes, auth, and AI conversation. Everything else is an extension.
-
-> **WARNING:** Extensions run in the same Node.js process as the kernel. They can access the filesystem, network, and database. Review all third-party extension code before installing. The kernel is safe. Extensions are as safe as the code they contain.
-
-```
-treeos ext list                    # See what's loaded
-treeos ext search                  # Browse the registry
-treeos ext install understanding   # Pull from registry (auto-resolves deps, verifies SHA256)
-treeos ext disable solana          # Skip on next boot
-treeos ext enable solana           # Load again on next boot
-treeos ext uninstall blog          # Remove (data stays in DB)
-treeos ext publish my-extension    # Share with the network
+```bash
+cd portal/3d-app
+npm install
+npm run dev            # Vite dev server; open the URL it prints
 ```
 
-### Per-node extension scoping
+The 3D portal is **in active development**. Expect rough edges. Point
+it at your local reality (defaults to `http://localhost:3000`),
+register, and you are in.
 
-Any node controls which extensions are active at that position. Block an extension at a tree root and it disappears from the entire tree. Restrict it to read-only and it can observe but not modify. Navigate somewhere else and everything is back.
+Optional landing/docs site:
 
-```
-treeos ext-scope                   # Show active/blocked/restricted at current position
-treeos ext-scope -t                # Tree-wide view of all blocks
-treeos ext-block solana scripts    # Block extensions (inherits to children)
-treeos ext-allow solana            # Remove from block list
-treeos ext-restrict food read      # Read-only tools only (hooks still fire)
+```bash
+npm run dev:site       # serves site/ via Vite
 ```
 
-Three levels: **active** (full access), **restricted** (read-only tools), **blocked** (nothing). The kernel filters tools using MCP `readOnlyHint` annotations. Extensions check `isExtensionBlockedAtNode()` in their routes.
+## The model in one paragraph
 
-Example: a Health tree with fitness and food extensions. Each branch restricts the other to read-only. The fitness coach references nutrition data. The food coach sees exercise history. Neither modifies the other's branch.
+The **reality** is the whole world the seed makes. It is durable,
+shared by every perspective. A **place** is one being's fold of the
+reality for one moment. Beings act through the four verbs at IBP
+addresses (`<reality>/<path>@<being>`); every act stamps a **Fact** on
+the reel of the thing it changed. The fold replays facts on demand to
+build the face a being sees. No state is stored as state; everything
+is stored as facts, and faces are rebuilt fresh.
 
-### Four bundles
-
-| Bundle | Count | What it is |
-|--------|-------|-----------|
-| **treeos-cascade** | 8 | The nervous system. Signals propagate, get filtered, compressed, monitored. |
-| **treeos-intelligence** | 14 | Self-awareness. The tree compresses, detects contradictions, profiles users, acts autonomously, searches, explores, traces, maps boundaries, tracks competence, notices conversational shifts, proposes new extensions, remembers every age. |
-| **treeos-connect** | 8 | External channels. Telegram, Discord, Slack, email, SMS, webhooks, Matrix. |
-| **treeos-maintenance** | 5 | Hygiene. Prune dead branches, reorganize, changelog, daily digest, delegate stuck work. |
-
-Plus 20 base extensions (ship with every place), 8 standalone, and domain-specific extensions for fitness, food, solana, billing, and more.
-
-### Building an extension
-
-Copy the template and start building:
-
-```
-cp -r place/extensions/_template place/extensions/my-extension
-```
-
-An extension declares what it needs and registers hooks, routes, tools, and AI modes:
-
-```js
-// manifest.js
-export default {
-  name: "my-extension",
-  version: "1.0.0",
-  needs: { models: ["Node"] },
-  provides: { routes: "./routes.js" },
-};
-```
-
-Full reference: `place/extensions/EXTENSION_FORMAT.md`
-
-## Node types
-
-Six core types provide a shared vocabulary:
-
-| Type | Meaning |
-|------|---------|
-| `goal` | A desired outcome |
-| `plan` | A strategy or sequence of steps |
-| `task` | A discrete piece of work |
-| `knowledge` | Stored information or understanding |
-| `resource` | A tool, skill, capability, or reference |
-| `identity` | Who or what this tree represents |
-
-Type is a free-form string. Custom types are valid. `null` means untyped.
-
-## LLM management
-
-Every user connects their own LLM (or uses tree owner's models):
-
-```
-treeos llm add                         # Interactive setup
-treeos llms                            # List connections
-treeos llm assign main <id>            # Set default model
-treeos llm tree-assign respond <id>    # Set model for chat on this tree
-treeos llm tree-assign placement <id>  # Set model for tree-building
-```
-
-Any OpenAI-compatible endpoint works. Core tree slots: default, placement, respond, notes. Extensions register additional slots (understanding, cleanup, drain, notification) via `core.llm.registerModeAssignment()`.
-
-## Configuration
-
-Boot settings live in `.env` (generated by setup wizard):
-`REALITY_DOMAIN`, `PORT`, `MONGODB_URI`, `JWT_SECRET`
-
-Runtime settings stored in the `.config` system node:
-`REALITY_NAME`, `PLACE_DEFAULT_TIER`, `ENABLE_FRONTEND_HTML`, `HORIZON_URL`
-
-Kernel tunables (applied at boot from `.config` node):
-`llmTimeout`, `llmMaxRetries`, `maxToolIterations`, `maxConversationMessages`, `noteMaxChars`, `treeSummaryMaxDepth`, `treeSummaryMaxNodes`, `carryMessages`, `sessionTTL`, `staleSessionTimeout`
-
-Security config:
-`allowedLlmDomains` - array of allowed LLM endpoint domains for non-admin users. Empty or unset means any external domain. Example: `["api.openai.com", "openrouter.ai", "api.anthropic.com"]`. Admins always bypass for localhost/local LLM flexibility.
-
-Extension settings declared in each extension's manifest under `provides.env`. Extensions read their own config via `core.config.get()`.
-
-Manage with `treeos config set <key> <value>` or the admin API. With the place-manager extension, the AI can manage config through chat.
-
-## Cascade
-
-When content is written at a node marked for cascade, the kernel announces it. Extensions react, propagate to other nodes, and deliver signals across places. Every signal produces a visible result stored in the `.flow` system node.
-
-```
-treeos config set cascadeEnabled true
-```
-
-Set `metadata.cascade = { enabled: true, propagate: "children" }` on any node. Now every note written there fires `onCascade`. Six result statuses: succeeded, failed, rejected, queued, partial, awaiting. None terminal.
-
-The kernel has four primitives: structure (nodes in hierarchies), intelligence (conversation loop and resolution chains), extensibility (loader, hooks, pub-sub), and communication (cascade, .flow, visible results). Everything else is emergent behavior from these four interacting.
-
-## Federation (Canopy)
-
-Places peer with each other. Users on one place can browse public trees on another, receive invites, and contribute remotely.
-
-```
-treeos peers add my-friend.com
-treeos browse my-friend.com
-treeos search "fitness"
-```
+For the long form, read the doctrine in
+[`reality/philosophy/`](reality/philosophy/), starting with
+[MOMENT.md](reality/philosophy/MOMENT.md).
 
 ## Project layout
 
 ```
-place/
-  seed/           The kernel. Two schemas, conversation loop, hooks, cascade.
-  extensions/     95 extensions across four bundles plus standalone.
-  canopy/         Federation. Peering, proxy, events, identity.
-  routes/         HTTP API endpoints.
-  orchestrators/  Pipeline runtime, locks, helpers.
-  mcp/            MCP server (AI tool execution).
-  plant.js        Operator's act. Plants the seed. Once only.
-  begin.js      t=0. Opens senses, fires genesis. Beginning on first boot, awakening after.
-  genesis.js      The unfolding. Forms the earth within the place.
+reality/             The reality. Boot trilogy + seed + protocols + extensions.
+  plant.js              First boot. Setup wizard, operator mint.
+  begin.js              Every boot. Opens HTTP/WebSocket; fires genesis.
+  genesis.js            The unfolding. Indexes, config, migrations, beings.
+  seed/                 The seed. The factory. The whole apparatus.
+  protocols/            What conversation over the wire looks like (IBP, canopy, mcp).
+  transports/           Thin carriers (HTTP, WebSocket).
+  extensions/           Where you build. _template/ is the scaffold.
+  philosophy/           The doctrine: MOMENT, FOLD, STAMPER, MATERIALS, chat, math.
 
-cli/              CLI client (treeos command). Separate install.
-site/             React + Vite frontend (treeos.ai). Separate deploy.
-horizon/          The Horizon (place discovery + extension registry). Separate server.
-create-treeos/    Scaffolder (npx create-treeos my-place).
+portal/3d-app/      The 3D portal client (in dev). Vite + Three.js.
+site/               Landing and docs site. React + Vite.
+cli/                CLI client (separate package).
+horizon/            Public directory + extension registry (standalone).
+create-treeos/      Scaffolder for new TreeOS projects.
 ```
 
-## Protocol
+## Building an extension
 
-The core protocol is documented in [PROTOCOL.md](PROTOCOL.md). Extensions are documented in [EXTENSIONS.md](EXTENSIONS.md). Every place serves its capabilities at `GET /api/v1/protocol`.
+Copy the template:
 
-## Contributing
+```bash
+cp -r reality/extensions/_template reality/extensions/my-extension
+```
 
-Contributing guide is in progress. For now: fork, branch, PR. Extension development is documented in `place/extensions/EXTENSION_FORMAT.md`.
+Edit `manifest.js` to declare what you need and provide; edit
+`index.js` to register operations, roles, tools, hooks, and seeds.
+Restart the reality.
+
+Full developer guide:
+[`reality/extensions/README.md`](reality/extensions/README.md).
+Manifest reference:
+[`reality/extensions/EXTENSION_FORMAT.md`](reality/extensions/EXTENSION_FORMAT.md).
+
+## Where to read deeper
+
+- [`reality/seed/FACTORY.md`](reality/seed/FACTORY.md), the seed's own
+  contract (first-person, from the I-Am).
+- [`reality/philosophy/MOMENT.md`](reality/philosophy/MOMENT.md), the
+  moment is the atom. Read first.
+- [`reality/philosophy/FOLD.md`](reality/philosophy/FOLD.md), the read
+  side: facts in, face out.
+- [`reality/philosophy/STAMPER.md`](reality/philosophy/STAMPER.md),
+  the write side: act in, facts out.
+- [`reality/philosophy/MATERIALS.md`](reality/philosophy/MATERIALS.md),
+  what the world is made of.
+- [`reality/philosophy/math.md`](reality/philosophy/math.md), the
+  formal statement (sets, reels, invariants).
+- [`portal/README.md`](portal/README.md), the portal client and IBP
+  vocabulary.
+- [`CLAUDE.md`](CLAUDE.md), the working notes for AI assistants
+  helping on this codebase.
+
+## Security
+
+Extensions run inside the same Node process as the seed. They can
+reach the filesystem, the network, the database. Review third-party
+extension code before installing. The seed is safe; an extension is
+as safe as the code in it. Extensions declaring `scope: "confined"`
+in their manifest are inactive until an operator explicitly allows
+them at a position.
 
 ## License
 
-AGPL-3.0. See [LICENSE](LICENSE) for details.
+AGPL-3.0. See [reality/seed/LICENSE](reality/seed/LICENSE) for the
+full text and the seed preamble.

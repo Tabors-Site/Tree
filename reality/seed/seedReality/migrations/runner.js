@@ -136,10 +136,10 @@ export async function runSeedMigrations() {
   if (compareSemver(storedVersion, currentVersion) >= 0) {
     // Already at or ahead of current version. Nothing to do.
     log.verbose("Seed", `Seed version ${currentVersion} (up to date)`);
-    return;
+    return 0;
   }
 
-  log.info("Seed", `Migrating seed from ${storedVersion} to ${currentVersion}`);
+  log.verbose("Seed", `Migrating seed from ${storedVersion} to ${currentVersion}`);
 
   const migrations = discoverMigrations();
   let ran = 0;
@@ -152,11 +152,11 @@ export async function runSeedMigrations() {
 
     const startMs = Date.now();
     try {
-      log.info("Seed", `Running migration ${version}...`);
+      log.verbose("Seed", `Running migration ${version}...`);
       await runMigration(version, file);
       ran++;
       const elapsed = Date.now() - startMs;
-      log.info("Seed", `Migration ${version} complete (${elapsed}ms)`);
+      log.verbose("Seed", `Migration ${version} complete (${elapsed}ms)`);
     } catch (err) {
       const elapsed = Date.now() - startMs;
       log.error("Seed", `Migration ${version} failed after ${elapsed}ms: ${err.message}`);
@@ -184,9 +184,10 @@ export async function runSeedMigrations() {
   );
 
   if (ran > 0) {
-    log.info("Seed", `${ran} migration(s) applied. Seed is now at ${currentVersion}`);
+    log.verbose("Seed", `${ran} migration(s) applied. Seed is now at ${currentVersion}`);
   } else {
     // No migration files but version changed (minor bump with no migration needed)
     log.verbose("Seed", `Seed version updated to ${currentVersion}`);
   }
+  return ran;
 }

@@ -3,13 +3,15 @@ node_modules/
 dist/
 *.log
 
-place/node_modules
-place/uploads
-place/.place/
-place/.env
-place/extensions/.disabled
-.place/
-place/oldExtensions/
+.claude/
+
+reality/node_modules
+reality/uploads
+reality/.place/
+reality/.env
+reality/extensions/.disabled
+reality/.place/
+reality/oldExtensions/
 
 create-treeos/template/uploads
 create-treeos/template/.env

@@ -140,7 +140,7 @@ export async function genesis(app, opts = {}) {
       mongoose.connection.once("error", reject);
     });
   }
-  log.info("Reality", "MongoDB connected. Memory online.");
+  log.info("Genesis", "I open my memory.");
 
   // The physical floor every space, matter, being, and Fact sits on.
   const { ensureIndexes } = await import("./seed/seedReality/indexes.js");
@@ -153,22 +153,28 @@ export async function genesis(app, opts = {}) {
   const Space = (await import("./seed/materials/space/space.js")).default;
   const existingRoot = await Space.findOne({ parent: null }).lean();
   bootMode = existingRoot ? "Awakening" : "Beginning";
-  log.info("Reality", `${bootMode}. ${reality.name} at ${reality.domain}.`);
+  log.info("Genesis", bootMode === "Beginning" ? "I am that I am." : "I awake.");
 
   // I plant the place's space root and the nine seed spaces. My own Being
   // row places inside this step so every Fact from t=0 has an actor.
   await ensureSpaceRoot();
+  if (bootMode === "Beginning") {
+    log.info("Genesis", "I plant the space root.");
+    log.info("Genesis", "I plant my nine seed spaces.");
+  }
 
   // I read my own remembered settings out of .config.
   await initRealityConfig();
+  log.info("Genesis", "I remember my settings.");
 
-  // I mirror the place/ directory into space and matter under
+  // I mirror the reality/ directory into space and matter under
   // `.source`. The source-space id cache primes for the read-only
   // DO gate, then the disk walk runs detached so a multi-thousand
   // file scan does not block boot. Subsequent boots reconcile
   // incrementally.
   const { ensureSourceTree } = await import("./seed/materials/space/source.js");
   await ensureSourceTree();
+  log.info("Genesis", "I see my own body.");
 
   // Default stance permissions (arrival, owner) and BE config flags
   // on the place root if not already present. Idempotent. Does not
@@ -176,11 +182,15 @@ export async function genesis(app, opts = {}) {
   const { seedDefaultStancePermissions } =
     await import("./seed/ibp/authorize.js");
   await seedDefaultStancePermissions();
+  if (bootMode === "Beginning") {
+    log.info("Genesis", "I set my stance defaults.");
+  }
 
   // Seed migrations run after config is loaded and before extensions.
   const { runSeedMigrations } =
     await import("./seed/seedReality/migrations/runner.js");
-  await runSeedMigrations();
+  const migrationsRan = await runSeedMigrations();
+  if (migrationsRan) log.info("Genesis", "I update my form.");
 
   // Prime the severed-roots cache. Any thread whose Stamps carry
   // severedAt from a prior run gets loaded into the in-memory Set so
@@ -246,7 +256,7 @@ export async function genesis(app, opts = {}) {
             { name: plantCtx.operatorName, password: plantCtx.operatorPassword },
             { scaffold: true },
           );
-          log.info("Genesis", `operator being "@${plantCtx.operatorName}" minted by cherub`);
+          log.info("Genesis", `I create @${plantCtx.operatorName}.`);
         } catch (err) {
           log.error("Genesis", `operator-being mint failed: ${err.message}`);
         }
@@ -364,6 +374,12 @@ export async function genesis(app, opts = {}) {
     getConfigValue: getRealityConfigValue,
     registerRawWebhook: opts.registerRawWebhook,
   });
+  {
+    const loadedCount = getLoadedExtensionNames().length;
+    if (loadedCount > 0) {
+      log.info("Genesis", `I load my ${loadedCount} extension${loadedCount === 1 ? "" : "s"}.`);
+    }
+  }
 
   await syncExtensionsToTree(getLoadedManifests());
 
@@ -404,7 +420,7 @@ export async function genesis(app, opts = {}) {
     await import("./seed/materials/space/spaceCircuit.js");
   startCircuitJob();
 
-  log.verbose("Reality", "Background jobs started");
+  log.info("Genesis", "I start my background jobs.");
 
   // I mirror my live registries into the .tools, .roles, and
   // .operations seed spaces. SEE on those addresses now reflects
@@ -424,7 +440,7 @@ export async function genesis(app, opts = {}) {
         syncRolesToSubstrate(),
         syncOperationsToSubstrate(),
       ]);
-      log.info(
+      log.verbose(
         "RegistryMirror",
         `synced: tools(${t.created}+${t.kept}-${t.removed}) ` +
           `roles(${r.created}+${r.kept}-${r.removed}) ` +

@@ -12,8 +12,8 @@
 //
 // The Being row for I_AM is registered during ensureSpaceRoot's
 // genesis pass (ensureIAm in seed/sprout.js). The stance
-// `<reality>/@I_AM` resolves to this being. See SEED.md (THE
-// PHILOSOPHY OF THE SEED) for why the constant exists and what
-// the I-Am is.
+// `<reality>/@I_AM` resolves to this being. See FACTORY.md "The
+// I-Am, as a Being row" for why the constant exists and what the
+// I-Am is.
 
 export const I_AM = "I_AM";

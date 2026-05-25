@@ -35,7 +35,7 @@ seed/              The seed. Four folders, four roles. NEVER modify.
   services.js        Assembles `reality` from the four folders above.
   spaceRoot.js        This reality's space root + the nine seed spaces.
   realityConfig.js      This reality's config.
-  SEED.md            Seed internals doc (first-person, from the I-Am).
+  FACTORY.md         Seed internals doc (first-person, from the I-Am).
   LICENSE            AGPL-3.0 with a preamble naming the seed.
 ```
 
@@ -179,7 +179,7 @@ treeos ext install <name>       # install from registry
 
 ## Learn more
 
-- `seed/SEED.md` for seed internals
+- `seed/FACTORY.md` for seed internals
 - `extensions/EXTENSION_FORMAT.md` for the full extension contract
 - `extensions/_template/` for a scaffold to copy
 - https://treeos.ai for documentation
