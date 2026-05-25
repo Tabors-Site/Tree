@@ -168,7 +168,7 @@ export class PortalClient {
    * second call will receive the same result.
    *
    * @param {string} address  position (or stance; @being is stripped server-side)
-   * @param {string} action   registered op name ("birth", "set", "death", "plant", "food:log-meal", ...)
+   * @param {string} action   registered op name ("create", "set", "end", "plant", "<ext>:<action>", ...)
    * @param {object} [args]   op-specific arguments
    * @param {object} [opts]   { correlation?: string, timeoutMs?: number }
    */
@@ -225,7 +225,7 @@ export class PortalClient {
    * BE: identity operations on a stance / place.
    *
    * @param {string} op           "register" | "claim" | "release" | "switch"
-   * @param {string} address      stance ("<place>/@auth", "<place>/@<name>") or bare place ("<place>")
+   * @param {string} address      stance ("<place>/@cherub", "<place>/@<name>") or bare place ("<place>")
    * @param {object} [credentials] op-specific fields ({ name, password, ... })
    */
   async be(op, address, credentials = {}) {

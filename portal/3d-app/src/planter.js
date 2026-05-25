@@ -1,18 +1,17 @@
 // TreeOS Portal 3D — seed planter.
 //
-// Orchestrates the two-step flow that turns a held seed into living
-// substrate: (1) DO create-child at the current position to spawn a
-// fresh node — when that position is the place root, the creator is
-// stamped as `rootOwner` by the seed — and (2) DO plant-seed at the
-// newly-created node id, which runs the seed's scaffold recipe
-// (materializing Ruler/Planner/Contractor/Foreman/coder beings for
-// `coder:governing-coder`).
+// Orchestrates the two-step flow that turns a held seed into a planted
+// scaffold: (1) DO create at the current position to spawn a fresh
+// space — when that position is the place root, the creator is stamped
+// as `rootOwner` by the seed — and (2) DO plant at the newly-created
+// space id, which runs the registered seed's plant recipe (whatever
+// the extension that registered the seed defined).
 //
-// Why two DOs and not one: planting INTO an empty position would mean
-// the seed scaffolds over the operator's existing tree. Planting AT a
-// NEW position lets the operator place many independent rulerships
-// across the place. The first DO declares the place; the second declares
-// what grows there.
+// Why two DOs and not one: planting INTO an existing position would
+// mean the seed scaffolds over the operator's existing children.
+// Planting AT a NEW position lets the operator place many independent
+// scaffolds across the place. The first DO declares where; the second
+// declares what grows there.
 
 let _modal = null;
 
@@ -21,7 +20,7 @@ let _modal = null;
  * with { name } on submit, or rejects on cancel.
  *
  * @param {object} args
- * @param {object} args.item        the hotbar slot (seed metadata)
+ * @param {object} args.item        the hotbar slot (seed qualities)
  * @param {string} args.parentLabel human label of the place we're planting at ("treeos.ai/")
  */
 export function promptForName({ item, parentLabel }) {
@@ -82,9 +81,9 @@ export function isPlanterOpen() {
 /**
  * Plant a seed end-to-end. Two DOs over the IBP socket:
  *
- *   1. place.do(parentAddress, "birth", { kind: "space", spec: { name, type } })
- *      → returns the new node. At the place root this stamps `rootOwner`.
- *   2. place.do(newNodeAddress, "plant", { seed: seedName })
+ *   1. place.do(parentAddress, "create", { kind: "space", spec: { name, type } })
+ *      → returns the new space. At the place root this stamps `rootOwner`.
+ *   2. place.do(newSpaceAddress, "plant", { seed: seedName })
  *      → runs the seed's scaffold; returns plantedSeedId + plantedThings.
  *
  * Resolves with `{ newNodeAddress, plantedSeedId, plantedThings }`.
@@ -92,15 +91,15 @@ export function isPlanterOpen() {
  * @param {object} args
  * @param {object} args.client          PortalClient
  * @param {string} args.parentAddress   parent position ("treeos.ai/" for place root)
- * @param {string} args.seedName        registered seed name (e.g. "coder:governing-coder")
- * @param {string} args.newNodeName     name for the new node
+ * @param {string} args.seedName        registered seed name (e.g. "<ext>:<seed>")
+ * @param {string} args.newNodeName     name for the new space
  * @param {string} [args.newNodeType]   defaults to "branch"
  */
 export async function plantSeed({ client, parentAddress, seedName, newNodeName, newNodeType = "branch" }) {
-  // Step 1 — create the new node. The seed's birth op returns the
-  // created node (full doc). At the place root, isRoot=true and
+  // Step 1 — create the new space. The seed's create op returns the
+  // created space (full doc). At the place root, isRoot=true and
   // rootOwner gets stamped with the creator's beingId.
-  const created = await client.do(parentAddress, "birth", {
+  const created = await client.do(parentAddress, "create", {
     kind: "space",
     spec: {
       name: newNodeName,
@@ -108,14 +107,14 @@ export async function plantSeed({ client, parentAddress, seedName, newNodeName, 
     },
   });
 
-  const newNodeId   = created?._id || created?.id || created?.nodeId;
+  const newNodeId   = created?._id || created?.id || created?.spaceId;
   const newNodePath = derivePath(parentAddress, newNodeName);
   if (!newNodeId) {
-    throw new Error("birth returned no node id");
+    throw new Error("create returned no space id");
   }
 
-  // Step 2 — plant the seed at the new node. Address by path (the
-  // resolver will place on the same node we just created).
+  // Step 2 — plant the seed at the new space. Address by path (the
+  // resolver will place on the same space we just created).
   const planted = await client.do(newNodePath, "plant", {
     seed: seedName,
   });

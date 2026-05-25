@@ -157,9 +157,9 @@ function payloadHintFor(verb) {
 function addressPlaceholderFor(verb, place) {
   switch (verb) {
     case "see":    return `${place}/.discovery`;
-    case "do":     return `${place}/<nodeId>`;
-    case "summon": return `${place}/<nodeId>@<being>`;
-    case "be":     return `${place}/@auth`;
+    case "do":     return `${place}/<spaceId>`;
+    case "summon": return `${place}/<spaceId>@<being>`;
+    case "be":     return `${place}/@cherub`;
     default:       return place;
   }
 }

@@ -5,10 +5,22 @@
 //
 // Scheduler picks an intake entry off a being's line and hands it
 // here. assign loads the receiver Being, resolves the active role,
-// checks role-carry, opens the Act row that frames this moment,
-// and builds the summon context the moment's dispatch needs. It
-// returns { actId, role, summonCtx } for moment to dispatch, or
+// checks role-carry, mints the actId, computes the act's derived
+// fields (ibpAddress, rootCorrelation, parentThread), and builds the
+// summon context the moment's dispatch needs. It returns
+// { actId, plannedAct, role, summonCtx } for moment to dispatch, or
 // { skipped } when the entry can't run.
+//
+// **assign no longer writes the Act row to Mongo** (Round 5).
+// The Act row is created at seal-time by stamped.js, only when
+// cognition returned ok:true. On ok:false the Act row never
+// materializes — that's how "no Act row for the failed moment" is
+// structurally enforced. Tool-calls during the moment still stamp
+// Facts carrying actId; on a partial-then-fail those Facts persist
+// with an actId pointing to a row that never existed. That's the
+// honest audit: intermediate Facts happened inside a moment that
+// produced no final answer. See [[project-cognition-result-type]]
+// and seed/present/run.js for the CognitionResult contract.
 //
 // Two intake kinds reach assign:
 //
@@ -130,7 +142,12 @@ export async function assign({ beingId, spaceId, entry, handoff = null, signal =
     ? (askerName || "transport")
     : (askerName || entry.from || "user");
 
-  const act = await openActRow({
+  // Plan the Act row but do NOT write it to Mongo. The Act gets
+  // created at seal-time by stamped.js, only when cognition
+  // returned ok:true. plannedAct carries the derived fields the
+  // seal needs (ibpAddress, rootCorrelation, parentThread); moment
+  // threads it through to stamped via summonCtx.plannedAct.
+  const plannedAct = await planActRow({
     beingIn:           String(askerBeingId),
     beingOut:          String(beingId),
     addresseePosition: spaceId,
@@ -144,13 +161,14 @@ export async function assign({ beingId, spaceId, entry, handoff = null, signal =
     receivedAt:        entry.sentAt || null,
     priority:          entry.priority || null,
     // Bucket 3 Option D: this moment answers the InboxProjection
-    // row keyed by entry.correlation; stamped.js evicts it on seal.
+    // row keyed by entry.correlation; stamped.js fires
+    // closeInboxOnAnswer when the Act row materializes on seal.
     answers:           entry.correlation || null,
   });
 
   // ── assign: build the summon ctx moment.js dispatches on ─────────
   // Two shapes by kind. moment.js reads ctx.kind and routes.
-  const actId = act?._id ? String(act._id) : null;
+  const actId = plannedAct?._id ? String(plannedAct._id) : null;
 
   const baseCtx = {
     kind,
@@ -192,7 +210,12 @@ export async function assign({ beingId, spaceId, entry, handoff = null, signal =
     };
   }
 
-  return { actId, role, summonCtx };
+  // plannedAct rides on the return so moment.js can hand it to
+  // stamped.js for the seal-time write. The summonCtx carries
+  // actId (so DO/BE Facts stamped during the moment reference
+  // this Act); plannedAct stays separate because the cognition
+  // shouldn't see or care about the Act's structural fields.
+  return { actId, plannedAct, role, summonCtx };
 }
 
 // Render a one-line description of a transport-act for the Act's
@@ -237,7 +260,16 @@ function capContent(s) {
   return s.length > max ? s.slice(0, max) + "... (truncated)" : s;
 }
 
-async function openActRow(opts = {}) {
+/**
+ * Compute the Act row's derived fields and return a plain object
+ * that stamped.js writes to Mongo at seal-time (only when cognition
+ * returned ok:true). The actId is minted here so DO/BE Facts
+ * stamped inside the moment can carry it; the row itself does NOT
+ * exist in Mongo until the seal step writes it.
+ *
+ * Returns null when the inputs are invalid (beingIn missing).
+ */
+async function planActRow(opts = {}) {
   const {
     beingIn,
     beingOut = null,
@@ -258,7 +290,7 @@ async function openActRow(opts = {}) {
   } = opts;
 
   if (!beingIn) {
-    log.warn("Assign", "openActRow called without beingIn");
+    log.warn("Assign", "planActRow called without beingIn");
     return null;
   }
 

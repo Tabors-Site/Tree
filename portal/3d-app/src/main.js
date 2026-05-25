@@ -17,9 +17,9 @@ import {
   hideAuthActions,
   showAuthSignInPanel,
   hideAuthSignInPanel,
-  showTalkPanel,
-  hideTalkPanel,
-  resetTalkState,
+  showSummonPanel,
+  hideSummonPanel,
+  resetSummonState,
   setHistoryButtonsEnabled,
   isAnyPanelOpen,
   showLlmAssignerPanel,
@@ -34,8 +34,8 @@ const state = {
   discovery: null,
   scene: null,
   descriptor: null,
-  // Whichever non-auth being currently has the talk panel open.
-  currentTalkBeing: null,
+  // Whichever non-cherub being currently has the summon panel open.
+  currentSummonBeing: null,
   // Correlation id -> being, for routing async ibp:summon
   // events back to the being whose bubble should be updated.
   pendingSummons: new Map(),
@@ -255,7 +255,7 @@ async function onMatterEnded({ matterId }) {
 
 // Periodic playback-position update from the in-world video screen.
 // Fires every 5s while playing, on pause, and at unmount/navigate.
-// Persists to matter.metadata.tutorial.playbackSeconds via a DO op
+// Persists to matter.qualities.tutorial.playbackSeconds via a DO op
 // so revisits resume at the saved point across browsers and devices.
 async function onMatterPlaybackTick({ matterId, currentTime }) {
   if (!state.client?.connected || !matterId) return;
@@ -271,14 +271,14 @@ async function onMatterPlaybackTick({ matterId, currentTime }) {
 }
 
 // Spawn the llm-assigner intro tutorial matter at the place root.
-// The DO op is idempotent server-side (marker on metadata.tutorial.purpose)
+// The DO op is idempotent server-side (marker on qualities.tutorial.purpose)
 // so calling it twice returns the existing matter instead of creating
 // a duplicate. We ALWAYS re-render after the call — even when `created`
 // is false, the descriptor needs to refresh so the mesh shows for the
 // current session (a fresh tab won't have rendered it yet).
 async function spawnLlmAssignerTutorial() {
   if (!state.client) throw new Error("Not connected");
-  if (!state.session?.token) throw new Error("Not authenticated. Sign in via @auth first.");
+  if (!state.session?.token) throw new Error("Not authenticated. Sign in via @cherub first.");
   const place = state.discovery?.place;
   if (!place) throw new Error("No place");
 
@@ -322,9 +322,9 @@ async function navigate(address, { fromHistory = false } = {}) {
     });
     hideAuthActions();
     hideAuthSignInPanel();
-    hideTalkPanel();
-    resetTalkState();
-    state.currentTalkBeing = null;
+    hideSummonPanel();
+    resetSummonState();
+    state.currentSummonBeing = null;
     refreshAddressBar();
     setHud(formatLocation(desc, state.session));
 
@@ -376,18 +376,18 @@ function refreshAddressBar() {
   });
 }
 
-// Gaze handler: tree-zone labels and child entry happen inside scene.js.
-// All being interaction (auth + talk) is driven by proximity+gaze in
+// Gaze handler: child-zone labels and child entry happen inside scene.js.
+// All being interaction (cherub + summon) is driven by proximity+gaze in
 // onBeingProximity below.
 function onGaze(_target, _info) {
   // no-op for now
 }
 
 // Proximity dispatcher: fires from scene.js whenever any being's
-// proximity+gaze state flips. Auth-being opens sign-in/logout; every
-// other being opens the talk panel.
+// proximity+gaze state flips. Cherub opens sign-in/logout; every
+// other being opens the summon panel.
 function onBeingProximity(b, inRange, _distance) {
-  if (b.being === "auth")         return onAuthProximity(inRange);
+  if (b.being === "cherub")       return onAuthProximity(inRange);
   if (b.being === "llm-assigner") return onLlmAssignerProximity(inRange);
   return onChatBeingProximity(b, inRange);
 }
@@ -410,9 +410,9 @@ function onLlmAssignerProximity(inRange) {
 
 function onChatBeingProximity(b, inRange) {
   if (!inRange) {
-    if (state.currentTalkBeing === b.being) {
-      hideTalkPanel();
-      state.currentTalkBeing = null;
+    if (state.currentSummonBeing === b.being) {
+      hideSummonPanel();
+      state.currentSummonBeing = null;
     }
   }
 }
@@ -420,12 +420,12 @@ function onChatBeingProximity(b, inRange) {
 // Click-to-activate dispatcher. Fires from scene.js when the player
 // clicks while gazing at a being within INTERACT_RANGE.
 function onBeingActivate(b) {
-  if (b.being === "auth") {
+  if (b.being === "cherub") {
     openAuthPanel();
   } else if (b.being === "llm-assigner") {
     openLlmAssignerPanel();
   } else {
-    openTalkPanel(b);
+    openSummonPanel(b);
   }
 }
 
@@ -488,9 +488,9 @@ function openAuthPanel() {
   }
 }
 
-function openTalkPanel(b) {
-  state.currentTalkBeing = b.being;
-  showTalkPanel({
+function openSummonPanel(b) {
+  state.currentSummonBeing = b.being;
+  showSummonPanel({
     being: b,
     onSubmit: (text) => sendSummon(b, text),
   });
@@ -506,8 +506,8 @@ async function sendSummon(b, text) {
   // Drop the chat panel as soon as the user hits send. The thinking
   // bubble (or final reply) lives in the world above the being's head;
   // the panel stays out of the way until the user activates again.
-  hideTalkPanel();
-  state.currentTalkBeing = null;
+  hideSummonPanel();
+  state.currentSummonBeing = null;
   const place = state.discovery.place;
   const path = state.descriptor.address?.pathByNames || "/";
   // Stance form: `<place>/<path>@<being>`. When path is "/" the slash
@@ -553,9 +553,9 @@ addEventListener("keydown", (e) => {
   if (e.key === "Escape") {
     hideAuthActions();
     hideAuthSignInPanel();
-    if (state.currentTalkBeing) {
-      hideTalkPanel();
-      state.currentTalkBeing = null;
+    if (state.currentSummonBeing) {
+      hideSummonPanel();
+      state.currentSummonBeing = null;
     }
     if (isPlanterOpen()) closePrompt();
     return;

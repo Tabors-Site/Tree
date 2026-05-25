@@ -11,7 +11,7 @@ extensions on top. Self-hosted. Federated. Open source.
 Requires Node.js 18+ and a running MongoDB.
 
 ```bash
-git clone https://github.com/taborgreat/Tree.git
+git clone https://github.com/Tabors-Site/Tree.git
 cd Tree
 npm install            # installs reality/, site/, cli/ via postinstall
 npm start              # boots the reality

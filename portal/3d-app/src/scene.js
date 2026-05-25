@@ -186,26 +186,26 @@ export class Scene {
     const beings = desc?.beings || [];
     const children = desc?.children || [];
 
-    // In arrival mode, render only the auth-being directly in front
-    // of the player. Other beings and all children are hidden.
+    // In arrival mode, render only cherub directly in front of the
+    // player. Other beings and all children are hidden.
     const beingsToRender = arrival
-      ? beings.filter((b) => b.being === "auth")
+      ? beings.filter((b) => b.being === "cherub")
       : beings;
     const childrenToRender = arrival ? [] : children;
 
-    // Place beings: in arrival mode, the auth-being stands directly
-    // ahead. In default mode, beings spread in an arc.
+    // Place beings: in arrival mode, cherub stands directly ahead.
+    // In default mode, beings spread in an arc.
     this._beingMeshes.clear();
     this._lastBeingInRange.clear();
     this._clearBubble();
     if (arrival) {
-      const authBeing = beingsToRender[0];
-      if (authBeing) {
-        const mesh = this._makeBeingMesh(authBeing);
+      const cherubBeing = beingsToRender[0];
+      if (cherubBeing) {
+        const mesh = this._makeBeingMesh(cherubBeing);
         mesh.position.set(0, 0.7, -4);
-        mesh.userData = beingUserData(authBeing);
+        mesh.userData = beingUserData(cherubBeing);
         this.world.add(mesh);
-        this._beingMeshes.set(authBeing.being, mesh);
+        this._beingMeshes.set(cherubBeing.being, mesh);
       }
     } else {
       const beingRadius = 6;
@@ -704,9 +704,9 @@ export class Scene {
   }
 
   _makeBeingMesh(b) {
-    // A floating cube with a softer top sphere. Distinct color for the
-    // auth-being so users can find it on arrival.
-    const isAuth = b.being === "auth";
+    // A floating cube with a softer top sphere. Distinct color for
+    // cherub so users can find the gate on arrival.
+    const isAuth = b.being === "cherub";
     const color = isAuth ? COLOR_BEING_AUTH : COLOR_BEING_OTHER;
     const group = new THREE.Group();
     const body = new THREE.Mesh(
@@ -1228,7 +1228,7 @@ export class Scene {
       const last = this._lastBeingInRange.get(being) ?? false;
       if (inRange !== last) {
         this._lastBeingInRange.set(being, inRange);
-        if (being === "auth") this._setGlare(mesh, inRange);
+        if (being === "cherub") this._setGlare(mesh, inRange);
         this.onBeingProximity(
           { being, ...(mesh.userData || {}) },
           inRange,
@@ -1425,11 +1425,11 @@ export class Scene {
     this._tickGlare();
   }
 
-  // Hazy glare on the auth-being when gazed at. Pulses emissive intensity
-  // and shows a subtle screen-space haze vignette. Cleared on gaze-away.
+  // Hazy glare on cherub when gazed at. Pulses emissive intensity and
+  // shows a subtle screen-space haze vignette. Cleared on gaze-away.
   _setGlare(target, active) {
     const data = target?.userData;
-    const isAuth = data?.kind === "being" && data.being === "auth";
+    const isAuth = data?.kind === "being" && data.being === "cherub";
     if (active && isAuth) {
       this._glare = { target, t: 0 };
       _showGlareVignette(true);
@@ -1455,7 +1455,7 @@ export class Scene {
     if (!data) return;
     const d = this.camera.position.distanceTo(target.position);
     // Beings: a click while gazing within INTERACT_RANGE opens their
-    // panel (sign-in/logout for auth, talk panel for everyone else).
+    // panel (sign-in/logout for cherub, summon panel for everyone else).
     if (data.kind === "being" && d <= INTERACT_RANGE) {
       this.onBeingActivate({ being: data.being, ...data });
       return;

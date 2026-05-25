@@ -9,8 +9,8 @@
 // The hotbar is a thin presentation layer over a flat array of slot
 // objects:
 //
-//   { kind: "seed", name: "coder:governing-coder", label: "coder",
-//     description: "Bootstrap a code-project rulership..." }
+//   { kind: "seed", name: "<ext>:<seed-name>", label: "short-name",
+//     description: "what this seed does when planted..." }
 //
 // Today only the "seed" kind exists; future kinds (matter templates,
 // summons, tools) drop into the same shape without touching the hotbar.
@@ -133,7 +133,7 @@ function _renderSelection() {
 
 function _shortName(fullName) {
   if (!fullName) return "";
-  // "coder:governing-coder" → "governing-coder"
+  // "<ext>:<name>" → "<name>"
   const idx = fullName.indexOf(":");
   return idx >= 0 ? fullName.slice(idx + 1) : fullName;
 }

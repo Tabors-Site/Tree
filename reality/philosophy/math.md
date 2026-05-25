@@ -34,13 +34,13 @@ $$f = (\,t,\; a,\; n,\; p,\; h\,)$$
 - $p$ — the **prev-hash**: $H$ of the fact before $f$ in $R_t$ (genesis value at $n = 1$)
 - $h$ — the **self-hash**: $H$ of $f$'s content together with $p$
 
-The doer is carried by the act: $\;\operatorname{doer}(f) := \operatorname{doer}(a) \in \mathcal{B}$. Only beings act. The hash fields $p, h$ bind $f$ to its reel's history — see INTEGRITY.
+The doer is carried by the act: $\;\mathrm{doer}(f) := \mathrm{doer}(a) \in \mathcal{B}$. Only beings act. The hash fields $p, h$ bind $f$ to its reel's history — see INTEGRITY.
 
 ### SINGLE-WRITER — _the law_
 
 A being's reel holds only that being's own deeds:
 
-$$f \in R_b,\;\; b \in \mathcal{B} \quad\Longrightarrow\quad \operatorname{doer}(f) = b$$
+$$f \in R_b,\;\; b \in \mathcal{B} \quad\Longrightarrow\quad \mathrm{doer}(f) = b$$
 
 No such constraint on $R_s$ or $R_m$: a space/matter reel is written by whichever being acts on it. **Beings never write each other's reels.** One being reaches another only by summon.
 
@@ -56,7 +56,7 @@ $$\textbf{DO / BE}\;:\;\; a \neq \varnothing \qquad \text{fold, act, seal}$$
 
 ### FOLD
 
-$$\Phi = \operatorname{Fold}(b,\; R_{\text{scope}})$$
+$$\Phi = \mathrm{Fold}(b,\; R_{\text{scope}})$$
 
 $R_{\text{scope}}$ is the set of reels in scope for $b$ this moment; $\Phi$ is the world framed for $b$. The face is **never stored** — folded fresh, then discarded.
 
@@ -70,11 +70,11 @@ $\Delta\mathcal{F}$ lands across the doer's **own** reel and the reels of whatev
 
 ### SEAL
 
-$$\operatorname{Seal}(\mu) = \begin{cases} a(\Phi) & a \neq \varnothing \\[4pt] \varnothing & a = \varnothing \quad (\textbf{SEE}\ \text{seals nothing}) \end{cases}$$
+$$\mathrm{Seal}(\mu) = \begin{cases} a(\Phi) & a \neq \varnothing \\[4pt] \varnothing & a = \varnothing \quad (\textbf{SEE}\ \text{seals nothing}) \end{cases}$$
 
 The seal is **atomic** — all of $\Delta\mathcal{F}$ lands, or none does:
 
-$$\operatorname{commit}(\Delta\mathcal{F}) \in \{\,\text{all},\;\text{nothing}\,\}$$
+$$\mathrm{commit}(\Delta\mathcal{F}) \in \{\,\text{all},\;\text{nothing}\,\}$$
 
 A crashed moment leaves zero trace.
 
@@ -86,7 +86,7 @@ $$\mathcal{W} \;=\; \bigcup_{e \in \mathcal{E}} R_e$$
 
 There is **no** $\mathcal{W}(\tau)$ — the world is not indexed by a clock (see TIME). A seal grows it:
 
-$$\operatorname{Seal}(\mu) = \Delta\mathcal{F} \quad\Longrightarrow\quad \mathcal{W} \;:=\; \mathcal{W} \cup \Delta\mathcal{F}$$
+$$\mathrm{Seal}(\mu) = \Delta\mathcal{F} \quad\Longrightarrow\quad \mathcal{W} \;:=\; \mathcal{W} \cup \Delta\mathcal{F}$$
 
 Growth is monotonic; nothing is ever removed.
 
@@ -111,13 +111,13 @@ The world has no scalar time. Its entire temporal state is the **vector** $(T_e)
 
 ### SUMMON
 
-A summon is an act of one being toward another, $\;\operatorname{summon}:\mathcal{B}\to\mathcal{B}$. It stamps a fact on the summoner's **own** reel (single-writer holds):
+A summon is an act of one being toward another, $\;\mathrm{summon}:\mathcal{B}\to\mathcal{B}$. It stamps a fact on the summoner's **own** reel (single-writer holds):
 
-$$f = (\,b_i,\;\; \operatorname{summon}(b_i \!\rightarrow\! b_j),\;\; n\,) \;\in\; R_{b_i}$$
+$$f = (\,b_i,\;\; \mathrm{summon}(b_i \!\rightarrow\! b_j),\;\; n\,) \;\in\; R_{b_i}$$
 
 The recipient's reel is never written. It **sees** the summon by projection:
 
-$$\operatorname{inbox}(b_j) = \{\, f \in \mathcal{W} \;:\; f.a \ \text{is a summon naming}\ b_j \,\}$$
+$$\mathrm{inbox}(b_j) = \{\, f \in \mathcal{W} \;:\; f.a \ \text{is a summon naming}\ b_j \,\}$$
 
 A projection — inbox, position index, lineage — is **derived**, never stored.
 
@@ -125,35 +125,35 @@ A projection — inbox, position index, lineage — is **derived**, never stored
 
 A being is three things, nothing more:
 
-$$b = (\,\operatorname{id}_b,\;\; R_b,\;\; A_b\,)$$
+$$b = (\,\mathrm{id}_b,\;\; R_b,\;\; A_b\,)$$
 
-$\operatorname{id}_b$ is **constant** — the bare identity, the thread. The being's **figure** — its name and qualities, all downstream facts — is a projection over its own reel:
+$\mathrm{id}_b$ is **constant** — the bare identity, the thread. The being's **figure** — its name and qualities, all downstream facts — is a projection over its own reel:
 
-$$\operatorname{figure}(b) = \operatorname{reduce}(R_b)$$
+$$\mathrm{figure}(b) = \mathrm{reduce}(R_b)$$
 
 **Becoming:** the reel only grows, so the figure generally differs moment to moment —
 
-$$\operatorname{figure}(b)_{\mu} \;\neq\; \operatorname{figure}(b)_{\mu+1}$$
+$$\mathrm{figure}(b)_{\mu} \;\neq\; \mathrm{figure}(b)_{\mu+1}$$
 
-— while $\operatorname{id}_b$ never changes. A being is stateless between moments; it is re-folded each time it is summoned.
+— while $\mathrm{id}_b$ never changes. A being is stateless between moments; it is re-folded each time it is summoned.
 
 _(A being backed by an LLM reaches its model through an_ LlmConnection _— a conduit, not an entity. It has no reel and does not appear in this shape.)_
 
 ### GENESIS
 
-$$\mathcal{W} = \varnothing \qquad\qquad a_0 = \operatorname{Declare}(\text{I-AM})$$
+$$\mathcal{W} = \varnothing \qquad\qquad a_0 = \mathrm{Declare}(\text{I-AM})$$
 
-$$\mu_0 = (\,\text{I-AM},\;\; \operatorname{Fold}(\text{I-AM},\,\varnothing),\;\; a_0\,)$$
+$$\mu_0 = (\,\text{I-AM},\;\; \mathrm{Fold}(\text{I-AM},\,\varnothing),\;\; a_0\,)$$
 
-$$\mathcal{W} \;:=\; \operatorname{Seal}(\mu_0)$$
+$$\mathcal{W} \;:=\; \mathrm{Seal}(\mu_0)$$
 
 $\mu_0$ is the one moment with no concurrency — before it the braid has not forked. Every later being is minted by a BE-act of an existing being; the I-AM is the root.
 
 ### INVARIANTS — _the laws: behavior, not data_
 
-$$\textbf{SINGLE-WRITER}\qquad f \in R_b \Rightarrow \operatorname{doer}(f) = b$$
+$$\textbf{SINGLE-WRITER}\qquad f \in R_b \Rightarrow \mathrm{doer}(f) = b$$
 
-$$\textbf{ATOMIC SEAL}\qquad \operatorname{commit}(\Delta\mathcal{F}) \in \{\text{all},\,\text{nothing}\}$$
+$$\textbf{ATOMIC SEAL}\qquad \mathrm{commit}(\Delta\mathcal{F}) \in \{\text{all},\,\text{nothing}\}$$
 
 $$\textbf{PAST FIXED}\qquad f \in R_e\ \text{is permanent — never altered, never deleted}$$
 
@@ -188,7 +188,7 @@ The inhabitants $\mathcal{B},\mathcal{S},\mathcal{M}$ are not separate parts of 
 ### SYMBOL KEY
 
 | symbol                                    | meaning                                                       |
-| ----------------------------------------- | ------------------------------------------------------------- | --- | --- |
+| ----------------------------------------- | ------------------------------------------------------------- |
 | $\mathcal{B},\ \mathcal{S},\ \mathcal{M}$ | beings, spaces, matter                                        |
 | $\mathcal{E}$                             | all entities $=\mathcal{B}\sqcup\mathcal{S}\sqcup\mathcal{M}$ |
 | $\mathcal{F},\ \mathcal{A},\ \mathcal{P}$ | facts, acts, faces                                            |
@@ -198,7 +198,7 @@ The inhabitants $\mathcal{B},\mathcal{S},\mathcal{M}$ are not separate parts of 
 | $\mathcal{W}$                             | the world — union of all reels                                |
 | $\Delta\mathcal{F}$                       | the facts produced by one seal                                |
 | $\mathcal{R}$                             | Reality                                                       |
-| $T_e$                                     | local time $=                                                 | R_e | $   |
+| $T_e$                                     | local time $= \lvert R_e \rvert$                              |
 | $n$                                       | a fact's local index in its reel                              |
 | $p,\ h$                                   | a fact's prev-hash and self-hash                              |
 | $H$                                       | hash function                                                 |

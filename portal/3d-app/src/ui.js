@@ -283,22 +283,23 @@ export function hideAuthActions() {
   _authActionsEl = null;
 }
 
-// Talk panel: shown when in proximity+gaze of a non-auth being. Lets the
-// user type a message and send a ibp:summon. Typed state is preserved
-// across re-opens (per being) so a brief look-away doesn't lose typing,
-// and is cleared on submit or when the user navigates to a new position.
-let _talkPanelEl = null;
-let _talkState = new Map(); // embodiment -> { text, busy, error }
+// Summon panel: shown when in proximity+gaze of a non-cherub being.
+// Lets the user type a message and send a SUMMON. Typed state is
+// preserved across re-opens (per being) so a brief look-away doesn't
+// lose typing, and is cleared on submit or when the user navigates to
+// a new position.
+let _summonPanelEl = null;
+let _summonState = new Map(); // being -> { text, busy, error }
 
-export function showTalkPanel({ being: b, onSubmit }) {
-  if (_talkPanelEl) return;
+export function showSummonPanel({ being: b, onSubmit }) {
+  if (_summonPanelEl) return;
   document.exitPointerLock?.();
   const key = b.being;
-  if (!_talkState.has(key)) _talkState.set(key, { text: "", busy: false, error: "" });
-  const s = _talkState.get(key);
+  if (!_summonState.has(key)) _summonState.set(key, { text: "", busy: false, error: "" });
+  const s = _summonState.get(key);
 
   const el = document.createElement("div");
-  el.className = "talk-panel";
+  el.className = "summon-panel";
   el.style.cssText = `
     position: fixed; left: 50%; bottom: 80px;
     transform: translateX(-50%);
@@ -335,7 +336,7 @@ export function showTalkPanel({ being: b, onSubmit }) {
     </form>
   `;
   document.body.appendChild(el);
-  _talkPanelEl = el;
+  _summonPanelEl = el;
 
   const form = el.querySelector("form");
   const textarea = form.querySelector("textarea");
@@ -375,7 +376,7 @@ export function showTalkPanel({ being: b, onSubmit }) {
       s.text = "";
       textarea.value = "";
     } catch (err) {
-      const msg = `${err.code || "error"}: ${err.message || "talk failed"}`;
+      const msg = `${err.code || "error"}: ${err.message || "summon failed"}`;
       s.error = msg;
       errBox.style.display = "block";
       errBox.textContent = msg;
@@ -388,19 +389,19 @@ export function showTalkPanel({ being: b, onSubmit }) {
   });
 }
 
-export function hideTalkPanel() {
-  _talkPanelEl?.remove();
-  _talkPanelEl = null;
+export function hideSummonPanel() {
+  _summonPanelEl?.remove();
+  _summonPanelEl = null;
 }
 
-export function resetTalkState() {
-  _talkState = new Map();
+export function resetSummonState() {
+  _summonState = new Map();
 }
 
 // Any modal panel currently open. Used to gate gameplay input (WASD/B/N)
 // so the user can interact with panels without the camera moving.
 export function isAnyPanelOpen() {
-  return !!(_signInPanelEl || _authActionsEl || _talkPanelEl);
+  return !!(_signInPanelEl || _authActionsEl || _summonPanelEl);
 }
 
 // Bottom-right sky clock. Shows the place's local time (HH:MM in 24h),
