@@ -194,40 +194,53 @@ export async function logFact(input, opts = {}) {
   // reel and stay outside the fold model. They carry p=h=null.
   if (finalTarget && REEL_KINDS.has(finalTarget.kind) && finalTarget.id) {
     const { session = null, skipEagerFold = false } = opts;
+    // Critical section: allocSeq + prev-hash read + insert, all
+    // under the per-reel append lock (per STAMPER.md). The same
+    // body runs whether called standalone or from sealFacts; the
+    // ONLY difference is who's holding the lock — sealFacts holds
+    // it for the whole transaction across reels, so a nested
+    // withReelLock here would deadlock.
+    const runAppend = async () => {
+      const seq = await allocSeq(finalTarget.kind, finalTarget.id, { session });
+
+      // INTEGRITY chain: read prev fact's h. seq is monotonic per
+      // reel; under this lock, prev sits at exactly seq-1. A missing
+      // prev (legacy pre-INTEGRITY row, or a true gap from a crashed
+      // alloc) falls back to GENESIS_PREV.
+      let p = GENESIS_PREV;
+      if (seq > 1) {
+        let prevQuery = Fact.findOne(
+          { "target.kind": finalTarget.kind, "target.id": finalTarget.id, seq: seq - 1 },
+          { h: 1 },
+        ).lean();
+        if (session) prevQuery = prevQuery.session(session);
+        const prev = await prevQuery;
+        if (prev?.h) p = prev.h;
+      }
+
+      // Mint _id explicitly so it lands in the hashed content; the
+      // schema default would generate it inside Mongoose, too late
+      // for inclusion in the digest.
+      const _id = uuidv4();
+      const fullDoc = { ...baseDoc, _id, seq, p };
+      const h = computeHash(p, contentOf(fullDoc));
+      if (session) {
+        // Mongoose: insert-with-session requires the array form.
+        await Fact.create([{ ...fullDoc, h }], { session });
+      } else {
+        await Fact.create({ ...fullDoc, h });
+      }
+    };
     try {
-      await withReelLock(finalTarget.kind, finalTarget.id, async () => {
-        const seq = await allocSeq(finalTarget.kind, finalTarget.id, { session });
-
-        // INTEGRITY chain: read prev fact's h. seq is monotonic per
-        // reel; under this lock, prev sits at exactly seq-1. A missing
-        // prev (legacy pre-INTEGRITY row, or a true gap from a crashed
-        // alloc) falls back to GENESIS_PREV — the backfill migration
-        // normalizes legacy rows so post-backfill all in-range prevs
-        // carry h.
-        let p = GENESIS_PREV;
-        if (seq > 1) {
-          let prevQuery = Fact.findOne(
-            { "target.kind": finalTarget.kind, "target.id": finalTarget.id, seq: seq - 1 },
-            { h: 1 },
-          ).lean();
-          if (session) prevQuery = prevQuery.session(session);
-          const prev = await prevQuery;
-          if (prev?.h) p = prev.h;
-        }
-
-        // Mint _id explicitly so it lands in the hashed content; the
-        // schema default would generate it inside Mongoose, too late
-        // for inclusion in the digest.
-        const _id = uuidv4();
-        const fullDoc = { ...baseDoc, _id, seq, p };
-        const h = computeHash(p, contentOf(fullDoc));
-        if (session) {
-          // Mongoose: insert-with-session requires the array form.
-          await Fact.create([{ ...fullDoc, h }], { session });
-        } else {
-          await Fact.create({ ...fullDoc, h });
-        }
-      });
+      if (session) {
+        // sealFacts already holds the reel lock for this reel.
+        // withReelLock is non-reentrant; calling it here would
+        // deadlock. Trust the caller (sealFacts) to have acquired
+        // every needed lock up front.
+        await runAppend();
+      } else {
+        await withReelLock(finalTarget.kind, finalTarget.id, runAppend);
+      }
     } catch (err) {
       log.error("DB", `Fact append failed (${action} on ${finalTarget.kind}:${finalTarget.id}): ${err.message}`);
       throw new Error("Failed to stamp Fact");
@@ -378,53 +391,43 @@ export async function sealFacts(deltaF, opts = {}) {
   const sortedKeys = [...factsByReel.keys()].sort();
   const sortedReels = sortedKeys.map(k => factsByReel.get(k));
 
-  log.debug("Seal", `sealFacts: starting session for ${deltaF.length} facts across ${sortedReels.length} reels`);
   const session = await mongoose.startSession();
-  log.debug("Seal", `sealFacts: session started`);
   let committedCount = 0;
   try {
     await session.withTransaction(async () => {
-      log.debug("Seal", `sealFacts: inside withTransaction`);
       committedCount = 0; // reset on retry (withTransaction may retry)
 
-      // Acquire all reel locks up front in sorted order. The
-      // recursive nesting (one withReelLock per reel) was simpler
-      // to read but interacts badly with withTransaction's retry
-      // semantics — a retried callback re-attempts the locks
-      // before the first attempt's locks have been released, and
-      // deadlocks. Flat acquisition + single innermost critical
-      // section avoids it.
+      // Acquire reel locks in sorted order via nested withReelLock
+      // calls; the innermost level does the appends. The sort
+      // guarantees two concurrent sealFacts touching the same
+      // reels can't deadlock by acquiring in opposite orders.
+      // logFact, when called with `session`, skips its own
+      // withReelLock wrap (we already hold every needed lock here),
+      // so there's no reentrancy collision.
       const acquireAndAppend = async (i) => {
         if (i === sortedReels.length) {
-          log.debug("Seal", `sealFacts: all locks held, appending`);
           for (const reel of sortedReels) {
             for (const spec of reel.facts) {
-              log.debug("Seal", `  appending fact on ${reel.kind}:${String(reel.id).slice(0,8)}`);
               await logFact(spec, { session, skipEagerFold: true });
             }
           }
           for (const spec of orphanFacts) {
             await logFact(spec, { session, skipEagerFold: true });
           }
-          log.debug("Seal", `sealFacts: appends done`);
           return;
         }
         const reel = sortedReels[i];
-        log.debug("Seal", `sealFacts: acquiring lock ${i + 1}/${sortedReels.length} on ${reel.kind}:${String(reel.id).slice(0,8)}`);
         await withReelLock(reel.kind, reel.id, () => acquireAndAppend(i + 1));
       };
 
       await acquireAndAppend(0);
       committedCount = deltaF.length;
-      log.debug("Seal", `sealFacts: txn body done, about to commit`);
     });
-    log.debug("Seal", `sealFacts: withTransaction returned`);
   } catch (err) {
     log.error("Seal", `sealFacts aborted: ${err.message}`);
     throw err;
   } finally {
     await session.endSession();
-    log.debug("Seal", `sealFacts: session ended`);
   }
 
   // Eager-fold AFTER commit. Run for each reel that received facts.

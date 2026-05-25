@@ -32,7 +32,43 @@ treeos start
 ## Requirements
 
 - **Node.js** 18+
-- **MongoDB** running locally or accessible URI
+- **MongoDB** running locally or accessible URI, configured as a **replica set** (see below)
+
+## MongoDB: replica set required
+
+TreeOS needs MongoDB running as a replica set (even a single-node one for dev). This is a hard requirement once any act produces a multi-fact ΔF — a fact-set that spans more than one reel (e.g., a being moving from space A to space B stamps facts on both reels). MODEL.md's ATOMIC SEAL invariant says `commit(ΔF) ∈ {all, nothing}` — the whole multi-reel fact-set commits as one Mongo transaction, all-or-nothing. Multi-document Mongo transactions only work on a replica set.
+
+Singleton ΔF (one fact, one reel — every act in current TreeOS code) commits atomically without a transaction via the per-reel append lock, so a freshly-installed TreeOS will boot and run on standalone Mongo. But the first multi-fact ΔF (any act emitting > 1 fact) throws a clear error naming the conversion steps. The seed enforces this rather than silently dropping the atomicity guarantee.
+
+### Convert to a single-node replica set (dev)
+
+```bash
+# 1. Add replSetName to /etc/mongod.conf
+sudo sh -c 'cat >> /etc/mongod.conf <<EOF
+
+replication:
+  replSetName: rs0
+EOF'
+
+# 2. Restart mongod
+sudo systemctl restart mongod
+
+# 3. Initiate the replica set (once, ever)
+mongosh --eval 'rs.initiate()'
+
+# 4. Confirm: should print { ok: 1, set: "rs0", ... }
+mongosh --eval 'rs.status()'
+```
+
+After this, mongod comes up as a replica set on every boot. The Mongo URI doesn't need to change — `mongodb://localhost:27017/reality` still works; the driver discovers the replica set via the `hello` handshake.
+
+### Why this design
+
+A reel is the per-aggregate fact-chain (one being's reel, one space's reel, etc.). Per-reel atomicity is local — Mongo's single-document insert guarantees a fact lands or doesn't. But an act that stamps facts on TWO reels (a being entering a space stamps a fact on the being's reel AND the space's reel) has no per-document guarantee for the pair. Without a transaction, a crash between the two inserts leaves a partial ΔF: one reel records something happened, the other doesn't. PAST FIXED means you can't take it back, only append a correction — and you can't even know there was something to correct unless you compare reels.
+
+The fix is `sealFacts(ΔF)` in `seed/past/fact/facts.js`. Single fact: delegates to the per-reel `logFact` (no transaction needed). Multi-fact: opens a Mongo session, sorts reels by id (deadlock prevention), acquires per-reel locks in order, appends every fact inside `session.withTransaction(...)`, commits as one unit. Crash mid-transaction → Mongo aborts → zero facts visible → moment releases with no trace, identical to a crashed moment that never happened.
+
+See [[project-sealfacts-atomic-seal]] and `.test/scripts/verify-seal-atomicity.js` for the details and the test that proves the all-or-nothing property end-to-end.
 
 ## Reality/ File Operation Order
 
