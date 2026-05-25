@@ -237,9 +237,20 @@ export async function genesis(app, opts = {}) {
 
   // The shared stance every unauthenticated visitor carries. SEE
   // bypasses the scheduler so many concurrent visitors share one
-  // row without contention. See [[project-arrival-see]] memory note.
+  // row without contention.
   const { arrivalRole } = await import("./seed/present/roles/arrival.js");
   registerRole("arrival", arrivalRole, "seed");
+
+  // Cherub and llm-assigner are delegates: real work happens through
+  // BE verb routing (cherubBeing.register / llmAssignerBeing.add-llm
+  // / etc.), not through role.summon dispatch. They still need stub
+  // roles in the registry so the @cherub / @llm-assigner stances
+  // resolve and assign doesn't warn when an old inbox row gets
+  // drained. triggerOn: [] on each prevents new SUMMONs from queueing.
+  const { cherubRole } = await import("./seed/present/roles/cherub.js");
+  const { llmAssignerRole } = await import("./seed/present/roles/llmAssigner.js");
+  registerRole("cherub", cherubRole, "seed");
+  registerRole("llm-assigner", llmAssignerRole, "seed");
 
   // ── Operator being. The first human inhabitant. ──
   // plant.js gathered (name, password, consent) at first plant and

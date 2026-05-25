@@ -60,7 +60,7 @@ async function main() {
 
   state.discovery = await PortalClient.bootstrap(placeUrl, { useProxy });
 
-  setHud(`connected to ${state.discovery.place}`);
+  setHud(`connected to ${state.discovery.reality}`);
 
   // Build the 3D scene.
   state.scene = new Scene({
@@ -88,8 +88,8 @@ async function main() {
     onNavigate: (raw) => navigate(raw),
     onIdentityClick: () => {
       const full = state.session?.username
-        ? `${state.session.username}@${state.discovery.place}`
-        : `arrival@${state.discovery.place}`;
+        ? `${state.session.username}@${state.discovery.reality}`
+        : `arrival@${state.discovery.reality}`;
       toggleIdentityChip(full);
       refreshAddressBar();
     },
@@ -109,7 +109,7 @@ async function main() {
   mountIbpConsole({
     root:    document.getElementById("overlays") || document.body,
     client:  state.client,
-    getPlace: () => state.discovery?.place || "treeos.ai",
+    getPlace: () => state.discovery?.reality || "treeos.ai",
   });
 
   // Mount the hotbar. Populated from the place's discovery payload
@@ -123,9 +123,9 @@ async function main() {
 // (just enough to open the socket); the full capability surface lives
 // on the socket-side discovery.
 async function refreshSeedCatalog() {
-  if (!state.client || !state.discovery?.place) return;
+  if (!state.client || !state.discovery?.reality) return;
   try {
-    const full = await state.client.see(`${state.discovery.place}/.discovery`);
+    const full = await state.client.see(`${state.discovery.reality}/.discovery`);
     // Merge into state.discovery so other consumers see the rich form too.
     state.discovery = { ...state.discovery, ...full };
     const seeds = Array.isArray(full?.seeds) ? full.seeds : [];
@@ -177,8 +177,8 @@ async function connectAndPlace(session) {
   // refuses, drop the local session and reconnect anonymously rather
   // than lie to the user with a stale "tabor" chip.
   const beingAddress = session.beingAddress
-    || (session.username && state.discovery?.place
-        ? `${state.discovery.place}/@${session.username}`
+    || (session.username && state.discovery?.reality
+        ? `${state.discovery.reality}/@${session.username}`
         : null);
   if (beingAddress) {
     try {
@@ -244,7 +244,7 @@ function handleSummon(entry) {
 // its marker before deleting.
 async function onMatterEnded({ matterId }) {
   if (!state.client || !matterId) return;
-  const place = state.discovery?.place;
+  const place = state.discovery?.reality;
   if (!place) return;
   try {
     await state.client.do(`${place}/`, "llm-assigner:complete-tutorial", { matterId });
@@ -259,7 +259,7 @@ async function onMatterEnded({ matterId }) {
 // so revisits resume at the saved point across browsers and devices.
 async function onMatterPlaybackTick({ matterId, currentTime }) {
   if (!state.client?.connected || !matterId) return;
-  const place = state.discovery?.place;
+  const place = state.discovery?.reality;
   if (!place) return;
   try {
     await state.client.do(`${place}/`, "llm-assigner:save-playback",
@@ -279,7 +279,7 @@ async function onMatterPlaybackTick({ matterId, currentTime }) {
 async function spawnLlmAssignerTutorial() {
   if (!state.client) throw new Error("Not connected");
   if (!state.session?.token) throw new Error("Not authenticated. Sign in via @cherub first.");
-  const place = state.discovery?.place;
+  const place = state.discovery?.reality;
   if (!place) throw new Error("No place");
 
   // After an HMR reload (or any transient disconnect) the panel may
@@ -369,7 +369,7 @@ function updateHistoryButtons() {
 function refreshAddressBar() {
   updateAddressBar({
     username: state.session?.username,
-    placeDomain: state.discovery?.place,
+    placeDomain: state.discovery?.reality,
     pathByNames: state.descriptor?.address?.pathByNames,
     chain: state.descriptor?.address?.chain,
     isAuthenticated: !!state.session?.token,
@@ -442,7 +442,7 @@ function openLlmAssignerPanel() {
   // the Space tab.
   showLlmAssignerPanel({
     client:         state.client,
-    place:           state.discovery.place,
+    place:           state.discovery.reality,
     currentSpaceId: state.descriptor?.address?.spaceId || null,
     onClose:       () => {},
     // Link in the panel: fires the llm-assigner:start-tutorial DO,
@@ -463,12 +463,12 @@ function openAuthPanel() {
   } else {
     hideAuthActions();
     showAuthSignInPanel({
-      place: state.discovery.place,
+      reality: state.discovery.reality,
       onSubmit: async (mode, username, password) => {
         // `name` is the canonical wire field; the server accepts
         // `username` as a legacy alias. Pass directly — `client.be`
         // already wraps these into the BE envelope's payload.
-        const result = await state.client.be(mode, state.discovery.place, {
+        const result = await state.client.be(mode, state.discovery.reality, {
           name: username,
           password,
         });
@@ -508,15 +508,15 @@ async function sendSummon(b, text) {
   // the panel stays out of the way until the user activates again.
   hideSummonPanel();
   state.currentSummonBeing = null;
-  const place = state.discovery.place;
+  const reality = state.discovery.reality;
   const path = state.descriptor.address?.pathByNames || "/";
-  // Stance form: `<place>/<path>@<being>`. When path is "/" the slash
-  // is already present, so `${place}${path}@...` collapses to `<place>/@...`
-  // (the canonical form for place/home-root beings).
-  const stance = `${place}${path}@${b.being}`.replace(/\/+@/, "/@");
+  // Stance form: `<reality>/<path>@<being>`. When path is "/" the slash
+  // is already present, so `${reality}${path}@...` collapses to
+  // `<reality>/@...` (the canonical form for reality/home-root beings).
+  const stance = `${reality}${path}@${b.being}`.replace(/\/+@/, "/@");
   const fromStance = state.session?.username
-    ? `${place}/@${state.session.username}`
-    : `${place}/@arrival`;
+    ? `${reality}/@${state.session.username}`
+    : `${reality}/@arrival`;
   const correlation = `c-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
   const message = {
     from: fromStance,
@@ -582,9 +582,9 @@ async function attemptPlant() {
   }
   if (!state.descriptor || !state.client) return;
 
-  const place = state.discovery.place;
+  const reality = state.discovery.reality;
   const path = state.descriptor.address?.pathByNames || "/";
-  const parentAddress = `${place}${path}`.replace(/\/+$/, "") || place;
+  const parentAddress = `${reality}${path}`.replace(/\/+$/, "") || reality;
 
   let answer;
   try {
@@ -628,7 +628,7 @@ function isGameplayInputBlocked() {
 async function logout() {
   if (!state.session?.token) return;
   const stance = state.session.beingAddress
-    || `${state.discovery.place}/@${state.session.username}`;
+    || `${state.discovery.reality}/@${state.session.username}`;
   try {
     await state.client.be("release", stance, { identity: state.session.token });
   } catch (err) {

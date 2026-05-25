@@ -232,7 +232,37 @@ export class PortalClient {
     if (typeof op !== "string" || !op) {
       throw new Error("BE requires an op (string)");
     }
-    return this._call("be", normalize(address), { op, ...credentials });
+    const correlation = credentials.correlation || cryptoRandomId();
+    const timeoutMs   = credentials.timeoutMs   || 30000;
+
+    // Register the awaiter before emitting so a fast server push
+    // doesn't arrive before we're listening. BE rides the same
+    // transport-act async path as DO: server acks "accepted" with
+    // the correlation, then pushes the moment's result (or error)
+    // later as a `summon` envelope matched by correlation.
+    const momentPromise = new Promise((resolve, reject) => {
+      const timer = setTimeout(() => {
+        this._pendingMoments.delete(correlation);
+        const err = new Error(`ibp BE result push timed out (correlation=${correlation.slice(0, 8)})`);
+        err.code = "TIMEOUT";
+        reject(err);
+      }, timeoutMs);
+      this._pendingMoments.set(correlation, { resolve, reject, timer });
+    });
+
+    try {
+      const { correlation: _c, timeoutMs: _t, ...payload } = credentials;
+      const ack = await this._call("be", normalize(address), { op, correlation, ...payload });
+      if (!ack || ack.status !== "accepted") {
+        this._pendingMoments.delete(correlation);
+        throw new Error(`ibp BE not accepted: ${JSON.stringify(ack)}`);
+      }
+    } catch (err) {
+      this._pendingMoments.delete(correlation);
+      throw err;
+    }
+
+    return momentPromise;
   }
 
   // ────────────────────────────────────────────────────────────────

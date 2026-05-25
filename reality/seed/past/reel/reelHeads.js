@@ -30,10 +30,15 @@ function reelKey(type, id) {
  *
  * @param {"being"|"space"|"matter"} type
  * @param {string} id  aggregate id
+ * @param {object} [opts]
+ * @param {ClientSession} [opts.session] Mongo session for transactional
+ *   participation. When provided, the $inc participates in the
+ *   caller's transaction (sealFacts). When absent, runs on its own
+ *   single-doc atomic guarantee.
  * @returns {Promise<number>} the allocated seq (always >= 1)
  * @throws when type or id is missing/invalid
  */
-export async function allocSeq(type, id) {
+export async function allocSeq(type, id, opts = {}) {
   if (!VALID_TYPES.has(type)) {
     throw new Error(`allocSeq: type must be one of ${[...VALID_TYPES].join("|")}, got "${type}"`);
   }
@@ -41,13 +46,16 @@ export async function allocSeq(type, id) {
     throw new Error(`allocSeq: id must be a non-empty string`);
   }
 
+  const queryOpts = { upsert: true, new: true, lean: true };
+  if (opts.session) queryOpts.session = opts.session;
+
   const doc = await ReelHead.findOneAndUpdate(
     { _id: reelKey(type, id) },
     {
       $inc: { head: 1 },
       $setOnInsert: { type, id },
     },
-    { upsert: true, new: true, lean: true },
+    queryOpts,
   );
   return doc.head;
 }

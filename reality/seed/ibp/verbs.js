@@ -827,13 +827,13 @@ export async function beVerb(operation, payload = {}, opts = {}) {
 
   const realityDomain = currentReality || getRealityDomain();
 
-  // Address must point at this place.
+  // Address must point at this reality.
   const targetReality = extractRealityFromAddress(address, addressKind);
-  if (targetReality && targetReality !== place) {
+  if (targetReality && targetReality !== realityDomain) {
     throw new IbpError(
       IBP_ERR.SPACE_NOT_FOUND,
-      `Place "${targetReality}" is not served by this server`,
-      { targetReality, serverPlace: place },
+      `Reality "${targetReality}" is not served by this server`,
+      { targetReality, serverReality: realityDomain },
     );
   }
 

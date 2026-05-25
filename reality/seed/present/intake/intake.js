@@ -188,6 +188,12 @@ export async function pickNextIntake(spaceId, beingId) {
       inReplyTo:       row.inReplyTo,
       attachments:     row.attachments,
       sentAt:          row.sentAt?.toISOString?.() || row.sentAt,
+      // For transport-act entries the whole original entry is stored
+      // under row.content (enqueueIntake stuffs it there). Surface the
+      // act payload + identity so runTransportAct in momentum.js gets
+      // them on summonCtx without re-reading row.content.
+      act:             row.content?.act || null,
+      identity:        row.content?.identity || null,
     },
     index: row._id, // correlation as identifier
   };

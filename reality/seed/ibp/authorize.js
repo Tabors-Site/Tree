@@ -68,14 +68,22 @@ import { I_AM } from "../materials/being/seedBeings.js";
 // ─────────────────────────────────────────────────────────────────────
 
 const PLACE_ROOT_DEFAULT_PERMISSIONS = Object.freeze({
-  // SEE: anyone, including arrival (unauthenticated visitors). The
-  // place root is the public-facing first impression; the portal's
-  // "see what you're joining before committing" UX depends on this
-  // being open. Per-position rules at private trees can tighten by
-  // adding `qualities.permissions.see.<keyParts>` with stricter
-  // requires (e.g., `requires: { arrival: false }` or
+  // SEE: anyone present on this place — including arrival
+  // (unauthenticated visitors). The place root is the public-facing
+  // first impression; the portal's "see what you're joining before
+  // committing" UX depends on this being open. Per-position rules
+  // at private trees can tighten by adding
+  // `qualities.permissions.see.<keyParts>` with stricter requires
+  // (e.g., `requires: { arrival: false }` or
   // `requires: { contributor: true }`). See [[project-arrival-see]].
-  see: { "*": { requires: {} } },
+  //
+  // `homeOnThisPlace: true` admits arrival (ARRIVAL_PROPS sets it
+  // true) AND every local being. It denies federated-remote stances
+  // by default — they can opt in per-position. An empty
+  // `requires: {}` would be cleaner, but Mongoose Mixed strips empty
+  // nested objects on save (the same quirk Round 5 INTEGRITY caught),
+  // wiping the whole rule. The condition has to carry SOMETHING.
+  see: { "*": { requires: { homeOnThisPlace: true } } },
   // DO / SUMMON: still authenticated-only. Arrival can look but not
   // act. (BE register/claim has its own bootstrap exception below
   // for sign-up flows.)

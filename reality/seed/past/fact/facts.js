@@ -28,6 +28,7 @@
 // See seed/philosophy/MATERIALS.md "And the beings are the acts" for the
 // philosophy behind why this reel is identity-load-bearing.
 
+import mongoose from "mongoose";
 import log from "../../seedReality/log.js";
 import { v4 as uuidv4 } from "uuid";
 import { getInternalConfigValue } from "../../internalConfig.js";
@@ -66,7 +67,7 @@ const VALID_TARGET_KINDS = new Set([
 /**
  * Act a Fact onto the reel.
  *
- * @param {object} params
+ * @param {object} params           the fact spec (see fields below)
  * @param {string} params.beingId   actor (I_AM for scaffold flows)
  * @param {string} params.action    operation or sub-event name
  * @param {string} [params.verb="do"]   "do" | "be"
@@ -77,11 +78,22 @@ const VALID_TARGET_KINDS = new Set([
  * @param {string|null} [params.sessionId]  correlation
  * @param {string|null} [params.homeReality]   federation provenance
  * @param {boolean} [params.wasRemote=false] federation provenance
+ * @param {object} [opts]                runtime options (NOT part of the fact)
+ * @param {ClientSession} [opts.session] Mongo session for transactional
+ *   participation. Passed by `sealFacts` when committing a multi-fact ΔF
+ *   inside one transaction. When absent, logFact runs its own per-reel
+ *   atomic commit (singleton ΔF, today's behavior). When present, every
+ *   Mongo op in the append (allocSeq, prev lookup, Fact.create) carries
+ *   the session so they participate in sealFacts' transaction.
+ * @param {boolean} [opts.skipEagerFold=false] When true, do not call
+ *   the foldEngine's eager-fold after insert. sealFacts sets this when
+ *   committing transactionally — folds run after commit on the
+ *   committed state, not during the transaction (which would race).
  *
  * The `beforeFact` hook receives a mutable view of these fields and may
  * cancel the stamp or enrich the payload before insert.
  */
-export async function logFact(input) {
+export async function logFact(input, opts = {}) {
   if (!input || typeof input !== "object") {
     throw new Error("logFact requires a params object");
   }
@@ -181,9 +193,10 @@ export async function logFact(input) {
   // Target-less or place/stance facts skip the lock — they have no
   // reel and stay outside the fold model. They carry p=h=null.
   if (finalTarget && REEL_KINDS.has(finalTarget.kind) && finalTarget.id) {
+    const { session = null, skipEagerFold = false } = opts;
     try {
       await withReelLock(finalTarget.kind, finalTarget.id, async () => {
-        const seq = await allocSeq(finalTarget.kind, finalTarget.id);
+        const seq = await allocSeq(finalTarget.kind, finalTarget.id, { session });
 
         // INTEGRITY chain: read prev fact's h. seq is monotonic per
         // reel; under this lock, prev sits at exactly seq-1. A missing
@@ -193,10 +206,12 @@ export async function logFact(input) {
         // carry h.
         let p = GENESIS_PREV;
         if (seq > 1) {
-          const prev = await Fact.findOne(
+          let prevQuery = Fact.findOne(
             { "target.kind": finalTarget.kind, "target.id": finalTarget.id, seq: seq - 1 },
             { h: 1 },
           ).lean();
+          if (session) prevQuery = prevQuery.session(session);
+          const prev = await prevQuery;
           if (prev?.h) p = prev.h;
         }
 
@@ -206,7 +221,12 @@ export async function logFact(input) {
         const _id = uuidv4();
         const fullDoc = { ...baseDoc, _id, seq, p };
         const h = computeHash(p, contentOf(fullDoc));
-        await Fact.create({ ...fullDoc, h });
+        if (session) {
+          // Mongoose: insert-with-session requires the array form.
+          await Fact.create([{ ...fullDoc, h }], { session });
+        } else {
+          await Fact.create({ ...fullDoc, h });
+        }
       });
     } catch (err) {
       log.error("DB", `Fact append failed (${action} on ${finalTarget.kind}:${finalTarget.id}): ${err.message}`);
@@ -218,26 +238,209 @@ export async function logFact(input) {
     // fold engine's compare-and-set handles concurrency; failure here
     // is harmless — the next fold round self-heals.
     //
-    // Dynamic import to avoid a hard cycle at module load time
-    // (foldEngine imports from materials/, past/fact/facts is in
-    // materials/ — keeping the dependency lazy keeps boot order clean).
-    try {
-      const { fold } = await import("../../present/fold/foldEngine.js");
-      await fold(finalTarget.kind, finalTarget.id);
-    } catch (err) {
-      // Self-healing: the next fold catches up. Log but don't throw —
-      // the fact is the source of truth and is already on disk.
-      log.debug("Fold", `eager-fold failed for ${finalTarget.kind}:${finalTarget.id}: ${err.message}`);
+    // Skip when called inside a sealFacts transaction (skipEagerFold).
+    // sealFacts runs folds AFTER commit so projections see the
+    // committed state instead of in-flight transactional state. The
+    // projections are self-healing either way; this just avoids
+    // wasted reads against pre-commit state.
+    if (!skipEagerFold) {
+      try {
+        const { fold } = await import("../../present/fold/foldEngine.js");
+        await fold(finalTarget.kind, finalTarget.id);
+      } catch (err) {
+        // Self-healing: the next fold catches up. Log but don't throw —
+        // the fact is the source of truth and is already on disk.
+        log.debug("Fold", `eager-fold failed for ${finalTarget.kind}:${finalTarget.id}: ${err.message}`);
+      }
     }
   } else {
     // Non-reel-bearing path: simple insert, seq stays null.
     try {
-      await Fact.create({ ...baseDoc, seq: null });
+      if (opts.session) {
+        await Fact.create([{ ...baseDoc, seq: null }], { session: opts.session });
+      } else {
+        await Fact.create({ ...baseDoc, seq: null });
+      }
     } catch (err) {
       log.error("DB", `Fact save failed (${action}): ${err.message}`);
       throw new Error("Failed to stamp Fact");
     }
   }
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// sealFacts — the seal is the unit of commit (atomicity for ΔF).
+// ─────────────────────────────────────────────────────────────────────
+//
+// MODEL.md ATOMIC SEAL: commit(ΔF) ∈ {all, nothing}. ΔF can span
+// multiple reels. The whole set commits as one unit. logFact is the
+// per-reel append primitive; sealFacts is the ΔF commit boundary.
+// One act → one ΔF → one sealFacts → one Mongo transaction.
+//
+// Single-fact ΔF: no transaction needed — logFact's per-reel lock +
+// single-doc insert is already atomic. sealFacts delegates.
+//
+// Multi-fact ΔF: requires a Mongo replica set (multi-document
+// transactions are a replica-set feature). sealFacts opens one
+// session, acquires per-reel locks in sorted order (deadlock
+// prevention — see [[project-sealfacts-atomic-seal]]), appends each
+// fact inside the session, commits as one transaction. If any
+// append fails, the transaction aborts and zero facts land. PAST
+// FIXED holds end-to-end.
+//
+// Eager-fold runs AFTER commit, not inside, so projections see the
+// committed state. The fact-chain is the source of truth;
+// projections self-heal even without eager-fold.
+
+const REPLICA_SET_REQUIRED_MSG =
+  "sealFacts: multi-fact ΔF requires a Mongo replica set (multi-document " +
+  "transactions are a replica-set feature). To enable on a dev box: " +
+  "stop mongod, start with `--replSet rs0`, then `mongosh --eval 'rs.initiate()'`. " +
+  "Per [[project-sealfacts-atomic-seal]]: 'the first multi-reel act waits behind sealFacts + replica set. No exceptions.'";
+
+function isReplicaSetCluster() {
+  // mongoose.connection.db.topology.type === "ReplicaSetWithPrimary" /
+  // "ReplicaSetNoPrimary" — but the simplest reliable check is the
+  // topology description on the client.
+  try {
+    const topology = mongoose.connection?.client?.topology;
+    if (!topology) return false;
+    const desc = topology.description;
+    if (!desc) return false;
+    // ReplicaSet types contain "ReplicaSet" in the name.
+    return /ReplicaSet/i.test(desc.type || "");
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Commit a ΔF — the fact-set produced by one act — as one unit.
+ *
+ * @param {Array<object>} deltaF  array of fact specs (same shape
+ *   logFact accepts). For singleton ΔF (most acts today), pass a
+ *   single-element array.
+ * @param {object} [opts]
+ * @param {boolean} [opts.requireTransaction=false] When true, refuse
+ *   to commit even singleton ΔF without a replica set (forces the
+ *   transactional path). Useful for tests that need to verify the
+ *   transaction shape end-to-end.
+ *
+ * @returns {Promise<{ committed: number, txn: boolean }>}
+ *   committed = number of facts in ΔF (post-commit). txn = whether
+ *   a Mongo transaction was used.
+ */
+export async function sealFacts(deltaF, opts = {}) {
+  if (!Array.isArray(deltaF)) {
+    throw new Error("sealFacts: deltaF must be an array");
+  }
+  if (deltaF.length === 0) {
+    return { committed: 0, txn: false };
+  }
+
+  // Singleton ΔF — no transaction needed unless caller explicitly
+  // requested one (test path). logFact's per-reel atomic commit
+  // covers single-fact correctness on standalone Mongo. This is
+  // why hello-world and every singleton-act today ships on current
+  // code without a replica set.
+  if (deltaF.length === 1 && !opts.requireTransaction) {
+    await logFact(deltaF[0]);
+    return { committed: 1, txn: false };
+  }
+
+  // Multi-fact (or explicitly-requested-transactional singleton):
+  // requires replica set. Fail loud per the hard prerequisite.
+  if (!isReplicaSetCluster()) {
+    throw new Error(REPLICA_SET_REQUIRED_MSG);
+  }
+
+  // Group facts by reel. Non-reel-bearing facts (place/stance,
+  // target-less) commit too but don't take reel locks — they go
+  // into the same transaction as a degenerate "no-lock" reel.
+  const factsByReel = new Map(); // "kind:id" → { kind, id, facts: [] }
+  const orphanFacts = []; // non-reel-bearing
+  for (const spec of deltaF) {
+    const target = spec?.target;
+    if (target && REEL_KINDS.has(target.kind) && target.id) {
+      const key = `${target.kind}:${target.id}`;
+      const entry = factsByReel.get(key)
+        || { kind: target.kind, id: String(target.id), facts: [] };
+      entry.facts.push(spec);
+      factsByReel.set(key, entry);
+    } else {
+      orphanFacts.push(spec);
+    }
+  }
+
+  // Deterministic lock-acquisition order: sort by reel key. Two
+  // concurrent sealFacts touching reels A and B both acquire in the
+  // same order, so they can't deadlock by taking opposite orders.
+  const sortedKeys = [...factsByReel.keys()].sort();
+  const sortedReels = sortedKeys.map(k => factsByReel.get(k));
+
+  log.debug("Seal", `sealFacts: starting session for ${deltaF.length} facts across ${sortedReels.length} reels`);
+  const session = await mongoose.startSession();
+  log.debug("Seal", `sealFacts: session started`);
+  let committedCount = 0;
+  try {
+    await session.withTransaction(async () => {
+      log.debug("Seal", `sealFacts: inside withTransaction`);
+      committedCount = 0; // reset on retry (withTransaction may retry)
+
+      // Acquire all reel locks up front in sorted order. The
+      // recursive nesting (one withReelLock per reel) was simpler
+      // to read but interacts badly with withTransaction's retry
+      // semantics — a retried callback re-attempts the locks
+      // before the first attempt's locks have been released, and
+      // deadlocks. Flat acquisition + single innermost critical
+      // section avoids it.
+      const acquireAndAppend = async (i) => {
+        if (i === sortedReels.length) {
+          log.debug("Seal", `sealFacts: all locks held, appending`);
+          for (const reel of sortedReels) {
+            for (const spec of reel.facts) {
+              log.debug("Seal", `  appending fact on ${reel.kind}:${String(reel.id).slice(0,8)}`);
+              await logFact(spec, { session, skipEagerFold: true });
+            }
+          }
+          for (const spec of orphanFacts) {
+            await logFact(spec, { session, skipEagerFold: true });
+          }
+          log.debug("Seal", `sealFacts: appends done`);
+          return;
+        }
+        const reel = sortedReels[i];
+        log.debug("Seal", `sealFacts: acquiring lock ${i + 1}/${sortedReels.length} on ${reel.kind}:${String(reel.id).slice(0,8)}`);
+        await withReelLock(reel.kind, reel.id, () => acquireAndAppend(i + 1));
+      };
+
+      await acquireAndAppend(0);
+      committedCount = deltaF.length;
+      log.debug("Seal", `sealFacts: txn body done, about to commit`);
+    });
+    log.debug("Seal", `sealFacts: withTransaction returned`);
+  } catch (err) {
+    log.error("Seal", `sealFacts aborted: ${err.message}`);
+    throw err;
+  } finally {
+    await session.endSession();
+    log.debug("Seal", `sealFacts: session ended`);
+  }
+
+  // Eager-fold AFTER commit. Run for each reel that received facts.
+  // Self-healing on failure: the next fold round catches up.
+  try {
+    const { fold } = await import("../../present/fold/foldEngine.js");
+    for (const reel of sortedReels) {
+      try {
+        await fold(reel.kind, reel.id);
+      } catch (err) {
+        log.debug("Fold", `post-seal fold failed for ${reel.kind}:${reel.id}: ${err.message}`);
+      }
+    }
+  } catch {}
+
+  return { committed: committedCount, txn: true };
 }
 
 function capPayload(value, label) {

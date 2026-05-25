@@ -143,7 +143,7 @@ treeos?.exports?.registerSlot?.(
 
 **OrchestratorRuntime** is how you run multi-step AI pipelines. Single LLM call: use `place.llm.runTurn()`. Multi-step background pipeline: use `new OrchestratorRuntime()` with init, runStep, trackStep, cleanup.
 
-**LLM_PRIORITY** on every LLM call. BACKGROUND for jobs. INTERACTIVE for user-triggered tools. GATEWAY for external channels. Without priority, background work starves human responses.
+**envelope.priority on the SUMMON, not the LLM call.** Priority lives at the SUMMON / thread layer: it shapes thread-cut behavior in `summonVerb` (HUMAN gets an out-of-band AbortSignal; lower priorities drain naturally from the per-being queue) and rides the rootCorrelation cancel cascade. The LLM call itself is downstream of a scheduler decision and does not need a separate tag. Values: HUMAN, GATEWAY, INTERACTIVE, BACKGROUND. Default INTERACTIVE.
 
 **scope: "confined"** for dangerous extensions. Inactive everywhere by default. Operators allow at specific positions with `ext-allow`.
 

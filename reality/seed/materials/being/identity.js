@@ -18,7 +18,7 @@ import { escapeRegex } from "../../utils.js";
 import { getRealityConfigValue } from "../../realityConfig.js";
 import { IBP_ERR, IbpError } from "../../ibp/protocol.js";
 import log from "../../seedReality/log.js";
-import { logFact } from "../../past/fact/facts.js";
+import { logFact, sealFacts } from "../../past/fact/facts.js";
 
 if (!process.env.JWT_SECRET)
   throw new Error(
@@ -184,15 +184,24 @@ export async function createBeing(name, password, opts = {}) {
   // being/<newId> keeps the Fact on the new being's reel where the
   // reducer materializes the row).
   const actor = opts.actor || id;
+
+  // ATOMIC BIRTH: route the be:register Fact through sealFacts —
+  // the ΔF commit boundary. Today birth is singleton ΔF (just the
+  // be:register Fact), so sealFacts delegates to logFact. The
+  // structural point is the boundary: a future birth that ALSO
+  // records on the parent's reel (provenance) would land both
+  // facts atomically, all-or-nothing. The seal-is-the-unit-of-
+  // commit invariant holds whether ΔF is one fact or many.
+  // See [[project-sealfacts-atomic-seal]].
   try {
-    await logFact({
+    await sealFacts([{
       verb:    "be",
       action:  "register",
       beingId: actor,
       target:  { kind: "being", id },
       params:  { spec },
       actId:   opts.actId || null,
-    });
+    }]);
   } catch (err) {
     if (err.code === 11000)
       throw new IbpError(IBP_ERR.RESOURCE_CONFLICT, "Name already taken");

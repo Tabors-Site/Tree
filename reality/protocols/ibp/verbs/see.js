@@ -16,12 +16,21 @@ export async function handleSee(socket, env, ack) {
   const id = env?.id || null;
   try {
     const { address, addressKind, payload } = env;
-    const identity = socket.beingId ? { beingId: socket.beingId, name: socket.name } : null;
+    // Unauthenticated callers get the arrival stance. assertVerbCaller
+    // in seed/ibp/verbs.js requires a truthy identity; without this
+    // the wire-layer SEE refused every visitor before they could even
+    // see what they were joining. authorize sees beingId:null and
+    // applies ARRIVAL_PROPS (arrival: true); the relaxed place-root
+    // SEE default `requires: {}` admits. Per-position rules at
+    // private trees can still tighten. See [[project-arrival-see]].
+    const identity = socket.beingId
+      ? { beingId: socket.beingId, name: socket.name }
+      : { beingId: null, name: "arrival" };
 
     const descriptor = await seeVerb(address, {
       identity,
       addressKind,
-      currentUser: socket.name,
+      currentUser: socket.name || "arrival",
       payload,
     });
 

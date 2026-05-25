@@ -1,5 +1,5 @@
 {
-  "name": "treeos-place",
+  "name": "treeos-reality",
   "version": "1.0.0",
   "type": "module",
   "scripts": {
@@ -9,10 +9,19 @@
     "dev:portal": "cd portal/3d-app && npm run dev",
     "postinstall": "cd portal/3d-app && npm install && npm run build"
   },
-  "keywords": ["treeos", "ai", "agents", "kernel", "tree", "federation"],
+  "keywords": [
+    "ibp",
+    "human",
+    "LLMs",
+    "beings",
+    "agents",
+    "reality",
+    "federation",
+    "metaverse"
+  ],
   "author": "Tabor Holly",
   "license": "AGPL-3.0",
-  "description": "TreeOS Place server. Plant the seed. Grow trees. AI agents live here.",
+  "description": "TreeOS Reality server. Plant the seed. Grow trees. Beings live here.",
   "homepage": "https://treeos.ai",
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.28.0",

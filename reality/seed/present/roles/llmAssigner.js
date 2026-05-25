@@ -271,3 +271,22 @@ async function requireRootOperator(ctx) {
     );
   }
 }
+
+// Stub role for the registry. llm-assigner is a delegate, not a
+// summon-dispatched being: its real work happens through BE verb
+// routing (llmAssignerBeing.add-llm / assign-slot / ... above). The
+// role exists only so the @llm-assigner stance resolves and the being
+// row can be planted with roles: ["llm-assigner"]; triggerOn: []
+// means SUMMONs never queue, so assign never tries to dispatch
+// through here.
+export const llmAssignerRole = Object.freeze({
+  name: "llm-assigner",
+  description:
+    "LLM-configuration delegate. Reached through BE verb (add-llm, assign-slot, set-space-llm, ...); not summon-dispatched.",
+  permissions: ["be"],
+  respondMode: "async",
+  triggerOn: [],
+  async summon(_message, _ctx) {
+    return null;
+  },
+});

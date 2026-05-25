@@ -1,6 +1,6 @@
 {
   "name": "treeos-reality",
-  "version": "2.0.0",
+  "version": "1.0.0",
   "private": true,
   "type": "module",
   "license": "AGPL-3.0",
@@ -12,8 +12,6 @@
     "start": "cd reality && node plant.js",
     "dev": "cd reality && node plant.js",
     "build": "cd site && npm run build",
-    "dev:site": "cd site && npm run dev",
-    "postinstall": "cd reality && npm install && cd ../site && npm install --no-optional && cd ../cli && npm install",
     "test": "node --test test/core.test.js"
   }
 }

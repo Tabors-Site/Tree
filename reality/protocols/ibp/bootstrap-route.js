@@ -4,7 +4,7 @@
 // its WebSocket connection before it has one. Everything else in IBP
 // travels over WebSocket.
 //
-// GET /.well-known/treeos-portal → { ws, protocolVersion, place }
+// GET /.well-known/treeos-portal → { ws, protocolVersion, reality, timezone }
 //
 // The response is intentionally minimal: just enough information for the
 // client to open a socket. Full capability discovery (zones, beings,

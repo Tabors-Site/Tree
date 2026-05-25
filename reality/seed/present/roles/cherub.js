@@ -288,3 +288,21 @@ function mapSeedError(err) {
   }
   return new IbpError(IBP_ERR.INTERNAL, msg);
 }
+
+// Stub role for the registry. Cherub is a delegate, not a summon-
+// dispatched being: its real work happens through BE verb routing
+// (cherubBeing.register / claim / release / switch above). The role
+// exists only so the @cherub stance resolves and the being row can
+// be planted with roles: ["cherub"]; triggerOn: [] means SUMMONs
+// never queue, so assign never tries to dispatch through here.
+export const cherubRole = Object.freeze({
+  name: "cherub",
+  description:
+    "The gate. Delegate; processes BE register/claim/release/switch out-of-band, not through summon dispatch.",
+  permissions: ["be"],
+  respondMode: "async",
+  triggerOn: [],
+  async summon(_message, _ctx) {
+    return null;
+  },
+});

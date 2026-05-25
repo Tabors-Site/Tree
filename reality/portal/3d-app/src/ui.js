@@ -125,7 +125,7 @@ export function hideLabel() {
 let _signInPanelEl = null;
 let _signInState = { mode: "claim", username: "", password: "", error: "" };
 
-export function showAuthSignInPanel({ place, onSubmit }) {
+export function showAuthSignInPanel({ reality, onSubmit }) {
   if (_signInPanelEl) return;
   document.exitPointerLock?.();
 
@@ -143,7 +143,7 @@ export function showAuthSignInPanel({ place, onSubmit }) {
   `;
   el.innerHTML = `
     <div style="font-size: 11px; color: #6b7d72; margin-bottom: 10px;">
-      arrival at ${escapeHtml(place)}
+      arrival at ${escapeHtml(reality)}
     </div>
     <form>
       <div style="margin-bottom: 8px;">
