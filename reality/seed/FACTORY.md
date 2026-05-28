@@ -176,26 +176,55 @@ the future is ever stored. The doctrine made structural.
 
 The present is the one moment that is live. I run each moment through
 four beats: **assign** (open the moment, resolve the being), **fold**
-(mount the face), **momentum** (the act), **stamped** (seal).
+(mount the face), **momentum** (the act), **stamped** (seal). The
+beats live grouped in `beats/`, numbered so `ls` tells the order;
+`moment.js` at the root is the conductor that walks them.
 
 ```
 present/
-├── intake/           SUMMONs arrive, InboxProjection rows, scheduler drains
-│   ├── scheduler.js     picks rows, in-memory "currently running" claim
-│   ├── intake.js        thin reader and writer over InboxProjection
-│   ├── inbox.js         reader over InboxProjection
-│   └── transportAct.js  human-transport entries (self-summons)
-├── fold/             beat 2, the read side
-│   ├── foldEngine.js     generic per-aggregate fold + cross-cutting registry
-│   ├── foldPlace.js      cross-reel weave for one being's moment
-│   └── reel.js           per-reel reader helpers
-├── voices/           a being's voice when it is an LLM (runTurn loop, connect, ...)
-├── roles/            authorization templates (cherub, llm-assigner, ...)
-├── run.js            the loop over moments for one summon
-├── moment.js         one moment, start to finish (assign→fold→momentum→stamped)
-├── assign.js         beat 1, open the moment, resolve the being
-├── momentum.js       beat 3, the act, the being's doing
-└── stamped.js        beat 4, the seal; facts hit reels, projections evict
+├── moment.js            the conductor; walks the four beats in order
+├── beats/               the four-beat sequence, visibly ordered
+│   ├── 1-assign.js         mint actId, plan Act, resolve role + summonCtx
+│   ├── 2-fold/             the read side; one cross-reel weave per moment
+│   │   ├── foldEngine.js      generic per-aggregate fold + cross-cutting registry
+│   │   ├── foldPlace.js       cross-reel weave (handles orientation: forward|half|inward)
+│   │   ├── reel.js            per-presence in-memory carry between moments
+│   │   └── reelChains.js      per-being Act-chain reader helpers
+│   ├── 3-momentum.js       the being's act; returns CognitionResult
+│   └── 4-stamped.js        sealAct: commit Act + ΔF in one Mongo transaction
+├── intake/              arrivals: InboxProjection rows, scheduler drains
+│   ├── inbox.js            reader over InboxProjection
+│   ├── intake.js           thin reader and writer over InboxProjection
+│   ├── scheduler.js        picks rows, in-memory "currently running" claim
+│   └── transportAct.js     human-transport entries (self-summons)
+├── wakes/               event SOURCES that produce intake (not intake itself)
+│   ├── subscriptions.js    DO-trigger fan-out
+│   └── wakeSchedule.js     scheduled wake cadences
+├── replies.js           how one moment begets the next (out-direction)
+├── session.js           per-being-presence session bookkeeping
+├── voices/llm/          LLM cognition apparatus (separate from beats)
+│   ├── runTurn.js          orchestration entry points (stepTurn, runTurn)
+│   ├── loop.js             the Phase 5 iteration (callLLM, finalizeResponse)
+│   ├── tools.js            tool registry + per-position resolution + dispatch
+│   ├── connect.js          per-being LLM connection hub + client cache
+│   ├── resolution.js       four-layer LLM-connection chain walk
+│   ├── ssrf.js             network safety for connection base URLs
+│   ├── call.js             provider call surround (failover, model quirks)
+│   ├── assemble.js         system prompt + tool surface builder
+│   ├── compress.js         history compression for long conversations
+│   ├── defaultSummon.js    default scripted-role summon handler
+│   └── seeResolvers.js     prompt-context SEE resolvers
+├── roles/               summonable being templates, each co-located
+│   ├── arrival/role.js     unauthenticated visitor stance
+│   ├── auth/role.js        legacy auth-being (cherub replaces)
+│   ├── cherub/role.js      BE-honoring auth being (register/claim/release/switch)
+│   ├── human/role.js       receptive role every human carries
+│   ├── llm-assigner/{role,ops}.js  LLM connection management being + DO ops
+│   ├── reality-manager/{role,tools}.js  the operator's autonomous assistant
+│   └── registry.js         the role registry
+├── orientation.js       INNER-FOLD ω parameter + inner/outer classifier
+├── cognitionResult.js   CognitionResult discriminated type contract
+└── knobs.js             internalConfig router (fans values to subsystem setters)
 ```
 
 A place lives only here. The face the fold mounts is the place framed
@@ -218,15 +247,17 @@ past/
 │   └── threadsProjectionFold.js     fold handlers maintaining it
 ├── fact/
 │   ├── fact.js                      the Fact, the storage atom
-│   └── facts.js                     stamping (logFact) and read queries
+│   ├── facts.js                     primitives: logFact, sealFacts, emitFact
+│   ├── hash.js                      INTEGRITY chain (computeHash, canonicalize)
+│   └── verifyReel.js                INTEGRITY check (walk reel, recompute h)
 └── reel/                            per-aggregate fact-chain (seq, head, lock)
-    ├── reelHead.js
-    ├── reelHeads.js                 atomic seq allocator
-    └── appendLock.js                per-reel append mutex
+    ├── reelHead.js                  schema (per-reel seq counter)
+    ├── reelHeads.js                 atomic seq allocator (session-aware)
+    └── appendLock.js                per-reel append mutex (in-process)
 ```
 
 An **Act** is one sealed moment of one being, opened at assign, closed
-at the seal in [stamped.js](present/stamped.js). A **Fact** is the
+at the seal in [4-stamped.js](present/beats/4-stamped.js). A **Fact** is the
 trace one act leaves on the reel of the thing it changed. Acts belong
 to the doer; Facts belong to the things done-to; one act leads to many
 facts, one per aggregate it touched. A **reel** is the per-aggregate
@@ -285,6 +316,27 @@ Every operation in the system maps to one of these. Small protocol;
 expressiveness lives in role templates, registered operations, and the
 materials I stamp.
 
+```
+ibp/
+├── verbs.js              thin re-export shim for the four verbs
+├── verbs/                one file per verb, each owns its own helpers
+│   ├── do.js                doVerb + auto-Fact + read-only origin gate
+│   ├── see.js               seeVerb + discovery short-circuit + thread descriptor
+│   ├── summon.js            summonVerb + summonCreateBeing + summonByResolved
+│   ├── be.js                beVerb + writeBeFact + runClaim + cherub/llm-assigner registration
+│   └── _shared.js           assertVerbCaller + caller-frame walker
+├── address.js            parse/expand/canonicalize IBP Addresses
+├── resolver.js           resolve a stance to a Space
+├── authorize.js          stance authorization (layers 1-4)
+├── descriptor.js         buildPlaceDescriptor (the SEE face)
+├── discovery.js          buildDiscovery (pre-identity surface)
+├── operations.js         the DO operation registry
+├── seedOperations.js     the seed's DO operations (birth/set/death/plant/llm-conn/...)
+├── protocol.js           IBP_ERR, IbpError, ok/error helpers
+├── pushChannel.js        emitToBeing / emitToBeingRoom (transport indirection)
+└── stanceProperties.js   the property bag the authorize layer evaluates
+```
+
 **seedReality/** is the host floor that knows nothing of the world.
 DbConfig, log, hooks, indexes, version, retention, migrations, utils.
 A file here should never speak the words space, matter, being, or
@@ -298,7 +350,7 @@ and [internalConfig.js](internalConfig.js) (the config stores).
 
 ## The fold
 
-The fold engine ([present/fold/foldEngine.js](present/fold/foldEngine.js))
+The fold engine ([present/beats/2-fold/foldEngine.js](present/beats/2-fold/foldEngine.js))
 is generic over material type. It knows aggregates, facts, reducers,
 projections; never "being" or "space" or "matter" by name. Per-type
 logic lives in pluggable reducers under [materials/](materials/); the
@@ -339,11 +391,53 @@ changes. Per FOLD.md, the engine never grows; the materials catalog
 does. Extended, the cross-cutting registry grows; the engine never
 grows.
 
-**foldPlace** ([present/fold/foldPlace.js](present/fold/foldPlace.js))
+**foldPlace** ([present/beats/2-fold/foldPlace.js](present/beats/2-fold/foldPlace.js))
 is the cross-reel weave for one being's moment. It folds the being,
 its space, and that space's occupants. Per FOLD.md, reach is one hop.
 Child spaces are listed but not deep-folded; a being deep-folds a
 child space only when it moves in.
+
+## Orientation — the three turns
+
+Every moment carries an orientation. The fold signature is
+`Fold(b, R_scope, ω)`. Orientation determines `R_scope` — what the
+fold reaches — without changing the fold operation itself. Three
+values:
+
+- **forward** (default). Folds the world: `b`'s own reel (as
+  world-history) + space + matter reels in scope. The act-chain
+  `A_b` is NOT in scope. Almost every moment is forward.
+- **inward**. Folds only `A_b`, in act-order. The world drops out.
+  The face is the being's own line of deeds — pure reflection.
+- **half**. Folds the forward world PLUS the recalled set: past
+  acts of `b` that stitched a reel of an entity present in the
+  forward face. Causal-adjacency recall, not similarity search.
+  The braid is the index — for each entity in the current face,
+  walk its reel back to facts `b` stamped on it; the Acts those
+  facts came from are what surfaces.
+
+**The turn is an act.** A being shifts orientation by self-summoning
+with a new ω. One `be:summon` Fact lands on the being's own reel
+(target = self, params.recipient = self, params.orientation = ω′).
+Touches no other reel — the canonical inner act. The scheduler
+picks the InboxProjection row; assign reads orientation from the
+entry and puts it on `summonCtx.orientation`; the next moment folds
+at ω′. Statelessness preserved: the being never "remembers turning,"
+it just finds itself already turned.
+
+Only self-summons may carry non-forward orientation. The
+`_dispatchSummon` gate refuses any cross-being summon with ω ≠
+forward — a being can turn itself; it cannot turn another being.
+
+**Inner vs outer acts.** A classifier in
+[orientation.js](present/orientation.js) reads the ΔF and the doer:
+inner when every fact targets the doer's own reel AND no
+`be:summon` names another recipient; outer otherwise. This is
+single-writer read as a classifier — no new category, no new
+primitive. Self-summons (the canonical inner act) classify inner;
+DO/BE that touch any other reel classify outer.
+
+Full doctrine in [philosophy/inner-fold.md](../philosophy/inner-fold.md).
 
 ## Per-reel time, single-writer, atomic seal
 
@@ -371,10 +465,27 @@ collapses (allocSeq, insertFact) into one ordered op so the fold sees
 a clean total order.
 
 **Atomic seal.** The seal is all-or-nothing. Either the full set of
-facts an act yields lands, or none does. A crashed moment leaves zero
-trace. The commit point is the fact insert, not the seal record; each
-fact is its own atomic write, one document, one collection. Full
-write-side doctrine in
+facts an act yields lands AND the Act row that frames them lands,
+or none of it does. A crashed moment leaves zero trace.
+
+For ΔF=0 moments (LLM with no tool calls, etc.), the seal is a
+single-doc `Act.create` — atomic by definition. For ΔF≥1 moments,
+`sealAct` opens a Mongo session, calls `appendDeltaFInSession`
+(grouping facts by reel, acquiring per-reel locks in sorted order
+to prevent deadlock, calling logFact-with-session for each), then
+`Act.create` — all inside one `withTransaction`. Either everything
+commits or nothing does, even under crash mid-write. Multi-fact ΔF
+requires Mongo replica set; sealAct refuses to proceed without one.
+
+Two verification scripts back this up:
+[`.test/scripts/verify-seal-atomicity.js`](/.test/scripts/verify-seal-atomicity.js)
+exercises the four sealFacts cases (singleton, multi-fact-on-standalone-throws,
+multi-reel-on-replica-set-commits, injected-failure-mid-txn);
+[`.test/scripts/verify-crash-mid-seal.js`](/.test/scripts/verify-crash-mid-seal.js)
+spawns a subprocess that SIGKILLs itself mid-transaction and asserts
+both reels remain byte-identical AND verifyReel-green post-restart.
+
+Full write-side doctrine in
 [philosophy/STAMPER.md](../philosophy/STAMPER.md).
 
 ## Integrity
@@ -401,20 +512,53 @@ Three distinct tools, never confused:
 ## How writes flow
 
 ```
-verb call
+verb call (inside a moment)
   ↓
-handler validates, builds spec
+handler validates, builds fact spec
   ↓
-logFact (past/fact/facts.js)
-  ↓ withReelLock(target.kind, target.id):
-      allocSeq + Fact.create        ← THE COMMIT
-  ↓ eager-fold(target.kind, target.id)
-      reducer.reduce per fact        ← per-aggregate state
-      applyProjection (CAS)          ← projection row updated
-      dispatchCrossCutting           ← InboxProjection, ThreadsProjection, ...
+emitFact(spec, summonCtx)           ← handlers never call logFact directly
+  ↓
+  summonCtx.deltaF.push(spec)        ← accumulate; nothing commits yet
+  ↓
+... more handlers fire inside the same moment, each pushing to ΔF ...
+  ↓
+sealAct (beats/4-stamped.js) when momentum returns ok:true
+  ↓ if ΔF=0: Act.create()             ← single-doc atomic
+  ↓ if ΔF≥1: withTransaction(session):
+      appendDeltaFInSession(ΔF)        ← each fact under per-reel lock
+        allocSeq + Fact.create
+      Act.create([actDoc], {session})  ← framed by the same transaction
+    THE COMMIT: ΔF + Act commit together or NOT AT ALL
+  ↓ foldAfterCommit(reels)             ← eager-fold per reel post-commit
+      reducer.reduce per fact
+      applyProjection (CAS)             ← projection row updated
+      dispatchCrossCutting              ← InboxProjection, ThreadsProjection, ...
+  ↓ side effects: closeInboxOnAnswer, noteActSealOnThread
+  ↓ summonCtx.afterSeal callbacks fire (scheduler nudges, etc.)
   ↓
 verb returns
 ```
+
+**One commit site.** `sealAct` is the only place a moment's full
+record lands. `emitFact` is the only place handlers reach toward
+the reel — and it never commits during cognition; it only stages
+facts into ctx.deltaF. The seal is the unit of commit, and the
+unit is atomic. See [philosophy/math.md](../philosophy/math.md)
+ATOMIC SEAL.
+
+**Outside a moment, emitFact falls back to `sealFacts` singleton.**
+Boot scaffolding, migrations, the genesis I-Am self-stamp — these
+have no surrounding moment. emitFact detects `summonCtx === null`
+and commits the spec immediately as a one-fact ΔF (no transaction
+needed for a single-doc insert). The same primitive, two contexts:
+in-moment it stages; out-of-moment it commits.
+
+**Multi-fact ΔF requires Mongo replica set.** Cross-document
+transactions are a replica-set feature. Single-fact ΔF works on
+standalone Mongo (logFact's per-reel lock is enough); the moment
+the first multi-reel act needs to seal, the dev environment must
+be a single-node replica set. See `reality/README.md` for the
+conversion steps.
 
 **One writer.** `fold` is the only thing that ever writes a
 projection row (outside genesis). The fact insert is the only
@@ -422,17 +566,26 @@ synchronous commit; everything else is derived and self-healing on
 the next fold pass.
 
 **SUMMON respects single-writer.** A `be:summon` Fact lands on the
-summoner's reel (the actor's), with the recipient in `params.recipient`.
-The recipient's reel is untouched. The cross-cutting fold turns those
-facts into InboxProjection rows keyed by recipient. The inbox is a
-fold, not a stored entity.
+summoner's reel (the actor's), with the recipient in
+`params.recipient` (and the orientation, the rootCorrelation, the
+priority, the content). The recipient's reel is untouched. The
+cross-cutting fold turns those facts into InboxProjection rows
+keyed by recipient. The inbox is a fold, not a stored entity.
 
 **Closure is the answering act's seal.** When a moment that consumed
 a summon seals, the Act carries `answers: <correlation>`.
-`stamped.js` calls `closeInboxOnAnswer(...)` which evicts the matching
-InboxProjection row. The closure event is the answer-act sealing, not
-a reply-message. A SUMMON to "clean room 3" closes when the room is
-cleaned, regardless of whether the cleaner sends any reply.
+`sealAct` calls `closeInboxOnAnswer(...)` which evicts the matching
+InboxProjection row. The closure event is the answer-act sealing,
+not a reply-message. A SUMMON to "clean room 3" closes when the
+room is cleaned, regardless of whether the cleaner sends any reply.
+
+**Birth is a real multi-reel atomic ΔF.** When one being summons
+another into existence (`summonCreateBeing` inside a moment), the
+moment's ΔF carries TWO facts on TWO reels: `be:register` on the
+new being's reel (the new being is the actor) PLUS `be:summon-create`
+on the summoner's reel (audit fact: "I summoned this being forth").
+Both commit in one transaction with the Act row. First real
+multi-reel act in production code.
 
 ## How reads flow
 
@@ -444,8 +597,8 @@ authorize gates (stance permissions)
 resolveStance (parses address)
   ↓
 buildPlaceDescriptor
-  ↓ foldRead(leaf)                  ← catch-up before read
-  ↓ foldRead(each occupant)          ← children, matter, beings
+  ↓ fold(leaf)                  ← catch-up before read
+  ↓ fold(each occupant)          ← children, matter, beings
   ↓ assemble face from folded states
   ↓
 return descriptor
@@ -458,7 +611,7 @@ table, no place cache that outlives a moment. Full read-side doctrine
 in [philosophy/FOLD.md](../philosophy/FOLD.md).
 
 **The fold-on-read seam.** Each aggregate the descriptor exposes is
-folded first via `foldRead(type, id)`. Hot path: one cache read when
+folded first via `fold(type, id)`. Hot path: one cache read when
 foldedSeq is current (eager-fold-on-write keeps it current).
 Direct-write bypasses become visible at the seam; the fold's CAS
 detects them on the next round.
@@ -551,31 +704,80 @@ Origin determines content shape and sync behavior:
 
 ### Fact (one stamped act)
 
-`verb`, `action`, `beingId` (the actor), `target` (`{ kind, id }`,
-the reel this fact rides), `params`, `result`, `actId` (the
-moment-frame), `sessionId`, `seq` (per-reel monotonic), `date`, plus
-federation provenance fields. Every DO and BE stamps one Fact; SUMMON
-stamps a `be:summon` Fact on the summoner's reel; sever stamps
-`be:sever` on the severer's reel. The append IS the commit.
+`_id` (uuid, minted inside the seal so it lands in the hashed
+content), `date`, `verb` (`"do"|"be"`), `action`, `beingId` (the
+actor), `target` (`{ kind, id }`, the reel this fact rides),
+`params`, `result`, `truncated` (size-cap flag), `actId` (the
+moment-frame; null for genesis scaffold and for the be:summon
+fact stamped OUTSIDE a moment by enqueueIntake), `sessionId`,
+`seq` (per-reel monotonic, allocated under the per-reel append
+lock), `homeReality` + `wasRemote` (federation provenance), and
+INTEGRITY chain fields:
+
+- **`p`** — prev-hash: the previous fact's `h` on the same reel
+  (`GENESIS_PREV` at seq=1). Set inside the seal under the per-reel
+  lock so concurrent appenders can't both read the same prev.
+- **`h`** — self-hash: SHA-256(`p || canonical(content)`). Set
+  inside the seal so the fact and its correct hash land together.
+
+The hash chain is per-reel, not global. It DETECTS tampering — alter
+any past fact and its `h` changes, breaking the next fact's `p` link
+and propagating forward. The chain does not REPAIR; repair is
+replication's job. Wrong-but-honest data gets a correction fact, never
+an edit to the old one. Non-reel-bearing facts (target.kind ∈
+{place, stance} or target-less) carry `p=h=null` and stay outside
+verification — they have no reel to chain against.
+
+Every DO and BE stamps one Fact; SUMMON stamps a `be:summon` Fact on
+the summoner's reel (with `params.orientation` carrying the INNER-FOLD
+ω, defaulting to forward); sever stamps `be:sever` on the severer's
+reel. The append IS the commit.
 
 ### Act (one sealed moment of one being)
 
-`beingIn` (the actor), `beingOut` (the addressee, for SUMMON-honoring
-moments), `ibpAddress`, `activeRole`, `inReplyTo`, `rootCorrelation`,
-`answers` (the InboxProjection correlation this moment closes),
-`parentThread`, `startMessage`, `endMessage`, `severedAt`, `priority`,
-`receivedAt`, `stampedAt`. Opened in [assign.js](present/assign.js);
-sealed in [stamped.js](present/stamped.js). Every Fact emitted during
-the moment carries this Act's `_id` as `actId`.
+`_id` (uuid, minted in assign so DO/BE Facts emitted during the moment
+can already carry it as `actId`), `beingIn` (the asker / caller),
+`beingOut` (the responder; equal to beingIn for self-summons and
+transport-acts), `ibpAddress` (canonical stance pair the moment
+crossed), `activeRole`, `inboxMessageId` (the InboxProjection
+correlation the moment pulled from), `inReplyTo` (parent Act's _id,
+threading conversations), `rootCorrelation` (the conversation root;
+equals _id for fresh roots), `answers` (the InboxProjection
+correlation this moment closes — sealAct fires
+`closeInboxOnAnswer` on it), `parentThread` (spawn lineage when a
+moment running under root A emits a fresh top-level summon),
+`startMessage` (`{ content, source }` opened at assign), `endMessage`
+(`{ content, time, stopped }` written at the seal), `severedAt` (set
+by markThreadSevered when a cut runs through this Act's rootCorrelation),
+`priority` (HUMAN | GATEWAY | INTERACTIVE | BACKGROUND), `receivedAt`,
+`stampedAt`. PLANNED in [beats/1-assign.js](present/beats/1-assign.js)
+(no Mongo write); CREATED in
+[beats/4-stamped.js](present/beats/4-stamped.js) at the seal, inside
+the same transaction that commits the moment's ΔF. Every Fact emitted
+during the moment carries this Act's `_id` as `actId`.
+
+**The Act row materializes only on `ok:true`.** Per the Round 5
+restructure, a failed cognition (`ok:false`) leaves zero trace: no
+Act row, no inbox close, no projection bump. The being's reel and
+act-chain are byte-identical to before the failed moment. The seal
+is gated on the CognitionResult discriminated type
+([cognitionResult.js](present/cognitionResult.js)); failure is
+structurally unreachable at the seal site.
 
 ### LlmConnection (per-being LLM config)
 
 Stored as entries in `Being.qualities.llmConnections`, keyed by
 connection uuid. Each entry: `{ name, baseUrl, encryptedApiKey, model,
-createdAt, lastUsedAt }`. AES-256-CBC at rest; SSRF gate on baseUrl.
+createdAt, lastUsedAt }`. AES-256-CBC at rest;
+[ssrf.js](present/voices/llm/ssrf.js) gates the baseUrl against
+private IPs and blocked hosts (DNS-resolved at registration time).
+
 The LLM resolution chain in
-[present/voices/llm/connect.js](present/voices/llm/connect.js) walks
-space-tree and being-tree to pick which connection a moment uses.
+[present/voices/llm/resolution.js](present/voices/llm/resolution.js)
+walks space-tree and being-tree to pick which connection a moment
+uses. Connection storage + slot rules + CRUD + the client cache live
+in [present/voices/llm/connect.js](present/voices/llm/connect.js);
+resolution imports the slot-rule readers from there.
 
 ## Resolution chains
 
@@ -681,9 +883,15 @@ tool filter enforces this at the verb intersection.
 
 I assemble `reality` in [services.js](services.js) and hand a
 per-extension scoped view to each extension's `init(reality)`. The
-scoping enforces namespace ownership: `reality.do.registerOperation(name, ...)`
+scoping logic lives in
+[extensions/scopedReality.js](../extensions/scopedReality.js) and
+enforces namespace ownership: `reality.do.registerOperation(name, ...)`
 auto-prefixes to `<ext>:<name>`; `reality.websocket.emitToBeing(...)`
-auto-prefixes the event name. Extensions never type their own
+auto-prefixes the event name; `reality.auth.registerStrategy(name, ...)`
+records under the calling extension's name only if the manifest
+declared `provides.authStrategies`. Fully-qualified names with a
+mismatched prefix throw; reserved event names (`"ibp"`, `"registered"`,
+`"navigate"`) refuse entirely. Extensions never type their own
 namespace.
 
 ### Four verbs (`reality.see`, `reality.do`, `reality.summon`, `reality.be`)
@@ -878,20 +1086,22 @@ Defaults to off (`treeCircuitEnabled: false`). The code is in
 
 ## Seed versioning and migrations
 
-`SEED_VERSION` constant in [seedReality/version.js](seedReality/version.js).
-At boot I compare it against `seedVersion` in `.config`. If they
-differ, the migration runner
+`SEED_VERSION` constant in [seedReality/version.js](seedReality/version.js)
+(currently `0.1.0`). At boot I compare it against `seedVersion` in
+`.config`. If they differ, the migration runner
 ([seedReality/migrations/runner.js](seedReality/migrations/runner.js))
 executes every migration between the stored version and the current
 version in order. Migrations live in
-[seedReality/migrations/](seedReality/migrations/) named by version.
-Each exports a default async function. If a migration fails, the
-stored version does not advance; next boot retries from the failure
-point.
+[seedReality/migrations/](seedReality/migrations/) named by version
+(`<version>.js`). Each exports a default async function. If a
+migration fails, the stored version does not advance; next boot
+retries from the failure point.
 
-The current head, `0.26.0`, migrates legacy
-`qualities.inbox/intake.<beingId>` arrays into `be:summon` Facts and
-InboxProjection rows (Bucket 3 Option D).
+The migrations directory holds only the runner today; the prior
+0.1.0–0.27.0 history was struck after the Round 5 / Phase 2
+restructure left a clean schema with no live consumers of any
+backward-compatibility hop. Future schema changes start a fresh
+migration ladder from 0.1.0.
 
 ## Safety
 
@@ -918,7 +1128,7 @@ codebase.
 | Config key / value validation  | Key regex `^[a-zA-Z][a-zA-Z0-9_]{0,63}$`; dangerous keys rejected; 64KB per value cap.                                                                                                                                                   |
 | SSRF protection                | Federation peer registration and LLM connection baseUrls validate hostname against private-IP patterns.                                                                                                                                  |
 | Boot recovery                  | Every boot verifies the nine seed spaces and the I-Am Being row exist. Missing ones recreated. Partial first-boot crashes leave a recoverable state.                                                                                     |
-| Genesis exception              | Only the I-Am's first `be:register` Fact self-stamps (target is the not-yet-existing row). Everything else after stamps under an open Act.                                                                                                |
+| Genesis exception              | Boot scaffolding stamps all facts with `actId: null` via `{ scaffold: true }` on the verb-caller gate. The I-Am self-stamps its own first `be:register` (target = the not-yet-existing row). Seed-delegate births (cherub, arrival, llm-assigner, reality-manager) and seed-space creations follow the same pattern. The first being summoned by a real moment (typically the operator-being via cherub) is the first fact stamped under an open Act. |
 | Cross-cutting handler safety   | A failing handler is logged and skipped; the projection self-heals on the next fold pass touching the same fact.                                                                                                                          |
 | Graceful shutdown              | All interval timers `.unref()`; SIGTERM closes WS, then HTTP, then DB.                                                                                                                                                                   |
 
@@ -933,10 +1143,34 @@ first act issues its own first fact, "I am that I am." After that one
 moment the rules close and never open again. Every Fact is the
 deposit of a sealed Act; every Act is a being in a moment.
 
+**Scaffold path: facts without Act frames.** Genesis-era writes use
+`{ scaffold: true }` on every verb call (the I-Am's self-stamp,
+seedDelegates planting cherub/arrival/llm-assigner/reality-manager,
+sprout's nine seed-spaces, seedDefaultStancePermissions, the
+manifest sync mirroring extensions into `.extensions`). The scaffold
+flag bypasses the moment machinery entirely — no scheduler, no
+assign, no Act row opens. Every fact stamped under scaffold carries
+`actId: null`. This is by design: there's no being to act yet, no
+moment to frame the act in. A freshly-booted reality therefore has
+ZERO Acts and ~30 facts (the seed-space births + I-Am +
+seed-delegate births + permission seeding) all with `actId: null`.
+
+The first real Act appears the moment a real being acts. Typically:
+the operator's registration, when plant.js handed cherub the
+operator's name/password and cherub.register opens an Act
+(`scaffold: true` on the verb-caller gate, but cherub's call still
+runs through the normal seal — opening one Act with a multi-fact ΔF:
+`do:create` on the operator's home space + `do:set` on rootOwner +
+`be:register` on the operator + `be:summon-create` on cherub's reel).
+Every Fact after that, except for transport-acts which queue an
+inbox row outside any moment, rides a real Act.
+
 A seventh, doctrinal rule rides on this: **every state change is a
 Fact.** Direct writes to Space, Being, or Matter bypass the fold and
-corrupt the projection. The one exception is genesis. Everything else
-routes through `logFact`.
+corrupt the projection. The one exception is genesis. Everything
+else routes through `emitFact` (the Phase 2 single entry point that
+either pushes onto the moment's ΔF or commits via `sealFacts`
+singleton when standalone).
 
 ## What is NOT in seed
 
@@ -984,6 +1218,11 @@ The doctrine lives one folder up, in
 4. **[MATERIALS.md](../philosophy/MATERIALS.md)**, what the world is
    made of versus what has been done; constitutive vs characterizing;
    the qualities Map.
+5. **[inner-fold.md](../philosophy/inner-fold.md)**, the three turns:
+   orientation as a fold parameter; how a being shifts inward; what
+   the act-chain is for during a moment; the recall braid.
+6. **[harmony.md](../philosophy/harmony.md)**, the doctrinal note on
+   how multiple LLM beings coordinate without a central conductor.
 
 The two supporting forms of the whole model:
 
