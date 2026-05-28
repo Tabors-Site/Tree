@@ -210,11 +210,15 @@ export class Scene {
     } else {
       const beingRadius = 6;
       beingsToRender.forEach((b, i) => {
-        // Prefer server-provided coords. Fall back to a deterministic
-        // arc spread when the position extension hasn't placed this
-        // being at the parent yet.
+        // Prefer server-provided coords. The seed doesn't surface a
+        // generic position field; each spatial extension writes into
+        // its own qualities namespace. Today: harmony writes coords
+        // to qualities.harmony.coords. Fall back to a deterministic
+        // arc spread when no extension has placed this being yet.
         let x, z;
-        const serverCoords = b.position?.coords;
+        const serverCoords =
+          b.qualities?.harmony?.coords ||
+          b.position?.coords;  // legacy fallback
         if (serverCoords && typeof serverCoords.x === "number") {
           x = serverCoords.x;
           z = serverCoords.y;

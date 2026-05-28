@@ -51,7 +51,7 @@ import { IbpError, IBP_ERR, mapPatternsToIbpError } from "./protocol.js";
 import Being from "../materials/being/being.js";
 import Matter from "../materials/matter/matter.js";
 import { I_AM } from "../materials/being/seedBeings.js";
-import { logFact } from "../past/fact/facts.js";
+import { emitFact } from "../past/fact/facts.js";
 import { v4 as uuidv4 } from "uuid";
 
 let _registered = false;
@@ -75,7 +75,7 @@ export function registerSeedOperations() {
   //   })
   //
   // The handler lives on the auth-being's `createBeing` method (see
-  // seed/present/roles/cherub.js). Per the philosophy notes: BE acts on
+  // seed/present/roles/cherub/role.js). Per the philosophy notes: BE acts on
   // the being calling it, and identity creation is the BE side of the
   // grammar.
   //
@@ -350,14 +350,14 @@ export function registerSeedOperations() {
           throw new IbpError(IBP_ERR.UNAUTHORIZED,
             "birth requires identity or scaffold flow");
         }
-        await logFact({
+        await emitFact({
           verb:    "do",
           action:  "create",
           beingId: String(actorBeingId),
           target:  { kind: "matter", id: matterId },
           params:  { spec: enrichedSpec },
           actId:   summonCtx?.actId || null,
-        });
+        }, summonCtx);
         return { matterId, spaceId, parentMatterId };
       }
       throw new Error(`birth: unknown kind "${kind}"`);
@@ -816,13 +816,18 @@ async function createSpaceChild({ target, params, identity, summonCtx, scaffold,
     throw new IbpError(IBP_ERR.INVALID_INPUT, "`name` is required");
   }
 
-  // Mongoose Space doc path: trust the caller, parent is the doc itself.
+  // Non-stance path: trust the caller, parent is the target. Accepts
+  // any of the shapes targetIdOf() handles (Mongoose doc, plain
+  // {_id} / {id} / {spaceId} envelope, raw string id). Without this
+  // helper extensions that pass a string id (the documented call
+  // shape `place.do(targetId, "create", {...})`) get rejected with
+  // "Non-root spaces require a parentId" — the target gets dropped.
   if (kind !== "stance") {
     try {
       const newSpace = await createSpace({
         name,
         type,
-        parentId: target?._id ? String(target._id) : null,
+        parentId: targetIdOf(target),
         beingId,
         actId,
       });

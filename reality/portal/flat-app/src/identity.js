@@ -1,0 +1,147 @@
+// identity.js — claim / register UI.
+//
+// Renders a small overlay with two tabs: claim (existing name + password)
+// and register (new name + password). Wires up to BE via main.js#signIn.
+// Overlay is shown by main.js when the descriptor's identity is missing,
+// or by the identity chip on click.
+
+import { flat } from "./main.js";
+
+let _overlayMounted = false;
+
+export function showAuthOverlay(reality) {
+  const root = document.getElementById("auth-overlay");
+  if (!root) return;
+  root.classList.remove("hidden");
+  root.innerHTML = ""; // re-render each time
+
+  const card = document.createElement("div");
+  card.className = "auth-card";
+
+  const h = document.createElement("h2");
+  h.textContent = "claim an identity";
+  card.appendChild(h);
+
+  const sub = document.createElement("div");
+  sub.className = "sub";
+  sub.textContent = `on ${reality}`;
+  card.appendChild(sub);
+
+  // Tabs.
+  const tabs = document.createElement("div");
+  tabs.className = "tabs";
+  const claimTab    = tabBtn("claim",    true);
+  const registerTab = tabBtn("register", false);
+  tabs.appendChild(claimTab);
+  tabs.appendChild(registerTab);
+  card.appendChild(tabs);
+
+  // Form fields.
+  const nameField = field("name", "input");
+  const passField = field("password", "input", "password");
+  card.appendChild(nameField.wrap);
+  card.appendChild(passField.wrap);
+
+  const submit = document.createElement("button");
+  submit.className = "btn-primary btn-block";
+  submit.textContent = "claim";
+  card.appendChild(submit);
+
+  const err = document.createElement("div");
+  err.className = "auth-err hidden";
+  card.appendChild(err);
+
+  const cherub = document.createElement("button");
+  cherub.className = "btn-link";
+  cherub.textContent = "claim as @cherub (no password)";
+  cherub.title = "ad-hoc test identity";
+  card.appendChild(cherub);
+
+  let mode = "claim";
+  claimTab.onclick = () => {
+    mode = "claim";
+    setActive(claimTab, registerTab);
+    submit.textContent = "claim";
+  };
+  registerTab.onclick = () => {
+    mode = "register";
+    setActive(registerTab, claimTab);
+    submit.textContent = "register";
+  };
+
+  submit.onclick = async () => {
+    err.classList.add("hidden");
+    const name = nameField.input.value.trim();
+    const pass = passField.input.value;
+    if (!name) { showErr(err, "name required"); return; }
+    try {
+      submit.disabled = true;
+      submit.textContent = mode === "claim" ? "claiming..." : "registering...";
+      await flat.signIn(mode, name, pass);
+    } catch (e) {
+      showErr(err, `${e.code || "error"}: ${e.message || "sign-in failed"}`);
+      submit.disabled = false;
+      submit.textContent = mode;
+    }
+  };
+
+  cherub.onclick = async () => {
+    err.classList.add("hidden");
+    try {
+      cherub.disabled = true;
+      await flat.signIn("claim", "cherub", "");
+    } catch (e) {
+      showErr(err, `${e.code || "error"}: ${e.message || "cherub claim failed"}`);
+      cherub.disabled = false;
+    }
+  };
+
+  root.appendChild(card);
+  _overlayMounted = true;
+
+  // Close on background click.
+  root.onclick = (ev) => { if (ev.target === root) hideAuthOverlay(); };
+  // Focus the name field.
+  setTimeout(() => nameField.input.focus(), 10);
+}
+
+export function hideAuthOverlay() {
+  const root = document.getElementById("auth-overlay");
+  if (!root) return;
+  root.classList.add("hidden");
+  root.innerHTML = "";
+  _overlayMounted = false;
+}
+
+// ────────────────────────────────────────────────────────────────
+// Helpers
+// ────────────────────────────────────────────────────────────────
+
+function tabBtn(label, active) {
+  const b = document.createElement("button");
+  b.className = "tab" + (active ? " active" : "");
+  b.textContent = label;
+  return b;
+}
+
+function setActive(on, off) {
+  on.classList.add("active");
+  off.classList.remove("active");
+}
+
+function field(label, kind, type = "text") {
+  const wrap = document.createElement("div");
+  wrap.className = "field";
+  const l = document.createElement("label");
+  l.textContent = label;
+  const input = document.createElement(kind);
+  input.type = type;
+  wrap.appendChild(l);
+  wrap.appendChild(input);
+  return { wrap, input };
+}
+
+function showErr(el, msg) {
+  el.textContent = msg;
+  el.classList.remove("hidden");
+}

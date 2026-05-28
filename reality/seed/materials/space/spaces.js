@@ -32,7 +32,7 @@ import { getInternalConfigValue } from "../../internalConfig.js";
 import Space from "./space.js";
 import Being from "../being/being.js";
 import { createMatter } from "../matter/matters.js";
-import { logFact } from "../../past/fact/facts.js";
+import { sealFacts } from "../../past/fact/facts.js";
 import {
   acquireSpaceLock,
   releaseSpaceLock,
@@ -273,7 +273,9 @@ export async function createSpace({
     const specQualities = hookData.qualities instanceof Map
       ? Object.fromEntries(hookData.qualities)
       : (hookData.qualities || {});
-    await logFact({
+    // Eager singleton commit (read-back at line ~299 needs the row
+    // materialized). Same shape as createBeing / createMatter.
+    await sealFacts([{
       verb:    "do",
       action:  "create",
       beingId: String(being._id),
@@ -289,7 +291,7 @@ export async function createSpace({
       },
       actId,
       sessionId,
-    });
+    }]);
   } finally {
     if (lockTarget) releaseSpaceLock(lockTarget, sessionId);
   }
@@ -369,7 +371,8 @@ export async function createRealitySeedSpace({
     ? Object.fromEntries(qualities)
     : (qualities || {});
 
-  await logFact({
+  // Eager singleton commit (read-back at line ~389 needs the row).
+  await sealFacts([{
     verb:    "do",
     action:  "create",
     beingId: I_AM,
@@ -384,7 +387,7 @@ export async function createRealitySeedSpace({
         qualities: specQualities,
       },
     },
-  });
+  }]);
 
   const newSpace = await Space.findById(id);
   if (!newSpace) {

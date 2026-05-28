@@ -35,7 +35,7 @@
 //     positionInHomeDomain,     // home is an ancestor of target (target lives inside home's subtree)
 //
 //     // federation
-//     homeOnThisPlace,           // !being.isRemote
+//     homeOnThisReality,           // !being.isRemote
 //     federatedFrom,            // being.homeReality if remote, else null
 //   }
 //
@@ -62,7 +62,7 @@ const ARRIVAL_PROPS = Object.freeze({
   // resolve scoped checks like `homeInDomain: "<rulership-spaceId>"`
   // ("is this specific space anywhere in the home's ancestry?").
   homeAncestors:        Object.freeze([]),
-  homeOnThisPlace:       true,
+  homeOnThisReality:       true,
   federatedFrom:        null,
 });
 
@@ -97,7 +97,7 @@ export async function deriveStanceProperties({ beingId, targetSpace }) {
     homeInDomain:         false,
     positionInHomeDomain: false,
     homeAncestors:        [],
-    homeOnThisPlace:       !being.isRemote,
+    homeOnThisReality:       !being.isRemote,
     federatedFrom:        being.isRemote ? (being.homeReality || null) : null,
   };
 

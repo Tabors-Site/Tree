@@ -71,6 +71,16 @@ const InboxProjectionSchema = new mongoose.Schema({
     default: "INTERACTIVE",
   },
 
+  // Orientation (INNER-FOLD §1): which way the recipient's moment
+  // folds when this summon is picked. External summons carry forward;
+  // self-summons may carry half or inward. Read by assign and put on
+  // summonCtx so the moment's fold knows where to look.
+  orientation: {
+    type: String,
+    enum: ["forward", "half", "inward"],
+    default: "forward",
+  },
+
   // Conversation threading (orthogonal to closure). rootCorrelation
   // gets its sparse index declared below at the sever-sweep target;
   // no duplicate `index: true` here.

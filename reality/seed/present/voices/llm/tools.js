@@ -26,6 +26,17 @@
 // cannot cripple a role by stripping its capacities at call time.
 
 import log from "../../../seedReality/log.js";
+import { hooks } from "../../../hooks.js";
+import { getInternalConfigValue } from "../../../internalConfig.js";
+import { isDbHealthy } from "../../../seedReality/dbConfig.js";
+import {
+  getCurrentSpace,
+  getRootIdFor,
+} from "../../../materials/being/position.js";
+import { getAncestorChain, resolveExtensionScopeFromChain } from "../../../materials/space/ancestorCache.js";
+import { getToolCallTimeoutMs, getToolResultMaxBytes } from "../../knobs.js";
+import { resolveToolsForRole } from "./assemble.js";
+
 const toolDefs = {};
 const toolVerbs = {};    // name → "see" | "do" | "summon" | "be"
 const toolHandlers = {}; // name → async (args) => result
@@ -360,6 +371,11 @@ export async function auditToolDescriptions() {
   for (const roleName of roleNames) {
     const role = getRole(roleName);
     if (!role) continue;
+    // Skip scripted roles. They bring their own summon and never
+    // dispatch through the tool registry; their canX entries are DO
+    // operation names, not LLM tool names. Auditing them produces
+    // false "missing tool" warnings.
+    if (role._cognitionMode === "scripted") continue;
     scanned++;
     const declared = [
       ...(role.canSee || []),
@@ -409,4 +425,372 @@ export async function syncToolsToSubstrate() {
     ]),
   }));
   return manifestItems({ seedSpace: SEED_SPACE.TOOLS, items });
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// PER-POSITION TOOL RESOLUTION + DISPATCH
+// ─────────────────────────────────────────────────────────────────────────
+//
+// resolveToolsForPosition: per-moment resolution of which tools the being
+// may reach for. Role base + extension overlays + per-position rules +
+// permission filter. Called once at the start of the LLM loop (see
+// loop.js). The position-walk reads the being's ancestor cache so a
+// tree's `qualities.tools.{allowed, blocked}` can tighten or loosen
+// the role's defaults; confined extensions on the chain drop their
+// tools out of the surface.
+//
+// executeTool: dispatch one tool call from the LLM. Parse the args,
+// inject context (beingId, actId, spaceId), check the per-tool circuit
+// breaker, fire beforeToolCall, dispatch through the handler, capture
+// the result, fire afterToolCall, append the tool-response message to
+// session history. The loop in loop.js calls this once per tool the
+// model invoked in its last forward pass.
+
+/**
+ * Resolve the tool surface for one moment.
+ *
+ * @param {object} session           the per-being presence reel
+ * @param {string} beingId           acting being
+ * @param {string[]|null} rolePermissions  caller-supplied permission filter
+ * @returns {Promise<{tools, blockedExtensions, restrictedExtensions}>}
+ */
+export async function resolveToolsForPosition(
+  session,
+  beingId,
+  rolePermissions = null,
+) {
+  let treeToolConfig = null;
+  let blockedExtensions = null;
+  let restrictedExtensions = null;
+  const currentSpace = getCurrentSpace(beingId) || getRootIdFor(beingId);
+  if (currentSpace) {
+    try {
+      const ancestors =
+        session._ancestorSnapshot || (await getAncestorChain(currentSpace));
+
+      if (ancestors && ancestors.length > 0) {
+        // Position-scoped tool allow/block. Walks closest-to-farthest;
+        // any space can contribute, place-seed spaces terminate.
+        const allowed = new Set();
+        const blocked = new Set();
+        for (const space of ancestors) {
+          if (space.seedSpace) break;
+          const meta = space.qualities || {};
+          if (meta.tools?.allowed)
+            for (const t of meta.tools.allowed) allowed.add(t);
+          if (meta.tools?.blocked)
+            for (const t of meta.tools.blocked) blocked.add(t);
+        }
+        if (allowed.size || blocked.size) {
+          treeToolConfig = {
+            allowed: allowed.size ? [...allowed] : undefined,
+            blocked: blocked.size ? [...blocked] : undefined,
+          };
+        }
+
+        // Confined-extension scope: same resolver extensionScope.js uses,
+        // so policy stays in one place.
+        const { getConfinedExtensions } =
+          await import("../../../materials/space/extensionScope.js");
+        const scope = resolveExtensionScopeFromChain(
+          ancestors,
+          getConfinedExtensions(),
+        );
+        if (scope.blocked.size) blockedExtensions = scope.blocked;
+        if (scope.restricted.size) restrictedExtensions = scope.restricted;
+      }
+    } catch (scopeErr) {
+      log.warn(
+        "LLM",
+        `Tool scope resolution failed for space ${currentSpace}: ${scopeErr.message}`,
+      );
+    }
+  }
+  // Role base + extension overlays + position overlays + permission
+  // filter. Permissions are role identity; envelopes never widen them.
+  let tools = resolveToolsForRole(
+    session.role,
+    treeToolConfig,
+    rolePermissions,
+  );
+  if (blockedExtensions || restrictedExtensions) {
+    const { filterToolsByScope } =
+      await import("../../../materials/space/extensionScope.js");
+    tools = filterToolsByScope(tools, blockedExtensions, restrictedExtensions);
+  }
+  return { tools, blockedExtensions, restrictedExtensions };
+}
+
+/**
+ * I run one tool call. The LLM has asked for a hand reach: parse
+ * its args, check the per-tool circuit breaker, fire beforeToolCall
+ * so extensions can rewrite or cancel, dispatch through the
+ * handler, capture the result, fire afterToolCall. The result lands
+ * in session.messages as the `tool` role partner of the assistant's
+ * tool_call so the next call sees the answer in its history.
+ *
+ * @param {object} toolCall      OpenAI tool-call object
+ * @param {object} session       per-being presence reel
+ * @param {object} ctx           moment ctx (beingId, actId, signal, ...)
+ * @param {string} presenceKey   conversation identifier
+ */
+export async function executeTool(toolCall, session, ctx, presenceKey) {
+  const toolName = toolCall.function.name;
+  let args;
+
+  if (
+    !toolCall.function.arguments ||
+    typeof toolCall.function.arguments !== "string"
+  ) {
+    log.error("LLM", `Missing or non-string tool arguments for ${toolName}`);
+    session.messages.push({
+      role: "tool",
+      tool_call_id: toolCall.id,
+      content: JSON.stringify({ error: "Missing tool arguments" }),
+    });
+    return { tool: toolName, success: false, error: "Missing tool arguments" };
+  }
+
+  try {
+    args = JSON.parse(toolCall.function.arguments);
+  } catch (e) {
+    log.error("LLM", `Invalid tool arguments for ${toolName}:`, e.message);
+    session.messages.push({
+      role: "tool",
+      tool_call_id: toolCall.id,
+      content: JSON.stringify({ error: "Invalid arguments" }),
+    });
+    return {
+      tool: toolName,
+      success: false,
+      error: "Invalid arguments",
+    };
+  }
+
+  // Auto-injected context args. The LLM doesn't know the summon's
+  // identifiers; we do. We stamp them onto every tool call so the
+  // handler can correlate back without global lookups. beingId names
+  // the caller; actId/sessionId tie to this LLM turn; rootActId
+  // points at the user-message-level root for per-turn state;
+  // ibpAddress identifies the conversation; spaceId pins the position.
+  args.beingId = ctx.beingId;
+  if (ctx?.actId && !args.actId) args.actId = ctx.actId;
+  if (ctx?.sessionId && !args.sessionId) args.sessionId = ctx.sessionId;
+  if (ctx?.rootActId && !args.rootActId)
+    args.rootActId = ctx.rootActId;
+  else if (ctx?.actId && !args.rootActId)
+    args.rootActId = ctx.actId;
+  if (presenceKey && !args.ibpAddress) args.ibpAddress = presenceKey;
+  if (ctx.rootId && !args.rootId) args.rootId = ctx.rootId;
+  // Position-pin. When a turn is dispatched with an explicit
+  // ctx.currentSpace (sub-Ruler turn, branch dispatch, Worker-at-
+  // scope, etc.) the tool call places AT THAT space even if the user
+  // navigates somewhere else mid-turn. Without this, a dispatched
+  // Worker's writes follow the user's cursor — position is per-being,
+  // and user-driven and dispatch-driven turns share it. The pin is
+  // the only thing keeping the two flows from clobbering each other.
+  const _curNode =
+    ctx.currentSpace || getCurrentSpace(ctx.beingId) || ctx.rootId || null;
+  if (_curNode && !args.spaceId) args.spaceId = _curNode;
+
+  // Per-tool circuit breaker. If one tool keeps failing this
+  // session, disable it for the rest of the session. The tool
+  // disappears from the AI's perspective; it routes around. One
+  // bad API key kills one tool, not the whole turn.
+  if (!session._toolFailures) session._toolFailures = {};
+  const toolCircuitThreshold = parseInt(
+    getInternalConfigValue("toolCircuitThreshold") || "5",
+    10,
+  );
+  if ((session._toolFailures[toolName] || 0) >= toolCircuitThreshold) {
+    session.messages.push({
+      role: "tool",
+      tool_call_id: toolCall.id,
+      content: JSON.stringify({
+        error: `Tool "${toolName}" has been temporarily disabled due to repeated failures. Use a different approach.`,
+      }),
+    });
+    return {
+      tool: toolName,
+      args,
+      success: false,
+      error: "tool_circuit_tripped",
+    };
+  }
+
+  // beforeToolCall lets extensions rewrite args or cancel the call.
+  // actId / sessionId / spaceId let forensics correlate the call
+  // back to the originating turn.
+  const _toolActId = ctx?.actId || null;
+  const _toolSessionId = ctx?.sessionId || null;
+  const hookData = {
+    toolName,
+    args,
+    beingId: ctx.beingId,
+    rootId: ctx.rootId,
+    role: session.role?.name,
+    actId: _toolActId,
+    sessionId: _toolSessionId,
+    spaceId: getCurrentSpace(ctx.beingId) || ctx.rootId || null,
+  };
+  const hookResult = await hooks.run("beforeToolCall", hookData);
+  if (hookResult.cancelled) {
+    const errCode = hookResult.timedOut ? "HOOK_TIMEOUT" : "HOOK_CANCELLED";
+    session.messages.push({
+      role: "tool",
+      tool_call_id: toolCall.id,
+      content: JSON.stringify({
+        error: hookResult.reason || "Tool call cancelled",
+        code: errCode,
+      }),
+    });
+    return { tool: toolName, args, success: false, error: errCode };
+  }
+  args = hookData.args;
+  const resolvedToolName = hookData.toolName || toolName;
+
+  log.debug("LLM", `🔧 [role:${session.role?.name}] ${resolvedToolName}`, args);
+
+  // Announce the call before dispatch. Live consumers (CLI, web) get
+  // to show "running <tool>..." while the work is happening instead
+  // of waiting for the answer to flash in.
+  if (ctx.onToolCalled) {
+    try {
+      ctx.onToolCalled({ tool: resolvedToolName, args });
+    } catch {
+      /* never let a listener break the tool loop */
+    }
+  }
+
+  // DB health gate. If Mongo is unreachable, every substrate-touching
+  // tool will fail in the same way; rather than burn time on the
+  // failures, tell the AI directly so it can speak to the user.
+  if (!isDbHealthy()) {
+    const dbErr =
+      "Database is currently unavailable. Tell the user the place is experiencing issues and to try again shortly.";
+    session.messages.push({
+      role: "tool",
+      tool_call_id: toolCall.id,
+      content: JSON.stringify({ error: dbErr }),
+    });
+    return { tool: toolName, args, success: false, error: "db_unavailable" };
+  }
+
+  try {
+    // Direct handler dispatch. Tools are verb-tagged and registered
+    // with their handler via registerToolDef (above); the handler IS
+    // the verb call (it usually wraps place.see / place.do /
+    // place.summon / place.be against a target). The verb dispatcher's
+    // authorize gate covers per-verb auth and the extension-scope
+    // block — no protocol layer between the LLM voice and the handler.
+    const handler = getToolHandler(resolvedToolName);
+    if (typeof handler !== "function") {
+      throw new Error(`Tool "${resolvedToolName}" has no registered handler`);
+    }
+    const nodeToolTimeout =
+      session._nodeLlmConfig?.toolCallTimeout ?? getToolCallTimeoutMs();
+    const result = await Promise.race([
+      Promise.resolve(handler(args)),
+      new Promise((_, reject) =>
+        setTimeout(
+          () =>
+            reject(
+              new Error(
+                `Tool "${resolvedToolName}" timed out after ${nodeToolTimeout / 1000}s`,
+              ),
+            ),
+          nodeToolTimeout,
+        ),
+      ),
+    ]);
+    let resultText =
+      typeof result === "string" ? result : JSON.stringify(result);
+    // Cap the result before it joins history. The full answer
+    // already informed this turn; only the historical copy gets
+    // truncated, so future turns don't drag a megabyte of file dump
+    // across the wire on every call.
+    const nodeResultMax =
+      session._nodeLlmConfig?.toolResultMaxBytes ?? getToolResultMaxBytes();
+    if (resultText && Buffer.byteLength(resultText, "utf8") > nodeResultMax) {
+      const charEstimate = Math.floor(nodeResultMax * 0.9);
+      resultText =
+        resultText.slice(0, charEstimate) +
+        `\n... (truncated, result exceeded ${Math.round(nodeResultMax / 1024)}KB)`;
+    }
+
+    session.messages.push({
+      role: "tool",
+      tool_call_id: toolCall.id,
+      content: resultText,
+    });
+
+    // Success clears the breaker. One transient failure shouldn't
+    // disable a tool for the rest of the turn.
+    delete session._toolFailures[resolvedToolName];
+
+    hooks
+      .run("afterToolCall", {
+        toolName: resolvedToolName,
+        args,
+        result: resultText,
+        success: true,
+        beingId: ctx.beingId,
+        rootId: ctx.rootId,
+        role: session.role?.name,
+        actId: _toolActId,
+        sessionId: _toolSessionId,
+        spaceId: getCurrentSpace(ctx.beingId) || ctx.rootId || null,
+      })
+      .catch(() => {});
+
+    // The full text rides back on the return so the Act row can
+    // archive what actually ran. Callers that only need success/fail
+    // ignore it; the extra field costs nothing.
+    return { tool: resolvedToolName, args, result: resultText, success: true };
+  } catch (err) {
+    log.error("LLM", `❌ Tool ${resolvedToolName} failed:`, err.message);
+
+    session._toolFailures[resolvedToolName] =
+      (session._toolFailures[resolvedToolName] || 0) + 1;
+    if (session._toolFailures[resolvedToolName] >= toolCircuitThreshold) {
+      log.warn(
+        "LLM",
+        `Tool "${resolvedToolName}" tripped after ${toolCircuitThreshold} consecutive failures. Disabled for this session.`,
+      );
+    }
+
+    // If Mongo died during the call, the error shape is misleading;
+    // rewrite the message so the AI knows the cause.
+    const errorMsg = !isDbHealthy()
+      ? "Database became unavailable during this operation. Tell the user the place is experiencing issues."
+      : err.message;
+
+    session.messages.push({
+      role: "tool",
+      tool_call_id: toolCall.id,
+      content: JSON.stringify({ error: errorMsg }),
+    });
+
+    hooks
+      .run("afterToolCall", {
+        toolName: resolvedToolName,
+        args,
+        error: err.message,
+        success: false,
+        beingId: ctx.beingId,
+        rootId: ctx.rootId,
+        role: session.role?.name,
+        actId: _toolActId,
+        sessionId: _toolSessionId,
+        spaceId: getCurrentSpace(ctx.beingId) || ctx.rootId || null,
+      })
+      .catch(() => {});
+
+    return {
+      tool: resolvedToolName,
+      args,
+      success: false,
+      error: err.message,
+    };
+  }
 }

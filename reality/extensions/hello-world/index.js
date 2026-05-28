@@ -16,7 +16,7 @@
 // stays the same; the cognition just changes shape.
 
 import log from "../../seed/seedReality/log.js";
-import { cognitionSuccess } from "../../seed/present/run.js";
+import { cognitionSuccess } from "../../seed/present/cognitionResult.js";
 
 export async function init(place) {
   const realityDomain = process.env.REALITY_DOMAIN || "localhost";

@@ -53,12 +53,12 @@
 
 import log from "../../../seedReality/log.js";
 import { runTurn } from "./runTurn.js";
-import { cognitionFailure, cognitionSuccess } from "../../run.js";
+import { cognitionFailure, cognitionSuccess } from "../../cognitionResult.js";
 import {
   emitReplyToAsker,
   emitReplyToStance,
   findChainInitialCaller,
-} from "../../intake/replies.js";
+} from "../../replies.js";
 
 /**
  * The generic summon implementation. The role registry wires this

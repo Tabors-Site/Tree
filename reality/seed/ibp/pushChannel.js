@@ -18,7 +18,7 @@
 // to push just see "nothing happened" without crashing.
 //
 // Same inversion pattern as the schedule emitter (see
-// seed/present/intake/wakeSchedule.js setScheduleEmitter).
+// seed/present/wakes/wakeSchedule.js setScheduleEmitter).
 
 import log from "../seedReality/log.js";
 

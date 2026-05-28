@@ -28,7 +28,7 @@ import Being from "./being.js";
 import log from "../../seedReality/log.js";
 import { getAncestorChain } from "../space/ancestorCache.js";
 import { getSpaceRootId } from "../../sprout.js";
-import { logFact } from "../../past/fact/facts.js";
+import { emitFact } from "../../past/fact/facts.js";
 
 const beingPositions = new Map();
 const MAX_BEING_POSITIONS = 50000;
@@ -73,15 +73,24 @@ function getBeingPositionRecord(beingId) {
 //
 // `beingId` doubles as actor and target — the being is acting on
 // itself (BE.switch is identity acting on identity).
-function persistBeingPosition(beingId, spaceId) {
+function persistBeingPosition(beingId, spaceId, summonCtx = null) {
   if (!beingId) return;
-  logFact({
+  const spec = {
     verb:    "be",
     action:  "switch",
     beingId: String(beingId),
     target:  { kind: "being", id: String(beingId) },
     params:  { toPosition: spaceId || null },
-  }).catch((err) => {
+    actId:   summonCtx?.actId || null,
+  };
+  // Phase 2: when inside a moment, push synchronously to ctx.deltaF.
+  // Outside a moment (boot, no summonCtx), keep fire-and-forget for
+  // hot-path latency — sealFacts singleton commits in the background.
+  if (summonCtx && Array.isArray(summonCtx.deltaF)) {
+    summonCtx.deltaF.push(spec);
+    return;
+  }
+  emitFact(spec, null).catch((err) => {
     log.debug(
       "Position",
       `persistBeingPosition(${String(beingId).slice(0, 8)}) failed: ${err.message}`,
@@ -120,12 +129,12 @@ async function deriveSpaceRootId(spaceId) {
  * remains fire-and-forget for hot-path latency; the ancestor walk is
  * served by the in-memory ancestor cache on the warm path.
  */
-export async function setCurrentSpace(beingId, spaceId) {
+export async function setCurrentSpace(beingId, spaceId, summonCtx = null) {
   if (!beingId) return;
   const p = getBeingPositionRecord(beingId);
   p.currentSpace = spaceId || null;
   p.rootId = await deriveSpaceRootId(spaceId);
-  persistBeingPosition(beingId, spaceId);
+  persistBeingPosition(beingId, spaceId, summonCtx);
 }
 
 export function getCurrentSpace(beingId) {

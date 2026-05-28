@@ -42,7 +42,7 @@
 
 import log from "../../../seedReality/log.js";
 import { resolveConnection } from "./connect.js";
-import { cognitionFailureError } from "../../run.js";
+import { cognitionFailureError } from "../../cognitionResult.js";
 
 // Note: the shared-pool LLM throttling (LLM_PRIORITY enum,
 // acquireLlmSlot / releaseLlmSlot, _llmWaiters queue, LLM_MAX_CONCURRENT

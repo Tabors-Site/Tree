@@ -81,7 +81,7 @@ import {
   isCognitionFailure,
   cognitionFailure,
   cognitionSuccess,
-} from "../../run.js";
+} from "../../cognitionResult.js";
 
 import crypto from "crypto";
 import Being from "../../../materials/being/being.js";
@@ -91,8 +91,12 @@ import {
   resolveExtensionScopeFromChain,
   getAncestorChain,
 } from "../../../materials/space/ancestorCache.js";
-import { isDbHealthy } from "../../../seedReality/dbConfig.js";
-import { resolveTools } from "./tools.js";
+import {
+  resolveTools,
+  resolveToolsForPosition,
+  executeTool,
+} from "./tools.js";
+import { callLLM, finalizeResponse } from "./loop.js";
 import { getSpaceName } from "../../../materials/space/spaces.js";
 // MCP wiring retired. Tools dispatch directly via getToolHandler in
 // executeTool; the verb dispatcher's authorize gate covers per-verb
@@ -110,7 +114,7 @@ import {
   setCarryMessages,
   setMaxPresenceReels,
   setStalePresenceMs,
-} from "../../fold/reel.js";
+} from "../../beats/2-fold/reel.js";
 export { setCarryMessages };
 import { getRealityConfigValue } from "../../../realityConfig.js";
 import { I_AM } from "../../../materials/being/seedBeings.js";
@@ -152,20 +156,18 @@ export function getActiveRunTurnCount() {
   return _activeRunTurns;
 }
 
-// Budget knobs + setInternalConfig live in config.js. I import the
-// getters for use in the loop and register my MAX_RUN_TURNS setter
-// so genesis-routed configs land. setInternalConfig is re-exported
-// because services.js wires it through the public surface.
+// Budget knobs + setInternalConfig live in knobs.js (the router that
+// fans internalConfig values down into present-subsystem setters). I
+// import the getters for use in the loop and register my MAX_RUN_TURNS
+// setter so genesis-routed configs land. setInternalConfig is
+// re-exported because services.js wires it through the public surface.
 import {
   setInternalConfig,
   registerMaxRunTurnsSetter,
   getMaxMessages,
   getMaxToolIterations,
-  getLlmMaxRetries,
-  getToolCallTimeoutMs,
-  getToolResultMaxBytes,
   getMaxMessageContentBytes,
-} from "../../config.js";
+} from "../../knobs.js";
 export { setInternalConfig };
 registerMaxRunTurnsSetter(setMaxRunTurns);
 
@@ -182,14 +184,11 @@ import {
 export { setLlmTimeout };
 
 // The call-surround machinery (failover, model quirks, response
-// parsing) lives in llmCall.js. I import what callLLM uses
-// internally and re-export the public surface (registerFailoverResolver)
-// so external callers reach it through runTurn the way they always
-// have.
+// parsing) lives in call.js. callLLM moved to loop.js and pulls
+// callWithFailover + JSON-error predicates directly from there;
+// runTurn keeps just the model-quirks / internal-parse pair that
+// stepTurn still uses, plus the public surface we re-export.
 import {
-  callWithFailover,
-  isJsonEscapeError,
-  isJsonStructuralError,
   registerFailoverResolver,
   handleModelQuirks,
   parseInternalResponse,
@@ -215,19 +214,8 @@ import {
 //     shape — a Planner with a giant prompt needs longer than a
 //     one-shot Worker)
 //   - place default (the floor)
-function getRetriesForRole(role) {
-  return role?.maxRetries ?? getLlmMaxRetries();
-}
-function getTimeoutForRole(role, spaceQualities = null) {
-  const meta =
-    spaceQualities instanceof Map
-      ? Object.fromEntries(spaceQualities)
-      : spaceQualities || {};
-  const spaceTimeout = role?.name ? meta.timeouts?.[role.name] : null;
-  if (spaceTimeout && Number.isFinite(spaceTimeout)) return spaceTimeout;
-  if (role?.timeoutMs && Number.isFinite(role.timeoutMs)) return role.timeoutMs;
-  return getLlmTimeout();
-}
+// getTimeoutForRole moved to loop.js (its only consumer was callLLM,
+// which also moved). getRetriesForRole was dead code and was dropped.
 
 // LLM connection getters (getClientForBeing, resolveRootLlmForRole)
 // imported above with the other connect.js surface.
@@ -679,728 +667,13 @@ function resolveLlmConfig(ancestors, role) {
  * hands the merged result through resolveToolsForRole's role-spec
  * + permission filter. Zero DB queries when the snapshot is hot.
  */
-async function resolveToolsForPosition(
-  session,
-  beingId,
-  rolePermissions = null,
-) {
-  let treeToolConfig = null;
-  let blockedExtensions = null;
-  let restrictedExtensions = null;
-  const currentSpace = getCurrentSpace(beingId) || getRootIdFor(beingId);
-  if (currentSpace) {
-    try {
-      const ancestors =
-        session._ancestorSnapshot || (await getAncestorChain(currentSpace));
-
-      if (ancestors && ancestors.length > 0) {
-        // Position-scoped tool allow/block. Walks closest-to-farthest;
-        // any space can contribute, place-seed spaces terminate.
-        const allowed = new Set();
-        const blocked = new Set();
-        for (const space of ancestors) {
-          if (space.seedSpace) break;
-          const meta = space.qualities || {};
-          if (meta.tools?.allowed)
-            for (const t of meta.tools.allowed) allowed.add(t);
-          if (meta.tools?.blocked)
-            for (const t of meta.tools.blocked) blocked.add(t);
-        }
-        if (allowed.size || blocked.size) {
-          treeToolConfig = {
-            allowed: allowed.size ? [...allowed] : undefined,
-            blocked: blocked.size ? [...blocked] : undefined,
-          };
-        }
-
-        // Confined-extension scope: same resolver extensionScope.js uses,
-        // so policy stays in one place.
-        const { getConfinedExtensions } =
-          await import("../../../materials/space/extensionScope.js");
-        const scope = resolveExtensionScopeFromChain(
-          ancestors,
-          getConfinedExtensions(),
-        );
-        if (scope.blocked.size) blockedExtensions = scope.blocked;
-        if (scope.restricted.size) restrictedExtensions = scope.restricted;
-      }
-    } catch (scopeErr) {
-      log.warn(
-        "LLM",
-        `Tool scope resolution failed for space ${currentSpace}: ${scopeErr.message}`,
-      );
-    }
-  }
-  // Role base + extension overlays + position overlays + permission
-  // filter. Permissions are role identity; envelopes never widen them.
-  let tools = resolveToolsForRole(
-    session.role,
-    treeToolConfig,
-    rolePermissions,
-  );
-  if (blockedExtensions || restrictedExtensions) {
-    const { filterToolsByScope } =
-      await import("../../../materials/space/extensionScope.js");
-    tools = filterToolsByScope(tools, blockedExtensions, restrictedExtensions);
-  }
-  return { tools, blockedExtensions, restrictedExtensions };
-}
-
-/**
- * One forward pass through the provider. Wraps the call with the
- * semaphore (so background work doesn't starve human turns), the
- * failover chain (so one dead provider doesn't kill the loop), the
- * beforeLLMCall + afterLLMCall hooks (so extensions can meter,
- * cancel, capture forensics), and the JSON-error retry path. The
- * loop body (stepTurn) calls this once per iteration and
- * dispatches tools from the result.
- */
-async function callLLM(
-  openai,
-  MODEL,
-  session,
-  tools,
-  ctx,
-  clientEntry,
-  presenceKey,
-) {
-  const requestParams = {
-    model: MODEL,
-    messages: session.messages,
-  };
-
-  if (tools.length > 0) {
-    requestParams.tools = tools;
-    requestParams.tool_choice = "auto";
-  }
-
-  // Conduit-boundary timeout. The SDK's request timeout is provider-
-  // and-version-dependent; we don't trust it. A hang produces no
-  // moment, no failure, no release — the being is wedged forever and
-  // holds its per-being serial slot. Own the deadline here: link a
-  // self-owned AbortController to ctx.signal, and race the actual
-  // call against a timer. Timer wins → abort the SDK request AND
-  // throw cognitionFailureError("timeout") so the outer boundary
-  // converts to { ok:false } and the moment releases on time.
-  const deadlineMs = getTimeoutForRole(session.role);
-  const deadlineCtrl = new AbortController();
-  if (ctx.signal) {
-    if (ctx.signal.aborted) deadlineCtrl.abort();
-    else ctx.signal.addEventListener("abort", () => deadlineCtrl.abort(), { once: true });
-  }
-  const requestOpts = { signal: deadlineCtrl.signal };
-
-  // beforeLLMCall: extensions can cancel (quota exhausted) or rewrite
-  // params. Exposing `messages` lets a before-handler inject a system
-  // line into the actual buffer. actId / sessionId / parentStampId
-  // let forensics capture handlers correlate back to the dispatching
-  // call. The inReplyTo lookup is one query per LLM call, skipped
-  // silently when the doc isn't there.
-  const _llmChatId = ctx?.actId || null;
-  const _llmSessionId = ctx?.sessionId || null;
-  let _llmParentChatId = null;
-  if (_llmChatId) {
-    try {
-      const { default: _Stamp } = await import("../../../past/act/act.js");
-      const _chatDoc = await _Summon
-        .findById(_llmChatId)
-        .select("inReplyTo")
-        .lean();
-      if (_chatDoc?.inReplyTo) _llmParentChatId = String(_chatDoc.inReplyTo);
-    } catch {}
-  }
-  const llmHookData = {
-    beingId: ctx.beingId,
-    rootId: ctx.rootId,
-    role: session.role?.name,
-    model: MODEL,
-    messageCount: session.messages.length,
-    hasTools: tools.length > 0,
-    messages: session.messages,
-    spaceId: getCurrentSpace(ctx.beingId) || ctx.rootId || null,
-    actId: _llmChatId,
-    sessionId: _llmSessionId,
-    parentStampId: _llmParentChatId,
-  };
-  const llmHookResult = await hooks.run("beforeLLMCall", llmHookData);
-  if (llmHookResult.cancelled) {
-    throw new Error(llmHookResult.reason || "LLM call rejected");
-  }
-
-  // Quick log of the [Block] tags at the top of the prompt — useful
-  // when debugging which extension contributed what to the assembled
-  // identity (each enrichContext block lands as its own labeled
-  // section).
-  if (session.messages[0]?.role === "system") {
-    const sys = session.messages[0].content;
-    const blocks = sys
-      .split("\n")
-      .filter((l) => l.startsWith("["))
-      .map((l) => l.split("]")[0] + "]")
-      .slice(0, 10);
-    if (blocks.length > 0) {
-      log.verbose(
-        "Grammar",
-        `[role:${session.role?.name}] modifiers: ${blocks.join(" ")}`,
-      );
-    }
-  }
-
-  let response;
-  let deadlineTimer = null;
-
-  try {
-    // Promise.race: the actual call vs the deadline timer. Timer
-    // resolves to a sentinel that the caller distinguishes; on
-    // resolve we abort the in-flight SDK request and throw
-    // cognitionFailureError("timeout"). This is the conduit
-    // boundary's hard deadline, owned here regardless of SDK
-    // behavior.
-    const DEADLINE_SENTINEL = Symbol("deadline");
-    const deadline = new Promise((resolve) => {
-      deadlineTimer = setTimeout(() => resolve(DEADLINE_SENTINEL), deadlineMs);
-    });
-    const callPromise = callWithFailover(
-      (client, model) =>
-        client.chat.completions.create(
-          { ...requestParams, model },
-          requestOpts,
-        ),
-      clientEntry,
-      ctx.beingId,
-      ctx.rootId || null,
-    );
-    let raceWinner;
-    try {
-      raceWinner = await Promise.race([callPromise, deadline]);
-    } finally {
-      // Clear the timer the moment one side resolves so it doesn't
-      // keep counting against the process. The finally runs on both
-      // the happy path (call returned first) and the timeout path
-      // (deadline returned first); the explicit abort below handles
-      // the timeout case's resource cleanup separately.
-      if (deadlineTimer) clearTimeout(deadlineTimer);
-    }
-    if (raceWinner === DEADLINE_SENTINEL) {
-      // Timer won. Abort the in-flight SDK request so it doesn't keep
-      // burning resources; the SDK rejects callPromise (we don't wait
-      // for it). Throw the sentinel; runTurn's outer boundary
-      // converts to { ok:false, shape:"timeout" }.
-      deadlineCtrl.abort();
-      callPromise.catch(() => {}); // swallow late rejection
-      log.warn("LLM", `LLM call exceeded deadline of ${deadlineMs}ms; releasing moment`);
-      throw cognitionFailureError("timeout", `LLM call exceeded ${deadlineMs}ms`);
-    }
-    const failoverResult = raceWinner;
-    response = failoverResult.response;
-    if (failoverResult.usedClient !== clientEntry) {
-      Object.assign(clientEntry, failoverResult.usedClient);
-    }
-
-    // afterLLMCall: token metering, billing, analytics, forensics.
-    // Carries responseText so capture handlers don't need a second
-    // hook to find "what the AI said."
-    hooks
-      .run("afterLLMCall", {
-        beingId: ctx.beingId,
-        rootId: ctx.rootId,
-        role: session.role?.name,
-        model: failoverResult.usedClient?.model || MODEL,
-        usage: response?.usage || null,
-        hasToolCalls: !!response?.choices?.[0]?.message?.tool_calls?.length,
-        actId: _llmChatId,
-        sessionId: _llmSessionId,
-        responseText: response?.choices?.[0]?.message?.content || null,
-      })
-      .catch(() => {});
-  } catch (apiErr) {
-    // tool_use_failed salvage retired Round 5. The path used to
-    // extract real model prose from `failed_generation` when a
-    // cheap model on an aggregator invented a tool name, and
-    // stuff it into a synthetic response. Per Tabor: salvage that
-    // re-enters the same act-validation as a normal response is
-    // legitimate; salvage that sneaks toward the seal is not.
-    // Today's pipeline has no validation step distinct from
-    // "trust the response," so the salvage was sneaking. Re-add
-    // through the front door once there's a real validate step
-    // (a separate task). For now: treat as cognition failure.
-    if (apiErr.code === "tool_use_failed" && apiErr.error?.failed_generation) {
-      const inventedTool = apiErr.error?.message?.match(/tool '(\w+)'/)?.[1] || "?";
-      log.warn("LLM", `Model invented tool "${inventedTool}". Treating as cognition failure (salvage retired).`);
-      throw cognitionFailureError("garbage", `model invented tool "${inventedTool}"`);
-    } else if (
-      (isJsonEscapeError(apiErr) || isJsonStructuralError(apiErr)) &&
-      !session._jsonRetryDone
-    ) {
-      // The provider rejected the model's tool-call JSON. Two
-      // distinct failure shapes: bad escape sequences in arguments
-      // (model wrote raw backslashes, control chars), or structural
-      // breakage in the envelope (unmatched bracket, truncated
-      // string). Each gets its own corrective system line; a blind
-      // retry of the identical request would just fail identically.
-      // The guard below caps retries at one per session — if the
-      // model can't produce clean output even with the hint, I
-      // surface the error instead of looping forever.
-      session._jsonRetryDone = true;
-      const errMsg = String(
-        apiErr.message || apiErr.error?.message || "",
-      ).slice(0, 200);
-      const isEscape = isJsonEscapeError(apiErr);
-      const failureClass = isEscape ? "escape" : "structural";
-      log.warn(
-        "LLM",
-        `JSON ${failureClass} failure on ${MODEL} (${errMsg}). Retrying once with corrective hint.`,
-      );
-
-      // Diagnostic line for the structural class. Captures the
-      // shape of what I sent (model, connection, message count,
-      // input size, max_tokens) plus any partial output the
-      // provider salvaged. When max_tokens prints "unset" the
-      // provider's silent default is the prime suspect for
-      // mid-stream truncation.
-      try {
-        const totalMessageChars = (session.messages || []).reduce(
-          (sum, m) =>
-            sum + (typeof m?.content === "string" ? m.content.length : 0),
-          0,
-        );
-        const failedGen =
-          apiErr?.error?.failed_generation ||
-          apiErr?.error?.failed_response ||
-          null;
-        const failedGenLen = failedGen ? String(failedGen).length : null;
-        const failedGenTail = failedGen
-          ? String(failedGen).slice(-200).replace(/\s+/g, " ")
-          : null;
-        log.warn(
-          "LLM",
-          `↳ diagnostic: model=${MODEL} ` +
-            `connection=${clientEntry?.connectionId ? String(clientEntry.connectionId).slice(0, 8) : "default"} ` +
-            `messages=${(session.messages || []).length} ` +
-            `inputChars=${totalMessageChars} ` +
-            `tools=${tools.length} ` +
-            `max_tokens=${requestParams.max_tokens ?? "unset"} ` +
-            (failedGenLen != null
-              ? `partialOutputChars=${failedGenLen} `
-              : "") +
-            (failedGenTail ? `tail="${failedGenTail}"` : ""),
-        );
-      } catch (diagErr) {
-        log.debug(
-          "LLM",
-          `structural-failure diagnostic skipped: ${diagErr.message}`,
-        );
-      }
-
-      const escapeHint =
-        `The provider could not deserialize one of your tool-call arguments because it contained ` +
-        `invalid escape sequences (raw backslashes, backslash followed by a space, or unescaped ` +
-        `control characters). RETRY WITH SIMPLER CONTENT: avoid backslashes entirely in tool ` +
-        `arguments, keep content ASCII where possible, and prefer prose over literal code / regex / ` +
-        `file paths. If you must include code, keep it short and use only simple identifiers.`;
-
-      const structuralHint =
-        `The provider could not deserialize your tool-call payload because the JSON envelope itself ` +
-        `was malformed at a structural position (unmatched bracket, unexpected token after a key/` +
-        `value pair, or a truncated string). This is usually NOT about escape characters — your ` +
-        `previous content may have been fine, but the JSON wrapping around it broke. RETRY by: ` +
-        `(1) keeping tool-call arguments shorter — split a long file into multiple smaller writes ` +
-        `if needed; (2) double-checking that every quote, bracket, and brace in your arguments ` +
-        `is balanced; (3) avoiding embedding raw long strings of code that may have triggered a ` +
-        `truncation. The fix is structural, not lexical — do not strip backslashes or rewrite as ` +
-        `prose unless the content itself was the problem.`;
-
-      session.messages.push({
-        role: "system",
-        content:
-          `Your previous turn failed with a JSON parse error: "${errMsg}". ` +
-          (isEscape ? escapeHint : structuralHint),
-      });
-      ctx._retryJsonEscape = true;
-    } else if (isCognitionFailure(apiErr)) {
-      // Re-throw the sentinel — we threw this ourselves (timeout or
-      // garbage from the response normalizer above) and the outer
-      // boundary in runTurn knows how to handle it.
-      throw apiErr;
-    } else {
-      // Generic HTTP / SDK error (rate limit, 500, auth, etc.). Per
-      // Round 5: convert to a cognition failure so the outer
-      // boundary returns { ok:false, shape:"http-error" } and the
-      // moment releases without sealing. The error message is
-      // preserved as the reason for forensics.
-      log.warn("LLM", `LLM call failed (${apiErr.code || apiErr.status || "unknown"}): ${apiErr.message?.slice(0, 200)}`);
-      throw cognitionFailureError("http-error", apiErr.message || apiErr.code || "unknown HTTP failure");
-    }
-  }
-
-  // The retry re-enters callLLM. The corrective system line is
-  // already in session.messages; the _jsonRetryDone guard on
-  // session prevents a second pass through this branch.
-  if (ctx._retryJsonEscape) {
-    ctx._retryJsonEscape = false;
-    return await callLLM(
-      openai,
-      MODEL,
-      session,
-      tools,
-      ctx,
-      clientEntry,
-      presenceKey,
-    );
-  }
-
-  // Provider response shapes vary. Some return null, some return an
-  // empty choices array, some return a choice with no message. Per
-  // Round 5: failure does not synthesize text. Each shape throws a
-  // cognitionFailureError("garbage"); runTurn's outer boundary
-  // converts to { ok:false } and the moment releases with no Act.
-  if (!response || !response.choices || !Array.isArray(response.choices)) {
-    log.warn("LLM", `LLM returned malformed response (no choices array). Model: ${MODEL}`);
-    throw cognitionFailureError("garbage", `no choices array from ${MODEL}`);
-  } else if (response.choices.length === 0) {
-    log.warn("LLM", `LLM returned empty choices array. Model: ${MODEL}`);
-    throw cognitionFailureError("garbage", `empty choices array from ${MODEL}`);
-  } else if (!response.choices[0].message) {
-    log.warn("LLM", `LLM returned choice without message. Model: ${MODEL}`);
-    throw cognitionFailureError("garbage", `choice has no message from ${MODEL}`);
-  }
-
-  return response;
-}
+// resolveToolsForPosition moved to tools.js (the per-position resolution
+// IS tool-registry logic; it belongs next to the static registry, not
+// in runTurn's orchestration). stepTurn below imports it.
 
 
-/**
- * I run one tool call. The LLM has asked for a hand reach: parse
- * its args, check the per-tool circuit breaker, fire beforeToolCall
- * so extensions can rewrite or cancel, dispatch through the MCP
- * client (the handler lives wherever — in-process extension, a
- * separate MCP server, doesn't matter to me), capture the result,
- * fire afterToolCall. The result lands in session.messages as the
- * `tool` role partner of the assistant's tool_call so the next
- * call I make sees the answer in its history.
- */
-async function executeTool(toolCall, session, ctx, presenceKey) {
-  const toolName = toolCall.function.name;
-  let args;
-
-  if (
-    !toolCall.function.arguments ||
-    typeof toolCall.function.arguments !== "string"
-  ) {
-    log.error("LLM", `Missing or non-string tool arguments for ${toolName}`);
-    session.messages.push({
-      role: "tool",
-      tool_call_id: toolCall.id,
-      content: JSON.stringify({ error: "Missing tool arguments" }),
-    });
-    return { tool: toolName, success: false, error: "Missing tool arguments" };
-  }
-
-  try {
-    args = JSON.parse(toolCall.function.arguments);
-  } catch (e) {
-    log.error("LLM", `Invalid tool arguments for ${toolName}:`, e.message);
-    session.messages.push({
-      role: "tool",
-      tool_call_id: toolCall.id,
-      content: JSON.stringify({ error: "Invalid arguments" }),
-    });
-    return {
-      tool: toolName,
-      success: false,
-      error: "Invalid arguments",
-    };
-  }
-
-  // Auto-injected context args. The LLM doesn't know the summon's
-  // identifiers; I do. I stamp them onto every tool call so the
-  // handler on the other side of MCP can correlate back without
-  // global lookups. beingId names the caller; actId/sessionId tie
-  // to this LLM turn; rootStampId points at the user-message-level
-  // root for per-turn state; ibpAddress identifies the conversation;
-  // spaceId pins the position. Mirrors what mcp/server.js stamps on
-  // HTTP-path calls so handlers see one shape regardless of route.
-  args.beingId = ctx.beingId;
-  if (ctx?.actId && !args.actId) args.actId = ctx.actId;
-  if (ctx?.sessionId && !args.sessionId) args.sessionId = ctx.sessionId;
-  if (ctx?.rootStampId && !args.rootStampId)
-    args.rootStampId = ctx.rootStampId;
-  else if (ctx?.actId && !args.rootStampId)
-    args.rootStampId = ctx.actId;
-  if (presenceKey && !args.ibpAddress) args.ibpAddress = presenceKey;
-  if (ctx.rootId && !args.rootId) args.rootId = ctx.rootId;
-  // Position-pin. When a turn is dispatched with an explicit
-  // ctx.currentSpace (sub-Ruler turn, branch dispatch, Worker-at-
-  // scope, etc.) the tool call places AT THAT space even if the user
-  // navigates somewhere else mid-turn. Without this, a dispatched
-  // Worker's writes follow the user's cursor — position is per-being,
-  // and user-driven and dispatch-driven turns share it. The pin is
-  // the only thing keeping the two flows from clobbering each other.
-  const _curNode =
-    ctx.currentSpace || getCurrentSpace(ctx.beingId) || ctx.rootId || null;
-  if (_curNode && !args.spaceId) args.spaceId = _curNode;
-
-  // Per-tool circuit breaker. If one tool keeps failing this
-  // session, I disable it for the rest of the session. The tool
-  // disappears from the AI's perspective; it routes around. One
-  // bad API key kills one tool, not the whole turn.
-  if (!session._toolFailures) session._toolFailures = {};
-  const toolCircuitThreshold = parseInt(
-    getInternalConfigValue("toolCircuitThreshold") || "5",
-    10,
-  );
-  if ((session._toolFailures[toolName] || 0) >= toolCircuitThreshold) {
-    session.messages.push({
-      role: "tool",
-      tool_call_id: toolCall.id,
-      content: JSON.stringify({
-        error: `Tool "${toolName}" has been temporarily disabled due to repeated failures. Use a different approach.`,
-      }),
-    });
-    return {
-      tool: toolName,
-      args,
-      success: false,
-      error: "tool_circuit_tripped",
-    };
-  }
-
-  // beforeToolCall lets extensions rewrite args or cancel the call.
-  // actId / sessionId / spaceId let forensics correlate the call
-  // back to the originating turn.
-  const _toolChatId = ctx?.actId || null;
-  const _toolSessionId = ctx?.sessionId || null;
-  const hookData = {
-    toolName,
-    args,
-    beingId: ctx.beingId,
-    rootId: ctx.rootId,
-    role: session.role?.name,
-    actId: _toolChatId,
-    sessionId: _toolSessionId,
-    spaceId: getCurrentSpace(ctx.beingId) || ctx.rootId || null,
-  };
-  const hookResult = await hooks.run("beforeToolCall", hookData);
-  if (hookResult.cancelled) {
-    const errCode = hookResult.timedOut ? "HOOK_TIMEOUT" : "HOOK_CANCELLED";
-    session.messages.push({
-      role: "tool",
-      tool_call_id: toolCall.id,
-      content: JSON.stringify({
-        error: hookResult.reason || "Tool call cancelled",
-        code: errCode,
-      }),
-    });
-    return { tool: toolName, args, success: false, error: errCode };
-  }
-  args = hookData.args;
-  const resolvedToolName = hookData.toolName || toolName;
-
-  log.debug("LLM", `🔧 [role:${session.role?.name}] ${resolvedToolName}`, args);
-
-  // Announce the call before I dispatch it. Live consumers (CLI,
-  // web) get to show "running <tool>..." while the work is happening
-  // instead of waiting for the answer to flash in.
-  if (ctx.onToolCalled) {
-    try {
-      ctx.onToolCalled({ tool: resolvedToolName, args });
-    } catch {
-      /* never let a listener break the tool loop */
-    }
-  }
-
-  // DB health gate. If Mongo is unreachable, every substrate-touching
-  // tool will fail in the same way; rather than burn time on the
-  // failures, I tell the AI directly so it can speak to the user.
-  if (!isDbHealthy()) {
-    const dbErr =
-      "Database is currently unavailable. Tell the user the place is experiencing issues and to try again shortly.";
-    session.messages.push({
-      role: "tool",
-      tool_call_id: toolCall.id,
-      content: JSON.stringify({ error: dbErr }),
-    });
-    return { tool: toolName, args, success: false, error: "db_unavailable" };
-  }
-
-  try {
-    // Direct handler dispatch. Tools are verb-tagged and registered
-    // with their handler in voices/llm/tools.js; the handler IS the
-    // verb call (it usually wraps place.see / place.do / place.summon /
-    // place.be against a target). The verb dispatcher's authorize gate
-    // covers per-verb auth and the extension-scope block — no protocol
-    // layer between the LLM voice and the handler.
-    const { getToolHandler } = await import("./tools.js");
-    const handler = getToolHandler(resolvedToolName);
-    if (typeof handler !== "function") {
-      throw new Error(`Tool "${resolvedToolName}" has no registered handler`);
-    }
-    const nodeToolTimeout =
-      session._nodeLlmConfig?.toolCallTimeout ?? getToolCallTimeoutMs();
-    const result = await Promise.race([
-      Promise.resolve(handler(args)),
-      new Promise((_, reject) =>
-        setTimeout(
-          () =>
-            reject(
-              new Error(
-                `Tool "${resolvedToolName}" timed out after ${nodeToolTimeout / 1000}s`,
-              ),
-            ),
-          nodeToolTimeout,
-        ),
-      ),
-    ]);
-    let resultText =
-      typeof result === "string" ? result : JSON.stringify(result);
-    // Cap the result before it joins history. The full answer
-    // already informed this turn; only the historical copy gets
-    // truncated, so future turns don't drag a megabyte of file dump
-    // across the wire on every call.
-    const nodeResultMax =
-      session._nodeLlmConfig?.toolResultMaxBytes ?? getToolResultMaxBytes();
-    if (resultText && Buffer.byteLength(resultText, "utf8") > nodeResultMax) {
-      const charEstimate = Math.floor(nodeResultMax * 0.9);
-      resultText =
-        resultText.slice(0, charEstimate) +
-        `\n... (truncated, result exceeded ${Math.round(nodeResultMax / 1024)}KB)`;
-    }
-
-    session.messages.push({
-      role: "tool",
-      tool_call_id: toolCall.id,
-      content: resultText,
-    });
-
-    // Success clears the breaker. One transient failure shouldn't
-    // disable a tool for the rest of the turn.
-    delete session._toolFailures[resolvedToolName];
-
-    hooks
-      .run("afterToolCall", {
-        toolName: resolvedToolName,
-        args,
-        result: resultText,
-        success: true,
-        beingId: ctx.beingId,
-        rootId: ctx.rootId,
-        role: session.role?.name,
-        actId: _toolChatId,
-        sessionId: _toolSessionId,
-        spaceId: getCurrentSpace(ctx.beingId) || ctx.rootId || null,
-      })
-      .catch(() => {});
-
-    // The full text rides back on the return so the Act row can
-    // archive what actually ran. Callers that only need success/fail
-    // ignore it; the extra field costs nothing.
-    return { tool: resolvedToolName, args, result: resultText, success: true };
-  } catch (err) {
-    log.error("LLM", `❌ Tool ${resolvedToolName} failed:`, err.message);
-
-    session._toolFailures[resolvedToolName] =
-      (session._toolFailures[resolvedToolName] || 0) + 1;
-    if (session._toolFailures[resolvedToolName] >= toolCircuitThreshold) {
-      log.warn(
-        "LLM",
-        `Tool "${resolvedToolName}" tripped after ${toolCircuitThreshold} consecutive failures. Disabled for this session.`,
-      );
-    }
-
-    // If Mongo died during the call, the error shape is misleading;
-    // I rewrite the message so the AI knows the cause.
-    const errorMsg = !isDbHealthy()
-      ? "Database became unavailable during this operation. Tell the user the place is experiencing issues."
-      : err.message;
-
-    session.messages.push({
-      role: "tool",
-      tool_call_id: toolCall.id,
-      content: JSON.stringify({ error: errorMsg }),
-    });
-
-    hooks
-      .run("afterToolCall", {
-        toolName: resolvedToolName,
-        args,
-        error: err.message,
-        success: false,
-        beingId: ctx.beingId,
-        rootId: ctx.rootId,
-        role: session.role?.name,
-        actId: _toolChatId,
-        sessionId: _toolSessionId,
-        spaceId: getCurrentSpace(ctx.beingId) || ctx.rootId || null,
-      })
-      .catch(() => {});
-
-    return {
-      tool: resolvedToolName,
-      args,
-      success: false,
-      error: err.message,
-    };
-  }
-}
-
-/**
- * Close the turn. The loop has exited; I have either a text answer
- * or a response that ends with tool_calls but no prose. In the
- * second case I make one more call to the model with no tools so it
- * speaks its conclusion. Then I append the final assistant message
- * to the buffer (unless this is an internal-shaped turn where the
- * caller wants the raw response object) and hand the answer back
- * with provenance for the Act row.
- */
-async function finalizeResponse(
-  session,
-  openai,
-  MODEL,
-  response,
-  isInternal,
-  isCustom,
-  resolvedConnectionId,
-  ctx,
-) {
-  // Ensure final text response. If the tool loop ended with no text content
-  // (e.g., model returned only tool calls), make one more call to get a summary.
-  if (!response?.choices?.[0]?.message?.content) {
-    const finalResponse = await openai.chat.completions.create({
-      model: MODEL,
-      messages: session.messages,
-    });
-    response = finalResponse;
-  }
-
-  const finalAnswer = response?.choices?.[0]?.message?.content || "Done.";
-
-  // Append only if the loop didn't already place this exact answer.
-  // Avoids the assistant message appearing twice on weird code paths.
-  if (!isInternal) {
-    const lastMsg = session.messages[session.messages.length - 1];
-    if (lastMsg?.role !== "assistant" || lastMsg?.content !== finalAnswer) {
-      session.messages.push({ role: "assistant", content: finalAnswer });
-    }
-  }
-
-  // _internal carries provenance for the closing stamp() (which
-  // model, which connection). Never leaves the seed; clients see
-  // only the text.
-  const _internal = {
-    role: session.role?.name,
-    rootId: getRootIdFor(ctx.beingId),
-    isCustom,
-    model: MODEL,
-    connectionId: resolvedConnectionId || null,
-  };
-
-  return {
-    success: true,
-    content: finalAnswer,
-    text: finalAnswer,
-    _internal,
-  };
-}
+// executeTool moved to tools.js. stepTurn below imports it.
+// finalizeResponse moved to loop.js. stepTurn below imports it.
 
 // ─────────────────────────────────────────────────────────────────────────
 // PROCESS MESSAGE
@@ -1744,8 +1017,8 @@ export async function runTurn({ being, envelope, role, signal = null } = {}) {
   const rootId = null;
 
   const { setSessionAbort, clearSessionAbort } =
-    await import("../../intake/session.js");
-  const { resolvePipelineKey } = await import("../../intake/session.js");
+    await import("../../session.js");
+  const { resolvePipelineKey } = await import("../../session.js");
   const { computeIbpStampAddress } = await import("../../../ibp/address.js");
 
   // The IBP Address is the conversation identifier. When I can
@@ -1809,7 +1082,7 @@ export async function runTurn({ being, envelope, role, signal = null } = {}) {
       rootId,
       currentSpace: getCurrentSpace(beingId),
       actId,
-      rootStampId: actId,
+      rootActId: actId,
       sessionId,
       signal: abortSignal,
       // Permissions are role identity. The intersection with tool

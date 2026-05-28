@@ -59,8 +59,8 @@ export async function resolveStance(stance, opts = {}) {
   if (requireRealityMatch && stanceReality !== localReality) {
     throw new IbpError(
       IBP_ERR.SPACE_NOT_FOUND,
-      `Place "${stanceReality}" is not served by this server`,
-      { stanceReality, serverPlace: localReality },
+      `Reality "${stanceReality}" is not served by this server`,
+      { stanceReality, serverReality: localReality },
     );
   }
 

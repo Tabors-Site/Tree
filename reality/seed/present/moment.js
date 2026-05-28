@@ -29,7 +29,7 @@
 // exists to close it. The being's reel and act-chain are byte-
 // identical to before the failed moment. Zero trace.
 //
-// See seed/present/run.js for the CognitionResult contract.
+// See seed/present/cognitionResult.js for the CognitionResult contract.
 //
 // The intake queue and per-being serial behavior live in
 // intake/scheduler.js; the scheduler calls runMoment() once per
@@ -37,11 +37,11 @@
 // business.
 
 import log from "../seedReality/log.js";
-import { assign }   from "./assign.js";
-import { momentum } from "./momentum.js";
-import { sealAct }  from "./stamped.js";
+import { assign }   from "./beats/1-assign.js";
+import { momentum } from "./beats/3-momentum.js";
+import { sealAct }  from "./beats/4-stamped.js";
 import { markIntakeRunning, markIntakeComplete } from "./intake/intake.js";
-import { buildResponseEntry } from "./intake/replies.js";
+import { buildResponseEntry } from "./replies.js";
 
 /**
  * Run one moment for a being. Walks all four beats; never throws —
@@ -137,14 +137,20 @@ export async function runMoment({ beingId, spaceId, entry, index, handoff = null
       actInserted = await sealAct(setup.plannedAct, {
         content: sealContent,
         stopped: false,
+        deltaF:    setup.summonCtx?.deltaF    || [],
+        afterSeal: setup.summonCtx?.afterSeal || [],
       });
     } else if (setup?.plannedAct && cognition?.shape === "aborted") {
       // Abort path. Legacy: still produces an Act with content=null
       // and stopped=true. To be converted to release-with-no-Act
-      // in a future pass (see run.js doctrine).
+      // in a future pass (see run.js doctrine). On abort we still
+      // commit whatever ΔF accumulated before the abort — those
+      // facts happened and PAST FIXED applies.
       actInserted = await sealAct(setup.plannedAct, {
         content: null,
         stopped: true,
+        deltaF:    setup.summonCtx?.deltaF    || [],
+        afterSeal: setup.summonCtx?.afterSeal || [],
       });
     } else if (setup?.plannedAct) {
       // ok:false (and not aborted). NO Act row. NO inbox close.

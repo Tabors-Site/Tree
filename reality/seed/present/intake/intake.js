@@ -37,7 +37,7 @@
 
 import { randomUUID } from "crypto";
 import InboxProjection from "../../past/act/inboxProjection.js";
-import { logFact } from "../../past/fact/facts.js";
+import { emitFact } from "../../past/fact/facts.js";
 
 // Place-level cap on pending intake entries. Counts InboxProjection
 // rows (cheap to query on demand; the cached counter is a soft hint
@@ -102,8 +102,10 @@ export async function enqueueIntake(spaceId, beingId, entry) {
   // Self-summon Fact: the being is the actor AND the recipient. The
   // params carry the transport-act payload; the scheduler reads them
   // when picking. The Fact lands on the being's own reel (single-
-  // writer — the being is the actor).
-  await logFact({
+  // writer — the being is the actor). enqueueIntake runs OUTSIDE a
+  // moment (it kicks one off), so emitFact's no-summonCtx path
+  // applies: immediate commit via sealFacts singleton.
+  await emitFact({
     verb:    "be",
     action:  "summon",
     beingId: String(beingId),
@@ -185,6 +187,7 @@ export async function pickNextIntake(spaceId, beingId) {
       content:         row.content,
       priority:        row.priority,
       activeRole:      row.activeRole,
+      orientation:     row.orientation || "forward",
       inReplyTo:       row.inReplyTo,
       attachments:     row.attachments,
       sentAt:          row.sentAt?.toISOString?.() || row.sentAt,

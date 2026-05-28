@@ -97,6 +97,14 @@ export function registerRole(name, def, extName = "role-registry") {
     ? def.triggerOn
     : ["message"];
 
+  // Cognition mode: scripted iff the role brought its own summon
+  // function. LLM roles let the registry wrap with defaultSummon and
+  // dispatch through runTurn + tools. Scripted roles call seed verbs
+  // directly from their own summon and never touch the tool registry.
+  // The audit reads this flag to skip canX checks for scripted roles
+  // (their canDo entries are DO op names, not tool names).
+  const cognitionMode = typeof def.summon === "function" ? "scripted" : "llm";
+
   // Build the final role spec. summon and buildSystemPrompt are wired
   // lazily because they depend on seed/present modules; importing
   // them at module top would create a load-order cycle with runTurn.
@@ -107,6 +115,7 @@ export function registerRole(name, def, extName = "role-registry") {
     permissions,
     respondMode,
     triggerOn,
+    _cognitionMode: cognitionMode,
   };
 
   // Auto-wrap with defaultSummon when no custom summon is provided.

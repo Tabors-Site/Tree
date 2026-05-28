@@ -23,7 +23,7 @@ import Space from "./materials/space/space.js";
 import Fact from "./past/fact/fact.js";
 import Matter from "./materials/matter/matter.js";
 
-import { logFact } from "./past/fact/facts.js";
+import { emitFact } from "./past/fact/facts.js";
 import { resolveSpaceAccess } from "./materials/space/spaces.js";
 import {
   createBeing,
@@ -50,7 +50,7 @@ import {
   clearSessionAbort,
   SESSION_TYPES,
   registerSessionType,
-} from "./present/intake/session.js";
+} from "./present/session.js";
 
 import {
   stepTurn,
@@ -132,19 +132,19 @@ import {
 // extensions register roles, subscribe to events, declare wake
 // cadences, and aggregate fan-out replies without importing my
 // internals.
-import { aggregate as ibpAggregate } from "./present/intake/replies.js";
+import { aggregate as ibpAggregate } from "./present/replies.js";
 import {
   subscribe as ibpSubscribe,
   unsubscribe as ibpUnsubscribe,
   unsubscribeAllForBeing as ibpUnsubscribeAllForBeing,
-} from "./present/intake/subscriptions.js";
+} from "./present/wakes/subscriptions.js";
 import {
   schedule as ibpSchedule,
   unschedule as ibpUnschedule,
   unscheduleAllForBeing as ibpUnscheduleAllForBeing,
   setEmitter as ibpSetScheduleEmitter,
   resetEmitter as ibpResetScheduleEmitter,
-} from "./present/intake/wakeSchedule.js";
+} from "./present/wakes/wakeSchedule.js";
 import {
   registerRole as ibpRegisterRole,
   unregisterRole as ibpUnregisterRole,
@@ -211,7 +211,7 @@ export function buildRealityServices({
     be: beVerb,
 
     // --- Always-available services ---
-    facts: { logFact },
+    facts: { emitFact },
     auth: {
       resolveSpaceAccess,
       createBeing,

@@ -337,6 +337,7 @@ export async function cutThread({
   priority = "INTERACTIVE",
   reason = "thread cut",
   identity = null,
+  summonCtx = null,
 }) {
   if (!rootCorrelation) {
     return { severed: 0, cancelled: 0, aborted: 0 };
@@ -382,19 +383,23 @@ export async function cutThread({
   //    facts are the permanent arrival record.
   let cancelled = 0;
   try {
-    const { logFact } = await import("../../past/fact/facts.js");
+    const { emitFact } = await import("../../past/fact/facts.js");
     const InboxProjection = (await import("../../past/act/inboxProjection.js")).default;
     const severerBeingId = isIAm ? I_AM : String(identity.beingId);
     cancelled = await InboxProjection.countDocuments({ rootCorrelation });
-    await logFact({
+    await emitFact({
       verb:    "be",
       action:  "sever",
       beingId: severerBeingId,
       target:  { kind: "being", id: severerBeingId }, // severer's own reel
       params:  { rootCorrelation, reason, priority },
-    });
-    // Eager-fold inside logFact ran the cross-cutting be:sever handler,
-    // which deleted the matching InboxProjection rows.
+      actId:   summonCtx?.actId || null,
+    }, summonCtx);
+    // When summonCtx is present, the be:sever Fact lives in the
+    // caller's ΔF and commits at sealAct; the cross-cutting fold runs
+    // post-commit and clears the InboxProjection rows then. When
+    // summonCtx is null (boot/standalone), emitFact committed
+    // immediately and the eager-fold already ran.
   } catch {
     // Best-effort. Severed Acts + scheduler abort still close the
     // line at the audit + runtime layers.

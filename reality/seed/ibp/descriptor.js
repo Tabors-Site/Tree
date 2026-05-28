@@ -47,8 +47,8 @@ import {
 } from "../materials/space/spaces.js";
 import { getInboxSummary } from "../present/intake/inbox.js";
 import { getRole, listRoles } from "../present/roles/registry.js";
-import { findOpenForBeing } from "../present/fold/reelChains.js";
-import { fold } from "../present/fold/foldEngine.js";
+import { findOpenForBeing } from "../present/beats/2-fold/reelChains.js";
+import { fold } from "../present/beats/2-fold/foldEngine.js";
 
 // Fold an aggregate before reading its qualities. Per FOLD.md: the
 // projection IS the cache, and fold() catches it up to the reel head

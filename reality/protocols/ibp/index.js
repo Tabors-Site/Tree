@@ -20,28 +20,37 @@ import { attachIbpHandlers } from "./protocol.js";
 import { hooks } from "../../seed/hooks.js";
 import Space from "../../seed/materials/space/space.js";
 import { emitPositionInvalidate } from "./live.js";
-import { emitToSubscribers } from "../../seed/present/intake/subscriptions.js";
-import { startTickLoop as startScheduleTick } from "../../seed/present/intake/wakeSchedule.js";
+import { emitToSubscribers } from "../../seed/present/wakes/subscriptions.js";
+import { startTickLoop as startScheduleTick } from "../../seed/present/wakes/wakeSchedule.js";
 
 // Seed-signal-to-live-emit bridge. When seed events touch data that
 // the Position Description reads, invalidate subscribers so they refetch.
 // First cut: invalidate. Patch-based diffs come later as an optimization.
-const PLACEMENT_NAMESPACES = new Set(["position", "scenes", "models", "inbox"]);
 
 let _hooksWired = false;
 function wireLiveHooks() {
   if (_hooksWired) return;
   _hooksWired = true;
 
-  // Placement metadata changed on a space: invalidate the space's own
-  // descriptor and its parent's (which lists this space as a child).
-  hooks.register("afterQualityWrite", async ({ spaceId, extName }) => {
-    if (!spaceId || !PLACEMENT_NAMESPACES.has(extName)) return;
-    emitPositionInvalidate(spaceId, `qualities:${extName}`);
-    try {
-      const n = await Space.findById(spaceId).select("parent").lean();
-      if (n?.parent) emitPositionInvalidate(n.parent, `child-metadata:${extName}`);
-    } catch { /* defensive */ }
+  // Quality write on a being/space/matter: invalidate the affected
+  // space's descriptor (and its parent, which lists this space as a
+  // child when the target is a space). The descriptor always exposes
+  // qualities; any write to qualities.<ns> may change what subscribers
+  // see, so no namespace gate. Listeners that don't care about a
+  // specific event are free to skip — the cost is one descriptor
+  // re-fetch by clients with a live subscription, bounded by their
+  // own debounce in handleDescriptorEvent.
+  hooks.register("afterQualityWrite", async ({ spaceId, ns, target }) => {
+    if (!spaceId) return;
+    emitPositionInvalidate(spaceId, `qualities:${ns}`);
+    // For space-target writes, also invalidate the parent (which lists
+    // this space as a child with its own qualities surfaced).
+    if (target?.kind === "space") {
+      try {
+        const s = await Space.findById(target.id).select("parent").lean();
+        if (s?.parent) emitPositionInvalidate(s.parent, `child-metadata:${ns}`);
+      } catch { /* defensive */ }
+    }
   }, "ibp-live");
 
   // Structural changes: new/removed/moved children change the parent's
@@ -119,7 +128,7 @@ export { IbpError, IBP_ERR, isIbpError } from "../../seed/ibp/protocol.js";
 // out-of-band interrupt).
 export { getCurrentRootCorrelation, getStats as getSchedulerStats } from "../../seed/present/intake/scheduler.js";
 // Reply aggregation pattern for fanout (Foreman → Workers, etc.).
-export { aggregate } from "../../seed/present/intake/replies.js";
+export { aggregate } from "../../seed/present/replies.js";
 // Subscription registry — extensions declare DO-trigger interest so
 // their beings get summoned when matching substrate writes happen.
 export {
@@ -129,7 +138,7 @@ export {
   getMatchingSubscribers,
   emitToSubscribers,
   getStats as getSubscriptionStats,
-} from "../../seed/present/intake/subscriptions.js";
+} from "../../seed/present/wakes/subscriptions.js";
 // Schedule registry — extensions declare wake cadences so their
 // beings get scheduled-wake SUMMONs on intervals. Default emitter is
 // Mode 2 (@system sender); embodied flavor swaps via setEmitter.
@@ -140,4 +149,4 @@ export {
   setEmitter as setScheduleEmitter,
   resetEmitter as resetScheduleEmitter,
   getStats as getScheduleStats,
-} from "../../seed/present/intake/wakeSchedule.js";
+} from "../../seed/present/wakes/wakeSchedule.js";

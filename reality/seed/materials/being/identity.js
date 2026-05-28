@@ -18,7 +18,7 @@ import { escapeRegex } from "../../utils.js";
 import { getRealityConfigValue } from "../../realityConfig.js";
 import { IBP_ERR, IbpError } from "../../ibp/protocol.js";
 import log from "../../seedReality/log.js";
-import { logFact, sealFacts } from "../../past/fact/facts.js";
+import { emitFact, sealFacts } from "../../past/fact/facts.js";
 
 if (!process.env.JWT_SECRET)
   throw new Error(
@@ -185,29 +185,44 @@ export async function createBeing(name, password, opts = {}) {
   // reducer materializes the row).
   const actor = opts.actor || id;
 
-  // ATOMIC BIRTH: route the be:register Fact through sealFacts —
-  // the ΔF commit boundary. Today birth is singleton ΔF (just the
-  // be:register Fact), so sealFacts delegates to logFact. The
-  // structural point is the boundary: a future birth that ALSO
-  // records on the parent's reel (provenance) would land both
-  // facts atomically, all-or-nothing. The seal-is-the-unit-of-
-  // commit invariant holds whether ΔF is one fact or many.
-  // See [[project-sealfacts-atomic-seal]].
+  // ATOMIC BIRTH (math-pure, Phase 2): the be:register Fact joins the
+  // calling moment's ΔF via emitFact. When inside a moment, the Fact
+  // commits with the rest of the moment's ΔF + Act row in one Mongo
+  // transaction — the seal is the unit of commit. When standalone
+  // (boot/scaffold, no summonCtx), emitFact falls back to sealFacts
+  // singleton — eager commit, row materializes immediately.
+  //
+  // Return shape depends on context:
+  //   - In-moment: pending view ({ _id, ...spec, _pending: true }).
+  //     The Being row doesn't exist in Mongo until sealAct commits
+  //     the moment; callers that need the row read it after seal.
+  //   - Standalone: full Mongoose document (Being.findById). The
+  //     eager singleton commit ran the fold; the row exists.
+  //
+  // Callers inside a moment can read spec fields off the pending view
+  // (name, operatingMode, roles, homeSpace, etc.). Schema-derived /
+  // timestamp fields aren't on the pending view; defer those reads.
   try {
-    await sealFacts([{
+    await emitFact({
       verb:    "be",
       action:  "register",
       beingId: actor,
       target:  { kind: "being", id },
       params:  { spec },
       actId:   opts.actId || null,
-    }]);
+    }, opts.summonCtx);
   } catch (err) {
     if (err.code === 11000)
       throw new IbpError(IBP_ERR.RESOURCE_CONFLICT, "Name already taken");
     throw err;
   }
 
+  // In-moment: return the pending view. Row will exist after seal.
+  if (opts.summonCtx) {
+    return { _id: id, ...spec, _pending: true };
+  }
+
+  // Standalone: row exists now (sealFacts singleton committed).
   const being = await Being.findById(id);
   if (!being) {
     throw new Error(
@@ -473,6 +488,7 @@ export async function createBeingWithHome(opts) {
     parentBeingId = null,
     identity = null,
     actId = null,
+    summonCtx = null,
   } = opts || {};
   let { name, password } = opts || {};
 
@@ -545,7 +561,11 @@ export async function createBeingWithHome(opts) {
       ? Object.fromEntries(homeQualities)
       : (homeQualities || {});
     const { I_AM } = await import("./seedBeings.js");
-    await logFact({
+    // Eager singleton commit — same read-back constraint as
+    // createBeing's be:register: the next line reads Space.findById,
+    // so the Fact must have committed (the eager-fold materializes
+    // the Space row only on commit). Singleton ΔF, no transaction.
+    await sealFacts([{
       verb:    "do",
       action:  "create",
       beingId: identity?.beingId ? String(identity.beingId) : I_AM,
@@ -560,7 +580,7 @@ export async function createBeingWithHome(opts) {
         },
       },
       actId,
-    });
+    }]);
     home = await Space.findById(homeId);
     if (!home) {
       throw new Error(
@@ -582,6 +602,7 @@ export async function createBeingWithHome(opts) {
       homeReality,
       parentBeingId,
       actId, // ride the caller's moment when threaded through
+      summonCtx, // be:register joins moment's ΔF when in-moment
     });
   } catch (err) {
     if (createdNewHome) {

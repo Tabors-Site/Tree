@@ -19,7 +19,7 @@
 import { v4 as uuidv4 } from "uuid";
 import Space from "../materials/space/space.js";
 import log from "../seedReality/log.js";
-import { logFact } from "../past/fact/facts.js";
+import { sealFacts } from "../past/fact/facts.js";
 import { I_AM } from "./being/seedBeings.js";
 
 // Stamp a do:birth Fact for a new manifest child Space. Slice C
@@ -33,7 +33,9 @@ async function createChildByFact({ parentId, name, type, qualities }) {
   const specQualities = qualities instanceof Map
     ? Object.fromEntries(qualities)
     : (qualities || {});
-  await logFact({
+  // Boot/scaffold path: eager singleton commit so callers can read
+  // the row immediately (manifest sync reads back after).
+  await sealFacts([{
     verb:    "do",
     action:  "create",
     beingId: I_AM,
@@ -47,7 +49,7 @@ async function createChildByFact({ parentId, name, type, qualities }) {
         qualities: specQualities,
       },
     },
-  });
+  }]);
   return id;
 }
 

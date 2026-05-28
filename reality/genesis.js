@@ -222,9 +222,9 @@ export async function genesis(app, opts = {}) {
   // its two generic tools (place-see, place-do).
   const { registerRole } = await import("./seed/present/roles/registry.js");
   const { realityManagerRole } =
-    await import("./seed/present/roles/realityManager.js");
+    await import("./seed/present/roles/reality-manager/role.js");
   const { realityManagerTools } =
-    await import("./seed/present/roles/realityManagerTools.js");
+    await import("./seed/present/roles/reality-manager/tools.js");
   registerRole("reality-manager", realityManagerRole, "seed");
   await registerSeedTools(realityManagerTools);
 
@@ -232,13 +232,13 @@ export async function genesis(app, opts = {}) {
   // to a human are rejected with ROLE_UNAVAILABLE. The role's summon
   // is a no-op — humans respond out-of-band from their own transport,
   // not synchronously through the factory.
-  const { humanRole } = await import("./seed/present/roles/human.js");
+  const { humanRole } = await import("./seed/present/roles/human/role.js");
   registerRole("human", humanRole, "seed");
 
   // The shared stance every unauthenticated visitor carries. SEE
   // bypasses the scheduler so many concurrent visitors share one
   // row without contention.
-  const { arrivalRole } = await import("./seed/present/roles/arrival.js");
+  const { arrivalRole } = await import("./seed/present/roles/arrival/role.js");
   registerRole("arrival", arrivalRole, "seed");
 
   // Cherub and llm-assigner are delegates: real work happens through
@@ -247,8 +247,8 @@ export async function genesis(app, opts = {}) {
   // roles in the registry so the @cherub / @llm-assigner stances
   // resolve and assign doesn't warn when an old inbox row gets
   // drained. triggerOn: [] on each prevents new SUMMONs from queueing.
-  const { cherubRole } = await import("./seed/present/roles/cherub.js");
-  const { llmAssignerRole } = await import("./seed/present/roles/llmAssigner.js");
+  const { cherubRole } = await import("./seed/present/roles/cherub/role.js");
+  const { llmAssignerRole } = await import("./seed/present/roles/llm-assigner/role.js");
   registerRole("cherub", cherubRole, "seed");
   registerRole("llm-assigner", llmAssignerRole, "seed");
 
@@ -268,7 +268,7 @@ export async function genesis(app, opts = {}) {
       const { isFirstBeing } = await import("./seed/materials/being/identity.js");
       if (await isFirstBeing()) {
         try {
-          const { cherubBeing } = await import("./seed/present/roles/cherub.js");
+          const { cherubBeing } = await import("./seed/present/roles/cherub/role.js");
           await cherubBeing.register(
             { name: plantCtx.operatorName, password: plantCtx.operatorPassword },
             { scaffold: true },
@@ -286,7 +286,7 @@ export async function genesis(app, opts = {}) {
   // not in the seed ops registry. Same shape an extension would
   // use, just shipped in seed.
   const { registerLlmAssignerOps } =
-    await import("./seed/present/roles/llmAssignerOps.js");
+    await import("./seed/present/roles/llm-assigner/ops.js");
   registerLlmAssignerOps();
 
   // I hand my remembered settings (from .config) down to the seed
@@ -325,19 +325,19 @@ export async function genesis(app, opts = {}) {
       },
       sessionTTL: {
         load: () =>
-          import("./seed/present/intake/session.js").then(
+          import("./seed/present/session.js").then(
             (m) => (v) => m.setSessionTTL(v * 1000),
           ),
       },
       staleSessionTimeout: {
         load: () =>
-          import("./seed/present/intake/session.js").then(
+          import("./seed/present/session.js").then(
             (m) => (v) => m.setStaleTimeout(v * 1000),
           ),
       },
       maxSessions: {
         load: () =>
-          import("./seed/present/intake/session.js").then(
+          import("./seed/present/session.js").then(
             (m) => m.setMaxSessions,
           ),
       },

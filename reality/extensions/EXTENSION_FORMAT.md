@@ -1326,7 +1326,7 @@ to the target):
 | `homeInDomain: "<spaceId>"` | The named space is in the caller's home ancestry |
 | `positionInHomeDomain: true` | The target is inside the caller's home subtree |
 | `role: "<role-name>"` | Caller's active role matches |
-| `homeOnThisPlace: true` | Caller is not federated from another place |
+| `homeOnThisReality: true` | Caller is not federated from another reality |
 
 `requires: {}` admits every stance (used for "anyone can do this"
 rules). All entries must pass for the rule to allow.

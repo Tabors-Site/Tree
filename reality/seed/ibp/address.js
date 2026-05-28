@@ -600,16 +600,24 @@ function stanceString(input) {
 }
 
 /**
- * Canonical sorted IBP Address for a stance pair. A→B and B→A produce
- * the same string. Self-addressed (same stance twice) returns the
- * single stance string.
+ * Canonical sorted IBP Address for a stance pair. An IBP address is
+ * always `<stance> :: <stance>` per the doctrine; both halves carry
+ * even when they refer to the same stance (a self-summon, e.g. cherub
+ * processing register on its own reel). A→B and B→A produce the same
+ * canonical string via lexicographic sort; A→A produces `A :: A`.
+ *
+ * Previous behavior collapsed self-pairs to a single stance, which
+ * stored half-formed IBP addresses on the Act row (presence keys, the
+ * Act.ibpAddress field, threadsProjection lookups). The full pair
+ * form keeps the doctrine intact and the field name honest.
  */
 function canonicalStancePair(stanceA, stanceB) {
   const a = stanceString(stanceA);
   const b = stanceString(stanceB);
   if (!a || !b) return null;
-  if (a === b) return a;
-  return a < b ? `${a}${STANCE_PAIR_SEPARATOR}${b}` : `${b}${STANCE_PAIR_SEPARATOR}${a}`;
+  return a < b
+    ? `${a}${STANCE_PAIR_SEPARATOR}${b}`
+    : `${b}${STANCE_PAIR_SEPARATOR}${a}`;
 }
 
 // Bounded LRU cache for being stance fields. name + homeSpace rarely

@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>TreeOS Portal Flat</title>
+    <link rel="stylesheet" href="/src/style.css" />
+  </head>
+  <body>
+    <div id="app">
+      <header id="top-bar">
+        <div id="parent-link"></div>
+        <div id="address-line"></div>
+        <div id="identity-chip"></div>
+      </header>
+
+      <main id="middle">
+        <section id="position-pane">
+          <h3 class="pane-title">beings</h3>
+          <ul id="beings-list" class="list"></ul>
+          <h3 class="pane-title">matter</h3>
+          <ul id="matter-list" class="list"></ul>
+        </section>
+
+        <section id="detail-pane">
+          <div id="empty-detail" class="empty">click a being or matter to see its verbs and permissions, or click "chat" on a being to summon it</div>
+          <div id="inspector" class="hidden"></div>
+          <div id="chat-panel" class="hidden"></div>
+        </section>
+      </main>
+
+      <footer id="bottom-bar">
+        <ul id="children-list"></ul>
+      </footer>
+
+      <div id="status-line"></div>
+      <div id="auth-overlay" class="hidden"></div>
+    </div>
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>

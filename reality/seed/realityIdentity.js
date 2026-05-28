@@ -100,7 +100,7 @@ export function setExtensionNamesProvider(fn) {
 
 export function getRealityInfoPayload() {
   const identity = getRealityIdentity();
-  const baseUrl = process.env.PLACE_BASE_URL || getRealityUrl();
+  const baseUrl = process.env.REALITY_BASE_URL || getRealityUrl();
   const timezone = getRealityConfigValue("timezone") || Intl.DateTimeFormat().resolvedOptions().timeZone;
 
   return {
@@ -111,7 +111,7 @@ export function getRealityInfoPayload() {
     protocolVersion: identity.protocolVersion,
     seedVersion: SEED_VERSION,
     baseUrl,
-    siteUrl: process.env.PLACE_SITE_URL || null,
+    siteUrl: process.env.REALITY_SITE_URL || null,
     timezone,
     capabilities: [
       ...(_getExtNames && _getExtNames().includes("team") ? ["invite"] : []),

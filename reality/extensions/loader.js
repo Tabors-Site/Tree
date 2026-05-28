@@ -11,6 +11,14 @@ import { setExtensionToolResolver } from "../seed/present/voices/llm/tools.js";
 import { hooks } from "../seed/hooks.js";
 import { getToolOwner } from "../seed/materials/space/extensionScope.js";
 import log from "../seed/seedReality/log.js";
+import { buildScopedReality } from "./scopedReality.js";
+import {
+  parseDepString,
+  semverSatisfies,
+  parseNpmDeps,
+  needsNpmInstall,
+  runNpmInstall,
+} from "./manifestDeps.js";
 
 /** Convert a file path to a URL string for dynamic import (Windows compat) */
 function toImportURL(filePath) {
@@ -133,180 +141,7 @@ export function syncDisabledFile(list) {
 // State
 // ---------------------------------------------------------------------------
 
-// ---------------------------------------------------------------------------
-// Semver utilities (no external deps)
-// ---------------------------------------------------------------------------
-
-/**
- * Parse a dependency string like "understanding" or "understanding@^1.0.0".
- * Returns { name, constraint } where constraint is null or the version part.
- */
-function parseDepString(dep) {
-  const atIdx = dep.indexOf("@");
-  if (atIdx <= 0) return { name: dep, constraint: null };
-  return { name: dep.slice(0, atIdx), constraint: dep.slice(atIdx + 1) };
-}
-
-/**
- * Parse a semver string "1.2.3" into [major, minor, patch].
- */
-function parseSemver(v) {
-  const match = String(v).match(/^(\d+)\.(\d+)\.(\d+)/);
-  if (!match) return null;
-  return [Number(match[1]), Number(match[2]), Number(match[3])];
-}
-
-/**
- * Check if version satisfies a constraint.
- * Supports: "1.2.3" (exact), "^1.2.3" (compatible), ">=1.2.3", ">1.2.3", "1.x", "1.2.x"
- */
-function semverSatisfies(version, constraint) {
-  const v = parseSemver(version);
-  if (!v) return true; // unparseable version, skip check
-
-  // Wildcard: "1.x" or "1.2.x"
-  if (constraint.includes("x")) {
-    const parts = constraint.split(".");
-    if (parts[0] !== "x" && Number(parts[0]) !== v[0]) return false;
-    if (parts[1] && parts[1] !== "x" && Number(parts[1]) !== v[1]) return false;
-    return true;
-  }
-
-  // >= operator
-  if (constraint.startsWith(">=")) {
-    const c = parseSemver(constraint.slice(2));
-    if (!c) return true;
-    if (v[0] !== c[0]) return v[0] > c[0];
-    if (v[1] !== c[1]) return v[1] > c[1];
-    return v[2] >= c[2];
-  }
-
-  // > operator
-  if (constraint.startsWith(">") && !constraint.startsWith(">=")) {
-    const c = parseSemver(constraint.slice(1));
-    if (!c) return true;
-    if (v[0] !== c[0]) return v[0] > c[0];
-    if (v[1] !== c[1]) return v[1] > c[1];
-    return v[2] > c[2];
-  }
-
-  // ^ operator (compatible: same major, >= minor.patch)
-  if (constraint.startsWith("^")) {
-    const c = parseSemver(constraint.slice(1));
-    if (!c) return true;
-    if (v[0] !== c[0]) return false; // major must match
-    if (v[1] !== c[1]) return v[1] > c[1];
-    return v[2] >= c[2];
-  }
-
-  // Exact match (or = prefix)
-  const exact = constraint.startsWith("=") ? constraint.slice(1) : constraint;
-  const c = parseSemver(exact);
-  if (!c) return true;
-  return v[0] === c[0] && v[1] === c[1] && v[2] === c[2];
-}
-
-// ---------------------------------------------------------------------------
-// npm dependency management
-// ---------------------------------------------------------------------------
-
-/**
- * Parse a manifest npm array into a dependencies object for package.json.
- * "discord.js@^14.0.0" -> { "discord.js": "^14.0.0" }
- * "@scope/pkg@^1.0.0"  -> { "@scope/pkg": "^1.0.0" }
- * "web-push"           -> { "web-push": "*" }
- */
-function parseNpmDeps(npmArray) {
-  const deps = {};
-  for (const entry of npmArray) {
-    const scopeEnd = entry.startsWith("@") ? entry.indexOf("/") : -1;
-    const atIdx = entry.indexOf("@", scopeEnd + 1);
-    if (atIdx > 0) {
-      deps[entry.slice(0, atIdx)] = entry.slice(atIdx + 1);
-    } else {
-      deps[entry] = "*";
-    }
-  }
-  return deps;
-}
-
-/**
- * Check whether npm install needs to run for an extension.
- * Returns true if node_modules or package.json is missing, or if
- * the package.json deps don't match the manifest's npm array.
- */
-function needsNpmInstall(extDir, npmDeps) {
-  const nmDir = path.join(extDir, "node_modules");
-  const pkgPath = path.join(extDir, "package.json");
-
-  if (!fs.existsSync(nmDir)) return true;
-  if (!fs.existsSync(pkgPath)) return true;
-
-  try {
-    const pkg = JSON.parse(fs.readFileSync(pkgPath, "utf8"));
-    const current = pkg.dependencies || {};
-    const wanted = parseNpmDeps(npmDeps);
-
-    const currentKeys = Object.keys(current).sort();
-    const wantedKeys = Object.keys(wanted).sort();
-    if (currentKeys.length !== wantedKeys.length) return true;
-    for (let i = 0; i < currentKeys.length; i++) {
-      if (currentKeys[i] !== wantedKeys[i]) return true;
-      if (current[currentKeys[i]] !== wanted[wantedKeys[i]]) return true;
-    }
-    return false;
-  } catch {
-    return true;
-  }
-}
-
-/**
- * Generate package.json and run npm install in an extension directory.
- * Uses execFileSync (same pattern as installFromRepo's git clone).
- * Throws on failure so the caller can handle rollback.
- */
-async function runNpmInstall(extDir, npmDeps, extName, opts = {}) {
-  const deps = parseNpmDeps(npmDeps);
-
-  const pkgJson = JSON.stringify(
-    {
-      name: `treeos-ext-${extName}`,
-      version: "1.0.0",
-      private: true,
-      dependencies: deps,
-    },
-    null,
-    2,
-  );
-
-  fs.writeFileSync(path.join(extDir, "package.json"), pkgJson, "utf8");
-
-  let timeout = opts.timeout || 60000;
-  try {
-    const { getRealityConfigValue } = await import("../seed/realityConfig.js");
-    const configured = getRealityConfigValue("npmInstallTimeout");
-    if (configured) timeout = Number(configured);
-  } catch {}
-
-  const { execSync } = await import("child_process");
-  try {
-    execSync("npm install --production --no-fund --no-audit --ignore-scripts", {
-      cwd: extDir,
-      stdio: "pipe",
-      timeout,
-      shell: true,
-    });
-    log.verbose(
-      "Extensions",
-      `${extName}: npm install complete (${npmDeps.length} packages)`,
-    );
-  } catch (err) {
-    const stderr = err.stderr
-      ? err.stderr.toString().slice(0, 500)
-      : err.message;
-    throw new Error(`npm install failed: ${stderr}`);
-  }
-}
+// Semver + npm-dep helpers moved to manifestDeps.js. Imported above.
 
 // ---------------------------------------------------------------------------
 // State
@@ -481,212 +316,7 @@ function appendToEnvFile(key, value, description) {
   } catch {}
 }
 
-// ---------------------------------------------------------------------------
-// Scoped place (permission boundary)
-// ---------------------------------------------------------------------------
-
-/**
- * Build a scoped place services bundle that only includes what the manifest
- * declares in needs + optional. Extensions cannot access services they
- * didn't declare.
- */
-function buildScopedReality(manifest, fullReality) {
-  const allowed = new Set();
-
-  // Collect all declared services (required + optional)
-  for (const svc of manifest.needs?.services || []) allowed.add(svc);
-  for (const svc of manifest.optional?.services || []) allowed.add(svc);
-
-  // Collect declared models
-  const allowedModels = new Set(manifest.needs?.models || []);
-  for (const m of manifest.optional?.models || []) allowedModels.add(m);
-
-  // Build scoped object
-  const scoped = {};
-
-  // Services: inject declared seed services
-  for (const key of AVAILABLE_SERVICES) {
-    if (allowed.has(key) && fullReality[key]) {
-      scoped[key] = fullReality[key];
-    }
-  }
-
-  // Also inject declared services that were dynamically registered by other
-  // extensions (e.g. energy registers place.energy during its init). The seed
-  // doesn't name these. Extensions discover them by declaration.
-  for (const svc of allowed) {
-    if (!AVAILABLE_SERVICES.has(svc) && fullReality[svc]) {
-      scoped[svc] = fullReality[svc];
-    }
-  }
-
-  // Models: only inject declared ones (plus any registered by other extensions)
-  scoped.models = {};
-  for (const name of allowedModels) {
-    if (fullReality.models[name]) {
-      scoped.models[name] = fullReality.models[name];
-    }
-  }
-
-  // Hooks: always available (place infrastructure, not a declared service)
-  if (fullReality.hooks) {
-    scoped.hooks = fullReality.hooks;
-  }
-
-  // Metadata: always available (every extension reads/writes metadata)
-  if (fullReality.qualities) {
-    scoped.qualities = fullReality.qualities;
-  }
-
-  // Being metadata: always available (extensions store per-being state)
-  if (fullReality.beingMetadata) {
-    scoped.beingMetadata = fullReality.beingMetadata;
-  }
-
-  // Matter metadata: always available (extensions tag matter in their namespace)
-  if (fullReality.matterMetadata) {
-    scoped.matterMetadata = fullReality.matterMetadata;
-  }
-
-  // Auth strategy binding: wrap registerStrategy to auto-inject extension name.
-  // Extensions must declare provides.authStrategies in manifest to register.
-  if (scoped.auth?.registerStrategy) {
-    const extName = manifest.name;
-    if (manifest.provides?.authStrategies) {
-      scoped.auth.allowStrategyExtension(extName);
-    }
-    const origRegister = scoped.auth.registerStrategy;
-    scoped.auth = {
-      ...scoped.auth,
-      registerStrategy: (name, handler) => origRegister(name, handler, extName),
-    };
-  }
-
-  // DO verb binding: auto-namespace operation registrations.
-  // Same principle as modes/orchestrators above. Extensions write
-  //   place.do.registerOperation("hire-planner", { ... })
-  // and the seed records as "governing:hire-planner" with
-  // ownerExtension: "governing" automatically. Extensions never type
-  // their own namespace — the namespace is implicit from the
-  // registration context.
-  //
-  // Fully-qualified names (with a colon) are accepted only when the
-  // prefix matches the extension's own name; mismatches are rejected
-  // to make namespace-impersonation a structural impossibility.
-  //
-  // The verb function itself (`place.do(...)`) is passed through; only
-  // the registerOperation method gets scoped.
-  if (
-    typeof scoped.do === "function" &&
-    typeof scoped.do.registerOperation === "function"
-  ) {
-    const extName = manifest.name;
-    const origDo = scoped.do;
-    const origRegister = scoped.do.registerOperation;
-    const scopedDo = (...args) => origDo(...args);
-    scopedDo.registerOperation = (name, spec) => {
-      if (typeof name !== "string" || name.length === 0) {
-        return origRegister(name, spec); // let the registry surface the error
-      }
-      let fullName;
-      if (name.includes(":")) {
-        const prefix = name.split(":")[0];
-        if (prefix !== extName) {
-          throw new Error(
-            `registerOperation("${name}"): extension "${extName}" cannot register under prefix "${prefix}". ` +
-              `Use the bare name ("${name.split(":").slice(1).join(":")}") — namespacing is automatic.`,
-          );
-        }
-        fullName = name;
-      } else {
-        fullName = `${extName}:${name}`;
-      }
-      return origRegister(fullName, {
-        ...(spec || {}),
-        ownerExtension: extName,
-      });
-    };
-    // Forward the rest of the registry surface unchanged.
-    scopedDo.unregisterOperation = origDo.unregisterOperation;
-    scopedDo.unregisterOperationsFromExtension =
-      origDo.unregisterOperationsFromExtension;
-    scopedDo.getOperation = origDo.getOperation;
-    scopedDo.listOperations = origDo.listOperations;
-    scoped.do = scopedDo;
-  }
-
-  // Push-channel event binding: auto-namespace event names.
-  // Same principle as registerOperation above — extensions write the
-  // local event name; the seed prefixes their extension name on the
-  // way to the wire. Bare:
-  //
-  //   place.websocket.emitToBeing(beingId, "lifecycleActive", payload)
-  //
-  // Wire receives: "governing:lifecycleActive".
-  //
-  // Fully-qualified `<ext>:<name>` is accepted only when the prefix
-  // matches the calling extension's name; mismatches throw so
-  // namespace-impersonation is a structural impossibility.
-  //
-  // The seed events `IBP_EVENT` ("ibp") and transport-private
-  // events (WS_REGISTERED, WS_NAVIGATE) are reserved and rejected
-  // entirely — extensions can never emit them through this surface.
-  if (scoped.websocket) {
-    const extName = manifest.name;
-    const RESERVED = new Set(["ibp", "registered", "navigate"]);
-    const namespaceEvent = (event) => {
-      if (typeof event !== "string" || !event) {
-        throw new Error(`emitToBeing: event name must be a non-empty string`);
-      }
-      if (RESERVED.has(event)) {
-        throw new Error(`emitToBeing: "${event}" is reserved by the seed`);
-      }
-      if (event.includes(":")) {
-        const prefix = event.split(":")[0];
-        if (prefix !== extName) {
-          throw new Error(
-            `emitToBeing("${event}"): extension "${extName}" cannot emit under prefix "${prefix}". ` +
-              `Use the bare name ("${event.split(":").slice(1).join(":")}") — namespacing is automatic.`,
-          );
-        }
-        return event;
-      }
-      return `${extName}:${event}`;
-    };
-    const wsRaw = scoped.websocket;
-    scoped.websocket = {
-      ...wsRaw,
-      emitToBeing: (beingId, event, data) =>
-        wsRaw.emitToBeing(beingId, namespaceEvent(event), data),
-      emitToBeingRoom: (beingId, event, data) =>
-        wsRaw.emitToBeingRoom(beingId, namespaceEvent(event), data),
-    };
-  }
-
-  // Qualities binding retired 2026-05-23 alongside the qualities.js
-  // write API. The setQuality / mergeQuality / etc. methods on
-  // `place.qualities.{being,space,matter}` are tombstones — they throw
-  // with a migration message pointing at
-  // `place.do(target, "set", { field: "qualities.<ns>" })`. Reads
-  // (getQuality, readQualityNamespace) stay. Namespace ownership is
-  // now enforced in the seed `do.set` handler against the verb's
-  // calling identity. No need to wrap here; scoped.qualities passes
-  // through unchanged.
-
-  // Freeze existing seed services so extensions can't replace place.hooks,
-  // place.llm, etc. But allow adding new properties (place.energy = {...})
-  // which is the pattern for extension-provided services.
-  for (const key of Object.keys(scoped)) {
-    if (
-      scoped[key] &&
-      typeof scoped[key] === "object" &&
-      !Array.isArray(scoped[key])
-    ) {
-      Object.freeze(scoped[key]);
-    }
-  }
-  return scoped;
-}
+// buildScopedReality moved to scopedReality.js. Imported above.
 
 // ---------------------------------------------------------------------------
 // Dependency ordering (proper topological sort)
@@ -865,7 +495,7 @@ export async function loadExtensions(app, mcpServer, opts = {}) {
       }
 
       // Build scoped place: only inject what the manifest declares
-      const scopedReality = buildScopedReality(manifest, realityServices);
+      const scopedReality = buildScopedReality(manifest, realityServices, AVAILABLE_SERVICES);
 
       // Initialize (with timeout to prevent a single extension from blocking boot)
       const INIT_TIMEOUT_MS = 10000;
@@ -1074,7 +704,7 @@ export async function loadExtensions(app, mcpServer, opts = {}) {
       // Register session types
       if (manifest.provides?.sessionTypes) {
         const { registerSessionType } =
-          await import("../seed/present/intake/session.js");
+          await import("../seed/present/session.js");
         for (const [key, value] of Object.entries(
           manifest.provides.sessionTypes,
         )) {

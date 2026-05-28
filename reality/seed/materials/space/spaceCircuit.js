@@ -40,7 +40,7 @@ import { getRealityConfigValue } from "../../realityConfig.js";
 import { invalidateSpace } from "./ancestorCache.js";
 import { resolveSpaceAccess } from "./spaces.js";
 import { I_AM } from "../being/seedBeings.js";
-import { logFact } from "../../past/fact/facts.js";
+import { emitFact } from "../../past/fact/facts.js";
 
 /**
  * Is the tree-circuit feature enabled on this reality?
@@ -180,13 +180,13 @@ export async function tripTree(treeId, reason, scores = {}) {
     scores,
   };
 
-  await logFact({
+  await emitFact({
     verb:    "do",
     action:  "set",
     beingId: I_AM,
     target:  { kind: "space", id: String(treeId) },
     params:  { field: "qualities.circuit", value: circuit, merge: false },
-  });
+  }, null);
   invalidateSpace(treeId);
 
   log.warn("Circuit", `Tree ${treeId} tripped: ${reason}`);
@@ -219,13 +219,13 @@ export async function reviveTree(treeId, beingId) {
     : anchor.qualities?.circuit;
   if (!circuit?.tripped) return; // already alive, no-op
 
-  await logFact({
+  await emitFact({
     verb:    "do",
     action:  "set",
     beingId: String(beingId),
     target:  { kind: "space", id: String(treeId) },
     params:  { field: "qualities.circuit", value: { tripped: false }, merge: false },
-  });
+  }, null);
   invalidateSpace(treeId);
 
   log.info("Circuit", `Tree ${treeId} revived by ${beingId}`);

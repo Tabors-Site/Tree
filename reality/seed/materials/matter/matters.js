@@ -39,7 +39,7 @@ import { v4 as uuidv4 } from "uuid";
 import Matter from "./matter.js";
 import Space from "../space/space.js";
 import Fact from "../../past/fact/fact.js";
-import { logFact } from "../../past/fact/facts.js";
+import { emitFact, sealFacts } from "../../past/fact/facts.js";
 import { escapeRegex } from "../../utils.js";
 import { getRealityConfigValue } from "../../realityConfig.js";
 import { resolveRootSpace } from "../space/spaces.js";
@@ -173,7 +173,11 @@ async function createMatter({
   // applyCreateMatter + initProjection materializes the row. No more
   // direct Matter.save() — the fact is the commit.
   const matterId = uuidv4();
-  await logFact({
+  // Eager singleton commit: the next line reads Matter.findById, so
+  // the Fact must have committed (the eager-fold materializes the
+  // Matter row only on commit). Same read-back constraint as
+  // createBeing.
+  await sealFacts([{
     verb:    "do",
     action:  "create",
     beingId: String(beingId),
@@ -189,7 +193,7 @@ async function createMatter({
     },
     actId,
     sessionId,
-  });
+  }]);
   const newMatter = await Matter.findById(matterId);
   if (!newMatter) {
     throw new Error(
@@ -278,7 +282,9 @@ async function editMatter({
 
   // Fact-driven content update (Slice C-matter-full, 2026-05-23).
   // The reducer's applySetField writes state.content from the fact.
-  await logFact({
+  // emitFact path: when a summonCtx is threaded, the Fact joins the
+  // moment's ΔF; otherwise falls back to sealFacts singleton.
+  await emitFact({
     verb:    "do",
     action:  "set",
     beingId: String(beingId),
@@ -376,7 +382,7 @@ async function deleteMatterAndFile({
   // got nulled above), spaceId=DELETED, beingId=DELETED. The per-reel
   // append lock keeps them visible-together to a concurrent fold.
   const setMatterField = (field, value) =>
-    logFact({
+    emitFact({
       verb:    "do",
       action:  "set",
       beingId: String(beingId),
@@ -442,7 +448,7 @@ async function transferMatter({
   const sourceSpaceId = matter.spaceId;
   // Fact-driven transfer (Slice C-matter-full, 2026-05-23). One do:set
   // Fact updates spaceId; the reducer's applySetField writes the row.
-  await logFact({
+  await emitFact({
     verb:    "do",
     action:  "set",
     beingId: String(beingId),
