@@ -203,12 +203,68 @@ async function connectAndPlace(session) {
   if (state.hotbar) await refreshSeedCatalog();
 }
 
-// Live SEE events. For now we use a coarse path: any descriptor change
-// triggers a debounced refetch and re-render. Patch-based diffing comes
-// later as an optimization.
+// Self-position emit loop. Polls the camera's grid coord at a
+// throttled cadence; whenever the integer (x, y) changes, fires a
+// set-being:coord for the signed-in being so other tabs see them
+// move. The server clamps coord to space.size, so walking off the
+// grid edge is safe. The loop runs idempotently across navigations.
+let _selfPositionTimer = null;
+let _lastEmittedCoord = null;
+let _selfEmitInflight = false;
+const SELF_EMIT_TICK_MS = 100;
+
+function _startSelfPositionLoop() {
+  if (_selfPositionTimer) return;
+  _selfPositionTimer = setInterval(_tickSelfPosition, SELF_EMIT_TICK_MS);
+}
+
+async function _tickSelfPosition() {
+  if (_selfEmitInflight) return;
+  if (!state.scene || !state.descriptor) return;
+  const grid = state.scene.getCurrentGridCoord();
+  if (!grid) return;
+  if (_lastEmittedCoord &&
+      _lastEmittedCoord.x === grid.x &&
+      _lastEmittedCoord.y === grid.y) return;
+  const desc = state.descriptor;
+  if (!desc?.identity?.name || !desc?.address?.pathByNames) return;
+  const stance = `${desc.address.pathByNames}@${desc.identity.name}`;
+  _selfEmitInflight = true;
+  // Record the attempted coord BEFORE the await so a failure path
+  // doesn't leave _lastEmittedCoord null — that would make the 100ms
+  // poll retry every tick forever while you're standing still on a
+  // grid cell the server refuses to accept (auth deny, clamp, etc).
+  // The next real movement to a different cell will retry; meanwhile
+  // we stop hammering the wire with the same failing emit.
+  _lastEmittedCoord = { x: grid.x, y: grid.y };
+  try {
+    await state.client.do(stance, "set-being", {
+      field: "coord",
+      value: { x: grid.x, y: grid.y },
+    });
+  } catch (err) {
+    console.warn("[3D] self set-being:coord failed:", err?.message);
+  } finally {
+    _selfEmitInflight = false;
+  }
+}
+
+// Live SEE events.
+//
+// "position" delta: skinny per-being movement update from the
+// PositionProjection fold. Apply directly to the mesh, no refetch.
+// Lower latency than the descriptor round-trip.
+//
+// Everything else: debounced full-descriptor refetch (the fat
+// fallback). Covers create/delete, qualities writes, ownership
+// changes, anything the projection delta doesn't carry.
 let _refetchTimer = null;
-function handleDescriptorEvent(_event) {
+function handleDescriptorEvent(event) {
   if (!state.currentAddress) return;
+  if (event?.kind === "position") {
+    state.scene.applyPositionDelta(event.payload);
+    return;
+  }
   if (_refetchTimer) return; // already scheduled
   _refetchTimer = setTimeout(async () => {
     _refetchTimer = null;
@@ -217,6 +273,7 @@ function handleDescriptorEvent(_event) {
       state.descriptor = desc;
       state.scene.renderDescriptor(desc, {
         isAuthenticated: !!state.session?.token,
+        resetCamera: false,
       });
       refreshAddressBar();
     } catch (err) {
@@ -327,6 +384,21 @@ async function navigate(address, { fromHistory = false } = {}) {
     state.currentSummonBeing = null;
     refreshAddressBar();
     setHud(formatLocation(desc, state.session));
+
+    // Two-humans-walking: mark this space as my current position so
+    // I appear in other tabs' descriptors (occupantsByPosition scans
+    // Being.position == spaceId). Best-effort; ignore failure (the
+    // descriptor will refetch on the next live event and pick up
+    // whatever coord state landed).
+    if (desc?.size && desc?.identity?.beingId && desc?.address?.spaceId) {
+      const selfStance = `${desc.address.pathByNames}@${desc.identity.name}`;
+      state.client.do(selfStance, "set-being", {
+        field: "position",
+        value: desc.address.spaceId,
+      }).catch((err) => console.warn("[3D] set-being:position failed:", err?.message));
+    }
+    _lastEmittedCoord = null;
+    _startSelfPositionLoop();
 
     // Push to history unless we're navigating via back/forward.
     if (!fromHistory) {

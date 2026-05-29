@@ -21,7 +21,7 @@
 import { registerOperation } from "../../ibp/operations.js";
 import Being from "./being.js";
 import Space from "../space/space.js";
-import { detectTargetKind, targetIdOf } from "../_targetShape.js";
+import { detectTargetKind, targetIdOf, loadTargetRow } from "../_targetShape.js";
 
 const RESERVED_SET_META_NS = new Set([
   "inbox", // per-being inbox; written through SUMMON
@@ -33,10 +33,10 @@ const RESERVED_SET_META_NS = new Set([
 const COORD_AXES = ["x", "y", "z"];
 
 /**
- * Clamp a coord write against the being's currentSpace size. Reads
- * Space.size at write time (the bound that's in force right now);
- * if the being has no currentSpace, or the space has no size, the
- * coord passes through as written.
+ * Clamp a coord write against the being's current position space
+ * size. Reads Space.size at write time (the bound that's in force
+ * right now); if the being has no position, or the space has no size,
+ * the coord passes through as written.
  *
  * Pure in the sense that two concurrent writers see the same Space
  * row (it doesn't move during the lock window) and compute the same
@@ -53,7 +53,7 @@ async function clampCoord(beingDoc, raw) {
   if (Object.keys(out).length === 0) {
     return null; // nothing meaningful to write
   }
-  const spaceId = beingDoc?.currentSpace || beingDoc?.homeSpace || null;
+  const spaceId = beingDoc?.position || beingDoc?.homeSpace || null;
   if (!spaceId) return out;
   const space = await Space.findById(spaceId).select("size").lean();
   const size = space?.size || null;
@@ -89,12 +89,12 @@ async function setOnBeingHandler({ target, params }) {
   if (!field || typeof field !== "string") {
     throw new Error("set-being: `field` is required");
   }
-  const kind = detectTargetKind(target);
-  if (kind !== "being") {
-    throw new Error(
-      `set-being: target must be a Being (got ${kind})`,
-    );
-  }
+  // The verb layer hands us a typed identity ({kind, id}) or a bare
+  // string id. set-being needs row contents (qualities namespaces
+  // for merge, current name for uniqueness check, current position
+  // for the clamp helper). Load the row once at the top — the rest
+  // of the handler reads from the doc.
+  target = await loadTargetRow(target, "being");
 
   // ── qualities paths ────────────────────────────────────
   if (field.startsWith("qualities.")) {
@@ -186,10 +186,22 @@ async function setOnBeingHandler({ target, params }) {
     return { beingId: String(target._id), password: value };
   }
 
-  // coord: the being's position inside currentSpace. Shape `{ x, y, z? }`
+  // position: the Space this being is in. The DO-side counterpart to
+  // be:switch; either form lands the same Being.position write
+  // through the reducer. The portal emits this on navigate-to-sized-
+  // space so the being shows up in descriptor.occupantsByPosition
+  // for everyone else in that space.
+  if (field === "position") {
+    if (value !== null && typeof value !== "string") {
+      throw new Error("set-being: `position` value must be a spaceId string or null");
+    }
+    return { beingId: String(target._id), position: value };
+  }
+
+  // coord: the being's coord inside its position space. Shape `{ x, y, z? }`
   // or null to unset. The seed clamps each axis to the bounding box on
-  // the being's currentSpace (Space.size) so a being structurally
-  // cannot exist outside the space it's in. When currentSpace has no
+  // the being's position space (Space.size) so a being structurally
+  // cannot exist outside the space it's in. When the space has no
   // size, the coord passes through as written.
   if (field === "coord") {
     if (value === null || value === undefined) {
@@ -203,7 +215,7 @@ async function setOnBeingHandler({ target, params }) {
   }
 
   throw new Error(
-    `set-being: unknown field "${field}". Supported: name, operatingMode, roles, defaultRole, homeSpace, llmDefault, parentBeingId, password, coord, qualities.<namespace>[.<innerKey>]`,
+    `set-being: unknown field "${field}". Supported: name, operatingMode, roles, defaultRole, homeSpace, llmDefault, parentBeingId, password, position, coord, qualities.<namespace>[.<innerKey>]`,
   );
 }
 
@@ -241,19 +253,19 @@ async function addLlmConnectionHandler({ target, params, identity, summonCtx }) 
       "add-llm-connection: `name`, `baseUrl`, and `model` are required",
     );
   }
+  // Load the row to read llmDefault for the auto-assign-on-first-connection branch.
+  const beingRow = await loadTargetRow(target, "being");
   const { addLlmConnection, assignConnection } = await import(
     "../../present/voices/llm/connect.js"
   );
-  const beingId = String(target._id);
+  const beingId = String(beingRow._id);
   const connection = await addLlmConnection(
     beingId,
     { name, baseUrl, apiKey: apiKey || "none", model },
     { identity, summonCtx },
   );
-  // If this is the Being's first connection, auto-assign it to the
-  // default `main` slot so subsequent runTurn calls find an LLM.
   try {
-    if (!target.llmDefault) {
+    if (!beingRow.llmDefault) {
       await assignConnection(beingId, "main", connection._id, {
         identity, summonCtx,
       });
@@ -271,11 +283,13 @@ async function updateLlmConnectionHandler({ target, params, identity, summonCtx 
       "update-llm-connection: `baseUrl` and `model` are required",
     );
   }
+  // Only need the id; the helper takes a beingId string.
+  const beingId = targetIdOf(target);
   const { updateLlmConnection } = await import(
     "../../present/voices/llm/connect.js"
   );
   const connection = await updateLlmConnection(
-    String(target._id),
+    beingId,
     connectionId,
     { name, baseUrl, apiKey, model },
     { identity, summonCtx },
@@ -290,7 +304,7 @@ async function deleteLlmConnectionHandler({ target, params, identity, summonCtx 
   const { deleteLlmConnection } = await import(
     "../../present/voices/llm/connect.js"
   );
-  await deleteLlmConnection(String(target._id), connectionId, { identity, summonCtx });
+  await deleteLlmConnection(targetIdOf(target), connectionId, { identity, summonCtx });
   return { removed: true, connectionId };
 }
 
@@ -298,22 +312,23 @@ async function assignLlmSlotHandler({ target, params, identity, summonCtx }) {
   const { slot, connectionId } = params || {};
   if (!slot) throw new Error("assign-llm-slot: `slot` is required");
   const kind = detectTargetKind(target);
+  const id = targetIdOf(target);
   const { assignConnection, assignSpaceConnection } = await import(
     "../../present/voices/llm/connect.js"
   );
   if (kind === "being") {
-    return assignConnection(String(target._id), slot, connectionId || null, {
+    return assignConnection(id, slot, connectionId || null, {
       identity, summonCtx,
     });
   }
-  const spaceId = targetIdOf(target);
-  if (!spaceId)
-    throw new Error("assign-llm-slot: target must resolve to a space id");
-  return assignSpaceConnection(spaceId, slot, connectionId || null, {
-    ownerBeingId: identity?.beingId || null,
-    identity,
-    summonCtx,
-  });
+  if (kind === "space" || kind === "stance") {
+    return assignSpaceConnection(id, slot, connectionId || null, {
+      ownerBeingId: identity?.beingId || null,
+      identity,
+      summonCtx,
+    });
+  }
+  throw new Error(`assign-llm-slot: target kind "${kind}" not supported`);
 }
 
 // ─────────────────────────────────────────────────────────────────────

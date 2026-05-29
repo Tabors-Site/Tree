@@ -1,0 +1,133 @@
+/* GetStartedPage. Two cards + a sovereignty section + a short
+   requirements list. .ns-start-* keeps these rules out of the way
+   of the legacy .lp-* styles loaded under /old/*. */
+
+.ns-start {
+  padding: 60px 24px 40px;
+}
+
+.ns-start-inner {
+  max-width: 880px;
+  margin: 0 auto;
+}
+
+.ns-start-title {
+  font-size: clamp(2rem, 5vw, 2.8rem);
+  font-weight: 700;
+  margin: 0 0 14px;
+  letter-spacing: -0.02em;
+  color: #e5e5e5;
+}
+
+.ns-start-lede {
+  font-size: 1.1rem;
+  color: #b8b8b8;
+  line-height: 1.55;
+  margin: 0 0 40px;
+  max-width: 640px;
+}
+
+.ns-start-cards {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+}
+
+.ns-start-card {
+  background: #111;
+  border: 1px solid #1f1f1f;
+  border-radius: 10px;
+  padding: 28px 26px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  transition: border-color 140ms ease, background-color 140ms ease;
+}
+
+.ns-start-card:hover {
+  background: #141414;
+  border-color: #2a2a2a;
+}
+
+.ns-start-card-kicker {
+  font-size: 0.75rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: #6fb1ff;
+}
+
+.ns-start-card-title {
+  margin: 0;
+  font-size: 1.4rem;
+  font-weight: 600;
+  color: #e5e5e5;
+}
+
+.ns-start-card-body {
+  margin: 0;
+  color: #b8b8b8;
+  line-height: 1.6;
+  font-size: 0.98rem;
+}
+
+.ns-start-card-cta {
+  margin-top: auto;
+  font-size: 0.85rem;
+  color: #6fb1ff;
+  letter-spacing: 0.04em;
+}
+
+.ns-start-meta {
+  padding: 40px 24px 80px;
+  border-top: 1px solid #1a1a1a;
+  background: #0c0c0c;
+}
+
+.ns-start-meta-inner {
+  max-width: 720px;
+  margin: 0 auto;
+}
+
+.ns-start-meta-title {
+  font-size: clamp(1.5rem, 3.5vw, 1.9rem);
+  font-weight: 600;
+  margin: 0 0 24px;
+  color: #e5e5e5;
+}
+
+.ns-start-meta p {
+  margin: 0 0 18px;
+  color: #c2c2c2;
+  line-height: 1.7;
+  font-size: 1.02rem;
+}
+
+.ns-start-req {
+  margin-top: 36px;
+  padding: 22px 24px;
+  background: #111;
+  border: 1px solid #1f1f1f;
+  border-radius: 8px;
+}
+
+.ns-start-req-title {
+  margin: 0 0 12px;
+  font-size: 1rem;
+  font-weight: 600;
+  color: #e5e5e5;
+}
+
+.ns-start-req-list {
+  margin: 0;
+  padding-left: 20px;
+  color: #b8b8b8;
+  line-height: 1.7;
+}
+
+@media (max-width: 720px) {
+  .ns-start-cards {
+    grid-template-columns: 1fr;
+  }
+  .ns-start { padding: 40px 20px 30px; }
+  .ns-start-meta { padding: 30px 20px 60px; }
+}

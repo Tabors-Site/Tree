@@ -1,0 +1,151 @@
+import { Routes, Route } from "react-router-dom";
+import WelcomePage from "./WelcomePage.jsx";
+
+import EnergySection from "./About/EnergySection.jsx";
+import AboutRawIdeas from "./About/AboutRawIdeas.jsx";
+import DreamsAbout from "./About/DreamsAbout.jsx";
+import StartedAbout from "./About/StartedAbout.jsx";
+import CLIAbout from "./About/CLIAbout.jsx";
+import GatewayAbout from "./About/GatewayAbout.jsx";
+import LandAbout from "./About/LandAbout.jsx";
+import NodeTypesAbout from "./About/NodeTypesAbout.jsx";
+import ExtensionsAbout from "./About/ExtensionsAbout.jsx";
+import LandingPage from "./Landing/LandingPage.jsx";
+import AIArchitecturePage from "./Landing/AIArchitecturePage.jsx";
+import KernelPage from "./Landing/KernelPage.jsx";
+import CascadePage from "./Landing/CascadePage.jsx";
+import SwarmPage from "./Landing/SwarmPage.jsx";
+import ExtensionsPage from "./Landing/ExtensionsPage.jsx";
+import NetworkPage from "./Landing/NetworkPage.jsx";
+import FlowPage from "./Landing/FlowPage.jsx";
+import BuildPage from "./Landing/BuildPage.jsx";
+import CodePage from "./Landing/CodePage.jsx";
+import MyceliumPage from "./Landing/MyceliumPage.jsx";
+import LandPage from "./Landing/LandPage.jsx";
+import TreeOSPage from "./Landing/TreeOSPage.jsx";
+import StudyPage from "./Landing/StudyPage.jsx";
+import HTMLPage from "./Landing/HTMLPage.jsx";
+import StartPage from "./Landing/StartPage.jsx";
+import WhatPage from "./Landing/WhatPage.jsx";
+import UsePage from "./Landing/UsePage.jsx";
+import FitnessPage from "./Landing/FitnessPage.jsx";
+import FoodPage from "./Landing/FoodPage.jsx";
+import RecoveryPage from "./Landing/RecoveryPage.jsx";
+import KbPage from "./Landing/KbPage.jsx";
+import GoverningPage from "./Landing/GoverningPage.jsx";
+import RulershipPage from "./Landing/RulershipPage.jsx";
+import RulerPage from "./Landing/RulerPage.jsx";
+import PlannerPage from "./Landing/PlannerPage.jsx";
+import ContractorPage from "./Landing/ContractorPage.jsx";
+import ForemanPage from "./Landing/ForemanPage.jsx";
+import WorkerPage from "./Landing/WorkerPage.jsx";
+import ProtocolPage from "./Landing/ProtocolPage.jsx";
+import ArrivalPage from "./Landing/ArrivalPage.jsx";
+import AuthorizationPage from "./Landing/AuthorizationPage.jsx";
+
+import ApiAccessSection from "./About/API.jsx";
+
+import PrivacySection from "./PrivacySection.jsx";
+import TermsSection from "./TermsSections.jsx";
+
+import AboutHome from "./About/AboutHome.jsx";
+import Guide from "./Landing/Guide.jsx";
+import AboutLayout from "./About/AboutLayout.jsx";
+import NotFound from "./NotFound.jsx";
+
+/**
+ * OldRoutes. The legacy site preserved under /old/*.
+ *
+ * Mounted from WelcomeRoutes.jsx as <Route path="/old/*" element={<OldRoutes/>}/>.
+ * Every <Route> below uses a relative path (no leading slash) so React Router
+ * nests the whole tree under /old/*. External bookmarks degrade to /old/<what>
+ * gracefully.
+ */
+const OldRoutes = () => {
+  // External redirect: /old/horizon -> horizon.treeos.ai
+  const HorizonRedirect = () => {
+    window.location.href = "https://horizon.treeos.ai";
+    return null;
+  };
+
+  return (
+    <Routes>
+      {/* Old landing. Was "/", now "/old/". */}
+      <Route index element={<LandingPage />} />
+
+      {/* /decentralized redirects to /network (old URL, kept for backcompat) */}
+      <Route path="decentralized" element={<NetworkPage />} />
+      <Route path="ai" element={<AIArchitecturePage />} />
+      <Route path="kernel" element={<KernelPage />} />
+      <Route path="seed" element={<KernelPage />} />
+      <Route path="cascade" element={<CascadePage />} />
+      <Route path="swarm" element={<SwarmPage />} />
+      <Route path="extensions" element={<ExtensionsPage />} />
+      <Route path="network" element={<NetworkPage />} />
+      <Route path="flow" element={<FlowPage />} />
+      <Route path="build" element={<BuildPage />} />
+      <Route path="code" element={<CodePage />} />
+      <Route path="html" element={<HTMLPage />} />
+      <Route path="start" element={<StartPage />} />
+      <Route path="what" element={<WhatPage />} />
+      <Route path="use" element={<UsePage />} />
+      <Route path="cli" element={<CLIAbout />} />
+      <Route path="mycelium" element={<MyceliumPage />} />
+      <Route path="lands" element={<LandPage />} />
+      <Route path="treeos" element={<TreeOSPage />} />
+      <Route path="study" element={<StudyPage />} />
+      <Route path="fitness" element={<FitnessPage />} />
+      <Route path="food" element={<FoodPage />} />
+      <Route path="recovery" element={<RecoveryPage />} />
+      <Route path="kb" element={<KbPage />} />
+      <Route path="governing" element={<GoverningPage />} />
+      <Route path="governing/rulership" element={<RulershipPage />} />
+      <Route path="governing/rulership/ruler" element={<RulerPage />} />
+      <Route path="governing/rulership/planner" element={<PlannerPage />} />
+      <Route path="governing/rulership/contractor" element={<ContractorPage />} />
+      <Route path="governing/rulership/foreman" element={<ForemanPage />} />
+      <Route path="governing/rulership/worker" element={<WorkerPage />} />
+      <Route path="ibp" element={<ProtocolPage />} />
+      <Route path="ibp/arrival" element={<ArrivalPage />} />
+      <Route path="ibp/authorization" element={<AuthorizationPage />} />
+      <Route path="horizon" element={<HorizonRedirect />} />
+
+      {/* Original app welcome (treeos.ai example) */}
+      <Route path="app" element={<WelcomePage />} />
+      <Route path="privacy" element={<AboutLayout />}>
+        <Route index element={<PrivacySection />} />
+      </Route>
+      <Route path="terms" element={<AboutLayout />}>
+        <Route index element={<TermsSection />} />
+      </Route>
+
+      {/* Help layout */}
+      <Route path="about" element={<AboutLayout />}>
+        <Route index element={<AboutHome />} />
+        <Route path="api" element={<ApiAccessSection />} />
+        <Route path="energy" element={<EnergySection />} />
+        <Route path="raw-ideas" element={<AboutRawIdeas />} />
+        <Route path="dreams" element={<DreamsAbout />} />
+        <Route path="gettingstarted" element={<StartedAbout />} />
+        <Route path="cli" element={<CLIAbout />} />
+        <Route path="gateway" element={<GatewayAbout />} />
+        <Route path="land" element={<LandAbout />} />
+        <Route path="node-types" element={<NodeTypesAbout />} />
+        <Route path="extensions" element={<ExtensionsAbout />} />
+      </Route>
+
+      {/* Guide (narrative, start to finish) */}
+      <Route path="guide" element={<Guide />} />
+
+      {/* Blog stayed at root (/blog) across the rebuild, not under /old/* */}
+
+      {/* Keep /landing as alias during transition */}
+      <Route path="landing" element={<LandingPage />} />
+
+      {/* 404 inside /old/* */}
+      <Route path="*" element={<NotFound />} />
+    </Routes>
+  );
+};
+
+export default OldRoutes;

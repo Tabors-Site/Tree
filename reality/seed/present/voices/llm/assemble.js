@@ -102,7 +102,7 @@
 // working through the legacy path in runTurn until they migrate.
 //
 // "at <space.name>" names the Space the being is currently inhabiting
-// (read from Being.currentSpace, falling back through ctx fields for
+// (read from Being.position, falling back through ctx fields for
 // the transition period). Not "scope" — a Ruler's space happens to
 // be its governance scope, but for Planner / Contractor / Worker /
 // Coder the space is just where they stand. The space's name is what

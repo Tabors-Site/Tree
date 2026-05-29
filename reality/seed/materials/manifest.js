@@ -63,10 +63,10 @@ async function refreshQualitiesByFact(spaceId, qualities, summonCtx) {
   if (entries.length === 0) return;
   const { doVerb } = await import("../ibp/verbs/do.js");
   for (const [ns, value] of entries) {
-    const refreshed = await Space.findById(spaceId);
+    const refreshed = await Space.findById(spaceId).select("_id").lean();
     if (!refreshed) return;
     await doVerb(
-      refreshed,
+      { kind: "space", id: String(refreshed._id) },
       "set-space",
       { field: `qualities.${ns}`, value, merge: false },
       { scaffold: true, summonCtx },
@@ -76,10 +76,13 @@ async function refreshQualitiesByFact(spaceId, qualities, summonCtx) {
 
 // do:end-space fact for the child Space. I-Am is the actor.
 async function deleteChildByFact(childId, summonCtx) {
-  const childDoc = await Space.findById(childId);
-  if (!childDoc) return;
   const { doVerb } = await import("../ibp/verbs/do.js");
-  await doVerb(childDoc, "end-space", {}, { scaffold: true, summonCtx });
+  await doVerb(
+    { kind: "space", id: String(childId) },
+    "end-space",
+    {},
+    { scaffold: true, summonCtx },
+  );
 }
 
 export async function manifestItems({

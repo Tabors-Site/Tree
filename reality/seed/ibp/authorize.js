@@ -100,7 +100,34 @@ const REALITY_ROOT_DEFAULT_PERMISSIONS = Object.freeze({
     claim:          { requires: {} },
     release:        { requires: { arrival: false } },
     switch:         { requires: { arrival: false } },
-    "create-being": { requires: { role: "cherub" } },
+    // create-being: any authenticated being can summon a being forth.
+    // The privilege boundary lives DOWNSTREAM — the new being must
+    // be parented under a space the actor can write to (their home,
+    // their child trees, etc.), and the ownership check on that
+    // space gates the actual mint. The default here just admits the
+    // attempt; the substrate-side checks enforce the outcome.
+    //
+    // The previous `role: "cherub"` default was a bootstrap-era
+    // intent (the cherub at the gate creates identities) but broke
+    // every plant scaffold that mints beings on the operator's
+    // behalf — operators have role="human", not "cherub", and the
+    // strict rule rejected legitimate operator-initiated creation.
+    "create-being": { requires: { arrival: false } },
+
+    // llm-assigner BE ops. Any authenticated being can manage its
+    // own LLM connections (add-llm, list/delete on its own being,
+    // bind one of its connections to a slot). set-place-llm /
+    // set-space-llm pass the auth gate at this layer and the
+    // llm-assigner role enforces the tighter "root operator" /
+    // "tree owner" check inline. Without these rules every fresh
+    // operator hits "no rule matched be:add-llm" the first time
+    // they try to configure a connection.
+    "add-llm":       { requires: { arrival: false } },
+    "assign-slot":   { requires: { arrival: false } },
+    "list-llms":     { requires: { arrival: false } },
+    "delete-llm":    { requires: { arrival: false } },
+    "set-place-llm": { requires: { arrival: false } },
+    "set-space-llm": { requires: { arrival: false } },
   },
 });
 
@@ -132,7 +159,7 @@ export async function authorize(args) {
   // emitted act (DO-trigger fan-out, scheduled wakes, genesis
   // scaffolding) runs as the I_AM and shorts past the layered check.
   if (identity?.name === I_AM) {
-    return { ok: true, stance: "I_AM" };
+    return { ok: true, stance: I_AM };
   }
 
   // ── Layer 2: derive stance properties ──
@@ -515,11 +542,11 @@ export async function seedDefaultStancePermissions(summonCtx) {
   // very next boot), so scaffold:true attributes the facts to I_AM
   // and bypasses the per-being identity gate. The verb dispatcher
   // tolerates this on the right-stance bootstrap path.
-  const spaceRoot = await Space.findById(spaceRootId);
   const { doVerb } = await import("./verbs/do.js");
+  const target = { kind: "space", id: spaceRootId };
   for (const [field, value] of Object.entries(updates)) {
     await doVerb(
-      spaceRoot,
+      target,
       "set-space",
       { field, value, merge: false },
       { scaffold: true, summonCtx },

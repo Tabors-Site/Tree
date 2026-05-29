@@ -98,8 +98,9 @@ export function registerLlmAssignerOps() {
     targets: ["space"],
     ownerExtension: OWNER,
     handler: async ({ target }) => {
-      const spaceId = String(target?._id || target?.spaceId || target);
-      if (!spaceId || spaceId === "[object Object]") {
+      const { targetIdOf } = await import("../../../materials/_targetShape.js");
+      const spaceId = targetIdOf(target);
+      if (!spaceId) {
         throw new Error("llm-assigner:start-tutorial: space target required");
       }
 
@@ -130,7 +131,7 @@ export function registerLlmAssignerOps() {
         name:    "llm-assigner",
       };
       const result = await doVerb(
-        target,
+        { kind: "space", id: spaceId },
         "create-matter",
         {
           spec: {
@@ -193,7 +194,7 @@ export function registerLlmAssignerOps() {
       const value = { ...tutorialMeta, playbackSeconds: currentTime };
       const opts = identity ? { identity, summonCtx } : { scaffold: true };
       await doVerb(
-        matter,
+        { kind: "matter", id: String(matter._id) },
         "set-matter",
         { field: "qualities.tutorial", value, merge: false },
         opts,
@@ -214,10 +215,11 @@ export function registerLlmAssignerOps() {
       log.info("llm-assigner",
         `complete-tutorial hit: matterId=${params?.matterId}`);
 
-      const matterId = String(
-        params?.matterId || target?._id || target?.matterId || target,
-      );
-      if (!matterId || matterId === "[object Object]") {
+      const { targetIdOf } = await import("../../../materials/_targetShape.js");
+      const matterId = params?.matterId
+        ? String(params.matterId)
+        : targetIdOf(target);
+      if (!matterId) {
         throw new Error("llm-assigner:complete-tutorial: matterId required");
       }
 
@@ -227,7 +229,7 @@ export function registerLlmAssignerOps() {
 
       const llmAssigner = await getLlmAssigner();
       await doVerb(
-        matter,
+        { kind: "matter", id: String(matter._id) },
         "end-matter",
         {},
         {

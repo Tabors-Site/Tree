@@ -98,7 +98,17 @@ export async function doVerb(target, operation, params = {}, opts = {}) {
   const isPreBeingScaffold = opts.scaffold === true && !opts.identity;
   if (!isPreBeingScaffold) {
     const identity = opts.identity || null;
-    const spaceIdForAuth = resolveAuditTarget(target, null)?.id || null;
+    // Auth target ≠ audit target. The Fact lands on whatever reel the
+    // op declares (being's reel, matter's reel, space's reel — that's
+    // `resolveAuditTarget`). But the permission rules live in
+    // `qualities.permissions` on Spaces, walked via the ancestor
+    // cache. So for non-space targets, resolve to the Space the
+    // entity lives at — Being.position / .homeSpace, Matter.spaceId.
+    // Then the ancestor walk finds the per-position rules (and the
+    // reality-root default `do.*` fallback) the same way it would for
+    // a direct space target.
+    const auditTarget = resolveAuditTarget(target, null, op);
+    const spaceIdForAuth = await resolveAuthSpaceId(target, auditTarget);
     // Extract namespace for namespace-aware authorization. Three
     // forms handled: legacy set-qualities/clear-qualities (params.namespace),
     // and the material-scoped set-<kind> ops with
@@ -175,7 +185,7 @@ export async function doVerb(target, operation, params = {}, opts = {}) {
       verb:    "do",
       action:  op.factAction,
       beingId: actorBeingId,
-      target:  resolveAuditTarget(target, result),
+      target:  resolveAuditTarget(target, result, op),
       params:  ctx.params,
       result:  summarizeAuditResult(result),
       actId,
@@ -196,6 +206,65 @@ doVerb.listOperations = listOperations;
 // ─────────────────────────────────────────────────────────────────────
 // PRIVATE HELPERS — read-only gate + audit shaping
 // ─────────────────────────────────────────────────────────────────────
+
+/**
+ * Resolve the Space id the authorization check should walk from.
+ *
+ * Audit and auth are different targets. The audit fact lands on the
+ * op's reel (Being / Matter / Space — whichever the op writes). The
+ * auth check looks for `qualities.permissions` rules, which live ONLY
+ * on Spaces. So when the op writes a Being or Matter, the auth check
+ * has to walk from the Space the entity lives at — otherwise the
+ * ancestor walk runs on a being-id or matter-id, finds no space row,
+ * and returns "no permission rule matched" even when the reality
+ * root has a `do.*` default that would have applied.
+ *
+ * Mapping:
+ *   Space target  → its own id
+ *   Being target  → Being.position (or .homeSpace as fallback)
+ *   Matter target → Matter.spaceId
+ *   String id     → look up — first Space, then Being, then Matter
+ *
+ * Returns null when nothing resolves (rare; the auth chain falls
+ * through to the reality root via getSpaceRootId in findMatchingRule).
+ */
+async function resolveAuthSpaceId(target, auditTarget) {
+  // The audit target's kind tells us what to look up. When the
+  // op-handler already returned a kind (via result._factTarget or
+  // schema-typed shapes), trust it.
+  const kind = auditTarget?.kind || null;
+  const id   = auditTarget?.id   || null;
+  if (!id) return null;
+
+  if (kind === "space") return id;
+
+  // For being/matter, look up the live row's position / spaceId.
+  if (kind === "being") {
+    const Being = (await import("../../materials/being/being.js")).default;
+    const b = await Being.findById(id).select("position homeSpace").lean();
+    return b?.position || b?.homeSpace || null;
+  }
+  if (kind === "matter") {
+    const Matter = (await import("../../materials/matter/matter.js")).default;
+    const m = await Matter.findById(id).select("spaceId").lean();
+    return m?.spaceId ? String(m.spaceId) : null;
+  }
+
+  // Kind unknown (string id, or target without _factKind). Probe each
+  // model in order. Common case: a Mongoose doc passed directly with
+  // constructor.modelName — but if we got here, the audit-target
+  // walker didn't classify it. Be permissive.
+  const Space  = (await import("../../materials/space/space.js")).default;
+  const space  = await Space.findById(id).select("_id").lean();
+  if (space) return String(space._id);
+  const Being  = (await import("../../materials/being/being.js")).default;
+  const being  = await Being.findById(id).select("position homeSpace").lean();
+  if (being)  return being.position || being.homeSpace || null;
+  const Matter = (await import("../../materials/matter/matter.js")).default;
+  const matter = await Matter.findById(id).select("spaceId").lean();
+  if (matter) return matter.spaceId ? String(matter.spaceId) : null;
+  return null;
+}
 
 /**
  * Returns null when the DO target is writable, or a reason string when
@@ -245,7 +314,19 @@ function isReadMostlyOrigin(origin) {
  * Returns null when nothing is resolvable; the Fact still stamps,
  * since target is optional in the schema.
  */
-function resolveAuditTarget(target, result) {
+// Produce the fact's `target` field from the call's target and the
+// handler's result. The contract is { kind, id } — see materials/
+// _targetShape.js. No duck-typing on raw rows; no guessing kinds; no
+// fallback to "space." Inputs are typed identities or throw.
+//
+// Precedence:
+//   1. Handler override via result._factTarget — explicit, wins.
+//   2. Convenience fields on the result (spaceId/matterId/beingId)
+//      that the handler chose to surface — the kind is unambiguous
+//      from the field name, no guess.
+//   3. The call's target itself when typed; the fact lands on the
+//      reel the call addressed.
+function resolveAuditTarget(target, result, op) {
   if (result && typeof result === "object") {
     if (result._factTarget && result._factTarget.id) {
       return { kind: result._factTarget.kind || null, id: String(result._factTarget.id) };
@@ -254,18 +335,34 @@ function resolveAuditTarget(target, result) {
     if (result.matterId) return { kind: "matter", id: String(result.matterId) };
     if (result.beingId)  return { kind: "being",  id: String(result.beingId) };
   }
-  if (target && typeof target === "object") {
-    if (target._factKind && target._id) {
-      return { kind: target._factKind, id: String(target._id) };
-    }
-    if (target.spaceId)  return { kind: "space",  id: String(target.spaceId) };
-    if (target.matterId) return { kind: "matter", id: String(target.matterId) };
-    if (target.beingId)  return { kind: "being",  id: String(target.beingId) };
-    if (target._id) return { kind: "space", id: String(target._id) };
-    if (target.id) return { kind: null, id: String(target.id) };
+  // Typed identity — the canonical shape.
+  if (target && typeof target === "object" && target.kind && target.id != null) {
+    return { kind: target.kind, id: String(target.id) };
   }
-  if (typeof target === "string") return { kind: null, id: target };
-  return null;
+  // String id paired with an op that targets exactly one kind. The
+  // op contract carries the kind; we trust it. When the op accepts
+  // multiple kinds, the string is ambiguous and the caller must use
+  // the typed form.
+  if (typeof target === "string") {
+    const targets = Array.isArray(op?.targets) ? op.targets : null;
+    if (targets && targets.length === 1) {
+      return { kind: targets[0], id: target };
+    }
+    return { kind: null, id: target };
+  }
+  // Stance object from the resolver. Stance-targeted ops surface
+  // the right kind via their result; here we only get this far when
+  // the result didn't carry one, which means the stance addressed a
+  // space (the only kind a bare stance names).
+  if (target && typeof target === "object" && Array.isArray(target.chain) && target.spaceId) {
+    return { kind: "space", id: String(target.spaceId) };
+  }
+  throw new Error(
+    `resolveAuditTarget: unrecognized target shape for op "${op?.name || "?"}". ` +
+    `Expected { kind, id } or string id (with single-kind op). ` +
+    `Got ${typeof target}${target && typeof target === "object" ? ` with keys ${Object.keys(target).join(",")}` : ""}. ` +
+    `Migrate the caller — Mongoose rows do not cross the verb boundary; pass { kind, id } instead.`,
+  );
 }
 
 // Summarize an op's return value for the Fact. Primitives pass through;

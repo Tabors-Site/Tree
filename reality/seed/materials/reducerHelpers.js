@@ -87,6 +87,13 @@ const SCALAR_SET_FIELDS = new Set([
   // before stamping; the reducer just records the clamped value.
   "coord",
   "size",
+  // `position` (Being.position): the Space this being is in right
+  // now. Historically written via be:switch with params.toPosition;
+  // set-being:position is the symmetric DO-side path used by the
+  // portal on navigate ("I am now in this space") so the being
+  // shows up in descriptor.occupantsByPosition. The reducer
+  // accepts either form — both write the same field.
+  "position",
 ]);
 
 // Per-kind birth shapes. The reducer's job on `do:birth`: produce the
@@ -251,14 +258,18 @@ export function applyCreateBeing(state, fact) {
     defaultRole,
     parentBeingId: spec.parentBeingId ?? null,
     homeSpace:     spec.homeSpace ?? null,
-    currentSpace:  spec.currentSpace ?? spec.homeSpace ?? null,
     llmDefault:    spec.llmDefault ?? null,
     isRemote:      Boolean(spec.isRemote),
-    homeReality:     spec.homeReality ?? null,
+    homeReality:   spec.homeReality ?? null,
     qualities:     spec.qualities ?? {},
     // Being.children retired 2026-05-23; downward walks query by
     // parentBeingId (parallel to Space.children retirement).
-    position:      spec.homeSpace ?? null,
+    // `position` carries either an explicit `spec.position` (caller
+    // chose a starting position different from homeSpace) or falls
+    // back to homeSpace. Legacy `spec.currentSpace` accepted as an
+    // alias during migration; callers should pass `spec.position`
+    // going forward.
+    position:      spec.position ?? spec.currentSpace ?? spec.homeSpace ?? null,
     createdAt:     fact.date,
     updatedAt:     fact.date,
   };

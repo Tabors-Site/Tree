@@ -74,7 +74,12 @@ const ActSchema = new mongoose.Schema({
   stampedAt:  { type: Date, default: null },
 
   startMessage: {
-    content: { type: String, required: true },
+    // Mixed because SUMMON content is whatever the receiving role
+    // expects. Humans send text strings. Scripted beings receive
+    // structured payloads (e.g. drummer tick: `{ event, drumMatterId,
+    // gridSpaceId }`). The Act records what was said in whichever
+    // shape the protocol carried.
+    content: { type: mongoose.Schema.Types.Mixed, required: true },
     source:  { type: String, default: "user" },
     _id: false,
   },

@@ -24,7 +24,7 @@ import {
 import { getRealityDomain } from "../../ibp/address.js";
 import { IbpError, IBP_ERR, mapPatternsToIbpError } from "../../ibp/protocol.js";
 import { I_AM } from "../being/seedBeings.js";
-import { detectTargetKind, targetIdOf } from "../_targetShape.js";
+import { detectTargetKind, targetIdOf, loadTargetRow } from "../_targetShape.js";
 
 // Namespaces NOT writable through set-space qualities (each has its own verb).
 const RESERVED_SET_META_NS = new Set([
@@ -129,9 +129,10 @@ async function setOnSpaceHandler({ target, params, identity }) {
       }
     }
 
+    const spaceId = targetIdOf(target);
     return {
       written: true,
-      spaceId: String(target._id),
+      spaceId,
       ...(parts.length === 1 ? { namespace } : { field }),
       ...(value === null ? { unset: true } : {}),
     };
@@ -146,16 +147,20 @@ async function setOnSpaceHandler({ target, params, identity }) {
     if (kind === "stance") {
       return renameAtStance({ resolved: target, name: value, identity });
     }
+    // name needs row contents: current name (for unchanged-noop),
+    // parent (for uniqueness scope), seedSpace (to reject renames
+    // on seed spaces). Load the row.
+    const row = await loadTargetRow(target, "space");
     const normalized = assertValidSpaceName(value);
-    if (target.seedSpace) {
+    if (row.seedSpace) {
       throw new Error("set-space: cannot rename seed spaces");
     }
-    if (target.name !== normalized) {
-      await assertNameAvailableAt(target.parent, normalized, {
-        excludeSpaceId: String(target._id),
+    if (row.name !== normalized) {
+      await assertNameAvailableAt(row.parent, normalized, {
+        excludeSpaceId: String(row._id),
       });
     }
-    return { spaceId: String(target._id), name: normalized };
+    return { spaceId: String(row._id), name: normalized };
   }
 
   if (field === "type") {

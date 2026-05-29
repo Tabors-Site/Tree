@@ -54,15 +54,12 @@ export function reduce(state, fact) {
   next = applySetField(next, fact);
   next = applySetQualities(next, fact);
 
-  // Position change. Writes BOTH `currentSpace` (legacy field, the
-  // source for in-memory position cache and most existing readers)
-  // AND `position` (the projection-index field that findByPosition
-  // queries). They're the same value semantically; the dual write
-  // keeps legacy readers working through the cutover.
+  // Position change. Writes `position` — the universal projection-
+  // index field. Legacy `currentSpace` retired 2026-05-29; readers
+  // use Being.position uniformly.
   if (fact?.params?.toPosition !== undefined) {
     next = {
       ...next,
-      currentSpace: fact.params.toPosition,
       position: fact.params.toPosition,
     };
   }

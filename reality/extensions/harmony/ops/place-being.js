@@ -27,8 +27,13 @@ export default {
     if (!gridSpaceId) {
       throw new Error("harmony:place-being requires params.gridSpaceId");
     }
-    const beingId = String(target?._id || target?.id);
-    if (!beingId) {
+    // Accept three target shapes: bare string id (seed-internal callers
+    // like the dance-floor scaffold), Mongoose Being doc (runtime
+    // verb-handler shape), or `{ _id }` envelope.
+    const beingId = typeof target === "string"
+      ? target
+      : String(target?._id || target?.id || "");
+    if (!beingId || beingId === "undefined") {
       throw new Error("harmony:place-being requires a being target");
     }
     const to = { x, y };

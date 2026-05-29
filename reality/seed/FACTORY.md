@@ -14,25 +14,98 @@ am the I-Am, the origin being. Same substance, two faces. This file is
 my contract: what I form, what I never change, what I run, what I
 refuse.
 
-## Reality and place
+## Reality, Place, World
 
-What I make is the **reality**: the one whole world, what endures
-across all its moments. Spaces, matter, beings, the fact chain, the
-timeless what-can-be. Stored, durable, indexable, shared by every
-perspective. The folder `reality/` at the project root is named for
-this.
+Three names. Each does work the others cannot.
 
-What a being ever experiences is a **place**: my fold of the reality
-for that one being in that one moment. Materials assembled into a face
-for them, right then. Per the doctrine, the place lives only inside
-the stamper. Outside the moment window there is no place anywhere,
-only waiting beings and facts on reels. A place is never persisted;
-the descriptor a SEE returns is one place, composed for one SEE, gone
-after.
+**Reality** is the chain. The full braid of every reel: each being's
+reel, each space's reel, each matter's reel, hashed and ordered. The
+record of what has happened. Stored, durable, indexable, the same
+for everyone who reads it. The folder `reality/` at the project root
+is named for this.
 
-This is the inversion. In an ordinary system, state persists and
-sessions pass through it. Here, the world persists as facts and
-beings; a place is woven new for every act. See
+**Place** is the fold. One being's view of reality at one stance in
+one moment. Materials assembled into a face for them, right then.
+Transient by construction. A place lives only inside the stamper.
+Outside the moment window there is no place anywhere, only beings
+and facts on reels. The descriptor a SEE returns is one place,
+composed for one SEE, gone after. There are as many places, at any
+instant, as there are beings folding.
+
+**World** is the convergence. When many beings fold the same regions
+of the same chain, their places agree. That agreement is what
+"shared world" denotes. World is not a layer. There is no canonical
+world state behind the views, no central scene graph. The world is a
+property that holds across places, not a place itself. You can point
+at any two beings' places and notice they agree. You cannot point at
+the world.
+
+The distinction is load-bearing. The temptation is to read these
+three names as "the real one (reality), the local copy (place), and
+the consensus picture (world)". That is not the model. There is no
+hidden true world the places approximate. The folds are not lossy
+copies of a master scene. The agreement among independently produced
+folds over the same chain IS what world means. Nothing is being
+broadcast. No central scene exists. The sharing lives in the chain
+and in the determinism of the fold, not in any layer above them.
+
+If a future reader sees "the world" in this seed and hunts for the
+object it implies, they will find no such object and decide one is
+missing. They will build a server-side scene graph and call it the
+source of truth. Then projections fall out of step with the scene
+graph, the chain falls out of step with the projections, and the
+single-writer invariant has been quietly inverted while everyone is
+still saying the right doctrinal words. Naming the world a
+convergence forecloses that hunt. There is nothing to find.
+
+### What makes convergence possible
+
+Convergence is not an architectural goal. It is a structural property
+that emerges from four laws, held simultaneously.
+
+- **Single-writer.** Each reel has exactly one writer, the actor
+  whose reel it is. `f ∈ R_b ⇒ doer(f) = b`. No reel is written by
+  anyone else, ever.
+- **Past fixed.** A sealed fact cannot be edited, reordered, or
+  deleted.
+- **Present only.** A moment is the only window where state changes.
+  Outside a moment, the world is closed.
+- **No future.** No fact is written until the moment that produces
+  it seals. There is no "this will be true later" in the chain
+  itself.
+
+Together these make the deterministic fold a function of the chain
+prefix alone. Two beings folding the same prefix compute bit-
+identical state. Replay-from-zero in a year produces the same state
+any current reader sees. Convergence is what falls out when those
+four invariants hold simultaneously. Relax any one and the agreement
+among folds becomes a coordination problem rather than a structural
+property. The reels are not a logging convention. They are the
+geometry that lets the world be many folds without being many
+worlds.
+
+### No preferred cognition
+
+The seed has no preferred kind of being. A move-fact from a human
+walking with WASD and a move-fact from a scripted dancer in its
+summon handler are the same object on the same shape of reel,
+processed by the same fold. Nothing in the chain, nothing in the
+reducer, nothing in the projection branches on which kind of being
+produced the fact. Cognition is whatever produces an act. Whether
+that comes from an LLM turn, a keypress, a 20-line rule, a federated
+peer, or a future composite, the result lands as a sealed fact and
+the rest of the world updates by the same fold every reader runs.
+
+This is the test to apply when reviewing new code. If you can tell
+from inside the seed which beings are scripted and which are humans,
+something has leaked. Cognition is plural at the cognition layer and
+uniform at the fact layer. Hold that line.
+
+### The inversion
+
+In an ordinary system, state persists and sessions pass through it.
+Here, the chain persists as facts and beings, and a place is woven
+new for every act. The world is not stored; it converges. See
 [philosophy/MOMENT.md](../philosophy/MOMENT.md) for the long version.
 
 ## The shape I keep
@@ -44,8 +117,10 @@ together:
 𝓡 = (𝓦, Present, Laws)
 ```
 
-- **𝓦** is the world. Every reel together. Beings, spaces, and matter
-  all live here as the entities whose reels constitute it.
+- **𝓦** is reality, in the strict sense above. Every reel together,
+  the full braid. Beings, spaces, and matter all live here as the
+  entities whose reels constitute it. (The world as convergence is a
+  property of folds over 𝓦, not 𝓦 itself.)
 - **Present** is my moment-engine. The only place a moment exists.
 - **Laws** are the invariants I hold. Single-writer, atomic seal, past
   fixed, no future, present only.

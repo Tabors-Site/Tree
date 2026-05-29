@@ -19,7 +19,7 @@ import { registerIbpBootstrap } from "./bootstrap-route.js";
 import { attachIbpHandlers } from "./protocol.js";
 import { hooks } from "../../seed/hooks.js";
 import Space from "../../seed/materials/space/space.js";
-import { emitPositionInvalidate } from "./live.js";
+import { emitPositionInvalidate, emitPositionDelta } from "./live.js";
 import { emitToSubscribers } from "../../seed/present/wakes/subscriptions.js";
 import { startTickLoop as startScheduleTick } from "../../seed/present/wakes/wakeSchedule.js";
 
@@ -49,6 +49,48 @@ function wireLiveHooks() {
       try {
         const s = await Space.findById(target.id).select("parent").lean();
         if (s?.parent) emitPositionInvalidate(s.parent, `child-metadata:${ns}`);
+      } catch { /* defensive */ }
+    }
+  }, "ibp-live");
+
+  // PositionProjection deltas. Skinny push: just (beingId, x, y, seq)
+  // for the affected space. Clients map beingId to a mesh, apply the
+  // coord with lastMoveSeq ordering. The fat-path invalidate below
+  // still fires for the same write through afterFieldWrite — that
+  // remains the catch-up path for clients that missed a delta. The
+  // delta is the latency optimization.
+  hooks.register("afterPositionUpdate", async (payload) => {
+    if (!payload?.spaceId) return;
+    emitPositionDelta(payload.spaceId, {
+      beingId:     payload.beingId,
+      x:           payload.x,
+      y:           payload.y,
+      ...(payload.z !== undefined ? { z: payload.z } : {}),
+      lastMoveSeq: payload.lastMoveSeq,
+    });
+  }, "ibp-live");
+
+  // Non-qualities scalar writes (size, name, type, parent, position, ...).
+  // The descriptor surfaces these on beings/matters/spaces, so any
+  // change should invalidate live subscribers.
+  //
+  // `coord` is the exception. The PositionProjection fold pushes a
+  // skinny per-being delta on every coord write (see
+  // emitPositionDelta above) and the portal applies that delta in
+  // place — no descriptor rebuild. Firing a full invalidate on top
+  // of every coord write would force a debounced refetch of the
+  // whole descriptor 10x/sec while a human walks, destroying and
+  // recreating every mesh in the scene. The delta is the
+  // authoritative live path for coord; invalidate covers fields
+  // the delta doesn't carry.
+  hooks.register("afterFieldWrite", async ({ spaceId, field, target }) => {
+    if (!spaceId) return;
+    if (field === "coord") return;
+    emitPositionInvalidate(spaceId, `field:${field}`);
+    if (target?.kind === "space") {
+      try {
+        const s = await Space.findById(target.id).select("parent").lean();
+        if (s?.parent) emitPositionInvalidate(s.parent, `child-field:${field}`);
       } catch { /* defensive */ }
     }
   }, "ibp-live");

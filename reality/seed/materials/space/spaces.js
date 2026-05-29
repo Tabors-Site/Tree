@@ -730,15 +730,15 @@ export async function deleteSpaceBranch(
     const opts = beingId
       ? { identity: { beingId: String(beingId) }, summonCtx: actId ? { actId } : null, scaffold: !actId }
       : { scaffold: true };
+    const target = { kind: "space", id: String(spaceId) };
     await doVerb(
-      spaceToDelete,
+      target,
       "set-space",
       { field: "rootOwner", value: String(beingId) },
       opts,
     );
-    const refreshed = await Space.findById(spaceId);
     await doVerb(
-      refreshed,
+      target,
       "set-space",
       { field: "parent", value: DELETED },
       opts,

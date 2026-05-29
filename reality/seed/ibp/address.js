@@ -284,17 +284,28 @@ function findStandaloneAt(s) {
 
 function parseBeing(s) {
   if (!s.startsWith("@")) {
-    throw paError("invalid-being-prefix", s, "Being must start with @");
+    throw paError("invalid-being-prefix", s, "Being qualifier must start with @");
   }
   const id = s.slice(1).trim();
   if (!id) {
-    throw paError("empty-being", s, "Being identifier is empty");
+    throw paError("empty-being", s, "Being qualifier is empty");
   }
-  if (!/^[a-z][a-z0-9-]*$/.test(id)) {
+  // The @qualifier accepts two shapes:
+  //   1. A bare being name: lowercase kebab-case (e.g. @cherub, @tabor,
+  //      @greeter-12345678).
+  //   2. A role-shorthand: `<ext>:<role>` form for namespaced roles
+  //      (e.g. @hello-world:greeter). The SUMMON resolver looks up
+  //      `qualities.beings.<role>.beingId` on the target space when the
+  //      bare-name lookup misses — the same shape extension DO ops and
+  //      seeds use throughout the system.
+  if (!/^[a-z][a-z0-9-]*(?::[a-z][a-z0-9-]*)?$/.test(id)) {
     throw paError(
       "invalid-being-chars",
       s,
-      `Being "${id}" must be lowercase kebab-case starting with a letter`,
+      `Being qualifier "${id}" must be lowercase kebab-case (e.g. "@cherub", ` +
+      `"@tabor") or an extension role shorthand (e.g. "@hello-world:greeter"). ` +
+      `Roles may contain a single ":" separating the extension namespace from ` +
+      `the role name; bare being names cannot.`,
     );
   }
   return id;

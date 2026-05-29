@@ -75,6 +75,17 @@ export class Scene {
     // Every being mesh by being. Proximity fires per-being; speech
     // bubbles anchor to the mesh for that being.
     this._beingMeshes = new Map();
+    // Parallel index keyed by beingId so the live PositionProjection
+    // delta (which carries beingId, not name) can find its mesh in
+    // O(1). Populated alongside _beingMeshes during renderDescriptor.
+    this._beingMeshesById = new Map();
+    // Per-render grid metadata cached so live deltas can map a coord
+    // back into world units without re-reading the descriptor.
+    this._gridSize = null;
+    this._gridCell = null;
+    // Track the latest seq applied per being so stale or out-of-order
+    // deliveries get dropped.
+    this._beingLastMoveSeq = new Map();
     this._lastBeingInRange = new Map();
     this._bubble = null;
 
@@ -167,10 +178,33 @@ export class Scene {
   //     Movement locked. Player faces the cherub.
   //   - default: grassy field, all beings and children rendered.
   //     Movement unlocked.
-  renderDescriptor(desc, { isAuthenticated } = {}) {
+  renderDescriptor(desc, { isAuthenticated, resetCamera = true } = {}) {
     this._clearWorld();
     const isPlaceRoot = !!desc?.isPlaceRoot;
     const arrival    = isPlaceRoot && !isAuthenticated;
+
+    // Coord mapping. When the space declares a size (e.g. the harmony
+    // dance-floor with size:{x:10,y:10}), render beings and matter at
+    // their reported coord positions. cellSize world units per grid
+    // cell, centered on the origin. Without a size the grid mapping
+    // is skipped and the legacy arc/hash fallbacks render instead.
+    const gridSize = desc?.size && Number.isFinite(desc.size.x) && Number.isFinite(desc.size.y)
+      ? { x: desc.size.x, y: desc.size.y }
+      : null;
+    const CELL = 1.5;
+    const coordToWorld = (c) => {
+      if (!gridSize || !c || !Number.isFinite(c.x) || !Number.isFinite(c.y)) return null;
+      return {
+        x: (c.x - (gridSize.x - 1) / 2) * CELL,
+        z: (c.y - (gridSize.y - 1) / 2) * CELL,
+      };
+    };
+    // Cache for live deltas. applyPositionDelta runs outside the
+    // renderDescriptor scope and needs the same mapping.
+    this._gridSize = gridSize;
+    this._gridCell = CELL;
+    this._beingMeshesById.clear();
+    this._beingLastMoveSeq.clear();
 
     // Pick the visual mode. Arrival overrides everything. Otherwise the
     // descriptor's resolved scene.sceneType picks a preset; unknown or
@@ -193,6 +227,17 @@ export class Scene {
       : beings;
     const childrenToRender = arrival ? [] : children;
 
+    // Self identity. The signed-in user is the camera in first-person;
+    // we never render their own avatar mesh in their tab. Their coord
+    // anchors the camera on initial navigation and on resetCamera.
+    // Other tabs see their mesh moving through the same position
+    // deltas any other being would emit. Computed AFTER beingsToRender
+    // because we look up the self entry in that list.
+    this._selfBeingId = desc?.identity?.beingId || null;
+    this._selfBeing = this._selfBeingId
+      ? beingsToRender.find((b) => b.beingId === this._selfBeingId) || null
+      : null;
+
     // Place beings: in arrival mode, cherub stands directly ahead.
     // In default mode, beings spread in an arc.
     this._beingMeshes.clear();
@@ -210,18 +255,20 @@ export class Scene {
     } else {
       const beingRadius = 6;
       beingsToRender.forEach((b, i) => {
-        // Prefer server-provided coords. The seed doesn't surface a
-        // generic position field; each spatial extension writes into
-        // its own qualities namespace. Today: harmony writes coords
-        // to qualities.harmony.coords. Fall back to a deterministic
-        // arc spread when no extension has placed this being yet.
+        // First-person: skip your own avatar in your own tab. You
+        // ARE the camera; the mesh would clip the lens and double-
+        // render whatever the other tabs see for you.
+        if (this._selfBeingId && b.beingId === this._selfBeingId) return;
+        // Prefer the being's coord field (the seed's spatial schema
+        // field, written through set-being:coord and clamped to
+        // space.size). When the space has a declared size, map the
+        // grid coord into world units. Fall back to an arc spread for
+        // beings outside a sized space.
         let x, z;
-        const serverCoords =
-          b.qualities?.harmony?.coords ||
-          b.position?.coords;  // legacy fallback
-        if (serverCoords && typeof serverCoords.x === "number") {
-          x = serverCoords.x;
-          z = serverCoords.y;
+        const world = coordToWorld(b.coord);
+        if (world) {
+          x = world.x;
+          z = world.z;
         } else {
           const angle = (i / Math.max(1, beingsToRender.length)) * Math.PI - Math.PI / 2;
           x = Math.cos(angle) * beingRadius;
@@ -236,6 +283,7 @@ export class Scene {
         mesh.userData = { ...beingUserData(b), defaultCoord: { x, z } };
         this.world.add(mesh);
         this._beingMeshes.set(b.being, mesh);
+        if (b.beingId) this._beingMeshesById.set(b.beingId, mesh);
       });
     }
 
@@ -296,10 +344,10 @@ export class Scene {
         const id = mt.matterId || `mt-${i}`;
         const isVideo = mt?.content?.contentType === "video/youtube";
         let x, z;
-        const serverCoords = mt.position?.coords;
-        if (serverCoords && typeof serverCoords.x === "number") {
-          x = serverCoords.x;
-          z = serverCoords.y;
+        const world = coordToWorld(mt.coord);
+        if (world) {
+          x = world.x;
+          z = world.z;
         } else if (isVideo) {
           // Video screens get a stable, prominent spot in front of the
           // arrival camera — close enough to read, far enough to walk
@@ -331,18 +379,126 @@ export class Scene {
       });
     }
 
+    // Sized-space overlay. When the descriptor declares a size, draw
+    // a grid the same dimensions on the ground so the player can read
+    // motion across the cells. Lives in the per-render world so it
+    // tears down with _clearWorld and rebuilds at the new size on
+    // navigation.
+    if (gridSize && !arrival) {
+      const w = gridSize.x * CELL;
+      const h = gridSize.y * CELL;
+      const overlayGrid = new THREE.GridHelper(
+        Math.max(w, h),
+        Math.max(gridSize.x, gridSize.y),
+        0x88aaff,
+        0x445577,
+      );
+      overlayGrid.position.y = 0.02;
+      this.world.add(overlayGrid);
+    }
+
     // Wire per-being activity: bubbles for current thoughts/tool calls,
     // and movement targets so beings walk to whoever/whatever they're
     // acting on while their chainstep is active.
     this._applyBeingActivity(beingsToRender);
 
-    // Drop the player at origin. In arrival, face the cherub (z negative).
-    this.camera.position.set(0, 1.7, arrival ? 2 : 8);
-    this.yaw = 0;
-    this.pitch = 0;
-    this.velocityY = 0; // reset any in-flight jump on navigation
+    // Drop the player at origin on navigation. Live-data refreshes
+    // (subscriptions, in-place re-fetches) pass resetCamera:false so
+    // we don't yank the player back to spawn every tick.
+    //
+    // When the descriptor declared a size AND your own being has a
+    // coord at this space, anchor the camera there instead of
+    // generic spawn — your first-person view starts at your
+    // server-side position so the world matches what other tabs see
+    // of you.
+    if (resetCamera) {
+      const selfWorld = this._selfBeing?.coord ? coordToWorld(this._selfBeing.coord) : null;
+      if (selfWorld) {
+        this.camera.position.set(selfWorld.x, 1.7, selfWorld.z);
+      } else {
+        this.camera.position.set(0, 1.7, arrival ? 2 : 8);
+      }
+      this.yaw = 0;
+      this.pitch = 0;
+      this.velocityY = 0;
+    }
     this._applyLook();
   }
+
+  // Apply one PositionProjection delta from the live SEE channel.
+  // Payload shape from positionProjectionFold.js:
+  //   { spaceId, beingId, x, y, z?, lastMoveSeq }
+  //
+  // Three filters:
+  //   - mesh present for this beingId (the delta is for a being
+  //     currently visible in this scene)
+  //   - gridSize known for the space (no-op otherwise; coords have
+  //     no world mapping until the descriptor declared a size)
+  //   - lastMoveSeq strictly greater than the last applied for this
+  //     being (drop stale / out-of-order deliveries; the projection
+  //     guarantees the truth state, the wire doesn't guarantee order)
+  applyPositionDelta(delta) {
+    if (!delta || !delta.beingId) return;
+    // Self deltas are echoes of our own emit; the camera is
+    // authoritative for self and snapping a mesh under the camera
+    // would just fight the player's input.
+    if (this._selfBeingId && delta.beingId === this._selfBeingId) return;
+    const mesh = this._beingMeshesById.get(delta.beingId);
+    if (!mesh) return;
+    const gridSize = this._gridSize;
+    const cell = this._gridCell;
+    if (!gridSize || !cell) return;
+    if (!Number.isFinite(delta.x) || !Number.isFinite(delta.y)) return;
+
+    const lastSeq = this._beingLastMoveSeq.get(delta.beingId);
+    if (Number.isFinite(delta.lastMoveSeq) && Number.isFinite(lastSeq) && delta.lastMoveSeq <= lastSeq) {
+      return; // stale; the wire delivered out of order
+    }
+    if (Number.isFinite(delta.lastMoveSeq)) {
+      this._beingLastMoveSeq.set(delta.beingId, delta.lastMoveSeq);
+    }
+
+    const x = (delta.x - (gridSize.x - 1) / 2) * cell;
+    const z = (delta.y - (gridSize.y - 1) / 2) * cell;
+    // Don't teleport. Update defaultCoord — the per-frame
+    // _updateBeingMovement lerp drives the mesh toward this goal at
+    // a fixed walking speed. Movement reads as continuous even
+    // though deltas arrive at the moment cadence (one per sealed
+    // Act) rather than per-frame. With cell size 1.5 world units
+    // and walk speed 3.5/s, one cell takes ~0.43s — visibly walking
+    // rather than jumping.
+    if (mesh.userData) {
+      mesh.userData.defaultCoord = { x, z };
+    }
+  }
+
+  // Inverse of coordToWorld: read the camera's world position, return
+  // the grid coord, clamped to the declared size. The emit loop in
+  // main.js polls this each tick and stamps a set-being:coord fact
+  // whenever the result changes — that's how your camera in this tab
+  // becomes your avatar's coord in every other tab.
+  //
+  // Returns null when the descriptor hasn't declared a size (no
+  // mapping exists) OR there's no self being to attribute the
+  // emit to.
+  getCurrentGridCoord() {
+    if (!this._selfBeingId) return null;
+    const gridSize = this._gridSize;
+    const cell = this._gridCell;
+    if (!gridSize || !cell) return null;
+    const wx = this.camera.position.x;
+    const wz = this.camera.position.z;
+    const gx = Math.round(wx / cell + (gridSize.x - 1) / 2);
+    const gy = Math.round(wz / cell + (gridSize.y - 1) / 2);
+    return {
+      x: Math.max(0, Math.min(gridSize.x - 1, gx)),
+      y: Math.max(0, Math.min(gridSize.y - 1, gy)),
+    };
+  }
+
+  // The signed-in being's id, if any. main.js needs it to construct
+  // the set-being:coord emit address.
+  getSelfBeingId() { return this._selfBeingId; }
 
   // Apply activity state across all currently-rendered beings. For each
   // being entry: stash an `activeTargetCoord` on its mesh when activity

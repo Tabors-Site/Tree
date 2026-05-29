@@ -18,7 +18,7 @@ import Matter from "./matter.js";
 import Space from "../space/space.js";
 import { I_AM } from "../being/seedBeings.js";
 import { v4 as uuidv4 } from "uuid";
-import { detectTargetKind, targetIdOf } from "../_targetShape.js";
+import { detectTargetKind, targetIdOf, loadTargetRow } from "../_targetShape.js";
 
 const COORD_AXES = ["x", "y", "z"];
 
@@ -78,7 +78,7 @@ async function createMatterHandler(ctx) {
   const spaceId =
     targetKind === "space" ? targetIdOf(target) : (spec.spaceId ?? null);
   const parentMatterId =
-    targetKind === "matter" ? String(target._id) : (spec.parentMatterId ?? null);
+    targetKind === "matter" ? targetIdOf(target) : (spec.parentMatterId ?? null);
   const enrichedSpec = {
     ...spec,
     spaceId,
@@ -123,12 +123,9 @@ async function setOnMatterHandler({ target, params }) {
   if (!field || typeof field !== "string") {
     throw new Error("set-matter: `field` is required");
   }
-  const kind = detectTargetKind(target);
-  if (kind !== "matter") {
-    throw new Error(
-      `set-matter: target must be a Matter (got ${kind})`,
-    );
-  }
+  // Load the row at the top — set-matter needs spaceId for coord
+  // clamping plus the doc for id-emitting return shapes.
+  target = await loadTargetRow(target, "matter");
 
   // ── qualities paths ────────────────────────────────────
   if (field.startsWith("qualities.")) {
@@ -187,7 +184,7 @@ async function setOnMatterHandler({ target, params }) {
 // ─────────────────────────────────────────────────────────────────────
 
 async function endMatterHandler({ target, identity, summonCtx }) {
-  const matterId = String(target?._id || target?.matterId || target);
+  const matterId = targetIdOf(target);
   if (!matterId) throw new Error("end-matter: matterId required");
   const { deleteMatterAndFile } = await import("./matters.js");
   const beingId =

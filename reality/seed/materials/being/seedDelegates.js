@@ -52,6 +52,7 @@ import log from "../../seedReality/log.js";
 import Being from "./being.js";
 import { summonCreateBeing } from "../../ibp/verbs/summon.js";
 import { findIAm, iAmIdentity } from "./identity.js";
+import { I_AM } from "./seedBeings.js";
 
 export const SEED_DELEGATES = [
   {
@@ -142,8 +143,9 @@ export async function ensureSeedDelegates(spaceRootId, summonCtx, opts = {}) {
         // exception list short (only the spaceRoot/I_AM creation).
         const { doVerb } = await import("../../ibp/verbs/do.js");
         const setOpts = { scaffold: true, summonCtx };
+        const beingTarget = { kind: "being", id: String(existingBeing._id) };
         const setField = (field, value) =>
-          doVerb(existingBeing, "set-being", { field, value }, setOpts);
+          doVerb(beingTarget, "set-being", { field, value }, setOpts);
 
         if (existingBeing.operatingMode !== spec.operatingMode) {
           await setField("operatingMode", spec.operatingMode);
@@ -179,7 +181,7 @@ export async function ensureSeedDelegates(spaceRootId, summonCtx, opts = {}) {
       // be:summon-create Fact summonCreateBeing stamps inside this
       // moment carries rootBeingId as the actor on its own reel.
       const iAmIdent = iAm._pending
-        ? { beingId: rootBeingId, name: "I_AM" }
+        ? { beingId: rootBeingId, name: I_AM }
         : await iAmIdentity();
       await summonCreateBeing({
         spec: {

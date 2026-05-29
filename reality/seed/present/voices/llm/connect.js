@@ -476,7 +476,7 @@ export async function addLlmConnection(
 
   const { doVerb } = await import("../../../ibp/verbs/do.js");
   await doVerb(
-    being,
+    { kind: "being", id: String(being._id) },
     "set-being",
     { field: `qualities.llmConnections.${connectionId}`, value: conn },
     identity ? { identity, summonCtx } : { scaffold: true, summonCtx },
@@ -543,7 +543,7 @@ export async function updateLlmConnection(
   const merged = { ...existing, ...update };
   const { doVerb } = await import("../../../ibp/verbs/do.js");
   await doVerb(
-    being,
+    { kind: "being", id: String(being._id) },
     "set-being",
     { field: `qualities.llmConnections.${safeConnId}`, value: merged },
     identity ? { identity, summonCtx } : { scaffold: true, summonCtx },
@@ -586,7 +586,7 @@ export async function deleteLlmConnection(beingId, connectionId, { identity, sum
   // Unset the connection entry on this being's qualities (do.set with
   // value=null on a 2-deep path unsets via Mongo $unset).
   await doVerb(
-    being,
+    { kind: "being", id: String(being._id) },
     "set-being",
     { field: `qualities.llmConnections.${safeConnId}`, value: null },
     opts,
@@ -595,7 +595,7 @@ export async function deleteLlmConnection(beingId, connectionId, { identity, sum
   // Clear being's main slot if it pointed here.
   if (being.llmDefault === connectionId) {
     await doVerb(
-      being,
+    { kind: "being", id: String(being._id) },
       "set-being",
       { field: "llmDefault", value: null },
       opts,
@@ -611,7 +611,7 @@ export async function deleteLlmConnection(beingId, connectionId, { identity, sum
   for (const [s, val] of Object.entries(beingSlots)) {
     if (val === connectionId) {
       await doVerb(
-        being,
+    { kind: "being", id: String(being._id) },
         "set-being",
         { field: `qualities.beingLlm.slots.${s}`, value: null },
         opts,
@@ -680,14 +680,14 @@ export async function assignConnection(beingId, slot, connectionId, { identity, 
   // writes the projection.
   if (slot === "main") {
     await doVerb(
-      being,
+    { kind: "being", id: String(being._id) },
       "set-being",
       { field: "llmDefault", value: safeConnId },
       opts,
     );
   } else {
     await doVerb(
-      being,
+    { kind: "being", id: String(being._id) },
       "set-being",
       { field: `qualities.beingLlm.slots.${slot}`, value: safeConnId },
       opts,
@@ -738,16 +738,17 @@ export async function assignSpaceConnection(
 
   // "main" slot writes the Space's scalar llmDefault; other slots write
   // the qualities path. Both flow through do.set; null clears.
+  const spaceTarget = { kind: "space", id: String(space._id) };
   if (slot === "main") {
     await doVerb(
-      space,
+      spaceTarget,
       "set-space",
       { field: "llmDefault", value: safeConnId },
       opts,
     );
   } else {
     await doVerb(
-      space,
+      spaceTarget,
       "set-space",
       { field: `qualities.llm.slots.${slot}`, value: safeConnId },
       opts,
@@ -835,7 +836,7 @@ export async function resolveConnection(beingId, connectionId, cacheKey, { summo
       if (being) {
         const { doVerb } = await import("../../../ibp/verbs/do.js");
         await doVerb(
-          being,
+    { kind: "being", id: String(being._id) },
           "set-being",
           {
             field: `qualities.llmConnections.${connectionId}.lastUsedAt`,

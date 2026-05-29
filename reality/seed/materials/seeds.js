@@ -145,7 +145,15 @@ export function registerSeed(name, recipe, ownerExtension = "seed") {
     );
     return false;
   }
-  SEEDS.set(name, Object.freeze({ name, ...recipe, ownerExtension }));
+  // Spread the recipe FIRST, then write `name` and `ownerExtension`
+  // last so they can't be silently overridden by a recipe that
+  // carries its own `name` (the loader passes the namespaced
+  // "<ext>:<local>" form here; the recipe usually carries just the
+  // local "<local>" form because extensions don't know their own
+  // namespaced name). Without this, the SEEDS map is keyed by the
+  // namespaced name but `listSeeds()` returned the local name,
+  // breaking the round-trip from discovery → hotbar → plant lookup.
+  SEEDS.set(name, Object.freeze({ ...recipe, name, ownerExtension }));
   SEED_OWNER.set(name, ownerExtension);
   log.verbose("Seeds", `Registered: ${name} (${ownerExtension})`);
   return true;
@@ -245,12 +253,23 @@ export async function plantSeed({
   const plantedSeedId = uuidv4();
   const plantedAt = new Date().toISOString();
 
+  // Thread the plant's summonCtx into the scaffold's ctx so every
+  // DO the recipe runs (create-space, set-space, create-matter, ...)
+  // pushes its Fact onto the SAME deltaF and rides the SAME actId.
+  // sealAct commits them all together when the plant moment seals,
+  // or rolls them all back together when any one fails. Without
+  // this, scaffold DOs would each commit independently — and a
+  // mid-scaffold failure would leave partial state on the row
+  // (the user-observed case: the dance-floor space materialized
+  // but the subsequent set-space size write was denied, leaving
+  // an orphan grid with no bounds).
   const ctx = {
     rootSpaceId: String(atSpaceId),
     plantedSeedId,
     identity,
     place: reality,
     params: safeParams,
+    summonCtx,
   };
 
   let plantedThings;
@@ -287,7 +306,7 @@ export async function plantSeed({
     };
     const { doVerb } = await import("../ibp/verbs/do.js");
     await doVerb(
-      space,
+      { kind: "space", id: String(space._id) },
       "set-space",
       { field: "qualities.seeds", value: existing, merge: false },
       { identity, summonCtx },
@@ -380,9 +399,8 @@ export async function unplantSeed({
 
   delete seeds[plantedSeedId];
   const { doVerb } = await import("../ibp/verbs/do.js");
-  const refreshed = await Space.findById(atSpaceId);
   await doVerb(
-    refreshed,
+    { kind: "space", id: String(atSpaceId) },
     "set-space",
     { field: "qualities.seeds", value: seeds, merge: false },
     identity ? { identity, summonCtx } : { scaffold: true },

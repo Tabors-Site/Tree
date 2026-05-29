@@ -234,11 +234,13 @@ export async function logFact(input, opts = {}) {
       }
     };
     try {
-      if (session) {
-        // sealFacts already holds the reel lock for this reel.
-        // withReelLock is non-reentrant; calling it here would
-        // deadlock. Trust the caller (sealFacts) to have acquired
-        // every needed lock up front.
+      if (session || opts.lockHeldByCaller) {
+        // The caller already holds the per-reel append lock for this
+        // reel. Either implicitly (session present, so sealFacts /
+        // sealAct is holding the lock around the open transaction
+        // per PARALLEL FACTS §1.2) or explicitly (lockHeldByCaller,
+        // single-reel sealFacts short-circuit). withReelLock is
+        // non-reentrant; re-acquiring here would deadlock.
         await runAppend();
       } else {
         await withReelLock(finalTarget.kind, finalTarget.id, runAppend);
@@ -329,29 +331,26 @@ export function isReplicaSetCluster() {
 }
 
 /**
- * Append a ΔF inside an already-open Mongo session/transaction.
+ * Group a ΔF by reel and sort the reels by key. Centralizes the
+ * grouping so sealFacts and sealAct produce identical lock-order
+ * for the same ΔF.
  *
- * The caller (sealFacts or sealAct) opens the session and the
- * withTransaction; this helper does the work inside it:
- *   - groups facts by reel,
- *   - sorts the reels by key (deadlock-free lock ordering),
- *   - acquires per-reel locks in sorted order via nested withReelLock,
- *   - appends each fact in its reel (logFact with the session passed
- *     through; logFact skips its own withReelLock when session is
- *     present because this caller already holds it).
+ *   - Reel-bearing facts (target.kind in REEL_KINDS, target.id set)
+ *     bucket by "<kind>:<id>".
+ *   - Non-reel-bearing facts (place/stance, target-less) accumulate
+ *     in orphanFacts and commit without a reel lock — they only
+ *     ride the session for atomicity.
  *
- * Returns metadata the outer caller uses for post-commit fold runs.
+ * Sorted order is deterministic and identical across callers, so
+ * two concurrent transactions touching the same set of reels
+ * acquire locks in the same order and cannot deadlock.
  *
- * @param {Array<object>} deltaF      fact specs (same shape logFact takes)
- * @param {ClientSession} session     Mongo session held by the outer txn
- * @returns {Promise<{ sortedReels: Array<{kind,id,facts}> }>}
+ * @param {Array<object>} deltaF
+ * @returns {{ sortedReels: Array<{kind,id,facts}>, orphanFacts: Array<object> }}
  */
-export async function appendDeltaFInSession(deltaF, session) {
-  // Group facts by reel. Non-reel-bearing facts (place/stance,
-  // target-less) commit too but don't take reel locks — they go
-  // into the same transaction as a degenerate "no-lock" reel.
-  const factsByReel = new Map(); // "kind:id" → { kind, id, facts: [] }
-  const orphanFacts = [];        // non-reel-bearing
+export function groupByReel(deltaF) {
+  const factsByReel = new Map();
+  const orphanFacts = [];
   for (const spec of deltaF) {
     const target = spec?.target;
     if (target && REEL_KINDS.has(target.kind) && target.id) {
@@ -364,30 +363,61 @@ export async function appendDeltaFInSession(deltaF, session) {
       orphanFacts.push(spec);
     }
   }
+  const sortedReels = [...factsByReel.keys()].sort().map(k => factsByReel.get(k));
+  return { sortedReels, orphanFacts };
+}
 
-  // Deterministic lock-acquisition order: sort by reel key. Two
-  // concurrent callers touching reels A and B acquire in the same
-  // order, so they can't deadlock by taking opposite orders.
-  const sortedKeys = [...factsByReel.keys()].sort();
-  const sortedReels = sortedKeys.map(k => factsByReel.get(k));
-
-  const acquireAndAppend = async (i) => {
-    if (i === sortedReels.length) {
-      for (const reel of sortedReels) {
-        for (const spec of reel.facts) {
-          await logFact(spec, { session, skipEagerFold: true });
-        }
-      }
-      for (const spec of orphanFacts) {
-        await logFact(spec, { session, skipEagerFold: true });
-      }
-      return;
-    }
+/**
+ * Acquire every per-reel append lock in sorted order, then run fn.
+ * The callback runs only once every lock is held; locks release in
+ * reverse order after fn resolves or rejects.
+ *
+ * PARALLEL FACTS §1.2: "lock at append, only the append is serial."
+ * The lock must span the full read-snapshot lifetime of the seal —
+ * from before the Mongo session opens through after the transaction
+ * commits — so two contenders on the same reel cannot have
+ * overlapping snapshots. If the lock were taken inside the
+ * transaction (former shape), contender B's session would snapshot
+ * `reelHeads` while contender A still held the lock for its
+ * in-flight commit, and B's $inc on the same head would raise
+ * WriteConflict at the storage engine — a Strategy-B-shaped seal
+ * rejection on a Strategy-A workload (§6 violation). Holding the
+ * lock outside the transaction restores §1.2 by construction.
+ */
+export async function withReelLocks(sortedReels, fn) {
+  const acquire = async (i) => {
+    if (i === sortedReels.length) return fn();
     const reel = sortedReels[i];
-    await withReelLock(reel.kind, reel.id, () => acquireAndAppend(i + 1));
+    return withReelLock(reel.kind, reel.id, () => acquire(i + 1));
   };
+  return acquire(0);
+}
 
-  await acquireAndAppend(0);
+/**
+ * Append a ΔF inside an already-open Mongo session/transaction.
+ *
+ * The caller (sealFacts or sealAct) is responsible for holding
+ * every reel lock for the full transaction lifetime via
+ * withReelLocks. This helper just iterates: each fact goes through
+ * logFact with the session, and logFact skips its own withReelLock
+ * because session-present means the caller is holding it.
+ *
+ * Returns metadata the outer caller uses for post-commit fold runs.
+ *
+ * @param {Array<object>} deltaF      fact specs (same shape logFact takes)
+ * @param {ClientSession} session     Mongo session held by the outer txn
+ * @returns {Promise<{ sortedReels: Array<{kind,id,facts}> }>}
+ */
+export async function appendDeltaFInSession(deltaF, session) {
+  const { sortedReels, orphanFacts } = groupByReel(deltaF);
+  for (const reel of sortedReels) {
+    for (const spec of reel.facts) {
+      await logFact(spec, { session, skipEagerFold: true });
+    }
+  }
+  for (const spec of orphanFacts) {
+    await logFact(spec, { session, skipEagerFold: true });
+  }
   return { sortedReels };
 }
 
@@ -483,35 +513,66 @@ export async function sealFacts(deltaF, opts = {}) {
     return { committed: 0, txn: false };
   }
 
-  // Singleton ΔF — no transaction needed unless caller explicitly
-  // requested one (test path). logFact's per-reel atomic commit
-  // covers single-fact correctness on standalone Mongo. Used by
-  // boot/migration callers that have no surrounding Act (sealAct
-  // is the moment's seal boundary; sealFacts standalone is for
-  // material helpers called outside a moment).
-  if (deltaF.length === 1 && !opts.requireTransaction) {
-    await logFact(deltaF[0]);
-    return { committed: 1, txn: false };
+  // PARALLEL FACTS §3, the "microsecond of appending": a ΔF whose
+  // facts all share ONE reel needs no multi-document transaction.
+  // The per-reel append lock plus single-doc atomic inserts already
+  // give §1.2's guarantee — the transaction would lie about what
+  // the commit actually is (transactions exist for multi-reel
+  // atomicity). Single-fact ΔF collapses into this case naturally.
+  // The single-reel short-circuit also runs on standalone Mongo, so
+  // boot/migration callers without a replica set still pass through
+  // without needing requireTransaction:false. Orphan facts
+  // (target-less, e.g. place/stance) force the multi-reel path
+  // because they need the session for their own atomicity.
+  const { sortedReels: lockReels, orphanFacts } = groupByReel(deltaF);
+  if (
+    lockReels.length <= 1 &&
+    orphanFacts.length === 0 &&
+    !opts.requireTransaction
+  ) {
+    if (lockReels.length === 0) {
+      // No reel-bearing facts and no orphans — by construction
+      // unreachable from here (deltaF.length > 0, every fact either
+      // reels or orphans), but guarded for forward safety.
+      return { committed: 0, txn: false };
+    }
+    const reel = lockReels[0];
+    await withReelLock(reel.kind, reel.id, async () => {
+      for (const spec of reel.facts) {
+        await logFact(spec, { lockHeldByCaller: true, skipEagerFold: true });
+      }
+    });
+    await foldAfterCommit(lockReels);
+    return { committed: deltaF.length, txn: false };
   }
 
-  // Multi-fact (or explicitly-requested-transactional singleton):
-  // requires replica set. Fail loud per the hard prerequisite.
+  // Multi-reel (or orphan-mixed, or transaction-required): needs a
+  // replica set for multi-document atomic commit. Fail loud per the
+  // hard prerequisite.
   if (!isReplicaSetCluster()) {
     throw new Error("sealFacts: " + REPLICA_SET_REQUIRED_MSG);
   }
 
-  const session = await mongoose.startSession();
+  // PARALLEL FACTS §1.2: acquire every reel lock BEFORE opening the
+  // session, hold them across the entire transaction (open → write
+  // → commit → close). This bounds the snapshot lifetime so two
+  // contenders on the same reel can never have overlapping
+  // snapshots; the next contender's session cannot open until our
+  // commit has landed. See withReelLocks for the full rationale.
   let result;
-  try {
-    await session.withTransaction(async () => {
-      result = await appendDeltaFInSession(deltaF, session);
-    });
-  } catch (err) {
-    log.error("Seal", `sealFacts aborted: ${err.message}`);
-    throw err;
-  } finally {
-    await session.endSession();
-  }
+  await withReelLocks(lockReels, async () => {
+    const session = await mongoose.startSession();
+    try {
+      await session.withTransaction(async () => {
+        result = await appendDeltaFInSession(deltaF, session);
+      });
+    } catch (err) {
+      log.error("Seal", `sealFacts aborted: ${err.message}`);
+      throw err;
+    } finally {
+      await session.endSession();
+    }
+  });
 
   // Eager-fold AFTER commit. Self-healing on failure.
   await foldAfterCommit(result.sortedReels);

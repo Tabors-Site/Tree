@@ -112,13 +112,14 @@ export const llmAssignerBeing = Object.freeze({
     // Dispatch through the seed DO op so the assign-llm-slot Fact
     // stamps and the stance-authorization gate runs uniformly. Same
     // path setSpaceLlm uses below for space targets.
-    const being = await Being.findById(String(ctx.identity.beingId));
-    if (!being) throw new IbpError(IBP_ERR.BEING_NOT_FOUND, `Being ${ctx.identity.beingId} not found`);
+    const beingId = String(ctx.identity.beingId);
     const { doVerb } = await import("../../../ibp/verbs/do.js");
-    return doVerb(being, "assign-llm-slot", { slot, connectionId: connectionId || null }, {
-      identity: ctx.identity,
-      summonCtx: ctx.summonCtx,
-    });
+    return doVerb(
+      { kind: "being", id: beingId },
+      "assign-llm-slot",
+      { slot, connectionId: connectionId || null },
+      { identity: ctx.identity, summonCtx: ctx.summonCtx },
+    );
   },
 
   /**
@@ -194,12 +195,12 @@ export const llmAssignerBeing = Object.freeze({
     // is not a protected key; no scaffold flag needed.
     const { SEED_SPACE } = await import("../../../materials/space/seedSpaces.js");
     const { doVerb } = await import("../../../ibp/verbs/do.js");
-    const configNode = await Space.findOne({ seedSpace: SEED_SPACE.CONFIG });
+    const configNode = await Space.findOne({ seedSpace: SEED_SPACE.CONFIG }).select("_id").lean();
     if (!configNode) {
       throw new IbpError(IBP_ERR.INTERNAL, "Reality .config seed space not found");
     }
     await doVerb(
-      configNode,
+      { kind: "space", id: String(configNode._id) },
       "set-config",
       { key: "realityLlmConnection", value: connectionId || null },
       { identity: ctx.identity, summonCtx: ctx.summonCtx },
@@ -226,17 +227,20 @@ export const llmAssignerBeing = Object.freeze({
     if (!spaceId) throw new IbpError(IBP_ERR.INVALID_INPUT, "`spaceId` is required");
     if (!slot)   throw new IbpError(IBP_ERR.INVALID_INPUT, "`slot` is required");
 
-    const space = await Space.findById(spaceId);
-    if (!space) throw new IbpError(IBP_ERR.SPACE_NOT_FOUND, `Space ${spaceId} not found`);
+    const exists = await Space.exists({ _id: spaceId });
+    if (!exists) throw new IbpError(IBP_ERR.SPACE_NOT_FOUND, `Space ${spaceId} not found`);
 
     // Dispatch through the seed DO op so the stance-authorization
     // gate runs uniformly (same path the wire-side DO uses). The op's
     // handler routes space targets to assignSpaceConnection, which also
     // verifies the connection belongs to the caller before binding.
     const { doVerb } = await import("../../../ibp/verbs/do.js");
-    const result = await doVerb(space, "assign-llm-slot", { slot, connectionId: connectionId || null }, {
-      identity: ctx.identity,
-    });
+    const result = await doVerb(
+      { kind: "space", id: String(spaceId) },
+      "assign-llm-slot",
+      { slot, connectionId: connectionId || null },
+      { identity: ctx.identity },
+    );
 
     log.verbose("llm-assigner",
       `space ${spaceId} slot "${slot}" → ${connectionId || "(cleared)"} by being ${ctx.identity.beingId}`);

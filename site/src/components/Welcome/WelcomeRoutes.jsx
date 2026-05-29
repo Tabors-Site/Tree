@@ -1,148 +1,70 @@
 import { Routes, Route } from "react-router-dom";
-import WelcomePage from "./WelcomePage.jsx";
 
+// New site (post-rebuild 2026)
+import NewLandingPage from "./NewLandingPage.jsx";
+import IbpPage from "./IbpPage.jsx";
+import GetStartedPage from "./GetStartedPage.jsx";
+import FactoryLayout from "./FactoryLayout.jsx";
+import FactoryOverview from "./FactoryOverview.jsx";
+import FactoryIntake from "./FactoryIntake.jsx";
+import FactoryAssign from "./FactoryAssign.jsx";
+import FactoryFold from "./FactoryFold.jsx";
+import FactoryMomentum from "./FactoryMomentum.jsx";
+import FactoryStamped from "./FactoryStamped.jsx";
 
-import EnergySection from "./About/EnergySection.jsx";
-import AboutRawIdeas from "./About/AboutRawIdeas.jsx";
-import DreamsAbout from "./About/DreamsAbout.jsx";
-import StartedAbout from "./About/StartedAbout.jsx";
-import CLIAbout from "./About/CLIAbout.jsx";
-import GatewayAbout from "./About/GatewayAbout.jsx";
-import LandAbout from "./About/LandAbout.jsx";
-import NodeTypesAbout from "./About/NodeTypesAbout.jsx";
-import ExtensionsAbout from "./About/ExtensionsAbout.jsx";
-import LandingPage from "./Landing/LandingPage.jsx";
-import AIArchitecturePage from "./Landing/AIArchitecturePage.jsx";
-import KernelPage from "./Landing/KernelPage.jsx";
-import CascadePage from "./Landing/CascadePage.jsx";
-import SwarmPage from "./Landing/SwarmPage.jsx";
-import ExtensionsPage from "./Landing/ExtensionsPage.jsx";
-import NetworkPage from "./Landing/NetworkPage.jsx";
-import FlowPage from "./Landing/FlowPage.jsx";
-import BuildPage from "./Landing/BuildPage.jsx";
-import CodePage from "./Landing/CodePage.jsx";
-import MyceliumPage from "./Landing/MyceliumPage.jsx";
-import LandPage from "./Landing/LandPage.jsx";
-import TreeOSPage from "./Landing/TreeOSPage.jsx";
-import StudyPage from "./Landing/StudyPage.jsx";
-import HTMLPage from "./Landing/HTMLPage.jsx";
-import StartPage from "./Landing/StartPage.jsx";
-import WhatPage from "./Landing/WhatPage.jsx";
-import UsePage from "./Landing/UsePage.jsx";
-import FitnessPage from "./Landing/FitnessPage.jsx";
-import FoodPage from "./Landing/FoodPage.jsx";
-import RecoveryPage from "./Landing/RecoveryPage.jsx";
-import KbPage from "./Landing/KbPage.jsx";
-import GoverningPage from "./Landing/GoverningPage.jsx";
-import RulershipPage from "./Landing/RulershipPage.jsx";
-import RulerPage from "./Landing/RulerPage.jsx";
-import PlannerPage from "./Landing/PlannerPage.jsx";
-import ContractorPage from "./Landing/ContractorPage.jsx";
-import ForemanPage from "./Landing/ForemanPage.jsx";
-import WorkerPage from "./Landing/WorkerPage.jsx";
-import ProtocolPage from "./Landing/ProtocolPage.jsx";
-import ArrivalPage from "./Landing/ArrivalPage.jsx";
-import AuthorizationPage from "./Landing/AuthorizationPage.jsx";
+// Blog stays at root (/blog and /blog/:slug). The component crossed
+// the rebuild seam unchanged; we just import it from where it now
+// lives (under old/) and mount it at both root and /old/.
+import BlogSection from "./old/Blog/BlogSection.jsx";
 
-import ApiAccessSection from "./About/API.jsx";
+// Legacy site preserved under /old/*
+import OldRoutes from "./old/OldRoutes.jsx";
 
-import PrivacySection from "./PrivacySection.jsx";
-import TermsSection from "./TermsSections.jsx";
+// 404 (shared between new and old)
+import NotFound from "./old/NotFound.jsx";
 
-import AboutHome from "./About/AboutHome.jsx";
-import Guide from "./Landing/Guide.jsx";
-import AboutLayout from "./About/AboutLayout.jsx";
-import BlogSection from "./Blog/BlogSection.jsx";
-import NotFound from "./NotFound.jsx";
-
+/**
+ * WelcomeRoutes. Dispatcher between the new site and the legacy site.
+ *
+ *   /                       NEW landing (two buttons plus "What is this?")
+ *   /ibp                    NEW IBP page (transport plus four verbs)
+ *   /factory                NEW factory overview plus chapter walk
+ *   /factory/<chapter>      NEW factory chapter (intake / assign / fold / momentum / stamped)
+ *   /blog, /blog/:slug      Blog at root (component lives under old/Blog/)
+ *   /old/*                  EVERY legacy route, preserved verbatim
+ *   *                       404
+ *
+ * The new pages live alongside the legacy components but use the `.ns-*`
+ * CSS class prefix so styles never collide with the legacy `.lp-*` rules
+ * still loaded under /old/*.
+ */
 const WelcomeRoutes = () => {
-  // External redirect: /horizon -> horizon.treeos.ai
-  const HorizonRedirect = () => {
-    window.location.href = "https://horizon.treeos.ai";
-    return null;
-  };
-
   return (
     <Routes>
-
-      {/* Landing page (protocol site) */}
-      <Route path="/" element={<LandingPage />} />
-
-      {/* /decentralized redirects to /network (old URL, kept for backcompat) */}
-      <Route path="/decentralized" element={<NetworkPage />} />
-      <Route path="/ai" element={<AIArchitecturePage />} />
-      <Route path="/kernel" element={<KernelPage />} />
-      <Route path="/seed" element={<KernelPage />} />
-      <Route path="/cascade" element={<CascadePage />} />
-      <Route path="/swarm" element={<SwarmPage />} />
-      <Route path="/extensions" element={<ExtensionsPage />} />
-      <Route path="/network" element={<NetworkPage />} />
-      <Route path="/flow" element={<FlowPage />} />
-      <Route path="/build" element={<BuildPage />} />
-      <Route path="/code" element={<CodePage />} />
-      <Route path="/html" element={<HTMLPage />} />
-      <Route path="/start" element={<StartPage />} />
-      <Route path="/what" element={<WhatPage />} />
-      <Route path="/use" element={<UsePage />} />
-      <Route path="/cli" element={<CLIAbout />} />
-      <Route path="/mycelium" element={<MyceliumPage />} />
-      <Route path="/lands" element={<LandPage />} />
-      <Route path="/treeos" element={<TreeOSPage />} />
-      <Route path="/study" element={<StudyPage />} />
-      <Route path="/fitness" element={<FitnessPage />} />
-      <Route path="/food" element={<FoodPage />} />
-      <Route path="/recovery" element={<RecoveryPage />} />
-      <Route path="/kb" element={<KbPage />} />
-      <Route path="/governing" element={<GoverningPage />} />
-      <Route path="/governing/rulership" element={<RulershipPage />} />
-      <Route path="/governing/rulership/ruler" element={<RulerPage />} />
-      <Route path="/governing/rulership/planner" element={<PlannerPage />} />
-      <Route path="/governing/rulership/contractor" element={<ContractorPage />} />
-      <Route path="/governing/rulership/foreman" element={<ForemanPage />} />
-      <Route path="/governing/rulership/worker" element={<WorkerPage />} />
-      <Route path="/ibp" element={<ProtocolPage />} />
-      <Route path="/ibp/arrival" element={<ArrivalPage />} />
-      <Route path="/ibp/authorization" element={<AuthorizationPage />} />
-      <Route path="/horizon" element={<HorizonRedirect />} />
-
-      {/* Original app welcome (treeos.ai example) */}
-      <Route path="/app" element={<WelcomePage />} />
-      <Route path="/privacy" element={<AboutLayout />} >
-        <Route index element={<PrivacySection />} />
-</Route>
-    <Route path="/terms" element={<AboutLayout />} >
-        <Route index element={<TermsSection />} />
-</Route>
-
-
-      {/* Help layout */}
-      <Route path="/about" element={<AboutLayout />}>
-        <Route index element={<AboutHome />} />
-        <Route path="api" element={<ApiAccessSection />} />
-        <Route path="energy" element={<EnergySection />} />
-        <Route path="raw-ideas" element={<AboutRawIdeas />} />
-        <Route path="dreams" element={<DreamsAbout />} />
-        <Route path="gettingstarted" element={<StartedAbout />} />
-        <Route path="cli" element={<CLIAbout />} />
-        <Route path="gateway" element={<GatewayAbout />} />
-        <Route path="land" element={<LandAbout />} />
-        <Route path="node-types" element={<NodeTypesAbout />} />
-        <Route path="extensions" element={<ExtensionsAbout />} />
-
+      {/* New site */}
+      <Route path="/" element={<NewLandingPage />} />
+      <Route path="/ibp" element={<IbpPage />} />
+      <Route path="/start" element={<GetStartedPage />} />
+      <Route path="/factory" element={<FactoryLayout />}>
+        <Route index element={<FactoryOverview />} />
+        <Route path="intake"   element={<FactoryIntake />} />
+        <Route path="assign"   element={<FactoryAssign />} />
+        <Route path="fold"     element={<FactoryFold />} />
+        <Route path="momentum" element={<FactoryMomentum />} />
+        <Route path="stamped"  element={<FactoryStamped />} />
       </Route>
 
-      {/* Guide (narrative, start to finish) */}
-      <Route path="/guide" element={<Guide />} />
-
+      {/* Blog at root level (stayed at /blog/* across the rebuild) */}
       <Route path="/blog" element={<BlogSection />} />
       <Route path="/blog/:slug" element={<BlogSection />} />
 
-      {/* Keep /landing as alias during transition */}
-      <Route path="/landing" element={<LandingPage />} />
+      {/* Legacy site, every old route */}
+      <Route path="/old/*" element={<OldRoutes />} />
+
+      {/* 404 */}
       <Route path="*" element={<NotFound />} />
     </Routes>
   );
 };
-
 
 export default WelcomeRoutes;

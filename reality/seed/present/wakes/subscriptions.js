@@ -1,22 +1,34 @@
 // TreeOS Seed . AGPL-3.0 . https://treeos.ai . Tabor Holly
 //
-// Where substrate change becomes a request for a moment. One of
-// two paths that ask a being to have a moment when nothing
-// directly summoned it; the other is a direct SUMMON from another
-// being. When a DO lands at a position — matter write, status
-// change, qualities write — my post-DO hooks emit SUMMONs to
-// every subscriber whose interest covers the affected position
-// and event shape. The SUMMON content carries a small envelope
-// describing what changed; the receiving role's summon() decides
-// whether the moment should actually act on it.
+// Attention, not dispatch.
 //
-// Why this layer. Without it, anonymous code (DOs emitted without
-// a being's perspective) is isolated from beings that care about
-// the substrate it touches. With it, code-driven changes feed the
-// same SUMMON-in-inbox mechanism as being-driven changes — the
-// reel of moments stays whole. Mode 1 (a being requesting a
-// moment) and Mode 2 (substrate change requesting a moment) reach
-// subscribers identically.
+// A subscription is a being's standing assignment of attention:
+// "wake me when this happens at that position." When the watched
+// event arrives, the being's prior request is what fires — the wake
+// is a SELF-WAKE, not an external command. The SUMMON's asker and
+// receiver are the same being. I_AM is the routing machinery, not
+// the holder of the declaration; the being holds it (registry
+// keyed by _byBeing).
+//
+// Under this framing there is no "Mode 1 vs Mode 2." Every wake is
+// a being requesting a moment of itself. Direct SUMMONs are
+// requests fired now; subscription wakes are requests fired when
+// the watched event arrives; scheduled wakes are requests fired on
+// a cadence. Same shape, different latencies.
+//
+// What this layer adds. Without it, substrate change is decoupled
+// from beings that care about it; with it, beings can direct their
+// attention at the substrate and have their own follow-up moments
+// arrive naturally when the substrate moves. The being's act-chain
+// reads cleanly as "moments this being attended to" — every wake
+// row's beingIn IS the being.
+//
+// Subscription content carries a small envelope describing what
+// changed; the receiving role's summon() decides whether the
+// moment should actually act on it. The original DO actor (whoever
+// fired the triggering write) lives in the SUMMON content as
+// `actorBeingId`, not in `from` — the asker on the wire is always
+// the subscriber.
 //
 // Subscription shape:
 //
@@ -51,8 +63,6 @@ import { getAncestorChain } from "../../materials/space/ancestorCache.js";
 import { summonByResolved } from "../../ibp/verbs/summon.js";
 import { getRealityDomain } from "../../ibp/address.js";
 import { getSpaceRootId } from "../../sprout.js";
-import { I_AM } from "../../materials/being/seedBeings.js";
-import { iAmIdentity } from "../../materials/being/identity.js";
 
 // beingId -> Map<subscriptionId, subscription>
 const _byBeing = new Map();
@@ -286,17 +296,16 @@ export async function getMatchingSubscribers(eventName, payload) {
 }
 
 /**
- * Emit a DO-trigger SUMMON to every subscriber whose interest covers
- * this event. Called by substrate hook listeners; safe to call when
- * no subscribers match (cheap no-op). Each emission is appendToInbox
- * + wake — the receiving being's scheduler picks the SUMMON up in
- * its normal priority order.
+ * Emit a SUMMON to every subscriber whose attention covers this
+ * event. Called by substrate hook listeners; safe to call when no
+ * subscribers match (cheap no-op).
  *
- * Sender is the doing being when payload.beingId is present, else
- * the I_AM's stance `<reality>/@I_AM`. The receiver's role
- * template can inspect the sender to distinguish I_AM-emitted
- * events (substrate-internal triggers like .source sync) from
- * other-being-emitted ones (explicit acts by named beings).
+ * Each emission is a self-wake: the SUMMON's asker is the
+ * subscribing being itself, at the position where the triggering
+ * event happened. The original DO actor (whoever fired the
+ * triggering write) is carried in the SUMMON content as
+ * `actorBeingId` so the receiving role can distinguish "I caused
+ * this" from "someone else's write reached my attention."
  *
  * @param {string} eventName
  * @param {object} payload
@@ -306,19 +315,27 @@ export async function emitToSubscribers(eventName, payload, options = {}) {
   const matches = await getMatchingSubscribers(eventName, payload);
   if (matches.length === 0) return 0;
 
-  // Every DO-trigger SUMMON is emitted by the I_AM acting on a
-  // subscriber's standing declaration. The original DO actor lives
-  // in the SUMMON's content payload (`actorBeingId`), not in
-  // `from`. Position carries where the triggering DO happened.
-  const identity = await iAmIdentity();
-  if (!identity) {
+  // Doctrine — attention, not dispatch.
+  //
+  // A subscription is the being's standing assignment of attention:
+  // "wake me when this happens." When the watched event arrives, the
+  // being's prior request is what fires. The wake is therefore a
+  // SELF-WAKE — the asker and the receiver are the same being. I_AM
+  // is the routing machinery, not the holder of the declaration.
+  //
+  // The original DO actor (whoever wrote the matter / fired the
+  // quality) lives in the SUMMON content as `actorBeingId`; the
+  // subscriber's act-chain (beingIn = subscriber) reads cleanly as
+  // "moments this being attended to." Position carries where the
+  // triggering DO happened.
+  const realityDomain = getRealityDomain();
+  if (!realityDomain) {
     log.debug(
       "Subscriptions",
-      `skipping ${eventName}: I_AM identity not yet available`,
+      `skipping ${eventName}: reality domain not yet available`,
     );
     return 0;
   }
-  const senderStance = _senderStanceForPayload(payload);
   const rootCorrelation = payload?.rootCorrelation || payload?.actId || null;
 
   let emitted = 0;
@@ -332,6 +349,21 @@ export async function emitToSubscribers(eventName, payload, options = {}) {
         );
         continue;
       }
+      // Self-wake: load the subscribing being's identity, build the
+      // self-targeted sender stance. If the being is gone (deleted
+      // mid-flight), drop the wake silently — its standing
+      // declaration died with it.
+      const subIdentity = await _loadSubscriberIdentity(sub.beingId);
+      if (!subIdentity) {
+        log.debug(
+          "Subscriptions",
+          `skipping ${eventName} → being ${sub.beingId.slice(0, 8)}: subscriber being not found`,
+        );
+        continue;
+      }
+      const subSpaceForStance = payload?.spaceId ? String(payload.spaceId) : targetSpace;
+      const senderStance = `${realityDomain}/${subSpaceForStance}@${subIdentity.name}`;
+
       const eventContent = _renderTriggerContent(eventName, payload);
       if (sub.coalesceMs > 0) {
         // Coalescing path: append this event to the subscription's
@@ -343,6 +375,7 @@ export async function emitToSubscribers(eventName, payload, options = {}) {
           senderStance,
           targetSpace,
           rootCorrelation,
+          identity: subIdentity,
         });
         emitted++;
       } else {
@@ -353,7 +386,7 @@ export async function emitToSubscribers(eventName, payload, options = {}) {
           senderStance,
           content: eventContent,
           rootCorrelation,
-          identity,
+          identity: subIdentity,
         });
         emitted++;
       }
@@ -411,6 +444,7 @@ function _enqueueCoalesce(sub, ctx) {
     targetSpace: ctx.targetSpace,
     rootCorrelation: ctx.rootCorrelation,
     eventName: ctx.eventName,
+    identity: ctx.identity || null,
     timer: null,
   };
   pending.timer = setTimeout(() => {
@@ -442,7 +476,13 @@ async function _flushCoalesce(sub) {
     lastAt: new Date().toISOString(),
   };
   try {
-    const identity = await iAmIdentity();
+    // Self-wake: the subscriber's identity was captured when the
+    // coalesce window opened. Re-load on a stale-being check so a
+    // mid-window delete drops the wake instead of summoning a
+    // phantom.
+    const identity = pending.identity
+      ? (await _loadSubscriberIdentity(sub.beingId))
+      : null;
     if (!identity) return;
     await _emitOne({
       inboxSpaceId: pending.targetSpace,
@@ -464,6 +504,24 @@ async function _flushCoalesce(sub) {
 // ────────────────────────────────────────────────────────────────
 // Internals
 // ────────────────────────────────────────────────────────────────
+
+/**
+ * Load { beingId, name } for the subscribing being. Self-wakes need
+ * this to mint the SUMMON as the being itself rather than as the
+ * I_AM dispatcher. Returns null when the being is gone (deleted
+ * mid-flight or between subscribe and fire); callers drop the wake
+ * silently in that case.
+ */
+async function _loadSubscriberIdentity(beingId) {
+  try {
+    const Being = (await import("../../materials/being/being.js")).default;
+    const row = await Being.findById(String(beingId)).select("_id name").lean();
+    if (!row?.name) return null;
+    return { beingId: String(row._id), name: row.name };
+  } catch {
+    return null;
+  }
+}
 
 function _matchesFilter(filter, payload) {
   if (!filter || typeof filter !== "object") return true;
@@ -489,20 +547,6 @@ function _readPath(obj, path) {
     cur = cur[seg];
   }
   return cur;
-}
-
-function _senderStanceForPayload(payload) {
-  // Every seed-emitted SUMMON has the I_AM as its asker. The
-  // subscriber registered an interest; the I_AM holds that
-  // declaration and emits the SUMMON when a matching DO fires.
-  // The position carries where the DO happened, so the receiver
-  // can see "the I_AM, standing at this space, is summoning you."
-  // The original DO actor lives in the SUMMON's content payload as
-  // `actorBeingId`; receivers that need to know who acted read it
-  // from there.
-  const domain = getRealityDomain() || "place";
-  const position = payload?.spaceId ? `/${payload.spaceId}` : "";
-  return `${domain}${position}@${I_AM}`;
 }
 
 function _inboxNodeIdForSubscriber(sub, payload) {

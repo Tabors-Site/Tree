@@ -105,7 +105,7 @@ function register(hookName, handler, extName = "unknown") {
       "beforeLLMCall", "afterLLMCall", "beforeToolCall", "afterToolCall",
       "beforeResponse", "beforeRegister", "afterRegister",
       "afterSessionCreate", "afterSessionEnd",
-      "afterSpaceMove", "afterQualityWrite", "afterScopeChange", "afterOwnershipChange", "afterBoot",
+      "afterSpaceMove", "afterQualityWrite", "afterFieldWrite", "afterPositionUpdate", "afterScopeChange", "afterOwnershipChange", "afterBoot",
       "onTreeTripped", "onTreeRevived", "onCompress",
     ];
     if (!hookName.includes(":")) {

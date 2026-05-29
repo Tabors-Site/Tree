@@ -125,28 +125,59 @@ function readNsFrom(qualities, name) {
 function beingsAtSpace(space, { writeAllowed, authorizedHere }) {
   const beings = [];
   const beingHomes = readNsFrom(space?.qualities, "beings");
-  if (!beingHomes) return beings;
   // Stance-permission profiles share the qualities.beings namespace;
   // skip them so only entries naming a being surface here.
   const STANCE_NAMES = new Set(["arrival", "owner", "member"]);
-  const names = beingHomes instanceof Map
-    ? Array.from(beingHomes.keys())
-    : Object.keys(beingHomes);
-  for (const name of names) {
-    if (STANCE_NAMES.has(name)) continue;
-    const home = beingHomes instanceof Map ? beingHomes.get(name) : beingHomes[name];
-    const invocableBy = home?.invocableBy || "owner";
-    beings.push({
-      being: name,
-      invocableBy,
-      available: invocableBy === "anyone" ? authorizedHere : writeAllowed,
-      // Internal-only, stripped before the wire — enrichBeings uses
-      // it to attach the being's currently-active Act.
-      _beingId: home?.beingId || null,
-    });
+  if (beingHomes) {
+    const names = beingHomes instanceof Map
+      ? Array.from(beingHomes.keys())
+      : Object.keys(beingHomes);
+    for (const name of names) {
+      if (STANCE_NAMES.has(name)) continue;
+      const home = beingHomes instanceof Map ? beingHomes.get(name) : beingHomes[name];
+      const invocableBy = home?.invocableBy || "owner";
+      beings.push({
+        being: name,
+        invocableBy,
+        available: invocableBy === "anyone" ? authorizedHere : writeAllowed,
+        // Internal-only, stripped before the wire — enrichBeings uses
+        // it to attach the being's currently-active Act.
+        _beingId: home?.beingId || null,
+      });
+    }
   }
 
   return beings;
+}
+
+// Beings whose Being.position points at this space — transient
+// occupants. Two humans walking in a shared room get surfaced this
+// way without writing into qualities.beings on every step. Merged
+// with the qualities.beings-registered list; entries already present
+// by beingId are skipped so a being doesn't appear twice.
+async function occupantsByPosition(spaceId, existing) {
+  if (!spaceId) return [];
+  const Being = (await import("../materials/being/being.js")).default;
+  const seen = new Set();
+  for (const e of existing) {
+    if (e._beingId) seen.add(String(e._beingId));
+  }
+  const rows = await Being
+    .find({ position: spaceId })
+    .select("_id name")
+    .lean();
+  const out = [];
+  for (const row of rows) {
+    const id = String(row._id);
+    if (seen.has(id)) continue;
+    out.push({
+      being: row.name || id,
+      invocableBy: "owner",
+      available: false,
+      _beingId: id,
+    });
+  }
+  return out;
 }
 
 // ── Activity derivation ──
@@ -386,9 +417,11 @@ async function placeAtSpace(resolved, { identity, payload } = {}) {
     } catch { /* defensive */ }
   }
 
+  const registered = beingsAtSpace(space, { writeAllowed, authorizedHere });
+  const transient = await occupantsByPosition(space._id, registered);
   const beings = await enrichBeings(
     space._id,
-    beingsAtSpace(space, { writeAllowed, authorizedHere }),
+    [...registered, ...transient],
   );
 
   return {
@@ -411,6 +444,7 @@ async function placeAtSpace(resolved, { identity, payload } = {}) {
     matters,
     lineage,
     siblings,
+    size: space.size || null,
     qualities: serializeQualities(space.qualities),
     identity: identityBlock(identity, { authorizedHere, writeAllowed }),
     _meta: meta(writeAllowed ? [] : ["read-only"]),
@@ -496,6 +530,7 @@ async function mattersAt(spaceId) {
       matterId: m.matterId,
       name: f.name ?? m.name,
       origin: f.origin ?? m.origin,
+      coord: f.coord ?? m.coord ?? null,
       preview: isText ? content.slice(0, 400) : null,
       previewBytes: isText ? Buffer.byteLength(content, "utf8") : 0,
       totalBytes: isText ? Buffer.byteLength(content, "utf8") : 0,
@@ -536,6 +571,11 @@ async function enrichBeings(spaceId, entries) {
       .filter(Boolean)
       .map((b) => [String(b._id), serializeQualities(b.qualities)]),
   );
+  const coordByBeing = new Map(
+    foldedBeings
+      .filter(Boolean)
+      .map((b) => [String(b._id), b.coord || null]),
+  );
 
   const activities = await Promise.all(entries.map(async (e) => {
     if (!e._beingId) return null;
@@ -565,6 +605,7 @@ async function enrichBeings(spaceId, entries) {
       talkingTo:   inb.activeFrom,
       queueDepth:  inb.queueDepth,
       pendingFrom: inb.pendingFrom,
+      coord:       (inboxKey && coordByBeing.get(inboxKey)) || null,
       qualities:   (inboxKey && qualitiesByBeing.get(inboxKey)) || {},
     };
   });

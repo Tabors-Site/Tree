@@ -168,8 +168,7 @@ export async function genesis(app, opts = {}) {
   // skips the seal — nothing to commit.
   const { ensureSeedDelegates } =
     await import("./seed/materials/being/seedDelegates.js");
-  const { getSpaceRootId } = await import("./seed/sprout.js");
-  const { I_AM } = await import("./seed/materials/being/seedBeings.js");
+  const { getSpaceRootId, getIAmBeingId } = await import("./seed/sprout.js");
 
   await withBootMoment(async (bootCtx) => {
     await ensureSpaceRoot(bootCtx);
@@ -177,9 +176,14 @@ export async function genesis(app, opts = {}) {
       log.info("Genesis", "I plant the space root.");
       log.info("Genesis", "I plant my nine seed spaces.");
     }
-    // Pass the planted I-Am beingId so seedDelegates can skip the
-    // live Mongo lookup (the row is pending inside the same moment).
-    await ensureSeedDelegates(getSpaceRootId(), bootCtx, { iAmBeingId: I_AM });
+    // Pass the planted I-Am beingId (resolved via sprout's cache)
+    // so seedDelegates can skip the live Mongo lookup — the row is
+    // pending inside this same moment. getIAmBeingId() returns the
+    // I_AM constant on fresh installs and a uuid on awakening from
+    // a pre-2026-05-29 DB.
+    await ensureSeedDelegates(getSpaceRootId(), bootCtx, {
+      iAmBeingId: getIAmBeingId(),
+    });
   });
 
   // ── POST-GENESIS RECONCILIATIONS ──

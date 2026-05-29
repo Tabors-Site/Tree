@@ -110,6 +110,22 @@ export function emitPositionInvalidate(spaceId, reason) {
   _pushSee(spaceId, SEE_PUSH.INVALIDATE, { reason });
 }
 
+/**
+ * Push a skinny per-being position delta to every subscriber of a
+ * space. Fired by the PositionProjection fold handler after the row
+ * commits, so the payload reflects the projection's truth (not the
+ * fact's raw params). Clients order by lastMoveSeq and discard
+ * stale deliveries.
+ *
+ * The full-descriptor invalidate still fires on the same write via
+ * afterFieldWrite — that's the fat fallback for clients that miss
+ * the delta. The delta is the optimization, not the only path.
+ */
+export function emitPositionDelta(spaceId, delta) {
+  if (!spaceId || !delta) return;
+  _pushSee(spaceId, SEE_PUSH.POSITION, delta);
+}
+
 function _pushSee(spaceId, kind, data) {
   if (!spaceId) return;
   const bucket = _subscribers.get(String(spaceId));

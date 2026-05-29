@@ -38,9 +38,11 @@ import { hasCredentialAuthority } from "./identity/lineage.js";
 import { doVerb } from "../../ibp/verbs/do.js";
 
 function targetBeingIdOf(target) {
-  if (!target || !target._id)
-    throw new IbpError(IBP_ERR.INVALID_INPUT, "credential op requires a being target");
-  return String(target._id);
+  if (target && typeof target === "object" && target.kind === "being" && target.id) {
+    return String(target.id);
+  }
+  if (typeof target === "string") return target;
+  throw new IbpError(IBP_ERR.INVALID_INPUT, "credential op requires a being target");
 }
 
 function askerBeingIdOf(identity, scaffold) {
@@ -83,7 +85,9 @@ registerOperation("credential-read", {
         );
       }
     }
-    const blob = readCredentialPlainFromBeing(target);
+    const { loadTargetRow } = await import("../_targetShape.js");
+    const beingRow = await loadTargetRow(target, "being");
+    const blob = readCredentialPlainFromBeing(beingRow);
     const plaintext = blob ? decryptCredential(blob) : null;
     const reelBeingId = askerBeingId || targetBeingId;
     return {

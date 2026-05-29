@@ -29,6 +29,7 @@ import { IBP_ERR, IbpError } from "../../../ibp/protocol.js";
 import log from "../../../seedReality/log.js";
 import { emitFact } from "../../../past/fact/facts.js";
 import { mintCredentialSpec } from "./credentials.js";
+import { I_AM } from "../seedBeings.js";
 
 // ─────────────────────────────────────────────────────────────────────
 // VALIDATION
@@ -98,6 +99,65 @@ export async function createBeing(name, password, opts = {}) {
   name = validateName(name);
   validatePassword(password);
 
+  // ── Being-tree invariant: only the I-Am has null parentBeingId, ──
+  // ── and every named parent must resolve to a real being. ───────
+  //
+  // The being-tree is rooted at the I-Am. Every other being is
+  // birthed from an existing being's act, so parentBeingId is the
+  // line of causation back to the root. Two failure modes the model
+  // refuses to materialize:
+  //
+  //   (1) parentBeingId is null on a non-I-Am being — a structural
+  //       orphan. No chain to walk for ancestor checks (credential
+  //       authority, role inheritance, permission resolution); no
+  //       truthful "who summoned me forth" record.
+  //
+  //   (2) parentBeingId is set but points at a being that doesn't
+  //       exist — a dangling reference. The chain walks break the
+  //       first time anything tries to resolve the parent.
+  //
+  // Genesis is the one legitimate (1) — the chain doesn't yet exist
+  // to chain TO. ensureIAm in sprout.js mints the I-Am with
+  // parentBeingId: null, and isIAm short-circuits this check there.
+  //
+  // (2) has an atomic-batch caveat: when birth runs inside a moment
+  // whose ΔF carries the parent's be:register earlier in the same
+  // batch, the parent row hasn't sealed yet but the reference is
+  // legitimate (it commits in the same transaction). Same shape as
+  // the homeSpace pending-check below. Check the moment's deltaF
+  // before failing.
+  const isIAm = name === I_AM;
+  const parentBeingId = opts.parentBeingId || null;
+  if (!isIAm) {
+    if (!parentBeingId) {
+      throw new Error(
+        `createBeing("${name}"): non-I-Am beings require parentBeingId. ` +
+        `The being-tree is rooted at the I-Am; every other being chains ` +
+        `back through its parent. Standard sources: identity.beingId ` +
+        `(SUMMON-create), the cherub/I-Am for register flows, or an ` +
+        `explicit parent set by the caller. Pass opts.parentBeingId.`,
+      );
+    }
+    const parentRow = await Being.findById(parentBeingId).select("_id").lean();
+    if (!parentRow) {
+      const pendingInBatch = opts.summonCtx?.deltaF?.find(
+        (f) =>
+          f?.verb === "be" &&
+          f?.action === "register" &&
+          f?.target?.kind === "being" &&
+          String(f?.target?.id) === String(parentBeingId),
+      );
+      if (!pendingInBatch) {
+        throw new Error(
+          `createBeing("${name}"): parentBeingId "${parentBeingId}" does ` +
+          `not resolve to an existing being and is not pending earlier in ` +
+          `the current moment's ΔF. The being-tree would have a dangling ` +
+          `reference. Pass a parentBeingId that points at a real being.`,
+        );
+      }
+    }
+  }
+
   // Case-insensitive uniqueness check. Regex because Mongo collation
   // support varies across deployments. The unique index on `name` is
   // the safety net; this check produces a friendly error first.
@@ -137,7 +197,13 @@ export async function createBeing(name, password, opts = {}) {
     defaultRole,
     parentBeingId: opts.parentBeingId || null,
     homeSpace: opts.homeSpace || null,
-    currentSpace: opts.currentSpace || opts.homeSpace || null,
+    // Starting position. Caller may specify opts.position (or the
+    // legacy opts.currentSpace alias during migration). Default is
+    // homeSpace — a being starts at home unless placed elsewhere.
+    // applyCreateBeing in reducerHelpers seeds Being.position from
+    // this. Navigation later writes Being.position via the position-
+    // fact pipeline.
+    position: opts.position || opts.currentSpace || opts.homeSpace || null,
     llmDefault: opts.llmDefault || null,
     isRemote: opts.isRemote || false,
     homeReality: opts.homeReality || null,
@@ -270,7 +336,6 @@ export async function generateUniqueName(role, opts = {}) {
 export async function createBeingWithHome(opts) {
   const {
     operatingMode,
-    role = null,
     // Plural shape — used when the caller knows the being needs more
     // than one role from birth (e.g. a human registered with
     // ["human"]). When BOTH `role` (singular) and `roles` (plural)
@@ -300,6 +365,14 @@ export async function createBeingWithHome(opts) {
     scaffold = false,
   } = opts || {};
   let { name, password } = opts || {};
+  // `role` is declared as `let` outside the destructure so the
+  // validation below can fill it in from `roles[0]` when only the
+  // plural shape was passed. After this block, the rest of the
+  // function uses `role` uniformly.
+  let role = opts?.role || null;
+  if (!role && Array.isArray(roles) && roles.length > 0) {
+    role = roles[0];
+  }
 
   // ── Validate mode + required fields ──
   if (
@@ -312,12 +385,35 @@ export async function createBeingWithHome(opts) {
       "createBeingWithHome requires operatingMode='human' | 'llm' | 'scripted' | 'mixed'",
     );
   }
+  // Non-human beings must declare at least one role at birth; humans
+  // may have none. `role` was filled in from `roles[0]` above when
+  // only the plural shape was passed.
   if (operatingMode !== "human" && !role) {
-    throw new Error("createBeingWithHome: non-human beings require a role");
+    throw new Error(
+      "createBeingWithHome: non-human beings require a role. Pass `role` " +
+      "(singular) or `roles` (array with at least one entry).",
+    );
+  }
+  // Home resolution — three sources in priority order:
+  //   1. explicit homeSpace (use this existing space)
+  //   2. explicit homeParent (create a fresh child space under it)
+  //   3. parentBeingId's homeSpace (default: live where your parent
+  //      lives — what your instinct expects unless you override)
+  //
+  // (3) is the natural-meaning fallback. A being birthed without
+  // explicit home settles into its parent's home; home can be
+  // updated later via do:set-being { field: "homeSpace" }. The
+  // I-Am is the one exception (no parent), and ensureIAm sets
+  // homeSpace explicitly at genesis.
+  if (!homeSpace && !homeParent && parentBeingId) {
+    const parentRow = await Being.findById(parentBeingId).select("homeSpace").lean();
+    if (parentRow?.homeSpace) {
+      homeSpace = String(parentRow.homeSpace);
+    }
   }
   if (!homeSpace && !homeParent) {
     throw new Error(
-      "createBeingWithHome requires either homeSpace or homeParent",
+      "createBeingWithHome requires homeSpace, homeParent, or a parentBeingId whose homeSpace can be inherited",
     );
   }
 
@@ -489,15 +585,12 @@ export async function createBeingWithHome(opts) {
   // to already be the owner).
   if (createdNewHome && operatingMode === "human") {
     const { doVerb } = await import("../../../ibp/verbs/do.js");
-    // Inside a moment, home._id is the planned id (row not yet
-    // materialized); pass the pending shape directly to doVerb so it
-    // can stamp the fact on the same space's reel. Outside a moment,
-    // read back the materialized doc.
-    const homeRef = home._pending
-      ? home
-      : (await Space.findById(home._id)) || home;
+    // Both materialized and pending-in-batch homes resolve to the
+    // same typed identity. setOnSpace's rootOwner branch uses only
+    // targetIdOf — no row load — so the write works whether the
+    // row exists yet or not.
     await doVerb(
-      homeRef,
+      { kind: "space", id: String(home._id) },
       "set-space",
       { field: "rootOwner", value: String(being._id) },
       { scaffold: true, summonCtx },
@@ -531,14 +624,22 @@ export async function createBeingWithHome(opts) {
       const registerOpts = identity
         ? { identity, summonCtx, scaffold }
         : { scaffold: true, summonCtx };
+      // Key the entry by the being's NAME, not its role. Multiple
+      // beings can share a role (5 dancers all on `harmony:dancer.
+      // toward` at one space). Role-keyed entries clobber each other
+      // and the descriptor surfaces only the last writer. Name-keyed
+      // entries give every being its own slot, and the role rides
+      // along in the value for stance-role-shorthand lookups (see
+      // summon.js qualifier resolution).
       await doVerb(
-        home,
+        { kind: "space", id: String(home._id) },
         "set-space",
         {
           field: "qualities.beings",
           value: {
-            [role]: {
+            [being.name]: {
               beingId: String(being._id),
+              role,
               installedAt: new Date().toISOString(),
               installedBy: "createBeingWithHome",
             },
@@ -550,7 +651,7 @@ export async function createBeingWithHome(opts) {
     } catch (err) {
       log.warn(
         "auth",
-        `createBeingWithHome: failed to register ${role} home: ${err.message}`,
+        `createBeingWithHome: failed to register ${being.name} home: ${err.message}`,
       );
     }
   }

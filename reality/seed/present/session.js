@@ -502,7 +502,7 @@ setInterval(
 // What `clientSessionId` IS NOT:
 //   - Conversation identity. The canonical identifier for a conversation
 //     between two beings is `Act.ibpAddress` (the stance pair).
-//   - Position state. Lives on `Being.currentSpace`. Two tabs for the
+//   - Position state. Lives on `Being.position`. Two tabs for the
 //     same being share position automatically.
 //   - Tool-call → actId correlation. The SUMMON loop injects
 //     `actId` / `rootCorrelation` / `ibpAddress` into MCP tool args

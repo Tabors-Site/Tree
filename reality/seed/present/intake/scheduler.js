@@ -60,7 +60,15 @@ function CFG_INBOX_DEPTH() {
 }
 function CFG_SUMMONS_PER_SECOND() {
   const v = Number(getInternalConfigValue("summonsPerSecond"));
-  return Number.isFinite(v) && v > 0 ? v : 10;
+  // Default raised from 10 to 60 once movement landed as a first-class
+  // fact stream. A walking human emits one set-being:coord transport-
+  // act per cell crossing; the trail is real and goes through the
+  // stamper just like LLM cognition does. The old 10/sec cap was
+  // tuned for an LLM-era world where one summon = one expensive
+  // turn; with cheap transport-acts in the mix it floors the human
+  // experience at "deferred" the moment they start walking.
+  // Operators can tune via .config (summonsPerSecond).
+  return Number.isFinite(v) && v > 0 ? v : 60;
 }
 function CFG_MAX_AGE_SECONDS() {
   const v = Number(getInternalConfigValue("summonMaxAgeSeconds"));

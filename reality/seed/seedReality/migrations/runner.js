@@ -187,12 +187,12 @@ export async function runSeedMigrations(summonCtx) {
   const Space = (await import("../../materials/space/space.js")).default;
   const { SEED_SPACE } = await import("../../materials/space/seedSpaces.js");
   const { doVerb } = await import("../../ibp/verbs/do.js");
-  const configNode = await Space.findOne({ seedSpace: SEED_SPACE.CONFIG });
+  const configNode = await Space.findOne({ seedSpace: SEED_SPACE.CONFIG }).select("_id").lean();
   if (!configNode) {
     throw new Error("Cannot persist seedVersion: .config seed space not found");
   }
   await doVerb(
-    configNode,
+    { kind: "space", id: String(configNode._id) },
     "set-config",
     { key: "seedVersion", value: currentVersion },
     { scaffold: true, summonCtx },

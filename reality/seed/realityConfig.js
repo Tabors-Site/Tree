@@ -194,7 +194,7 @@ export async function setRealityConfigValue(key, value, { internal, identity, su
     ? { identity, summonCtx }
     : { scaffold: true, summonCtx };
   await doVerb(
-    configSpace,
+    { kind: "space", id: String(configSpace._id) },
     "set-space",
     { field: `qualities.config.${key}`, value },
     opts,
@@ -227,7 +227,7 @@ export async function deleteRealityConfigValue(key, { internal, identity, summon
     ? { identity, summonCtx }
     : { scaffold: true, summonCtx };
   await doVerb(
-    configSpace,
+    { kind: "space", id: String(configSpace._id) },
     "set-space",
     { field: `qualities.config.${key}`, value: null },
     opts,

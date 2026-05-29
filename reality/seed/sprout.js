@@ -82,6 +82,7 @@ import { emitFact } from "./past/fact/facts.js";
 import { sealAct } from "./present/beats/4-stamped.js";
 
 let spaceRootCache = null;
+let iAmBeingIdCache = null;
 
 // ─────────────────────────────────────────────────────────────────────
 // Boot moment — the I-Am's first moment
@@ -363,7 +364,7 @@ export async function ensureSpaceRoot(summonCtx) {
       );
       const { doVerb } = await import("./ibp/verbs/do.js");
       await doVerb(
-        space,
+        { kind: "space", id: String(space._id) },
         "set-space",
         { field: "parent", value: String(spaceRoot._id) },
         { scaffold: true, summonCtx },
@@ -384,7 +385,7 @@ export async function ensureSpaceRoot(summonCtx) {
     for (const root of orphanRoots) {
       try {
         await doVerb(
-          root,
+          { kind: "space", id: String(root._id) },
           "set-space",
           { field: "parent", value: String(spaceRoot._id) },
           { scaffold: true, summonCtx },
@@ -446,9 +447,24 @@ async function ensureIAm(spaceRootId, summonCtx) {
   }
   const Being = (await import("./materials/being/being.js")).default;
   const existing = await Being.findOne({ name: I_AM }).select("_id").lean();
-  if (existing) return existing;
+  if (existing) {
+    iAmBeingIdCache = String(existing._id);
+    return existing;
+  }
 
-  const id = uuidv4();
+  // The I-Am's _id IS the I_AM string constant. This is the
+  // doctrinal shape. when other code says `beingId: I_AM` (in
+  // facts, in parent references, in audit attribution), it names
+  // the actual being row whose _id is the I_AM constant. No
+  // indirection, no string-vs-uuid mismatch. The string serves as
+  // both name AND id because the I-Am is exactly one being per
+  // reality and the constant identifies it unambiguously. The
+  // value is lowercase kebab ("i-am") to keep the wire stance
+  // valid under the address grammar. Every other being mints a
+  // uuid as its _id. I-Am is the one exception, and it's the one
+  // exception in every other respect too (null parent, scripted
+  // mode, planted by self-stamping fact at genesis).
+  const id = I_AM;
   const { mintCredentialSpec } = await import(
     "./materials/being/identity/credentials.js"
   );
@@ -469,7 +485,7 @@ async function ensureIAm(spaceRootId, summonCtx) {
         defaultRole: null,
         parentBeingId: null,
         homeSpace: String(spaceRootId),
-        currentSpace: String(spaceRootId),
+        position: String(spaceRootId),
         llmDefault: null,
         isRemote: false,
         homeReality: null,
@@ -482,7 +498,8 @@ async function ensureIAm(spaceRootId, summonCtx) {
   // The Being row materializes when the boot moment seals. Return a
   // pending view so callers that need the id can use it; the row
   // exists post-seal.
-  log.verbose("Reality", `Planned I_AM Being (${id.slice(0, 8)}); materializes at seal`);
+  iAmBeingIdCache = id;
+  log.verbose("Reality", `Planned I_AM Being (id=${id}); materializes at seal`);
   return { _id: id, _pending: true };
 }
 
@@ -495,6 +512,19 @@ export async function getSpaceRoot() {
 // Sync accessor. Only valid after ensureSpaceRoot() has run.
 export function getSpaceRootId() {
   return spaceRootCache?._id || null;
+}
+
+/**
+ * The I-Am Being's actual _id. After 2026-05-29 this is the I_AM
+ * string constant ("i-am") on fresh installs. sprout's ensureIAm
+ * mints the I-Am with _id = I_AM, so the constant IS the id. Pre.
+ * existing realities whose I-Am row was minted with a UUID before
+ * the change retain that UUID; the cache reflects whichever shape
+ * the row has. Sync accessor — only valid after ensureIAm() has run
+ * (which ensureSpaceRoot calls internally inside withBootMoment).
+ */
+export function getIAmBeingId() {
+  return iAmBeingIdCache;
 }
 
 // A tree root is a child of the space root with a non-seed rootOwner
@@ -566,17 +596,17 @@ export async function syncExtensionsToTree(manifests, summonCtx) {
       // Refresh existing extension space. type + qualities-namespace
       // each emit do:set-space facts that join the wrapping I-Am moment.
       const extChildId = existingByName.get(manifest.name);
-      const extChild = await Space.findById(extChildId);
-      if (extChild) {
+      if (extChildId) {
+        const extChildTarget = { kind: "space", id: String(extChildId) };
         const { doVerb } = await import("./ibp/verbs/do.js");
         await doVerb(
-          extChild,
+          extChildTarget,
           "set-space",
           { field: "type", value: "resource" },
           { scaffold: true, summonCtx },
         );
         await doVerb(
-          extChild,
+          extChildTarget,
           "set-space",
           {
             field: "qualities.extension",
@@ -593,7 +623,7 @@ export async function syncExtensionsToTree(manifests, summonCtx) {
         // materializes the row at seal.
         const { doVerb } = await import("./ibp/verbs/do.js");
         await doVerb(
-          extSpace,
+          { kind: "space", id: String(extSpace._id) },
           "create-space",
           {
             spec: {
@@ -620,11 +650,9 @@ export async function syncExtensionsToTree(manifests, summonCtx) {
   // qualities.extension.loaded leaf.
   for (const [name, spaceId] of existingByName) {
     if (!currentNames.has(name)) {
-      const extChild = await Space.findById(spaceId);
-      if (!extChild) continue;
       const { doVerb } = await import("./ibp/verbs/do.js");
       await doVerb(
-        extChild,
+        { kind: "space", id: String(spaceId) },
         "set-space",
         { field: "qualities.extension.loaded", value: false },
         { scaffold: true, summonCtx },

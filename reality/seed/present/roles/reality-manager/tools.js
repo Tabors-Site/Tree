@@ -93,7 +93,7 @@ export const realityManagerTools = [
       if (!spaceRootId) {
         return { content: [{ type: "text", text: "Error: space root not initialized." }] };
       }
-      const target = { _id: spaceRootId, spaceId: spaceRootId, chain: [] };
+      const target = { kind: "space", id: String(spaceRootId) };
       try {
         const result = await doVerb(target, action, args || {}, {
           identity: beingId ? { beingId, name } : null,

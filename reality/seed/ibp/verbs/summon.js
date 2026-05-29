@@ -58,6 +58,19 @@ import { getRole } from "../../present/roles/registry.js";
 import { attachHandoff, wake } from "../../present/intake/scheduler.js";
 import { assertVerbCaller } from "./_shared.js";
 
+// Legacy numeric priority (used by inbox queue ordering and the
+// older wake APIs) mapped to the SUMMON envelope's enum. The Act
+// schema stores the enum; coercing here at the verb seam keeps the
+// Fact, InboxProjection, and Act all carrying the same canonical
+// string regardless of which caller built the envelope.
+const _PRIORITY_NUM_TO_ENUM = {
+  1: "HUMAN",
+  2: "GATEWAY",
+  3: "INTERACTIVE",
+  4: "BACKGROUND",
+  5: "BACKGROUND",
+};
+
 /**
  * SUMMON. Deliver a message to the being at `stance` and wake their
  * scheduler so their role runs.
@@ -144,8 +157,12 @@ export async function summonVerb(stance, message, opts = {}) {
   }
 
   // Resolve the qualifier to a Being: direct name first (the canonical
-  // shape, @ruler435 / @cherub), then role shorthand via
-  // qualities.beings.<role>.beingId on the target space.
+  // shape, @ruler435 / @cherub), then role shorthand by scanning the
+  // target space's qualities.beings for an entry whose value.role
+  // matches. Entries are keyed by being-name (multi-being-per-role
+  // support); the role-shorthand search walks values to find a match.
+  // When multiple beings share the role, the first hit wins; addressing
+  // a specific instance uses its name.
   const Being = (await import("../../materials/being/being.js")).default;
   let toBeing = await Being.findOne({ name: qualifier });
   if (!toBeing && resolved.spaceId) {
@@ -154,7 +171,14 @@ export async function summonVerb(stance, message, opts = {}) {
     const beings = targetSpace?.qualities instanceof Map
       ? targetSpace.qualities.get("beings")
       : targetSpace?.qualities?.beings;
-    const homeBeingId = beings?.[qualifier]?.beingId || null;
+    let homeBeingId = beings?.[qualifier]?.beingId || null;
+    if (!homeBeingId && beings && typeof beings === "object") {
+      const entries = beings instanceof Map
+        ? Array.from(beings.values())
+        : Object.values(beings);
+      const hit = entries.find((e) => e && e.role === qualifier);
+      homeBeingId = hit?.beingId || null;
+    }
     if (homeBeingId) toBeing = await Being.findById(homeBeingId);
   }
   if (!toBeing) {
@@ -176,6 +200,17 @@ export async function summonVerb(stance, message, opts = {}) {
       const spec = {
         ...content.spec,
         name:      content.spec.name      || qualifier,
+        // parentBeingId defaults to the asker: a SUMMON-create's
+        // parent is who summoned the being forth. The being-tree
+        // invariant is "only I-Am has null parentBeingId"; honoring
+        // identity.beingId here keeps the chain intact when the
+        // caller didn't explicitly set it.
+        parentBeingId: content.spec.parentBeingId || identity.beingId,
+        // homeSpace defaults to where the being was summoned at
+        // (resolved.spaceId). createBeingWithHome will fall back to
+        // the parent's home if neither homeSpace nor homeParent is
+        // set; this keeps the legacy "summoned at X → home is X"
+        // behavior intact for the wire path.
         homeSpace: content.spec.homeSpace || resolved.spaceId,
       };
       const result = await summonCreateBeing({ spec, identity, summonCtx: opts.summonCtx || null });
@@ -260,10 +295,18 @@ export async function summonCreateBeing({ spec, identity, summonCtx = null, scaf
       { spec },
     );
   }
-  if (spec.operatingMode !== "human" && !spec.role) {
+  // Identity is durable; roles compose. A non-human being must come
+  // into the world wearing at least one role. The spec may name it
+  // singular (`role: "x"`, the legacy shape AI callers still use) or
+  // plural (`roles: ["x", ...]`, the canonical shape per the role-
+  // pluralization slice). Mirror birth.js's resolution exactly so the
+  // gate accepts whatever the downstream `createBeingWithHome` will.
+  const firstRole = spec.role
+    || (Array.isArray(spec.roles) && spec.roles.length > 0 ? spec.roles[0] : null);
+  if (spec.operatingMode !== "human" && !firstRole) {
     throw new IbpError(
       IBP_ERR.INVALID_INPUT,
-      "summonCreateBeing: non-human spec requires role",
+      "summonCreateBeing: non-human spec requires role (singular `role` or non-empty `roles[]`)",
       { spec },
     );
   }
@@ -345,7 +388,10 @@ export async function summonCreateBeing({ spec, identity, summonCtx = null, scaf
     params:  {
       createdBeingId: String(being._id),
       name:           being.name,
-      role:           spec.role || null,
+      // Resolved first-role matches the validation gate above. A spec
+      // that passed validation has a real role here (or is human, in
+      // which case both fields are null and that's intentional).
+      role:           firstRole,
       operatingMode:  spec.operatingMode || null,
       homeSpace:      spec.homeSpace || null,
     },
@@ -586,6 +632,14 @@ function validateSummonMessage(message) {
   }
   if (message.content === undefined || message.content === null) {
     throw new IbpError(IBP_ERR.INVALID_INPUT, "`message.content` is required");
+  }
+  // Normalize priority. Legacy callers (wakeSchedule, subscriptions)
+  // pass the numeric form 1..5 used by inbox queue ordering. The Act
+  // schema and downstream consumers want the enum string. Coerce
+  // here so the Fact, InboxProjection, and Act all carry the same
+  // canonical value.
+  if (message.priority !== undefined && message.priority !== null) {
+    message.priority = _PRIORITY_NUM_TO_ENUM[message.priority] || message.priority;
   }
   // Orientation (INNER-FOLD spec). External summons must carry
   // forward — only self-summons may set half or inward, enforced

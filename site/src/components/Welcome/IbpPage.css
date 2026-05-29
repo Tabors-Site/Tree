@@ -1,0 +1,329 @@
+/* IbpPage . single long page. The .ns-doc-* and .ns-code styles are
+   also reused by the Factory chapter pages (FactoryOverview, Intake,
+   Assign, Fold, Momentum, Stamped) . they all share the prose look. */
+
+.ns-doc {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 48px 24px 60px;
+}
+
+.ns-doc-header {
+  padding-bottom: 32px;
+  border-bottom: 1px solid #1a1a1a;
+  margin-bottom: 32px;
+}
+
+.ns-doc-eyebrow {
+  color: #6fb1ff;
+  font-size: 0.85rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  margin: 0 0 10px;
+}
+
+.ns-doc-title {
+  font-size: clamp(2rem, 5vw, 2.8rem);
+  font-weight: 700;
+  margin: 0 0 14px;
+  letter-spacing: -0.02em;
+}
+
+.ns-doc-lede {
+  font-size: 1.1rem;
+  color: #b8b8b8;
+  line-height: 1.55;
+  margin: 0;
+}
+
+.ns-doc section {
+  margin-top: 36px;
+}
+
+.ns-doc h2 {
+  font-size: 1.5rem;
+  font-weight: 600;
+  margin: 0 0 16px;
+  color: #e5e5e5;
+}
+
+.ns-doc h3 {
+  font-size: 1.15rem;
+  font-weight: 600;
+  margin: 0 0 8px;
+  color: #e5e5e5;
+}
+
+.ns-doc p {
+  font-size: 1.02rem;
+  line-height: 1.7;
+  color: #c9c9c9;
+  margin: 0 0 16px;
+}
+
+.ns-list {
+  list-style: disc;
+  padding-left: 24px;
+  margin: 0 0 16px;
+  color: #c9c9c9;
+}
+
+.ns-list li {
+  line-height: 1.65;
+  margin-bottom: 8px;
+}
+
+.ns-list strong {
+  color: #e5e5e5;
+  font-weight: 600;
+}
+
+.ns-doc code {
+  background: #161616;
+  border: 1px solid #232323;
+  border-radius: 4px;
+  padding: 1px 6px;
+  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas,
+    "Liberation Mono", monospace;
+  font-size: 0.92em;
+  color: #e5e5e5;
+}
+
+.ns-code {
+  background: #0f0f0f;
+  border: 1px solid #232323;
+  border-radius: 8px;
+  padding: 18px 22px;
+  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas,
+    "Liberation Mono", monospace;
+  font-size: 0.9rem;
+  line-height: 1.55;
+  color: #d5d5d5;
+  overflow-x: auto;
+  margin: 0 0 16px;
+}
+
+.ns-small {
+  font-size: 0.95rem;
+  color: #999;
+}
+
+.ns-verb {
+  padding: 18px 0;
+  border-top: 1px solid #1a1a1a;
+}
+
+.ns-verb:first-of-type {
+  border-top: none;
+}
+
+.ns-verb-line {
+  color: #b8b8b8;
+  margin-top: 0;
+}
+
+.ns-doc-aside {
+  margin-top: 56px;
+  padding: 24px 26px;
+  background: #111;
+  border: 1px solid #1f1f1f;
+  border-radius: 8px;
+}
+
+.ns-doc-aside h2 {
+  font-size: 1.15rem;
+  margin-bottom: 8px;
+}
+
+.ns-doc-aside p {
+  margin-bottom: 8px;
+}
+
+.ns-doc-aside .ns-list {
+  margin-top: 6px;
+}
+
+.ns-figure {
+  margin: 24px 0 8px;
+  padding: 12px;
+  background: rgba(0, 0, 0, 0.25);
+  border: 1px solid #1f1f1f;
+  border-radius: 10px;
+}
+
+.ns-figure img {
+  display: block;
+  width: 100%;
+  height: auto;
+  border-radius: 6px;
+}
+
+.ns-figure figcaption {
+  margin-top: 12px;
+  padding: 0 4px;
+  color: #888;
+  font-size: 0.9rem;
+  font-style: italic;
+  line-height: 1.5;
+}
+
+/* Address anatomy. The bar + labels + parts diagram for the
+   stance :: stance :: stance shape of an IBP address. */
+
+.ns-addr {
+  margin: 28px 0 14px;
+  padding: 22px;
+  background: #0f0f0f;
+  border: 1px solid #1f1f1f;
+  border-radius: 10px;
+}
+
+.ns-addr-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: center;
+  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas,
+    "Liberation Mono", monospace;
+  font-size: clamp(0.95rem, 2.2vw, 1.25rem);
+  background: #161616;
+  border: 1px solid #232323;
+  border-radius: 8px;
+  padding: 14px 16px;
+  margin-bottom: 18px;
+  gap: 2px;
+}
+
+.ns-addr-left    { color: #6fb1ff; }
+.ns-addr-bridge  { color: #888; padding: 0 8px; }
+.ns-addr-reality { color: #f5b96f; }
+.ns-addr-path    { color: #b3e07a; }
+.ns-addr-being   { color: #c084fc; }
+
+.ns-addr-labels {
+  display: grid;
+  grid-template-columns: 1fr 0.6fr 1.4fr;
+  gap: 12px;
+  margin-bottom: 18px;
+}
+
+.ns-addr-label {
+  padding: 10px 12px;
+  background: #131313;
+  border: 1px solid #1f1f1f;
+  border-radius: 6px;
+  text-align: center;
+}
+
+.ns-addr-label-left   { border-top: 2px solid #6fb1ff; }
+.ns-addr-label-bridge { border-top: 2px solid #555; }
+.ns-addr-label-right  { border-top: 2px solid #c084fc; }
+
+.ns-addr-label-name {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #e5e5e5;
+  margin-bottom: 4px;
+}
+
+.ns-addr-label-desc {
+  font-size: 0.82rem;
+  color: #b0b0b0;
+  margin-bottom: 2px;
+}
+
+.ns-addr-label-note {
+  font-size: 0.75rem;
+  color: #777;
+}
+
+.ns-addr-parts {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 12px;
+}
+
+.ns-addr-part {
+  padding: 12px;
+  background: #131313;
+  border: 1px solid #1f1f1f;
+  border-radius: 6px;
+  text-align: center;
+}
+
+.ns-addr-part-head {
+  font-size: 0.78rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #6fb1ff;
+  margin-bottom: 6px;
+}
+
+.ns-addr-part-code {
+  display: inline-block;
+  margin: 0 0 6px;
+  background: transparent;
+  border: none;
+  padding: 0;
+  font-size: 0.95rem;
+  color: #e5e5e5;
+}
+
+.ns-addr-part-note {
+  font-size: 0.78rem;
+  color: #888;
+}
+
+.ns-addr-readout {
+  text-align: center;
+  margin-bottom: 28px;
+}
+
+/* The addressing grammar table. Five rows, monospace form on the
+   left, plain-language meaning on the right. */
+
+.ns-grammar {
+  margin: 14px 0 8px;
+  border: 1px solid #1f1f1f;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.ns-grammar-row {
+  display: grid;
+  grid-template-columns: minmax(220px, 1fr) 2fr;
+  gap: 14px;
+  padding: 12px 16px;
+  background: #0f0f0f;
+  border-top: 1px solid #1a1a1a;
+  align-items: baseline;
+}
+
+.ns-grammar-row:first-child { border-top: none; }
+
+.ns-grammar-form {
+  background: transparent;
+  border: none;
+  padding: 0;
+  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas,
+    "Liberation Mono", monospace;
+  font-size: 0.95rem;
+  color: #f5b96f;
+}
+
+.ns-grammar-meaning {
+  color: #c2c2c2;
+  font-size: 0.95rem;
+  line-height: 1.55;
+}
+
+@media (max-width: 640px) {
+  .ns-addr-labels,
+  .ns-addr-parts {
+    grid-template-columns: 1fr;
+  }
+  .ns-grammar-row {
+    grid-template-columns: 1fr;
+    gap: 6px;
+  }
+}

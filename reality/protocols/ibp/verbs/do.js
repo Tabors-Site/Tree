@@ -40,7 +40,7 @@ import log from "../../../seed/seedReality/log.js";
 import { parseFromSocket, expand, getRealityDomain } from "../../../seed/ibp/address.js";
 import { resolveStance } from "../../../seed/ibp/resolver.js";
 import { IbpError, IBP_ERR, isIbpError } from "../../../seed/ibp/protocol.js";
-import { ackOk, ackError, stripBeingQualifier } from "../envelope.js";
+import { ackOk, ackError, stripBeingQualifier, extractBeingQualifier } from "../envelope.js";
 import { getOperation, listOperations } from "../../../seed/ibp/operations.js";
 import { dispatchTransportAct } from "../../../seed/present/intake/transportAct.js";
 import { emitToBeingRoom } from "../../../seed/ibp/pushChannel.js";
@@ -72,7 +72,16 @@ export async function handleDo(socket, env, ack) {
       );
     }
 
-    // DO targets positions; strip any @being qualifier on stance addresses.
+    // DO targets positions OR a being homed at a position. When the
+    // op is being-targeting, the @qualifier names the target and the
+    // path resolves only the auth context. When the op is space- or
+    // matter-targeting, the @qualifier is informational and gets
+    // stripped before path resolution.
+    const op = getOperation(action);
+    const beingTargetedOnly = Array.isArray(op?.targets)
+      && op.targets.length > 0
+      && op.targets.every((t) => t === "being");
+    const qualifier = extractBeingQualifier(address);
     const positionString = stripBeingQualifier(address);
 
     const parsed = parseFromSocket(socket, positionString);
@@ -81,6 +90,45 @@ export async function handleDo(socket, env, ack) {
       currentUser: socket.name,
     });
     const resolved = await resolveStance(expanded.right);
+
+    // Hand the verb layer a typed identity, not a Mongoose row. The
+    // IBP boundary speaks { kind, id }; raw rows are storage, and
+    // storage doesn't cross this boundary. The seed verb dispatcher
+    // and op handlers normalize from typed input — fetching rows
+    // only when they need row contents (qualities, position, name
+    // uniqueness checks), and only inside the handler that needs them.
+    //
+    // For being-targeting ops with an @qualifier, the typed target
+    // names the being directly. The resolved space is the auth
+    // context (via resolveAuthSpaceId at the seed gate) — separate
+    // concern, separate carrier.
+    //
+    // For everything else, the resolved stance points at a space;
+    // pass the typed space identity. (Stance-aware ops that need
+    // the resolver's chain detect that via the result, not the
+    // target.)
+    let target;
+    if (beingTargetedOnly && qualifier) {
+      const Being = (await import("../../../seed/materials/being/being.js")).default;
+      const beingRow = await Being.findOne({ name: qualifier }).select("_id").lean();
+      if (!beingRow) {
+        throw new IbpError(
+          IBP_ERR.BEING_NOT_FOUND,
+          `No being named "${qualifier}" on this reality`,
+          { qualifier },
+        );
+      }
+      target = { kind: "being", id: String(beingRow._id) };
+    } else if (resolved?.spaceId) {
+      target = { kind: "space", id: String(resolved.spaceId) };
+    } else {
+      // Stance with no spaceId is rare (a bare-place address with no
+      // resolved leaf); pass the resolver object through so any
+      // stance-aware op can read the chain. The audit-target resolver
+      // recognizes this shape and derives kind="space" via spaceId
+      // when present.
+      target = resolved;
+    }
 
     // Resolve operation args. Canonical: payload.args. Fallback: every
     // payload field except reserved keys.
@@ -102,7 +150,7 @@ export async function handleDo(socket, env, ack) {
       beingId,
       act: {
         verb:   "do",
-        target: resolved,
+        target,
         action,
         args,
       },

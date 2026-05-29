@@ -13,13 +13,14 @@
 // one tick, stay cheap, and getStats() always says exactly what's
 // pending.
 //
-// Two-mode neutrality. The default emitter writes wake SUMMONs as
-// the I_AM (`<reality>/<spaceRoot>@I_AM`) — the subscriber declared
-// the cadence, the I_AM holds the declaration and asks for the
-// moment when the tick fires. A place that wants an embodied
-// scheduler-being installs an extension that calls setEmitter()
-// to swap in a Being-row-backed dispatcher; the registry shape
-// doesn't change.
+// Attention, not dispatch. Every scheduled wake is a SELF-WAKE
+// minted as the scheduled being itself, not as the I_AM. A being
+// scheduling itself IS the act of attention; when the tick lands
+// the being's own prior request fires. The from-stance is the
+// being at the place root: `<reality>/<spaceRoot>@<being-name>`.
+// A reality that wants a different routing model installs an
+// extension that calls setEmitter() to swap in its own dispatcher;
+// the registry shape doesn't change.
 //
 // Schedule shape:
 //
@@ -45,8 +46,6 @@ import log from "../../seedReality/log.js";
 import { summonByResolved } from "../../ibp/verbs/summon.js";
 import { getRealityDomain } from "../../ibp/address.js";
 import { getSpaceRootId } from "../../sprout.js";
-import { I_AM } from "../../materials/being/seedBeings.js";
-import { iAmIdentity } from "../../materials/being/identity.js";
 
 const MIN_INTERVAL_MS = 250;
 const DEFAULT_TICK_MS = 1000;
@@ -219,9 +218,11 @@ export async function runOnce(nowMs) {
 }
 
 /**
- * Swap the default emitter. Used by the embodied scheduler-being
- * extension to route scheduled wakes through itself (Mode 1) instead
- * of the synthesized @I_AM sender (Mode 2).
+ * Swap the default emitter. The default mints each wake as the
+ * scheduled being itself; an extension can swap in a different
+ * dispatcher (e.g. one routing scheduled wakes through an embodied
+ * scheduler-being that observes and re-emits) without changing the
+ * schedule registry shape.
  *
  * @param {function(entry, nowMs): Promise<void>} fn
  */
@@ -265,10 +266,17 @@ export function _resetAll() {
 // ────────────────────────────────────────────────────────────────
 
 async function _defaultEmitter(entry, nowMs) {
-  // Every scheduled wake is a SUMMON emitted by the I_AM acting on
-  // the subscriber's standing declaration. The from-stance is the
-  // I_AM at the place root; the receiving role can inspect the
-  // content payload to learn the cadence context.
+  // Attention, not dispatch.
+  //
+  // A scheduled wake is the being's standing assignment of attention
+  // to a cadence: "wake me every N ms." When the tick lands, the
+  // being's prior request fires. The SUMMON's asker is the being
+  // itself; this is a self-wake. I_AM does not hold the declaration;
+  // the being's own schedule entry does (registry keyed by beingId).
+  //
+  // The receiving role inspects the content payload to learn the
+  // cadence context; everything in it is what the being itself set
+  // at schedule() time.
   const spaceId = getSpaceRootId() || null;
   if (!spaceId) {
     log.debug(
@@ -277,16 +285,28 @@ async function _defaultEmitter(entry, nowMs) {
     );
     return;
   }
-  const identity = await iAmIdentity();
+  const realityDomain = getRealityDomain();
+  if (!realityDomain) {
+    log.debug(
+      "Schedule",
+      `skipping wake for being ${entry.beingId.slice(0, 8)}: reality domain not yet available`,
+    );
+    return;
+  }
+  // Load the scheduled being's identity so the wake mints as the
+  // being itself. If the being is gone (deleted but its schedule
+  // wasn't yet unregistered), drop the wake silently — the standing
+  // declaration died with it.
+  const identity = await _loadBeingIdentity(entry.beingId);
   if (!identity) {
     log.debug(
       "Schedule",
-      `skipping wake for being ${entry.beingId.slice(0, 8)}: I_AM identity not yet available`,
+      `skipping wake for being ${entry.beingId.slice(0, 8)}: scheduled being not found`,
     );
     return;
   }
   const correlation = randomUUID();
-  const sender = `${getRealityDomain() || "place"}/${spaceId}@${I_AM}`;
+  const sender = `${realityDomain}/${spaceId}@${identity.name}`;
   await summonByResolved({
     toBeingId: entry.beingId,
     inboxSpaceId: spaceId,
@@ -300,4 +320,20 @@ async function _defaultEmitter(entry, nowMs) {
       sentAt: new Date(nowMs).toISOString(),
     },
   });
+}
+
+/**
+ * Load { beingId, name } for the scheduled being. Self-wakes use
+ * this in place of iAmIdentity so the SUMMON mints with the being
+ * as asker. Returns null when the being is gone.
+ */
+async function _loadBeingIdentity(beingId) {
+  try {
+    const Being = (await import("../../materials/being/being.js")).default;
+    const row = await Being.findById(String(beingId)).select("_id name").lean();
+    if (!row?.name) return null;
+    return { beingId: String(row._id), name: row.name };
+  } catch {
+    return null;
+  }
 }

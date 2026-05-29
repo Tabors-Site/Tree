@@ -62,22 +62,65 @@ const MAX_BUMP_RING = 16;
 
 const cellKey = (x, y) => `${x},${y}`;
 
+// Grid bounds default. When the grid space has no Space.size set
+// (legacy plant, or a space the operator never sized), the fold
+// degrades gracefully: every cell is in-bounds, the bump can land
+// anywhere. Practical grids always carry size; this default exists
+// so foldGrid doesn't throw on an un-sized space.
+const UNBOUNDED = Object.freeze({ gridW: Infinity, gridH: Infinity });
+
+/**
+ * Read the grid bounds from the Space.size schema field. Returns
+ * { gridW, gridH }. Falls back to UNBOUNDED when size is unset or
+ * unreadable (the fold then treats every cell as in-bounds).
+ *
+ * The bounds are loaded once per fold (constant across the replay
+ * of one grid) and passed through applyEvent → findNearestFree so
+ * the bump search never produces an off-grid cell.
+ */
+async function loadGridBounds(gridSpaceId) {
+  if (!gridSpaceId) return UNBOUNDED;
+  try {
+    const Space = mongoose.model("Space");
+    const s = await Space.findById(String(gridSpaceId)).select("size").lean();
+    const w = Number(s?.size?.x);
+    const h = Number(s?.size?.y);
+    if (!Number.isFinite(w) || !Number.isFinite(h) || w <= 0 || h <= 0) {
+      return UNBOUNDED;
+    }
+    return { gridW: w, gridH: h };
+  } catch {
+    return UNBOUNDED;
+  }
+}
+
+function inBounds(x, y, bounds) {
+  return x >= 0 && x < bounds.gridW && y >= 0 && y < bounds.gridH;
+}
+
+function clamp(v, lo, hi) {
+  return v < lo ? lo : v > hi ? hi : v;
+}
+
 /**
  * Walk outward from a target cell in deterministic order. For each
  * ring r ∈ [1, MAX_BUMP_RING], walk the 8 base directions, scaling
- * dx/dy by r. Yields the first cell whose key is NOT in `occupied`.
+ * dx/dy by r. Yields the first cell that is in-bounds AND not in
+ * `occupied`. Out-of-bounds cells are silently skipped so the bump
+ * cannot place a being outside the grid space it belongs to.
  *
- * Returns { x, y } for the first free cell, or null if the search
- * cap is exhausted.
+ * Returns { x, y } for the first free in-bounds cell, or null if
+ * the search cap is exhausted.
  *
- * The walk is deterministic in seq+constant: same `occupied` set +
- * same target = same bump cell. Replay reproduces.
+ * The walk is deterministic in seq+constant+bounds: same inputs =
+ * same bump cell. Replay reproduces.
  */
-function findNearestFree(targetX, targetY, occupied) {
+function findNearestFree(targetX, targetY, occupied, bounds) {
   for (let r = 1; r <= MAX_BUMP_RING; r++) {
     for (const dir of NEIGHBOR_DIRS) {
       const x = targetX + dir.dx * r;
       const y = targetY + dir.dy * r;
+      if (!inBounds(x, y, bounds)) continue;
       if (!occupied.has(cellKey(x, y))) {
         return { x, y };
       }
@@ -93,11 +136,23 @@ function findNearestFree(targetX, targetY, occupied) {
  *
  *   occupants : Map<"x,y", beingId>     — what's at each cell
  *   board     : Map<beingId, {x, y}>    — where each being is (post-bump)
+ *   bounds    : { gridW, gridH }        — grid size; clamp/skip OOB cells
  *
  * Event shape: { event, beingId, to: {x, y}, from?: {x, y} }.
  *
+ * Bounds handling:
+ *   - The fact's `to` is clamped to the grid before the bump rule
+ *     runs. A being can't be outside the space it's in; doctrine
+ *     calls this out at the Space.size schema clamp. The fold
+ *     enforces the same invariant on the projection — the Being row
+ *     was clamped at set-being time, the grid-event fact carries
+ *     the unclamped intent, the fold reconciles by clamping here.
+ *   - The bump search is also in-bounds-only (findNearestFree),
+ *     so a contested cell on an edge never places the loser off
+ *     the grid.
+ *
  * Bump rule (cell already occupied by SOMEONE ELSE):
- *   - search NEIGHBOR_DIRS outward in rings
+ *   - search NEIGHBOR_DIRS outward in rings (in-bounds only)
  *   - first free cell wins
  *   - the fact's `to` is NOT mutated; only the grid's `board` reflects
  *     the bumped position
@@ -105,12 +160,24 @@ function findNearestFree(targetX, targetY, occupied) {
  * Self-reoccupy (the cell is occupied by THIS being, e.g. a move to
  * the same cell): no-op on occupants, board re-set.
  */
-function applyEvent(occupants, board, event) {
+function applyEvent(occupants, board, event, bounds) {
   if (!event || !event.beingId || !event.to) return;
   if (event.event !== "move" && event.event !== "place") return;
 
   const beingId = String(event.beingId);
-  const requestedKey = cellKey(event.to.x, event.to.y);
+
+  // Clamp the requested cell to the grid. The bump rule below
+  // assumes a valid in-bounds target; an OOB request becomes the
+  // nearest in-bounds cell (which may itself collide, in which
+  // case the bump still applies).
+  const reqX = bounds.gridW === Infinity
+    ? event.to.x
+    : clamp(Number(event.to.x) | 0, 0, bounds.gridW - 1);
+  const reqY = bounds.gridH === Infinity
+    ? event.to.y
+    : clamp(Number(event.to.y) | 0, 0, bounds.gridH - 1);
+
+  const requestedKey = cellKey(reqX, reqY);
   const previous = board.get(beingId) || null;
 
   // Vacate the being's previous cell (if it currently holds one).
@@ -125,19 +192,21 @@ function applyEvent(occupants, board, event) {
   const occupant = occupants.get(requestedKey);
   if (!occupant || occupant === beingId) {
     occupants.set(requestedKey, beingId);
-    board.set(beingId, { x: event.to.x, y: event.to.y });
+    board.set(beingId, { x: reqX, y: reqY });
     return;
   }
 
   // Collision: someone else holds the requested cell. Find the nearest
-  // free neighbor deterministically.
-  const free = findNearestFree(event.to.x, event.to.y, occupants);
+  // free in-bounds neighbor deterministically.
+  const free = findNearestFree(reqX, reqY, occupants, bounds);
   if (!free) {
-    // Grid functionally full within the search cap. Park at the
-    // requested cell stacked on top (last-resort). The winner keeps
-    // the occupants entry; the loser still gets a board entry so the
-    // dancer has SOMEWHERE to be.
-    board.set(beingId, { x: event.to.x, y: event.to.y });
+    // Grid functionally full within the search cap (or so small that
+    // every in-bounds neighbor is taken). Park at the requested cell
+    // stacked on top (last-resort). The winner keeps the occupants
+    // entry; the loser still gets a board entry so the dancer has
+    // SOMEWHERE to be — and that somewhere is in-bounds because
+    // requestedKey was clamped above.
+    board.set(beingId, { x: reqX, y: reqY });
     return;
   }
   occupants.set(cellKey(free.x, free.y), beingId);
@@ -146,6 +215,7 @@ function applyEvent(occupants, board, event) {
 
 export async function foldGridUpToSeq(gridSpaceId, tickSeq) {
   if (!gridSpaceId) return new Map();
+  const bounds = await loadGridBounds(gridSpaceId);
   const Fact = mongoose.model("Fact");
   const facts = await Fact.find({
     "target.kind": "space",
@@ -159,7 +229,7 @@ export async function foldGridUpToSeq(gridSpaceId, tickSeq) {
   const occupants = new Map();
   const board = new Map();
   for (const f of facts) {
-    applyEvent(occupants, board, f.params || {});
+    applyEvent(occupants, board, f.params || {}, bounds);
   }
   return board;
 }
@@ -174,6 +244,7 @@ export async function foldGridUpToSeq(gridSpaceId, tickSeq) {
  */
 export async function foldGridResolved(gridSpaceId, tickSeq) {
   if (!gridSpaceId) return { board: new Map(), occupants: new Map(), placements: new Map() };
+  const bounds = await loadGridBounds(gridSpaceId);
   const Fact = mongoose.model("Fact");
   const facts = await Fact.find({
     "target.kind": "space",
@@ -189,7 +260,7 @@ export async function foldGridResolved(gridSpaceId, tickSeq) {
   const occupants = new Map();
   const board = new Map();
   for (const f of facts) {
-    applyEvent(occupants, board, f.params || {});
+    applyEvent(occupants, board, f.params || {}, bounds);
   }
   return { board, occupants, placements: board };
 }

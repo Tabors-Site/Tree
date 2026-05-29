@@ -180,7 +180,14 @@ export async function emitReplyToAsker({
       return false;
     }
 
-    const realityDomain = getRealityDomain() || "place";
+    const realityDomain = getRealityDomain();
+    if (!realityDomain) {
+      log.debug(
+        "Replies",
+        `skipping reply: reality domain not yet available`,
+      );
+      return false;
+    }
     const fromQualifier =
       fromRoleName ||
       fromBeing?.name ||
@@ -291,7 +298,14 @@ export async function emitReplyToStance({
       return false;
     }
 
-    const realityDomain = getRealityDomain() || "place";
+    const realityDomain = getRealityDomain();
+    if (!realityDomain) {
+      log.debug(
+        "Replies",
+        `skipping reply: reality domain not yet available`,
+      );
+      return false;
+    }
     const fromQualifier =
       fromRoleName ||
       fromBeing?.name ||

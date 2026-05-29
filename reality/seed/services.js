@@ -175,6 +175,12 @@ import "./past/act/inboxProjectionFold.js";
 // fold handlers (be:summon → upsert+addParticipant, be:sever →
 // mark severed). See seed/past/act/threadsProjectionFold.js.
 import "./past/act/threadsProjectionFold.js";
+// Side-effect import. Registers the PositionProjection cross-cutting
+// fold handler (do:set-being:coord → upsert (beingId, spaceId) row).
+// The cross-cutting read of "who is at this space, where," skinny
+// enough for live-sync push payloads without re-fetching the whole
+// descriptor. See seed/past/projections/position/positionProjectionFold.js.
+import "./past/projections/position/positionProjectionFold.js";
 
 // ---------------------------------------------------------------------------
 // Auth strategy registry (extensions register additional auth methods)

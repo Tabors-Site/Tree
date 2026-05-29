@@ -40,8 +40,15 @@ export default {
       throw new Error("harmony:move requires params.gridSpaceId");
     }
 
-    const beingId = String(target?._id || target?.id);
-    if (!beingId) throw new Error("harmony:move requires a being target");
+    // Accept bare string id (seed-internal callers) OR Mongoose Being
+    // doc (runtime verb-handler shape). String(undefined) would yield
+    // the literal "undefined", which downstream lookups can't resolve.
+    const beingId = typeof target === "string"
+      ? target
+      : String(target?._id || target?.id || "");
+    if (!beingId || beingId === "undefined") {
+      throw new Error("harmony:move requires a being target");
+    }
 
     // Choose param shape. Absolute `from`+`to` from the dancer's live
     // fold wins over dx/dy+coord-read.

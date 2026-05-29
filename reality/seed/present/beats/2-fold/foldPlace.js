@@ -122,7 +122,7 @@ export async function foldPlace(beingId, orientation = ORIENTATION.FORWARD, opts
  * the forward and half folds.
  */
 async function buildForwardFace(beingId, self, stash) {
-  const spaceId = self?.position || self?.currentSpace || null;
+  const spaceId = self?.position || null;
   if (!spaceId) {
     return { self, space: null, occupants: [] };
   }

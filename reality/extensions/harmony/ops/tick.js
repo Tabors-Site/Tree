@@ -22,8 +22,12 @@ export default {
     // Since we're inside a moment, this pushes a fact onto
     // summonCtx.deltaF; sealAct commits it with the moment's Act
     // in one transaction.
-    const targetId = target?._id || target?.id || params?.targetId;
-    if (!targetId) {
+    // Accept bare string id (seed-internal callers), Mongoose Matter
+    // doc, or { _id } / { id } / params.targetId envelope.
+    const targetId = typeof target === "string"
+      ? target
+      : (target?._id || target?.id || params?.targetId);
+    if (!targetId || targetId === "undefined") {
       throw new Error("harmony:tick requires a matter target with _id");
     }
 

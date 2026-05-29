@@ -41,6 +41,13 @@ export const SEE_PUSH = Object.freeze({
   PATCH:      "patch",
   REPLACE:    "replace",
   INVALIDATE: "invalidate",
+  // Skinny per-being position delta. Payload shape:
+  //   { spaceId, beingId, x, y, z?, lastMoveSeq }
+  // Fired by the PositionProjection fold after the row commits, so
+  // the value is the projection's truth (post-bump if reducers
+  // ever apply one), not the fact's raw params. Clients order by
+  // lastMoveSeq and discard stale deliveries.
+  POSITION:   "position",
 });
 
 /**

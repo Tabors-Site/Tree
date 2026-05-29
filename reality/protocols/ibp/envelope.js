@@ -25,14 +25,28 @@
 
 import { IbpError, IBP_ERR } from "../../seed/ibp/protocol.js";
 
-const EMBODIMENT_SUFFIX = /@[a-z][a-z0-9-]*$/i;
+// Matches the trailing `@<qualifier>` of a stance address. The
+// qualifier accepts two shapes (see parseBeing in seed/ibp/address.js):
+//   1. A bare being name (e.g. "@cherub", "@greeter-12345678")
+//   2. An extension role shorthand "<ext>:<role>" (e.g.
+//      "@hello-world:greeter") — namespaced roles use a colon to
+//      separate the extension namespace from the role name.
+// Both shapes participate in classifyAddress / stripBeingQualifier.
+const EMBODIMENT_SUFFIX = /@[a-z][a-z0-9-]*(?::[a-z][a-z0-9-]*)?$/i;
 const VALID_VERBS = new Set(["see", "do", "summon", "be"]);
 
 /**
- * Classify an address string into its kind:
- *   "place"     bare domain, no slash, no @being (e.g. "treeos.ai")
- *   "stance"   has @being qualifier (e.g. "treeos.ai/abc-123@cherub")
- *   "position" has slash, no @being (e.g. "treeos.ai/abc-123")
+ * Classify an address string into its kind. The kind names "place" /
+ * "position" / "stance" are the internal wire-side enum; in user-
+ * facing copy these are usually described as:
+ *
+ *   "place"    — bare reality domain, no slash, no @being.
+ *                Example: "treeos.ai". Accepted only by BE.
+ *   "position" — reality domain + path, no @being.
+ *                Example: "treeos.ai/~tabor". Accepted by SEE, DO.
+ *   "stance"   — position + @being qualifier.
+ *                Example: "treeos.ai/~tabor@cherub". Accepted by
+ *                SEE, SUMMON, BE.
  */
 export function classifyAddress(address) {
   if (typeof address !== "string" || !address) return null;
@@ -50,6 +64,21 @@ export function classifyAddress(address) {
  */
 export function stripBeingQualifier(address) {
   return typeof address === "string" ? address.replace(EMBODIMENT_SUFFIX, "") : address;
+}
+
+/**
+ * Extract the bare qualifier name from an address with an @qualifier,
+ * or null when no qualifier is present. For being-targeting DO ops
+ * the wire resolves this to a Being row and uses it as the target;
+ * for space-targeting ops the qualifier is informational and gets
+ * stripped before path resolution.
+ */
+export function extractBeingQualifier(address) {
+  if (typeof address !== "string") return null;
+  const m = address.match(EMBODIMENT_SUFFIX);
+  if (!m) return null;
+  // Strip leading "@" and any ":<role>" shorthand suffix.
+  return m[0].slice(1).split(":")[0];
 }
 
 /**
@@ -103,8 +132,9 @@ export function parseUnifiedEnvelope(msg) {
       if (addressKind !== "position" && addressKind !== "stance") {
         throw new IbpError(
           IBP_ERR.INVALID_INPUT,
-          `ibp SEE address must be a position or stance, e.g. "${address}/" for the place root or "${address}/<spaceId>" for a space. ` +
-          `Got bare-place "${address}".`,
+          `ibp SEE address must be a position or stance, e.g. "${address}/" ` +
+          `for the reality root or "${address}/<path>" for a specific space. ` +
+          `Got bare reality domain "${address}".`,
         );
       }
       break;
@@ -113,9 +143,10 @@ export function parseUnifiedEnvelope(msg) {
       if (addressKind !== "position" && addressKind !== "stance") {
         throw new IbpError(
           IBP_ERR.INVALID_INPUT,
-          `ibp DO address must be a position. Use "${address}/" to target the place root ` +
-          `(e.g. for set-config / install-extension), or "${address}/<spaceId>" for a specific space. ` +
-          `Got bare-place "${address}".`,
+          `ibp DO address must be a position (reality domain + path). ` +
+          `Use "${address}/" to target the reality root (e.g. for set-config ` +
+          `/ install-extension), or "${address}/<path>" for a specific space ` +
+          `(e.g. "${address}/~tabor"). Got bare reality domain "${address}".`,
         );
       }
       break;
@@ -123,8 +154,10 @@ export function parseUnifiedEnvelope(msg) {
       if (addressKind !== "stance") {
         throw new IbpError(
           IBP_ERR.INVALID_INPUT,
-          `ibp SUMMON address must be a stance (position@being), e.g. "${address}/@place-manager". ` +
-          `Got "${addressKind}" shape.`,
+          `ibp SUMMON address must be a stance (position@being), e.g. ` +
+          `"localhost/@cherub", "localhost/~tabor@greeter", or ` +
+          `"localhost/~tabor@hello-world:greeter" (role shorthand). ` +
+          `Got "${addressKind}" shape (address="${address}").`,
         );
       }
       break;
@@ -132,8 +165,9 @@ export function parseUnifiedEnvelope(msg) {
       if (addressKind !== "stance" && addressKind !== "place") {
         throw new IbpError(
           IBP_ERR.INVALID_INPUT,
-          `ibp BE address must be a stance (e.g. "${address}@cherub") or a bare place (e.g. "${address.split("/")[0]}"). ` +
-          `Got "${addressKind}" shape.`,
+          `ibp BE address must be a stance (e.g. "localhost/@cherub") or a bare ` +
+          `reality domain (e.g. "localhost", no slash). Got "${addressKind}" ` +
+          `shape (address="${address}").`,
         );
       }
       break;

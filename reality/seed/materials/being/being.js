@@ -128,32 +128,27 @@ const BeingSchema = new mongoose.Schema({
   // Where the being lives by default. Humans get a home territory at
   // registration; non-human beings are placed at creation by whatever
   // extension scaffolds them. Durable across summons. Navigation is
-  // tracked by `currentSpace`, not by mutating this field.
+  // tracked by `position`, not by mutating this field.
   homeSpace: { type: String, ref: "Space", default: null, index: true },
 
-  // Where the being is standing right now. Single-context: one
-  // position at a time, shared across every connected session.
-  // Humans move via navigation; non-humans usually sit at homeSpace
-  // but can shift during work that descends into a child space.
-  //
-  // Drives the asker's stance for new summons:
-  // `<reality>/<currentSpace>@<name>`. When this changes, the being's
-  // next summon places at a new IBP Address; earlier summons stay
-  // under their original address.
-  currentSpace: { type: String, ref: "Space", default: null, index: true },
+  // Legacy `currentSpace` field retired 2026-05-29. Replaced by the
+  // universal `position` field declared below; readers that used to
+  // read `Being.currentSpace` now read `Being.position`. Same
+  // semantic, uniform name across Space (= parent), Being (= where
+  // the being is standing), Matter (= spaceId).
 
-  // Coordinate inside currentSpace. Null when the being has no
-  // spatial position (most beings most of the time). When set, the
-  // shape is `{ x: Number, y: Number, z?: Number }`. A being can
+  // Coordinate inside the being's position space. Null when the being
+  // has no spatial position (most beings most of the time). When set,
+  // the shape is `{ x: Number, y: Number, z?: Number }`. A being can
   // only be at one coord at a time because it can only be in one
-  // currentSpace at a time.
+  // position at a time.
   //
-  // The seed clamps writes to this field against
-  // `currentSpace.size` at set-being time: a being cannot exist
-  // outside the space's bounding box. When currentSpace has no
-  // `size`, no clamp runs and the coord passes through as written.
-  // Extensions that want REJECT semantics layer a check before
-  // stamping; this clamp is the floor.
+  // The seed clamps writes to this field against the position
+  // space's `size` at set-being time: a being cannot exist outside
+  // the space's bounding box. When the space has no `size`, no clamp
+  // runs and the coord passes through as written. Extensions that
+  // want REJECT semantics layer a check before stamping; this clamp
+  // is the floor.
   coord: {
     x: { type: Number, default: null },
     y: { type: Number, default: null },
@@ -183,12 +178,14 @@ const BeingSchema = new mongoose.Schema({
 
   // Projection cache markers. Per FOLD.md / STAMPER.md, the Being
   // row is a cache of the fold over this being's reel — not the
-  // source of truth. `foldedSeq` is the highest fact-seq the fold has
-  // applied here. `position` mirrors `currentSpace` once the position-
-  // fact bypass closes; for now it's reducer output kept null until
-  // facts carry position changes.
+  // source of truth. `foldedSeq` is the highest fact-seq the fold
+  // has applied here. `position` is the universal projection-index
+  // field shared with Space (= parent) and Matter (= spaceId);
+  // findByPosition(spaceId) enumerates occupants across all three
+  // kinds by querying this one field. Drives the asker stance for
+  // new summons: `<reality>/<position>@<name>`.
   foldedSeq: { type: Number, default: null },
-  position:  { type: String, default: null },
+  position:  { type: String, ref: "Space", default: null },
 
   // Reducer-owned timestamps. Set from fact.date so the row is
   // deterministic from the reel alone (the replay test asserts

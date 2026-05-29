@@ -46,8 +46,10 @@ import { noteActSealOnThread } from "../../past/act/threadsProjectionFold.js";
 import {
   appendDeltaFInSession,
   foldAfterCommit,
+  groupByReel,
   isReplicaSetCluster,
   REPLICA_SET_REQUIRED_MSG,
+  withReelLocks,
 } from "../../past/fact/facts.js";
 import { hooks } from "../../hooks.js";
 import log from "../../seedReality/log.js";
@@ -157,27 +159,37 @@ export async function sealAct(plannedAct, { content = null, stopped = false, del
       throw new Error("sealAct: " + REPLICA_SET_REQUIRED_MSG);
     }
 
-    const session = await mongoose.startSession();
+    // PARALLEL FACTS §1.2: acquire every reel lock BEFORE opening
+    // the session, hold them across the entire transaction. This
+    // bounds the snapshot lifetime so two contenders on the same
+    // reel can never have overlapping snapshots. See withReelLocks
+    // for the full rationale; both sealFacts and sealAct follow
+    // this shape.
+    const { sortedReels: lockReels } = groupByReel(deltaF);
     try {
-      await session.withTransaction(async () => {
-        // Reset on retry (withTransaction may retry on transient errors).
-        inserted = null;
-        sortedReels = [];
+      await withReelLocks(lockReels, async () => {
+        const session = await mongoose.startSession();
+        try {
+          await session.withTransaction(async () => {
+            // Reset on retry (withTransaction may retry on transient errors).
+            inserted = null;
+            sortedReels = [];
 
-        // 1. Append every Fact in ΔF (in sorted-reel order under
-        //    nested per-reel locks; the helper handles the dance).
-        const result = await appendDeltaFInSession(deltaF, session);
-        sortedReels = result.sortedReels;
+            // 1. Append every Fact in ΔF (caller holds the locks).
+            const result = await appendDeltaFInSession(deltaF, session);
+            sortedReels = result.sortedReels;
 
-        // 2. Insert the Act row in the same session.
-        const docs = await Act.create([actDoc], { session });
-        inserted = docs[0];
+            // 2. Insert the Act row in the same session.
+            const docs = await Act.create([actDoc], { session });
+            inserted = docs[0];
+          });
+        } finally {
+          await session.endSession();
+        }
       });
     } catch (err) {
       log.error("Stamped", `sealAct aborted (actId=${String(plannedAct._id).slice(0, 8)}): ${err.message}`);
       throw err;
-    } finally {
-      await session.endSession();
     }
 
     // Eager-fold AFTER commit (projections see the committed state).
@@ -222,24 +234,34 @@ export async function sealAct(plannedAct, { content = null, stopped = false, del
         (f?.action !== "set-space" &&
           f?.action !== "set-being" &&
           f?.action !== "set-matter") ||
-        typeof f?.params?.field !== "string" ||
-        !f.params.field.startsWith("qualities.")
+        typeof f?.params?.field !== "string"
       ) continue;
-      const ns = f.params.field.slice("qualities.".length).split(".")[0];
+      const field = f.params.field;
       const target = f.target ? { kind: f.target.kind, id: String(f.target.id) } : null;
       const spaceId = await resolveSpaceForLiveSee(target);
+      const payload = {
+        target,
+        field,
+        value: f.params.value,
+        beingId: f.beingId ? String(f.beingId) : null,
+        actId: f.actId ? String(f.actId) : null,
+        spaceId,
+      };
+      // Two hook seams. Qualities writes have their own seam so
+      // listeners can filter by namespace cheaply (existing contract
+      // is field-segment driven). Non-qualities scalar writes
+      // (coord, size, name, type, ...) fire afterFieldWrite so the
+      // live-SEE layer can invalidate subscribers regardless of
+      // which field class moved.
       try {
-        await hooks.run("afterQualityWrite", {
-          target,
-          ns,
-          field: f.params.field,
-          value: f.params.value,
-          beingId: f.beingId ? String(f.beingId) : null,
-          actId: f.actId ? String(f.actId) : null,
-          spaceId,
-        });
+        if (field.startsWith("qualities.")) {
+          payload.ns = field.slice("qualities.".length).split(".")[0];
+          await hooks.run("afterQualityWrite", payload);
+        } else {
+          await hooks.run("afterFieldWrite", payload);
+        }
       } catch (err) {
-        log.warn("Stamped", `afterQualityWrite hook fan failed: ${err.message}`);
+        log.warn("Stamped", `field-write hook fan failed: ${err.message}`);
       }
     }
   }
@@ -271,8 +293,8 @@ async function resolveSpaceForLiveSee(target) {
   if (target.kind === "being") {
     try {
       const Being = mongoose.model("Being");
-      const b = await Being.findById(target.id).select("currentSpace").lean();
-      return b?.currentSpace ? String(b.currentSpace) : null;
+      const b = await Being.findById(target.id).select("position").lean();
+      return b?.position ? String(b.position) : null;
     } catch { return null; }
   }
   if (target.kind === "matter") {

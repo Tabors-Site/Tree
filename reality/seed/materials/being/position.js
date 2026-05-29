@@ -2,27 +2,33 @@
 //
 // Where a being is standing. The per-being position cache.
 //
-// A being IS at a position. `Being.currentSpace` is the source of
-// truth; this module mirrors it in memory so the runTurn tool loop
-// and websocket dispatch don't hit Mongo on every position read
-// (dozens per turn).
+// A being IS at a position. `Being.position` is the source of truth;
+// this module mirrors it in memory so the runTurn tool loop and
+// websocket dispatch don't hit Mongo on every position read (dozens
+// per turn).
 //
 // Two values per being:
 //
-//   currentSpace   the specific Space the being is attending to.
-//                  Persisted to Being.currentSpace on every set
-//                  (write-through, fire-and-forget).
+//   position   the specific Space the being is attending to.
+//              Persisted to Being.position on every set (write-
+//              through, fire-and-forget via the be:switch fact).
 //
-//   rootId         the tree-root the being is currently inside.
-//                  Derived — computed from currentSpace's ancestor
-//                  chain on every setCurrentSpace and cached for
-//                  fast sync reads. Never set independently;
-//                  rootId is a function of currentSpace.
+//   rootId     the tree-root the being is currently inside.
+//              Derived — computed from position's ancestor chain on
+//              every setCurrentSpace call and cached for fast sync
+//              reads. Never set independently; rootId is a function
+//              of position.
 //
-// One source of truth (currentSpace). rootId cannot drift from it.
+// One source of truth (position). rootId cannot drift from it.
 // Cross-tree moves need no special reset path; they just call
-// setCurrentSpace with the new Space and the derivation updates
-// both fields together.
+// setCurrentSpace with the new Space and the derivation updates both
+// fields together.
+//
+// API note: the public functions are `setCurrentSpace` and
+// `getCurrentSpace`. The names refer to the human-readable concept
+// "where the being currently is" and haven't changed; only the
+// underlying schema field migrated from `Being.currentSpace` to
+// `Being.position` on 2026-05-29.
 
 import Being from "./being.js";
 import log from "../../seedReality/log.js";
@@ -49,7 +55,7 @@ function getBeingPositionRecord(beingId) {
       if (oldestKey) beingPositions.delete(oldestKey);
     }
     beingPositions.set(key, {
-      currentSpace: null,
+      position: null,
       rootId: null,
       _lastActive: Date.now(),
     });
@@ -62,8 +68,8 @@ function getBeingPositionRecord(beingId) {
 // Fire-and-forget fact emit for being position change. The cache is
 // the hot path; DB persistence happens through the fact-driven flow:
 // logFact appends a be:switch Fact on the being's reel under the
-// append lock, eager-fold runs the being reducer (which derives
-// currentSpace + position from params.toPosition), and applyProjection
+// append lock, eager-fold runs the being reducer (which writes
+// Being.position from params.toPosition), and applyProjection
 // writes the row.
 //
 // Per STAMPER.md doctrine: the fact insert is the commit; the
@@ -125,14 +131,18 @@ async function deriveSpaceRootId(spaceId) {
 
 /**
  * Set the being's current position. Async because deriving rootId
- * walks the ancestor chain. The DB write to Being.currentSpace
- * remains fire-and-forget for hot-path latency; the ancestor walk is
- * served by the in-memory ancestor cache on the warm path.
+ * walks the ancestor chain. The DB write to Being.position remains
+ * fire-and-forget for hot-path latency; the ancestor walk is served
+ * by the in-memory ancestor cache on the warm path.
+ *
+ * Exported as `setCurrentSpace` for legacy API compatibility — the
+ * concept name "where the being currently is" hasn't changed; only
+ * the underlying schema field did (`currentSpace` → `position`).
  */
 export async function setCurrentSpace(beingId, spaceId, summonCtx = null) {
   if (!beingId) return;
   const p = getBeingPositionRecord(beingId);
-  p.currentSpace = spaceId || null;
+  p.position = spaceId || null;
   p.rootId = await deriveSpaceRootId(spaceId);
   persistBeingPosition(beingId, spaceId, summonCtx);
 }
@@ -140,7 +150,7 @@ export async function setCurrentSpace(beingId, spaceId, summonCtx = null) {
 export function getCurrentSpace(beingId) {
   if (!beingId) return null;
   const p = getBeingPositionRecord(beingId);
-  return p.currentSpace || p.rootId || null;
+  return p.position || p.rootId || null;
 }
 
 export function getRootIdFor(beingId) {

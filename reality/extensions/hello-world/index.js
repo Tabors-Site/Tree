@@ -40,7 +40,7 @@ export async function init(place) {
     triggerOn:   ["message"],
     async summon(message, ctx) {
       const me = ctx.toBeing;
-      const myPosition = ctx.spaceId || me.homeSpace || me.currentSpace;
+      const myPosition = ctx.spaceId || me.position || me.homeSpace;
 
       // SEE around: my space + the children of my space.
       // Direct model queries here because the role is scripted;
@@ -107,7 +107,7 @@ export async function init(place) {
           roles:         ["hello-world:greeter"],
           defaultRole:   "hello-world:greeter",
           homeSpace:     String(rootSpaceId),
-          currentSpace:  String(rootSpaceId),
+          position:      String(rootSpaceId),
           parentBeingId: identity?.beingId || null,
         },
         identity,

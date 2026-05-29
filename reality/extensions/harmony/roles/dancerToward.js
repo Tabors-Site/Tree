@@ -50,12 +50,24 @@ export const dancerTowardRole = Object.freeze({
 
   async summon(message, ctx) {
     const c = message?.content || {};
-    const { tick, gridSpaceId, gridW = DEFAULT_GRID_W, gridH = DEFAULT_GRID_H } = c;
+    // The wake content shape varies by source:
+    //   - direct SUMMON from a scheduler (legacy/test path) carries
+    //     { gridSpaceId, tick, ... } explicitly.
+    //   - DO-trigger SUMMON from afterQualityWrite (the drum tick
+    //     subscription) carries { event:"afterQualityWrite",
+    //     spaceId, actorBeingId, action, ... } per the seed's
+    //     _renderTriggerContent. `spaceId` IS the drum's spaceId,
+    //     which IS the dance-floor grid space.
+    // Accept either shape; the rule logic only needs to know which
+    // grid to fold.
+    const tick = c.tick;
+    const gridSpaceId = c.gridSpaceId || c.spaceId;
+    const { gridW = DEFAULT_GRID_W, gridH = DEFAULT_GRID_H } = c;
     if (!gridSpaceId) {
       return {
         ok: false,
         shape: "internal",
-        reason: "summon missing gridSpaceId in content",
+        reason: "summon missing gridSpaceId/spaceId in content",
       };
     }
 
@@ -76,7 +88,7 @@ export const dancerTowardRole = Object.freeze({
     const me = board.get(meId);
     if (!me) {
       // Not yet placed on this grid. This tick is a no-op for us.
-      return { ok: true, content: `tick ${tick}: not placed on grid` };
+      return { ok: true, content: `tick ${tick ?? "?"}: not placed on grid` };
     }
 
     // 2. Rule: step toward nearest neighbor; default to grid center if alone.
@@ -89,7 +101,7 @@ export const dancerTowardRole = Object.freeze({
       : { x: Math.floor(gridW / 2), y: Math.floor(gridH / 2) };
     const { dx, dy } = stepToward(me, target);
     if (dx === 0 && dy === 0) {
-      return { ok: true, content: `tick ${tick}: stay at (${me.x},${me.y})` };
+      return { ok: true, content: `tick ${tick ?? "?"}: stay at (${me.x},${me.y})` };
     }
 
     // 3. Compute the absolute target cell from the GRID-RESOLVED `me`,
@@ -112,7 +124,7 @@ export const dancerTowardRole = Object.freeze({
       });
       return {
         ok: true,
-        content: `tick ${tick}: ${r?.moved ? `${stringify(me)}→${stringify(r.to)}` : `no-op at ${stringify(me)}`}`,
+        content: `tick ${tick ?? "?"}: ${r?.moved ? `${stringify(me)}→${stringify(r.to)}` : `no-op at ${stringify(me)}`}`,
       };
     } catch (err) {
       log.warn("Dancer", `move failed: ${err.message}`);
