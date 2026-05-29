@@ -439,7 +439,7 @@ export function clearBeingClientCache(beingId) {
 export async function addLlmConnection(
   beingId,
   { name, baseUrl, apiKey, model },
-  { identity } = {},
+  { identity, summonCtx } = {},
 ) {
   const being = await Being.findById(beingId);
   if (!being) throw new Error("Being not found");
@@ -479,7 +479,7 @@ export async function addLlmConnection(
     being,
     "set-being",
     { field: `qualities.llmConnections.${connectionId}`, value: conn },
-    identity ? { identity } : { scaffold: true },
+    identity ? { identity, summonCtx } : { scaffold: true, summonCtx },
   );
 
   return {
@@ -494,7 +494,7 @@ export async function updateLlmConnection(
   beingId,
   connectionId,
   { name, baseUrl, apiKey, model },
-  { identity } = {},
+  { identity, summonCtx } = {},
 ) {
   const being = await Being.findById(beingId);
   if (!being) throw new Error("Being not found");
@@ -546,7 +546,7 @@ export async function updateLlmConnection(
     being,
     "set-being",
     { field: `qualities.llmConnections.${safeConnId}`, value: merged },
-    identity ? { identity } : { scaffold: true },
+    identity ? { identity, summonCtx } : { scaffold: true, summonCtx },
   );
 
   // Bust cache if this connection is currently assigned
@@ -570,7 +570,7 @@ export async function updateLlmConnection(
   };
 }
 
-export async function deleteLlmConnection(beingId, connectionId, { identity } = {}) {
+export async function deleteLlmConnection(beingId, connectionId, { identity, summonCtx } = {}) {
   const safeConnId = validateConnectionId(connectionId);
   const being = await Being.findById(beingId);
   if (!being) throw new Error("Being not found");
@@ -579,7 +579,9 @@ export async function deleteLlmConnection(beingId, connectionId, { identity } = 
   if (!conn) throw new Error("Connection not found");
 
   const { doVerb } = await import("../../../ibp/verbs/do.js");
-  const opts = identity ? { identity } : { scaffold: true };
+  const opts = identity
+    ? { identity, summonCtx }
+    : { scaffold: true, summonCtx };
 
   // Unset the connection entry on this being's qualities (do.set with
   // value=null on a 2-deep path unsets via Mongo $unset).
@@ -651,7 +653,7 @@ export async function deleteLlmConnection(beingId, connectionId, { identity } = 
   return { removed: true };
 }
 
-export async function assignConnection(beingId, slot, connectionId, { identity } = {}) {
+export async function assignConnection(beingId, slot, connectionId, { identity, summonCtx } = {}) {
   if (!isValidUserSlot(slot)) {
     throw new Error("Invalid assignment slot: " + slot);
   }
@@ -667,7 +669,9 @@ export async function assignConnection(beingId, slot, connectionId, { identity }
   if (!being) throw new Error("Being not found");
 
   const { doVerb } = await import("../../../ibp/verbs/do.js");
-  const opts = identity ? { identity } : { scaffold: true };
+  const opts = identity
+    ? { identity, summonCtx }
+    : { scaffold: true, summonCtx };
 
   // "main" slot goes to llmDefault (scalar field); other slots go to
   // qualities.beingLlm.slots.<slot> (qualities-path). Both routes
@@ -705,7 +709,7 @@ export async function assignSpaceConnection(
   spaceId,
   slot,
   connectionId,
-  { ownerBeingId, identity } = {},
+  { ownerBeingId, identity, summonCtx } = {},
 ) {
   if (!isValidUserSlot(slot)) {
     throw new Error("Invalid assignment slot: " + slot);
@@ -728,7 +732,9 @@ export async function assignSpaceConnection(
   if (!space) throw new Error("Space not found");
 
   const { doVerb } = await import("../../../ibp/verbs/do.js");
-  const opts = identity ? { identity } : { scaffold: true };
+  const opts = identity
+    ? { identity, summonCtx }
+    : { scaffold: true, summonCtx };
 
   // "main" slot writes the Space's scalar llmDefault; other slots write
   // the qualities path. Both flow through do.set; null clears.
@@ -764,7 +770,7 @@ export async function assignSpaceConnection(
  * @param {string} connectionId  uuid key within being.qualities.llmConnections
  * @param {string} [cacheKey]    optional cache key to memoize the entry
  */
-export async function resolveConnection(beingId, connectionId, cacheKey) {
+export async function resolveConnection(beingId, connectionId, cacheKey, { summonCtx } = {}) {
   const conn = await readConnection(beingId, connectionId);
   // baseUrl is required; encryptedApiKey is optional (local LLMs like
   // Ollama / llama.cpp commonly need no auth).
@@ -817,30 +823,31 @@ export async function resolveConnection(beingId, connectionId, cacheKey) {
 
   if (cacheKey) beingClientCache.set(cacheKey, entry);
 
-  // lastUsedAt — fire-and-forget Fact on the being's reel. The
-  // reducer's deep-path applySetQualities walks into
-  // qualities.llmConnections.<connectionId>.lastUsedAt and sets the
-  // leaf; per-reel append lock isolates concurrent writes on the same
-  // being. Observability-only; the LLM call doesn't wait for the
-  // write, so a transient lock-contention delay can't slow inference.
-  (async () => {
+  // lastUsedAt — Fact on the being's reel. Joins the caller's moment's
+  // ΔF so the touch commits atomically with whatever the moment is
+  // doing. No fire-and-forget (that would have committed outside the
+  // moment, which is no longer a legal path). The fact is observability
+  // — the LLM call doesn't depend on it succeeding — so a missing
+  // summonCtx is silently skipped rather than erroring.
+  if (summonCtx?.actId) {
     try {
       const being = await Being.findById(beingId);
-      if (!being) return;
-      const { doVerb } = await import("../../../ibp/verbs/do.js");
-      await doVerb(
-        being,
-        "set-being",
-        {
-          field: `qualities.llmConnections.${connectionId}.lastUsedAt`,
-          value: new Date().toISOString(),
-        },
-        { scaffold: true },
-      );
-    } catch {
-      // Observability write; never fail the LLM call on its failure.
+      if (being) {
+        const { doVerb } = await import("../../../ibp/verbs/do.js");
+        await doVerb(
+          being,
+          "set-being",
+          {
+            field: `qualities.llmConnections.${connectionId}.lastUsedAt`,
+            value: new Date().toISOString(),
+          },
+          { scaffold: true, summonCtx },
+        );
+      }
+    } catch (err) {
+      log.debug("LLM", `lastUsedAt write skipped: ${err.message}`);
     }
-  })();
+  }
 
   return entry;
 }

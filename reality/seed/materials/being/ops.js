@@ -20,11 +20,57 @@
 
 import { registerOperation } from "../../ibp/operations.js";
 import Being from "./being.js";
+import Space from "../space/space.js";
 import { detectTargetKind, targetIdOf } from "../_targetShape.js";
 
 const RESERVED_SET_META_NS = new Set([
   "inbox", // per-being inbox; written through SUMMON
 ]);
+
+// SPATIAL axes the clamp considers. Two-dimensional by default; z is
+// allowed when both the being's coord write and the space's size
+// carry it.
+const COORD_AXES = ["x", "y", "z"];
+
+/**
+ * Clamp a coord write against the being's currentSpace size. Reads
+ * Space.size at write time (the bound that's in force right now);
+ * if the being has no currentSpace, or the space has no size, the
+ * coord passes through as written.
+ *
+ * Pure in the sense that two concurrent writers see the same Space
+ * row (it doesn't move during the lock window) and compute the same
+ * clamp. The seal-time lock on the Being's reel serializes coord
+ * writes per-being.
+ */
+async function clampCoord(beingDoc, raw) {
+  const out = {};
+  for (const a of COORD_AXES) {
+    if (typeof raw[a] === "number" && Number.isFinite(raw[a])) {
+      out[a] = raw[a];
+    }
+  }
+  if (Object.keys(out).length === 0) {
+    return null; // nothing meaningful to write
+  }
+  const spaceId = beingDoc?.currentSpace || beingDoc?.homeSpace || null;
+  if (!spaceId) return out;
+  const space = await Space.findById(spaceId).select("size").lean();
+  const size = space?.size || null;
+  if (!size) return out;
+  for (const a of COORD_AXES) {
+    if (out[a] === undefined) continue;
+    const cap = typeof size[a] === "number" && size[a] > 0 ? size[a] : null;
+    if (cap === null) continue;
+    if (Number.isInteger(out[a])) {
+      out[a] = Math.max(0, Math.min(Math.trunc(cap) - 1, out[a]));
+    } else {
+      const high = cap - Number.EPSILON;
+      out[a] = Math.max(0, Math.min(high, out[a]));
+    }
+  }
+  return out;
+}
 
 // ─────────────────────────────────────────────────────────────────────
 // set-being
@@ -140,8 +186,24 @@ async function setOnBeingHandler({ target, params }) {
     return { beingId: String(target._id), password: value };
   }
 
+  // coord: the being's position inside currentSpace. Shape `{ x, y, z? }`
+  // or null to unset. The seed clamps each axis to the bounding box on
+  // the being's currentSpace (Space.size) so a being structurally
+  // cannot exist outside the space it's in. When currentSpace has no
+  // size, the coord passes through as written.
+  if (field === "coord") {
+    if (value === null || value === undefined) {
+      return { beingId: String(target._id), coord: null };
+    }
+    if (typeof value !== "object" || Array.isArray(value)) {
+      throw new Error("set-being: `coord` value must be an object {x,y,z?} or null");
+    }
+    const clamped = await clampCoord(target, value);
+    return { beingId: String(target._id), coord: clamped };
+  }
+
   throw new Error(
-    `set-being: unknown field "${field}". Supported: name, operatingMode, roles, defaultRole, homeSpace, llmDefault, parentBeingId, password, qualities.<namespace>[.<innerKey>]`,
+    `set-being: unknown field "${field}". Supported: name, operatingMode, roles, defaultRole, homeSpace, llmDefault, parentBeingId, password, coord, qualities.<namespace>[.<innerKey>]`,
   );
 }
 
@@ -172,7 +234,7 @@ async function endBeingHandler({ target }) {
 // writes through `do.set-being`, and the inner set IS the canonical
 // audit Fact. Without skipAudit the outer op would double-stamp.
 
-async function addLlmConnectionHandler({ target, params, identity }) {
+async function addLlmConnectionHandler({ target, params, identity, summonCtx }) {
   const { name, baseUrl, apiKey, model } = params || {};
   if (!name || !baseUrl || !model) {
     throw new Error(
@@ -186,19 +248,21 @@ async function addLlmConnectionHandler({ target, params, identity }) {
   const connection = await addLlmConnection(
     beingId,
     { name, baseUrl, apiKey: apiKey || "none", model },
-    { identity },
+    { identity, summonCtx },
   );
   // If this is the Being's first connection, auto-assign it to the
   // default `main` slot so subsequent runTurn calls find an LLM.
   try {
     if (!target.llmDefault) {
-      await assignConnection(beingId, "main", connection._id);
+      await assignConnection(beingId, "main", connection._id, {
+        identity, summonCtx,
+      });
     }
   } catch {}
   return { connection };
 }
 
-async function updateLlmConnectionHandler({ target, params, identity }) {
+async function updateLlmConnectionHandler({ target, params, identity, summonCtx }) {
   const { connectionId, name, baseUrl, apiKey, model } = params || {};
   if (!connectionId)
     throw new Error("update-llm-connection: `connectionId` is required");
@@ -214,31 +278,23 @@ async function updateLlmConnectionHandler({ target, params, identity }) {
     String(target._id),
     connectionId,
     { name, baseUrl, apiKey, model },
-    { identity },
+    { identity, summonCtx },
   );
   return { connection };
 }
 
-async function deleteLlmConnectionHandler({ target, params, identity }) {
+async function deleteLlmConnectionHandler({ target, params, identity, summonCtx }) {
   const { connectionId } = params || {};
   if (!connectionId)
     throw new Error("delete-llm-connection: `connectionId` is required");
   const { deleteLlmConnection } = await import(
     "../../present/voices/llm/connect.js"
   );
-  await deleteLlmConnection(String(target._id), connectionId, { identity });
+  await deleteLlmConnection(String(target._id), connectionId, { identity, summonCtx });
   return { removed: true, connectionId };
 }
 
-// Bind an LLM slot to a connection (or unbind by passing null).
-// Polymorphic across Being and Space targets — the resolution chain
-// walks both, so slot assignment lives at both:
-//
-//   Being target → Being.llmDefault (slot="main") or
-//                  Being.qualities.beingLlm.slots.<slot>
-//   Space target → Space.llmDefault (slot="main") or
-//                  Space.qualities.llm.slots.<slot>
-async function assignLlmSlotHandler({ target, params, identity }) {
+async function assignLlmSlotHandler({ target, params, identity, summonCtx }) {
   const { slot, connectionId } = params || {};
   if (!slot) throw new Error("assign-llm-slot: `slot` is required");
   const kind = detectTargetKind(target);
@@ -247,7 +303,7 @@ async function assignLlmSlotHandler({ target, params, identity }) {
   );
   if (kind === "being") {
     return assignConnection(String(target._id), slot, connectionId || null, {
-      identity,
+      identity, summonCtx,
     });
   }
   const spaceId = targetIdOf(target);
@@ -256,6 +312,7 @@ async function assignLlmSlotHandler({ target, params, identity }) {
   return assignSpaceConnection(spaceId, slot, connectionId || null, {
     ownerBeingId: identity?.beingId || null,
     identity,
+    summonCtx,
   });
 }
 

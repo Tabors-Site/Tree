@@ -25,8 +25,19 @@
  *   3. Default → "space"
  */
 export function detectTargetKind(target) {
-  if (target && typeof target === "object" && Array.isArray(target.chain))
+  // A stance target has an actual chain of named segments (the @-walk
+  // through `~name` or named children). An EMPTY chain doesn't make
+  // something a stance — the place root and other position addresses
+  // also flow through resolveStance and carry `chain: []` from the
+  // base() helper. Check for at least one chain entry, or the
+  // presence of the `being` (@-qualifier) field which is the other
+  // unambiguous stance signal.
+  if (
+    target && typeof target === "object" &&
+    ((Array.isArray(target.chain) && target.chain.length > 0) || target.being)
+  ) {
     return "stance";
+  }
   const modelName = target?.constructor?.modelName;
   if (modelName === "Being") return "being";
   if (modelName === "Matter") return "matter";

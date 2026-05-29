@@ -65,7 +65,7 @@ Each verb names its address field explicitly. The four verbs partition cleanly: 
 | SEE | `position` OR `stance` | Observation works at either tier: position-level (what's here?) or being-specific view (what does this being see here?). |
 | DO | `position` only | The world is data at positions; beings are not data targets. Mutations always place at a position. |
 | SUMMON | `stance` only | Beings live as stances (being-at-position). Engagement requires both. Inboxes are per-being-per-position. |
-| BE | `stance` only | Self-identity operations target stances. For fresh registration, the stance is the place's auth-being. |
+| BE | `stance` only | Self-identity operations target stances. For fresh registration, the stance is the place's cherub. |
 
 No generic `address` field. The field name tells the reader what the verb requires. None of these are IBP Addresses (the bridged `stance :: stance` form); they are the target side of an implicit relationship. The requester side is established by the identity token.
 
@@ -269,7 +269,7 @@ This means cascade arrivals are indistinguishable from user SUMMONs at the proto
 client emits ibp:be { id, operation, stance: "<stance>", payload?, identity?, from? }
 ```
 
-`stance` is the only address field. For fresh registration, the stance is the place's auth-being (typically `<place>/@auth`). The place's BE handler dispatches to the auth-being at the named stance's place.
+`stance` is the only address field. For fresh registration, the stance is the place's cherub (typically `<place>/@cherub`). The place's BE handler dispatches to the cherub at the named stance's place.
 
 ### Validation chain
 
@@ -277,10 +277,10 @@ client emits ibp:be { id, operation, stance: "<stance>", payload?, identity?, fr
 2. `stance` is present and qualified. `INVALID_INPUT` if missing or unqualified.
 3. The stance's place is this server (Pass 1: no federated BE yet).
 4. Identity requirement varies:
-   - `register` or credential-based `claim` (stance is auth-being, payload has credentials): identity may be absent.
+   - `register` or credential-based `claim` (stance is cherub, payload has credentials): identity may be absent.
    - Token-based `claim` (stance is a held being, identity carries the still-valid token): identity required.
    - `release` and `switch`: identity required.
-5. The auth-being at the stance's place processes the operation per its being's policy.
+5. The cherub at the stance's place processes the operation per its being's policy.
 6. Place returns the operation-specific response.
 
 ### Atomicity
@@ -291,7 +291,7 @@ client emits ibp:be { id, operation, stance: "<stance>", payload?, identity?, fr
 
 ### Token issuance
 
-Tokens are issued by the auth-being. The format is place-specific (today TreeOS uses JWT). The token is returned in the ack data:
+Tokens are issued by the cherub. The format is place-specific (today TreeOS uses JWT). The token is returned in the ack data:
 
 ```json
 {
@@ -326,7 +326,7 @@ A SEE with `position: "<place>/.discovery"` returns the place's capabilities:
     { "name": "governing", "version": "1.0.0" },
     "..."
   ],
-  "authBeing": { "stance": "treeos.ai/@auth", "registrationOpen": true, "credentialTypes": ["password"] },
+  "cherub": { "stance": "treeos.ai/@cherub", "registrationOpen": true, "credentialTypes": ["password"] },
   "capabilities": ["live-see", "streaming-talk", "federation"]
 }
 ```
@@ -334,7 +334,7 @@ A SEE with `position: "<place>/.discovery"` returns the place's capabilities:
 The client uses this to:
 - Confirm protocol version compatibility
 - Populate address-bar autocomplete with beings
-- Render the sign-in surface based on auth-being policy
+- Render the sign-in surface based on cherub policy
 - Decide which features to enable
 
 Discovery is anonymous-accessible by default. Places may restrict discovery if they choose.
@@ -358,7 +358,7 @@ The new protocol lives in `place/ibp/`. Verb handlers are in `place/ibp/verbs/`:
 - `place/ibp/verbs/see.js` SEE handler (one-shot and live)
 - `place/ibp/verbs/do.js` DO action dispatcher
 - `place/ibp/verbs/talk.js` SUMMON with inbox append and summoning trigger
-- `place/ibp/verbs/be.js` BE operations via auth-being
+- `place/ibp/verbs/be.js` BE operations via cherub
 
 Shared utilities:
 

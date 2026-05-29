@@ -1,20 +1,35 @@
 // harmony:dancer-toward — step toward the nearest neighbor each tick.
 //
 // Scripted cognition. Wakes on a SUMMON from the drummer carrying
-// { tick, tickSeq, gridSpaceId }. The dancer folds the grid reel up
-// to tickSeq itself (no handed-out snapshot), reads its own coords
-// from the fold, applies its rule (step toward nearest other), and
-// emits harmony:move with the delta.
+// { tick, tickSeq, gridSpaceId }. The dancer folds the LIVE grid
+// (no seq ceiling — PARALLEL FACTS Rung 5), reads its own resolved
+// coords from the fold, applies its rule (step toward nearest other),
+// computes the absolute target cell, and emits harmony:move with `to`.
 //
-// On rung 2 there's only ONE dancer in the grid, so "nearest neighbor"
-// has no candidates. The rule degrades to "step toward grid center"
-// so the lone dancer still moves visibly — proves the fold + move
-// pipeline end-to-end. Rung 4 adds 4 more dancers with other rules
-// and the toward/away/mirror/box/pulse dance emerges.
+// LIVE FOLD vs. LOCKSTEP CEILING (Rung 5 cutover):
+//   At Rung 2-4 the drummer captured `tickSeq` at start-of-tick and
+//   every dancer folded up to that ceiling — guaranteeing all dancers
+//   saw the identical board. Collisions were impossible to detect
+//   except through end-of-tick replay.
+//
+//   Rung 5 drops the ceiling. Dancers fold the LIVE board (whatever
+//   is on the grid reel right now), which means each dancer sees
+//   moves already sealed during this tick. They can "dodge" each
+//   other when wake-order is sequential. When two dancers fold-and-
+//   decide concurrently and both stamp moves to the same cell, the
+//   grid reducer's deterministic bump (foldGrid.js NEIGHBOR_DIRS)
+//   resolves at fold time. tickSeq still rides on the SUMMON for
+//   audit but is ignored by the fold.
+//
+// GRID IS AUTHORITATIVE for position. The dancer's qualities.coords
+// keep what its last move-fact said ("I stepped to (3,4)") — honest
+// about the act. Where the dancer actually IS post-bump lives only
+// in the grid fold. The dancer reads from there, not from its own
+// qualities, every tick.
 
 import log from "../../../seed/seedReality/log.js";
 import { doVerb } from "../../../seed/ibp/verbs/do.js";
-import { foldGridUpToSeq } from "../lib/foldGrid.js";
+import { foldGridLive } from "../lib/foldGrid.js";
 
 const DEFAULT_GRID_W = 10;
 const DEFAULT_GRID_H = 10;
@@ -35,29 +50,33 @@ export const dancerTowardRole = Object.freeze({
 
   async summon(message, ctx) {
     const c = message?.content || {};
-    const { tick, tickSeq, gridSpaceId, gridW = DEFAULT_GRID_W, gridH = DEFAULT_GRID_H } = c;
-    if (!gridSpaceId || tickSeq == null) {
+    const { tick, gridSpaceId, gridW = DEFAULT_GRID_W, gridH = DEFAULT_GRID_H } = c;
+    if (!gridSpaceId) {
       return {
         ok: false,
         shape: "internal",
-        reason: "summon missing gridSpaceId or tickSeq in content",
+        reason: "summon missing gridSpaceId in content",
       };
     }
 
-    // 1. Fold the grid up to tickSeq. Same ceiling all dancers see → lockstep.
+    // 1. Fold the LIVE grid (Rung 5 — no seq ceiling). Whoever wakes
+    //    after a peer's move sees that peer at its bumped position;
+    //    simultaneous wakes collide and the bump rule resolves at
+    //    fold time. Either way the grid is the source of truth for
+    //    rendered position.
     let board;
     try {
-      board = await foldGridUpToSeq(gridSpaceId, tickSeq);
+      board = await foldGridLive(gridSpaceId);
     } catch (err) {
-      log.warn("Dancer", `foldGridUpToSeq failed: ${err.message}`);
+      log.warn("Dancer", `foldGridLive failed: ${err.message}`);
       return { ok: false, shape: "internal", reason: err.message };
     }
 
     const meId = String(ctx.toBeing._id);
     const me = board.get(meId);
     if (!me) {
-      // Not yet placed by tickSeq. This tick is a no-op for us.
-      return { ok: true, content: `tick ${tick}: not placed at tickSeq=${tickSeq}` };
+      // Not yet placed on this grid. This tick is a no-op for us.
+      return { ok: true, content: `tick ${tick}: not placed on grid` };
     }
 
     // 2. Rule: step toward nearest neighbor; default to grid center if alone.
@@ -73,18 +92,27 @@ export const dancerTowardRole = Object.freeze({
       return { ok: true, content: `tick ${tick}: stay at (${me.x},${me.y})` };
     }
 
-    // 3. Emit the move. The op stamps two facts (dancer + grid) in
+    // 3. Compute the absolute target cell from the GRID-RESOLVED `me`,
+    //    not from the dancer's own qualities (which may be stale post-
+    //    bump). Pass `to` to harmony:move so the move op stamps from
+    //    the authoritative position regardless of any qualities drift.
+    const to = {
+      x: Math.max(0, Math.min(gridW - 1, me.x + dx)),
+      y: Math.max(0, Math.min(gridH - 1, me.y + dy)),
+    };
+
+    // 4. Emit the move. The op stamps two facts (dancer + grid) in
     //    one atomic moment seal via summonCtx.deltaF.
     try {
       const r = await doVerb(meId, "harmony:move", {
-        dx, dy, gridSpaceId, gridW, gridH,
+        from: me, to, gridSpaceId, gridW, gridH,
       }, {
         identity: { beingId: meId, name: ctx.toBeing.name },
         summonCtx: ctx,
       });
       return {
         ok: true,
-        content: `tick ${tick}: ${r?.moved ? `step(${dx},${dy}) ${stringify(me)}→${stringify(r.to)}` : `clamped at ${stringify(me)}`}`,
+        content: `tick ${tick}: ${r?.moved ? `${stringify(me)}→${stringify(r.to)}` : `no-op at ${stringify(me)}`}`,
       };
     } catch (err) {
       log.warn("Dancer", `move failed: ${err.message}`);

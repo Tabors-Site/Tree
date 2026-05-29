@@ -4,7 +4,7 @@
 // JSON callers (CLI, programmatic clients); `authPageRouter` mounts
 // at / for HTML form POSTs from the login / register pages. Both
 // dispatch into the same handlers in users.js, which are thin shims
-// over the IBP BE verb against the auth-being.
+// over the IBP BE verb routed through the cherub.
 //
 // HTML GET pages, share-token, verify-token, forgot-password,
 // reset-password, and email-verify routes belong to the

@@ -211,8 +211,33 @@ async function setOnSpaceHandler({ target, params, identity }) {
     return { spaceId, contributors: value };
   }
 
+  // size: the space's bounding box. Shape `{ x, y, z? }` or null to
+  // unset (the space becomes unbounded). Beings inside this space
+  // have their `coord` clamped against this size on each set-being
+  // write. We accept positive finite numbers per axis; anything
+  // else is ignored.
+  if (field === "size") {
+    const spaceId = targetIdOf(target);
+    if (value === null || value === undefined) {
+      return { spaceId, size: null };
+    }
+    if (typeof value !== "object" || Array.isArray(value)) {
+      throw new Error("set-space: `size` value must be an object {x,y,z?} or null");
+    }
+    const out = {};
+    for (const a of ["x", "y", "z"]) {
+      if (typeof value[a] === "number" && Number.isFinite(value[a]) && value[a] > 0) {
+        out[a] = value[a];
+      }
+    }
+    if (Object.keys(out).length === 0) {
+      throw new Error("set-space: `size` requires at least one positive numeric axis");
+    }
+    return { spaceId, size: out };
+  }
+
   throw new Error(
-    `set-space: unknown field "${field}". Supported: name, type, parent, llmDefault, rootOwner, contributors, qualities.<namespace>[.<innerKey>]`,
+    `set-space: unknown field "${field}". Supported: name, type, parent, llmDefault, rootOwner, contributors, size, qualities.<namespace>[.<innerKey>]`,
   );
 }
 
@@ -293,6 +318,8 @@ async function createSpaceChild({ target, params, identity, summonCtx, scaffold,
         parentId: targetIdOf(target),
         beingId,
         actId,
+        summonCtx,
+        scaffold,
       });
       return shapeNewSpace(newSpace);
     } catch (err) {
@@ -315,7 +342,7 @@ async function createSpaceChild({ target, params, identity, summonCtx, scaffold,
       );
     }
     try {
-      const newSpace = await createSpace({ name, type, isRoot: true, beingId, actId });
+      const newSpace = await createSpace({ name, type, isRoot: true, beingId, actId, summonCtx, scaffold });
       return shapeNewSpace(newSpace);
     } catch (err) {
       throw mapPatternsToIbpError(err, KERNEL_ERROR_PATTERNS.createChild);

@@ -196,8 +196,8 @@ function makeLazyDefaultSummon(role) {
  * per role; qualities mirror the role's surface. Called at boot end
  * after extensions register; idempotent.
  */
-export async function syncRolesToSubstrate() {
-  const { SEED_SPACE } = await import("../../ibp/protocol.js");
+export async function syncRolesToSubstrate(summonCtx) {
+  const { SEED_SPACE } = await import("../../materials/space/seedSpaces.js");
   const { manifestItems } = await import("../../materials/manifest.js");
   const items = [];
   for (const [name, role] of REGISTRY) {
@@ -218,5 +218,5 @@ export async function syncRolesToSubstrate() {
       ]),
     });
   }
-  return manifestItems({ seedSpace: SEED_SPACE.ROLES, items });
+  return manifestItems({ seedSpace: SEED_SPACE.ROLES, items, summonCtx });
 }

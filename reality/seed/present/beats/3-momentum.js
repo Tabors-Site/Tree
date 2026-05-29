@@ -7,23 +7,35 @@
 // mounts the face; momentum applies the being's motion; stamped
 // seals — ONLY when momentum returned ok:true.
 //
-// momentum dispatches by `summonCtx.kind` — the trigger-kind the
-// intake entry carried in. Same shape for every kind: momentum
-// returns a CognitionResult (see seed/present/cognitionResult.js).
+// momentum dispatches by `summonCtx.kind` — TWO SEMANTIC MODES, same
+// machinery. Both kinds opened the same way (a wake-call landed in
+// the being's inbox; the scheduler picked it; assign opened the
+// moment). The difference is what the wake-call's payload means:
 //
-//   kind: "summon"
-//     The role's summon() handler runs. Its return value is
-//     normalized into CognitionResult: legacy `{ content: string }`
-//     becomes `{ ok: true, content }`; null/undefined/throw becomes
-//     `{ ok: false, shape, reason }`. New cognition paths
-//     (defaultSummon, scripted-with-result-type) return the
-//     discriminated form directly.
+//   kind: "summon"  — DELIBERATION mode.
+//     The wake-call carries a message; the role's summon() handler
+//     reads it, thinks, decides what (if anything) to do. Most
+//     summons. Return value is normalized into CognitionResult:
+//     legacy `{ content: string }` → `{ ok: true, content }`; null/
+//     undefined/throw → `{ ok: false, shape, reason }`. New
+//     cognition paths return the discriminated form directly.
 //
-//   kind: "transport-act"
-//     The being acted from their own transport. The wrapped verb
-//     runs through doVerb/beVerb. Success → { ok: true, content: "",
-//     verbResult: <verb return> }. Failure → { ok: false,
-//     shape: "internal", reason }.
+//   kind: "transport-act"  — EXECUTION mode.
+//     The wake-call's payload is a pre-decided act, not a message
+//     to deliberate on. The being already chose (the transport
+//     delivered the keystroke; the being's decision was the
+//     keystroke). momentum just runs the wrapped verb through
+//     doVerb/beVerb from inside the being's moment so the act's
+//     auto-Fact rides the moment's actId. Success → { ok: true,
+//     content: "", verbResult: <verb return> }. Failure → { ok:
+//     false, shape: "internal", reason }.
+//
+// Same primitive, two modes. The being on the inside of either
+// moment can't tell, and shouldn't tell, the difference between
+// "another being summoned me to think about something" and "the
+// world summoned me to execute the act I already chose." Both are
+// the same thing from the moment's perspective: a wake-call opened
+// my moment; here I am, acting.
 //
 // Per Round 5: failure is structural, not disciplined. A bad
 // cognition cannot reach the seal because the seal's input type

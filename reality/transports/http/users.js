@@ -2,7 +2,9 @@
 //
 // Thin shims over the IBP BE verb. The canonical registration /
 // claim / release logic lives in seed/present/roles/cherub/role.js
-// (the auth-being); HTTP is just a transport carrier.
+// (the cherub handles identity-binding); HTTP is just a transport
+// carrier — the user is the originator, HTTP delivers their
+// self-summon, cherub processes it.
 //
 // Per-route work that remains here is HTTP-specific:
 //   - parse request body
@@ -76,7 +78,7 @@ const register = async (req, res) => {
     // Accept `name` (canonical) or `username` (legacy alias) from the body.
     const name = req.body?.name ?? req.body?.username;
     const { password } = req.body || {};
-    // Auth-being's beforeRegister / afterRegister hooks expect to read
+    // Cherub's beforeRegister / afterRegister hooks expect to read
     // the Express request from the carrier.
     const carrier = makeHttpCarrier(req, { _req: req });
     const ack = await dispatchAndWait(carrier, {

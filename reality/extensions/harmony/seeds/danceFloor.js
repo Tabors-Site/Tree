@@ -15,9 +15,21 @@ const TICK_MS  = 1500;
 const GRID_W   = 10;
 const GRID_H   = 10;
 
-// Rung 2 roster: one dancer to prove the pipeline. Rung 4 expands to 5.
+// Rung 5 roster: five dancers, varied start positions. All run the
+// same `dancer-toward` rule (step toward nearest neighbor). With five
+// dancers on a 10x10 board, multiple dancers will repeatedly target
+// adjacent cells, and the Strategy A deterministic bump in foldGrid
+// (PARALLEL FACTS §4) resolves collisions at fold time.
+//
+// Different rules (away/mirror/box/pulse) can layer in later passes;
+// the substrate already supports them because each dancer is its own
+// summon and the grid reel doesn't care which rule produced a move.
 const DANCER_ROSTER = [
-  { role: "harmony:dancer-toward", suffix: "toward", start: { x: 0, y: 0 } },
+  { role: "harmony:dancer-toward", suffix: "toward-nw", start: { x: 0, y: 0 } },
+  { role: "harmony:dancer-toward", suffix: "toward-ne", start: { x: 9, y: 0 } },
+  { role: "harmony:dancer-toward", suffix: "toward-sw", start: { x: 0, y: 9 } },
+  { role: "harmony:dancer-toward", suffix: "toward-se", start: { x: 9, y: 9 } },
+  { role: "harmony:dancer-toward", suffix: "toward-c",  start: { x: 5, y: 5 } },
 ];
 
 export const danceFloorSeed = {
@@ -32,6 +44,14 @@ export const danceFloorSeed = {
     }, { identity });
     const gridSpaceId = String(grid?._id || grid?.id || grid);
     log.info("Harmony", `planted dance-floor space ${gridSpaceId.slice(0, 8)}`);
+
+    // 1a. Set the grid's bounding box. The seed will clamp every
+    //     dancer's `coord` write to this size at set-being time —
+    //     a being can't be outside the space it's in.
+    await place.do(gridSpaceId, "set-space", {
+      field: "size",
+      value: { x: GRID_W, y: GRID_H },
+    }, { identity });
 
     // 2. drum matter
     const drum = await place.do(gridSpaceId, "create-matter", {

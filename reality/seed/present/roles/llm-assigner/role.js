@@ -87,7 +87,7 @@ export const llmAssignerBeing = Object.freeze({
     const connection = await addLlmConnection(
       String(ctx.identity.beingId),
       { name, baseUrl, model, apiKey },
-      { identity: ctx.identity },
+      { identity: ctx.identity, summonCtx: ctx.summonCtx },
     );
     return {
       connectionId: String(connection._id),
@@ -117,6 +117,7 @@ export const llmAssignerBeing = Object.freeze({
     const { doVerb } = await import("../../../ibp/verbs/do.js");
     return doVerb(being, "assign-llm-slot", { slot, connectionId: connectionId || null }, {
       identity: ctx.identity,
+      summonCtx: ctx.summonCtx,
     });
   },
 
@@ -165,7 +166,7 @@ export const llmAssignerBeing = Object.freeze({
     await deleteLlmConnection(
       String(ctx.identity.beingId),
       connectionId,
-      { identity: ctx.identity },
+      { identity: ctx.identity, summonCtx: ctx.summonCtx },
     );
     return { removed: true, connectionId };
   },
@@ -201,7 +202,7 @@ export const llmAssignerBeing = Object.freeze({
       configNode,
       "set-config",
       { key: "realityLlmConnection", value: connectionId || null },
-      { identity: ctx.identity },
+      { identity: ctx.identity, summonCtx: ctx.summonCtx },
     );
     return { realityLlmConnection: connectionId || null };
   },

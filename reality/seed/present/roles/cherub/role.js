@@ -115,6 +115,14 @@ export const cherubBeing = Object.freeze({
             operatingMode: "human",
             name,
             password,
+            // Every human carries the `human` role. Its summon handler
+            // is a no-op (humans respond out-of-band from their own
+            // transport, not synchronously through the factory) but
+            // without it, the moment-open path can't resolve a role
+            // for transport-acts and assign bails with
+            // "no role registered for null".
+            roles:         ["human"],
+            defaultRole:   "human",
             homeParent:    getSpaceRootId(),
             parentBeingId: iAm ? String(iAm._id) : null,
           },

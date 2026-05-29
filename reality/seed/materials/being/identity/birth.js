@@ -27,7 +27,7 @@ import { v4 as uuidv4 } from "uuid";
 import { escapeRegex } from "../../../utils.js";
 import { IBP_ERR, IbpError } from "../../../ibp/protocol.js";
 import log from "../../../seedReality/log.js";
-import { emitFact, sealFacts } from "../../../past/fact/facts.js";
+import { emitFact } from "../../../past/fact/facts.js";
 import { mintCredentialSpec } from "./credentials.js";
 
 // ─────────────────────────────────────────────────────────────────────
@@ -271,6 +271,15 @@ export async function createBeingWithHome(opts) {
   const {
     operatingMode,
     role = null,
+    // Plural shape — used when the caller knows the being needs more
+    // than one role from birth (e.g. a human registered with
+    // ["human"]). When BOTH `role` (singular) and `roles` (plural)
+    // are absent, the being is born with empty roles[] and no
+    // defaultRole; the moment-open path will skip transport-acts on
+    // it with "no role registered for null". createBeing collapses
+    // singular into plural; passing both is fine, `roles` wins.
+    roles = null,
+    defaultRole = null,
     llmDefault = null,
     // `homeSpace` matches the schema field on Being. The caller passes
     // an existing Space's id and the being's `homeSpace` field is set
@@ -338,14 +347,47 @@ export async function createBeingWithHome(opts) {
 
   if (homeSpace) {
     home = await Space.findById(homeSpace);
-    if (!home)
-      throw new Error(`createBeingWithHome: home space ${homeSpace} not found`);
-  } else {
-    const parent = await Space.findById(homeParent).select("_id").lean();
-    if (!parent)
-      throw new Error(
-        `createBeingWithHome: home parent ${homeParent} not found`,
+    if (!home) {
+      // Multi-act atomic batch: when this birth runs inside a moment
+      // whose ΔF carries an EARLIER act's create-space fact for this
+      // same id, the row hasn't materialized yet but the reference is
+      // legitimate — it commits in the same transaction. Genesis is
+      // the canonical case: the I-Am's "let there be world" moment
+      // contains several conceptually distinct acts (create the space,
+      // mint the being, place the being in the space) that must
+      // commit together because partial genesis is incoherent. SQL's
+      // same-transaction foreign-key insert has this shape. Accept
+      // the pending reference; the row materializes at seal.
+      const pendingInBatch = summonCtx?.deltaF?.find(
+        (f) =>
+          f?.verb === "do" &&
+          f?.action === "create-space" &&
+          f?.target?.kind === "space" &&
+          String(f?.target?.id) === String(homeSpace),
       );
+      if (!pendingInBatch) {
+        throw new Error(`createBeingWithHome: home space ${homeSpace} not found`);
+      }
+      home = { _id: homeSpace, _pending: true };
+    }
+  } else {
+    let parent = await Space.findById(homeParent).select("_id").lean();
+    if (!parent) {
+      // Same atomic-batch reference resolution as above.
+      const pendingInBatch = summonCtx?.deltaF?.find(
+        (f) =>
+          f?.verb === "do" &&
+          f?.action === "create-space" &&
+          f?.target?.kind === "space" &&
+          String(f?.target?.id) === String(homeParent),
+      );
+      if (!pendingInBatch) {
+        throw new Error(
+          `createBeingWithHome: home parent ${homeParent} not found`,
+        );
+      }
+      parent = { _id: homeParent, _pending: true };
+    }
 
     const resolvedName =
       homeName || (operatingMode === "human" ? `~${name}` : `${role}-home`);
@@ -353,9 +395,9 @@ export async function createBeingWithHome(opts) {
       homeType ||
       (operatingMode === "human" ? "home-territory" : `${role}-home`);
 
-    // Fact-driven home-space birth (Slice D-extended, 2026-05-23).
-    // Stamps a do:birth Fact on the new home space's reel; eager-fold
-    // runs applyCreateSpace + initProjection to materialize the row.
+    // Home-space birth fact. Inside a moment (boot or runtime), the
+    // fact joins ctx.deltaF and seals with the rest of the ΔF.
+    // Outside any moment, emitFact falls back to sealFacts singleton.
     // Bypasses createSpace because that helper rejects seedSpace
     // parents — human homes live directly under the place root which
     // IS the SPACE_ROOT seedSpace.
@@ -364,11 +406,7 @@ export async function createBeingWithHome(opts) {
       ? Object.fromEntries(homeQualities)
       : (homeQualities || {});
     const { I_AM } = await import("../seedBeings.js");
-    // Eager singleton commit — same read-back constraint as
-    // createBeing's be:register: the next line reads Space.findById,
-    // so the Fact must have committed (the eager-fold materializes
-    // the Space row only on commit). Singleton ΔF, no transaction.
-    await sealFacts([{
+    await emitFact({
       verb:    "do",
       action:  "create-space",
       beingId: identity?.beingId ? String(identity.beingId) : I_AM,
@@ -378,17 +416,32 @@ export async function createBeingWithHome(opts) {
           name:      resolvedName,
           type:      resolvedType,
           parent:    String(homeParent),
-          rootOwner: null, // set below for humans only via do.set
+          rootOwner: null, // set below for humans only via do.set-space
           qualities: specQualities,
         },
       },
-      actId,
-    }]);
-    home = await Space.findById(homeId);
-    if (!home) {
-      throw new Error(
-        `createBeingWithHome: home-space birth Fact stamped but row ${homeId} not materialized`,
-      );
+      actId: summonCtx?.actId || actId,
+    }, summonCtx);
+    // Inside a moment, the home row materializes at seal — keep a
+    // pending view carrying the id + parent + name so downstream code
+    // can keep operating. Outside a moment the eager singleton commit
+    // ran and the row exists; read it back.
+    if (summonCtx) {
+      home = {
+        _id: homeId,
+        _pending: true,
+        name: resolvedName,
+        type: resolvedType,
+        parent: String(homeParent),
+        rootOwner: null,
+      };
+    } else {
+      home = await Space.findById(homeId);
+      if (!home) {
+        throw new Error(
+          `createBeingWithHome: home-space birth Fact stamped but row ${homeId} not materialized`,
+        );
+      }
     }
     createdNewHome = true;
   }
@@ -399,6 +452,8 @@ export async function createBeingWithHome(opts) {
     being = await createBeing(name, password, {
       operatingMode,
       role,
+      roles,
+      defaultRole,
       homeSpace: String(home._id),
       llmDefault,
       isRemote,
@@ -434,12 +489,18 @@ export async function createBeingWithHome(opts) {
   // to already be the owner).
   if (createdNewHome && operatingMode === "human") {
     const { doVerb } = await import("../../../ibp/verbs/do.js");
-    const homeDoc = await Space.findById(home._id);
+    // Inside a moment, home._id is the planned id (row not yet
+    // materialized); pass the pending shape directly to doVerb so it
+    // can stamp the fact on the same space's reel. Outside a moment,
+    // read back the materialized doc.
+    const homeRef = home._pending
+      ? home
+      : (await Space.findById(home._id)) || home;
     await doVerb(
-      homeDoc,
+      homeRef,
       "set-space",
       { field: "rootOwner", value: String(being._id) },
-      { scaffold: true },
+      { scaffold: true, summonCtx },
     );
     home.rootOwner = being._id;
   }
@@ -469,7 +530,7 @@ export async function createBeingWithHome(opts) {
       const { doVerb } = await import("../../../ibp/verbs/do.js");
       const registerOpts = identity
         ? { identity, summonCtx, scaffold }
-        : { scaffold: true };
+        : { scaffold: true, summonCtx };
       await doVerb(
         home,
         "set-space",

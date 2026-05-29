@@ -241,7 +241,7 @@ export async function summonVerb(stance, message, opts = {}) {
  *
  * Authorization runs through the standard authorize() check with
  * verb="be" operation="create-being" against the new being's home
- * space. I_AM passes inherently (seed short-circuit). Auth-being
+ * space. I_AM passes inherently (seed short-circuit). The cherub
  * is granted by the seed-shipped default permission seeded at
  * place root. Extensions grant their own roles by declaring
  * defaultPermissions in their manifest:
@@ -292,13 +292,15 @@ export async function summonCreateBeing({ spec, identity, summonCtx = null, scaf
   }
 
   // Thread the caller's moment so the be:register Fact stamped inside
-  // createBeing rides the parent's frame. Genesis flows (scaffold:true)
-  // pass no actId — the chain has a root and this is it.
+  // createBeing rides the parent's frame. Boot moment passes summonCtx
+  // with scaffold:true; runtime callers pass summonCtx without
+  // scaffold; nothing is allowed to pass scaffold:true WITHOUT a
+  // summonCtx (no second seal path).
   const factStampId = summonCtx?.actId || null;
-  if (!factStampId && !scaffold) {
+  if (!factStampId) {
     throw new IbpError(
       IBP_ERR.INTERNAL,
-      `summonCreateBeing for @${spec.name}: missing ambient actId. Thread summonCtx from the caller's moment, or scaffold:true for boot.`,
+      `summonCreateBeing for @${spec.name}: missing ambient actId. Thread summonCtx from the caller's moment (runtime), or open a boot moment via withBootMoment(...) (genesis). scaffold:true alone is no longer sufficient — atomicity is whatever the summonCtx carries.`,
     );
   }
 

@@ -11,11 +11,11 @@ Two categories of things are addressable in IBP: a **Position** (a place) and a 
 | Concept | Form | Example | Answer to |
 |---|---|---|---|
 | **Position** | `<place>/<path>` | `treeos.ai/` (root), `treeos.ai/~tabor` (home), `treeos.ai/flappybird/chapter-1` (tree space) | "Where in the world?" |
-| **Stance** | `<position>@<being>` | `treeos.ai/flappybird@ruler`, `treeos.ai/@auth` | "Which being at the place?" |
+| **Stance** | `<position>@<being>` | `treeos.ai/flappybird@ruler`, `treeos.ai/@cherub` | "Which being at the place?" |
 
 ### Structural vocabulary. Not addressable on its own.
 
-- **Place** does double duty, distinguished by the trailing slash. `treeos.ai` (no slash) is the bare domain identifier, the name of the sovereign server, used by BE when dispatching to the place's auth-being. `treeos.ai/` (with slash) is the Place Position of that place, addressable like any Position. The trailing slash is the load-bearing distinction. When the docs say "place" they usually mean one or the other depending on context.
+- **Place** does double duty, distinguished by the trailing slash. `treeos.ai` (no slash) is the bare domain identifier, the name of the sovereign server, used by BE when dispatching to the place's cherub. `treeos.ai/` (with slash) is the Place Position of that place, addressable like any Position. The trailing slash is the load-bearing distinction. When the docs say "place" they usually mean one or the other depending on context.
 - **IBP Address** is the bridge form, `<stance> :: <stance>`. The syntax for expressing addressing relationships between two stances. Not a thing that gets addressed; the format used to address things. Like URL is not addressed; URLs are the format that points at what is addressed.
 - **Being** is a cognitive shape (`@ruler`, `@archivist`, a username). Not addressable on its own. Combines with a Position to form a Stance. The `@qualifier` in a Stance address names the being but never targets it.
 
@@ -30,7 +30,7 @@ The conceptual shift from the web: a URL says *"this resource, fetched."* An IBP
 | `treeos.ai` | domain only, Place identifier | BE |
 | `treeos.ai/` | domain plus trailing slash, Place Position | SEE, DO |
 | `treeos.ai/flappybird` | domain plus path, deeper Position | SEE, DO |
-| `treeos.ai/@auth` | Place Position plus being, Stance at the Place Position | SUMMON, BE |
+| `treeos.ai/@cherub` | Place Position plus being, Stance at the Place Position | SUMMON, BE |
 | `treeos.ai/flappybird@ruler` | deeper Position plus being, Stance at space | SEE, SUMMON, BE |
 
 ## Full grammar

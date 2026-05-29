@@ -70,6 +70,19 @@ const MatterSchema = new mongoose.Schema({
   // carrying only qualities.
   content: { type: mongoose.Schema.Types.Mixed, default: null },
 
+  // Coordinate inside spaceId. Null when the matter has no spatial
+  // position (most matter most of the time). Same shape and semantics
+  // as Being.coord — `{ x: Number, y: Number, z?: Number }` clamped
+  // at set-matter time against the containing Space.size. Matter
+  // cannot exist outside its space's bounds; the act of placing it
+  // at the edge stops AT the edge.
+  coord: {
+    x: { type: Number, default: null },
+    y: { type: Number, default: null },
+    z: { type: Number, default: null },
+    _id: false,
+  },
+
   qualities: {
     type: Map,
     of: mongoose.Schema.Types.Mixed,

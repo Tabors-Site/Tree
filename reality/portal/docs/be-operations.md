@@ -1,6 +1,6 @@
 # BE Operations
 
-The BE verb manages be-er identity. This document specifies the four operations (register, claim, release, switch) and the auth-being model that handles them.
+The BE verb manages be-er identity. This document specifies the four operations (register, claim, release, switch) and the cherub model that handles them.
 
 Read [protocol.md](protocol.md) first.
 
@@ -14,28 +14,28 @@ Folding BE into DO would require an `anonymous-from` exception to the protocol's
 
 ## The four operations
 
-The BE envelope always carries a `stance`. Self-identity operations target stances. For fresh registration, the stance is the place's auth-being (typically `<place>/@auth`); the auth-being processes the credential creation.
+The BE envelope always carries a `stance`. Self-identity operations target stances. For fresh registration, the stance is the place's cherub (typically `<place>/@cherub`); the cherub processes the credential creation.
 
 ```
 { verb: "be", operation: "register" | "claim" | "release" | "switch", stance: "<stance>", identity?, payload? }
 ```
 
-The auth-being at the stance's place processes the operation. It is a real being inspectable via SEE on its stance; places choose the qualifier name (`@auth`, `@identity`) and may install custom auth-being beings per place.
+The cherub at the stance's place processes the operation. It is a real being inspectable via SEE on its stance; places choose the qualifier name (`@cherub`, `@identity`) and may install custom cherub beings per place.
 
 ### register
 
-Creates a new be-er at a place. There is no prior stance, so the address is the place's auth-being.
+Creates a new be-er at a place. There is no prior stance, so the address is the place's cherub.
 
 ```
 {
   verb:      "be",
   operation: "register",
-  stance:    "<place>/@auth",
+  stance:    "<place>/@cherub",
   payload:   { username, password, ...place-specific fields }
 }
 ```
 
-The payload carries credentials and any registration data the place's auth-being requires (e.g., invite code, real name, contract acceptance).
+The payload carries credentials and any registration data the place's cherub requires (e.g., invite code, real name, contract acceptance).
 
 Returns: `{ identityToken, beingAddress }`. The new be-er is established for this session; subsequent SEE/DO/SUMMON use the returned token.
 
@@ -45,13 +45,13 @@ Errors: `FORBIDDEN` (registration not open on this place), `RESOURCE_CONFLICT` (
 
 Logs in. Two entry forms:
 
-**Credential-based** (no prior stance; address is the auth-being):
+**Credential-based** (no prior stance; address is the cherub):
 
 ```
 {
   verb:      "be",
   operation: "claim",
-  stance:    "<place>/@auth",
+  stance:    "<place>/@cherub",
   payload:   { username, password }
 }
 ```
@@ -108,19 +108,19 @@ Returns: `{ active: "<target stance>" }`.
 
 This is the operation behind "switch identity" in the portal's identity panel. It does not re-authenticate; it just selects which held be-er is the active one for new requests.
 
-## The auth-being
+## The cherub
 
-Every place has a per-place auth-being. By convention, addressable as `<place>/@auth` or `<place>/@identity` (place's choice). It handles BE operations.
+Every place has a per-place cherub. By convention, addressable as `<place>/@cherub` or `<place>/@identity` (place's choice). It handles BE operations.
 
-The auth-being is **a real being.** It has a position (the place root), an being (`auth` or similar), an inbox, a record. It is inspectable like any being. A SEE on `<place>/@auth` returns a descriptor showing the auth-being's policies (open vs. closed registration, supported credential types, etc.).
+The cherub is **a real being.** It has a position (the place root), an being (`auth` or similar), an inbox, a record. It is inspectable like any being. A SEE on `<place>/@cherub` returns a descriptor showing the cherub's policies (open vs. closed registration, supported credential types, etc.).
 
 This matters because:
 
-- **Each place can specialize its auth-being.** A public place's auth-being welcomes any registration. A private place's may require an invite code. A research place's may bind the be-er to a contract or NDA. A place with values about who can be there expresses those values through its auth-being.
-- **The auth-being can be replaced.** Places install custom auth beings to change registration flow, credential schemes, identity verification, etc. The protocol stays uniform.
-- **The auth-being can have its own inbox.** A registration that requires manual approval can be a SUMMON from the auth-being to the place operator with `intent: chat`, awaiting a response.
+- **Each place can specialize its cherub.** A public place's cherub welcomes any registration. A private place's may require an invite code. A research place's may bind the be-er to a contract or NDA. A place with values about who can be there expresses those values through its cherub.
+- **The cherub can be replaced.** Places install custom auth beings to change registration flow, credential schemes, identity verification, etc. The protocol stays uniform.
+- **The cherub can have its own inbox.** A registration that requires manual approval can be a SUMMON from the cherub to the place operator with `intent: chat`, awaiting a response.
 
-The auth-being's being honors the BE operations as protocol-level interactions. The protocol does not deliver BE operations as SUMMON messages; they are dispatched directly to the auth-being's BE handler. But the auth-being may SUMMON to others as part of processing (e.g., notifying admins of new registrations).
+The cherub's being honors the BE operations as protocol-level interactions. The protocol does not deliver BE operations as SUMMON messages; they are dispatched directly to the cherub's BE handler. But the cherub may SUMMON to others as part of processing (e.g., notifying admins of new registrations).
 
 ## Identity tokens
 
@@ -160,7 +160,7 @@ A be-er on Place A can address a position on Place B. The protocol envelope carr
 }
 ```
 
-Place B verifies the federated identity by contacting Place A (or via Canopy signature). The auth-being on Place B decides whether to accept federated identities and what permissions they have.
+Place B verifies the federated identity by contacting Place A (or via Canopy signature). The cherub on Place B decides whether to accept federated identities and what permissions they have.
 
 Federation BE operations:
 - A federated `claim` lets a be-er on Place A establish a session token on Place B without re-registering.
@@ -168,14 +168,14 @@ Federation BE operations:
 
 Federation details belong to the Canopy spec and are out of scope here. The protocol envelope reserves the shape.
 
-## Switching as a SUMMON to the auth-being
+## Switching as a SUMMON to the cherub
 
-`switch` is structurally a BE operation, but a more elaborate identity flow (proving identity through challenge-response, multi-factor, etc.) may use SUMMON to the auth-being:
+`switch` is structurally a BE operation, but a more elaborate identity flow (proving identity through challenge-response, multi-factor, etc.) may use SUMMON to the cherub:
 
 ```
 {
   verb:    "talk",
-  stance:  "<place>/@auth",
+  stance:  "<place>/@cherub",
   identity: <token>,
   message: {
     from:        "<current stance>",
@@ -186,7 +186,7 @@ Federation details belong to the Canopy spec and are out of scope here. The prot
 }
 ```
 
-The auth-being can respond with a challenge, await an answer, and complete the switch through a final BE operation. The protocol supports both: `BE switch` for simple held-be-er selection, SUMMON + final BE for complex flows.
+The cherub can respond with a challenge, await an answer, and complete the switch through a final BE operation. The protocol supports both: `BE switch` for simple held-be-er selection, SUMMON + final BE for complex flows.
 
 ## The arrival stance
 
@@ -195,7 +195,7 @@ An unestablished requester is in the **arrival stance** at the place. Arrival is
 The protocol commits to:
 
 1. Every place has an arrival stance.
-2. BE addressed at the auth-being is always permitted from the arrival stance.
+2. BE addressed at the cherub is always permitted from the arrival stance.
 
 Beyond those two, places configure what an arrival can do. Some places are open: arrivals SEE public scopes, SUMMON to a public host being, even DO bounded things like leave a guestbook entry. Some places are closed: arrivals can only BE.
 
@@ -205,7 +205,7 @@ Configuration lives at `<place>/` under `metadata.beings.arrival.permissions`:
 {
   see:  { allowed: [...], denied: [...] },
   do:   { allowed: [{ action, scope, ... }] },
-  summon: { allowed: ["@auth", "@host", ...] },
+  summon: { allowed: ["@cherub", "@host", ...] },
   be:   { allowed: ["register", "claim"] }
 }
 ```
@@ -224,10 +224,10 @@ See [protocol.md](protocol.md) for the full error vocabulary. The codes BE most 
 | `UNAUTHORIZED` | claim with invalid credentials |
 | `SESSION_EXPIRED` | switch with an expired token |
 | `USER_NOT_FOUND` | claim or release on an unknown username |
-| `INVALID_INPUT` | register missing required fields per the auth-being's policy |
+| `INVALID_INPUT` | register missing required fields per the cherub's policy |
 | `RESOURCE_CONFLICT` | register with a username already taken on this place |
 | `ADDRESS_PARSE_ERROR` | the address field could not be parsed |
-| `EMBODIMENT_UNAVAILABLE` | the auth-being qualifier in the address is not recognized on this place |
+| `EMBODIMENT_UNAVAILABLE` | the cherub qualifier in the address is not recognized on this place |
 | `RATE_LIMITED` | throttled (often applied to register and claim to limit credential probing) |
 | `INTERNAL` | server error |
 
@@ -286,5 +286,5 @@ Token invalidated; client may stop using it.
 
 - [protocol.md](protocol.md) the four-verb spec
 - [identity.md](identity.md) the identity-first session model
-- [ibp-address.md](ibp-address.md) what `@auth` and stance addresses mean
+- [ibp-address.md](ibp-address.md) what `@cherub` and stance addresses mean
 - [server-protocol.md](server-protocol.md) wire-level rules for the be op

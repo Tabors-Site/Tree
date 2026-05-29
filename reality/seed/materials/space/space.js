@@ -61,6 +61,22 @@ const SpaceSchema = new mongoose.Schema({
     default: null,
   },
 
+  // The space's coordinate bounding box. Null when the space is
+  // unbounded (most spaces). When set, the shape is
+  // `{ x: Number, y: Number, z?: Number }` — half-open: a valid
+  // coordinate `c` for a being inside this space satisfies
+  // `0 <= c.axis < size.axis` on each axis present.
+  //
+  // The seed reads this field at set-being-coord time to clamp a
+  // being's coord against the space they're in. A space with no
+  // size enforces no bounds; the being can be at any coordinate.
+  size: {
+    x: { type: Number, default: null },
+    y: { type: Number, default: null },
+    z: { type: Number, default: null },
+    _id: false,
+  },
+
   qualities: { type: Map, of: mongoose.Schema.Types.Mixed, default: () => new Map() },
 
   // Projection cache markers. Per FOLD.md / STAMPER.md, the Space row

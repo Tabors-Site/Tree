@@ -5,7 +5,7 @@
 //
 // Operations live in the dispatcher (ibp/operations.js); seed-shipped
 // ones register at boot via the per-material ops files (each
-// materials/<kind>/ops.js + materials/seeds.js + realityConfigOps.js,
+// materials/<kind>/ops.js + materials/seeds.js + realityConfig.js,
 // imported for side effects by seed/services.js); extension ones
 // register from their init() function. The verb body does:
 //
@@ -76,6 +76,20 @@ export async function doVerb(target, operation, params = {}, opts = {}) {
     throw new IbpError(IBP_ERR.ORIGIN_READ_ONLY, denial);
   }
 
+  // scaffold:true semantics, narrowed (post-boot-moment refactor):
+  //   - bypass stance auth + implicit I-Am actor when no identity
+  //   - DOES NOT imply commit-as-singleton. The caller MUST pass a
+  //     summonCtx (a real moment's ctx, typically the boot moment from
+  //     withBootMoment or a runtime moment). Without summonCtx, the
+  //     fact would be orphaned from any Act — there is no second seal
+  //     path. The check below throws loudly on misconfiguration.
+  if (opts.scaffold === true && !opts.summonCtx?.actId) {
+    throw new IbpError(
+      IBP_ERR.INTERNAL,
+      `DO ${operation}: scaffold:true requires summonCtx (the boot moment's ctx from withBootMoment, or an open runtime moment). Commit-strategy is no longer implied by the flag.`,
+      { operation },
+    );
+  }
   // Stance auth. The only call that legitimately skips the gate is the
   // pre-being scaffold path: scaffold:true AND no identity (boot,
   // migrations, first-time spaceRoot creation). A being who passes
@@ -140,11 +154,13 @@ export async function doVerb(target, operation, params = {}, opts = {}) {
   const shouldAudit = !op.skipAudit && !opts.skipAudit;
   if (shouldAudit) {
     const actId = opts.summonCtx?.actId || null;
-    if (!actId && opts.scaffold !== true) {
+    if (!actId) {
+      // Post-refactor invariant: every DO Fact rides an Act. The
+      // scaffold:true gate above already required summonCtx, so if
+      // we get here without an actId, the caller didn't thread one.
       throw new IbpError(
         IBP_ERR.INTERNAL,
-        `DO ${operation}: missing ambient actId. Every act must ride an open Act. ` +
-          `Thread opts.summonCtx from the caller's moment, or pass opts.scaffold:true for boot.`,
+        `DO ${operation}: missing ambient actId. Every act must ride an open Act. Thread opts.summonCtx from the caller's moment, or open a boot moment via withBootMoment(...).`,
         { operation },
       );
     }

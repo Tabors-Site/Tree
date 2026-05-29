@@ -27,7 +27,27 @@ import { resolveStance } from "../resolver.js";
 import { buildPlaceDescriptor, buildDiscovery } from "../descriptor.js";
 import { authorize } from "../authorize.js";
 import { threadIdFromPath, getThreadsSpaceId, describeThread } from "../../materials/space/threads.js";
+import { describeReel } from "../../past/fact/facts.js";
+import { describeActChain } from "../../past/act/actChain.js";
 import { assertVerbCaller } from "./_shared.js";
+
+// Path matchers for synthetic explorer addresses.
+//   `<reality>/.reel/<kind>/<id>` — facts targeting (kind, id).
+//   `<reality>/.acts/<beingId>`   — acts authored by being.
+// Both return non-stance descriptors (no persistent Space row); SEE
+// short-circuits before resolveStance.
+function reelTargetFromPath(path) {
+  if (typeof path !== "string") return null;
+  const m = path.match(/^\/?\.reel\/(space|matter|being)\/([^/]+)\/?$/);
+  if (!m) return null;
+  return { kind: m[1], id: decodeURIComponent(m[2]) };
+}
+function actChainTargetFromPath(path) {
+  if (typeof path !== "string") return null;
+  const m = path.match(/^\/?\.acts\/([^/]+)\/?$/);
+  if (!m) return null;
+  return decodeURIComponent(m[1]);
+}
 
 /**
  * SEE. Read a position and return its descriptor.
@@ -114,6 +134,68 @@ export async function seeVerb(target, opts = {}) {
       isHomeRoot:  false,
       isThread:    true,
       thread:      desc,
+      children:    [],
+      matters:     [],
+      qualities:   {},
+    };
+  }
+
+  // Reel-explorer short-circuit. SEE on `<reality>/.reel/<kind>/<id>`
+  // returns the fact-chain for that target. Used by client explorers
+  // (flat-app) to surface the hash-chained history of a space, matter,
+  // or being. Auth: any authenticated being can read any reel here —
+  // operators can tighten via stance-auth on the reality root later.
+  const reelTarget = reelTargetFromPath(expanded.right?.path);
+  if (reelTarget) {
+    const realityDomain = getRealityDomain();
+    const reel = await describeReel(reelTarget.kind, reelTarget.id);
+    return {
+      address: {
+        reality:     realityDomain,
+        path:        `/.reel/${reelTarget.kind}/${reelTarget.id}`,
+        being:       null,
+        spaceId:     null,
+        beingId:     null,
+        chain:       [],
+        pathByNames: `/.reel/${reelTarget.kind}/${reelTarget.id}`,
+        pathByIds:   `/.reel/${reelTarget.kind}/${reelTarget.id}`,
+        leafName:    reel.target.name || reelTarget.id,
+        leafId:      reelTarget.id,
+      },
+      isSpaceRoot: false,
+      isHomeRoot:  false,
+      isReel:      true,
+      reel,
+      children:    [],
+      matters:     [],
+      qualities:   {},
+    };
+  }
+
+  // Act-chain explorer short-circuit. SEE on `<reality>/.acts/<beingId>`
+  // returns the being's chain of moments (newest-first). Same auth
+  // posture as .reel for the first cut.
+  const actChainBeingId = actChainTargetFromPath(expanded.right?.path);
+  if (actChainBeingId) {
+    const realityDomain = getRealityDomain();
+    const chain = await describeActChain(actChainBeingId);
+    return {
+      address: {
+        reality:     realityDomain,
+        path:        `/.acts/${actChainBeingId}`,
+        being:       null,
+        spaceId:     null,
+        beingId:     actChainBeingId,
+        chain:       [],
+        pathByNames: `/.acts/${actChainBeingId}`,
+        pathByIds:   `/.acts/${actChainBeingId}`,
+        leafName:    chain.being.name || actChainBeingId,
+        leafId:      actChainBeingId,
+      },
+      isSpaceRoot: false,
+      isHomeRoot:  false,
+      isActChain:  true,
+      actChain:    chain,
       children:    [],
       matters:     [],
       qualities:   {},

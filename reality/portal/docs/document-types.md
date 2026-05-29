@@ -48,11 +48,11 @@ A place in the world. Form `<place>/<path>`. Examples: `treeos.ai/` (Place Posit
 
 ### Stance
 
-A being at a position. Form `<position>@<being>`. Examples: `treeos.ai/@auth`, `treeos.ai/flappybird@ruler`. Addressable; accepted by SEE, required by SUMMON and BE.
+A being at a position. Form `<position>@<being>`. Examples: `treeos.ai/@cherub`, `treeos.ai/flappybird@ruler`. Addressable; accepted by SEE, required by SUMMON and BE.
 
 ### Place
 
-A sovereign server. Two forms distinguished by the trailing slash. `treeos.ai` (no slash) is the **Place identifier**, the name of the server, used by BE when dispatching to the place's auth-being. `treeos.ai/` (with slash) is the **Place Position**, the actual addressable place at path `/` on that place. The trailing slash is the load-bearing distinction.
+A sovereign server. Two forms distinguished by the trailing slash. `treeos.ai` (no slash) is the **Place identifier**, the name of the server, used by BE when dispatching to the place's cherub. `treeos.ai/` (with slash) is the **Place Position**, the actual addressable place at path `/` on that place. The trailing slash is the load-bearing distinction.
 
 ### Being
 

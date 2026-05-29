@@ -164,7 +164,9 @@ import "./materials/matter/ops.js";
 import "./materials/being/ops.js";
 import "./materials/being/credentialOps.js";
 import "./materials/seeds.js";
-import "./realityConfigOps.js";
+// realityConfig.js self-registers the set-config / delete-config DO
+// ops alongside the setters they wrap. Importing for the side effect.
+import "./realityConfig.js";
 // Side-effect import. Registers the InboxProjection cross-cutting
 // fold handlers (be:summon → upsert, be:sever → delete-by-root).
 // See seed/past/act/inboxProjectionFold.js.

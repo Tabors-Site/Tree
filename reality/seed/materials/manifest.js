@@ -19,7 +19,7 @@
 import { v4 as uuidv4 } from "uuid";
 import Space from "../materials/space/space.js";
 import log from "../seedReality/log.js";
-import { sealFacts } from "../past/fact/facts.js";
+import { emitFact } from "../past/fact/facts.js";
 import { I_AM } from "./being/seedBeings.js";
 
 // Stamp a do:birth Fact for a new manifest child Space. Slice C
@@ -28,14 +28,12 @@ import { I_AM } from "./being/seedBeings.js";
 // materialize the row. scaffold-style attribution (I_AM as actor)
 // because manifest sync is seed-internal scaffolding — extension
 // load runs after I_AM is planted, so the Being row exists.
-async function createChildByFact({ parentId, name, type, qualities }) {
+async function createChildByFact({ parentId, name, type, qualities, summonCtx }) {
   const id = uuidv4();
   const specQualities = qualities instanceof Map
     ? Object.fromEntries(qualities)
     : (qualities || {});
-  // Boot/scaffold path: eager singleton commit so callers can read
-  // the row immediately (manifest sync reads back after).
-  await sealFacts([{
+  await emitFact({
     verb:    "do",
     action:  "create-space",
     beingId: I_AM,
@@ -49,14 +47,15 @@ async function createChildByFact({ parentId, name, type, qualities }) {
         qualities: specQualities,
       },
     },
-  }]);
+    actId: summonCtx.actId,
+  }, summonCtx);
   return id;
 }
 
 // Iterate over a qualities Map / Object and emit one do:set fact per
 // namespace key. The reducer derives the per-namespace state from each
 // fact; per-reel append lock serializes them.
-async function refreshQualitiesByFact(spaceId, qualities) {
+async function refreshQualitiesByFact(spaceId, qualities, summonCtx) {
   if (!qualities) return;
   const entries = qualities instanceof Map
     ? [...qualities.entries()]
@@ -70,26 +69,30 @@ async function refreshQualitiesByFact(spaceId, qualities) {
       refreshed,
       "set-space",
       { field: `qualities.${ns}`, value, merge: false },
-      { scaffold: true },
+      { scaffold: true, summonCtx },
     );
   }
 }
 
-// Emit a do:death fact for the child Space. Uses scaffold:true because
-// manifest sync is seed-internal (I_AM is the actor reconciling memory
-// against the substrate manifestation).
-async function deleteChildByFact(childId) {
+// do:end-space fact for the child Space. I-Am is the actor.
+async function deleteChildByFact(childId, summonCtx) {
   const childDoc = await Space.findById(childId);
   if (!childDoc) return;
   const { doVerb } = await import("../ibp/verbs/do.js");
-  await doVerb(childDoc, "end-space", {}, { scaffold: true });
+  await doVerb(childDoc, "end-space", {}, { scaffold: true, summonCtx });
 }
 
 export async function manifestItems({
   seedSpace,
   items,
   itemType = "resource",
+  summonCtx,
 }) {
+  if (!summonCtx) {
+    throw new Error(
+      "manifestItems requires summonCtx. Wrap the call in withIAmAct(...).",
+    );
+  }
   if (!seedSpace) throw new Error("manifestItems requires seedSpace");
   if (!Array.isArray(items)) items = [];
 
@@ -119,31 +122,25 @@ export async function manifestItems({
   for (const item of items) {
     const existing = existingByName.get(item.name);
     if (existing) {
-      // Refresh existing child's qualities. Fact-driven: one fact per
-      // namespace; serialized via the per-reel append lock so a SEE in
-      // flight sees consistent state.
       if (item.qualities) {
-        await refreshQualitiesByFact(existing._id, item.qualities);
+        await refreshQualitiesByFact(existing._id, item.qualities, summonCtx);
       }
       kept++;
       continue;
     }
-    // Fact-driven (Slice C, 2026-05-23). Stamp a do:birth Fact;
-    // eager-fold materializes the new Space row via applyCreateSpace.
     await createChildByFact({
       parentId:  parent._id,
       name:      item.name,
       type:      itemType,
       qualities: item.qualities,
+      summonCtx,
     });
     created++;
   }
 
   for (const [name, c] of existingByName) {
     if (desiredByName.has(name)) continue;
-    await deleteChildByFact(c._id);
-    // No parent.children $pull — the child's parent flips to DELETED
-    // inside deleteSpaceBranch; parent-query readers stop seeing it.
+    await deleteChildByFact(c._id, summonCtx);
     removed++;
   }
 
@@ -156,7 +153,13 @@ export async function addManifestChild({
   name,
   qualities = null,
   itemType = "resource",
+  summonCtx,
 }) {
+  if (!summonCtx) {
+    throw new Error(
+      "addManifestChild requires summonCtx. Wrap the call in withIAmAct(...).",
+    );
+  }
   if (!name) return null;
   const parent = await Space.findOne({ seedSpace });
   if (!parent) return null;
@@ -169,16 +172,16 @@ export async function addManifestChild({
     .lean();
   if (existing) {
     if (qualities) {
-      await refreshQualitiesByFact(existing._id, qualities);
+      await refreshQualitiesByFact(existing._id, qualities, summonCtx);
     }
     return existing._id;
   }
-  // Fact-driven new-child via createChildByFact.
   return await createChildByFact({
     parentId: parent._id,
     name,
     type: itemType,
     qualities,
+    summonCtx,
   });
 }
 
@@ -186,7 +189,13 @@ export async function removeManifestChild({
   seedSpace,
   name,
   itemType = "resource",
+  summonCtx,
 }) {
+  if (!summonCtx) {
+    throw new Error(
+      "removeManifestChild requires summonCtx. Wrap the call in withIAmAct(...).",
+    );
+  }
   if (!name) return false;
   const parent = await Space.findOne({ seedSpace });
   if (!parent) return false;
@@ -198,7 +207,6 @@ export async function removeManifestChild({
     .select("_id")
     .lean();
   if (!child) return false;
-  await deleteChildByFact(child._id);
-  // No parent.children $pull — parent-side cache retired.
+  await deleteChildByFact(child._id, summonCtx);
   return true;
 }

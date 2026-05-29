@@ -16,7 +16,7 @@
 //
 // The seed's own DO ops register at module load through each
 // material's ops file (materials/<kind>/ops.js, materials/seeds.js,
-// realityConfigOps.js — services.js imports them for side effects).
+// realityConfig.js — services.js imports them for side effects).
 // Extensions register theirs through the loader reading manifest
 // provides + init() return. Both go through registerOperation here;
 // there is no privileged seed path.
@@ -218,8 +218,8 @@ export function listOperations(filter = {}) {
  * declaration (targets, owner extension, factAction, skipAudit). Called
  * at boot end after extensions register; idempotent.
  */
-export async function syncOperationsToSubstrate() {
-  const { SEED_SPACE } = await import("./protocol.js");
+export async function syncOperationsToSubstrate(summonCtx) {
+  const { SEED_SPACE } = await import("../materials/space/seedSpaces.js");
   const { manifestItems } = await import("../materials/manifest.js");
   const items = [];
   for (const op of REGISTRY.values()) {
@@ -238,5 +238,5 @@ export async function syncOperationsToSubstrate() {
       ]),
     });
   }
-  return manifestItems({ seedSpace: SEED_SPACE.OPERATIONS, items });
+  return manifestItems({ seedSpace: SEED_SPACE.OPERATIONS, items, summonCtx });
 }

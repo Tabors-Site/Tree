@@ -33,8 +33,18 @@ export function clearDetail() {
 export function renderDescriptor(desc, { session, discovery }) {
   if (!desc) return;
   renderTopBar(desc, { session, discovery });
-  renderBeings(desc, { session });
-  renderMatter(desc, { session });
+  // Explorer dispatch — .reel/<kind>/<id> and .acts/<beingId> return
+  // synthetic descriptors with isReel / isActChain flags. Take over
+  // the middle area and render the chain explorer instead of the
+  // normal position layout.
+  if (desc.isReel || desc.isActChain) {
+    renderExplorer(desc, { discovery });
+    return;
+  }
+  // Restore normal layout (in case we came back from an explorer view).
+  restoreNormalLayout();
+  renderBeings(desc, { session, discovery });
+  renderMatter(desc, { session, discovery });
   renderChildren(desc, { discovery });
   // If chat is open, re-render it against the latest beings[] state so
   // inbox.recent stays fresh.
@@ -46,6 +56,15 @@ export function renderDescriptor(desc, { session, discovery }) {
       openChatFor(entry, { refresh: true });
     }
   }
+}
+
+// Hide explorer DOM and show the normal two-pane position layout.
+// Called whenever a non-explorer descriptor arrives.
+function restoreNormalLayout() {
+  const explorer = document.getElementById("explorer-pane");
+  if (explorer) explorer.remove();
+  document.getElementById("position-pane")?.classList.remove("hidden");
+  document.getElementById("detail-pane")?.classList.remove("hidden");
 }
 
 // ────────────────────────────────────────────────────────────────
@@ -75,6 +94,24 @@ function renderTopBar(desc, { session, discovery }) {
 
   addrEl.textContent = `${discovery.reality}${path === "/" ? "" : path}`;
 
+  // "facts on this space" link — opens the reel explorer for the
+  // current spaceId. Only shown on normal position views (not on
+  // explorer views themselves; those land on .reel/... / .acts/...
+  // paths and don't carry a spaceId).
+  const spaceId = desc.address?.spaceId;
+  if (spaceId && !desc.isReel && !desc.isActChain) {
+    const sep = document.createElement("span");
+    sep.className = "dim sep";
+    sep.textContent = " · ";
+    addrEl.appendChild(sep);
+    const reelLink = document.createElement("a");
+    reelLink.href = `#${discovery.reality}/.reel/space/${spaceId}`;
+    reelLink.className = "explorer-link";
+    reelLink.textContent = "⛓ facts";
+    reelLink.title = "view this space's fact reel (hash-chained explorer)";
+    addrEl.appendChild(reelLink);
+  }
+
   // Identity chip — shows current being, click to release / claim other.
   const username = session?.username || "arrival";
   const chip = document.createElement("button");
@@ -94,7 +131,7 @@ function renderTopBar(desc, { session, discovery }) {
 // Beings list
 // ────────────────────────────────────────────────────────────────
 
-function renderBeings(desc, { session }) {
+function renderBeings(desc, { session, discovery }) {
   const ul = document.getElementById("beings-list");
   ul.innerHTML = "";
   const beings = desc.beings || [];
@@ -124,6 +161,25 @@ function renderBeings(desc, { session }) {
     const actions = document.createElement("div");
     actions.className = "row-actions";
 
+    // Explorer links — beings get both a fact-reel and an act-chain.
+    // The being's id (when present) drives the synthetic SEE paths.
+    const beingId = b.beingId || null;
+    if (beingId && discovery?.reality) {
+      const factsA = document.createElement("a");
+      factsA.className = "btn-sm btn-explore";
+      factsA.href = `#${discovery.reality}/.reel/being/${beingId}`;
+      factsA.textContent = "facts";
+      factsA.title = "this being's fact reel";
+      actions.appendChild(factsA);
+
+      const actsA = document.createElement("a");
+      actsA.className = "btn-sm btn-explore";
+      actsA.href = `#${discovery.reality}/.acts/${beingId}`;
+      actsA.textContent = "acts";
+      actsA.title = "this being's act-chain";
+      actions.appendChild(actsA);
+    }
+
     const inspectBtn = document.createElement("button");
     inspectBtn.textContent = "inspect";
     inspectBtn.className = "btn-sm";
@@ -147,7 +203,7 @@ function renderBeings(desc, { session }) {
 // Matter list
 // ────────────────────────────────────────────────────────────────
 
-function renderMatter(desc, _opts) {
+function renderMatter(desc, { discovery } = {}) {
   const ul = document.getElementById("matter-list");
   ul.innerHTML = "";
   const matters = desc.matters || [];
@@ -178,6 +234,17 @@ function renderMatter(desc, _opts) {
 
     const actions = document.createElement("div");
     actions.className = "row-actions";
+
+    // Explorer link — open this matter's fact reel.
+    if (m.matterId && discovery?.reality) {
+      const factsA = document.createElement("a");
+      factsA.className = "btn-sm btn-explore";
+      factsA.href = `#${discovery.reality}/.reel/matter/${m.matterId}`;
+      factsA.textContent = "facts";
+      factsA.title = "this matter's fact reel";
+      actions.appendChild(factsA);
+    }
+
     const inspectBtn = document.createElement("button");
     inspectBtn.textContent = "inspect";
     inspectBtn.className = "btn-sm";
@@ -192,6 +259,334 @@ function renderMatter(desc, _opts) {
 // ────────────────────────────────────────────────────────────────
 // Children
 // ────────────────────────────────────────────────────────────────
+
+// ────────────────────────────────────────────────────────────────
+// Explorer — block-list view for .reel/<kind>/<id> and .acts/<beingId>
+// ────────────────────────────────────────────────────────────────
+
+function renderExplorer(desc, { discovery }) {
+  // Hide the normal two-pane layout; mount an #explorer-pane spanning
+  // the middle region. Re-mounted each call so navigation between
+  // explorer addresses doesn't accumulate stale rows.
+  const middle = document.getElementById("middle");
+  document.getElementById("position-pane")?.classList.add("hidden");
+  document.getElementById("detail-pane")?.classList.add("hidden");
+  let pane = document.getElementById("explorer-pane");
+  if (pane) pane.remove();
+  pane = document.createElement("section");
+  pane.id = "explorer-pane";
+  middle.appendChild(pane);
+
+  if (desc.isReel) renderReelExplorer(pane, desc.reel, discovery);
+  else if (desc.isActChain) renderActChainExplorer(pane, desc.actChain, discovery);
+}
+
+function renderReelExplorer(pane, reel, discovery) {
+  const { target, facts, count } = reel || {};
+
+  const header = document.createElement("header");
+  header.className = "explorer-header";
+
+  const h = document.createElement("h2");
+  h.className = "explorer-title";
+  h.innerHTML = `⛓ <span class="dim">reel</span> ${target.kind}<span class="dim">/</span>${target.name || target.id}`;
+  header.appendChild(h);
+
+  const sub = document.createElement("div");
+  sub.className = "explorer-sub";
+  sub.textContent = `${count} fact${count === 1 ? "" : "s"} • newest first • hash-chained per reel`;
+  header.appendChild(sub);
+
+  // Quick-nav: if the target is a being, offer a one-click jump to its acts.
+  if (target.kind === "being" && discovery?.reality) {
+    const jump = document.createElement("a");
+    jump.className = "explorer-jump";
+    jump.href = `#${discovery.reality}/.acts/${target.id}`;
+    jump.textContent = `→ acts by this being`;
+    header.appendChild(jump);
+  }
+  pane.appendChild(header);
+
+  if (!facts || facts.length === 0) {
+    const empty = document.createElement("div");
+    empty.className = "explorer-empty";
+    empty.textContent = `(no facts on this ${target.kind}'s reel yet)`;
+    pane.appendChild(empty);
+    return;
+  }
+
+  const list = document.createElement("ol");
+  list.className = "block-list";
+  for (const f of facts) list.appendChild(renderFactBlock(f, discovery));
+  pane.appendChild(list);
+}
+
+function renderFactBlock(f, discovery) {
+  const li = document.createElement("li");
+  li.className = "block";
+
+  // Summary row (always shown).
+  const summary = document.createElement("div");
+  summary.className = "block-summary";
+
+  const seq = document.createElement("span");
+  seq.className = "block-seq";
+  seq.textContent = `#${f.seq ?? "?"}`;
+  seq.title = "per-reel sequence (block height)";
+  summary.appendChild(seq);
+
+  const action = document.createElement("span");
+  action.className = "block-action";
+  action.textContent = `${f.verb}:${f.action}`;
+  summary.appendChild(action);
+
+  const target = document.createElement("span");
+  target.className = "block-target dim";
+  const tk = f.target?.kind || "?";
+  const ti = f.target?.id ? short(String(f.target.id)) : "?";
+  target.textContent = `→ ${tk}/${ti}`;
+  summary.appendChild(target);
+
+  const doer = document.createElement("span");
+  doer.className = "block-doer";
+  doer.textContent = f.beingName ? `@${f.beingName}` : (f.beingId ? short(f.beingId) : "?");
+  doer.title = f.beingId || "";
+  summary.appendChild(doer);
+
+  const ts = document.createElement("span");
+  ts.className = "block-ts dim";
+  ts.textContent = formatTs(f.date);
+  ts.title = f.date || "";
+  summary.appendChild(ts);
+
+  const hash = document.createElement("code");
+  hash.className = "block-hash";
+  hash.textContent = `h:${short(f.h, 10)}`;
+  hash.title = f.h ? `full: ${f.h}\nprev: ${f.p || "(genesis)"}` : "(no hash)";
+  summary.appendChild(hash);
+
+  const toggle = document.createElement("button");
+  toggle.className = "block-toggle";
+  toggle.textContent = "▸";
+  toggle.title = "expand";
+  summary.appendChild(toggle);
+
+  li.appendChild(summary);
+
+  // Detail (hidden by default).
+  const detail = document.createElement("div");
+  detail.className = "block-detail hidden";
+
+  detail.appendChild(kvBlock("fact id", f._id, { mono: true }));
+  detail.appendChild(kvBlock("h (self)", f.h || "(none)", { mono: true }));
+  detail.appendChild(kvBlock("p (prev)", f.p || "(genesis)", { mono: true }));
+  if (f.actId) detail.appendChild(kvBlock("act id", f.actId, { mono: true, link: discovery && f.beingId ? `#${discovery.reality}/.acts/${f.beingId}` : null }));
+  if (f.params != null) detail.appendChild(jsonKv("params", f.params));
+  if (f.result != null) detail.appendChild(jsonKv("result", f.result));
+  // Target link — clickable for navigation into the target's own reel.
+  if (discovery?.reality && f.target?.kind && f.target?.id) {
+    const linkText = `${f.target.kind}/${f.target.id}`;
+    detail.appendChild(kvBlock("target", linkText, {
+      mono: true,
+      link: `#${discovery.reality}/.reel/${f.target.kind}/${f.target.id}`,
+    }));
+  }
+  // Doer link — to the doer's own facts.
+  if (discovery?.reality && f.beingId) {
+    detail.appendChild(kvBlock("doer", f.beingName || f.beingId, {
+      mono: true,
+      link: `#${discovery.reality}/.reel/being/${f.beingId}`,
+    }));
+  }
+
+  li.appendChild(detail);
+
+  toggle.onclick = () => {
+    const open = detail.classList.toggle("hidden");
+    toggle.textContent = open ? "▸" : "▾";
+  };
+  summary.onclick = (ev) => {
+    if (ev.target === toggle || ev.target.tagName === "A") return;
+    toggle.click();
+  };
+  return li;
+}
+
+function renderActChainExplorer(pane, chain, discovery) {
+  const { being, acts, count } = chain || {};
+
+  const header = document.createElement("header");
+  header.className = "explorer-header";
+
+  const h = document.createElement("h2");
+  h.className = "explorer-title";
+  h.innerHTML = `⧗ <span class="dim">act-chain</span> @${being.name || being.id}`;
+  header.appendChild(h);
+
+  const sub = document.createElement("div");
+  sub.className = "explorer-sub";
+  sub.textContent = `${count} act${count === 1 ? "" : "s"} • newest first • each act = one moment this being authored`;
+  header.appendChild(sub);
+
+  if (discovery?.reality) {
+    const jump = document.createElement("a");
+    jump.className = "explorer-jump";
+    jump.href = `#${discovery.reality}/.reel/being/${being.id}`;
+    jump.textContent = `→ facts on this being's reel`;
+    header.appendChild(jump);
+  }
+  pane.appendChild(header);
+
+  if (!acts || acts.length === 0) {
+    const empty = document.createElement("div");
+    empty.className = "explorer-empty";
+    empty.textContent = "(this being has no acts yet)";
+    pane.appendChild(empty);
+    return;
+  }
+
+  const list = document.createElement("ol");
+  list.className = "block-list";
+  for (const a of acts) list.appendChild(renderActBlock(a, discovery));
+  pane.appendChild(list);
+}
+
+function renderActBlock(a, discovery) {
+  const li = document.createElement("li");
+  li.className = "block";
+
+  const summary = document.createElement("div");
+  summary.className = "block-summary";
+
+  const ts = document.createElement("span");
+  ts.className = "block-ts";
+  ts.textContent = formatTs(a.stampedAt || a.receivedAt);
+  ts.title = a.stampedAt || a.receivedAt || "";
+  summary.appendChild(ts);
+
+  const role = document.createElement("span");
+  role.className = "block-action";
+  role.textContent = a.activeRole || "(no role)";
+  summary.appendChild(role);
+
+  const addr = document.createElement("span");
+  addr.className = "block-target dim";
+  addr.textContent = a.ibpAddress ? short(a.ibpAddress, 32) : "(no address)";
+  addr.title = a.ibpAddress || "";
+  summary.appendChild(addr);
+
+  if (a.priority && a.priority !== "INTERACTIVE") {
+    const p = document.createElement("span");
+    p.className = `block-pri pri-${a.priority.toLowerCase()}`;
+    p.textContent = a.priority;
+    summary.appendChild(p);
+  }
+
+  if (a.severedAt) {
+    const s = document.createElement("span");
+    s.className = "block-pri pri-severed";
+    s.textContent = "severed";
+    summary.appendChild(s);
+  }
+
+  const root = document.createElement("code");
+  root.className = "block-hash";
+  root.textContent = a.rootCorrelation ? `root:${short(a.rootCorrelation, 8)}` : "(no root)";
+  root.title = a.rootCorrelation || "";
+  summary.appendChild(root);
+
+  const toggle = document.createElement("button");
+  toggle.className = "block-toggle";
+  toggle.textContent = "▸";
+  summary.appendChild(toggle);
+  li.appendChild(summary);
+
+  const detail = document.createElement("div");
+  detail.className = "block-detail hidden";
+  detail.appendChild(kvBlock("act id", a._id, { mono: true }));
+  if (a.ibpAddress) detail.appendChild(kvBlock("ibp address", a.ibpAddress, { mono: true }));
+  if (a.activeRole) detail.appendChild(kvBlock("role", a.activeRole));
+  if (a.priority) detail.appendChild(kvBlock("priority", a.priority));
+  if (a.beingOut && discovery?.reality) {
+    detail.appendChild(kvBlock("being out", a.beingOut, {
+      mono: true,
+      link: `#${discovery.reality}/.reel/being/${a.beingOut}`,
+    }));
+  }
+  if (a.rootCorrelation) detail.appendChild(kvBlock("rootCorrelation", a.rootCorrelation, { mono: true }));
+  if (a.inReplyTo)       detail.appendChild(kvBlock("inReplyTo",       a.inReplyTo,       { mono: true }));
+  if (a.parentThread)    detail.appendChild(kvBlock("parentThread",    a.parentThread,    { mono: true }));
+  if (a.answers)         detail.appendChild(kvBlock("answers (summon)", a.answers,        { mono: true }));
+  if (a.startMessage?.content) detail.appendChild(jsonKv("start message", a.startMessage));
+  if (a.endMessage?.content || a.endMessage?.stopped) detail.appendChild(jsonKv("end message", a.endMessage));
+  if (a.severedAt)       detail.appendChild(kvBlock("severed at", String(a.severedAt)));
+  if (a.receivedAt)      detail.appendChild(kvBlock("received at", String(a.receivedAt)));
+  if (a.stampedAt)       detail.appendChild(kvBlock("stamped at", String(a.stampedAt)));
+
+  li.appendChild(detail);
+
+  toggle.onclick = () => {
+    const open = detail.classList.toggle("hidden");
+    toggle.textContent = open ? "▸" : "▾";
+  };
+  summary.onclick = (ev) => {
+    if (ev.target === toggle || ev.target.tagName === "A") return;
+    toggle.click();
+  };
+  return li;
+}
+
+// ── Explorer helpers ────────────────────────────────────────────
+
+function short(s, n = 12) {
+  if (typeof s !== "string") return s;
+  if (s.length <= n) return s;
+  return s.slice(0, n) + "…";
+}
+
+function formatTs(ts) {
+  if (!ts) return "";
+  try {
+    const d = new Date(ts);
+    if (isNaN(d.getTime())) return "";
+    // Compact local time; full ISO sits in title.
+    return d.toLocaleString(undefined, { hour12: false });
+  } catch { return ""; }
+}
+
+function kvBlock(label, value, { mono = false, link = null } = {}) {
+  const row = document.createElement("div");
+  row.className = "kv-block";
+  const l = document.createElement("span");
+  l.className = "kv-block-label";
+  l.textContent = label;
+  row.appendChild(l);
+  let v;
+  if (link) {
+    v = document.createElement("a");
+    v.href = link;
+  } else {
+    v = document.createElement("span");
+  }
+  v.className = "kv-block-value" + (mono ? " mono" : "");
+  v.textContent = value == null ? "(none)" : String(value);
+  row.appendChild(v);
+  return row;
+}
+
+function jsonKv(label, obj) {
+  const row = document.createElement("div");
+  row.className = "kv-block kv-block-stack";
+  const l = document.createElement("span");
+  l.className = "kv-block-label";
+  l.textContent = label;
+  row.appendChild(l);
+  const pre = document.createElement("pre");
+  pre.className = "json";
+  pre.textContent = JSON.stringify(obj, null, 2);
+  row.appendChild(pre);
+  return row;
+}
 
 function renderChildren(desc, { discovery }) {
   const ul = document.getElementById("children-list");

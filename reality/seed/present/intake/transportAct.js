@@ -3,18 +3,70 @@
 // Transport-act dispatch. The seam between a being's transport and
 // the factory's intake.
 //
-// A being acting from their own transport (portal click, browser
-// form, CLI command, IDE keypress) is NOT a SUMMON. No envelope
-// reaches them; their own realm decides what to do and emits the
-// verb. But every DO/BE in the system must ride an ambient
-// actId, and assign is the sole legitimate Act opener. So
-// transport-emitted acts can't call doVerb/beVerb directly — they
-// have to enter through intake the same way SUMMONs do.
+// ── The shape, truthfully named ─────────────────────────────────
 //
-// This helper is the entry point. The wire layer (WS/HTTP/CLI
-// handlers) calls dispatchTransportAct({ beingId, act, correlation,
-// identity }) when a transport-authenticated being emits a DO or
-// BE. The helper:
+// When a being acts from their own transport (portal click, browser
+// form, CLI command, IDE keypress), the transport ISN'T the actor.
+// The transport is matter — a channel, a UI, a wire. Only beings
+// act. So an arriving keystroke isn't yet an act; it's a delivery.
+//
+// The architecture's response: convert "a keystroke reached the
+// transport" into "the being is acting" via a self-SUMMON. The
+// transport drops a wake-call into the being's inbox saying "your
+// keystroke reached me; here's the act you indicated." The scheduler
+// picks it; the being's moment opens; from inside the moment the
+// being is the actor doing the act. The transport was the postman;
+// the being is the originator.
+//
+// This is the model refusing to let the wire short-circuit into a
+// being's reel. If the transport could directly stamp facts on the
+// being's reel, the wire would be a second writer — same class of
+// bug as opts.actor on createBeing or Mongoose timestamps:true
+// overwriting projections. The transport-summon pattern enforces
+// single-writer at the I/O boundary structurally: the wire CAN'T
+// stamp anything on a being's reel; it can only summon the being,
+// and the being's moment is what stamps.
+//
+// ── Why SUMMON and not a new verb ────────────────────────────────
+//
+// The model has exactly four verbs. SUMMON's whole job is "wake a
+// being into a moment." Whether the wake comes from another being
+// ("answer me"), a scheduled cadence ("your timer fired"), or a
+// transport ("your keystroke arrived"), the being sees a wake-call
+// land in its inbox and opens a moment. The being can't tell — and
+// shouldn't tell — the difference. That's a sign the model is tight:
+// the wire didn't need a new verb because SUMMON already covered it.
+//
+// ── transportAct: true is a semantic mode, not a structural carve-out
+//
+// Most summons drive cognition: the role's summon(message, ctx)
+// handler deliberates on the message and decides what (if anything)
+// to do. Transport-summons drive execution: the being already chose
+// before the keystroke fired; the wake-call's payload is a
+// pre-decided act, not a message to deliberate on. The kind:
+// "transport-act" flag is the architecture saying "skip deliberation;
+// the being already chose." Same machinery; two semantic modes.
+//
+// ── The two-fact-per-click thing ────────────────────────────────
+//
+// Every transport interaction puts two facts on the being's reel:
+//   - be:summon (transportAct:true) — the wake-call: "I summoned
+//     myself via the wire."
+//   - the inner do:* / be:* — the act itself.
+//
+// Both are real history. The summon records HOW the moment opened;
+// the inner fact records WHAT the being did. Open design question
+// worth bookmarking: whether transport-bookkeeping summons should
+// share a reel with deliberate being-to-being summons. They're both
+// legitimately summons (the primitive is the same), but they're
+// different kinds of history. Not deciding now; the current shape
+// is honest and the verbosity is bearable.
+//
+// ── Concrete contract ───────────────────────────────────────────
+//
+// The wire layer (WS/HTTP/CLI handlers) calls dispatchTransportAct({
+// beingId, act, correlation, identity }) when a transport-arriving
+// keystroke needs to become the being's act. The helper:
 //
 //   1. Resolves the intake-storing space — Being.homeSpace by
 //      default. This is a stopgap: intake is being-keyed
@@ -33,11 +85,11 @@
 // SEE never reaches here. Reads are synchronous folds with no
 // state change, no Fact, no Act.
 //
-// ── On the new shape ─────────────────────────────────────────────
+// ── On the async shape ──────────────────────────────────────────
 // The wire DO contract is fundamentally asynchronous. A
-// transport-act may trigger a moment that SUMMONs other beings
+// transport-summon may open a moment that SUMMONs other beings
 // whose own moments cascade. The tail of that cascade is what the
-// transport caller actually wants back, and it has no time bound.
+// originating socket actually wants back, and it has no time bound.
 // There is no correct ack timeout because the quantity being
 // timed isn't the wire layer's to bound. The correct shape is:
 // ack immediately with a correlationId; push the result through

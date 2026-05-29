@@ -41,6 +41,7 @@ import { assign }   from "./beats/1-assign.js";
 import { momentum } from "./beats/3-momentum.js";
 import { sealAct }  from "./beats/4-stamped.js";
 import { markIntakeRunning, markIntakeComplete } from "./intake/intake.js";
+import { closeInboxOnAnswer } from "../past/act/inboxProjectionFold.js";
 import { buildResponseEntry } from "./replies.js";
 
 /**
@@ -153,14 +154,44 @@ export async function runMoment({ beingId, spaceId, entry, index, handoff = null
         afterSeal: setup.summonCtx?.afterSeal || [],
       });
     } else if (setup?.plannedAct) {
-      // ok:false (and not aborted). NO Act row. NO inbox close.
-      // The summon stays open in the InboxProjection because no
-      // answering Act exists.
+      // ok:false (and not aborted). NO Act row written. What happens
+      // to the inbox row depends on the kind:
+      //
+      //   transport-act — ONE-SHOT semantics. The user clicked a
+      //     button (or the client sent a verb call); the act ran and
+      //     failed with a definitive business error like "Invalid
+      //     credentials". There's no transient state to recover from —
+      //     retrying with the same row would produce the same failure
+      //     forever, blocking every subsequent transport-act on this
+      //     being's inbox queue. Evict the row. Fire onError so the
+      //     wire-side caller (handleBe's awaitResult, doVerb's
+      //     transport carrier) gets a fast failure instead of timing
+      //     out at the wire's timeout.
+      //
+      //   summon — TRANSIENT semantics. SUMMON failures may be
+      //     genuinely retriable (LLM timeout, scheduler bailout,
+      //     temporary resource pressure). Leave the row in the
+      //     projection; a later moment can pick it up. onResponse
+      //     stays unfired because there is no answer to deliver.
+      if (isTransportAct) {
+        try { await closeInboxOnAnswer(entry.correlation); } catch {}
+        if (handoff?.onError) {
+          try {
+            handoff.onError(
+              Object.assign(
+                new Error(cognition?.reason || "transport-act failed"),
+                { shape: cognition?.shape || "internal" },
+              ),
+            );
+          } catch {}
+        }
+      }
       log.info(
         "Moment",
         `released being=${beingId.slice(0, 8)} ` +
         `shape=${cognition?.shape || "unknown"} ` +
-        `reason="${(cognition?.reason || "").slice(0, 80)}" — no Act written`,
+        `reason="${(cognition?.reason || "").slice(0, 80)}" — no Act written` +
+        (isTransportAct ? " (inbox row evicted)" : ""),
       );
     }
   } catch (err) {

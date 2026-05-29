@@ -81,6 +81,12 @@ const SCALAR_SET_FIELDS = new Set([
   "content",
   "spaceId",
   "beingId",
+  // SPATIAL fields. Both shapes are `{ x, y, z? }`. coord (Being)
+  // is the position inside currentSpace; size (Space) is the
+  // bounding box. The set-being handler clamps coord to size
+  // before stamping; the reducer just records the clamped value.
+  "coord",
+  "size",
 ]);
 
 // Per-kind birth shapes. The reducer's job on `do:birth`: produce the

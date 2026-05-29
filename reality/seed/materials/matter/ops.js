@@ -15,9 +15,45 @@ import { registerOperation } from "../../ibp/operations.js";
 import { IbpError, IBP_ERR } from "../../ibp/protocol.js";
 import { emitFact } from "../../past/fact/facts.js";
 import Matter from "./matter.js";
+import Space from "../space/space.js";
 import { I_AM } from "../being/seedBeings.js";
 import { v4 as uuidv4 } from "uuid";
 import { detectTargetKind, targetIdOf } from "../_targetShape.js";
+
+const COORD_AXES = ["x", "y", "z"];
+
+/**
+ * Clamp a coord write against the matter's space size. Same shape as
+ * the set-being clamp (being/ops.js): half-open [0, cap) per axis,
+ * integer or continuous. If the matter's space has no size, the coord
+ * passes through.
+ */
+async function clampMatterCoord(matterDoc, raw) {
+  const out = {};
+  for (const a of COORD_AXES) {
+    if (typeof raw[a] === "number" && Number.isFinite(raw[a])) {
+      out[a] = raw[a];
+    }
+  }
+  if (Object.keys(out).length === 0) return null;
+  const spaceId = matterDoc?.spaceId || null;
+  if (!spaceId) return out;
+  const space = await Space.findById(spaceId).select("size").lean();
+  const size = space?.size || null;
+  if (!size) return out;
+  for (const a of COORD_AXES) {
+    if (out[a] === undefined) continue;
+    const cap = typeof size[a] === "number" && size[a] > 0 ? size[a] : null;
+    if (cap === null) continue;
+    if (Number.isInteger(out[a])) {
+      out[a] = Math.max(0, Math.min(Math.trunc(cap) - 1, out[a]));
+    } else {
+      const high = cap - Number.EPSILON;
+      out[a] = Math.max(0, Math.min(high, out[a]));
+    }
+  }
+  return out;
+}
 
 const RESERVED_SET_META_NS = new Set([
   // none today; the set kept for symmetry with space/being
@@ -126,8 +162,23 @@ async function setOnMatterHandler({ target, params }) {
     return { matterId: String(target._id), name: value };
   }
 
+  // coord: the matter's position inside spaceId. Same shape and
+  // semantics as Being.coord — `{ x, y, z? }` clamped to Space.size.
+  // A being moving matter inside a space writes here through the
+  // standard set-matter path.
+  if (field === "coord") {
+    if (value === null || value === undefined) {
+      return { matterId: String(target._id), coord: null };
+    }
+    if (typeof value !== "object" || Array.isArray(value)) {
+      throw new Error("set-matter: `coord` value must be an object {x,y,z?} or null");
+    }
+    const clamped = await clampMatterCoord(target, value);
+    return { matterId: String(target._id), coord: clamped };
+  }
+
   throw new Error(
-    `set-matter: unknown field "${field}". Supported: name, qualities.<namespace>[.<innerKey>]`,
+    `set-matter: unknown field "${field}". Supported: name, coord, qualities.<namespace>[.<innerKey>]`,
   );
 }
 

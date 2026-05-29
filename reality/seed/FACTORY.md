@@ -218,8 +218,7 @@ present/
 │   └── seeResolvers.js     prompt-context SEE resolvers
 ├── roles/               summonable being templates, each co-located
 │   ├── arrival/role.js     unauthenticated visitor stance
-│   ├── auth/role.js        legacy auth-being (cherub replaces)
-│   ├── cherub/role.js      BE-honoring auth being (register/claim/release/switch)
+│   ├── cherub/role.js      BE-honoring identity-binding handler (register/claim/release/switch)
 │   ├── human/role.js       receptive role every human carries
 │   ├── llm-assigner/{role,ops}.js  LLM connection management being + DO ops
 │   ├── reality-manager/{role,tools}.js  the operator's autonomous assistant

@@ -36,11 +36,11 @@ Two categories of things are addressable in IBP. Position and Stance. Everything
 | Concept | Form | Example |
 |---|---|---|
 | **Position** | `<place>/<path>` | `treeos.ai/` (root), `treeos.ai/~tabor` (home), `treeos.ai/flappybird/chapter-1` (tree space) |
-| **Stance** | `<position>@<being>` | `treeos.ai/flappybird@ruler`, `treeos.ai/@auth` |
+| **Stance** | `<position>@<being>` | `treeos.ai/flappybird@ruler`, `treeos.ai/@cherub` |
 
 ### Structural vocabulary. Not addressable on its own.
 
-- **Place** does double duty, distinguished by the trailing slash. `treeos.ai` (no slash) is the bare domain identifier — the name of the sovereign server, used by BE when dispatching to the place's auth-being. `treeos.ai/` (with slash) is the Place Position of that place — addressable like any Position. The trailing slash is the load-bearing distinction.
+- **Place** does double duty, distinguished by the trailing slash. `treeos.ai` (no slash) is the bare domain identifier — the name of the sovereign server, used by BE when dispatching to the place's cherub. `treeos.ai/` (with slash) is the Place Position of that place — addressable like any Position. The trailing slash is the load-bearing distinction.
 - **IBP Address** is the bridge form, `<stance> :: <stance>`. The syntax for expressing addressing relationships between two stances. Not a thing that gets addressed; the format used to address things. Like URL is not addressed; URLs are the format.
 - **Being** is a cognitive shape (`@ruler`, `@archivist`, a username). Not addressable on its own. Combines with a Position to form a Stance.
 
@@ -51,7 +51,7 @@ Two categories of things are addressable in IBP. Position and Stance. Everything
 | `treeos.ai` | domain only, Place identifier | BE |
 | `treeos.ai/` | domain plus trailing slash, Place Position | SEE, DO |
 | `treeos.ai/flappybird` | domain plus path, deeper Position | SEE, DO |
-| `treeos.ai/@auth` | Place Position plus being, Stance at the Place Position | SUMMON, BE |
+| `treeos.ai/@cherub` | Place Position plus being, Stance at the Place Position | SUMMON, BE |
 | `treeos.ai/flappybird@ruler` | deeper Position plus being, Stance at space | SEE, SUMMON, BE |
 
 A **Stance** is one side of a bridge: a being at a position. An **IBP Address** joins two stances through a **bridge** (`::`), naming who's addressing whom.
@@ -138,7 +138,7 @@ IBP's surface is four WebSocket verbs, each with a distinct address rule:
 | **SEE** | position or stance | Observation works at either tier: what's here, or what does this being see here. |
 | **DO** | position only | Mutations target persistent data. Beings are summoned moments, not storage — nothing at a stance to mutate. |
 | **SUMMON** | stance only | Beings live as stances. Engagement requires both position and being (inboxes are per-being-per-position). |
-| **BE** | stance only | Self-identity operations target stances. For fresh registration, the stance is the place's auth-being. |
+| **BE** | stance only | Self-identity operations target stances. For fresh registration, the stance is the place's cherub. |
 
 **Data and beings.** IBP distinguishes data from beings. Data is mutable (through DO). Beings are not. You can shape a being's environment (DO on its position data), send it messages (SUMMON to its stance), and observe its perspective (SEE on its stance). You cannot mutate a being directly. See [docs/protocol.md](docs/protocol.md) for the architectural commitment.
 
@@ -152,7 +152,7 @@ The build sequence:
 1. Build SEE fresh. Full Position Description for all three zones; live SEE streams RFC 6902 patches.
 2. Build DO with four named actions plus `set-meta` to prove the dispatch pattern.
 3. Build SUMMON and the inbox. Sync respond-mode first, with one demonstration being.
-4. Build BE. Auth-being handles register/claim/release/switch.
+4. Build BE. The cherub handles register/claim/release/switch.
 5. Add async respond-mode. Response routing back to the originator's inbox.
 6. Finish the Portal shell. Place/Home/Tree zone renderers, tabs, navigator, identity panel.
 
@@ -171,7 +171,7 @@ portal/
 │   ├── message-envelope.md    SUMMON envelope and intent semantics
 │   ├── inbox.md               inbox model, summoning triggers, response delivery
 │   ├── do-actions.md          catalog of named DO actions plus set-meta
-│   ├── be-operations.md       identity bootstrap and auth-being
+│   ├── be-operations.md       identity bootstrap and cherub
 │   ├── server-protocol.md     wire-level rules for the four ops
 │   ├── ibp-address.md      IBP Address grammar + parser semantics
 │   ├── position-description.md JSON shape places return per zone

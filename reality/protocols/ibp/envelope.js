@@ -75,16 +75,29 @@ export function parseUnifiedEnvelope(msg) {
       `ibp envelope must include verb (one of: ${[...VALID_VERBS].join(", ")})`,
     );
   }
-  const address = typeof msg.address === "string" ? msg.address : null;
+  let address = typeof msg.address === "string" ? msg.address : null;
   if (!address || address.length === 0) {
     throw new IbpError(IBP_ERR.INVALID_INPUT, "ibp envelope must include a non-empty `address`");
   }
-  const addressKind = classifyAddress(address);
+  let addressKind = classifyAddress(address);
 
-  // Per-verb address-kind contract. Bare-place addresses (no slash) are
-  // only valid for BE; every other verb needs at least the place-root
-  // marker — `<reality>/` — to name a position. SUMMON additionally needs
-  // an @being qualifier.
+  // Per-verb address-kind contract. Bare-place addresses (no slash)
+  // mean "the place root" for verbs that need a position (SEE, DO).
+  // Normalize once at the IBP layer so the seed never sees a bare-
+  // place for position-targeted verbs — it always receives a position
+  // address (`<reality>/`) that resolves to the place root via the
+  // standard path-walk. The seed doesn't worry about the difference.
+  //
+  // BE is intentionally NOT normalized: it accepts bare-place
+  // shorthand for register/claim against the place's cherub, which
+  // is a distinct semantic shape from "BE on the place root."
+  // SUMMON requires a stance (@being qualifier) and rejects bare-
+  // place outright; no normalization is meaningful.
+  if ((verb === "see" || verb === "do") && addressKind === "place") {
+    address     = `${address}/`;
+    addressKind = "position";
+  }
+
   switch (verb) {
     case "see":
       if (addressKind !== "position" && addressKind !== "stance") {

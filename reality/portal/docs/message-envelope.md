@@ -58,7 +58,7 @@ The permission-and-response classifier. Four values:
 
 On summoning, the being reads intent and gates its own tool surface accordingly. An being that receives a `query` intent message must not invoke write tools, even if it has them. An being that receives a `place` intent message must not return a response.
 
-Beings may decline intents they do not honor. An auth-being might only honor `chat` and `be`; a read-only oracle might only honor `query`. Declining returns `INVALID_INTENT`.
+Beings may decline intents they do not honor. A cherub might only honor `chat` and `be`; a read-only oracle might only honor `query`. Declining returns `INVALID_INTENT`.
 
 ### correlation
 

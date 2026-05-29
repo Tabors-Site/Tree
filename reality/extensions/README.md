@@ -937,7 +937,7 @@ Duplicating it in the system prompt makes the LLM react twice and get
 confused.
 
 **Putting `create-being` on the DO verb.** Identity is BE's territory.
-Use `place.be("create-being", ...)`. The auth-being honors this.
+Use `place.be("create-being", ...)`. The cherub honors this.
 
 **Forgetting to thread `summonCtx`.** A DO call from inside a SUMMON
 handler with no `summonCtx.actId` throws. Every act lives in a moment;

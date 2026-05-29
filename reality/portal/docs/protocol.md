@@ -63,11 +63,11 @@ Two categories of things are addressable in IBP. Position and Stance. Everything
 | Concept | Form | What it names |
 |---|---|---|
 | **Position** | `<place>/<path>` | A place in the world. The place domain plus `/` plus the path. Examples: `treeos.ai/` (Place Position), `treeos.ai/~tabor` (home), `treeos.ai/flappybird/chapter-1` (a tree space). Accepted by SEE and DO. |
-| **Stance** | `<position>@<being>` | A being at a position. `treeos.ai/flappybird@ruler`, `treeos.ai/@auth`. Accepted by SEE, required by SUMMON and BE. |
+| **Stance** | `<position>@<being>` | A being at a position. `treeos.ai/flappybird@ruler`, `treeos.ai/@cherub`. Accepted by SEE, required by SUMMON and BE. |
 
 ### Structural vocabulary. Not addressable on its own.
 
-- **Place** does double duty, distinguished by the trailing slash. `treeos.ai` (no slash) is the bare domain identifier, the name of the sovereign server, used by BE when dispatching to the place's auth-being. `treeos.ai/` (with slash) is the Place Position of that place, addressable like any Position. The trailing slash is the load-bearing distinction.
+- **Place** does double duty, distinguished by the trailing slash. `treeos.ai` (no slash) is the bare domain identifier, the name of the sovereign server, used by BE when dispatching to the place's cherub. `treeos.ai/` (with slash) is the Place Position of that place, addressable like any Position. The trailing slash is the load-bearing distinction.
 - **IBP Address** is the bridge form, `<stance> :: <stance>`. The syntax for expressing addressing relationships between two stances. Not a thing that gets addressed; the format used to address things. Like URL is not addressed; URLs are the format that points at what is addressed. An IBP Address is rarely inside a verb envelope. It describes the *relationship* between requester and target. The envelope carries the target side only; the requester side is implicit, established by BE and carried in the identity token. IBP Addresses appear in UI surfaces (tab titles, history) and in being-to-being framing.
 - **Being** is a cognitive shape (`@ruler`, `@archivist`, a username like `@tabor`). Not addressable on its own. Combines with a Position to form a Stance. The `@qualifier` in a Stance address names the being but never targets it.
 
@@ -78,7 +78,7 @@ Two categories of things are addressable in IBP. Position and Stance. Everything
 | `treeos.ai` | domain only, Place identifier | BE |
 | `treeos.ai/` | domain plus trailing slash, Place Position | SEE, DO |
 | `treeos.ai/flappybird` | domain plus path, deeper Position | SEE, DO |
-| `treeos.ai/@auth` | Place Position plus being, Stance at the Place Position | SUMMON, BE |
+| `treeos.ai/@cherub` | Place Position plus being, Stance at the Place Position | SUMMON, BE |
 | `treeos.ai/flappybird@ruler` | deeper Position plus being, Stance at space | SEE, SUMMON, BE |
 
 ## Envelopes
@@ -90,7 +90,7 @@ Each verb's envelope is named explicitly for the kind of address it expects. The
 | **SEE** | `position` OR `stance` | Observation works at either tier. Position-level data (what's here?) or being-perspective interpretation (what does this being see here?). |
 | **DO** | `position` only | Mutation only happens to persistent data. Beings are summoned moments, not storage — there is nothing at a stance to mutate. |
 | **SUMMON** | `stance` only | Beings live as stances (being-at-position). Engagement requires both. Inboxes are per-being-per-position. |
-| **BE** | `stance` (full form) OR `place` (domain form, auth-being implicit) | Self-identity operations target stances. For fresh registration the stance is the place's auth-being (`<place>/@auth`); passing just the bare domain (`<place>`, no slash) is shorthand for the same. |
+| **BE** | `stance` (full form) OR `place` (domain form, cherub implicit) | Self-identity operations target stances. For fresh registration the stance is the place's cherub (`<place>/@cherub`); passing just the bare domain (`<place>`, no slash) is shorthand for the same. |
 
 The asymmetry between SEE and DO is real and reflects what beings are. Observation can ask "what does this being see here" because that question has meaning even when the being is not currently summoned (the answer is "how this being would interpret position data"). Mutation cannot ask "what does this being become" because beings are not mutable — only the data they read is mutable.
 
@@ -121,16 +121,16 @@ Accepts a `stance` field. Required. Inboxes are per-being-per-position, so the b
 
 ### BE
 
-Accepts a `stance` field (the full form) OR a `place` field (the domain-only shorthand). Both forms address the place's auth-being for `register` and credential-based `claim`. For `release`, `switch`, and token-based `claim`, the address is the specific held stance.
+Accepts a `stance` field (the full form) OR a `place` field (the domain-only shorthand). Both forms address the place's cherub for `register` and credential-based `claim`. For `release`, `switch`, and token-based `claim`, the address is the specific held stance.
 
 ```
 // register: use either form
 { verb: "be", operation: "register", place:   "<place>",        payload: {...} }
-{ verb: "be", operation: "register", stance: "<place>/@auth",  payload: {...} }
+{ verb: "be", operation: "register", stance: "<place>/@cherub",  payload: {...} }
 
-// claim with credentials: either form (auth-being processes credentials)
+// claim with credentials: either form (cherub processes credentials)
 { verb: "be", operation: "claim",    place:   "<place>",        payload: { username, password } }
-{ verb: "be", operation: "claim",    stance: "<place>/@auth",  payload: { username, password } }
+{ verb: "be", operation: "claim",    stance: "<place>/@cherub",  payload: { username, password } }
 
 // token re-claim, release, switch: stance form (names the specific be-er)
 { verb: "be", operation: "claim",    stance: "<stance>", identity: <token> }
@@ -248,7 +248,7 @@ Full detail: [message-envelope.md](message-envelope.md) and [inbox.md](inbox.md)
 
 ## BE
 
-BE manages the requester's own identity. The address is a `stance` (the full form) or a `place` (the domain-only shorthand for register and credential claim). Both forms reach the place's auth-being; `place` is just the shorter version.
+BE manages the requester's own identity. The address is a `stance` (the full form) or a `place` (the domain-only shorthand for register and credential claim). Both forms reach the place's cherub; `place` is just the shorter version.
 
 ```
 {
@@ -262,15 +262,15 @@ BE manages the requester's own identity. The address is a `stance` (the full for
 
 | Operation | Address | Why |
 |---|---|---|
-| `register` | `place: "<place>"` or `stance: "<place>/@auth"` (equivalent) | No prior stance. The auth-being processes credential creation. |
-| `claim` (credentials) | `place: "<place>"` or `stance: "<place>/@auth"` (equivalent) | No prior stance. Credentials are validated by the auth-being. |
+| `register` | `place: "<place>"` or `stance: "<place>/@cherub"` (equivalent) | No prior stance. The cherub processes credential creation. |
+| `claim` (credentials) | `place: "<place>"` or `stance: "<place>/@cherub"` (equivalent) | No prior stance. Credentials are validated by the cherub. |
 | `claim` (token re-claim) | `stance: "<held stance>"` | A previously-held stance is being re-activated. |
 | `release` | `stance: "<held stance>"` | The user knows which one they are letting go. |
 | `switch` | `stance: "<target stance>"` | The session already holds the target; this selects it as active. |
 
-The auth-being is the place's welcome character: it is the stance that visitors first encounter. Whatever the place's values are about who can be there get expressed through the auth-being's responses. Public places shape their auth-being to be friendly and accessible. Private places shape theirs to require an invite code. Research places shape theirs to bind the be-er to a contract. The auth-being is an architectural commitment that becomes a UX surface.
+The cherub is the place's welcome character: it is the stance that visitors first encounter. Whatever the place's values are about who can be there get expressed through the cherub's responses. Public places shape their cherub to be friendly and accessible. Private places shape theirs to require an invite code. Research places shape theirs to bind the be-er to a contract. The cherub is an architectural commitment that becomes a UX surface.
 
-The auth-being is inspectable via SEE on its stance (typically `<place>/@auth`); places choose the qualifier name and may install custom auth-being beings.
+The cherub is inspectable via SEE on its stance (typically `<place>/@cherub`); places choose the qualifier name and may install custom cherub beings.
 
 Full detail: [be-operations.md](be-operations.md).
 
@@ -281,7 +281,7 @@ An unestablished requester is in the **arrival stance** at the place they have j
 The protocol commits to exactly two things about arrivals:
 
 1. Every place has an arrival stance, so unestablished visitors have something to be.
-2. Every place has an auth-being, and BE addressed at the auth-being (`<place>` or `<place>/@auth`) is always permitted from the arrival stance, so visitors can register or claim — subject to which BE operations the place's auth-being enables (a private place can disable `register` entirely).
+2. Every place has an cherub, and BE addressed at the cherub (`<place>` or `<place>/@cherub`) is always permitted from the arrival stance, so visitors can register or claim — subject to which BE operations the place's cherub enables (a private place can disable `register` entirely).
 
 Beyond those two, **everything is place-configured**. The place defines what an arrival can SEE, DO, and SUMMON to. The place's character expresses through what its arrival stance permits.
 
@@ -302,7 +302,7 @@ What each field means:
 
 - **`see.allowed_visibility`** lists Space `visibility` values that arrivals may SEE. The `visibility` field already exists on the Space schema; arrivals get filtered access to positions whose visibility matches. `["public"]` is the common open setting. `[]` denies all SEE.
 - **`do.allowed_actions`** is a list of action names (`["write-note", "set-meta"]`) or the wildcard `"*"`. Empty list denies all DO.
-- **`talk.allowed_targets`** lists being names arrivals can SUMMON to. `["@auth", "@guide"]` permits the auth-being and a public guide; `"*"` permits any being.
+- **`talk.allowed_targets`** lists being names arrivals can SUMMON to. `["@cherub", "@guide"]` permits the cherub and a public guide; `"*"` permits any being.
 - **`be.allowed_operations`** lists which BE operations are honored. `["register", "claim"]` is the default; a closed place may narrow it.
 
 Stance Authorization (see below) checks arrival permissions on every request from an unestablished requester. No special-case logic at the protocol layer. Arrivals follow the same rules as any other stance, with their permission profile sourced from this metadata namespace.
@@ -311,14 +311,14 @@ The discovery position (`<place>/.discovery`) is implicitly readable by arrivals
 
 ### Place-level BE configuration
 
-Two booleans at the place root govern which BE operations the auth-being honors:
+Two booleans at the place root govern which BE operations the cherub honors:
 
 ```
 metadata.auth.register_enabled = true | false   // default: true
 metadata.auth.claim_enabled    = true | false   // default: true
 ```
 
-A closed place disables `register_enabled` and leaves `claim_enabled` on. A maintenance-mode place disables both. The auth-being reads these on every BE call; it rejects with `FORBIDDEN` when the requested operation is disabled. These are intentionally simpler than per-stance `be.allowed_operations` for the common case. Most places tune register/claim availability at the place level, not per stance.
+A closed place disables `register_enabled` and leaves `claim_enabled` on. A maintenance-mode place disables both. The cherub reads these on every BE call; it rejects with `FORBIDDEN` when the requested operation is disabled. These are intentionally simpler than per-stance `be.allowed_operations` for the common case. Most places tune register/claim availability at the place level, not per stance.
 
 ### The system default
 
@@ -378,7 +378,7 @@ These are deliberately deferred until real places surface real configuration nee
 - **Additional stance vocabularies**: `member`, `guest`, `contributor`, `moderator`, and custom stances configured per place. The seed's authorize function reads `metadata.beings.<stance>.permissions` regardless of stance name; Phase 7 work is the resolver that assigns these stances to authenticated identities at a place.
 - **Cross-place stance assignment** (Phase 8+ federation). When an identified visitor from another place contacts this place, the receiving place needs to look up its policy for that identity and assign a stance. Requires cross-place identity infrastructure (Canopy or successor). The authorize function is designed so this resolver plugs in without changing the verb-side flow.
 - **Place-tooling presets** (personal / community / service) that configure arrival permissions out of the box. Not protocol features; convenience configurations the place installer provides.
-- **Auth-being customization** beyond defaults. Places that want different welcome characters, invite-only registration flows, contract acceptance, etc. Today's default auth-being is open registration.
+- **Cherub customization** beyond defaults. Places that want different welcome characters, invite-only registration flows, contract acceptance, etc. Today's default cherub is open registration.
 
 The architecture's commitments are preserved by Phase 5; the implementation just ships only what real use has validated. The authorize function adapts as new shape requirements surface; the work compounds rather than gets replaced.
 
@@ -471,5 +471,5 @@ IBP does message delivery to beings and operations on the world from be-ers. Eve
 - [message-envelope.md](message-envelope.md) the SUMMON envelope in detail
 - [inbox.md](inbox.md) the inbox model and summoning triggers
 - [do-actions.md](do-actions.md) the catalog of named DO actions
-- [be-operations.md](be-operations.md) identity bootstrap and auth-being
+- [be-operations.md](be-operations.md) identity bootstrap and cherub
 - [server-protocol.md](server-protocol.md) wire-level rules for the four ops

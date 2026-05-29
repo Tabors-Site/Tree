@@ -50,7 +50,6 @@
 
 import log from "../../seedReality/log.js";
 import Being from "./being.js";
-import Space from "../space/space.js";
 import { summonCreateBeing } from "../../ibp/verbs/summon.js";
 import { findIAm, iAmIdentity } from "./identity.js";
 
@@ -96,28 +95,33 @@ export const SEED_DELEGATES = [
  * place). ensureSpaceRoot() creates my row first and then calls
  * this. Subsequent boots re-run idempotently to backfill any drift.
  */
-export async function ensureSeedDelegates(spaceRootId) {
+export async function ensureSeedDelegates(spaceRootId, summonCtx, opts = {}) {
   if (!spaceRootId) {
     log.warn("SeedDelegates", "ensureSeedDelegates called without a spaceRootId");
     return { created: 0, existing: 0, deferred: false };
   }
-
-  const spaceRoot = await Space.findById(spaceRootId);
-  if (!spaceRoot) {
-    log.warn(
-      "SeedDelegates",
-      `place root ${String(spaceRootId).slice(0, 8)} not found; skipping`,
+  if (!summonCtx) {
+    throw new Error(
+      "ensureSeedDelegates requires summonCtx. Reachable only from inside withBootMoment(...).",
     );
-    return { created: 0, existing: 0, deferred: false };
   }
 
-  const iAm = await findIAm();
-  if (!iAm) {
-    log.info(
-      "SeedDelegates",
-      "no I_AM yet; deferring seed-delegate setup until ensureSpaceRoot() runs",
-    );
-    return { created: 0, existing: 0, deferred: true };
+  // Inside the boot moment the spaceRoot and I-Am Being rows haven't
+  // materialized yet (they're pending facts in summonCtx.deltaF).
+  // sprout.js passes the planted I-Am id (`opts.iAmBeingId`); without
+  // it we fall back to the live lookup for the Awakening path.
+  let iAm = null;
+  if (opts.iAmBeingId) {
+    iAm = { _id: opts.iAmBeingId, _pending: true };
+  } else {
+    iAm = await findIAm();
+    if (!iAm) {
+      log.info(
+        "SeedDelegates",
+        "no I_AM yet; deferring seed-delegate setup until ensureSpaceRoot() runs",
+      );
+      return { created: 0, existing: 0, deferred: true };
+    }
   }
   const rootBeingId = String(iAm._id);
 
@@ -137,9 +141,9 @@ export async function ensureSeedDelegates(spaceRootId) {
         // write retired (2026-05-23); fact-driven keeps the genesis
         // exception list short (only the spaceRoot/I_AM creation).
         const { doVerb } = await import("../../ibp/verbs/do.js");
-        const opts = { scaffold: true };
+        const setOpts = { scaffold: true, summonCtx };
         const setField = (field, value) =>
-          doVerb(existingBeing, "set-being", { field, value }, opts);
+          doVerb(existingBeing, "set-being", { field, value }, setOpts);
 
         if (existingBeing.operatingMode !== spec.operatingMode) {
           await setField("operatingMode", spec.operatingMode);
@@ -170,7 +174,13 @@ export async function ensureSeedDelegates(spaceRootId) {
       // = place root because seed delegates live at the place root
       // itself; parent = me, so the being-tree chain delegate → me
       // → null is intact.
-      const iAmIdent = await iAmIdentity();
+      // Build the I-Am identity from the planted id without a Mongo
+      // lookup (the row is still pending inside the boot moment). The
+      // be:summon-create Fact summonCreateBeing stamps inside this
+      // moment carries rootBeingId as the actor on its own reel.
+      const iAmIdent = iAm._pending
+        ? { beingId: rootBeingId, name: "I_AM" }
+        : await iAmIdentity();
       await summonCreateBeing({
         spec: {
           name: spec.name,
@@ -181,6 +191,7 @@ export async function ensureSeedDelegates(spaceRootId) {
         },
         identity: iAmIdent,
         scaffold: true,
+        summonCtx,
       });
       created++;
       log.info("Genesis", `I create ${spec.name}.`);

@@ -163,8 +163,8 @@ export class Scene {
 
   // Replace the world with what's described by the given descriptor.
   // Two visual modes for the place zone:
-  //   - arrival: matrix-dark ground, only the auth-being visible.
-  //     Movement locked. Player faces the auth-being.
+  //   - arrival: matrix-dark ground, only the cherub visible.
+  //     Movement locked. Player faces the cherub.
   //   - default: grassy field, all beings and children rendered.
   //     Movement unlocked.
   renderDescriptor(desc, { isAuthenticated } = {}) {
@@ -336,7 +336,7 @@ export class Scene {
     // acting on while their chainstep is active.
     this._applyBeingActivity(beingsToRender);
 
-    // Drop the player at origin. In arrival, face the auth-being (z negative).
+    // Drop the player at origin. In arrival, face the cherub (z negative).
     this.camera.position.set(0, 1.7, arrival ? 2 : 8);
     this.yaw = 0;
     this.pitch = 0;

@@ -13,7 +13,7 @@ What's locked:
 - SUMMON envelope and intent classifier ([message-envelope.md](message-envelope.md)).
 - Inbox model and summoning triggers ([inbox.md](inbox.md)).
 - DO action catalog and `set-meta` semantics ([do-actions.md](do-actions.md)).
-- BE operations and auth-being model ([be-operations.md](be-operations.md)).
+- BE operations and cherub model ([be-operations.md](be-operations.md)).
 - Position Description JSON contract ([position-description.md](position-description.md)).
 - Server protocol wire-level rules ([server-protocol.md](server-protocol.md)).
 - Identity-first session model ([identity.md](identity.md)).
@@ -104,13 +104,13 @@ The hardest piece. Inbox seed helpers, summoning triggers, sync respond-mode fir
 
 **Estimate:** 1 week. The inbox primitive and the summoning trigger are the load-bearing pieces.
 
-## Phase 5: BE and the auth-being
+## Phase 5: BE and the cherub
 
 Identity bootstrap. Establishes the protocol's full surface.
 
 **Work:**
 
-1. Define the auth-being being for treeos.ai.
+1. Define the cherub being for treeos.ai.
 2. Build [place/ibp/verbs/be.js](place/ibp/verbs/be.js):
    - `register` operation: payload validation, user creation, token issuance.
    - `claim` operation: credential check, token issuance.
@@ -122,8 +122,8 @@ Identity bootstrap. Establishes the protocol's full surface.
 
 **Verification:**
 
-- `be register stance: "treeos.ai/@auth" { username, password }` creates a new user and returns a token.
-- `be claim stance: "treeos.ai/@auth" { username, password }` returns a token (credential-based).
+- `be register stance: "treeos.ai/@cherub" { username, password }` creates a new user and returns a token.
+- `be claim stance: "treeos.ai/@cherub" { username, password }` returns a token (credential-based).
 - `be claim stance: "tabor@treeos.ai" identity: <token>` re-claims a held stance.
 - `be release stance: "tabor@treeos.ai"` invalidates the identity token.
 - `be switch stance: "<target stance>" from: "<from stance>" identity: <token>` swaps the active be-er.
@@ -149,8 +149,8 @@ Phase 5 wired BE but left per-verb auth checks ad-hoc. Phase 5.5 builds the infr
    - `do: { allowed_actions: [...] | "*" }` — list of action names or wildcard.
    - `summon: { allowed_targets: ["@being", ...] | "*" }` — list of being names or wildcard.
    - `be: { allowed_operations: [...] }` — which BE ops the stance can call.
-3. Apply place-level BE flags: `metadata.auth.register_enabled` and `metadata.auth.claim_enabled` (both default `true`). Auth-being rejects with `FORBIDDEN` when the requested operation is disabled.
-4. Replace per-verb ad-hoc auth checks in [place/ibp/verbs/*.js](place/ibp/verbs/) with calls to `authorize()`. SEE, DO, SUMMON route through it. BE bootstrap stays (the auth-being is the only escape hatch for unestablished requesters), but consults the place-level BE flags.
+3. Apply place-level BE flags: `metadata.auth.register_enabled` and `metadata.auth.claim_enabled` (both default `true`). Cherub rejects with `FORBIDDEN` when the requested operation is disabled.
+4. Replace per-verb ad-hoc auth checks in [place/ibp/verbs/*.js](place/ibp/verbs/) with calls to `authorize()`. SEE, DO, SUMMON route through it. BE bootstrap stays (the cherub is the only escape hatch for unestablished requesters), but consults the place-level BE flags.
 5. Seed default `arrival` and `owner` stance permissions on place boot, so a freshly installed place has the conservative defaults set explicitly in metadata.
 
 **Deferred (Phase 7+):**
@@ -257,7 +257,7 @@ Phase 0   [DONE]               foundations: format contracts + docs
 Phase 2   [2-3 days]           build SEE fresh
 Phase 3   [3-4 days]           build DO with 4 actions
 Phase 4   [1 week]             build SUMMON + inbox + sync respond-mode
-Phase 5   [3-4 days]           build BE + auth-being
+Phase 5   [3-4 days]           build BE + cherub
 Phase 6   [4-5 days]           add async respond-mode + response routing
 Phase 7   [1-2 weeks]          portal shell completion
 Phase 8   [2-4 weeks]          per-extension migration

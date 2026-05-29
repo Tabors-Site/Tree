@@ -1,6 +1,6 @@
 // TreeOS Portal 3D — UI overlays.
 //
-// Login menu (opened when you gaze at the auth-being), gaze labels above
+// Login menu (opened when you gaze at the cherub), gaze labels above
 // objects, and a small HUD line at the top of the screen.
 
 const overlayRoot = () => document.getElementById("overlays");
@@ -116,10 +116,10 @@ export function hideLabel() {
   if (labelEl) labelEl.style.display = "none";
 }
 
-// Contextual sign-in panel shown when gazing at the auth-being while
+// Contextual sign-in panel shown when gazing at the cherub while
 // unestablished. Behaves like the logout panel: appears on gaze, hides
 // on look-away. The panel persists ONLY while the gaze stays on the
-// auth-being; if the gaze leaves, the panel removes itself, but state
+// cherub; if the gaze leaves, the panel removes itself, but state
 // (typed values) is preserved across re-gazes so the user doesn't have
 // to restart on a brief glance-away.
 let _signInPanelEl = null;
@@ -242,8 +242,8 @@ export function hideAuthSignInPanel() {
   _signInPanelEl = null;
 }
 
-// Small action panel shown when gazing at the auth-being while signed in.
-// Persists while the gaze stays on the auth-being; closes when the user
+// Small action panel shown when gazing at the cherub while signed in.
+// Persists while the gaze stays on the cherub; closes when the user
 // looks away or the action completes.
 let _authActionsEl = null;
 export function showAuthActions({ username, onLogout }) {

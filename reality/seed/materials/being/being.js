@@ -110,9 +110,9 @@ const BeingSchema = new mongoose.Schema({
   // The being tree. Beings form a recursive lineage parallel to the
   // space tree. The place has exactly one root being — me — with
   // parentBeingId: null. Every other being chains back to me:
-  // auth, llm-assigner, reality-manager are my children; the first
-  // human becomes the root operator under me; subsequent humans
-  // register under the auth-being; rulers parent under whoever
+  // cherub, llm-assigner, reality-manager, arrival are my children;
+  // the first human becomes the root operator under me; subsequent
+  // humans register under the cherub; rulers parent under whoever
   // promoted them and spawn their own inner trio.
   //
   // Being-tree parent/child is independent of homeSpace: many
@@ -141,6 +141,25 @@ const BeingSchema = new mongoose.Schema({
   // next summon places at a new IBP Address; earlier summons stay
   // under their original address.
   currentSpace: { type: String, ref: "Space", default: null, index: true },
+
+  // Coordinate inside currentSpace. Null when the being has no
+  // spatial position (most beings most of the time). When set, the
+  // shape is `{ x: Number, y: Number, z?: Number }`. A being can
+  // only be at one coord at a time because it can only be in one
+  // currentSpace at a time.
+  //
+  // The seed clamps writes to this field against
+  // `currentSpace.size` at set-being time: a being cannot exist
+  // outside the space's bounding box. When currentSpace has no
+  // `size`, no clamp runs and the coord passes through as written.
+  // Extensions that want REJECT semantics layer a check before
+  // stamping; this clamp is the floor.
+  coord: {
+    x: { type: Number, default: null },
+    y: { type: Number, default: null },
+    z: { type: Number, default: null },
+    _id: false,
+  },
 
   // For llm-mode beings: the LLM that drives their cognition each
   // summoning. For humans: the LLM used when they request AI help.

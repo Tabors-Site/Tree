@@ -141,14 +141,14 @@ export class PortalClient {
   /**
    * BE: manage be-er identity.
    *
-   * Accepts either a stance (full form, e.g. `<place>/@auth` or a held
+   * Accepts either a stance (full form, e.g. `<place>/@cherub` or a held
    * stance like `<place>/@<username>`) or a bare place domain (shorthand
    * for register and credential-based claim). For release and switch,
    * use the held stance.
    *
    * @param {string} operation              register | claim | release | switch
    * @param {string|object} addressOrField  bare place like "treeos.ai",
-   *                                        a stance like "treeos.ai/@auth",
+   *                                        a stance like "treeos.ai/@cherub",
    *                                        or { stance } / { place }
    * @param {object} [extra]                operation-specific fields (payload, from, ...)
    */
@@ -231,7 +231,7 @@ function _toBeAddressField(address) {
     if (hasEmbodiment) return { stance: address };
     if (looksLikeBareDomain) return { place: address };
     throw new Error(
-      `BE requires either a bare place domain ("treeos.ai") or a stance with @being ("treeos.ai/@auth"). Got: ${address}`,
+      `BE requires either a bare place domain ("treeos.ai") or a stance with @being ("treeos.ai/@cherub"). Got: ${address}`,
     );
   }
   if (address && typeof address === "object") {

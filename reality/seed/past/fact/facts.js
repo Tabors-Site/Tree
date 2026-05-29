@@ -614,6 +614,81 @@ export async function getFacts({
 }
 
 /**
+ * Get the reel for any target. Generalizes getFacts beyond space-only.
+ * Returns facts targeting (kind, id) ordered newest-first by default
+ * (explorer view); pass { order: "asc" } for chain-walk order.
+ */
+export async function getReel({ targetKind, targetId, limit, offset, order = "desc" }) {
+  if (!targetKind || !targetId) {
+    throw new Error("getReel: targetKind and targetId required");
+  }
+  if (!REEL_KINDS.has(targetKind)) {
+    throw new Error(`getReel: targetKind must be one of ${[...REEL_KINDS].join("|")}`);
+  }
+  const query = { "target.kind": targetKind, "target.id": String(targetId) };
+  const safeLimit  = Math.min(Math.max(Number(limit)  || 100, 1), MAX_QUERY_LIMIT());
+  const safeOffset = Math.max(0, Number(offset) || 0);
+  const dir = order === "asc" ? 1 : -1;
+  const facts = await Fact.find(query)
+    .populate("beingId", "name")
+    .sort({ seq: dir, date: dir })
+    .skip(safeOffset)
+    .limit(safeLimit)
+    .lean();
+  return { facts, limit: safeLimit, offset: safeOffset };
+}
+
+/**
+ * Build the reel-explorer descriptor for a (targetKind, targetId).
+ * Used by SEE on <reality>/.reel/<kind>/<id>. Includes the target's
+ * display name (best-effort lookup) and a serialized fact list shaped
+ * for the explorer view (full hash chain preserved).
+ */
+export async function describeReel(targetKind, targetId, opts = {}) {
+  const { facts } = await getReel({ targetKind, targetId, ...opts });
+  let targetName = null;
+  try {
+    if (targetKind === "space") {
+      const Space = (await import("../../materials/space/space.js")).default;
+      const row = await Space.findById(targetId).select("name").lean();
+      targetName = row?.name || null;
+    } else if (targetKind === "matter") {
+      const Matter = (await import("../../materials/matter/matter.js")).default;
+      const row = await Matter.findById(targetId).select("name").lean();
+      targetName = row?.name || null;
+    } else if (targetKind === "being") {
+      const Being = (await import("../../materials/being/being.js")).default;
+      const row = await Being.findById(targetId).select("name").lean();
+      targetName = row?.name || null;
+    }
+  } catch { /* name lookup is best-effort */ }
+  return {
+    target: { kind: targetKind, id: String(targetId), name: targetName },
+    facts: facts.map(serializeFactForReel),
+    count: facts.length,
+  };
+}
+
+function serializeFactForReel(f) {
+  return {
+    _id:       String(f._id),
+    seq:       f.seq,
+    verb:      f.verb,
+    action:    f.action,
+    target:    f.target,
+    params:    f.params,
+    result:    f.result,
+    p:         f.p,
+    h:         f.h,
+    date:      f.date,
+    beingId:   f.beingId?._id ? String(f.beingId._id)
+               : (f.beingId ? String(f.beingId) : null),
+    beingName: f.beingId?.name || null,
+    actId:     f.actId || null,
+  };
+}
+
+/**
  * Get a being's Fact reel.
  */
 export async function getFactsByBeing(beingId, limit, startDate, endDate) {

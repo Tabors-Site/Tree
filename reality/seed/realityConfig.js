@@ -23,6 +23,7 @@
 import log from "./seedReality/log.js";
 import Space from "./materials/space/space.js";
 import { SEED_SPACE } from "./materials/space/seedSpaces.js";
+import { registerOperation } from "./ibp/operations.js";
 
 let configCache = null;
 let initialized = false;
@@ -167,24 +168,31 @@ async function getConfigSpace() {
   return doc;
 }
 
-export async function setRealityConfigValue(key, value, { internal, identity } = {}) {
+export async function setRealityConfigValue(key, value, { internal, identity, summonCtx } = {}) {
   validateKey(key);
   if (PROTECTED_KEYS.has(key) && !internal) {
     throw new Error(`Config key "${key}" is protected and cannot be modified manually`);
   }
   validateValue(value);
+  if (!summonCtx) {
+    throw new Error(
+      `setRealityConfigValue(${key}) requires summonCtx. Runtime callers thread the moment's ctx; seed-internal callers (e.g. migrations) wrap in withIAmAct(...).`,
+    );
+  }
 
   const configSpace = await getConfigSpace();
   if (!configSpace) {
     throw new Error("Config write failed: .config seed space not found. Reality may need repair.");
   }
 
-  // Route through do.set so the write IS a Fact on the .config space's
-  // reel. internal=true (boot scaffolding) attributes the Fact to I_AM
-  // via the scaffold path; user-driven writes thread the caller's
-  // identity for attribution.
+  // Route through do.set-space so the write IS a Fact on the .config
+  // space's reel. internal=true (seed scaffolding) attributes via the
+  // scaffold path; user-driven writes thread caller identity. Either
+  // way, the fact joins the wrapping moment's ΔF.
   const { doVerb } = await import("./ibp/verbs/do.js");
-  const opts = identity ? { identity } : { scaffold: true };
+  const opts = identity
+    ? { identity, summonCtx }
+    : { scaffold: true, summonCtx };
   await doVerb(
     configSpace,
     "set-space",
@@ -198,10 +206,15 @@ export async function setRealityConfigValue(key, value, { internal, identity } =
   log.verbose("Reality", `Config set: ${key}`);
 }
 
-export async function deleteRealityConfigValue(key, { internal, identity } = {}) {
+export async function deleteRealityConfigValue(key, { internal, identity, summonCtx } = {}) {
   validateKey(key);
   if (PROTECTED_KEYS.has(key) && !internal) {
     throw new Error(`Config key "${key}" is protected and cannot be deleted manually`);
+  }
+  if (!summonCtx) {
+    throw new Error(
+      `deleteRealityConfigValue(${key}) requires summonCtx. Runtime callers thread the moment's ctx; seed-internal callers wrap in withIAmAct(...).`,
+    );
   }
 
   const configSpace = await getConfigSpace();
@@ -209,10 +222,10 @@ export async function deleteRealityConfigValue(key, { internal, identity } = {})
     throw new Error("Config delete failed: .config seed space not found.");
   }
 
-  // value=null on a 2-deep qualities path (qualities.<key>) unsets the
-  // leaf — see reducerHelpers.applySetQualities.
   const { doVerb } = await import("./ibp/verbs/do.js");
-  const opts = identity ? { identity } : { scaffold: true };
+  const opts = identity
+    ? { identity, summonCtx }
+    : { scaffold: true, summonCtx };
   await doVerb(
     configSpace,
     "set-space",
@@ -294,3 +307,68 @@ export async function reloadRealityConfig() {
   await loadConfigFromDb();
   log.info("Reality", `Config reloaded from .config space (${Object.keys(configCache).length} keys)`);
 }
+
+// ─────────────────────────────────────────────────────────────────────
+// DO operations: set-config / delete-config
+// ─────────────────────────────────────────────────────────────────────
+//
+// Reads route through `ibp:see` on `<reality>/.config` (returns the
+// cached snapshot); writes route through the two ops below which wrap
+// setRealityConfigValue / deleteRealityConfigValue. The wrappers
+// handle cache invalidation, validation, and the PROTECTED_KEYS gate
+// (seedVersion and disabledExtensions can only be written from
+// scaffold flows).
+//
+// `skipAudit: true` because the underlying helpers route their writes
+// through `do.set-space` on the .config space and that inner set IS
+// the canonical audit Fact. Without skipAudit the outer op would
+// double-stamp.
+//
+// Self-register at module load — `seed/services.js` imports
+// realityConfig.js as a side effect so the registry is populated
+// before any caller dispatches.
+
+registerOperation("set-config", {
+  targets: ["space"],
+  ownerExtension: "seed",
+  skipAudit: true,
+  handler: async ({ params, scaffold, identity, summonCtx }) => {
+    const { key, value } = params || {};
+    if (!key || typeof key !== "string") {
+      throw new Error("set-config: `key` is required");
+    }
+    if (value === undefined) {
+      throw new Error(
+        "set-config: `value` is required (use delete-config to remove)",
+      );
+    }
+    // Scaffold flows (migrations, first-boot bootstrap) are permitted
+    // to write PROTECTED_KEYS (seedVersion, disabledExtensions). Being
+    // calls never carry scaffold and stay subject to the protected-key
+    // gate above.
+    await setRealityConfigValue(key, value, {
+      internal: scaffold === true,
+      identity,
+      summonCtx,
+    });
+    return { key, value };
+  },
+});
+
+registerOperation("delete-config", {
+  targets: ["space"],
+  ownerExtension: "seed",
+  skipAudit: true,
+  handler: async ({ params, scaffold, identity, summonCtx }) => {
+    const { key } = params || {};
+    if (!key || typeof key !== "string") {
+      throw new Error("delete-config: `key` is required");
+    }
+    await deleteRealityConfigValue(key, {
+      internal: scaffold === true,
+      identity,
+      summonCtx,
+    });
+    return { deleted: true, key };
+  },
+});

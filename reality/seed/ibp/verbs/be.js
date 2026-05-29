@@ -101,11 +101,27 @@ export async function beVerb(operation, payload = {}, opts = {}) {
 
   const ctx = { socket, address: { kind: addressKind, value: address }, identity, req, summonCtx };
 
-  // register + claim are identity-bind ops, not being-method
-  // dispatches — the address carries which identity is being bound,
-  // not which being to talk to. They always run through the
-  // cherub, gated by the place-level config toggles.
-  if (operation === "register" || operation === "claim") {
+  // All four canonical BE ops are session-binding, not being-method
+  // dispatches. The address carries which identity is being bound /
+  // unbound, not which being to talk to. They always run through the
+  // cherub:
+  //
+  //   register  — admit a new identity, gated by register_enabled
+  //   claim     — bind a session to an existing identity, gated by
+  //               claim_enabled
+  //   release   — drop the session's binding (stateless ack)
+  //   switch    — confirm which identity the session now holds
+  //
+  // Without this routing, a client logging out as `<reality>/@tabor`
+  // (or any non-cherub stance) would fall through to the "no being
+  // handler for @tabor" rejection. release/switch don't care which
+  // stance was addressed — they're about the session, not the being.
+  if (
+    operation === "register" ||
+    operation === "claim" ||
+    operation === "release" ||
+    operation === "switch"
+  ) {
     const authConfig = await getAuthConfig();
     if (operation === "register" && !authConfig.register_enabled) {
       throw new IbpError(IBP_ERR.FORBIDDEN, "Registration is disabled on this reality", { operation });
@@ -113,9 +129,19 @@ export async function beVerb(operation, payload = {}, opts = {}) {
     if (operation === "claim" && !authConfig.claim_enabled) {
       throw new IbpError(IBP_ERR.FORBIDDEN, "Claim is disabled on this reality", { operation });
     }
-    const authResult = operation === "register"
-      ? await cherubBeing.register(payload, ctx)
-      : await runClaim({ kind: addressKind, value: address }, payload, ctx);
+    let authResult;
+    if (operation === "register") {
+      authResult = await cherubBeing.register(payload, ctx);
+    } else if (operation === "claim") {
+      authResult = await runClaim({ kind: addressKind, value: address }, payload, ctx);
+    } else if (operation === "release") {
+      authResult = await cherubBeing.release(payload, ctx);
+    } else {
+      // switch — cherub.switch derives from/to from the address.
+      const from = payload?.from;
+      const to   = addressKind === "stance" ? address : null;
+      authResult = await cherubBeing.switch({ from, to }, ctx);
+    }
     await writeBeFact({
       operation,
       identity,
@@ -192,10 +218,14 @@ export async function beVerb(operation, payload = {}, opts = {}) {
  * and a BE without a Fact didn't happen.
  */
 async function writeBeFact({ operation, identity, authResult, payload, beingName = "cherub", actId = null, summonCtx = null, scaffold = false }) {
-  if (!actId && !scaffold) {
+  // Post-refactor: scaffold:true no longer implies "commit as a
+  // singleton outside any moment." Callers must thread a summonCtx
+  // (boot moment from withBootMoment, or a runtime moment). Without
+  // an actId the Fact would orphan; throw rather than silently commit.
+  if (!actId) {
     throw new IbpError(
       IBP_ERR.INTERNAL,
-      `BE ${operation} @${beingName}: missing ambient actId. Wire-layer BE must route through cherub-as-actor so assign opens the frame.`,
+      `BE ${operation} @${beingName}: missing ambient actId. Thread summonCtx from the caller's moment (runtime), or open a boot moment via withBootMoment(...) (genesis). scaffold:true alone is no longer sufficient.`,
       { operation, beingName },
     );
   }

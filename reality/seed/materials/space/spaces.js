@@ -32,7 +32,7 @@ import { getInternalConfigValue } from "../../internalConfig.js";
 import Space from "./space.js";
 import Being from "../being/being.js";
 import { createMatter } from "../matter/matters.js";
-import { sealFacts } from "../../past/fact/facts.js";
+import { emitFact } from "../../past/fact/facts.js";
 import {
   acquireSpaceLock,
   releaseSpaceLock,
@@ -174,6 +174,8 @@ export async function createSpace({
   validatedBeing = null,
   actId = null,
   sessionId = null,
+  summonCtx = null,
+  scaffold = false,
 } = {}) {
   name = assertValidSpaceName(name);
   type = assertValidSpaceType(type);
@@ -256,9 +258,25 @@ export async function createSpace({
       const parentSpace = await Space.findById(parentId)
         .select("seedSpace")
         .lean();
-      if (!parentSpace) throw new Error("Parent space not found");
-      if (parentSpace.seedSpace)
+      // The parent may be pending earlier in this batch (atomic-batch
+      // forward reference) — accept either a materialized row or a
+      // pending fact in the boot moment's ΔF.
+      if (!parentSpace) {
+        const pendingInBatch = summonCtx?.deltaF?.find(
+          (f) =>
+            f?.verb === "do" &&
+            f?.action === "create-space" &&
+            f?.target?.kind === "space" &&
+            String(f?.target?.id) === String(parentId),
+        );
+        if (!pendingInBatch) throw new Error("Parent space not found");
+      } else if (parentSpace.seedSpace && !scaffold) {
+        // User-being protection: extension code / operators may not
+        // create children directly under a seed space. The I-Am acts
+        // in scaffold mode (genesis, manifest sync, registry mirrors)
+        // and owns the dot-namespace — scaffold bypasses the check.
         throw new Error("Cannot create spaces under seed spaces");
+      }
       const childCount = await Space.countDocuments({ parent: parentId });
       if (childCount >= maxChildren) {
         throw new IbpError(IBP_ERR.INVALID_INPUT,
@@ -267,15 +285,14 @@ export async function createSpace({
       }
     }
 
-    // Stamp the birth Fact. The reducer (applyCreateSpace) derives the
-    // full row from the spec; eager-fold + initProjection materializes
-    // it via the per-reel append lock on the new space's reel.
+    // Stamp the birth Fact. Inside a moment (summonCtx provided) the
+    // fact joins ctx.deltaF and seals with the rest of the moment.
+    // Outside any moment (legacy standalone callers without summonCtx),
+    // emitFact falls back to sealFacts singleton — eager commit.
     const specQualities = hookData.qualities instanceof Map
       ? Object.fromEntries(hookData.qualities)
       : (hookData.qualities || {});
-    // Eager singleton commit (read-back at line ~299 needs the row
-    // materialized). Same shape as createBeing / createMatter.
-    await sealFacts([{
+    await emitFact({
       verb:    "do",
       action:  "create-space",
       beingId: String(being._id),
@@ -289,15 +306,26 @@ export async function createSpace({
           qualities: specQualities,
         },
       },
-      actId,
+      actId: summonCtx?.actId || actId,
       sessionId,
-    }]);
+    }, summonCtx);
   } finally {
     if (lockTarget) releaseSpaceLock(lockTarget, sessionId);
   }
 
-  // Read back the row the fold materialized. Eager-fold completed
-  // inside logFact so the row is in place.
+  // Inside a moment the row materializes at seal — return a pending
+  // view carrying the id so the caller can keep operating without a
+  // read-back. Outside a moment the eager singleton commit ran, so
+  // the row exists and we read it back.
+  if (summonCtx) {
+    return {
+      _id: id,
+      _pending: true,
+      name,
+      parent: resolvedParentId,
+      seedSpace: null,
+    };
+  }
   const newSpace = await Space.findById(id);
   if (!newSpace) {
     throw new Error(`createSpace: birth Fact stamped but row ${id} not materialized`);
@@ -354,25 +382,26 @@ export async function createRealitySeedSpace({
   parentId,
   seedSpace,
   qualities = null,
+  summonCtx = null,
 }) {
   if (!name || typeof name !== "string")
     throw new Error("Seed space name is required");
   if (!parentId) throw new Error("Seed space requires a parent");
+  if (!summonCtx) {
+    throw new Error(
+      "createRealitySeedSpace requires summonCtx (the boot moment's ctx). Reachable only from inside withBootMoment(...).",
+    );
+  }
 
-  // Fact-driven genesis (2026-05-23). Stamps a do:birth Fact carrying
-  // the full spec; eager-fold's applyCreateSpace + initProjection
-  // materializes the row. Genesis exception lives on the actor side:
-  // beingId="I_AM" is a string ref to a Being row that may not yet
-  // exist (ensureIAm runs after the first seed-space creation in the
-  // same boot pass) — the Fact accepts the string; readers resolve
-  // backward via populate once I_AM is planted.
+  // do:create-space joins the boot moment's ΔF. sealAct commits it
+  // with the rest of genesis in one transaction; reducer's
+  // applyCreateSpace + initProjection materializes the row at seal.
   const id = uuidv4();
   const specQualities = qualities instanceof Map
     ? Object.fromEntries(qualities)
     : (qualities || {});
 
-  // Eager singleton commit (read-back at line ~389 needs the row).
-  await sealFacts([{
+  await emitFact({
     verb:    "do",
     action:  "create-space",
     beingId: I_AM,
@@ -387,15 +416,12 @@ export async function createRealitySeedSpace({
         qualities: specQualities,
       },
     },
-  }]);
+    actId: summonCtx.actId,
+  }, summonCtx);
 
-  const newSpace = await Space.findById(id);
-  if (!newSpace) {
-    throw new Error(
-      `createRealitySeedSpace: birth Fact stamped but row ${id} not materialized`,
-    );
-  }
-  return newSpace;
+  // Row materializes at boot seal. Return a pending shape so the
+  // caller (sprout.js ensureSpaceRoot) can keep operating on the id.
+  return { _id: id, _pending: true, name, parent: parentId, seedSpace };
 }
 
 /**

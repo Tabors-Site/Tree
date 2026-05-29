@@ -553,6 +553,9 @@ async function enrichBeings(spaceId, entries) {
     const { _beingId, ...wireEntry } = entry;
     return {
       ...wireEntry,
+      // Surface the being's id on the wire. Clients (explorers, link
+      // builders) need it to address `.reel/being/<id>` / `.acts/<id>`.
+      beingId:     inboxKey,
       permissions: def ? def.permissions : null,
       respondMode: def ? def.respondMode : null,
       triggerOn:   def ? def.triggerOn   : null,

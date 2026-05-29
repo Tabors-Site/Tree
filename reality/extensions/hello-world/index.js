@@ -80,52 +80,47 @@ export async function init(place) {
   });
 
   // ── Seed: greeter ──────────────────────────────────────────────
-  // The plant uses place.auth.createBeing directly — the underlying
-  // primitive that creates a Being row via the fact-driven path
-  // (a be:register Fact on the new being's reel; the row materializes
-  // through the fold). Compared to SUMMON-create-being (which is the
-  // user-facing "one being calls another forth from non-being"
-  // primitive), the direct path is the right fit for seed scaffolds:
-  // a scaffold isn't a being-to-being summon, it's a configuration
-  // step performed by the operator-as-planter.
+  // The plant routes through SUMMON-create-being so the canonical
+  // atomic-multi-reel birth shape applies: be:register on the new
+  // greeter's reel (self-stamped) PLUS be:summon-create on the
+  // planter's reel (audit "I summoned the greeter forth") — both
+  // committed in ONE transaction with the planter's moment.
   //
   // Idempotent on re-plant: if a being with this name already exists,
-  // the unique-name index in identity.js#createBeing throws
-  // RESOURCE_CONFLICT and we surface it.
+  // summonCreateBeing throws RESOURCE_CONFLICT and we surface it.
   place.seeds.register("hello-world:greeter", {
     description:
       "Spawns one greeter being at the target space. SUMMON it to receive a hello-world greeting.",
-    scaffold: async ({ rootSpaceId, identity, place: scaffoldPlace }) => {
-      // Mint a stable being name from the target space.
+    scaffold: async ({ rootSpaceId, identity, summonCtx }) => {
       const beingName = `hello-${String(rootSpaceId).slice(0, 8)}`;
-      // Random password — the being can't be claimed via auth; it's
-      // a scripted being whose only purpose is to greet.
       const password = `seed-${Math.random().toString(36).slice(2)}-${Math.random().toString(36).slice(2)}`;
 
-      const being = await scaffoldPlace.auth.createBeing(beingName, password, {
-        operatingMode: "scripted",
-        // createBeing accepts both `role` (singular legacy) and
-        // `roles` (plural new). Pass both for forward compatibility.
-        role:        "hello-world:greeter",
-        roles:       ["hello-world:greeter"],
-        defaultRole: "hello-world:greeter",
-        homeSpace:   String(rootSpaceId),
-        currentSpace: String(rootSpaceId),
-        parentBeingId: identity?.beingId || null,
-        // The be:register Fact self-stamps on the new greeter's reel
-        // (SINGLE-WRITER: the new being is the actor of its own
-        // genesis). The planter's "I created the greeter" audit
-        // belongs on the planter's reel as a separate be:summon-create
-        // Fact — see summonCreateBeing in seed/ibp/verbs/summon.js
-        // for the canonical atomic-multi-reel birth shape. This path
-        // does not currently emit that creator-side audit; the seed
-        // plant is recorded only on the new being's reel.
+      const { summonCreateBeing } = await import(
+        "../../seed/ibp/verbs/summon.js"
+      );
+      const result = await summonCreateBeing({
+        spec: {
+          name:          beingName,
+          password,
+          operatingMode: "scripted",
+          role:          "hello-world:greeter",
+          roles:         ["hello-world:greeter"],
+          defaultRole:   "hello-world:greeter",
+          homeSpace:     String(rootSpaceId),
+          currentSpace:  String(rootSpaceId),
+          parentBeingId: identity?.beingId || null,
+        },
+        identity,
+        summonCtx,
       });
 
-      log.info("HelloWorld", `🌱 planted greeter "${beingName}" at ${String(rootSpaceId).slice(0, 8)}`);
+      log.info(
+        "HelloWorld",
+        `🌱 planted greeter "${beingName}" at ${String(rootSpaceId).slice(0, 8)}`,
+      );
       return {
         being: {
-          id:   String(being._id),
+          id:   String(result.beingId),
           name: beingName,
         },
       };

@@ -104,12 +104,20 @@ export async function resolveStance(stance, opts = {}) {
     }
 
     const subPath = segments.slice(1);
-    // Bare "/~name" → the home position itself.
+    // Bare "/~name" → the home position itself. spaceId is the place
+    // root because the home address denotes the "where" inside the
+    // tree at the same level — authorize uses spaceId to walk
+    // ancestor permission rules, and the closest containing space
+    // for a home is the place root. Without this, every DO at a
+    // home address would have spaceIdForAuth fall through to the
+    // beingId, which isn't a valid space, and the wildcard rule on
+    // the place root would never be found.
     if (subPath.length === 0) {
       return base({
         isHomeRoot: true,
         beingId: beingDoc._id,
         name: beingDoc.name,
+        spaceId: getSpaceRootId(),
         chain: [{ name: `~${beingDoc.name}`, id: beingDoc._id }],
         leafName: `~${beingDoc.name}`,
         leafId: beingDoc._id,

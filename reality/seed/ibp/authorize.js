@@ -139,16 +139,35 @@ export async function authorize(args) {
   const props = await deriveStanceProperties({ beingId, targetSpace: spaceId });
   const stanceLabel = stanceLabelFromProps(props);
 
-  // BE bootstrap exception: register/claim from arrival are always
-  // permitted, gated by place-level register_enabled/claim_enabled
-  // flags (enforced by the cherub itself). Without this no one
-  // could ever sign up on a fresh reality.
-  if (
-    verb === "be" &&
-    props.arrival &&
-    (args.operation === "register" || args.operation === "claim")
-  ) {
-    return { ok: true, stance: "arrival" };
+  // BE bootstrap exception. All four canonical BE ops are permitted
+  // from arrival:
+  //
+  //   register / claim    — admission ops, gated downstream by
+  //                         place-level register_enabled / claim_enabled
+  //                         flags (the cherub enforces). Without this
+  //                         no one could ever sign up on a fresh reality.
+  //
+  //   release / switch    — stateless no-ops at the cherub level
+  //                         (release returns {released:true}; switch
+  //                         confirms the client-side swap). Allowing
+  //                         them from arrival unblocks the stale-
+  //                         session cleanup path: a client with a
+  //                         dead cookie can release it, drop to a
+  //                         clean arrival state, then register / claim
+  //                         again. Denying them gates nothing because
+  //                         the handlers don't mutate server state.
+  //
+  // Per-op feature flags + cherub-side validation handle actual
+  // authorization; this gate just lets the request reach them.
+  if (verb === "be" && props.arrival) {
+    if (
+      args.operation === "register" ||
+      args.operation === "claim" ||
+      args.operation === "release" ||
+      args.operation === "switch"
+    ) {
+      return { ok: true, stance: "arrival" };
+    }
   }
 
   // SEE discovery exception: <reality>/.discovery is the place's
@@ -453,7 +472,12 @@ function stanceLabelFromProps(props) {
  * can only BE register/claim. Per-position rules at sub-positions
  * override these via the ancestor walk picking the nearest match.
  */
-export async function seedDefaultStancePermissions() {
+export async function seedDefaultStancePermissions(summonCtx) {
+  if (!summonCtx) {
+    throw new Error(
+      "seedDefaultStancePermissions requires summonCtx. Wrap the call in withIAmAct(...) so each set-space Fact rides the I-Am's act.",
+    );
+  }
   const spaceRootId = getSpaceRootId();
   if (!spaceRootId)
     return { seeded: false, reason: "place root not initialized" };
@@ -492,13 +516,13 @@ export async function seedDefaultStancePermissions() {
   // and bypasses the per-being identity gate. The verb dispatcher
   // tolerates this on the right-stance bootstrap path.
   const spaceRoot = await Space.findById(spaceRootId);
-  const { doVerb } = await import("./verbs.js");
+  const { doVerb } = await import("./verbs/do.js");
   for (const [field, value] of Object.entries(updates)) {
     await doVerb(
       spaceRoot,
       "set-space",
       { field, value, merge: false },
-      { scaffold: true },
+      { scaffold: true, summonCtx },
     );
   }
   return { seeded: true, fields: Object.keys(updates) };

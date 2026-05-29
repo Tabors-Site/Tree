@@ -76,7 +76,7 @@
 
 import mongoose from "./seed/seedReality/dbConfig.js";
 import { getRealityIdentity, getRealityUrl } from "./seed/realityIdentity.js";
-import { ensureSpaceRoot } from "./seed/sprout.js";
+import { ensureSpaceRoot, withBootMoment, withIAmAct } from "./seed/sprout.js";
 import { initRealityConfig, getRealityConfigValue } from "./seed/realityConfig.js";
 import { getInternalConfigValue } from "./seed/internalConfig.js";
 import {
@@ -155,13 +155,37 @@ export async function genesis(app, opts = {}) {
   bootMode = existingRoot ? "Awakening" : "Beginning";
   log.info("Genesis", bootMode === "Beginning" ? "I am that I am." : "I awake.");
 
-  // I plant the place's space root and the nine seed spaces. My own Being
-  // row places inside this step so every Fact from t=0 has an actor.
-  await ensureSpaceRoot();
-  if (bootMode === "Beginning") {
-    log.info("Genesis", "I plant the space root.");
-    log.info("Genesis", "I plant my nine seed spaces.");
-  }
+  // ── THE BOOT MOMENT ──
+  //
+  // Genesis is ONE moment of the I-Am. ONE act ("I am that I am; let
+  // there be world") deposits ΔF across many reels: I-Am be:register,
+  // ten do:create-space (root + nine seed spaces), four delegate
+  // be:register + four be:summon-create + their home setups. sealAct
+  // commits the whole ΔF + the genesis Act row in one Mongo
+  // transaction. A kill -9 mid-genesis leaves zero trace.
+  //
+  // On Awakening (existing world) the moment produces zero facts and
+  // skips the seal — nothing to commit.
+  const { ensureSeedDelegates } =
+    await import("./seed/materials/being/seedDelegates.js");
+  const { getSpaceRootId } = await import("./seed/sprout.js");
+  const { I_AM } = await import("./seed/materials/being/seedBeings.js");
+
+  await withBootMoment(async (bootCtx) => {
+    await ensureSpaceRoot(bootCtx);
+    if (bootMode === "Beginning") {
+      log.info("Genesis", "I plant the space root.");
+      log.info("Genesis", "I plant my nine seed spaces.");
+    }
+    // Pass the planted I-Am beingId so seedDelegates can skip the
+    // live Mongo lookup (the row is pending inside the same moment).
+    await ensureSeedDelegates(getSpaceRootId(), bootCtx, { iAmBeingId: I_AM });
+  });
+
+  // ── POST-GENESIS RECONCILIATIONS ──
+  // The I-Am exists now. Each subsequent scaffold step is its own
+  // moment of the I-Am — opens an Act, accumulates ΔF, seals. Zero
+  // facts → no seal (idempotent reconciliations cost nothing).
 
   // I read my own remembered settings out of .config.
   await initRealityConfig();
@@ -169,50 +193,34 @@ export async function genesis(app, opts = {}) {
 
   // I mirror the reality/ directory into space and matter under
   // `.source`. The source-space id cache primes for the read-only
-  // DO gate, then the disk walk runs detached so a multi-thousand
-  // file scan does not block boot. Subsequent boots reconcile
-  // incrementally.
+  // DO gate, then the disk walk runs detached.
   const { ensureSourceTree } = await import("./seed/materials/space/source.js");
   await ensureSourceTree();
   log.info("Genesis", "I see my own body.");
 
-  // Default stance permissions (arrival, owner) and BE config flags
-  // on the place root if not already present. Idempotent. Does not
-  // overwrite operator configuration.
-  const { seedDefaultStancePermissions } =
-    await import("./seed/ibp/authorize.js");
-  await seedDefaultStancePermissions();
+  // Default stance permissions. I-Am acts to write the permission
+  // qualities on the space root.
+  await withIAmAct("seed default stance permissions", async (ctx) => {
+    const { seedDefaultStancePermissions } =
+      await import("./seed/ibp/authorize.js");
+    await seedDefaultStancePermissions(ctx);
+  });
   if (bootMode === "Beginning") {
     log.info("Genesis", "I set my stance defaults.");
   }
 
-  // Seed migrations run after config is loaded and before extensions.
-  const { runSeedMigrations } =
-    await import("./seed/seedReality/migrations/runner.js");
-  const migrationsRan = await runSeedMigrations();
-  if (migrationsRan) log.info("Genesis", "I update my form.");
+  // Seed migrations. Each migration's writes ride one I-Am act.
+  await withIAmAct("seed migrations", async (ctx) => {
+    const { runSeedMigrations } =
+      await import("./seed/seedReality/migrations/runner.js");
+    const migrationsRan = await runSeedMigrations(ctx);
+    if (migrationsRan) log.info("Genesis", "I update my form.");
+  });
 
-  // Prime the severed-roots cache. Any thread whose Stamps carry
-  // severedAt from a prior run gets loaded into the in-memory Set so
-  // the scheduler's ancestor-severance check at inbox pickup short-
-  // circuits without a DB walk. The cache is otherwise rebuilt
-  // lazily on cache misses; this is a startup optimization, not a
-  // correctness step.
+  // Prime the severed-roots cache. Read-only — no moment needed.
   const { primeSeveredRootsCache } =
     await import("./seed/materials/space/threads.js");
   await primeSeveredRootsCache();
-
-  // The first delegates I form beneath myself: the place beings
-  // (auth, llm-assigner, reality-manager). Real Being rows at the
-  // place root. After this step, work begins distributing. Facts
-  // start attributing to these beings as their own acts run.
-  // Idempotent, runs every boot, creates only what is missing.
-  // Must come after migrations so the Being model shape is current
-  // before I write into it.
-  const { ensureSeedDelegates } =
-    await import("./seed/materials/being/seedDelegates.js");
-  const { getSpaceRootId } = await import("./seed/sprout.js");
-  await ensureSeedDelegates(getSpaceRootId());
 
   // Register seed-shipped role specs into the role registry so
   // SUMMON can dispatch to them. Auth and llm-assigner are BE only,
@@ -269,10 +277,15 @@ export async function genesis(app, opts = {}) {
       if (await isFirstBeing()) {
         try {
           const { cherubBeing } = await import("./seed/present/roles/cherub/role.js");
-          await cherubBeing.register(
-            { name: plantCtx.operatorName, password: plantCtx.operatorPassword },
-            { scaffold: true },
-          );
+          // Operator mint is the I-Am acting through cherub. One Act
+          // for the whole register flow (cherub's home create, be:register,
+          // be:summon-create, rootOwner set) — all commit atomically.
+          await withIAmAct(`operator-being mint @${plantCtx.operatorName}`, async (ctx) => {
+            await cherubBeing.register(
+              { name: plantCtx.operatorName, password: plantCtx.operatorPassword },
+              { scaffold: true, summonCtx: ctx },
+            );
+          });
           log.info("Genesis", `I create @${plantCtx.operatorName}.`);
         } catch (err) {
           log.error("Genesis", `operator-being mint failed: ${err.message}`);
@@ -398,7 +411,9 @@ export async function genesis(app, opts = {}) {
     }
   }
 
-  await syncExtensionsToTree(getLoadedManifests());
+  await withIAmAct("sync extensions to .extensions tree", async (ctx) => {
+    await syncExtensionsToTree(getLoadedManifests(), ctx);
+  });
 
   // Confined extensions must be known before any scope resolution
   // walks the ancestor chain, or queries during this window race.
@@ -444,6 +459,11 @@ export async function genesis(app, opts = {}) {
   // the live registry through the standard descriptor pipeline.
   // Detached so a sync failure does not block boot. Errors are
   // logged inside the helpers.
+  //
+  // Three parallel sync calls, three I-Am moments — independent
+  // reconciliations of independent registries. Each is the I-Am's
+  // act on its own substrate; running them as separate moments lets
+  // them progress in parallel (Promise.all) without a shared deltaF.
   (async () => {
     try {
       const { syncToolsToSubstrate } =
@@ -453,9 +473,9 @@ export async function genesis(app, opts = {}) {
       const { syncOperationsToSubstrate } =
         await import("./seed/ibp/operations.js");
       const [t, r, o] = await Promise.all([
-        syncToolsToSubstrate(),
-        syncRolesToSubstrate(),
-        syncOperationsToSubstrate(),
+        withIAmAct("sync tools to .tools", (ctx) => syncToolsToSubstrate(ctx)),
+        withIAmAct("sync roles to .roles", (ctx) => syncRolesToSubstrate(ctx)),
+        withIAmAct("sync ops to .operations", (ctx) => syncOperationsToSubstrate(ctx)),
       ]);
       log.verbose(
         "RegistryMirror",

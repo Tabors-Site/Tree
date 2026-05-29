@@ -9,26 +9,44 @@
 // `payload.correlation` is the client-generated idempotency key —
 // retries with the same correlation collapse to one moment.
 //
-// ── Cherub as actor ──────────────────────────────────────────────
-// Every BE rides cherub's reel. A being is always born from an
-// existing being's act, and cherub is the gatekeeper: register
-// summons a being forth, claim authenticates them, release/switch
-// move identity between holders. That's not three different actors,
-// it's one — the cherub doing the gatekeeping.
+// ── The transport is the postman, not the originator ────────────
 //
-// Concretely: the wire adapter doesn't call `beVerb` directly. It
-// enqueues a transport-act on the cherub's intake; the stamper
-// opens a Act framing cherub's moment, momentum runs `beVerb`
-// inside that frame so the auto-Fact rides cherub's actId. The
-// result pushes back to the originating socket via the SUMMON push
-// envelope (matched on correlation).
+// The wire never acts. Only beings act. When a BE envelope arrives,
+// the wire's job is to convert "a keystroke reached me" into "a being
+// is acting" — and the only honest way to do that is to summon the
+// being-being-bound-to on its own behalf with the BE op as the
+// pre-decided act. The transport delivers; the being acts.
+//
+// The wire adapter does NOT call `beVerb` directly. It enqueues a
+// transport-summon (kind:"transport-act") on cherub's intake; the
+// scheduler picks it; assign opens cherub's moment; momentum runs
+// `beVerb` from inside that moment so the auto-Fact rides the
+// moment's actId. The result pushes back to the originating socket
+// via the IBP push envelope (matched on correlation).
+//
+// Cherub is the HANDLER of identity-binding summons, not the
+// originator. Cherub knows how to fulfill register/claim/release/
+// switch — minting beings, verifying credentials, signing tokens.
+// But the originator of every BE is the being-being-bound-to: for
+// register, the prospective new being (delivered through the socket
+// before its row exists); for claim, the being asking to bind a
+// session; for release/switch, the already-authenticated being.
 //
 // This subsumes the "register from arrival" bootstrap question. A
-// fresh socket with no identity is asking cherub to perform a BE
-// on its behalf — cherub is the actor, the new being is the
-// target. After register / claim succeeds, subsequent BEs from
-// the now-authed socket still route through cherub (cherub is the
-// only legitimate processor of identity ops).
+// fresh socket with no identity is the prospective-being's only
+// available delivery channel before its row exists. Cherub processes
+// the summon, mints the being, and signs the token. The being is the
+// originator throughout; cherub is the handler.
+//
+// Why route through cherub at all (instead of opening the moment on
+// the new being's reel directly): the pre-being case has no reel
+// yet — there's no actor row, no inbox, no stamp surface. Cherub is
+// the seed-shipped handler that owns the identity-binding protocol;
+// every reality has exactly one. Subsequent BEs from authed sockets
+// could in principle open on the authed being's own reel, but
+// routing them all through cherub keeps the identity-binding code
+// path uniform (one handler, one place to gate register_enabled /
+// claim_enabled, one place to verify credentials).
 
 import log from "../../../seed/seedReality/log.js";
 import Being from "../../../seed/materials/being/being.js";

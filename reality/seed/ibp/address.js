@@ -399,7 +399,12 @@ export function isValidReality(place) {
   return typeof place === "string" && REALITY_RE.test(place);
 }
 
-const SEGMENT_RE = /^[a-z0-9_~][a-z0-9_.-]*$/i;
+// Optional leading "." for system-segments (`.threads`, `.reel`, `.acts`,
+// `.discovery`, `.extensions`, `.tools`, `.roles`, `.operations`,
+// `.peers`, `.identity`, `.flow`, `.source`). Without this, the parser
+// rejected every dot-prefixed segment and only the pre-parse `.discovery`
+// short-circuit in see.js was reachable.
+const SEGMENT_RE = /^\.?[a-z0-9_~][a-z0-9_.-]*$/i;
 
 export function isValidPath(path) {
   if (typeof path !== "string") return false;

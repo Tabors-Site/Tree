@@ -408,7 +408,7 @@ export async function auditToolDescriptions() {
 // extensions have registered their tools) so SEE on `<reality>/.tools`
 // reflects current state. Idempotent; subsequent calls reconcile
 // (add new tools, remove gone ones).
-export async function syncToolsToSubstrate() {
+export async function syncToolsToSubstrate(summonCtx) {
   const { SEED_SPACE } = await import("../../../materials/space/seedSpaces.js");
   const { manifestItems } = await import("../../../materials/manifest.js");
   const items = Object.entries(toolDefs).map(([name, def]) => ({
@@ -424,7 +424,7 @@ export async function syncToolsToSubstrate() {
       ],
     ]),
   }));
-  return manifestItems({ seedSpace: SEED_SPACE.TOOLS, items });
+  return manifestItems({ seedSpace: SEED_SPACE.TOOLS, items, summonCtx });
 }
 
 // ─────────────────────────────────────────────────────────────────────────
