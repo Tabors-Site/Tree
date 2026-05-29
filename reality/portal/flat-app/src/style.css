@@ -905,6 +905,47 @@ kbd {
 }
 a.kv-block-value:hover { color: var(--accent); text-decoration: underline; }
 
+/* Verb-capability lists used in the role/extension detail panes. */
+.verb-list {
+  list-style: none;
+  padding: 0;
+  margin: 4px 0 0 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.verb-list li {
+  padding: 0;
+}
+.verb-list code {
+  background: var(--bg-3);
+  border: 1px solid var(--border);
+  padding: 2px 8px;
+  border-radius: 3px;
+  color: var(--accent);
+  font-size: 11px;
+  font-family: ui-monospace, monospace;
+}
+.explorer-title a {
+  color: var(--fg-faint);
+  text-decoration: none;
+}
+.explorer-title a:hover { color: var(--accent); }
+
+.thread-state {
+  display: inline-block;
+  padding: 1px 8px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+.thread-state-live     { color: var(--accent); border-color: var(--accent); }
+.thread-state-complete { color: var(--fg-dim); }
+.thread-state-severed  { color: var(--err); border-color: var(--err); background: #1a0a0a; }
+.thread-state-pending  { color: #d4b056; border-color: #d4b056; }
+
 .json {
   background: var(--bg-3);
   border: 1px solid var(--border);

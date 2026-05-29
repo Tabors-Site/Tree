@@ -181,7 +181,30 @@ export async function describeThread(rootCorrelation) {
   const summons = await Act.find({ rootCorrelation })
     .select("_id beingIn beingOut activeRole ibpAddress inReplyTo parentThread stampedAt receivedAt endMessage severedAt priority")
     .lean();
-  if (!summons.length) return null;
+  if (!summons.length) {
+    // A thread can exist in the ThreadsProjection (the cross-cutting
+    // fold updated it from a be:summon Fact) before any moment has
+    // sealed an Act. listLiveThreads will surface it; the projection
+    // is the source of truth for "open thread, no acts yet". Fall back
+    // so the descriptor still resolves instead of 404-ing on a thread
+    // the catalog just listed.
+    const ThreadsProjection = (await import("../../past/act/threadsProjection.js")).default;
+    const proj = await ThreadsProjection.findById(rootCorrelation).lean();
+    if (!proj) return null;
+    return {
+      id:              rootCorrelation,
+      state:           proj.severedAt ? "severed" : "pending",
+      depth:           0,
+      liveCount:       0,
+      severedCount:    0,
+      completeCount:   0,
+      participants:    Array.isArray(proj.participants) ? proj.participants : [],
+      parentThread:    proj.parentThread || null,
+      rootStartedAt:   proj.startedAt || proj.createdAt || null,
+      lastAct:         proj.lastAct || null,
+      pending:         true,
+    };
+  }
 
   const participants = new Set();
   let live = 0;
@@ -209,9 +232,12 @@ export async function describeThread(rootCorrelation) {
   // canonical lineage pointer — auto-stamped when assign opens a
   // moment for a being acting under thread A who emits a fresh
   // top-level SUMMON.
+  const sortedAsc = [...summons].sort(
+    (a, b) => new Date(a.stampedAt || a.receivedAt || 0) - new Date(b.stampedAt || b.receivedAt || 0),
+  );
   const rootStamp =
     summons.find((s) => String(s._id) === String(rootCorrelation)) ||
-    summons.sort((a, b) => (a.stampedAt || 0) - (b.stampedAt || 0))[0];
+    sortedAsc[0];
   const parentThread = rootStamp?.parentThread || null;
 
   return {
@@ -225,6 +251,27 @@ export async function describeThread(rootCorrelation) {
     parentThread,
     rootStartedAt:   rootStamp?.stampedAt || rootStamp?.receivedAt || null,
     lastAct,
+    // Surface the acts on the thread so clients can render the chain
+    // without a second query. Oldest-first for natural reading order.
+    acts: sortedAsc.map(serializeThreadAct),
+  };
+}
+
+function serializeThreadAct(s) {
+  return {
+    _id:             String(s._id),
+    beingIn:         s.beingIn ? String(s.beingIn) : null,
+    beingOut:        s.beingOut ? String(s.beingOut) : null,
+    activeRole:      s.activeRole || null,
+    ibpAddress:      s.ibpAddress || null,
+    inReplyTo:       s.inReplyTo || null,
+    parentThread:    s.parentThread || null,
+    priority:        s.priority || null,
+    startMessage:    s.startMessage || null,
+    endMessage:      s.endMessage || null,
+    receivedAt:      s.receivedAt || null,
+    stampedAt:       s.stampedAt || null,
+    severedAt:       s.severedAt || null,
   };
 }
 

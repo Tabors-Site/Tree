@@ -415,7 +415,15 @@ export function isValidReality(place) {
 // `.peers`, `.identity`, `.flow`, `.source`). Without this, the parser
 // rejected every dot-prefixed segment and only the pre-parse `.discovery`
 // short-circuit in see.js was reachable.
-const SEGMENT_RE = /^\.?[a-z0-9_~][a-z0-9_.-]*$/i;
+//
+// `:` is allowed in the body of a segment so namespaced names —
+// `<extension>:<action>` for registered ops (`harmony:place-being`),
+// `<extension>:<role>` for role templates (`harmony:dancer-llm`) — are
+// addressable through their sync'd seed-space children under
+// `<reality>/.operations/<op>` / `.roles/<role>` etc. Cannot lead a
+// segment (must start with alphanumeric/underscore/tilde, optionally
+// dot-prefixed for system segments).
+const SEGMENT_RE = /^\.?[a-z0-9_~][a-z0-9_.:-]*$/i;
 
 export function isValidPath(path) {
   if (typeof path !== "string") return false;

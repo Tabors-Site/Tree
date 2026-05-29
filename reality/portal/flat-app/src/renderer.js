@@ -33,11 +33,11 @@ export function clearDetail() {
 export function renderDescriptor(desc, { session, discovery }) {
   if (!desc) return;
   renderTopBar(desc, { session, discovery });
-  // Explorer dispatch — .reel/<kind>/<id>, .acts/<beingId>, .beings
-  // return synthetic descriptors with isReel / isActChain / isBeingsCatalog
-  // flags. Take over the middle area and render the catalog/explorer
-  // instead of the normal position layout.
-  if (desc.isReel || desc.isActChain || desc.isBeingsCatalog) {
+  // Explorer dispatch — .reel/<kind>/<id>, .acts/<beingId>, .beings,
+  // .threads/<id> return synthetic descriptors with is{Reel,ActChain,
+  // BeingsCatalog,Thread} flags. Take over the middle area and render
+  // the catalog/explorer instead of the normal position layout.
+  if (desc.isReel || desc.isActChain || desc.isBeingsCatalog || desc.isThread) {
     renderExplorer(desc, { discovery });
     return;
   }
@@ -50,6 +50,15 @@ export function renderDescriptor(desc, { session, discovery }) {
   const catalogKind = detectCatalogPath(desc.address?.pathByNames);
   if (catalogKind) {
     renderSystemCatalog(desc, catalogKind, { discovery });
+    return;
+  }
+  // Catalog-item dispatch — one level deeper: .operations/<op>,
+  // .roles/<role>, .extensions/<ext>. Each is a regular space whose
+  // qualities namespace carries the item's data. Without a detail view
+  // they render as an empty position (no beings, no matter, no children).
+  const catalogItem = detectCatalogItemPath(desc.address?.pathByNames);
+  if (catalogItem) {
+    renderCatalogItemDetail(desc, catalogItem, { discovery });
     return;
   }
   // Restore normal layout (in case we came back from an explorer view).
@@ -377,6 +386,14 @@ function detectCatalogPath(path) {
   return m ? m[1] : null;
 }
 
+function detectCatalogItemPath(path) {
+  if (typeof path !== "string") return null;
+  // Item names can contain colons (`harmony:dancer-llm`), hyphens, dots.
+  // Catch the catalog kind and the rest of the path (anything after).
+  const m = path.match(/^\/\.(operations|roles|extensions)\/([^/]+)\/?$/);
+  return m ? { kind: m[1], name: m[2] } : null;
+}
+
 const CATALOG_META = {
   operations: { icon: "⚙", title: "operations", sub: "registered DO actions" },
   roles:      { icon: "◎", title: "roles",      sub: "summonable role templates" },
@@ -478,6 +495,154 @@ function renderCatalogRow(kind, item, discovery) {
   return li;
 }
 
+// One-item detail view: SEE on `.operations/<op>` / `.roles/<role>` /
+// `.extensions/<ext>`. The descriptor is a normal position descriptor;
+// the item's data lives on `qualities.<kind>`. Take over the explorer
+// pane and surface the data in a way that's actually useful.
+function renderCatalogItemDetail(desc, { kind, name }, { discovery }) {
+  const middle = document.getElementById("middle");
+  document.getElementById("position-pane")?.classList.add("hidden");
+  document.getElementById("detail-pane")?.classList.add("hidden");
+  let pane = document.getElementById("explorer-pane");
+  if (pane) pane.remove();
+  pane = document.createElement("section");
+  pane.id = "explorer-pane";
+  middle.appendChild(pane);
+
+  const meta = CATALOG_META[kind] || { icon: "·", title: kind, sub: "" };
+
+  // Header with breadcrumb-like trail back to the catalog.
+  const header = document.createElement("header");
+  header.className = "explorer-header";
+  const h = document.createElement("h2");
+  h.className = "explorer-title";
+  h.innerHTML = `${meta.icon} <a class="dim" href="#${discovery.reality}/.${kind}">${meta.title}</a> <span class="dim">/</span> ${name}`;
+  header.appendChild(h);
+
+  const sub = document.createElement("div");
+  sub.className = "explorer-sub";
+  const spaceId = desc.address?.spaceId;
+  sub.textContent = spaceId ? `space ${spaceId}` : "(no spaceId)";
+  header.appendChild(sub);
+
+  if (spaceId && discovery?.reality) {
+    const reel = document.createElement("a");
+    reel.className = "explorer-jump";
+    reel.href = `#${discovery.reality}/.reel/space/${spaceId}`;
+    reel.textContent = `⛓ reel for this row`;
+    header.appendChild(reel);
+  }
+  pane.appendChild(header);
+
+  // Per-kind body. Read from qualities.<kind>.
+  const q = desc.qualities || {};
+  if (kind === "operations") renderOperationDetail(pane, q.operation || {}, name);
+  else if (kind === "roles") renderRoleDetail(pane, q.role || {}, name);
+  else if (kind === "extensions") renderExtensionDetail(pane, q.extension || q, name);
+}
+
+function renderOperationDetail(pane, op, name) {
+  const grid = section("operation");
+  grid.appendChild(kvBlock("name", name, { mono: true }));
+  if (Array.isArray(op.targets) && op.targets.length) {
+    grid.appendChild(kvBlock("targets", op.targets.join(", ")));
+  }
+  if (op.factAction) grid.appendChild(kvBlock("stamps factAction", op.factAction, { mono: true }));
+  if (op.ownerExtension) grid.appendChild(kvBlock("from extension", op.ownerExtension));
+  grid.appendChild(kvBlock("skipAudit", op.skipAudit ? "true" : "false"));
+  pane.appendChild(grid);
+
+  if (op && Object.keys(op).length) {
+    const raw = section("raw qualities.operation");
+    raw.appendChild(jsonBlock(op));
+    pane.appendChild(raw);
+  }
+}
+
+function renderRoleDetail(pane, role, name) {
+  const top = section("role");
+  top.appendChild(kvBlock("name", name, { mono: true }));
+  if (role.respondMode) top.appendChild(kvBlock("respondMode", role.respondMode));
+  if (Array.isArray(role.triggerOn) && role.triggerOn.length) {
+    top.appendChild(kvBlock("triggerOn", role.triggerOn.join(", ")));
+  }
+  if (role.replyTo) top.appendChild(kvBlock("replyTo", role.replyTo));
+  pane.appendChild(top);
+
+  // Capabilities — one section per verb.
+  const caps = [
+    ["canSee",    role.canSee],
+    ["canDo",     role.canDo],
+    ["canSummon", role.canSummon],
+    ["canBe",     role.canBe],
+    ["see",       role.see],
+  ];
+  for (const [label, list] of caps) {
+    if (!Array.isArray(list) || list.length === 0) continue;
+    const sec = section(label);
+    const ul = document.createElement("ul");
+    ul.className = "verb-list";
+    for (const entry of list) {
+      const li = document.createElement("li");
+      li.innerHTML = `<code>${escapeHtml(String(entry))}</code>`;
+      ul.appendChild(li);
+    }
+    sec.appendChild(ul);
+    pane.appendChild(sec);
+  }
+
+  if (Array.isArray(role.permissions) && role.permissions.length) {
+    const sec = section("permissions");
+    sec.appendChild(jsonBlock(role.permissions));
+    pane.appendChild(sec);
+  }
+}
+
+function renderExtensionDetail(pane, ext, name) {
+  const top = section("extension");
+  top.appendChild(kvBlock("name", name, { mono: true }));
+  if (ext.version) top.appendChild(kvBlock("version", ext.version));
+  if (ext.description) top.appendChild(kvBlock("description", ext.description));
+  if (ext.author) top.appendChild(kvBlock("author", ext.author));
+  if (ext.installedAt) top.appendChild(kvBlock("installed at", String(ext.installedAt)));
+  if (ext.enabled != null) top.appendChild(kvBlock("enabled", String(ext.enabled)));
+  pane.appendChild(top);
+
+  // Provides — list whatever capability arrays it advertises.
+  const provideKeys = ["operations", "roles", "tools", "hooks", "seeds", "subscriptions", "schedules", "routes"];
+  for (const k of provideKeys) {
+    const v = ext[k];
+    if (Array.isArray(v) && v.length) {
+      const sec = section(`provides ${k}`);
+      const ul = document.createElement("ul");
+      ul.className = "verb-list";
+      for (const entry of v) {
+        const li = document.createElement("li");
+        const txt = typeof entry === "string" ? entry : JSON.stringify(entry);
+        li.innerHTML = `<code>${escapeHtml(txt)}</code>`;
+        ul.appendChild(li);
+      }
+      sec.appendChild(ul);
+      pane.appendChild(sec);
+    } else if (v && typeof v === "object") {
+      const sec = section(`provides ${k}`);
+      sec.appendChild(jsonBlock(v));
+      pane.appendChild(sec);
+    }
+  }
+
+  // Raw qualities at the bottom for completeness.
+  const raw = section("raw qualities");
+  raw.appendChild(jsonBlock(ext));
+  pane.appendChild(raw);
+}
+
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, (c) => ({
+    "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;", "'": "&#39;",
+  }[c]));
+}
+
 function renderOperationRowBody(main, item) {
   const op = item.qualities?.operation || {};
   const targets = Array.isArray(op.targets) ? op.targets : [];
@@ -559,6 +724,104 @@ function renderExplorer(desc, { discovery }) {
   if (desc.isReel) renderReelExplorer(pane, desc.reel, discovery);
   else if (desc.isActChain) renderActChainExplorer(pane, desc.actChain, discovery);
   else if (desc.isBeingsCatalog) renderBeingsCatalog(pane, desc.beingsCatalog, discovery);
+  else if (desc.isThread) renderThreadDetail(pane, desc.thread, discovery);
+}
+
+// Thread detail view — metadata header + the act chain that constitutes
+// this thread, oldest-first (natural reading order, opposite of the
+// global act-chain view which is newest-first).
+function renderThreadDetail(pane, thread, discovery) {
+  if (!thread) {
+    const empty = document.createElement("div");
+    empty.className = "explorer-empty";
+    empty.textContent = "(thread not found)";
+    pane.appendChild(empty);
+    return;
+  }
+
+  const header = document.createElement("header");
+  header.className = "explorer-header";
+  const h = document.createElement("h2");
+  h.className = "explorer-title";
+  h.innerHTML = `⧖ <a class="dim" href="#${discovery.reality}/.threads">thread</a> <span class="dim">/</span> ${short(thread.id, 16)}`;
+  h.title = thread.id;
+  header.appendChild(h);
+
+  const sub = document.createElement("div");
+  sub.className = "explorer-sub";
+  const parts = [];
+  parts.push(`state: <span class="thread-state thread-state-${thread.state}">${thread.state}</span>`);
+  parts.push(`${thread.depth} act${thread.depth === 1 ? "" : "s"}`);
+  if (thread.liveCount)     parts.push(`<span class="dim">${thread.liveCount} live</span>`);
+  if (thread.completeCount) parts.push(`<span class="dim">${thread.completeCount} complete</span>`);
+  if (thread.severedCount)  parts.push(`<span class="chain-bad">${thread.severedCount} severed</span>`);
+  sub.innerHTML = parts.join(" · ");
+  header.appendChild(sub);
+
+  pane.appendChild(header);
+
+  // Metadata block.
+  const meta = section("thread");
+  meta.appendChild(kvBlock("rootCorrelation", thread.id, { mono: true }));
+  meta.appendChild(kvBlock("state", thread.state));
+  if (thread.rootStartedAt) meta.appendChild(kvBlock("started at", String(thread.rootStartedAt)));
+  if (thread.lastAct)       meta.appendChild(kvBlock("last act at", String(thread.lastAct)));
+  if (thread.parentThread && discovery?.reality) {
+    meta.appendChild(kvBlock("parent thread", thread.parentThread, {
+      mono: true,
+      link: `#${discovery.reality}/.threads/${thread.parentThread}`,
+    }));
+  }
+  if (Array.isArray(thread.participants) && thread.participants.length) {
+    const row = document.createElement("div");
+    row.className = "kv-block kv-block-stack";
+    const lbl = document.createElement("span");
+    lbl.className = "kv-block-label";
+    lbl.textContent = "participants";
+    row.appendChild(lbl);
+    const chips = document.createElement("div");
+    chips.className = "verb-list";
+    for (const p of thread.participants) {
+      const a = document.createElement("a");
+      a.className = "btn-explore";
+      a.href = `#${discovery.reality}/.acts/${p}`;
+      a.textContent = short(p, 14);
+      a.title = `view acts by ${p}`;
+      chips.appendChild(a);
+    }
+    row.appendChild(chips);
+    meta.appendChild(row);
+  }
+  if (thread.pending) {
+    const note = document.createElement("div");
+    note.className = "kv-block";
+    note.innerHTML = `<span class="kv-block-label">note</span><span class="kv-block-value dim">summon emitted; no moment has sealed yet (projection ahead of acts).</span>`;
+    meta.appendChild(note);
+  }
+  pane.appendChild(meta);
+
+  // Acts in the thread — re-use the same renderActBlock as .acts/<id>
+  // so the look is consistent. Oldest-first here (chronological flow).
+  const acts = Array.isArray(thread.acts) ? thread.acts : [];
+  if (acts.length === 0) {
+    const empty = document.createElement("div");
+    empty.className = "explorer-empty";
+    empty.textContent = thread.pending
+      ? "(pending — projection shows the summon but no Act has sealed yet)"
+      : "(no acts in this thread yet)";
+    pane.appendChild(empty);
+    return;
+  }
+  const listHead = document.createElement("h4");
+  listHead.className = "pane-title";
+  listHead.style.marginTop = "16px";
+  listHead.textContent = "acts in this thread (oldest first)";
+  pane.appendChild(listHead);
+
+  const list = document.createElement("ol");
+  list.className = "block-list";
+  for (const a of acts) list.appendChild(renderActBlock(a, discovery));
+  pane.appendChild(list);
 }
 
 // Global beings catalog — every Being row across the reality. Different
