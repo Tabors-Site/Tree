@@ -72,6 +72,11 @@ async function main() {
     onMatterPlaybackTick: (info) => onMatterPlaybackTick(info),
     isInputBlocked: isGameplayInputBlocked,
   });
+  // Move tool wiring. Scene runs the pick-up state machine and fires
+  // onMove only when the user commits a put-down. The HUD reflects
+  // mode/carry state so the player sees what they're holding.
+  state.scene.onMove = (intent) => fireMove(intent);
+  state.scene.onMoveModeChange = (on, carrying) => updateMoveHud(on, carrying);
   state.scene.setPlaceTimezone(state.discovery.timezone || null);
   state.scene.start();
 
@@ -113,8 +118,15 @@ async function main() {
   });
 
   // Mount the hotbar. Populated from the place's discovery payload
-  // (refreshed on every connect — see refreshSeedCatalog).
-  state.hotbar = initHotbar(document.getElementById("hud") || document.body);
+  // (refreshed on every connect — see refreshSeedCatalog). Selecting
+  // the built-in Move tool toggles the scene's pick-up mode; any
+  // other selection turns it off.
+  state.hotbar = initHotbar(document.getElementById("hud") || document.body, {
+    onSelectionChange: (item) => {
+      const isMoveTool = item?.kind === "tool" && item?.name === "move";
+      state.scene?.setMoveMode?.(isMoveTool);
+    },
+  });
   await refreshSeedCatalog();
 }
 
@@ -130,12 +142,24 @@ async function refreshSeedCatalog() {
     state.discovery = { ...state.discovery, ...full };
     const seeds = Array.isArray(full?.seeds) ? full.seeds : [];
     console.log(`[3D] discovery: ${seeds.length} seed(s)`, seeds.map((s) => s.name));
-    state.hotbar?.setSlots(seeds.map((s) => ({
-      kind:        "seed",
-      name:        s.name,
-      label:       s.name.split(":").pop(),
-      description: s.description,
-    })));
+    // Slot 0 is always the built-in Move tool. Seeds populate after.
+    // The tool is intrinsic to the portal — not provided by the
+    // place — so it doesn't ride on discovery.
+    const slots = [
+      {
+        kind: "tool",
+        name: "move",
+        label: "Move",
+        description: "Click an object to pick it up. Click a destination to put it down. Esc to cancel.",
+      },
+      ...seeds.map((s) => ({
+        kind:        "seed",
+        name:        s.name,
+        label:       s.name.split(":").pop(),
+        description: s.description,
+      })),
+    ];
+    state.hotbar?.setSlots(slots);
     if (seeds.length === 0) {
       setHud("no plantable seeds registered on this place");
     }
@@ -246,6 +270,52 @@ async function _tickSelfPosition() {
     console.warn("[3D] self set-being:coord failed:", err?.message);
   } finally {
     _selfEmitInflight = false;
+  }
+}
+
+// Move tool. Scene tracks pick-up state and fires onMove only when
+// the user commits a put-down (second click). This callback turns
+// that commit into the actual `do move` fact. Esc cancels client-
+// side; nothing is written.
+async function fireMove(intent) {
+  if (!intent || !state.descriptor || !state.client) return;
+  if (!state.session?.token) {
+    setHud("sign in to move things.");
+    return;
+  }
+  const desc = state.descriptor;
+  const stance = `${desc.address.pathByNames}@${desc.identity?.name || ""}`;
+  // Two modes from the scene's pick-up state machine. coord mode is
+  // the everyday case (within the current container); container mode
+  // is the "carry it through a doorway" case.
+  const args = {
+    target: { kind: intent.kind, id: intent.id },
+  };
+  if (intent.mode === "coord" && intent.coord) {
+    args.coord = intent.coord;
+  } else if (intent.mode === "container" && intent.to) {
+    args.to = intent.to;
+  } else {
+    return;
+  }
+  try {
+    await state.client.do(stance, "move", args);
+    setHud(`moved "${intent.label || intent.id.slice(0,8)}" to ${intent.destLabel || ""}.`);
+  } catch (err) {
+    console.warn("[3D] move failed:", err?.message || err);
+    setHud(`move failed: ${err?.message || "denied"}`);
+  }
+}
+
+function updateMoveHud(on, carrying) {
+  if (!on) {
+    setHud("");
+    return;
+  }
+  if (carrying) {
+    setHud(`carrying ${carrying.label || carrying.id.slice(0,8)}. click destination, or Esc to cancel.`);
+  } else {
+    setHud("Move tool: click a tree or matter to pick it up.");
   }
 }
 
@@ -374,6 +444,10 @@ async function navigate(address, { fromHistory = false } = {}) {
     const desc = await state.client.see(resolved, { live: true });
     state.descriptor = desc;
     state.currentAddress = resolved;
+    // Hand the current spaceId to the scene so the Move tool can
+    // resolve "put down here in this space" without an extra
+    // descriptor lookup.
+    state.scene.setCurrentSpaceId?.(desc?.address?.spaceId || null);
     state.scene.renderDescriptor(desc, {
       isAuthenticated: !!state.session?.token,
     });

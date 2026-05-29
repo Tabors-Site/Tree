@@ -18,13 +18,13 @@
 //   self     add-llm, assign-slot, list-llms, delete-llm
 //            Caller manages their own being's connections.
 //
-//   place     set-place-llm
-//            Sets the place-level default connectionId. Restricted to
-//            the place's root being — the first human registered,
-//            identified structurally by parentBeingId: null. There is
-//            no "admin" role anymore (isAdmin retired 2026-05-18);
-//            the root being is the place's operator by virtue of
-//            having no being-tree parent.
+//   reality   set-reality-llm
+//            Sets the reality-level default connectionId. Restricted
+//            to the reality's root being — the first human
+//            registered, identified structurally by parentBeingId:
+//            null. There is no "admin" role anymore (isAdmin retired
+//            2026-05-18); the root being is the operator by virtue
+//            of having no being-tree parent.
 //
 //   space    set-space-llm
 //            Sets qualities.llm.slots[slot] on a space the caller owns
@@ -60,7 +60,7 @@ export const llmAssignerBeing = Object.freeze({
     "assign-slot",  // caller binds one of their connections to a slot
     "list-llms",    // caller lists their connections + slot assignments
     "delete-llm",   // caller removes one of their connections
-    "set-place-llm", // root operator sets the place-level default
+    "set-reality-llm", // root operator sets the reality-level default
     "set-space-llm", // tree owner sets a slot on a specific space
   ],
 
@@ -173,13 +173,13 @@ export const llmAssignerBeing = Object.freeze({
   },
 
   // ────────────────────────────────────────────────────────────────
-  // Place-scope operations
+  // Reality-scope operations
   // ────────────────────────────────────────────────────────────────
 
   /**
-   * Set (or clear) the place-level default LLM connection. Restricted
-   * to the root operator (the first registered human; identified by
-   * `parentBeingId: null`).
+   * Set (or clear) the reality-level default LLM connection.
+   * Restricted to the root operator (the first registered human;
+   * identified by `parentBeingId: null`).
    *
    * @param {object} payload  { connectionId }  null to clear
    */
@@ -239,7 +239,7 @@ export const llmAssignerBeing = Object.freeze({
       { kind: "space", id: String(spaceId) },
       "assign-llm-slot",
       { slot, connectionId: connectionId || null },
-      { identity: ctx.identity },
+      { identity: ctx.identity, summonCtx: ctx.summonCtx },
     );
 
     log.verbose("llm-assigner",
@@ -272,7 +272,7 @@ async function requireRootOperator(ctx) {
   if (String(operator._id) !== String(ctx.identity.beingId)) {
     throw new IbpError(
       IBP_ERR.FORBIDDEN,
-      "Only the place's root operator can change place-level LLM configuration.",
+      "Only the reality's root operator can change reality-level LLM configuration.",
     );
   }
 }

@@ -5,7 +5,7 @@
 // no Three.js.
 
 import { PortalClient } from "./portal-client.js";
-import { renderDescriptor, setStatus, clearDetail } from "./renderer.js";
+import { renderDescriptor, setStatus, clearDetail, setConnectionStatus, setLoading } from "./renderer.js";
 import { showAuthOverlay, hideAuthOverlay } from "./identity.js";
 import { openChatFor, handleIncomingSummon, closeChat, isChatOpen } from "./chat.js";
 
@@ -66,7 +66,105 @@ async function main() {
     const addr = addressFromHash();
     if (addr !== state.currentAddress) navigate(addr);
   });
+
+  wireAddressForm();
+  wireKeyboardShortcuts();
 }
+
+// Address form — type any address and press Enter to navigate. Updates
+// the URL hash; the hashchange listener picks it up. Accepts:
+//   <reality>/<path>            — normal SEE
+//   <reality>/<path>@<being>    — stance SEE
+//   <reality>/.beings           — global being catalog
+//   /<path>                     — current reality, alternate path
+//   ~tabor/notes                — home shorthand
+function wireAddressForm() {
+  const form  = document.getElementById("address-form");
+  const input = document.getElementById("address-input");
+  if (!form || !input) return;
+  form.addEventListener("submit", (ev) => {
+    ev.preventDefault();
+    const raw = input.value.trim();
+    if (!raw) return;
+    // Allow shorthands that don't start with the reality.
+    const reality = state.discovery?.reality;
+    let addr = raw;
+    if (reality && !raw.startsWith(reality)) {
+      if (raw.startsWith("/") || raw.startsWith("~")) addr = `${reality}${raw === "/" ? "/" : raw}`;
+    }
+    location.hash = "#" + addr;
+    input.blur();
+  });
+}
+
+// Keyboard shortcuts:
+//   /       — focus the address bar
+//   Esc     — close the topmost panel (auth → chat → inspector)
+//   g h     — go home (reality root)
+//   g i     — go to inbox of current user (~user)
+function wireKeyboardShortcuts() {
+  let gPending = false;
+  let gTimer   = null;
+  window.addEventListener("keydown", (ev) => {
+    const target = ev.target;
+    const inField = target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable);
+    if (ev.key === "Escape") {
+      // Layered close: auth overlay → chat → inspector. Most-recently-opened first.
+      const auth = document.getElementById("auth-overlay");
+      if (auth && !auth.classList.contains("hidden")) {
+        hideAuthOverlay();
+        return;
+      }
+      if (isChatOpen()) { closeChat(); return; }
+      const insp = document.getElementById("inspector");
+      if (insp && !insp.classList.contains("hidden")) {
+        insp.classList.add("hidden");
+        document.getElementById("empty-detail")?.classList.remove("hidden");
+        return;
+      }
+      return;
+    }
+    if (inField) return;
+    if (ev.key === "/") {
+      ev.preventDefault();
+      const input = document.getElementById("address-input");
+      if (input) { input.focus(); input.select(); }
+      return;
+    }
+    if (ev.key === "g") {
+      gPending = true;
+      if (gTimer) clearTimeout(gTimer);
+      gTimer = setTimeout(() => { gPending = false; }, 600);
+      return;
+    }
+    if (gPending) {
+      gPending = false;
+      if (gTimer) { clearTimeout(gTimer); gTimer = null; }
+      const reality = state.discovery?.reality;
+      if (!reality) return;
+      if (ev.key === "h") {
+        ev.preventDefault();
+        location.hash = `#${reality}/`;
+      } else if (ev.key === "b") {
+        ev.preventDefault();
+        location.hash = `#${reality}/.beings`;
+      } else if (ev.key === "o") {
+        ev.preventDefault();
+        location.hash = `#${reality}/.operations`;
+      } else if (ev.key === "r") {
+        ev.preventDefault();
+        location.hash = `#${reality}/.roles`;
+      } else if (ev.key === "t") {
+        ev.preventDefault();
+        location.hash = `#${reality}/.threads`;
+      } else if (ev.key === "i" && state.session?.username) {
+        ev.preventDefault();
+        location.hash = `#${reality}/~${state.session.username}`;
+      }
+    }
+  });
+}
+
 
 // Fetch the DO registry by SEEing <reality>/.operations. The seed syncs
 // the live registry into that space at boot end (operations.js
@@ -104,7 +202,7 @@ async function connectAnonymous(placeUrl, useProxy) {
     placeUrl,
     token:              null,
     useProxy,
-    onConnectionChange: (status, reason) => setStatus(`socket: ${status}${reason ? " — " + reason : ""}`),
+    onConnectionChange: (status, reason) => setConnectionStatus(status, reason),
     onSummon:           handleIncomingSummon,
     onDescriptorEvent:  () => refreshCurrent(),
   });
@@ -118,7 +216,7 @@ async function connectAuthed(session) {
     placeUrl:           session.placeUrl,
     token:              session.token,
     useProxy:           session.placeIsProxied,
-    onConnectionChange: (status) => setStatus(`${session.username} | ${status}`),
+    onConnectionChange: (status, reason) => setConnectionStatus(status, reason),
     onSummon:           handleIncomingSummon,
     onDescriptorEvent:  () => refreshCurrent(),
   });
@@ -153,7 +251,8 @@ async function connectAuthed(session) {
 async function navigate(address) {
   if (!state.client) return;
   const target = address || `${state.discovery.reality}/`;
-  setStatus(`see ${target}...`);
+  setStatus(`see ${target}…`);
+  setLoading(true);
   try {
     const desc = await state.client.see(target, { live: true });
     state.descriptor     = desc;
@@ -162,15 +261,22 @@ async function navigate(address) {
       // Update hash without triggering hashchange.
       history.replaceState(null, "", "#" + target);
     }
-    if (!state.session?.token && !isChatOpen()) {
+    // Show auth overlay on first load when not signed in — but only on
+    // the home view, not when the user has navigated to a specific
+    // synthetic catalog (they may want to browse first).
+    const path = desc.address?.pathByNames || "/";
+    const isHomeView = (path === "/" || path === "");
+    if (!state.session?.token && isHomeView && !isChatOpen()) {
       showAuthOverlay(state.discovery.reality);
     } else {
       hideAuthOverlay();
     }
     renderDescriptor(desc, { session: state.session, discovery: state.discovery });
-    setStatus(`at ${desc.address?.pathByNames || "/"} | ${state.session?.username || "arrival"}`);
+    setStatus(`at ${path} · ${state.session?.username || "arrival"}`);
   } catch (err) {
     setStatus(`see failed: ${err.code || ""} ${err.message || ""}`);
+  } finally {
+    setLoading(false);
   }
 }
 

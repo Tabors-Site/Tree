@@ -47,7 +47,7 @@ import {
 } from "../materials/space/spaces.js";
 import { getInboxSummary } from "../present/intake/inbox.js";
 import { getRole, listRoles } from "../present/roles/registry.js";
-import { findOpenForBeing } from "../present/beats/2-fold/reelChains.js";
+import { findOpenForBeing, findLastSealedForBeing } from "../present/beats/2-fold/reelChains.js";
 import { fold } from "../present/beats/2-fold/foldEngine.js";
 
 // Fold an aggregate before reading its qualities. Per FOLD.md: the
@@ -205,8 +205,28 @@ function truncate(s, n) {
 
 // Convert a Act into an activity object the descriptor surfaces
 // for the being whose Act it is. Null when no Act is given.
-async function summonToActivity(summon) {
+// opts.sealed = true means the Act is closed and we surface its
+// endMessage as "what they last said" so the speech bubble can
+// persist between moments.
+async function summonToActivity(summon, opts = {}) {
   if (!summon) return null;
+
+  if (opts.sealed) {
+    const raw = summon.endMessage;
+    const text =
+      raw && typeof raw === "object"
+        ? typeof raw.content === "string" ? raw.content : ""
+        : typeof raw === "string" ? raw : "";
+    if (!text) return null;
+    return {
+      kind: "said",
+      content: truncate(text, ACTIVITY_CONTENT_CAP),
+      chainstepId: String(summon._id),
+      target: null,
+      ts: raw?.time || summon.stampedAt || new Date(),
+    };
+  }
+
   let lastFact = null;
   try {
     lastFact = await Fact.findOne({ actId: summon._id })
@@ -473,6 +493,7 @@ async function childrenOf(parentId, parentPath, opts = {}) {
       name: f.name || s.name,
       spaceId: s._id,
       type: f.type ?? s.type ?? null,
+      coord: f.coord ?? s.coord ?? null,
       path: parentPath === "/" ? `/${s.name}` : `${parentPath}/${s.name}`,
       qualities: serializeQualities(f.qualities ?? s.qualities),
     };
@@ -579,8 +600,13 @@ async function enrichBeings(spaceId, entries) {
 
   const activities = await Promise.all(entries.map(async (e) => {
     if (!e._beingId) return null;
-    const summon = await findOpenForBeing(e._beingId);
-    return summonToActivity(summon);
+    const open = await findOpenForBeing(e._beingId);
+    if (open) return summonToActivity(open);
+    // No Act in flight. Fall back to what this being last SAID so
+    // the speech bubble persists between moments. Without this the
+    // bubble vanishes the instant a moment seals.
+    const sealed = await findLastSealedForBeing(e._beingId);
+    return summonToActivity(sealed, { sealed: true });
   }));
 
   return entries.map((entry, i) => {

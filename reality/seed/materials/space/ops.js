@@ -11,10 +11,9 @@
 // dispatches.
 
 import { registerOperation } from "../../ibp/operations.js";
+import Space from "./space.js";
 import {
   createSpace,
-  editSpaceName,
-  editSpaceType,
   deleteSpaceBranch,
   assertValidSpaceName,
   assertValidSpaceType,
@@ -144,14 +143,41 @@ async function setOnSpaceHandler({ target, params, identity }) {
     if (!value || typeof value !== "string") {
       throw new Error("set-space: `value` must be a string for field=name");
     }
-    if (kind === "stance") {
-      return renameAtStance({ resolved: target, name: value, identity });
-    }
-    // name needs row contents: current name (for unchanged-noop),
-    // parent (for uniqueness scope), seedSpace (to reject renames
-    // on seed spaces). Load the row.
-    const row = await loadTargetRow(target, "space");
     const normalized = assertValidSpaceName(value);
+
+    // Single-writer doctrine. The op handler validates the rename
+    // (access, seed-space immutability, sibling-name uniqueness) and
+    // returns the shape. doVerb's auto-stamp lands a do:set-space
+    // fact carrying { field: "name", value: normalized }; the space
+    // reducer's applySetField is the one writer of Space.name.
+    // Direct findByIdAndUpdate inside this handler used to double-
+    // write the same field, racing the reducer.
+    if (kind === "stance") {
+      const spaceId = target?.spaceId;
+      if (!spaceId) {
+        throw new IbpError(IBP_ERR.SPACE_NOT_FOUND, "Resolved address has no spaceId");
+      }
+      const beingId = identity?.beingId || null;
+      const access = await resolveSpaceAccess(spaceId, beingId);
+      if (!access?.ok || access.write !== true) {
+        throw new IbpError(IBP_ERR.FORBIDDEN, "Not authorized to rename at this place");
+      }
+      const row = await Space.findById(spaceId).select("name parent seedSpace").lean();
+      if (!row) {
+        throw new IbpError(IBP_ERR.SPACE_NOT_FOUND, "Space not found");
+      }
+      if (row.seedSpace) {
+        throw new Error("set-space: cannot rename seed spaces");
+      }
+      if (row.name !== normalized) {
+        await assertNameAvailableAt(row.parent, normalized, {
+          excludeSpaceId: String(spaceId),
+        });
+      }
+      return { spaceId: String(spaceId), name: normalized };
+    }
+    // Typed-space path. Identical validation; reducer writes.
+    const row = await loadTargetRow(target, "space");
     if (row.seedSpace) {
       throw new Error("set-space: cannot rename seed spaces");
     }
@@ -170,11 +196,17 @@ async function setOnSpaceHandler({ target, params, identity }) {
       throw new Error("set-space: cannot change type on seed spaces");
     }
     if (kind === "stance") {
-      await editSpaceType({
-        spaceId,
-        newType: normalized,
-        beingId: identity?.beingId || null,
-      });
+      // Single-writer: no direct Space.type write here. The op handler
+      // validates seed-space immutability via the row check below,
+      // then returns the shape; doVerb auto-stamps do:set-space and
+      // the space reducer's applySetField writes Space.type.
+      const row = await Space.findById(spaceId).select("seedSpace").lean();
+      if (!row) {
+        throw new IbpError(IBP_ERR.SPACE_NOT_FOUND, "Space not found");
+      }
+      if (row.seedSpace) {
+        throw new Error("set-space: cannot change type on seed spaces");
+      }
     }
     return { spaceId, type: normalized };
   }
@@ -250,9 +282,14 @@ async function setOnSpaceHandler({ target, params, identity }) {
 // end-space
 // ─────────────────────────────────────────────────────────────────────
 
-async function endSpaceHandler({ target, identity }) {
+async function endSpaceHandler({ target, identity, scaffold }) {
   const spaceId = targetIdOf(target);
-  const deleted = await deleteSpaceBranch(spaceId, identity?.beingId || null);
+  // Scaffold-mode acts as I_AM. The registry mirror sync (genesis +
+  // boot) calls end-space against stale registry entries under
+  // I_AM authority; without this fall-through, deleteSpaceBranch's
+  // owner check rejects a null beingId and the sync warns.
+  const actorBeingId = identity?.beingId || (scaffold ? I_AM : null);
+  const deleted = await deleteSpaceBranch(spaceId, actorBeingId);
   return { deathSpaceId: String(deleted?._id || spaceId) };
 }
 
@@ -307,7 +344,7 @@ const KERNEL_ERROR_PATTERNS = {
 async function createSpaceChild({ target, params, identity, summonCtx, scaffold, kind }) {
   const beingId = identity?.beingId || (scaffold ? I_AM : null);
   const actId = summonCtx?.actId || null;
-  const { name, type = null } = params || {};
+  const { name, type = null, size = null } = params || {};
   if (!name || typeof name !== "string") {
     throw new IbpError(IBP_ERR.INVALID_INPUT, "`name` is required");
   }
@@ -320,6 +357,7 @@ async function createSpaceChild({ target, params, identity, summonCtx, scaffold,
       const newSpace = await createSpace({
         name,
         type,
+        size,
         parentId: targetIdOf(target),
         beingId,
         actId,
@@ -347,7 +385,7 @@ async function createSpaceChild({ target, params, identity, summonCtx, scaffold,
       );
     }
     try {
-      const newSpace = await createSpace({ name, type, isRoot: true, beingId, actId, summonCtx, scaffold });
+      const newSpace = await createSpace({ name, type, size, isRoot: true, beingId, actId, summonCtx, scaffold });
       return shapeNewSpace(newSpace);
     } catch (err) {
       throw mapPatternsToIbpError(err, KERNEL_ERROR_PATTERNS.createChild);
@@ -363,6 +401,7 @@ async function createSpaceChild({ target, params, identity, summonCtx, scaffold,
     const newSpace = await createSpace({
       name,
       type,
+      size,
       parentId: target.spaceId,
       beingId,
       actId,
@@ -383,25 +422,3 @@ function shapeNewSpace(newSpace) {
   };
 }
 
-async function renameAtStance({ resolved, name, identity }) {
-  const beingId = identity?.beingId || null;
-  if (!resolved.spaceId) {
-    throw new IbpError(
-      IBP_ERR.SPACE_NOT_FOUND,
-      "Resolved address has no spaceId",
-    );
-  }
-  const access = await resolveSpaceAccess(resolved.spaceId, beingId);
-  if (!access?.ok || access.write !== true) {
-    throw new IbpError(
-      IBP_ERR.FORBIDDEN,
-      "Not authorized to rename at this place",
-    );
-  }
-  try {
-    await editSpaceName({ spaceId: resolved.spaceId, newName: name, beingId });
-    return { spaceId: String(resolved.spaceId), name };
-  } catch (err) {
-    throw mapPatternsToIbpError(err, KERNEL_ERROR_PATTERNS.rename);
-  }
-}

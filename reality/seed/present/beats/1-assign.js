@@ -250,12 +250,37 @@ export async function assign({ beingId, spaceId, entry, handoff = null, signal =
 // Render a one-line description of a transport-act for the Act's
 // startMessage. The full payload lives on the intake entry; this is
 // what shows up when humans skim a Summon row.
+//
+// For DO: target is a typed object ({kind, id}); render as "<verb>
+// <action> on <kind>/<id>".  For BE: target is the op-name string
+// itself (e.g. "claim"); render as "BE <op>". Previously this used a
+// raw `${target}` interpolation, which silently produced "[object
+// Object]" for every DO row in the audit history.
 function describeTransportAct(act) {
   if (!act || typeof act !== "object") return "[transport-act]";
-  const verb   = act.verb || "?";
-  const target = act.target || "?";
-  const action = act.action || "?";
-  return `${verb.toUpperCase()} ${target} ${action}`;
+  const verb   = (act.verb || "?").toUpperCase();
+  const target = formatTransportTarget(act.target);
+  const action = typeof act.action === "string" ? act.action : null;
+  if (verb === "BE") {
+    return action ? `BE ${target} ${action}` : `BE ${target}`;
+  }
+  return action ? `${verb} ${action} on ${target}` : `${verb} on ${target}`;
+}
+
+function formatTransportTarget(t) {
+  if (t == null) return "?";
+  if (typeof t === "string") return t;
+  if (typeof t === "object") {
+    if (t.kind && t.id) return `${t.kind}/${truncId(t.id)}`;
+    if (t.spaceId)      return `space/${truncId(t.spaceId)}`;
+    if (typeof t.value === "string") return t.value;
+  }
+  return String(t);
+}
+
+function truncId(id) {
+  const s = String(id);
+  return s.length > 12 ? s.slice(0, 8) + "…" : s;
 }
 
 // ─────────────────────────────────────────────────────────────────────

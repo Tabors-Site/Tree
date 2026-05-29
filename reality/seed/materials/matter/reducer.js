@@ -16,7 +16,7 @@
 // this; until then the projection's `position` matches the matter's
 // `spaceId` field on creation.
 
-import { applySetQualities, applySetField, applyCreateMatter } from "../reducerHelpers.js";
+import { applySetQualities, applySetField, applyCreateMatter, applyMove } from "../reducerHelpers.js";
 
 /**
  * Empty initial state. Today: empty — the fold derives qualities +
@@ -47,6 +47,10 @@ export function reduce(state, fact) {
   // do:set — scalar fields and qualities paths.
   next = applySetField(next, fact);
   next = applySetQualities(next, fact);
+
+  // do:move — picks up a matter and puts it in a new space.
+  // Updates both spaceId and position; one fact, one intent recorded.
+  next = applyMove(next, fact);
 
   // Position change.
   const explicit = fact?.params?.toPosition ?? fact?.params?.spaceId;

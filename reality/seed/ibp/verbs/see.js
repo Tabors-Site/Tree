@@ -29,6 +29,7 @@ import { authorize } from "../authorize.js";
 import { threadIdFromPath, getThreadsSpaceId, describeThread } from "../../materials/space/threads.js";
 import { describeReel } from "../../past/fact/facts.js";
 import { describeActChain } from "../../past/act/actChain.js";
+import { describeBeingsCatalog } from "../../materials/being/beingsCatalog.js";
 import { assertVerbCaller } from "./_shared.js";
 
 // Path matchers for synthetic explorer addresses.
@@ -47,6 +48,10 @@ function actChainTargetFromPath(path) {
   const m = path.match(/^\/?\.acts\/([^/]+)\/?$/);
   if (!m) return null;
   return decodeURIComponent(m[1]);
+}
+function isBeingsCatalogPath(path) {
+  if (typeof path !== "string") return false;
+  return /^\/?\.beings\/?$/.test(path);
 }
 
 /**
@@ -169,6 +174,37 @@ export async function seeVerb(target, opts = {}) {
       children:    [],
       matters:     [],
       qualities:   {},
+    };
+  }
+
+  // Global being catalog short-circuit. SEE on `<reality>/.beings`
+  // returns every Being row across the reality, regardless of home.
+  // Mirrors `.operations` (catalog of registered DO ops). Per-position
+  // beings still surface via normal SEE on a position; this is the
+  // cross-position view for clients building global lists.
+  if (isBeingsCatalogPath(expanded.right?.path)) {
+    const realityDomain = getRealityDomain();
+    const catalog = await describeBeingsCatalog();
+    return {
+      address: {
+        reality:     realityDomain,
+        path:        `/.beings`,
+        being:       null,
+        spaceId:     null,
+        beingId:     null,
+        chain:       [],
+        pathByNames: `/.beings`,
+        pathByIds:   `/.beings`,
+        leafName:    ".beings",
+        leafId:      null,
+      },
+      isSpaceRoot:   false,
+      isHomeRoot:    false,
+      isBeingsCatalog: true,
+      beingsCatalog: catalog,
+      children:      [],
+      matters:       [],
+      qualities:     {},
     };
   }
 

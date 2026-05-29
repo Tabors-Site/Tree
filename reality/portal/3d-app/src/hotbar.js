@@ -138,8 +138,9 @@ function _shortName(fullName) {
   return idx >= 0 ? fullName.slice(idx + 1) : fullName;
 }
 
-// Per-kind icon. A seed gets a stylized sapling; future kinds add
-// their own glyphs. SVG is inline so no asset loading.
+// Per-kind icon. A seed gets a stylized sapling; the move tool gets
+// an open hand; future kinds add their own glyphs. SVG is inline so
+// no asset loading.
 function _iconSvg(item) {
   if (item.kind === "seed") {
     return `<svg viewBox="0 0 24 24" width="28" height="28">
@@ -147,6 +148,15 @@ function _iconSvg(item) {
       <path d="M12 13 C8 12, 6 9, 7 6 C10 7, 12 9, 12 13 Z" fill="#4f8a5f"/>
       <path d="M12 13 C16 12, 18 9, 17 6 C14 7, 12 9, 12 13 Z" fill="#5fa672"/>
       <ellipse cx="12" cy="21" rx="3.5" ry="0.8" fill="#3a2a1c"/>
+    </svg>`;
+  }
+  if (item.kind === "tool" && item.name === "move") {
+    // Open-hand glyph. White-ish fill for visibility on dark slot.
+    return `<svg viewBox="0 0 24 24" width="28" height="28">
+      <path d="M8 13 V6 a1.2 1.2 0 0 1 2.4 0 V11" stroke="#cfd8e5" stroke-width="1.4" fill="none" stroke-linecap="round"/>
+      <path d="M10.4 11 V5 a1.2 1.2 0 0 1 2.4 0 V11" stroke="#cfd8e5" stroke-width="1.4" fill="none" stroke-linecap="round"/>
+      <path d="M12.8 11 V5.5 a1.2 1.2 0 0 1 2.4 0 V11" stroke="#cfd8e5" stroke-width="1.4" fill="none" stroke-linecap="round"/>
+      <path d="M15.2 11 V6.5 a1.2 1.2 0 0 1 2.4 0 V14 a5.5 5.5 0 0 1 -5.5 5.5 H10 a4 4 0 0 1 -3.4 -2 L4.5 14 a1.4 1.4 0 0 1 2 -2 L8 13.5" stroke="#cfd8e5" stroke-width="1.4" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
     </svg>`;
   }
   return "";

@@ -98,10 +98,6 @@ import {
 } from "./tools.js";
 import { callLLM, finalizeResponse } from "./loop.js";
 import { getSpaceName } from "../../../materials/space/spaces.js";
-// MCP wiring retired. Tools dispatch directly via getToolHandler in
-// executeTool; the verb dispatcher's authorize gate covers per-verb
-// auth + extension-scope. No protocol layer between the LLM voice
-// and the handler.
 
 // The live carry between this being's moments — messages tail,
 // current role, idle eviction — lives in reel.js. setCarryMessages
@@ -400,7 +396,6 @@ function checkTreeCircuit(session) {
         content:
           "This tree is dormant. It exceeded health thresholds and its circuit breaker tripped. Contact the place operator or wait for an extension to revive it.",
         role: session.role?.name || null,
-        _internal: { tripped: true, rootId: rootAncestor._id },
       };
     }
   }
@@ -409,9 +404,8 @@ function checkTreeCircuit(session) {
 
 /**
  * Phase 3. Resolve the LLM client (with role-aware connection
- * resolution + failover) and the MCP client for tool dispatch.
- * Returns the bundle the loop needs, or a no-LLM placeholder reply
- * when nothing is configured.
+ * resolution + failover). Returns the bundle the loop needs, or a
+ * no-LLM placeholder reply when nothing is configured.
  */
 async function resolveLLMClient(ctx, session, presenceKey) {
   // Role can pin its own connection at the tree root (llmSlot →
@@ -903,20 +897,25 @@ export async function stepTurn(presenceKey, message, ctx) {
   // Phase 7. Close the turn. Two short-circuits skip finalizeResponse's
   // "make one more call for prose" step: tool-cap (the caller will
   // re-enter on a new step with continuation: true) and reality-done
-  // (the tools were the answer, no prose needed).
+  // (the tools were the answer, no prose needed). Pull the last
+  // assistant message's prose so the Act records what the being
+  // said alongside its tool call (the dancer's "I'll head east."
+  // becomes the visible record; an empty assistant content gets a
+  // deterministic placeholder so the moment still seals).
   if (continueReason === "tool-cap" || continueReason === "reality-done") {
-    const _internal = {
-      role: session.role?.name,
-      rootId: getRootIdFor(ctx.beingId),
-      isCustom,
-      model: MODEL,
-      connectionId: resolvedConnectionId || null,
-    };
+    let assistantProse = "";
+    for (let i = session.messages.length - 1; i >= 0; i--) {
+      const m = session.messages[i];
+      if (m.role === "assistant" && typeof m.content === "string" && m.content.trim()) {
+        assistantProse = m.content.trim();
+        break;
+      }
+    }
+    const content = assistantProse ||
+      (continueReason === "tool-cap" ? "(continuing)" : "(step taken)");
     return {
       success: true,
-      content: "",
-      text: "",
-      _internal,
+      content,
       _continue: continueReason === "tool-cap",
       _continueReason: continueReason,
     };
@@ -959,11 +958,10 @@ export function getCurrentRole(sessionKey) {
 //   signal   — the scheduler's AbortController signal so a cut at
 //              HUMAN priority interrupts mid-turn.
 //
-// Inside, I derive identifiers, open or reuse the MCP connection,
-// open the Act row, set the position, run stepTurn, fire
-// beforeResponse on the answer, finalize the Act row, and hand
-// back { text, actId, role, sessionKey } to the role's handler
-// for reply emission.
+// Inside, I derive identifiers, open the Act row, set the position,
+// run stepTurn, fire beforeResponse on the answer, finalize the Act
+// row, and hand back { text, actId, role, sessionKey } to the role's
+// handler for reply emission.
 /**
  * I run one LLM turn for the summoned being and return text.
  */
@@ -1021,18 +1019,37 @@ export async function runTurn({ being, envelope, role, signal = null } = {}) {
   const { resolvePipelineKey } = await import("../../session.js");
   const { computeIbpStampAddress } = await import("../../../ibp/address.js");
 
-  // The IBP Address is the conversation identifier. When I can
-  // resolve both stances, that address keys the per-being session
-  // across every Act between these two beings; when I can't, I
-  // fall back to an ephemeral pipeline key so the turn still runs.
-  const _eagerIbpAddress = beingOut
-    ? await computeIbpStampAddress({
+  // Session key resolution.
+  //
+  // Normal path: the IBP Address is the conversation identifier.
+  // When I can resolve both stances, that address keys the per-
+  // being session across every Act between these two beings; the
+  // session.messages buffer accumulates user/assistant pairs so
+  // the LLM has prior-turn context.
+  //
+  // Presentism opt-in (role.presentist === true): every summon is
+  // its own "now". The face rebuilds from substrate every call —
+  // the system prompt already carries identity + see-resolvers +
+  // capabilities + persona — and conversation history isn't
+  // useful, only costly. Without this, a being whose self-self
+  // IBP Address is stable (e.g. a dancer whose every wake comes
+  // through subscription as `dancer@grid :: dancer@grid`) stacks
+  // every prior wake's user message + assistant reply onto the
+  // same buffer, so by tick N the prompt is N times larger than
+  // it should be and inference latency runs away. Presentism mints
+  // a fresh ephemeral session key per call; the message buffer
+  // starts empty and stays empty across ticks.
+  const isPresentist = role?.presentist === true;
+  const _eagerIbpAddress = (isPresentist || !beingOut)
+    ? null
+    : await computeIbpStampAddress({
         askerBeingId: beingId,
         askerPosition: getCurrentSpace(beingId) || null,
         addresseeBeingId: beingOut,
-      })
-    : null;
-  const { key: resolvedKey } = resolvePipelineKey({ beingId, rootId });
+      });
+  const { key: resolvedKey } = isPresentist
+    ? { key: `pipeline:ephemeral:${crypto.randomUUID()}`, persist: false }
+    : resolvePipelineKey({ beingId, rootId });
   const sessionKey = _eagerIbpAddress || resolvedKey;
   const sessionId = crypto.randomUUID();
 
@@ -1112,10 +1129,7 @@ export async function runTurn({ being, envelope, role, signal = null } = {}) {
     return cognitionFailure("aborted", "abort signal fired");
   }
 
-  // Per Round 5: no fake-text fallback. The act IS the text. If
-  // stepTurn returned no usable content, this is a garbage
-  // cognition — no Act will seal.
-  const text = result?.content || result?.answer || null;
+  const text = typeof result?.content === "string" ? result.content : null;
   if (typeof text !== "string" || text.length === 0) {
     if (abort) clearSessionAbort(sessionKey);
     return cognitionFailure(
@@ -1135,9 +1149,9 @@ export async function runTurn({ being, envelope, role, signal = null } = {}) {
     }
   } catch {}
 
-  // 6. Release the abort registration. The session buffer + MCP
-  // connection stay alive for the next turn on this key; only the
-  // cancel hook for this specific turn lets go.
+  // 6. Release the abort registration. The session buffer stays
+  // alive for the next turn on this key; only the cancel hook for
+  // this specific turn lets go.
   if (abort) clearSessionAbort(sessionKey);
 
   return cognitionSuccess(finalText);

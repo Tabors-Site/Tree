@@ -12,25 +12,66 @@
 import log from "../../../seed/seedReality/log.js";
 import { summonCreateBeing } from "../../../seed/ibp/verbs/summon.js";
 
-const TICK_MS  = 1500;
+// Tick cadence. 30s is conservative for big local models
+// (qwen3.5:27b on consumer GPU/CPU runs ~5-15s per inference once
+// presentism is in play). With 5 dancers × ~10s/call / 30s tick =
+// well under saturation; the inbox drains, no buffer backup.
+//
+// Drop to 5-10s when Ollama is reliably fast (e.g. small models,
+// good hardware).
+const TICK_MS  = 30000;
 const GRID_W   = 10;
 const GRID_H   = 10;
 
-// Rung 5 roster: five dancers, varied start positions. All run the
-// same `dancer-toward` rule (step toward nearest neighbor). With five
-// dancers on a 10x10 board, multiple dancers will repeatedly target
-// adjacent cells, and the Strategy A deterministic bump in foldGrid
-// (PARALLEL FACTS §4) resolves collisions at fold time.
+// LLM roster — 5 personas, one role template, persona-per-being via
+// `qualities.harmony.persona`. The buildSystemPrompt on dancer-llm
+// reads the quality and appends it to the base prompt, so each being
+// gets a distinct character at runtime without N role files.
 //
-// Different rules (away/mirror/box/pulse) can layer in later passes;
-// the substrate already supports them because each dancer is its own
-// summon and the grid reel doesn't care which rule produced a move.
+// Each LLM dancer inherits its LlmConnection through the seed's
+// 4-layer resolver (set-reality-llm pins the reality default; dancers
+// have no per-being slot, so resolution falls through to that).
+//
+// Doctrine: same SUMMON path as scripted dancers. The drum strikes,
+// the seed's afterQualityWrite subscription self-wakes each dancer,
+// the dancer's role.summon calls runTurn. Cognition swaps without
+// the rest of the substrate noticing.
 const DANCER_ROSTER = [
-  { role: "harmony:dancer-toward", suffix: "toward-nw", start: { x: 0, y: 0 } },
-  { role: "harmony:dancer-toward", suffix: "toward-ne", start: { x: 9, y: 0 } },
-  { role: "harmony:dancer-toward", suffix: "toward-sw", start: { x: 0, y: 9 } },
-  { role: "harmony:dancer-toward", suffix: "toward-se", start: { x: 9, y: 9 } },
-  { role: "harmony:dancer-toward", suffix: "toward-c",  start: { x: 5, y: 5 } },
+  {
+    role: "harmony:dancer-llm",
+    suffix: "explorer",
+    start: { x: 0, y: 0 },
+    persona:
+      "You wander. You're drawn to empty space — head toward the directions with the fewest neighbors and the most room. Avoid the crowd.",
+  },
+  {
+    role: "harmony:dancer-llm",
+    suffix: "follower",
+    start: { x: 9, y: 0 },
+    persona:
+      "You track the nearest other being. Try to stay one cell away from them — close enough to keep contact, far enough not to crowd. If your nearest neighbor is adjacent, STAY.",
+  },
+  {
+    role: "harmony:dancer-llm",
+    suffix: "mirror",
+    start: { x: 0, y: 9 },
+    persona:
+      "You're a contrarian. Step in the direction OPPOSITE to where the most beings around you are. If most are to your N, go S. If everyone's clustered, escape outward.",
+  },
+  {
+    role: "harmony:dancer-llm",
+    suffix: "hunter",
+    start: { x: 9, y: 9 },
+    persona:
+      "You hunt. Pick whoever your nearest neighbor is on the first tick and chase them, stepping toward them every tick from here on. Don't switch targets unless they vanish.",
+  },
+  {
+    role: "harmony:dancer-llm",
+    suffix: "wallflower",
+    start: { x: 5, y: 5 },
+    persona:
+      "You crave the edge. Head for the corner with the fewest other beings near it. Stay on the perimeter. Avoid the center of the grid.",
+  },
 ];
 
 export const danceFloorSeed = {
@@ -49,10 +90,16 @@ export const danceFloorSeed = {
 
     // 1. dance-floor space. create-space returns
     // `{spaceId, name, position, _factTarget}` (shapeNewSpace).
-    // Read spaceId; the legacy _id / id paths never resolved on
-    // this op and silently fell through to "[object Object]".
+    // `size` rides on the create spec, so the bounding box lands in
+    // one fact instead of create-then-set. The seed clamps every
+    // dancer's `coord` write to this size at set-being time, so a
+    // being can't be outside the space it's in.
     const grid = await place.do(rootSpaceId, "create-space", {
-      spec: { name: "dance-floor", type: "domain" },
+      spec: {
+        name: "dance-floor",
+        type: "domain",
+        size: { x: GRID_W, y: GRID_H },
+      },
     }, opOpts);
     const gridSpaceId = String(grid?.spaceId || grid?._id || grid?.id || "");
     if (!gridSpaceId) {
@@ -60,17 +107,19 @@ export const danceFloorSeed = {
     }
     log.info("Harmony", `planted dance-floor space ${gridSpaceId.slice(0, 8)}`);
 
-    // 1a. Set the grid's bounding box. The seed will clamp every
-    //     dancer's `coord` write to this size at set-being time —
-    //     a being can't be outside the space it's in.
-    await place.do(gridSpaceId, "set-space", {
-      field: "size",
-      value: { x: GRID_W, y: GRID_H },
-    }, opOpts);
-
     // 2. drum matter. create-matter returns `{matterId, spaceId,
-    // parentMatterId}`.
-    const drum = await place.do(gridSpaceId, "create-matter", {
+    //    parentMatterId}`.
+    //
+    // Typed target ({kind:"space", id}) — passing the bare string id
+    // would land in detectTargetKind's "unknown" branch (returns
+    // null), and create-matter's `targetKind === "space"` check
+    // would fail, falling back to `spec.spaceId ?? null`. The drum
+    // would then be created with spaceId=null and the subscription
+    // scope check on every tick would silently miss
+    // (afterQualityWrite resolves payload.spaceId from matter.spaceId,
+    // which would be null). That's how the dance can tick without
+    // ever waking a dancer.
+    const drum = await place.do({ kind: "space", id: gridSpaceId }, "create-matter", {
       spec: { name: "drum", content: null, origin: "ibp" },
     }, opOpts);
     const drumMatterId = String(drum?.matterId || drum?._id || drum?.id || "");
@@ -109,13 +158,17 @@ export const danceFloorSeed = {
       value: { drumMatterId, gridSpaceId, gridW: GRID_W, gridH: GRID_H, tickMs: TICK_MS },
     }, opOpts);
 
-    // 5. dancers — same summonCreateBeing pattern.
+    // 5. dancers — same summonCreateBeing pattern. operatingMode is
+    //    "llm" so each wake routes through runTurn; the LLM
+    //    connection resolves through the seed's standard chain (set-
+    //    place-llm pins the reality default, dancers inherit).
     const dancers = [];
     for (const spec of DANCER_ROSTER) {
+      const isLlm = spec.role === "harmony:dancer-llm";
       const dancerResult = await summonCreateBeing({
         spec: {
           name: `${spec.suffix}-${plantedSeedId.slice(0, 6)}`,
-          operatingMode: "scripted",
+          operatingMode: isLlm ? "llm" : "scripted",
           roles: [spec.role],
           defaultRole: spec.role,
           homeSpace: gridSpaceId,
@@ -129,17 +182,30 @@ export const danceFloorSeed = {
       if (!dancerBeingId) {
         throw new Error(`summonCreateBeing dancer ${spec.suffix} returned no beingId`);
       }
-      log.info("Harmony", `summoned dancer ${spec.suffix} ${dancerBeingId.slice(0, 8)}`);
+      log.info("Harmony", `summoned dancer ${spec.suffix} ${dancerBeingId.slice(0, 8)} (${isLlm ? "llm" : "scripted"})`);
 
-      // 5a. place at starting coords. Atomic two-fact op:
-      //     dancer's coord schema field + grid reel place-event.
+      // 5a. persona on qualities. The dancer-llm role's
+      //     buildSystemPrompt reads qualities.harmony.persona and
+      //     appends it to the base prompt; this gives every LLM
+      //     dancer a distinct character at runtime without N role
+      //     templates. Skipped for scripted roles (no prompt).
+      if (isLlm && spec.persona) {
+        await place.do(dancerBeingId, "set-being", {
+          field: "qualities.harmony.persona",
+          value: spec.persona,
+        }, opOpts);
+      }
+
+      // 5b. place at starting coords. The harmony grid reducer
+      //     processes the resulting harmony:grid-event fact and
+      //     writes Being.coord + PositionProjection (single writer).
       await place.do(dancerBeingId, "harmony:place-being", {
         x: spec.start.x,
         y: spec.start.y,
         gridSpaceId,
       }, opOpts);
 
-      // 5b. subscribe the dancer to drum ticks. The drummer no longer
+      // 5c. subscribe the dancer to drum ticks. The drummer no longer
       //     fans SUMMONs (stigmergic refactor): it just stamps the
       //     tick fact on the drum's qualities.harmony.tick. The
       //     seed's afterQualityWrite hook fires, the seed's

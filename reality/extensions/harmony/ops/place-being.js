@@ -1,18 +1,21 @@
-// harmony:place-being — set initial coord on a being + record on grid.
+// harmony:place-being — record an initial placement on the grid reel.
 //
-// Used by the seed at plant time to put a dancer at a starting cell.
-// Stamps TWO facts in one moment (atomic via summonCtx.deltaF):
+// Doctrine — single writer per projection. The being's coord is a
+// projection of the grid reel's fold (with the bump rule applied
+// per PARALLEL FACTS §4). This op records the act of placement;
+// the cross-cutting handler in handlers/gridReducer.js folds the
+// fact and writes the resolved position to Being.coord and
+// PositionProjection.
 //
-//   1. do.set-being on the being's `coord` schema field (its own reel).
-//      The seed clamps to the grid's `size` automatically.
-//   2. do.set-like emission on the grid space's reel as a
-//      "harmony:grid-event" with event="place" (the canonical record
-//      from which any dancer's position can be folded with the
-//      Strategy A bump rule).
+// One fact:
 //
-// Both facts share the same actId. sealAct commits them in one
-// transaction. The dancer's own reel and the grid's reel agree from
-// the first frame; replay-from-the-grid-reel matches live coord.
+//   harmony:grid-event with event="place", beingId, to: starting cell.
+//
+// Used by the dance-floor seed at plant time to put a dancer at a
+// starting cell. The grid reducer applies the bump rule at fold
+// time (if two place-facts ever land on the same cell, the
+// later-seq is bumped to the nearest free neighbor); the act of
+// placement stays honest about what was requested.
 
 import { doVerb } from "../../../seed/ibp/verbs/do.js";
 
@@ -38,13 +41,8 @@ export default {
     }
     const to = { x, y };
 
-    // Fact 1 — dancer's coord (schema field; seed clamps to space size).
-    await doVerb(beingId, "set-being", {
-      field: "coord",
-      value: to,
-    }, { identity, summonCtx });
-
-    // Fact 2 — grid reel record of the placement.
+    // One fact on the grid reel. The grid reducer is the writer of
+    // Being.coord / PositionProjection.
     await doVerb(gridSpaceId, "harmony:grid-event", {
       event: "place",
       beingId,

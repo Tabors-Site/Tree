@@ -112,6 +112,19 @@ export function schedule(beingId, opts = {}) {
   }
   beingSet.add(id);
 
+  // Durability shadow. Same pattern as SubscriptionRecord — the
+  // in-memory registry is the hot-path tick dispatcher; this
+  // write-through is what survives a restart so the drum keeps
+  // beating across server lifecycles. Fire-and-forget per the
+  // self-healing principle: a missed write just means this schedule
+  // doesn't survive the next boot.
+  _persistSchedule(entry).catch((err) => {
+    log.warn(
+      "Schedule",
+      `persistence write failed for ${id.slice(0, 8)}: ${err.message}`,
+    );
+  });
+
   log.verbose(
     "Schedule",
     `scheduled wake for being ${entry.beingId.slice(0, 8)} every ${intervalMs}ms ` +
@@ -132,6 +145,14 @@ export function unschedule(scheduleId) {
     beingSet.delete(scheduleId);
     if (beingSet.size === 0) _byBeing.delete(entry.beingId);
   }
+  // Durability: drop the persisted shadow so this schedule doesn't
+  // rehydrate on next boot. Fire-and-forget.
+  _removePersistedSchedule(scheduleId).catch((err) => {
+    log.warn(
+      "Schedule",
+      `persistence delete failed for ${scheduleId.slice(0, 8)}: ${err.message}`,
+    );
+  });
   return true;
 }
 
@@ -235,6 +256,103 @@ export function setEmitter(fn) {
  */
 export function resetEmitter() {
   _emitter = _defaultEmitter;
+}
+
+/**
+ * Rehydrate the in-memory registry from the ScheduleRecord
+ * collection. Called once at boot (see genesis.js) so a server
+ * coming back up still ticks for every being that had a standing
+ * cadence — the dance-floor's drum keeps beating across restarts.
+ *
+ * `nextFireMs` is recomputed as `Date.now() + intervalMs` for each
+ * restored entry — we don't try to honor the pre-restart phase,
+ * just resume the cadence from now.
+ *
+ * Returns the count rehydrated.
+ */
+export async function rehydrateFromDb() {
+  let ScheduleRecord;
+  try {
+    ScheduleRecord = (await import("../../models/scheduleRecord.js")).default;
+  } catch (err) {
+    log.warn("Schedule", `rehydrate skipped: model load failed (${err.message})`);
+    return 0;
+  }
+  let restored = 0;
+  try {
+    const rows = await ScheduleRecord.find({}).lean();
+    const now = Date.now();
+    for (const row of rows) {
+      try {
+        const intervalMs = Number(row.intervalMs);
+        if (!Number.isFinite(intervalMs) || intervalMs < MIN_INTERVAL_MS) {
+          log.warn(
+            "Schedule",
+            `skipping record ${String(row._id).slice(0, 8)}: invalid intervalMs`,
+          );
+          continue;
+        }
+        const entry = {
+          id: row._id,
+          beingId: String(row.beingId),
+          intervalMs,
+          priority: Number.isFinite(row.priority) ? Number(row.priority) : 4,
+          content: row.content !== undefined ? row.content : { kind: "scheduled-wake" },
+          skipIfBacklog: row.skipIfBacklog !== false,
+          nextFireMs: now + intervalMs,
+          lastFireMs: null,
+        };
+        _registry.set(entry.id, entry);
+        let beingSet = _byBeing.get(entry.beingId);
+        if (!beingSet) {
+          beingSet = new Set();
+          _byBeing.set(entry.beingId, beingSet);
+        }
+        beingSet.add(entry.id);
+        restored++;
+      } catch (rowErr) {
+        log.warn(
+          "Schedule",
+          `skipping malformed record ${String(row?._id || "?").slice(0, 8)}: ${rowErr.message}`,
+        );
+      }
+    }
+  } catch (err) {
+    log.warn("Schedule", `rehydrate query failed: ${err.message}`);
+  }
+  if (restored > 0) {
+    log.info("Schedule", `rehydrated ${restored} schedule(s) from durable store`);
+  }
+  return restored;
+}
+
+// ────────────────────────────────────────────────────────────────
+// Persistence helpers. Write-through to ScheduleRecord. The
+// in-memory registry is authoritative at runtime; this collection
+// is the boot-rehydration source.
+// ────────────────────────────────────────────────────────────────
+
+async function _persistSchedule(entry) {
+  const ScheduleRecord = (await import("../../models/scheduleRecord.js")).default;
+  await ScheduleRecord.updateOne(
+    { _id: entry.id },
+    {
+      $set: {
+        beingId:       entry.beingId,
+        intervalMs:    entry.intervalMs,
+        priority:      entry.priority,
+        content:       entry.content,
+        skipIfBacklog: entry.skipIfBacklog,
+      },
+      $setOnInsert: { _id: entry.id, createdAt: new Date() },
+    },
+    { upsert: true },
+  );
+}
+
+async function _removePersistedSchedule(id) {
+  const ScheduleRecord = (await import("../../models/scheduleRecord.js")).default;
+  await ScheduleRecord.deleteOne({ _id: id });
 }
 
 /**

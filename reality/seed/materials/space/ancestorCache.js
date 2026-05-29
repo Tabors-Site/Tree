@@ -188,9 +188,21 @@ async function walkFromDb(spaceId, ttl) {
       contributors: (n.contributors || []).map(String),
     });
 
-    // Stop at seed spaces (they're the boundary)
-    if (n.seedSpace) break;
-
+    // Continue past any intermediate seed space. The loop ends
+    // naturally when we reach the place root (parent === null), so
+    // every chain walk reaches the place root's qualities.permissions
+    // — the system-wide defaults seeded at boot
+    // (REALITY_ROOT_DEFAULT_PERMISSIONS in authorize.js). Stopping
+    // the walk at a seed space would silently strip those defaults
+    // whenever a write targets `.config`, `.tools`, etc., and the
+    // root operator's privileges (declared at the place root) would
+    // be invisible from inside any dot-namespace.
+    //
+    // Consumers that DO want a per-domain boundary (e.g.
+    // resolveExtensionScopeFromChain for extension blocked/allowed
+    // walks) carry their own break on `seedSpace` over the returned
+    // chain; that boundary stays where it belongs, at the consumer,
+    // not at the walker.
     cursor = n.parent;
   }
 

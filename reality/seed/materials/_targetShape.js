@@ -117,6 +117,34 @@ export async function loadTargetRow(target, expectedKind) {
   if (!expectedKind || !KINDS.has(expectedKind)) {
     throw new Error(`loadTargetRow: expectedKind must be space/being/matter; got "${expectedKind}"`);
   }
+  // Stance-target shortcut for being-loading ops.
+  //
+  // The portal emits DO against a self-stance ("<reality>/<path>@<name>")
+  // for set-being:position on navigate; the IBP resolver hands the
+  // verb a stance object carrying `{ chain, spaceId, being }`. Ops
+  // that expect a Being row need the @qualifier resolved to a row.
+  // Doing it here means every being-loading op accepts a stance
+  // address out of the box.
+  //
+  // Name uniqueness is enforced at create-being time so this is a
+  // single-row lookup. Falls through to the typed-identity branch
+  // when no `being` qualifier is present.
+  if (
+    expectedKind === "being" &&
+    target &&
+    typeof target === "object" &&
+    typeof target.being === "string" &&
+    target.being.length > 0 &&
+    !(target.kind && target.id != null)
+  ) {
+    const Model = await _modelFor("being");
+    const row = await Model.findOne({ name: target.being });
+    if (!row) {
+      throw new Error(`loadTargetRow: no being found with name "${target.being}"`);
+    }
+    return row;
+  }
+
   // Resolve the id and verify the kind.
   let id;
   if (typeof target === "string") {

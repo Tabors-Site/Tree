@@ -114,6 +114,22 @@ function wireLiveHooks() {
     if (spaceId) emitPositionInvalidate(spaceId, `tool:${toolName || "unknown"}`);
   }, "ibp-live");
 
+  // Act seal: the being's activity flips from "acting" to "said" (the
+  // endMessage prose). Without this fire the bubble keeps showing the
+  // last fact's action(params) signature until the next moment's tool
+  // call triggers a refetch. Invalidate the being's current space so
+  // the descriptor's sealed-fallback path lands the spoken text above
+  // the mesh.
+  hooks.register("afterAct", async ({ beingOut }) => {
+    if (!beingOut) return;
+    try {
+      const b = await (await import("../../seed/materials/being/being.js")).default
+        .findById(beingOut).select("position homeSpace").lean();
+      const sId = b?.position || b?.homeSpace;
+      if (sId) emitPositionInvalidate(String(sId), "act-sealed");
+    } catch { /* descriptor refresh is best-effort */ }
+  }, "ibp-live");
+
   // DO-trigger fan-out. The three substrate write events fan out
   // through the subscription registry: any being subscribed to one of
   // these events whose scope covers the affected position gets a
@@ -148,6 +164,29 @@ export function initIBPWS(io) {
   }
   wireLiveHooks();
   attachIbpHandlers(io);
+  // Rehydrate the durable shadows. Subscriptions and schedules are
+  // in-memory at runtime; their write-through collections
+  // (SubscriptionRecord, ScheduleRecord) are the boot recovery
+  // source. Without this, every server restart wipes every being's
+  // standing attention and cadence — extensions planted before
+  // the restart silently stop responding.
+  //
+  // Fire before startScheduleTick so the tick loop sees the
+  // restored entries on its first sweep. Async — we don't await,
+  // because subscriptions can fan-out asynchronously and the few
+  // hundred-ms catch-up window after boot is acceptable.
+  (async () => {
+    try {
+      const [{ rehydrateFromDb: rehydrateSubs }, { rehydrateFromDb: rehydrateSchedules }] =
+        await Promise.all([
+          import("../../seed/present/wakes/subscriptions.js"),
+          import("../../seed/present/wakes/wakeSchedule.js"),
+        ]);
+      await Promise.all([rehydrateSubs(), rehydrateSchedules()]);
+    } catch (err) {
+      log.warn("IBP", `rehydrate at boot failed: ${err.message}`);
+    }
+  })();
   // Start the schedule tick loop. Beings that have declared a wake
   // cadence get scheduled-wake SUMMONs emitted on their interval.
   // The loop is process-singleton and unref'd; nothing to do at

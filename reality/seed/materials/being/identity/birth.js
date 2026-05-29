@@ -355,6 +355,7 @@ export async function createBeingWithHome(opts) {
     homeName = null,
     homeType = null,
     homeQualities = null,
+    homeSize = null,
     scaffolding = null,
     isRemote = false,
     homeReality = null,
@@ -490,6 +491,13 @@ export async function createBeingWithHome(opts) {
     const resolvedType =
       homeType ||
       (operatingMode === "human" ? "home-territory" : `${role}-home`);
+    // Default bounding box for human homes. Callers (including a
+    // future purchasing/upgrade system) can override by passing
+    // `homeSize`. Non-humans don't get a sized home by default;
+    // they're code without a 3D footprint until something gives them
+    // one explicitly.
+    const resolvedSize =
+      homeSize || (operatingMode === "human" ? { x: 100, y: 100 } : null);
 
     // Home-space birth fact. Inside a moment (boot or runtime), the
     // fact joins ctx.deltaF and seals with the rest of the ΔF.
@@ -514,6 +522,7 @@ export async function createBeingWithHome(opts) {
           parent:    String(homeParent),
           rootOwner: null, // set below for humans only via do.set-space
           qualities: specQualities,
+          ...(resolvedSize ? { size: resolvedSize } : {}),
         },
       },
       actId: summonCtx?.actId || actId,

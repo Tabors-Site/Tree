@@ -195,10 +195,21 @@ async function walkSpacePath({ segments, ownerFilter, contextBeing, being }) {
   for (let i = 0; i < segments.length; i++) {
     const seg = segments[i];
     const isFirst = i === 0;
+    // System seed-spaces use the dot-prefix convention (`.threads`,
+    // `.operations`, `.roles`, `.extensions`, `.source`). They are
+    // addressable at the reality root by name; deeper segments are
+    // user spaces (no seedSpace) addressable normally. Without this
+    // exception every SEE on `<reality>/.<system>` returned
+    // SPACE_NOT_FOUND even though the seed creates these rows at
+    // boot. Below depth 0 we keep the seedSpace:null filter — once
+    // you're inside a tree, only non-seed spaces resolve. Children of
+    // a system space (e.g. one space per registered operation under
+    // `.operations`) are not seed spaces themselves.
+    const isSystemSegment = isFirst && typeof seg === "string" && seg.startsWith(".");
     const baseQuery = {
       parent: currentParent,
-      seedSpace: null,
-      ...(isFirst ? ownerFilter : {}),
+      ...(isSystemSegment ? {} : { seedSpace: null }),
+      ...(isFirst && !isSystemSegment ? ownerFilter : {}),
     };
 
     const fields =

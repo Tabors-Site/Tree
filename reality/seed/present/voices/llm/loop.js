@@ -44,7 +44,7 @@ import {
   isCognitionFailure,
 } from "../../cognitionResult.js";
 import Act from "../../../past/act/act.js";
-import { getCurrentSpace, getRootIdFor } from "../../../materials/being/position.js";
+import { getCurrentSpace } from "../../../materials/being/position.js";
 import { getLlmTimeout } from "./connect.js";
 import {
   callWithFailover,
@@ -409,12 +409,36 @@ export async function finalizeResponse(
 ) {
   // Ensure final text response. If the tool loop ended with no text content
   // (e.g., model returned only tool calls), make one more call to get a summary.
+  // The race below mirrors callLLM's conduit-boundary deadline so this hidden
+  // second round-trip can't hang the moment if the provider stalls.
   if (!response?.choices?.[0]?.message?.content) {
-    const finalResponse = await openai.chat.completions.create({
-      model: MODEL,
-      messages: session.messages,
+    const deadlineMs = getTimeoutForRole(session.role);
+    const deadlineCtrl = new AbortController();
+    if (ctx?.signal) {
+      if (ctx.signal.aborted) deadlineCtrl.abort();
+      else ctx.signal.addEventListener("abort", () => deadlineCtrl.abort(), { once: true });
+    }
+    const DEADLINE_SENTINEL = Symbol("deadline");
+    let deadlineTimer = null;
+    const deadline = new Promise((resolve) => {
+      deadlineTimer = setTimeout(() => resolve(DEADLINE_SENTINEL), deadlineMs);
     });
-    response = finalResponse;
+    const callPromise = openai.chat.completions.create(
+      { model: MODEL, messages: session.messages },
+      { signal: deadlineCtrl.signal },
+    );
+    let raceWinner;
+    try {
+      raceWinner = await Promise.race([callPromise, deadline]);
+    } finally {
+      if (deadlineTimer) clearTimeout(deadlineTimer);
+    }
+    if (raceWinner === DEADLINE_SENTINEL) {
+      deadlineCtrl.abort();
+      callPromise.catch(() => {});
+      throw cognitionFailureError("timeout", `finalize call exceeded ${deadlineMs}ms`);
+    }
+    response = raceWinner;
   }
 
   const finalAnswer = response?.choices?.[0]?.message?.content || "Done.";
@@ -428,21 +452,8 @@ export async function finalizeResponse(
     }
   }
 
-  // _internal carries provenance for the closing stamp() (which
-  // model, which connection). Never leaves the seed; clients see
-  // only the text.
-  const _internal = {
-    role: session.role?.name,
-    rootId: getRootIdFor(ctx.beingId),
-    isCustom,
-    model: MODEL,
-    connectionId: resolvedConnectionId || null,
-  };
-
   return {
     success: true,
     content: finalAnswer,
-    text: finalAnswer,
-    _internal,
   };
 }

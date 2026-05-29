@@ -116,18 +116,18 @@ const REALITY_ROOT_DEFAULT_PERMISSIONS = Object.freeze({
 
     // llm-assigner BE ops. Any authenticated being can manage its
     // own LLM connections (add-llm, list/delete on its own being,
-    // bind one of its connections to a slot). set-place-llm /
+    // bind one of its connections to a slot). set-reality-llm /
     // set-space-llm pass the auth gate at this layer and the
     // llm-assigner role enforces the tighter "root operator" /
     // "tree owner" check inline. Without these rules every fresh
     // operator hits "no rule matched be:add-llm" the first time
     // they try to configure a connection.
-    "add-llm":       { requires: { arrival: false } },
-    "assign-slot":   { requires: { arrival: false } },
-    "list-llms":     { requires: { arrival: false } },
-    "delete-llm":    { requires: { arrival: false } },
-    "set-place-llm": { requires: { arrival: false } },
-    "set-space-llm": { requires: { arrival: false } },
+    "add-llm":         { requires: { arrival: false } },
+    "assign-slot":     { requires: { arrival: false } },
+    "list-llms":       { requires: { arrival: false } },
+    "delete-llm":      { requires: { arrival: false } },
+    "set-reality-llm": { requires: { arrival: false } },
+    "set-space-llm":   { requires: { arrival: false } },
   },
 });
 

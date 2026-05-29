@@ -50,7 +50,7 @@ import { getSpaceRootId } from "../../sprout.js";
 import { getRealityConfigValue } from "../../realityConfig.js";
 import log from "../../seedReality/log.js";
 import { IBP_ERR, IbpError } from "../../ibp/protocol.js";
-import { DELETED } from "./seedSpaces.js";
+import { DELETED, SEED_SPACE } from "./seedSpaces.js";
 import { I_AM } from "../being/seedBeings.js";
 import { MATTER_ORIGIN } from "../matter/origins.js";
 
@@ -171,6 +171,7 @@ export async function createSpace({
   type = null,
   note = null,
   qualities = null,
+  size = null,
   validatedBeing = null,
   actId = null,
   sessionId = null,
@@ -182,6 +183,20 @@ export async function createSpace({
 
   if (!isRoot && !parentId)
     throw new Error("Non-root spaces require a parentId");
+
+  // A child of the space root is a tree root by definition: it carries
+  // an owner, lives at the reality's top level, and is reachable both
+  // as `<reality>/<name>` (from the place root walk) AND as
+  // `<reality>/~<owner-name>/<name>` (from the owner's home walk). The
+  // home walk applies an owner filter (`rootOwner: <beingId>`), so if
+  // a space sits at parent=spaceRoot WITHOUT rootOwner set, the home-
+  // walk path can't find it and plant-after-create breaks even though
+  // create succeeded. Promote any spaceRoot-parented create to a tree
+  // root regardless of how the caller labeled it.
+  const spaceRootId = getSpaceRootId();
+  if (!isRoot && parentId && spaceRootId && String(parentId) === String(spaceRootId)) {
+    isRoot = true;
+  }
 
   const being = validatedBeing ?? (await getBeingOrThrow(beingId));
 
@@ -270,11 +285,22 @@ export async function createSpace({
             String(f?.target?.id) === String(parentId),
         );
         if (!pendingInBatch) throw new Error("Parent space not found");
-      } else if (parentSpace.seedSpace && !scaffold) {
+      } else if (
+        parentSpace.seedSpace &&
+        parentSpace.seedSpace !== SEED_SPACE.SPACE_ROOT &&
+        !scaffold
+      ) {
         // User-being protection: extension code / operators may not
-        // create children directly under a seed space. The I-Am acts
-        // in scaffold mode (genesis, manifest sync, registry mirrors)
+        // create children directly under a seed dot-namespace
+        // (.config, .tools, .extensions, …). The I-Am acts in
+        // scaffold mode (genesis, manifest sync, registry mirrors)
         // and owns the dot-namespace — scaffold bypasses the check.
+        //
+        // SPACE_ROOT is exempt: the place root carries
+        // seedSpace=SPACE_ROOT for ancestor-chain identity, but it
+        // IS the operator-visible root where every plant, every
+        // user tree, every dance-floor lives. Treating it as
+        // protected breaks the plant verb itself.
         throw new Error("Cannot create spaces under seed spaces");
       }
       const childCount = await Space.countDocuments({ parent: parentId });
@@ -304,6 +330,7 @@ export async function createSpace({
           parent:    resolvedParentId,
           rootOwner: isRoot ? String(being._id) : null,
           qualities: specQualities,
+          ...(size ? { size } : {}),
         },
       },
       actId: summonCtx?.actId || actId,
@@ -685,12 +712,20 @@ export async function deleteSpaceBranch(
   const spaceToDelete = await Space.findById(spaceId);
   if (!spaceToDelete) throw new Error("Space not found");
 
-  const access = await resolveSpaceAccess(spaceId, beingId);
-  if (!access.isOwner || (!access.isRoot && !!spaceToDelete.rootOwner)) {
-    throw new Error("Must be owner and not root");
-  }
-  if (spaceToDelete.rootOwner && spaceToDelete.rootOwner !== I_AM) {
-    throw new Error("Root spaces can only be retired from root view");
+  // I_AM bypass. The substrate's own identity acts with universal
+  // authority on its own reality — genesis, registry mirror sync,
+  // boot scaffolding all run as I_AM. The normal owner check below
+  // requires resolveSpaceAccess to return isOwner=true, which it
+  // won't for null beingIds; the bypass keeps boot-time cleanup
+  // paths working without weakening the user-facing gate.
+  if (beingId !== I_AM) {
+    const access = await resolveSpaceAccess(spaceId, beingId);
+    if (!access.isOwner || (!access.isRoot && !!spaceToDelete.rootOwner)) {
+      throw new Error("Must be owner and not root");
+    }
+    if (spaceToDelete.rootOwner && spaceToDelete.rootOwner !== I_AM) {
+      throw new Error("Root spaces can only be retired from root view");
+    }
   }
   if (spaceToDelete.parent === DELETED) {
     throw new Error("Space has already been deleted");

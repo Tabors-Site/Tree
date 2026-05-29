@@ -63,7 +63,7 @@ export function setMaxTools(n) {
 
 /**
  * Register a tool definition so resolveTools can find it.
- * Called by the extension loader when wiring MCP tools.
+ * Called by the extension loader when wiring tools.
  *
  * @param {string} name
  * @param {object} schema - OpenAI function tool shape
@@ -157,12 +157,11 @@ export function registerToolDef(name, schema, opts = {}) {
  *   { name, description, schema, handler, verb, annotations? }
  *
  *   - `schema` may be a raw shape (`{ key: z.string() }`) or a
- *     pre-built zod object. Wrapped in `z.object().passthrough()` for
- *     the MCP server so it does not strip context fields the MCP HTTP
- *     middleware injects (beingId, actId, ...).
+ *     pre-built zod object. Translated to JSON schema for the
+ *     LLM's function-calling format.
  *   - `verb` is REQUIRED ("see" | "do" | "summon" | "be").
  *   - Tools without a `handler` are def-only (registered for
- *     `resolveTools` but not callable via MCP).
+ *     `resolveTools` but not callable).
  *
  * Collisions across namespaces are rejected. The seed claims its
  * tools first (under `ownerExt: "seed"`); any extension trying to
@@ -271,7 +270,7 @@ export function unregisterToolsForExtension(extName, getToolOwnerFn) {
 /**
  * Look up a tool's handler. Returns null for unregistered tools or
  * def-only tools (registered for resolveTools but not callable).
- * runTurn's executeTool invokes this directly — no MCP transport.
+ * runTurn's executeTool invokes this directly.
  */
 export function getToolHandler(name) {
   return toolHandlers[name] || null;
@@ -687,10 +686,24 @@ export async function executeTool(toolCall, session, ctx, presenceKey) {
     if (typeof handler !== "function") {
       throw new Error(`Tool "${resolvedToolName}" has no registered handler`);
     }
+    // Per-call context for the handler. Carries the ambient moment so
+    // a tool that delegates to doVerb / beVerb can thread summonCtx
+    // and the Fact rides the open Act. Without this every extension
+    // tool would have to repack ctx fields from args by hand and
+    // forgetting throws "missing ambient actId" mid-stream.
+    const callCtx = {
+      identity: { beingId: ctx.beingId, name: ctx.username || null },
+      summonCtx: {
+        actId: ctx.actId || null,
+        sessionId: ctx.sessionId || null,
+        rootActId: ctx.rootActId || ctx.actId || null,
+        ibpAddress: presenceKey || null,
+      },
+    };
     const nodeToolTimeout =
       session._nodeLlmConfig?.toolCallTimeout ?? getToolCallTimeoutMs();
     const result = await Promise.race([
-      Promise.resolve(handler(args)),
+      Promise.resolve(handler(args, callCtx)),
       new Promise((_, reject) =>
         setTimeout(
           () =>

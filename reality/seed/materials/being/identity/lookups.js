@@ -32,28 +32,73 @@ export async function iAmIdentity() {
   return _iAmIdentityCache;
 }
 
+// Seed system beings, minted at genesis. The "operator" is the
+// first being that ISN'T one of these — i.e. the first being the
+// cherub admitted via register/claim, regardless of operating
+// mode. The list lives here because there's no schema-level flag
+// for "system being" yet; if a new seed being lands, add it here.
+const SEED_SYSTEM_BEING_NAMES = new Set([
+  "i-am",
+  "arrival",
+  "cherub",
+  "llm-assigner",
+  "reality-manager",
+]);
+
+// Build the "came through cherub" filter — beings whose
+// `parentBeingId` is the I_AM (first-being bootstrap path) OR the
+// cherub itself (every subsequent register/claim). Excludes beings
+// minted by other code paths (e.g. a planted dance-floor's dancers,
+// which are parented under whoever planted), which would otherwise
+// be candidates by name alone.
+async function _registeredParentIds() {
+  const allowed = ["i-am"];
+  const cherub = await Being
+    .findOne({ name: "cherub", operatingMode: "scripted" })
+    .select("_id")
+    .lean();
+  if (cherub) allowed.push(String(cherub._id));
+  return allowed;
+}
+
 /**
- * Find the place's root operator — the first human who registered.
- * The I_AM precedes them; the operator is the first being whose
- * `operatingMode === "human"`. Returns null on a fresh reality before
- * any human has registered. Use this for "who runs this place"
- * checks (place-LLM config, root-only operations); use `findIAm()`
- * for "who is the substrate's identity" checks.
+ * Find the reality's root operator — the first being the cherub
+ * admitted via register/claim. Doctrinally: the first being that
+ * isn't a system being and came through the cherub
+ * (parent=I_AM for the bootstrap user, parent=cherub for every
+ * subsequent). Mode-agnostic — an LLM being signing up first IS
+ * the operator, same as a human.
+ *
+ * Ordered by `createdAt` (not `_id`, which is a random UUID) so
+ * "first by creation time" matches the doctrine reliably. Falls
+ * back to `_id` as a tiebreaker for deterministic rebuild order.
+ *
+ * Returns null on a fresh reality before any being has registered.
  */
 export async function findRootOperator() {
-  return Being.findOne({ operatingMode: "human" })
-    .sort({ _id: 1 })
+  const parents = await _registeredParentIds();
+  return Being.findOne({
+    name: { $type: "string", $nin: [...SEED_SYSTEM_BEING_NAMES] },
+    parentBeingId: { $in: parents },
+  })
+    .sort({ createdAt: 1, _id: 1 })
     .select("_id name")
     .lean();
 }
 
 /**
- * Check if no human has yet registered on this place. Used by the
- * first-boot path to decide whether the plant-context credentials
- * mint the operator-being.
+ * Check if no operator-being has yet been minted by the cherub.
+ * Used by the first-boot path (and by cherub.register) to decide
+ * whether to take the first-being bootstrap branch.
  */
 export async function isFirstBeing() {
-  return (await Being.countDocuments({ operatingMode: "human" })) === 0;
+  const parents = await _registeredParentIds();
+  return (
+    (await Being.countDocuments({
+      name: { $type: "string", $nin: [...SEED_SYSTEM_BEING_NAMES] },
+      parentBeingId: { $in: parents },
+    })) === 0
+  );
 }
 
 /**

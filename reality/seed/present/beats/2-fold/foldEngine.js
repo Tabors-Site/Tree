@@ -177,6 +177,24 @@ export async function rebuild(type, id) {
     await dispatchCrossCutting(f, type, id);
   }
   const lastSeq = facts.length > 0 ? facts[facts.length - 1].seq : 0;
+
+  // Phantom guard. Every aggregate's reel doctrinally begins with a
+  // create-fact (be:register for beings, do:create-space / do:birth
+  // for spaces and matter). If the reducer walked every fact on
+  // this reel and produced an empty state, no creating fact was
+  // found — the reel is malformed (most often: a be:release or
+  // similar non-create fact landed against an unknown id, sometimes
+  // via wire-layer arrival/session quirks). initProjection's
+  // `$setOnInsert: { _id }` would materialize a row with no name
+  // and no parentBeingId; that row pollutes lookups
+  // (findRootOperator used to trip on it). Refusing to materialize
+  // empty state cleanly drops these orphan reels — the next fold
+  // round still self-heals if a create-fact later appears, because
+  // the row simply doesn't exist yet.
+  if (Object.keys(state).length === 0) {
+    return { state, foldedSeq: lastSeq };
+  }
+
   const position = state.position !== undefined ? state.position : undefined;
 
   // Upsert. The row may be new (first-ever fold for this aggregate)

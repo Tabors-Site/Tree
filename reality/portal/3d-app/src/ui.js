@@ -509,7 +509,7 @@ export function showLlmAssignerPanel({ client, place, currentSpaceId, onClose, o
       border-bottom:1px solid #2c3a32;">
       <button class="llm-tab" data-tab="being" type="button">My Being</button>
       <button class="llm-tab" data-tab="node"  type="button" ${currentSpaceId ? "" : "disabled"}>This Node</button>
-      <button class="llm-tab" data-tab="place"  type="button">Place Default</button>
+      <button class="llm-tab" data-tab="place"  type="button">Reality Default</button>
     </div>
 
     <div class="llm-body" style="font-size:11px;"></div>
@@ -756,7 +756,7 @@ export function showLlmAssignerPanel({ client, place, currentSpaceId, onClose, o
     }
     bodyEl.innerHTML = `
       <div style="color:#6b7d72; margin-bottom:8px;">
-        Setting the place-level default LLM. Restricted to the root
+        Setting the reality-level default LLM. Restricted to the root
         operator (the first registered human). Non-operators get
         <code style="color:#d97a7a;">FORBIDDEN</code>.
       </div>
@@ -777,15 +777,15 @@ export function showLlmAssignerPanel({ client, place, currentSpaceId, onClose, o
       e.preventDefault();
       clearError();
       try {
-        await client.be("set-place-llm", `${place}/@llm-assigner`, {
+        await client.be("set-reality-llm", `${place}/@llm-assigner`, {
           connectionId: connI.value || null,
         });
-      } catch (err) { showError(fmtErr(err, "set-place-llm failed")); }
+      } catch (err) { showError(fmtErr(err, "set-reality-llm failed")); }
     });
     form.querySelector("button[data-act=clear]").addEventListener("click", async () => {
       clearError();
       try {
-        await client.be("set-place-llm", `${place}/@llm-assigner`, { connectionId: null });
+        await client.be("set-reality-llm", `${place}/@llm-assigner`, { connectionId: null });
       } catch (err) { showError(fmtErr(err, "clear failed")); }
     });
   }

@@ -934,22 +934,30 @@ export async function getClientForBeing(beingId, slot, overrideConnectionId) {
     );
   }
 
-  // 4. Place-level default (operator-configured fallback). The
-  // connection itself lives on the I-Am being's qualities — realityLlmId
-  // is the uuid key, I-Am is the owner. Operator-installed place LLMs
-  // are added by writing to I_AM.qualities.llmConnections and
-  // pointing `realityLlmConnection` config at the uuid.
+  // 4. Reality-level default. The `realityLlmConnection` config key
+  // holds the connectionId; the connection record itself lives on
+  // the root operator's qualities (that's where `add-llm` writes,
+  // since the BE op runs as the caller). Earlier doctrine said the
+  // connection lived on I_AM — that's where this lookup used to
+  // probe — but add-llm has always written to the caller's being.
+  // Resolving from the operator matches what the install side
+  // actually does and avoids the silent-noLlm trap.
   try {
     const realityLlmId = getRealityConfigValue("realityLlmConnection");
     if (realityLlmId) {
-      const iAmId = await getIAmBeingId();
-      if (iAmId) {
+      const { findRootOperator } = await import("../../../materials/being/identity.js");
+      const operator = await findRootOperator();
+      if (operator?._id) {
         const realityCacheKey = "place:" + slot;
         const realityCached = beingClientCache.get(realityCacheKey);
         if (realityCached && Date.now() - realityCached.fetchedAt < CLIENT_CACHE_TTL) {
           return realityCached;
         }
-        const realityEntry = await resolveConnection(iAmId, realityLlmId, realityCacheKey);
+        const realityEntry = await resolveConnection(
+          String(operator._id),
+          realityLlmId,
+          realityCacheKey,
+        );
         if (realityEntry) return realityEntry;
       }
     }

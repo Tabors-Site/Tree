@@ -310,6 +310,7 @@ export function applyCreateSpace(state, fact) {
     contributors: [],
     seedSpace:    spec.seedSpace ?? null,
     llmDefault:   spec.llmDefault ?? null,
+    size:         spec.size ?? null,
     qualities:    spec.qualities ?? {},
     dateCreated:  fact.date,
     position:     spec.parent ?? spec.parentId ?? null,
@@ -329,6 +330,48 @@ export function applyCreateSpace(state, fact) {
  * @param {object} fact
  * @returns {object} new state
  */
+/**
+ * Apply a `do:move` fact. One unified action with two modes,
+ * discriminated by which params field is present.
+ *
+ * Mode 1, coord (the everyday case — repositioning within a space):
+ *   params.coord = { x, y[, z] }
+ *   matter target → coord becomes params.coord
+ *   space target  → coord becomes params.coord (a child tree's spot
+ *                   in its parent space)
+ *
+ * Mode 2, container (carrying across a doorway):
+ *   params.to = <spaceId>
+ *   matter target → spaceId becomes params.to (matter now lives in
+ *                   that space)
+ *   space target  → parent becomes params.to (tree now lives under
+ *                   that space)
+ *
+ * Beings have their own movement path (set-being:coord for in-space
+ * motion, set-being:position for cross-space). `move` is what beings
+ * do TO things in their world.
+ */
+export function applyMove(state, fact) {
+  if (fact?.verb !== "do" || fact?.action !== "move") return state;
+  const kind = fact?.target?.kind;
+  if (kind !== "space" && kind !== "matter") return state;
+  const { coord, to } = fact?.params || {};
+
+  if (coord && typeof coord === "object" &&
+      Number.isFinite(coord.x) && Number.isFinite(coord.y)) {
+    const next = { x: coord.x, y: coord.y };
+    if (Number.isFinite(coord.z)) next.z = coord.z;
+    return { ...state, coord: next, updatedAt: fact.date };
+  }
+
+  if (typeof to === "string" && to) {
+    if (kind === "space")  return { ...state, parent: to, position: to, updatedAt: fact.date };
+    if (kind === "matter") return { ...state, spaceId: to, position: to, updatedAt: fact.date };
+  }
+
+  return state;
+}
+
 export function applyCreateMatter(state, fact) {
   if (fact?.verb !== "do" || !CREATE_ACTIONS.has(fact?.action)) return state;
   if (fact?.target?.kind !== "matter") return state;

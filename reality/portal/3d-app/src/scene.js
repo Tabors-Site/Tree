@@ -86,6 +86,14 @@ export class Scene {
     // Track the latest seq applied per being so stale or out-of-order
     // deliveries get dropped.
     this._beingLastMoveSeq = new Map();
+    // Move tool. The "Move" hotbar slot toggles _moveMode. While on,
+    // click on a child (tree) or matter mesh to pick it up, then
+    // click again on a destination (a child mesh, or any non-target
+    // surface to mean "current space") to commit the move. Esc
+    // cancels with no fact written. State lives on the scene because
+    // the pick-up is purely client-side until the put-down emits.
+    this._moveMode = false;
+    this._carrying = null; // { kind: "space"|"matter", id, label, mesh }
     this._lastBeingInRange = new Map();
     this._bubble = null;
 
@@ -302,18 +310,25 @@ export class Scene {
       this.world.add(home);
     }
 
-    // Place children. Prefer server-provided coords from the position
-    // extension. Fall back to a deterministic hash-derived position so
-    // children placed before the position extension was installed still
-    // show up in a stable layout.
+    // Place children. Three layouts, in priority order:
+    //   1. If the parent space has a declared size AND the child has
+    //      a coord, render at coord mapped into world units.
+    //   2. Legacy position.coords (pre-coord-schema callers).
+    //   3. Hash-derived position so children without a coord (never
+    //      moved, parent unsized) get a stable layout instead of
+    //      stacking at the origin.
     childrenToRender.forEach((child) => {
       const key = child.id || child.path || child.name;
       const h = hashKey(key);
       let x, z;
-      const serverCoords = child.position?.coords;
-      if (serverCoords && typeof serverCoords.x === "number") {
-        x = serverCoords.x;
-        z = serverCoords.y;
+      const childCoordWorld = coordToWorld(child.coord);
+      const legacyCoords = child.position?.coords;
+      if (childCoordWorld) {
+        x = childCoordWorld.x;
+        z = childCoordWorld.z;
+      } else if (legacyCoords && typeof legacyCoords.x === "number") {
+        x = legacyCoords.x;
+        z = legacyCoords.y;
       } else {
         const angle = (h % 360) * (Math.PI / 180);
         const radius = 22 + ((h >> 9) % 120) * 0.45; // 22..76
@@ -327,6 +342,7 @@ export class Scene {
         kind: "child",
         label: child.name,
         address: child.path,
+        spaceId: child.spaceId || null,
         type: child.type,
         isDoorway: true,
       };
@@ -379,14 +395,36 @@ export class Scene {
       });
     }
 
-    // Sized-space overlay. When the descriptor declares a size, draw
-    // a grid the same dimensions on the ground so the player can read
-    // motion across the cells. Lives in the per-render world so it
-    // tears down with _clearWorld and rebuilds at the new size on
-    // navigation.
-    if (gridSize && !arrival) {
+    // Sized-space land. When the descriptor declares a size, the
+    // visible land IS that size: no infinite ground stretching past
+    // the bounds, no infinite background grid. The space's declared
+    // box (gridSize × CELL world units) is the entire walkable area,
+    // and the rest is void (the sky/dome stays as backdrop).
+    //
+    // When no size is declared the infinite ground/grid come back as
+    // the default outdoor scene.
+    const sized = gridSize && !arrival;
+    if (this._ground) this._ground.visible = !sized;
+    if (this._grid)   this._grid.visible   = !sized;
+    if (sized) {
       const w = gridSize.x * CELL;
       const h = gridSize.y * CELL;
+      // Sized ground plane — the land itself, exactly the space's size.
+      const landGeom = new THREE.PlaneGeometry(w, h);
+      const landMat = new THREE.MeshStandardMaterial({
+        color: VISUAL_DEFAULT.groundColor,
+        roughness: 0.9,
+        side: THREE.DoubleSide,
+      });
+      const land = new THREE.Mesh(landGeom, landMat);
+      land.rotation.x = -Math.PI / 2;
+      land.position.y = 0;
+      // Tag so the move tool can detect "click hit empty floor" and
+      // resolve the click point into a grid coord for put-down.
+      land.userData = { kind: "land" };
+      this.world.add(land);
+      this._land = land;
+      // Overlay cell grid on top of the land for motion legibility.
       const overlayGrid = new THREE.GridHelper(
         Math.max(w, h),
         Math.max(gridSize.x, gridSize.y),
@@ -395,6 +433,21 @@ export class Scene {
       );
       overlayGrid.position.y = 0.02;
       this.world.add(overlayGrid);
+      // Thin boundary frame at the edge so the player sees where the
+      // land ends instead of inferring it from missing geometry.
+      const frameMat = new THREE.LineBasicMaterial({ color: 0x88aaff });
+      const halfW = w / 2;
+      const halfH = h / 2;
+      const framePts = [
+        new THREE.Vector3(-halfW, 0.03, -halfH),
+        new THREE.Vector3( halfW, 0.03, -halfH),
+        new THREE.Vector3( halfW, 0.03,  halfH),
+        new THREE.Vector3(-halfW, 0.03,  halfH),
+        new THREE.Vector3(-halfW, 0.03, -halfH),
+      ];
+      const frameGeom = new THREE.BufferGeometry().setFromPoints(framePts);
+      const frame = new THREE.Line(frameGeom, frameMat);
+      this.world.add(frame);
     }
 
     // Wire per-being activity: bubbles for current thoughts/tool calls,
@@ -1264,6 +1317,11 @@ export class Scene {
         this.velocityY = 0;
         return;
       }
+      // Escape cancels an in-flight pick-up. Nothing is written.
+      if (e.code === "Escape" && !e.repeat && this._carrying) {
+        this._cancelCarry();
+        return;
+      }
       if (e.code === "Space") {
         // Stop the page from scrolling when Space is consumed by the scene.
         e.preventDefault();
@@ -1562,12 +1620,25 @@ export class Scene {
     // Update glare every frame based on current proximity.
     this._setGlare(target, withinInteract);
 
-    // Update label every frame so it follows the target. When the target
-    // is a being inside INTERACT_RANGE, append a "· click" hint so the
-    // user knows the panel needs an explicit click to open.
+    // Update label every frame so it follows the target. Move mode
+    // rewrites the hint text so a click on a tree reads as "pick up"
+    // (not "enter"); when carrying, the hint flips to "drop here".
     if (target?.userData?.label) {
       let text = target.userData.label;
-      if (target.userData.kind === "being" && withinInteract) {
+      const kind = target.userData.kind;
+      if (this._moveMode) {
+        if (this._carrying) {
+          if (kind === "child" && target.userData.spaceId && target.userData.spaceId !== this._carrying.id) {
+            text += "  ·  drop into";
+          } else if (kind === "land") {
+            text = `drop "${this._carrying.label || ""}" here`;
+          } else {
+            text += "  ·  drop here";
+          }
+        } else if ((kind === "child" && target.userData.spaceId) || (kind === "matter" && target.userData.matterId)) {
+          text += "  ·  pick up";
+        }
+      } else if (kind === "being" && withinInteract) {
         text += "  ·  click";
       }
       const screen = worldToScreen(target.position, this.camera, this.renderer);
@@ -1609,6 +1680,12 @@ export class Scene {
   }
 
   _tryActivate() {
+    // Move mode hijacks click behavior entirely. First click picks
+    // up; second click puts down. Esc (handled elsewhere) cancels.
+    if (this._moveMode) {
+      this._moveClick();
+      return;
+    }
     const target = this.currentGazeTarget;
     if (!target) return;
     const data = target.userData;
@@ -1624,6 +1701,189 @@ export class Scene {
     if (data.kind === "child" && data.isDoorway && data.address && d <= ENTER_RANGE * 6) {
       this.onEnter({ address: data.address, label: data.label });
     }
+  }
+
+  // ── Move tool ──────────────────────────────────────────────────
+  //
+  // Public surface for the hotbar's "Move" slot. Toggling mode on
+  // doesn't change anything on the server. Clicks while the mode is
+  // on go through _moveClick; the actual `do move` fact only fires
+  // at put-down (a second click on a destination).
+
+  setMoveMode(on) {
+    this._moveMode = !!on;
+    if (!this._moveMode) this._cancelCarry();
+    this._updateMoveBanner();
+    this.onMoveModeChange?.(this._moveMode, this._carrying);
+  }
+
+  // Top-center banner so the player always knows whether move mode is
+  // active. Without it, the same click reads ambiguously — pick up vs
+  // enter — and there's no visible state distinguishing the two.
+  _updateMoveBanner() {
+    if (!this._moveBannerEl) {
+      const el = document.createElement("div");
+      el.id = "move-banner";
+      el.style.cssText = [
+        "position: fixed",
+        "top: 12px",
+        "left: 50%",
+        "transform: translateX(-50%)",
+        "padding: 6px 14px",
+        "background: rgba(100, 140, 220, 0.85)",
+        "color: white",
+        "font: 600 13px/1.2 system-ui, sans-serif",
+        "letter-spacing: 0.06em",
+        "text-transform: uppercase",
+        "border-radius: 4px",
+        "pointer-events: none",
+        "z-index: 100",
+        "display: none",
+      ].join("; ");
+      document.body.appendChild(el);
+      this._moveBannerEl = el;
+    }
+    if (this._moveMode) {
+      this._moveBannerEl.textContent = this._carrying
+        ? `carrying "${this._carrying.label || ""}"`
+        : "move tool — click to pick up";
+      this._moveBannerEl.style.display = "block";
+    } else {
+      this._moveBannerEl.style.display = "none";
+    }
+  }
+
+  isMoveMode() { return this._moveMode; }
+  getCarrying() { return this._carrying ? { kind: this._carrying.kind, id: this._carrying.id, label: this._carrying.label } : null; }
+
+  // Cancel any in-flight pick-up without writing a fact. Called by
+  // Esc, by setMoveMode(false), and by the post-success cleanup
+  // after a successful put-down.
+  _cancelCarry() {
+    if (this._carrying?.mesh) {
+      this._carrying.mesh.position.y = this._carrying.originalY ?? 0;
+    }
+    this._carrying = null;
+    this._updateMoveBanner();
+    this.onMoveModeChange?.(this._moveMode, this._carrying);
+  }
+
+  _moveClick() {
+    const target = this.currentGazeTarget;
+    const data = target?.userData || null;
+    // No pick-up yet: this click selects what to carry. Must hit a
+    // child mesh (a space) or a matter mesh.
+    if (!this._carrying) {
+      if (!target || !data) return;
+      let pickedKind = null;
+      let pickedId   = null;
+      let pickedLabel = data.label || "";
+      if (data.kind === "child" && data.spaceId) {
+        pickedKind = "space";
+        pickedId   = String(data.spaceId);
+      } else if (data.kind === "matter" && data.matterId) {
+        pickedKind = "matter";
+        pickedId   = String(data.matterId);
+      }
+      if (!pickedKind) return;
+      // Visual cue: lift the mesh slightly so the player sees it's
+      // selected. Nothing else changes; no server interaction.
+      const originalY = target.position.y;
+      target.position.y = originalY + 0.6;
+      this._carrying = {
+        kind: pickedKind,
+        id: pickedId,
+        label: pickedLabel,
+        mesh: target,
+        originalY,
+      };
+      this._updateMoveBanner();
+      this.onMoveModeChange?.(this._moveMode, this._carrying);
+      return;
+    }
+    // Carrying something: this click chooses what to do.
+    //
+    //   - Click a different child tree → container mode: move the
+    //     subject INTO that tree (params.to = child.spaceId).
+    //   - Click the land (or anywhere on the ground) inside a sized
+    //     space → coord mode: move the subject to the cell under the
+    //     click point (params.coord = {x,y}).
+    //   - Click nothing useful → cancel via the caller; we no-op
+    //     here so the player doesn't lose their carry on a stray
+    //     click.
+    let intent = null;
+    if (data?.kind === "child" && data.spaceId && data.spaceId !== this._carrying.id) {
+      intent = {
+        kind: this._carrying.kind,
+        id:   this._carrying.id,
+        mode: "container",
+        to:   String(data.spaceId),
+        label: this._carrying.label,
+        destLabel: data.label || data.spaceId,
+      };
+    } else if (this._gridSize && this._gridCell) {
+      // Coord mode. Use the click point if the raycast hit the land;
+      // otherwise fall back to the player's current grid cell.
+      let coord = null;
+      const hit = this._raycastLand();
+      if (hit) {
+        coord = this._worldPointToGridCoord(hit.point);
+      } else {
+        coord = this.getCurrentGridCoord();
+      }
+      if (coord) {
+        intent = {
+          kind: this._carrying.kind,
+          id:   this._carrying.id,
+          mode: "coord",
+          coord,
+          label: this._carrying.label,
+          destLabel: `cell (${coord.x},${coord.y})`,
+        };
+      }
+    }
+    if (!intent) {
+      // Nothing actionable; leave the carry in place and let the
+      // player try again or hit Esc.
+      return;
+    }
+    // Restore the lifted mesh; the descriptor refresh after a
+    // successful move will reposition it.
+    if (this._carrying.mesh) {
+      this._carrying.mesh.position.y = this._carrying.originalY ?? 0;
+    }
+    this._carrying = null;
+    this._updateMoveBanner();
+    this.onMoveModeChange?.(this._moveMode, this._carrying);
+    this.onMove?.(intent);
+  }
+
+  _raycastLand() {
+    if (!this._land) return null;
+    this.gazeForward.set(0, 0, -1).applyQuaternion(this.camera.quaternion);
+    this.raycaster.set(this.camera.position, this.gazeForward);
+    this.raycaster.far = 200;
+    const hits = this.raycaster.intersectObject(this._land, false);
+    return hits.length ? hits[0] : null;
+  }
+
+  _worldPointToGridCoord(point) {
+    if (!this._gridSize || !this._gridCell) return null;
+    const cell = this._gridCell;
+    const gx = Math.round(point.x / cell + (this._gridSize.x - 1) / 2);
+    const gy = Math.round(point.z / cell + (this._gridSize.y - 1) / 2);
+    return {
+      x: Math.max(0, Math.min(this._gridSize.x - 1, gx)),
+      y: Math.max(0, Math.min(this._gridSize.y - 1, gy)),
+    };
+  }
+
+  getCurrentSpaceId() {
+    return this._currentSpaceId || null;
+  }
+
+  setCurrentSpaceId(id) {
+    this._currentSpaceId = id ? String(id) : null;
   }
 }
 

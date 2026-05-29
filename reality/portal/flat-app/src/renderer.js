@@ -33,12 +33,23 @@ export function clearDetail() {
 export function renderDescriptor(desc, { session, discovery }) {
   if (!desc) return;
   renderTopBar(desc, { session, discovery });
-  // Explorer dispatch — .reel/<kind>/<id> and .acts/<beingId> return
-  // synthetic descriptors with isReel / isActChain flags. Take over
-  // the middle area and render the chain explorer instead of the
-  // normal position layout.
-  if (desc.isReel || desc.isActChain) {
+  // Explorer dispatch — .reel/<kind>/<id>, .acts/<beingId>, .beings
+  // return synthetic descriptors with isReel / isActChain / isBeingsCatalog
+  // flags. Take over the middle area and render the catalog/explorer
+  // instead of the normal position layout.
+  if (desc.isReel || desc.isActChain || desc.isBeingsCatalog) {
     renderExplorer(desc, { discovery });
+    return;
+  }
+  // System catalog dispatch — .operations / .roles / .threads / .extensions
+  // are normal positions whose children ARE the data (one space per
+  // operation, role, thread, or extension). Without a catalog view they
+  // just show "no beings here" with the items as nav chips in the bottom
+  // bar — useless for browsing. Render the children as catalog rows
+  // with their qualities surfaced inline.
+  const catalogKind = detectCatalogPath(desc.address?.pathByNames);
+  if (catalogKind) {
+    renderSystemCatalog(desc, catalogKind, { discovery });
     return;
   }
   // Restore normal layout (in case we came back from an explorer view).
@@ -46,6 +57,7 @@ export function renderDescriptor(desc, { session, discovery }) {
   renderBeings(desc, { session, discovery });
   renderMatter(desc, { session, discovery });
   renderChildren(desc, { discovery });
+  renderCounts(desc);
   // If chat is open, re-render it against the latest beings[] state so
   // inbox.recent stays fresh.
   if (isChatOpen()) {
@@ -72,59 +84,154 @@ function restoreNormalLayout() {
 // ────────────────────────────────────────────────────────────────
 
 function renderTopBar(desc, { session, discovery }) {
-  const parentEl  = document.getElementById("parent-link");
-  const addrEl    = document.getElementById("address-line");
-  const idEl      = document.getElementById("identity-chip");
-  parentEl.innerHTML = "";
-  addrEl.innerHTML   = "";
-  idEl.innerHTML     = "";
+  renderBreadcrumb(desc, discovery);
+  renderQuickNav(desc, discovery);
+  renderIdentityChip(session, discovery);
+  syncAddressInput(desc, discovery);
+}
 
-  // Parent link: walk up the chain by dropping the last path segment.
+// Lineage breadcrumb — clickable trail from reality root → current
+// position. Replaces the single ↑ parent link. Each segment navigates.
+// Also surfaces a "⛓ facts" link beside the leaf for the space-reel
+// explorer when a real spaceId is present (i.e. on normal positions,
+// not on synthetic .reel/.acts/.beings views).
+function renderBreadcrumb(desc, discovery) {
+  const bc = document.getElementById("breadcrumb");
+  bc.innerHTML = "";
+  const reality = discovery?.reality || "?";
+
+  // Reality root segment — always clickable.
+  bc.appendChild(crumbLink(reality, `${reality}/`, { home: true }));
+
   const path = desc.address?.pathByNames || "/";
-  if (path !== "/" && path !== "") {
+  if (path && path !== "/" && path !== "") {
     const parts = path.split("/").filter(Boolean);
-    parts.pop();
-    const parentPath = parts.length ? "/" + parts.join("/") : "/";
-    const parentAddr = `${discovery.reality}${parentPath === "/" ? "/" : parentPath}`;
-    parentEl.appendChild(navLink("↑ parent", parentAddr));
-  } else {
-    parentEl.textContent = "↑ (at root)";
-    parentEl.classList.add("dim");
+    let accum = "";
+    for (const seg of parts) {
+      accum += "/" + seg;
+      const sep = document.createElement("span");
+      sep.className = "crumb-sep dim";
+      sep.textContent = "/";
+      bc.appendChild(sep);
+      // Decorate system segments differently.
+      const isSystem = seg.startsWith(".");
+      bc.appendChild(crumbLink(seg, `${reality}${accum}`, { system: isSystem }));
+    }
   }
 
-  addrEl.textContent = `${discovery.reality}${path === "/" ? "" : path}`;
-
-  // "facts on this space" link — opens the reel explorer for the
-  // current spaceId. Only shown on normal position views (not on
-  // explorer views themselves; those land on .reel/... / .acts/...
-  // paths and don't carry a spaceId).
+  // If on a normal position with a spaceId, surface a small ⛓ facts
+  // link beside the breadcrumb for the space-reel explorer.
   const spaceId = desc.address?.spaceId;
-  if (spaceId && !desc.isReel && !desc.isActChain) {
-    const sep = document.createElement("span");
-    sep.className = "dim sep";
-    sep.textContent = " · ";
-    addrEl.appendChild(sep);
-    const reelLink = document.createElement("a");
-    reelLink.href = `#${discovery.reality}/.reel/space/${spaceId}`;
-    reelLink.className = "explorer-link";
-    reelLink.textContent = "⛓ facts";
-    reelLink.title = "view this space's fact reel (hash-chained explorer)";
-    addrEl.appendChild(reelLink);
+  if (spaceId && !desc.isReel && !desc.isActChain && !desc.isBeingsCatalog) {
+    const reel = document.createElement("a");
+    reel.href = `#${reality}/.reel/space/${spaceId}`;
+    reel.className = "breadcrumb-side";
+    reel.textContent = "⛓ facts";
+    reel.title = "view this space's fact reel";
+    bc.appendChild(reel);
   }
+}
 
-  // Identity chip — shows current being, click to release / claim other.
+function crumbLink(text, address, { home = false, system = false } = {}) {
+  const a = document.createElement("a");
+  a.className = "crumb" + (home ? " crumb-home" : "") + (system ? " crumb-system" : "");
+  a.href = "#" + address;
+  a.textContent = text;
+  return a;
+}
+
+// Quick-nav chips — jump to system spaces and synthetic catalogs.
+// Each chip's data-tag determines its href.
+function renderQuickNav(desc, discovery) {
+  const reality = discovery?.reality;
+  if (!reality) return;
+  const QN = {
+    home:       `${reality}/`,
+    beings:     `${reality}/.beings`,
+    operations: `${reality}/.operations`,
+    roles:      `${reality}/.roles`,
+    threads:    `${reality}/.threads`,
+    extensions: `${reality}/.extensions`,
+  };
+  for (const chip of document.querySelectorAll("#quick-nav .qn-chip")) {
+    const tag = chip.dataset.tag;
+    if (QN[tag]) chip.href = "#" + QN[tag];
+    // Mark active if current address matches.
+    const here = (desc.address?.pathByNames || "/");
+    let active = false;
+    if (tag === "home"       && here === "/") active = true;
+    else if (tag === "beings"     && /^\/\.beings\b/.test(here))     active = true;
+    else if (tag === "operations" && /^\/\.operations\b/.test(here)) active = true;
+    else if (tag === "roles"      && /^\/\.roles\b/.test(here))      active = true;
+    else if (tag === "threads"    && /^\/\.threads\b/.test(here))    active = true;
+    else if (tag === "extensions" && /^\/\.extensions\b/.test(here)) active = true;
+    chip.classList.toggle("active", active);
+  }
+}
+
+function renderIdentityChip(session, discovery) {
+  const idEl = document.getElementById("identity-chip");
+  idEl.innerHTML = "";
+  const reality = discovery?.reality || "";
   const username = session?.username || "arrival";
   const chip = document.createElement("button");
-  chip.className = "chip";
+  chip.className = "chip" + (session?.token ? " chip-authed" : "");
   chip.textContent = session?.token ? `@${username}` : `@arrival`;
   chip.title = session?.token
-    ? "click to release this session and reclaim as someone else"
+    ? `signed in as @${username}\nbeing: ${session.beingAddress || "(unknown)"}\nclick to sign out`
     : "click to claim or register";
   chip.onclick = () => {
     if (session?.token) flat.signOut();
-    else showAuthOverlay(discovery.reality);
+    else showAuthOverlay(reality);
   };
   idEl.appendChild(chip);
+}
+
+// Reflect the current address in the input (unless the user is editing).
+function syncAddressInput(desc, discovery) {
+  const input = document.getElementById("address-input");
+  if (!input) return;
+  if (document.activeElement === input) return; // don't clobber typing
+  const reality = discovery?.reality || "";
+  const path = desc.address?.pathByNames || "/";
+  input.value = `${reality}${path === "/" ? "/" : path}`;
+}
+
+// Render the count badge next to each section title.
+function renderCounts(desc) {
+  const b = document.getElementById("beings-count");
+  const m = document.getElementById("matter-count");
+  if (b) b.textContent = desc.beings?.length ? `${desc.beings.length}` : "";
+  if (m) m.textContent = desc.matters?.length ? `${desc.matters.length}` : "";
+}
+
+// Update the connection-status pill in the top bar. Called from main.js
+// via flat.setConnection() whenever the socket state changes.
+export function setConnectionStatus(state, detail = "") {
+  const pill = document.getElementById("connection-pill");
+  if (!pill) return;
+  const dot  = pill.querySelector(".conn-dot");
+  const text = pill.querySelector(".conn-text");
+  pill.title = `socket: ${state}${detail ? " — " + detail : ""}`;
+  dot.className = "conn-dot";
+  if (state === "connected") {
+    dot.classList.add("conn-ok");
+    text.textContent = "live";
+  } else if (state === "disconnected" || state === "error") {
+    dot.classList.add("conn-err");
+    text.textContent = state === "error" ? "error" : "offline";
+  } else {
+    dot.classList.add("conn-pending");
+    text.textContent = state || "connecting…";
+  }
+}
+
+// Loading bar — a thin pulsing line under the top bar while a SEE is
+// in flight. Show on navigate start, hide on settle.
+export function setLoading(active) {
+  const el = document.getElementById("loading-bar");
+  if (!el) return;
+  el.classList.toggle("hidden", !active);
 }
 
 // ────────────────────────────────────────────────────────────────
@@ -261,6 +368,178 @@ function renderMatter(desc, { discovery } = {}) {
 // ────────────────────────────────────────────────────────────────
 
 // ────────────────────────────────────────────────────────────────
+// System catalogs — .operations / .roles / .threads / .extensions
+// ────────────────────────────────────────────────────────────────
+
+function detectCatalogPath(path) {
+  if (typeof path !== "string") return null;
+  const m = path.match(/^\/\.(operations|roles|threads|extensions)\/?$/);
+  return m ? m[1] : null;
+}
+
+const CATALOG_META = {
+  operations: { icon: "⚙", title: "operations", sub: "registered DO actions" },
+  roles:      { icon: "◎", title: "roles",      sub: "summonable role templates" },
+  threads:    { icon: "⧖", title: "threads",    sub: "live coordination chains (rootCorrelations)" },
+  extensions: { icon: "⊕", title: "extensions", sub: "installed extensions" },
+};
+
+function renderSystemCatalog(desc, kind, { discovery }) {
+  // Take over the middle pane like the other catalogs do.
+  const middle = document.getElementById("middle");
+  document.getElementById("position-pane")?.classList.add("hidden");
+  document.getElementById("detail-pane")?.classList.add("hidden");
+  let pane = document.getElementById("explorer-pane");
+  if (pane) pane.remove();
+  pane = document.createElement("section");
+  pane.id = "explorer-pane";
+  middle.appendChild(pane);
+
+  const meta = CATALOG_META[kind];
+  const items = desc.children || [];
+
+  const header = document.createElement("header");
+  header.className = "explorer-header";
+  const h = document.createElement("h2");
+  h.className = "explorer-title";
+  h.innerHTML = `${meta.icon} <span class="dim">${meta.title}</span>`;
+  header.appendChild(h);
+  const sub = document.createElement("div");
+  sub.className = "explorer-sub";
+  sub.textContent = `${items.length} item${items.length === 1 ? "" : "s"} · ${meta.sub}`;
+  header.appendChild(sub);
+  pane.appendChild(header);
+
+  if (items.length === 0) {
+    const empty = document.createElement("div");
+    empty.className = "explorer-empty";
+    empty.textContent = `(no ${meta.title} registered)`;
+    pane.appendChild(empty);
+    return;
+  }
+
+  const ul = document.createElement("ul");
+  ul.className = "catalog-list";
+  for (const item of items) {
+    ul.appendChild(renderCatalogRow(kind, item, discovery));
+  }
+  pane.appendChild(ul);
+}
+
+function renderCatalogRow(kind, item, discovery) {
+  const li = document.createElement("li");
+  li.className = "catalog-row";
+
+  // ── Headline row: icon, name, kind-specific badges, timestamp/right-side
+  const main = document.createElement("div");
+  main.className = "catalog-main";
+
+  const name = document.createElement("span");
+  name.className = "row-name";
+  name.textContent = item.name || "(unnamed)";
+  main.appendChild(name);
+
+  if (kind === "operations") renderOperationRowBody(main, item);
+  else if (kind === "roles") renderRoleRowBody(main, item);
+  else if (kind === "threads") renderThreadRowBody(main, item);
+  else if (kind === "extensions") renderExtensionRowBody(main, item);
+
+  li.appendChild(main);
+
+  // ── Sub-row: address, links into the system
+  const sub = document.createElement("div");
+  sub.className = "catalog-sub";
+
+  if (kind === "threads" && item.thread?.id && discovery?.reality) {
+    // Threads: link straight into the thread descriptor.
+    const open = document.createElement("a");
+    open.className = "btn-explore";
+    open.href = `#${discovery.reality}/.threads/${item.thread.id}`;
+    open.textContent = "open thread";
+    sub.appendChild(open);
+  } else if (item.path && discovery?.reality) {
+    // Others: link to the item's own space (where qualities live).
+    const open = document.createElement("a");
+    open.className = "btn-explore";
+    open.href = `#${discovery.reality}${item.path}`;
+    open.textContent = "open";
+    sub.appendChild(open);
+  }
+
+  if (item.spaceId && !String(item.spaceId).startsWith("thread:") && discovery?.reality) {
+    const reel = document.createElement("a");
+    reel.className = "btn-explore";
+    reel.href = `#${discovery.reality}/.reel/space/${item.spaceId}`;
+    reel.textContent = "facts";
+    sub.appendChild(reel);
+  }
+
+  if (sub.children.length) li.appendChild(sub);
+  return li;
+}
+
+function renderOperationRowBody(main, item) {
+  const op = item.qualities?.operation || {};
+  const targets = Array.isArray(op.targets) ? op.targets : [];
+  if (targets.length) main.appendChild(badge(`→ ${targets.join("/")}`, "mode"));
+  if (op.ownerExtension && op.ownerExtension !== "seed") {
+    main.appendChild(badge(op.ownerExtension, "activity"));
+  }
+  if (op.factAction && op.factAction !== item.name) {
+    const fa = document.createElement("span");
+    fa.className = "dim catalog-ts";
+    fa.textContent = `stamps ${op.factAction}`;
+    main.appendChild(fa);
+  }
+  if (op.skipAudit) main.appendChild(badge("no-audit", "busy"));
+}
+
+function renderRoleRowBody(main, item) {
+  const role = item.qualities?.role || {};
+  if (role.respondMode) main.appendChild(badge(role.respondMode, "mode"));
+  if (Array.isArray(role.triggerOn) && role.triggerOn.length) {
+    main.appendChild(badge(`on:${role.triggerOn.join(",")}`, "activity"));
+  }
+  // Compact capability summary: counts of canDo/canSee/canSummon/canBe.
+  const caps = [];
+  if (role.canDo?.length)     caps.push(`do:${role.canDo.length}`);
+  if (role.canSee?.length)    caps.push(`see:${role.canSee.length}`);
+  if (role.canSummon?.length) caps.push(`sum:${role.canSummon.length}`);
+  if (role.canBe?.length)     caps.push(`be:${role.canBe.length}`);
+  if (caps.length) {
+    const c = document.createElement("span");
+    c.className = "dim catalog-ts";
+    c.textContent = caps.join(" · ");
+    c.title = `canDo: ${(role.canDo||[]).join(", ") || "—"}\ncanSee: ${(role.canSee||[]).join(", ") || "—"}\ncanSummon: ${(role.canSummon||[]).join(", ") || "—"}\ncanBe: ${(role.canBe||[]).join(", ") || "—"}`;
+    main.appendChild(c);
+  }
+}
+
+function renderThreadRowBody(main, item) {
+  const t = item.thread || {};
+  if (t.lastAct) {
+    const ts = document.createElement("span");
+    ts.className = "dim catalog-ts";
+    ts.textContent = `last ${formatTs(t.lastAct)}`;
+    ts.title = t.lastAct;
+    main.appendChild(ts);
+  }
+  main.appendChild(badge("live", "queue"));
+}
+
+function renderExtensionRowBody(main, item) {
+  const ext = item.qualities?.extension || item.qualities || {};
+  if (ext.version) main.appendChild(badge(`v${ext.version}`, "mode"));
+  if (ext.description) {
+    const d = document.createElement("span");
+    d.className = "dim catalog-ts";
+    d.textContent = String(ext.description).slice(0, 80);
+    d.title = ext.description;
+    main.appendChild(d);
+  }
+}
+
+// ────────────────────────────────────────────────────────────────
 // Explorer — block-list view for .reel/<kind>/<id> and .acts/<beingId>
 // ────────────────────────────────────────────────────────────────
 
@@ -279,10 +558,116 @@ function renderExplorer(desc, { discovery }) {
 
   if (desc.isReel) renderReelExplorer(pane, desc.reel, discovery);
   else if (desc.isActChain) renderActChainExplorer(pane, desc.actChain, discovery);
+  else if (desc.isBeingsCatalog) renderBeingsCatalog(pane, desc.beingsCatalog, discovery);
+}
+
+// Global beings catalog — every Being row across the reality. Different
+// from the per-position beings list (which only shows beings homed at
+// the current space). Used to answer "what beings exist?" the way
+// .operations answers "what ops exist?".
+function renderBeingsCatalog(pane, catalog, discovery) {
+  const { beings, count } = catalog || {};
+
+  const header = document.createElement("header");
+  header.className = "explorer-header";
+
+  const h = document.createElement("h2");
+  h.className = "explorer-title";
+  h.innerHTML = `∴ <span class="dim">beings</span> <span class="dim">across</span> ${discovery?.reality || ""}`;
+  header.appendChild(h);
+
+  const sub = document.createElement("div");
+  sub.className = "explorer-sub";
+  sub.textContent = `${count} being${count === 1 ? "" : "s"} · global catalog · ordered by birth`;
+  header.appendChild(sub);
+  pane.appendChild(header);
+
+  if (!beings || beings.length === 0) {
+    const empty = document.createElement("div");
+    empty.className = "explorer-empty";
+    empty.textContent = "(no beings exist in this reality yet)";
+    pane.appendChild(empty);
+    return;
+  }
+
+  const ul = document.createElement("ul");
+  ul.className = "catalog-list";
+  for (const b of beings) ul.appendChild(renderBeingCatalogRow(b, discovery));
+  pane.appendChild(ul);
+}
+
+function renderBeingCatalogRow(b, discovery) {
+  const li = document.createElement("li");
+  li.className = "catalog-row";
+
+  const main = document.createElement("div");
+  main.className = "catalog-main";
+
+  const name = document.createElement("span");
+  name.className = "row-name";
+  name.textContent = `@${b.name || "(unnamed)"}`;
+  main.appendChild(name);
+
+  if (b.operatingMode) main.appendChild(badge(b.operatingMode, "mode"));
+  if (b.defaultRole) {
+    const role = badge(b.defaultRole, "activity");
+    role.title = b.roles?.length > 1 ? `roles: ${b.roles.join(", ")}` : `default role`;
+    main.appendChild(role);
+  }
+  if (b.createdAt) {
+    const ts = document.createElement("span");
+    ts.className = "dim catalog-ts";
+    ts.textContent = formatTs(b.createdAt);
+    ts.title = b.createdAt;
+    main.appendChild(ts);
+  }
+
+  li.appendChild(main);
+
+  // Sub-line: ids + nav links.
+  const sub = document.createElement("div");
+  sub.className = "catalog-sub";
+
+  const idSpan = document.createElement("code");
+  idSpan.className = "catalog-id";
+  idSpan.textContent = short(b.beingId, 20);
+  idSpan.title = b.beingId;
+  sub.appendChild(idSpan);
+
+  if (discovery?.reality) {
+    const facts = document.createElement("a");
+    facts.className = "btn-explore";
+    facts.href = `#${discovery.reality}/.reel/being/${b.beingId}`;
+    facts.textContent = "facts";
+    sub.appendChild(facts);
+
+    const acts = document.createElement("a");
+    acts.className = "btn-explore";
+    acts.href = `#${discovery.reality}/.acts/${b.beingId}`;
+    acts.textContent = "acts";
+    sub.appendChild(acts);
+
+    if (b.homeSpace) {
+      const home = document.createElement("a");
+      home.className = "btn-explore";
+      home.href = `#${discovery.reality}/.reel/space/${b.homeSpace}`;
+      home.textContent = "home reel";
+      home.title = `homed at space ${b.homeSpace}`;
+      sub.appendChild(home);
+    }
+  }
+
+  li.appendChild(sub);
+  return li;
 }
 
 function renderReelExplorer(pane, reel, discovery) {
   const { target, facts, count } = reel || {};
+
+  // Verify the hash chain across the visible window. Facts come desc by
+  // seq, so block[i+1] is the predecessor of block[i]. Each block's `p`
+  // (prev-hash) should equal the next-oldest block's `h`.
+  const verdict = verifyChain(facts || []);
 
   const header = document.createElement("header");
   header.className = "explorer-header";
@@ -294,7 +679,8 @@ function renderReelExplorer(pane, reel, discovery) {
 
   const sub = document.createElement("div");
   sub.className = "explorer-sub";
-  sub.textContent = `${count} fact${count === 1 ? "" : "s"} • newest first • hash-chained per reel`;
+  sub.innerHTML = `${count} fact${count === 1 ? "" : "s"} · newest first · `
+    + chainVerdictSummary(verdict);
   header.appendChild(sub);
 
   // Quick-nav: if the target is a being, offer a one-click jump to its acts.
@@ -317,17 +703,71 @@ function renderReelExplorer(pane, reel, discovery) {
 
   const list = document.createElement("ol");
   list.className = "block-list";
-  for (const f of facts) list.appendChild(renderFactBlock(f, discovery));
+  for (let i = 0; i < facts.length; i++) {
+    list.appendChild(renderFactBlock(facts[i], discovery, verdict.perBlock[i]));
+  }
   pane.appendChild(list);
 }
 
-function renderFactBlock(f, discovery) {
+// Walk the fact array (newest-first) and check each block's prev-hash
+// against the next-older block's self-hash. Returns:
+//   { ok: bool, verified: N, broken: M, perBlock: ["ok" | "genesis" | "edge" | "broken"] }
+function verifyChain(facts) {
+  const out = { ok: true, verified: 0, broken: 0, perBlock: [] };
+  for (let i = 0; i < facts.length; i++) {
+    const f = facts[i];
+    // The older neighbor in the window (if present).
+    const older = facts[i + 1];
+    if (older) {
+      if (f.p && older.h && String(f.p) === String(older.h)) {
+        out.verified++;
+        out.perBlock.push("ok");
+      } else {
+        out.broken++;
+        out.ok = false;
+        out.perBlock.push("broken");
+      }
+    } else {
+      // Oldest in the window. Genesis if p is null/zero; otherwise we
+      // can't check (the predecessor is outside the visible window).
+      if (!f.p || /^0+$/.test(String(f.p))) out.perBlock.push("genesis");
+      else                                  out.perBlock.push("edge");
+    }
+  }
+  return out;
+}
+
+function chainVerdictSummary(v) {
+  if (v.broken > 0) {
+    return `<span class="chain-bad">✗ ${v.broken} broken link${v.broken === 1 ? "" : "s"}</span> · ${v.verified} verified`;
+  }
+  if (v.verified === 0) {
+    return `<span class="chain-dim">— single-block window —</span>`;
+  }
+  return `<span class="chain-ok">✓ ${v.verified} link${v.verified === 1 ? "" : "s"} verified</span>`;
+}
+
+function renderFactBlock(f, discovery, chainStatus = "edge") {
   const li = document.createElement("li");
   li.className = "block";
 
   // Summary row (always shown).
   const summary = document.createElement("div");
   summary.className = "block-summary";
+
+  // Chain-link indicator: ✓ (verified link to predecessor), ◇ (genesis),
+  // · (window edge — predecessor outside visible range), ✗ (broken link).
+  const chain = document.createElement("span");
+  chain.className = `block-chain chain-${chainStatus}`;
+  chain.textContent = chainStatus === "ok"      ? "✓"
+                    : chainStatus === "genesis" ? "◇"
+                    : chainStatus === "broken"  ? "✗"
+                    :                             "·";
+  chain.title = chainStatus === "ok"      ? "prev-hash matches predecessor block"
+              : chainStatus === "genesis" ? "first fact on this reel (genesis)"
+              : chainStatus === "broken"  ? "prev-hash DOES NOT match predecessor — chain broken here"
+              :                             "predecessor outside visible window";
+  summary.appendChild(chain);
 
   const seq = document.createElement("span");
   seq.className = "block-seq";
@@ -372,6 +812,18 @@ function renderFactBlock(f, discovery) {
   summary.appendChild(toggle);
 
   li.appendChild(summary);
+
+  // Content sub-row — show a human-readable derived from params when
+  // available (be:summon content, create-* name, set-* field=value).
+  // Keeps the headline scannable; full payload still in expand.
+  const summaryText = factSummaryLine(f);
+  if (summaryText) {
+    const sub = document.createElement("div");
+    sub.className = "block-sub block-content";
+    sub.textContent = summaryText;
+    sub.title = summaryText;
+    li.appendChild(sub);
+  }
 
   // Detail (hidden by default).
   const detail = document.createElement("div");
@@ -453,53 +905,105 @@ function renderActChainExplorer(pane, chain, discovery) {
 
 function renderActBlock(a, discovery) {
   const li = document.createElement("li");
-  li.className = "block";
+  li.className = "block block-act";
 
-  const summary = document.createElement("div");
-  summary.className = "block-summary";
+  // Two-row layout for acts: row 1 (compact summary) shows the headline
+  // content the user actually wants to read; row 2 (sub) shows role +
+  // address + correlation. Everything else expands behind the toggle.
+  const head = document.createElement("div");
+  head.className = "block-head";
 
   const ts = document.createElement("span");
   ts.className = "block-ts";
   ts.textContent = formatTs(a.stampedAt || a.receivedAt);
   ts.title = a.stampedAt || a.receivedAt || "";
-  summary.appendChild(ts);
+  head.appendChild(ts);
 
-  const role = document.createElement("span");
-  role.className = "block-action";
-  role.textContent = a.activeRole || "(no role)";
-  summary.appendChild(role);
+  // Headline strategy: an act-chain shows what the being DID. For LLM
+  // beings, "did" = the words they returned (endMessage.content). For
+  // transport-acts and other roles, endMessage may be empty and the
+  // startMessage carries the meaning. Prefer the response when it's a
+  // non-empty string; otherwise format the inbound (which may itself
+  // be an object — subscription wakes carry { event, spaceId, ... }).
+  const endText = (typeof a.endMessage?.content === "string" && a.endMessage.content.trim())
+    ? a.endMessage.content
+    : null;
+  const startText = formatActPayload(a.startMessage?.content);
+  const headline = endText || startText;
+  const isResponse = !!endText;
 
-  const addr = document.createElement("span");
-  addr.className = "block-target dim";
-  addr.textContent = a.ibpAddress ? short(a.ibpAddress, 32) : "(no address)";
-  addr.title = a.ibpAddress || "";
-  summary.appendChild(addr);
+  const content = document.createElement("div");
+  content.className = "block-content";
+  content.textContent = headline;
+  content.title = headline;
+  if (isResponse) {
+    const tag = document.createElement("span");
+    tag.className = "content-tag dim";
+    tag.textContent = "↳";
+    tag.title = "this being's response (end message)";
+    content.prepend(tag);
+  }
+  head.appendChild(content);
 
   if (a.priority && a.priority !== "INTERACTIVE") {
     const p = document.createElement("span");
     p.className = `block-pri pri-${a.priority.toLowerCase()}`;
     p.textContent = a.priority;
-    summary.appendChild(p);
+    head.appendChild(p);
   }
-
   if (a.severedAt) {
     const s = document.createElement("span");
     s.className = "block-pri pri-severed";
     s.textContent = "severed";
-    summary.appendChild(s);
+    head.appendChild(s);
+  }
+
+  const toggle = document.createElement("button");
+  toggle.className = "block-toggle";
+  toggle.textContent = "▸";
+  head.appendChild(toggle);
+  li.appendChild(head);
+
+  const sub = document.createElement("div");
+  sub.className = "block-sub";
+
+  const role = document.createElement("span");
+  role.className = "block-role";
+  role.textContent = a.activeRole || "(no role)";
+  sub.appendChild(role);
+
+  if (a.ibpAddress) {
+    const addr = document.createElement("span");
+    addr.className = "block-target dim";
+    addr.textContent = short(a.ibpAddress, 40);
+    addr.title = a.ibpAddress;
+    sub.appendChild(addr);
   }
 
   const root = document.createElement("code");
   root.className = "block-hash";
   root.textContent = a.rootCorrelation ? `root:${short(a.rootCorrelation, 8)}` : "(no root)";
   root.title = a.rootCorrelation || "";
-  summary.appendChild(root);
+  sub.appendChild(root);
 
-  const toggle = document.createElement("button");
-  toggle.className = "block-toggle";
-  toggle.textContent = "▸";
-  summary.appendChild(toggle);
-  li.appendChild(summary);
+  // Show the OTHER message as a sub-line so the user sees both at a
+  // glance. If the headline was the response (endMessage), the sub-line
+  // shows the trigger (startMessage). If the headline was the trigger,
+  // and there's an endMessage, surface it here.
+  if (isResponse) {
+    const triggerLine = document.createElement("span");
+    triggerLine.className = "block-trigger dim";
+    triggerLine.textContent = "from: " + truncate(startText, 100);
+    triggerLine.title = startText;
+    sub.appendChild(triggerLine);
+  } else if (typeof a.endMessage?.content === "string" && a.endMessage.content) {
+    const out = document.createElement("span");
+    out.className = "block-end dim";
+    out.textContent = "↳ " + truncate(a.endMessage.content, 120);
+    out.title = a.endMessage.content;
+    sub.appendChild(out);
+  }
+  li.appendChild(sub);
 
   const detail = document.createElement("div");
   detail.className = "block-detail hidden";
@@ -517,23 +1021,116 @@ function renderActBlock(a, discovery) {
   if (a.inReplyTo)       detail.appendChild(kvBlock("inReplyTo",       a.inReplyTo,       { mono: true }));
   if (a.parentThread)    detail.appendChild(kvBlock("parentThread",    a.parentThread,    { mono: true }));
   if (a.answers)         detail.appendChild(kvBlock("answers (summon)", a.answers,        { mono: true }));
-  if (a.startMessage?.content) detail.appendChild(jsonKv("start message", a.startMessage));
-  if (a.endMessage?.content || a.endMessage?.stopped) detail.appendChild(jsonKv("end message", a.endMessage));
+  if (a.startMessage?.content) detail.appendChild(jsonKv("in (start message)", a.startMessage));
+  if (a.endMessage?.content || a.endMessage?.stopped) detail.appendChild(jsonKv("out (end message)", a.endMessage));
   if (a.severedAt)       detail.appendChild(kvBlock("severed at", String(a.severedAt)));
   if (a.receivedAt)      detail.appendChild(kvBlock("received at", String(a.receivedAt)));
   if (a.stampedAt)       detail.appendChild(kvBlock("stamped at", String(a.stampedAt)));
 
   li.appendChild(detail);
 
-  toggle.onclick = () => {
+  toggle.onclick = (ev) => {
+    ev.stopPropagation();
     const open = detail.classList.toggle("hidden");
     toggle.textContent = open ? "▸" : "▾";
   };
-  summary.onclick = (ev) => {
-    if (ev.target === toggle || ev.target.tagName === "A") return;
+  // Click anywhere on the head or sub rows to expand, except on real links.
+  const expand = (ev) => {
+    if (ev.target.tagName === "A" || ev.target === toggle) return;
     toggle.click();
   };
+  head.onclick = expand;
+  sub.onclick  = expand;
   return li;
+}
+
+// Derive a one-line content summary from a fact's verb/action/params.
+// Returns null if nothing useful to show — caller skips the sub-row.
+function factSummaryLine(f) {
+  if (!f) return null;
+  const p = f.params;
+  // be:summon — the message content is the headline.
+  if (f.verb === "be" && f.action === "summon") {
+    const c = p?.content;
+    if (typeof c === "string" && c) return `"${c}"`;
+    if (c && typeof c === "object" && typeof c.content === "string" && c.content) {
+      return `"${c.content}"`;
+    }
+  }
+  // be:register / be:claim — name of the registered being.
+  if (f.verb === "be" && (f.action === "register" || f.action === "claim")) {
+    if (p?.name) return `@${p.name}`;
+  }
+  // create-* — name on the spec.
+  if (/^create/.test(f.action) && p?.spec?.name) {
+    return `name "${p.spec.name}"${p.spec.type ? ` (type ${p.spec.type})` : ""}`;
+  }
+  // set-* — field = value.
+  if (/^set/.test(f.action) && p?.field) {
+    const v = p.value;
+    const vs = typeof v === "string" ? v
+              : typeof v === "number" || typeof v === "boolean" ? String(v)
+              : safeJson(v, 60);
+    return `${p.field} = ${vs}`;
+  }
+  // place-being / move — coords or path.
+  if (/place|move/.test(f.action) && p) {
+    if (typeof p.x === "number" && typeof p.y === "number") return `→ (${p.x}, ${p.y})`;
+    if (p.path) return `→ ${p.path}`;
+  }
+  // be:summon-create — what got created.
+  if (f.action === "summon-create" && p?.name) {
+    return `created @${p.name}${p.role ? ` as ${p.role}` : ""}`;
+  }
+  // Generic fallback: short JSON of params.
+  if (p && typeof p === "object") {
+    const s = safeJson(p, 100);
+    if (s && s !== "{}") return s;
+  }
+  return null;
+}
+
+function safeJson(v, cap = 80) {
+  try {
+    const s = JSON.stringify(v);
+    if (!s) return null;
+    return s.length > cap ? s.slice(0, cap) + "…" : s;
+  } catch { return null; }
+}
+
+function truncate(s, n) {
+  const str = typeof s === "string" ? s : String(s ?? "");
+  return str.length > n ? str.slice(0, n - 1) + "…" : str;
+}
+
+// Acts' startMessage.content is `Mixed` (Act schema): humans send
+// strings, scripted/subscription wakes send structured payloads like
+// { event, spaceId, actorBeingId, timestamp } or { event, drumMatterId, ... }.
+// Return a one-liner suitable for the act-block headline.
+function formatActPayload(c) {
+  if (c == null || c === "") return "(no content)";
+  if (typeof c === "string") return c;
+  if (typeof c !== "object") return String(c);
+  // Common nested shapes — peel the outer wrapper.
+  if (typeof c.text === "string"    && c.text.trim())    return c.text;
+  if (typeof c.content === "string" && c.content.trim()) return c.content;
+  // Subscription / scheduled-wake / drummer-tick / DO-trigger shape.
+  if (c.event) {
+    const parts = [String(c.event)];
+    if (c.spaceId)      parts.push(`at space/${shortIdInline(c.spaceId)}`);
+    if (c.actorBeingId) parts.push(`by being/${shortIdInline(c.actorBeingId)}`);
+    if (c.matterId)     parts.push(`on matter/${shortIdInline(c.matterId)}`);
+    if (c.drumMatterId) parts.push(`drum/${shortIdInline(c.drumMatterId)}`);
+    return parts.join(" ");
+  }
+  // Last resort: compact JSON.
+  const s = safeJson(c, 120);
+  return s || "[object]";
+}
+
+function shortIdInline(id) {
+  const s = String(id);
+  return s.length > 12 ? s.slice(0, 8) + "…" : s;
 }
 
 // ── Explorer helpers ────────────────────────────────────────────

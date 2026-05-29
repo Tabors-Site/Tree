@@ -299,4 +299,4 @@ export async function getGridEventStream(gridSpaceId) {
 
 // Constants exposed for verification scripts that want to compute
 // expected placements without re-running the fold.
-export { NEIGHBOR_DIRS, MAX_BUMP_RING, findNearestFree, applyEvent };
+export { NEIGHBOR_DIRS, MAX_BUMP_RING, findNearestFree, applyEvent, loadGridBounds };

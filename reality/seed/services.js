@@ -161,6 +161,11 @@ import { beVerb }     from "./ibp/verbs/be.js";
 // reality-config ops live alongside their respective subjects.
 import "./materials/space/ops.js";
 import "./materials/matter/ops.js";
+// Side-effect import. Registers the unified `do move` op (relocates
+// a space or a matter into a new destination space). The cross-kind
+// shape doesn't belong in any single material's ops file; it lives
+// at materials/ root for that reason. See materials/moveOp.js.
+import "./materials/moveOp.js";
 import "./materials/being/ops.js";
 import "./materials/being/credentialOps.js";
 import "./materials/seeds.js";

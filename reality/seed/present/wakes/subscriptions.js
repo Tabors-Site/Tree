@@ -148,6 +148,21 @@ export function subscribe(beingId, sub) {
 
   _index.set(id, entry);
 
+  // Durability shadow. The in-memory registry is the runtime
+  // source of truth (hot-path, no-DB lookups in emitToSubscribers);
+  // this write-through to SubscriptionRecord is what survives a
+  // server restart, so a dance-floor planted before the restart
+  // keeps its dancers attending after. The collection write is
+  // fire-and-forget — failures are logged, the in-memory entry is
+  // already live, the boot rehydrate is what would notice a
+  // missing record (and re-register is idempotent on id).
+  _persistSubscription(entry).catch((err) => {
+    log.warn(
+      "Subscriptions",
+      `persistence write failed for ${id.slice(0, 8)}: ${err.message}`,
+    );
+  });
+
   log.verbose(
     "Subscriptions",
     `subscribed ${entry.event} for being ${entry.beingId.slice(0, 8)} ` +
@@ -181,6 +196,14 @@ export function unsubscribe(subscriptionId) {
     clearTimeout(pending.timer);
     _pendingCoalesce.delete(subscriptionId);
   }
+  // Durability: drop the persisted shadow so this subscription
+  // doesn't rehydrate on next boot. Fire-and-forget.
+  _removePersistedSubscription(subscriptionId).catch((err) => {
+    log.warn(
+      "Subscriptions",
+      `persistence delete failed for ${subscriptionId.slice(0, 8)}: ${err.message}`,
+    );
+  });
   return true;
 }
 
@@ -210,6 +233,105 @@ export function _resetAll() {
   _byBeing.clear();
   _byEvent.clear();
   _index.clear();
+}
+
+/**
+ * Rehydrate the in-memory registry from the SubscriptionRecord
+ * collection. Called once at boot (see genesis.js). The collection
+ * is the durable shadow of every subscription that was ever
+ * registered and not explicitly unsubscribed; walking it lets a
+ * server come up with every being's prior attention restored.
+ *
+ * Returns the count rehydrated. Errors per-row are logged and
+ * swallowed — one malformed record shouldn't strand the rest of
+ * the dance.
+ */
+export async function rehydrateFromDb() {
+  let SubscriptionRecord;
+  try {
+    SubscriptionRecord = (await import("../../models/subscriptionRecord.js")).default;
+  } catch (err) {
+    log.warn("Subscriptions", `rehydrate skipped: model load failed (${err.message})`);
+    return 0;
+  }
+  let restored = 0;
+  try {
+    const rows = await SubscriptionRecord.find({}).lean();
+    for (const row of rows) {
+      try {
+        // Direct in-memory write — bypass subscribe() so we don't
+        // re-persist what we just read. The shape matches what
+        // subscribe() would have produced; the boot rehydrate is
+        // a registry restore, not a new declaration.
+        const entry = {
+          id: row._id,
+          beingId: String(row.beingId),
+          event: row.event,
+          scope: row.scope,
+          filter: row.filter || null,
+          priority: Number.isFinite(row.priority) ? Number(row.priority) : 4,
+          coalesceMs: Number.isFinite(row.coalesceMs) && row.coalesceMs > 0
+            ? Number(row.coalesceMs)
+            : 0,
+        };
+        let beingMap = _byBeing.get(entry.beingId);
+        if (!beingMap) {
+          beingMap = new Map();
+          _byBeing.set(entry.beingId, beingMap);
+        }
+        beingMap.set(entry.id, entry);
+        let eventSet = _byEvent.get(entry.event);
+        if (!eventSet) {
+          eventSet = new Set();
+          _byEvent.set(entry.event, eventSet);
+        }
+        eventSet.add(entry.id);
+        _index.set(entry.id, entry);
+        restored++;
+      } catch (rowErr) {
+        log.warn(
+          "Subscriptions",
+          `skipping malformed record ${String(row?._id || "?").slice(0, 8)}: ${rowErr.message}`,
+        );
+      }
+    }
+  } catch (err) {
+    log.warn("Subscriptions", `rehydrate query failed: ${err.message}`);
+  }
+  if (restored > 0) {
+    log.info("Subscriptions", `rehydrated ${restored} subscription(s) from durable store`);
+  }
+  return restored;
+}
+
+// ────────────────────────────────────────────────────────────────
+// Persistence helpers. Write-through to SubscriptionRecord. The
+// in-memory registry is authoritative at runtime; this collection
+// is the boot-rehydration source.
+// ────────────────────────────────────────────────────────────────
+
+async function _persistSubscription(entry) {
+  const SubscriptionRecord = (await import("../../models/subscriptionRecord.js")).default;
+  await SubscriptionRecord.updateOne(
+    { _id: entry.id },
+    {
+      $set: {
+        beingId:    entry.beingId,
+        event:      entry.event,
+        scope:      entry.scope,
+        filter:     entry.filter,
+        priority:   entry.priority,
+        coalesceMs: entry.coalesceMs,
+      },
+      $setOnInsert: { _id: entry.id, createdAt: new Date() },
+    },
+    { upsert: true },
+  );
+}
+
+async function _removePersistedSubscription(id) {
+  const SubscriptionRecord = (await import("../../models/subscriptionRecord.js")).default;
+  await SubscriptionRecord.deleteOne({ _id: id });
 }
 
 /**

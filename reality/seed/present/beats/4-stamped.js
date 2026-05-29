@@ -229,39 +229,80 @@ export async function sealAct(plannedAct, { content = null, stopped = false, del
   //             at least one listener is registered.
   if (Array.isArray(deltaF) && deltaF.length > 0) {
     for (const f of deltaF) {
-      if (
-        f?.verb !== "do" ||
-        (f?.action !== "set-space" &&
-          f?.action !== "set-being" &&
-          f?.action !== "set-matter") ||
-        typeof f?.params?.field !== "string"
-      ) continue;
-      const field = f.params.field;
+      if (f?.verb !== "do") continue;
+      const action = f.action;
       const target = f.target ? { kind: f.target.kind, id: String(f.target.id) } : null;
-      const spaceId = await resolveSpaceForLiveSee(target);
-      const payload = {
-        target,
-        field,
-        value: f.params.value,
-        beingId: f.beingId ? String(f.beingId) : null,
-        actId: f.actId ? String(f.actId) : null,
-        spaceId,
-      };
-      // Two hook seams. Qualities writes have their own seam so
-      // listeners can filter by namespace cheaply (existing contract
-      // is field-segment driven). Non-qualities scalar writes
-      // (coord, size, name, type, ...) fire afterFieldWrite so the
-      // live-SEE layer can invalidate subscribers regardless of
-      // which field class moved.
-      try {
-        if (field.startsWith("qualities.")) {
-          payload.ns = field.slice("qualities.".length).split(".")[0];
-          await hooks.run("afterQualityWrite", payload);
-        } else {
-          await hooks.run("afterFieldWrite", payload);
+      const baseBeing = f.beingId ? String(f.beingId) : null;
+      const baseActId = f.actId ? String(f.actId) : null;
+
+      // Set-* writes. Qualities paths get their own seam (namespace-
+      // aware); other scalar writes (coord, size, name, type, parent,
+      // ...) fire afterFieldWrite for live-SEE invalidation.
+      if (
+        (action === "set-space" || action === "set-being" || action === "set-matter") &&
+        typeof f?.params?.field === "string"
+      ) {
+        const field = f.params.field;
+        const spaceId = await resolveSpaceForLiveSee(target);
+        const payload = {
+          target,
+          field,
+          value: f.params.value,
+          beingId: baseBeing,
+          actId: baseActId,
+          spaceId,
+        };
+        try {
+          if (field.startsWith("qualities.")) {
+            payload.ns = field.slice("qualities.".length).split(".")[0];
+            await hooks.run("afterQualityWrite", payload);
+          } else {
+            await hooks.run("afterFieldWrite", payload);
+          }
+        } catch (err) {
+          log.warn("Stamped", `field-write hook fan failed: ${err.message}`);
         }
-      } catch (err) {
-        log.warn("Stamped", `field-write hook fan failed: ${err.message}`);
+        continue;
+      }
+
+      // Move. Two modes, both covered by the same hook fan:
+      //
+      //   coord mode (params.coord) — repositioning within the same
+      //     container. Source == destination, so one invalidate fires
+      //     on params.fromSpaceId (the container both before and
+      //     after). The container's descriptor refreshes; the moved
+      //     mesh re-renders at the new coord.
+      //
+      //   container mode (params.to) — the subject changed parent /
+      //     spaceId. Source and destination differ. Both descriptors
+      //     invalidate so each end's view reconciles.
+      //
+      // We fire field:"moved" rather than field:"coord". The live-SEE
+      // listener suppresses coord writes (humans walk at 10Hz; full
+      // refetches would clobber the scene). `moved` is the explicit
+      // signal that something changed enough to warrant a refetch,
+      // bypassing the coord-skip without losing the optimization.
+      if (action === "move") {
+        const from = f.params?.fromSpaceId ? String(f.params.fromSpaceId) : null;
+        const to   = f.params?.to ? String(f.params.to) : null;
+        const seen = new Set();
+        for (const spaceId of [from, to]) {
+          if (!spaceId || seen.has(spaceId)) continue;
+          seen.add(spaceId);
+          try {
+            await hooks.run("afterFieldWrite", {
+              target,
+              field: "moved",
+              value: null,
+              beingId: baseBeing,
+              actId: baseActId,
+              spaceId,
+            });
+          } catch (err) {
+            log.warn("Stamped", `move hook fan failed: ${err.message}`);
+          }
+        }
+        continue;
       }
     }
   }
@@ -279,6 +320,23 @@ export async function sealAct(plannedAct, { content = null, stopped = false, del
         log.warn("Stamped", `afterSeal callback failed: ${err.message}`);
       }
     }
+  }
+
+  // afterAct: the moment is now sealed and visible. Live listeners
+  // (descriptor invalidate, activity-bubble refresh, telemetry) attach
+  // here. Mid-moment hooks (afterToolCall, afterFieldWrite) cover
+  // intra-moment changes; this is the per-moment boundary.
+  try {
+    await hooks.run("afterAct", {
+      actId: String(inserted._id),
+      beingOut: inserted.beingOut ? String(inserted.beingOut) : null,
+      beingIn: inserted.beingIn ? String(inserted.beingIn) : null,
+      activeRole: inserted.activeRole || null,
+      endMessage: inserted.endMessage || null,
+      stoppedAt: endTime,
+    });
+  } catch (err) {
+    log.warn("Stamped", `afterAct hook fan failed: ${err.message}`);
   }
 
   return inserted;

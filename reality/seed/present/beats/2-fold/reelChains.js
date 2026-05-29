@@ -121,6 +121,31 @@ export async function findOpenForBeing(beingOut) {
 }
 
 /**
+ * Most recent SEALED Act for a being. Used by the descriptor as a
+ * fallback to surface "what this being last said" so a speech bubble
+ * can persist above the mesh between moments. Returns the closed Act
+ * with its endMessage attached, or null when the being has never
+ * sealed an Act.
+ *
+ * @param {string} beingOut
+ * @returns {Promise<object|null>}
+ */
+export async function findLastSealedForBeing(beingOut) {
+  if (!beingOut) return null;
+  try {
+    return await Act.findOne({
+      beingOut,
+      "endMessage.time": { $ne: null },
+    })
+      .select("_id endMessage activeRole stampedAt")
+      .sort({ "endMessage.time": -1 })
+      .lean();
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Recent Summons authored or received by a being. Newest first.
  * The slice of the reel where this being shows up as either
  * actor or addressee.
