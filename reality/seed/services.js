@@ -152,10 +152,19 @@ import {
 
 // The four-verb dispatcher. The whole of my public surface for
 // operations on space, matter, and beings.
-import { doVerb, seeVerb, summonVerb, beVerb } from "./ibp/verbs.js";
-// Side-effect import. Registers seed DO operations with the
-// registry on load. See seed/ibp/seedOperations.js for the current set.
-import "./ibp/seedOperations.js";
+import { doVerb }     from "./ibp/verbs/do.js";
+import { seeVerb }    from "./ibp/verbs/see.js";
+import { summonVerb } from "./ibp/verbs/summon.js";
+import { beVerb }     from "./ibp/verbs/be.js";
+// Side-effect imports. Each material owns the ops that target it; the
+// modules self-register with the operation registry on load. Seeds and
+// reality-config ops live alongside their respective subjects.
+import "./materials/space/ops.js";
+import "./materials/matter/ops.js";
+import "./materials/being/ops.js";
+import "./materials/being/credentialOps.js";
+import "./materials/seeds.js";
+import "./realityConfigOps.js";
 // Side-effect import. Registers the InboxProjection cross-cutting
 // fold handlers (be:summon → upsert, be:sever → delete-by-root).
 // See seed/past/act/inboxProjectionFold.js.

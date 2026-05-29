@@ -95,9 +95,11 @@ async function readReelAfter(type, id, afterSeq) {
  * `foldedSeq` marker, queries facts after it, applies them through
  * the reducer, and advances the marker via compare-and-set.
  *
- * Returns the post-fold state object (the reducer's output). If no
- * facts exist after the marker (hot path), returns the cached state
- * without any write.
+ * Returns { state, foldedSeq }: the reduced state plus the seq the
+ * fold ran to (the latest fact applied, or the cache's foldedSeq when
+ * the hot path skipped). Callers that only care about state can
+ * destructure; callers that need the stale-detection key (moment-
+ * open's foldedSeqs map) read foldedSeq.
  *
  * Concurrency: safe for many concurrent callers on the same (type,
  * id). Reducers are pure → concurrent computes agree on state. The
@@ -106,7 +108,7 @@ async function readReelAfter(type, id, afterSeq) {
  *
  * @param {"being"|"space"|"matter"} type
  * @param {string} id
- * @returns {Promise<object>} the reduced state
+ * @returns {Promise<{ state: object, foldedSeq: number }>}
  */
 export async function fold(type, id) {
   assertType(type);
@@ -122,7 +124,7 @@ export async function fold(type, id) {
   const tail = await readReelAfter(type, id, proj.foldedSeq);
   if (tail.length === 0) {
     // Hot path: nothing new since last fold. Cache read, no write.
-    return projectionState(proj);
+    return { state: projectionState(proj), foldedSeq: proj.foldedSeq ?? 0 };
   }
 
   const reducer = reducers.get(type);
@@ -146,7 +148,7 @@ export async function fold(type, id) {
     proj.foldedSeq,
   );
 
-  return state;
+  return { state, foldedSeq: newFoldedSeq };
 }
 
 /**
@@ -161,7 +163,7 @@ export async function fold(type, id) {
  *
  * @param {"being"|"space"|"matter"} type
  * @param {string} id
- * @returns {Promise<object>} the reduced state
+ * @returns {Promise<{ state: object, foldedSeq: number }>}
  */
 export async function rebuild(type, id) {
   assertType(type);
@@ -182,7 +184,7 @@ export async function rebuild(type, id) {
   // both atomically. The reducer's output is authoritative.
   await initProjection(type, id, { state, foldedSeq: lastSeq, position });
 
-  return state;
+  return { state, foldedSeq: lastSeq };
 }
 
 /**

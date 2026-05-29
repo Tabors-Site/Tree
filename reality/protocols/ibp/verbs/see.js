@@ -2,14 +2,14 @@
 //
 // Envelope: { id, verb: "see", address, payload: { live?: boolean }, identity? }
 //
-// Thin glue: delegates to `seeVerb` in seed/ibp/verbs.js for the
+// Thin glue: delegates to `seeVerb` in seed/ibp/verbs/see.js for the
 // descriptor, then subscribes the socket to live updates when the
 // payload asks for them. See [[project_four_verbs_one_execution]].
 
 import log from "../../../seed/seedReality/log.js";
 import { IbpError, IBP_ERR, isIbpError } from "../../../seed/ibp/protocol.js";
 import { ackOk, ackError } from "../envelope.js";
-import { seeVerb } from "../../../seed/ibp/verbs.js";
+import { seeVerb } from "../../../seed/ibp/verbs/see.js";
 import { subscribePosition } from "../live.js";
 
 export async function handleSee(socket, env, ack) {
@@ -17,7 +17,7 @@ export async function handleSee(socket, env, ack) {
   try {
     const { address, addressKind, payload } = env;
     // Unauthenticated callers get the arrival stance. assertVerbCaller
-    // in seed/ibp/verbs.js requires a truthy identity; without this
+    // in seed/ibp/verbs/_shared.js requires a truthy identity; without this
     // the wire-layer SEE refused every visitor before they could even
     // see what they were joining. authorize sees beingId:null and
     // applies ARRIVAL_PROPS (arrival: true); the relaxed place-root

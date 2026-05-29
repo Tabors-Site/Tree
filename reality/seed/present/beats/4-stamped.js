@@ -219,7 +219,9 @@ export async function sealAct(plannedAct, { content = null, stopped = false, del
     for (const f of deltaF) {
       if (
         f?.verb !== "do" ||
-        f?.action !== "set" ||
+        (f?.action !== "set-space" &&
+          f?.action !== "set-being" &&
+          f?.action !== "set-matter") ||
         typeof f?.params?.field !== "string" ||
         !f.params.field.startsWith("qualities.")
       ) continue;

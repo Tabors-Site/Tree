@@ -21,7 +21,7 @@
 import log from "../../../seedReality/log.js";
 import Matter from "../../../materials/matter/matter.js";
 import { registerOperation } from "../../../ibp/operations.js";
-import { doVerb } from "../../../ibp/verbs.js";
+import { doVerb } from "../../../ibp/verbs/do.js";
 import { findBeingByName } from "../../../materials/being/identity.js";
 import { getMatter } from "../../../materials/matter/matters.js";
 import {
@@ -131,9 +131,8 @@ export function registerLlmAssignerOps() {
       };
       const result = await doVerb(
         target,
-        "create",
+        "create-matter",
         {
-          kind: "matter",
           spec: {
             name:    "Setting up an LLM connection",
             origin:  "web",
@@ -195,7 +194,7 @@ export function registerLlmAssignerOps() {
       const opts = identity ? { identity, summonCtx } : { scaffold: true };
       await doVerb(
         matter,
-        "set",
+        "set-matter",
         { field: "qualities.tutorial", value, merge: false },
         opts,
       );
@@ -229,7 +228,7 @@ export function registerLlmAssignerOps() {
       const llmAssigner = await getLlmAssigner();
       await doVerb(
         matter,
-        "end",
+        "end-matter",
         {},
         {
           identity: {

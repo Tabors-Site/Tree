@@ -250,14 +250,17 @@ function buildKeyParts(args) {
       if (!args.action) return null;
       // Namespace-aware rules: a write to qualities.<namespace> uses
       // a two-part key [action, namespace] so an operator can pin
-      // permissions per quality namespace. Covers both the legacy
-      // set-qualities/clear-qualities ops and the collapsed `set`
-      // op with field="qualities.<namespace>..." (verbs.js extracts
-      // namespace into args.namespace before this runs).
+      // permissions per quality namespace. Covers the legacy
+      // set-qualities/clear-qualities ops and the material-scoped
+      // set-space/set-being/set-matter ops with
+      // field="qualities.<namespace>..." (do.js extracts namespace
+      // into args.namespace before this runs).
       if (
         (args.action === "set-qualities" ||
           args.action === "clear-qualities" ||
-          args.action === "set") &&
+          args.action === "set-space" ||
+          args.action === "set-being" ||
+          args.action === "set-matter") &&
         args.namespace
       ) {
         return [args.action, args.namespace];
@@ -493,7 +496,7 @@ export async function seedDefaultStancePermissions() {
   for (const [field, value] of Object.entries(updates)) {
     await doVerb(
       spaceRoot,
-      "set",
+      "set-space",
       { field, value, merge: false },
       { scaffold: true },
     );

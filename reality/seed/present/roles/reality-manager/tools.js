@@ -26,7 +26,8 @@
 // install an extension or write config get FORBIDDEN.
 
 import { z } from "zod";
-import { seeVerb, doVerb } from "../../../ibp/verbs.js";
+import { seeVerb } from "../../../ibp/verbs/see.js";
+import { doVerb } from "../../../ibp/verbs/do.js";
 import { getRealityDomain } from "../../../ibp/address.js";
 import { getSpaceRootId } from "../../../sprout.js";
 

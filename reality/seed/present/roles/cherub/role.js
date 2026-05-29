@@ -62,7 +62,7 @@ import {
 import { getSpaceRootId } from "../../../sprout.js";
 import { IbpError, IBP_ERR } from "../../../ibp/protocol.js";
 import { getRealityDomain } from "../../../ibp/address.js";
-import { summonCreateBeing } from "../../../ibp/verbs.js";
+import { summonCreateBeing } from "../../../ibp/verbs/summon.js";
 
 const TREEOS_AUTH_WELCOME =
   "Welcome to TreeOS. This place is open to anyone who wants to inhabit it. Pick a username and password; you will receive an identity token immediately and start at your home.";

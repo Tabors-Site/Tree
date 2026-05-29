@@ -44,7 +44,7 @@ import { randomUUID } from "crypto";
 import log from "../seedReality/log.js";
 import Being from "../materials/being/being.js";
 import { readInbox } from "./intake/inbox.js";
-import { summonByResolved } from "../ibp/verbs.js";
+import { summonByResolved } from "../ibp/verbs/summon.js";
 import { getRealityDomain } from "../ibp/address.js";
 
 // ─────────────────────────────────────────────────────────────────

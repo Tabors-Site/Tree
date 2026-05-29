@@ -13,6 +13,16 @@
 
 const QUALITIES_PREFIX = "qualities.";
 
+// Fact actions emitted by the material-scoped DO ops.
+//
+// Reducers route on action name so a fact saying "I set a Being field"
+// (`set-being`) and one saying "I set a Space field" (`set-space`) both
+// land in applySetField / applySetQualities. The ops live in
+// materials/<kind>/ops.js; their factAction strings are what the
+// dispatcher stamps into each fact.
+const SET_ACTIONS = new Set(["set-space", "set-being", "set-matter"]);
+const CREATE_ACTIONS = new Set(["create-space", "create-matter"]);
+
 // Plain scalar/array fields the `do:set` op writes on a single
 // aggregate. The reducer's job: set `state[field] = value`. Validation
 // happened in the verb handler (which threw on bad input before the
@@ -57,6 +67,11 @@ const SCALAR_SET_FIELDS = new Set([
   "roles",
   "defaultRole",
   "homeSpace",
+  // password: bcrypt hash. credential-reset (and any future flow that
+  // re-mints credentials) stamps a do:set-being fact carrying the new
+  // hash; the reducer records it exactly like any other Being scalar.
+  // Plaintext never touches this field.
+  "password",
   // Matter scalars added in Slice C-matter-full (2026-05-23). The
   // editMatter content update, deleteMatterAndFile soft-delete
   // (spaceId/beingId=DELETED), and transferMatter cross-space move
@@ -107,7 +122,7 @@ const SCALAR_SET_FIELDS = new Set([
  * @returns {object} new state
  */
 export function applySetQualities(state, fact) {
-  if (fact?.action !== "set") return state;
+  if (!SET_ACTIONS.has(fact?.action)) return state;
   const params = fact.params || {};
   const field = params.field;
   if (typeof field !== "string" || !field.startsWith(QUALITIES_PREFIX)) {
@@ -170,7 +185,7 @@ export function applySetQualities(state, fact) {
  * @returns {object} new state
  */
 export function applySetField(state, fact) {
-  if (fact?.action !== "set") return state;
+  if (!SET_ACTIONS.has(fact?.action)) return state;
   const { field, value } = fact.params || {};
   if (typeof field !== "string" || !SCALAR_SET_FIELDS.has(field)) {
     return state;
@@ -262,7 +277,7 @@ export function applyCreateBeing(state, fact) {
  * @returns {object} new state
  */
 export function applyCreateSpace(state, fact) {
-  if (fact?.verb !== "do" || fact?.action !== "create") return state;
+  if (fact?.verb !== "do" || !CREATE_ACTIONS.has(fact?.action)) return state;
   if (fact?.target?.kind !== "space") return state;
   const spec = fact?.params?.spec;
   if (!spec || typeof spec !== "object") return state; // legacy birth fact
@@ -298,7 +313,7 @@ export function applyCreateSpace(state, fact) {
  * @returns {object} new state
  */
 export function applyCreateMatter(state, fact) {
-  if (fact?.verb !== "do" || fact?.action !== "create") return state;
+  if (fact?.verb !== "do" || !CREATE_ACTIONS.has(fact?.action)) return state;
   if (fact?.target?.kind !== "matter") return state;
   const spec = fact?.params?.spec || {};
   return {

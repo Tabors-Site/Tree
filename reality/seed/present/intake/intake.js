@@ -60,7 +60,7 @@ export async function getPendingIntakeCount() {
  * scheduler picks it like any other entry.
  *
  * kind="summon" entries are no longer accepted here — the SUMMON
- * verb in seed/ibp/verbs.js stamps the be:summon Fact directly.
+ * verb in seed/ibp/verbs/summon.js stamps the be:summon Fact directly.
  *
  * @returns {Promise<{ correlation, sentAt, deduped?: boolean }>}
  */

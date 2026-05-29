@@ -51,7 +51,7 @@
 import log from "../../seedReality/log.js";
 import Being from "./being.js";
 import Space from "../space/space.js";
-import { summonCreateBeing } from "../../ibp/verbs.js";
+import { summonCreateBeing } from "../../ibp/verbs/summon.js";
 import { findIAm, iAmIdentity } from "./identity.js";
 
 export const SEED_DELEGATES = [
@@ -136,10 +136,10 @@ export async function ensureSeedDelegates(spaceRootId) {
         // delegate's reel). The legacy `existingBeing.save()` direct
         // write retired (2026-05-23); fact-driven keeps the genesis
         // exception list short (only the spaceRoot/I_AM creation).
-        const { doVerb } = await import("../../ibp/verbs.js");
+        const { doVerb } = await import("../../ibp/verbs/do.js");
         const opts = { scaffold: true };
         const setField = (field, value) =>
-          doVerb(existingBeing, "set", { field, value }, opts);
+          doVerb(existingBeing, "set-being", { field, value }, opts);
 
         if (existingBeing.operatingMode !== spec.operatingMode) {
           await setField("operatingMode", spec.operatingMode);

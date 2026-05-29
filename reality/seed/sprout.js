@@ -74,7 +74,7 @@ export async function ensureSpaceRoot() {
     const rootId = uuidv4();
     await logFact({
       verb: "do",
-      action: "create",
+      action: "create-space",
       beingId: I_AM,
       target: { kind: "space", id: rootId },
       params: {
@@ -127,10 +127,10 @@ export async function ensureSpaceRoot() {
         "Place",
         `Seed space ${def.name} has wrong parent. Repairing.`,
       );
-      const { doVerb } = await import("./ibp/verbs.js");
+      const { doVerb } = await import("./ibp/verbs/do.js");
       await doVerb(
         space,
-        "set",
+        "set-space",
         { field: "parent", value: String(spaceRoot._id) },
         { scaffold: true },
       );
@@ -146,12 +146,12 @@ export async function ensureSpaceRoot() {
       rootOwner: { $nin: [null, I_AM] },
       parent: null,
     });
-    const { doVerb } = await import("./ibp/verbs.js");
+    const { doVerb } = await import("./ibp/verbs/do.js");
     for (const root of orphanRoots) {
       try {
         await doVerb(
           root,
-          "set",
+          "set-space",
           { field: "parent", value: String(spaceRoot._id) },
           { scaffold: true },
         );
@@ -205,14 +205,18 @@ async function ensureIAm(spaceRootId) {
   if (iAm) return iAm;
 
   const id = uuidv4();
-  // The random password is hashed and stored but never used (I cannot
-  // be claimed). Pre-hash because the fact path uses $set which skips
-  // the schema's pre-save bcrypt hook.
-  const bcrypt = (await import("bcrypt")).default;
-  const password =
-    Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2);
-  const salt = await bcrypt.genSalt(12);
-  const hashedPassword = await bcrypt.hash(password, salt);
+  // Genesis is the one exception that doesn't go through createBeing
+  // (createBeing's emitFact path needs a moment context that doesn't
+  // exist before I do). Same credential rule applies: auto-generated,
+  // plain encrypted into qualities.auth.credentialPlain so the I-Am
+  // can be reset later through the credential ops.
+  const { mintCredentialSpec } = await import(
+    "./materials/being/identity/credentials.js"
+  );
+  const credential = await mintCredentialSpec(null);
+  const qualities = {
+    auth: { credentialPlain: credential.plain },
+  };
 
   await logFact({
     verb: "be",
@@ -222,7 +226,7 @@ async function ensureIAm(spaceRootId) {
     params: {
       spec: {
         name: I_AM,
-        password: hashedPassword,
+        password: credential.hash,
         operatingMode: "scripted",
         roles: [],
         defaultRole: null,
@@ -232,7 +236,7 @@ async function ensureIAm(spaceRootId) {
         llmDefault: null,
         isRemote: false,
         homeReality: null,
-        qualities: {},
+        qualities,
       },
     },
   });
@@ -321,17 +325,17 @@ export async function syncExtensionsToTree(manifests) {
       const extChildId = existingByName.get(manifest.name);
       const extChild = await Space.findById(extChildId);
       if (extChild) {
-        const { doVerb } = await import("./ibp/verbs.js");
+        const { doVerb } = await import("./ibp/verbs/do.js");
         await doVerb(
           extChild,
-          "set",
+          "set-space",
           { field: "type", value: "resource" },
           { scaffold: true },
         );
         const refreshed = await Space.findById(extChildId);
         await doVerb(
           refreshed,
-          "set",
+          "set-space",
           {
             field: "qualities.extension",
             value: extensionQuality,
@@ -348,12 +352,11 @@ export async function syncExtensionsToTree(manifests) {
         // row. scaffold:true attribution because syncExtensionsToTree
         // runs at extension load (I_AM is the actor).
         const childId = uuidv4();
-        const { doVerb } = await import("./ibp/verbs.js");
+        const { doVerb } = await import("./ibp/verbs/do.js");
         await doVerb(
           extSpace,
-          "create",
+          "create-space",
           {
-            kind: "space",
             spec: {
               name: manifest.name,
               type: "resource",
@@ -385,10 +388,10 @@ export async function syncExtensionsToTree(manifests) {
     if (!currentNames.has(name)) {
       const extChild = await Space.findById(spaceId);
       if (!extChild) continue;
-      const { doVerb } = await import("./ibp/verbs.js");
+      const { doVerb } = await import("./ibp/verbs/do.js");
       await doVerb(
         extChild,
-        "set",
+        "set-space",
         { field: "qualities.extension.loaded", value: false },
         { scaffold: true },
       );

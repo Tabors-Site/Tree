@@ -4,7 +4,9 @@
 // auto-emit a Fact, return the handler's result.
 //
 // Operations live in the dispatcher (ibp/operations.js); seed-shipped
-// ones register at boot via ibp/seedOperations.js; extension ones
+// ones register at boot via the per-material ops files (each
+// materials/<kind>/ops.js + materials/seeds.js + realityConfigOps.js,
+// imported for side effects by seed/services.js); extension ones
 // register from their init() function. The verb body does:
 //
 //   1. caller-shape gate (assertVerbCaller)
@@ -85,12 +87,15 @@ export async function doVerb(target, operation, params = {}, opts = {}) {
     const spaceIdForAuth = resolveAuditTarget(target, null)?.id || null;
     // Extract namespace for namespace-aware authorization. Three
     // forms handled: legacy set-qualities/clear-qualities (params.namespace),
-    // and the collapsed set op with field="qualities.<namespace>[.<inner>]".
+    // and the material-scoped set-<kind> ops with
+    // field="qualities.<namespace>[.<inner>]".
     let namespace;
     if (operation === "set-qualities" || operation === "clear-qualities") {
       namespace = params?.namespace;
     } else if (
-      operation === "set" &&
+      (operation === "set-space" ||
+        operation === "set-being" ||
+        operation === "set-matter") &&
       typeof params?.field === "string" &&
       params.field.startsWith("qualities.")
     ) {

@@ -8,7 +8,7 @@
 // correlation, and this file just queries that collection.
 //
 // Writers are GONE — appendToInbox retired. The SUMMON verb stamps
-// the Fact directly (see seed/ibp/verbs.js summonVerb). Closure is
+// the Fact directly (see seed/ibp/verbs/summon.js summonVerb). Closure is
 // also fact-driven: when the answering moment seals, its Act row
 // carries `answers: <correlation>` and the InboxProjection row
 // disappears. No durable `consumed` / `cancelled` state — the row

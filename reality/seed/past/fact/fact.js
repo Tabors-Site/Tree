@@ -102,6 +102,26 @@ const FactSchema = new mongoose.Schema({
   // model. They have no reel to chain against. See verifyReel.js.
   p: { type: String, default: null },
   h: { type: String, default: null },
+
+  // PARALLEL FACTS — stale-detection key (see
+  // [seed/philosophy/extensions/0-PARALLEL-FACTS.md](../../philosophy/extensions/0-PARALLEL-FACTS.md)).
+  //
+  //   foldSeq — the seq of the target's reel that this act's writer
+  //             folded from, captured at moment-open. By seal time
+  //             the reel may have advanced past it; Strategy B uses
+  //             that gap to detect a stale fold. Strategy A doesn't
+  //             require the value but carries it for audit and
+  //             replay verification.
+  //
+  // Null for:
+  //   - genesis / scaffold facts (no moment opened)
+  //   - facts whose target reel was not folded at moment-open
+  //   - facts targeting reel-less aggregates (place, stance, null)
+  //
+  // Included in the canonical content hash so verifyReel cannot be
+  // confused by a row-state foldSeq that differs from what was
+  // sealed. See past/fact/hash.js.
+  foldSeq: { type: Number, default: null },
 });
 
 FactSchema.index({ beingId: 1, date: -1 });                                          // a being's reel

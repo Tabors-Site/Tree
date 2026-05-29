@@ -168,7 +168,7 @@ export class PortalClient {
    * second call will receive the same result.
    *
    * @param {string} address  position (or stance; @being is stripped server-side)
-   * @param {string} action   registered op name ("create", "set", "end", "plant", "<ext>:<action>", ...)
+   * @param {string} action   registered op name ("create-space", "set-being", "end-matter", "plant", "<ext>:<action>", ...)
    * @param {object} [args]   op-specific arguments
    * @param {object} [opts]   { correlation?: string, timeoutMs?: number }
    */

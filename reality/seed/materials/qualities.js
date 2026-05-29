@@ -172,8 +172,10 @@ function validateData(key, data) {
 // addToQualitySet / batchSetQuality / unsetQuality) retired 2026-05-23
 // (Slice 3). The fact-driven path is the only writer now:
 //
-//   await reality.do(target, "set", { field: "qualities.<ns>", value }, opts)
-//   await reality.do(target, "set", { field: "qualities.<ns>.<inner>", value }, opts)
+//   await reality.do(target, "set-<kind>", { field: "qualities.<ns>", value }, opts)
+//   await reality.do(target, "set-<kind>", { field: "qualities.<ns>.<inner>", value }, opts)
+//
+// where <kind> is space / being / matter — whichever the target is.
 //
 // Every write stamps a Fact on the aggregate's reel; the reducer
 // (see materials/reducerHelpers.applySetQualities) derives the new
@@ -189,7 +191,7 @@ function createQualityPrimitives({ Model, documentType }) {
   const tombstone = (methodName) => () => {
     throw new Error(
       `qualities.${documentType}.${methodName} retired 2026-05-23. ` +
-      `Use place.do(target, "set", { field: "qualities.<ns>" or ` +
+      `Use place.do(target, "set-${documentType}", { field: "qualities.<ns>" or ` +
       `"qualities.<ns>.<innerKey>", value }) instead — every write is ` +
       `a Fact on the aggregate's reel now (see seed/STAMPER.md).`,
     );

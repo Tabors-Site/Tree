@@ -11,7 +11,7 @@
 // custom. Some beings need a specialized take on the default
 // operations (auth's `register` runs the welcome flow); others add
 // new operations beyond the default set (llm-assigner's `add-llm`,
-// `assign-slot`). The dispatcher in ibp/verbs.js consults this
+// `assign-slot`). The dispatcher in ibp/verbs/be.js consults this
 // registry before falling back to the default BE handling.
 //
 // This is not where Being rows are minted. Identity creation lives
@@ -30,7 +30,7 @@
 //   }
 //
 // Method names derive from operation names via kebab-to-camel (the
-// dispatcher in ibp/verbs.js does the conversion). So
+// dispatcher in ibp/verbs/be.js does the conversion). So
 // `honoredOperations: ["release", "create-being"]` requires methods
 // `release()` and `createBeing()` on the spec.
 //

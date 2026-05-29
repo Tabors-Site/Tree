@@ -3,7 +3,7 @@
 // Used by the seed at plant time to put a dancer at a starting cell.
 // Stamps TWO facts in one moment (atomic via summonCtx.deltaF):
 //
-//   1. do.set on the being's qualities.harmony.coords (its own reel)
+//   1. do.set-being on the being's qualities.harmony.coords (its own reel)
 //   2. do.set-like emission on the grid space's reel as a
 //      "harmony:grid-event" with event="place" (the canonical record
 //      from which any dancer's position can be folded)
@@ -12,7 +12,7 @@
 // transaction. The dancer's own reel and the grid's reel agree from
 // the first frame; replay-from-the-grid-reel matches live coords.
 
-import { doVerb } from "../../../seed/ibp/verbs.js";
+import { doVerb } from "../../../seed/ibp/verbs/do.js";
 
 export default {
   name: "place-being",  // becomes harmony:place-being after loader namespacing
@@ -32,7 +32,7 @@ export default {
     const to = { x, y };
 
     // Fact 1 — dancer's own coords.
-    await doVerb(beingId, "set", {
+    await doVerb(beingId, "set-being", {
       field: "qualities.harmony.coords",
       value: to,
     }, { identity, summonCtx });

@@ -171,7 +171,7 @@ export async function runSeedMigrations() {
   // the same way an in-being call cannot.
   const Space = (await import("../../materials/space/space.js")).default;
   const { SEED_SPACE } = await import("../../materials/space/seedSpaces.js");
-  const { doVerb } = await import("../../ibp/verbs.js");
+  const { doVerb } = await import("../../ibp/verbs/do.js");
   const configNode = await Space.findOne({ seedSpace: SEED_SPACE.CONFIG });
   if (!configNode) {
     throw new Error("Cannot persist seedVersion: .config seed space not found");

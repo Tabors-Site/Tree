@@ -114,7 +114,7 @@ export const llmAssignerBeing = Object.freeze({
     // path setSpaceLlm uses below for space targets.
     const being = await Being.findById(String(ctx.identity.beingId));
     if (!being) throw new IbpError(IBP_ERR.BEING_NOT_FOUND, `Being ${ctx.identity.beingId} not found`);
-    const { doVerb } = await import("../../../ibp/verbs.js");
+    const { doVerb } = await import("../../../ibp/verbs/do.js");
     return doVerb(being, "assign-llm-slot", { slot, connectionId: connectionId || null }, {
       identity: ctx.identity,
     });
@@ -192,7 +192,7 @@ export const llmAssignerBeing = Object.freeze({
     // the same way reality-manager's set-config call does. realityLlmConnection
     // is not a protected key; no scaffold flag needed.
     const { SEED_SPACE } = await import("../../../materials/space/seedSpaces.js");
-    const { doVerb } = await import("../../../ibp/verbs.js");
+    const { doVerb } = await import("../../../ibp/verbs/do.js");
     const configNode = await Space.findOne({ seedSpace: SEED_SPACE.CONFIG });
     if (!configNode) {
       throw new IbpError(IBP_ERR.INTERNAL, "Reality .config seed space not found");
@@ -232,7 +232,7 @@ export const llmAssignerBeing = Object.freeze({
     // gate runs uniformly (same path the wire-side DO uses). The op's
     // handler routes space targets to assignSpaceConnection, which also
     // verifies the connection belongs to the caller before binding.
-    const { doVerb } = await import("../../../ibp/verbs.js");
+    const { doVerb } = await import("../../../ibp/verbs/do.js");
     const result = await doVerb(space, "assign-llm-slot", { slot, connectionId: connectionId || null }, {
       identity: ctx.identity,
     });

@@ -182,7 +182,7 @@ export async function tripTree(treeId, reason, scores = {}) {
 
   await emitFact({
     verb:    "do",
-    action:  "set",
+    action:  "set-space",
     beingId: I_AM,
     target:  { kind: "space", id: String(treeId) },
     params:  { field: "qualities.circuit", value: circuit, merge: false },
@@ -221,7 +221,7 @@ export async function reviveTree(treeId, beingId) {
 
   await emitFact({
     verb:    "do",
-    action:  "set",
+    action:  "set-space",
     beingId: String(beingId),
     target:  { kind: "space", id: String(treeId) },
     params:  { field: "qualities.circuit", value: { tripped: false }, merge: false },

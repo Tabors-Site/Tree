@@ -277,7 +277,7 @@ export async function createSpace({
     // materialized). Same shape as createBeing / createMatter.
     await sealFacts([{
       verb:    "do",
-      action:  "create",
+      action:  "create-space",
       beingId: String(being._id),
       target:  { kind: "space", id },
       params:  {
@@ -374,7 +374,7 @@ export async function createRealitySeedSpace({
   // Eager singleton commit (read-back at line ~389 needs the row).
   await sealFacts([{
     verb:    "do",
-    action:  "create",
+    action:  "create-space",
     beingId: I_AM,
     target:  { kind: "space", id },
     params:  {
@@ -700,20 +700,20 @@ export async function deleteSpaceBranch(
     // from parent-query readers). The per-reel lock around the
     // (rootOwner, parent) pair keeps them visible-together to a
     // concurrent fold.
-    const { doVerb } = await import("../../ibp/verbs.js");
+    const { doVerb } = await import("../../ibp/verbs/do.js");
     const opts = beingId
       ? { identity: { beingId: String(beingId) }, summonCtx: actId ? { actId } : null, scaffold: !actId }
       : { scaffold: true };
     await doVerb(
       spaceToDelete,
-      "set",
+      "set-space",
       { field: "rootOwner", value: String(beingId) },
       opts,
     );
     const refreshed = await Space.findById(spaceId);
     await doVerb(
       refreshed,
-      "set",
+      "set-space",
       { field: "parent", value: DELETED },
       opts,
     );

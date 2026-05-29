@@ -197,9 +197,9 @@ export function buildScopedReality(manifest, fullReality, availableServices) {
   // write API. The setQuality / mergeQuality / etc. methods on
   // `place.qualities.{being,space,matter}` are tombstones — they throw
   // with a migration message pointing at
-  // `place.do(target, "set", { field: "qualities.<ns>" })`. Reads
+  // `place.do(target, "set-<kind>", { field: "qualities.<ns>" })`. Reads
   // (getQuality, readQualityNamespace) stay. Namespace ownership is
-  // now enforced in the seed `do.set` handler against the verb's
+  // now enforced in the seed `do.set-<kind>` handler against the verb's
   // calling identity. No need to wrap here; scoped.qualities passes
   // through unchanged.
 

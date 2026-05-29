@@ -154,8 +154,10 @@ or a SEE push. HTTP and CLI are translators: they shape a request or
 command into the same envelope and hand it to the one IBP dispatcher
 in [ibp/protocol.js](ibp/protocol.js).
 
-Internally the four verbs are functions in [ibp/verbs.js](ibp/verbs.js).
-The wire layer is thin; the verbs are one execution.
+Internally the four verbs are functions in [ibp/verbs/](ibp/verbs/) —
+one file per verb (`do.js`, `see.js`, `summon.js`, `be.js`), with
+shared helpers in `_shared.js`. The wire layer is thin; the verbs
+are one execution.
 
 ## The three tenses I am built from
 
@@ -331,7 +333,6 @@ ibp/
 ├── descriptor.js         buildPlaceDescriptor (the SEE face)
 ├── discovery.js          buildDiscovery (pre-identity surface)
 ├── operations.js         the DO operation registry
-├── seedOperations.js     the seed's DO operations (birth/set/death/plant/llm-conn/...)
 ├── protocol.js           IBP_ERR, IbpError, ok/error helpers
 ├── pushChannel.js        emitToBeing / emitToBeingRoom (transport indirection)
 └── stanceProperties.js   the property bag the authorize layer evaluates
@@ -630,11 +631,13 @@ field is named for exactly what it does.
 
 **Writes go through DO.** Per Slice 3 (2026-05-23) the legacy
 `qualities.{being,space,matter}.setQuality/...` direct-write API
-retired. Every quality write now stamps a `do:set` Fact:
+retired. Every quality write now stamps a material-scoped `do:set-<kind>`
+Fact:
 
 ```js
-await place.do(target, "set", { field: "qualities.<ns>", value }, opts);
-await place.do(target, "set", { field: "qualities.<ns>.<innerKey>", value }, opts);
+await place.do(target, "set-space",  { field: "qualities.<ns>", value }, opts);
+await place.do(target, "set-being",  { field: "qualities.<ns>.<innerKey>", value }, opts);
+await place.do(target, "set-matter", { field: "qualities.<ns>", value }, opts);
 ```
 
 The reducer's `applySetQualities` derives the new state; the fold
@@ -904,7 +907,8 @@ identity. New code uses the verbs.
 Read-only after Slice 3 (2026-05-23). `getQuality(doc, key)` returns
 the namespace data (`{}` when unset). `readQualityNamespace(doc, key)`
 returns null when unset. Write tombstones throw with migration
-message; use `reality.do(target, "set", { field: "qualities.<ns>", value })`.
+message; use `reality.do(target, "set-<kind>", { field: "qualities.<ns>", value })`
+where `<kind>` is space, being, or matter to match the target.
 
 ### Space CRUD (`reality.space`)
 

@@ -37,7 +37,7 @@ async function createChildByFact({ parentId, name, type, qualities }) {
   // the row immediately (manifest sync reads back after).
   await sealFacts([{
     verb:    "do",
-    action:  "create",
+    action:  "create-space",
     beingId: I_AM,
     target:  { kind: "space", id },
     params:  {
@@ -62,13 +62,13 @@ async function refreshQualitiesByFact(spaceId, qualities) {
     ? [...qualities.entries()]
     : Object.entries(qualities);
   if (entries.length === 0) return;
-  const { doVerb } = await import("../ibp/verbs.js");
+  const { doVerb } = await import("../ibp/verbs/do.js");
   for (const [ns, value] of entries) {
     const refreshed = await Space.findById(spaceId);
     if (!refreshed) return;
     await doVerb(
       refreshed,
-      "set",
+      "set-space",
       { field: `qualities.${ns}`, value, merge: false },
       { scaffold: true },
     );
@@ -81,8 +81,8 @@ async function refreshQualitiesByFact(spaceId, qualities) {
 async function deleteChildByFact(childId) {
   const childDoc = await Space.findById(childId);
   if (!childDoc) return;
-  const { doVerb } = await import("../ibp/verbs.js");
-  await doVerb(childDoc, "end", {}, { scaffold: true });
+  const { doVerb } = await import("../ibp/verbs/do.js");
+  await doVerb(childDoc, "end-space", {}, { scaffold: true });
 }
 
 export async function manifestItems({

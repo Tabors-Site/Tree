@@ -45,9 +45,16 @@ export function computeHash(prev, content) {
  * Extract the hashable content from a Fact row. Excludes `p`, `h`,
  * and mongoose internals (`__v`). Includes every domain field so the
  * digest captures the whole deed.
+ *
+ * `foldSeq` (PARALLEL FACTS §1.3) is included WHEN PRESENT so the
+ * chain commits to the stale-detection key. Pre-PARALLEL-FACTS rows
+ * have foldSeq null and the key is omitted (matching the digest they
+ * originally landed with). New facts with a numeric foldSeq include
+ * the key; mutating that value on a stored row breaks `h` and
+ * verifyReel trips.
  */
 export function contentOf(fact) {
-  return {
+  const out = {
     _id:         fact._id,
     date:        fact.date,
     beingId:     fact.beingId,
@@ -63,6 +70,10 @@ export function contentOf(fact) {
     homeReality: fact.homeReality,
     wasRemote:   fact.wasRemote,
   };
+  if (typeof fact.foldSeq === "number") {
+    out.foldSeq = fact.foldSeq;
+  }
+  return out;
 }
 
 /**

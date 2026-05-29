@@ -17,8 +17,132 @@
 // Action filter ("harmony:grid-event") keeps the fold pure to our
 // move-event shape, ignoring other facts that might land on the
 // grid reel (e.g. do.set on grid's own qualities).
+//
+// PARALLEL FACTS — Strategy A (deterministic-bump cell collision).
+//
+// Two beings can stamp move-to-the-same-cell facts in the same tick.
+// Both facts land on the reel (append-only, no rejection). At fold
+// time the bump rule resolves the contention: earlier-seq holds the
+// cell, later-seq is placed in the nearest free neighbor, searched
+// in a fixed direction order and outward in rings. The fact is NOT
+// rewritten; the grid simply renders the loser one cell over.
+//
+// THE GRID IS AUTHORITATIVE. The dancer's own qualities.harmony.coords
+// keeps what the move-fact said ("I stepped to (3,4)") — honest about
+// the act. But where the dancer actually IS post-bump lives only here,
+// in the grid's fold. Dancers reading the world MUST consult this fold,
+// not their own qualities row.
+//
+// Replay-identical: the neighbor-order constant and the seq-ordered
+// walk produce the same placements every fold, every run.
 
 import mongoose from "mongoose";
+
+// Deterministic search order for the bump (PARALLEL FACTS §4.3).
+// Eight compass directions, clockwise from N. Ring r searches every
+// cell at Chebyshev distance r from the target, ordered by direction
+// first, then by ring expansion. Replay reads this same constant.
+const NEIGHBOR_DIRS = [
+  { dx:  0, dy: -1 }, // N
+  { dx:  1, dy: -1 }, // NE
+  { dx:  1, dy:  0 }, // E
+  { dx:  1, dy:  1 }, // SE
+  { dx:  0, dy:  1 }, // S
+  { dx: -1, dy:  1 }, // SW
+  { dx: -1, dy:  0 }, // W
+  { dx: -1, dy: -1 }, // NW
+];
+
+// Cap the ring search. Past this the grid is functionally full;
+// the bump degenerates and we accept "no placement" (the loser sits
+// at its requested cell on top of the winner). For real harmony
+// boards this never triggers; the cap is here so a pathological
+// reel can't spin forever.
+const MAX_BUMP_RING = 16;
+
+const cellKey = (x, y) => `${x},${y}`;
+
+/**
+ * Walk outward from a target cell in deterministic order. For each
+ * ring r ∈ [1, MAX_BUMP_RING], walk the 8 base directions, scaling
+ * dx/dy by r. Yields the first cell whose key is NOT in `occupied`.
+ *
+ * Returns { x, y } for the first free cell, or null if the search
+ * cap is exhausted.
+ *
+ * The walk is deterministic in seq+constant: same `occupied` set +
+ * same target = same bump cell. Replay reproduces.
+ */
+function findNearestFree(targetX, targetY, occupied) {
+  for (let r = 1; r <= MAX_BUMP_RING; r++) {
+    for (const dir of NEIGHBOR_DIRS) {
+      const x = targetX + dir.dx * r;
+      const y = targetY + dir.dy * r;
+      if (!occupied.has(cellKey(x, y))) {
+        return { x, y };
+      }
+    }
+  }
+  return null;
+}
+
+/**
+ * Apply one grid-event to (occupants, board). Pure given the inputs.
+ * Mutates both maps in place because the fold caller composes many
+ * events into one final state.
+ *
+ *   occupants : Map<"x,y", beingId>     — what's at each cell
+ *   board     : Map<beingId, {x, y}>    — where each being is (post-bump)
+ *
+ * Event shape: { event, beingId, to: {x, y}, from?: {x, y} }.
+ *
+ * Bump rule (cell already occupied by SOMEONE ELSE):
+ *   - search NEIGHBOR_DIRS outward in rings
+ *   - first free cell wins
+ *   - the fact's `to` is NOT mutated; only the grid's `board` reflects
+ *     the bumped position
+ *
+ * Self-reoccupy (the cell is occupied by THIS being, e.g. a move to
+ * the same cell): no-op on occupants, board re-set.
+ */
+function applyEvent(occupants, board, event) {
+  if (!event || !event.beingId || !event.to) return;
+  if (event.event !== "move" && event.event !== "place") return;
+
+  const beingId = String(event.beingId);
+  const requestedKey = cellKey(event.to.x, event.to.y);
+  const previous = board.get(beingId) || null;
+
+  // Vacate the being's previous cell (if it currently holds one).
+  if (previous) {
+    const prevKey = cellKey(previous.x, previous.y);
+    if (occupants.get(prevKey) === beingId) {
+      occupants.delete(prevKey);
+    }
+  }
+
+  // Already at the requested cell? Idempotent re-place.
+  const occupant = occupants.get(requestedKey);
+  if (!occupant || occupant === beingId) {
+    occupants.set(requestedKey, beingId);
+    board.set(beingId, { x: event.to.x, y: event.to.y });
+    return;
+  }
+
+  // Collision: someone else holds the requested cell. Find the nearest
+  // free neighbor deterministically.
+  const free = findNearestFree(event.to.x, event.to.y, occupants);
+  if (!free) {
+    // Grid functionally full within the search cap. Park at the
+    // requested cell stacked on top (last-resort). The winner keeps
+    // the occupants entry; the loser still gets a board entry so the
+    // dancer has SOMEWHERE to be.
+    board.set(beingId, { x: event.to.x, y: event.to.y });
+    return;
+  }
+  occupants.set(cellKey(free.x, free.y), beingId);
+  board.set(beingId, { x: free.x, y: free.y });
+}
 
 export async function foldGridUpToSeq(gridSpaceId, tickSeq) {
   if (!gridSpaceId) return new Map();
@@ -32,14 +156,42 @@ export async function foldGridUpToSeq(gridSpaceId, tickSeq) {
     .sort({ seq: 1 })
     .lean();
 
+  const occupants = new Map();
   const board = new Map();
   for (const f of facts) {
-    const p = f.params || {};
-    if ((p.event === "move" || p.event === "place") && p.beingId && p.to) {
-      board.set(String(p.beingId), { x: p.to.x, y: p.to.y });
-    }
+    applyEvent(occupants, board, f.params || {});
   }
   return board;
+}
+
+/**
+ * Same as foldGridUpToSeq but also returns the occupants map (the
+ * resolved "who is at each cell" view) and a placements map (alias
+ * of board, named to match the PARALLEL FACTS spec language).
+ *
+ * Verification scripts use this to inspect both sides of the fold
+ * without re-running it.
+ */
+export async function foldGridResolved(gridSpaceId, tickSeq) {
+  if (!gridSpaceId) return { board: new Map(), occupants: new Map(), placements: new Map() };
+  const Fact = mongoose.model("Fact");
+  const facts = await Fact.find({
+    "target.kind": "space",
+    "target.id":   String(gridSpaceId),
+    action:        "harmony:grid-event",
+    seq:           tickSeq === undefined
+                     ? { $type: "number" }
+                     : { $lte: Number(tickSeq) || 0, $type: "number" },
+  })
+    .sort({ seq: 1 })
+    .lean();
+
+  const occupants = new Map();
+  const board = new Map();
+  for (const f of facts) {
+    applyEvent(occupants, board, f.params || {});
+  }
+  return { board, occupants, placements: board };
 }
 
 /**
@@ -73,3 +225,7 @@ export async function getGridEventStream(gridSpaceId) {
     ...(f.params || {}),
   }));
 }
+
+// Constants exposed for verification scripts that want to compute
+// expected placements without re-running the fold.
+export { NEIGHBOR_DIRS, MAX_BUMP_RING, findNearestFree, applyEvent };

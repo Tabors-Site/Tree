@@ -95,7 +95,7 @@ export async function momentum(setup = {}) {
  *
  *   verb: "do"  → doVerb(target, action, args, opts)
  *     target  = resolved position/stance object
- *     action  = DO op name ("create", "set", ...)
+ *     action  = DO op name ("create-space", "set-being", ...)
  *     args    = op-specific params
  *
  *   verb: "be"  → beVerb(operation, opPayload, ctx)
@@ -120,7 +120,8 @@ async function runTransportAct(summonCtx) {
   }
 
   // Lazy-import the verbs to avoid a circular import at module load.
-  const { doVerb, beVerb } = await import("../../ibp/verbs.js");
+  const { doVerb } = await import("../../ibp/verbs/do.js");
+  const { beVerb } = await import("../../ibp/verbs/be.js");
 
   if (verb === "do") {
     return doVerb(target, action, args || {}, {

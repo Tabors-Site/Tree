@@ -14,14 +14,11 @@ export default {
   description: "Scripted-being dance on a 2D grid. The hello-world for many-beings synchronization.",
 
   needs: {
-    // Verbs and registries the extension reaches for:
+    // Verbs the seed scaffold reaches for:
     //   do      — registerOperation + do() in the seed scaffold
     //   be      — be("create-being", ...) in the seed scaffold
     //   declare — registerRole, schedule (drummer wake)
-    //   hooks   — afterBoot hook for the auto-plant gate
-    // (Space/Being model lookups inside the extension import seed
-    // models directly; "models" is not part of the scoped bundle.)
-    services: ["do", "be", "declare", "hooks"],
+    services: ["do", "be", "declare"],
   },
 
   optional: {
@@ -31,16 +28,9 @@ export default {
   provides: {
     tools: false,
     seeds: {
-      // harmony:dance-floor — plant grid + drum + drummer (+ dancers in
-      // later rungs). The seed recipe runs through the place bundle.
+      // harmony:dance-floor — registered via init() return value.
+      // Operators plant from the seed hotbar in the portal.
     },
     hooks: { fires: [], listens: [] },
   },
-
-  env: [
-    // HARMONY_AUTO_PLANT=true at boot will plant a default dance-floor
-    // at the reality root for testing. Off by default; operators plant
-    // via the seed mechanism (place.do(rootId, "plant", { seed: ... })).
-    { name: "HARMONY_AUTO_PLANT", required: false, description: "Auto-plant a default dance-floor at the reality root on boot." },
-  ],
 };

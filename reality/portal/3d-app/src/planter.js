@@ -81,7 +81,7 @@ export function isPlanterOpen() {
 /**
  * Plant a seed end-to-end. Two DOs over the IBP socket:
  *
- *   1. place.do(parentAddress, "create", { kind: "space", spec: { name, type } })
+ *   1. place.do(parentAddress, "create-space", { spec: { name, type } })
  *      → returns the new space. At the place root this stamps `rootOwner`.
  *   2. place.do(newSpaceAddress, "plant", { seed: seedName })
  *      → runs the seed's scaffold; returns plantedSeedId + plantedThings.
@@ -96,11 +96,10 @@ export function isPlanterOpen() {
  * @param {string} [args.newNodeType]   defaults to "branch"
  */
 export async function plantSeed({ client, parentAddress, seedName, newNodeName, newNodeType = "branch" }) {
-  // Step 1 — create the new space. The seed's create op returns the
-  // created space (full doc). At the place root, isRoot=true and
+  // Step 1 — create the new space. The seed's create-space op returns
+  // the created space (full doc). At the place root, isRoot=true and
   // rootOwner gets stamped with the creator's beingId.
-  const created = await client.do(parentAddress, "create", {
-    kind: "space",
+  const created = await client.do(parentAddress, "create-space", {
     spec: {
       name: newNodeName,
       type: newNodeType,
@@ -110,7 +109,7 @@ export async function plantSeed({ client, parentAddress, seedName, newNodeName, 
   const newNodeId   = created?._id || created?.id || created?.spaceId;
   const newNodePath = derivePath(parentAddress, newNodeName);
   if (!newNodeId) {
-    throw new Error("create returned no space id");
+    throw new Error("create-space returned no space id");
   }
 
   // Step 2 — plant the seed at the new space. Address by path (the

@@ -13,7 +13,7 @@
 // and the toward/away/mirror/box/pulse dance emerges.
 
 import log from "../../../seed/seedReality/log.js";
-import { doVerb } from "../../../seed/ibp/verbs.js";
+import { doVerb } from "../../../seed/ibp/verbs/do.js";
 import { foldGridUpToSeq } from "../lib/foldGrid.js";
 
 const DEFAULT_GRID_W = 10;

@@ -1,8 +1,8 @@
 // harmony:tick — the drummer's beat.
 //
 // One DO op: stamps a tick-fact on the drum matter's reel. The fact
-// shape is do:set on qualities.harmony.tick = { n, at }. Each call
-// increments n. The drum's reel becomes the timeline of beats.
+// shape is do:set-matter on qualities.harmony.tick = { n, at }. Each
+// call increments n. The drum's reel becomes the timeline of beats.
 //
 // The drum is just matter — done-to, no act-chain. The drummer-being
 // is the actor; the drum is the surface the beat lands on.
@@ -27,18 +27,15 @@ export default {
       throw new Error("harmony:tick requires a matter target with _id");
     }
 
-    // Defer the actual emit to the seed do.set op (single canonical
-    // write surface). Use the place-bound do reference if present on
-    // ctx, otherwise import. The drummer role calls this op via
-    // place.do(drumMatterId, "harmony:tick", { n: prev+1 }) — but the
-    // handler here doesn't need a recursive do.set because the op spec
-    // already sets factAction; the auto-Fact would land here as
-    // harmony:tick. To keep the wire shape uniform with other state
-    // changes, we route through do.set explicitly. The handler runs
-    // inside doVerb already, so opts.summonCtx is what threads the
-    // moment's actId and deltaF accumulator.
-    const { doVerb } = await import("../../../seed/ibp/verbs.js");
-    await doVerb(targetId, "set", {
+    // Defer the actual emit to the seed do.set-matter op (single
+    // canonical write surface for matter qualities). The drummer role
+    // calls this op via place.do(drumMatterId, "harmony:tick", ...);
+    // the wire shape stays uniform with other state changes by routing
+    // through do.set-matter explicitly. The handler runs inside doVerb
+    // already, so opts.summonCtx is what threads the moment's actId
+    // and deltaF accumulator.
+    const { doVerb } = await import("../../../seed/ibp/verbs/do.js");
+    await doVerb(targetId, "set-matter", {
       field: "qualities.harmony.tick",
       value: next,
     }, {

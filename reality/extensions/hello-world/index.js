@@ -7,7 +7,7 @@
 //   2. The "greeter" seed — when planted at a target space, spawns
 //      one being there with the greeter role. The plant is itself
 //      a SUMMON-create-being (the standard primitive in
-//      seed/ibp/verbs.js#summonCreateBeing); we don't invent a new
+//      seed/ibp/verbs/summon.js#summonCreateBeing); we don't invent a new
 //      creation path.
 //
 // The role is scripted today. Flipping to LLM cognition is a one-
@@ -112,14 +112,14 @@ export async function init(place) {
         homeSpace:   String(rootSpaceId),
         currentSpace: String(rootSpaceId),
         parentBeingId: identity?.beingId || null,
-        // The be:register Fact for the new greeter attributes to the
-        // planter (the being who planted the seed). A seed-planted
-        // being didn't self-stamp into existence — the planter caused
-        // it. Without actor override, the Fact would self-stamp
-        // (Fact.beingId = newBeing._id), which is correct only for
-        // I-Am's genesis-of-self. For every other creation path,
-        // the actor is the cause.
-        actor: identity?.beingId || null,
+        // The be:register Fact self-stamps on the new greeter's reel
+        // (SINGLE-WRITER: the new being is the actor of its own
+        // genesis). The planter's "I created the greeter" audit
+        // belongs on the planter's reel as a separate be:summon-create
+        // Fact — see summonCreateBeing in seed/ibp/verbs/summon.js
+        // for the canonical atomic-multi-reel birth shape. This path
+        // does not currently emit that creator-side audit; the seed
+        // plant is recorded only on the new being's reel.
       });
 
       log.info("HelloWorld", `🌱 planted greeter "${beingName}" at ${String(rootSpaceId).slice(0, 8)}`);

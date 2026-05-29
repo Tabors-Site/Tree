@@ -179,7 +179,7 @@ async function createMatter({
   // createBeing.
   await sealFacts([{
     verb:    "do",
-    action:  "create",
+    action:  "create-matter",
     beingId: String(beingId),
     target:  { kind: "matter", id: matterId },
     params:  {
@@ -286,7 +286,7 @@ async function editMatter({
   // moment's ΔF; otherwise falls back to sealFacts singleton.
   await emitFact({
     verb:    "do",
-    action:  "set",
+    action:  "set-matter",
     beingId: String(beingId),
     target:  { kind: "matter", id: String(matter._id) },
     params:  { field: "content", value: finalContent },
@@ -384,7 +384,7 @@ async function deleteMatterAndFile({
   const setMatterField = (field, value) =>
     emitFact({
       verb:    "do",
-      action:  "set",
+      action:  "set-matter",
       beingId: String(beingId),
       target:  { kind: "matter", id: String(matter._id) },
       params:  { field, value },
@@ -450,7 +450,7 @@ async function transferMatter({
   // Fact updates spaceId; the reducer's applySetField writes the row.
   await emitFact({
     verb:    "do",
-    action:  "set",
+    action:  "set-matter",
     beingId: String(beingId),
     target:  { kind: "matter", id: String(matter._id) },
     params:  { field: "spaceId", value: String(targetSpace) },
@@ -567,7 +567,7 @@ async function getMatterHistory({ matterId, limit = 100, offset = 0 } = {}) {
     .find({
       "target.kind": "matter",
       "target.id":   String(matterId),
-      action:        { $in: ["create", "edit", "remove"] },
+      action:        { $in: ["create-matter", "set-matter"] },
     })
     .populate("beingId", "name")
     .sort({ date: 1 })

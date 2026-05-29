@@ -15,7 +15,8 @@
 
 import log from "../../../seed/seedReality/log.js";
 import mongoose from "mongoose";
-import { doVerb, summonVerb } from "../../../seed/ibp/verbs.js";
+import { doVerb }     from "../../../seed/ibp/verbs/do.js";
+import { summonVerb } from "../../../seed/ibp/verbs/summon.js";
 import { readHead } from "../../../seed/past/reel/reelHeads.js";
 import { findByPosition } from "../../../seed/materials/projections.js";
 import { getRealityDomain } from "../../../seed/ibp/address.js";

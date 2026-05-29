@@ -14,10 +14,12 @@
 // the seed; extensions register under "<extName>:<action>" so
 // every name's owner is structurally evident on the wire.
 //
-// The seed's own DO ops register at module load through
-// seedOperations.js. Extensions register theirs through the loader
-// reading manifest provides + init() return. Both go through
-// registerOperation here; there is no privileged seed path.
+// The seed's own DO ops register at module load through each
+// material's ops file (materials/<kind>/ops.js, materials/seeds.js,
+// realityConfigOps.js — services.js imports them for side effects).
+// Extensions register theirs through the loader reading manifest
+// provides + init() return. Both go through registerOperation here;
+// there is no privileged seed path.
 
 import log from "../seedReality/log.js";
 

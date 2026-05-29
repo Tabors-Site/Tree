@@ -48,7 +48,7 @@
 import { randomUUID } from "crypto";
 import log from "../../seedReality/log.js";
 import { getAncestorChain } from "../../materials/space/ancestorCache.js";
-import { summonByResolved } from "../../ibp/verbs.js";
+import { summonByResolved } from "../../ibp/verbs/summon.js";
 import { getRealityDomain } from "../../ibp/address.js";
 import { getSpaceRootId } from "../../sprout.js";
 import { I_AM } from "../../materials/being/seedBeings.js";

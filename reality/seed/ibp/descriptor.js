@@ -63,7 +63,8 @@ import { fold } from "../present/beats/2-fold/foldEngine.js";
 async function foldRead(type, id) {
   if (!id) return null;
   try {
-    return await fold(type, String(id));
+    const { state } = await fold(type, String(id));
+    return state;
   } catch {
     return null;
   }

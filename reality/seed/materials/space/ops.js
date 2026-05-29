@@ -1,0 +1,375 @@
+// TreeOS Seed . AGPL-3.0 . https://treeos.ai . Tabor Holly
+//
+// space/ops.js — DO operations that target Space.
+//
+//   create-space — bring a new Space into existence under target
+//   set-space    — write a Space field (schema fields or qualities)
+//   end-space    — chain-disconnect target Space from the projection
+//
+// These self-register at module load. `seed/services.js` imports this
+// file for side effects; the registry is populated before any caller
+// dispatches.
+
+import { registerOperation } from "../../ibp/operations.js";
+import {
+  createSpace,
+  editSpaceName,
+  editSpaceType,
+  deleteSpaceBranch,
+  assertValidSpaceName,
+  assertValidSpaceType,
+  assertNameAvailableAt,
+  resolveSpaceAccess,
+} from "./spaces.js";
+import { getRealityDomain } from "../../ibp/address.js";
+import { IbpError, IBP_ERR, mapPatternsToIbpError } from "../../ibp/protocol.js";
+import { I_AM } from "../being/seedBeings.js";
+import { detectTargetKind, targetIdOf } from "../_targetShape.js";
+
+// Namespaces NOT writable through set-space qualities (each has its own verb).
+const RESERVED_SET_META_NS = new Set([
+  "inbox", // per-being inbox; written through SUMMON
+]);
+
+// ─────────────────────────────────────────────────────────────────────
+// create-space
+// ─────────────────────────────────────────────────────────────────────
+//
+// params: { spec: { name, type? } }
+//
+// skipAudit because the branch stamps its own birth Fact directly
+// (the handler owns the actId + target + spec). One Fact per birth on
+// the new aggregate's reel; eager-fold materializes the row via the
+// reducer's applyCreateSpace.
+
+async function createSpaceHandler(ctx) {
+  const { target, params, identity, summonCtx, scaffold } = ctx;
+  const { spec = {} } = params || {};
+  const targetKind = detectTargetKind(target);
+  return createSpaceChild({
+    target,
+    params: spec,
+    identity,
+    summonCtx,
+    scaffold,
+    kind: targetKind,
+  });
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// set-space
+// ─────────────────────────────────────────────────────────────────────
+//
+// params: { field, value, merge=true }
+// field paths:
+//   "name" / "type" / "parent" / "llmDefault" / "rootOwner" /
+//   "contributors"                                  → schema-field writes
+//   "qualities.<namespace>"                          → set/merge that namespace
+//   "qualities.<namespace>.<innerKey>"               → merge one inner key
+//   value=null on a qualities path                   → unset
+
+async function setOnSpaceHandler({ target, params, identity }) {
+  const { field, value, merge = true } = params || {};
+  if (!field || typeof field !== "string") {
+    throw new Error("set-space: `field` is required");
+  }
+  const kind = detectTargetKind(target);
+
+  // ── qualities paths ────────────────────────────────────
+  //
+  // The handler validates input + resolves the target. The actual
+  // write happens inside the verb dispatcher's logFact → eager-fold
+  // pipeline: the fact is stamped, the reducer derives the new
+  // qualities state, and applyProjection writes it. One projection
+  // writer in the system — fold.
+  if (field.startsWith("qualities.")) {
+    const rest = field.slice("qualities.".length);
+    const parts = rest.split(".");
+    const namespace = parts[0];
+    if (RESERVED_SET_META_NS.has(namespace)) {
+      throw new Error(
+        `set-space: qualities namespace "${namespace}" is not writable through set-space; it has a dedicated verb.`,
+      );
+    }
+
+    if (kind === "stance") {
+      if (parts.length > 2) {
+        throw new Error(
+          `set-space: deep qualities path "${field}" not supported (max depth: qualities.<namespace>.<innerKey>)`,
+        );
+      }
+      if (!target.spaceId) {
+        throw new IbpError(
+          IBP_ERR.SPACE_NOT_FOUND,
+          "Resolved address has no spaceId",
+        );
+      }
+      const access = await resolveSpaceAccess(
+        target.spaceId,
+        identity?.beingId || null,
+      );
+      if (!access?.ok || access.write !== true) {
+        throw new IbpError(
+          IBP_ERR.FORBIDDEN,
+          "Not authorized to write qualities at this place",
+        );
+      }
+      return {
+        written: true,
+        spaceId: String(target.spaceId),
+        namespace,
+        kind: "space",
+        _factTarget: { kind: "space", id: String(target.spaceId) },
+      };
+    }
+
+    if (parts.length === 1 && value !== null) {
+      if (typeof value !== "object") {
+        throw new Error("set-space: qualities-namespace value must be an object");
+      }
+    }
+
+    return {
+      written: true,
+      spaceId: String(target._id),
+      ...(parts.length === 1 ? { namespace } : { field }),
+      ...(value === null ? { unset: true } : {}),
+    };
+  }
+
+  // ── schema-field writes ────────────────────────────────
+
+  if (field === "name") {
+    if (!value || typeof value !== "string") {
+      throw new Error("set-space: `value` must be a string for field=name");
+    }
+    if (kind === "stance") {
+      return renameAtStance({ resolved: target, name: value, identity });
+    }
+    const normalized = assertValidSpaceName(value);
+    if (target.seedSpace) {
+      throw new Error("set-space: cannot rename seed spaces");
+    }
+    if (target.name !== normalized) {
+      await assertNameAvailableAt(target.parent, normalized, {
+        excludeSpaceId: String(target._id),
+      });
+    }
+    return { spaceId: String(target._id), name: normalized };
+  }
+
+  if (field === "type") {
+    const spaceId = targetIdOf(target);
+    const normalized = assertValidSpaceType(value);
+    if (kind === "space" && target.seedSpace) {
+      throw new Error("set-space: cannot change type on seed spaces");
+    }
+    if (kind === "stance") {
+      await editSpaceType({
+        spaceId,
+        newType: normalized,
+        beingId: identity?.beingId || null,
+      });
+    }
+    return { spaceId, type: normalized };
+  }
+
+  if (field === "parent") {
+    if (value !== null && value !== undefined && typeof value !== "string") {
+      throw new Error("set-space: `parent` value must be a spaceId string or null");
+    }
+    const spaceId = targetIdOf(target);
+    return { spaceId, parent: value || null };
+  }
+
+  if (field === "llmDefault") {
+    if (value !== null && value !== undefined && typeof value !== "string") {
+      throw new Error("set-space: `llmDefault` value must be a connectionId string or null");
+    }
+    const spaceId = targetIdOf(target);
+    return { spaceId, llmDefault: value || null };
+  }
+
+  if (field === "rootOwner") {
+    if (value !== null && value !== undefined && typeof value !== "string") {
+      throw new Error("set-space: `rootOwner` value must be a beingId string or null");
+    }
+    const spaceId = targetIdOf(target);
+    return { spaceId, rootOwner: value || null };
+  }
+
+  if (field === "contributors") {
+    if (!Array.isArray(value)) {
+      throw new Error("set-space: `contributors` value must be an array of beingIds");
+    }
+    for (const id of value) {
+      if (typeof id !== "string") {
+        throw new Error("set-space: `contributors` array must contain beingId strings");
+      }
+    }
+    const spaceId = targetIdOf(target);
+    return { spaceId, contributors: value };
+  }
+
+  throw new Error(
+    `set-space: unknown field "${field}". Supported: name, type, parent, llmDefault, rootOwner, contributors, qualities.<namespace>[.<innerKey>]`,
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// end-space
+// ─────────────────────────────────────────────────────────────────────
+
+async function endSpaceHandler({ target, identity }) {
+  const spaceId = targetIdOf(target);
+  const deleted = await deleteSpaceBranch(spaceId, identity?.beingId || null);
+  return { deathSpaceId: String(deleted?._id || spaceId) };
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// Registration
+// ─────────────────────────────────────────────────────────────────────
+
+registerOperation("create-space", {
+  targets: ["space", "stance"],
+  ownerExtension: "seed",
+  factAction: "create-space",
+  skipAudit: true,
+  handler: createSpaceHandler,
+});
+
+registerOperation("set-space", {
+  targets: ["space", "stance"],
+  ownerExtension: "seed",
+  factAction: "set-space",
+  handler: setOnSpaceHandler,
+});
+
+registerOperation("end-space", {
+  targets: ["space"],
+  ownerExtension: "seed",
+  factAction: "end-space",
+  handler: endSpaceHandler,
+});
+
+// ─────────────────────────────────────────────────────────────────────
+// PRIVATE HELPERS
+// ─────────────────────────────────────────────────────────────────────
+//
+// Stance-arrival handler for create-space. When the op's target arrives
+// from the IBP wire, it's a resolved stance (carries `.chain`,
+// `.spaceId`, `.isSpaceRoot`, `.isHomeRoot`). The inline branch above
+// handles Mongoose-doc shapes; this helper handles the wire shape.
+
+const KERNEL_ERROR_PATTERNS = {
+  createChild: [
+    [/cancelled by extension/i, IBP_ERR.FORBIDDEN],
+    [/place seed spaces|reserved|invalid/i, IBP_ERR.INVALID_INPUT],
+    [/not found/i, IBP_ERR.SPACE_NOT_FOUND],
+  ],
+  rename: [
+    [/place seed spaces/i, IBP_ERR.FORBIDDEN],
+    [/not found/i, IBP_ERR.SPACE_NOT_FOUND],
+    [/cannot|reserved|invalid|characters|empty/i, IBP_ERR.INVALID_INPUT],
+  ],
+};
+
+async function createSpaceChild({ target, params, identity, summonCtx, scaffold, kind }) {
+  const beingId = identity?.beingId || (scaffold ? I_AM : null);
+  const actId = summonCtx?.actId || null;
+  const { name, type = null } = params || {};
+  if (!name || typeof name !== "string") {
+    throw new IbpError(IBP_ERR.INVALID_INPUT, "`name` is required");
+  }
+
+  // Non-stance path: trust the caller, parent is the target. Accepts
+  // any of the shapes targetIdOf() handles (Mongoose doc, plain
+  // {_id} / {id} / {spaceId} envelope, raw string id).
+  if (kind !== "stance") {
+    try {
+      const newSpace = await createSpace({
+        name,
+        type,
+        parentId: targetIdOf(target),
+        beingId,
+        actId,
+      });
+      return shapeNewSpace(newSpace);
+    } catch (err) {
+      throw mapPatternsToIbpError(err, KERNEL_ERROR_PATTERNS.createChild);
+    }
+  }
+
+  // Stance-arrival path.
+  if (target.isSpaceRoot) {
+    throw new IbpError(
+      IBP_ERR.INVALID_INPUT,
+      "Cannot create-child at the place root. Create the tree under your home (~) instead.",
+    );
+  }
+  if (target.isHomeRoot) {
+    if (String(target.beingId) !== String(beingId)) {
+      throw new IbpError(
+        IBP_ERR.FORBIDDEN,
+        "Cannot create a tree root in another being's home",
+      );
+    }
+    try {
+      const newSpace = await createSpace({ name, type, isRoot: true, beingId, actId });
+      return shapeNewSpace(newSpace);
+    } catch (err) {
+      throw mapPatternsToIbpError(err, KERNEL_ERROR_PATTERNS.createChild);
+    }
+  }
+  if (!target.spaceId) {
+    throw new IbpError(
+      IBP_ERR.SPACE_NOT_FOUND,
+      "Resolved position has no spaceId",
+    );
+  }
+  try {
+    const newSpace = await createSpace({
+      name,
+      type,
+      parentId: target.spaceId,
+      beingId,
+      actId,
+    });
+    return shapeNewSpace(newSpace);
+  } catch (err) {
+    throw mapPatternsToIbpError(err, KERNEL_ERROR_PATTERNS.createChild);
+  }
+}
+
+function shapeNewSpace(newSpace) {
+  const spaceId = String(newSpace._id);
+  return {
+    spaceId,
+    name: newSpace.name,
+    position: `${getRealityDomain()}/${spaceId}`,
+    _factTarget: { kind: "space", id: spaceId },
+  };
+}
+
+async function renameAtStance({ resolved, name, identity }) {
+  const beingId = identity?.beingId || null;
+  if (!resolved.spaceId) {
+    throw new IbpError(
+      IBP_ERR.SPACE_NOT_FOUND,
+      "Resolved address has no spaceId",
+    );
+  }
+  const access = await resolveSpaceAccess(resolved.spaceId, beingId);
+  if (!access?.ok || access.write !== true) {
+    throw new IbpError(
+      IBP_ERR.FORBIDDEN,
+      "Not authorized to rename at this place",
+    );
+  }
+  try {
+    await editSpaceName({ spaceId: resolved.spaceId, newName: name, beingId });
+    return { spaceId: String(resolved.spaceId), name };
+  } catch (err) {
+    throw mapPatternsToIbpError(err, KERNEL_ERROR_PATTERNS.rename);
+  }
+}

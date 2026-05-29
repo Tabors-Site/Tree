@@ -72,10 +72,10 @@ export async function addContributor(spaceId, contributorId, beingId) {
     const next = [...list, contributorId];
 
     const spaceDoc = await Space.findById(spaceId);
-    const { doVerb } = await import("../../ibp/verbs.js");
+    const { doVerb } = await import("../../ibp/verbs/do.js");
     await doVerb(
       spaceDoc,
-      "set",
+      "set-space",
       { field: "contributors", value: next },
       { identity: { beingId } },
     );
@@ -114,10 +114,10 @@ export async function removeContributor(spaceId, contributorId, beingId) {
     const next = list.filter((id) => id !== contributorId);
 
     const spaceDoc = await Space.findById(spaceId);
-    const { doVerb } = await import("../../ibp/verbs.js");
+    const { doVerb } = await import("../../ibp/verbs/do.js");
     await doVerb(
       spaceDoc,
-      "set",
+      "set-space",
       { field: "contributors", value: next },
       { identity: { beingId } },
     );
@@ -181,10 +181,10 @@ export async function setOwner(spaceId, newOwnerId, beingId) {
     }
 
     const spaceDoc = await Space.findById(spaceId);
-    const { doVerb } = await import("../../ibp/verbs.js");
+    const { doVerb } = await import("../../ibp/verbs/do.js");
     await doVerb(
       spaceDoc,
-      "set",
+      "set-space",
       { field: "rootOwner", value: newOwnerId },
       { identity: { beingId } },
     );
@@ -195,7 +195,7 @@ export async function setOwner(spaceId, newOwnerId, beingId) {
       const refreshed = await Space.findById(spaceId);
       await doVerb(
         refreshed,
-        "set",
+        "set-space",
         { field: "contributors", value: next },
         { identity: { beingId } },
       );
@@ -235,10 +235,10 @@ export async function removeOwner(spaceId, beingId) {
   if (!locked) throw new IbpError(IBP_ERR.RESOURCE_CONFLICT, "Space ownership is being modified");
   try {
     const spaceDoc = await Space.findById(spaceId);
-    const { doVerb } = await import("../../ibp/verbs.js");
+    const { doVerb } = await import("../../ibp/verbs/do.js");
     await doVerb(
       spaceDoc,
-      "set",
+      "set-space",
       { field: "rootOwner", value: null },
       { identity: { beingId } },
     );
@@ -285,17 +285,17 @@ export async function transferOwnership(spaceId, newOwnerId, beingId) {
     const next = filtered.includes(oldOwnerId) ? filtered : [...filtered, oldOwnerId];
 
     const spaceDoc = await Space.findById(spaceId);
-    const { doVerb } = await import("../../ibp/verbs.js");
+    const { doVerb } = await import("../../ibp/verbs/do.js");
     await doVerb(
       spaceDoc,
-      "set",
+      "set-space",
       { field: "rootOwner", value: newOwnerId },
       { identity: { beingId } },
     );
     const refreshed = await Space.findById(spaceId);
     await doVerb(
       refreshed,
-      "set",
+      "set-space",
       { field: "contributors", value: next },
       { identity: { beingId } },
     );

@@ -27,16 +27,14 @@ export const danceFloorSeed = {
     const { rootSpaceId, identity, place, plantedSeedId } = ctx;
 
     // 1. dance-floor space
-    const grid = await place.do(rootSpaceId, "create", {
-      kind: "space",
+    const grid = await place.do(rootSpaceId, "create-space", {
       spec: { name: "dance-floor", type: "domain" },
     }, { identity });
     const gridSpaceId = String(grid?._id || grid?.id || grid);
     log.info("Harmony", `planted dance-floor space ${gridSpaceId.slice(0, 8)}`);
 
     // 2. drum matter
-    const drum = await place.do(gridSpaceId, "create", {
-      kind: "matter",
+    const drum = await place.do(gridSpaceId, "create-matter", {
       spec: { name: "drum", content: null, origin: "ibp" },
     }, { identity });
     const drumMatterId = String(drum?._id || drum?.id || drum);
@@ -55,7 +53,7 @@ export const danceFloorSeed = {
     log.info("Harmony", `summoned drummer being ${drummerBeingId.slice(0, 8)}`);
 
     // 4. drummer role-config (knows what to tick, where to dance)
-    await place.do(drummerBeingId, "set", {
+    await place.do(drummerBeingId, "set-being", {
       field: "qualities.harmony.role",
       value: { drumMatterId, gridSpaceId, gridW: GRID_W, gridH: GRID_H, tickMs: TICK_MS },
     }, { identity });

@@ -88,7 +88,7 @@ WebSocket carries it on the single `"ibp"` event in both directions. HTTP carrie
 ## What this folder must never do
 
 - Form space, matter, or beings. (That is `seed/materials/`.)
-- Implement a verb. (Verb execution lives once, in `seed/ibp/verbs.js`.)
+- Implement a verb. (Verb execution lives once, in `seed/ibp/verbs/` — one file per verb.)
 - Define its own error codes or status mappings. (Single source is `seed/ibp/protocol.js`.)
 - Reach into `seed/present/` for scheduler internals (`wake`, `abortCurrent`, ...). The IBP dispatcher is the only path into seed from here.
 - Decide authorization. (Stance authorization runs inside the verb, in `seed/ibp/authorize.js`.)

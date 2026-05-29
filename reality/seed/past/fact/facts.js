@@ -108,6 +108,7 @@ export async function logFact(input, opts = {}) {
     sessionId = null,
     homeReality = null,
     wasRemote = false,
+    foldSeq = null,
   } = input;
 
   if (!beingId || !action) {
@@ -180,6 +181,7 @@ export async function logFact(input, opts = {}) {
     sessionId,
     homeReality: hookData.homeReality ?? homeReality,
     wasRemote: Boolean(hookData.wasRemote ?? wasRemote),
+    foldSeq: typeof foldSeq === "number" ? foldSeq : null,
     date: new Date(),
   };
 
@@ -448,6 +450,22 @@ export async function foldAfterCommit(sortedReels) {
  * @returns {Promise<void>}
  */
 export async function emitFact(spec, summonCtx = null) {
+  // Stamp foldSeq if the moment recorded a fold for this fact's target
+  // reel (PARALLEL FACTS §1.3). Already-set foldSeq wins (callers like
+  // verify scripts that author facts manually retain control). Null
+  // when the moment didn't fold this reel — null is the correct
+  // signal for "no stale-detection key available."
+  if (
+    spec &&
+    spec.foldSeq === undefined &&
+    summonCtx?.foldedSeqs instanceof Map &&
+    spec.target?.kind &&
+    spec.target?.id
+  ) {
+    const key = `${spec.target.kind}:${spec.target.id}`;
+    spec.foldSeq = summonCtx.foldedSeqs.get(key) ?? null;
+  }
+
   if (summonCtx && Array.isArray(summonCtx.deltaF)) {
     summonCtx.deltaF.push(spec);
     return;

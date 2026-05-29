@@ -316,6 +316,11 @@ export async function summonCreateBeing({ spec, identity, summonCtx = null, scaf
     identity,
     actId: factStampId,
     summonCtx, // be:register Fact joins the calling moment's ΔF
+    scaffold,  // GENESIS-ONLY. summonCreateBeing only accepts scaffold:true
+               // from the seedDelegates boot path; runtime callers never
+               // pass it. We propagate so the inner home-registration
+               // doVerb lands on the same exception path — without this,
+               // genesis crashes on the actId requirement at boot.
   });
 
   // ── Parent audit Fact (Phase 2, step 6: birth-with-parent-fact). ──

@@ -183,11 +183,11 @@ export async function setRealityConfigValue(key, value, { internal, identity } =
   // reel. internal=true (boot scaffolding) attributes the Fact to I_AM
   // via the scaffold path; user-driven writes thread the caller's
   // identity for attribution.
-  const { doVerb } = await import("./ibp/verbs.js");
+  const { doVerb } = await import("./ibp/verbs/do.js");
   const opts = identity ? { identity } : { scaffold: true };
   await doVerb(
     configSpace,
-    "set",
+    "set-space",
     { field: `qualities.config.${key}`, value },
     opts,
   );
@@ -211,11 +211,11 @@ export async function deleteRealityConfigValue(key, { internal, identity } = {})
 
   // value=null on a 2-deep qualities path (qualities.<key>) unsets the
   // leaf — see reducerHelpers.applySetQualities.
-  const { doVerb } = await import("./ibp/verbs.js");
+  const { doVerb } = await import("./ibp/verbs/do.js");
   const opts = identity ? { identity } : { scaffold: true };
   await doVerb(
     configSpace,
-    "set",
+    "set-space",
     { field: `qualities.config.${key}`, value: null },
     opts,
   );

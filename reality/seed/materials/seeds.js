@@ -76,7 +76,9 @@
 
 import { v4 as uuidv4 } from "uuid";
 import log from "../seedReality/log.js";
-import Space from "../materials/space/space.js";
+import Space from "./space/space.js";
+import { registerOperation } from "../ibp/operations.js";
+import { targetIdOf } from "./_targetShape.js";
 
 const SEEDS = new Map(); // name → recipe
 const SEED_OWNER = new Map(); // name → owning extension
@@ -283,10 +285,10 @@ export async function plantSeed({
       params: safeParams,
       plantedThings: plantedThings || null,
     };
-    const { doVerb } = await import("../ibp/verbs.js");
+    const { doVerb } = await import("../ibp/verbs/do.js");
     await doVerb(
       space,
-      "set",
+      "set-space",
       { field: "qualities.seeds", value: existing, merge: false },
       { identity, summonCtx },
     );
@@ -377,11 +379,11 @@ export async function unplantSeed({
   }
 
   delete seeds[plantedSeedId];
-  const { doVerb } = await import("../ibp/verbs.js");
+  const { doVerb } = await import("../ibp/verbs/do.js");
   const refreshed = await Space.findById(atSpaceId);
   await doVerb(
     refreshed,
-    "set",
+    "set-space",
     { field: "qualities.seeds", value: seeds, merge: false },
     identity ? { identity, summonCtx } : { scaffold: true },
   );
@@ -391,3 +393,49 @@ export async function unplantSeed({
     `🪦 unplanted ${plantedSeedId.slice(0, 8)} ("${entry.name}") from ${String(atSpaceId).slice(0, 8)}`,
   );
 }
+
+// ─────────────────────────────────────────────────────────────────────
+// plant — DO operation registration
+// ─────────────────────────────────────────────────────────────────────
+//
+// `plant` is the seed's scaffold-install verb. One act, many writes:
+// the seed recipe materializes a whole structure under target. The op
+// belongs here next to plantSeed itself; `seed/services.js` imports
+// this file for the side-effect registration.
+//
+// params: { seed, spec }
+
+registerOperation("plant", {
+  targets: ["space"],
+  ownerExtension: "seed",
+  factAction: "plant",
+  handler: async ({ target, params, identity, summonCtx }) => {
+    const { seed, spec } = params || {};
+    if (!seed || typeof seed !== "string") {
+      throw new Error(
+        "plant: `seed` is required (the seed's registered name)",
+      );
+    }
+    const spaceId = targetIdOf(target);
+    if (!spaceId) throw new Error("plant: target must resolve to a space id");
+    const { getRealityServices } = await import("../services.js");
+    const reality = getRealityServices();
+    const seedParams =
+      spec && typeof spec === "object" && !Array.isArray(spec) ? spec : {};
+    const { plantedSeedId, plantedThings } = await plantSeed({
+      name: seed,
+      atSpaceId: spaceId,
+      identity,
+      reality,
+      params: seedParams,
+      summonCtx,
+    });
+    return {
+      planted: true,
+      plantedSeedId,
+      name: seed,
+      spaceId,
+      plantedThings,
+    };
+  },
+});

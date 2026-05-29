@@ -91,7 +91,7 @@ tool is callable from any role that lists `"hello:greet"` in its
 
 Every operation on the world goes through one of four verbs. These are
 the only public surface; everything else is a syntactic helper on top
-of them. Signatures are in [`../seed/ibp/verbs.js`](../seed/ibp/verbs.js).
+of them. Signatures live in [`../seed/ibp/verbs/`](../seed/ibp/verbs/) — one file per verb (`do.js`, `see.js`, `summon.js`, `be.js`).
 
 | Verb | Targets | What it does | Stamps a Fact? |
 |---|---|---|---|
@@ -249,9 +249,10 @@ export async function init(place) {
 
 An **operation** is a named, gated, audited write. Tools call
 operations; operations are what extensions actually contribute to the
-verb. The seed defines a small bare-name set
-(`create`, `set`, `end`, `plant`, etc., in
-[`../seed/ibp/seedOperations.js`](../seed/ibp/seedOperations.js)); your
+verb. The seed defines a small bare-name set, material-scoped
+(`create-space`, `set-being`, `end-matter`, `plant`, `set-config`,
+`add-llm-connection`, etc. — registered from each
+[`../seed/materials/<kind>/ops.js`](../seed/materials/)). Your
 extension's operations live under `"<your-ext>:<action>"`.
 
 ### Registering
@@ -279,7 +280,7 @@ await place.do(spaceId, "my-ext:log-meal", { text: "eggs" }, { identity, summonC
 ### What the dispatcher does
 
 For each `place.do(...)` call, the verb in
-[`../seed/ibp/verbs.js:85`](../seed/ibp/verbs.js#L85) runs:
+[`../seed/ibp/verbs/do.js:60`](../seed/ibp/verbs/do.js#L60) runs:
 
 1. Look up `"my-ext:log-meal"` in the registry.
 2. Read-only-origin gate (filesystem-origin matter rejects writes
@@ -291,27 +292,31 @@ For each `place.do(...)` call, the verb in
 5. Stamp a Fact on the target's reel with `actId` from `summonCtx`
    (unless `skipAudit`).
 
-If your op writes qualities, use the collapsed `do.set` form rather
-than calling Mongoose directly:
+If your op writes qualities, use the material-scoped `do.set-<kind>`
+ops (one per material kind) rather than calling Mongoose directly:
 
 ```js
-// Set the whole namespace
-await place.do(spaceId, "set", {
+// Set the whole namespace on a space
+await place.do(spaceId, "set-space", {
   field: "qualities.my-ext",
   value: { lastMeal: "eggs", at: new Date().toISOString() },
 }, { identity, summonCtx });
 
 // Set one inner key (atomic; other namespaces and other inner keys untouched)
-await place.do(spaceId, "set", {
+await place.do(spaceId, "set-space", {
   field: "qualities.my-ext.lastMeal",
   value: "eggs",
 }, { identity, summonCtx });
+
+// Same shape for beings and matter targets — name the op for the kind
+await place.do(beingId,  "set-being",  { field: "qualities.my-ext.streak", value: 7 }, opts);
+await place.do(matterId, "set-matter", { field: "qualities.my-ext.tag",    value: "x" }, opts);
 ```
 
-`set` is a seed op; the reducer's `applySetQualities` derives the new
-state on the next fold. Per-reel append lock ensures concurrent writes
-to different namespaces on the same primitive never clobber each
-other.
+Each `set-<kind>` is a seed op; the reducer's `applySetQualities`
+derives the new state on the next fold. Per-reel append lock ensures
+concurrent writes to different namespaces on the same primitive never
+clobber each other.
 
 ### What target shapes are allowed
 
@@ -598,8 +603,7 @@ Operators plant them via `plant`:
 place.seeds.register("food-tracker", {
   description: "Plants a food tracking position with the meal-logger role.",
   plant: async ({ target, identity }) => {
-    await place.do(target, "create", {
-      kind: "space",
+    await place.do(target, "create-space", {
       spec: { name: "food", type: "domain" },
     }, { identity });
     // ... more setup
@@ -641,22 +645,23 @@ const ns = place.qualities.space.readQualityNamespace(space, "my-ext");
 
 ### Write
 
-Writes go through the DO verb's `set` operation. The legacy
-`setQuality` / `mergeQuality` / `incQuality` / `pushQuality` /
-`unsetQuality` methods were retired 2026-05-23; calling them now
-throws a migration error. Reason: every write must be a Fact on the
-aggregate's reel so the fold has one source of truth. See
+Writes go through the DO verb's material-scoped `set-<kind>` ops
+(`set-space`, `set-being`, `set-matter` — name the op for the kind
+your target is). The legacy `setQuality` / `mergeQuality` / `incQuality` /
+`pushQuality` / `unsetQuality` methods were retired 2026-05-23; calling
+them now throws a migration error. Reason: every write must be a Fact
+on the aggregate's reel so the fold has one source of truth. See
 [`../philosophy/STAMPER.md`](../philosophy/STAMPER.md).
 
 ```js
-// Set the whole namespace
-await place.do(spaceId, "set", {
+// Set the whole namespace (space target)
+await place.do(spaceId, "set-space", {
   field: "qualities.my-ext",
   value: { goals: [{ id: 1, text: "ship it" }] },
 }, { identity, summonCtx });
 
 // Set one inner key (atomic at that key path)
-await place.do(spaceId, "set", {
+await place.do(spaceId, "set-space", {
   field: "qualities.my-ext.lastSeen",
   value: new Date().toISOString(),
 }, { identity, summonCtx });
@@ -706,7 +711,7 @@ export async function init(place) {
       const existing = place.qualities.space.readQualityNamespace(target, "feedback") || {};
       const notes = Array.isArray(existing.notes) ? existing.notes : [];
       const next = [...notes, { text: params.text, at: new Date().toISOString() }].slice(-50);
-      await place.do(target._id, "set", {
+      await place.do(target._id, "set-space", {
         field: "qualities.feedback.notes",
         value: next,
       }, { identity, summonCtx });
@@ -917,7 +922,8 @@ pass either overwrites your write or, if nothing fires, leaves an
 audit-invisible difference. Always go through DO.
 
 **Using the retired `qualities.X.setQuality` family.** They throw. Use
-`place.do(target, "set", { field: "qualities.<ns>" })`.
+`place.do(target, "set-<kind>", { field: "qualities.<ns>" })` where
+`<kind>` is space, being, or matter to match the target.
 
 **Skipping the `verb` tag on a tool.** Registration rejects. The verb
 gate is part of authorization; tools need it.
@@ -957,7 +963,7 @@ sub-behaviors based on content shape).
   catches up).
 - **Template extension to copy:** [`_template/`](./_template/).
 - **The seed's own contract:** [`../seed/FACTORY.md`](../seed/FACTORY.md).
-- **The four verbs in code:** [`../seed/ibp/verbs.js`](../seed/ibp/verbs.js).
+- **The four verbs in code:** [`../seed/ibp/verbs/`](../seed/ibp/verbs/) (one file per verb).
 - **DO operation registry:** [`../seed/ibp/operations.js`](../seed/ibp/operations.js).
 - **Role registry:** [`../seed/present/roles/registry.js`](../seed/present/roles/registry.js).
 - **Default summon dispatcher:** [`../seed/present/voices/llm/defaultSummon.js`](../seed/present/voices/llm/defaultSummon.js).

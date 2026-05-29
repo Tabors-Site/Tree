@@ -3,7 +3,7 @@
 // The dancer's role calls this in its summon() after picking its move
 // from a board fold. Two facts land in one moment:
 //
-//   1. do.set on dancer's qualities.harmony.coords (dancer's reel)
+//   1. do.set-being on dancer's qualities.harmony.coords (dancer's reel)
 //   2. harmony:grid-event with event="move" on the grid reel
 //
 // Both push to summonCtx.deltaF; sealAct commits them in one
@@ -14,7 +14,7 @@
 // defaults). Out-of-grid intents become no-op steps in the bounded
 // direction.
 
-import { doVerb } from "../../../seed/ibp/verbs.js";
+import { doVerb } from "../../../seed/ibp/verbs/do.js";
 
 const DEFAULT_GRID_W = 10;
 const DEFAULT_GRID_H = 10;
@@ -48,7 +48,7 @@ export default {
     }
 
     // Fact 1: dancer's own reel — coord update.
-    await doVerb(beingId, "set", {
+    await doVerb(beingId, "set-being", {
       field: "qualities.harmony.coords",
       value: next,
     }, { identity, summonCtx });

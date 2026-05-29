@@ -474,10 +474,10 @@ export async function addLlmConnection(
     lastUsedAt:      null,
   };
 
-  const { doVerb } = await import("../../../ibp/verbs.js");
+  const { doVerb } = await import("../../../ibp/verbs/do.js");
   await doVerb(
     being,
-    "set",
+    "set-being",
     { field: `qualities.llmConnections.${connectionId}`, value: conn },
     identity ? { identity } : { scaffold: true },
   );
@@ -541,10 +541,10 @@ export async function updateLlmConnection(
   // shape is recoverable from the chain by walking earlier set Facts
   // on this same field path.
   const merged = { ...existing, ...update };
-  const { doVerb } = await import("../../../ibp/verbs.js");
+  const { doVerb } = await import("../../../ibp/verbs/do.js");
   await doVerb(
     being,
-    "set",
+    "set-being",
     { field: `qualities.llmConnections.${safeConnId}`, value: merged },
     identity ? { identity } : { scaffold: true },
   );
@@ -578,14 +578,14 @@ export async function deleteLlmConnection(beingId, connectionId, { identity } = 
   const conn = readConnectionsFrom(being)[safeConnId];
   if (!conn) throw new Error("Connection not found");
 
-  const { doVerb } = await import("../../../ibp/verbs.js");
+  const { doVerb } = await import("../../../ibp/verbs/do.js");
   const opts = identity ? { identity } : { scaffold: true };
 
   // Unset the connection entry on this being's qualities (do.set with
   // value=null on a 2-deep path unsets via Mongo $unset).
   await doVerb(
     being,
-    "set",
+    "set-being",
     { field: `qualities.llmConnections.${safeConnId}`, value: null },
     opts,
   );
@@ -594,7 +594,7 @@ export async function deleteLlmConnection(beingId, connectionId, { identity } = 
   if (being.llmDefault === connectionId) {
     await doVerb(
       being,
-      "set",
+      "set-being",
       { field: "llmDefault", value: null },
       opts,
     );
@@ -610,7 +610,7 @@ export async function deleteLlmConnection(beingId, connectionId, { identity } = 
     if (val === connectionId) {
       await doVerb(
         being,
-        "set",
+        "set-being",
         { field: `qualities.beingLlm.slots.${s}`, value: null },
         opts,
       );
@@ -626,7 +626,7 @@ export async function deleteLlmConnection(beingId, connectionId, { identity } = 
   for (const s of matchingMain) {
     await doVerb(
       await Space.findById(s._id),
-      "set",
+      "set-space",
       { field: "llmDefault", value: null },
       opts,
     );
@@ -641,7 +641,7 @@ export async function deleteLlmConnection(beingId, connectionId, { identity } = 
     for (const s of matchingSlot) {
       await doVerb(
         await Space.findById(s._id),
-        "set",
+        "set-space",
         { field: `qualities.llm.slots.${slot}`, value: null },
         opts,
       );
@@ -666,7 +666,7 @@ export async function assignConnection(beingId, slot, connectionId, { identity }
   const being = await Being.findById(beingId);
   if (!being) throw new Error("Being not found");
 
-  const { doVerb } = await import("../../../ibp/verbs.js");
+  const { doVerb } = await import("../../../ibp/verbs/do.js");
   const opts = identity ? { identity } : { scaffold: true };
 
   // "main" slot goes to llmDefault (scalar field); other slots go to
@@ -677,14 +677,14 @@ export async function assignConnection(beingId, slot, connectionId, { identity }
   if (slot === "main") {
     await doVerb(
       being,
-      "set",
+      "set-being",
       { field: "llmDefault", value: safeConnId },
       opts,
     );
   } else {
     await doVerb(
       being,
-      "set",
+      "set-being",
       { field: `qualities.beingLlm.slots.${slot}`, value: safeConnId },
       opts,
     );
@@ -727,7 +727,7 @@ export async function assignSpaceConnection(
   const space = await Space.findById(spaceId);
   if (!space) throw new Error("Space not found");
 
-  const { doVerb } = await import("../../../ibp/verbs.js");
+  const { doVerb } = await import("../../../ibp/verbs/do.js");
   const opts = identity ? { identity } : { scaffold: true };
 
   // "main" slot writes the Space's scalar llmDefault; other slots write
@@ -735,14 +735,14 @@ export async function assignSpaceConnection(
   if (slot === "main") {
     await doVerb(
       space,
-      "set",
+      "set-space",
       { field: "llmDefault", value: safeConnId },
       opts,
     );
   } else {
     await doVerb(
       space,
-      "set",
+      "set-space",
       { field: `qualities.llm.slots.${slot}`, value: safeConnId },
       opts,
     );
@@ -827,10 +827,10 @@ export async function resolveConnection(beingId, connectionId, cacheKey) {
     try {
       const being = await Being.findById(beingId);
       if (!being) return;
-      const { doVerb } = await import("../../../ibp/verbs.js");
+      const { doVerb } = await import("../../../ibp/verbs/do.js");
       await doVerb(
         being,
-        "set",
+        "set-being",
         {
           field: `qualities.llmConnections.${connectionId}.lastUsedAt`,
           value: new Date().toISOString(),

@@ -199,6 +199,13 @@ export async function assign({ beingId, spaceId, entry, handoff = null, signal =
     // one commit. Empty for moments that emit no facts (LLM moment
     // with no tool calls); still atomic via single-doc Act insert.
     deltaF: [],
+    // Stale-detection key map (PARALLEL FACTS §1.3). Populated by
+    // beat-2 (foldPlace) and by consumers that fold a reel before
+    // emitting against it — keyed `<targetKind>:<targetId>` → the
+    // seq this moment folded that reel at. emitFact reads this map
+    // to stamp `foldSeq` on facts whose target reel was folded here.
+    // Reels never folded leave foldSeq null on emit.
+    foldedSeqs: new Map(),
     // Post-seal callbacks. Verb handlers queue side effects here that
     // can only fire AFTER sealAct commits + folds run (the cross-
     // cutting fold materializes projection rows on commit; wakes

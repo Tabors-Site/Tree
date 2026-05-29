@@ -82,9 +82,20 @@ export async function foldPlace(beingId, orientation = ORIENTATION.FORWARD, opts
   if (!beingId) throw new Error("foldPlace: beingId is required");
   const ω = validateOrientation(orientation);
 
+  // Optional summonCtx for the stale-detection key (PARALLEL FACTS §1.3).
+  // When the moment-open caller passes summonCtx, every reel we fold
+  // here records its foldedSeq into summonCtx.foldedSeqs. emitFact
+  // later reads that map to stamp foldSeq on facts targeting those
+  // reels. Map is initialized in assign; we only set keys.
+  const seqs = opts.summonCtx?.foldedSeqs || null;
+  const stash = (kind, id, foldedSeq) => {
+    if (seqs) seqs.set(`${kind}:${id}`, foldedSeq);
+  };
+
   // The being itself is always folded — every orientation shows
   // the being to itself (the self is the carrier of orientation).
-  const self = await fold("being", beingId);
+  const { state: self, foldedSeq: selfFoldedSeq } = await fold("being", beingId);
+  stash("being", beingId, selfFoldedSeq);
 
   // Inward: the world drops out. The face is A_b in act-order.
   if (ω === ORIENTATION.INWARD) {
@@ -93,7 +104,7 @@ export async function foldPlace(beingId, orientation = ORIENTATION.FORWARD, opts
   }
 
   // Forward AND half need the forward face built first.
-  const forwardFace = await buildForwardFace(beingId, self);
+  const forwardFace = await buildForwardFace(beingId, self, stash);
 
   if (ω === ORIENTATION.FORWARD) {
     return { orientation: ω, ...forwardFace };
@@ -110,13 +121,14 @@ export async function foldPlace(beingId, orientation = ORIENTATION.FORWARD, opts
  * Build the forward face: being's space + occupants. Used by both
  * the forward and half folds.
  */
-async function buildForwardFace(beingId, self) {
+async function buildForwardFace(beingId, self, stash) {
   const spaceId = self?.position || self?.currentSpace || null;
   if (!spaceId) {
     return { self, space: null, occupants: [] };
   }
 
-  const space = await fold("space", spaceId);
+  const { state: space, foldedSeq: spaceFoldedSeq } = await fold("space", spaceId);
+  stash?.("space", spaceId, spaceFoldedSeq);
   const occupantRefs = await findByPosition(spaceId);
 
   // Self is its own occupant of its position; filter it out so the
@@ -131,7 +143,8 @@ async function buildForwardFace(beingId, self) {
   const occupants = await Promise.all(
     others.map(async (o) => {
       try {
-        const state = await fold(o.type, o.id);
+        const { state, foldedSeq } = await fold(o.type, o.id);
+        stash?.(o.type, o.id, foldedSeq);
         return { type: o.type, id: o.id, state };
       } catch (err) {
         return { type: o.type, id: o.id, error: err.message };
