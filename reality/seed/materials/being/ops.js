@@ -19,6 +19,7 @@
 // dispatches.
 
 import { registerOperation } from "../../ibp/operations.js";
+import { IbpError, IBP_ERR } from "../../ibp/protocol.js";
 import Being from "./being.js";
 import Space from "../space/space.js";
 import { detectTargetKind, targetIdOf, loadTargetRow } from "../_targetShape.js";
@@ -43,7 +44,25 @@ const COORD_AXES = ["x", "y", "z"];
  * clamp. The seal-time lock on the Being's reel serializes coord
  * writes per-being.
  */
-async function clampCoord(beingDoc, raw) {
+/**
+ * Validate a coord write against the being's containing space size.
+ * Throws IbpError(INVALID_INPUT) if any axis is out of bounds — the
+ * fact never seals. Cognition catches the rejection and refaces or
+ * retries; the substrate stays the floor for what's legal, the role
+ * stays decoupled from the rules.
+ *
+ * Doctrine: silent clamping was a quiet lie. The reel showed "moved
+ * to (10,5)" when the row stored (9,5); replay from the chain
+ * disagreed with the live fold. Throwing instead keeps the chain
+ * honest — if a fact says the being moved to (x,y), the row reflects
+ * (x,y), period. PAST FIXED applies because the fact only seals when
+ * the destination was legal at write time.
+ *
+ * When the being has no containing space, or the space has no size,
+ * any coord passes. The check is "stay inside the declared box";
+ * without a box there's nothing to enforce.
+ */
+async function assertCoordInBounds(beingDoc, raw) {
   const out = {};
   for (const a of COORD_AXES) {
     if (typeof raw[a] === "number" && Number.isFinite(raw[a])) {
@@ -51,7 +70,7 @@ async function clampCoord(beingDoc, raw) {
     }
   }
   if (Object.keys(out).length === 0) {
-    return null; // nothing meaningful to write
+    return null;
   }
   const spaceId = beingDoc?.position || beingDoc?.homeSpace || null;
   if (!spaceId) return out;
@@ -62,11 +81,13 @@ async function clampCoord(beingDoc, raw) {
     if (out[a] === undefined) continue;
     const cap = typeof size[a] === "number" && size[a] > 0 ? size[a] : null;
     if (cap === null) continue;
-    if (Number.isInteger(out[a])) {
-      out[a] = Math.max(0, Math.min(Math.trunc(cap) - 1, out[a]));
-    } else {
-      const high = cap - Number.EPSILON;
-      out[a] = Math.max(0, Math.min(high, out[a]));
+    const high = Number.isInteger(out[a]) ? Math.trunc(cap) - 1 : cap - Number.EPSILON;
+    if (out[a] < 0 || out[a] > high) {
+      throw new IbpError(
+        IBP_ERR.INVALID_INPUT,
+        `set-being: coord.${a}=${out[a]} is out of bounds (0..${high} for this space)`,
+        { axis: a, value: out[a], cap: high },
+      );
     }
   }
   return out;
@@ -210,8 +231,8 @@ async function setOnBeingHandler({ target, params }) {
     if (typeof value !== "object" || Array.isArray(value)) {
       throw new Error("set-being: `coord` value must be an object {x,y,z?} or null");
     }
-    const clamped = await clampCoord(target, value);
-    return { beingId: String(target._id), coord: clamped };
+    const validated = await assertCoordInBounds(target, value);
+    return { beingId: String(target._id), coord: validated };
   }
 
   throw new Error(

@@ -706,60 +706,324 @@ export class Scene {
     );
     this._sky.add(this._sunHalo);
 
-    this._cloudMat = new THREE.MeshStandardMaterial({
-      color: 0xffffff, emissive: 0xffffff, emissiveIntensity: 0.04,
-      roughness: 1.0,
+    // Cloud cover: a huge inside-out sphere wrapping the whole space.
+    // BackSide rendering so we see the inside of the dome; depthWrite
+    // off and renderOrder -1 so it draws first and the rest of the
+    // world paints on top regardless of distance. Texture tiles a few
+    // times around so no single seam ever stands out, and the sphere
+    // rotates slowly so the cover appears to move with the wind.
+    // Cloud cover: cube with a custom ShaderMaterial. Texture is
+    // sampled via TRIPLANAR projection — the same 2D Perlin tile is
+    // projected onto XY, YZ, XZ planes and blended by the surface
+    // normal — so adjacent cube faces share a continuous cloud field
+    // and the edge seams disappear. A horizon fade tween blends the
+    // cloud color toward the current sky horizon color as the view
+    // angle dips toward y=0, and drops alpha to zero below the
+    // horizon. uCloudColor and uHorizonColor are updated each frame
+    // by _updateTimeOfDay so the fade brightens at day, darkens at
+    // night, and always matches the sky.
+    const cloudTex = this._makeCloudTexture(1024);
+    cloudTex.wrapS = THREE.RepeatWrapping;
+    cloudTex.wrapT = THREE.RepeatWrapping;
+    this._cloudTex = cloudTex;
+    this._cloudMat = new THREE.ShaderMaterial({
+      uniforms: {
+        uMap:          { value: cloudTex },
+        uCloudColor:   { value: new THREE.Color(0xffffff) },
+        uHorizonColor: { value: new THREE.Color(0x6fb4e6) },
+        uTileScale:    { value: 1.2 },
+      },
+      vertexShader: `
+        varying vec3 vDir;
+        void main() {
+          vDir = normalize(position);
+          gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+        }
+      `,
+      fragmentShader: `
+        precision highp float;
+        uniform sampler2D uMap;
+        uniform vec3 uCloudColor;
+        uniform vec3 uHorizonColor;
+        uniform float uTileScale;
+        varying vec3 vDir;
+        void main() {
+          vec3 n = normalize(vDir);
+          vec3 absN = abs(n);
+          float sum = absN.x + absN.y + absN.z;
+          vec3 blend = absN / max(sum, 0.0001);
+          vec4 cx = texture2D(uMap, n.zy * uTileScale + 0.5);
+          vec4 cy = texture2D(uMap, n.xz * uTileScale + 0.5);
+          vec4 cz = texture2D(uMap, n.xy * uTileScale + 0.5);
+          vec4 sampled = cx * blend.x + cy * blend.y + cz * blend.z;
+          float coverage = sampled.a;
+          float fade = smoothstep(-0.05, 0.3, n.y);
+          vec3 col = mix(uHorizonColor, uCloudColor, fade);
+          col *= mix(0.85, 1.0, fade);
+          float a = coverage * fade;
+          gl_FragColor = vec4(col, a);
+        }
+      `,
+      transparent: true,
+      depthWrite: false,
+      depthTest: true,
+      side: THREE.BackSide,
     });
-    const cloudSeeds = [
-      { x: -45, y: 25, z: -65, s: 0.65 },
-      { x:  62, y: 48, z: -32, s: 1.7  },
-      { x: -82, y: 36, z:  18, s: 1.0  },
-      { x:  32, y: 62, z:  72, s: 2.2  },
-      { x: -22, y: 42, z:  88, s: 0.85 },
-      { x:  92, y: 55, z:  12, s: 1.4  },
-      { x: -62, y: 70, z: -22, s: 1.1  },
-      { x:  42, y: 30, z: -82, s: 0.9  },
-      { x: -18, y: 78, z: -18, s: 1.9  },
-      { x:  75, y: 38, z:  45, s: 0.6  },
-      { x: -55, y: 50, z:  55, s: 1.3  },
-      { x:  18, y: 22, z: -25, s: 0.75 },
-    ];
-    this._clouds = [];
-    for (const c of cloudSeeds) {
-      const cloud = this._makeCloud(c.s, this._cloudMat);
-      cloud.position.set(c.x, c.y, c.z);
-      // Random drift direction + speed per cloud. Slow enough that
-      // motion is just barely perceptible. Y drifts a tiny bit so
-      // clouds aren't pinned to a single height line.
-      cloud.userData = {
-        driftX: (Math.random() - 0.5) * 1.2,
-        driftZ: (Math.random() - 0.5) * 1.2,
-        driftY: (Math.random() - 0.5) * 0.08,
-        baseY:  c.y,
-      };
-      this._sky.add(cloud);
-      this._clouds.push(cloud);
-    }
+    // Skybox semantics for a TRANSPARENT shell:
+    //   - depthTest:  true  → the world's depth buffer hides the dome
+    //                         wherever opaque geometry was drawn first
+    //                         (trees, buildings, etc.). Without this,
+    //                         the dome paints over them — transparent
+    //                         materials render in their own queue
+    //                         AFTER opaque ones regardless of renderOrder.
+    //   - depthWrite: false → the dome itself doesn't fill the depth
+    //                         buffer, so other transparent objects
+    //                         can still blend correctly against the
+    //                         world behind it.
+    //   - renderOrder -1    → among transparent siblings, the dome
+    //                         sorts to the back of the painter pass.
+    // Icosahedron at detail 3: 1280 evenly-distributed triangular
+    // faces, no UV poles, no big quad faces. Combined with the
+    // triplanar shader (which samples by world direction, not UVs)
+    // the cover reads as a smooth sphere with no seams at all.
+    const cloudCube = new THREE.Mesh(
+      new THREE.IcosahedronGeometry(200, 3),
+      this._cloudMat,
+    );
+    cloudCube.renderOrder = -1;
+    // Group wraps the cube so we can pin the whole assembly to the
+    // camera each frame and rotate around world Y for the wind drift.
+    // Lives directly in the scene (not in _sky) so the camera pin
+    // doesn't compound with _sky's own position.
+    const cloudGroup = new THREE.Group();
+    cloudGroup.add(cloudCube);
+    this._clouds = cloudGroup;
+    this.scene.add(cloudGroup);
+
+    // Star layer: same triplanar trick as the clouds but with a
+    // sparse pinpoint texture, sitting on a larger icosahedron so
+    // stars read as farther out than the cloud cover. renderOrder -2
+    // ensures stars draw before clouds, so cloud gaps reveal stars
+    // behind them. uOpacity is driven by _updateTimeOfDay: full at
+    // night, fading through dawn/dusk, zero at midday. uTime drives
+    // per-star twinkle in the fragment shader.
+    const starTex = this._makeStarTexture(2048);
+    starTex.wrapS = THREE.RepeatWrapping;
+    starTex.wrapT = THREE.RepeatWrapping;
+    this._starTex = starTex;
+    this._starMat = new THREE.ShaderMaterial({
+      uniforms: {
+        uMap:       { value: starTex },
+        uOpacity:   { value: 0.0 },
+        uTime:      { value: 0.0 },
+        uTileScale: { value: 1.5 },
+      },
+      vertexShader: `
+        varying vec3 vLocalDir;
+        varying vec3 vWorldDir;
+        void main() {
+          // Local direction rotates with the sphere → drives triplanar
+          // sampling, so the texture turns with the rotation.
+          vLocalDir = normalize(position);
+          // World direction stays absolute → drives the horizon mask,
+          // so "below horizon" is always real-world below regardless
+          // of how the celestial sphere is tilted.
+          vWorldDir = normalize(mat3(modelMatrix) * position);
+          gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+        }
+      `,
+      fragmentShader: `
+        precision highp float;
+        uniform sampler2D uMap;
+        uniform float uOpacity;
+        uniform float uTime;
+        uniform float uTileScale;
+        varying vec3 vLocalDir;
+        varying vec3 vWorldDir;
+        float hash(vec3 p) {
+          p = fract(p * 0.3183099 + vec3(0.71, 0.113, 0.419));
+          p *= 17.0;
+          return fract(p.x * p.y * p.z * (p.x + p.y + p.z));
+        }
+        void main() {
+          if (uOpacity <= 0.001) discard;
+          vec3 n = normalize(vLocalDir);
+          vec3 wn = normalize(vWorldDir);
+          vec3 absN = abs(n);
+          float sum = absN.x + absN.y + absN.z;
+          vec3 blend = absN / max(sum, 0.0001);
+          vec4 cx = texture2D(uMap, n.zy * uTileScale + 0.5);
+          vec4 cy = texture2D(uMap, n.xz * uTileScale + 0.5);
+          vec4 cz = texture2D(uMap, n.xy * uTileScale + 0.5);
+          vec4 sampled = cx * blend.x + cy * blend.y + cz * blend.z;
+          float brightness = sampled.r;
+          // Per-star twinkle: hash direction into a phase so each star
+          // pulses on its own clock; mix range keeps stars always at
+          // least 60% visible so they don't disappear entirely.
+          float phase = hash(floor(n * 80.0)) * 6.283;
+          float twinkle = 0.5 + 0.5 * sin(uTime * 2.0 + phase);
+          brightness *= mix(0.6, 1.0, twinkle);
+          // Horizon mask uses WORLD direction so it stays anchored to
+          // the real horizon line regardless of the sphere's rotation.
+          float horizonMask = smoothstep(0.0, 0.25, wn.y);
+          float a = brightness * uOpacity * horizonMask;
+          gl_FragColor = vec4(vec3(brightness), a);
+        }
+      `,
+      transparent: true,
+      depthWrite: false,
+      depthTest: true,
+      side: THREE.BackSide,
+      blending: THREE.AdditiveBlending,
+    });
+    const starShell = new THREE.Mesh(
+      new THREE.IcosahedronGeometry(400, 3),
+      this._starMat,
+    );
+    starShell.renderOrder = -2;
+    const starGroup = new THREE.Group();
+    starGroup.add(starShell);
+    this._stars = starGroup;
+    this.scene.add(starGroup);
 
     this.scene.add(this._sky);
     this._sky.visible = false;
   }
 
-  _makeCloud(scale, mat) {
-    const g = new THREE.Group();
-    const puffs = [
-      [ 0,    0,    0,   4.0],
-      [ 3.5, -0.5,  0,   3.5],
-      [-3,    0.2,  0.5, 3.2],
-      [ 1.5,  1.0, -1,   2.8],
-      [-1.5, -0.5,  1,   3.0],
-    ];
-    for (const [x, y, z, r] of puffs) {
-      const m = new THREE.Mesh(new THREE.SphereGeometry(r * scale, 12, 8), mat);
-      m.position.set(x * scale, y * scale, z * scale);
-      g.add(m);
+  // Procedural starfield: randomly placed Gaussian-ish bright spots on
+  // a black canvas. The same texture is sampled three ways by the
+  // triplanar shader to wrap a sphere with no UV pole.
+  _makeStarTexture(size) {
+    const canvas = document.createElement("canvas");
+    canvas.width = size;
+    canvas.height = size;
+    const ctx = canvas.getContext("2d");
+    ctx.fillStyle = "#000";
+    ctx.fillRect(0, 0, size, size);
+    const starCount = 800;
+    for (let i = 0; i < starCount; i++) {
+      const x = Math.random() * size;
+      const y = Math.random() * size;
+      const brightness = 0.4 + Math.random() * 0.6;
+      const radius = 0.5 + Math.random() * Math.random() * 3.5;
+      const grad = ctx.createRadialGradient(x, y, 0, x, y, radius * 4);
+      const v = Math.floor(255 * brightness);
+      grad.addColorStop(0,   `rgba(${v},${v},${v},1)`);
+      grad.addColorStop(0.3, `rgba(${v},${v},${v},0.5)`);
+      grad.addColorStop(1,   "rgba(0,0,0,0)");
+      ctx.fillStyle = grad;
+      ctx.fillRect(x - radius * 4, y - radius * 4, radius * 8, radius * 8);
     }
-    return g;
+    return new THREE.CanvasTexture(canvas);
+  }
+
+  // Procedural Perlin noise texture, fBm over 5 octaves, shaped into a
+  // cloud-cover alpha. Returned as a CanvasTexture set to repeat.
+  _makeCloudTexture(size) {
+    const canvas = document.createElement("canvas");
+    canvas.width = size;
+    canvas.height = size;
+    const ctx = canvas.getContext("2d");
+    const img = ctx.createImageData(size, size);
+
+    const p = new Uint8Array(256);
+    for (let i = 0; i < 256; i++) p[i] = i;
+    for (let i = 255; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      const tmp = p[i]; p[i] = p[j]; p[j] = tmp;
+    }
+    const perm = new Uint8Array(512);
+    for (let i = 0; i < 512; i++) perm[i] = p[i & 255];
+
+    const fade = (t) => t * t * t * (t * (t * 6 - 15) + 10);
+    const lerp = (a, b, t) => a + t * (b - a);
+    const grad = (hash, x, y) => {
+      const h = hash & 3;
+      const u = h < 2 ? x : y;
+      const v = h < 2 ? y : x;
+      return ((h & 1) ? -u : u) + ((h & 2) ? -v : v);
+    };
+    const noise2d = (x, y) => {
+      const X = Math.floor(x) & 255;
+      const Y = Math.floor(y) & 255;
+      x -= Math.floor(x);
+      y -= Math.floor(y);
+      const u = fade(x);
+      const v = fade(y);
+      const A = perm[X] + Y;
+      const B = perm[X + 1] + Y;
+      return lerp(
+        lerp(grad(perm[A], x, y),         grad(perm[B], x - 1, y),         u),
+        lerp(grad(perm[A + 1], x, y - 1), grad(perm[B + 1], x - 1, y - 1), u),
+        v,
+      );
+    };
+    // Straight fBm over 5 octaves. No toroidal tricks — those bent the
+    // noise into visible banded projections. Seams at the texture edge
+    // are hidden by the giant plane (one tile, no repeat) and by the
+    // two layers drifting against each other.
+    const fbm = (x, y) => {
+      let sum = 0, amp = 1, freq = 1, max = 0;
+      for (let o = 0; o < 5; o++) {
+        sum += amp * noise2d(x * freq, y * freq);
+        max += amp;
+        amp *= 0.5;
+        freq *= 2;
+      }
+      return sum / max;
+    };
+    // Domain warp: feed fbm's input through another low-amplitude fbm
+    // so the iso-lines curve and braid instead of running in straight
+    // bands. This is what kills the "grid feel" — the eye reads it as
+    // wind-shaped cloud cover rather than a procedural pattern.
+    const warped = (x, y) => {
+      const wx = fbm(x + 5.2, y + 1.3) * 0.9;
+      const wy = fbm(x + 8.1, y + 2.7) * 0.9;
+      return fbm(x + wx, y + wy);
+    };
+
+    // Scale: 4 across the tile means ~4 blobs end-to-end inside one
+    // texture period. Lower = blobbier.
+    const SCALE = 4;
+    // Seamless wrap via 4-corner cross-fade. At u=0 and u=1 the result
+    // is identical (same for v), so tiling around the dome leaves no
+    // visible seam meridian. The cost is a softer pattern near the
+    // boundaries, but with domain warping the eye reads it as just
+    // more cloud variety.
+    const tile = (u, v) => {
+      const a = warped(u * SCALE,             v * SCALE);
+      const b = warped((u - 1) * SCALE,       v * SCALE);
+      const c = warped(u * SCALE,             (v - 1) * SCALE);
+      const d = warped((u - 1) * SCALE,       (v - 1) * SCALE);
+      return (1 - u) * (1 - v) * a
+           + u       * (1 - v) * b
+           + (1 - u) * v       * c
+           + u       * v       * d;
+    };
+
+    for (let y = 0; y < size; y++) {
+      for (let x = 0; x < size; x++) {
+        const n = tile(x / size, y / size);
+        // Shape: threshold and stretch so most of the plane is gappy
+        // with thick clusters. v in 0..1. Black (low) is transparent
+        // and dim, white (high) is opaque and bright. RGB carries the
+        // shading, alpha carries the coverage; the material multiplies
+        // both so thin wisps fade out softly.
+        const v = Math.max(0, Math.min(1, (n + 0.15) * 1.6));
+        const c = Math.floor(v * 255);
+        const i = (y * size + x) * 4;
+        img.data[i]     = c;
+        img.data[i + 1] = c;
+        img.data[i + 2] = c;
+        img.data[i + 3] = c;
+      }
+    }
+    ctx.putImageData(img, 0, 0);
+
+    const tex = new THREE.CanvasTexture(canvas);
+    tex.wrapS = THREE.RepeatWrapping;
+    tex.wrapT = THREE.RepeatWrapping;
+    return tex;
   }
 
   // Set the timezone used to compute time-of-day. null = browser local time.
@@ -838,9 +1102,37 @@ export class Scene {
     const warmth = above ? (1 - Math.sin(angle)) : 0;
     this._sunHalo.material.opacity = 0.18 + warmth * 0.35;
     this._sunHalo.scale.setScalar(1 + warmth * 1.6);
-    this._cloudMat.color.setHex(sky.cloudColor);
-    this._cloudMat.emissive.setHex(sky.cloudColor);
-    this._cloudMat.emissiveIntensity = sky.cloudEmissive;
+    // Push current sky tints into the cloud shader. Cloud color is
+    // the "thick cluster" color; horizon color is what the bottom of
+    // the dome fades toward — together they keep the cover matched
+    // to the sky's day/night progression.
+    this._cloudMat.uniforms.uCloudColor.value.setHex(sky.cloudColor);
+    this._cloudMat.uniforms.uHorizonColor.value.setHex(sky.horizon);
+
+    // Star opacity: full at night (h<5 or h>19), fading across the
+    // sunrise window (5..7) and the sunset window (17..19). Lets the
+    // starfield bleed in/out smoothly alongside the sky color shift.
+    let starOp;
+    if (h < 5 || h >= 19) starOp = 1;
+    else if (h < 7)       starOp = 1 - (h - 5) / 2;
+    else if (h > 17)      starOp = (h - 17) / 2;
+    else                  starOp = 0;
+    if (this._starMat) this._starMat.uniforms.uOpacity.value = starOp;
+
+    // Star rotation locked to the hour and the SUN'S axis exactly.
+    // Sun moves in a plane through east (R,0,0), high south
+    // (0, R, SOUTH_TILT), and west (-R,0,0); the normal to that plane
+    // (0, -SOUTH_TILT, R) is the south-tilted "polar axis" the sun
+    // appears to rotate around. The celestial sphere rotates the same
+    // direction (positive right-hand rule about that axis) so the
+    // stars track the sun's arc precisely, one full turn per 24h.
+    if (this._stars) {
+      if (!this._sunAxis) {
+        this._sunAxis = new THREE.Vector3(0, -SOUTH_TILT, R).normalize();
+      }
+      const starAngle = ((h - 6) / 12) * Math.PI;
+      this._stars.quaternion.setFromAxisAngle(this._sunAxis, starAngle);
+    }
     this._updateSkyDomeColors(sky.horizon, sky.zenith);
 
     // Clock display: only when minute changes to avoid DOM churn.
@@ -859,10 +1151,10 @@ export class Scene {
     const zr = (zenith  >> 16) & 0xff, zg = (zenith  >> 8) & 0xff, zb = zenith  & 0xff;
     for (let i = 0; i < pos.count; i++) {
       const y = pos.getY(i);
-      // y ranges roughly [-450, 450]. Bias horizon up so the band where
-      // ground meets sky is the most "horizon-y", with zenith taking the
-      // upper dome.
-      const t = Math.max(0, Math.min(1, (y + 50) / 380));
+      // y ranges roughly [-450, 450]. Horizon band sits near ground
+      // level then blends smoothly into the zenith — full horizon
+      // below y=10, full zenith by y=160.
+      const t = Math.max(0, Math.min(1, (y - 10) / 150));
       const r = (hr + (zr - hr) * t) / 255;
       const g = (hg + (zg - hg) * t) / 255;
       const b = (hb + (zb - hb) * t) / 255;
@@ -1411,20 +1703,16 @@ export class Scene {
 
   _driftClouds(dt) {
     if (!this._clouds) return;
-    for (const cloud of this._clouds) {
-      const d = cloud.userData;
-      cloud.position.x += d.driftX * dt;
-      cloud.position.z += d.driftZ * dt;
-      cloud.position.y += d.driftY * dt;
-      // Wrap horizontally so clouds keep circling around the player
-      // forever instead of drifting off into the void.
-      if (cloud.position.x >  110) cloud.position.x = -110;
-      if (cloud.position.x < -110) cloud.position.x =  110;
-      if (cloud.position.z >  110) cloud.position.z = -110;
-      if (cloud.position.z < -110) cloud.position.z =  110;
-      // Keep vertical drift bounded around the cloud's base height.
-      if (cloud.position.y > d.baseY + 6) d.driftY = -Math.abs(d.driftY);
-      if (cloud.position.y < d.baseY - 6) d.driftY =  Math.abs(d.driftY);
+    // Pin the cloud dome to the camera so it always wraps the viewer
+    // no matter where they walk. Slow Y-axis rotation reads as wind
+    // drift across the sky.
+    this._clouds.position.copy(this.camera.position);
+    this._clouds.rotation.y += dt * 0.02;
+    if (this._stars) {
+      // Stars pin to the camera. Rotation is owned by _updateTimeOfDay
+      // (locked to hour); here we only advance the twinkle clock.
+      this._stars.position.copy(this.camera.position);
+      if (this._starMat) this._starMat.uniforms.uTime.value += dt;
     }
   }
 
@@ -2030,15 +2318,15 @@ function worldToScreen(pos, camera, renderer) {
 // is the top of the dome. fog uses `horizon` so distant geometry fades
 // into the visible horizon line.
 const SKY_KEYFRAMES = [
-  { h: 0,  horizon: 0x141a35, zenith: 0x05081a, sunI: 0.0,  ambientI: 0.15, sunColor: 0xfff3a8, cloudColor: 0x2a3550, cloudEmissive: 0.02 },
-  { h: 5,  horizon: 0x2a3055, zenith: 0x101830, sunI: 0.0,  ambientI: 0.2,  sunColor: 0xffaa66, cloudColor: 0x3a4560, cloudEmissive: 0.02 },
+  { h: 0,  horizon: 0x0e121c, zenith: 0x030510, sunI: 0.0,  ambientI: 0.15, sunColor: 0xfff3a8, cloudColor: 0x2c3140, cloudEmissive: 0.02 },
+  { h: 5,  horizon: 0x141828, zenith: 0x070a1a, sunI: 0.0,  ambientI: 0.2,  sunColor: 0xffaa66, cloudColor: 0x363b4e, cloudEmissive: 0.02 },
   { h: 6,  horizon: 0xff8855, zenith: 0x5a78a8, sunI: 0.4,  ambientI: 0.4,  sunColor: 0xffaa55, cloudColor: 0xffc890, cloudEmissive: 0.05 },
   { h: 8,  horizon: 0xa0d5f0, zenith: 0x5fa8e0, sunI: 0.85, ambientI: 0.6,  sunColor: 0xfff3a8, cloudColor: 0xffffff, cloudEmissive: 0.04 },
   { h: 12, horizon: 0xb5dcf0, zenith: 0x6fb4e6, sunI: 1.0,  ambientI: 0.7,  sunColor: 0xffffff, cloudColor: 0xffffff, cloudEmissive: 0.04 },
   { h: 17, horizon: 0xa5d0e8, zenith: 0x5fa0d8, sunI: 0.9,  ambientI: 0.65, sunColor: 0xfff3a8, cloudColor: 0xffffff, cloudEmissive: 0.04 },
   { h: 18, horizon: 0xff7040, zenith: 0x4a6890, sunI: 0.5,  ambientI: 0.45, sunColor: 0xffaa55, cloudColor: 0xffc890, cloudEmissive: 0.06 },
-  { h: 20, horizon: 0x2a3055, zenith: 0x101830, sunI: 0.05, ambientI: 0.2,  sunColor: 0xff8855, cloudColor: 0x3a4560, cloudEmissive: 0.02 },
-  { h: 24, horizon: 0x141a35, zenith: 0x05081a, sunI: 0.0,  ambientI: 0.15, sunColor: 0xfff3a8, cloudColor: 0x2a3550, cloudEmissive: 0.02 },
+  { h: 20, horizon: 0x141828, zenith: 0x070a1a, sunI: 0.05, ambientI: 0.2,  sunColor: 0xff8855, cloudColor: 0x363b4e, cloudEmissive: 0.02 },
+  { h: 24, horizon: 0x0e121c, zenith: 0x030510, sunI: 0.0,  ambientI: 0.15, sunColor: 0xfff3a8, cloudColor: 0x2c3140, cloudEmissive: 0.02 },
 ];
 
 function _skyPalette(h) {

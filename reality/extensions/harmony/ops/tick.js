@@ -11,25 +11,23 @@ export default {
   name: "tick",  // becomes harmony:tick after loader namespacing
   targets: ["matter"],
 
-  async handler({ target, params, identity, summonCtx }) {
-    // Read current tick count from the matter's qualities.
-    const cur = target?.qualities?.harmony?.tick;
+  async handler({ target, identity, summonCtx }) {
+    // Load the drum row so we can read its current tick count. The
+    // verb layer hands handlers a typed identity ({kind,id}) or a
+    // string id — not the row. The previous code read
+    // `target?.qualities?.harmony?.tick` directly on whatever shape
+    // arrived; on a typed target there's no `qualities` field, so
+    // prevN was always 0 and every tick said "tick 1." Load the row
+    // and read from it.
+    const { loadTargetRow } = await import("../../../seed/materials/_targetShape.js");
+    const drum = await loadTargetRow(target, "matter");
+
+    const harmonyQuals = drum.qualities instanceof Map
+      ? drum.qualities.get("harmony")
+      : drum.qualities?.harmony;
+    const cur = harmonyQuals?.tick;
     const prevN = (cur && typeof cur === "object" && Number.isFinite(cur.n)) ? cur.n : 0;
     const next = { n: prevN + 1, at: new Date().toISOString() };
-
-    // do:set the inner key. The seed's set op recognizes nested
-    // qualities.<ns>.<key> paths and writes the leaf atomically.
-    // Since we're inside a moment, this pushes a fact onto
-    // summonCtx.deltaF; sealAct commits it with the moment's Act
-    // in one transaction.
-    // Accept bare string id (seed-internal callers), Mongoose Matter
-    // doc, or { _id } / { id } / params.targetId envelope.
-    const targetId = typeof target === "string"
-      ? target
-      : (target?._id || target?.id || params?.targetId);
-    if (!targetId || targetId === "undefined") {
-      throw new Error("harmony:tick requires a matter target with _id");
-    }
 
     // Defer the actual emit to the seed do.set-matter op (single
     // canonical write surface for matter qualities). The drummer role
@@ -39,13 +37,15 @@ export default {
     // already, so opts.summonCtx is what threads the moment's actId
     // and deltaF accumulator.
     const { doVerb } = await import("../../../seed/ibp/verbs/do.js");
-    await doVerb(targetId, "set-matter", {
-      field: "qualities.harmony.tick",
-      value: next,
-    }, {
-      identity,
-      summonCtx,
-    });
+    await doVerb(
+      { kind: "matter", id: String(drum._id) },
+      "set-matter",
+      {
+        field: "qualities.harmony.tick",
+        value: next,
+      },
+      { identity, summonCtx },
+    );
 
     return { tick: next.n, at: next.at };
   },

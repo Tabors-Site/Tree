@@ -110,29 +110,32 @@ async function moveHandler({ target, params }) {
   }
   if (fromSpaceId && params) params.fromSpaceId = fromSpaceId;
 
-  // Coord-mode clamping. The containing space's `size` is the
-  // bounding box for any coord inside it; an out-of-bounds put-down
-  // (client bug, drifted UI, or just a paranoid caller) gets locked
-  // to the nearest legal cell. The clamped value rides on
-  // params.coord into the fact so the reducer just writes it.
+  // Coord-mode bounds check. Throw on out-of-bounds rather than
+  // clamping. The substrate is the floor for what's legal; cognition
+  // catches the rejection and refaces. Silent clamping was a lie —
+  // the reel said "moved to (X,Y)" while the row stored a different
+  // (clamped) value, and replay diverged from live. Throwing keeps
+  // the chain honest: if a fact seals saying "moved to (X,Y)," the
+  // row reflects (X,Y).
   if (coord) {
-    const containerId = fromSpaceId; // coord-mode keeps the same container
+    const containerId = fromSpaceId;
     if (containerId) {
       const containerRow = await Space.findById(containerId).select("size").lean();
       const size = containerRow?.size || null;
       if (size) {
-        const clamped = { ...coord };
         for (const axis of ["x", "y", "z"]) {
-          if (!Number.isFinite(clamped[axis])) continue;
+          if (!Number.isFinite(coord[axis])) continue;
           const cap = typeof size[axis] === "number" && size[axis] > 0 ? size[axis] : null;
           if (cap === null) continue;
-          if (Number.isInteger(clamped[axis])) {
-            clamped[axis] = Math.max(0, Math.min(Math.trunc(cap) - 1, clamped[axis]));
-          } else {
-            clamped[axis] = Math.max(0, Math.min(cap - Number.EPSILON, clamped[axis]));
+          const high = Number.isInteger(coord[axis]) ? Math.trunc(cap) - 1 : cap - Number.EPSILON;
+          if (coord[axis] < 0 || coord[axis] > high) {
+            throw new IbpError(
+              IBP_ERR.INVALID_INPUT,
+              `move: coord.${axis}=${coord[axis]} is out of bounds (0..${high} for this container)`,
+              { axis, value: coord[axis], cap: high },
+            );
           }
         }
-        if (params) params.coord = clamped;
       }
     }
   }

@@ -23,12 +23,13 @@ import { detectTargetKind, targetIdOf, loadTargetRow } from "../_targetShape.js"
 const COORD_AXES = ["x", "y", "z"];
 
 /**
- * Clamp a coord write against the matter's space size. Same shape as
- * the set-being clamp (being/ops.js): half-open [0, cap) per axis,
- * integer or continuous. If the matter's space has no size, the coord
- * passes through.
+ * Validate a coord write against the matter's space size. Throws
+ * IbpError(INVALID_INPUT) on an out-of-bounds axis — the fact never
+ * seals. Same doctrine as set-being:coord (see being/ops.js header
+ * for assertCoordInBounds): silent clamping was a lie; throwing
+ * keeps the chain honest.
  */
-async function clampMatterCoord(matterDoc, raw) {
+async function assertMatterCoordInBounds(matterDoc, raw) {
   const out = {};
   for (const a of COORD_AXES) {
     if (typeof raw[a] === "number" && Number.isFinite(raw[a])) {
@@ -45,11 +46,13 @@ async function clampMatterCoord(matterDoc, raw) {
     if (out[a] === undefined) continue;
     const cap = typeof size[a] === "number" && size[a] > 0 ? size[a] : null;
     if (cap === null) continue;
-    if (Number.isInteger(out[a])) {
-      out[a] = Math.max(0, Math.min(Math.trunc(cap) - 1, out[a]));
-    } else {
-      const high = cap - Number.EPSILON;
-      out[a] = Math.max(0, Math.min(high, out[a]));
+    const high = Number.isInteger(out[a]) ? Math.trunc(cap) - 1 : cap - Number.EPSILON;
+    if (out[a] < 0 || out[a] > high) {
+      throw new IbpError(
+        IBP_ERR.INVALID_INPUT,
+        `set-matter: coord.${a}=${out[a]} is out of bounds (0..${high} for this space)`,
+        { axis: a, value: out[a], cap: high },
+      );
     }
   }
   return out;
@@ -170,7 +173,7 @@ async function setOnMatterHandler({ target, params }) {
     if (typeof value !== "object" || Array.isArray(value)) {
       throw new Error("set-matter: `coord` value must be an object {x,y,z?} or null");
     }
-    const clamped = await clampMatterCoord(target, value);
+    const clamped = await assertMatterCoordInBounds(target, value);
     return { matterId: String(target._id), coord: clamped };
   }
 

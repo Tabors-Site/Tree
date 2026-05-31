@@ -3,8 +3,15 @@
 // Scripted cognition. Wakes on a SUMMON from the drummer carrying
 // { tick, tickSeq, gridSpaceId }. The dancer folds the LIVE grid
 // (no seq ceiling — PARALLEL FACTS Rung 5), reads its own resolved
-// coords from the fold, applies its rule (step toward nearest other),
-// computes the absolute target cell, and emits harmony:move with `to`.
+// coords from the fold, picks a primary axis to step on, and asks
+// the seed via harmony:move.
+//
+// Cognition tries, the seed enforces. Out-of-bounds coords throw at
+// set-being:coord — no fact seals, the moment unwinds with whatever
+// ΔF had accumulated discarded. This dancer catches the rejection
+// and refaces to the secondary axis, then tries one more time. If
+// both axes are refused, it stays. The dancer does not know the
+// rules; it just asks. The substrate is the floor.
 //
 // LIVE FOLD vs. LOCKSTEP CEILING (Rung 5 cutover):
 //   At Rung 2-4 the drummer captured `tickSeq` at start-of-tick and
@@ -99,37 +106,51 @@ export const dancerTowardRole = Object.freeze({
     const target = others.length
       ? pickNearest(me, others)
       : { x: Math.floor(gridW / 2), y: Math.floor(gridH / 2) };
-    const { dx, dy } = stepToward(me, target);
-    if (dx === 0 && dy === 0) {
+    const dxTotal = target.x - me.x;
+    const dyTotal = target.y - me.y;
+    if (dxTotal === 0 && dyTotal === 0) {
       return { ok: true, content: `tick ${tick ?? "?"}: stay at (${me.x},${me.y})` };
     }
 
-    // 3. Compute the absolute target cell from the GRID-RESOLVED `me`,
-    //    not from the dancer's own qualities (which may be stale post-
-    //    bump). Pass `to` to harmony:move so the move op stamps from
-    //    the authoritative position regardless of any qualities drift.
-    const to = {
-      x: Math.max(0, Math.min(gridW - 1, me.x + dx)),
-      y: Math.max(0, Math.min(gridH - 1, me.y + dy)),
-    };
+    // 3. Try primary axis first; on rejection (seed throws on out-of-
+    //    bounds), reface to the secondary axis and try once more.
+    //    Cognition doesn't know the rules — it just tries. The
+    //    substrate enforces. If both axes are rejected, stay.
+    const sx = Math.sign(dxTotal);
+    const sy = Math.sign(dyTotal);
+    const xFirst = Math.abs(dxTotal) >= Math.abs(dyTotal);
+    const attempts = xFirst
+      ? [{ dx: sx, dy: 0 }, { dx: 0, dy: sy }]
+      : [{ dx: 0, dy: sy }, { dx: sx, dy: 0 }];
 
-    // 4. Emit the move. The op stamps two facts (dancer + grid) in
-    //    one atomic moment seal via summonCtx.deltaF.
-    try {
-      const r = await doVerb(meId, "harmony:move", {
-        from: me, to, gridSpaceId, gridW, gridH,
-      }, {
-        identity: { beingId: meId, name: ctx.toBeing.name },
-        summonCtx: ctx,
-      });
+    const identity = { beingId: meId, name: ctx.toBeing.name };
+    let moveResult = null;
+    let lastReason = null;
+    for (const step of attempts) {
+      if (step.dx === 0 && step.dy === 0) continue;
+      const to = { x: me.x + step.dx, y: me.y + step.dy };
+      try {
+        moveResult = await doVerb(meId, "harmony:move", {
+          from: me, to, gridSpaceId, gridW, gridH,
+        }, { identity, summonCtx: ctx });
+        break;
+      } catch (err) {
+        lastReason = err.message;
+        // Refacing on rejection IS the design. The seed threw, so
+        // nothing was committed; try the other axis.
+      }
+    }
+
+    if (!moveResult) {
       return {
         ok: true,
-        content: `tick ${tick ?? "?"}: ${r?.moved ? `${stringify(me)}→${stringify(r.to)}` : `no-op at ${stringify(me)}`}`,
+        content: `tick ${tick ?? "?"}: stay at (${me.x},${me.y}) (refaced; both axes rejected${lastReason ? `: ${lastReason}` : ""})`,
       };
-    } catch (err) {
-      log.warn("Dancer", `move failed: ${err.message}`);
-      return { ok: false, shape: "internal", reason: err.message };
     }
+    return {
+      ok: true,
+      content: `tick ${tick ?? "?"}: ${stringify(me)}→${stringify(moveResult.to)}`,
+    };
   },
 });
 
@@ -149,16 +170,8 @@ function manhattan(a, b) {
   return Math.abs(a.x - b.x) + Math.abs(a.y - b.y);
 }
 
-// One-cell step closer on the axis of greatest distance.
-// Tie-break: prefer x-step when |dx| == |dy|.
-function stepToward(from, to) {
-  const dx = to.x - from.x;
-  const dy = to.y - from.y;
-  if (dx === 0 && dy === 0) return { dx: 0, dy: 0 };
-  if (Math.abs(dx) >= Math.abs(dy)) {
-    return { dx: Math.sign(dx), dy: 0 };
-  }
-  return { dx: 0, dy: Math.sign(dy) };
-}
+// The axis choice + reface lives inline in summon now. The seed
+// asserts coord bounds; the cognition just tries primary, catches
+// the rejection, and tries secondary.
 
 function stringify(p) { return `(${p.x},${p.y})`; }

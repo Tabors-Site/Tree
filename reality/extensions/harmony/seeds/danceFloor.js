@@ -12,14 +12,11 @@
 import log from "../../../seed/seedReality/log.js";
 import { summonCreateBeing } from "../../../seed/ibp/verbs/summon.js";
 
-// Tick cadence. 30s is conservative for big local models
-// (qwen3.5:27b on consumer GPU/CPU runs ~5-15s per inference once
-// presentism is in play). With 5 dancers × ~10s/call / 30s tick =
-// well under saturation; the inbox drains, no buffer backup.
-//
-// Drop to 5-10s when Ollama is reliably fast (e.g. small models,
-// good hardware).
-const TICK_MS  = 30000;
+// Tick cadence. One minute keeps the LLM dancers' per-tick inference
+// load light and gives a human watching the floor time to read each
+// move before the next one lands. Drop to 5-30s when running cheap
+// models or no LLM dancers; raise when adding more beings.
+const TICK_MS  = 60000;
 const GRID_W   = 10;
 const GRID_H   = 10;
 
@@ -128,6 +125,19 @@ export const danceFloorSeed = {
     }
     log.info("Harmony", `planted drum matter ${drumMatterId.slice(0, 8)}`);
 
+    // 2a. Place the drum at center. Without this the drum has no
+    // coord and the drummer has no destination to approach — he'd
+    // either tick from nowhere (the old "no coord, just tick" lie)
+    // or stand still forever. Centering the drum gives him a clear
+    // starting target; operators can then move it with the Move
+    // tool and watch the drummer follow.
+    const drumStart = { x: Math.floor(GRID_W / 2), y: Math.floor(GRID_H / 2) };
+    await place.do({ kind: "matter", id: drumMatterId }, "set-matter", {
+      field: "coord",
+      value: drumStart,
+    }, opOpts);
+    log.info("Harmony", `placed drum at (${drumStart.x},${drumStart.y})`);
+
     // 3. drummer being. Use summonCreateBeing directly (the same path
     // hello-world's seed uses). `place.be("create-being", ...)` is a
     // doc-claimed shape but cherub's honoredOperations does not
@@ -151,6 +161,19 @@ export const danceFloorSeed = {
       throw new Error("summonCreateBeing drummer returned no beingId");
     }
     log.info("Harmony", `summoned drummer being ${drummerBeingId.slice(0, 8)}`);
+
+    // 3a. Place the drummer at a starting cell adjacent to the drum
+    // so the first wake strikes (he's already in range). Subsequent
+    // user-driven drum moves force him to walk back. Without this,
+    // the drummer has no coord and his approach logic has nothing
+    // to work with — first wake would be a no-op.
+    const drummerStart = { x: drumStart.x, y: drumStart.y };
+    await place.do(drummerBeingId, "harmony:place-being", {
+      x: drummerStart.x,
+      y: drummerStart.y,
+      gridSpaceId,
+    }, opOpts);
+    log.info("Harmony", `placed drummer at (${drummerStart.x},${drummerStart.y})`);
 
     // 4. drummer role-config (knows what to tick, where to dance)
     await place.do(drummerBeingId, "set-being", {
