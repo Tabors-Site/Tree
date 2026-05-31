@@ -192,7 +192,7 @@ export function registerLlmAssignerOps() {
       );
 
       const value = { ...tutorialMeta, playbackSeconds: currentTime };
-      const opts = identity ? { identity, summonCtx } : { scaffold: true };
+      const opts = identity ? { identity, summonCtx } : { scaffold: true, summonCtx };
       await doVerb(
         { kind: "matter", id: String(matter._id) },
         "set-matter",

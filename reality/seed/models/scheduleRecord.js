@@ -18,7 +18,7 @@ import mongoose from "mongoose";
 const ScheduleRecordSchema = new mongoose.Schema({
   _id: { type: String, required: true },
 
-  beingId:       { type: String, required: true, index: true },
+  beingId:       { type: String, required: true },
   intervalMs:    { type: Number, required: true },
   priority:      { type: Number, default: 4 },
   content:       { type: mongoose.Schema.Types.Mixed, default: null },
@@ -27,6 +27,10 @@ const ScheduleRecordSchema = new mongoose.Schema({
   createdAt:     { type: Date, default: Date.now },
 }, { _id: false, minimize: false });
 
+// One single-field index on beingId. The field's `index: true` shortcut
+// was removed to avoid Mongoose's duplicate-index warning when both
+// forms coexist; the explicit schema.index call here is the canonical
+// declaration.
 ScheduleRecordSchema.index({ beingId: 1 });
 
 export default mongoose.models.ScheduleRecord

@@ -764,7 +764,7 @@ export async function deleteSpaceBranch(
     const { doVerb } = await import("../../ibp/verbs/do.js");
     const opts = beingId
       ? { identity: { beingId: String(beingId) }, summonCtx: actId ? { actId } : null, scaffold: !actId }
-      : { scaffold: true };
+      : { scaffold: true, summonCtx: actId ? { actId } : null };
     const target = { kind: "space", id: String(spaceId) };
     await doVerb(
       target,

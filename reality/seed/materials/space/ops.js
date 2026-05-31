@@ -282,14 +282,19 @@ async function setOnSpaceHandler({ target, params, identity }) {
 // end-space
 // ─────────────────────────────────────────────────────────────────────
 
-async function endSpaceHandler({ target, identity, scaffold }) {
+async function endSpaceHandler({ target, identity, scaffold, summonCtx }) {
   const spaceId = targetIdOf(target);
   // Scaffold-mode acts as I_AM. The registry mirror sync (genesis +
   // boot) calls end-space against stale registry entries under
   // I_AM authority; without this fall-through, deleteSpaceBranch's
   // owner check rejects a null beingId and the sync warns.
   const actorBeingId = identity?.beingId || (scaffold ? I_AM : null);
-  const deleted = await deleteSpaceBranch(spaceId, actorBeingId);
+  // Forward the open moment's actId so deleteSpaceBranch's internal
+  // do.set-space writes ride the same Act. Without this, the inner
+  // doVerb calls fall into the `summonCtx: null, scaffold: true`
+  // branch and trip the "scaffold requires summonCtx" guard in
+  // verbs/do.js — exactly the RegistryMirror sync failure.
+  const deleted = await deleteSpaceBranch(spaceId, actorBeingId, summonCtx?.actId || null);
   return { deathSpaceId: String(deleted?._id || spaceId) };
 }
 
