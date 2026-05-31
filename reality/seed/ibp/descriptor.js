@@ -239,6 +239,36 @@ async function summonToActivity(summon, opts = {}) {
   const target = await inferActivityTarget(summon);
 
   if (lastFact) {
+    // Outbound summon . the being just SUMMONed someone else. Surface
+    // the recipient + message body so the portal renders
+    // `→@<recipient> <content>` above this being's avatar. Multiplayer-
+    // visible: every viewer sees what this being said to whom because
+    // the source is the substrate's fact, not a per-tab UI side-channel.
+    if (lastFact.action === "summon") {
+      const recipientBeingId = lastFact.params?.recipient
+        ? String(lastFact.params.recipient)
+        : null;
+      const recipientName = recipientBeingId
+        ? await _lookupBeingName(recipientBeingId)
+        : null;
+      return {
+        kind: "summoning",
+        content: truncate(lastFact.params?.content || "", ACTIVITY_CONTENT_CAP),
+        target: recipientBeingId
+          ? {
+              kind: "being",
+              beingId: recipientBeingId,
+              name: recipientName,
+              role: lastFact.params?.activeRole || null,
+            }
+          : null,
+        chainstepId: String(summon._id),
+        ts: lastFact.date,
+      };
+    }
+
+    // Other tool calls (do / see / non-summon be) . compact pill that
+    // names the action. The portal renders these with a transient style.
     return {
       kind: "acting",
       content: truncate(
@@ -258,6 +288,20 @@ async function summonToActivity(summon, opts = {}) {
     target,
     ts: summon.stampedAt || new Date(),
   };
+}
+
+// Best-effort name lookup for a being id. Used by summonToActivity to
+// pre-resolve the recipient name so the portal can render `→@<name>`
+// without a second roundtrip. Returns null on miss (the portal falls
+// back to role / beingId prefix).
+async function _lookupBeingName(beingId) {
+  try {
+    const Being = (await import("../materials/being/being.js")).default;
+    const row = await Being.findById(beingId).select("name").lean();
+    return row?.name || null;
+  } catch {
+    return null;
+  }
 }
 
 // Infer what a Act is acting on. The Act schema doesn't carry an

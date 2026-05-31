@@ -1,13 +1,14 @@
-// harmony:step — direction → move.
+// harmony:step . direction → set-being:coord.
 //
-// LLM-friendly step verb. The being's position is read from the
-// grid fold (post-bump, authoritative); the cardinal direction
-// names one of the 8 compass neighbors or STAY. The op delegates
-// to harmony:move with the absolute target cell; the fold
-// reducer's bump rule clamps and resolves collisions.
+// The dancer's only op. Takes a compass direction, reads the
+// dancer's current coord, calls set-being:coord with the new cell.
+// The seed enforces bounds (throws on OOB) and the factory's
+// PositionProjection fold writes the cached row. No bump rule, no
+// grid-event fact action, no harmony-side reducer . the world is
+// the world; if two dancers land on the same cell, they overlap.
 
+import Being from "../../../seed/materials/being/being.js";
 import { doVerb } from "../../../seed/ibp/verbs/do.js";
-import { foldGridLive } from "../lib/foldGrid.js";
 
 const DIRS = {
   N:    { dx:  0, dy: -1 },
@@ -32,10 +33,7 @@ export default {
     if (!beingId || beingId === "undefined") {
       throw new Error("harmony:step requires a being target");
     }
-    const gridSpaceId = params?.gridSpaceId;
-    if (!gridSpaceId) {
-      throw new Error("harmony:step requires params.gridSpaceId");
-    }
+
     const dir = String(params?.direction || "").toUpperCase();
     const delta = DIRS[dir];
     if (!delta) {
@@ -44,22 +42,26 @@ export default {
       );
     }
 
-    const board = await foldGridLive(gridSpaceId);
-    const me = board.get(beingId);
-    if (!me) {
-      return { stepped: false, reason: "not placed on grid" };
-    }
     if (delta.dx === 0 && delta.dy === 0) {
-      return { stepped: false, reason: "stay", from: me, direction: dir };
+      return { stepped: false, reason: "stay", direction: dir };
     }
 
-    const to = { x: me.x + delta.dx, y: me.y + delta.dy };
-    const r = await doVerb(beingId, "harmony:move", {
-      from: me,
-      to,
-      gridSpaceId,
-    }, { identity, summonCtx });
+    const me = await Being.findById(beingId).select("coord").lean();
+    const cur = (me?.coord && Number.isFinite(me.coord.x) && Number.isFinite(me.coord.y))
+      ? { x: me.coord.x, y: me.coord.y }
+      : { x: 0, y: 0 };
+    const next = { x: cur.x + delta.dx, y: cur.y + delta.dy };
 
-    return { stepped: true, from: me, to, direction: dir, moveResult: r };
+    // set-being:coord . the seed enforces bounds and the
+    // PositionProjection fold writes the cached row. Throws on
+    // out-of-bounds; cognition refaces.
+    await doVerb(
+      { kind: "being", id: beingId },
+      "set-being",
+      { field: "coord", value: next },
+      { identity, summonCtx },
+    );
+
+    return { stepped: true, from: cur, to: next, direction: dir };
   },
 };

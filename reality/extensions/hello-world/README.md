@@ -26,9 +26,9 @@ You should see something like:
 The extension uses exactly the primitives every extension uses:
 
 - **Manifest** declares what the extension needs from the seed (services, models, optional declarations).
-- **`init(place)`** is the one entry point. It registers a role and a seed.
-- **`place.declare.registerRole(name, def)`** wires the role into the registry. The loader auto-namespaces (`greeter` becomes `hello-world:greeter`).
-- **`place.seeds.register(name, recipe)`** wires the plantable scaffold. The recipe's `scaffold(ctx)` is one `place.summon` of `<reality>/@<new-being>` with `content: { kind: "create-being", spec }` — the standard SUMMON-create-being primitive, no special seed-side creation path.
+- **`init(reality)`** is the one entry point. It registers a role and a seed.
+- **`reality.declare.registerRole(name, def)`** wires the role into the registry. The loader auto-namespaces (`greeter` becomes `hello-world:greeter`).
+- **`reality.seeds.register(name, recipe)`** wires the plantable scaffold. The recipe's `scaffold(ctx)` is one `reality.summon` of `<reality>/@<new-being>` with `content: { kind: "create-being", spec }` — the standard SUMMON-create-being primitive, no special seed-side creation path.
 - The greeter role returns a **CognitionResult** (`cognitionSuccess(text)`). On any internal failure (position can't be resolved, etc.), it would return `cognitionFailure(shape, reason)` and the seal would NOT fire — no Act would land, the InboxProjection row would stay open, the being's reel byte-identical. That's the Round 5 structural seal-gate at work.
 
 ## Flip to LLM cognition

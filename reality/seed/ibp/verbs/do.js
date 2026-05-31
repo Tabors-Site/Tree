@@ -65,7 +65,7 @@ export async function doVerb(target, operation, params = {}, opts = {}) {
 
   const op = getOperation(operation);
   if (!op) {
-    throw new Error(`Unknown DO operation: "${operation}". Use place.do.listOperations() to see available operations.`);
+    throw new Error(`Unknown DO operation: "${operation}". Use reality.do.listOperations() to see available operations.`);
   }
 
   // Read-only origin gate. DO is always a write; if the target lives in
@@ -195,7 +195,7 @@ export async function doVerb(target, operation, params = {}, opts = {}) {
   return result;
 }
 
-// `place.do` is callable AND carries the operation registry as
+// `reality.do` is callable AND carries the operation registry as
 // methods, so callers reach both surfaces through the same export.
 doVerb.registerOperation = registerOperation;
 doVerb.unregisterOperation = unregisterOperation;

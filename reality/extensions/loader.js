@@ -7,7 +7,6 @@ import path from "path";
 import crypto from "crypto";
 import { fileURLToPath, pathToFileURL } from "url";
 import { buildRealityServices } from "../seed/services.js";
-import { setExtensionToolResolver } from "../seed/present/cognition/llm/tools.js";
 import { hooks } from "../seed/hooks.js";
 import { getToolOwner } from "../seed/materials/space/extensionScope.js";
 import log from "../seed/seedReality/log.js";
@@ -148,9 +147,8 @@ export function syncDisabledFile(list) {
 // ---------------------------------------------------------------------------
 
 const loaded = new Map(); // name -> { manifest, instance }
-let realityServices = null; // the assembled place bundle
+let realityServices = null; // the assembled reality bundle
 const _bootSkipped = []; // [{ name, reason }] extensions that failed to load
-const modeToolExtensions = []; // [{ modeKey, toolNames }] from extensions
 const registeredJobs = []; // [{ name, start, stop }] from extensions
 
 // ---------------------------------------------------------------------------
@@ -191,12 +189,12 @@ let AVAILABLE_SERVICES = new Set();
 
 const AVAILABLE_MODELS = new Set(["Being", "Space", "Fact", "Matter"]);
 
-function validateNeeds(manifest, place) {
+function validateNeeds(manifest, reality) {
   const missing = [];
 
   if (manifest.needs?.services) {
     for (const svc of manifest.needs.services) {
-      if (!AVAILABLE_SERVICES.has(svc) && !place[svc]) {
+      if (!AVAILABLE_SERVICES.has(svc) && !reality[svc]) {
         missing.push(`service:${svc}`);
       }
     }
@@ -204,7 +202,7 @@ function validateNeeds(manifest, place) {
 
   if (manifest.needs?.models) {
     for (const model of manifest.needs.models) {
-      if (!AVAILABLE_MODELS.has(model) && !place.models[model]) {
+      if (!AVAILABLE_MODELS.has(model) && !reality.models[model]) {
         missing.push(`model:${model}`);
       }
     }
@@ -234,17 +232,17 @@ function validateNeeds(manifest, place) {
 }
 
 /**
- * Inject no-op stubs for optional seed services the host place doesn't have.
+ * Inject no-op stubs for optional seed services the host reality doesn't have.
  * Only stubs seed-provided services (AVAILABLE_SERVICES). Extension-provided
  * services (like energy) are either present because that extension loaded first,
- * or absent. Extensions guard with if (place.svc) for those.
+ * or absent. Extensions guard with if (reality.svc) for those.
  */
-function applyOptionalStubs(manifest, place) {
+function applyOptionalStubs(manifest, reality) {
   if (!manifest.optional?.services) return;
 
   for (const svc of manifest.optional.services) {
-    if (AVAILABLE_SERVICES.has(svc) && !place[svc]) {
-      place[svc] = {};
+    if (AVAILABLE_SERVICES.has(svc) && !reality[svc]) {
+      reality[svc] = {};
     }
   }
 }
@@ -381,14 +379,14 @@ function topologicalSort(manifests) {
  * @param {object} mcpServer   - MCP server instance (optional)
  * @param {object} opts
  * @param {object} opts.overrides - service overrides for buildRealityServices
- * @param {Function} opts.getConfigValue - place config reader (key => value)
+ * @param {Function} opts.getConfigValue - reality config reader (key => value)
  * @returns {Map} loaded extensions
  */
 export async function loadExtensions(app, mcpServer, opts = {}) {
   // Track route ownership for collision detection
   const routeOwnership = new Map();
 
-  // Build place services (initially with empty loadedExtensions)
+  // Build reality services (initially with empty loadedExtensions)
   realityServices = buildRealityServices({
     loadedExtensions: loaded,
     overrides: opts.overrides || {},
@@ -408,7 +406,7 @@ export async function loadExtensions(app, mcpServer, opts = {}) {
     return loaded;
   }
 
-  // Check disabled list (env var + place config)
+  // Check disabled list (env var + reality config)
   const disabled = getDisabledExtensions(opts.getConfigValue);
   const enabled = manifests.filter(({ manifest }) => {
     if (disabled.has(manifest.name)) {
@@ -494,7 +492,7 @@ export async function loadExtensions(app, mcpServer, opts = {}) {
         continue;
       }
 
-      // Build scoped place: only inject what the manifest declares
+      // Build scoped reality: only inject what the manifest declares
       const scopedReality = buildScopedReality(manifest, realityServices, AVAILABLE_SERVICES);
 
       // Initialize (with timeout to prevent a single extension from blocking boot)
@@ -555,13 +553,6 @@ export async function loadExtensions(app, mcpServer, opts = {}) {
         log.warn(
           "Extensions",
           `"${manifest.name}": router is not a valid Express router. Skipped.`,
-        );
-        continue;
-      }
-      if (instance.tools !== undefined && !Array.isArray(instance.tools)) {
-        log.warn(
-          "Extensions",
-          `"${manifest.name}": tools must be an array. Skipped.`,
         );
         continue;
       }
@@ -650,17 +641,11 @@ export async function loadExtensions(app, mcpServer, opts = {}) {
         log.verbose("Extensions", `${manifest.name}: raw webhook registered`);
       }
 
-      // Register tools into the seed tool registry. Same path the
-      // seed uses for its own tools — see registerToolBundle in
-      // seed/present/cognition/llm/tools.js. The LLM voice dispatches
-      // verb-tagged tool calls directly through getToolHandler.
-      if (instance.tools) {
-        const { registerToolBundle } =
-          await import("../seed/present/cognition/llm/tools.js");
-        await registerToolBundle(instance.tools, { ownerExt: manifest.name });
-      }
+      // No extension-side LLM tools. The four seed verb-tools are
+      // the entire LLM-facing surface; extensions add ops to the DO
+      // operation registry instead. See seed/FACTORY.md.
 
-      // Register models from manifest (add to place.models so other extensions can use them)
+      // Register models from manifest (add to reality.models so other extensions can use them)
       if (manifest.provides?.models) {
         for (const [modelName, modelPath] of Object.entries(
           manifest.provides.models,
@@ -709,13 +694,6 @@ export async function loadExtensions(app, mcpServer, opts = {}) {
           manifest.provides.sessionTypes,
         )) {
           registerSessionType(key, value);
-        }
-      }
-
-      // Register mode tool injections (extensions can add tools to existing modes)
-      if (instance.modeTools) {
-        for (const injection of instance.modeTools) {
-          modeToolExtensions.push(injection);
         }
       }
 
@@ -795,10 +773,7 @@ export async function loadExtensions(app, mcpServer, opts = {}) {
       // Build log line
       const parts = [manifest.name, `v${manifest.version}`];
       if (instance.router) parts.push("routes");
-      if (instance.tools?.length) parts.push(`${instance.tools.length} tools`);
       if (instance.jobs?.length) parts.push(`${instance.jobs.length} jobs`);
-      if (instance.modeTools?.length)
-        parts.push(`${instance.modeTools.length} mode injections`);
       if (instance.middleware?.length)
         parts.push(`${instance.middleware.length} middleware`);
       log.verbose("Extensions", `Loaded: ${parts.join(" | ")}`);
@@ -811,12 +786,9 @@ export async function loadExtensions(app, mcpServer, opts = {}) {
     }
   }
 
-  // Wire the mode tool injection resolver now that all extensions are loaded
-  setExtensionToolResolver(getExtensionToolsForMode);
-
-  // Register extension names provider so the place's identity payload
+  // Register extension names provider so the reality's identity payload
   // includes the installed extension list (used by `.well-known/treeos-portal`
-  // discovery + future cross-place introspection).
+  // discovery + future cross-reality introspection).
   try {
     const { setExtensionNamesProvider } =
       await import("../seed/realityIdentity.js");
@@ -832,9 +804,9 @@ export async function loadExtensions(app, mcpServer, opts = {}) {
   // Warn loudly at boot instead of letting the failure stay invisible.
   validateHookListens(loaded);
 
-  // All extensions loaded. Freeze the top-level place object.
-  // Extension service registration (place.energy = {...}) happened during init().
-  // No more property additions. place.hooks = "garbage" now fails.
+  // All extensions loaded. Freeze the top-level reality object.
+  // Extension service registration (reality.energy = {...}) happened during init().
+  // No more property additions. reality.hooks = "garbage" now fails.
   if (realityServices) Object.freeze(realityServices);
 
   return loaded;
@@ -877,7 +849,7 @@ const CORE_HOOKS_VALID = new Set([
 ]);
 
 function validateHookListens(loadedMap) {
-  // Build the set of all hook names that SOMETHING fires — place + any
+  // Build the set of all hook names that SOMETHING fires — reality + any
   // extension's declared customs.
   const firedByExt = new Map(); // hookName -> Set<extName>
   const knownValid = new Set(CORE_HOOKS_VALID);
@@ -911,7 +883,7 @@ function validateHookListens(loadedMap) {
         log.warn(
           "Extensions",
           `"${extName}" listens to "${h}" but nothing fires it. ` +
-            `Not a place hook and no extension declares it in fires. ` +
+            `Not a reality hook and no extension declares it in fires. ` +
             `No handler will run.`,
         );
       }
@@ -1146,7 +1118,7 @@ export function getExtension(name) {
  * or when the lookup fails.
  *
  * This is the principled way for one extension to reach into another:
- *   const cw = await place.scope.getExtensionAtScope("code-workspace", spaceId);
+ *   const cw = await reality.scope.getExtensionAtScope("code-workspace", spaceId);
  *   if (!cw?.exports?.someApi) return; // not active here
  *   await cw.exports.someApi(...);
  *
@@ -1950,27 +1922,6 @@ export async function enableExtension(name) {
  * @returns {Set<string>}
  */
 export { getDisabledExtensions };
-
-// ---------------------------------------------------------------------------
-// Extension tools for modes
-// ---------------------------------------------------------------------------
-
-/**
- * Get additional tools injected by extensions for a specific mode.
- * Called by the mode registry when resolving tools.
- *
- * @param {string} modeKey - e.g. "tree:librarian"
- * @returns {string[]} additional tool names to append
- */
-export function getExtensionToolsForMode(modeKey) {
-  const tools = [];
-  for (const injection of modeToolExtensions) {
-    if (injection.modeKey === modeKey) {
-      tools.push(...injection.toolNames);
-    }
-  }
-  return tools;
-}
 
 /**
  * Get all registered extension jobs.

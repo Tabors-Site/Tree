@@ -282,7 +282,7 @@ export function emitNavigate({ beingId, url, replace = false }) {
 
 /**
  * Direct emit to every socket the being has connected. Extensions
- * reach this through the loader's scoped `place.websocket.emitToBeing`
+ * reach this through the loader's scoped `reality.websocket.emitToBeing`
  * (which auto-namespaces the event name to the extension's prefix).
  */
 export function emitToBeing(beingId, event, data) {

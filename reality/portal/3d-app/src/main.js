@@ -352,17 +352,15 @@ function handleDescriptorEvent(event) {
   }, 100); // debounce a touch so a flurry of patches collapses into one render
 }
 
-// Async SUMMON reply arrives via `ibp:summon`. Look up which being
-// the reply belongs to (by correlation id) and swap the thinking bubble
-// for the real content.
+// Async SUMMON reply arrives via `ibp:summon`. Bookkeeping only . the
+// activity bubble above the replying being's avatar (driven by the
+// server's per-being activity field) shows their reply. Every viewer
+// sees the same thing because the source is the substrate, not local
+// UI state.
 function handleSummon(entry) {
   const correlation = entry?.inReplyTo;
   if (!correlation) return;
-  const being = state.pendingSummons.get(correlation);
-  if (!being) return;
   state.pendingSummons.delete(correlation);
-  const text = entry.content || "(no reply)";
-  state.scene.showBeingMessage(being, text);
 }
 
 // In-world video matter reached its end. Fire the role-owned consume
@@ -672,19 +670,20 @@ async function sendSummon(b, text) {
   try {
     const reply = await state.client.summon(stance, message);
     if (reply?.status === "accepted") {
-      // Async path: server kicked off summoning; show thinking dots and
-      // wait for `ibp:summon` to swap them for real content.
+      // Async path: the server kicked off the receiving being's moment.
+      // The activity bubble above YOUR avatar (driven by your server-
+      // side activity field, which now reflects "summoning <target> with
+      // this content") shows other players what you just said. The
+      // reply, when it lands, shows above the responder's avatar. No
+      // local UI state needed.
       state.pendingSummons.set(correlation, b.being);
-      state.scene.showBeingThinking(b.being);
       return;
     }
-    const replyText = reply?.content || "(no reply)";
-    state.scene.showBeingMessage(b.being, replyText);
+    // Sync responses are still rare . the activity refresh on the
+    // recipient's mesh will surface the reply prose. Nothing else to do.
   } catch (err) {
-    state.scene.showBeingMessage(
-      b.being,
-      `[${err.code || "error"}] ${err.message || "summon failed"}`,
-    );
+    // Errors surface in the summon panel's error display; the activity
+    // bubble path stays substrate-driven.
     throw err;
   }
 }

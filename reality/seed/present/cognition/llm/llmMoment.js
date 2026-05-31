@@ -412,6 +412,14 @@ async function runLlmMomentInner({ being, envelope, role, signal, summonCtx }) {
           rootActId: summonCtx?.rootActId || summonCtx?.actId || envelope.actId || null,
           signal,
           username,
+          // Wake context. The summon tool (and any other tool that
+          // wants to reply-thread) reads these off callCtx.summonCtx
+          // to default `target` to the asker and `inReplyTo` to the
+          // wake's correlation. The LLM doesn't have to track
+          // correlations . a bare `summon({content:"..."})` is a
+          // reply to whoever opened this moment.
+          wakeFrom: envelope?.from || null,
+          wakeCorrelation: envelope?.correlation || null,
         },
         presenceKey,
       );

@@ -10,11 +10,11 @@
 // The scoped bundle also auto-namespaces a handful of register-style
 // methods so extensions can't impersonate each other or the seed:
 //
-//   - `place.do.registerOperation("name", spec)` → records
+//   - `reality.do.registerOperation("name", spec)` → records
 //     "<ext>:name" with ownerExtension=<ext>.
-//   - `place.websocket.emitToBeing(beingId, "evt", data)` → emits
+//   - `reality.websocket.emitToBeing(beingId, "evt", data)` → emits
 //     "<ext>:evt".
-//   - `place.auth.registerStrategy(name, handler)` → records the
+//   - `reality.auth.registerStrategy(name, handler)` → records the
 //     strategy under the extension's name; only extensions that
 //     declared `provides.authStrategies` may register at all.
 //
@@ -24,8 +24,8 @@
 // Reserved event names ("ibp", "registered", "navigate") refuse.
 //
 // The whole scoped object is shallow-frozen so extensions can't
-// replace `place.hooks` or `place.llm`; they CAN add new top-level
-// properties (`place.energy = {...}`), which is how an extension
+// replace `reality.hooks` or `reality.llm`; they CAN add new top-level
+// properties (`reality.energy = {...}`), which is how an extension
 // publishes its own service surface for other extensions to declare.
 
 /**
@@ -61,7 +61,7 @@ export function buildScopedReality(manifest, fullReality, availableServices) {
   }
 
   // Also inject declared services that were dynamically registered by other
-  // extensions (e.g. energy registers place.energy during its init). The seed
+  // extensions (e.g. energy registers reality.energy during its init). The seed
   // doesn't name these. Extensions discover them by declaration.
   for (const svc of allowed) {
     if (!availableServices.has(svc) && fullReality[svc]) {
@@ -115,7 +115,7 @@ export function buildScopedReality(manifest, fullReality, availableServices) {
   // write the local name; the registry records "<ext>:<name>" with
   // ownerExtension=<ext>. Fully-qualified names with a prefix that
   // doesn't match this extension throw to prevent impersonation. The
-  // verb function itself (`place.do(...)`) is passed through; only the
+  // verb function itself (`reality.do(...)`) is passed through; only the
   // registerOperation method gets scoped.
   if (
     typeof scoped.do === "function" &&
@@ -195,16 +195,16 @@ export function buildScopedReality(manifest, fullReality, availableServices) {
 
   // Qualities binding retired 2026-05-23 alongside the qualities.js
   // write API. The setQuality / mergeQuality / etc. methods on
-  // `place.qualities.{being,space,matter}` are tombstones — they throw
+  // `reality.qualities.{being,space,matter}` are tombstones — they throw
   // with a migration message pointing at
-  // `place.do(target, "set-<kind>", { field: "qualities.<ns>" })`. Reads
+  // `reality.do(target, "set-<kind>", { field: "qualities.<ns>" })`. Reads
   // (getQuality, readQualityNamespace) stay. Namespace ownership is
   // now enforced in the seed `do.set-<kind>` handler against the verb's
   // calling identity. No need to wrap here; scoped.qualities passes
   // through unchanged.
 
-  // Freeze existing seed services so extensions can't replace place.hooks,
-  // place.llm, etc. But allow adding new properties (place.energy = {...})
+  // Freeze existing seed services so extensions can't replace reality.hooks,
+  // reality.llm, etc. But allow adding new properties (reality.energy = {...})
   // which is the pattern for extension-provided services.
   for (const key of Object.keys(scoped)) {
     if (

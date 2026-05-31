@@ -22,6 +22,20 @@ const FactoryOverview = () => {
       </header>
 
       <section>
+        <h2>Before the cycle: what is a being?</h2>
+        <p>
+          A moment belongs to a being. Before the five beats make sense,
+          it helps to know what a being IS and what kinds of cognition
+          drive one. Scripted, LLM, human, composite . the substrate
+          treats them all the same.{" "}
+          <Link to="/factory/being-types" className="ns-inline-link">
+            Read Being types
+          </Link>{" "}
+          if any of those words need a footing.
+        </p>
+      </section>
+
+      <section>
         <h2>The cycle</h2>
         <p>
           Time in TreeOS is made of moments. A moment is one being, one face

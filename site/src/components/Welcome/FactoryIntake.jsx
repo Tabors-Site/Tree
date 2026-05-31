@@ -61,6 +61,10 @@ const FactoryIntake = () => {
 
       <nav className="ns-doc-aside">
         <p>
+          Previous.{" "}
+          <Link to="/factory/being-types" className="ns-inline-link">Being types</Link>
+          . What a being IS and the kinds of cognition that drive one.
+          <br />
           Next. <Link to="/factory/assign" className="ns-inline-link">2. Assign</Link>
           . The scheduler picks an entry and the moment opens.
         </p>

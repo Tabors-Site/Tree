@@ -6,12 +6,13 @@
 //
 // Tests the model's core claim: many scripted beings folding one
 // shared world, each acting by its own voice, synchronizing through
-// facts on shared reels. No LLMs.
+// facts on shared reels.
 
 export default {
   name: "harmony",
   version: "0.1.0",
-  description: "Scripted-being dance on a 2D grid. The hello-world for many-beings synchronization.",
+  description:
+    "Scripted-being dance on a 2D grid. The hello-world for many-beings synchronization.",
 
   needs: {
     // Verbs the seed scaffold reaches for:
@@ -26,7 +27,6 @@ export default {
   },
 
   provides: {
-    tools: false,
     seeds: {
       // harmony:dance-floor — registered via init() return value.
       // Operators plant from the seed hotbar in the portal.

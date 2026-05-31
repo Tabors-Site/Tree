@@ -13,7 +13,7 @@
 // my universal grammar; every act inside me already speaks them.
 // The LLM voice's tool dispatch goes direct from getToolHandler to
 // the verb dispatcher — no protocol wrapper between the inference
-// loop and place.do. Tools are verb-tagged at registration; the
+// loop and reality.do. Tools are verb-tagged at registration; the
 // verb tells the dispatcher how to gate the call.
 //
 // MCP lives on as a future wrapper around the verbs, not a parallel
@@ -49,7 +49,7 @@
 //   external MCP client emits tool call
 //     → mcp transport unwraps name + args
 //     → handler = getToolHandler(name)
-//     → handler runs (typically wrapping place.see/do/summon/be)
+//     → handler runs (typically wrapping reality.see/do/summon/be)
 //     → verb dispatcher authorizes (stance auth + extension-scope gate)
 //     → operation handler runs, Fact is stamped
 //     → result wrapped into MCP's content shape, returned to client

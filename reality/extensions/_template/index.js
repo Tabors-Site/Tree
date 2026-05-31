@@ -1,6 +1,6 @@
 // TreeOS extension entry point.
 //
-// The loader calls init(place) once at boot, after validating manifest
+// The loader calls init(reality) once at boot, after validating manifest
 // deps and building a scoped `place` services bundle. Return whatever
 // the extension provides — tools, router, jobs, exports — and the
 // loader wires the rest.
@@ -11,7 +11,7 @@
 
 import log from "../../seed/system/log.js";
 
-export async function init(place) {
+export async function init(reality) {
   // log.verbose("MyExt", "init starting");
 
   // ───────────────────────────────────────────────────────────────
@@ -23,22 +23,22 @@ export async function init(place) {
   // ───────────────────────────────────────────────────────────────
   //
   // Space qualities:
-  //   const data = place.qualities.space.getQuality(space, "my-extension");
-  //   await place.qualities.space.setQuality(spaceId, "my-extension", { key: "value" });
-  //   await place.qualities.space.mergeQuality(spaceId, "my-extension", { extraKey: "value" });
-  //   await place.qualities.space.incQuality(spaceId, "my-extension", "counter", 1);
-  //   await place.qualities.space.pushQuality(spaceId, "my-extension", "history", item, 50);
-  //   await place.qualities.space.batchSetQuality(spaceId, "my-extension", { a: 1, b: 2 });
-  //   await place.qualities.space.unsetQuality(spaceId, "my-extension");
+  //   const data = reality.qualities.space.getQuality(space, "my-extension");
+  //   await reality.qualities.space.setQuality(spaceId, "my-extension", { key: "value" });
+  //   await reality.qualities.space.mergeQuality(spaceId, "my-extension", { extraKey: "value" });
+  //   await reality.qualities.space.incQuality(spaceId, "my-extension", "counter", 1);
+  //   await reality.qualities.space.pushQuality(spaceId, "my-extension", "history", item, 50);
+  //   await reality.qualities.space.batchSetQuality(spaceId, "my-extension", { a: 1, b: 2 });
+  //   await reality.qualities.space.unsetQuality(spaceId, "my-extension");
   //
   // Being qualities (per-being data; persists across role changes):
-  //   const prefs = place.qualities.being.getQuality(being, "my-extension");
-  //   await place.qualities.being.setQuality(beingId, "my-extension", { ... });
-  //   await place.qualities.being.incQuality(beingId, "my-extension", "visits", 1);
+  //   const prefs = reality.qualities.being.getQuality(being, "my-extension");
+  //   await reality.qualities.being.setQuality(beingId, "my-extension", { ... });
+  //   await reality.qualities.being.incQuality(beingId, "my-extension", "visits", 1);
   //
   // Matter qualities (per-piece-of-matter data):
-  //   const tags = place.qualities.matter.getQuality(matter, "my-extension");
-  //   await place.qualities.matter.setQuality(matterId, "my-extension", { ... });
+  //   const tags = reality.qualities.matter.getQuality(matter, "my-extension");
+  //   await reality.qualities.matter.setQuality(matterId, "my-extension", { ... });
 
   // ───────────────────────────────────────────────────────────────
   // HOOKS — react to substrate events. Always available; no needs
@@ -46,28 +46,28 @@ export async function init(place) {
   // hook list and payload shapes.
   // ───────────────────────────────────────────────────────────────
   //
-  // place.hooks.register("enrichContext", async ({ context, space, meta }) => {
+  // reality.hooks.register("enrichContext", async ({ context, space, meta }) => {
   //   const data = meta["my-extension"] || {};
   //   if (Object.keys(data).length === 0) return; // guard: only enrich when relevant
   //   context.myExtension = data;
   // }, "my-extension");
   //
-  // place.hooks.register("afterMatter", async ({ matter, spaceId, beingId, origin }) => {
+  // reality.hooks.register("afterMatter", async ({ matter, spaceId, beingId, origin }) => {
   //   // react to any matter write at any position
   // }, "my-extension");
 
   // ───────────────────────────────────────────────────────────────
   // DO OPERATIONS — register custom write actions on the DO verb.
   // The loader auto-namespaces: declare "log-meal" here, callers
-  // invoke `place.do(target, "my-extension:log-meal", { ... })`.
+  // invoke `reality.do(target, "my-extension:log-meal", { ... })`.
   // Every op handler receives { target, params, identity, scaffold }
   // and runs through the Fact stamp unless `skipAudit: true`.
   // ───────────────────────────────────────────────────────────────
   //
-  // place.do.registerOperation("log-meal", {
+  // reality.do.registerOperation("log-meal", {
   //   targets: ["space"],
   //   handler: async ({ target, params, identity }) => {
-  //     await place.qualities.space.mergeQuality(target._id, "my-extension", {
+  //     await reality.qualities.space.mergeQuality(target._id, "my-extension", {
   //       lastMeal: params.text,
   //     });
   //     return { logged: true };
@@ -83,7 +83,7 @@ export async function init(place) {
   // see below) before any being is summoned in this role.
   // ───────────────────────────────────────────────────────────────
   //
-  // place.declare.registerRole("my-role", {
+  // reality.declare.registerRole("my-role", {
   //   name:       "my-role",
   //   canSee:     ["my-extension:read-status"],
   //   canDo:      ["my-extension:log-meal"],
@@ -101,7 +101,7 @@ export async function init(place) {
   // receiving role's summon handler interprets the event.
   // ───────────────────────────────────────────────────────────────
   //
-  // place.declare.subscribe(beingId, {
+  // reality.declare.subscribe(beingId, {
   //   event:    "afterMatter",
   //   scope:    { ancestor: someSpaceId },     // | { everywhere: true } | { spaceId }
   //   filter:   { origin: "web" },             // optional payload equality / any-of
@@ -115,7 +115,7 @@ export async function init(place) {
   // a scheduler-being extension to swap in an embodied emitter.
   // ───────────────────────────────────────────────────────────────
   //
-  // place.declare.schedule(beingId, {
+  // reality.declare.schedule(beingId, {
   //   intervalMs: 60_000 * 30,                  // every 30 minutes
   //   content:    { event: "tick" },
   //   priority:   4,
@@ -125,13 +125,13 @@ export async function init(place) {
   // ───────────────────────────────────────────────────────────────
   // SEEDS — plantable scaffolds. Register a recipe here (or via
   // the manifest's provides.seeds path) and the operator plants
-  // it with `place.do(space, "plant", { seed: "my-ext:my-seed" })`.
+  // it with `reality.do(space, "plant", { seed: "my-ext:my-seed" })`.
   // ───────────────────────────────────────────────────────────────
   //
-  // place.seeds.register("my-seed", {
+  // reality.seeds.register("my-seed", {
   //   description: "Sets up a tracking position with the my-extension role.",
   //   plant: async ({ target, identity }) => {
-  //     await place.do(target, "create-space", { spec: { name: "tracking" } }, { identity });
+  //     await reality.do(target, "create-space", { spec: { name: "tracking" } }, { identity });
   //   },
   // });
 
@@ -148,7 +148,7 @@ export async function init(place) {
     //     schema:      { text: z.string() },   // zod shape; injected ctx (beingId, spaceId, ...) passes through
     //     verb:        "do",                   // "see" | "do" | "summon" | "be"
     //     handler:     async (args) => {
-    //       await place.do(args.spaceId, "my-extension:log-meal", { text: args.text }, {
+    //       await reality.do(args.spaceId, "my-extension:log-meal", { text: args.text }, {
     //         identity: { beingId: args.beingId },
     //       });
     //       return { ok: true };
@@ -162,7 +162,7 @@ export async function init(place) {
     // },
     //
     // exports: {                               // cross-extension API — other extensions read via
-    //   helperFn,                              //   place.scope.getExtensionAtScope("my-extension", spaceId)
+    //   helperFn,                              //   reality.scope.getExtensionAtScope("my-extension", spaceId)
     // },                                       //   then ext?.exports?.helperFn(...)
   };
 }

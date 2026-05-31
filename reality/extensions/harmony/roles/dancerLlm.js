@@ -1,35 +1,21 @@
 // harmony:dancer-llm — LLM-cognition dancer.
 //
-// Doctrine — the being IS its perspective.
+// Pure role spec. The seed's role registry auto-wraps defaultSummon
+// for roles without a custom summon function . defaultSummon calls
+// runLlmMoment with the right envelope and routes the discriminated
+// result. This file is data describing what the being IS; engine
+// dispatch is the substrate's job.
 //
-// The face is built fresh every summon by the seed's assembler
-// (seed/present/cognition/llm/assemble.js → buildPrompt). The
-// assembler renders:
-//
-//   identity      "I am <name>, harmony:dancer-llm at <space>."
-//   preloaded     fresh resolution of every entry in role.see.
-//                 The dancer declares `see: ["harmony:neighbors"]`;
-//                 the registered resolver below reads the live grid
-//                 fold and returns "[Your view] at (x,y). N=...,
-//                 NE=..., walls=...". This is the dancer's eyes for
-//                 the moment.
-//   capabilities  rendered list of canDo. The dancer can ONLY
-//                 harmony:step.
-//   body          this file's prompt(ctx) — base instructions plus
-//                 the per-being persona injected from
-//                 qualities.harmony.persona.
-//   time          ISO timestamp of this moment.
-//
-// The being doesn't ask for its view through a SEE tool. The view
-// is what it IS for this instant. It only acts: one harmony:step.
-//
-// LlmConnection resolves through the seed's 4-layer chain (the
-// reality-default pinned by set-reality-llm carries the dancer).
+// The see-resolver below is legitimately harmony-shaped . it reads
+// the seed's PositionProjection (the factory-owned cross-cutting
+// fold of beings' coords per space) and returns the dancer's
+// structured world face. The seed enforces grid bounds via
+// Space.size at set-being:coord time.
 
-import mongoose from "mongoose";
-import { runLlmMoment } from "../../../seed/present/cognition/llm/llmMoment.js";
+import Being from "../../../seed/materials/being/being.js";
+import Space from "../../../seed/materials/space/space.js";
 import { registerSeeResolver } from "../../../seed/present/cognition/llm/seeResolvers.js";
-import { foldGridLive, loadGridBounds } from "../lib/foldGrid.js";
+import { readPositionsInSpace } from "../../../seed/past/projections/position/positionProjectionFold.js";
 import log from "../../../seed/seedReality/log.js";
 
 const DIRS = [
@@ -43,9 +29,9 @@ const DIRS = [
   { key: "NW", dx: -1, dy: -1 },
 ];
 
-// Side-effect: register the dancer's eye on module load. The
-// resolver is registered under the qualified key
-// "harmony:neighbors"; roles reference it the same way.
+// Structured world face for the dancer. Returns a JSON object;
+// assemble.js stringifies it under [neighbors] in the system prompt.
+// Source of truth: the seed's PositionProjection (factory-owned).
 registerSeeResolver("neighbors", async (ctx) => {
   const beingId = String(ctx.being?._id || "");
   const gridSpaceId =
@@ -54,88 +40,84 @@ registerSeeResolver("neighbors", async (ctx) => {
     null;
   if (!beingId || !gridSpaceId) return null;
 
-  let board, bounds;
+  let positions, bounds;
   try {
-    board = await foldGridLive(gridSpaceId);
-    bounds = await loadGridBounds(gridSpaceId);
+    positions = await readPositionsInSpace(gridSpaceId);
+    const space = await Space.findById(gridSpaceId).select("size").lean();
+    bounds = {
+      w: space?.size?.x > 0 ? space.size.x : null,
+      h: space?.size?.y > 0 ? space.size.y : null,
+    };
   } catch (err) {
-    log.warn("DancerLlm", `see-resolver fold failed: ${err.message}`);
+    log.warn("DancerLlm", `see-resolver read failed: ${err.message}`);
     return null;
   }
 
-  const me = board.get(beingId);
-  if (!me) return "[Your view] You are not yet placed on the grid.";
+  const me = positions.find((p) => String(p.beingId) === beingId);
+  if (!me) {
+    return { placed: false };
+  }
 
-  const gw = bounds.gridW === Infinity ? "∞" : bounds.gridW;
-  const gh = bounds.gridH === Infinity ? "∞" : bounds.gridH;
-
+  // Build cell→beingId map and collect neighbor ids.
   const occupants = new Map();
-  for (const [bid, pos] of board.entries()) {
-    occupants.set(`${pos.x},${pos.y}`, bid);
+  for (const p of positions) {
+    const id = String(p.beingId);
+    if (id === beingId) continue;
+    occupants.set(`${p.x},${p.y}`, id);
   }
 
   const walls = [];
   const neighborIds = new Set();
-  const neighborByDir = {};
+  const neighbors = {};
   for (const d of DIRS) {
     const nx = me.x + d.dx;
     const ny = me.y + d.dy;
     const oob =
-      bounds.gridW !== Infinity &&
-      (nx < 0 || nx >= bounds.gridW || ny < 0 || ny >= bounds.gridH);
+      (bounds.w !== null && (nx < 0 || nx >= bounds.w)) ||
+      (bounds.h !== null && (ny < 0 || ny >= bounds.h));
     if (oob) {
       walls.push(d.key);
-      neighborByDir[d.key] = "WALL";
+      neighbors[d.key] = "WALL";
       continue;
     }
     const occ = occupants.get(`${nx},${ny}`);
-    if (occ && occ !== beingId) {
-      neighborByDir[d.key] = occ;
+    if (occ) {
+      neighbors[d.key] = occ;
       neighborIds.add(occ);
     } else {
-      neighborByDir[d.key] = "empty";
+      neighbors[d.key] = "empty";
     }
   }
 
   if (neighborIds.size > 0) {
-    const Being = mongoose.model("Being");
     const rows = await Being
       .find({ _id: { $in: [...neighborIds] } })
       .select("_id name")
       .lean();
     const nameById = new Map(rows.map((r) => [String(r._id), r.name]));
-    for (const k of Object.keys(neighborByDir)) {
-      const v = neighborByDir[k];
+    for (const k of Object.keys(neighbors)) {
+      const v = neighbors[k];
       if (v !== "empty" && v !== "WALL") {
-        neighborByDir[k] = `@${nameById.get(v) || v.slice(0, 8)}`;
+        neighbors[k] = `@${nameById.get(v) || v.slice(0, 8)}`;
       }
     }
   }
 
-  const lines = [];
-  lines.push("[Your view]");
-  lines.push(`You are at (${me.x}, ${me.y}) on a ${gw}×${gh} grid.`);
-  lines.push("Neighbors (8 cells around you):");
-  for (const d of DIRS) {
-    lines.push(`  ${d.key.padEnd(2)} → ${neighborByDir[d.key]}`);
-  }
-  if (walls.length > 0) {
-    lines.push(`Walls (do not step into these): ${walls.join(", ")}`);
-  }
-  return lines.join("\n");
+  const legalMoves = ["STAY", ...DIRS.map((d) => d.key).filter((k) => !walls.includes(k))];
+
+  return {
+    placed: true,
+    position: { x: me.x, y: me.y },
+    grid: bounds,
+    neighbors,
+    walls,
+    legalMoves,
+  };
 }, "harmony");
 
 const BASE_PROMPT = `You are a dancer on a grid. The drum has struck; this is your one moment to step.
 
-You can see what's around you above ([Your view]). You MUST call the \`step\` tool exactly once this turn. Do not reply with text alone — text without a step call is wasted; the loop will reject the turn and force a retry.
-
-Pick exactly one of these directions and pass it to step:
-
-  N, NE, E, SE, S, SW, W, NW, STAY
-
-STAY is a real choice (the tool still fires, the dancer holds). Picking a direction in your "Walls" list gets clamped by the bump rule — prefer an open direction. Pick with intent.
-
-After the tool call you may add one short sentence about your choice; that sentence becomes the visible record of this moment in your act-chain.`;
+STAY is a real choice. Walls are clamped by the bump rule. Pick with intent.`;
 
 export const dancerLlmRole = Object.freeze({
   name: "harmony:dancer-llm",
@@ -152,39 +134,26 @@ export const dancerLlmRole = Object.freeze({
   see: ["neighbors"],
 
   // Declared action surface. The face shows this; the LLM picks
-  // exactly one call per moment. Names are bare ("step") — inside
-  // this extension you don't prefix with the extension name.
-  canDo: ["step"],
-  canSummon: [],
-  canBe: [],
-  canSee: [],
+  // The body of the being. The dancer's only act is to step. The
+  // seed `do` tool is exposed automatically (canDo non-empty); the
+  // LLM calls do({action: "harmony:step", args: {direction}}) and
+  // the op handler resolves gridSpaceId from the dancer's position.
+  // No toolNames field. The role spec IS its can* lists.
+  canDo: [
+    {
+      action: "harmony:step",
+      description:
+        "Step one cell. args: { direction: 'N'|'NE'|'E'|'SE'|'S'|'SW'|'W'|'NW'|'STAY' }. " +
+          "STAY does nothing. Out-of-bounds picks throw at the substrate; pick a legalMove.",
+    },
+  ],
 
   // Presentism. Every tick is a fresh "now" — the face is rebuilt
   // from substrate each summon (identity + see-resolvers +
-  // capabilities + persona), so prior-turn conversation history
-  // adds no signal and grows the prompt unboundedly across ticks.
-  // Without this, a dancer's self-self IBP address would key the
-  // same session for every wake and session.messages would stack
-  // 2 messages/tick. By tick 30 the prompt is ~30× what it should
-  // be and inference latency runs away.
+  // capabilities + persona). Without this, a dancer's self-self IBP
+  // address would key the same session for every wake and the
+  // prompt would grow unboundedly across ticks.
   presentist: true,
-
-  // One step per moment. The summon ends when the step seals.
-  maxMessagesBeforeLoop: 2,
-  maxToolCallsPerStep: 1,
-
-  // Exit gate. The seed's loop refuses to terminate until `step`
-  // fires; if the model emits prose without calling step, the loop
-  // injects a corrective system line and re-runs. Without this, a
-  // chatty model just narrates ("I step north.") as plain text,
-  // the loop exits naturally with no tool_calls, and the dancer
-  // never actually moves.
-  exit: { requires: "step" },
-
-  // The tool registry's filter list. Only this tool is offered to
-  // the LLM. (Tool registration itself happens in extensions/harmony/
-  // tools.js via the loader.)
-  toolNames: ["step"],
 
   label: "Harmony Dancer (LLM)",
 
@@ -197,32 +166,5 @@ export const dancerLlmRole = Object.freeze({
       return `${BASE_PROMPT}\n\nYour character: ${persona}`;
     }
     return BASE_PROMPT;
-  },
-
-  async summon(message, ctx) {
-    try {
-      const result = await runLlmMoment({
-        being:    ctx.toBeing,
-        envelope: message,
-        role:     dancerLlmRole,
-        signal:   ctx.signal,
-        summonCtx: {
-          actId: ctx?.actId || message?.actId || null,
-          sessionId: ctx?.sessionId || null,
-          ibpAddress: ctx?.ibpAddress || null,
-        },
-      });
-      // runLlmMoment returns a discriminated CognitionResult:
-      //   kind:"act"     . tool dispatched OR prose said
-      //   kind:"see"     . LLM chose to do nothing this tick . a
-      //                    legitimate outcome (stay-put dancer)
-      //   kind:"failure" . cognition broke
-      // Pass through to momentum; the conductor branches on .kind.
-      return result;
-    } catch (err) {
-      if (ctx.signal?.aborted) return null;
-      log.warn("DancerLlm", `LLM call failed: ${err.message}`);
-      return { text: `dancer error: ${err.message}` };
-    }
   },
 });

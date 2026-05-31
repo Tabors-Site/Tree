@@ -2,11 +2,10 @@
 //
 // One plant act creates:
 //   1. A "dance-floor" Space under the target (typically the reality root).
-//   2. A "drum" Matter under the dance-floor.
-//   3. A "drummer" scripted Being whose qualities point at the drum
-//      and the dance-floor.
-//   4. A roster of dancer Beings (rung 2: 1 dancer; rung 4: 5).
-//   5. harmony:place-being for each dancer (initial coords).
+//   2. A "drum" Matter under the dance-floor, placed at center.
+//   3. A "drummer" scripted Being placed adjacent to the drum.
+//   4. A roster of dancer Beings at corner starts.
+//   5. set-being:coord on every being for its initial position.
 //   6. A scheduled wake on the drummer every TICK_MS.
 
 import log from "../../../seed/seedReality/log.js";
@@ -75,9 +74,9 @@ export const danceFloorSeed = {
   description: "Plant a dance-floor: grid space + drum + drummer + dancers + scheduled tick.",
 
   async scaffold(ctx) {
-    const { rootSpaceId, identity, place, plantedSeedId, summonCtx } = ctx;
+    const { rootSpaceId, identity, reality, plantedSeedId, summonCtx } = ctx;
 
-    // Every place.do / place.be in this scaffold threads summonCtx so
+    // Every reality.do / reality.be in this scaffold threads summonCtx so
     // every Fact pushes onto the SAME moment's deltaF and rides the
     // SAME actId. sealAct commits the whole scaffold together — or
     // none of it. A mid-scaffold rejection (auth, validation, etc.)
@@ -91,7 +90,7 @@ export const danceFloorSeed = {
     // one fact instead of create-then-set. The seed clamps every
     // dancer's `coord` write to this size at set-being time, so a
     // being can't be outside the space it's in.
-    const grid = await place.do(rootSpaceId, "create-space", {
+    const grid = await reality.do(rootSpaceId, "create-space", {
       spec: {
         name: "dance-floor",
         type: "domain",
@@ -116,7 +115,7 @@ export const danceFloorSeed = {
     // (afterQualityWrite resolves payload.spaceId from matter.spaceId,
     // which would be null). That's how the dance can tick without
     // ever waking a dancer.
-    const drum = await place.do({ kind: "space", id: gridSpaceId }, "create-matter", {
+    const drum = await reality.do({ kind: "space", id: gridSpaceId }, "create-matter", {
       spec: { name: "drum", content: null, origin: "ibp" },
     }, opOpts);
     const drumMatterId = String(drum?.matterId || drum?._id || drum?.id || "");
@@ -132,14 +131,14 @@ export const danceFloorSeed = {
     // starting target; operators can then move it with the Move
     // tool and watch the drummer follow.
     const drumStart = { x: Math.floor(GRID_W / 2), y: Math.floor(GRID_H / 2) };
-    await place.do({ kind: "matter", id: drumMatterId }, "set-matter", {
+    await reality.do({ kind: "matter", id: drumMatterId }, "set-matter", {
       field: "coord",
       value: drumStart,
     }, opOpts);
     log.info("Harmony", `placed drum at (${drumStart.x},${drumStart.y})`);
 
     // 3. drummer being. Use summonCreateBeing directly (the same path
-    // hello-world's seed uses). `place.be("create-being", ...)` is a
+    // hello-world's seed uses). `reality.be("create-being", ...)` is a
     // doc-claimed shape but cherub's honoredOperations does not
     // include "create-being" — that dispatch would throw
     // ACTION_NOT_SUPPORTED.
@@ -164,19 +163,17 @@ export const danceFloorSeed = {
 
     // 3a. Place the drummer at a starting cell adjacent to the drum
     // so the first wake strikes (he's already in range). Subsequent
-    // user-driven drum moves force him to walk back. Without this,
-    // the drummer has no coord and his approach logic has nothing
-    // to work with — first wake would be a no-op.
+    // drum moves force him to walk back. Without a coord, his
+    // approach logic has nothing to work with.
     const drummerStart = { x: drumStart.x, y: drumStart.y };
-    await place.do(drummerBeingId, "harmony:place-being", {
-      x: drummerStart.x,
-      y: drummerStart.y,
-      gridSpaceId,
+    await reality.do({ kind: "being", id: drummerBeingId }, "set-being", {
+      field: "coord",
+      value: drummerStart,
     }, opOpts);
     log.info("Harmony", `placed drummer at (${drummerStart.x},${drummerStart.y})`);
 
     // 4. drummer role-config (knows what to tick, where to dance)
-    await place.do(drummerBeingId, "set-being", {
+    await reality.do(drummerBeingId, "set-being", {
       field: "qualities.harmony.role",
       value: { drumMatterId, gridSpaceId, gridW: GRID_W, gridH: GRID_H, tickMs: TICK_MS },
     }, opOpts);
@@ -213,19 +210,18 @@ export const danceFloorSeed = {
       //     dancer a distinct character at runtime without N role
       //     templates. Skipped for scripted roles (no prompt).
       if (isLlm && spec.persona) {
-        await place.do(dancerBeingId, "set-being", {
+        await reality.do(dancerBeingId, "set-being", {
           field: "qualities.harmony.persona",
           value: spec.persona,
         }, opOpts);
       }
 
-      // 5b. place at starting coords. The harmony grid reducer
-      //     processes the resulting harmony:grid-event fact and
-      //     writes Being.coord + PositionProjection (single writer).
-      await place.do(dancerBeingId, "harmony:place-being", {
-        x: spec.start.x,
-        y: spec.start.y,
-        gridSpaceId,
+      // 5b. place at starting coords. set-being:coord . the seed
+      //     writes Being.coord and the factory's PositionProjection
+      //     fold caches the position row.
+      await reality.do({ kind: "being", id: dancerBeingId }, "set-being", {
+        field: "coord",
+        value: { x: spec.start.x, y: spec.start.y },
       }, opOpts);
 
       // 5c. subscribe the dancer to drum ticks. The drummer no longer
@@ -240,7 +236,7 @@ export const danceFloorSeed = {
       //     Filter on the exact field path so other harmony qualities
       //     writes (e.g. the drummer's qualities.harmony.role config)
       //     don't trigger the dance.
-      place.declare.subscribe(dancerBeingId, {
+      reality.declare.subscribe(dancerBeingId, {
         event: "afterQualityWrite",
         scope: { spaceId: gridSpaceId },
         filter: { field: "qualities.harmony.tick" },
@@ -261,7 +257,7 @@ export const danceFloorSeed = {
     }
 
     // 6. schedule the drummer wake. Default emitter sends as @I-AM.
-    const scheduleId = place.declare.schedule(drummerBeingId, {
+    const scheduleId = reality.declare.schedule(drummerBeingId, {
       intervalMs: TICK_MS,
       content: { event: "tick", drumMatterId, gridSpaceId },
       priority: 4,

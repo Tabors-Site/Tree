@@ -132,8 +132,9 @@
 // the LLM needs to know its frame of reference for this turn.
 
 import log from "../../../seedReality/log.js";
-import { getToolDescription, resolveTools, getExtensionToolsForRole } from "./tools.js";
+import { getToolDescription, resolveTools } from "./tools.js";
 import { resolveSeeList, registerSeeResolver } from "./seeResolvers.js";
+import { resolveCanStar } from "./canStarResolver.js";
 import { getSpaceName } from "../../../materials/space/spaces.js";
 
 // ────────────────────────────────────────────────────────────────────
@@ -191,8 +192,10 @@ export async function buildPrompt(role, ctx) {
   // What this being can see, do, summon, and be — for this instant.
   // The capability surface is per-summon; a role's tool set is a
   // function of right-now, not a property the being carries between
-  // calls.
-  const capabilities = renderCapabilities(role);
+  // calls. ctx threads through so the can* resolver layer can expand
+  // relationship-tokens (e.g. { rel: "parent" }) against the live
+  // being and its lineage.
+  const capabilities = await renderCapabilities(role, ctx);
 
   const body = await Promise.resolve(role.prompt(ctx));
   const bodyStr = typeof body === "string" ? body.trim() : "";
@@ -227,13 +230,48 @@ async function renderPreloadedSee(role, ctx) {
 // Capability sections
 // ────────────────────────────────────────────────────────────────────
 
-function renderCapabilities(role) {
+async function renderCapabilities(role, ctx) {
   const sections = [];
 
-  const seeBlock = renderToolList(role.canSee, "see");
-  const doBlock = renderToolList(role.canDo, "do");
-  const summonBlock = renderToolList(role.canSummon, "summon");
-  const beBlock = renderToolList(role.canBe, "be", "(for creating new beings)");
+  // Expand can* entries through the resolver layer BEFORE rendering.
+  // Most entries pass through unchanged (literal strings or
+  // {name, description} objects); relationship tokens like
+  // {rel: "parent"} or {pattern: "<glob>"} expand to concrete entries
+  // via registered resolvers. Today the resolver registry is empty;
+  // every entry passes through as a literal. Future resolvers
+  // (lineage, predecessor, child-list, path-pattern) plug in there
+  // without changing this assembler or the role specs.
+  const beingCtx = {
+    being: ctx?.being || null,
+    role,
+    currentSpace: ctx?.currentSpace || null,
+    rootId: ctx?.rootId || null,
+    name: ctx?.name || null,
+  };
+  const [seeEntries, doEntries, summonEntries, beEntries] = await Promise.all([
+    resolveCanStar(role.canSee, beingCtx),
+    resolveCanStar(role.canDo, beingCtx),
+    resolveCanStar(role.canSummon, beingCtx),
+    resolveCanStar(role.canBe, beingCtx),
+  ]);
+
+  const seeBlock = renderCapabilityList(seeEntries, "see", {
+    dispatcher: "see",
+    targetWord: "address",
+  });
+  const doBlock = renderCapabilityList(doEntries, "do", {
+    dispatcher: "do",
+    targetWord: "action",
+  });
+  const summonBlock = renderCapabilityList(summonEntries, "summon", {
+    dispatcher: "summon",
+    targetWord: "stance",
+  });
+  const beBlock = renderCapabilityList(beEntries, "be", {
+    dispatcher: "be",
+    targetWord: "operation",
+    suffix: "(for creating new beings)",
+  });
 
   if (seeBlock) sections.push(seeBlock);
   if (doBlock) sections.push(doBlock);
@@ -261,40 +299,84 @@ function renderExit(role) {
   ].join("\n");
 }
 
-function renderToolList(names, label, suffix = null) {
+/**
+ * Render one of the four can* lists into the prompt body.
+ *
+ * Symmetric across the four verbs. Each can* list describes what the
+ * role is licensed for at that verb . canSee lists addresses the
+ * role may read, canDo lists action names it may invoke, canSummon
+ * lists stance targets it may address, canBe lists BE operations.
+ *
+ * The LLM dispatches through ONE generic verb-tool per verb
+ * (`see`, `do`, `summon`, `be`) registered by the seed. The can*
+ * entries are descriptors the LLM reads to know what's allowed; the
+ * substrate stance-auth at the verb is the actual gate.
+ *
+ * Entry shapes accepted (in either pattern):
+ *
+ *   "name"                   . either a registered tool name (gets a
+ *                              description lookup) or a free-form
+ *                              descriptor (rendered as-is).
+ *
+ *   { name, description }    . self-describing object. Either field
+ *                              may also be `stance`/`address`/`action`/
+ *                              `target` for ergonomic clarity.
+ *
+ * Pattern A (ergonomic wrappers): extensions can keep registering
+ * specific tools like `step` that pre-fill verb args, and list them
+ * in canDo. The description lookup still works.
+ *
+ * Pattern B (verb-generic): roles list bare descriptors and rely on
+ * the seed verb-tool. No tool registration per entry needed.
+ */
+function renderCapabilityList(names, label, opts = {}) {
   if (!Array.isArray(names) || names.length === 0) return null;
-  const header = suffix ? `${label}: ${suffix}` : `${label}:`;
-  // Descriptions are guaranteed non-null by assertAllToolsResolve at
-  // the buildPrompt entry; this helper does not need a fallback path.
-  const lines = names.map((name) => `  - ${name}: ${getToolDescription(name)}`);
+  const { dispatcher, targetWord, suffix } = opts;
+  const headerExtras = [];
+  if (dispatcher) {
+    headerExtras.push(
+      `call via the \`${dispatcher}\` tool with the ${targetWord || "name"} below`,
+    );
+  }
+  if (suffix) headerExtras.push(suffix);
+  const header = headerExtras.length > 0
+    ? `${label}: (${headerExtras.join("; ")})`
+    : `${label}:`;
+  const lines = names.map((entry) => renderCapabilityEntry(entry));
   return [header, ...lines].join("\n");
 }
 
+function renderCapabilityEntry(entry) {
+  if (entry && typeof entry === "object") {
+    const name =
+      entry.name || entry.stance || entry.address || entry.action || entry.target || "(unnamed)";
+    const desc = entry.description ? `: ${entry.description}` : "";
+    return `  - ${name}${desc}`;
+  }
+  if (typeof entry === "string") return `  - ${entry}`;
+  return `  - ${String(entry)}`;
+}
+
 /**
- * Reject the summon if any declared tool has no registered description.
- * Walks the four verb buckets (canSee / canDo / canSummon / canBe) and
- * throws with the full list of unresolved names. Stops the LLM call
- * before it ships a broken prompt.
+ * Verify the four seed verb-tools are registered. The role declares
+ * nothing tool-name-shaped . the can* lists are descriptors, and
+ * tool exposure is derived from which can* lists are populated.
+ * The only thing to assert is that the seed registered its four
+ * verb-tools at genesis. If those are missing, no role can run.
  */
-function assertAllToolsResolve(role) {
-  const declared = [
-    ...(role.canSee || []),
-    ...(role.canDo || []),
-    ...(role.canSummon || []),
-    ...(role.canBe || []),
-  ];
-  const missing = declared.filter((name) => !getToolDescription(name));
+function assertAllToolsResolve(_role) {
+  const SEED_VERB_TOOLS = ["see", "do", "summon", "be"];
+  const missing = SEED_VERB_TOOLS.filter((name) => !getToolDescription(name));
   if (missing.length === 0) return;
   log.error(
     "Prompt",
-    `Role "${role.name}" cannot be summoned: ${missing.length} declared tool(s) ` +
-      `have no registered description (${missing.join(", ")}).`,
+    `Seed verb-tools missing from the registry: ${missing.join(", ")}. ` +
+      `Genesis did not register them. No LLM role can run.`,
   );
   throw new Error(
-    `Role "${role.name}" cannot be summoned: ${missing.length} declared tool(s) ` +
-      `have no registered description (${missing.join(", ")}). The tools either ` +
-      `failed to register or the role's canSee/canDo/canSummon/canBe names a ` +
-      `tool that does not exist.`,
+    `Seed verb-tools missing from the registry: ${missing.join(", ")}. ` +
+      `genesis.js must register seedSeeTool / seedDoTool / seedSummonTool / seedBeTool ` +
+      `before any LLM role can be summoned.`,
   );
 }
 
@@ -464,12 +546,23 @@ export async function buildSystemPromptForRole(role, ctx) {
 }
 
 /**
- * Resolve the OpenAI-compatible tools array for a role at this
- * moment.
- *   1. role.toolNames (base)
- *   2. extension-injected tools (via getExtensionToolsForRole)
- *   3. tree-specific overlays (qualities.tools.allowed / blocked)
- *   4. permission filter (drop tools whose verb isn't in role.permissions)
+ * Resolve the OpenAI-compatible tools array for a role at this moment.
+ *
+ * The tool surface is DERIVED from the role's four can* lists.
+ *
+ *   canSee non-empty    → expose the `see`    tool
+ *   canDo non-empty     → expose the `do`     tool
+ *   canSummon non-empty → expose the `summon` tool
+ *   canBe non-empty     → expose the `be`     tool
+ *
+ * That's it. Every LLM provider call is one of see / do / summon / be.
+ * The role's four can* lists are the body; the tool surface follows.
+ *
+ * Tree-tool config (`qualities.tools.{allowed,blocked}`) and the
+ * role's permissions still gate the final list . a position can
+ * tighten the four verbs available inside its subtree, and the
+ * role's permissions filter drops tools whose verb-tag isn't on the
+ * role.
  */
 export function resolveToolsForRole(
   role,
@@ -478,12 +571,11 @@ export function resolveToolsForRole(
 ) {
   if (!role) return [];
 
-  let toolNames = Array.isArray(role.toolNames) ? [...role.toolNames] : [];
-
-  const extTools = getExtensionToolsForRole(role.name);
-  if (extTools.length > 0) {
-    toolNames = [...new Set([...toolNames, ...extTools])];
-  }
+  let toolNames = [];
+  if (Array.isArray(role.canSee) && role.canSee.length > 0) toolNames.push("see");
+  if (Array.isArray(role.canDo) && role.canDo.length > 0) toolNames.push("do");
+  if (Array.isArray(role.canSummon) && role.canSummon.length > 0) toolNames.push("summon");
+  if (Array.isArray(role.canBe) && role.canBe.length > 0) toolNames.push("be");
 
   if (treeToolConfig) {
     if (Array.isArray(treeToolConfig.allowed)) {
@@ -495,8 +587,6 @@ export function resolveToolsForRole(
     }
   }
 
-  // Permissions are role identity ([[project_role_permissions_not_envelope]]);
-  // envelopes never widen them.
   const permsForFilter = Array.isArray(rolePermissions)
     ? rolePermissions
     : Array.isArray(role.permissions)

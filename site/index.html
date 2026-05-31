@@ -42,11 +42,21 @@
 
     <meta name="theme-color" content="#0a0a0a" />
     <style>
+      /* Global mobile defenses. Without these any single child with
+         width:100% + its own padding (default box-sizing: content-box)
+         overflows its parent, the page becomes wider than the viewport,
+         and mobile browsers zoom out to fit — the classic "super zoomed
+         out with side space" symptom. */
+      *, *::before, *::after { box-sizing: border-box; }
       html, body {
         background: #0a0a0a;
         margin: 0;
         padding: 0;
+        overflow-x: clip;        /* hard backstop against horizontal scroll */
       }
+      html { -webkit-text-size-adjust: 100%; }
+      img, video, svg, pre, table { max-width: 100%; }
+      img, video { height: auto; }
     </style>
   </head>
 

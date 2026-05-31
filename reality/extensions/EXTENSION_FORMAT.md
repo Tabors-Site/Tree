@@ -21,7 +21,7 @@ The routing pipeline parses every message: noun (whose territory?) then tense (w
 ```
 extensions/<name>/
   manifest.js    # Required: declares dependencies, capabilities, metadata
-  index.js       # Required: exports init(place) function
+  index.js       # Required: exports init(reality) function
   routes.js      # Optional: Express router for HTTP endpoints
   model.js       # Optional: Mongoose model(s)
   ...            # Any other files the extension needs
@@ -49,7 +49,7 @@ export default {
 
   provides: {
     models: {
-      MyModel: "./model.js",            // Registered in place.models
+      MyModel: "./model.js",            // Registered in reality.models
     },
     routes: "./routes.js",              // Mounted at /api/v1
     tools: false,                       // Or true if init() returns tools[]
@@ -87,15 +87,15 @@ export default {
 
 **If your extension uses a core service, you MUST declare it in `needs.services` or `optional.services`.** The loader builds a scoped place object that only contains declared services. Undeclared services are undefined.
 
-**Common failure:** `Cannot read properties of undefined (reading 'runTurn')` means you used `place.llm.runTurn` without declaring `services: ["llm"]` in your manifest.
+**Common failure:** `Cannot read properties of undefined (reading 'runTurn')` means you used `reality.llm.runTurn` without declaring `services: ["llm"]` in your manifest.
 
 ### Available seed services
 
-The four verbs (`place.see`, `place.do`, `place.summon`, `place.be`) are always callable and are the only public surface for substrate operations. Everything below is a syntactic helper or an infrastructure surface those verbs sit on.
+The four verbs (`reality.see`, `reality.do`, `reality.summon`, `reality.be`) are always callable and are the only public surface for substrate operations. Everything below is a syntactic helper or an infrastructure surface those verbs sit on.
 
 | Service | What it provides | Common functions |
 |---------|-----------------|-----------------|
-| `see` / `do` / `summon` / `be` | The four verbs. Always available. | `place.do(target, "set-qualities", { namespace, data })`, `place.see(address)`, etc. |
+| `see` / `do` / `summon` / `be` | The four verbs. Always available. | `reality.do(target, "set-qualities", { namespace, data })`, `reality.see(address)`, etc. |
 | `facts` | Audit-row stamping. | `logFact` |
 | `auth` | Identity primitives. | `resolveSpaceAccess`, `createBeing`, `verifyPassword`, `generateToken`, `findBeingByName`, `registerStrategy` |
 | `session` | Per-reach session lifecycle. | `createSession`, `endSession`, `getSession`, `SESSION_TYPES`, `registerSessionType` |
@@ -107,7 +107,7 @@ The four verbs (`place.see`, `place.do`, `place.summon`, `place.be`) are always 
 | `space` | Space CRUD + tree infrastructure. | `getAncestorChain`, `snapshotAncestors`, `createSpace`, `deleteSpaceBranch`, `checkTreeHealth`, `isTreeAlive`, `getSpaceRootId` |
 | `matters` | Programmatic matter CRUD. | `createMatter`, `editMatter`, `deleteMatterAndFile`, `transferMatter`, `getMatters` |
 | `spaceLocks` | Structural mutation locks. | `acquireSpaceLock`, `releaseSpaceLock`, `acquireMultiple` |
-| `qualities` | Per-primitive qualities Map. Three sub-namespaces: `place.qualities.being`, `place.qualities.space`, `place.qualities.matter`. Each carries the same nine atomic primitives. Namespace ownership is enforced for space and matter writes. | `getQuality`, `setQuality`, `mergeQuality`, `incQuality`, `pushQuality`, `addToQualitySet`, `batchSetQuality`, `unsetQuality`, `readQualityNamespace` |
+| `qualities` | Per-primitive qualities Map. Three sub-namespaces: `reality.qualities.being`, `reality.qualities.space`, `reality.qualities.matter`. Each carries the same nine atomic primitives. Namespace ownership is enforced for space and matter writes. | `getQuality`, `setQuality`, `mergeQuality`, `incQuality`, `pushQuality`, `addToQualitySet`, `batchSetQuality`, `unsetQuality`, `readQualityNamespace` |
 | `scope` | Extension-scope checks. | `isExtensionBlockedAtSpace`, `getBlockedExtensionsAtSpace`, `getExtensionAtScope`, `getToolOwner` |
 | `declare` | Setup voice — what extensions declare so the verbs have something to act on. | `registerRole`, `unregisterRole`, `subscribe`, `unsubscribe`, `schedule`, `unschedule`, `aggregate`, `setScheduleEmitter` |
 | `protocol` | Response shapes + error codes. | `ok`, `error`, `sendOk`, `sendError`, `IBP_ERR` |
@@ -122,13 +122,13 @@ Extensions load in topological order. If extension A depends on extension B (`ne
 
 ### Always-available services
 
-The four verbs (`place.see`, `place.do`, `place.summon`, `place.be`), `place.hooks`, and `place.qualities` are injected into every scoped place regardless of declaration. You never need to declare them.
+The four verbs (`reality.see`, `reality.do`, `reality.summon`, `reality.be`), `reality.hooks`, and `reality.qualities` are injected into every scoped reality regardless of declaration. You never need to declare them.
 
-The three sub-namespaces of `place.qualities` mirror each other. Every namespaced operation that works on a space also works on a being and on a matter, with the same nine atomic primitives on each (`place.qualities.space.setQuality` / `place.qualities.being.setQuality` / `place.qualities.matter.setQuality`, and so on). Pick the sub-namespace that matches the primitive you are tagging.
+The three sub-namespaces of `reality.qualities` mirror each other. Every namespaced operation that works on a space also works on a being and on a matter, with the same nine atomic primitives on each (`reality.qualities.space.setQuality` / `reality.qualities.being.setQuality` / `reality.qualities.matter.setQuality`, and so on). Pick the sub-namespace that matches the primitive you are tagging.
 
 ### Extension-provided services
 
-Extensions can register services on the core object during init: `place.energy = { useEnergy, ... }`. Later extensions that declare `needs.services: ["energy"]` or `optional.services: ["energy"]` receive it. If the providing extension hasn't loaded yet, optional services get a no-op stub. Required services cause the dependent extension to skip.
+Extensions can register services on the core object during init: `reality.energy = { useEnergy, ... }`. Later extensions that declare `needs.services: ["energy"]` or `optional.services: ["energy"]` receive it. If the providing extension hasn't loaded yet, optional services get a no-op stub. Required services cause the dependent extension to skip.
 
 ## npm Dependencies
 
@@ -167,22 +167,22 @@ import { Client, GatewayIntentBits } from "discord.js";
 ```js
 import { z } from "zod";
 
-export async function init(place) {
+export async function init(reality) {
   // Register hooks
-  place.hooks.register("enrichContext", async ({ context, meta }) => {
+  reality.hooks.register("enrichContext", async ({ context, meta }) => {
     if (meta.myData) context.myData = meta.myData;
   }, "my-extension");
 
   // Register modes
-  place.modes.registerMode("tree:my-mode", myModeConfig, "my-extension");
+  reality.modes.registerMode("tree:my-mode", myModeConfig, "my-extension");
 
   // Register LLM slot mapping (optional)
-  if (place.llm?.registerModeAssignment) {
-    place.llm.registerModeAssignment("tree:my-mode", "my-slot");
+  if (reality.llm?.registerModeAssignment) {
+    reality.llm.registerModeAssignment("tree:my-mode", "my-slot");
   }
 
   // Register energy service (optional, no-ops if energy not loaded)
-  if (place.energy) setEnergyService(place.energy);
+  if (reality.energy) setEnergyService(reality.energy);
 
   return {
     // Express router (mounted at /api/v1)
@@ -241,17 +241,17 @@ export async function init(place) {
 
 ## Running AI Conversations (runTurn)
 
-Use `place.llm.runTurn()` to run AI conversations from your extension. One call. No boilerplate.
+Use `reality.llm.runTurn()` to run AI conversations from your extension. One call. No boilerplate.
 
 ```js
-const { answer } = await place.llm.runTurn({
+const { answer } = await reality.llm.runTurn({
   userId,
   username,
   message: "analyze this data",
   mode: "tree:structure",
   rootId: "...",            // optional, for tree modes
   res,                      // optional, Express response for auto-abort on disconnect
-  llmPriority: place.llm.LLM_PRIORITY.BACKGROUND, // optional, default HUMAN
+  llmPriority: reality.llm.LLM_PRIORITY.BACKGROUND, // optional, default HUMAN
 });
 ```
 
@@ -268,7 +268,7 @@ When multiple sessions compete for LLM slots, priority determines who goes first
 | `INTERACTIVE` | 3 | Human-initiated async (scout, explore, reroot analysis). |
 | `BACKGROUND` | 4 | Autonomous jobs (intent, dreams, codebook, compression). |
 
-Access via `place.llm.LLM_PRIORITY`. Background jobs should always set `llmPriority: place.llm.LLM_PRIORITY.BACKGROUND` so human interactions never wait behind autonomous work.
+Access via `reality.llm.LLM_PRIORITY`. Background jobs should always set `llmPriority: reality.llm.LLM_PRIORITY.BACKGROUND` so human interactions never wait behind autonomous work.
 
 ## Session identity (runTurn and OrchestratorRuntime)
 
@@ -337,7 +337,7 @@ try {
 
 | Need | Use |
 |------|-----|
-| Single message, user-facing | `place.llm.runTurn()` |
+| Single message, user-facing | `reality.llm.runTurn()` |
 | Multi-step background pipeline | `OrchestratorRuntime` with `init()` + `runStep()` + `cleanup()` |
 | Real-time interactive orchestrator | `OrchestratorRuntime` with `attach()` + `trackStep()` |
 
@@ -362,13 +362,13 @@ export default {
 };
 
 // index.js
-export async function init(place) {
+export async function init(reality) {
   return {
     orchestrator: {
       bigMode: "tree",
       async handle({ visitorId, message, socket, userId, sessionId, rootId, spaceId, mode, ...ctx }) {
         // You have full control. Run LLM calls, use tools, navigate the tree.
-        const { content } = await place.conversation.stepTurn({
+        const { content } = await reality.conversation.stepTurn({
           userId,
           username: ctx.username,
           message,
@@ -411,11 +411,11 @@ Return value: `{ response, navigatedTo, ... }`. The response is sent to the clie
 
 | Utility | Access | Purpose |
 |---------|--------|---------|
-| `stepTurn()` | `place.conversation.stepTurn(opts)` | Run one LLM call with MCP tools |
-| `runTurn()` | `place.llm.runTurn(opts)` | Higher-level: handles session, abort, tracking |
-| `OrchestratorRuntime` | `place.orchestrator.OrchestratorRuntime` | Session lifecycle for multi-step flows |
-| `acquireLock/releaseLock` | `place.orchestrator.acquireLock(key)` | Concurrency control |
-| `parseJsonSafe` | `place.orchestrator.parseJsonSafe(str)` | Parse LLM JSON output (handles fences, trailing commas) |
+| `stepTurn()` | `reality.conversation.stepTurn(opts)` | Run one LLM call with MCP tools |
+| `runTurn()` | `reality.llm.runTurn(opts)` | Higher-level: handles session, abort, tracking |
+| `OrchestratorRuntime` | `reality.orchestrator.OrchestratorRuntime` | Session lifecycle for multi-step flows |
+| `acquireLock/releaseLock` | `reality.orchestrator.acquireLock(key)` | Concurrency control |
+| `parseJsonSafe` | `reality.orchestrator.parseJsonSafe(str)` | Parse LLM JSON output (handles fences, trailing commas) |
 
 ### When to Build One
 
@@ -435,26 +435,26 @@ Return value: `{ response, navigatedTo, ... }`. The response is sent to the clie
 
 | Service | Key | Always Available |
 |---------|-----|-----------------|
-| Models | `place.models.{Being,Space,Fact,Matter}` | Yes |
-| Auth | `place.auth.resolveTreeAccess` | Yes |
-| Contributions | `place.contributions.logContribution` | Yes |
-| Sessions | `place.session.*` | Yes |
-| Chat | `place.chat.*` | Yes |
-| LLM | `place.llm.*` (includes `LLM_PRIORITY`) | Yes |
-| MCP | `place.mcp.*` | Yes |
-| WebSocket | `place.websocket.*` | Yes (no-op if headless) |
-| Orchestrator | `place.orchestrator.*` | Yes |
-| Hooks | `place.hooks.*` | Yes (always injected) |
-| Modes | `place.modes.*` | Yes (always injected) |
-| Orchestrators | `place.orchestrators.*` | Yes |
-| Ownership | `place.ownership.*` | Yes |
-| Space | `place.space.*` | Yes |
-| Space Locks | `place.spaceLocks.*` | Yes |
-| Metadata | `place.qualities.*` (namespace-enforced, 7 functions) | Yes (always injected) |
-| User Metadata | `place.beingMetadata.*` (6 functions) | Yes (always injected) |
-| Scope | `place.scope.*` | Yes |
-| Protocol | `place.protocol.*` | Yes |
-| Energy | `place.energy.*` | No-op stub if extension not loaded |
+| Models | `reality.models.{Being,Space,Fact,Matter}` | Yes |
+| Auth | `reality.auth.resolveTreeAccess` | Yes |
+| Contributions | `reality.contributions.logContribution` | Yes |
+| Sessions | `reality.session.*` | Yes |
+| Chat | `reality.chat.*` | Yes |
+| LLM | `reality.llm.*` (includes `LLM_PRIORITY`) | Yes |
+| MCP | `reality.mcp.*` | Yes |
+| WebSocket | `reality.websocket.*` | Yes (no-op if headless) |
+| Orchestrator | `reality.orchestrator.*` | Yes |
+| Hooks | `reality.hooks.*` | Yes (always injected) |
+| Modes | `reality.modes.*` | Yes (always injected) |
+| Orchestrators | `reality.orchestrators.*` | Yes |
+| Ownership | `reality.ownership.*` | Yes |
+| Space | `reality.space.*` | Yes |
+| Space Locks | `reality.spaceLocks.*` | Yes |
+| Metadata | `reality.qualities.*` (namespace-enforced, 7 functions) | Yes (always injected) |
+| User Metadata | `reality.beingMetadata.*` (6 functions) | Yes (always injected) |
+| Scope | `reality.scope.*` | Yes |
+| Protocol | `reality.protocol.*` | Yes |
+| Energy | `reality.energy.*` | No-op stub if extension not loaded |
 
 ## Logging
 
@@ -506,20 +506,20 @@ Endpoint placeholders are resolved automatically by the CLI:
 The hook system is an open pub/sub bus. Core fires seed hooks. Extensions can fire their own hooks and listen to each other's. Any hook name is valid. No whitelist.
 
 ```js
-export async function init(place) {
+export async function init(reality) {
   // Listen to a core hook
-  place.hooks.register("enrichContext", async ({ context, space, meta }) => {
+  reality.hooks.register("enrichContext", async ({ context, space, meta }) => {
     const myData = meta["my-extension"] || {};
     if (Object.keys(myData).length > 0) context.myData = myData;
   }, "my-extension");
 
   // Listen to another extension's hook
-  place.hooks.register("gateway:beforeDispatch", async (data) => {
+  reality.hooks.register("gateway:beforeDispatch", async (data) => {
     // modify or react to gateway dispatches
   }, "my-extension");
 
   // Fire your own hook for other extensions to listen to
-  await place.hooks.run("my-extension:afterProcess", { result, userId });
+  await reality.hooks.run("my-extension:afterProcess", { result, userId });
 }
 ```
 
@@ -562,15 +562,15 @@ Extensions define their own hooks using the `extName:hookName` naming convention
 
 ### Structural mutations in hooks
 
-If your hook handler creates, moves, or deletes spaces, acquire a space lock via `place.spaceLocks.acquireSpaceLock`. Release in a `finally` block. The seed does not know which hooks do structural work. Extensions that do take responsibility.
+If your hook handler creates, moves, or deletes spaces, acquire a space lock via `reality.spaceLocks.acquireSpaceLock`. Release in a `finally` block. The seed does not know which hooks do structural work. Extensions that do take responsibility.
 
 ```js
-place.hooks.register("afterMatter", async ({ spaceId }) => {
-  const lock = await place.spaceLocks.acquireSpaceLock(parentId, sessionId);
+reality.hooks.register("afterMatter", async ({ spaceId }) => {
+  const lock = await reality.spaceLocks.acquireSpaceLock(parentId, sessionId);
   try {
     await createSpace({ name: "Child", parentId, beingId });
   } finally {
-    place.spaceLocks.releaseSpaceLock(parentId, sessionId);
+    reality.spaceLocks.releaseSpaceLock(parentId, sessionId);
   }
 }, "my-ext");
 ```
@@ -765,7 +765,7 @@ Both sources are merged. Disabled extensions are skipped during loading.
 Extensions return `jobs` from `init()` with start/stop functions:
 
 ```js
-export async function init(place) {
+export async function init(reality) {
   return {
     jobs: [
       {
@@ -783,52 +783,52 @@ Jobs are auto-started after DB connect via `startExtensionJobs()`.
 ## Per-Space Data Storage (metadata)
 
 Extensions MUST store per-space data in `space.qualities` under their extension name.
-Do NOT add fields to the core Space schema. Use `place.qualities` from the services bundle:
+Do NOT add fields to the core Space schema. Use `reality.qualities` from the services bundle:
 
 ```js
-// In init(place) or any function with core in scope:
+// In init(reality) or any function with core in scope:
 
 // Read
-const data = place.qualities.qualities.space.getQuality(space, "my-extension");  // returns {} if empty
+const data = reality.qualities.qualities.space.getQuality(space, "my-extension");  // returns {} if empty
 
 // Write (full replace, needs document)
-await place.qualities.qualities.space.setQuality(space, "my-extension", { wallets: {}, config: {} });
+await reality.qualities.qualities.space.setQuality(space, "my-extension", { wallets: {}, config: {} });
 
 // Partial update (shallow merge, needs document)
-await place.qualities.qualities.space.mergeQuality(space, "my-extension", { lastSync: new Date() });
+await reality.qualities.qualities.space.mergeQuality(space, "my-extension", { lastSync: new Date() });
 
 // Atomic increment (by ID or document, no read-modify-write)
-await place.qualities.qualities.space.incQuality(spaceId, "my-extension", "counter", 1);
+await reality.qualities.qualities.space.incQuality(spaceId, "my-extension", "counter", 1);
 
 // Atomic capped array push (by ID or document)
-await place.qualities.qualities.space.pushQuality(spaceId, "my-extension", "history", { ts: Date.now() }, 50);
+await reality.qualities.qualities.space.pushQuality(spaceId, "my-extension", "history", { ts: Date.now() }, 50);
 
 // Atomic multi-field set (by ID or document)
-await place.qualities.qualities.space.batchSetQuality(spaceId, "my-extension", { a: 1, b: 2, c: 3 });
+await reality.qualities.qualities.space.batchSetQuality(spaceId, "my-extension", { a: 1, b: 2, c: 3 });
 
 // Remove namespace entirely (on uninstall or cleanup)
-await place.qualities.qualities.space.unsetQuality(spaceId, "my-extension");
+await reality.qualities.qualities.space.unsetQuality(spaceId, "my-extension");
 ```
 
-For files outside `init()` (place.js, tools.js, routes.js), receive metadata through a configure pattern:
+For files outside `init()` (reality.js, tools.js, routes.js), receive metadata through a configure pattern:
 
 ```js
-// In place.js:
+// In reality.js:
 let _metadata = null;
 export function configure({ metadata }) { _metadata = metadata; }
 // Then use _metadata.qualities.space.getQuality, _metadata.qualities.space.setQuality, etc.
 
-// In index.js init(place):
-import { configure } from "./place.js";
-configure({ metadata: place.qualities });
+// In index.js init(reality):
+import { configure } from "./reality.js";
+configure({ metadata: reality.qualities });
 ```
 
-User metadata follows the same pattern via `place.beingMetadata`:
+User metadata follows the same pattern via `reality.beingMetadata`:
 
 ```js
-const prefs = place.beingMetadata.qualities.being.getQuality(user, "my-extension");
-await place.beingMetadata.incBeingMeta(userId, "my-extension", "visits", 1);
-await place.beingMetadata.batchSetBeingMeta(userId, "my-extension", { theme: "dark" });
+const prefs = reality.beingMetadata.qualities.being.getQuality(user, "my-extension");
+await reality.beingMetadata.incBeingMeta(userId, "my-extension", "visits", 1);
+await reality.beingMetadata.batchSetBeingMeta(userId, "my-extension", { theme: "dark" });
 ```
 
 Both paths are valid. The scoped place path prevents accidental cross-namespace writes. The direct import path is for seed code, migrations, and utilities that need to write to arbitrary namespaces.
@@ -847,9 +847,9 @@ Convention:
 Extensions that create a tree structure on install (food, fitness, recovery, kb, etc.) MUST set a `role` field in their metadata namespace on every scaffolded space:
 
 ```js
-await place.qualities.qualities.space.setQuality(logSpace, "food", { role: "log" });
-await place.qualities.qualities.space.setQuality(mealsSpace, "food", { role: "meals" });
-await place.qualities.qualities.space.setQuality(profileSpace, "food", { role: "profile" });
+await reality.qualities.qualities.space.setQuality(logSpace, "food", { role: "log" });
+await reality.qualities.qualities.space.setQuality(mealsSpace, "food", { role: "meals" });
+await reality.qualities.qualities.space.setQuality(profileSpace, "food", { role: "profile" });
 ```
 
 The `role` field is the structural marker. It means "this space is load-bearing for my extension." TreeOS base registers a generic `beforeSpaceDelete` hook that checks every space being deleted. If any extension namespace in the space's metadata contains a `role` field, the delete is cancelled with a message naming the extension and role.
@@ -920,8 +920,8 @@ export default {
 Or register during init():
 
 ```js
-export async function init(place) {
-  place.modes.registerMode("tree:research", {
+export async function init(reality) {
+  reality.modes.registerMode("tree:research", {
     emoji: "🔬",
     label: "Research",
     bigMode: "tree",
@@ -995,10 +995,10 @@ tools-clear                      Remove all local config (inherit from parent)
 
 **From extension code:**
 ```js
-// Allow a tool programmatically (use place.qualities, never import directly)
-const tools = place.qualities.qualities.space.getQuality(space, "tools") || {};
+// Allow a tool programmatically (use reality.qualities, never import directly)
+const tools = reality.qualities.qualities.space.getQuality(space, "tools") || {};
 tools.allowed = [...(tools.allowed || []), "my-custom-tool"];
-await place.qualities.qualities.space.setQuality(space, "tools", tools);
+await reality.qualities.qualities.space.setQuality(space, "tools", tools);
 ```
 
 ## Per-Space Mode Overrides
@@ -1068,8 +1068,8 @@ ext-restrict food read            Restrict to read-only tools
 Extensions should check spatial scope before running AI conversations:
 
 ```js
-// In your route handler (place.scope is always available):
-if (await place.scope.isExtensionBlockedAtSpace("my-extension", rootId)) {
+// In your route handler (reality.scope is always available):
+if (await reality.scope.isExtensionBlockedAtSpace("my-extension", rootId)) {
   return res.status(403).json({ error: "This extension is blocked on this branch." });
 }
 ```
@@ -1140,21 +1140,21 @@ No action = default GET. Unknown action shows available subcommands. Missing req
 
 ## Per-User Data Storage (metadata)
 
-Same pattern as per-space metadata. Use `place.beingMetadata` (always available, no declaration needed):
+Same pattern as per-space metadata. Use `reality.beingMetadata` (always available, no declaration needed):
 
 ```js
 // Read
-const energy = place.beingMetadata.qualities.being.getQuality(user, "energy");  // returns {} if empty
+const energy = reality.beingMetadata.qualities.being.getQuality(user, "energy");  // returns {} if empty
 
 // Write (sync, caller must save)
-place.beingMetadata.qualities.being.setQuality(user, "energy", { available: { amount: 100 } });
+reality.beingMetadata.qualities.being.setQuality(user, "energy", { available: { amount: 100 } });
 await user.save();
 
 // Atomic operations (by ID or document, no need to save)
-await place.beingMetadata.incBeingMeta(userId, "energy", "used", 5);
-await place.beingMetadata.pushBeingMeta(userId, "energy", "history", { ts: Date.now() }, 50);
-await place.beingMetadata.batchSetBeingMeta(userId, "energy", { available: 95, lastUsed: Date.now() });
-await place.beingMetadata.unsetBeingMeta(userId, "old-extension");
+await reality.beingMetadata.incBeingMeta(userId, "energy", "used", 5);
+await reality.beingMetadata.pushBeingMeta(userId, "energy", "history", { ts: Date.now() }, 50);
+await reality.beingMetadata.batchSetBeingMeta(userId, "energy", { available: 95, lastUsed: Date.now() });
+await reality.beingMetadata.unsetBeingMeta(userId, "old-extension");
 ```
 
 Convention: namespace key matches your manifest name. Same rules as space metadata.
@@ -1168,7 +1168,7 @@ Extensions never import each other's files directly. They communicate through de
 Return an `exports` object from `init()`:
 
 ```js
-export async function init(place) {
+export async function init(reality) {
   return {
     router,
     exports: {
@@ -1209,14 +1209,14 @@ if (treeOrch) {
 For services like energy that may or may not be installed, use a setter pattern:
 
 ```js
-// place.js
+// reality.js
 let useEnergy = async () => ({ energyUsed: 0 });
 export function setEnergyService(energy) { useEnergy = energy.useEnergy; }
 
 // index.js
-import { setEnergyService } from "./place.js";
-export async function init(place) {
-  if (place.energy) setEnergyService(place.energy);
+import { setEnergyService } from "./reality.js";
+export async function init(reality) {
+  if (reality.energy) setEnergyService(reality.energy);
   // ...
 }
 ```
@@ -1254,10 +1254,10 @@ optional: {
 ```js
 // In your index.js setRunChat wrapper:
 setRunChat(async (opts) => {
-  if (opts.userId && opts.userId !== "SYSTEM" && !await place.llm.userHasLlm(opts.userId)) {
+  if (opts.userId && opts.userId !== "SYSTEM" && !await reality.llm.userHasLlm(opts.userId)) {
     return { answer: null };
   }
-  return place.llm.runTurn({ ...opts, llmPriority: BG });
+  return reality.llm.runTurn({ ...opts, llmPriority: BG });
 });
 ```
 
@@ -1265,7 +1265,7 @@ setRunChat(async (opts) => {
 
 **Injecting into enrichContext without guarding.** Every enrichContext handler should check if relevant data exists before injecting. If your extension has no data for this space, return early. Do not inject empty objects. Do not run database queries on every context build unless you have data to contribute.
 
-**Writing to metadata without the seed API.** Direct `space.qualities.set()` or `Space.updateOne({ $set: ... })` bypasses namespace ownership, document size guards, and the afterQualityWrite hook. Always use `place.qualities.*` functions. The seed provides atomic operations for every pattern: `qualities.space.incQuality` for counters, `qualities.space.pushQuality` for capped arrays, `qualities.space.batchSetQuality` for multi-field writes, `qualities.space.unsetQuality` for cleanup. There is no reason to use direct MongoDB for metadata.
+**Writing to metadata without the seed API.** Direct `space.qualities.set()` or `Space.updateOne({ $set: ... })` bypasses namespace ownership, document size guards, and the afterQualityWrite hook. Always use `reality.qualities.*` functions. The seed provides atomic operations for every pattern: `qualities.space.incQuality` for counters, `qualities.space.pushQuality` for capped arrays, `qualities.space.batchSetQuality` for multi-field writes, `qualities.space.unsetQuality` for cleanup. There is no reason to use direct MongoDB for metadata.
 
 **Missing LLM_PRIORITY on background calls.** Every LLM call needs a priority. BACKGROUND for hooks and jobs. INTERACTIVE for user-triggered tools. GATEWAY for external channels. Without priority, background extensions compete with human chat.
 
@@ -1340,7 +1340,7 @@ defaults.
 
 ## Security Model
 
-Extensions run in the same Node.js process as place. There is no sandbox or import restriction.
+Extensions run in the same Node.js process as reality. There is no sandbox or import restriction.
 
 - Manifests declare dependencies for documentation and scoped injection via `buildScopedCore`, but **do not enforce access boundaries**. Any extension can `import` any file on disk.
 - The `needs` and `optional` fields determine what is injected into `place` during `init()`, not what the extension can access.
@@ -1462,11 +1462,11 @@ treeos bundle install <name>    Install all member extensions.
 
 ## Collaboration
 
-Code lives on your place. You build extensions in `extensions/my-extension/`, test them locally, and publish to Horizon when ready. If you want others to contribute, push the code to GitHub (or any git host) and link it with `repoUrl`. If you don't need collaboration, skip the repo. The extension works either way.
+Code lives on your reality. You build extensions in `extensions/my-extension/`, test them locally, and publish to Horizon when ready. If you want others to contribute, push the code to GitHub (or any git host) and link it with `repoUrl`. If you don't need collaboration, skip the repo. The extension works either way.
 
 ### Workflow
 
-1. **Build** locally. Create your extension in `extensions/`. Test it on your place.
+1. **Build** locally. Create your extension in `extensions/`. Test it on your reality.
 2. **Publish** to Horizon. `treeos ext publish my-extension --notes "what changed"`. Horizon stores the package.
 3. **Others install** from Horizon. `treeos ext install my-extension`. They get the published version.
 4. **Collaborate** (optional). Push to GitHub. Others fork, PR, contribute. You publish the next version.

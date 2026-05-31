@@ -1,49 +1,69 @@
 # Extensions, a developer guide
 
-This is the guide for building TreeOS extensions against the seed as it
-stands today. Start at the top if you have never written one before,
-skim the lower sections once you know your way around. The companion
-spec for manifest fields is [EXTENSION_FORMAT.md](./EXTENSION_FORMAT.md);
-the seed's own internals are in [`../seed/FACTORY.md`](../seed/FACTORY.md).
+The guide for building TreeOS extensions against the seed as it stands.
+Start at the top if you have not written one. The manifest spec is in
+[EXTENSION_FORMAT.md](./EXTENSION_FORMAT.md); the seed's own internals
+are in [`../seed/FACTORY.md`](../seed/FACTORY.md).
 
-If anything here disagrees with the seed source, **the source is
-right**. The seed evolves; this guide aims to track it. If you find
-drift, fix it.
+If anything here disagrees with the seed source, **the source is right**.
 
 ---
 
-## 1. What an extension is
+## 1. What an extension actually adds
 
-The seed (`reality/seed/`) is a closed kernel. It defines six primitives
-(Being, Space, Matter, Fact, Act, LlmConnection), four verbs (SEE, DO,
-SUMMON, BE), and the machinery that runs one moment at a time. It does
-not know what food is, what governance is, what a Discord channel is,
-or what your domain looks like. It provides structure.
+The seed is a closed kernel. It defines six primitives (Being, Space,
+Matter, Fact, Act, LlmConnection), four verbs (SEE, DO, SUMMON, BE), and
+the machinery that runs one moment at a time. It does not know what
+food, governance, or a dance floor is. It provides structure.
 
 An **extension** lives in `reality/extensions/<name>/` and teaches the
-seed new vocabulary inside that structure. It can:
+seed new vocabulary. It can contribute exactly five things:
 
-- Register **DO operations**, new actions on the DO verb (extensions of
-  the write vocabulary).
-- Register **roles**, templates a Being can wear when summoned.
-- Provide **tools**, LLM-callable functions tagged with a verb.
-- Subscribe to **hooks**, lifecycle events the seed fires.
-- Subscribe to **DO triggers**, so a write at some position wakes a
-  Being you choose.
-- Register **scheduled wakes**, cadence-driven SUMMONs.
-- Register **seeds**, plantable scaffolds the operator can run.
-- Provide HTTP **routes** (thin shims into IBP), **jobs**
-  (start/stop background workers), and Mongoose **models**.
-- Push **WebSocket events** to a Being.
+- **DO operations** — new actions on the DO verb. The only LLM-callable
+  surface your extension adds.
+- **Roles** — templates a Being wears when summoned.
+- **See-resolvers** — structured per-role views the prompt assembler
+  pre-renders into the system prompt.
+- **Seeds** — plantable scaffolds an operator can run.
+- **Hooks / subscriptions / scheduled wakes** — lifecycle reactivity.
 
-The seed loads extensions at boot, calls each one's `init(place)` once
-with a scoped services bundle, and wires whatever the init returns.
+Plus the usual plumbing if you need it: HTTP routes, background jobs,
+cross-extension API, WebSocket pushes.
+
+### What extensions DO NOT add
+
+Read this before you start. The cleanup that landed in 2026-05 deleted
+several patterns; not knowing they are gone is the #1 way to overbuild.
+
+- **LLM tools.** The seed ships ONE generic tool per verb (`see`, `do`,
+  `summon`, `be`). That is the entire LLM tool surface for every being
+  on every reality. Extensions do not register LLM tools. Add a DO
+  operation; the LLM calls `do({action: "your-ext:your-op", args})`.
+- **Per-action ergonomic wrappers.** No `step({direction})` tool that
+  translates into `do({action: "harmony:step"})`. Domain-tuned schemas
+  belong at the op-handler level, not as a separate LLM tool.
+- **Position folds, grid reducers, projection writers.** The factory
+  has `PositionProjection` (cross-cutting fold of beings' coords per
+  space). Read it via `readPositionsInSpace(spaceId)`. Bounds are
+  enforced by `set-being:coord` at write time.
+- **Direct `mongoose.model("X")` calls.** Import the model from its
+  seed path:
+  `import Being from "../../seed/materials/being/being.js"`.
+  Same for Space, Matter, Fact. Direct registry lookups bypass the
+  seed's typing.
+- **A `toolNames` field on roles.** It does not exist. The role spec
+  IS its four `can*` lists; tool exposure follows from which lists are
+  populated.
+- **Tool-syntax instructions in `prompt(ctx)`.** The system prompt
+  already renders the four verbs and the role's licensed targets. Do
+  not restate `do({action, args})` syntax in the role body; that is
+  role-intent space, not assembler space.
 
 ---
 
 ## 2. The smallest possible extension
 
-Two files, total. Copy [`_template/`](./_template/) and edit.
+Two files. Copy [`_template/`](./_template/) and edit.
 
 ```
 extensions/hello/
@@ -58,163 +78,132 @@ export default {
   name: "hello",
   version: "1.0.0",
   description: "Says hi.",
-  needs:    { services: [], extensions: [] },
-  provides: { tools: true },
+  needs:    { services: [] },
+  provides: { hooks: { fires: [], listens: [] } },
 };
 ```
 
 **index.js**
 
 ```js
-export async function init(place) {
-  return {
-    tools: [{
-      name: "hello:greet",
-      verb: "do",
-      description: "Greet the asker.",
-      schema: {},
-      handler: async ({ beingId }) => ({
-        content: [{ type: "text", text: `Hi, being ${beingId}.` }],
-      }),
-    }],
-  };
+export async function init(reality) {
+  reality.do.registerOperation("greet", {
+    targets: ["being"],
+    async handler({ target, params }) {
+      return { greeting: `Hi, being ${target.id}.` };
+    },
+  });
 }
 ```
 
-Drop the folder in `reality/extensions/`, restart the server, and the
-tool is callable from any role that lists `"hello:greet"` in its
-`canDo`. That is the whole contract.
+That is the whole contract. Any LLM role with
+`canDo: [{action: "hello:greet", description: "..."}]` can invoke it
+via `do({action: "hello:greet"})`.
 
 ---
 
 ## 3. The four verbs
 
-Every operation on the world goes through one of four verbs. These are
-the only public surface; everything else is a syntactic helper on top
-of them. Signatures live in [`../seed/ibp/verbs/`](../seed/ibp/verbs/) — one file per verb (`do.js`, `see.js`, `summon.js`, `be.js`).
+Every operation on the world goes through one of four verbs. Verb
+files are in [`../seed/ibp/verbs/`](../seed/ibp/verbs/).
 
-| Verb | Targets | What it does | Stamps a Fact? |
-|---|---|---|---|
-| **SEE** | space, matter, being, position | Read state, return a descriptor. | No |
-| **DO** | space, matter, being, place, stance, position | Run a registered operation. Writes. | Yes (unless `skipAudit`) |
-| **SUMMON** | being (stance) | Wake a being with a message. | Yes (`be:summon` on the summoner's reel) |
-| **BE** | being (self) | Identity: register, claim, release, switch, create-being. | Yes (`be:<op>` on the being's reel) |
-
-The verb you call decides the gate (`authorize`), the side effects
-(Fact stamp), and which registry resolves the name (operations for DO,
-role/being for SUMMON).
+| Verb | What it does | Stamps a Fact? |
+|---|---|---|
+| **SEE** | Read state, return a Position Descriptor. | No |
+| **DO** | Run a registered operation. Writes. | Yes (unless `skipAudit`) |
+| **SUMMON** | Wake a being with a message. | Yes (`be:summon` on the summoner's reel) |
+| **BE** | Identity: register, claim, release, switch, create-being. | Yes (`be:<op>` on the being's reel) |
 
 ### Calling them
 
-The scoped bundle hands you each one as a callable:
-
 ```js
-const desc = await place.see(target, opts);
-const ret  = await place.do(target, "ext:operation-name", params, opts);
-const sum  = await place.summon(stance, message, opts);
-const bee  = await place.be("register" | "claim" | ..., payload, opts);
+const desc = await reality.see(target, opts);
+const ret  = await reality.do(target, "ext:op-name", params, opts);
+const sum  = await reality.summon(stance, message, opts);
+const bee  = await reality.be("register" | "claim" | ..., payload, opts);
 ```
 
-**Threading identity and audit.** Most DO/BE/SUMMON calls from inside
-an extension happen while a Being is acting through your code. Pass
-that being through:
+**Threading identity + summonCtx.** Every DO/SUMMON/BE inside a being's
+moment must thread the moment context so the resulting Fact rides this
+moment's Act:
 
 ```js
-await place.do(target, "ext:set-status", { status: "ok" }, {
-  identity:  { beingId },         // who's doing it (drives stance auth)
-  summonCtx,                       // the open Act's correlation, threaded from the caller
+await reality.do(target, "ext:set-status", { status: "ok" }, {
+  identity:  { beingId },     // who is doing it (drives stance auth)
+  summonCtx,                  // forwards the open Act's actId
 });
 ```
 
-The seed throws if `summonCtx.actId` is missing on a DO call from
-non-scaffold code. Every act lives in a moment; the Fact has to ride
-the Act that opened that moment.
-
-If you genuinely are doing boot-time scaffolding (you should not be,
-in an extension), pass `{ scaffold: true }` and no identity. This is
-reserved for the seed itself.
+The seed throws on a DO call with no `summonCtx.actId` from non-scaffold
+code. Forward `summonCtx` from your handler down into every sub-call.
 
 ---
 
-## 4. The `place` bundle
+## 4. The `reality` bundle
 
-The loader (`reality/extensions/loader.js`) calls your `init(place)`
-with a scoped view of the seed's service bundle, assembled in
-[`../seed/services.js`](../seed/services.js). What you get:
+The loader calls your `init(reality)` with a scoped view of the seed's
+service bundle (assembled in
+[`../seed/services.js`](../seed/services.js)).
 
-### Always available (no `needs` declaration required)
+### Always available
 
-- `place.see`, `place.do`, `place.summon`, `place.be`, the four verbs.
-- `place.do.registerOperation(name, spec)`, register a DO action.
+- `reality.see`, `reality.do`, `reality.summon`, `reality.be` — the four verbs.
+- `reality.do.registerOperation(name, spec)` — register a DO action.
   Auto-namespaced (your `name` becomes `"<your-ext>:<name>"`).
-- `place.hooks`, `{ register, unregister, run, fire }` lifecycle bus.
-- `place.qualities.{being,space,matter}`, read API (`getQuality`,
-  `readQualityNamespace`). Writes have been retired here; use DO.
+- `reality.hooks` — `{ register, unregister, run, fire }` lifecycle bus.
+- `reality.qualities.{being,space,matter}` — read API (`getQuality`,
+  `readQualityNamespace`). Writes go through DO.
+- `reality.declare` — `{ registerRole, subscribe, schedule, aggregate }`.
 
-### Declared via `needs.services` in manifest
+### Declared via `needs.services`
 
 | Service | What you get |
 |---|---|
-| `models` | Mongoose models: `Being`, `Space`, `Matter`, `Fact`, etc. |
-| `auth` | `createBeing`, `verifyPassword`, `generateToken`, `findBeingByName`, `registerStrategy`, ... |
-| `session` | `createSession`, `endSession`, `getSession`, `SESSION_TYPES`, `registerSessionType`, ... |
-| `llm` | `runTurn`, `stepTurn`, `getClientForBeing`, `switchRole`, `registerBeingLlmSlot`, ... |
+| `models` | `Being`, `Space`, `Matter`, `Fact`, `Act`, `LlmConnection`. |
+| `auth` | `createBeing`, `verifyPassword`, `generateToken`, ... |
+| `session` | `createSession`, `endSession`, `SESSION_TYPES`, ... |
+| `llm` | `runLlmMoment`, `getClientForBeing`, `resolveRootLlmForRole`, `registerBeingLlmSlot`, `registerRootSpaceLlmSlot`, `registerFailoverResolver`. |
 | `websocket` | `emitToBeing`, `emitNavigate`, `registerSocketHandler`, `getIO`. Event names auto-namespaced. |
-| `facts` | `logFact` (rarely called directly; DO stamps for you) |
-| `seeds` | `register`, `plant`, `unplant`, `list`, `listPlantedAt` |
-| `space` | `createSpace`, `deleteSpaceBranch`, `editSpaceName`, `editSpaceType`, `getAncestorChain`, `snapshotAncestors`, ... |
-| `matters` | `createMatter`, `editMatter`, `deleteMatterAndFile`, `transferMatter`, `getMatters` |
-| `spaceLocks` | `acquireSpaceLock`, `releaseSpaceLock`, `acquireMultiple`, ... |
-| `scope` | `isExtensionBlockedAtSpace`, `getBlockedExtensionsAtSpace`, `getToolOwner` |
-| `declare` | `registerRole`, `unregisterRole`, `subscribe`, `schedule`, `aggregate`, ... |
-| `protocol` | `ok`, `error`, `sendOk`, `sendError`, `IBP_ERR` (for routes) |
-
-A declared but missing service comes through as an inert stub
-(optional ones) or causes init to fail (required ones). The minimum
-list for a tool-only extension is empty; you only declare what you
-actually reach for.
+| `space` | `createSpace`, `getAncestorChain`, `snapshotAncestors`, ... |
+| `matters` | `createMatter`, `editMatter`, `deleteMatterAndFile`, ... |
+| `scope` | `isExtensionBlockedAtSpace`, `getToolOwner`. |
+| `protocol` | `ok`, `error`, `sendOk`, `sendError`, `IBP_ERR`. |
 
 ### Auto-namespacing
 
-The loader scopes your view so you can never accidentally write into
-another extension's territory:
-
-- `place.do.registerOperation("foo", ...)` becomes
-  `"<your-ext>:foo"` on the registry.
-- `place.websocket.emitToBeing(bId, "tick", payload)` becomes
+- `reality.do.registerOperation("foo", ...)` becomes `"<your-ext>:foo"`.
+- `reality.websocket.emitToBeing(bId, "tick", ...)` becomes
   `"<your-ext>:tick"` on the wire.
 - Passing a fully-qualified name with a prefix that is not yours
   **throws**.
 
 ---
 
-## 5. Manifest in detail
+## 5. Manifest
 
 ```js
 export default {
   name:        "my-extension",     // kebab-case; this is your namespace
-  version:     "1.0.0",            // semver
+  version:     "1.0.0",
   description: "One line.",
 
   needs: {
-    services:   ["llm", "session"],        // required; init fails if missing
-    extensions: ["other-ext"],             // required peers
-    models:     ["Space", "Being"],        // optional, mostly informational
+    services:   ["llm", "session"],
+    extensions: ["other-ext"],
   },
 
   optional: {
-    services:   ["energy"],                // gets stub if missing
-    extensions: ["billing"],               // wired if present, skipped if not
+    services:   ["energy"],
+    extensions: ["billing"],
   },
 
   provides: {
-    models: { MyModel: "./model.js" },     // registered into place.models
-    routes: "./routes.js",                  // mounted at /api/v1
-    tools:  true,                           // init() returns tools: [...]
-    jobs:   "./jobs.js",                    // { start, stop }
-    seeds:  { "my-seed": "./seeds/my.js" }, // plantable scaffolds
+    models: { MyModel: "./model.js" },
+    routes: "./routes.js",
+    jobs:   "./jobs.js",
+    seeds:  { "my-seed": "./seeds/my.js" },
     hooks: {
-      fires:   [{ name: "my-ext:ready", data: "{}", description: "..." }],
+      fires:   [{ name: "my-ext:ready", description: "..." }],
       listens: ["afterMatter", "enrichContext"],
     },
     defaultPermissions: {
@@ -224,21 +213,20 @@ export default {
 };
 ```
 
+There is no `provides.tools` — extensions don't register LLM tools.
+
 Full reference: [EXTENSION_FORMAT.md](./EXTENSION_FORMAT.md).
 
-### `init(place)` return shape
-
-Anything not declared in the manifest can also be returned at runtime
-from `init`. The loader wires whatever it sees:
+### `init(reality)` return
 
 ```js
-export async function init(place) {
-  // do things during init...
+export async function init(reality) {
+  // register ops, roles, subscriptions, hooks here...
   return {
-    tools:   [/* tool objects */],
-    router:  expressRouter,
+    router:  expressRouter,         // mounted at /api/v1/<ext>/
     jobs:    { start() {}, stop() {} },
-    exports: { helperFn },   // cross-extension API
+    seeds:   [{ name: "my-seed", ...mySeed }],
+    exports: { helperFn },          // cross-extension API
   };
 }
 ```
@@ -247,444 +235,445 @@ export async function init(place) {
 
 ## 6. DO operations
 
-An **operation** is a named, gated, audited write. Tools call
-operations; operations are what extensions actually contribute to the
-verb. The seed defines a small bare-name set, material-scoped
-(`create-space`, `set-being`, `end-matter`, `plant`, `set-config`,
-`add-llm-connection`, etc. — registered from each
-[`../seed/materials/<kind>/ops.js`](../seed/materials/)). Your
-extension's operations live under `"<your-ext>:<action>"`.
+A **DO operation** is a named, gated, audited write. It is the only
+LLM-callable surface your extension adds.
 
-### Registering
+### Register
 
 ```js
-place.do.registerOperation("log-meal", {
-  targets: ["space"],                       // valid: space|being|matter|place|stance|position
-  schema:  zodOrJsonSchema,                 // currently stored only; enforcement on roadmap
-  factAction: "log-meal",                   // name written into the Fact (defaults to op name)
-  skipAudit: false,                         // true means no Fact stamped (use sparingly)
+reality.do.registerOperation("log-meal", {
+  targets:    ["space"],                       // valid: space|being|matter|stance|position
+  factAction: "log-meal",                      // defaults to op name
+  skipAudit:  false,                           // true = no Fact stamped (rare)
   async handler({ target, params, identity, summonCtx, scaffold }) {
-    // do the write
+    // do the write through seed verbs or seed-model imports
     return { logged: true };
   },
 });
 ```
 
-The loader rewrites `"log-meal"` to `"my-ext:log-meal"` and tags it
-with `ownerExtension: "my-ext"`. From then on:
+The loader rewrites `"log-meal"` to `"my-ext:log-meal"`. From then on:
 
 ```js
-await place.do(spaceId, "my-ext:log-meal", { text: "eggs" }, { identity, summonCtx });
+await reality.do(spaceId, "my-ext:log-meal", { text: "eggs" }, { identity, summonCtx });
 ```
 
-### What the dispatcher does
+And the LLM dispatches the same op as:
 
-For each `place.do(...)` call, the verb in
-[`../seed/ibp/verbs/do.js:60`](../seed/ibp/verbs/do.js#L60) runs:
+```
+do({ action: "my-ext:log-meal", target: "<address>", args: { text: "eggs" } })
+```
+
+### Dispatcher flow
+
+For each `reality.do(...)`:
 
 1. Look up `"my-ext:log-meal"` in the registry.
-2. Read-only-origin gate (filesystem-origin matter rejects writes
-   unless an extension opted out).
-3. Stance authorization (`authorize`), namespace-aware: a write to
-   `qualities.<ns>` only passes if the actor owns that namespace at
-   that position.
+2. Read-only-origin gate (filesystem-origin matter rejects writes).
+3. Stance authorization (`authorize`), namespace-aware.
 4. Call your `handler({ target, params, identity, summonCtx, scaffold })`.
 5. Stamp a Fact on the target's reel with `actId` from `summonCtx`
    (unless `skipAudit`).
 
-If your op writes qualities, use the material-scoped `do.set-<kind>`
-ops (one per material kind) rather than calling Mongoose directly:
+### Writing qualities
+
+Use the seed's material-scoped `set-<kind>` ops. Per-namespace atomic:
 
 ```js
-// Set the whole namespace on a space
-await place.do(spaceId, "set-space", {
+// Whole namespace on a space
+await reality.do(spaceId, "set-space", {
   field: "qualities.my-ext",
-  value: { lastMeal: "eggs", at: new Date().toISOString() },
+  value: { goals: [{ id: 1, text: "ship it" }] },
 }, { identity, summonCtx });
 
-// Set one inner key (atomic; other namespaces and other inner keys untouched)
-await place.do(spaceId, "set-space", {
-  field: "qualities.my-ext.lastMeal",
-  value: "eggs",
+// One inner key (atomic at that key path)
+await reality.do(spaceId, "set-space", {
+  field: "qualities.my-ext.lastSeen",
+  value: new Date().toISOString(),
 }, { identity, summonCtx });
 
-// Same shape for beings and matter targets — name the op for the kind
-await place.do(beingId,  "set-being",  { field: "qualities.my-ext.streak", value: 7 }, opts);
-await place.do(matterId, "set-matter", { field: "qualities.my-ext.tag",    value: "x" }, opts);
+// Same shape for beings and matter
+await reality.do(beingId,  "set-being",  { field: "qualities.my-ext.streak", value: 7 }, opts);
+await reality.do(matterId, "set-matter", { field: "qualities.my-ext.tag",    value: "x" }, opts);
 ```
 
-Each `set-<kind>` is a seed op; the reducer's `applySetQualities`
-derives the new state on the next fold. Per-reel append lock ensures
-concurrent writes to different namespaces on the same primitive never
-clobber each other.
-
-### What target shapes are allowed
-
-The `targets: [...]` field lists the kinds your op can be invoked
-against. The dispatcher does **not** validate that the runtime
-`target` matches; your handler does. Validate early:
-
-```js
-async handler({ target, params }) {
-  if (!target?._id || target.constructor.modelName !== "Space") {
-    throw new Error("my-ext:log-meal expects a Space target");
-  }
-  // ...
-}
-```
+The legacy `qualities.X.setQuality()` family was retired 2026-05-23 and
+now throws. Every write must be a Fact on the aggregate's reel.
 
 ---
 
 ## 7. Roles
 
-A **role** is a template a Being wears for a moment. When a SUMMON
-arrives at a being-stance, the seed looks up the activeRole, builds
-the frame from the role spec, and runs the moment.
+A **role** is a template a Being wears for a moment. The role spec is
+PURE DATA — name, description, the four `can*` lists, optional
+see-resolvers, and the `prompt(ctx)` body. The seed registry runs
+the role; you do not write engine glue.
 
-Registered at
-[`../seed/present/roles/registry.js`](../seed/present/roles/registry.js).
+Specifically: do not write a `summon` function in your role for LLM
+cognition. The registry auto-wraps `defaultSummon`, which calls
+`runLlmMoment` with the right envelope and routes the discriminated
+result (act / see / failure). Defining your own `summon` is the
+retired pattern; it duplicates the dispatcher.
 
-### Minimal role
+Define a custom `summon` ONLY for scripted cognition (the function
+reads the fold and acts in code, no LLM call). The harmony drummer
+and dancer-toward are scripted; the dancer-llm and reality-manager
+are pure data.
+
+### The complete role spec (LLM cognition)
 
 ```js
-place.declare.registerRole("meal-logger", {
-  name:        "meal-logger",
-  see:         ["this-space"],              // preloaded prompt blocks
-  canSee:      ["my-ext:read-status"],      // tool names by verb
-  canDo:       ["my-ext:log-meal"],
-  canSummon:   [],
-  canBe:       [],
-  prompt:      (ctx) => `You are the Meal Logger at ${ctx.currentSpaceName}.
-Log the user's meal. Call my-ext:log-meal exactly once and exit.`,
-  respondMode: "async",                     // "async" | "sync" | "none"
-  triggerOn:   ["message"],                 // ["message"] | ["schedule"] | hooks
-  replyTo:     "asker",                     // "asker" | "chain-initial" | omit
+reality.declare.registerRole("meal-logger", {
+  name: "meal-logger",
+  description: "Records what the user just ate at this position.",
+  permissions: ["see", "do"],
+  respondMode: "async",
+  triggerOn:   ["message"],
+
+  // The body: four can* lists. THIS IS THE ROLE.
+  canSee: [
+    "this-space",
+    { address: ".identity", description: "the reality's DID and public key" },
+  ],
+  canDo: [
+    {
+      action: "my-ext:log-meal",
+      description: "Record one meal. args: { text: string }",
+    },
+  ],
+  canSummon: [
+    { stance: "(asker)", description: "reply to whoever woke you" },
+  ],
+  // canBe absent: not in the tool surface.
+
+  // Optional: structured face the assembler pre-renders into the prompt.
+  see: ["my-ext:meal-history"],
+
+  // Multi-moment work. Default false (one act per summon).
+  selfContinue: false,
+
+  // Role-intent body. NO verb syntax explanation; the assembler handles
+  // that. This is the role's character, persona, and goal.
+  prompt: (ctx) =>
+    `You log what the user ate. Be brief. Confirm and move on.`,
+
+  // Optional: how to send the answer back.
+  replyTo: "asker",
+
+  // No `summon` field. The registry auto-wraps defaultSummon, which
+  // calls runLlmMoment with the right envelope. Pure data.
 }, "my-ext");
 ```
 
-### What the registry derives so you don't write it
+### The four `can*` lists ARE the role
 
-| Field | How it's derived |
-|---|---|
-| `permissions` | Union of verbs implied by `canSee`/`canDo`/`canSummon`/`canBe` plus `see`. |
-| `respondMode` | Defaults to `"async"`. |
-| `triggerOn` | Defaults to `["message"]`. |
-| `summon(message, ctx)` | Auto-wrapped with [defaultSummon.js](../seed/present/voices/llm/defaultSummon.js) unless you supply one. |
-| System prompt | Auto-assembled: identity + preloaded `see` blocks + capability list + your `prompt(ctx)` body + a time stamp. |
+| List | Entries | Tool exposed |
+|---|---|---|
+| `canSee`    | addresses the role may read         | `see`    |
+| `canDo`     | action names the role may invoke    | `do`     |
+| `canSummon` | stance targets the role may address | `summon` |
+| `canBe`     | BE operations the role may perform  | `be`     |
 
-### What `defaultSummon` does for you
+A `can*` list with at least one entry exposes that verb's tool. The
+prompt's `see:` / `do:` / `summon:` / `be:` sections list the entries
+verbatim under each verb header.
 
-For every SUMMON to a being in your role, it:
+There is no `toolNames` field. The role spec is described once; the
+tool surface follows.
 
-1. Resolves the LLM client for this being at this position (the
-   four-layer space/being lockout walk in
-   [`../seed/present/voices/llm/connect.js`](../seed/present/voices/llm/connect.js)).
-2. Builds the system prompt: identity line, preloaded `see` blocks,
-   capability list, your `prompt(ctx)` body, time.
-3. Pushes the SUMMON envelope content as the first user message.
-4. Loops: assistant turn, tool calls, tool results, repeat until the
-   LLM emits text with no tool call (or `exit.requires` is unmet).
-5. Returns `{ text, actId }`.
-6. If `replyTo` is set, emits a reply SUMMON to the right stance
-   (asker for `"asker"`, chain-initial for `"chain-initial"`).
+### Entry shapes
 
-You only write a custom `summon` when the dispatch shape is unusual
-(structural routing, multi-step composition, etc.).
-
-### Exit gate
-
-If the role MUST produce a specific deliverable, declare:
+Each `can*` entry is either a plain string or a self-describing object:
 
 ```js
-exit: { requires: "my-ext:log-meal" },
+canDo: [
+  "my-ext:simple-action",                                // bare descriptor
+  { action: "set-config", description: "args: { key, value }" },
+  { rel: "any-child" },                                  // relationship token (future)
+]
 ```
 
-The loop refuses to terminate until the named tool fires. If the LLM
-tries to end early, the loop pushes a corrective system message and
-re-enters, capped at `maxToolIterations` (default 15, in
-internalConfig).
+Relationship tokens (`{rel: "..."}`, `{pattern: "..."}`) expand at
+prompt-build time via registered resolvers; today none ship, so they
+pass through as literals (drop silently). Reserved for lineage-aware
+licenses.
 
-### Preloaded `see` blocks
+### The `prompt(ctx)` body
 
-The `see` array names resolvers registered through
-[`registerSeeResolver`](../seed/present/voices/llm/seeResolvers.js).
-Seed ships `this-space`; your extension can add its own:
+Role-intent only. Persona, goal, constraints. The assembler already
+renders:
 
-```js
-import { registerSeeResolver } from "../../seed/present/voices/llm/seeResolvers.js";
+- `I am <name>, <role> at <space>.`
+- Preloaded structured `see` blocks (your resolvers' output as JSON).
+- `and can:` followed by the four `can*` sections.
+- Your `prompt(ctx)` body.
+- `[Time] <ISO>`.
 
-registerSeeResolver("my-ext-status", async (ctx) => {
-  const spaceId = ctx.currentSpaceId || ctx.rootId;
-  if (!spaceId) return null;     // null opts this block out for this context
-  return await renderStatus(spaceId);
-}, "my-ext");
-```
+Do NOT restate `do({action, args})` syntax. Do NOT restate "call see to
+read state" or similar. The assembler instructs the LLM on the verbs.
 
-Resolvers run in parallel. The assembler joins non-empty results in
-declaration order between the identity line and the capability list.
+### `selfContinue`
+
+A role with `selfContinue: true` auto-enqueues a self-SUMMON after each
+sealed act. The being keeps stepping (each step is one moment with a
+freshly-folded world) until the LLM emits no tool call. Silence (SEE)
+is the natural exit.
+
+Default `false`: one summon, one act, done. The harmony dancers are
+this kind — externally ticked.
 
 ---
 
-## 8. Tools
+## 8. See-resolvers (structured per-role views)
 
-A **tool** is an LLM-callable function. Every tool tags its verb so
-authorization runs the right gate and the prompt assembler groups it
-correctly.
+The role's `see` field is a list of resolver names. Every moment, the
+assembler runs each one and pre-renders the result into the system
+prompt as `[name]\n<JSON>` blocks.
 
-### Shape
+### Register
 
 ```js
+import { registerSeeResolver } from "../../seed/present/cognition/llm/seeResolvers.js";
+
+registerSeeResolver("meal-history", async (ctx) => {
+  const beingId = String(ctx.being?._id);
+  const recent = await readRecentMeals(beingId);
+  return {
+    today: recent.today,                  // array of meal records
+    weekCount: recent.weekCount,           // number
+    streakDays: recent.streakDays,         // number
+  };
+}, "my-ext");
+```
+
+### Return structured data
+
+Resolvers MUST return objects, not prose. The LLM hallucinates when
+the input is English; structured input keeps the model honest. The
+classic prose-input failure: a resolver returns
+`"You are at (3,4) on a 10x10 grid"` and the LLM free-associates "wall
+cluster ahead" — features that don't exist in the data.
+
+Object output renders as:
+
+```
+[meal-history]
 {
-  name:        "my-ext:log-meal",           // matches a registered tool
-  verb:        "do",                        // "see" | "do" | "summon" | "be" (required)
-  description: "Record one meal at the current position.",
-  schema: {                                 // zod or json-schema
-    text: z.string().describe("What the user ate."),
-  },
-  async handler({ text, beingId, spaceId, userId, role, signal }) {
-    await place.do(spaceId, "my-ext:log-meal", { text }, {
-      identity:  { beingId },
-      summonCtx: { actId: ctx.actId },       // threaded by the loop
-    });
-    return { content: [{ type: "text", text: "Logged." }] };
-  },
+  "today": [{ "text": "eggs", "at": "..." }],
+  "weekCount": 14,
+  "streakDays": 5
 }
 ```
 
-Tools are returned from `init()` in the `tools: [...]` array. The
-loader registers them through `registerToolBundle`. Tool names are
-**not** auto-namespaced (because they must match the strings used in
-role `canDo`/`canSee` lists); convention is to prefix with your
-extension name yourself.
+Strings are accepted (legacy) and pass through verbatim, but new
+resolvers should return objects.
 
-### How tools find their schema args
+### When to write one
 
-The schema fields you declare are merged with seed-injected context
-keys (`beingId`, `spaceId`, `userId`, `role`, `signal`) before the
-handler runs. The LLM only sees and fills the fields you declare; the
-context keys arrive automatically.
-
-### Choosing the verb tag
-
-- **see** for read tools that return data. No state change. Examples:
-  `my-ext:read-status`, `my-ext:get-history`.
-- **do** for state writes. Examples: `my-ext:log-meal`,
-  `my-ext:archive-plan`.
-- **summon** for tools that wake another being. The handler may
-  internally do `place.be("create-being", ...)` first if needed,
-  then `place.summon(stance, message, ...)`. The tool is summon-tagged
-  because waking is the point.
-- **be** for tools that mutate identity (register, claim, release,
-  switch). Most extensions never write these; the seed auth role
-  handles them.
+Most roles do not need a custom resolver. Use the seed's `this-space`
+for the standard position view. Write your own only when the role
+needs a focused, role-specific projection (a dancer's neighbor view, a
+worker's plan slice, an admin's audit summary).
 
 ---
 
-## 9. Creating beings, use BE
+## 9. Creating beings: use BE
 
-Identity belongs on BE. To spawn a sub-being from inside a SUMMON
-handler:
+Identity belongs on BE.
 
 ```js
-const helper = await place.be("create-being", {
+const helper = await reality.be("create-being", {
   name:          `helper-${shortId()}`,
-  password:      null,                  // auto-generated for AI beings
-  operatingMode: "llm",                  // "human" | "llm" | "scripted" | "mixed"
-  roles:         ["my-ext:helper"],      // registered role name(s)
+  password:      null,                   // auto-generated for AI beings
+  operatingMode: "llm",                   // "llm" | "scripted" | "human" | "composite"
+  roles:         ["my-ext:helper"],       // registered role name(s)
   defaultRole:   "my-ext:helper",
-  homeSpace:     spaceId,                 // existing space
-  parentBeingId: beingId,                 // lineage; defaults to caller
+  homeSpace:     spaceId,
+  parentBeingId: beingId,                 // lineage
   llmDefault:    null,                    // optional LlmConnection id
 }, { identity: { beingId }, summonCtx });
 ```
 
+For seed-internal flows where you already know the inbox space and
+don't need to go through stance resolution, the seed exports
+`summonCreateBeing` directly from
+[`../seed/ibp/verbs/summon.js`](../seed/ibp/verbs/summon.js).
+
 Then wake it:
 
 ```js
-await place.summon(`${realityRoot}/${spaceId}@${helper.name}`, {
-  from:    { beingId },
-  content: "Please do X.",
+await reality.summon(`${realityDomain}/${spaceId}@${helper.name}`, {
+  from:        `${realityDomain}/${spaceId}@${myName}`,
+  content:     "Please do X.",
   correlation: shortId(),
 }, { identity: { beingId }, summonCtx });
 ```
 
-For a clean LLM-side surface, wrap the BE + SUMMON sequence inside a
-single SUMMON-tagged tool so the model sees one call.
+For LLM beings, the cognition is one call to the model per moment via
+[`../seed/present/cognition/llm/llmMoment.js`](../seed/present/cognition/llm/llmMoment.js).
+One call, one decision, one act. Multi-step work uses many moments via
+`selfContinue: true`. The detailed shape is at
+[`/factory/being-types`](../../site/src/components/Welcome/FactoryBeingTypes.jsx)
+on the site.
 
 ---
 
 ## 10. Hooks
 
-Hooks are lifecycle pub/sub. Before-hooks run sequentially and can
-cancel by returning `false` or throwing. After-hooks run in parallel
-and are fire-and-forget.
+Before-hooks run sequentially and can cancel by returning `false` or
+throwing. After-hooks run in parallel.
 
 ```js
-place.hooks.register("enrichContext", async ({ context, space, meta }) => {
+reality.hooks.register("enrichContext", async ({ context, space, meta }) => {
   const ours = meta["my-ext"] || {};
-  if (Object.keys(ours).length === 0) return;     // guard: only inject when relevant
+  if (Object.keys(ours).length === 0) return;     // always guard
   context.myExt = ours;
 }, "my-ext");
 ```
 
-### Hook reference
+### Common hooks
 
-The full list lives in [`../seed/hooks.js`](../seed/hooks.js) and in
-[FACTORY.md](../seed/FACTORY.md) under "Hooks." Common ones:
+Full list in [`../seed/hooks.js`](../seed/hooks.js):
 
-- `beforeMatter` / `afterMatter`, matter create/edit/delete.
-- `beforeSpaceCreate` / `afterSpaceCreate` / `beforeSpaceDelete` /
-  `afterSpaceMove`.
-- `beforeFact`, enrich a Fact before stamping.
-- `beforeLLMCall` / `afterLLMCall`.
-- `beforeToolCall` / `afterToolCall`.
-- `beforeResponse`, modify the AI response before the client sees it.
-- `enrichContext`, **sequential override**; cumulative AI context
-  building. Always guard.
-- `afterQualityWrite`, `afterScopeChange`, `afterOwnershipChange`,
-  `afterBoot`.
-- `onDocumentPressure`, `onTreeTripped` / `onTreeRevived`.
+- `beforeMatter` / `afterMatter`
+- `beforeSpaceCreate` / `afterSpaceCreate` / `afterSpaceMove`
+- `beforeFact`
+- `beforeLLMCall` / `afterLLMCall`
+- `beforeToolCall` / `afterToolCall`
+- `beforeResponse`, `enrichContext` (sequential override)
+- `afterQualityWrite`, `afterFieldWrite`, `afterScopeChange`, `afterBoot`
+- `onTreeTripped` / `onTreeRevived`
 
-Per-handler timeout is 5 seconds, chain timeout 15. Five consecutive
-failures from one extension's handler trip a circuit breaker for 5
-minutes with a half-open recovery test.
+Per-handler timeout 5s; chain timeout 15s. Five consecutive failures
+trip a 5-minute circuit breaker on the extension's handler.
 
-Extensions can also fire their own hooks; namespace them as
-`my-ext:eventName`.
+Extensions may fire their own hooks; namespace as `my-ext:eventName`.
 
 ---
 
 ## 11. DO-trigger subscriptions
 
-Wake a being when a write of a particular shape happens somewhere on
-the tree:
+Wake a being when a write of a particular shape happens on the tree:
 
 ```js
-place.declare.subscribe(beingId, {
-  event:      "afterMatter",
-  scope:      { ancestor: someSpaceId },     // | { everywhere: true } | { spaceId }
-  filter:     { origin: "web" },              // payload equality / any-of
-  priority:   4,                              // BACKGROUND
-  coalesceMs: 0,                              // batch matching events in N ms
+reality.declare.subscribe(beingId, {
+  event:      "afterQualityWrite",
+  scope:      { spaceId: someSpaceId },           // | { ancestor: id } | { everywhere: true }
+  filter:     { field: "qualities.harmony.tick" }, // payload equality
+  priority:   4,                                   // 1=HUMAN..4=BACKGROUND
+  coalesceMs: 100,                                 // batch N ms; one SUMMON per batch
 });
 ```
 
-The seed fans matching events out as `intent: "do-trigger"` SUMMONs
-to the subscribing being's inbox; the role's `summon` interprets
-them. Use this for reactive workflows that should fire without
-polling.
+The seed fans matching events as SUMMONs to the subscribing being's
+inbox. The role's `summon` interprets the wake content.
+
+### Wake payload
+
+For `afterQualityWrite` and `afterFieldWrite`, the wake content
+carries the WRITTEN VALUE alongside the routing metadata:
+
+```js
+{
+  event:        "afterQualityWrite",
+  spaceId:      "...",
+  actorBeingId: "...",                    // who wrote it
+  action:       "set-matter",
+  field:        "qualities.harmony.tick",  // the field path
+  value:        { n: 7, at: "..." },       // the value written
+  target:       { kind: "matter", id: "..." },
+  timestamp:    "..."
+}
+```
+
+So a subscriber can read the value off the wake without folding the
+target. Coalesced wakes carry the batch as `{coalesced: true, events: [...]}`.
 
 ---
 
 ## 12. Scheduled wakes
 
-Fire a SUMMON on a being's inbox at a cadence:
-
 ```js
-place.declare.schedule(beingId, {
-  intervalMs: 60_000 * 30,             // every 30 minutes
+reality.declare.schedule(beingId, {
+  intervalMs: 60_000 * 30,
   content:    { event: "tick" },
   priority:   4,
 });
 ```
 
-The default emitter sends from `@I-am`. Install a scheduler-being
-extension to swap in an embodied emitter.
+Default emitter sends as `@I-AM`. The receiving being's role.summon
+reads `message.content`.
 
 ---
 
 ## 13. Seeds (plantable scaffolds)
 
-A **seed** is a recipe that fans out a domain shape when planted.
-Operators plant them via `plant`:
+A seed is a recipe that fans out a domain shape when planted.
+Operators plant from the seed hotbar in the portal.
 
 ```js
-// During init
-place.seeds.register("food-tracker", {
-  description: "Plants a food tracking position with the meal-logger role.",
-  plant: async ({ target, identity }) => {
-    await place.do(target, "create-space", {
-      spec: { name: "food", type: "domain" },
-    }, { identity });
-    // ... more setup
-  },
-}, "my-ext");
+// Returned from init():
+return {
+  seeds: [{
+    name: "food-tracker",
+    description: "Food tracking position with a meal-logger role.",
+    async scaffold({ rootSpaceId, identity, reality, plantedSeedId, summonCtx }) {
+      const opOpts = { identity, summonCtx };
+      const space = await reality.do(rootSpaceId, "create-space", {
+        spec: { name: "food", type: "domain" },
+      }, opOpts);
+      // ... more setup, threading summonCtx through every reality.do
+      return { spaceId: space.spaceId };
+    },
+  }],
+};
 ```
 
-Later, anyone with permission can:
-
-```js
-await place.do(parentSpaceId, "plant", {
-  seed: "my-ext:food-tracker",
-}, { identity, summonCtx });
-```
+`summonCtx` threads through so every Fact emitted during the plant
+joins the same Act. Failure unwinds the whole plant atomically.
 
 ---
 
 ## 14. Reading and writing qualities
 
-`qualities.<extension-namespace>` is where extensions store data on a
-Being, Space, or Matter. Three peer buckets:
-
-- **`Being.qualities.<ns>`**, per-being data. Persists across role
-  changes. Energy balance, auth keys, preferences.
-- **`Space.qualities.<ns>`**, per-position data. Goals, governance
-  shape, lifecycle state for this space.
-- **`Matter.qualities.<ns>`**, per-piece-of-matter data. Tags,
-  review status, sync state.
+`qualities.<your-ext>` is your namespace on Being, Space, or Matter.
 
 ### Read
 
 ```js
-const data = place.qualities.space.getQuality(space, "my-ext");
+const data = reality.qualities.space.getQuality(space, "my-ext");
 // returns the namespace object, or {} when unset
 
-const ns = place.qualities.space.readQualityNamespace(space, "my-ext");
+const ns = reality.qualities.space.readQualityNamespace(space, "my-ext");
 // returns the namespace object, or null when unset
 ```
 
-### Write
-
-Writes go through the DO verb's material-scoped `set-<kind>` ops
-(`set-space`, `set-being`, `set-matter` — name the op for the kind
-your target is). The legacy `setQuality` / `mergeQuality` / `incQuality` /
-`pushQuality` / `unsetQuality` methods were retired 2026-05-23; calling
-them now throws a migration error. Reason: every write must be a Fact
-on the aggregate's reel so the fold has one source of truth. See
-[`../philosophy/STAMPER.md`](../philosophy/STAMPER.md).
+### Write — through DO
 
 ```js
-// Set the whole namespace (space target)
-await place.do(spaceId, "set-space", {
+// Whole namespace
+await reality.do(spaceId, "set-space", {
   field: "qualities.my-ext",
   value: { goals: [{ id: 1, text: "ship it" }] },
 }, { identity, summonCtx });
 
-// Set one inner key (atomic at that key path)
-await place.do(spaceId, "set-space", {
+// One inner key (atomic, other namespaces and other inner keys untouched)
+await reality.do(spaceId, "set-space", {
   field: "qualities.my-ext.lastSeen",
   value: new Date().toISOString(),
 }, { identity, summonCtx });
 ```
 
-The seed's stance authorizer enforces namespace ownership: a write
-under `qualities.my-ext` requires the actor to own that namespace at
-that position. The loader records ownership when you register an op.
-
-### What if you need merge / inc / push semantics?
-
-For now, read the namespace, compute the new value in your handler,
-and `do.set` the result. This loses cross-namespace atomicity, but
-within-namespace atomicity is preserved by the per-reel append lock.
-Richer write operations may return as named ops if a real need
-emerges; the principle (every write is a Fact) does not change.
+Stance auth enforces namespace ownership: a write under
+`qualities.my-ext` requires the actor to own that namespace at the
+position. The loader records ownership at op registration.
 
 ---
 
-## 15. A complete worked example
+## 15. A worked example: feedback
 
-A `feedback` extension that collects short notes at any space and
-exposes a tool the operator can call from any meeting role.
+Collects short notes at any space. One op, one role, one hook, one
+see-resolver. Two files.
 
 **`extensions/feedback/manifest.js`**
 
@@ -694,24 +683,24 @@ export default {
   version:     "1.0.0",
   description: "Collect short feedback notes at any position.",
   needs:    { services: [] },
-  provides: { tools: true, hooks: { listens: ["enrichContext"] } },
+  provides: { hooks: { listens: ["enrichContext"] } },
 };
 ```
 
 **`extensions/feedback/index.js`**
 
 ```js
-import log from "../../seed/seedReality/log.js";
+import { registerSeeResolver } from "../../seed/present/cognition/llm/seeResolvers.js";
 
-export async function init(place) {
-  // 1. DO operation: append-only push to the namespace.
-  place.do.registerOperation("append", {
+export async function init(reality) {
+  // 1. DO operation. Append a note to this space's namespace.
+  reality.do.registerOperation("add-note", {
     targets: ["space"],
     async handler({ target, params, identity, summonCtx }) {
-      const existing = place.qualities.space.readQualityNamespace(target, "feedback") || {};
+      const existing = reality.qualities.space.readQualityNamespace(target, "feedback") || {};
       const notes = Array.isArray(existing.notes) ? existing.notes : [];
       const next = [...notes, { text: params.text, at: new Date().toISOString() }].slice(-50);
-      await place.do(target._id, "set-space", {
+      await reality.do(target._id, "set-space", {
         field: "qualities.feedback.notes",
         value: next,
       }, { identity, summonCtx });
@@ -719,172 +708,151 @@ export async function init(place) {
     },
   });
 
-  // 2. Role: a small assistant that collects one note and exits.
-  place.declare.registerRole("feedback-collector", {
-    name:        "feedback-collector",
-    see:         ["this-space"],
-    canDo:       ["feedback:add-note"],
-    prompt: (ctx) => `You are the Feedback Collector at ${ctx.currentSpaceName}.
-The user just told you something they observed. Call feedback:add-note exactly
-once with their text, then exit.`,
-    replyTo:     "asker",
-    exit:        { requires: "feedback:add-note" },
+  // 2. See-resolver. Pre-renders the latest note as structured data.
+  registerSeeResolver("recent", async (ctx) => {
+    const spaceId = ctx.currentSpace || ctx.rootId;
+    if (!spaceId) return null;
+    const space = await ctx.models?.Space?.findById(spaceId).lean();
+    const data = space?.qualities?.feedback || {};
+    const notes = Array.isArray(data.notes) ? data.notes : [];
+    if (notes.length === 0) return null;
+    return { latest: notes[notes.length - 1], total: notes.length };
   }, "feedback");
 
-  // 3. enrichContext: surface the latest note to any LLM at this space.
-  place.hooks.register("enrichContext", async ({ context, space }) => {
-    const data = place.qualities.space.readQualityNamespace(space, "feedback");
+  // 3. Role. canDo lists the action; the seed `do` tool dispatches.
+  reality.declare.registerRole("feedback-collector", {
+    name: "feedback-collector",
+    description: "Collects one feedback note and exits.",
+    permissions: ["do"],
+    respondMode: "async",
+    triggerOn:   ["message"],
+
+    canDo: [
+      { action: "feedback:add-note", description: "args: { text: string }" },
+    ],
+    canSummon: [
+      { stance: "(asker)", description: "reply to whoever woke you" },
+    ],
+
+    see: ["feedback:recent"],
+
+    prompt: (_ctx) =>
+      `Collect one short feedback note from the user, then reply with a brief confirmation.`,
+
+    replyTo: "asker",
+  }, "feedback");
+
+  // 4. Hook. Surface a one-liner to any LLM at this space (legacy
+  //    enrichContext path; new code prefers see-resolvers).
+  reality.hooks.register("enrichContext", async ({ context, space }) => {
+    const data = reality.qualities.space.readQualityNamespace(space, "feedback");
     if (!data?.notes?.length) return;
     const latest = data.notes[data.notes.length - 1];
-    context.feedbackLatest = `Most recent feedback at this space: "${latest.text}"`;
+    context.feedbackLatest = `Most recent feedback: "${latest.text}"`;
   }, "feedback");
-
-  // 4. The tool. The role's canDo points at this name.
-  return {
-    tools: [{
-      name:        "feedback:add-note",
-      verb:        "do",
-      description: "Append one feedback note to this position's queue.",
-      schema: {
-        text: { type: "string", description: "What the user said." },
-      },
-      async handler({ text, beingId, spaceId }) {
-        await place.do(spaceId, "feedback:append", { text }, {
-          identity:  { beingId },
-          summonCtx: this?.summonCtx,
-        });
-        return { content: [{ type: "text", text: "Noted." }] };
-      },
-    }],
-  };
 }
 ```
 
-That's the whole extension: one operation, one role, one hook, one
-tool. The seed handles dispatch, stance auth, Fact stamping, the
-fold-on-write that updates the projection, prompt assembly, and reply
-emission. Your code is the domain shape.
+That is the whole extension. No tool registrations. No mongoose calls.
+No factory duplication. One op, one role, one resolver, one hook.
 
 ---
 
 ## 16. HTTP routes
 
-If you need an HTTP endpoint (legacy clients, webhooks, file uploads),
+If you need an HTTP endpoint (legacy clients, webhooks, uploads),
 return an Express router from `init`:
 
 ```js
 import express from "express";
 
-export async function init(place) {
+export async function init(reality) {
   const router = express.Router();
-  router.get("/status", async (req, res) => {
-    const data = await someQuery();
-    place.protocol.sendOk(res, data);
-  });
   router.post("/log", async (req, res) => {
     try {
-      await place.do(req.body.spaceId, "my-ext:log-meal", { text: req.body.text }, {
-        identity: { beingId: req.beingId },
+      await reality.do(req.body.spaceId, "my-ext:log-meal", { text: req.body.text }, {
+        identity:  { beingId: req.beingId },
         summonCtx: req.summonCtx,
       });
-      place.protocol.sendOk(res, { logged: true });
+      reality.protocol.sendOk(res, { logged: true });
     } catch (e) {
-      place.protocol.sendError(res, 500, place.protocol.IBP_ERR.INTERNAL, e.message);
+      reality.protocol.sendError(res, 500, reality.protocol.IBP_ERR.INTERNAL, e.message);
     }
   });
   return { router };
 }
 ```
 
-The loader mounts it at `/api/v1/<your-ext>/`. Keep routes thin; they
-should be shims that dispatch into IBP verbs.
+The loader mounts it at `/api/v1/<your-ext>/`. Keep routes thin shims
+into IBP verbs.
 
 ---
 
 ## 17. Background jobs
 
-For workers that start at boot and run until shutdown:
-
 ```js
-export async function init(place) {
+export async function init(reality) {
   let timer = null;
   return {
     jobs: {
       start() {
-        timer = setInterval(async () => {
-          await sweepStaleRecords();
-        }, 60_000);
+        timer = setInterval(async () => { await sweepStaleRecords(); }, 60_000);
         timer.unref();
       },
-      stop() {
-        if (timer) clearInterval(timer);
-      },
+      stop() { if (timer) clearInterval(timer); },
     },
   };
 }
 ```
 
-The loader calls `start()` after all extensions initialize and `stop()`
-on SIGTERM.
+`start()` runs after all extensions initialize; `stop()` runs on SIGTERM.
 
 ---
 
 ## 18. Cross-extension API
 
-If you want other extensions to call into yours, expose helpers via
-`exports`:
-
 ```js
-export async function init(place) {
+export async function init(reality) {
   return {
     exports: {
-      getLatestNote(spaceId) {
-        // ...
-      },
+      getLatestNote(spaceId) { /* ... */ },
     },
   };
 }
 ```
 
-A consumer reaches you through `place.scope.getExtensionAtScope`:
+Consumers reach you through `reality.scope.getExtensionAtScope`:
 
 ```js
-const ext = place.scope.getExtensionAtScope("my-ext", spaceId);
+const ext = reality.scope.getExtensionAtScope("my-ext", spaceId);
 const note = ext?.exports?.getLatestNote?.(spaceId);
 ```
 
-Optional chaining is load-bearing: extensions are optional in the
-field. If yours is not installed, the caller silently no-ops.
+Optional chaining is load-bearing — extensions are optional in the
+field.
 
 ---
 
 ## 19. Stance authorization
 
 Every verb call passes through `authorize` in
-[`../seed/ibp/authorize.js`](../seed/ibp/authorize.js). For DO:
+[`../seed/ibp/authorize.js`](../seed/ibp/authorize.js). Four layers:
 
-1. **Layer 1, facts.** Owner / contributor / role / home / operating
-   mode / federation status of the being at this position.
-2. **Layer 2, per-position rules.** Walks the ancestor chain looking
-   for `qualities.permissions.<verb>.<keyParts>` rules.
-3. **Layer 3, extension defaults.** Default rules contributed by
-   installed extensions through `provides.defaultPermissions` in
-   their manifest.
-4. **Layer 4, default deny.** No match means reject (`FORBIDDEN` with
-   identity, `UNAUTHORIZED` without).
+1. **Facts.** Owner / contributor / role / home / operating mode of
+   the being at this position.
+2. **Per-position rules.** Walk the ancestor chain for
+   `qualities.permissions.<verb>.<keyParts>`.
+3. **Extension defaults.** From manifest `provides.defaultPermissions`.
+4. **Default deny.** No match → reject.
 
-For a write under `qualities.<ns>`, namespace ownership is enforced
-on top: the actor must own that namespace at the target position.
-The loader records ownership when you register operations or tools.
-
-If your op needs special permissions, declare them in
-`provides.defaultPermissions`:
+For writes under `qualities.<ns>`, namespace ownership is enforced on
+top. The actor must own that namespace at the target position.
 
 ```js
 provides: {
   defaultPermissions: {
     "do:my-ext:admin-purge": { requires: { owner: true } },
-    "do:my-ext:read-only":   { requires: {} },          // anyone
+    "do:my-ext:read-only":   { requires: {} },           // anyone
     "summon:@my-coach":      { requires: { homeInDomain: true } },
   },
 }
@@ -894,85 +862,88 @@ provides: {
 
 ## 20. WebSocket pushes
 
-To push live updates to a being, use `place.websocket.emitToBeing`.
-Event names are auto-namespaced.
-
 ```js
-place.websocket.emitToBeing(beingId, "status-changed", {
-  status: "ok",
-  at: new Date().toISOString(),
-});
+reality.websocket.emitToBeing(beingId, "status-changed", { status: "ok" });
 // On the wire: event name is "my-ext:status-changed"
 ```
 
-The client listens on that namespaced name. The seed reserves the
-`"ibp"`, `"registered"`, and `"navigate"` event names; emitting any
-of those throws.
+The seed reserves `"ibp"`, `"registered"`, and `"navigate"`; emitting
+any of those throws.
 
 ---
 
 ## 21. Anti-patterns
 
-Mistakes that look reasonable but fight the seed.
+The things that look reasonable and are actually fighting the seed.
 
-**Calling Mongoose directly to write a Space/Being/Matter row.** The
-fold is the only legitimate projection writer. Direct writes bypass
-Fact stamping; the projection diverges from the reel; the next fold
-pass either overwrites your write or, if nothing fires, leaves an
-audit-invisible difference. Always go through DO.
+**Registering an LLM tool.** Don't. Extensions add DO operations; the
+LLM dispatches them through the seed's generic `do` tool. There is no
+extension tool registry to consume.
 
-**Using the retired `qualities.X.setQuality` family.** They throw. Use
-`place.do(target, "set-<kind>", { field: "qualities.<ns>" })` where
-`<kind>` is space, being, or matter to match the target.
+**Per-action ergonomic wrappers.** A `step({direction})` tool that
+translates into `do({action: "harmony:step"})` is the retired pattern.
+Domain-tuned argument shapes belong in the op handler, which can
+derive `gridSpaceId` from the actor's position or whatever else.
 
-**Skipping the `verb` tag on a tool.** Registration rejects. The verb
-gate is part of authorization; tools need it.
+**Adding `toolNames` to a role.** The field doesn't exist. The role's
+body is its four `can*` lists; tool exposure follows from which lists
+are populated.
 
-**Declaring `permissions` on a role.** Derived from your `canX`
-arrays. If you set it, you're shadowing the registry's computation.
+**Restating verb syntax in `prompt(ctx)`.** The assembler renders the
+four verbs and the role's licensed targets. The role body is
+role-intent only.
 
-**Embedding the SUMMON message in your role's `prompt` body.** The
-seed pushes the message as the first user-role message in the chat.
-Duplicating it in the system prompt makes the LLM react twice and get
-confused.
+**Prose-returning see-resolvers.** Return structured objects. Prose
+input invites prose hallucination — the LLM free-associates features
+that aren't in the data.
 
-**Putting `create-being` on the DO verb.** Identity is BE's territory.
-Use `place.be("create-being", ...)`. The cherub honors this.
+**Calling `mongoose.model("X")`.** Import from the seed:
+`import Being from "../../seed/materials/being/being.js"`.
+
+**Re-implementing position folds.** The factory's `PositionProjection`
+holds beings' coords per space; `readPositionsInSpace(spaceId)` returns
+them. Bounds enforcement is at the seed's `set-being:coord` (throws on
+OOB). Extensions add the wake shape, not the projection.
+
+**Direct writes to a Space/Being/Matter row.** Bypasses Fact stamping;
+the projection diverges from the reel. Always go through DO.
+
+**Using `qualities.X.setQuality()`.** Retired 2026-05-23, throws. Use
+`reality.do(target, "set-<kind>", { field: "qualities.<ns>" })`.
+
+**Writing into another extension's qualities namespace.** Stance auth
+rejects. Each namespace is owned at registration.
+
+**`create-being` on DO.** Identity is BE's territory.
+`reality.be("create-being", ...)`.
 
 **Forgetting to thread `summonCtx`.** A DO call from inside a SUMMON
-handler with no `summonCtx.actId` throws. Every act lives in a moment;
-its Fact has to ride the Act that opened that moment. Forward the
-`summonCtx` your handler receives down into every DO you call.
+handler with no `summonCtx.actId` throws. Forward `summonCtx` down
+into every sub-call.
 
-**Writing into another extension's `qualities` namespace.** Stance auth
-rejects. Each namespace is owned. Even if you have the data, you can't
-write it under another extension's name.
-
-**Custom `summon` when the default works.** The default handles 90%
-of cases. Write a custom one only when the role needs structural
-routing (the only canonical example is a role that picks among
-sub-behaviors based on content shape).
+**Defining `summon` on an LLM role.** Don't. The registry auto-wraps
+`defaultSummon`, which calls `runLlmMoment` and routes the
+discriminated result. Writing your own `summon` is duplicating the
+dispatcher. The role spec is pure data; the substrate runs it.
+Custom `summon` is only for scripted cognition (the function reads
+the fold and acts in code, no LLM call).
 
 ---
 
 ## 22. Where to read next
 
-- **Manifest contract:** [EXTENSION_FORMAT.md](./EXTENSION_FORMAT.md)
-  (note: parts of the qualities section still describe the retired
-  write API; trust this README and the seed source over it until it
-  catches up).
-- **Template extension to copy:** [`_template/`](./_template/).
+- **Manifest contract:** [EXTENSION_FORMAT.md](./EXTENSION_FORMAT.md).
+- **Template to copy:** [`_template/`](./_template/).
 - **The seed's own contract:** [`../seed/FACTORY.md`](../seed/FACTORY.md).
-- **The four verbs in code:** [`../seed/ibp/verbs/`](../seed/ibp/verbs/) (one file per verb).
+- **The four verbs in code:** [`../seed/ibp/verbs/`](../seed/ibp/verbs/).
 - **DO operation registry:** [`../seed/ibp/operations.js`](../seed/ibp/operations.js).
 - **Role registry:** [`../seed/present/roles/registry.js`](../seed/present/roles/registry.js).
-- **Default summon dispatcher:** [`../seed/present/voices/llm/defaultSummon.js`](../seed/present/voices/llm/defaultSummon.js).
-- **Reply emission helpers:** [`../seed/present/intake/replies.js`](../seed/present/intake/replies.js).
+- **One LLM moment:** [`../seed/present/cognition/llm/llmMoment.js`](../seed/present/cognition/llm/llmMoment.js).
+- **Default summon dispatcher:** [`../seed/present/cognition/defaultSummon.js`](../seed/present/cognition/defaultSummon.js).
+- **The four seed verb-tools:** [`../seed/present/cognition/llm/seedSeeTool.js`](../seed/present/cognition/llm/seedSeeTool.js), `seedDoTool.js`, `seedSummonTool.js`, `seedBeTool.js`.
+- **See-resolvers:** [`../seed/present/cognition/llm/seeResolvers.js`](../seed/present/cognition/llm/seeResolvers.js).
+- **Position projection (factory-owned position fold):** [`../seed/past/projections/position/`](../seed/past/projections/position/).
+- **Reply emission helpers:** [`../seed/present/replies.js`](../seed/present/replies.js).
 - **Stance authorization:** [`../seed/ibp/authorize.js`](../seed/ibp/authorize.js).
 - **Hooks list:** [`../seed/hooks.js`](../seed/hooks.js).
 - **Loader scoping:** [`./loader.js`](./loader.js).
-- **Doctrine (read in order):**
-  [`../philosophy/MOMENT.md`](../philosophy/MOMENT.md),
-  [`../philosophy/FOLD.md`](../philosophy/FOLD.md),
-  [`../philosophy/STAMPER.md`](../philosophy/STAMPER.md),
-  [`../philosophy/MATERIALS.md`](../philosophy/MATERIALS.md).

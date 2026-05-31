@@ -36,3 +36,9 @@
     padding: 28px 20px 40px;
   }
 }
+
+@media (max-width: 540px) {
+  .ns-factory-main {
+    padding: 20px 14px 32px;
+  }
+}

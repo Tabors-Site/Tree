@@ -7,7 +7,7 @@
 // exposes the services this extension declared.
 //
 // Reach a service you didn't declare and it's undefined. Common bug:
-// `place.llm.runTurn is not a function` means `llm` is missing from
+// `reality.llm.runTurn is not a function` means `llm` is missing from
 // `needs.services`.
 
 export default {
@@ -37,7 +37,7 @@ export default {
 
   provides: {
     // Mongoose models the extension contributes. Each places in
-    // place.models for cross-extension access.
+    // reality.models for cross-extension access.
     models: {
       // MyModel: "./model.js",
     },
@@ -60,7 +60,7 @@ export default {
     jobs: false,                    // or "./jobs.js"
 
     // Plantable seeds. An operator plants a seed at a position with
-    // `place.do(space, "plant", { seed: "<ext>:<seed>" })`.
+    // `reality.do(space, "plant", { seed: "<ext>:<seed>" })`.
     // Each recipe file exports { plant(ctx) } and the loader auto-
     // namespaces the seed name with the extension.
     seeds: {
@@ -81,7 +81,7 @@ export default {
     // Hooks this extension fires / listens to. The `fires` list lets
     // other extensions discover hook names declaratively; the
     // `listens` list documents the contract (the actual registration
-    // happens in init() via place.hooks.register).
+    // happens in init() via reality.hooks.register).
     hooks: {
       fires: [
         // { name: "my-ext:something", data: "{ field }", description: "What it means" },

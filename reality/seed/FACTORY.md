@@ -713,16 +713,16 @@ retired. Every quality write now stamps a material-scoped `do:set-<kind>`
 Fact:
 
 ```js
-await place.do(target, "set-space",  { field: "qualities.<ns>", value }, opts);
-await place.do(target, "set-being",  { field: "qualities.<ns>.<innerKey>", value }, opts);
-await place.do(target, "set-matter", { field: "qualities.<ns>", value }, opts);
+await reality.do(target, "set-space",  { field: "qualities.<ns>", value }, opts);
+await reality.do(target, "set-being",  { field: "qualities.<ns>.<innerKey>", value }, opts);
+await reality.do(target, "set-matter", { field: "qualities.<ns>", value }, opts);
 ```
 
 The reducer's `applySetQualities` derives the new state; the fold
 engine writes the projection under the per-reel append lock. One
 writer (fold), one source of truth (facts). The tombstone methods on
 `qualities.{being,space,matter}.setQuality` throw a migration error
-directing callers at `place.do(...)`.
+directing callers at `reality.do(...)`.
 
 **Reads still go through `qualities`.** Two methods stayed:
 `getQuality(doc, key)` (returns `{}` when unset) and
@@ -935,7 +935,7 @@ never to silence.
 
 Auto-namespacing. Extensions write bare names; I record the qualified
 form (`governing:hire-planner`). Same prefixing applies to
-`place.websocket.emitToBeing(...)` events.
+`reality.websocket.emitToBeing(...)` events.
 
 ## Roles
 
@@ -943,22 +943,56 @@ A role is the unit of summonable behavior. A being declares which
 roles it can wear; a SUMMON arrives with an `activeRole`; my
 dispatcher routes the summon to that role's `summon(message, ctx)`.
 
+### The complete LLM role spec
+
+Every LLM role's complete declaration is its four `can*` lists plus
+optional see resolvers, orientation, continuation flag, and the
+prompt body. Everything else — permissions, respondMode, triggerOn,
+the wrapped `summon` dispatcher, the system-prompt assembler — is
+derived by [registry.js](present/roles/registry.js) at registration.
+Authors write what the role IS; I fill in everything derivable.
+
 ```js
-export const exampleRole = Object.freeze({
-  name: "example",
-  description: "What this role does in one line.",
-  honoredOperations: ["op-one", "op-two"],
-  permissions: ["see", "do", "summon", "be"],
-  respondMode: "sync", // sync | async | none
-  toolNames: ["see-name", "do-name"],
-  buildSystemPrompt(ctx) { return "..."; },
-  async summon(message, ctx) { /* return { text, actId } */ },
-});
+// Every LLM role's complete spec is its four can* lists + optional
+// see resolvers.
+{
+  name: "...",
+  canSee:    [...],            // optional, populates the see tool
+  canDo:     [...],            // optional, populates the do tool
+  canSummon: [...],            // optional, populates the summon tool
+  canBe:     [...],            // optional, populates the be tool
+  see: ["name"],               // optional, structured resolver outputs in prompt
+  selfContinue: bool,          // optional, one-act vs many-acts-via-many-moments
+  defaultOrientation: "...",   // optional, forward by default
+  prompt(ctx) { ... },         // role-intent only; no verb syntax explanation
+}
 ```
 
-Permissions are tool-verb overlays. A role that declares
-`["see", "do"]` cannot SUMMON other beings or BE-mutate itself; the
-tool filter enforces this at the verb intersection.
+| Field                | Optional? | What it does                                                                                                                                                                              |
+| -------------------- | --------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `name`               | required  | Kebab-case identifier (`harmony:dancer-llm`). The activeRole on a SUMMON resolves through it.                                                                                             |
+| `canSee`             | optional  | Address entries the LLM may read via the seed's generic `see` tool. Non-empty → the `see` tool is exposed and permission `see` is added.                                                  |
+| `canDo`              | optional  | DO action entries the LLM may invoke via the seed's generic `do` tool. Non-empty → `do` tool exposed, permission `do` added.                                                              |
+| `canSummon`          | optional  | Stance/being targets the LLM may summon. Non-empty → `summon` tool exposed. Entries may be literal stances OR relationship tokens (`{rel:"parent"}`, `{pattern:"fitness/@coach"}`).        |
+| `canBe`              | optional  | BE operations the LLM may perform on its own identity (`claim`, `release`, `switch`). Non-empty → `be` tool exposed.                                                                     |
+| `see`                | optional  | Names of registered see-resolvers. The assembler runs each one every moment and pre-renders the structured result under `[name]` in the system prompt. NOT a tool; baked into the face. |
+| `selfContinue`       | optional  | `true` → after an act seals, the sealer enqueues a fresh summon to the same being. Many-acts-via-many-moments. Default `false`: one summon, one moment, done.                            |
+| `defaultOrientation` | optional  | `"forward"` (default), `"half"`, or `"inward"`. Controls what the fold reads. Half / inward are accepted-and-downgraded today until the recall primitives land.                          |
+| `prompt(ctx)`        | required  | Returns role-intent text. Describes WHO the role is and WHAT it does, in role-language. Does NOT explain verb syntax — that's auto-assembled from `can*` lists.                          |
+
+What seed derives:
+
+- `permissions` — union of verbs implied by `can*` (and `see` if any preloaded resolvers).
+- `respondMode` — `"async"` by default; only override for sync replies.
+- `triggerOn` — `["message"]` by default; override for scheduled or hook-fired roles.
+- `summon(message, ctx)` — auto-wrapped with [defaultSummon](present/cognition/defaultSummon.js) when not provided. Scripted roles attach their own `summon` and seed leaves it alone — that flips `_cognitionMode` to `"scripted"` and bypasses the LLM apparatus entirely.
+- `buildSystemPrompt` — auto-assembled by [assemble.js](present/cognition/llm/assemble.js): identity + preloaded `see` resolvers + capabilities rendered from `can*` + role's `prompt(ctx)` body + current time. Roles override this only for unusual prompt shapes.
+
+The four `can*` lists ARE the body. Adding a capability is editing
+one list. Tool exposure follows from the body; there is no second
+declaration to keep in sync. Off-list calls that pass prompt
+discipline still refuse at the verb's stance-auth gate — the prompt
+list is what the LLM SEES, the verb is the truth.
 
 ## My extension APIs (the `reality` services bundle)
 

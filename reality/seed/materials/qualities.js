@@ -191,7 +191,7 @@ function createQualityPrimitives({ Model, documentType }) {
   const tombstone = (methodName) => () => {
     throw new Error(
       `qualities.${documentType}.${methodName} retired 2026-05-23. ` +
-      `Use place.do(target, "set-${documentType}", { field: "qualities.<ns>" or ` +
+      `Use reality.do(target, "set-${documentType}", { field: "qualities.<ns>" or ` +
       `"qualities.<ns>.<innerKey>", value }) instead — every write is ` +
       `a Fact on the aggregate's reel now (see seed/STAMPER.md).`,
     );

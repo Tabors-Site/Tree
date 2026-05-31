@@ -19,7 +19,7 @@
 // what they hear. Substrate-self-referential: the tick fact is
 // how the substrate tells itself to dance.
 
-import mongoose from "mongoose";
+import Matter from "../../../seed/materials/matter/matter.js";
 import log from "../../../seed/seedReality/log.js";
 import { doVerb } from "../../../seed/ibp/verbs/do.js";
 
@@ -55,7 +55,6 @@ export const drummerRole = Object.freeze({
     // either. Stay, log, and try again next wake.
     let drumCoord = null;
     try {
-      const Matter = mongoose.model("Matter");
       const drum = await Matter.findById(drumMatterId).select("coord").lean();
       if (drum?.coord && Number.isFinite(drum.coord.x) && Number.isFinite(drum.coord.y)) {
         drumCoord = { x: drum.coord.x, y: drum.coord.y };

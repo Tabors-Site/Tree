@@ -135,7 +135,7 @@ export async function isExtensionBlockedAtSpace(extName, spaceId) {
  *
  * This is the principled way for one extension to reach into another:
  *
- *   const cw = await place.scope.getExtensionAtScope("code-workspace", spaceId);
+ *   const cw = await reality.scope.getExtensionAtScope("code-workspace", spaceId);
  *   if (!cw?.exports?.someApi) return; // not active here
  *   await cw.exports.someApi(...);
  *

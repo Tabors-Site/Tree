@@ -44,19 +44,6 @@ let MAX_TOOLS = 500;
 const TOOL_NAME_RE = /^[a-z][a-z0-9_-]{0,63}$/;
 const VALID_VERBS = new Set(["see", "do", "summon", "be"]);
 
-// Extension tool injection hook. The loader calls
-// setExtensionToolResolver during boot with a function that returns
-// the extension-contributed tools for a given role name. Act uses
-// the resolver at frame-build time to merge extension tools into
-// the role's base toolNames before the permission filter runs.
-let _getExtToolsFn = () => [];
-export function setExtensionToolResolver(fn) {
-  _getExtToolsFn = typeof fn === "function" ? fn : () => [];
-}
-export function getExtensionToolsForRole(roleName) {
-  return _getExtToolsFn(roleName);
-}
-
 export function setMaxTools(n) {
   MAX_TOOLS = Math.max(10, Number(n) || 500);
 }
@@ -351,54 +338,37 @@ export function listToolNames() {
 }
 
 /**
- * Audit every registered role's declared tools against the registry.
- * For each role, walk canSee + canDo + canSummon + canBe and verify
- * each name resolves to a registered description. Misses are logged
- * loudly at genesis so the operator sees them before any summon
- * (where the same gap would block the role via assertAllToolsResolve
- * in stamp.js).
+ * Audit that the four seed verb-tools are registered. After the
+ * verbs-as-language cleanup, the seed ships ONE generic tool per
+ * verb (`see`, `do`, `summon`, `be`); that is the entire LLM tool
+ * surface. The role's can* lists are descriptors of what the role
+ * is licensed for at each verb (addresses, action names, stance
+ * targets, BE operations), NOT tool names to resolve.
  *
- * Returns { roles: number, missing: { [roleName]: string[] } }. An
- * empty `missing` map means the tree is wired correctly.
+ * The old audit walked canSee/canDo/canSummon/canBe and looked each
+ * entry up in toolDefs. That produced false-positive warnings under
+ * the new doctrine . object entries (e.g. `{action, description}`)
+ * stringify to `[object Object]`, plain address strings like
+ * `.config` aren't registered tool names. Both are correct per the
+ * descriptor doctrine, neither should fail the audit.
+ *
+ * Now the audit checks only the four seed verb-tools; if any are
+ * missing, no LLM role can run.
  */
 export async function auditToolDescriptions() {
-  const { listRoles, getRole } = await import("../../roles/registry.js");
-  const roleNames = listRoles();
-  const missing = {};
-  let scanned = 0;
-
-  for (const roleName of roleNames) {
-    const role = getRole(roleName);
-    if (!role) continue;
-    // Skip scripted roles. They bring their own summon and never
-    // dispatch through the tool registry; their canX entries are DO
-    // operation names, not LLM tool names. Auditing them produces
-    // false "missing tool" warnings.
-    if (role._cognitionMode === "scripted") continue;
-    scanned++;
-    const declared = [
-      ...(role.canSee || []),
-      ...(role.canDo || []),
-      ...(role.canSummon || []),
-      ...(role.canBe || []),
-    ];
-    const gaps = declared.filter((name) => !toolDefs[name]);
-    if (gaps.length > 0) missing[roleName] = gaps;
-  }
-
-  const missingCount = Object.keys(missing).length;
-  if (missingCount === 0) {
-    log.verbose("Tools", `tool-description audit: ${scanned} role(s) clean`);
+  const SEED_VERB_TOOLS = ["see", "do", "summon", "be"];
+  const missing = SEED_VERB_TOOLS.filter((name) => !toolDefs[name]);
+  if (missing.length === 0) {
+    log.verbose("Tools", `verb-tool audit: ${SEED_VERB_TOOLS.length} seed tool(s) registered`);
   } else {
-    for (const [roleName, gaps] of Object.entries(missing)) {
-      log.error(
-        "Tools",
-        `role "${roleName}" declares ${gaps.length} tool(s) with no registered ` +
-          `description: ${gaps.join(", ")}. Role cannot be summoned until resolved.`,
-      );
-    }
+    log.error(
+      "Tools",
+      `seed verb-tools missing from the registry: ${missing.join(", ")}. ` +
+        `Genesis did not register seedSeeTool / seedDoTool / seedSummonTool / seedBeTool ` +
+        `before role auditing. No LLM role can run until this is fixed.`,
+    );
   }
-  return { roles: scanned, missing };
+  return { tools: SEED_VERB_TOOLS.length, missing };
 }
 
 // Sync the full tool registry into `<reality>/.tools` as child spaces.
@@ -678,8 +648,8 @@ export async function executeTool(toolCall, session, ctx, presenceKey) {
   try {
     // Direct handler dispatch. Tools are verb-tagged and registered
     // with their handler via registerToolDef (above); the handler IS
-    // the verb call (it usually wraps place.see / place.do /
-    // place.summon / place.be against a target). The verb dispatcher's
+    // the verb call (it usually wraps reality.see / reality.do /
+    // reality.summon / reality.be against a target). The verb dispatcher's
     // authorize gate covers per-verb auth and the extension-scope
     // block — no protocol layer between the LLM voice and the handler.
     const handler = getToolHandler(resolvedToolName);
@@ -698,6 +668,12 @@ export async function executeTool(toolCall, session, ctx, presenceKey) {
         sessionId: ctx.sessionId || null,
         rootActId: ctx.rootActId || ctx.actId || null,
         ibpAddress: presenceKey || null,
+        // Wake context for reply-threading tools (e.g. the seed
+        // summon tool). Optional; only set when the moment was
+        // opened by an incoming summon llmMoment knows about.
+        wakeFrom: ctx.wakeFrom || null,
+        wakeCorrelation: ctx.wakeCorrelation || null,
+        spaceId: ctx.currentSpace || ctx.rootId || null,
       },
     };
     const nodeToolTimeout =

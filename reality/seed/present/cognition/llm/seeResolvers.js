@@ -144,12 +144,17 @@ export function getSeeResolver(name) {
 }
 
 /**
- * Resolve every name in the list against the given ctx. Runs in
- * parallel; returns the non-empty results in declaration order.
- * Unknown names log a warning and contribute nothing.
+ * Resolve every name in the list against the given ctx. Returns the
+ * non-empty results in declaration order, each pre-rendered as a
+ * labeled block ready to drop into the system prompt.
+ *
+ * Resolvers SHOULD return structured objects . the LLM hallucinates
+ * less when the input is JSON than when it is prose. Strings are
+ * still accepted (legacy) and pass through as-is. The renderer
+ * stringifies objects to JSON and wraps with a `[<name>]` header.
  *
  * @param {string[]} names  the role's `see` list (qualified or bare)
- * @param {object} ctx      runTurn ctx (carries being, position, message, etc.)
+ * @param {object} ctx      moment ctx (carries being, position, ...)
  * @returns {Promise<string[]>}
  */
 export async function resolveSeeList(names, ctx) {
@@ -163,7 +168,7 @@ export async function resolveSeeList(names, ctx) {
       }
       try {
         const out = await fn(ctx);
-        return typeof out === "string" && out.length > 0 ? out : null;
+        return renderResolverOutput(name, out);
       } catch (err) {
         log.warn("SeeResolvers", `Resolver "${name}" failed: ${err.message}`);
         return null;
@@ -171,6 +176,34 @@ export async function resolveSeeList(names, ctx) {
     }),
   );
   return settled.filter(Boolean);
+}
+
+/**
+ * Shape the resolver's output into a prompt block. The structured
+ * path is preferred . an object becomes `[<name>]\n<JSON>`, which
+ * LLMs fold cleanly without inventing fields. Strings pass through
+ * verbatim (the resolver already framed its own block).
+ */
+function renderResolverOutput(name, out) {
+  if (out == null) return null;
+  if (typeof out === "string") {
+    return out.length > 0 ? out : null;
+  }
+  if (typeof out === "object") {
+    const label = headerFor(name);
+    try {
+      return `[${label}]\n${JSON.stringify(out, null, 2)}`;
+    } catch {
+      return null;
+    }
+  }
+  return null;
+}
+
+function headerFor(name) {
+  // "harmony:neighbors" → "neighbors"; bare names pass through.
+  const idx = name.indexOf(":");
+  return idx >= 0 ? name.slice(idx + 1) : name;
 }
 
 /**

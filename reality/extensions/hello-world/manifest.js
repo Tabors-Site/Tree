@@ -41,9 +41,8 @@ export default {
     // The role is registered in init() rather than declared here so
     // it can close over `place` for the SEE call inside summon().
     // Seeds are also registered in init() for the same reason
-    // (scaffold needs `place.summon` to plant the being).
+    // (scaffold needs `reality.summon` to plant the being).
     seeds: {},
-    tools: false,
     routes: false,
     jobs: false,
     env: [],

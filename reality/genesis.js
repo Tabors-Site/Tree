@@ -235,10 +235,32 @@ export async function genesis(app, opts = {}) {
   const { registerRole } = await import("./seed/present/roles/registry.js");
   const { realityManagerRole } =
     await import("./seed/present/roles/reality-manager/role.js");
-  const { realityManagerTools } =
-    await import("./seed/present/roles/reality-manager/tools.js");
   registerRole("reality-manager", realityManagerRole, "seed");
-  await registerSeedTools(realityManagerTools);
+
+  // Seed-shipped verb tools. ONE generic tool per verb (see / do /
+  // summon / be). Tool exposure is DERIVED at prompt-build time
+  // from which of the role's four can* lists are non-empty . a
+  // role with non-empty canDo gets the do tool, non-empty canSee
+  // gets the see tool, etc. There is no role-side toolNames field;
+  // the four can* lists ARE the role's body, and the tool surface
+  // follows from the body.
+  //
+  // Adding a capability to a being is editing one can* list . never
+  // registering a new tool. The verb set is structurally universal.
+  //
+  // be is mostly identity-bind/release/switch handled by scripted
+  // seed roles (cherub, llm-assigner) out of band. Shipped for
+  // symmetry; LLM roles that need it (notably for `switch`) just
+  // populate canBe.
+  const { seedSeeTool } =
+    await import("./seed/present/cognition/llm/seedSeeTool.js");
+  const { seedDoTool } =
+    await import("./seed/present/cognition/llm/seedDoTool.js");
+  const { seedSummonTool } =
+    await import("./seed/present/cognition/llm/seedSummonTool.js");
+  const { seedBeTool } =
+    await import("./seed/present/cognition/llm/seedBeTool.js");
+  await registerSeedTools([seedSeeTool, seedDoTool, seedSummonTool, seedBeTool]);
 
   // The receptive role every human being carries. Without it, SUMMONs
   // to a human are rejected with ROLE_UNAVAILABLE. The role's summon

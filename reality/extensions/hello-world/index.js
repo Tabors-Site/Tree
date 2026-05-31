@@ -1,6 +1,6 @@
 // TreeOS extension: hello-world.
 //
-// init(place) registers two things:
+// init(reality) registers two things:
 //   1. The "greeter" role — when summoned, the being SEEs its
 //      position + the children around it and returns a greeting
 //      addressed to both the asker AND the world it just saw.
@@ -18,7 +18,7 @@
 import log from "../../seed/seedReality/log.js";
 import { cognitionSuccess } from "../../seed/present/cognition/cognitionResult.js";
 
-export async function init(place) {
+export async function init(reality) {
   const realityDomain = process.env.REALITY_DOMAIN || "localhost";
 
   // ── Role: greeter ──────────────────────────────────────────────
@@ -34,7 +34,7 @@ export async function init(place) {
   // for roles or seeds (only DO operations + push-channel events get
   // loader-wrapped today), so extensions write the full "<ext>:<name>"
   // form and the registries accept it as-is.
-  place.declare.registerRole("hello-world:greeter", {
+  reality.declare.registerRole("hello-world:greeter", {
     permissions: ["see"],
     respondMode: "async",
     triggerOn:   ["message"],
@@ -48,7 +48,7 @@ export async function init(place) {
       let myPlaceName = "an unnamed space";
       let surroundings = [];
       try {
-        const Space = place.models.Space;
+        const Space = reality.models.Space;
         const myPlace = await Space.findById(myPosition).select("name").lean();
         if (myPlace?.name) myPlaceName = myPlace.name;
         const children = await Space.find({ parent: myPosition })
@@ -88,7 +88,7 @@ export async function init(place) {
   //
   // Idempotent on re-plant: if a being with this name already exists,
   // summonCreateBeing throws RESOURCE_CONFLICT and we surface it.
-  place.seeds.register("hello-world:greeter", {
+  reality.seeds.register("hello-world:greeter", {
     description:
       "Spawns one greeter being at the target space. SUMMON it to receive a hello-world greeting.",
     scaffold: async ({ rootSpaceId, identity, summonCtx }) => {

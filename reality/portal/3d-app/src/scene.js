@@ -95,7 +95,6 @@ export class Scene {
     this._moveMode = false;
     this._carrying = null; // { kind: "space"|"matter", id, label, mesh }
     this._lastBeingInRange = new Map();
-    this._bubble = null;
 
     this.canvas = document.getElementById("scene");
     this.renderer = new THREE.WebGLRenderer({
@@ -250,7 +249,6 @@ export class Scene {
     // In default mode, beings spread in an arc.
     this._beingMeshes.clear();
     this._lastBeingInRange.clear();
-    this._clearBubble();
     if (arrival) {
       const cherubBeing = beingsToRender[0];
       if (cherubBeing) {
@@ -591,34 +589,25 @@ export class Scene {
       }
       mesh.userData.activeTargetCoord = targetCoord;
 
-      // Activity bubble: a small HTML label that follows the being. We
-      // keep it separate from the SUMMON-reply bubble (_bubble) so they
-      // can coexist.
-      if (activity?.content) {
+      // ONE bubble per being, server-driven. Every act a being takes .
+      // outbound summon, mid-act tool call, inbound summon, sealed reply
+      // . is captured in the server's activity field and rendered above
+      // THEIR head with a per-kind visual treatment. Multiplayer-visible:
+      // every viewer sees the same bubbles because the source is the
+      // descriptor's activity field, not a local UI side-channel.
+      if (activity?.content || activity?.target) {
         seen.add(b.being);
         let entry = this._activityBubbles.get(b.being);
         if (!entry) {
           const el = document.createElement("div");
           el.className = "being-activity";
-          el.style.cssText = `
-            position: fixed; pointer-events: none; z-index: 7;
-            transform: translate(-50%, -100%);
-            background: rgba(13, 30, 22, 0.88);
-            color: #c8d3cb;
-            padding: 3px 8px;
-            border: 1px solid #2c4a3a; border-radius: 4px;
-            font-family: ui-monospace, monospace; font-size: 10px;
-            max-width: 260px; white-space: nowrap; overflow: hidden;
-            text-overflow: ellipsis;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.4);
-          `;
           document.body.appendChild(el);
           entry = { mesh, el };
           this._activityBubbles.set(b.being, entry);
         } else {
           entry.mesh = mesh;
         }
-        entry.el.textContent = activity.content;
+        _renderActivity(entry.el, activity);
       }
     }
 
@@ -1653,7 +1642,6 @@ export class Scene {
     this._checkBeingProximity();
     this._updateBeingMovement(dt);
     this._updateActivityBubbles();
-    this._updateBubble();
     if (this._skyMode === "default") {
       this._updateTimeOfDay();
       this._driftClouds(dt);
@@ -1744,90 +1732,12 @@ export class Scene {
     }
   }
 
-  // Floating HTML speech bubble anchored above a being's head. One bubble
-  // at a time. The bubble auto-clears after BUBBLE_TTL_MS, and tracks the
-  // mesh's screen position every frame via _updateBubble().
-  showBeingMessage(being, text, { ttlMs = 30000 } = {}) {
-    const mesh = this._beingMeshes.get(being);
-    if (!mesh) return;
-    this._clearBubble();
-    const el = document.createElement("div");
-    el.className = "being-bubble";
-    el.textContent = text;
-    el.style.cssText = `
-      position: fixed; pointer-events: none; z-index: 8;
-      transform: translate(-50%, -100%);
-      background: rgba(10,13,12,0.92);
-      color: #c8d3cb; padding: 6px 12px;
-      border: 1px solid #2c3a32; border-radius: 6px;
-      font-family: ui-monospace, monospace; font-size: 12px;
-      max-width: 360px; white-space: pre-wrap; line-height: 1.4;
-      box-shadow: 0 4px 16px rgba(0,0,0,0.4);
-    `;
-    document.body.appendChild(el);
-    this._bubble = { being, mesh, el, expiresAt: performance.now() + ttlMs };
-  }
-
-  // Animated "thinking" bubble: three dots that pulse in sequence. Shown
-  // while we wait for an async SUMMON reply. Persists until replaced by
-  // showBeingMessage or cleared on look-away / navigation.
-  showBeingThinking(being) {
-    const mesh = this._beingMeshes.get(being);
-    if (!mesh) return;
-    this._clearBubble();
-    _ensureThinkingStyles();
-    const el = document.createElement("div");
-    el.className = "being-bubble being-bubble--thinking";
-    el.innerHTML = `
-      <span class="dot"></span>
-      <span class="dot"></span>
-      <span class="dot"></span>
-    `;
-    el.style.cssText = `
-      position: fixed; pointer-events: none; z-index: 8;
-      transform: translate(-50%, -100%);
-      background: rgba(10,13,12,0.92);
-      padding: 12px 20px;
-      border: 1px solid #2c3a32; border-radius: 20px;
-      box-shadow: 0 4px 16px rgba(0,0,0,0.4);
-      display: inline-flex; gap: 12px; align-items: center;
-    `;
-    document.body.appendChild(el);
-    // Thinking lives a long time (up to 30 minutes); the reply event or
-    // user action clears it. Auto-expire just in case the server never
-    // emits a reply.
-    this._bubble = {
-      being, mesh, el,
-      expiresAt: performance.now() + 30 * 60 * 1000,
-      thinking: true,
-    };
-  }
-
-  hideBeingMessage(being) {
-    if (this._bubble?.being === being) this._clearBubble();
-  }
-
-  _clearBubble() {
-    this._bubble?.el?.remove();
-    this._bubble = null;
-  }
-
-  _updateBubble() {
-    if (!this._bubble) return;
-    if (performance.now() > this._bubble.expiresAt) {
-      this._clearBubble();
-      return;
-    }
-    const pos = this._bubble.mesh.position.clone();
-    pos.y += 2.4;
-    const v = pos.project(this.camera);
-    const x = (v.x * 0.5 + 0.5) * this.renderer.domElement.clientWidth;
-    const y = (-v.y * 0.5 + 0.5) * this.renderer.domElement.clientHeight;
-    const behind = v.z > 1;
-    this._bubble.el.style.left = `${x}px`;
-    this._bubble.el.style.top  = `${y}px`;
-    this._bubble.el.style.display = behind ? "none" : "block";
-  }
+  // The per-being bubble + the activity-bubble pair retired in favor of
+  // ONE display path: _applyBeingActivity reads the server-pushed
+  // activity field and renders it above each being's head with per-kind
+  // styling (see _renderActivity at the bottom of this file). The local
+  // user's own outbound summons are server-derived activity too .
+  // multiplayer-visible from every viewer's perspective.
 
   _move(dt) {
     const blocked = this.isInputBlocked();
@@ -2281,24 +2191,131 @@ function _showGlareVignette(on) {
   }
 }
 
-let _thinkingStylesInjected = false;
-function _ensureThinkingStyles() {
-  if (_thinkingStylesInjected) return;
-  _thinkingStylesInjected = true;
-  const style = document.createElement("style");
-  style.id = "thinking-bubble-style";
-  style.textContent = `
-    .being-bubble--thinking .dot {
-      width: 9px; height: 9px; border-radius: 50%;
-      background: #8fbf9f;
-      box-shadow: 0 0 6px rgba(143, 191, 159, 0.6);
-      animation: thinking-pulse 1.2s ease-in-out infinite;
+// Activity-bubble renderer. ONE shape per being, driven by the server's
+// per-being `activity` field on the place descriptor. Every viewer sees
+// the same bubbles because the source is the substrate-derived activity,
+// not a per-tab UI side-channel.
+//
+// Four kinds the server emits:
+//
+//   summoning . the being is summoning someone. Rendered as
+//               `→@<target> <content>` . the primary "what they just
+//               said to whom" line. Most visible style.
+//
+//   acting    . the being is mid-act on a tool call (do/see/be).
+//               Rendered as a compact `◇ <action>` pill. Transient.
+//
+//   summoned  . the being was just summoned. Rendered as
+//               `← <content>` . the received message style.
+//
+//   said      . the being closed its act with a reply. Rendered as
+//               the speech-bubble body of `<content>`.
+function _renderActivity(el, activity) {
+  _ensureActivityStyles();
+  el.className = "being-activity";
+  const kind = activity?.kind || "acting";
+  el.classList.add(`being-activity--${kind}`);
+  el.innerHTML = "";
+
+  const target = activity?.target;
+  const targetName = target?.name || target?.role
+    || (target?.beingId ? `${target.beingId.slice(0, 6)}` : null);
+
+  if (kind === "summoning") {
+    if (targetName) {
+      const arrow = document.createElement("span");
+      arrow.className = "being-activity-arrow";
+      arrow.textContent = `→@${targetName}`;
+      el.appendChild(arrow);
     }
-    .being-bubble--thinking .dot:nth-child(2) { animation-delay: 0.2s; }
-    .being-bubble--thinking .dot:nth-child(3) { animation-delay: 0.4s; }
-    @keyframes thinking-pulse {
-      0%, 80%, 100% { opacity: 0.3; transform: scale(0.85); }
-      40%           { opacity: 1.0; transform: scale(1.0); }
+    const body = document.createElement("span");
+    body.className = "being-activity-body";
+    body.textContent = activity.content || "";
+    el.appendChild(body);
+    return;
+  }
+
+  if (kind === "summoned") {
+    const arrow = document.createElement("span");
+    arrow.className = "being-activity-arrow being-activity-arrow--in";
+    arrow.textContent = "←";
+    el.appendChild(arrow);
+    const body = document.createElement("span");
+    body.className = "being-activity-body";
+    body.textContent = activity.content || "";
+    el.appendChild(body);
+    return;
+  }
+
+  if (kind === "acting") {
+    const dot = document.createElement("span");
+    dot.className = "being-activity-dot";
+    dot.textContent = "◇";
+    el.appendChild(dot);
+    const body = document.createElement("span");
+    body.className = "being-activity-body";
+    body.textContent = activity.content || "";
+    el.appendChild(body);
+    return;
+  }
+
+  // kind: "said" or anything else . plain prose bubble.
+  el.textContent = activity?.content || "";
+}
+
+let _activityStylesInjected = false;
+function _ensureActivityStyles() {
+  if (_activityStylesInjected) return;
+  _activityStylesInjected = true;
+  const style = document.createElement("style");
+  style.id = "being-activity-style";
+  style.textContent = `
+    .being-activity {
+      position: fixed; pointer-events: none; z-index: 7;
+      transform: translate(-50%, -100%);
+      padding: 4px 10px;
+      border-radius: 6px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-size: 11px;
+      line-height: 1.4;
+      max-width: 360px;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.45);
+      display: flex; align-items: center; gap: 6px;
+    }
+    .being-activity-arrow {
+      color: #ffd479;
+      font-weight: 600;
+    }
+    .being-activity-arrow--in {
+      color: #9ec5ff;
+    }
+    .being-activity-dot {
+      color: #8fbf9f;
+      opacity: 0.8;
+    }
+    .being-activity-body {
+      color: #d4ddd6;
+    }
+    .being-activity--summoning {
+      background: rgba(38, 24, 12, 0.92);
+      border: 1px solid #6a4828;
+    }
+    .being-activity--summoned {
+      background: rgba(14, 22, 36, 0.92);
+      border: 1px solid #2e4866;
+    }
+    .being-activity--acting {
+      background: rgba(13, 30, 22, 0.88);
+      border: 1px solid #2c4a3a;
+      font-size: 10px;
+      padding: 2px 8px;
+    }
+    .being-activity--said {
+      background: rgba(10, 13, 12, 0.92);
+      border: 1px solid #2c3a32;
+      color: #c8d3cb;
+      white-space: pre-wrap;
     }
   `;
   document.head.appendChild(style);

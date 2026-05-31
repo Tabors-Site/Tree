@@ -31,7 +31,7 @@
 // arrival is intentionally supported — that's how a fresh reality's
 // first human comes in.
 //
-// Every operation an extension registers via place.do.registerOperation
+// Every operation an extension registers via reality.do.registerOperation
 // is instantly callable here. No per-feature route files. The
 // protocol IS the API.
 

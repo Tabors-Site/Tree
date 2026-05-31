@@ -87,7 +87,7 @@ const SEED_NAME_RE = /^[a-z][a-z0-9-]*:[a-z][a-z0-9-]*$/;
 const MAX_SEEDS = 200;
 
 /**
- * Register a seed recipe. Extensions call this via place.seeds.register
+ * Register a seed recipe. Extensions call this via reality.seeds.register
  * (or declare seeds in their init() return value and the loader registers).
  *
  * @param {string} name - "<ext>:<seed-action>" — seed namespace convention
@@ -267,7 +267,7 @@ export async function plantSeed({
     rootSpaceId: String(atSpaceId),
     plantedSeedId,
     identity,
-    place: reality,
+    reality,
     params: safeParams,
     summonCtx,
   };
