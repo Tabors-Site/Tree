@@ -147,7 +147,7 @@ export function classifyDeltaF(deltaF, doerId) {
  */
 export async function classifyActById(actId, doerId, opts = {}) {
   const FactModel = opts.FactModel
-    || (await import("../past/fact/fact.js")).default;
+    || (await import("../../../past/fact/fact.js")).default;
   const facts = await FactModel.find({ actId: String(actId) })
     .select("verb action target params")
     .lean();

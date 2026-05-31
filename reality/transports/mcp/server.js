@@ -38,7 +38,7 @@
 //   2. Enumerate my seed tool registry. For each tool, register it
 //      with the MCP server using:
 //        - the tool's existing JSON schema (already built by
-//          zod-to-json-schema inside seed/present/voices/llm/tools.js).
+//          zod-to-json-schema inside seed/present/cognition/llm/tools.js).
 //        - a thin handler that calls getToolHandler(name)(args) and
 //          wraps the return as MCP's { content: [{ type: "text", text }] }.
 //   3. Mount three HTTP routes (POST / GET / DELETE /mcp) protected
@@ -83,7 +83,7 @@ export async function initMcpServer(app, opts = {}) {
   log.warn(
     "MCP",
     `MCP transport is a stub. To activate: import the MCP SDK, wire ` +
-    `getToolHandler from seed/present/voices/llm/tools.js into MCP tool ` +
+    `getToolHandler from seed/present/cognition/llm/tools.js into MCP tool ` +
     `registrations, and mount routes at ${mountPath}. See header comment.`,
   );
 
@@ -94,7 +94,7 @@ export async function initMcpServer(app, opts = {}) {
   //     "@modelcontextprotocol/sdk/server/streamableHttp.js"
   //   );
   //   const { listToolNames, getToolDef, getToolHandler } = await import(
-  //     "../../seed/present/voices/llm/tools.js"
+  //     "../../seed/present/cognition/llm/tools.js"
   //   );
   //   const authenticate = (await import("../http/middleware/authenticate.js")).default;
   //

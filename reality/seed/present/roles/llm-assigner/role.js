@@ -29,7 +29,7 @@
 //   space    set-space-llm
 //            Sets qualities.llm.slots[slot] on a space the caller owns
 //            (rootOwner matches). Drives the tree-level resolution
-//            step in seed/present/voices/llm/connect.js.
+//            step in seed/present/cognition/llm/connect.js.
 //
 // Authorization gates here are coarse for now (self / root operator /
 // tree ownership). The deferred stance-authorization framework will
@@ -83,7 +83,7 @@ export const llmAssignerBeing = Object.freeze({
     if (!model)   throw new IbpError(IBP_ERR.INVALID_INPUT, "`model` is required");
     // apiKey is optional — local LLMs (Ollama, llama.cpp) don't need it.
 
-    const { addLlmConnection } = await import("../../voices/llm/connect.js");
+    const { addLlmConnection } = await import("../../cognition/llm/connect.js");
     const connection = await addLlmConnection(
       String(ctx.identity.beingId),
       { name, baseUrl, model, apiKey },
@@ -130,7 +130,7 @@ export const llmAssignerBeing = Object.freeze({
   async listLlms(_payload, ctx) {
     requireAuthenticated(ctx);
     const beingId = String(ctx.identity.beingId);
-    const { getBeingLlmAssignments } = await import("../../voices/llm/connect.js");
+    const { getBeingLlmAssignments } = await import("../../cognition/llm/connect.js");
 
     const being = await Being.findById(beingId)
       .select("llmDefault qualities")
@@ -163,7 +163,7 @@ export const llmAssignerBeing = Object.freeze({
     const { connectionId } = payload || {};
     if (!connectionId) throw new IbpError(IBP_ERR.INVALID_INPUT, "`connectionId` is required");
 
-    const { deleteLlmConnection } = await import("../../voices/llm/connect.js");
+    const { deleteLlmConnection } = await import("../../cognition/llm/connect.js");
     await deleteLlmConnection(
       String(ctx.identity.beingId),
       connectionId,
@@ -216,7 +216,7 @@ export const llmAssignerBeing = Object.freeze({
    * Set an LLM slot on a space the caller owns (via rootOwner of the
    * containing tree). Writes qualities.llm.slots[slot] on the space —
    * the tree-level step of the resolution chain in
-   * seed/present/voices/llm/connect.js.
+   * seed/present/cognition/llm/connect.js.
    *
    * @param {object} payload  { spaceId, slot, connectionId }
    *                          connectionId null to clear the slot

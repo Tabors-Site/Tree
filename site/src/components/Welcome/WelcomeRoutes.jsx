@@ -11,6 +11,7 @@ import FactoryAssign from "./FactoryAssign.jsx";
 import FactoryFold from "./FactoryFold.jsx";
 import FactoryMomentum from "./FactoryMomentum.jsx";
 import FactoryStamped from "./FactoryStamped.jsx";
+import FactoryBeingTypes from "./FactoryBeingTypes.jsx";
 
 // Blog stays at root (/blog and /blog/:slug). The component crossed
 // the rebuild seam unchanged; we just import it from where it now
@@ -50,8 +51,9 @@ const WelcomeRoutes = () => {
         <Route path="intake"   element={<FactoryIntake />} />
         <Route path="assign"   element={<FactoryAssign />} />
         <Route path="fold"     element={<FactoryFold />} />
-        <Route path="momentum" element={<FactoryMomentum />} />
-        <Route path="stamped"  element={<FactoryStamped />} />
+        <Route path="momentum"    element={<FactoryMomentum />} />
+        <Route path="stamped"     element={<FactoryStamped />} />
+        <Route path="being-types" element={<FactoryBeingTypes />} />
       </Route>
 
       {/* Blog at root level (stayed at /blog/* across the rebuild) */}

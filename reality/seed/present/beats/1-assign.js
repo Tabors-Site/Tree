@@ -20,7 +20,7 @@
 // with an actId pointing to a row that never existed. That's the
 // honest audit: intermediate Facts happened inside a moment that
 // produced no final answer. See [[project-cognition-result-type]]
-// and seed/present/cognitionResult.js for the CognitionResult contract.
+// and seed/present/cognition/cognitionResult.js for the CognitionResult contract.
 //
 // Two intake kinds reach assign:
 //
@@ -60,7 +60,7 @@ import Act from "../../past/act/act.js";
 import { getRealityConfigValue } from "../../realityConfig.js";
 import { getRole } from "../roles/registry.js";
 import { computeIbpStampAddress } from "../../ibp/address.js";
-import { validateOrientation, DEFAULT_ORIENTATION } from "../orientation.js";
+import { validateOrientation, DEFAULT_ORIENTATION } from "./2-fold/orientation.js";
 
 /**
  * Set up one moment for stamping. Loads the being, resolves the

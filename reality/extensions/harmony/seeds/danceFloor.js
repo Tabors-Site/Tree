@@ -245,6 +245,15 @@ export const danceFloorSeed = {
         scope: { spaceId: gridSpaceId },
         filter: { field: "qualities.harmony.tick" },
         priority: 3, // INTERACTIVE
+        // 100 ms window — at the current TICK_MS, drum strikes are far
+        // enough apart that nothing coalesces (so behavior is identical
+        // to today). The window kicks in only when a future faster
+        // tick or a burst of writes lands within 100 ms — in which
+        // case the dancer wakes ONCE per batch instead of N times.
+        // Conservative latency budget for an animated grid.
+        // dancerToward.js's summon handler reads the coalesced shape
+        // (c.events[0].spaceId) when c.spaceId is absent.
+        coalesceMs: 100,
         id: `harmony-tick-sub-${dancerBeingId}`,
       });
 

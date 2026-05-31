@@ -220,7 +220,7 @@ export function listOperations(filter = {}) {
  */
 export async function syncOperationsToSubstrate(summonCtx) {
   const { SEED_SPACE } = await import("../materials/space/seedSpaces.js");
-  const { manifestItems } = await import("../materials/manifest.js");
+  const { manifestItems } = await import("../present/manifest.js");
   const items = [];
   for (const op of REGISTRY.values()) {
     items.push({

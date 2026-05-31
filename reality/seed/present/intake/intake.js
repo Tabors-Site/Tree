@@ -36,7 +36,7 @@
 //     migration.
 
 import { randomUUID } from "crypto";
-import InboxProjection from "../../past/act/inboxProjection.js";
+import InboxProjection from "../../past/projections/inbox/inboxProjection.js";
 import { emitFact } from "../../past/fact/facts.js";
 
 // Place-level cap on pending intake entries. Counts InboxProjection

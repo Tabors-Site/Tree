@@ -192,11 +192,11 @@ Two cache collections sit alongside the primitives in `past/act/`.
 They are projection caches, fact-derived, rebuildable, not new
 primitives:
 
-- **InboxProjection** ([past/act/inboxProjection.js](past/act/inboxProjection.js)),
+- **InboxProjection** ([past/projections/inbox/inboxProjection.js](past/projections/inbox/inboxProjection.js)),
   open summons addressed to each being. Built by cross-cutting fold
   from `be:summon` and `be:sever` facts. The scheduler reads its pick
   queue from this collection.
-- **ThreadsProjection** ([past/act/threadsProjection.js](past/act/threadsProjection.js)),
+- **ThreadsProjection** ([past/projections/threads/threadsProjection.js](past/projections/threads/threadsProjection.js)),
   live coordination chains keyed by `rootCorrelation`. Built the same
   way. `.threads` SEE reads from here.
 
@@ -279,7 +279,7 @@ present/
 │   └── wakeSchedule.js     scheduled wake cadences
 ├── replies.js           how one moment begets the next (out-direction)
 ├── session.js           per-being-presence session bookkeeping
-├── voices/llm/          LLM cognition apparatus (separate from beats)
+├── cognition/llm/          LLM cognition apparatus (separate from beats)
 │   ├── runTurn.js          orchestration entry points (stepTurn, runTurn)
 │   ├── loop.js             the Phase 5 iteration (callLLM, finalizeResponse)
 │   ├── tools.js            tool registry + per-position resolution + dispatch
@@ -376,15 +376,12 @@ Materials define the possible; facts define the actual. Two axes, not
 a depth ladder. Full doctrine in
 [philosophy/MATERIALS.md](../philosophy/MATERIALS.md).
 
-## The two support folders
+## ibp/ — the verbs
 
-These are not tenses; they are how the three tenses reach the outside
-world.
-
-```
-ibp/                 THE VERBS, SEE / DO / SUMMON / BE
-seedReality/         the host floor, runtime, wire, the world outside
-```
+The verbs are not support for the tenses; they are the thing the tenses
+are made of. SEE reads the present's fold of the past; DO/BE/SUMMON
+stamp the past via the present. So `ibp/` is a top-level peer to
+present/past/materials, not a sidecar of any one of them.
 
 **ibp/** carries the four verbs, the universal currency every act
 speaks. SEE, DO, SUMMON, BE on IBP addresses (`<reality>/<path>@<being>`).
@@ -394,7 +391,6 @@ materials I stamp.
 
 ```
 ibp/
-├── verbs.js              thin re-export shim for the four verbs
 ├── verbs/                one file per verb, each owns its own helpers
 │   ├── do.js                doVerb + auto-Fact + read-only origin gate
 │   ├── see.js               seeVerb + discovery short-circuit + thread descriptor
@@ -412,10 +408,18 @@ ibp/
 └── stanceProperties.js   the property bag the authorize layer evaluates
 ```
 
+## seedReality/ — the host floor
+
+A separate concern from ibp/. Where ibp/ is the universal currency of
+acts, seedReality/ is the runtime — the place where the world I form
+meets the world outside. They were never the same kind of thing.
+
 **seedReality/** is the host floor that knows nothing of the world.
 DbConfig, log, hooks, indexes, version, retention, migrations, utils.
 A file here should never speak the words space, matter, being, or
 verb by name.
+
+## Boot anchors
 
 Plus three boot anchors at the seed root: [sprout.js](sprout.js)
 (genesis, plants the reality root + the nine seed spaces + the I-Am),
@@ -458,8 +462,8 @@ that span reels. Three uses today, one mechanism:
 | Projection             | Handler triggers                                                                  | Built in                                                              |
 | ---------------------- | --------------------------------------------------------------------------------- | --------------------------------------------------------------------- |
 | **Position index**     | Every reducer writes `state.position`; `findByPosition` queries the index.        | Implicit in projection field                                          |
-| **InboxProjection**    | `be:summon` upserts row; `be:sever` deletes by rootCorrelation; Act seal evicts.  | [past/act/inboxProjectionFold.js](past/act/inboxProjectionFold.js)    |
-| **ThreadsProjection**  | `be:summon` upserts row + adds participants; `be:sever` marks; Act seal bumps.    | [past/act/threadsProjectionFold.js](past/act/threadsProjectionFold.js)|
+| **InboxProjection**    | `be:summon` upserts row; `be:sever` deletes by rootCorrelation; Act seal evicts.  | [past/projections/inbox/inboxProjectionFold.js](past/projections/inbox/inboxProjectionFold.js)    |
+| **ThreadsProjection**  | `be:summon` upserts row + adds participants; `be:sever` marks; Act seal bumps.    | [past/projections/threads/threadsProjectionFold.js](past/projections/threads/threadsProjectionFold.js)|
 
 Future cross-reel projections add one registry line; the engine never
 changes. Per FOLD.md, the engine never grows; the materials catalog
@@ -505,7 +509,7 @@ Only self-summons may carry non-forward orientation. The
 forward — a being can turn itself; it cannot turn another being.
 
 **Inner vs outer acts.** A classifier in
-[orientation.js](present/orientation.js) reads the ΔF and the doer:
+[orientation.js](present/beats/2-fold/orientation.js) reads the ΔF and the doer:
 inner when every fact targets the doer's own reel AND no
 `be:summon` names another recipient; outer otherwise. This is
 single-writer read as a classifier — no new category, no new
@@ -838,7 +842,7 @@ restructure, a failed cognition (`ok:false`) leaves zero trace: no
 Act row, no inbox close, no projection bump. The being's reel and
 act-chain are byte-identical to before the failed moment. The seal
 is gated on the CognitionResult discriminated type
-([cognitionResult.js](present/cognitionResult.js)); failure is
+([cognitionResult.js](present/cognition/cognitionResult.js)); failure is
 structurally unreachable at the seal site.
 
 ### LlmConnection (per-being LLM config)
@@ -846,14 +850,14 @@ structurally unreachable at the seal site.
 Stored as entries in `Being.qualities.llmConnections`, keyed by
 connection uuid. Each entry: `{ name, baseUrl, encryptedApiKey, model,
 createdAt, lastUsedAt }`. AES-256-CBC at rest;
-[ssrf.js](present/voices/llm/ssrf.js) gates the baseUrl against
+[ssrf.js](present/cognition/llm/ssrf.js) gates the baseUrl against
 private IPs and blocked hosts (DNS-resolved at registration time).
 
 The LLM resolution chain in
-[present/voices/llm/resolution.js](present/voices/llm/resolution.js)
+[present/cognition/llm/resolution.js](present/cognition/llm/resolution.js)
 walks space-tree and being-tree to pick which connection a moment
 uses. Connection storage + slot rules + CRUD + the client cache live
-in [present/voices/llm/connect.js](present/voices/llm/connect.js);
+in [present/cognition/llm/connect.js](present/cognition/llm/connect.js);
 resolution imports the slot-rule readers from there.
 
 ## Resolution chains

@@ -409,7 +409,7 @@ export async function auditToolDescriptions() {
 // (add new tools, remove gone ones).
 export async function syncToolsToSubstrate(summonCtx) {
   const { SEED_SPACE } = await import("../../../materials/space/seedSpaces.js");
-  const { manifestItems } = await import("../../../materials/manifest.js");
+  const { manifestItems } = await import("../../manifest.js");
   const items = Object.entries(toolDefs).map(([name, def]) => ({
     name,
     qualities: new Map([

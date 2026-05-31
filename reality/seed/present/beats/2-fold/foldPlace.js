@@ -35,7 +35,7 @@
 
 import { fold } from "./foldEngine.js";
 import { findByPosition } from "../../../materials/projections.js";
-import { ORIENTATION, validateOrientation } from "../../orientation.js";
+import { ORIENTATION, validateOrientation } from "./orientation.js";
 import Act from "../../../past/act/act.js";
 import Fact from "../../../past/fact/fact.js";
 

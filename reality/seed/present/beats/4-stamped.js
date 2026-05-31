@@ -41,8 +41,8 @@
 import mongoose from "mongoose";
 import { getInternalConfigValue } from "../../internalConfig.js";
 import Act from "../../past/act/act.js";
-import { closeInboxOnAnswer } from "../../past/act/inboxProjectionFold.js";
-import { noteActSealOnThread } from "../../past/act/threadsProjectionFold.js";
+import { closeInboxOnAnswer } from "../../past/projections/inbox/inboxProjectionFold.js";
+import { noteActSealOnThread } from "../../past/projections/threads/threadsProjectionFold.js";
 import {
   appendDeltaFInSession,
   foldAfterCommit,

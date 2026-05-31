@@ -260,7 +260,7 @@ async function endBeingHandler({ target }) {
 // Connection records live in `Being.qualities.llmConnections` as a
 // Map keyed by connection uuid. Each entry: `{ name, baseUrl,
 // encryptedApiKey, model, createdAt, lastUsedAt }`. These ops wrap
-// the seed/present/voices/llm/connect.js helpers behind the IBP
+// the seed/present/cognition/llm/connect.js helpers behind the IBP
 // grammar so operators / CLI clients have a single dispatch surface.
 //
 // `skipAudit: true` on every op because the helpers route their
@@ -277,7 +277,7 @@ async function addLlmConnectionHandler({ target, params, identity, summonCtx }) 
   // Load the row to read llmDefault for the auto-assign-on-first-connection branch.
   const beingRow = await loadTargetRow(target, "being");
   const { addLlmConnection, assignConnection } = await import(
-    "../../present/voices/llm/connect.js"
+    "../../present/cognition/llm/connect.js"
   );
   const beingId = String(beingRow._id);
   const connection = await addLlmConnection(
@@ -307,7 +307,7 @@ async function updateLlmConnectionHandler({ target, params, identity, summonCtx 
   // Only need the id; the helper takes a beingId string.
   const beingId = targetIdOf(target);
   const { updateLlmConnection } = await import(
-    "../../present/voices/llm/connect.js"
+    "../../present/cognition/llm/connect.js"
   );
   const connection = await updateLlmConnection(
     beingId,
@@ -323,7 +323,7 @@ async function deleteLlmConnectionHandler({ target, params, identity, summonCtx 
   if (!connectionId)
     throw new Error("delete-llm-connection: `connectionId` is required");
   const { deleteLlmConnection } = await import(
-    "../../present/voices/llm/connect.js"
+    "../../present/cognition/llm/connect.js"
   );
   await deleteLlmConnection(targetIdOf(target), connectionId, { identity, summonCtx });
   return { removed: true, connectionId };
@@ -335,7 +335,7 @@ async function assignLlmSlotHandler({ target, params, identity, summonCtx }) {
   const kind = detectTargetKind(target);
   const id = targetIdOf(target);
   const { assignConnection, assignSpaceConnection } = await import(
-    "../../present/voices/llm/connect.js"
+    "../../present/cognition/llm/connect.js"
   );
   if (kind === "being") {
     return assignConnection(id, slot, connectionId || null, {

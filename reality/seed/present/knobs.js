@@ -18,8 +18,8 @@
 
 import { getRealityConfigValue } from "../realityConfig.js";
 import { getInternalConfigValue } from "../internalConfig.js";
-import { setLlmTimeout } from "./voices/llm/connect.js";
-import { setFailoverTimeout } from "./voices/llm/call.js";
+import { setLlmTimeout } from "./cognition/llm/connect.js";
+import { setFailoverTimeout } from "./cognition/llm/call.js";
 import { setMaxPresenceReels, setStalePresenceMs } from "./beats/2-fold/reel.js";
 
 // ─────────────────────────────────────────────────────────────────

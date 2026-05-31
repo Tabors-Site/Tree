@@ -52,18 +52,13 @@ import {
   registerSessionType,
 } from "./present/session.js";
 
-import {
-  stepTurn,
-  switchRole,
-  runTurn,
-  getCurrentRole,
-  registerFailoverResolver,
-} from "./present/voices/llm/runTurn.js";
+import { runLlmMoment } from "./present/cognition/llm/llmMoment.js";
+import { registerFailoverResolver } from "./present/cognition/llm/call.js";
 import {
   getClientForBeing,
   resolveRootLlmForRole,
   beingHasLlm,
-} from "./present/voices/llm/connect.js";
+} from "./present/cognition/llm/connect.js";
 import {
   getRootIdFor,
   setCurrentSpace,
@@ -72,7 +67,7 @@ import {
 import {
   registerRootSpaceLlmSlot,
   registerBeingLlmSlot,
-} from "./present/voices/llm/connect.js";
+} from "./present/cognition/llm/connect.js";
 import {
   emitNavigate,
   emitToBeing,
@@ -174,12 +169,12 @@ import "./materials/seeds.js";
 import "./realityConfig.js";
 // Side-effect import. Registers the InboxProjection cross-cutting
 // fold handlers (be:summon → upsert, be:sever → delete-by-root).
-// See seed/past/act/inboxProjectionFold.js.
-import "./past/act/inboxProjectionFold.js";
+// See seed/past/projections/inbox/inboxProjectionFold.js.
+import "./past/projections/inbox/inboxProjectionFold.js";
 // Side-effect import. Registers the ThreadsProjection cross-cutting
 // fold handlers (be:summon → upsert+addParticipant, be:sever →
-// mark severed). See seed/past/act/threadsProjectionFold.js.
-import "./past/act/threadsProjectionFold.js";
+// mark severed). See seed/past/projections/threads/threadsProjectionFold.js.
+import "./past/projections/threads/threadsProjectionFold.js";
 // Side-effect import. Registers the PositionProjection cross-cutting
 // fold handler (do:set-being:coord → upsert (beingId, spaceId) row).
 // The cross-cutting read of "who is at this space, where," skinny
@@ -280,13 +275,10 @@ export function buildRealityServices({
       getClientForBeing,
       resolveRootLlmForRole,
       beingHasLlm,
-      stepTurn,
-      switchRole,
+      runLlmMoment,
       getRootIdFor,
-      runTurn,
       setCurrentSpace,
       getCurrentSpace,
-      getCurrentRole,
       registerRootSpaceLlmSlot,
       registerBeingLlmSlot,
       registerFailoverResolver,

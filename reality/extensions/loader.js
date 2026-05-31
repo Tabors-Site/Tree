@@ -7,7 +7,7 @@ import path from "path";
 import crypto from "crypto";
 import { fileURLToPath, pathToFileURL } from "url";
 import { buildRealityServices } from "../seed/services.js";
-import { setExtensionToolResolver } from "../seed/present/voices/llm/tools.js";
+import { setExtensionToolResolver } from "../seed/present/cognition/llm/tools.js";
 import { hooks } from "../seed/hooks.js";
 import { getToolOwner } from "../seed/materials/space/extensionScope.js";
 import log from "../seed/seedReality/log.js";
@@ -652,11 +652,11 @@ export async function loadExtensions(app, mcpServer, opts = {}) {
 
       // Register tools into the seed tool registry. Same path the
       // seed uses for its own tools — see registerToolBundle in
-      // seed/present/voices/llm/tools.js. The LLM voice dispatches
+      // seed/present/cognition/llm/tools.js. The LLM voice dispatches
       // verb-tagged tool calls directly through getToolHandler.
       if (instance.tools) {
         const { registerToolBundle } =
-          await import("../seed/present/voices/llm/tools.js");
+          await import("../seed/present/cognition/llm/tools.js");
         await registerToolBundle(instance.tools, { ownerExt: manifest.name });
       }
 
@@ -1452,7 +1452,7 @@ export async function uninstallExtension(name) {
     // registry after uninstall.
     try {
       const { unregisterToolsForExtension } =
-        await import("../seed/present/voices/llm/tools.js");
+        await import("../seed/present/cognition/llm/tools.js");
       unregisterToolsForExtension(name, getToolOwner);
     } catch {}
     try {

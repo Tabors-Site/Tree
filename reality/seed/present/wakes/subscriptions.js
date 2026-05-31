@@ -697,6 +697,19 @@ function _renderTriggerContent(eventName, payload) {
   if (payload?.toStatus) out.toStatus = payload.toStatus;
   if (payload?.timestamp) out.timestamp = payload.timestamp;
   else out.timestamp = new Date().toISOString();
+  // For afterQualityWrite / afterFieldWrite, surface the WRITTEN
+  // VALUE so the receiving role can read it directly off the wake
+  // without folding the matter / space / being. The drummer's tick
+  // is the canonical case: the dancer wakes on
+  // afterQualityWrite{field:"qualities.harmony.tick"} and needs the
+  // tick number (`value.n`) to frame this beat. The target reference
+  // (matterId / spaceId / actorBeingId) is still carried so a role
+  // that wants the full fold can do it; this is just the inline read.
+  if (payload?.field) out.field = String(payload.field);
+  if (payload?.value !== undefined) out.value = payload.value;
+  if (payload?.target?.kind && payload?.target?.id) {
+    out.target = { kind: payload.target.kind, id: String(payload.target.id) };
+  }
   return out;
 }
 

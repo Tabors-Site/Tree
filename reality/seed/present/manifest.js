@@ -20,7 +20,7 @@ import { v4 as uuidv4 } from "uuid";
 import Space from "../materials/space/space.js";
 import log from "../seedReality/log.js";
 import { emitFact } from "../past/fact/facts.js";
-import { I_AM } from "./being/seedBeings.js";
+import { I_AM } from "../materials/being/seedBeings.js";
 
 // Stamp a do:birth Fact for a new manifest child Space. Slice C
 // (2026-05-23): the legacy Space.create bypass is gone; eager-fold

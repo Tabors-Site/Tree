@@ -1,77 +1,47 @@
 // TreeOS Seed . AGPL-3.0 . https://treeos.ai . Tabor Holly
 //
-// The default-summon dispatch. The generic act of carrying one
-// moment from request to stamp, for any LLM-driven role that
-// hasn't overridden it. Roles declare only what makes their
-// moments different (prompt, tools, permissions, who they reply
-// to); I run the surrounding shape from here.
+// defaultSummon . the generic dispatch for an LLM moment.
 //
-// I am infrastructure, not perspective. I prepare the moment, hand
-// it to runTurn (which assembles the frame and runs the inference),
-// receive what came back, decide whether the moment requests a
-// follow-up moment from someone, and step out. The being lived for
-// the duration of the inference inside runTurn — what I see is
-// only the text that came out.
+// I prepare the moment, hand it to runLlmMoment (one stateless fold
+// in, one cognition result out), then route on the result's kind:
 //
-// The shape lived inline in every governing role (rulerRole,
-// plannerRole, contractorRole, foremanRole, coderRole) at roughly
-// 60 lines of identical boilerplate around runTurn. Pulling it
-// here is what lets role files stay declarative.
+//   kind:"act"      . the being acted. Fire replyTo if declared, then
+//                      return the success result for the seal.
+//   kind:"see"      . the being looked and chose not to act. No reply
+//                      fires. Pass the SEE result through; moment.js
+//                      releases the inbox without sealing an Act.
+//   kind:"failure"  . cognition broke (timeout, http-error, garbage).
+//                      No reply fires. Pass through.
 //
-// What I do, in order:
-//
-//   1. Validate the scope (ctx.spaceId / ctx.resolved.spaceId).
-//   2. Detect a reply-wake (message.inReplyTo set) — the asker is
-//      requesting the receiver have a follow-up moment.
-//   3. Compose the message body the moment will see — a reply-
-//      context wrapper on reply-wakes, raw content otherwise.
-//   4. Call runTurn. The being has its moment inside that call.
-//   5. Handle abort signal and inference errors.
-//   6. If the role declares a reply mode, request the next moment
-//      in the chain (someone else's, somewhere upstream).
-//   7. Return { text, actId } for the scheduler.
-//
-// `text` is the terminal LLM emission — the final assistant
-// message the being produced inside its moment. The deliverable
-// lives in the substrate (whatever the tools wrote during the
-// moment); `text` is the closing utterance, not the deliverable.
+// SEE is NOT a failure. It is a legitimate cognition outcome and gets
+// its own log line.
 //
 // Reply modes (declared on the role spec via `replyTo`):
 //
-//   undefined        no follow-up moment requested. The return
-//                    value is consumed by the caller directly.
-//                    (Coder, Worker — leaf roles.)
-//
-//   "asker"          request the immediate sender have a follow-up
-//                    moment. (Planner, Contractor, Foreman
-//                    reporting up to whoever summoned them.)
-//
+//   undefined        no follow-up moment requested.
+//   "asker"          request the immediate sender have a follow-up moment.
 //   "chain-initial"  on reply-wakes only, request the chain-opening
-//                    asker (user-being or parent Ruler) have the
-//                    follow-up moment. The Ruler's synthesis back
-//                    to whoever opened the chain.
+//                    asker have the follow-up moment.
 
-import log from "../../../seedReality/log.js";
-import { runTurn } from "./runTurn.js";
-import { cognitionFailure, cognitionSuccess } from "../../cognitionResult.js";
+import log from "../../seedReality/log.js";
+import { runLlmMoment } from "./llm/llmMoment.js";
+import { cognitionFailure } from "./cognitionResult.js";
 import {
   emitReplyToAsker,
   emitReplyToStance,
   findChainInitialCaller,
-} from "../../replies.js";
+} from "../replies.js";
 
 /**
  * The generic summon implementation. The role registry wires this
- * automatically when a role declares no custom `summon` function (see
- * seed/present/roles/registry.js#makeLazyDefaultSummon). Roles needing
- * custom dispatch attach their own `summon` and the registry skips
- * the wrap.
+ * automatically when a role declares no custom `summon` function.
+ * Roles needing custom dispatch attach their own `summon`.
  *
  * @param {object} opts
  * @param {object} opts.message . the inbox SUMMON envelope
  * @param {object} opts.ctx . the summon ctx (toBeing, spaceId, signal, ...)
  * @param {object} opts.role . the role spec
- * @returns {Promise<{ text, actId } | null>}
+ * @returns {Promise<CognitionResult>}
  */
 export async function defaultSummon({ message, ctx, role }) {
   const startMs = Date.now();
@@ -94,65 +64,72 @@ export async function defaultSummon({ message, ctx, role }) {
       `correlation=${message.correlation?.slice(0, 8) || "?"})`,
   );
 
-  // Reply-context shape. Most roles want the default "[wakeup] X
-  // replied:" prefix, but a role can declare its own
-  // `buildReplyContext(message)` to phrase the wakeup differently
-  // (Ruler: "X advanced state to Y; consider Z." Foreman: judgment-
-  // framed. etc). Default falls back to buildReplyContextMessage.
+  // Reply-context shape. A role can declare `buildReplyContext(message)`
+  // to phrase the wakeup differently; default to buildReplyContextMessage.
   const messageBody = isReply
     ? typeof role?.buildReplyContext === "function"
       ? role.buildReplyContext(message)
       : buildReplyContextMessage(message)
     : String(message.content || "");
 
-  // runTurn now returns a CognitionResult directly. Exceptions from
-  // it are genuinely exceptional (assertion violations, missing
-  // deps) — we still wrap in try so the moment can never throw past
-  // momentum, but the normal failure shapes (timeout, http-error,
-  // garbage) come back as ok:false from runTurn itself, not as
-  // thrown errors.
+  // One moment for the LLM being. Stateless across calls; the prompt is
+  // folded fresh from the reel. Returns a CognitionResult discriminated
+  // by `kind` (act | see | failure). Unexpected throws come back as
+  // internal failures so the outer boundary always sees a result.
   let result;
   try {
-    result = await runTurn({
+    result = await runLlmMoment({
       being: ctx.toBeing,
-      envelope: { ...message, content: messageBody },
+      envelope: { ...message, content: messageBody, actId: ctx?.actId || message.actId || null },
       role,
       signal: ctx.signal,
+      summonCtx: {
+        actId: ctx?.actId || message.actId || null,
+        sessionId: ctx?.sessionId || null,
+        rootActId: ctx?.rootActId || ctx?.actId || message.actId || null,
+        ibpAddress: ctx?.ibpAddress || null,
+      },
     });
   } catch (err) {
     if (ctx.signal?.aborted) {
       log.info(logTag, `summon aborted (${err.message})`);
       return cognitionFailure("aborted", err.message);
     }
-    // Unexpected throw from runTurn (not the normal failure shapes).
-    // Treat as internal cognition failure — no Act will seal.
-    log.warn(logTag, `runTurn threw unexpectedly: ${err.message}`);
+    log.warn(logTag, `runLlmMoment threw unexpectedly: ${err.message}`);
     return cognitionFailure("internal", err.message);
   }
 
-  // Defensive: runTurn must return a CognitionResult. If it didn't,
-  // treat as garbage rather than synthesizing text.
-  if (!result || typeof result.ok !== "boolean") {
-    log.warn(logTag, `runTurn returned non-CognitionResult value`);
-    return cognitionFailure("garbage", "runTurn returned non-CognitionResult");
+  if (!result || typeof result.kind !== "string") {
+    log.warn(logTag, `runLlmMoment returned non-CognitionResult value`);
+    return cognitionFailure("garbage", "runLlmMoment returned non-CognitionResult");
   }
 
-  if (result.ok === false) {
-    log.info(logTag, `cognition failed: shape=${result.shape} reason=${(result.reason || "").slice(0, 80)}`);
+  // Three discriminated paths. No `result.ok` branching; route on kind.
+  if (result.kind === "see") {
+    log.info(
+      logTag,
+      `saw and released at ${String(scopeNodeId).slice(0, 8)} . no act sealed`,
+    );
     return result;
   }
 
-  // ── ok:true ──
+  if (result.kind === "failure") {
+    log.info(
+      logTag,
+      `cognition failed: shape=${result.shape} reason="${(result.reason || "").slice(0, 80)}"`,
+    );
+    return result;
+  }
+
+  // kind === "act"
   const durationMs = Date.now() - startMs;
   log.info(
     logTag,
     `summons complete at ${String(scopeNodeId).slice(0, 8)} in ${durationMs}ms`,
   );
 
-  // Reply emission. The role spec's `replyTo` selects which shape.
-  // "asker" and "chain-initial" both flow through the seed reply
-  // helpers; they differ only in which stance receives the reply.
-  // Only fires on ok:true — there's no answer to emit on failure.
+  // Reply emission only on acts. SEE and failure leave no reply; the
+  // asker either times out or sees the empty seal, which is correct.
   await maybeEmitReply({
     role,
     isReply,
@@ -164,7 +141,7 @@ export async function defaultSummon({ message, ctx, role }) {
     logTag,
   });
 
-  return cognitionSuccess(result.content);
+  return result;
 }
 
 // ────────────────────────────────────────────────────────────────────
@@ -199,9 +176,6 @@ async function maybeEmitReply({
   }
 
   if (replyTo === "chain-initial") {
-    // Only emit on reply-wakes. The chain-initial caller has no inbox
-    // entry to walk before the first sub-being reply places, and the
-    // entry-scope return path covers the initial response.
     if (!isReply) return;
 
     const beingId = String(ctx.toBeing?._id || "");
@@ -234,10 +208,8 @@ async function maybeEmitReply({
 }
 
 /**
- * Build a synthesis-friendly message body for a reply-summon. The LLM
- * reads this alongside the snapshot block buildSystemPrompt added.
- * Names what just finished so the next turn frames as "continuing in-
- * progress work" rather than "answering a fresh question."
+ * Build a synthesis-friendly message body for a reply-summon. Names
+ * what just finished so the next moment frames as continuing work.
  */
 export function buildReplyContextMessage(message) {
   const sender = message.from || "(sub-being)";

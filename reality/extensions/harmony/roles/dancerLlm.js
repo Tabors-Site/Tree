@@ -3,7 +3,7 @@
 // Doctrine — the being IS its perspective.
 //
 // The face is built fresh every summon by the seed's assembler
-// (seed/present/voices/llm/assemble.js → buildPrompt). The
+// (seed/present/cognition/llm/assemble.js → buildPrompt). The
 // assembler renders:
 //
 //   identity      "I am <name>, harmony:dancer-llm at <space>."
@@ -27,8 +27,8 @@
 // reality-default pinned by set-reality-llm carries the dancer).
 
 import mongoose from "mongoose";
-import { runTurn } from "../../../seed/present/voices/llm/runTurn.js";
-import { registerSeeResolver } from "../../../seed/present/voices/llm/seeResolvers.js";
+import { runLlmMoment } from "../../../seed/present/cognition/llm/llmMoment.js";
+import { registerSeeResolver } from "../../../seed/present/cognition/llm/seeResolvers.js";
 import { foldGridLive, loadGridBounds } from "../lib/foldGrid.js";
 import log from "../../../seed/seedReality/log.js";
 
@@ -201,23 +201,24 @@ export const dancerLlmRole = Object.freeze({
 
   async summon(message, ctx) {
     try {
-      const result = await runTurn({
+      const result = await runLlmMoment({
         being:    ctx.toBeing,
         envelope: message,
         role:     dancerLlmRole,
         signal:   ctx.signal,
+        summonCtx: {
+          actId: ctx?.actId || message?.actId || null,
+          sessionId: ctx?.sessionId || null,
+          ibpAddress: ctx?.ibpAddress || null,
+        },
       });
-      // runTurn returns a CognitionResult on success
-      // (`{ok:true, content}` per cognitionSuccess) or a
-      // noLlmResponse / cognitionFailure (`{content}` or
-      // `{ok:false, reason}`). The text we want for the act-chain
-      // is `result.content` in all those shapes — `.text` doesn't
-      // exist, which is why earlier acts all showed "(no reply)".
-      const text =
-        (typeof result?.content === "string" && result.content) ||
-        (typeof result?.reason === "string" && `cognition failed: ${result.reason}`) ||
-        "(no reply)";
-      return { text };
+      // runLlmMoment returns a discriminated CognitionResult:
+      //   kind:"act"     . tool dispatched OR prose said
+      //   kind:"see"     . LLM chose to do nothing this tick . a
+      //                    legitimate outcome (stay-put dancer)
+      //   kind:"failure" . cognition broke
+      // Pass through to momentum; the conductor branches on .kind.
+      return result;
     } catch (err) {
       if (ctx.signal?.aborted) return null;
       log.warn("DancerLlm", `LLM call failed: ${err.message}`);

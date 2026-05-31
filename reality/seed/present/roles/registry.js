@@ -184,7 +184,7 @@ function makeLazyDefaultSummon(role) {
   let cached = null;
   return async (message, ctx) => {
     if (!cached) {
-      const mod = await import("../voices/llm/defaultSummon.js");
+      const mod = await import("../cognition/defaultSummon.js");
       cached = mod.defaultSummon;
     }
     return cached({ message, ctx, role });
@@ -198,7 +198,7 @@ function makeLazyDefaultSummon(role) {
  */
 export async function syncRolesToSubstrate(summonCtx) {
   const { SEED_SPACE } = await import("../../materials/space/seedSpaces.js");
-  const { manifestItems } = await import("../../materials/manifest.js");
+  const { manifestItems } = await import("../manifest.js");
   const items = [];
   for (const [name, role] of REGISTRY) {
     items.push({

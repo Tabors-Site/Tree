@@ -6,7 +6,7 @@
 // SUMMON is the only verb whose fact lands on the CALLER'S reel
 // (single-writer: a being writes only its own reel). The
 // recipient is named in params.recipient; the cross-cutting fold
-// handler in past/act/inboxProjectionFold.js upserts an
+// handler in past/projections/inbox/inboxProjectionFold.js upserts an
 // InboxProjection row keyed by correlation; the scheduler picks
 // from there.
 //
@@ -43,7 +43,7 @@ import { emitFact } from "../../past/fact/facts.js";
 import {
   ORIENTATION,
   validateOrientation,
-} from "../../present/orientation.js";
+} from "../../present/beats/2-fold/orientation.js";
 import { IbpError, IBP_ERR } from "../protocol.js";
 import { I_AM } from "../../materials/being/seedBeings.js";
 import { parseWithContext, expand, getRealityDomain } from "../address.js";
@@ -496,7 +496,7 @@ async function _dispatchSummon({
   // a be:summon Fact on the summoner's own reel. The recipient
   // lives in params.recipient (NOT on target — single-writer: facts
   // only land on the actor's reel for being-targeted ops). The
-  // cross-cutting fold handler in past/act/inboxProjectionFold.js
+  // cross-cutting fold handler in past/projections/inbox/inboxProjectionFold.js
   // upserts an InboxProjection row keyed by correlation; the
   // scheduler picks from there.
   //

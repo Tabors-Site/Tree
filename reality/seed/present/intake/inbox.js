@@ -17,7 +17,7 @@
 // What survives here: per-being readers (`readInbox`,
 // `getInboxSummary`) used by the descriptor and the UI.
 
-import InboxProjection from "../../past/act/inboxProjection.js";
+import InboxProjection from "../../past/projections/inbox/inboxProjection.js";
 
 /**
  * Read a being's open inbox at this position. Returns the

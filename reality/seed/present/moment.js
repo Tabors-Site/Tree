@@ -29,7 +29,7 @@
 // exists to close it. The being's reel and act-chain are byte-
 // identical to before the failed moment. Zero trace.
 //
-// See seed/present/cognitionResult.js for the CognitionResult contract.
+// See seed/present/cognition/cognitionResult.js for the CognitionResult contract.
 //
 // The intake queue and per-being serial behavior live in
 // intake/scheduler.js; the scheduler calls runMoment() once per
@@ -41,7 +41,7 @@ import { assign }   from "./beats/1-assign.js";
 import { momentum } from "./beats/3-momentum.js";
 import { sealAct }  from "./beats/4-stamped.js";
 import { markIntakeRunning, markIntakeComplete } from "./intake/intake.js";
-import { closeInboxOnAnswer } from "../past/act/inboxProjectionFold.js";
+import { closeInboxOnAnswer } from "../past/projections/inbox/inboxProjectionFold.js";
 import { buildResponseEntry } from "./replies.js";
 
 /**
@@ -97,10 +97,10 @@ export async function runMoment({ beingId, spaceId, entry, index, handoff = null
     // its own try/catch). Treat as cognition failure: no Act row.
     if (controller.signal.aborted) {
       log.info("Moment", `aborted being=${beingId.slice(0, 8)} corr=${entry.correlation.slice(0, 8)}: ${err.message}`);
-      cognition = { ok: false, shape: "aborted", reason: err.message };
+      cognition = { kind: "failure", ok: false, shape: "aborted", reason: err.message };
     } else {
       log.error("Moment", `errored being=${beingId.slice(0, 8)}: ${err.message}`);
-      cognition = { ok: false, shape: "internal", reason: err.message };
+      cognition = { kind: "failure", ok: false, shape: "internal", reason: err.message };
       if (handoff?.onError) {
         try { handoff.onError(err, entry); } catch {}
       }
@@ -108,16 +108,20 @@ export async function runMoment({ beingId, spaceId, entry, index, handoff = null
   }
 
   // ── Beat 4: seal-gate. ──
-  // The structural rule: an Act row is written ONLY when cognition
-  // returned ok:true. ok:false → no Act, the InboxProjection stays
-  // open because no answering Act exists to close it.
+  // Three discriminated paths, by cognition.kind:
+  //   "act"     . Act row writes; ΔF commits with it; replies fire.
+  //   "see"     . No Act row. The being looked and chose not to act.
+  //               The inbox row CLOSES (the moment ran to completion).
+  //               No eviction-as-failure, no onError handoff.
+  //   "failure" . No Act row. The inbox row evicts on deterministic
+  //               shapes (garbage, internal, transport-act). aborted
+  //               still seals stopped:true for legacy reasons.
   //
-  // One legacy exception: abort path still produces an Act with
-  // content=null + stopped=true. That's the pre-CognitionResult
-  // shape; future work converts abort to release-with-no-Act too
-  // (noted in run.js doctrine). For now: aborted → seal with null.
+  // SEE is structurally separate from failure: same downstream effect
+  // (no Act materializes) but different meaning, different log line,
+  // different recoverability semantics.
   try {
-    if (setup?.plannedAct && cognition?.ok === true) {
+    if (setup?.plannedAct && cognition?.kind === "act") {
       // ── Cognition succeeded. Build seal content + seal the Act. ──
       let sealContent;
       if (isTransportAct) {
@@ -141,6 +145,47 @@ export async function runMoment({ beingId, spaceId, entry, index, handoff = null
         deltaF:    setup.summonCtx?.deltaF    || [],
         afterSeal: setup.summonCtx?.afterSeal || [],
       });
+
+      // selfContinue. The role declares whether its being keeps
+      // stepping after each act. When true, enqueue a self-SUMMON
+      // so the next moment folds the post-act world and decides
+      // its next step. SEE is the natural exit . the LLM emits no
+      // tool call, the moment becomes kind:"see", and we don't
+      // reach this branch (so no further self-summon).
+      //
+      // Transport-act moments don't self-continue . they're
+      // pre-decided keystroke-like acts, not deliberation, and the
+      // transport drives cadence.
+      if (
+        actInserted &&
+        setup.role?.selfContinue === true &&
+        !isTransportAct
+      ) {
+        try {
+          await emitSelfContinueSummon({
+            beingId,
+            inboxSpaceId: spaceId,
+            actInserted,
+            entry,
+            roleName: setup.role?.name || null,
+          });
+        } catch (selfErr) {
+          log.warn(
+            "Moment",
+            `selfContinue enqueue failed for being=${beingId.slice(0, 8)}: ${selfErr.message}`,
+          );
+        }
+      }
+    } else if (setup?.plannedAct && cognition?.kind === "see") {
+      // ── SEE path. The being looked and chose not to act. ──
+      // Distinct from failure: this is a complete moment, the inbox
+      // closes cleanly. No Act row, no eviction-as-failure, no
+      // onError handoff.
+      try { await closeInboxOnAnswer(entry.correlation); } catch {}
+      log.info(
+        "Moment",
+        `saw being=${beingId.slice(0, 8)} . no act sealed (clean release)`,
+      );
     } else if (setup?.plannedAct && cognition?.shape === "aborted") {
       // Abort path. Legacy: still produces an Act with content=null
       // and stopped=true. To be converted to release-with-no-Act
@@ -154,8 +199,8 @@ export async function runMoment({ beingId, spaceId, entry, index, handoff = null
         afterSeal: setup.summonCtx?.afterSeal || [],
       });
     } else if (setup?.plannedAct) {
-      // ok:false (and not aborted). NO Act row written. What happens
-      // to the inbox row depends on whether the failure is
+      // kind:"failure" (and not aborted). NO Act row written. What
+      // happens to the inbox row depends on whether the failure is
       // DETERMINISTIC (retrying produces the same failure) or
       // TRANSIENT (a later attempt could plausibly succeed).
       //
@@ -254,4 +299,37 @@ export async function runMoment({ beingId, spaceId, entry, index, handoff = null
     result: rawResult,
     responseEntry,
   };
+}
+
+/**
+ * Enqueue a self-SUMMON for a being whose role declared
+ * `selfContinue: true`. Fires after the moment's Act seals so the
+ * next moment folds the post-act world.
+ *
+ * The next moment carries the same role name (continuation, not a
+ * role switch), the prior actId in rootActId/parentActId for chain
+ * tracing, and a synthetic envelope content marking it as a
+ * self-continuation so the role's prompt can frame it that way.
+ *
+ * SEE is the natural exit: when the next moment's LLM emits no tool
+ * call, the moment becomes kind:"see", no Act seals, no further
+ * self-summon enqueues, and the loop stops.
+ */
+async function emitSelfContinueSummon({ beingId, inboxSpaceId, actInserted, entry, roleName }) {
+  const { summonByResolved } = await import("../ibp/verbs/summon.js");
+  const { I_AM } = await import("../materials/being/seedBeings.js");
+  const rootCorrelation =
+    entry?.rootCorrelation || actInserted?.rootCorrelation || null;
+  await summonByResolved({
+    toBeingId: beingId,
+    inboxSpaceId,
+    activeRole: roleName || undefined,
+    identity: { beingId: I_AM, name: "i-am" },
+    message: {
+      content: { event: "self-continue", priorActId: String(actInserted._id) },
+      from: "self-continue",
+      priority: entry?.priority || 3,
+      rootCorrelation,
+    },
+  });
 }

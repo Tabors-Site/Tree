@@ -29,7 +29,7 @@
 // (probably a thin "do-op" tool that takes { action, args } and
 // dispatches through place.do, plus a "see" tool for substrate reads).
 
-import { runTurn } from "../../voices/llm/runTurn.js";
+import { runLlmMoment } from "../../cognition/llm/llmMoment.js";
 import log from "../../../seedReality/log.js";
 
 const REALITY_MANAGER_PROMPT = `You are the Reality Manager for this TreeOS reality. You answer to
@@ -96,11 +96,16 @@ export const realityManagerRole = Object.freeze({
 
     let result;
     try {
-      result = await runTurn({
+      result = await runLlmMoment({
         being:    ctx.toBeing,
         envelope: message,
         role:     realityManagerRole,
         signal:   ctx.signal,
+        summonCtx: {
+          actId: ctx?.actId || message?.actId || null,
+          sessionId: ctx?.sessionId || null,
+          ibpAddress: ctx?.ibpAddress || null,
+        },
       });
     } catch (err) {
       if (ctx.signal?.aborted) {
@@ -108,15 +113,15 @@ export const realityManagerRole = Object.freeze({
         return null;
       }
       log.warn("RealityManager", `LLM call failed: ${err.message}`);
-      return { text: `Place manager error: ${err.message}` };
+      return { text: `Reality manager error: ${err.message}` };
     }
 
     const durationMs = Date.now() - startMs;
     log.info("RealityManager", `summons complete in ${durationMs}ms`);
 
-    return {
-      text:     result?.text || "(reality manager done)",
-      actId: result?.actId || null,
-    };
+    // Pass the discriminated CognitionResult through; momentum branches
+    // on .kind (act | see | failure) and the conductor decides whether
+    // to seal.
+    return result;
   },
 });

@@ -1,5 +1,18 @@
 // TreeOS Seed . AGPL-3.0 . https://treeos.ai . Tabor Holly
 //
+// ┌──────────────────────────────────────────────────────────────────┐
+// │  SCOPE: IN-PROCESS ONLY.                                         │
+// │                                                                  │
+// │  This lock serializes appends to the same reel inside ONE Node   │
+// │  process. It does NOT cross processes. If two Node instances run │
+// │  against the same Mongo, they can both allocate seq + insert     │
+// │  concurrently — the per-process lock is invisible across the     │
+// │  wire. Cross-process append safety belongs to a separate         │
+// │  primitive (Mongo $inc + unique index + retry, a distributed     │
+// │  lock service, or the same write-once-per-reel discipline        │
+// │  layered above). Don't infer single-writer from this file alone. │
+// └──────────────────────────────────────────────────────────────────┘
+//
 // Per-reel append lock. The critical-section primitive the write side
 // stands on.
 //

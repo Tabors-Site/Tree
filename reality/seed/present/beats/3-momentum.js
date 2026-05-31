@@ -42,7 +42,7 @@
 // cannot represent a failure.
 
 import log from "../../seedReality/log.js";
-import { normalizeCognitionResult, cognitionFailure } from "../cognitionResult.js";
+import { normalizeCognitionResult, cognitionFailure } from "../cognition/cognitionResult.js";
 
 /**
  * Beat 3: run the act. Dispatch by summonCtx.kind. Returns a
@@ -68,7 +68,7 @@ export async function momentum(setup = {}) {
       // Transport-act success: the verb ran. content is "" because
       // the act was a substrate write, not a closing utterance.
       // verbResult rides through for the handoff.
-      return { ok: true, content: "", verbResult };
+      return { kind: "act", ok: true, content: "", verbResult };
     } catch (err) {
       log.warn("Momentum", `transport-act failed: ${err.message}`);
       return cognitionFailure("internal", err.message);

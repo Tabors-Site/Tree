@@ -65,10 +65,17 @@ export const dancerTowardRole = Object.freeze({
     //     spaceId, actorBeingId, action, ... } per the seed's
     //     _renderTriggerContent. `spaceId` IS the drum's spaceId,
     //     which IS the dance-floor grid space.
-    // Accept either shape; the rule logic only needs to know which
-    // grid to fold.
+    //   - coalesced subscription SUMMON (coalesceMs > 0) carries
+    //     { event, coalesced:true, batchSize, events:[{...}, ...] }
+    //     where each entry in events is a per-write payload of the
+    //     uncoalesced shape. The grid is the same for the whole batch
+    //     (subscription scoped to one spaceId), so we pull spaceId
+    //     from the first event. The dancer steps ONCE per batch
+    //     regardless of batchSize — natural rate-limit.
+    // Accept all three shapes; the rule logic only needs to know
+    // which grid to fold.
     const tick = c.tick;
-    const gridSpaceId = c.gridSpaceId || c.spaceId;
+    const gridSpaceId = c.gridSpaceId || c.spaceId || c.events?.[0]?.spaceId;
     const { gridW = DEFAULT_GRID_W, gridH = DEFAULT_GRID_H } = c;
     if (!gridSpaceId) {
       return {

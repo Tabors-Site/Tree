@@ -188,7 +188,7 @@ export async function describeThread(rootCorrelation) {
     // is the source of truth for "open thread, no acts yet". Fall back
     // so the descriptor still resolves instead of 404-ing on a thread
     // the catalog just listed.
-    const ThreadsProjection = (await import("../../past/act/threadsProjection.js")).default;
+    const ThreadsProjection = (await import("../../past/projections/threads/threadsProjection.js")).default;
     const proj = await ThreadsProjection.findById(rootCorrelation).lean();
     if (!proj) return null;
     return {
@@ -307,7 +307,7 @@ export async function listLiveThreads({
   // Route through the ThreadsProjection (Bucket 3 Option D, 2026-05-23).
   // The legacy per-SEE Act aggregation retired; the cross-cutting fold
   // maintains this projection from be:summon Facts + Act seals.
-  const ThreadsProjection = (await import("../../past/act/threadsProjection.js")).default;
+  const ThreadsProjection = (await import("../../past/projections/threads/threadsProjection.js")).default;
   const match = { severedAt: null };
   if (being) {
     match.participants = String(being).replace(/^@/, "");
@@ -423,7 +423,7 @@ export async function cutThread({
   // 2. Fact-driven sever (Bucket 3 Option D, 2026-05-23). The
   //    severer stamps one be:sever Fact on its own reel (single-
   //    writer); the cross-cutting fold in
-  //    past/act/inboxProjectionFold.js sweeps the InboxProjection
+  //    past/projections/inbox/inboxProjectionFold.js sweeps the InboxProjection
   //    rows whose rootCorrelation matches. Queued moments drop in
   //    one fold cycle; the legacy per-being intake sweep is gone.
   //    Inbox audit (the be:summon Facts themselves) is untouched —
@@ -431,7 +431,7 @@ export async function cutThread({
   let cancelled = 0;
   try {
     const { emitFact } = await import("../../past/fact/facts.js");
-    const InboxProjection = (await import("../../past/act/inboxProjection.js")).default;
+    const InboxProjection = (await import("../../past/projections/inbox/inboxProjection.js")).default;
     const severerBeingId = isIAm ? I_AM : String(identity.beingId);
     cancelled = await InboxProjection.countDocuments({ rootCorrelation });
     await emitFact({

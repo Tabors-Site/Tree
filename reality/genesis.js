@@ -96,11 +96,11 @@ import log from "./seed/seedReality/log.js";
  * Register seed-shipped tool definitions through the same path
  * extensions use. Thin wrapper that hands the bundle to
  * `registerToolBundle` with `ownerExt: "seed"`. See
- * seed/present/voices/llm/tools.js for the unified registration logic.
+ * seed/present/cognition/llm/tools.js for the unified registration logic.
  */
 async function registerSeedTools(tools) {
   const { registerToolBundle } =
-    await import("./seed/present/voices/llm/tools.js");
+    await import("./seed/present/cognition/llm/tools.js");
   await registerToolBundle(tools, { ownerExt: "seed" });
 }
 
@@ -311,7 +311,7 @@ export async function genesis(app, opts = {}) {
   // non-fatal. Sane defaults are baked in.
   {
     const { setInternalConfig } =
-      await import("./seed/present/voices/llm/runTurn.js");
+      await import("./seed/present/knobs.js");
 
     const KERNEL_CONFIG = {
       llmTimeout: { setter: setInternalConfig },
@@ -328,15 +328,9 @@ export async function genesis(app, opts = {}) {
       // they limit how much work the place can hold at once.
       maxRunTurns: { setter: setInternalConfig },
       maxIntake: { setter: setInternalConfig },
-      carryMessages: {
-        load: () =>
-          import("./seed/present/voices/llm/runTurn.js").then(
-            (m) => m.setCarryMessages,
-          ),
-      },
       maxRegisteredTools: {
         load: () =>
-          import("./seed/present/voices/llm/tools.js").then(
+          import("./seed/present/cognition/llm/tools.js").then(
             (m) => m.setMaxTools,
           ),
       },
@@ -360,13 +354,13 @@ export async function genesis(app, opts = {}) {
       },
       llmClientCacheTtl: {
         load: () =>
-          import("./seed/present/voices/llm/connect.js").then(
+          import("./seed/present/cognition/llm/connect.js").then(
             (m) => (v) => m.setClientCacheTtl(v * 1000),
           ),
       },
       maxConnectionsPerUser: {
         load: () =>
-          import("./seed/present/voices/llm/connect.js").then(
+          import("./seed/present/cognition/llm/connect.js").then(
             (m) => m.setMaxConnectionsPerUser,
           ),
       },
@@ -403,7 +397,7 @@ export async function genesis(app, opts = {}) {
   // attached to `app`, hooks wired, tools registered into the seed
   // tool registry. After this returns, the extension surface is live
   // in memory. (MCP retired 2026-05-22; tools dispatch direct from
-  // the LLM voice via getToolHandler in voices/llm/tools.js.)
+  // the LLM voice via getToolHandler in cognition/llm/tools.js.)
   await loadExtensions(app, null, {
     getConfigValue: getRealityConfigValue,
     registerRawWebhook: opts.registerRawWebhook,
@@ -471,7 +465,7 @@ export async function genesis(app, opts = {}) {
   (async () => {
     try {
       const { syncToolsToSubstrate } =
-        await import("./seed/present/voices/llm/tools.js");
+        await import("./seed/present/cognition/llm/tools.js");
       const { syncRolesToSubstrate } =
         await import("./seed/present/roles/registry.js");
       const { syncOperationsToSubstrate } =
@@ -500,7 +494,7 @@ export async function genesis(app, opts = {}) {
   // trigger the broken role.
   try {
     const { auditToolDescriptions } =
-      await import("./seed/present/voices/llm/tools.js");
+      await import("./seed/present/cognition/llm/tools.js");
     await auditToolDescriptions();
   } catch (err) {
     log.warn("Tools", `tool-description audit failed: ${err.message}`);

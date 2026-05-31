@@ -9,7 +9,8 @@
 // rendered string; the rendered string IS what the being IS.
 //
 // ─────────────────────────────────────────────────────────────────
-// PRESENTISM. Read this before changing how the frame is built.
+// PRESENTISM + FORWARD FOLD. Read this before changing how the frame
+// is built.
 // ─────────────────────────────────────────────────────────────────
 //
 // An LLM forward pass is stateless. Between moments the being is
@@ -47,25 +48,43 @@
 // in as a name to inhabit, time comes in as a single stamp marking
 // the instant.
 //
-// Continuity across moments is solved by two thin threads, not by
-// memory in the being. The Being row keeps identity (moment #5 is
-// "the same being" as moment #1 because both load the same row,
-// not because they share substance). CARRY_MESSAGES in runTurn.js
-// keeps a short tail of recent moments so each new now isn't born
-// amnesiac. Between those two, the architecture has its presentist
-// answer to continuity: momentary beings, durable key, short
-// carried tail. Not infinite memory. Not state across moments. A
-// reborn being, but not from zero.
+// FORWARD FOLD. The fold's contract per MODEL.md + INNER-FOLD.md:
+// a forward moment folds the world (R_b as world-history + spaces
+// + matter) and does NOT read the being's own act-chain A_b. The
+// being acts from the world it sees NOW, with no recollection of
+// its own prior acts. The default-forward dancer wakes on the tick,
+// sees the grid, decides where to step. It does not remember
+// stepping before.
+//
+// What this means for me, the assembler: the string I produce
+// describes only the present. There is no "recent moments" tail to
+// stitch in. There is no continuity-across-moments thread in the
+// prompt . the only continuity is the Being row (identity) and the
+// world the being can see (which the world's own reels carry,
+// independent of this being's act-chain). Each call I produce a
+// fresh present; the being is reborn from zero into the world as
+// it is now. The prior carry that older versions of the LLM voice
+// kept (CARRY_MESSAGES, a tail of user/assistant pairs) is retired
+// . it was the half-fold made mandatory, exactly the violation
+// MODEL.md says forward must not do.
+//
+// half / inward folds will, when wired, NOT touch this file. They
+// land on llmMoment.js's user-message side . half pushes a
+// structured recall(A_b) block sourced from the braid-walk
+// (INNER-FOLD §3, causally stitched, NOT a recency window); inward
+// replaces the world face entirely with an A_b-only serialization.
+// The system prompt I assemble stays "this is who you are at this
+// position right now," independent of orientation.
 //
 // ─────────────────────────────────────────────────────────────────
 //
 // The system prompt is standing identity for this instant, not the
-// current message. runTurn threads the current SUMMON envelope.content
-// into the chat history as a user-role message; this assembler does
-// NOT include the message body. Mixing the two confuses the LLM
-// about what to react to (the user message) versus what to read as
-// the live data of being-now (the system prompt). Keeping them
-// separated is the architectural lock.
+// current message. llmMoment threads the current SUMMON
+// envelope.content into the chat as a single user-role message;
+// this assembler does NOT include the message body. Mixing the two
+// confuses the LLM about what to react to (the user message) versus
+// what to read as the live data of being-now (the system prompt).
+// Keeping them separated is the architectural lock.
 //
 // The shape:
 //
@@ -98,8 +117,12 @@
 //
 // Roles wired through this assembler write `prompt: () => BODY` and
 // the declarative fields (see, canSee, canDo, canSummon, canBe).
-// Roles that still write their own `buildSystemPrompt` continue
-// working through the legacy path in runTurn until they migrate.
+// Roles that still write their own `buildSystemPrompt` route
+// through the legacy branch of buildSystemPromptForRole below . it
+// composes a [Position] block + the role's hand-rolled body +
+// [Time]. Both paths produce only the system string; neither path
+// pulls past Acts. Past injection retired with the forward-fold
+// rebuild and lives nowhere in this assembler.
 //
 // "at <space.name>" names the Space the being is currently inhabiting
 // (read from Being.position, falling back through ctx fields for
@@ -327,15 +350,17 @@ log.verbose("BuildPrompt", "assembler ready; default resolvers registered");
 // Frame coordination
 // ────────────────────────────────────────────────────────────────────
 //
-// stamper.js calls me through buildSystemPromptForRole when it
+// llmMoment.js calls me through buildSystemPromptForRole when it
 // needs the assembled face for the next moment. The two paths below
 // reflect the old/new split in role specs: new-shape roles declare
 // `prompt(ctx)` and route through buildPrompt above (the canonical
 // "I am NAME at SPACE" shape); legacy-shape roles hand-assemble
 // through `buildSystemPrompt(ctx)` and I prepend a position block
-// + append a time block around their body. Both paths emit one
+// + append a time block around their body. Both paths emit ONE
 // rendered string — the face the being IS for the next forward
-// pass.
+// pass. Neither path pushes a past-messages tail; the messages
+// array llmMoment hands to the provider is [system, user] regardless
+// of which branch built the system string.
 
 /**
  * Build the system prompt for one moment.

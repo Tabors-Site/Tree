@@ -14,12 +14,13 @@ import "./FactorySidebar.css";
  * one beat.
  */
 const CHAPTERS = [
-  { to: "/factory",          label: "Overview", end: true },
-  { to: "/factory/intake",   label: "1. Intake"           },
-  { to: "/factory/assign",   label: "2. Assign"           },
-  { to: "/factory/fold",     label: "3. Fold"             },
-  { to: "/factory/momentum", label: "4. Momentum"         },
-  { to: "/factory/stamped",  label: "5. Stamped"          },
+  { to: "/factory",             label: "Overview", end: true },
+  { to: "/factory/intake",      label: "1. Intake"           },
+  { to: "/factory/assign",      label: "2. Assign"           },
+  { to: "/factory/fold",        label: "3. Fold"             },
+  { to: "/factory/momentum",    label: "4. Momentum"         },
+  { to: "/factory/stamped",     label: "5. Stamped"          },
+  { to: "/factory/being-types", label: "Being types"         },
 ];
 
 const FactorySidebar = () => {

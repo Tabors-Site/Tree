@@ -1,148 +1,108 @@
 // TreeOS Seed . AGPL-3.0 . https://treeos.ai . Tabor Holly
 //
-// The live reel — the in-memory carry between this being's moments.
+// reel.js . the durable record's prompt-side fold.
 //
-// A being doesn't persist itself across moments. But each moment
-// needs to know what the recent moments looked like, or the
-// LLM-being is born amnesiac every call. The reel is that thin
-// strand of carry between moments on one presence lane: the last
-// N messages, the role currently bound, the iteration count.
+// A being doesn't persist across moments. Each moment that needs to
+// see what came before folds the durable Act collection (per
+// ibpAddress) into prompt context. The fold runs FRESH every moment;
+// there is no in-memory chat buffer that lives across moments.
 //
-// Keyed by presenceKey — the lane the being is continuously
-// present in. For being-to-being summons that's the IBP Address
+// This file used to keep an in-memory `reels` Map with a `messages`
+// array per presence lane . the chat-shape sidecar that the LLM
+// rebuild retired. With session.messages gone, the only thing that
+// lives here is the helper that reads sealed Acts for the next
+// prompt and the carry-limit knob.
+//
+// Keyed by presenceKey . the lane the being is continuously present
+// in. For being-to-being summons that's the IBP Address
 // (stance::stance); for stanceless internal cognition it's the
-// pipeline key. Two reaches into the same presence (same IBPA,
-// two tabs) share one reel — the carry is the lane, not the
-// device.
-//
-// What lives in a reel entry: `{ messages[], role, _lastActive }`.
-// What does NOT live here: position state (rootId, currentSpace
-// live in place/being/position.js keyed by Being, because a being
-// has one position regardless of how many reaches sit in front of
-// it). MCP cache, push fanout, etc. each have their own first-
-// class identifier.
-//
-// What's stamped onto the reel forever (the historical record)
-// lives on Act rows in Mongo. This file is only the LIVE carry
-// across moments; once a presence goes idle past
-// STALE_PRESENCE_MS, the in-memory entry evicts. The history on
-// Mongo is forever; the live carry is just a tail.
+// pipeline key. Ephemeral pipeline keys early-return [] (those lanes
+// are stateless by design).
 
 import log from "../../../seedReality/log.js";
+import { findByIbpAddress } from "./reelChains.js";
 
-// ─────────────────────────────────────────────────────────────────
-// CARRY CONFIG
-// ─────────────────────────────────────────────────────────────────
-
-// How many recent messages a role switch carries across so the
-// next role isn't born amnesiac. The system prompt rebuilds fresh
-// each call; this is just the recent-turns echo, not memory.
-let CARRY_MESSAGES = 4;
-export function setCarryMessages(n) {
-  CARRY_MESSAGES = Math.max(0, Number(n) || 4);
+// Compatibility stubs. The in-memory reel cache and its CARRY_MESSAGES
+// tail retired with the forward-fold rebuild (a forward moment reads
+// the world, not the act-chain, so there is no tail to carry). knobs.js
+// still routes setMaxPresenceReels / setStalePresenceMs through
+// internalConfig; keep them as no-ops so the wiring doesn't throw at
+// boot. CARRY_MESSAGES the knob is gone entirely . it claimed to
+// configure how many prior Acts feed the prompt, which is zero per
+// MODEL.md forward-fold doctrine.
+export function setMaxPresenceReels(_n) {
+  /* no-op . in-memory reel cache retired with the LLM rebuild */
 }
-export function getCarryMessages() {
-  return CARRY_MESSAGES;
-}
-
-// Hard cap on live reels. Beyond this, oldest by _lastActive evicts
-// on next get so a runaway reach can't leak entries forever.
-let MAX_PRESENCE_REELS = 50000;
-export function setMaxPresenceReels(n) {
-  MAX_PRESENCE_REELS = Math.max(100, Math.min(Number(n) || 50000, 500000));
-}
-
-// Idle-eviction window. A reel untouched for this long gets swept.
-// The Mongo-side Act record is the durable history; this is
-// just the live carry.
-let STALE_PRESENCE_MS = 30 * 60 * 1000;
-export function setStalePresenceMs(ms) {
-  STALE_PRESENCE_MS = Math.max(60000, Math.min(Number(ms) || 1800000, 86400000));
-}
-
-// ─────────────────────────────────────────────────────────────────
-// THE REEL MAP
-// ─────────────────────────────────────────────────────────────────
-
-const reels = new Map();
-
-/**
- * Get or create the live reel keyed by presenceKey. For being-to-
- * being summons the key is the IBP Address; for stanceless internal
- * cognition it's the pipeline key. Two reaches that share the key
- * share the reel — switching tabs doesn't fork the lane. On miss,
- * creates a fresh entry; on overflow, evicts the oldest by
- * _lastActive.
- */
-export function getReel(presenceKey) {
-  if (!reels.has(presenceKey)) {
-    if (reels.size >= MAX_PRESENCE_REELS) {
-      let oldestKey = null;
-      let oldestTime = Infinity;
-      for (const [id, r] of reels) {
-        if ((r._lastActive || 0) < oldestTime) {
-          oldestTime = r._lastActive || 0;
-          oldestKey = id;
-        }
-      }
-      if (oldestKey) reels.delete(oldestKey);
-    }
-    reels.set(presenceKey, {
-      // The role spec the moment is currently driven by. Null
-      // until first switchRole. The role IS the unit of behavior.
-      role: null,
-      messages: [],
-      _lastActive: Date.now(),
-    });
-  }
-  const r = reels.get(presenceKey);
-  r._lastActive = Date.now();
-  return r;
+export function setStalePresenceMs(_ms) {
+  /* no-op . in-memory reel cache retired with the LLM rebuild */
 }
 
 /**
- * Resolve the presence key for this turn. Internal call sites route
- * through here so two reaches sitting in the same IBPA share one reel
- * end to end. Currently every caller hands the resolved key in as
- * fallback; the ctx slot is reserved for an explicit IBPA lane.
+ * Resolve the presence key for this turn. Two reaches sitting in the
+ * same IBPA share one prompt-history lane end to end (folded from the
+ * same Acts). Today every caller hands the resolved key in as fallback;
+ * the ctx slot is reserved for an explicit IBPA lane.
  */
 export function presenceKeyFor(_ctx, fallback) {
   return fallback;
 }
 
 /**
- * Number of live reels currently held. Used by health probes /
- * diagnostics.
+ * Number of folded reels held in memory. The in-memory cache is gone;
+ * this returns 0. Kept so health probes calling it don't break.
  */
 export function getReelCount() {
-  return reels.size;
+  return 0;
 }
 
-// ─────────────────────────────────────────────────────────────────
-// IDLE SWEEP
-// ─────────────────────────────────────────────────────────────────
-//
-// Safety net: any reel idle past STALE_PRESENCE_MS gets dropped
-// every 10 minutes so a leaked entry doesn't stick around. The
-// durable history is in Mongo (Act rows); the live carry can
-// evict freely.
-
-setInterval(
-  () => {
-    const now = Date.now();
-    let swept = 0;
-    for (const [id, r] of reels) {
-      if (now - (r._lastActive || 0) > STALE_PRESENCE_MS) {
-        reels.delete(id);
-        swept++;
-      }
+/**
+ * RECENCY WINDOW (not recall). Returns the most recent N sealed Acts
+ * on a lane as user/assistant pairs. Useful for explicit transitional
+ * tooling that wants a quick lookback over an IBPA, but DO NOT inject
+ * the return value into an LLM moment's prompt by default.
+ *
+ * Per MODEL.md + INNER-FOLD.md, a forward fold does NOT read A_b. A
+ * forward moment's prompt is system + user only . no past. The
+ * dance is harmonic because each forward voice reacts to the world
+ * it sees NOW; secretly carrying prior Acts every moment makes every
+ * being a contemplative and breaks that property.
+ *
+ * "Recall" (the half-fold's A_b surface) is the braid-walk:
+ * INNER-FOLD §3 . past acts causally stitched to entities in the
+ * current face. Recency is NOT braid-walk. When half-orientation is
+ * built, recall plugs in at llmMoment's orientation seam and does
+ * NOT call this function.
+ *
+ * Keeping the helper here so transitional callers (replay tooling,
+ * audit views, the legacy chat console) still have a quick way to
+ * read recent IBPA Acts. The LLM voice no longer uses it.
+ */
+export async function foldMessagesFromReel(presenceKey, opts = {}) {
+  if (!presenceKey || typeof presenceKey !== "string") return [];
+  if (!presenceKey.includes("::")) return [];
+  const limit = Math.max(1, Math.min(Number(opts.limit) || 50, 500));
+  let acts;
+  try {
+    acts = await findByIbpAddress(presenceKey, { limit });
+  } catch (err) {
+    log.debug("Reel", `foldMessagesFromReel skipped: ${err.message}`);
+    return [];
+  }
+  if (!Array.isArray(acts) || acts.length === 0) return [];
+  // findByIbpAddress returns newest-first; the prompt wants oldest-
+  // first so the most recent moment is the last user/assistant pair
+  // before the live envelope appends.
+  acts.reverse();
+  const messages = [];
+  for (const act of acts) {
+    const startContent = act?.startMessage?.content;
+    const endContent = act?.endMessage?.content;
+    if (typeof startContent === "string" && startContent.length > 0) {
+      messages.push({ role: "user", content: startContent });
     }
-    if (swept > 0) {
-      log.debug(
-        "Reel",
-        `🧹 Swept ${swept} stale reel(s) (${reels.size} live)`,
-      );
+    if (typeof endContent === "string" && endContent.length > 0) {
+      messages.push({ role: "assistant", content: endContent });
     }
-  },
-  10 * 60 * 1000,
-).unref();
+  }
+  return messages;
+}

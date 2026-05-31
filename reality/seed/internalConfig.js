@@ -38,7 +38,6 @@ export const INTERNAL_CONFIG_DEFAULTS = {
   llmMaxConcurrent: 20,
   failoverTimeout: 15,
   maxMessageContentBytes: 32768,
-  carryMessages: 4,
   llmClientCacheTtl: 300,
   maxConnectionsPerUser: 15,
   dnsLookupTimeout: 5000,

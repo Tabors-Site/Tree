@@ -28,7 +28,7 @@ async function _gridSpaceForBeing(beingId) {
 export const harmonyTools = [
   {
     // Tool names are validated by the seed's tool registry
-    // (TOOL_NAME_RE in seed/present/voices/llm/tools.js — lowercase
+    // (TOOL_NAME_RE in seed/present/cognition/llm/tools.js — lowercase
     // alphanumeric + hyphens + underscores; no colons). Roles inside
     // this extension declare just "step" — no `harmony:` prefix
     // needed when you're already inside harmony.
