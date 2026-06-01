@@ -11,7 +11,7 @@
 //      creation path.
 //
 // The role is scripted today. Flipping to LLM cognition is a one-
-// line change in the seed (operatingMode: "scripted" → "llm" +
+// line change in the seed (cognition: "scripted" → "llm" +
 // configuring an llm connection on the being). The greeting logic
 // stays the same; the cognition just changes shape.
 
@@ -102,7 +102,7 @@ export async function init(reality) {
         spec: {
           name:          beingName,
           password,
-          operatingMode: "scripted",
+          cognition: "scripted",
           role:          "hello-world:greeter",
           roles:         ["hello-world:greeter"],
           defaultRole:   "hello-world:greeter",

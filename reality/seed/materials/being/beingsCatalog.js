@@ -24,8 +24,9 @@ const MAX_LIMIT = 500;
 export async function describeBeingsCatalog(opts = {}) {
   const limit = Math.min(Math.max(Number(opts.limit) || 200, 1), MAX_LIMIT);
   const Being = (await import("./being.js")).default;
+  const { beingCognition } = await import("./identity/lookups.js");
   const rows = await Being.find({})
-    .select("_id name operatingMode roles defaultRole homeSpace parentBeingId createdAt")
+    .select("_id name qualities roles defaultRole homeSpace parentBeingId createdAt")
     .sort({ createdAt: 1 })
     .limit(limit)
     .lean();
@@ -34,7 +35,7 @@ export async function describeBeingsCatalog(opts = {}) {
     beings: rows.map((b) => ({
       beingId:       String(b._id),
       name:          b.name,
-      operatingMode: b.operatingMode || null,
+      cognition:     beingCognition(b),
       roles:         Array.isArray(b.roles) ? b.roles : [],
       defaultRole:   b.defaultRole || null,
       homeSpace:     b.homeSpace ? String(b.homeSpace) : null,

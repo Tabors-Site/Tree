@@ -3,8 +3,8 @@
 // Deferred HTTP endpoint(s). What's left here is the one shim
 // that hasn't moved onto the IBP surface yet (`GET /reality/root`),
 // kept so the legacy clients keep working. Every other place-level
-// surface is reachable through `ibp:see <reality>/.config`,
-// `ibp:see <reality>/.extensions`, `ibp:do <place>` with set-config /
+// surface is reachable through `ibp:see <reality>/./config`,
+// `ibp:see <reality>/./extensions`, `ibp:do <place>` with set-config /
 // install-extension / etc. The protocol is the API; this file
 // stays small.
 

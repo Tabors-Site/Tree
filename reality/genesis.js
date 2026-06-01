@@ -48,12 +48,13 @@
 //
 //   1. DB connection, then indexes. The physical floor every space,
 //      matter row, being, and Fact sits on.
-//   2. ensureSpaceRoot. The place root and the nine place seed spaces
-//      (.identity, .config, .peers, .extensions, .tools, .roles,
-//      .operations, .source, .threads). My own Being row places inside
-//      this step so every Fact from t=0 has an actor.
+//   2. ensureSpaceRoot. The place root, the heaven space ("." . the
+//      I-Am's room), and the nine Tier-3 seed spaces under heaven
+//      (identity, config, peers, extensions, tools, roles, operations,
+//      source, threads). My own Being row places inside this step so
+//      every Fact from t=0 has an actor.
 //   3. initRealityConfig. I read my own remembered settings.
-//   4. .source mirror, stance defaults, seed migrations. The place's
+//   4. ./source mirror, stance defaults, seed migrations. The place's
 //      reflexive surfaces: codebase as matter, permissions on space,
 //      schema forwards.
 //   5. ensureSeedDelegates. I summon auth, llm-assigner, and
@@ -66,7 +67,7 @@
 //   7. Extension load, MCP transport, scope wiring, and jobs. I open
 //      the place to operator installed beings and the periodic acts
 //      that keep the world tidy.
-//   8. Registry mirrors into .tools, .roles, .operations, afterBoot.
+//   8. Registry mirrors into ./tools, ./roles, ./operations, afterBoot.
 //      The world becomes introspectable under the same SEE protocol
 //      as everything else. The place is now complete; begin opens
 //      the heavens and printReady fires.
@@ -191,7 +192,7 @@ export async function genesis(app, opts = {}) {
   // moment of the I-Am — opens an Act, accumulates ΔF, seals. Zero
   // facts → no seal (idempotent reconciliations cost nothing).
 
-  // I read my own remembered settings out of .config.
+  // I read my own remembered settings out of ./config.
   await initRealityConfig();
   log.info("Genesis", "I remember my settings.");
 
@@ -211,6 +212,44 @@ export async function genesis(app, opts = {}) {
   });
   if (bootMode === "Beginning") {
     log.info("Genesis", "I set my stance defaults.");
+  }
+
+  // Reign roster. Three steps in order:
+  //   1. ensureReignMatter plants the matter at heaven if missing.
+  //   2. loadReigningBeings reads persisted roster into the in-process
+  //      cache (which then becomes the source of truth for next-list
+  //      computation, so multiple add/remove calls in one moment do
+  //      not clobber each other).
+  //   3. ensureSeedDelegatesReign adds any seed delegate not already
+  //      in the cache. Fresh boot writes facts; awakening sees them
+  //      in the cache and writes nothing.
+  await withIAmAct("ensure reign matter", async (ctx) => {
+    const { ensureReignMatter } =
+      await import("./seed/materials/being/reigning.js");
+    await ensureReignMatter(ctx);
+  });
+  {
+    const { loadReigningBeings } =
+      await import("./seed/materials/being/reigning.js");
+    await loadReigningBeings();
+  }
+  await withIAmAct("seed delegates reign", async (ctx) => {
+    const { ensureSeedDelegatesReign } =
+      await import("./seed/materials/being/reigning.js");
+    await ensureSeedDelegatesReign(ctx);
+  });
+  // Repair: any being parented directly under the I-Am is structurally
+  // reigning. Cherub anoints the rootOperator on first-register, but
+  // legacy DBs and any anoint-Fact that failed to seal can leave the
+  // cache missing a being whose parent IS the I-Am. This walks every
+  // such being and adds them. Idempotent on awakening.
+  await withIAmAct("anoint I-Am children", async (ctx) => {
+    const { ensureIAmChildrenReign } =
+      await import("./seed/materials/being/reigning.js");
+    await ensureIAmChildrenReign(ctx);
+  });
+  if (bootMode === "Beginning") {
+    log.info("Genesis", "I anoint my reigning ones.");
   }
 
   // Seed migrations. Each migration's writes ride one I-Am act.
@@ -268,6 +307,20 @@ export async function genesis(app, opts = {}) {
   // not synchronously through the factory.
   const { humanRole } = await import("./seed/present/roles/human/role.js");
   registerRole("human", humanRole, "seed");
+
+  // The "birther" role. Carried by the @birther seed delegate at the
+  // reality root. Authenticated callers click @birther to mint a child
+  // whose parent (being-tree) is the caller. Cherub is for arrival →
+  // fresh identity; birther is for authenticated → child of self.
+  // See seed/present/roles/birther/role.js for the doctrine.
+  const { birtherRole } = await import("./seed/present/roles/birther/role.js");
+  registerRole("birther", birtherRole, "seed");
+
+  // role-manager: authors and edits live-defined roles. canDo:["set-role"].
+  // After this registration, the live-role boot loader (later in genesis)
+  // walks ./roles/* for origin:"live" entries and registers them too.
+  const { roleManagerRole } = await import("./seed/present/roles/role-manager/role.js");
+  registerRole("role-manager", roleManagerRole, "seed");
 
   // The shared stance every unauthenticated visitor carries. SEE
   // bypasses the scheduler so many concurrent visitors share one
@@ -328,7 +381,13 @@ export async function genesis(app, opts = {}) {
     await import("./seed/present/roles/llm-assigner/ops.js");
   registerLlmAssignerOps();
 
-  // I hand my remembered settings (from .config) down to the seed
+  // role-manager's set-role DO op. Registered alongside llm-assigner's
+  // ops so the role-manager delegate's canDo entry resolves at boot.
+  const { registerRoleManagerOps } =
+    await import("./seed/present/roles/role-manager/ops.js");
+  registerRoleManagerOps();
+
+  // I hand my remembered settings (from ./config) down to the seed
   // modules that depend on them. Per-key failures are logged but
   // non-fatal. Sane defaults are baked in.
   {
@@ -390,7 +449,7 @@ export async function genesis(app, opts = {}) {
 
     for (const [key, cfg] of Object.entries(KERNEL_CONFIG)) {
       // KERNEL_CONFIG keys are all seed-runtime knobs — read from seedConfig
-      // so the default-fallback applies when .config has no override.
+      // so the default-fallback applies when ./config has no override.
       const val = getInternalConfigValue(key);
       if (val == null) continue;
       try {
@@ -431,9 +490,22 @@ export async function genesis(app, opts = {}) {
     }
   }
 
-  await withIAmAct("sync extensions to .extensions tree", async (ctx) => {
+  await withIAmAct("sync extensions to ./extensions tree", async (ctx) => {
     await syncExtensionsToTree(getLoadedManifests(), ctx);
   });
+
+  // Load operator-authored live roles from ./roles. Runs after seed +
+  // extension role registration (so live entries can override either
+  // by name) and BEFORE syncRolesToSubstrate (so the round-trip
+  // preserves them — manifestItems would otherwise delete entries
+  // not in the registry).
+  const { loadLiveRolesFromSubstrate } =
+    await import("./seed/present/roles/registry.js");
+  try {
+    await loadLiveRolesFromSubstrate();
+  } catch (err) {
+    log.warn("Genesis", `live-role loader failed: ${err.message}`);
+  }
 
   // Confined extensions must be known before any scope resolution
   // walks the ancestor chain, or queries during this window race.
@@ -474,8 +546,8 @@ export async function genesis(app, opts = {}) {
 
   log.info("Genesis", "I start my background jobs.");
 
-  // I mirror my live registries into the .tools, .roles, and
-  // .operations seed spaces. SEE on those addresses now reflects
+  // I mirror my live registries into the ./tools, ./roles, and
+  // ./operations seed spaces. SEE on those addresses now reflects
   // the live registry through the standard descriptor pipeline.
   // Detached so a sync failure does not block boot. Errors are
   // logged inside the helpers.
@@ -493,9 +565,9 @@ export async function genesis(app, opts = {}) {
       const { syncOperationsToSubstrate } =
         await import("./seed/ibp/operations.js");
       const [t, r, o] = await Promise.all([
-        withIAmAct("sync tools to .tools", (ctx) => syncToolsToSubstrate(ctx)),
-        withIAmAct("sync roles to .roles", (ctx) => syncRolesToSubstrate(ctx)),
-        withIAmAct("sync ops to .operations", (ctx) => syncOperationsToSubstrate(ctx)),
+        withIAmAct("sync tools to ./tools", (ctx) => syncToolsToSubstrate(ctx)),
+        withIAmAct("sync roles to ./roles", (ctx) => syncRolesToSubstrate(ctx)),
+        withIAmAct("sync ops to ./operations", (ctx) => syncOperationsToSubstrate(ctx)),
       ]);
       log.verbose(
         "RegistryMirror",

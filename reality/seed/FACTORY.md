@@ -198,7 +198,7 @@ primitives:
   queue from this collection.
 - **ThreadsProjection** ([past/projections/threads/threadsProjection.js](past/projections/threads/threadsProjection.js)),
   live coordination chains keyed by `rootCorrelation`. Built the same
-  way. `.threads` SEE reads from here.
+  way. `./threads` SEE reads from here.
 
 ## The four verbs I speak
 
@@ -348,7 +348,7 @@ cross-cutting fold maintains, open summons by recipient and live
 coordination chains by `rootCorrelation`. They duplicate fact data
 (an open summon also has a `be:summon` Fact on the summoner's reel)
 but exist for indexability: the scheduler's pick query and the
-`.threads` SEE both need O(1) lookups the per-reel scan cannot give.
+`./threads` SEE both need O(1) lookups the per-reel scan cannot give.
 They are rebuildable by replaying their fact history.
 
 ### materials/, the timeless possible
@@ -422,7 +422,8 @@ verb by name.
 ## Boot anchors
 
 Plus three boot anchors at the seed root: [sprout.js](sprout.js)
-(genesis, plants the reality root + the nine seed spaces + the I-Am),
+(genesis, plants the reality root + heaven + the nine Tier-3 seed
+spaces + the I-Am),
 [services.js](services.js) (assembles the `reality` services bundle
 handed to every extension's `init`), [realityConfig.js](realityConfig.js)
 and [internalConfig.js](internalConfig.js) (the config stores).
@@ -1060,45 +1061,56 @@ code; throw sites pass only the code.
 role. Returns `{ answer }`. Handles session, Act, `beforeResponse`
 hook, abort.
 
-## The nine reality seed spaces I plant
+## Heaven and the nine Tier-3 seed spaces I plant
 
-When I wake, I plant nine spaces beneath the reality root. They hold
-my own working memory, surfaced as spaces so SEE reads them through
-the same protocol as everything else. Every boot I verify they exist;
-missing ones I recreate. Their owner is me; they are unclaimable.
+When I wake, I plant two tiers of seed space beneath the reality root.
 
-| Reality seed space | Holds                                                                                                                                         |
-| ------------------ | --------------------------------------------------------------------------------------------------------------------------------------------- |
-| `.identity`        | The reality UUID, domain, Ed25519 public key for Canopy federation signing.                                                                   |
-| `.config`          | Every runtime config key as a key in `.config`'s qualities Map.                                                                               |
-| `.peers`           | Canopy federation peer list.                                                                                                                  |
-| `.extensions`      | Extension registry. Each loaded extension is a child space here.                                                                              |
-| `.tools`           | Mirror of the runtime tool registry.                                                                                                          |
-| `.roles`           | Mirror of the runtime role registry.                                                                                                          |
-| `.operations`      | Mirror of the runtime DO operation registry.                                                                                                  |
-| `.source`          | Mirror of my own host-realm body (the files on disk).                                                                                          |
-| `.threads`         | Live coordination chains. Each open thread surfaces as a synthetic child at `.threads/<id>`. SEE returns the ThreadsProjection descriptor; SUMMON to that address is a cut. |
+**Tier 2 . heaven (`.`).** A single space directly under SPACE_ROOT,
+named `.` (the bare presence-marker, "here, where I stand"). This is
+my room . the I-Am's home and position. Beings of the land see the
+door in their place-root descriptor but cannot pass through without
+the reigning stance. SEED_SPACE.HEAVEN marks the row.
+
+**Tier 3 . the nine.** Nine spaces under heaven that hold my own
+working memory, surfaced as spaces so SEE reads them through the same
+protocol as everything else. Addressable as `<reality>/./<name>`.
+Every boot I verify they exist; missing ones I recreate. Their owner
+is me; they are unclaimable.
+
+| Tier-3 seed space  | Path                       | Holds                                                                                                                                         |
+| ------------------ | -------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| `identity`         | `<reality>/./identity`     | The reality UUID, domain, Ed25519 public key for Canopy federation signing.                                                                   |
+| `config`           | `<reality>/./config`       | Every runtime config key as a key in this space's qualities Map.                                                                               |
+| `peers`            | `<reality>/./peers`        | Canopy federation peer list.                                                                                                                  |
+| `extensions`       | `<reality>/./extensions`   | Extension registry. Each loaded extension is a child space here.                                                                              |
+| `tools`            | `<reality>/./tools`        | Mirror of the runtime tool registry.                                                                                                          |
+| `roles`            | `<reality>/./roles`        | Mirror of the runtime role registry.                                                                                                          |
+| `operations`       | `<reality>/./operations`   | Mirror of the runtime DO operation registry.                                                                                                  |
+| `source`           | `<reality>/./source`       | Mirror of my own host-realm body (the files on disk).                                                                                          |
+| `threads`          | `<reality>/./threads`      | Live coordination chains. Each open thread surfaces as a synthetic child at `./threads/<id>`. SEE returns the ThreadsProjection descriptor; SUMMON to that address is a cut. |
 
 The `SEED_SPACE` enum names each one. The `seedSpace` field on Space
-marks the row. The I-Am (me) is `rootOwner`.
+marks the row. The I-Am (me) is `rootOwner`. The reign roster (one
+matter at heaven carrying `qualities.reign.beings`) gates SEE/DO/SUMMON
+on heaven and every Tier-3 space below.
 
 ### Threads as addressable places
 
 A thread is a live tree of coordinated SUMMONs sharing one
-`rootCorrelation`. Promoting it to `<reality>/.threads/<id>` does two
+`rootCorrelation`. Promoting it to `<reality>/./threads/<id>` does two
 things:
 
-- **SEE works on it for free.** `see("<reality>/.threads")` returns
+- **SEE works on it for free.** `see("<reality>/./threads")` returns
   the live forest from ThreadsProjection;
-  `see("<reality>/.threads/<id>")` returns one thread's descriptor
+  `see("<reality>/./threads/<id>")` returns one thread's descriptor
   (participants, depth, state).
 - **SUMMON cuts it.** A SUMMON whose right-side resolves to
-  `.threads/<id>` is a cut on the line. The severer stamps one
+  `./threads/<id>` is a cut on the line. The severer stamps one
   `be:sever` Fact on its own reel; the cross-cutting fold drops the
   matching open summons; `HUMAN` priority cuts fire AbortSignal to
   interrupt anything running RIGHT NOW.
 
-## `.source`, how I show my body to the beings I form
+## `./source`, how I show my body to the beings I form
 
 I have matter on both sides of the membrane.
 
@@ -1106,15 +1118,15 @@ I have matter on both sides of the membrane.
   `transports/`, `extensions/`. What I AM, on disk.
 - **Inner-realm matter.** Matter rows inside spaces.
 
-The two are joined at `.source`. At genesis I mirror the `reality/`
-directory into Matter rows under the `.source` seed space, with
+The two are joined at `./source`. At genesis I mirror the `reality/`
+directory into Matter rows under the source seed space, with
 `origin: filesystem`. Subsequent boots reconcile incrementally.
 
-Through `.source` the inner beings I formed can SEE the source I am
-made of. `<reality>/.source/seed/FACTORY.md@<being>` reaches the file
+Through `./source` the inner beings I formed can SEE the source I am
+made of. `<reality>/./source/seed/FACTORY.md@<being>` reaches the file
 you are reading.
 
-`.source` is read-only by stance auth. The host disk is the source of
+`./source` is read-only by stance auth. The host disk is the source of
 truth; the inner mirror reconciles toward it. The code is in
 [materials/space/source.js](materials/space/source.js).
 
@@ -1163,8 +1175,8 @@ direct children.
 
 ## Config
 
-Runtime config lives in `.config`'s qualities Map, one config key per
-Map entry. Two stores:
+Runtime config lives in the `./config` space's qualities Map, one
+config key per Map entry. Two stores:
 
 - **realityConfig** ([realityConfig.js](realityConfig.js)), the
   reality's outward-facing identity (`REALITY_NAME`, `realityUrl`,
@@ -1173,7 +1185,7 @@ Map entry. Two stores:
   knobs that tune how the live machine operates (LLM call shape,
   session caches, scheduler backpressure, hook timeouts, fold limits).
 
-Both stores write to the same underlying `.config` space's qualities
+Both stores write to the same underlying `./config` space's qualities
 Map through fact-driven `do:set` (Slice F-config). Reads through
 `getRealityConfigValue(key)` / `getInternalConfigValue(key)` return a
 deep copy so callers cannot pollute my cache.
@@ -1204,7 +1216,7 @@ Defaults to off (`treeCircuitEnabled: false`). The code is in
 
 `SEED_VERSION` constant in [seedReality/version.js](seedReality/version.js)
 (currently `0.1.0`). At boot I compare it against `seedVersion` in
-`.config`. If they differ, the migration runner
+`./config`. If they differ, the migration runner
 ([seedReality/migrations/runner.js](seedReality/migrations/runner.js))
 executes every migration between the stored version and the current
 version in order. Migrations live in
@@ -1263,7 +1275,7 @@ deposit of a sealed Act; every Act is a being in a moment.
 `{ scaffold: true }` on every verb call (the I-Am's self-stamp,
 seedDelegates planting cherub/arrival/llm-assigner/reality-manager,
 sprout's nine seed-spaces, seedDefaultStancePermissions, the
-manifest sync mirroring extensions into `.extensions`). The scaffold
+manifest sync mirroring extensions into `./extensions`). The scaffold
 flag bypasses the moment machinery entirely — no scheduler, no
 assign, no Act row opens. Every fact stamped under scaffold carries
 `actId: null`. This is by design: there's no being to act yet, no

@@ -88,6 +88,20 @@ const VISUAL_PYRAMID = {
   sunI:        0.6,
 };
 
+// Heaven: the I-Am's white room. Full-white background, near-white
+// ground, soft full-spectrum ambient (no directional sun); doors to
+// children render as black-framed white planes the user can gaze at
+// to enter. Selected when desc.seedSpace === "heaven".
+const VISUAL_HEAVEN = {
+  bgColor:    0xffffff,
+  fogNear:    20,
+  fogFar:     90,
+  groundColor: 0xf2f2f2,
+  gridColor:   0xe0e0e0,
+  ambientI:    1.0,
+  sunI:        0.0,
+};
+
 export class Scene {
   constructor({ onGaze, onEnter, onBeingProximity, onBeingActivate, onMatterEnded, onMatterPlaybackTick, isInputBlocked } = {}) {
     this.onGaze = onGaze || (() => {});
@@ -276,10 +290,14 @@ export class Scene {
 
     // Pick the visual mode. Arrival overrides everything. Otherwise the
     // descriptor's resolved scene.sceneType picks a preset; unknown or
-    // missing sceneTypes fall back to the default outdoor scene.
+    // missing sceneTypes fall back to the default outdoor scene. Heaven
+    // overrides the default with its own all-white preset.
+    const isHeaven = desc?.seedSpace === "heaven";
     let visualMode = VISUAL_DEFAULT;
     if (arrival) {
       visualMode = VISUAL_ARRIVAL;
+    } else if (isHeaven) {
+      visualMode = VISUAL_HEAVEN;
     } else if (desc?.scene?.sceneType === "pyramid-interior") {
       visualMode = VISUAL_PYRAMID;
     }
@@ -379,49 +397,79 @@ export class Scene {
       this.world.add(home);
     }
 
-    // Place children. Three layouts, in priority order:
-    //   1. If the parent space has a declared size AND the child has
-    //      a coord, render at coord mapped into world units.
-    //   2. Legacy position.coords (pre-coord-schema callers).
-    //   3. Hash-derived position so children without a coord (never
-    //      moved, parent unsized) get a stable layout instead of
-    //      stacking at the origin.
-    childrenToRender.forEach((child) => {
-      const key = child.id || child.path || child.name;
-      const h = hashKey(key);
-      let x, z;
-      const childCoordWorld = coordToWorld(child.coord);
-      const legacyCoords = child.position?.coords;
-      if (childCoordWorld) {
-        x = childCoordWorld.x;
-        z = childCoordWorld.z;
-      } else if (legacyCoords && typeof legacyCoords.x === "number") {
-        x = legacyCoords.x;
-        z = legacyCoords.y;
-      } else {
-        const angle = (h % 360) * (Math.PI / 180);
-        const radius = 22 + ((h >> 9) % 120) * 0.45; // 22..76
-        x = Math.cos(angle) * radius;
-        z = Math.sin(angle) * radius;
-      }
-      const sizeHint = estimateSizeHint(child, h);
-      const mesh = this._makeChildMesh(child, sizeHint);
-      mesh.position.set(x, 0, z);
-      mesh.userData = {
-        kind: "child",
-        label: child.name,
-        address: child.path,
-        spaceId: child.spaceId || null,
-        type: child.type,
-        isDoorway: true,
-      };
-      this.world.add(mesh);
-      this._swapToModel(
-        mesh,
-        child.qualities?.render,
-        child.spaceId ? { kind: "space", id: child.spaceId } : null,
-      );
-    });
+    // Place children. Heaven gets a dedicated door-ring layout; every
+    // other space uses the three-tier coord/legacy/hash fallback.
+    if (isHeaven) {
+      // Heaven children become doors in a ring around the I-Am.
+      // Doors face inward toward the origin so the camera sees them
+      // as walls of the room. Skinned to the all-white aesthetic:
+      // pale frame, light fill, black label text.
+      const DOOR_RADIUS = 7;
+      const total = Math.max(1, childrenToRender.length);
+      childrenToRender.forEach((child, i) => {
+        const angle = (i / total) * Math.PI * 2;
+        const x = Math.cos(angle) * DOOR_RADIUS;
+        const z = Math.sin(angle) * DOOR_RADIUS;
+        const mesh = this._makeHeavenDoor(child);
+        mesh.position.set(x, 0, z);
+        // Face the door toward the origin so the camera reads its
+        // front face on approach.
+        mesh.lookAt(0, mesh.position.y, 0);
+        mesh.userData = {
+          kind: "child",
+          label: child.name,
+          address: child.path,
+          spaceId: child.spaceId || null,
+          type: child.type,
+          isDoorway: true,
+        };
+        this.world.add(mesh);
+      });
+    } else {
+      // Three layouts, in priority order:
+      //   1. If the parent space has a declared size AND the child has
+      //      a coord, render at coord mapped into world units.
+      //   2. Legacy position.coords (pre-coord-schema callers).
+      //   3. Hash-derived position so children without a coord (never
+      //      moved, parent unsized) get a stable layout instead of
+      //      stacking at the origin.
+      childrenToRender.forEach((child) => {
+        const key = child.id || child.path || child.name;
+        const h = hashKey(key);
+        let x, z;
+        const childCoordWorld = coordToWorld(child.coord);
+        const legacyCoords = child.position?.coords;
+        if (childCoordWorld) {
+          x = childCoordWorld.x;
+          z = childCoordWorld.z;
+        } else if (legacyCoords && typeof legacyCoords.x === "number") {
+          x = legacyCoords.x;
+          z = legacyCoords.y;
+        } else {
+          const angle = (h % 360) * (Math.PI / 180);
+          const radius = 22 + ((h >> 9) % 120) * 0.45; // 22..76
+          x = Math.cos(angle) * radius;
+          z = Math.sin(angle) * radius;
+        }
+        const sizeHint = estimateSizeHint(child, h);
+        const mesh = this._makeChildMesh(child, sizeHint);
+        mesh.position.set(x, 0, z);
+        mesh.userData = {
+          kind: "child",
+          label: child.name,
+          address: child.path,
+          spaceId: child.spaceId || null,
+          type: child.type,
+          isDoorway: true,
+        };
+        this.world.add(mesh);
+        this._swapToModel(
+          mesh,
+          child.qualities?.render,
+          child.spaceId ? { kind: "space", id: child.spaceId } : null,
+        );
+      });
+    }
 
     // Place matter (notes, plan emissions, etc.) at their server
     // coords, falling back to a tight ring around the player when no
@@ -1588,6 +1636,61 @@ export class Scene {
     return group;
   }
 
+  // Heaven-door mesh. A tall white panel with a black frame and the
+  // child space's name floating in front. Doors ring the room around
+  // the I-Am; gazing at one and pressing enter walks the user through
+  // to the child space. No glTF . heaven is purely seed-rendered, so
+  // it works with no asset bundle installed.
+  _makeHeavenDoor(child) {
+    const W = 1.6, H = 2.4, T = 0.04;
+    const group = new THREE.Group();
+
+    // Frame (a slightly bigger black panel behind the white fill).
+    const frame = new THREE.Mesh(
+      new THREE.BoxGeometry(W + 0.14, H + 0.14, T),
+      new THREE.MeshStandardMaterial({
+        color: 0x111111, roughness: 0.6, metalness: 0.0,
+      }),
+    );
+    frame.position.set(0, H / 2 + 0.05, 0);
+    group.add(frame);
+
+    // Fill (the white interior the player gazes "into").
+    const fill = new THREE.Mesh(
+      new THREE.BoxGeometry(W, H, T + 0.02),
+      new THREE.MeshStandardMaterial({
+        color: 0xffffff, roughness: 0.4,
+        emissive: 0xffffff, emissiveIntensity: 0.15,
+      }),
+    );
+    fill.position.set(0, H / 2 + 0.05, 0.01);
+    group.add(fill);
+
+    // Threshold strip at the floor so it reads as standing on the ground.
+    const sill = new THREE.Mesh(
+      new THREE.BoxGeometry(W + 0.14, 0.05, 0.18),
+      new THREE.MeshStandardMaterial({ color: 0x111111, roughness: 0.7 }),
+    );
+    sill.position.set(0, 0.025, 0.08);
+    group.add(sill);
+
+    // Label plate (a thin black bar above the door fill). The space
+    // name renders in the gaze-label UI when you target it; this plate
+    // just gives the door a top accent so the user reads "door".
+    const plate = new THREE.Mesh(
+      new THREE.BoxGeometry(W * 0.6, 0.18, T + 0.03),
+      new THREE.MeshStandardMaterial({ color: 0x111111, roughness: 0.6 }),
+    );
+    plate.position.set(0, H + 0.05, 0.015);
+    group.add(plate);
+
+    // Keep the child reference handy for the label / hover UI without
+    // recomputing it from userData every frame.
+    group.userData = { ...(group.userData || {}), heavenDoorChildName: child?.name || "" };
+
+    return group;
+  }
+
   // Pyramid mesh used for rulership spaces (and any other space marked
   // with qualities.models.model === "pyramid"). 4-sided cone, sandstone
   // color, base + height grow with sizeHint so larger trees still feel
@@ -1805,6 +1908,12 @@ export class Scene {
   }
 
   _makeChildMesh(child, sizeHint = 1) {
+    // Heaven door at the place root. When the place-root descriptor
+    // surfaces heaven as a child, render it as the white-paneled door
+    // a reigning being can walk through. Non-reigning beings see the
+    // same door but the SEE on the other side denies.
+    if (child.seedSpace === "heaven") return this._makeHeavenDoor(child);
+
     // Dispatch by the models extension hint. Unknown / missing models
     // fall through to the default tree mesh below.
     const modelName = child.model?.model || null;

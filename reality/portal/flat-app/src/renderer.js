@@ -14,6 +14,7 @@
 import { flat } from "./main.js";
 import { openChatFor, isChatOpen, getChatBeing } from "./chat.js";
 import { showAuthOverlay } from "./identity.js";
+import { renderRoleManagerPanel } from "./role-manager-panel.js";
 
 // ────────────────────────────────────────────────────────────────
 // Public surface
@@ -66,6 +67,7 @@ export function renderDescriptor(desc, { session, discovery }) {
   renderBeings(desc, { session, discovery });
   renderMatter(desc, { session, discovery });
   renderChildren(desc, { discovery });
+  renderLineage(desc, { session, discovery });
   renderCounts(desc);
   // If chat is open, re-render it against the latest beings[] state so
   // inbox.recent stays fresh.
@@ -157,10 +159,10 @@ function renderQuickNav(desc, discovery) {
   const QN = {
     home:       `${reality}/`,
     beings:     `${reality}/.beings`,
-    operations: `${reality}/.operations`,
-    roles:      `${reality}/.roles`,
-    threads:    `${reality}/.threads`,
-    extensions: `${reality}/.extensions`,
+    operations: `${reality}/./operations`,
+    roles:      `${reality}/./roles`,
+    threads:    `${reality}/./threads`,
+    extensions: `${reality}/./extensions`,
   };
   for (const chip of document.querySelectorAll("#quick-nav .qn-chip")) {
     const tag = chip.dataset.tag;
@@ -316,6 +318,135 @@ function renderBeings(desc, { session, discovery }) {
 }
 
 // ────────────────────────────────────────────────────────────────
+// Being-tree lineage — children of the stance's being
+// ────────────────────────────────────────────────────────────────
+//
+// When the stance carries a beingId, the descriptor includes
+// beingLineage: an array of {beingId, name, cognition, ...} for every
+// being parented under it. Render as a list with an "inhabit" button
+// per row. Inhabit calls BE:connect with the ancestor-relation auth
+// path (cherub Mode 3); on success the response carries inherited:true
+// and a fresh token, which we hand to a new browser tab so both
+// connections (this tab on the parent, the new tab on the child) live
+// independently. Tab close → BE:release on its own token.
+
+function renderLineage(desc, { session, discovery }) {
+  const section = document.getElementById("lineage-section");
+  const ul      = document.getElementById("lineage-list");
+  const count   = document.getElementById("lineage-count");
+  if (!section || !ul) return;
+
+  const items = Array.isArray(desc.beingLineage) ? desc.beingLineage : null;
+  if (!items) {
+    section.classList.add("hidden");
+    ul.innerHTML = "";
+    if (count) count.textContent = "";
+    return;
+  }
+  section.classList.remove("hidden");
+  if (count) count.textContent = items.length ? `${items.length}` : "";
+  ul.innerHTML = "";
+
+  if (items.length === 0) {
+    ul.appendChild(emptyRow("(no descendants yet — BE:birth from your own stance to mint one)"));
+    return;
+  }
+
+  const reality = discovery?.reality || null;
+  const canInhabit = !!session?.token; // need an active session to inherit-connect
+
+  for (const child of items) {
+    const li = document.createElement("li");
+    li.className = "list-row";
+
+    const meta = document.createElement("div");
+    meta.className = "row-meta";
+
+    const name = document.createElement("span");
+    name.className = "row-name";
+    name.textContent = `@${child.name || child.beingId.slice(0, 8)}`;
+    meta.appendChild(name);
+
+    if (child.cognition)   meta.appendChild(badge(child.cognition, "mode"));
+    if (child.defaultRole) meta.appendChild(badge(child.defaultRole, "activity"));
+
+    li.appendChild(meta);
+
+    const actions = document.createElement("div");
+    actions.className = "row-actions";
+
+    // Inspect link → SEE the child's stance (so the user can drill in
+    // and see ITS lineage too).
+    if (reality && child.name) {
+      const a = document.createElement("a");
+      a.className = "btn-sm btn-explore";
+      a.href = `#${reality}/@${child.name}`;
+      a.textContent = "open";
+      a.title = "navigate to this being's stance";
+      actions.appendChild(a);
+    }
+
+    const inhabitBtn = document.createElement("button");
+    inhabitBtn.textContent = "inhabit";
+    inhabitBtn.className = "btn-sm btn-primary";
+    inhabitBtn.disabled = !canInhabit;
+    inhabitBtn.title = canInhabit
+      ? "open a new tab driving this being"
+      : "sign in first";
+    inhabitBtn.onclick = () => triggerInhabit(child, { reality });
+    actions.appendChild(inhabitBtn);
+
+    li.appendChild(actions);
+    ul.appendChild(li);
+  }
+}
+
+// Inhabit handler. Calls flat.beOp("connect") on the child stance; the
+// substrate's cherub Mode-3 path returns a fresh token gated on the
+// caller-being-tree ancestor relation. On success, open a new browser
+// tab with the inheriter token in the URL hash so the new tab can
+// boot its own independent session without clobbering this tab's
+// localStorage.
+async function triggerInhabit(child, { reality }) {
+  if (!reality || !child?.name) return;
+  setStatus(`inheriting @${child.name}...`);
+  try {
+    const { flat } = await import("./main.js");
+    const stance = `${reality}/@${child.name}`;
+    const ack = await flat.beOp("connect", stance, {});
+    if (!ack || ack.status === "error") {
+      const msg = ack?.error?.message || "connect rejected";
+      setStatus(`inhabit failed: ${msg}`);
+      return;
+    }
+    const token = ack.data?.identityToken;
+    const name  = ack.data?.name || child.name;
+    if (!token) {
+      setStatus(`inhabit ok but no token returned (server bug?)`);
+      return;
+    }
+    // Stash a one-shot session blob in the URL hash. The new tab reads
+    // it on boot, copies into sessionStorage, clears the hash.
+    const blob = encodeURIComponent(JSON.stringify({
+      token,
+      username: name,
+      placeUrl: flat.state.session?.placeUrl || window.location.origin,
+      inherited: true,
+      // Who authorized this inhabit. Inheriter tab persists it and
+      // listens for the spawner's pagehide on a BroadcastChannel —
+      // when the spawner tab closes, the inheriter releases itself
+      // (borrowed presence; lender leaves, lease ends).
+      spawnerName: flat.state.session?.username || null,
+    }));
+    const url = `${window.location.pathname}#inhabit=${blob}`;
+    window.open(url, "_blank");
+    setStatus(`opened new tab for @${name}`);
+  } catch (err) {
+    setStatus(`inhabit failed: ${err?.message || String(err)}`);
+  }
+}
+
+// ────────────────────────────────────────────────────────────────
 // Matter list
 // ────────────────────────────────────────────────────────────────
 
@@ -382,7 +513,9 @@ function renderMatter(desc, { discovery } = {}) {
 
 function detectCatalogPath(path) {
   if (typeof path !== "string") return null;
-  const m = path.match(/^\/\.(operations|roles|threads|extensions)\/?$/);
+  // Match both the new "./X" canonical form and the legacy "/.X" form
+  // some bookmarks may still carry.
+  const m = path.match(/^\/(?:\.\/)?(operations|roles|threads|extensions)\/?$/);
   return m ? m[1] : null;
 }
 
@@ -390,7 +523,7 @@ function detectCatalogItemPath(path) {
   if (typeof path !== "string") return null;
   // Item names can contain colons (`harmony:dancer-llm`), hyphens, dots.
   // Catch the catalog kind and the rest of the path (anything after).
-  const m = path.match(/^\/\.(operations|roles|extensions)\/([^/]+)\/?$/);
+  const m = path.match(/^\/(?:\.\/)?(operations|roles|extensions)\/([^/]+)\/?$/);
   return m ? { kind: m[1], name: m[2] } : null;
 }
 
@@ -471,7 +604,7 @@ function renderCatalogRow(kind, item, discovery) {
     // Threads: link straight into the thread descriptor.
     const open = document.createElement("a");
     open.className = "btn-explore";
-    open.href = `#${discovery.reality}/.threads/${item.thread.id}`;
+    open.href = `#${discovery.reality}/./threads/${item.thread.id}`;
     open.textContent = "open thread";
     sub.appendChild(open);
   } else if (item.path && discovery?.reality) {
@@ -743,7 +876,7 @@ function renderThreadDetail(pane, thread, discovery) {
   header.className = "explorer-header";
   const h = document.createElement("h2");
   h.className = "explorer-title";
-  h.innerHTML = `⧖ <a class="dim" href="#${discovery.reality}/.threads">thread</a> <span class="dim">/</span> ${short(thread.id, 16)}`;
+  h.innerHTML = `⧖ <a class="dim" href="#${discovery.reality}/./threads">thread</a> <span class="dim">/</span> ${short(thread.id, 16)}`;
   h.title = thread.id;
   header.appendChild(h);
 
@@ -769,7 +902,7 @@ function renderThreadDetail(pane, thread, discovery) {
   if (thread.parentThread && discovery?.reality) {
     meta.appendChild(kvBlock("parent thread", thread.parentThread, {
       mono: true,
-      link: `#${discovery.reality}/.threads/${thread.parentThread}`,
+      link: `#${discovery.reality}/./threads/${thread.parentThread}`,
     }));
   }
   if (Array.isArray(thread.participants) && thread.participants.length) {
@@ -871,7 +1004,7 @@ function renderBeingCatalogRow(b, discovery) {
   name.textContent = `@${b.name || "(unnamed)"}`;
   main.appendChild(name);
 
-  if (b.operatingMode) main.appendChild(badge(b.operatingMode, "mode"));
+  if (b.cognition) main.appendChild(badge(b.cognition, "mode"));
   if (b.defaultRole) {
     const role = badge(b.defaultRole, "activity");
     role.title = b.roles?.length > 1 ? `roles: ${b.roles.join(", ")}` : `default role`;
@@ -1512,8 +1645,18 @@ function showInspector({ kind, entry }) {
   insp.classList.remove("hidden");
   insp.innerHTML = "";
 
-  if (kind === "being")  renderBeingInspector(insp, entry);
-  else                   renderMatterInspector(insp, entry);
+  if (kind === "being") {
+    // @role-manager opens a dedicated authoring panel instead of the
+    // generic being inspector. The being itself is scripted (no chat),
+    // and the panel is the whole point of the being's existence.
+    if (entry?.being === "role-manager") {
+      renderRoleManagerPanel(insp, entry);
+      return;
+    }
+    renderBeingInspector(insp, entry);
+  } else {
+    renderMatterInspector(insp, entry);
+  }
 }
 
 // ── Being inspector ─────────────────────────────────────────────

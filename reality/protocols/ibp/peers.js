@@ -7,7 +7,7 @@
 //
 // This file is intentionally slim. Liveness checks, redirect handling,
 // and the old `/canopy/info` heartbeat retired with the parallel
-// federation protocol. Liveness becomes a periodic `ibp:see <peer>/.identity`
+// federation protocol. Liveness becomes a periodic `ibp:see <peer>/./identity`
 // when the wire-protocol federation slice places.
 
 import log from "../../seed/seedReality/log.js";
@@ -23,7 +23,7 @@ function isPrivateHost(hostname) {
 /**
  * Register a new peer place. Operator supplies the public key + realityId
  * directly. Automated discovery (fetching the peer's `.well-known/treeos-portal`
- * or `ibp:see <peer>/.identity` and pulling the key) places with the
+ * or `ibp:see <peer>/./identity` and pulling the key) places with the
  * federation wire-protocol slice.
  *
  * @param {object} info

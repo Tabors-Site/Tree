@@ -99,11 +99,13 @@ async function assertCoordInBounds(beingDoc, raw) {
 //
 // params: { field, value, merge=true }
 // field paths:
-//   "name" / "operatingMode" / "roles" / "defaultRole" / "homeSpace" /
+//   "name" / "roles" / "defaultRole" / "homeSpace" /
 //   "llmDefault" / "parentBeingId"                  → schema-field writes
 //   "qualities.<namespace>"                          → set/merge that namespace
 //   "qualities.<namespace>.<innerKey>"               → merge one inner key
 //   value=null on a qualities path                   → unset
+//   ("cognition" lives at qualities.cognition.defaultKind, written via
+//    the qualities.* paths, not as a schema-field write.)
 
 async function setOnBeingHandler({ target, params, summonCtx }) {
   const { field, value, merge = true } = params || {};
@@ -180,7 +182,6 @@ async function setOnBeingHandler({ target, params, summonCtx }) {
   }
 
   if (
-    field === "operatingMode" ||
     field === "roles" ||
     field === "defaultRole" ||
     field === "homeSpace"
@@ -238,7 +239,7 @@ async function setOnBeingHandler({ target, params, summonCtx }) {
   }
 
   throw new Error(
-    `set-being: unknown field "${field}". Supported: name, operatingMode, roles, defaultRole, homeSpace, llmDefault, parentBeingId, password, position, coord, qualities.<namespace>[.<innerKey>]`,
+    `set-being: unknown field "${field}". Supported: name, roles, defaultRole, homeSpace, llmDefault, parentBeingId, password, position, coord, qualities.<namespace>[.<innerKey>]`,
   );
 }
 

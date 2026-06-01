@@ -29,15 +29,16 @@ export const arrivalRole = Object.freeze({
   name: "arrival",
   description:
     "The shared stance every unauthenticated visitor carries. SEE-only; one being row, many concurrent users.",
+  requiredCognition: "scripted",
   permissions: ["see"],
   respondMode: "async",
   triggerOn: [], // never auto-processes anything
   /**
    * No-op. Arrival doesn't receive SUMMONs (no "message" in triggerOn);
-   * this handler exists only because the role-registry contract requires
-   * a summon function. If something ever does SUMMON @arrival, the
-   * moment releases with no Act per the Round 5 seal-gate (no cognition
-   * → no act → no seal).
+   * this handler exists only so the role has a callable summon when
+   * effective cognition resolves to "scripted". If something ever does
+   * SUMMON @arrival, the moment releases with no Act per the Round 5
+   * seal-gate (no cognition → no act → no seal).
    */
   async summon(_message, _ctx) {
     return null;

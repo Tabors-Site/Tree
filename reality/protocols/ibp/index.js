@@ -220,7 +220,7 @@ export { IbpError, IBP_ERR, isIbpError } from "../../seed/ibp/protocol.js";
 // and the cancel sweeps are NOT re-exported: they let callers fabricate
 // or sever work without an envelope, breaking the audit chain. The
 // right way to wake a being is to SUMMON them; the right way to cut a
-// sub-tree is to SUMMON `<reality>/.threads/<id>` (priority HUMAN for
+// sub-tree is to SUMMON `<reality>/./threads/<id>` (priority HUMAN for
 // out-of-band interrupt).
 export { getCurrentRootCorrelation, getStats as getSchedulerStats } from "../../seed/present/intake/scheduler.js";
 // Reply aggregation pattern for fanout (Foreman → Workers, etc.).

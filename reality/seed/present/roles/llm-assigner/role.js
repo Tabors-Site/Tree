@@ -288,6 +288,7 @@ export const llmAssignerRole = Object.freeze({
   name: "llm-assigner",
   description:
     "LLM-configuration delegate. Reached through BE verb (add-llm, assign-slot, set-space-llm, ...); not summon-dispatched.",
+  requiredCognition: "scripted",
   permissions: ["be"],
   respondMode: "async",
   triggerOn: [],

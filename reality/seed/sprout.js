@@ -252,9 +252,19 @@ export function isBootMomentInFlight() {
   return _bootMomentInFlight;
 }
 
+// The heaven space. Named "." . sits directly under the space root
+// and parents every Tier-3 seed space below. The I-Am's home.
+// Beings of the land lacking heaven stance see the door but cannot
+// enter; the place root stays uncluttered by the I-Am's working
+// memory rooms.
+const REALITY_HEAVEN_SPACE = {
+  name: ".",
+  seedSpace: SEED_SPACE.HEAVEN,
+};
+
 const REALITY_SEED_SPACES = [
   {
-    name: ".identity",
+    name: "identity",
     seedSpace: SEED_SPACE.IDENTITY,
     buildQualities: () => {
       const domain = process.env.REALITY_DOMAIN || "localhost";
@@ -262,7 +272,7 @@ const REALITY_SEED_SPACES = [
     },
   },
   {
-    name: ".config",
+    name: "config",
     seedSpace: SEED_SPACE.CONFIG,
     buildQualities: () => {
       const name = process.env.REALITY_NAME || "My Place";
@@ -273,19 +283,20 @@ const REALITY_SEED_SPACES = [
       ]);
     },
   },
-  { name: ".peers", seedSpace: SEED_SPACE.PEERS },
-  { name: ".extensions", seedSpace: SEED_SPACE.EXTENSIONS },
-  { name: ".tools", seedSpace: SEED_SPACE.TOOLS },
-  { name: ".roles", seedSpace: SEED_SPACE.ROLES },
-  { name: ".operations", seedSpace: SEED_SPACE.OPERATIONS },
-  // .source is read-only. Populated by seed/materials/space/source.js as a filesystem
-  // mirror of reality/. DO writes against children reject with ORIGIN_READ_ONLY.
-  { name: ".source", seedSpace: SEED_SPACE.SOURCE },
-  // .threads is a derived projection. Live rootCorrelation chains
-  // surface as synthetic children at `<reality>/.threads/<id>`; the
+  { name: "peers", seedSpace: SEED_SPACE.PEERS },
+  { name: "extensions", seedSpace: SEED_SPACE.EXTENSIONS },
+  { name: "tools", seedSpace: SEED_SPACE.TOOLS },
+  { name: "roles", seedSpace: SEED_SPACE.ROLES },
+  { name: "operations", seedSpace: SEED_SPACE.OPERATIONS },
+  // source is read-only. Populated by seed/materials/space/source.js
+  // as a filesystem mirror of reality/. DO writes against children
+  // reject with ORIGIN_READ_ONLY.
+  { name: "source", seedSpace: SEED_SPACE.SOURCE },
+  // threads is a derived projection. Live rootCorrelation chains
+  // surface as synthetic children at `<reality>/./threads/<id>`; the
   // descriptor is computed on demand from inbox + Act records.
   // SUMMON to a thread address is a cut. See seed/materials/space/threads.js.
-  { name: ".threads", seedSpace: SEED_SPACE.THREADS },
+  { name: "threads", seedSpace: SEED_SPACE.THREADS },
 ];
 
 export async function ensureSpaceRoot(summonCtx) {
@@ -332,6 +343,48 @@ export async function ensureSpaceRoot(summonCtx) {
     log.verbose("Reality", `Planned space root: ${rootId.slice(0, 8)} (materializes at seal)`);
   }
 
+  // Plant heaven first . the "." space under the space root. Its id
+  // is then the parent of every Tier-3 seed space, so they gather in
+  // the heaven room instead of cluttering the place root. Repair: a
+  // pre-existing heaven row found at the wrong parent gets moved back
+  // under spaceRoot. The repair Fact joins genesis's ΔF.
+  let heavenSpace = await Space.findOne({ seedSpace: SEED_SPACE.HEAVEN });
+  if (!heavenSpace) {
+    try {
+      heavenSpace = await createRealitySeedSpace({
+        name: REALITY_HEAVEN_SPACE.name,
+        parentId: spaceRoot._id,
+        seedSpace: REALITY_HEAVEN_SPACE.seedSpace,
+        qualities: null,
+        summonCtx,
+      });
+      log.verbose("Reality", `Planned heaven space: ${REALITY_HEAVEN_SPACE.name}`);
+    } catch (err) {
+      log.error(
+        "Place",
+        `Failed to create heaven space ${REALITY_HEAVEN_SPACE.name}: ${err.message}. Boot continues.`,
+      );
+    }
+  } else if (
+    heavenSpace.parent &&
+    heavenSpace.parent.toString() !== spaceRoot._id.toString()
+  ) {
+    log.warn("Place", `Heaven space has wrong parent. Repairing.`);
+    const { doVerb } = await import("./ibp/verbs/do.js");
+    await doVerb(
+      { kind: "space", id: String(heavenSpace._id) },
+      "set-space",
+      { field: "parent", value: String(spaceRoot._id) },
+      { scaffold: true, summonCtx },
+    );
+  }
+
+  // Heaven is the parent of every Tier-3 seed space. Fall back to
+  // spaceRoot only if heaven failed to plant above (degraded boot);
+  // the repair pass on next boot will adopt these spaces back under
+  // heaven once it materializes.
+  const seedSpaceParentId = heavenSpace ? heavenSpace._id : spaceRoot._id;
+
   for (const def of REALITY_SEED_SPACES) {
     let space = await Space.findOne({ seedSpace: def.seedSpace });
 
@@ -339,7 +392,7 @@ export async function ensureSpaceRoot(summonCtx) {
       try {
         space = await createRealitySeedSpace({
           name: def.name,
-          parentId: spaceRoot._id,
+          parentId: seedSpaceParentId,
           seedSpace: def.seedSpace,
           qualities: def.buildQualities ? def.buildQualities() : null,
           summonCtx,
@@ -354,15 +407,15 @@ export async function ensureSpaceRoot(summonCtx) {
       }
     }
 
-    // Repair: a seed space found at the wrong parent (manual DB
-    // edit, corruption) gets moved back under the space root. Routes
-    // through do.set-space inside the boot moment so the repair Fact
-    // joins genesis's ΔF (either the whole genesis + repair commits
-    // or none of it does).
+    // Repair: a Tier-3 seed space found at the wrong parent (manual
+    // DB edit, corruption, or migration from an older layout where
+    // they parented directly under the place root) gets moved back
+    // under heaven. Routes through do.set-space inside the boot
+    // moment so the repair Fact joins genesis's ΔF.
     if (
       space.parent &&
       !space._pending &&
-      space.parent.toString() !== spaceRoot._id.toString()
+      space.parent.toString() !== seedSpaceParentId.toString()
     ) {
       log.warn(
         "Place",
@@ -372,7 +425,7 @@ export async function ensureSpaceRoot(summonCtx) {
       await doVerb(
         { kind: "space", id: String(space._id) },
         "set-space",
-        { field: "parent", value: String(spaceRoot._id) },
+        { field: "parent", value: String(seedSpaceParentId) },
         { scaffold: true, summonCtx },
       );
     }
@@ -421,7 +474,12 @@ export async function ensureSpaceRoot(summonCtx) {
   // Plant my own Being row. Every later being parents under it;
   // every Fact written during this genesis joins the same moment's ΔF
   // and seals atomically with the be:register that names me.
-  await ensureIAm(spaceRoot._id, summonCtx);
+  //
+  // Home is heaven ("."). It's the I-Am's room. Beings of the land
+  // see the door but cannot enter without heaven stance. Falls back
+  // to the place root only if heaven failed to plant (degraded boot).
+  const iAmHomeSpaceId = heavenSpace ? heavenSpace._id : spaceRoot._id;
+  await ensureIAm(iAmHomeSpaceId, summonCtx);
 
   // childCount read only meaningful on Awakening (rows exist).
   if (!spaceRoot._pending) {
@@ -435,7 +493,7 @@ export async function ensureSpaceRoot(summonCtx) {
 }
 
 // My Being row. parentBeingId null (root of the being-tree); no
-// roles (I precede the role registry); operatingMode scripted (code
+// roles (I precede the role registry); cognition scripted (code
 // cognition only). The random password is never used; I cannot be
 // claimed or summoned interactively.
 //
@@ -445,7 +503,7 @@ export async function ensureSpaceRoot(summonCtx) {
 // fact." The Being row IS the fold-so-far of that one fact, sealed
 // inside the boot moment's transaction alongside every other genesis
 // Fact.
-async function ensureIAm(spaceRootId, summonCtx) {
+async function ensureIAm(homeSpaceId, summonCtx) {
   if (!summonCtx) {
     throw new Error(
       "ensureIAm requires summonCtx (the boot moment's ctx). Reachable only from inside withBootMoment(...).",
@@ -475,7 +533,10 @@ async function ensureIAm(spaceRootId, summonCtx) {
     "./materials/being/identity/credentials.js"
   );
   const credential = await mintCredentialSpec(null);
-  const qualities = { auth: { credentialPlain: credential.plain } };
+  const qualities = {
+    auth: { credentialPlain: credential.plain },
+    cognition: { defaultKind: "scripted" },
+  };
 
   await emitFact({
     verb: "be",
@@ -486,12 +547,11 @@ async function ensureIAm(spaceRootId, summonCtx) {
       spec: {
         name: I_AM,
         password: credential.hash,
-        operatingMode: "scripted",
         roles: [],
         defaultRole: null,
         parentBeingId: null,
-        homeSpace: String(spaceRootId),
-        position: String(spaceRootId),
+        homeSpace: String(homeSpaceId),
+        position: String(homeSpaceId),
         llmDefault: null,
         isRemote: false,
         homeReality: null,
@@ -549,8 +609,8 @@ export function isBeingRoot(space) {
   return true;
 }
 
-// Mirror loaded extensions into the .extensions seed space so SEE
-// on `<reality>/.extensions/<name>` returns the extension's surface
+// Mirror loaded extensions into the `./extensions` seed space so SEE
+// on `<reality>/./extensions/<name>` returns the extension's surface
 // (capabilities, deps, scope) via the standard descriptor pipeline.
 //
 // Runs OUTSIDE the boot moment (after sealAct has materialized the

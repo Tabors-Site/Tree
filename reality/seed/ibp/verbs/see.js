@@ -10,9 +10,9 @@
 // Two short-circuits before the normal descriptor flow:
 //
 //   1. `<reality>/.discovery` → buildDiscovery() (no auth, no parse).
-//   2. `<reality>/.threads/<id>` → describeThread(id). Threads have no
+//   2. `<reality>/./threads/<id>` → describeThread(id). Threads have no
 //      persistent Space row, so the standard resolveStance walk would
-//      fail; this branch handles them. SEE on the bare `/.threads`
+//      fail; this branch handles them. SEE on the bare `/./threads`
 //      folder still routes normally; placeAtSpace injects the
 //      synthetic children for that case.
 //
@@ -94,10 +94,10 @@ export async function seeVerb(target, opts = {}) {
   const parsed   = parseWithContext(addrString, parseCtx);
   const expanded = expand(parsed, parseCtx);
 
-  // Thread descriptor short-circuit. SEE on `<reality>/.threads/<id>`
+  // Thread descriptor short-circuit. SEE on `<reality>/./threads/<id>`
   // returns the synthetic projection from describeThread instead of
   // routing through resolveStance + placeAtSpace (the thread has no
-  // persistent space row). SEE on `<reality>/.threads` itself still
+  // persistent space row). SEE on `<reality>/./threads` itself still
   // routes normally — placeAtSpace injects synthetic children for
   // that case. See materials/space/threads.js.
   const targetThreadId = threadIdFromPath(expanded.right?.path);
@@ -126,13 +126,13 @@ export async function seeVerb(target, opts = {}) {
     return {
       address: {
         reality: getRealityDomain(),
-        path: `/.threads/${targetThreadId}`,
+        path: `/./threads/${targetThreadId}`,
         being: null,
         spaceId: threadsSpaceId,
         beingId: null,
         chain: [],
-        pathByNames: `/.threads/${targetThreadId}`,
-        pathByIds: `/.threads/${targetThreadId}`,
+        pathByNames: `/./threads/${targetThreadId}`,
+        pathByIds: `/./threads/${targetThreadId}`,
         leafName: targetThreadId,
         leafId: targetThreadId,
       },

@@ -94,7 +94,7 @@ async function birthHandler({ payload, ctx }) {
     const { findIAm } = await import("../../../materials/being/identity.js");
     const iAm = await findIAm();
     const cherubBeingRow = await Being
-      .findOne({ name: "cherub", operatingMode: "scripted" })
+      .findOne({ name: "cherub" })
       .select("_id").lean();
     const cherubBeingId = cherubBeingRow ? String(cherubBeingRow._id) : null;
 
@@ -102,7 +102,7 @@ async function birthHandler({ payload, ctx }) {
     try {
       const result = await summonCreateBeing({
         spec: {
-          operatingMode: "human",
+          cognition: "human",
           name,
           password,
           roles:         ["human"],
@@ -119,6 +119,33 @@ async function birthHandler({ payload, ctx }) {
       throw mapSeedError(err);
     }
     hooks.run("afterRegister", { user: being, req: ctx?.req }).catch(() => {});
+
+    // Anoint the rootOperator. The first human is admitted into
+    // heaven from the moment they materialize so they can immediately
+    // SEE/DO/SUMMON the seed-internal spaces (config, extensions,
+    // tools, etc.). Subsequent humans default to non-reigning; an
+    // existing reigning being promotes them via the add-reigning DO
+    // op. Best-effort: failures here don't deny the registration
+    // (the operator can repair via the DO op once boot completes).
+    try {
+      const { withIAmAct } = await import("../../../sprout.js");
+      const { addReigningBeing } = await import(
+        "../../../materials/being/reigning.js"
+      );
+      await withIAmAct(`anoint rootOperator @${being.name}`, async (anointCtx) => {
+        await addReigningBeing(String(being._id), {
+          summonCtx: anointCtx,
+          addedBy: cherubBeingId || "cherub",
+        });
+      });
+    } catch (err) {
+      // Log only; the cherub's job is admission, not coronation.
+      const { default: log } = await import("../../../seedReality/log.js");
+      log.error(
+        "Cherub",
+        `failed to anoint rootOperator @${being.name}: ${err.message}. They can be added later via add-reigning.`,
+      );
+    }
 
     const identityToken = generateToken(being);
     return {
@@ -139,7 +166,7 @@ async function birthHandler({ payload, ctx }) {
     throw new IbpError(code, hookResult.reason || "Registration blocked");
   }
 
-  const cherubParent = await Being.findOne({ name: "cherub", operatingMode: "scripted" })
+  const cherubParent = await Being.findOne({ name: "cherub" })
     .select("_id").lean();
   const parentBeingId = cherubParent ? String(cherubParent._id) : null;
 
@@ -147,7 +174,7 @@ async function birthHandler({ payload, ctx }) {
   try {
     const result = await summonCreateBeing({
       spec: {
-        operatingMode: "human",
+        cognition: "human",
         name,
         password,
         roles:         ["human"],
@@ -223,25 +250,82 @@ async function connectHandler({ address, addressKind, payload, identity }) {
   }
 
   // Mode 2: token re-claim against an already-held stance.
-  if (!identity) {
-    throw new IbpError(
-      IBP_ERR.UNAUTHORIZED,
-      "Token re-claim requires a still-valid identity token",
+  if (identity) {
+    const expectedStance = `${getRealityDomain()}/@${identity.name}`;
+    if (address === expectedStance) {
+      return {
+        identityToken: null,
+        beingAddress:  expectedStance,
+        note:          "already held",
+      };
+    }
+
+    // Mode 3: inherit-connect. The caller is already authenticated as
+    // SOME being; they want a token for a DIFFERENT being. Auth path:
+    // the target must be a descendant of the caller on the being-tree
+    // (target's parentBeingId chain reaches the caller's beingId).
+    // No password — the lineage relationship is the credential.
+    //
+    // This is how a parent "inhabits" a child being they minted via
+    // BE:birth: the portal opens a second tab with the new token; both
+    // presences (the original tab on the parent, the new tab on the
+    // child) are independent connections, each will independently
+    // emit BE:release when its tab closes.
+    //
+    // Auth direction is descendants-only (Rule A): tabor can inhabit
+    // beings tabor minted, transitively. Tabor cannot inhabit cherub
+    // or the I-Am or any other ancestor. This avoids privilege
+    // escalation up the chain.
+    const targetName = extractTargetName(address);
+    if (!targetName) {
+      throw new IbpError(
+        IBP_ERR.INVALID_INPUT,
+        "connect target must name a being (@name in the address)",
+        { address },
+      );
+    }
+    const targetBeing = await findBeingByName(targetName);
+    if (!targetBeing || targetBeing.isRemote) {
+      throw new IbpError(IBP_ERR.UNAUTHORIZED, "No such being on this reality");
+    }
+    const { isAncestorOf } = await import(
+      "../../../materials/being/identity/lookups.js"
     );
-  }
-  const expectedStance = `${getRealityDomain()}/@${identity.name}`;
-  if (address !== expectedStance) {
-    throw new IbpError(
-      IBP_ERR.FORBIDDEN,
-      "Cannot re-claim a stance the session does not hold",
-      { held: expectedStance, requested: address },
+    const canInhabit = await isAncestorOf(
+      String(identity.beingId),
+      String(targetBeing._id),
     );
+    if (!canInhabit) {
+      throw new IbpError(
+        IBP_ERR.FORBIDDEN,
+        `@${identity.name} can only inhabit beings they minted (or their descendants)`,
+        { caller: identity.name, target: targetName },
+      );
+    }
+
+    const identityToken = generateToken(targetBeing);
+    return {
+      identityToken,
+      beingAddress: `${getRealityDomain()}/@${targetBeing.name}`,
+      beingId:      String(targetBeing._id),
+      name:         targetBeing.name,
+      inherited:    true,
+    };
   }
-  return {
-    identityToken: null,
-    beingAddress:  expectedStance,
-    note:          "already held",
-  };
+
+  // No identity AND no @cherub address: nothing to bind.
+  throw new IbpError(
+    IBP_ERR.UNAUTHORIZED,
+    "connect requires either an @cherub address with credentials, an existing session token, or an authenticated session to inherit-connect into a descendant being",
+  );
+}
+
+// Strip the @qualifier off a stance address. Returns the name string,
+// or null when the address doesn't end with @<name>.
+function extractTargetName(address) {
+  if (typeof address !== "string") return null;
+  const m = address.match(/@([a-z][a-z0-9-]*)$/i);
+  return m ? m[1].toLowerCase() : null;
 }
 
 // ────────────────────────────────────────────────────────────────────
@@ -321,7 +405,8 @@ function mapSeedError(err) {
 export const cherubRole = Object.freeze({
   name: "cherub",
   description:
-    "The gate. Processes the four BE ops (birth/use/release/switch). Identity territory; no summon dispatch.",
+    "The gate. Processes the three BE ops (birth/connect/release). Identity territory; no summon dispatch.",
+  requiredCognition: "scripted",
   permissions: ["be"],
   respondMode: "async",
   triggerOn: [],

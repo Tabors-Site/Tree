@@ -187,12 +187,56 @@ export async function createBeing(name, password, opts = {}) {
   if (credential.plain) {
     qualities.auth = { credentialPlain: credential.plain };
   }
+  // Cognition (closed-set: "llm" | "human" | "scripted") goes on the
+  // being as a quality, not a schema field. Effective cognition at
+  // moment-assign is read via beingCognition(being) in identity/lookups.js,
+  // which prefers the inhabit-projection (qualities.connection.inhabitedBy)
+  // and falls back to this defaultKind. Substrate default is "llm";
+  // cherub's human-registration path overrides with "human"; seed
+  // delegates and extensions pass their own.
+  qualities.cognition = { defaultKind: opts.cognition || "llm" };
 
   const id = uuidv4();
+  const position = opts.position || opts.currentSpace || opts.homeSpace || null;
+
+  // Derive a random coord inside the position space's size so the
+  // portal renders this being at a stable spot . the same rule
+  // createSpace uses for its children. Every being is visible at
+  // their position+coord (the descriptor surfaces them through
+  // occupantsByPosition; the renderer maps coord into world units).
+  // Reads the position space's size from disk OR, if the space is
+  // pending in this same moment's ΔF (e.g. createBeingWithHome's
+  // new-home path), from the create-space Fact's spec. Falls back
+  // to no coord when the space has no size; the renderer's hash-ring
+  // fallback kicks in there.
+  let resolvedCoord = opts.coord || null;
+  if (!resolvedCoord && position) {
+    try {
+      const live = await Space.findById(position).select("size").lean();
+      let size = live?.size || null;
+      if (!size) {
+        const pendingCreate = opts.summonCtx?.deltaF?.find(
+          (f) =>
+            f?.verb === "do" &&
+            f?.action === "create-space" &&
+            f?.target?.kind === "space" &&
+            String(f?.target?.id) === String(position),
+        );
+        size = pendingCreate?.params?.spec?.size || null;
+      }
+      if (size && Number.isFinite(size.x) && Number.isFinite(size.y) &&
+          size.x > 0 && size.y > 0) {
+        resolvedCoord = {
+          x: Math.floor(Math.random() * size.x),
+          y: Math.floor(Math.random() * size.y),
+        };
+      }
+    } catch { /* defensive: any lookup failure leaves coord null */ }
+  }
+
   const spec = {
     name,
     password: credential.hash,
-    operatingMode: opts.operatingMode || "human",
     roles: rolesList,
     defaultRole,
     parentBeingId: opts.parentBeingId || null,
@@ -203,7 +247,12 @@ export async function createBeing(name, password, opts = {}) {
     // applyCreateBeing in reducerHelpers seeds Being.position from
     // this. Navigation later writes Being.position via the position-
     // fact pipeline.
-    position: opts.position || opts.currentSpace || opts.homeSpace || null,
+    position,
+    // Starting coord . random spot inside position-space's size, set
+    // at creation so the portal has a place to draw the being from
+    // the moment they exist. Every being acts like a human in this
+    // respect; movement writes through set-being:coord.
+    ...(resolvedCoord ? { coord: resolvedCoord } : {}),
     llmDefault: opts.llmDefault || null,
     isRemote: opts.isRemote || false,
     homeReality: opts.homeReality || null,
@@ -232,8 +281,9 @@ export async function createBeing(name, password, opts = {}) {
   //     eager singleton commit ran the fold; the row exists.
   //
   // Callers inside a moment can read spec fields off the pending view
-  // (name, operatingMode, roles, homeSpace, etc.). Schema-derived /
-  // timestamp fields aren't on the pending view; defer those reads.
+  // (name, roles, homeSpace, qualities.cognition.defaultKind, etc.).
+  // Schema-derived / timestamp fields aren't on the pending view; defer
+  // those reads.
   try {
     await emitFact({
       verb:    "be",
@@ -295,7 +345,7 @@ export async function generateUniqueName(role, opts = {}) {
 // `createBeingWithHome` is the single primitive for placing a being in
 // the world with a home. Same operation handles every case:
 //
-//   - Human registration: operatingMode="human", homeParent=space root.
+//   - Human registration: cognition="human", homeParent=space root.
 //     Creates the human's home territory directly under the place root.
 //   - Seed delegates (cherub, llm-assigner, reality-manager): homeSpace=space
 //     root. No new space; the delegate just lives at the space root.
@@ -317,10 +367,10 @@ export async function generateUniqueName(role, opts = {}) {
  * Create a being and place it in the world at a home Space.
  *
  * @param {object} opts
- * @param {"human"|"llm"|"scripted"|"mixed"} opts.operatingMode   required
- * @param {string} [opts.name]                required for human; auto-generated for AI if missing
- * @param {string} [opts.password]            required for human; auto-generated for AI if missing
- * @param {string} [opts.role]                required for non-human
+ * @param {"llm"|"human"|"scripted"} [opts.cognition]   default "llm"; substrate's choice when caller doesn't specify
+ * @param {string} [opts.name]                required for "human" cognition; auto-generated for others if missing
+ * @param {string} [opts.password]            required for "human" cognition; auto-generated for others if missing
+ * @param {string} [opts.role]                required for non-"human" cognition
  * @param {string} [opts.llmDefault]
  * @param {string} [opts.homeSpace]           use this existing Space as the home
  * @param {string} [opts.homeParent]          OR create a new child under this Space
@@ -335,7 +385,6 @@ export async function generateUniqueName(role, opts = {}) {
  */
 export async function createBeingWithHome(opts) {
   const {
-    operatingMode,
     // Plural shape — used when the caller knows the being needs more
     // than one role from birth (e.g. a human registered with
     // ["human"]). When BOTH `role` (singular) and `roles` (plural)
@@ -364,6 +413,12 @@ export async function createBeingWithHome(opts) {
     actId = null,
     summonCtx = null,
     scaffold = false,
+    // Optional explicit coord for the new being inside its position
+    // space. Callers who want deterministic placement (seed delegates
+    // on a circle around the place-root origin, scaffolded LLM beings
+    // pinned to specific spots) pass this; createBeing falls back to a
+    // random in-bounds coord otherwise.
+    coord = null,
   } = opts || {};
   let { name, password } = opts || {};
   // `role` is declared as `let` outside the destructure so the
@@ -375,21 +430,26 @@ export async function createBeingWithHome(opts) {
     role = roles[0];
   }
 
-  // ── Validate mode + required fields ──
+  // Cognition: default to "llm" (substrate default). Caller can pass
+  // "human" (cherub's human-registration path), "scripted" (seed
+  // delegates, harmony drummer/dancer-toward), or "llm". Closed set;
+  // see seed/present/roles/registry.js header for the doctrine.
+  const cognition = opts.cognition || "llm";
+
+  // ── Validate cognition + required fields ──
   if (
-    operatingMode !== "human" &&
-    operatingMode !== "llm" &&
-    operatingMode !== "scripted" &&
-    operatingMode !== "mixed"
+    cognition !== "human" &&
+    cognition !== "llm" &&
+    cognition !== "scripted"
   ) {
     throw new Error(
-      "createBeingWithHome requires operatingMode='human' | 'llm' | 'scripted' | 'mixed'",
+      `createBeingWithHome: cognition must be "llm" | "human" | "scripted"; got "${cognition}"`,
     );
   }
   // Non-human beings must declare at least one role at birth; humans
   // may have none. `role` was filled in from `roles[0]` above when
   // only the plural shape was passed.
-  if (operatingMode !== "human" && !role) {
+  if (cognition !== "human" && !role) {
     throw new Error(
       "createBeingWithHome: non-human beings require a role. Pass `role` " +
       "(singular) or `roles` (array with at least one entry).",
@@ -426,10 +486,10 @@ export async function createBeingWithHome(opts) {
   // auto-generate and store the retrievable plaintext. The old auto-gen
   // here discarded the plaintext, which is what we're fixing.
   if (!name) {
-    if (operatingMode !== "human") name = await generateUniqueName(role);
+    if (cognition !== "human") name = await generateUniqueName(role);
     else throw new IbpError(IBP_ERR.INVALID_INPUT, "Name is required");
   }
-  if (!password && operatingMode === "human") {
+  if (!password && cognition === "human") {
     throw new IbpError(IBP_ERR.INVALID_INPUT, "Password is required");
   }
 
@@ -493,17 +553,17 @@ export async function createBeingWithHome(opts) {
     // reach it; the listing surface ("/<name>") shows it by its real
     // name.
     const resolvedName =
-      homeName || (operatingMode === "human" ? name : `${role}-home`);
+      homeName || (cognition === "human" ? name : `${role}-home`);
     const resolvedType =
       homeType ||
-      (operatingMode === "human" ? "home-territory" : `${role}-home`);
+      (cognition === "human" ? "home-territory" : `${role}-home`);
     // Default bounding box for human homes. Callers (including a
     // future purchasing/upgrade system) can override by passing
     // `homeSize`. Non-humans don't get a sized home by default;
     // they're code without a 3D footprint until something gives them
     // one explicitly.
     const resolvedSize =
-      homeSize || (operatingMode === "human" ? { x: 100, y: 100 } : null);
+      homeSize || (cognition === "human" ? { x: 100, y: 100 } : null);
 
     // Compute a random coord inside the parent's size so the home tree
     // lands on the parent's grid rather than the portal's hash-derived
@@ -584,7 +644,7 @@ export async function createBeingWithHome(opts) {
   let being;
   try {
     being = await createBeing(name, password, {
-      operatingMode,
+      cognition,
       role,
       roles,
       defaultRole,
@@ -593,6 +653,10 @@ export async function createBeingWithHome(opts) {
       isRemote,
       homeReality,
       parentBeingId,
+      // Pass through the explicit coord when callers requested
+      // deterministic placement; createBeing's default in-bounds
+      // randomization stays available when coord is null.
+      coord,
       actId, // ride the caller's moment when threaded through
       summonCtx, // be:register joins moment's ΔF when in-moment
     });
@@ -621,7 +685,7 @@ export async function createBeingWithHome(opts) {
   // Stamping under the new being's identity would face a chicken-and-egg
   // with stance auth (the being is becoming the owner; auth needs them
   // to already be the owner).
-  if (createdNewHome && operatingMode === "human") {
+  if (createdNewHome && cognition === "human") {
     const { doVerb } = await import("../../../ibp/verbs/do.js");
     // Both materialized and pending-in-batch homes resolve to the
     // same typed identity. setOnSpace's rootOwner branch uses only
@@ -656,7 +720,7 @@ export async function createBeingWithHome(opts) {
   // at boot, before any moment-opening machinery exists), scaffold is
   // already true on the parent call and threads through. This is the
   // genesis-exempt path, not a runtime "no moment open" fallback.
-  if (operatingMode !== "human" && role) {
+  if (cognition !== "human" && role) {
     try {
       const { doVerb } = await import("../../../ibp/verbs/do.js");
       const registerOpts = identity

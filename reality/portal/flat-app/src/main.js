@@ -11,6 +11,13 @@ import { openChatFor, handleIncomingSummon, closeChat, isChatOpen } from "./chat
 
 const SESSION_KEY = "treeos-portal-flat-session";
 
+// Inheriter-tab handoff constants — declared above `state` because
+// loadSession() (called during state init) reads `_isInheriterTab`,
+// and a `let` declared later is in the temporal dead zone there.
+const INHABIT_HASH   = "inhabit=";
+const INHERITER_FLAG = "treeos-portal-flat-inheriter";
+let _isInheriterTab  = sessionStorage.getItem(INHERITER_FLAG) === "1";
+
 const state = {
   session:        loadSession(),
   client:         null,
@@ -18,7 +25,7 @@ const state = {
   descriptor:     null,
   currentAddress: null,
   // Registered DO operations, fetched once at connect from
-  // <reality>/.operations. Each entry: { name, targets, factAction,
+  // <reality>/./operations. Each entry: { name, targets, factAction,
   // ownerExtension, skipAudit }. Filter by targets for the inspector.
   operations:     [],
 };
@@ -69,6 +76,74 @@ async function main() {
 
   wireAddressForm();
   wireKeyboardShortcuts();
+  wireInheriterUnload();
+}
+
+// Inheriter tabs release their connect when the tab closes. The fact
+// stream gets a BE:release naming the inheriter's token; the
+// connection-tracking projection clears qualities.connection.inhabitedBy
+// on the target being so the next moment-assign reads "no one inhabiting"
+// and the being's defaultKind takes over again. Best-effort: the browser
+// gives us very little time during unload, so the BE call goes out as
+// fire-and-forget. If the network drops the message, the next inhabit
+// of the same being overwrites inhabitedBy via the new connect's reducer.
+//
+// Plus the parent-presence channel: parent (non-inheriter) tabs
+// broadcast "parent-leaving" on pagehide; inheriter tabs whose
+// spawnerName matches release themselves. Inhabit is a borrowed
+// presence — when the lender leaves, the lease ends.
+const PRESENCE_CHANNEL = "treeos-portal-flat-presence";
+const SPAWNER_KEY      = "treeos-portal-flat-spawner";
+let _presence = null;
+try { _presence = new BroadcastChannel(PRESENCE_CHANNEL); }
+catch { /* old browser; no cross-tab cascade */ }
+
+function wireInheriterUnload() {
+  if (_isInheriterTab) {
+    // Stash spawnerName from the inhabit blob so subsequent reloads
+    // of this inheriter tab keep the binding.
+    try {
+      const raw = sessionStorage.getItem(SESSION_KEY);
+      const spawner = raw ? JSON.parse(raw)?.spawnerName || null : null;
+      if (spawner) sessionStorage.setItem(SPAWNER_KEY, String(spawner));
+    } catch { /* defensive */ }
+
+    if (_presence) {
+      _presence.addEventListener("message", async (ev) => {
+        const msg = ev?.data;
+        if (!msg || msg.type !== "parent-leaving") return;
+        const mySpawner = sessionStorage.getItem(SPAWNER_KEY);
+        if (!mySpawner || msg.username !== mySpawner) return;
+        try {
+          if (state.client && state.discovery?.reality && state.session?.username) {
+            await state.client.be("release", `${state.discovery.reality}/@${state.session.username}`, {});
+          }
+        } catch { /* best effort */ }
+        clearSession();
+        sessionStorage.removeItem(SPAWNER_KEY);
+        window.location.replace(window.location.pathname);
+      });
+    }
+
+    window.addEventListener("pagehide", () => {
+      try {
+        const sess = state.session;
+        if (!sess?.token || !state.client || !state.discovery?.reality) return;
+        const stance = `${state.discovery.reality}/@${sess.username}`;
+        // No await — unload doesn't wait for promises. Fire and forget.
+        state.client.be("release", stance, {}).catch(() => {});
+      } catch { /* defensive */ }
+    });
+    return;
+  }
+
+  // Parent (non-inheriter) tab: broadcast on close.
+  window.addEventListener("pagehide", () => {
+    if (!_presence) return;
+    const username = state.session?.username || null;
+    if (!username) return;
+    try { _presence.postMessage({ type: "parent-leaving", username }); } catch {}
+  });
 }
 
 // Address form — type any address and press Enter to navigate. Updates
@@ -152,13 +227,13 @@ function wireKeyboardShortcuts() {
         location.hash = `#${reality}/.beings`;
       } else if (ev.key === "o") {
         ev.preventDefault();
-        location.hash = `#${reality}/.operations`;
+        location.hash = `#${reality}/./operations`;
       } else if (ev.key === "r") {
         ev.preventDefault();
-        location.hash = `#${reality}/.roles`;
+        location.hash = `#${reality}/./roles`;
       } else if (ev.key === "t") {
         ev.preventDefault();
-        location.hash = `#${reality}/.threads`;
+        location.hash = `#${reality}/./threads`;
       } else if (ev.key === "i" && state.session?.username) {
         ev.preventDefault();
         location.hash = `#${reality}/~`;
@@ -168,14 +243,14 @@ function wireKeyboardShortcuts() {
 }
 
 
-// Fetch the DO registry by SEEing <reality>/.operations. The seed syncs
-// the live registry into that space at boot end (operations.js
+// Fetch the DO registry by SEEing <reality>/./operations. The seed
+// syncs the live registry into that space at boot end (operations.js
 // syncOperationsToSubstrate), so each child is one op with
 // qualities.operation.{ targets, factAction, ownerExtension, skipAudit }.
 async function refreshOperations() {
   if (!state.client || !state.discovery?.reality) return;
   try {
-    const desc = await state.client.see(`${state.discovery.reality}/.operations`);
+    const desc = await state.client.see(`${state.discovery.reality}/./operations`);
     const children = Array.isArray(desc.children) ? desc.children : [];
     state.operations = children.map((c) => {
       const op = c.qualities?.operation || {};
@@ -384,7 +459,7 @@ async function beOp(op, address, credentials = {}) {
 async function cancelByRootCorrelation(rootCorrelation) {
   if (!state.client || !rootCorrelation) return;
   const reality = state.discovery.reality;
-  const threadAddress = `${reality}/.threads/${rootCorrelation}`;
+  const threadAddress = `${reality}/./threads/${rootCorrelation}`;
   // Server-side cut handler picks this up — see seed/materials/space/threads.js cutThread.
   const fromStance = state.session?.username
     ? `${reality}/@${state.session.username}`
@@ -410,15 +485,56 @@ function addressFromHash() {
   return raw;
 }
 
-function loadSession() {
+// One-shot inhabit handoff. INHABIT_HASH / INHERITER_FLAG and the
+// `_isInheriterTab` flag are declared near the top of the file (above
+// the `state` initializer) so loadSession can read them during state
+// init. This block holds the runtime functions that consume them.
+
+function consumeInhabitHash() {
+  // Hash can carry an inhabit blob; if so, decode and store. We
+  // strip the hash whether decode succeeded or not so a malformed
+  // hash never leaves the user stuck in inhabit-pending state.
+  const hash = location.hash.replace(/^#/, "");
+  if (!hash.startsWith(INHABIT_HASH)) return null;
+  let parsed = null;
   try {
+    const raw = decodeURIComponent(hash.slice(INHABIT_HASH.length));
+    parsed = JSON.parse(raw);
+  } catch { parsed = null; }
+  // Clear the inhabit hash but keep the rest of the routing experience
+  // intact (an empty hash will route to the reality root on first load).
+  history.replaceState(null, "", location.pathname);
+  if (!parsed?.token) return null;
+  sessionStorage.setItem(INHERITER_FLAG, "1");
+  sessionStorage.setItem(SESSION_KEY, JSON.stringify(parsed));
+  _isInheriterTab = true;
+  return parsed;
+}
+
+function loadSession() {
+  // Inheriter tabs first read any inhabit-handoff blob from the URL
+  // hash. Whether or not the hash is present, an inheriter tab uses
+  // sessionStorage; the original (parent) tab uses localStorage.
+  const inherited = consumeInhabitHash();
+  if (inherited) return inherited;
+  try {
+    if (_isInheriterTab) {
+      const raw = sessionStorage.getItem(SESSION_KEY);
+      return raw ? JSON.parse(raw) : null;
+    }
     const raw = localStorage.getItem(SESSION_KEY);
     return raw ? JSON.parse(raw) : null;
   } catch { return null; }
 }
 
-function saveSession(s)  { localStorage.setItem(SESSION_KEY, JSON.stringify(s)); }
-function clearSession()  { localStorage.removeItem(SESSION_KEY); }
+function saveSession(s) {
+  if (_isInheriterTab) sessionStorage.setItem(SESSION_KEY, JSON.stringify(s));
+  else                 localStorage.setItem(SESSION_KEY, JSON.stringify(s));
+}
+function clearSession() {
+  if (_isInheriterTab) sessionStorage.removeItem(SESSION_KEY);
+  else                 localStorage.removeItem(SESSION_KEY);
+}
 
 function defaultPlaceUrl() { return "http://localhost:3000"; }
 

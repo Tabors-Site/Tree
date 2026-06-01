@@ -371,10 +371,10 @@ export async function auditToolDescriptions() {
   return { tools: SEED_VERB_TOOLS.length, missing };
 }
 
-// Sync the full tool registry into `<reality>/.tools` as child spaces.
+// Sync the full tool registry into `<reality>/./tools` as child spaces.
 // One child per tool, name = tool name, qualities carries the
 // registered shape info. Called at the end of genesis (after
-// extensions have registered their tools) so SEE on `<reality>/.tools`
+// extensions have registered their tools) so SEE on `<reality>/./tools`
 // reflects current state. Idempotent; subsequent calls reconcile
 // (add new tools, remove gone ones).
 export async function syncToolsToSubstrate(summonCtx) {

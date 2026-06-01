@@ -9,8 +9,11 @@
 // llm-assigner comes alive, the row I create looks like this one.
 // One shape, every kind: human, llm, scripted, future composite. I
 // do not branch on the kind. The verbs treat them all alike;
-// scheduling and cognition are the only places `operatingMode`
-// matters.
+// scheduling and cognition resolve through qualities.cognition.defaultKind
+// (and the inhabit projection at qualities.connection.inhabitedBy) —
+// the schema doesn't carry a cognition field. See
+// seed/materials/being/identity/lookups.js#beingCognition for the
+// single resolver.
 //
 // The being is not the row, though. The row is where the trail of
 // acts attaches; the being IS the trail. Every Fact the being stamps
@@ -45,7 +48,7 @@
 // for that fourth slot ever appears, that wanting is the smell.
 //
 // Fields declared below the three-slot categories (name, password,
-// roles, homeSpace, operatingMode, etc.) are declared for Mongoose
+// roles, homeSpace, etc.) are declared for Mongoose
 // strict-mode mechanics, not as figure authority. The reducer is the
 // authority for what figure(b) looks like; the schema only declares
 // these so strict mode doesn't drop the reducer's output and so
@@ -77,18 +80,16 @@ const BeingSchema = new mongoose.Schema({
   // <name>@<realityDomain>. Unique on this reality.
   name: { type: String, required: true, unique: true },
 
-  // How this being thinks. Scheduling and cognition dispatch branch
-  // on it; addressing and stance authorization do not.
-  //   human    — a person at the keys.
-  //   llm      — an LLM call each time they're summoned.
-  //   scripted — code in the loop, no LLM (auth, llm-assigner).
-  //   mixed    — composite cognition. Reserved.
-  operatingMode: {
-    type: String,
-    enum: ["human", "llm", "scripted", "mixed"],
-    required: true,
-    default: "human",
-  },
+  // Cognition (how this being thinks) USED to live here as
+  // `operatingMode`. It has moved to qualities.cognition.defaultKind
+  // — cognition is a being concept, not a schema field, and the
+  // closed-set vocabulary ("llm" | "human" | "scripted") is policed
+  // by the role registry's VALID_COGNITION and the birth handler's
+  // validator. Effective cognition at moment-assign is read via
+  // identity/lookups.js#beingCognition, which checks the inhabit
+  // projection (qualities.connection.inhabitedBy) first and falls
+  // back to defaultKind. See seed/present/roles/registry.js header
+  // for the doctrine.
 
   // Bcrypt-hashed. Stored on the row as a $set written by the fold
   // engine (applyProjection), pre-hashed by the verb handler before
@@ -199,7 +200,7 @@ const BeingSchema = new mongoose.Schema({
   updatedAt: { type: Date, default: null },
 });
 
-BeingSchema.index({ homeSpace: 1, operatingMode: 1 });
+BeingSchema.index({ homeSpace: 1 });
 BeingSchema.index({ parentBeingId: 1, _id: 1 });
 BeingSchema.index({ roles: 1 });
 BeingSchema.index({ defaultRole: 1 });

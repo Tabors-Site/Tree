@@ -19,7 +19,12 @@
 // Pure-ness is what lets concurrent folds compute identical state
 // and what makes rebuild deterministic.
 
-import { applySetQualities, applySetField, applyCreateBeing } from "../reducerHelpers.js";
+import {
+  applySetQualities,
+  applySetField,
+  applyCreateBeing,
+  applyConnectionState,
+} from "../reducerHelpers.js";
 
 /**
  * Empty initial state. Reducers grow this as they take ownership of
@@ -49,6 +54,12 @@ export function reduce(state, fact) {
   // legacy slim-params facts (no .spec); safe to compose now even
   // before summonCreateBeing converts.
   next = applyCreateBeing(next, fact);
+
+  // be:connect / be:release — maintains qualities.connection.inhabitedBy
+  // as a projection of the connect/release fact stream. beingCognition()
+  // in identity/lookups.js reads this projection to flip effective
+  // cognition to "human" when an inhabitor is present.
+  next = applyConnectionState(next, fact);
 
   // do:set — scalar fields (name/type) and qualities paths.
   next = applySetField(next, fact);

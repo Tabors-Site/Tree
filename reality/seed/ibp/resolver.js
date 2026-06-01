@@ -37,6 +37,7 @@ import Being from "../materials/being/being.js";
 import Space from "../materials/space/space.js";
 import { getSpaceRootId } from "../sprout.js";
 import { resolveRootSpace } from "../materials/space/spaces.js";
+import { SEED_SPACE } from "../materials/space/seedSpaces.js";
 
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -260,28 +261,40 @@ async function walkSpacePath({ segments, ownerFilter, contextBeing, being, start
   let currentParent = startAt ? startAt._id : spaceRootId;
   let leafSpace = startAt;
 
+  // Track whether we're currently inside the heaven region. Heaven (".",
+  // SEED_SPACE.HEAVEN) sits directly under the place root and parents
+  // every Tier-3 seed space (identity, config, tools, roles,
+  // operations, extensions, source, peers, threads). Descending into
+  // heaven or one of its Tier-3 children requires letting the
+  // seedSpace filter off. Once we pass through a Tier-3 child into
+  // a normal sub-row (e.g. `./roles/<role-name>`), seed-space children
+  // are no longer expected . the filter goes back on.
+  let parentSeedSpace = null;
   for (let i = 0; i < segments.length; i++) {
     const seg = segments[i];
     const isFirst = i === 0;
-    // System seed-spaces use the dot-prefix convention (`.threads`,
-    // `.operations`, `.roles`, `.extensions`, `.source`). They are
-    // addressable at the reality root by name; deeper segments are
-    // user spaces (no seedSpace) addressable normally. Without this
-    // exception every SEE on `<reality>/.<system>` returned
-    // SPACE_NOT_FOUND even though the seed creates these rows at
-    // boot. Below depth 0 we keep the seedSpace:null filter — once
-    // you're inside a tree, only non-seed spaces resolve. Children of
-    // a system space (e.g. one space per registered operation under
-    // `.operations`) are not seed spaces themselves.
-    const isSystemSegment = isFirst && typeof seg === "string" && seg.startsWith(".");
+    // Heaven's name at depth 0. The bare "." is the door into the
+    // I-Am's room; we let the seedSpace filter off so the heaven row
+    // (seedSpace: "heaven") resolves. No other dot-prefixed segment
+    // lives directly under the place root anymore . the legacy
+    // ".config" / ".tools" etc shape retired 2026-06-01; all Tier-3
+    // seed spaces now live under heaven.
+    const isHeavenDoor = isFirst && seg === ".";
+    // Heaven children: when the parent we just descended into is
+    // heaven itself, drop the seedSpace:null filter so its Tier-3
+    // seed-space children (config, tools, roles, ...) resolve.
+    // Without this, paths like `/./roles` SPACE_NOT_FOUND at depth 1
+    // because `roles` IS a seedSpace and would get filtered out.
+    const parentIsHeaven = parentSeedSpace === SEED_SPACE.HEAVEN;
+    const allowSeedSpaceChildren = isHeavenDoor || parentIsHeaven;
     const baseQuery = {
       parent: currentParent,
-      ...(isSystemSegment ? {} : { seedSpace: null }),
-      ...(isFirst && !isSystemSegment ? ownerFilter : {}),
+      ...(allowSeedSpaceChildren ? {} : { seedSpace: null }),
+      ...(isFirst && !isHeavenDoor ? ownerFilter : {}),
     };
 
     const fields =
-      "_id name type status parent rootOwner contributors visibility qualities";
+      "_id name type status parent rootOwner contributors visibility qualities seedSpace";
     let space = null;
     if (UUID_RE.test(seg)) {
       space = await Space.findOne({ ...baseQuery, _id: seg })
@@ -304,6 +317,7 @@ async function walkSpacePath({ segments, ownerFilter, contextBeing, being, start
     chain.push({ name: space.name, id: space._id });
     currentParent = space._id;
     leafSpace = space;
+    parentSeedSpace = space.seedSpace || null;
   }
 
   // The enclosing tree root. Walk up to the nearest space with rootOwner;

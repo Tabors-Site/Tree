@@ -35,10 +35,10 @@
 // initial discovery, clients read the rest of the protocol surface
 // via `ibp:see` on place seed spaces:
 //
-//   GET /ibp/see/<reality>/.extensions   — extensions + capabilities
-//   GET /ibp/see/<reality>/.tools        — registered tools
-//   GET /ibp/see/<reality>/.roles        — registered roles
-//   GET /ibp/see/<reality>/.operations   — registered DO operations
+//   GET /ibp/see/<reality>/./extensions   — extensions + capabilities
+//   GET /ibp/see/<reality>/./tools        — registered tools
+//   GET /ibp/see/<reality>/./roles        — registered roles
+//   GET /ibp/see/<reality>/./operations   — registered DO operations
 
 import { authApiRouter, authPageRouter } from "./auth.js";
 import ibp from "./api/ibp.js";

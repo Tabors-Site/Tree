@@ -10,10 +10,11 @@
 // the outside world; seed config is about how the apparatus runs
 // internally.
 //
-// Both write to the same underlying store — the .config seed
-// space's qualities Map — through the storage primitives realityConfig
-// owns. This file is a thin facade: its own defaults table, its own
-// get/set names so callers reach the right surface at import time.
+// Both write to the same underlying store — the `./config` Tier-3
+// seed space's qualities Map — through the storage primitives
+// realityConfig owns. This file is a thin facade: its own defaults
+// table, its own get/set names so callers reach the right surface at
+// import time.
 
 import {
   setRealityConfigValue,
@@ -24,7 +25,7 @@ import {
 /**
  * Seed runtime defaults. Every knob the live machine reads. Each
  * caller falls back to this value when no override sits in
- * .config. Adding a knob means: add it here AND read it via
+ * `./config`. Adding a knob means: add it here AND read it via
  * `getInternalConfigValue(key)` at the use site.
  */
 export const INTERNAL_CONFIG_DEFAULTS = {
@@ -124,7 +125,7 @@ export const INTERNAL_CONFIG_DEFAULTS = {
 };
 
 /**
- * Read a seed runtime knob. Returns the .config override when set,
+ * Read a seed runtime knob. Returns the `./config` override when set,
  * otherwise the INTERNAL_CONFIG_DEFAULTS entry, otherwise null. Callers
  * that want to know whether a value came from override vs default
  * should compare against the defaults table directly.
@@ -137,7 +138,7 @@ export function getInternalConfigValue(key) {
 
 /**
  * Write a seed runtime knob. Routes through the same underlying
- * .config-space writer realityConfig uses; both surfaces share the
+ * `./config`-space writer realityConfig uses; both surfaces share the
  * same store.
  */
 export const setInternalConfigValue    = setRealityConfigValue;

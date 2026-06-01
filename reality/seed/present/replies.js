@@ -170,7 +170,7 @@ export async function emitReplyToAsker({
     }
 
     const askerBeing = await Being.findOne({ name: askerStance.qualifier })
-      .select("_id name defaultRole roles operatingMode")
+      .select("_id name defaultRole roles")
       .lean();
     if (!askerBeing) {
       log.warn(
@@ -288,7 +288,7 @@ export async function emitReplyToStance({
       return false;
     }
     const askerBeing = await Being.findOne({ name: parsed.qualifier })
-      .select("_id name defaultRole roles operatingMode")
+      .select("_id name defaultRole roles")
       .lean();
     if (!askerBeing) {
       log.warn(

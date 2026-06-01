@@ -172,6 +172,10 @@ import "./ibp/setRender.js";
 // realityConfig.js self-registers the set-config / delete-config DO
 // ops alongside the setters they wrap. Importing for the side effect.
 import "./realityConfig.js";
+// Side-effect import. Registers the add-reigning / remove-reigning DO
+// ops that promote/demote beings into heaven's reign registry. See
+// seed/materials/being/reigning.js.
+import "./materials/being/reigning.js";
 // Side-effect import. Registers the InboxProjection cross-cutting
 // fold handlers (be:summon → upsert, be:sever → delete-by-root).
 // See seed/past/projections/inbox/inboxProjectionFold.js.

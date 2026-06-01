@@ -54,11 +54,87 @@ const SEED_SYSTEM_BEING_NAMES = new Set([
 async function _registeredParentIds() {
   const allowed = ["i-am"];
   const cherub = await Being
-    .findOne({ name: "cherub", operatingMode: "scripted" })
+    .findOne({ name: "cherub" })
     .select("_id")
     .lean();
   if (cherub) allowed.push(String(cherub._id));
   return allowed;
+}
+
+/**
+ * Walk the being-tree from `descendantBeingId` upward, return true if
+ * `ancestorBeingId` is anywhere on the chain. Used by cherub's
+ * connect-via-inherit auth path: an authenticated caller can `connect`
+ * to a target without password when the target's parentBeingId chain
+ * reaches the caller's beingId (the caller is the target's ancestor =
+ * the target is the caller's descendant).
+ *
+ * Defensive: returns false on missing rows, cycles, or depth > MAX_HOPS.
+ * The being-tree's depth in practice is shallow (humans → their
+ * children → their children's children); a hard cap at 64 is plenty.
+ *
+ * @param {string} ancestorBeingId    the prospective ancestor
+ * @param {string} descendantBeingId  the being to check
+ * @returns {Promise<boolean>}
+ */
+export async function isAncestorOf(ancestorBeingId, descendantBeingId) {
+  if (!ancestorBeingId || !descendantBeingId) return false;
+  const ancestor = String(ancestorBeingId);
+  let cursor = String(descendantBeingId);
+  if (cursor === ancestor) return false;  // self isn't your own ancestor
+  const visited = new Set();
+  const MAX_HOPS = 64;
+  let hops = 0;
+  while (cursor && !visited.has(cursor) && hops < MAX_HOPS) {
+    visited.add(cursor);
+    hops++;
+    const row = await Being.findById(cursor).select("parentBeingId").lean();
+    if (!row) return false;
+    const parent = row.parentBeingId ? String(row.parentBeingId) : null;
+    if (!parent) return false;
+    if (parent === ancestor) return true;
+    cursor = parent;
+  }
+  return false;
+}
+
+/**
+ * Resolve a being's effective cognition: "llm" | "human" | "scripted".
+ *
+ * Per the cognition doctrine (see seed/present/roles/registry.js header),
+ * cognition is a being concept, not a role concept. Effective cognition is:
+ *
+ *   1. If qualities.connection.inhabitedBy is set → "human"
+ *      (an operator is inhabiting via BE:connect; they drive)
+ *   2. Else qualities.cognition.defaultKind        (what this being is normally)
+ *   3. Else null (caller decides a safe default)
+ *
+ * The being stays itself across the transition. inhabitedBy is a projection
+ * the connection-tracking reducer derives from BE:connect / BE:release facts —
+ * not a direct write. Replay reproduces who was driving each being at each
+ * moment from the chain.
+ *
+ * This is the SINGLE resolver. The legacy `Being.operatingMode` schema
+ * field is gone; everything that used to read it now branches on this
+ * helper's return value.
+ *
+ * @param {object} being  — Being row, lean or full
+ * @returns {"llm"|"human"|"scripted"|null}
+ */
+export function beingCognition(being) {
+  if (!being) return null;
+  const quals = being.qualities;
+  const qGet = (ns) => {
+    if (!quals) return null;
+    return quals instanceof Map ? quals.get(ns) : quals[ns];
+  };
+  // Inhabit is the live override. inhabitedBy set → human is driving.
+  const connection = qGet("connection");
+  if (connection?.inhabitedBy) return "human";
+  // Default kind on the being.
+  const cognition = qGet("cognition");
+  if (cognition?.defaultKind) return cognition.defaultKind;
+  return null;
 }
 
 /**

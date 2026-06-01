@@ -353,7 +353,36 @@ async function placeAtSpaceRoot(resolved, { identity } = {}) {
   const isRegistered = (beingName) => !!getRole(beingName);
 
   const spaceRoot = await foldRead("space", spaceRootId);
-  const children = spaceRootId ? await childrenOf(spaceRootId, "/") : [];
+  let children = spaceRootId ? await childrenOf(spaceRootId, "/") : [];
+
+  // The childrenOf walk filters out seed spaces (so .config/.tools
+  // etc. don't pollute the place-root listing). Heaven IS a seed
+  // space but is meant to be visible at the place root as the door
+  // into the I-Am's room . inject it explicitly. Reigning gating
+  // happens at SEE-time when a being tries to walk through; here we
+  // just surface the door.
+  if (spaceRootId) {
+    const Space = (await import("../materials/space/space.js")).default;
+    const heaven = await Space.findOne({ seedSpace: SEED_SPACE.HEAVEN })
+      .select("_id name type qualities coord")
+      .lean();
+    if (heaven) {
+      const folded = (await foldRead("space", heaven._id)) || heaven;
+      children = [
+        {
+          name: folded.name || heaven.name,
+          spaceId: heaven._id,
+          type: folded.type ?? heaven.type ?? null,
+          coord: folded.coord ?? heaven.coord ?? null,
+          seedSpace: SEED_SPACE.HEAVEN,
+          path: `/${heaven.name}`,
+          qualities: serializeQualities(folded.qualities || heaven.qualities),
+        },
+        ...children,
+      ];
+    }
+  }
+
   const matters = spaceRootId ? await listMattersAt(spaceRootId) : [];
 
   // My place-root beings — ensureSeedDelegates plants them; this list
@@ -367,11 +396,43 @@ async function placeAtSpaceRoot(resolved, { identity } = {}) {
   // 3D portal sees the bare {being, invocableBy, available} triple
   // and renders cherub with "no actions" because the actions array
   // is undefined.
-  const spaceRootBeings = await enrichBeings(spaceRootId, [
-    { being: "cherub",          invocableBy: "anyone",        available: isRegistered("cherub"),         _beingId: null },
-    { being: "llm-assigner",    invocableBy: "authenticated", available: isRegistered("llm-assigner"),   _beingId: null },
-    { being: "reality-manager", invocableBy: "owner",         available: isRegistered("reality-manager"), _beingId: null },
-  ], { identity });
+  // Seed-delegate labels at the place root: the role + invocability
+  // surface every fresh visitor sees on first SEE. The roster (name,
+  // role, cognition, invocableBy) lives in SEED_DELEGATES . single
+  // source of truth. We resolve each delegate's REAL Being row id by
+  // name so occupantsByPosition's dedupe (keyed on _beingId)
+  // recognizes them and doesn't surface the same being twice. Each
+  // entry carries the role-specific invocableBy + availability; if
+  // the delegate's row hasn't planted yet (early boot, or a
+  // misconfigured place), the entry surfaces anyway with _beingId:
+  // null so the label and action surface still render . it just
+  // can't carry coord/inbox/activity until the row catches up.
+  const { SEED_DELEGATES } = await import("../materials/being/seedDelegates.js");
+  const delegateNames = SEED_DELEGATES.map((d) => d.name);
+  const delegateRows = await Being.find({ name: { $in: delegateNames } })
+    .select("_id name")
+    .lean();
+  const delegateIdByName = new Map(
+    delegateRows.map((r) => [r.name, String(r._id)]),
+  );
+  const seedDelegateEntries = SEED_DELEGATES.map((d) => ({
+    being:       d.name,
+    invocableBy: d.invocableBy || "authenticated",
+    available:   isRegistered(d.name),
+    _beingId:    delegateIdByName.get(d.name) || null,
+  }));
+  // Merge in transient occupants . any being whose position points at
+  // the space root and isn't already a seed delegate above. Mirrors
+  // the placeAtSpace path so the reality root surfaces humans /
+  // scripted / LLM beings standing there, not just seed delegates.
+  const transientRoot = spaceRootId
+    ? await occupantsByPosition(spaceRootId, seedDelegateEntries)
+    : [];
+  const spaceRootBeings = await enrichBeings(
+    spaceRootId,
+    [...seedDelegateEntries, ...transientRoot],
+    { identity },
+  );
 
   return {
     address: {
@@ -401,7 +462,7 @@ async function placeAtSpaceRoot(resolved, { identity } = {}) {
     place: {
       name: getRealityConfigValue("REALITY_NAME") || "Unnamed Place",
     },
-    identity: identityBlock(identity, { authorizedHere: true, writeAllowed: false }),
+    identity: await identityBlock(identity, { authorizedHere: true, writeAllowed: false }),
     _meta: meta(),
   };
 }
@@ -449,13 +510,51 @@ async function placeAtSpace(resolved, { identity, payload } = {}) {
     } catch { /* defensive */ }
   }
 
+  // ── Beings list = position truth, not home registration. ─────────
+  // qualities.beings (the home-registration namespace) lists beings
+  // whose HOME is this space. occupants is beings whose CURRENT
+  // position equals this space. When a being walks away, the home
+  // registration stays but the position changes — rendering off the
+  // home list would leave a ghost mesh at the home space.
+  //
+  // We use position as the rendering truth. The home-registration
+  // entries are still surfaced as `residents` so the descriptor
+  // carries "who lives here" separately from "who is here right now"
+  // — extension UIs that want to render addressable @qualifiers can
+  // use residents; the 3D / flat scene renders beings.
   const registered = beingsAtSpace(space, { writeAllowed, authorizedHere });
-  const transient = await occupantsByPosition(space._id, registered);
-  const beings = await enrichBeings(
-    space._id,
-    [...registered, ...transient],
-    { identity },
+  const positionedHere = await occupantsByPosition(space._id, []);
+  // Cross-index for the residents enrichment.
+  const positionedIds = new Set(
+    positionedHere.map((e) => e._beingId).filter(Boolean).map(String),
   );
+  // Residents = registered entries that are NOT currently at this space.
+  // (Registered entries who ARE here naturally appear in positionedHere
+  // because their position field === this space; the dedup keeps a
+  // single entry in the beings list below.)
+  const residentsRaw = registered.filter(
+    (e) => !e._beingId || !positionedIds.has(String(e._beingId)),
+  );
+  // The combined "beings to render" list: positioned occupants, PLUS
+  // registered entries that share the same beingId as a position
+  // occupant (this gives us back the rich qualities.beings invocableBy
+  // metadata when the being is also here). Position-only entries
+  // remain visible.
+  const renderEntries = positionedHere.map((occ) => {
+    const reg = registered.find((r) => r._beingId && String(r._beingId) === String(occ._beingId));
+    return reg ? { ...occ, invocableBy: reg.invocableBy, available: reg.available } : occ;
+  });
+  const beings    = await enrichBeings(space._id, renderEntries, { identity });
+  const residents = await enrichBeings(space._id, residentsRaw,   { identity });
+
+  // Being-tree lineage. When the stance carries a beingId (a stance
+  // address like <reality>/<path>@<name>), surface the immediate
+  // children of that being — beings whose parentBeingId points at it.
+  // The portal renders this as the "lineage" panel: who did you
+  // birth, who can you inhabit. One Mongo query, lean, capped.
+  const beingLineage = resolved.beingId
+    ? await listBeingChildren(resolved.beingId)
+    : null;
 
   return {
     address: {
@@ -472,14 +571,21 @@ async function placeAtSpace(resolved, { identity, payload } = {}) {
     },
     isSpaceRoot: false,
     isHomeRoot: false,
+    // The seed-space marker on the wire so the portal can render
+    // the room differently per kind . heaven shows as a white-room
+    // door-room, threads renders as a stack, etc. Null on user
+    // spaces (the common case).
+    seedSpace: space.seedSpace || null,
     beings,
+    residents,
     children,
     matters,
     lineage,
+    beingLineage,
     siblings,
     size: space.size || null,
     qualities: serializeQualities(space.qualities),
-    identity: identityBlock(identity, { authorizedHere, writeAllowed }),
+    identity: await identityBlock(identity, { authorizedHere, writeAllowed }),
     _meta: meta(writeAllowed ? [] : ["read-only"]),
   };
 }
@@ -574,6 +680,32 @@ async function mattersAt(spaceId) {
   });
 }
 
+// Being-tree children of a being. Used by the descriptor's
+// `beingLineage` field on stance addresses (<reality>/<path>@<name>).
+// Each entry carries enough for the portal to render an "inhabit"
+// affordance: name, beingId, cognition, defaultRole. Cap at 200 to
+// stay bounded for prolific parents; deeper inspection happens via
+// dedicated SEE on each child stance.
+async function listBeingChildren(parentBeingId) {
+  if (!parentBeingId) return [];
+  const { beingCognition } = await import("../materials/being/identity/lookups.js");
+  const rows = await Being
+    .find({ parentBeingId: String(parentBeingId) })
+    .select("_id name roles defaultRole homeSpace qualities createdAt")
+    .sort({ createdAt: 1 })
+    .limit(200)
+    .lean();
+  return rows.map((b) => ({
+    beingId:     String(b._id),
+    name:        b.name || null,
+    defaultRole: b.defaultRole || null,
+    roles:       Array.isArray(b.roles) ? b.roles : [],
+    cognition:   beingCognition(b),
+    homeSpace:   b.homeSpace ? String(b.homeSpace) : null,
+    createdAt:   b.createdAt || null,
+  }));
+}
+
 // Top-down breadcrumb chain: place root + each named segment up to but
 // not including the leaf.
 function buildLineage(resolved) {
@@ -625,12 +757,47 @@ function buildActions(beingName, def, identity) {
       if (isAcquireOp && isAuthenticated) continue;
       if (isHeldOp && !isAuthenticated)   continue;
     }
+    // Reshape per-being. Cherub's BE_OPS labels are arrival-flow-
+    // centric ("Register", "Log in"); for other beings the same op
+    // means something else (a parent birthing a child, a session-
+    // already-authenticated user releasing). Adjust label + args so
+    // the portal renders meaningful copy.
+    let label       = op.label || opName;
+    let description = op.description || "";
+    let args        = op.args || {};
+    if (beingName !== "cherub" && opName === "birth") {
+      label = "Mint child";
+      description = "Birth a new being from yourself. The child's parent is you.";
+      // Populate the role dropdown from the live registry so the
+      // operator sees every role currently available (seed, extension,
+      // and operator-authored "live" entries). Non-human cognition
+      // requires a role — surfacing the list inline removes the
+      // typo-prone free-text input.
+      const roleNames = listRoles().slice().sort();
+      args = {
+        name:      { type: "text", label: "Child name", required: true },
+        cognition: {
+          type:    "select",
+          label:   "Cognition",
+          enum:    ["llm", "scripted", "human"],
+          required: false,
+          default: "llm",
+        },
+        role: {
+          type:    "select",
+          label:   "Role",
+          enum:    roleNames,
+          required: true,
+          default: roleNames.includes("human") ? "human" : (roleNames[0] || ""),
+        },
+      };
+    }
     out.push({
       verb:        "be",
       action:      opName,
-      label:       op.label || opName,
-      description: op.description || "",
-      args:        op.args || {},
+      label,
+      description,
+      args,
       bootstrap:   op.bootstrap === true,
     });
   }
@@ -706,11 +873,31 @@ async function enrichBeings(spaceId, entries, opts = {}) {
 
 // ── Wire-shape helpers ──
 
-function identityBlock(identity, { authorizedHere, writeAllowed }) {
+async function identityBlock(identity, { authorizedHere, writeAllowed }) {
   if (!identity) return null;
+  // Position + coord are server-side state on the Being row. Surface
+  // them on every authenticated SEE so the portal can resume the
+  // camera at the being's last spot (instead of teleporting to /
+  // on every login / reconnect). `coord` may be null on never-moved
+  // beings — the client falls back to a default spawn.
+  let position = null;
+  let coord    = null;
+  if (identity.beingId) {
+    try {
+      const row = await Being.findById(identity.beingId)
+        .select("position qualities")
+        .lean();
+      position = row?.position ? String(row.position) : null;
+      const quals = row?.qualities;
+      const coordQ = quals instanceof Map ? quals.get("coord") : quals?.coord;
+      coord = coordQ || row?.coord || null;
+    } catch { /* defensive */ }
+  }
   return {
     beingId: identity.beingId,
     name:    identity.name,
+    position,
+    coord,
     authorizedHere,
     writeAllowed,
   };

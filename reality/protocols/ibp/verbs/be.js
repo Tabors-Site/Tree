@@ -62,7 +62,7 @@ import { IBP_EVENT, buildTransportActReply } from "../events.js";
 let _cherubBeingIdCache = null;
 async function getCherubBeingId() {
   if (_cherubBeingIdCache) return _cherubBeingIdCache;
-  const row = await Being.findOne({ name: "cherub", operatingMode: "scripted" })
+  const row = await Being.findOne({ name: "cherub" })
     .select("_id homeSpace")
     .lean();
   if (!row?._id) {

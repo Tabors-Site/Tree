@@ -8,11 +8,11 @@
 // no parent); a thread is just that whole chain looked at as one
 // thing. Promoting it to addressable substrate means:
 //
-//   - SEE can return it. `see("<reality>/.threads/<id>")` returns the
-//     thread's descriptor; `see("<reality>/.threads")` returns the
+//   - SEE can return it. `see("<reality>/./threads/<id>")` returns the
+//     thread's descriptor; `see("<reality>/./threads")` returns the
 //     live forest. Coordination becomes inspectable.
 //
-//   - SUMMON can cut it. `summon` with target = `.threads/<id>`
+//   - SUMMON can cut it. `summon` with target = `./threads/<id>`
 //     severs the thread: the seed cut handler walks every pending
 //     inbox entry under that rootCorrelation and marks it severed,
 //     and (when priority demands) interrupts whatever is running
@@ -114,25 +114,32 @@ export async function isAncestorSevered(rootCorrelation, visited = new Set()) {
 // Address recognition
 // ─────────────────────────────────────────────────────────────────
 
-const THREADS_SEGMENT = ".threads";
+const THREADS_SEGMENT = "threads";
+const HEAVEN_SEGMENT = ".";
 
 /**
  * Does a path string name a thread address?
  *
- *   "/.threads/<id>"  → true
- *   "/.threads"       → false (the listing space, not a single thread)
+ *   "/./threads/<id>"  → true     (canonical: heaven / threads / id)
+ *   "/threads/<id>"    → true     (shorthand without heaven prefix, accepted)
+ *   "/./threads"       → false    (the listing space, not a single thread)
+ *   "/threads"         → false    (shorthand listing, not a single thread)
  *
  * The path passed in is the position part of an address (already
  * stripped of @being qualifier). Both leaf-only and full-chain
- * forms are accepted.
+ * forms are accepted, with or without the heaven "/." prefix.
  *
  * @param {string} path
  * @returns {string|null} the rootCorrelation if matched, else null
  */
 export function threadIdFromPath(path) {
   if (typeof path !== "string" || !path) return null;
-  // Accept either /.threads/<id> or .threads/<id>.
-  const trimmed = path.replace(/^\/+/, "");
+  let trimmed = path.replace(/^\/+/, "");
+  // Strip an optional leading heaven segment so callers can pass
+  // either the heaven-prefixed form or the bare leaf form.
+  if (trimmed.startsWith(HEAVEN_SEGMENT + "/")) {
+    trimmed = trimmed.slice(HEAVEN_SEGMENT.length + 1);
+  }
   if (!trimmed.startsWith(THREADS_SEGMENT + "/")) return null;
   const tail = trimmed.slice(THREADS_SEGMENT.length + 1);
   // The rootCorrelation is the next segment. Reject empty or further
@@ -142,9 +149,9 @@ export function threadIdFromPath(path) {
 }
 
 /**
- * The space _id of the .threads place seed space on this reality. Cached
+ * The space _id of the threads place seed space on this reality. Cached
  * after first lookup. Used by the resolver to return a stance whose
- * spaceId points at .threads even though the thread itself has no
+ * spaceId points at threads even though the thread itself has no
  * persistent space row.
  */
 let _threadsSpaceIdCache = null;

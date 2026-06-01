@@ -96,10 +96,26 @@ const REALITY_ROOT_DEFAULT_PERMISSIONS = Object.freeze({
   // (e.g., "my ruler role may create sub-rulers in its tree")
   // through provides.defaultPermissions in their manifest.
   be: {
-    register:       { requires: {} },
-    claim:          { requires: {} },
-    release:        { requires: { arrival: false } },
-    switch:         { requires: { arrival: false } },
+    // The three canonical BE ops. `homeOnThisReality: true` admits
+    // ARRIVAL_PROPS (which sets it true) AND every local being, so
+    // both unauthenticated callers (cherub flows) and authenticated
+    // ones (birther / inhabit) pass the auth layer. Identity-flow
+    // specifics are enforced at the handler:
+    //   - cherub.birth / cherub.connect: arrival mints a fresh
+    //     identity / binds credentials.
+    //   - birther.birth: handler rejects unauthenticated callers
+    //     (must already BE someone to mint a child).
+    //   - inhabit-connect: handler enforces ancestor-relation auth.
+    //   - release on bound session: handler is a no-op for arrival.
+    //
+    // `requires: {}` would be the cleanest expression but Mongoose
+    // Mixed strips empty nested objects on save (the same quirk the
+    // SEE rule above documents), wiping the rule entirely. The
+    // condition has to carry SOMETHING; homeOnThisReality is the
+    // permissive option ARRIVAL_PROPS already satisfies.
+    birth:    { requires: { homeOnThisReality: true } },
+    connect:  { requires: { homeOnThisReality: true } },
+    release:  { requires: { homeOnThisReality: true } },
     // create-being: any authenticated being can summon a being forth.
     // The privilege boundary lives DOWNSTREAM — the new being must
     // be parented under a space the actor can write to (their home,
@@ -129,6 +145,36 @@ const REALITY_ROOT_DEFAULT_PERMISSIONS = Object.freeze({
     "set-reality-llm": { requires: { arrival: false } },
     "set-space-llm":   { requires: { arrival: false } },
   },
+});
+
+// ─────────────────────────────────────────────────────────────────────
+// Heaven space defaults. Heaven is the I-Am's room and parents every
+// Tier-3 seed space (identity, config, tools, roles, operations,
+// extensions, source, peers, threads). It's not a public place.
+//
+// `requires: { reigning: true }` admits the I-Am, every seed delegate
+// (cherub, llm-assigner, reality-manager, arrival . parented directly
+// under the I-Am by construction), and the rootOperator (first human,
+// planted with parentBeingId = I_AM at cherub.register). Any later
+// operator-designated reigning being joins the same way: parent them
+// under the I-Am and they reign. Beings of the land lacking reigning
+// stance see the door in their place-root descriptor but SEE on
+// "<reality>/." returns DENIED.
+//
+// Operators can tighten this per their setup by writing explicit
+// `qualities.permissions.see.<keyParts>` on heaven (or on individual
+// Tier-3 spaces). The closer rule wins on the ancestor walk.
+//
+// BE intentionally omitted: heaven is not a sign-up destination. The
+// nearest applicable BE rule comes from the place root (register and
+// claim from arrival, the rest from authenticated stances), reached
+// via the ancestor walk when no rule matches at heaven itself.
+// ─────────────────────────────────────────────────────────────────────
+
+const HEAVEN_DEFAULT_PERMISSIONS = Object.freeze({
+  see:    { "*": { requires: { reigning: true } } },
+  do:     { "*": { requires: { reigning: true } } },
+  summon: { "*": { requires: { reigning: true } } },
 });
 
 // ─────────────────────────────────────────────────────────────────────
@@ -316,13 +362,13 @@ function buildKeyParts(args) {
       return [args.action];
     }
     case "summon": {
-      // Thread target: SUMMON `.threads/<id>` is a cut. The keyParts
-      // route to `summon:.threads:*` so operators can pin a stricter
+      // Thread target: SUMMON `./threads/<id>` is a cut. The keyParts
+      // route to `summon:threads:*` so operators can pin a stricter
       // rule at the place root if they want; the cut handler in
       // place/space/threads.js does its own participation check
       // (you must be in the rootCorrelation chain to sever it).
       if (args.target?.kind === "thread") {
-        return [".threads", String(args.target.id || "*")];
+        return ["threads", String(args.target.id || "*")];
       }
       const qualifier = args.target?.being || args.target?.name;
       if (!qualifier) return null;
@@ -566,19 +612,24 @@ export async function seedDefaultStancePermissions(summonCtx) {
   if (!spaceRootId)
     return { seeded: false, reason: "place root not initialized" };
 
+  const { doVerb } = await import("./verbs/do.js");
+
+  const seededFields = [];
+
+  // ── Place root defaults ──
   const root = await Space.findById(spaceRootId).select("qualities").lean();
   const quals = root?.qualities;
   const permsRoot =
     quals instanceof Map ? quals.get("permissions") : quals?.permissions;
 
-  const updates = {};
+  const rootUpdates = {};
 
   // Seed each verb's bucket only if it isn't already populated. We do
   // not overwrite operator customizations.
   for (const [verb, bucket] of Object.entries(REALITY_ROOT_DEFAULT_PERMISSIONS)) {
     const existingVerb = permsRoot?.[verb];
     if (existingVerb && Object.keys(existingVerb).length > 0) continue;
-    updates[`qualities.permissions.${verb}`] = bucket;
+    rootUpdates[`qualities.permissions.${verb}`] = bucket;
   }
 
   // Place-level BE config flags (birth/connect toggles for operators
@@ -586,30 +637,55 @@ export async function seedDefaultStancePermissions(summonCtx) {
   const auth = quals instanceof Map ? quals.get("auth") : quals?.auth;
   const hasAuth = auth instanceof Map ? auth.size > 0 : !!auth;
   if (!hasAuth) {
-    updates["qualities.auth"] = { birth_enabled: true, connect_enabled: true };
+    rootUpdates["qualities.auth"] = { birth_enabled: true, connect_enabled: true };
   }
 
-  if (Object.keys(updates).length === 0) {
-    return { seeded: false, reason: "defaults already present" };
-  }
-
-  // One fact per namespace key. Place-root seeding runs during boot
-  // before any being exists (this is the call site that creates the
-  // bootstrap permissions seedDefaultStancePermissions checks for the
-  // very next boot), so scaffold:true attributes the facts to I_AM
-  // and bypasses the per-being identity gate. The verb dispatcher
-  // tolerates this on the right-stance bootstrap path.
-  const { doVerb } = await import("./verbs/do.js");
-  const target = { kind: "space", id: spaceRootId };
-  for (const [field, value] of Object.entries(updates)) {
+  for (const [field, value] of Object.entries(rootUpdates)) {
     await doVerb(
-      target,
+      { kind: "space", id: spaceRootId },
       "set-space",
       { field, value, merge: false },
       { scaffold: true, summonCtx },
     );
+    seededFields.push(`spaceRoot.${field}`);
   }
-  return { seeded: true, fields: Object.keys(updates) };
+
+  // ── Heaven defaults ──
+  // Heaven is the I-Am's room. Owner-only by default. Beings of the
+  // land see the door (heaven shows up in the place-root children
+  // listing) but SEE on "<reality>/." denies. Tier-3 seed spaces under
+  // heaven inherit this through the ancestor walk.
+  const { SEED_SPACE } = await import("../materials/space/seedSpaces.js");
+  const heaven = await Space.findOne({ seedSpace: SEED_SPACE.HEAVEN })
+    .select("_id qualities")
+    .lean();
+  if (heaven) {
+    const heavenQuals = heaven.qualities;
+    const heavenPerms =
+      heavenQuals instanceof Map
+        ? heavenQuals.get("permissions")
+        : heavenQuals?.permissions;
+    const heavenUpdates = {};
+    for (const [verb, bucket] of Object.entries(HEAVEN_DEFAULT_PERMISSIONS)) {
+      const existingVerb = heavenPerms?.[verb];
+      if (existingVerb && Object.keys(existingVerb).length > 0) continue;
+      heavenUpdates[`qualities.permissions.${verb}`] = bucket;
+    }
+    for (const [field, value] of Object.entries(heavenUpdates)) {
+      await doVerb(
+        { kind: "space", id: String(heaven._id) },
+        "set-space",
+        { field, value, merge: false },
+        { scaffold: true, summonCtx },
+      );
+      seededFields.push(`heaven.${field}`);
+    }
+  }
+
+  if (seededFields.length === 0) {
+    return { seeded: false, reason: "defaults already present" };
+  }
+  return { seeded: true, fields: seededFields };
 }
 
 /**

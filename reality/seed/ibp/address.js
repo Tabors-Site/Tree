@@ -410,7 +410,7 @@ export function isValidReality(place) {
 // `<extension>:<action>` for registered ops (`harmony:place-being`),
 // `<extension>:<role>` for role templates (`harmony:dancer-llm`) — are
 // addressable through their sync'd seed-space children under
-// `<reality>/.operations/<op>` / `.roles/<role>` etc. Cannot lead a
+// `<reality>/./operations/<op>` / `./roles/<role>` etc. Cannot lead a
 // segment (must start with alphanumeric/underscore/tilde, optionally
 // dot-prefixed for system segments).
 const SEGMENT_RE = /^\.?[a-z0-9_~][a-z0-9_.:-]*$/i;
@@ -429,6 +429,10 @@ export function isValidPath(path) {
       // @qualifier names the being, not a path segment).
       continue;
     }
+    // The heaven space is named ".". A bare-"." segment is the door
+    // into the I-Am's room; all Tier-3 seed spaces live one step
+    // deeper at "/./config", "/./tools", etc.
+    if (seg === ".") continue;
     if (!SEGMENT_RE.test(seg)) {
       return false;
     }

@@ -17,7 +17,7 @@
 //   3. `treeos summon <space>@hello-<id>` greets you.
 //
 // Today the role is "scripted" (code-cognition). Flipping to LLM
-// cognition is a one-line change in the seed (operatingMode: "llm"
+// cognition is a one-line change in the seed (cognition: "llm"
 // + an llm connection on the being); the role's prompt already
 // describes the desired behavior. The scripted variant runs without
 // LLM credentials so the canonical hello-world can be reproduced on

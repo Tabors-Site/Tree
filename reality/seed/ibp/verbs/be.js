@@ -25,6 +25,7 @@
 //   3. Otherwise fall through to legacy per-being dispatch (llm-assigner).
 
 import log from "../../seedReality/log.js";
+import Being from "../../materials/being/being.js";
 import { emitFact } from "../../past/fact/facts.js";
 import { IbpError, IBP_ERR } from "../protocol.js";
 import { I_AM } from "../../materials/being/seedBeings.js";
@@ -91,6 +92,213 @@ export async function beVerb(operation, payload = {}, opts = {}) {
   // dispatch through it. Future seed change could license other beings
   // for these ops, but cherub is the only one today.
   const beOp = getBeOp(operation);
+
+  // ── Birther path (BE:birth on @birther). ────────────────────────
+  // Cherub serves unauthenticated arrival: someone with no identity
+  // calls BE:birth on @cherub to register a fresh being on this
+  // reality (parent = cherub or I-Am for the first registrant).
+  //
+  // Birther serves authenticated callers: an existing being calls
+  // BE:birth on @birther to mint a CHILD. The new being's being-tree
+  // parent is the caller, not birther. Same BE op, different target,
+  // different parent semantics. See seed/present/roles/birther/role.js.
+  if (operation === "birth" && beingName === "birther") {
+    assertVerbCaller("be", opts);
+    if (!identity?.beingId) {
+      throw new IbpError(IBP_ERR.UNAUTHORIZED, "BE:birth via @birther requires an authenticated caller");
+    }
+    const authConfig = await getAuthConfig();
+    if (!authConfig.birth_enabled) {
+      throw new IbpError(IBP_ERR.FORBIDDEN, "Birth is disabled on this reality");
+    }
+    // Auth gate (the standard rule is be:create-being via the place-
+    // root default, which admits all authenticated callers; per-position
+    // rules can tighten).
+    const decision = await authorize({
+      identity,
+      verb: "be",
+      target: { kind: addressKind, value: address },
+      operation,
+      summonCtx,
+    });
+    if (!decision.ok) {
+      throw new IbpError(
+        IBP_ERR.FORBIDDEN,
+        `BE:birth denied for stance "${decision.stance}": ${decision.reason}`,
+        { stance: decision.stance },
+      );
+    }
+
+    // Mint the child. Spec carries the caller-supplied name + optional
+    // cognition/role/password; parentBeingId is the caller's beingId.
+    //
+    // Home policy: the child's homeSpace defaults to the CALLER's
+    // homeSpace (move-in, no new space minted). Operators can move the
+    // child later via set-being:homeSpace once a per-being-settings UI
+    // lands. Override at mint-time via payload.homeSpace (existing
+    // space) or payload.homeParent (mint a new sub-space).
+    const childName = payload?.name;
+    const childCognition = payload?.cognition || "llm";  // substrate default
+    const childPassword  = payload?.password || null;
+    const childRoleField = payload?.role || null;
+    const childRolesArr  = Array.isArray(payload?.roles) ? payload.roles : null;
+    if (!childName || typeof childName !== "string") {
+      throw new IbpError(IBP_ERR.INVALID_INPUT, "BE:birth requires payload.name");
+    }
+
+    let childHomeSpace  = payload?.homeSpace  || null;
+    let childHomeParent = payload?.homeParent || null;
+    if (!childHomeSpace && !childHomeParent) {
+      // Default: move the child into the caller's home. No new space.
+      const callerRow = await Being.findById(identity.beingId)
+        .select("homeSpace")
+        .lean();
+      childHomeSpace = callerRow?.homeSpace ? String(callerRow.homeSpace) : null;
+    }
+    if (!childHomeSpace && !childHomeParent) {
+      throw new IbpError(
+        IBP_ERR.INVALID_INPUT,
+        "BE:birth requires a homeSpace or homeParent (caller has no homeSpace to inherit)",
+      );
+    }
+
+    const { summonCreateBeing } = await import("./summon.js");
+    const childSpec = {
+      name:          childName,
+      cognition:     childCognition,
+      password:      childPassword,
+      parentBeingId: String(identity.beingId),
+    };
+    if (childHomeSpace)  childSpec.homeSpace  = childHomeSpace;
+    if (childHomeParent) childSpec.homeParent = childHomeParent;
+    if (childRoleField) childSpec.role = childRoleField;
+    if (childRolesArr)  childSpec.roles = childRolesArr;
+
+    const result = await summonCreateBeing({
+      spec: childSpec,
+      identity,
+      summonCtx,
+      scaffold: opts.scaffold === true,
+    });
+    // writeBeFact: audit a self-stamp on the caller's reel ("I gave
+    // birth to X") in addition to the be:register the child stamps.
+    await writeBeFact({
+      operation,
+      identity,
+      authResult: { beingAddress: address, beingId: result.beingId, name: result.name },
+      payload:    { name: childName },
+      beingName,
+      actId:      summonCtx?.actId || null,
+      summonCtx,
+      scaffold:   opts.scaffold === true,
+    });
+    return {
+      beingId:      result.beingId,
+      name:         result.name,
+      beingAddress: `${getRealityDomain()}/@${result.name}`,
+    };
+  }
+
+  // ── Release on a non-cherub being. ──────────────────────────────
+  // The inheriter tab's pagehide fires BE:release on its own stance
+  // (e.g. `<reality>/@puppet`) to clear inhabitedBy. Cherub's release
+  // handler is a no-op (the token is a stateless JWT; the connection
+  // reducer derives qualities.connection.inhabitedBy from the fact
+  // stream). We route this through cherub's release handler so the
+  // writeBeFact below stamps a be:release fact on the target's reel
+  // and the connection-tracking reducer clears the inhabitedBy
+  // projection. Without this branch the call fell through to the
+  // legacy beRegistry lookup and threw "no handler for @<name>".
+  if (operation === "release" && beingName !== "cherub") {
+    assertVerbCaller("be", opts);
+    if (!identity?.beingId) {
+      throw new IbpError(IBP_ERR.UNAUTHORIZED, "release requires an authenticated caller");
+    }
+    const decision = await authorize({
+      identity,
+      verb: "be",
+      target: { kind: addressKind, value: address },
+      operation,
+      summonCtx,
+    });
+    if (!decision.ok) {
+      throw new IbpError(
+        IBP_ERR.FORBIDDEN,
+        `BE:release denied for stance "${decision.stance}": ${decision.reason}`,
+        { stance: decision.stance },
+      );
+    }
+    const cherubReleaseOp = getBeOp("release");
+    const result = cherubReleaseOp
+      ? await cherubReleaseOp.handler({ address, addressKind, payload, identity,
+          ctx: { socket, address: { kind: addressKind, value: address }, identity, req, summonCtx },
+          summonCtx })
+      : { released: true };
+    await writeBeFact({
+      operation,
+      identity,
+      authResult: result,
+      payload,
+      beingName,
+      actId: summonCtx?.actId || null,
+      summonCtx,
+      scaffold: opts.scaffold === true,
+    });
+    return result;
+  }
+
+  // ── Inhabit-connect path. ───────────────────────────────────────
+  // BE:connect on a non-cherub being. Cherub's handler implements the
+  // inhabit auth path (Mode 3: caller is authenticated AND target is
+  // a descendant on the being-tree → skip password, issue token for
+  // the target). Dispatch order: birther's birth path is checked
+  // above; here we route connect-to-any-being through cherub's handler
+  // so Mode 3 is reachable. Cherub's handler discriminates on the
+  // address (cherub vs other) and runs the right mode.
+  if (operation === "connect" && beingName !== "cherub") {
+    assertVerbCaller("be", opts);
+    const authConfig = await getAuthConfig();
+    if (!authConfig.connect_enabled) {
+      throw new IbpError(IBP_ERR.FORBIDDEN, "Connect is disabled on this reality");
+    }
+    const decision = await authorize({
+      identity,
+      verb: "be",
+      target: { kind: addressKind, value: address },
+      operation,
+      summonCtx,
+    });
+    if (!decision.ok) {
+      throw new IbpError(
+        IBP_ERR.FORBIDDEN,
+        `BE:connect denied for stance "${decision.stance}": ${decision.reason}`,
+        { stance: decision.stance },
+      );
+    }
+    const cherubConnectOp = getBeOp("connect");
+    if (!cherubConnectOp) {
+      throw new IbpError(IBP_ERR.INTERNAL, "connect op not registered");
+    }
+    const result = await cherubConnectOp.handler({
+      address,
+      addressKind,
+      payload,
+      identity,
+      ctx: { socket, address: { kind: addressKind, value: address }, identity, req, summonCtx },
+      summonCtx,
+    });
+    await writeBeFact({
+      operation,
+      identity,
+      authResult: result,
+      payload,
+      beingName,
+      actId: summonCtx?.actId || null,
+      summonCtx,
+      scaffold: opts.scaffold === true,
+    });
+    return result;
+  }
 
   if (beOp && beingName === "cherub") {
     // The op opts out of the verb-caller assertion when bootstrap is
@@ -247,14 +455,58 @@ async function writeBeFact({ operation, identity, authResult, payload, beingName
     ? { name: payload.name || null, from: payload.from || null }
     : null;
 
+  // Target selection. Connect/release need to land on the TARGET being's
+  // reel so the connection-tracking reducer in being/reducer.js sees them
+  // and maintains qualities.connection.inhabitedBy as a projection.
+  //
+  //   connect: target = the being being connected to (authResult.beingId
+  //            for cherub credential / inherit paths; identity.beingId
+  //            for re-claim where the user re-asserts their own session).
+  //   release: target = the being being released (identity.beingId — the
+  //            caller IS the one releasing their own connection).
+  //   birth / other: keep the legacy shape (stance for new identities,
+  //            actor's being otherwise; these don't drive connection state).
+  let target;
+  let connectionParams = null;
+  if (operation === "connect") {
+    const targetBeingId = authResult?.beingId || identity?.beingId || null;
+    if (targetBeingId) {
+      target = { kind: "being", id: String(targetBeingId) };
+      // inhabitedBy = the identity now driving this being. For
+      // credential-connect (cherub binding fresh auth), this is the
+      // being itself (self-connect). For inherit-connect, this is the
+      // caller (parent driving child).
+      const driverId = identity?.beingId
+        ? String(identity.beingId)
+        : String(targetBeingId);
+      connectionParams = { inhabitedBy: driverId };
+    } else {
+      target = authResult?.beingAddress
+        ? { kind: "stance", id: String(authResult.beingAddress) }
+        : { kind: "being",  id: String(actorBeingId) };
+    }
+  } else if (operation === "release") {
+    // The caller is releasing themselves. Target = caller's being so
+    // the fact lands on that being's reel and clears inhabitedBy.
+    const targetBeingId = identity?.beingId || actorBeingId;
+    target = { kind: "being", id: String(targetBeingId) };
+    connectionParams = { inhabitedBy: null };
+  } else {
+    target = authResult?.beingAddress
+      ? { kind: "stance", id: String(authResult.beingAddress) }
+      : { kind: "being",  id: String(actorBeingId) };
+  }
+
+  const mergedParams = connectionParams
+    ? { ...(safeParams || {}), ...connectionParams }
+    : safeParams;
+
   await emitFact({
     verb:    "be",
     action:  operation,
     beingId: actorBeingId,
-    target:  authResult?.beingAddress
-      ? { kind: "stance", id: String(authResult.beingAddress) }
-      : { kind: "being",  id: String(actorBeingId) },
-    params:  safeParams,
+    target,
+    params:  mergedParams,
     result:  safeResult,
     actId,
   }, summonCtx);

@@ -26,14 +26,14 @@ export const realityManagerRole = Object.freeze({
   triggerOn:   ["message"],
 
   canSee: [
-    ".identity",
-    ".config",
-    ".peers",
-    ".extensions",
-    ".tools",
-    ".roles",
-    ".operations",
-    ".source",
+    "./identity",
+    "./config",
+    "./peers",
+    "./extensions",
+    "./tools",
+    "./roles",
+    "./operations",
+    "./source",
   ],
 
   canDo: [

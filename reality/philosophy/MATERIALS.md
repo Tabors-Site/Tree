@@ -134,7 +134,7 @@ Space holds matter; matter qualifies space; the union becomes a being when it ac
 
 The architecture carries the extra fields that go beyond the tree shape:
 
-- **Space** carries `qualities` (the of-what-sort answers for this position, see below), `contributors[]` and `rootOwner` (whose authority lives here), and `seedSpace` (set only on the nine place seed spaces).
+- **Space** carries `qualities` (the of-what-sort answers for this position, see below), `contributors[]` and `rootOwner` (whose authority lives here), and `seedSpace` (set only on the seed-planted spaces: heaven plus the nine Tier-3 rooms below it).
 - **Matter** has an `origin` naming where the underlying content actually lives (`ibp`, `filesystem`, `web`, `cross-place`) and a `content` payload shaped by that origin. The `origin` field is how the world bridges to other realms.
 - **Being** has `name`, `roles[]`, `operatingMode` (`human` | `llm` | `script` | `mixed`), `homeSpace` (where it lives by default), `currentSpace` (where it stands right now), `defaultRole`, and `llmDefault`. Beings act through the four verbs (SEE, DO, SUMMON, BE) and every act they emit attributes back to them.
 
@@ -149,8 +149,8 @@ The architecture carries the extra fields that go beyond the tree shape:
 
 Two siblings at the root:
 
-- **`manifest.js`**: makes the I-Am's runtime collections (tools, roles, operations) manifest as Space children under `.tools`, `.roles`, `.operations` so SEE can introspect them through the standard pipeline. It writes Space rows, so it belongs here alongside the world it shapes.
-- **`space/threads.js`**: the `.threads` projection and the seed cut handler. A thread is a live tree of coordinated SUMMONs sharing one `rootCorrelation`. Made addressable at `<place>/.threads/<id>` so SEE returns its descriptor (participants, depth, state) and SUMMON severs it. Pure derived view: no new persistence; the descriptor is computed from Summon + inbox rows. Same verb, same envelope; the address tells the seed whether the operation is a call (to a being) or a cut (of a line). A cut is just SUMMONing the line itself.
+- **`manifest.js`**: makes the I-Am's runtime collections (tools, roles, operations) manifest as Space children under `./tools`, `./roles`, `./operations` (Tier-3 spaces beneath heaven) so SEE can introspect them through the standard pipeline. It writes Space rows, so it belongs here alongside the world it shapes.
+- **`space/threads.js`**: the `./threads` projection and the seed cut handler. A thread is a live tree of coordinated SUMMONs sharing one `rootCorrelation`. Made addressable at `<place>/./threads/<id>` so SEE returns its descriptor (participants, depth, state) and SUMMON severs it. Pure derived view: no new persistence; the descriptor is computed from Summon + inbox rows. Same verb, same envelope; the address tells the seed whether the operation is a call (to a being) or a cut (of a line). A cut is just SUMMONing the line itself.
 
 The schemas for all six primitives (the three above plus Fact, Summon, LlmConnection) live at `seed/models/` so they sit in one place. The operations on the three world-shape primitives live here.
 

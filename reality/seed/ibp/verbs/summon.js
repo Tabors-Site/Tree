@@ -14,7 +14,7 @@
 //
 //   summonVerb         — public, parses the stance, resolves the
 //                        being, dispatches. Two short-circuits before
-//                        the normal flow: `<reality>/.threads/<id>`
+//                        the normal flow: `<reality>/./threads/<id>`
 //                        routes to cutThread; an unresolved
 //                        @qualifier with a `create-being` content
 //                        routes to summonCreateBeing (call-forth).
@@ -289,13 +289,19 @@ export async function summonVerb(stance, message, opts = {}) {
  *   }
  */
 export async function summonCreateBeing({ spec, identity, summonCtx = null, scaffold = false }) {
-  if (!spec || !spec.name || !spec.operatingMode) {
+  if (!spec || !spec.name) {
     throw new IbpError(
       IBP_ERR.INVALID_INPUT,
-      "summonCreateBeing requires spec.{name, operatingMode}",
+      "summonCreateBeing requires spec.name",
       { spec },
     );
   }
+  // Cognition is optional; defaults to "llm" inside createBeingWithHome
+  // (substrate default). Callers that need a non-default kind pass
+  // spec.cognition explicitly: cherub's human registration passes "human",
+  // seed delegates pass "scripted" or "llm" per the delegate, harmony's
+  // dancers pass "llm" or "scripted" per the role spec.
+  const cognition = spec.cognition || "llm";
   // Identity is durable; roles compose. A non-human being must come
   // into the world wearing at least one role. The spec may name it
   // singular (`role: "x"`, the legacy shape AI callers still use) or
@@ -304,10 +310,10 @@ export async function summonCreateBeing({ spec, identity, summonCtx = null, scaf
   // gate accepts whatever the downstream `createBeingWithHome` will.
   const firstRole = spec.role
     || (Array.isArray(spec.roles) && spec.roles.length > 0 ? spec.roles[0] : null);
-  if (spec.operatingMode !== "human" && !firstRole) {
+  if (cognition !== "human" && !firstRole) {
     throw new IbpError(
       IBP_ERR.INVALID_INPUT,
-      "summonCreateBeing: non-human spec requires role (singular `role` or non-empty `roles[]`)",
+      "summonCreateBeing: non-human-cognition spec requires role (singular `role` or non-empty `roles[]`)",
       { spec },
     );
   }
@@ -394,10 +400,11 @@ export async function summonCreateBeing({ spec, identity, summonCtx = null, scaf
       createdBeingId: String(being._id),
       name:           being.name,
       // Resolved first-role matches the validation gate above. A spec
-      // that passed validation has a real role here (or is human, in
-      // which case both fields are null and that's intentional).
+      // that passed validation has a real role here (or is human-
+      // cognition, in which case both fields are null and that's
+      // intentional).
       role:           firstRole,
-      operatingMode:  spec.operatingMode || null,
+      cognition:      cognition,
       homeSpace:      spec.homeSpace || null,
     },
     actId: factStampId,

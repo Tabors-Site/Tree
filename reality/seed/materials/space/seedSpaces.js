@@ -11,7 +11,7 @@
 //     layer beneath beings, not a void. The runtime is a being.
 //
 //  2. I_AM has no role, because it precedes roles. It is the being
-//     that plants .roles. Its identity is the bare primordial
+//     that plants ./roles. Its identity is the bare primordial
 //     assertion: I AM. Every other being is "(being) a (role) doing
 //     X"; I_AM is simply I_AM. That assertion is its first BE.
 //
@@ -31,14 +31,14 @@
 //
 //  5. Two kinds of space. Normal space is made by beings, where
 //     beings live, addressable by stance, governed by auth. Place
-//     seed space is made by I_AM at boot: the fixed
-//     (.identity, .config, .peers, .extensions, .tools,
-//     .roles, .operations, .source, .threads). These are I_AM's own
-//     working memory, surfaced as spaces so SEE reads them through
-//     the same protocol as everything else.
+//     seed space is made by I_AM at boot: the fixed nine
+//     (identity, config, peers, extensions, tools, roles, operations,
+//     source, threads) living inside heaven ("."). These are I_AM's
+//     own working memory, surfaced as spaces so SEE reads them
+//     through the same protocol as everything else.
 //
 //  6. Genesis is an ordered sequence. Server starts → I_AM exists
-//     → it plants the place root → it plants .identity and
+//     → it plants the place root → it plants ./identity and
 //     registers its own being-record → genesis Facts attribute to it
 //     → it plants the rest of the nine → it plants the first place
 //     beings. Planting a being is two acts: I_AM's DO scaffolds the
@@ -59,7 +59,7 @@
 //     written never, except by I_AM's own ops.
 //
 //  9. Authority flows outward and never loops back. Extensions
-//     exist only because I_AM planted .extensions. Nothing an
+//     exist only because I_AM planted ./extensions. Nothing an
 //     extension does can gate I_AM's genesis. The trust chain is
 //     beings all the way down; its root is a being, not a void.
 //
@@ -75,33 +75,56 @@
 // SEED SPACES
 // ============================================================================
 //
-// Kinds of Space the seed plants and owns. Every seed-space is dot-
-// prefixed (.identity, .config, .peers, .extensions, .tools, .roles,
-// .operations, .source, .threads) and reserved by the seed. They sit
-// directly under the place root and are the substrate the seed plants
-// at first boot. The Space schema field `seedSpace` carries one of
-// these values; beings' own spaces have `seedSpace: null`.
+// Kinds of Space the seed plants and owns. Two tiers.
+//
+// Tier 1 . the place root itself (SPACE_ROOT). The reality's outermost
+// space; the place every being and every tree hangs off.
+//
+// Tier 2 . the heaven space (HEAVEN), named ".", parented directly
+// under the place root. This is the I-Am's home . the room where the
+// runtime stands and from which it dispatches genesis. All other seed
+// spaces hang under HEAVEN, not under SPACE_ROOT, so the place root
+// stays clear for beings' own trees while the I-Am's working memory
+// gathers into one heaven-room. Beings of the land who lack reigning
+// stance see SPACE_ROOT with the user trees on it; the heaven door is
+// there but they cannot pass through.
+//
+// Tier 3 . the inner spaces (identity, config, peers, extensions,
+// tools, roles, operations, source, threads). These are I-Am's
+// working memory, surfaced as spaces so SEE reads them through the
+// same protocol as everything else. They are children of HEAVEN,
+// addressable as `<reality>/./config`, `<reality>/./tools`, etc.
+// The leading "./" is heaven's door; the inner names carry no
+// reserved sigil because heaven is the namespace.
+//
+// The Space schema field `seedSpace` carries one of these values;
+// beings' own spaces have `seedSpace: null`.
 
 export const SEED_SPACE = Object.freeze({
   SPACE_ROOT: "space-root",
+  // The I-Am's home; the heaven space. Sits directly under SPACE_ROOT.
+  // Named "." . the bare presence-marker, "here, where I stand".
+  // Parents every Tier-3 seed space, so the I-Am's working memory
+  // gathers into one room instead of cluttering the place root.
+  HEAVEN: "heaven",
   IDENTITY: "identity",
   CONFIG: "config",
   PEERS: "peers",
   EXTENSIONS: "extensions",
   // Registry-mirror place seed spaces. Each runtime registry (tool defs,
   // role specs, DO operations) syncs its contents into a child Space
-  // here so SEE on `<reality>/.tools` (etc.) returns the current registry
+  // here so SEE on `<reality>/./tools` (etc.) returns the current registry
   // through the standard descriptor pipeline.
   TOOLS: "tools",
   ROLES: "roles",
   OPERATIONS: "operations",
-  // The .source self-tree. Seed walks its own place/ directory at boot
+  // The source self-tree. Seed walks its own place/ directory at boot
   // and plants a recursive filesystem-origin matter tree under this
-  // space, mirroring the codebase as substrate. Read-only: DO writes on
-  // .source matter reject with ORIGIN_READ_ONLY.
+  // space, mirroring the codebase as Mongo data. Read-only: DO writes
+  // on ./source matter reject with ORIGIN_READ_ONLY.
   SOURCE: "source",
-  // The .threads space. A live tree of coordinated work (a
-  // rootCorrelation chain) is addressable here as `.threads/<id>`. No
+  // The threads space. A live tree of coordinated work (a
+  // rootCorrelation chain) is addressable here as `./threads/<id>`. No
   // children are persisted; the projection is computed on demand from
   // inbox + Act records keyed by rootCorrelation. SUMMON to a
   // thread address is a cut (sever the line and everything hanging

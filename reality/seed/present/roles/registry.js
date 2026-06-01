@@ -11,6 +11,37 @@
 // moment of. The role file declares what the role uniquely IS;
 // I fill in everything derivable.
 //
+// ── COGNITION DOCTRINE (closed set, BEING level — not role level) ──
+//
+// Cognition is what a being IS (human-driven, LLM-driven, scripted),
+// not what a role IS. The same role applies regardless of who or what
+// is driving the being. A factory-worker role on an LLM-driven being
+// is the LLM doing factory work; the SAME role on the same being
+// while a human inhabits it is the human doing factory work. The
+// role doesn't change; the cognition does.
+//
+// Cognition lives on the being at `qualities.cognition.defaultKind`,
+// one of:
+//
+//   "llm"      Wake → runLlmMoment with the active role's prompt + tools.
+//   "human"    Wake → don't auto-process. The human reads the inbox in
+//              their portal and emits the act from their own transport.
+//   "scripted" Wake → call the active role's `summon(message, ctx)` if
+//              present; else SEE (no act).
+//
+// Inhabit overrides defaultKind: when `qualities.inhabit` is present
+// on the being, effective cognition for that moment is "human" — the
+// inhabiting operator drives, regardless of defaultKind. Release the
+// inhabit and effective cognition reverts to defaultKind.
+//
+// The closed-set discipline matches BE_OPS: additions to the cognition
+// vocabulary are substrate changes (scheduler / momentum / stamper
+// all branch on effective cognition), not extension hooks. "hybrid" /
+// "chain" / "conditional" patterns belong at the roleFlow layer, not
+// inside cognition.
+//
+// ── ROLES ───────────────────────────────────────────────────────────
+//
 // What the role file writes:
 //   name             - kebab-case identifier
 //   see              - preloaded resolver names (resolved into prompt at build)
@@ -18,20 +49,21 @@
 //   canDo            - DO tool names the LLM may call
 //   canSummon        - SUMMON tool names (beings the role may wake)
 //   canBe            - BE tool names (being shapes the role may create)
-//   prompt           - () => prompt body string
+//   prompt           - () => prompt body (used when effective cognition = "llm")
+//   summon           - custom dispatch (used when effective cognition = "scripted")
+//   requiredCognition - optional roleFlow guard: this clause only
+//                       applies when effective cognition matches.
+//                       One of "llm" | "human" | "scripted". Omitted
+//                       = applies to any cognition.
 //   replyTo          - optional: "asker" | "chain-initial" reply mode
 //
 // What seed derives at registration:
 //   permissions      - union of verbs implied by canSee / canDo / canSummon / canBe
 //   respondMode      - "async" by default
 //   triggerOn        - ["message"] by default
-//   summon           - auto-wrapped with defaultSummon when not provided
+//   summon           - auto-wrapped with defaultSummon when role has no
+//                      custom summon (LLM path is the default)
 //   buildSystemPrompt - auto-assembled via seed/present/buildPrompt when not provided
-//
-// Roles with custom dispatch attach their own `summon` and seed leaves
-// it alone. Roles with custom prompt assembly attach
-// `buildSystemPrompt` and the assembler is skipped. The defaults
-// cover the common case; opt-in covers the rest.
 //
 import log from "../../seedReality/log.js";
 
@@ -42,6 +74,14 @@ const REGISTRY = new Map();
 
 const VALID_PERMISSIONS = new Set(["see", "do", "summon", "be"]);
 const VALID_REPLY_MODES = new Set(["asker", "chain-initial"]);
+
+// Closed-set cognition vocabulary. Cognition lives on the being
+// (qualities.cognition.defaultKind), not on the role; the role's
+// `requiredCognition` (optional) is a roleFlow guard, not a declaration.
+// Adding a value here requires a substrate change (scheduler, momentum,
+// stamper all branch on it). See the header comment block for the
+// doctrine.
+export const VALID_COGNITION = Object.freeze(new Set(["llm", "human", "scripted"]));
 
 export function getRole(name) {
   if (!name) return null;
@@ -77,6 +117,23 @@ export function registerRole(name, def, extName = "role-registry") {
     );
   }
 
+  // requiredCognition is an optional roleFlow guard. When set, this
+  // role only applies when the being's effective cognition matches
+  // (e.g. a "human-conversationalist" role makes sense only when a
+  // human is inhabiting). The roleFlow evaluator (Step 2) honors it;
+  // unguarded clauses below in the flow then have a chance to apply.
+  // Omitted = the role applies to any cognition.
+  if (
+    def.requiredCognition !== undefined &&
+    def.requiredCognition !== null &&
+    !VALID_COGNITION.has(def.requiredCognition)
+  ) {
+    throw new Error(
+      `registerRole("${name}") invalid requiredCognition "${def.requiredCognition}"; ` +
+      `must be one of ${[...VALID_COGNITION].join("|")} or omitted.`,
+    );
+  }
+
   // Derive permissions from canSee/canDo/canSummon/canBe. Role files
   // declare what they can do; the verb permissions fall out. Authors
   // never write permissions[] directly — the registry computes it.
@@ -97,28 +154,34 @@ export function registerRole(name, def, extName = "role-registry") {
     ? def.triggerOn
     : ["message"];
 
-  // Cognition mode: scripted iff the role brought its own summon
-  // function. LLM roles let the registry wrap with defaultSummon and
-  // dispatch through runTurn + tools. Scripted roles call seed verbs
-  // directly from their own summon and never touch the tool registry.
-  // The audit reads this flag to skip canX checks for scripted roles
-  // (their canDo entries are DO op names, not tool names).
-  const cognitionMode = typeof def.summon === "function" ? "scripted" : "llm";
-
   // Build the final role spec. summon and buildSystemPrompt are wired
   // lazily because they depend on seed/present modules; importing
   // them at module top would create a load-order cycle with runTurn.
   // The lazy refs resolve at first call.
+  // Origin tag: who introduced this role. "seed" for the seed-shipped
+  // ones, "<extName>" for extension-provided, "live" for operator-
+  // authored (set-role DO op). syncRolesToSubstrate writes this into
+  // qualities.role.origin so the boot live-role loader can pick out
+  // live entries from the .roles mirror without confusing them with
+  // seed/extension auto-synced ones.
+  const origin = extName === "role-registry" ? "seed" : extName;
+
   const spec = {
     name,
     ...def,
     permissions,
     respondMode,
     triggerOn,
-    _cognitionMode: cognitionMode,
+    requiredCognition: def.requiredCognition || null,
+    origin,
   };
 
-  // Auto-wrap with defaultSummon when no custom summon is provided.
+  // Auto-wrap with defaultSummon when the role brings no custom summon.
+  // The custom summon is the SCRIPTED dispatch path; defaultSummon is
+  // the LLM dispatch path. Momentum picks which to invoke at moment-
+  // assign time based on the being's effective cognition (inhabit ?
+  // "human" : qualities.cognition.defaultKind), regardless of which
+  // path the role provides.
   if (typeof spec.summon !== "function") {
     spec.summon = makeLazyDefaultSummon(spec);
   }
@@ -126,8 +189,7 @@ export function registerRole(name, def, extName = "role-registry") {
   REGISTRY.set(name, Object.freeze(spec));
   log.verbose("Roles",
     `Registered role "${name}" (${extName}) ` +
-    `[verbs: ${permissions.join("/")}, ` +
-    `summon: ${typeof def.summon === "function" ? "custom" : "default"}]`);
+    `[verbs: ${permissions.join("/")}${spec.requiredCognition ? `, requires: ${spec.requiredCognition}` : ""}]`);
 }
 
 /**
@@ -192,7 +254,7 @@ function makeLazyDefaultSummon(role) {
 }
 
 /**
- * Sync the role registry into `<reality>/.roles` as child Spaces. One child
+ * Sync the role registry into `<reality>/./roles` as child Spaces. One child
  * per role; qualities mirror the role's surface. Called at boot end
  * after extensions register; idempotent.
  */
@@ -205,6 +267,7 @@ export async function syncRolesToSubstrate(summonCtx) {
       name,
       qualities: new Map([
         ["role", {
+          requiredCognition: role.requiredCognition || null,
           permissions: role.permissions || [],
           respondMode: role.respondMode  || null,
           triggerOn:   role.triggerOn    || [],
@@ -214,9 +277,65 @@ export async function syncRolesToSubstrate(summonCtx) {
           canBe:       role.canBe        || [],
           see:         role.see          || [],
           replyTo:     role.replyTo      || null,
+          origin:      role.origin       || "seed",
+          // Live roles carry a prompt string (seed/extension roles use
+          // a prompt function we can't serialize). Surface it when
+          // present so the .roles mirror is round-trip-able.
+          prompt:      typeof role.prompt === "string" ? role.prompt : null,
         }],
       ]),
     });
   }
   return manifestItems({ seedSpace: SEED_SPACE.ROLES, items, summonCtx });
+}
+
+/**
+ * Boot-time loader for operator-authored live roles. Walks
+ * `<reality>/./roles` for children whose qualities.role.origin === "live"
+ * and calls registerRole on each so they live in the in-memory map
+ * alongside seed and extension roles. Runs AFTER extension loading
+ * and BEFORE syncRolesToSubstrate so the round-trip preserves them.
+ *
+ * Live roles store their prompt as a string in qualities; we wrap that
+ * string into a prompt function so the registry contract holds
+ * (defaultSummon / buildPrompt call role.prompt()).
+ *
+ * @returns {Promise<{ loaded: number }>}
+ */
+export async function loadLiveRolesFromSubstrate() {
+  const { SEED_SPACE } = await import("../../materials/space/seedSpaces.js");
+  const Space = (await import("../../materials/space/space.js")).default;
+  const parent = await Space.findOne({ seedSpace: SEED_SPACE.ROLES }).select("_id").lean();
+  if (!parent) return { loaded: 0 };
+  const children = await Space.find({ parent: parent._id })
+    .select("name qualities").lean();
+  let loaded = 0;
+  for (const child of children) {
+    const quals = child.qualities;
+    const role  = quals instanceof Map ? quals.get("role") : quals?.role;
+    if (!role || role.origin !== "live") continue;
+    try {
+      const promptStr = typeof role.prompt === "string" ? role.prompt : "";
+      registerRole(child.name, {
+        description:       `Live role authored via @role-manager.`,
+        requiredCognition: role.requiredCognition || null,
+        canSee:    Array.isArray(role.canSee)    ? role.canSee    : [],
+        canDo:     Array.isArray(role.canDo)     ? role.canDo     : [],
+        canSummon: Array.isArray(role.canSummon) ? role.canSummon : [],
+        canBe:     Array.isArray(role.canBe)     ? role.canBe     : [],
+        replyTo:   role.replyTo || null,
+        // Wrap the stored string prompt as a prompt function so the
+        // role spec matches what defaultSummon / buildPrompt expect.
+        prompt:    () => promptStr,
+      }, "live");
+      loaded++;
+    } catch (err) {
+      log.warn(
+        "Roles",
+        `Failed to load live role "${child.name}": ${err.message}`,
+      );
+    }
+  }
+  log.info("Roles", `Loaded ${loaded} live role${loaded === 1 ? "" : "s"} from .roles.`);
+  return { loaded };
 }

@@ -78,7 +78,7 @@ const ThreadsProjectionSchema = new mongoose.Schema({
   updatedAt: { type: Date, default: null },
 });
 
-// SEE on `<reality>/.threads` lists live threads sorted by recency.
+// SEE on `<reality>/./threads` lists live threads sorted by recency.
 ThreadsProjectionSchema.index({ lastAct: -1 });
 // Per-participant query — "what threads is this being in?"
 ThreadsProjectionSchema.index({ participants: 1, lastAct: -1 });

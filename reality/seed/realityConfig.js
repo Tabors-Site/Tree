@@ -106,7 +106,7 @@ async function loadConfigFromDb() {
   try {
     const configSpace = await Space.findOne({ seedSpace: SEED_SPACE.CONFIG }).lean();
     if (!configSpace || !configSpace.qualities) {
-      log.warn("Reality", "No .config seed space found or qualities is empty. Using empty config.");
+      log.warn("Reality", "No config seed space found or qualities is empty. Using empty config.");
       configCache = {};
       return;
     }
@@ -182,7 +182,7 @@ export async function setRealityConfigValue(key, value, { internal, identity, su
 
   const configSpace = await getConfigSpace();
   if (!configSpace) {
-    throw new Error("Config write failed: .config seed space not found. Reality may need repair.");
+    throw new Error("Config write failed: config seed space not found at <reality>/./config. Reality may need repair.");
   }
 
   // Route through do.set-space so the write IS a Fact on the .config
@@ -219,7 +219,7 @@ export async function deleteRealityConfigValue(key, { internal, identity, summon
 
   const configSpace = await getConfigSpace();
   if (!configSpace) {
-    throw new Error("Config delete failed: .config seed space not found.");
+    throw new Error("Config delete failed: config seed space not found at <reality>/./config.");
   }
 
   const { doVerb } = await import("./ibp/verbs/do.js");
@@ -326,7 +326,7 @@ export async function reloadRealityConfig() {
 // DO operations: set-config / delete-config
 // ─────────────────────────────────────────────────────────────────────
 //
-// Reads route through `ibp:see` on `<reality>/.config` (returns the
+// Reads route through `ibp:see` on `<reality>/./config` (returns the
 // cached snapshot); writes route through the two ops below which wrap
 // setRealityConfigValue / deleteRealityConfigValue. The wrappers
 // handle cache invalidation, validation, and the PROTECTED_KEYS gate

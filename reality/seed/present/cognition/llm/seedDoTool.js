@@ -22,8 +22,8 @@
 // schema does it at the op-handler level, not by adding a separate
 // LLM tool.
 //
-// Address shorthand. A leading "." resolves against the reality root
-// ('.config' → '<reality>/.config').
+// Address shorthand. A leading "." names a heaven child
+// ('.config' → '<reality>/./config').
 
 import { z } from "zod";
 import { doVerb } from "../../../ibp/verbs/do.js";
@@ -34,7 +34,7 @@ export const seedDoTool = {
   name: "do",
   description:
     "Invoke a registered DO operation against a target. The action is the " +
-    "operation name as registered (use see on <reality>/.operations to " +
+    "operation name as registered (use see on <reality>/./operations to " +
     "discover available actions and their expected args). Target defaults " +
     "to the reality root when not specified; pass an explicit target for " +
     "ops that act on a different position, being, or matter. Authorization " +
@@ -51,7 +51,7 @@ export const seedDoTool = {
         "reality root for ops that operate at the root.",
     ),
     args: z.record(z.any()).optional().describe(
-      "Operation-specific args. See <reality>/.operations for each op's expected shape.",
+      "Operation-specific args. See <reality>/./operations for each op's expected shape.",
     ),
     beingId: z.string().describe("Injected by server. Ignore."),
     name: z.string().optional().describe("Injected by server. Ignore."),
@@ -122,8 +122,13 @@ async function resolveTarget(target, callCtx) {
     return { kind: target.kind, id: String(target.id) };
   }
   if (typeof target === "string" && target.length > 0) {
-    if (target.startsWith(".")) {
-      return `${getRealityDomain()}/${target}`;
+    // Leading "." shorthand routes through heaven. ".config" becomes
+    // "<reality>/./config"; "." alone is heaven itself.
+    if (target === ".") {
+      return `${getRealityDomain()}/.`;
+    }
+    if (target.startsWith(".") && !target.startsWith("./")) {
+      return `${getRealityDomain()}/./${target.slice(1)}`;
     }
     return target;
   }

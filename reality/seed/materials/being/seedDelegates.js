@@ -54,32 +54,63 @@ import { summonCreateBeing } from "../../ibp/verbs/summon.js";
 import { findIAm, iAmIdentity } from "./identity.js";
 import { I_AM } from "./seedBeings.js";
 
+// `invocableBy` is a display label the portal shows next to the
+// delegate ("who is this for?"). It is NOT the auth gate . that's
+// stance authorization downstream. The only behavior the descriptor
+// derives from this field today is `available`: "anyone" maps to
+// authorizedHere (the caller can SEE here at all), every other value
+// maps to writeAllowed (the caller can write here). The label values
+// stay informational: "anyone" means even arrival, "authenticated"
+// means any local being, "owner" reads as "this is the root
+// operator's tool" even though the gate semantics match
+// "authenticated" in this code path. Single source of truth for the
+// delegate roster; descriptor.js reads from here.
 export const SEED_DELEGATES = [
   {
     name: "arrival",
     role: "arrival",
-    operatingMode: "scripted",
+    cognition: "scripted",
+    invocableBy: "anyone",
     description:
       "Shared stance for unauthenticated visitors. SEE-only; one row, many concurrent users.",
   },
   {
     name: "cherub",
     role: "cherub",
-    operatingMode: "scripted",
+    cognition: "scripted",
+    invocableBy: "anyone",
     description:
       "Welcome character; processes BE register/claim/release/switch.",
   },
   {
+    name: "birther",
+    role: "birther",
+    cognition: "scripted",
+    invocableBy: "authenticated",
+    description:
+      "Sibling delegate to cherub. Cherub serves unauthenticated arrival (mint a fresh identity on this reality). Birther serves authenticated callers (mint a child being whose parent is you).",
+  },
+  {
+    name: "role-manager",
+    role: "role-manager",
+    cognition: "scripted",
+    invocableBy: "authenticated",
+    description:
+      "Authors and edits live-defined roles. Click @role-manager at the reality root to add or replace a role with origin:'live'. Restart picks up live changes; the in-memory registry rebuilds from .roles on boot.",
+  },
+  {
     name: "llm-assigner",
     role: "llm-assigner",
-    operatingMode: "scripted",
+    cognition: "scripted",
+    invocableBy: "authenticated",
     description:
       "Configures LLM connections — caller's being, owned nodes, or place default (root operator only for place scope).",
   },
   {
     name: "reality-manager",
     role: "reality-manager",
-    operatingMode: "llm",
+    cognition: "llm",
+    invocableBy: "owner",
     description:
       "Conversational interface for place-level administration (extensions, config, peers). Carries no authority of its own; its writes are gated by the caller's stance — root operator, or owner / contributor on the place root.",
   },
@@ -129,15 +160,55 @@ export async function ensureSeedDelegates(spaceRootId, summonCtx, opts = {}) {
   let created = 0;
   let existing = 0;
 
-  for (const spec of SEED_DELEGATES) {
+  // Resolve the space root's size for the seed-delegate circle. With
+  // a size we lay out the delegates evenly around a small ring at the
+  // center of the place root . a clean stable arrangement instead of
+  // the random-coord scatter createBeing would otherwise pick. Without
+  // a size we leave coord null and let the renderer's hash-ring
+  // fallback handle placement.
+  let circleCoord = null;
+  try {
+    const live = await Space.findById(spaceRootId).select("size").lean();
+    let size = live?.size || null;
+    if (!size && opts.summonCtx?.deltaF) {
+      const pendingCreate = opts.summonCtx.deltaF.find(
+        (f) =>
+          f?.verb === "do" &&
+          f?.action === "create-space" &&
+          f?.target?.kind === "space" &&
+          String(f?.target?.id) === String(spaceRootId),
+      );
+      size = pendingCreate?.params?.spec?.size || null;
+    }
+    if (size && Number.isFinite(size.x) && Number.isFinite(size.y) &&
+        size.x > 0 && size.y > 0) {
+      const cx = size.x / 2;
+      const cy = size.y / 2;
+      // Ring radius = quarter of the smaller dimension. Tight enough
+      // to read as a cluster, large enough that two delegates never
+      // overlap visually.
+      const r = Math.max(2, Math.min(size.x, size.y) / 4);
+      const total = SEED_DELEGATES.length;
+      circleCoord = (i) => {
+        const angle = (i / total) * Math.PI * 2;
+        return {
+          x: Math.round(cx + r * Math.cos(angle)),
+          y: Math.round(cy + r * Math.sin(angle)),
+        };
+      };
+    }
+  } catch { /* defensive: leave circleCoord null */ }
+
+  for (let i = 0; i < SEED_DELEGATES.length; i++) {
+    const spec = SEED_DELEGATES[i];
     try {
       // Look up by name (the canonical identifier per place).
       const existingBeing = await Being.findOne({ name: spec.name }).select(
-        "_id roles defaultRole homeSpace operatingMode parentBeingId",
+        "_id roles defaultRole homeSpace qualities parentBeingId",
       );
       if (existingBeing) {
-        // Idempotent drift correction: keep mode/role/home/parent in
-        // sync via do.set facts (one per field that drifted, on the
+        // Idempotent drift correction: keep cognition/role/home/parent
+        // in sync via do.set facts (one per field that drifted, on the
         // delegate's reel). The legacy `existingBeing.save()` direct
         // write retired (2026-05-23); fact-driven keeps the genesis
         // exception list short (only the spaceRoot/I_AM creation).
@@ -147,8 +218,16 @@ export async function ensureSeedDelegates(spaceRootId, summonCtx, opts = {}) {
         const setField = (field, value) =>
           doVerb(beingTarget, "set-being", { field, value }, setOpts);
 
-        if (existingBeing.operatingMode !== spec.operatingMode) {
-          await setField("operatingMode", spec.operatingMode);
+        // Cognition drift correction. The cognition kind lives at
+        // qualities.cognition.defaultKind (closed-set "llm"|"human"|
+        // "scripted"); compare and write through set-being qualities
+        // when the existing delegate has drifted from the spec.
+        const quals = existingBeing.qualities;
+        const existingCognition = quals instanceof Map
+          ? quals.get("cognition")?.defaultKind
+          : quals?.cognition?.defaultKind;
+        if (existingCognition !== spec.cognition) {
+          await setField("qualities.cognition", { defaultKind: spec.cognition });
         }
         const carried = Array.isArray(existingBeing.roles)
           ? existingBeing.roles
@@ -187,9 +266,13 @@ export async function ensureSeedDelegates(spaceRootId, summonCtx, opts = {}) {
         spec: {
           name: spec.name,
           role: spec.role,
-          operatingMode: spec.operatingMode,
+          cognition: spec.cognition,
           homeSpace: String(spaceRootId),
           parentBeingId: rootBeingId,
+          // Deterministic ring position when the place root has a
+          // size. Falls through to createBeing's random-in-bounds
+          // default when circleCoord couldn't be computed.
+          ...(circleCoord ? { coord: circleCoord(i) } : {}),
         },
         identity: iAmIdent,
         scaffold: true,

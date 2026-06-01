@@ -32,6 +32,14 @@ import { createFactDispatcher } from "./factDispatcher.js";
 
 const SESSION_KEY = "treeos-portal-3d-session";
 
+// Inheriter-tab handoff constants — declared above the `state`
+// initializer because loadSession() (called during state init below)
+// reads `_isInheriterTab`, and a `let` declared later is in the
+// temporal dead zone at that point.
+const INHABIT_HASH   = "inhabit=";
+const INHERITER_FLAG = "treeos-portal-3d-inheriter";
+let _isInheriterTab  = sessionStorage.getItem(INHERITER_FLAG) === "1";
+
 const state = {
   session: loadSession(),
   client: null,
@@ -225,9 +233,24 @@ async function connectAndPlace(session) {
     || (session.username && state.discovery?.reality
         ? `${state.discovery.reality}/@${session.username}`
         : null);
+  // The being's last-known position (server-side state) is surfaced
+  // on the descriptor's identity block. Reuse it to land the camera
+  // where the being actually IS, instead of teleporting to / on
+  // every login / reconnect. Falls back to the being's stance (home),
+  // then to / if even that fails.
+  let landingAddress = "/";
   if (beingAddress) {
     try {
-      await state.client.see(beingAddress);
+      const desc = await state.client.see(beingAddress);
+      const pos = desc?.identity?.position || null;
+      if (pos && state.discovery?.reality) {
+        // Position is a spaceId — the resolver accepts UUID paths.
+        landingAddress = `${state.discovery.reality}/${pos}`;
+      } else {
+        // No saved position yet — fall back to the being's stance
+        // address (which resolves to their home).
+        landingAddress = beingAddress;
+      }
     } catch (err) {
       if (err?.code === "UNAUTHORIZED" || err?.code === "NODE_NOT_FOUND") {
         console.warn("[3D] stored session is no longer valid; dropping it.");
@@ -238,11 +261,11 @@ async function connectAndPlace(session) {
         await connectAnonymous(placeUrl, shouldUseProxy(placeUrl));
         return;
       }
-      // Other errors (network, TIMEOUT) — let navigation surface them.
+      // Other errors (network, TIMEOUT) — fall through to landing.
     }
   }
 
-  await navigate("/");
+  await navigate(landingAddress);
   // The hotbar may have mounted before the socket reconnected (auth flow
   // disconnects + reconnects). Refresh the seed list against the new socket.
   if (state.hotbar) await refreshSeedCatalog();
@@ -605,12 +628,101 @@ function onChatBeingProximity(b, inRange) {
 // Click-to-activate dispatcher. Fires from scene.js when the player
 // clicks while gazing at a being within INTERACT_RANGE.
 function onBeingActivate(b) {
-  if (b.being === "cherub") {
+  if (b.being === "cherub" || b.being === "birther" || b.being === "role-manager") {
+    // Reality-root delegates that surface their work through the
+    // action menu's data-driven form. Cherub: register/log-in.
+    // Birther: mint child. Role-manager: create/replace a live role.
+    // All carry a `canBe` or `canDo` list; the descriptor turns each
+    // entry into an action with its args schema, and the form renders
+    // it generically.
     openActionMenu(b);
   } else if (b.being === "llm-assigner") {
     openLlmAssignerPanel();
   } else {
-    openSummonPanel(b);
+    // Any other being: the action menu now includes a synthetic
+    // "Inhabit (new tab)" entry alongside the role's actions[] and
+    // a fallback summon entry. Substrate's cherub Mode-3 enforces
+    // descendant-only auth, so non-descendants get a clean 403.
+    openBeingActionMenu(b);
+  }
+}
+
+// Action menu for non-cherub, non-self beings. Composes the role's
+// descriptor-provided actions[] PLUS two synthetic entries:
+//   - "Inhabit (new tab)" — calls BE:connect via the cherub Mode-3
+//     ancestor-relation auth path. The substrate rejects if the
+//     target isn't a descendant of the caller; on success it returns
+//     a fresh token and we open a new browser tab driving the target.
+//   - "Summon" — open the SUMMON panel for free-form chat (the prior
+//     default behavior when no actions surfaced).
+function openBeingActionMenu(b) {
+  const reality = state.discovery?.reality;
+  const path = state.descriptor?.address?.pathByNames || "/";
+  const address = `${reality}${path}@${b.being}`.replace(/\/+@/, "/@");
+  const fullBeing = state.descriptor?.beings?.find((bb) => bb.being === b.being) || b;
+  const roleActions = Array.isArray(fullBeing.actions) ? fullBeing.actions.slice() : [];
+
+  // Synthetic entries. Tagged with __synthetic so the action-form
+  // dispatch can fork; the rest of the action shape (verb/action/
+  // label/args) matches the on-the-wire form.
+  const inhabitAction = {
+    verb:        "be",
+    action:      "connect",
+    label:       "Inhabit (new tab)",
+    description: "Open a new tab driving this being. Only allowed when this being is in your lineage.",
+    args:        {},  // no inputs — auth carries via lineage
+    __synthetic: "inhabit",
+  };
+  const summonAction = {
+    verb:        "summon",
+    action:      "summon",
+    label:       "Summon",
+    description: "Open a chat with this being.",
+    args:        {},
+    __synthetic: "summon",
+  };
+
+  const composed = [...roleActions, inhabitAction, summonAction];
+  showActionMenu({ ...fullBeing, actions: composed }, {
+    onActionPicked: (action) => {
+      if (action.__synthetic === "inhabit") return doInhabit(b, address);
+      if (action.__synthetic === "summon")  { openSummonPanel(b); return; }
+      openActionForm({ ...fullBeing, actions: composed }, action, address);
+    },
+    onClose: () => {},
+  });
+}
+
+async function doInhabit(b, address) {
+  hideActionPanel();
+  setHud(`inheriting @${b.being}...`);
+  try {
+    const ack = await state.client.be("connect", address, {});
+    const token = ack?.identityToken;
+    const name  = ack?.name || b.being;
+    if (!token) {
+      setHud(`inhabit failed: no token returned`);
+      return;
+    }
+    const blob = encodeURIComponent(JSON.stringify({
+      placeUrl:        state.session?.placeUrl || defaultPlaceUrl(),
+      placeIsProxied:  shouldUseProxy(state.session?.placeUrl || defaultPlaceUrl()),
+      token,
+      username:        name,
+      beingAddress:    ack.beingAddress || `${state.discovery.reality}/@${name}`,
+      inherited:       true,
+      // Who authorized the inhabit. The new tab listens on a
+      // BroadcastChannel for the spawner's pagehide announcement;
+      // when the spawner tab closes, the inheriter releases itself
+      // (inhabit is a borrowed presence — closing the lender ends
+      // the lease).
+      spawnerName:     state.session?.username || null,
+    }));
+    const url = `${window.location.pathname}#inhabit=${blob}`;
+    window.open(url, "_blank");
+    setHud(`opened new tab for @${name}`);
+  } catch (err) {
+    setHud(`inhabit failed: ${err.code || ""} ${err.message || err}`);
   }
 }
 
@@ -621,9 +733,12 @@ function onBeingActivate(b) {
 function openActionMenu(b) {
   const reality = state.discovery?.reality;
   const path = state.descriptor?.address?.pathByNames || "/";
-  // Cherub's BE ops dispatch against the bare place address.
-  const address = b.being === "cherub"
-    ? reality
+  // Reality-root delegates address as <reality>/@<name> (bare-place
+  // stance). Other beings address against the current path.
+  const isRootDelegate =
+    b.being === "cherub" || b.being === "birther" || b.being === "role-manager";
+  const address = isRootDelegate
+    ? `${reality}/@${b.being}`
     : `${reality}${path}@${b.being}`.replace(/\/+@/, "/@");
   // The scene's mesh.userData carries a trimmed being shape (no actions).
   // Pull the full descriptor entry so the renderer sees actions[].
@@ -644,8 +759,14 @@ function openActionForm(b, action, address, { error = null } = {}) {
       try {
         if (action.verb === "be") {
           const result = await state.client.be(action.action, address, values);
-          // Apply auth-state side effects.
-          if (action.action === "birth" || action.action === "connect") {
+          // Cherub's BE flows swap the active session — birth from
+          // arrival becomes the new identity, connect with credentials
+          // becomes the bound being, release drops the binding.
+          // Self-births (clicking your own avatar to mint a child) do
+          // NOT replace your session — the child is a new being but
+          // the parent stays the parent. Branch on b.being.
+          const isCherubAuthFlow = b.being === "cherub";
+          if (isCherubAuthFlow && (action.action === "birth" || action.action === "connect")) {
             const newSession = {
               placeUrl:        state.session?.placeUrl || defaultPlaceUrl(),
               placeIsProxied:  shouldUseProxy(state.session?.placeUrl || defaultPlaceUrl()),
@@ -660,12 +781,17 @@ function openActionForm(b, action, address, { error = null } = {}) {
             await connectAndPlace(newSession);
             return;
           }
-          if (action.action === "release") {
+          if (isCherubAuthFlow && action.action === "release") {
             await logout();
             hideActionPanel();
             return;
           }
-          // switch / other: just close the panel.
+          // Self-birth (or any non-cherub BE): the moment seals, the
+          // child being row materializes, the descriptor will refresh
+          // on the next navigate. Close the panel and tell the user.
+          if (!isCherubAuthFlow && action.action === "birth") {
+            setHud(`minted @${result.name || values.name}`);
+          }
           hideActionPanel();
         } else if (action.verb === "do") {
           await state.client.do(address, action.action, values);
@@ -880,22 +1006,129 @@ async function onEnter(target) {
 // Helpers
 // ────────────────────────────────────────────────────────────────
 
-function loadSession() {
+// One-shot inhabit handoff. When the flat-app or this app opens a
+// new tab via the lineage panel's "inhabit" action, it stashes the
+// child's session blob in the URL hash as `#inhabit=<json>`. The new
+// tab consumes the hash on boot, copies into sessionStorage (per-tab,
+// not shared), clears the hash, and runs as the inheriter without
+// clobbering the parent tab's localStorage session. The constants
+// INHABIT_HASH / INHERITER_FLAG and the `_isInheriterTab` flag are
+// declared above the `state` initializer earlier in this file — they
+// must exist before loadSession runs.
+function consumeInhabitHash() {
+  const hash = location.hash.replace(/^#/, "");
+  if (!hash.startsWith(INHABIT_HASH)) return null;
+  let parsed = null;
   try {
+    const raw = decodeURIComponent(hash.slice(INHABIT_HASH.length));
+    parsed = JSON.parse(raw);
+  } catch { parsed = null; }
+  history.replaceState(null, "", location.pathname);
+  if (!parsed?.token) return null;
+  sessionStorage.setItem(INHERITER_FLAG, "1");
+  sessionStorage.setItem(SESSION_KEY, JSON.stringify(parsed));
+  _isInheriterTab = true;
+  return parsed;
+}
+
+function loadSession() {
+  const inherited = consumeInhabitHash();
+  if (inherited) return inherited;
+  try {
+    if (_isInheriterTab) {
+      const raw = sessionStorage.getItem(SESSION_KEY);
+      return raw ? JSON.parse(raw) : null;
+    }
     const raw = localStorage.getItem(SESSION_KEY);
     return raw ? JSON.parse(raw) : null;
-  } catch {
-    return null;
-  }
+  } catch { return null; }
 }
 
 function saveSession(s) {
-  localStorage.setItem(SESSION_KEY, JSON.stringify(s));
+  if (_isInheriterTab) sessionStorage.setItem(SESSION_KEY, JSON.stringify(s));
+  else                 localStorage.setItem(SESSION_KEY, JSON.stringify(s));
 }
 
 function clearSession() {
-  localStorage.removeItem(SESSION_KEY);
+  if (_isInheriterTab) sessionStorage.removeItem(SESSION_KEY);
+  else                 localStorage.removeItem(SESSION_KEY);
 }
+
+// Inheriter tabs release their connect when the tab closes. Best-
+// effort — pagehide gives ~milliseconds; the BE goes out fire-and-
+// forget. The next inhabit of the same child will overwrite
+// inhabitedBy via its own connect reducer, so a dropped release
+// repairs itself.
+window.addEventListener("pagehide", () => {
+  if (!_isInheriterTab) return;
+  try {
+    if (!state.client || !state.discovery?.reality || !state.session?.username) return;
+    const stance = `${state.discovery.reality}/@${state.session.username}`;
+    state.client.be("release", stance, {}).catch(() => {});
+  } catch { /* defensive */ }
+});
+
+// ── Parent-presence channel. ──────────────────────────────────────
+// Inhabit is a borrowed presence: the inheriter tab runs on a token
+// authorized by the parent tab's session. When the parent closes,
+// the borrowed body should release — the lender went home, the
+// lease ends. BroadcastChannel lets the parent broadcast "leaving"
+// on pagehide and inheriter tabs on the same origin receive it.
+//
+// Sender (any non-inheriter tab):
+//   pagehide → broadcast { type: "parent-leaving", username }
+//
+// Receiver (inheriter tab):
+//   listen → if msg.username === sessionStorage.spawnerName,
+//             fire BE:release on self + clearSession + reload.
+const PRESENCE_CHANNEL = "treeos-portal-3d-presence";
+const SPAWNER_KEY      = "treeos-portal-3d-spawner";
+let _presence = null;
+try { _presence = new BroadcastChannel(PRESENCE_CHANNEL); }
+catch { /* old browser; fall through with no cross-tab cascade */ }
+
+// Inheriter tab side: persist the spawner name on first boot, then
+// listen for the parent's leaving broadcast.
+if (_isInheriterTab) {
+  // The inhabit blob carried spawnerName; loadSession stashed it in
+  // sessionStorage. Persist a tab-local copy under SPAWNER_KEY so
+  // subsequent reloads of the inheriter tab keep the binding.
+  const stashed = (() => {
+    try {
+      const raw = sessionStorage.getItem(SESSION_KEY);
+      return raw ? JSON.parse(raw)?.spawnerName || null : null;
+    } catch { return null; }
+  })();
+  if (stashed) sessionStorage.setItem(SPAWNER_KEY, String(stashed));
+  if (_presence) {
+    _presence.addEventListener("message", async (ev) => {
+      const msg = ev?.data;
+      if (!msg || msg.type !== "parent-leaving") return;
+      const mySpawner = sessionStorage.getItem(SPAWNER_KEY);
+      if (!mySpawner || msg.username !== mySpawner) return;
+      // Lender went home. Release the borrowed body and reload as
+      // anonymous so the user re-enters through cherub.
+      try {
+        if (state.client && state.discovery?.reality && state.session?.username) {
+          await state.client.be("release", `${state.discovery.reality}/@${state.session.username}`, {});
+        }
+      } catch { /* best effort */ }
+      clearSession();
+      sessionStorage.removeItem(SPAWNER_KEY);
+      window.location.replace(window.location.pathname);
+    });
+  }
+}
+
+// Parent (non-inheriter) tab side: broadcast on close so any
+// inheriter tabs spawned from this session release themselves.
+window.addEventListener("pagehide", () => {
+  if (_isInheriterTab) return;
+  if (!_presence)      return;
+  const username = state.session?.username || null;
+  if (!username)       return;
+  try { _presence.postMessage({ type: "parent-leaving", username }); } catch {}
+});
 
 function defaultPlaceUrl() {
   return "http://localhost:3000";

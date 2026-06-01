@@ -165,7 +165,7 @@ export const danceFloorSeed = {
     const drummerResult = await summonCreateBeing({
       spec: {
         name: `drummer-${plantedSeedId.slice(0, 6)}`,
-        operatingMode: "scripted",
+        cognition: "scripted",
         roles: ["harmony:drummer"],
         defaultRole: "harmony:drummer",
         homeSpace: gridSpaceId,
@@ -223,7 +223,7 @@ export const danceFloorSeed = {
       },
     }, opOpts);
 
-    // 5. dancers — same summonCreateBeing pattern. operatingMode is
+    // 5. dancers — same summonCreateBeing pattern. cognition is
     //    "llm" so each wake routes through runTurn; the LLM
     //    connection resolves through the seed's standard chain (set-
     //    place-llm pins the reality default, dancers inherit).
@@ -233,7 +233,7 @@ export const danceFloorSeed = {
       const dancerResult = await summonCreateBeing({
         spec: {
           name: `${spec.suffix}-${plantedSeedId.slice(0, 6)}`,
-          operatingMode: isLlm ? "llm" : "scripted",
+          cognition: isLlm ? "llm" : "scripted",
           roles: [spec.role],
           defaultRole: spec.role,
           homeSpace: gridSpaceId,

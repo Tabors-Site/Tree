@@ -14,8 +14,8 @@
 // non-empty, no toolNames field. It calls `see({address: "..."})`
 // and receives the Position Descriptor.
 //
-// Address shorthand. A leading "." resolves against the reality root
-// (".config" → "<reality>/.config"). Absolute addresses pass through
+// Address shorthand. A leading "." names a heaven child .
+// ".config" → "<reality>/./config". Absolute addresses pass through
 // unchanged. This matches the reality-see ergonomics so the LLM does
 // not need to know the reality DID for common cases.
 
@@ -28,15 +28,16 @@ export const seedSeeTool = {
   description:
     "Read substrate at a position. Returns the Position Descriptor for that " +
     "address (its qualities, children, matter, occupants, etc.). " +
-    "Address shorthand: a leading '.' resolves against the reality root " +
-    "('.config' → '<reality>/.config'). Authorization runs at the substrate " +
-    "layer; positions the role is not licensed to see refuse with FORBIDDEN.",
+    "Address shorthand: a leading '.' names a heaven child " +
+    "('.config' resolves to '<reality>/./config'). Authorization runs at " +
+    "the substrate layer; positions the role is not licensed to see " +
+    "refuse with FORBIDDEN.",
   verb: "see",
   schema: {
     address: z.string().describe(
       "Position address to read. Examples: '.config', '.extensions', " +
-        "'<reality>/.operations', '<reality>/<spaceId>', '<reality>/<spaceId>@<being>'. " +
-        "Leading '.' resolves against the reality root.",
+        "'<reality>/./operations', '<reality>/<spaceId>', '<reality>/<spaceId>@<being>'. " +
+        "Leading '.' names a heaven child.",
     ),
     beingId: z.string().describe("Injected by server. Ignore."),
     name: z.string().optional().describe("Injected by server. Ignore."),
@@ -47,9 +48,15 @@ export const seedSeeTool = {
         content: [{ type: "text", text: "Error: see requires a non-empty `address` string." }],
       };
     }
-    const resolved = address.startsWith(".")
-      ? `${getRealityDomain()}/${address}`
-      : address;
+    // Leading "." shorthand routes through heaven. ".config" becomes
+    // "<reality>/./config"; ".x/y" becomes "<reality>/./x/y". Bare "."
+    // is heaven itself.
+    let resolved = address;
+    if (address === ".") {
+      resolved = `${getRealityDomain()}/.`;
+    } else if (address.startsWith(".") && !address.startsWith("./")) {
+      resolved = `${getRealityDomain()}/./${address.slice(1)}`;
+    }
     try {
       const descriptor = await seeVerb(resolved, {
         identity: beingId ? { beingId, name: name || null } : null,

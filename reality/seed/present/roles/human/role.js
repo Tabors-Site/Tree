@@ -46,18 +46,14 @@ export const humanRole = Object.freeze({
   permissions: ["see", "do", "summon", "be"],
   respondMode: "async",
   // No "message" trigger: humans don't auto-process incoming SUMMONs.
-  // SUMMONs to a human stay in the inbox until the human surfaces them
-  // through their transport.
+  // The SUMMON sits in the inbox until the human surfaces it through
+  // their transport. Cognition lives on the being (qualities.cognition),
+  // not the role — the same role on the same being still works whether
+  // a human is driving or (when inhabit-released) something else is.
   triggerOn: [],
 
-  /**
-   * No synchronous act for the SUMMON path. A SUMMON to a human is a
-   * notification; the human answers in their own time by emitting a
-   * fresh verb call from their transport. The factory has nothing to
-   * dispatch on their behalf here. Transport-acts are handled at
-   * momentum directly (kind: "transport-act"), not through this
-   * handler.
-   */
+  // No-op summon: humans don't auto-dispatch. Present so any path that
+  // does role.summon(...) doesn't crash.
   async summon(_message, _ctx) {
     return null;
   },

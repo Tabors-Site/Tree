@@ -20,7 +20,7 @@
 // simple equality / membership checks without undefined sniffing):
 //
 //   {
-//     beingId, username, role, operatingMode,
+//     beingId, username, role,
 //
 //     // identity-tier markers
 //     arrival,                  // true when no beingId resolves
@@ -34,6 +34,10 @@
 //     homeInDomain,             // target is an ancestor of home (home lives inside target's subtree)
 //     positionInHomeDomain,     // home is an ancestor of target (target lives inside home's subtree)
 //
+//     // heaven-tier reign
+//     reigning,                 // I-Am, or the rootOperator, or a being
+//                               //   explicitly added to heaven's reigningBeings list
+//
 //     // federation
 //     homeOnThisReality,           // !being.isRemote
 //     federatedFrom,            // being.homeReality if remote, else null
@@ -45,12 +49,12 @@
 import Being from "../materials/being/being.js";
 import { resolveSpaceAccess } from "../materials/space/spaces.js";
 import { getAncestorChain } from "../materials/space/ancestorCache.js";
+import { isReigning } from "../materials/being/reigning.js";
 
 const ARRIVAL_PROPS = Object.freeze({
   beingId:              null,
   name:                 null,
   role:                 null,
-  operatingMode:        null,
   arrival:              true,
   owner:                false,
   contributor:          false,
@@ -62,6 +66,12 @@ const ARRIVAL_PROPS = Object.freeze({
   // resolve scoped checks like `homeInDomain: "<rulership-spaceId>"`
   // ("is this specific space anywhere in the home's ancestry?").
   homeAncestors:        Object.freeze([]),
+  // reigning: true for the I-Am and for every being parented directly
+  // under her . the seed delegates (cherub, llm-assigner, reality-
+  // manager, arrival) and the rootOperator (first human). Many beings
+  // can reign at once. Heaven and Tier-3 seed spaces gate on this
+  // prop. Arrival (unauthenticated) never reigns.
+  reigning:             false,
   homeOnThisReality:       true,
   federatedFrom:        null,
 });
@@ -76,9 +86,17 @@ export async function deriveStanceProperties({ beingId, targetSpace }) {
   if (!beingId) return { ...ARRIVAL_PROPS };
 
   const being = await Being.findById(beingId)
-    .select("name roles defaultRole operatingMode homeSpace isRemote homeReality")
+    .select("name roles defaultRole homeSpace isRemote homeReality")
     .lean();
   if (!being) return { ...ARRIVAL_PROPS, beingId };
+
+  // Reigning stance . membership in heaven's reign.beings list.
+  // Cached in seed/materials/being/reigning.js; loaded at boot,
+  // updated by the add-reigning / remove-reigning DO ops. I-Am is
+  // always reigning; seed delegates auto-add during boot; the
+  // rootOperator (first human) auto-adds in cherub.register; further
+  // additions happen via the DO op.
+  const reigning = isReigning(String(being._id));
 
   const props = {
     beingId:              String(being._id),
@@ -89,7 +107,6 @@ export async function deriveStanceProperties({ beingId, targetSpace }) {
     // per-role gates can use the more specific value when present.
     role:                 being.defaultRole || null,
     roles:                Array.isArray(being.roles) ? being.roles : [],
-    operatingMode:        being.operatingMode || "human",
     arrival:              false,
     owner:                false,
     contributor:          false,
@@ -97,6 +114,7 @@ export async function deriveStanceProperties({ beingId, targetSpace }) {
     homeInDomain:         false,
     positionInHomeDomain: false,
     homeAncestors:        [],
+    reigning,
     homeOnThisReality:       !being.isRemote,
     federatedFrom:        being.isRemote ? (being.homeReality || null) : null,
   };

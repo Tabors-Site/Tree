@@ -62,8 +62,10 @@ const SCALAR_SET_FIELDS = new Set([
   "parentBeingId",
   // Being identity scalars added during genesis cleanup (2026-05-23).
   // seedDelegates drift correction stamps do:set facts for each
-  // when an existing delegate's row drifts from spec.
-  "operatingMode",
+  // when an existing delegate's row drifts from spec. Cognition no
+  // longer lives here as a schema field — it's at
+  // qualities.cognition.defaultKind and writes through the qualities
+  // path, not SCALAR_SET_FIELDS.
   "roles",
   "defaultRole",
   "homeSpace",
@@ -160,11 +162,22 @@ export function applySetQualities(state, fact) {
       delete next[namespace];
       return { ...state, qualities: next };
     }
-    if (typeof value !== "object" || Array.isArray(value)) {
+    if (typeof value !== "object") {
       // Malformed — reducer is defensive; pass through
       return state;
     }
-    const currentNs = (currentQualities[namespace] && typeof currentQualities[namespace] === "object")
+    // Arrays-as-namespace are legal but only as a replacement (merge has
+    // no defined meaning for an array). roleFlow is the canonical case:
+    // an ordered list of clauses lives at qualities.roleFlow directly.
+    // Callers writing an array must pass merge:false.
+    if (Array.isArray(value)) {
+      if (merge) return state;
+      return {
+        ...state,
+        qualities: { ...currentQualities, [namespace]: value },
+      };
+    }
+    const currentNs = (currentQualities[namespace] && typeof currentQualities[namespace] === "object" && !Array.isArray(currentQualities[namespace]))
       ? currentQualities[namespace]
       : {};
     const newNs = merge ? { ...currentNs, ...value } : value;
@@ -231,6 +244,64 @@ export function applySetField(state, fact) {
  * @param {object} fact
  * @returns {object} new state
  */
+/**
+ * Connection-tracking reducer for being-targeted BE:connect and
+ * BE:release facts. Maintains qualities.connection.{inhabitedBy, since}
+ * as a projection of the connect/release fact stream.
+ *
+ * Doctrine: an inhabit IS a BE:connect (cherub Mode-3 ancestor-relation
+ * auth path), not a new BE op or a DO:set. The chain stamps a normal
+ * connect fact; this reducer derives the inhabitedBy quality from it.
+ * Replay reconstructs the full inhabit history.
+ *
+ * Fact shape this recognizes:
+ *   verb: "be"
+ *   action: "connect" → set inhabitedBy + since
+ *   action: "release" → clear inhabitedBy (set to null)
+ *   target.kind: "being", target.id: <being whose state we're updating>
+ *   params.inhabitedBy: <the identity now driving this being>
+ *
+ * Cherub's three connect paths all stamp the same fact shape:
+ *   - credential connect: inhabitedBy = the bound being's id (self)
+ *   - re-claim: inhabitedBy = caller's beingId (self, no change)
+ *   - inherit: inhabitedBy = caller's beingId (parent driving child)
+ *
+ * @param {object} state
+ * @param {object} fact
+ * @returns {object} new state
+ */
+export function applyConnectionState(state, fact) {
+  if (fact?.verb !== "be") return state;
+  if (fact?.target?.kind !== "being") return state;
+  const action = fact?.action;
+  if (action !== "connect" && action !== "release") return state;
+
+  // Preserve any other namespaces under qualities by merging at the
+  // connection sub-key. qualities itself may be undefined on first
+  // touch; default to {}.
+  const qualities = state.qualities || {};
+  const prev = qualities.connection || {};
+
+  let connection;
+  if (action === "connect") {
+    const inhabitedBy = fact?.params?.inhabitedBy || null;
+    const since = fact?.date || fact?.params?.since || null;
+    connection = { ...prev, inhabitedBy, since };
+  } else {
+    // release — clear the inhabitedBy. Keep `since` for audit
+    // (last-connected-at; the next connect overwrites).
+    connection = { ...prev, inhabitedBy: null };
+  }
+
+  return {
+    ...state,
+    qualities: {
+      ...qualities,
+      connection,
+    },
+  };
+}
+
 export function applyCreateBeing(state, fact) {
   if (fact?.verb !== "be" || fact?.action !== "birth") return state;
   if (fact?.target?.kind !== "being") return state;
@@ -253,7 +324,6 @@ export function applyCreateBeing(state, fact) {
     ...state,
     name:          spec.name,
     password:      spec.password,
-    operatingMode: spec.operatingMode || "human",
     roles:         rolesList,
     defaultRole,
     parentBeingId: spec.parentBeingId ?? null,
@@ -261,6 +331,10 @@ export function applyCreateBeing(state, fact) {
     llmDefault:    spec.llmDefault ?? null,
     isRemote:      Boolean(spec.isRemote),
     homeReality:   spec.homeReality ?? null,
+    // Cognition (closed-set: "llm" | "human" | "scripted") lives at
+    // qualities.cognition.defaultKind. Effective cognition is computed
+    // at read time by beingCognition() in identity/lookups.js, which
+    // checks the inhabit projection first and falls back to this.
     qualities:     spec.qualities ?? {},
     // Being.children retired 2026-05-23; downward walks query by
     // parentBeingId (parallel to Space.children retirement).
@@ -270,6 +344,11 @@ export function applyCreateBeing(state, fact) {
     // alias during migration; callers should pass `spec.position`
     // going forward.
     position:      spec.position ?? spec.currentSpace ?? spec.homeSpace ?? null,
+    // Coord inside the position space. createBeing assigns a random
+    // coord inside the position space's size when none was passed;
+    // the reducer just records it. Movement later writes coord via
+    // set-being:coord facts which applySetField picks up.
+    coord:         spec.coord ?? null,
     createdAt:     fact.date,
     updatedAt:     fact.date,
   };

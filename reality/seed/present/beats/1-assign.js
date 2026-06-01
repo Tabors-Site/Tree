@@ -59,6 +59,8 @@ import Being from "../../materials/being/being.js";
 import Act from "../../past/act/act.js";
 import { getRealityConfigValue } from "../../realityConfig.js";
 import { getRole } from "../roles/registry.js";
+import { resolveActiveRole } from "../roles/roleFlow.js";
+import Space from "../../materials/space/space.js";
 import { computeIbpStampAddress } from "../../ibp/address.js";
 import { validateOrientation, DEFAULT_ORIENTATION } from "./2-fold/orientation.js";
 
@@ -95,26 +97,50 @@ export async function assign({ beingId, spaceId, entry, handoff = null, signal =
   }
 
   // ── assign: resolve the active role ──────────────────────────────
-  // entry.activeRole has primacy when present; toBeing.defaultRole
-  // falls back when the inbox row didn't pin one. A specified
-  // activeRole must be in the being's roles[].
-  let activeRole = null;
-  if (entry.activeRole) {
-    const carried = Array.isArray(toBeing.roles) ? toBeing.roles : [];
-    if (!carried.includes(entry.activeRole)) {
-      log.warn(
-        "Assign",
-        `entry's activeRole "${entry.activeRole}" not carried by being ` +
-          `${String(beingId).slice(0, 8)} (roles: ${carried.join(", ") || "none"})`,
-      );
-      return { skipped: "role-not-carried" };
-    }
-    activeRole = entry.activeRole;
-  } else {
-    activeRole = toBeing.defaultRole || null;
+  // Resolution order (see seed/present/roles/roleFlow.js for the doctrine):
+  //   1. entry.activeRole — caller specifically requested this voice;
+  //      honor without running flow. Must be in toBeing.roles[].
+  //   2. Being.qualities.roleFlow — per-being conditional program; first
+  //      clause whose `when` matches AND whose role's requiredCognition
+  //      matches the being's effective cognition wins.
+  //   3. toBeing.defaultRole — terminal fallback.
+  //
+  // resolveActiveRole returns a role name string (or null). We then
+  // validate carry + registry presence here.
+  const spaceRow = spaceId
+    ? await Space.findById(spaceId).select("_id name type seedSpace").lean()
+    : null;
+
+  const activeRole = resolveActiveRole({
+    toBeing,
+    entry,
+    handoff,
+    space: spaceRow,
+  });
+
+  if (!activeRole) {
+    log.warn(
+      "Assign",
+      `no active role resolves for being ${String(beingId).slice(0, 8)} ` +
+        `(no entry.activeRole, no roleFlow match, no defaultRole)`,
+    );
+    return { skipped: "role-unresolved" };
   }
 
-  const role = activeRole ? getRole(activeRole) : null;
+  // Carry check. The being must declare this role in its roles[].
+  // (RoleFlow returns names from its own clauses; defaultRole is
+  // assumed declared; entry.activeRole could be anything — check here.)
+  const carried = Array.isArray(toBeing.roles) ? toBeing.roles : [];
+  if (!carried.includes(activeRole)) {
+    log.warn(
+      "Assign",
+      `resolved activeRole "${activeRole}" not carried by being ` +
+        `${String(beingId).slice(0, 8)} (roles: ${carried.join(", ") || "none"})`,
+    );
+    return { skipped: "role-not-carried" };
+  }
+
+  const role = getRole(activeRole);
   if (!role) {
     log.warn(
       "Assign",
