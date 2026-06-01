@@ -224,7 +224,7 @@ export class PortalClient {
   /**
    * BE: identity operations on a stance / place.
    *
-   * @param {string} op           "register" | "claim" | "release" | "switch"
+   * @param {string} op           "birth" | "connect" | "release"
    * @param {string} address      stance ("<place>/@cherub", "<place>/@<name>") or bare place ("<place>")
    * @param {object} [credentials] op-specific fields ({ name, password, ... })
    */

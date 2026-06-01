@@ -253,7 +253,7 @@ export async function assign({ beingId, spaceId, entry, handoff = null, signal =
 //
 // For DO: target is a typed object ({kind, id}); render as "<verb>
 // <action> on <kind>/<id>".  For BE: target is the op-name string
-// itself (e.g. "claim"); render as "BE <op>". Previously this used a
+// itself (e.g. "connect"); render as "BE <op>". Previously this used a
 // raw `${target}` interpolation, which silently produced "[object
 // Object]" for every DO row in the audit history.
 function describeTransportAct(act) {

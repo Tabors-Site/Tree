@@ -4,7 +4,7 @@
 //
 //   { id, verb: "be", address (stance or place), payload, identity? }
 //
-// `payload.op` is one of "register" | "claim" | "release" | "switch".
+// `payload.op` is one of "birth" | "connect" | "release".
 // Remaining payload fields carry operation-specific credentials/state.
 // `payload.correlation` is the client-generated idempotency key —
 // retries with the same correlation collapse to one moment.
@@ -25,14 +25,14 @@
 // via the IBP push envelope (matched on correlation).
 //
 // Cherub is the HANDLER of identity-binding summons, not the
-// originator. Cherub knows how to fulfill register/claim/release/
-// switch — minting beings, verifying credentials, signing tokens.
-// But the originator of every BE is the being-being-bound-to: for
-// register, the prospective new being (delivered through the socket
-// before its row exists); for claim, the being asking to bind a
-// session; for release/switch, the already-authenticated being.
+// originator. Cherub knows how to fulfill birth/connect/release —
+// minting beings, verifying credentials, signing tokens. But the
+// originator of every BE is the being-being-bound-to: for birth,
+// the prospective new being (delivered through the socket before
+// its row exists); for connect, the being asking to bind a session;
+// for release, the already-authenticated being.
 //
-// This subsumes the "register from arrival" bootstrap question. A
+// This subsumes the "birth from arrival" bootstrap question. A
 // fresh socket with no identity is the prospective-being's only
 // available delivery channel before its row exists. Cherub processes
 // the summon, mints the being, and signs the token. The being is the
@@ -45,8 +45,8 @@
 // every reality has exactly one. Subsequent BEs from authed sockets
 // could in principle open on the authed being's own reel, but
 // routing them all through cherub keeps the identity-binding code
-// path uniform (one handler, one place to gate register_enabled /
-// claim_enabled, one place to verify credentials).
+// path uniform (one handler, one place to gate birth_enabled /
+// connect_enabled, one place to verify credentials).
 
 import log from "../../../seed/seedReality/log.js";
 import Being from "../../../seed/materials/being/being.js";

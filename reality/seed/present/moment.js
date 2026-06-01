@@ -113,13 +113,18 @@ export async function runMoment({ beingId, spaceId, entry, index, handoff = null
   //   "see"     . No Act row. The being looked and chose not to act.
   //               The inbox row CLOSES (the moment ran to completion).
   //               No eviction-as-failure, no onError handoff.
-  //   "failure" . No Act row. The inbox row evicts on deterministic
-  //               shapes (garbage, internal, transport-act). aborted
-  //               still seals stopped:true for legacy reasons.
+  //   "failure" . No Act row, ever — including the aborted shape.
+  //               Inbox eviction depends on whether the failure is
+  //               deterministic (garbage, internal, transport-act —
+  //               evict) or transient (aborted — keep the row for
+  //               the scheduler's next pickup; a HUMAN-priority cut
+  //               or user cancel can plausibly succeed on retry).
   //
-  // SEE is structurally separate from failure: same downstream effect
-  // (no Act materializes) but different meaning, different log line,
-  // different recoverability semantics.
+  // Per the MODEL.md doctrine: a moment that produces nothing leaves
+  // zero trace. SEE and every failure shape — aborted included —
+  // share that property. The earlier "aborted seals stopped:true"
+  // legacy stub was retired; sealAct now refuses to write an Act
+  // with no content and no Facts as a structural invariant.
   try {
     if (setup?.plannedAct && cognition?.kind === "act") {
       // ── Cognition succeeded. Build seal content + seal the Act. ──
@@ -186,23 +191,12 @@ export async function runMoment({ beingId, spaceId, entry, index, handoff = null
         "Moment",
         `saw being=${beingId.slice(0, 8)} . no act sealed (clean release)`,
       );
-    } else if (setup?.plannedAct && cognition?.shape === "aborted") {
-      // Abort path. Legacy: still produces an Act with content=null
-      // and stopped=true. To be converted to release-with-no-Act
-      // in a future pass (see run.js doctrine). On abort we still
-      // commit whatever ΔF accumulated before the abort — those
-      // facts happened and PAST FIXED applies.
-      actInserted = await sealAct(setup.plannedAct, {
-        content: null,
-        stopped: true,
-        deltaF:    setup.summonCtx?.deltaF    || [],
-        afterSeal: setup.summonCtx?.afterSeal || [],
-      });
     } else if (setup?.plannedAct) {
-      // kind:"failure" (and not aborted). NO Act row written. What
-      // happens to the inbox row depends on whether the failure is
-      // DETERMINISTIC (retrying produces the same failure) or
-      // TRANSIENT (a later attempt could plausibly succeed).
+      // kind:"failure" (every shape, including aborted). NO Act row
+      // written. What happens to the inbox row depends on whether
+      // the failure is DETERMINISTIC (retrying produces the same
+      // failure) or TRANSIENT (a later attempt could plausibly
+      // succeed).
       //
       //   transport-act, any shape    — deterministic. The user did a
       //                                 specific act; it failed with a
@@ -229,7 +223,10 @@ export async function runMoment({ beingId, spaceId, entry, index, handoff = null
       //                                 aborted externally (HUMAN-
       //                                 priority cut, user cancel).
       //                                 Leave the row; a later attempt
-      //                                 may run cleanly.
+      //                                 may run cleanly. No onError
+      //                                 either: abort is not a failure
+      //                                 the wire-caller needs to hear
+      //                                 about — they caused it.
       //
       //   summon, other shapes        — leave for now; surface as new
       //                                 shapes get added.

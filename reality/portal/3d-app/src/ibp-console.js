@@ -10,7 +10,7 @@
 
 const VERBS = ["see", "do", "summon", "be"];
 
-const BE_OPS = ["register", "claim", "release", "switch"];
+const BE_OPS = ["birth", "connect", "release"];
 
 export function mountIbpConsole({ root, client, getPlace }) {
   if (!root) throw new Error("mountIbpConsole: { root } required (DOM container)");
@@ -139,7 +139,7 @@ function defaultPayloadFor(verb) {
     case "see":    return JSON.stringify({ live: false }, null, 2);
     case "do":     return JSON.stringify({ action: "", args: {} }, null, 2);
     case "summon": return JSON.stringify({ message: { content: "" } }, null, 2);
-    case "be":     return JSON.stringify({ op: "claim", name: "", password: "" }, null, 2);
+    case "be":     return JSON.stringify({ op: "connect", name: "", password: "" }, null, 2);
     default:       return "{}";
   }
 }

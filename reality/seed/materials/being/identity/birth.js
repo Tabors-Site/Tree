@@ -143,7 +143,7 @@ export async function createBeing(name, password, opts = {}) {
       const pendingInBatch = opts.summonCtx?.deltaF?.find(
         (f) =>
           f?.verb === "be" &&
-          f?.action === "register" &&
+          f?.action === "birth" &&
           f?.target?.kind === "being" &&
           String(f?.target?.id) === String(parentBeingId),
       );
@@ -237,7 +237,7 @@ export async function createBeing(name, password, opts = {}) {
   try {
     await emitFact({
       verb:    "be",
-      action:  "register",
+      action:  "birth",
       beingId: id,
       target:  { kind: "being", id },
       params:  { spec },

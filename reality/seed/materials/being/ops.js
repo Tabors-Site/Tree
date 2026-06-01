@@ -208,7 +208,7 @@ async function setOnBeingHandler({ target, params }) {
   }
 
   // position: the Space this being is in. The DO-side counterpart to
-  // be:switch; either form lands the same Being.position write
+  // be:occupy; either form lands the same Being.position write
   // through the reducer. The portal emits this on navigate-to-sized-
   // space so the being shows up in descriptor.occupantsByPosition
   // for everyone else in that space.

@@ -135,6 +135,36 @@
   border-bottom-color: #9ec8ff;
 }
 
+/* The looping stamper sketch sits inside the "What is this?" section
+   directly under the title, leading the explanation. Bordered card to
+   set it apart from prose; the gif itself is responsive via
+   max-width:100% from the global rules in index.html. */
+.ns-stamper-figure {
+  margin: 12px auto 28px;
+  padding: 14px;
+  background: rgba(0, 0, 0, 0.25);
+  border: 1px solid #1f1f1f;
+  border-radius: 10px;
+  max-width: 560px;
+}
+
+.ns-stamper-figure img {
+  display: block;
+  width: 100%;
+  height: auto;
+  border-radius: 6px;
+}
+
+.ns-stamper-figure figcaption {
+  margin-top: 12px;
+  padding: 0 4px;
+  color: #888;
+  font-size: 0.9rem;
+  font-style: italic;
+  line-height: 1.5;
+  text-align: center;
+}
+
 @media (max-width: 540px) {
   .ns-hero { min-height: calc(100vh - 57px); }
   .ns-btn { min-width: 160px; padding: 18px 24px; }

@@ -1572,15 +1572,14 @@ function renderBeingInspector(insp, b) {
   // ─── BE actions (identity ops on this being's stance)
   const be = section("BE actions");
   if (b.being === "cherub") {
-    // Cherub is the authentication being. Show claim + register inline.
-    be.appendChild(beInlineForm("claim",    stance, ["name", "password"]));
-    be.appendChild(beInlineForm("register", stance, ["name", "password"]));
+    // Cherub is the authentication being. Show connect + birth inline.
+    be.appendChild(beInlineForm("connect", stance, ["name", "password"]));
+    be.appendChild(beInlineForm("birth",   stance, ["name", "password"]));
   } else {
-    // For any other being: switch (reclaim) if you're not them; release if you are.
+    // For any other being: release if you are them. No bind-as-other
+    // shortcut anymore . release first, then connect through cherub.
     if (isSelf) {
       be.appendChild(beButton("release", stance, {}));
-    } else {
-      be.appendChild(beInlineForm("switch", stance, ["password"]));
     }
   }
   insp.appendChild(be);

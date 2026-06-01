@@ -6,20 +6,27 @@
 // PositionProjection fold writes the cached row. No bump rule, no
 // grid-event fact action, no harmony-side reducer . the world is
 // the world; if two dancers land on the same cell, they overlap.
+//
+// STAY is not a direction. A dancer that wants to stay this tick
+// emits NO tool call — cognition returns kind:"see", no Act row is
+// written, the substrate carries zero trace of the non-step. This
+// matches the doctrine: a moment that produces nothing IS SEE.
+// "Stepping in place" was the legacy shape; it stamped no Fact and
+// silently left orphan Acts behind. Same outcome on the world,
+// honest on the substrate.
 
 import Being from "../../../seed/materials/being/being.js";
 import { doVerb } from "../../../seed/ibp/verbs/do.js";
 
 const DIRS = {
-  N:    { dx:  0, dy: -1 },
-  NE:   { dx:  1, dy: -1 },
-  E:    { dx:  1, dy:  0 },
-  SE:   { dx:  1, dy:  1 },
-  S:    { dx:  0, dy:  1 },
-  SW:   { dx: -1, dy:  1 },
-  W:    { dx: -1, dy:  0 },
-  NW:   { dx: -1, dy: -1 },
-  STAY: { dx:  0, dy:  0 },
+  N:  { dx:  0, dy: -1 },
+  NE: { dx:  1, dy: -1 },
+  E:  { dx:  1, dy:  0 },
+  SE: { dx:  1, dy:  1 },
+  S:  { dx:  0, dy:  1 },
+  SW: { dx: -1, dy:  1 },
+  W:  { dx: -1, dy:  0 },
+  NW: { dx: -1, dy: -1 },
 };
 
 export default {
@@ -38,12 +45,9 @@ export default {
     const delta = DIRS[dir];
     if (!delta) {
       throw new Error(
-        `harmony:step: direction must be one of ${Object.keys(DIRS).join(",")}; got "${params?.direction}"`,
+        `harmony:step: direction must be one of ${Object.keys(DIRS).join(",")}; ` +
+        `got "${params?.direction}". To stay in place, emit no tool call.`,
       );
-    }
-
-    if (delta.dx === 0 && delta.dy === 0) {
-      return { stepped: false, reason: "stay", direction: dir };
     }
 
     const me = await Being.findById(beingId).select("coord").lean();

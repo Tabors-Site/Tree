@@ -1,21 +1,28 @@
 // TreeOS Seed . AGPL-3.0 . https://treeos.ai . Tabor Holly
 //
-// be.js — the BE verb. Identity operations on a being.
+// be.js . the BE verb. Identity operations on a being.
 //
-// Every being honors BE by default — register, claim, release, switch
-// are the universal ones. Some beings add their own (auth's flows,
-// llm-assigner's add-llm and slot ops, extension BE-beings like a
-// court's convene / rule). The registry (materials/being/beRegistry.js)
-// holds the per-being handlers; the seed pre-registers cherub and
-// llm-assigner at module load below.
+// BE is a closed four-op set: birth, use, release, switch. The static
+// table BE_OPS in [[ibp/beOps.js]] holds the schemas + handlers; this
+// verb's job is to authorize, dispatch, and stamp the audit Fact.
 //
-// operation:  "register" | "claim" | "release" | "switch" | <being-honored>
-// payload:    operation-specific
-//   register  { name, password, ... }
-//   claim     { name, password }   (against the place's cherub)
-//   claim     { }                  (re-claim a stance already held)
-//   release   { }
-//   switch    { from }             (target lives in opts.address)
+// Cherub is the canonical being that handles BE. llm-assigner has six
+// historical "honored operations" (add-llm, assign-slot, ...) that
+// belong on DO, not BE; until that migration lands, those still flow
+// through the legacy `beRegistry.getBeHandler` path below.
+//
+// Dispatch flow:
+//
+//   1. Resolve the target being from the address (bare place defaults
+//      to @cherub, the welcome character).
+//   2. If the op name is in BE_OPS, dispatch through the static table.
+//      - assertVerbCaller unless the op is `bootstrap: true`.
+//      - place-level flags (birth_enabled / connect_enabled) gate
+//        birth / connect.
+//      - authorize() the BE call.
+//      - run BE_OPS[op].handler(...).
+//      - writeBeFact stamps a `be:<op>` Fact on the actor's reel.
+//   3. Otherwise fall through to legacy per-being dispatch (llm-assigner).
 
 import log from "../../seedReality/log.js";
 import { emitFact } from "../../past/fact/facts.js";
@@ -23,16 +30,17 @@ import { IbpError, IBP_ERR } from "../protocol.js";
 import { I_AM } from "../../materials/being/seedBeings.js";
 import { getRealityDomain } from "../address.js";
 import { authorize, getAuthConfig } from "../authorize.js";
-import { cherubBeing } from "../../present/roles/cherub/role.js";
-import { llmAssignerBeing } from "../../present/roles/llm-assigner/role.js";
+import { BE_OPS, getBeOp } from "../beOps.js";
 import { registerBeHandler, getBeHandler } from "../../materials/being/beRegistry.js";
 import { assertVerbCaller } from "./_shared.js";
 
-// The two BE-honoring beings register at module load so the
-// dispatcher below can find them. Extensions add their own through
-// registerBeHandler.
-registerBeHandler("cherub",       cherubBeing,       "seed");
-registerBeHandler("llm-assigner", llmAssignerBeing,  "seed");
+// llm-assigner has not yet migrated to DO ops; keep its legacy
+// `honoredOperations` + per-being method dispatch through beRegistry.
+// Cherub's static export (cherubBeing) is no longer needed here . its
+// handlers live behind BE_OPS now.
+import { llmAssignerBeing } from "../../present/roles/llm-assigner/role.js";
+
+registerBeHandler("llm-assigner", llmAssignerBeing, "seed");
 
 /**
  * BE. Run an identity operation. Returns the operation's result
@@ -51,14 +59,6 @@ registerBeHandler("llm-assigner", llmAssignerBeing,  "seed");
 export async function beVerb(operation, payload = {}, opts = {}) {
   if (typeof operation !== "string" || !operation.length) {
     throw new IbpError(IBP_ERR.INVALID_INPUT, "reality.be requires an operation");
-  }
-
-  // Register and claim are identity-acquisition: the caller is binding
-  // to a being, so no being identity exists yet. Every other BE needs
-  // an identified caller (or a scaffold flow). authorize() still
-  // gates register/claim against the place-level flags below.
-  if (operation !== "register" && operation !== "claim") {
-    assertVerbCaller("be", opts);
   }
 
   const {
@@ -83,8 +83,76 @@ export async function beVerb(operation, payload = {}, opts = {}) {
     );
   }
 
-  // Stance auth gates every BE call. register/claim from arrival is
-  // the bootstrap exception — authorize permits it inherently.
+  // Bare-place address defaults to @cherub, the welcome character.
+  const beingName = extractBeingFromAddress(address, addressKind) || "cherub";
+
+  // Static-table dispatch. BE_OPS holds the canonical four ops; if the
+  // operation name is in the table AND cherub is the resolved being,
+  // dispatch through it. Future seed change could license other beings
+  // for these ops, but cherub is the only one today.
+  const beOp = getBeOp(operation);
+
+  if (beOp && beingName === "cherub") {
+    // The op opts out of the verb-caller assertion when bootstrap is
+    // true (birth/connect from a fresh arrival have no identity yet).
+    if (!beOp.bootstrap) {
+      assertVerbCaller("be", opts);
+    }
+
+    // Place-level flags gate birth and connect.
+    if (operation === "birth" || operation === "connect") {
+      const authConfig = await getAuthConfig();
+      if (operation === "birth" && !authConfig.birth_enabled) {
+        throw new IbpError(IBP_ERR.FORBIDDEN, "Registration is disabled on this reality", { operation });
+      }
+      if (operation === "connect" && !authConfig.connect_enabled) {
+        throw new IbpError(IBP_ERR.FORBIDDEN, "Connect is disabled on this reality", { operation });
+      }
+    }
+
+    const decision = await authorize({
+      identity,
+      verb: "be",
+      target: { kind: addressKind, value: address },
+      operation,
+    });
+    if (!decision.ok) {
+      throw new IbpError(
+        IBP_ERR.FORBIDDEN,
+        `BE denied for stance "${decision.stance}": ${decision.reason}`,
+        { stance: decision.stance, operation },
+      );
+    }
+
+    const result = await beOp.handler({
+      address,
+      addressKind,
+      payload,
+      identity,
+      ctx: { socket, address: { kind: addressKind, value: address }, identity, req, summonCtx },
+      summonCtx,
+    });
+    await writeBeFact({
+      operation,
+      identity,
+      authResult: result,
+      payload,
+      beingName,
+      actId: summonCtx?.actId || null,
+      summonCtx,
+      scaffold: opts.scaffold === true,
+    });
+    return result;
+  }
+
+  // ── Legacy per-being dispatch ──
+  // Everything not yet migrated to the registry (currently
+  // llm-assigner's six honored ops) still flows through
+  // beRegistry.getBeHandler → method-on-role. This path retires when
+  // llm-assigner migrates.
+
+  assertVerbCaller("be", opts);
+
   const decision = await authorize({
     identity,
     verb: "be",
@@ -99,64 +167,6 @@ export async function beVerb(operation, payload = {}, opts = {}) {
     );
   }
 
-  const ctx = { socket, address: { kind: addressKind, value: address }, identity, req, summonCtx };
-
-  // All four canonical BE ops are session-binding, not being-method
-  // dispatches. The address carries which identity is being bound /
-  // unbound, not which being to talk to. They always run through the
-  // cherub:
-  //
-  //   register  — admit a new identity, gated by register_enabled
-  //   claim     — bind a session to an existing identity, gated by
-  //               claim_enabled
-  //   release   — drop the session's binding (stateless ack)
-  //   switch    — confirm which identity the session now holds
-  //
-  // Without this routing, a client logging out as `<reality>/@tabor`
-  // (or any non-cherub stance) would fall through to the "no being
-  // handler for @tabor" rejection. release/switch don't care which
-  // stance was addressed — they're about the session, not the being.
-  if (
-    operation === "register" ||
-    operation === "claim" ||
-    operation === "release" ||
-    operation === "switch"
-  ) {
-    const authConfig = await getAuthConfig();
-    if (operation === "register" && !authConfig.register_enabled) {
-      throw new IbpError(IBP_ERR.FORBIDDEN, "Registration is disabled on this reality", { operation });
-    }
-    if (operation === "claim" && !authConfig.claim_enabled) {
-      throw new IbpError(IBP_ERR.FORBIDDEN, "Claim is disabled on this reality", { operation });
-    }
-    let authResult;
-    if (operation === "register") {
-      authResult = await cherubBeing.register(payload, ctx);
-    } else if (operation === "claim") {
-      authResult = await runClaim({ kind: addressKind, value: address }, payload, ctx);
-    } else if (operation === "release") {
-      authResult = await cherubBeing.release(payload, ctx);
-    } else {
-      // switch — cherub.switch derives from/to from the address.
-      const from = payload?.from;
-      const to   = addressKind === "stance" ? address : null;
-      authResult = await cherubBeing.switch({ from, to }, ctx);
-    }
-    await writeBeFact({
-      operation,
-      identity,
-      authResult,
-      payload,
-      actId: summonCtx?.actId || null,
-      summonCtx,
-      scaffold: opts.scaffold === true,
-    });
-    return authResult;
-  }
-
-  // Everything else dispatches to the addressed being. Bare-place
-  // addresses default to @cherub, the welcome character.
-  const beingName = extractBeingFromAddress(address, addressKind) || "cherub";
   const role = getBeHandler(beingName);
   if (!role) {
     throw new IbpError(
@@ -165,32 +175,24 @@ export async function beVerb(operation, payload = {}, opts = {}) {
       { beingName },
     );
   }
-  if (!role.honoredOperations.includes(operation)) {
+  if (!role.honoredOperations?.includes(operation)) {
     throw new IbpError(
       IBP_ERR.ACTION_NOT_SUPPORTED,
       `Being @${beingName} does not honor BE ${operation}`,
-      { beingName, operation, honoredOperations: role.honoredOperations },
+      { beingName, operation, honoredOperations: role.honoredOperations || [] },
     );
   }
 
-  // Auth's switch derives from/to from the address; everything else
-  // dispatches via kebab-case op name → camelCase method on the role.
-  let beResult;
-  if (beingName === "cherub" && operation === "switch") {
-    const from = payload.from;
-    const to   = addressKind === "stance" ? address : null;
-    beResult = await role.switch({ from, to }, ctx);
-  } else {
-    const methodName = kebabToCamel(operation);
-    const method = role[methodName];
-    if (typeof method !== "function") {
-      throw new IbpError(
-        IBP_ERR.INTERNAL,
-        `Being @${beingName} declares BE "${operation}" but has no ${methodName}() handler`,
-      );
-    }
-    beResult = await method.call(role, payload, ctx);
+  const ctx = { socket, address: { kind: addressKind, value: address }, identity, req, summonCtx };
+  const methodName = kebabToCamel(operation);
+  const method = role[methodName];
+  if (typeof method !== "function") {
+    throw new IbpError(
+      IBP_ERR.INTERNAL,
+      `Being @${beingName} declares BE "${operation}" but has no ${methodName}() handler`,
+    );
   }
+  const beResult = await method.call(role, payload, ctx);
   await writeBeFact({
     operation,
     identity,
@@ -256,41 +258,8 @@ async function writeBeFact({ operation, identity, authResult, payload, beingName
   }, summonCtx);
 }
 
-/**
- * Two claim modes. Credentials: address is the place or
- * <reality>/@cherub, payload carries name + password. Token re-claim:
- * address is a stance already held by the session, identity carries a
- * valid token.
- */
-async function runClaim(address, opPayload, ctx) {
-  const isAuthBeingAddress =
-    address.kind === "place" ||
-    (address.kind === "stance" && /\/@cherub$/.test(address.value));
-
-  if (isAuthBeingAddress) {
-    return cherubBeing.claim(opPayload, ctx);
-  }
-
-  if (!ctx.identity) {
-    throw new IbpError(
-      IBP_ERR.UNAUTHORIZED,
-      "Token re-claim requires a still-valid identity token",
-    );
-  }
-  const expectedStance = `${getRealityDomain()}/@${ctx.identity.name}`;
-  if (address.value !== expectedStance) {
-    throw new IbpError(
-      IBP_ERR.FORBIDDEN,
-      "Cannot re-claim a stance the session does not hold",
-      { held: expectedStance, requested: address.value },
-    );
-  }
-  return {
-    identityToken: null,
-    beingAddress:  expectedStance,
-    note:          "already held",
-  };
-}
+// (runClaim retired . both modes (credentials, token re-claim) now
+//  live inside the `use` handler in cherub/role.js.)
 
 // Pull the reality prefix off an address, if any. Lets beVerb refuse
 // addresses pointing at a different reality before any auth runs.

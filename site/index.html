@@ -42,21 +42,30 @@
 
     <meta name="theme-color" content="#0a0a0a" />
     <style>
-      /* Global mobile defenses. Without these any single child with
-         width:100% + its own padding (default box-sizing: content-box)
-         overflows its parent, the page becomes wider than the viewport,
-         and mobile browsers zoom out to fit — the classic "super zoomed
-         out with side space" symptom. */
+      /* Global mobile defenses.
+         box-sizing fixes the structural overflow (100% + padding) that
+         used to push content wider than its parent.
+         Wrapping rules below prevent long inline strings (file paths in
+         <code>, URLs, identifiers) from overflowing the line and pulling
+         the page wider than the viewport. Wrapping is preferred over an
+         `overflow-x: clip` seatbelt because clip hides content AND blocks
+         scroll-to-reach. */
       *, *::before, *::after { box-sizing: border-box; }
       html, body {
         background: #0a0a0a;
         margin: 0;
         padding: 0;
-        overflow-x: clip;        /* hard backstop against horizontal scroll */
       }
       html { -webkit-text-size-adjust: 100%; }
       img, video, svg, pre, table { max-width: 100%; }
       img, video { height: auto; }
+      /* Inline content that would otherwise refuse to break (file paths,
+         long identifiers in <code>, raw URLs in <a>) wraps at any
+         character on mobile so it never pushes the line past the
+         viewport. <pre> keeps its strict whitespace and scrolls
+         horizontally inside its own box via .ns-code's overflow-x:auto. */
+      code, kbd, samp { overflow-wrap: anywhere; word-break: break-word; }
+      a, p, li, h1, h2, h3, h4, h5, h6 { overflow-wrap: break-word; }
     </style>
   </head>
 

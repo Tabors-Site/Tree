@@ -10,45 +10,26 @@
 // at the gate there is no orderly passage. With one, the boundary
 // holds and the passage is witnessed.
 //
-// Four operations:
+// Four registered BE operations:
 //
-//   register — admit a new being into the reality. The arrival has no
+//   birth    . admit a new being into the reality. The arrival has no
 //              identity yet; I summon their being-to-be forth via
 //              SUMMON.create-being internally and bind their session
 //              to it. The first ever caller becomes the rootOperator.
-//   claim    — bind an existing identity (credentials or token) to
+//   use      . bind an existing identity (credentials or token) to
 //              a session.
-//   release  — drop a session's binding.
-//   switch   — change which being a session is bound to.
+//   release  . drop a session's binding.
+//   switch   . change which being a session is bound to.
 //
 // I am a scripted-cognition being. The factory does not assemble
-// a frame for me — I AM my code. When a SUMMON arrives for me, my
-// summon() runs deterministically and returns. No prompt, no
-// inference, no presence lane. The being-IS-its-code branch of
-// the architecture.
+// a frame for me . I AM my code. When a BE arrives for me, the
+// registered op's handler runs deterministically and returns. No
+// prompt, no inference, no presence lane.
 //
-// I hold no authority of my own. My one privilege is the place-root
-// default for be:create-being that lets me admit arrivals. Beyond
-// arrival I do nothing special; identified beings spawn their own
-// children directly through SUMMON.create-being, not through me.
-//
-// One canonical implementation, reached through `ibp:be` from every
-// transport (WebSocket, HTTP adapter, CLI). The HTTP /auth/register +
-// /auth/login + /auth/logout routes are thin shims that dispatch
-// through here and set browser cookies.
-//
-// Contract:
-//
-//   - honoredOperations: ["register", "claim", "release", "switch"]
-//   - register(payload, ctx) -> { identityToken, beingAddress, beingId,
-//                                 username, firstUser, welcome }
-//   - claim(payload, ctx)    -> { identityToken, beingAddress, beingId,
-//                                 username, welcome? }
-//   - release(payload, ctx)  -> { released: true }
-//   - switch(payload, ctx)   -> { active }
-//
-// On every other reality, a different cherub can be installed by an
-// extension. The contract above is what the protocol layer expects.
+// All four ops register through `registerBeOperation` at module load.
+// Each op carries a structured `args` schema so the descriptor's
+// `actions[]` surface exposes them to clients (the 3D portal renders
+// the schema as a form generically).
 
 import log from "../../../seedReality/log.js";
 import { hooks } from "../../../hooks.js";
@@ -67,145 +48,76 @@ import { summonCreateBeing } from "../../../ibp/verbs/summon.js";
 const TREEOS_AUTH_WELCOME =
   "Welcome to TreeOS. This place is open to anyone who wants to inhabit it. Pick a username and password; you will receive an identity token immediately and start at your home.";
 
+// ────────────────────────────────────────────────────────────────────
+// Static cherub-being export. Used by callers that reach the static
+// fields directly (welcome message, name, policy). The handlers live
+// in the BE op registry now, not on this object.
+// ────────────────────────────────────────────────────────────────────
+
 export const cherubBeing = Object.freeze({
   name: "cherub",
-  description: "The place's welcome character. Processes register, claim, release, and switch for arrival flows. Being creation outside the arrival path goes through SUMMON.create directly, not through auth dispatch.",
-  honoredOperations: ["register", "claim", "release", "switch"],
+  description:
+    "The place's welcome character. Processes birth, use, release, and switch for arrival flows. Being creation outside the arrival path goes through SUMMON.create directly, not through auth dispatch.",
   policy: {
     registrationOpen: true,
     credentialTypes: ["password"],
   },
   welcome: TREEOS_AUTH_WELCOME,
+});
 
-  async register(payload, ctx) {
-    // `name` is the canonical wire field; `username` accepted as a
-    // legacy alias during the transition.
-    const name = payload?.name ?? payload?.username;
-    const { password } = payload || {};
-    if (!name || typeof name !== "string") {
-      throw new IbpError(IBP_ERR.INVALID_INPUT, "`name` is required");
-    }
-    if (!password || typeof password !== "string") {
-      throw new IbpError(IBP_ERR.INVALID_INPUT, "`password` is required");
-    }
+// ────────────────────────────────────────────────────────────────────
+// birth . A new being is born into the reality.
+// ────────────────────────────────────────────────────────────────────
 
-    // ── First-being bootstrap ──
-    // The I_AM already exists (planted by ensureSpaceRoot at boot)
-    // and I (cherub) was summoned forth by the I_AM at genesis.
-    // The very first human registration is admitted through me like
-    // every other one — I summon them forth via SUMMON.create-being.
-    // Two things differ from the subsequent path: their being-tree
-    // parent is the I_AM directly (so they become the rootOperator),
-    // and beforeRegister is bypassed because hook listeners are not
-    // yet loaded on a fresh reality. The cherub at the gate admits the
-    // first arrival the same way as every later one.
-    const first = await isFirstBeing();
-    if (first) {
-      const { findIAm } = await import("../../../materials/being/identity.js");
-      const iAm = await findIAm();
-      const cherubBeingRow = await Being
-        .findOne({ name: "cherub", operatingMode: "scripted" })
-        .select("_id").lean();
-      const cherubBeingId = cherubBeingRow ? String(cherubBeingRow._id) : null;
+async function birthHandler({ payload, ctx }) {
+  const name = payload?.name;
+  const { password } = payload || {};
+  if (!name || typeof name !== "string") {
+    throw new IbpError(IBP_ERR.INVALID_INPUT, "`name` is required");
+  }
+  if (!password || typeof password !== "string") {
+    throw new IbpError(IBP_ERR.INVALID_INPUT, "`password` is required");
+  }
 
-      let being;
-      try {
-        const result = await summonCreateBeing({
-          spec: {
-            operatingMode: "human",
-            name,
-            password,
-            // Every human carries the `human` role. Its summon handler
-            // is a no-op (humans respond out-of-band from their own
-            // transport, not synchronously through the factory) but
-            // without it, the moment-open path can't resolve a role
-            // for transport-acts and assign bails with
-            // "no role registered for null".
-            roles:         ["human"],
-            defaultRole:   "human",
-            homeParent:    getSpaceRootId(),
-            parentBeingId: iAm ? String(iAm._id) : null,
-          },
-          identity:  { name: "cherub", beingId: cherubBeingId },
-          summonCtx: ctx?.summonCtx || null,
-          // Genesis-time mint (plant gathered creds before any
-          // moment existed): ctx.scaffold=true bypasses the
-          // presentism stampId guard. Wire-side first registers
-          // don't pass scaffold; they ride the cherub-as-actor
-          // transport-act path which carries a real ambient
-          // stampId.
-          scaffold:  ctx?.scaffold === true,
-        });
-        being = result.being;
-      } catch (err) {
-        throw mapSeedError(err);
-      }
-      hooks.run("afterRegister", { user: being, req: ctx?.req }).catch(() => {});
-
-      const identityToken = generateToken(being);
-      return {
-        identityToken,
-        beingAddress: `${getRealityDomain()}/@${being.name}`,
-        beingId:      String(being._id),
-        name:     being.name,
-        firstUser:    true,
-        welcome:      TREEOS_AUTH_WELCOME,
-      };
-    }
-
-    // ── Subsequent registrations ──
-    // Run beforeRegister so extensions can gate (email verification,
-    // invite codes, rate limits).
-    const hookData = { name, password, req: ctx?.req, handled: false };
-    const hookResult = await hooks.run("beforeRegister", hookData);
-    if (hookResult?.cancelled) {
-      const code = hookResult.timedOut ? IBP_ERR.INTERNAL : IBP_ERR.FORBIDDEN;
-      throw new IbpError(code, hookResult.reason || "Registration blocked");
-    }
-
-    // Subsequent humans register via the cherub's flow: they
-    // become being-tree children of the cherub. The cherub
-    // is itself a child of the root being, so the chain walks
-    // human → auth → root → null.
-    const cherubParent = await Being.findOne({ name: "cherub", operatingMode: "scripted" })
+  // ── First-being bootstrap ──
+  // The I_AM already exists (planted by ensureSpaceRoot at boot) and
+  // I (cherub) was summoned forth by the I_AM at genesis. The very
+  // first human registration is admitted through me like every other
+  // one . I summon them forth via SUMMON.create-being. Two things
+  // differ from the subsequent path: their being-tree parent is the
+  // I_AM directly (so they become the rootOperator), and
+  // beforeRegister is bypassed because hook listeners are not yet
+  // loaded on a fresh reality. The cherub at the gate admits the
+  // first arrival the same way as every later one.
+  const first = await isFirstBeing();
+  if (first) {
+    const { findIAm } = await import("../../../materials/being/identity.js");
+    const iAm = await findIAm();
+    const cherubBeingRow = await Being
+      .findOne({ name: "cherub", operatingMode: "scripted" })
       .select("_id").lean();
-    const parentBeingId = cherubParent ? String(cherubParent._id) : null;
+    const cherubBeingId = cherubBeingRow ? String(cherubBeingRow._id) : null;
 
     let being;
     try {
-      // I (cherub) summon the new human-being forth. The human
-      // arrived as an arrival stance and asked to be registered; my
-      // act is the SUMMON.create on their behalf. The new being's
-      // first BE.register Fact is stamped by summonCreateBeing,
-      // witnessed by me — preserving the symmetry that every being's
-      // first act is its own first BE, even though I sign it.
       const result = await summonCreateBeing({
         spec: {
           operatingMode: "human",
           name,
           password,
-          // The human role is the addressable contract every human
-          // carries. Its summon handler is a no-op — humans respond
-          // out-of-band from their own transport. Without a role,
-          // SUMMONs to the new human would reject with ROLE_UNAVAILABLE.
           roles:         ["human"],
           defaultRole:   "human",
           homeParent:    getSpaceRootId(),
-          parentBeingId,
+          parentBeingId: iAm ? String(iAm._id) : null,
         },
-        identity:  { name: "cherub", beingId: parentBeingId },
+        identity:  { name: "cherub", beingId: cherubBeingId },
         summonCtx: ctx?.summonCtx || null,
+        scaffold:  ctx?.scaffold === true,
       });
       being = result.being;
     } catch (err) {
       throw mapSeedError(err);
     }
-
-    if (!parentBeingId) {
-      log.warn("cherub",
-        `human "${name}" registered without cherub parent; system beings may be missing`);
-    }
-
     hooks.run("afterRegister", { user: being, req: ctx?.req }).catch(() => {});
 
     const identityToken = generateToken(being);
@@ -213,15 +125,76 @@ export const cherubBeing = Object.freeze({
       identityToken,
       beingAddress: `${getRealityDomain()}/@${being.name}`,
       beingId:      String(being._id),
-      name:     being.name,
-      firstUser:    false,
+      name:         being.name,
+      firstUser:    true,
       welcome:      TREEOS_AUTH_WELCOME,
     };
-  },
+  }
 
-  async claim(payload, _ctx) {
-    // `name` is canonical; `username` is the legacy alias.
-    const name = payload?.name ?? payload?.username;
+  // ── Subsequent registrations ──
+  const hookData = { name, password, req: ctx?.req, handled: false };
+  const hookResult = await hooks.run("beforeRegister", hookData);
+  if (hookResult?.cancelled) {
+    const code = hookResult.timedOut ? IBP_ERR.INTERNAL : IBP_ERR.FORBIDDEN;
+    throw new IbpError(code, hookResult.reason || "Registration blocked");
+  }
+
+  const cherubParent = await Being.findOne({ name: "cherub", operatingMode: "scripted" })
+    .select("_id").lean();
+  const parentBeingId = cherubParent ? String(cherubParent._id) : null;
+
+  let being;
+  try {
+    const result = await summonCreateBeing({
+      spec: {
+        operatingMode: "human",
+        name,
+        password,
+        roles:         ["human"],
+        defaultRole:   "human",
+        homeParent:    getSpaceRootId(),
+        parentBeingId,
+      },
+      identity:  { name: "cherub", beingId: parentBeingId },
+      summonCtx: ctx?.summonCtx || null,
+    });
+    being = result.being;
+  } catch (err) {
+    throw mapSeedError(err);
+  }
+
+  if (!parentBeingId) {
+    log.warn("cherub",
+      `human "${name}" registered without cherub parent; system beings may be missing`);
+  }
+
+  hooks.run("afterRegister", { user: being, req: ctx?.req }).catch(() => {});
+
+  const identityToken = generateToken(being);
+  return {
+    identityToken,
+    beingAddress: `${getRealityDomain()}/@${being.name}`,
+    beingId:      String(being._id),
+    name:         being.name,
+    firstUser:    false,
+    welcome:      TREEOS_AUTH_WELCOME,
+  };
+}
+
+// ────────────────────────────────────────────────────────────────────
+// connect . Bind a session to an existing identity. Two modes:
+// credentials (address is @cherub or a bare place) and token re-bind
+// (address is a stance already held by the session).
+// ────────────────────────────────────────────────────────────────────
+
+async function connectHandler({ address, addressKind, payload, identity }) {
+  const isCherubAddress =
+    addressKind === "place" ||
+    (addressKind === "stance" && /\/@cherub$/.test(address));
+
+  // Mode 1: credential-based bind against cherub.
+  if (isCherubAddress) {
+    const name = payload?.name;
     const { password } = payload || {};
     if (!name || typeof name !== "string") {
       throw new IbpError(IBP_ERR.INVALID_INPUT, "`name` is required");
@@ -230,7 +203,6 @@ export const cherubBeing = Object.freeze({
       throw new IbpError(IBP_ERR.INVALID_INPUT, "`password` is required");
     }
     const user = await findBeingByName(name);
-
     // Constant-time rejection: always run bcrypt even when the user
     // doesn't exist or is remote, so timing doesn't disclose existence.
     const DUMMY_HASH = "$2b$12$0000000000000000000000000000000000000000000000000000";
@@ -241,47 +213,87 @@ export const cherubBeing = Object.freeze({
     if (!user || user.isRemote || !ok) {
       throw new IbpError(IBP_ERR.UNAUTHORIZED, "Invalid credentials");
     }
-
     const identityToken = generateToken(user);
     return {
       identityToken,
       beingAddress: `${getRealityDomain()}/@${user.name}`,
       beingId:      String(user._id),
-      name:     user.name,
+      name:         user.name,
     };
-  },
+  }
 
-  async release(_payload, _ctx) {
-    // Tokens are stateless JWTs; release is client-side (drop the
-    // token, clear the cookie). A server-side revocation list keyed
-    // by jti is on the roadmap. The protocol-level contract is
-    // honored: a released token should not be used again by the
-    // client.
-    return { released: true };
-  },
+  // Mode 2: token re-claim against an already-held stance.
+  if (!identity) {
+    throw new IbpError(
+      IBP_ERR.UNAUTHORIZED,
+      "Token re-claim requires a still-valid identity token",
+    );
+  }
+  const expectedStance = `${getRealityDomain()}/@${identity.name}`;
+  if (address !== expectedStance) {
+    throw new IbpError(
+      IBP_ERR.FORBIDDEN,
+      "Cannot re-claim a stance the session does not hold",
+      { held: expectedStance, requested: address },
+    );
+  }
+  return {
+    identityToken: null,
+    beingAddress:  expectedStance,
+    note:          "already held",
+  };
+}
 
-  async switch(payload, _ctx) {
-    const { from, to } = payload || {};
-    if (!from || typeof from !== "string") {
-      throw new IbpError(IBP_ERR.INVALID_INPUT, "`from` (current stance) is required");
-    }
-    if (!to || typeof to !== "string") {
-      throw new IbpError(IBP_ERR.INVALID_INPUT, "`to` (target stance) is required");
-    }
-    // Switch is purely a client-coordination signal. The server has
-    // no per-session state to update.
-    return { active: to, from };
-  },
+// ────────────────────────────────────────────────────────────────────
+// release . Drop the session's binding. Tokens are stateless JWTs so
+// this is a client-side coordination signal; a server-side revocation
+// list keyed by jti is on the roadmap.
+// ────────────────────────────────────────────────────────────────────
 
-  // Note: there is no `createBeing` BE operation. Being creation is a
-  // SUMMON act, not a BE act. Any being with permission calls SUMMON
-  // against the not-yet-existing @qualifier carrying a creation spec
-  // in message.content; the verb routes to summonCreateBeing. Auth-
-  // being's role in creation is only the arrival flow above (humans
-  // signing up via BE.register, where auth's register handler
-  // internally calls summonCreateBeing on their behalf because the
-  // human has no identity yet to be the summoner).
+async function releaseHandler(_args) {
+  return { released: true };
+}
+
+// ────────────────────────────────────────────────────────────────────
+// Op definitions. Three handlers + their static schemas. The seed
+// imports these into the canonical BE_OPS table at ibp/beOps.js .
+// there is no registration call (BE is a closed set, fixed by the
+// substrate, so a registry would be the same anti-pattern as the
+// retired `toolNames`).
+// ────────────────────────────────────────────────────────────────────
+
+export const cherubBeOps = Object.freeze({
+  birth: {
+    description: "Create a new identity and start at your home.",
+    label: "Register",
+    args: {
+      name:     { type: "text",     label: "Username", required: true },
+      password: { type: "password", label: "Password", required: true, minLength: 1 },
+    },
+    handler: birthHandler,
+    bootstrap: true,   // arrival has no identity yet; assertVerbCaller skipped
+  },
+  connect: {
+    description: "Bind this session to an existing identity.",
+    label: "Log in",
+    args: {
+      name:     { type: "text",     label: "Username", required: true },
+      password: { type: "password", label: "Password", required: true },
+    },
+    handler: connectHandler,
+    bootstrap: true,
+  },
+  release: {
+    description: "Drop this session's binding.",
+    label: "Log out",
+    args: {},
+    handler: releaseHandler,
+  },
 });
+
+// ────────────────────────────────────────────────────────────────────
+// Helpers
+// ────────────────────────────────────────────────────────────────────
 
 function mapSeedError(err) {
   if (err && err.name === "IbpError" && err.code) {
@@ -297,19 +309,31 @@ function mapSeedError(err) {
   return new IbpError(IBP_ERR.INTERNAL, msg);
 }
 
+// ────────────────────────────────────────────────────────────────────
 // Stub role for the registry. Cherub is a delegate, not a summon-
-// dispatched being: its real work happens through BE verb routing
-// (cherubBeing.register / claim / release / switch above). The role
-// exists only so the @cherub stance resolves and the being row can
-// be planted with roles: ["cherub"]; triggerOn: [] means SUMMONs
-// never queue, so assign never tries to dispatch through here.
+// dispatched being: its real work happens through registered BE ops
+// above. The role exists only so the @cherub stance resolves and the
+// being row can be planted with roles: ["cherub"]; triggerOn: []
+// means SUMMONs never queue, so assign never tries to dispatch
+// through here.
+// ────────────────────────────────────────────────────────────────────
+
 export const cherubRole = Object.freeze({
   name: "cherub",
   description:
-    "The gate. Delegate; processes BE register/claim/release/switch out-of-band, not through summon dispatch.",
+    "The gate. Processes the four BE ops (birth/use/release/switch). Identity territory; no summon dispatch.",
   permissions: ["be"],
   respondMode: "async",
   triggerOn: [],
+
+  // License declaration. The descriptor's enrichBeings reads this list,
+  // cross-references the seed's static BE_OPS table for each name, and
+  // builds the per-being `actions[]` block the portal renders as
+  // menu + form. Schemas live in the seed (cherubBeOps above + BE_OPS
+  // at ibp/beOps.js), not here . canBe names the license, not the
+  // shape.
+  canBe: ["birth", "connect", "release"],
+
   async summon(_message, _ctx) {
     return null;
   },

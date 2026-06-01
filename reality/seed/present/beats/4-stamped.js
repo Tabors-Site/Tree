@@ -73,9 +73,9 @@ export function capContent(s) {
 /**
  * Atomically commit one moment: ΔF (the Facts the moment produced)
  * + the Act row that frames them. Called by moment.js only when
- * cognition returned ok:true (or for the abort path, which still
- * produces an Act with content=null and stopped=true — legacy
- * shape until abort also converts to release-with-no-Act).
+ * cognition returned `kind:"act"` AND produced at least one of:
+ * non-empty endMessage content, or a Fact on some reel. Both
+ * structurally enforced below.
  *
  * The plannedAct came from assign.planActRow and carries all the
  * derived fields (ibpAddress, rootCorrelation, parentThread,
@@ -85,13 +85,12 @@ export function capContent(s) {
  * unit. PAST FIXED on the whole moment, not just the Act.
  *
  * Three commit shapes:
- *   - ΔF=0: single-doc Act.create. No transaction needed.
+ *   - ΔF=0 (content-only act, e.g. an LLM that emitted prose via a
+ *     speech tool): single-doc Act.create. No transaction needed.
  *   - ΔF=1, no replica set: logFact-then-Act.create. Two writes,
  *     each individually atomic. The moment's atomicity reduces to
  *     "both happened or neither" only via the per-reel lock for the
- *     fact + the Act's unique _id. (Today, this path is dead in
- *     practice once Phase 2 lands because all moments either emit
- *     facts under replica set or emit none.)
+ *     fact + the Act's unique _id.
  *   - ΔF≥1, replica set: one session, withTransaction, append the
  *     whole ΔF + Act.create inside. All-or-nothing across the moment.
  *
@@ -101,10 +100,18 @@ export function capContent(s) {
  *   - noteActSealOnThread(rootCorrelation) bumps the
  *     ThreadsProjection's lastAct
  *
- * On a failed cognition (ok:false), moment.js does not call this
- * function. The Act row never materializes; ΔF never commits. Zero
- * trace; the InboxProjection stays open (no answering Act exists);
- * the ThreadsProjection is not bumped.
+ * On a failed cognition (ok:false), or on a SEE outcome, moment.js
+ * does not call this function. The Act row never materializes;
+ * ΔF never commits. Zero trace; the InboxProjection stays open
+ * (no answering Act exists); the ThreadsProjection is not bumped.
+ *
+ * Invariant — structurally enforced.
+ *   Every Act row in the database has either non-empty endMessage
+ *   content OR one or more Facts under its actId. An Act with
+ *   neither is a substrate violation: it means a moment that should
+ *   have been SEE (a(Φ) = ∅) leaked an Act row anyway. The gate at
+ *   the top of this function refuses such a write loudly. New
+ *   callers that hit this throw should be returning SEE upstream.
  *
  * Idempotency: the Act._id is a uuid minted at assign-time. A second
  * sealAct call with the same plannedAct would collide on _id; that's
@@ -113,9 +120,9 @@ export function capContent(s) {
  *
  * @param {object} plannedAct        — the row to create (from planActRow)
  * @param {object} opts
- * @param {string|null} opts.content — endMessage text. null for
- *   transport-acts and aborts.
- * @param {boolean} [opts.stopped=false]  — abort marker.
+ * @param {string|null} opts.content — endMessage text. Null for
+ *   transport-acts (the verb call IS the act; the prose channel
+ *   is unused). In that case ΔF must be non-empty.
  * @param {Array<object>} [opts.deltaF=[]] — Fact specs the moment
  *   produced (verb handlers and material helpers pushed onto
  *   summonCtx.deltaF during cognition). Committed atomically with
@@ -128,16 +135,34 @@ export function capContent(s) {
  * @returns {Promise<object|null>}   the inserted row, or null on
  *   collision/failure.
  */
-export async function sealAct(plannedAct, { content = null, stopped = false, deltaF = [], afterSeal = [] } = {}) {
+export async function sealAct(plannedAct, { content = null, deltaF = [], afterSeal = [] } = {}) {
   if (!plannedAct?._id) {
     log.warn("Stamped", "sealAct called without plannedAct._id; nothing sealed");
     return null;
   }
+
+  // Invariant gate. Refuse to write an Act that would be an orphan
+  // (no output and no Facts). Such a moment is doctrinally SEE; the
+  // caller should not have reached this function. The check lives in
+  // code, not just doctrine, so a regression in any future tool that
+  // succeeds without stamping a Fact fails loudly here on first run
+  // instead of silently filling the Act collection.
+  const hasContent = typeof content === "string" && content.trim().length > 0;
+  const hasFacts   = Array.isArray(deltaF) && deltaF.length > 0;
+  if (!hasContent && !hasFacts) {
+    throw new Error(
+      `sealAct: refusing to seal Act ${String(plannedAct._id).slice(0, 8)} ` +
+      `with no endMessage content and no Facts — that's a SEE moment, ` +
+      `not an act. Caller (likely moment.js or a tool path) should ` +
+      `return cognitionSee() instead of invoking sealAct.`,
+    );
+  }
+
   const endTime = new Date();
   const safeContent = content != null ? capContent(content) : null;
   const actDoc = {
     ...plannedAct,
-    endMessage: { content: safeContent, time: endTime, stopped },
+    endMessage: { content: safeContent, time: endTime, stopped: false },
   };
 
   let inserted = null;

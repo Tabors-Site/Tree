@@ -298,7 +298,7 @@ function refreshCurrent() {
   }, 120);
 }
 
-// BE.claim or BE.register. Stores the session and reconnects the socket
+// BE.connect or BE.birth. Stores the session and reconnects the socket
 // so the new token rides the next handshake.
 async function signIn(mode, name, password) {
   if (!state.client) throw new Error("Not connected");
@@ -363,12 +363,12 @@ async function doOp(address, action, args = {}) {
 }
 
 // Invoke a BE operation. address is a stance ("<reality>/@cherub" or
-// "<reality>/<path>@<name>"); op is "claim" | "register" | "release" | "switch".
-// For claim/register, this routes through signIn() so the session and
+// "<reality>/<path>@<name>"); op is "birth" | "connect" | "release".
+// For birth/connect, this routes through signIn() so the session and
 // socket get rebuilt correctly.
 async function beOp(op, address, credentials = {}) {
   if (!state.client) throw new Error("Not connected");
-  if (op === "claim" || op === "register") {
+  if (op === "birth" || op === "connect") {
     // Re-use signIn so the new token replaces the session and the
     // socket reconnects auth'd.
     return signIn(op, credentials.name, credentials.password || "");

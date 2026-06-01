@@ -13,10 +13,6 @@ import {
   initAddressBar,
   updateAddressBar,
   toggleIdentityChip,
-  showAuthActions,
-  hideAuthActions,
-  showAuthSignInPanel,
-  hideAuthSignInPanel,
   showSummonPanel,
   hideSummonPanel,
   resetSummonState,
@@ -25,6 +21,12 @@ import {
   showLlmAssignerPanel,
   hideLlmAssignerPanel,
 } from "./ui.js";
+import {
+  showActionMenu,
+  showActionForm,
+  hideActionPanel,
+  isActionPanelOpen,
+} from "./actionRenderer.js";
 
 const SESSION_KEY = "treeos-portal-3d-session";
 
@@ -449,8 +451,7 @@ async function navigate(address, { fromHistory = false } = {}) {
     state.scene.renderDescriptor(desc, {
       isAuthenticated: !!state.session?.token,
     });
-    hideAuthActions();
-    hideAuthSignInPanel();
+    hideActionPanel();
     hideSummonPanel();
     resetSummonState();
     state.currentSummonBeing = null;
@@ -528,22 +529,19 @@ function onGaze(_target, _info) {
 }
 
 // Proximity dispatcher: fires from scene.js whenever any being's
-// proximity+gaze state flips. Cherub opens sign-in/logout; every
-// other being opens the summon panel.
+// proximity+gaze state flips. Cherub opens its action menu (rendered
+// generically from the descriptor's actions[]); every other being
+// uses its own panel today. Other migrations follow the cherub model.
 function onBeingProximity(b, inRange, _distance) {
-  if (b.being === "cherub")       return onAuthProximity(inRange);
+  if (b.being === "cherub")       return onActionBeingProximity(b, inRange);
   if (b.being === "llm-assigner") return onLlmAssignerProximity(inRange);
   return onChatBeingProximity(b, inRange);
 }
 
-// Proximity only CLOSES panels now (when the player walks away or looks
-// away). Opening requires an explicit click on the being so the user
-// doesn't trigger panels by brushing past.
-function onAuthProximity(inRange) {
-  if (!inRange) {
-    hideAuthActions();
-    hideAuthSignInPanel();
-  }
+// Proximity only CLOSES the action menu when the player walks away or
+// looks away. Opening requires an explicit click on the being.
+function onActionBeingProximity(b, inRange) {
+  if (!inRange) hideActionPanel();
 }
 
 function onLlmAssignerProximity(inRange) {
@@ -565,7 +563,7 @@ function onChatBeingProximity(b, inRange) {
 // clicks while gazing at a being within INTERACT_RANGE.
 function onBeingActivate(b) {
   if (b.being === "cherub") {
-    openAuthPanel();
+    openActionMenu(b);
   } else if (b.being === "llm-assigner") {
     openLlmAssignerPanel();
   } else {
@@ -573,11 +571,88 @@ function onBeingActivate(b) {
   }
 }
 
+// Generic action menu + form. Reads the being's `actions[]` from the
+// descriptor; user picks one, fills the form, submit dispatches the
+// verb. Substrate-driven . the portal doesn't know what cherub is or
+// what `birth` does, just renders what the server says is available.
+function openActionMenu(b) {
+  const reality = state.discovery?.reality;
+  const path = state.descriptor?.address?.pathByNames || "/";
+  // Cherub's BE ops dispatch against the bare place address.
+  const address = b.being === "cherub"
+    ? reality
+    : `${reality}${path}@${b.being}`.replace(/\/+@/, "/@");
+  // The scene's mesh.userData carries a trimmed being shape (no actions).
+  // Pull the full descriptor entry so the renderer sees actions[].
+  const fullBeing = state.descriptor?.beings?.find((bb) => bb.being === b.being) || b;
+  showActionMenu(fullBeing, {
+    onActionPicked: (action) => openActionForm(fullBeing, action, address),
+    onClose: () => {},
+  });
+}
+
+function openActionForm(b, action, address, { error = null } = {}) {
+  showActionForm(action, {
+    error,
+    onCancel: () => openActionMenu(b),
+    onSubmit: async (values) => {
+      // Show busy state while the verb dispatches.
+      showActionForm(action, { busy: true, error: null });
+      try {
+        if (action.verb === "be") {
+          const result = await state.client.be(action.action, address, values);
+          // Apply auth-state side effects.
+          if (action.action === "birth" || action.action === "connect") {
+            const newSession = {
+              placeUrl:        state.session?.placeUrl || defaultPlaceUrl(),
+              placeIsProxied:  shouldUseProxy(state.session?.placeUrl || defaultPlaceUrl()),
+              token:           result.identityToken,
+              username:        result.name || values.name,
+              beingAddress:    result.beingAddress,
+            };
+            saveSession(newSession);
+            state.session = newSession;
+            state.client.disconnect();
+            hideActionPanel();
+            await connectAndPlace(newSession);
+            return;
+          }
+          if (action.action === "release") {
+            await logout();
+            hideActionPanel();
+            return;
+          }
+          // switch / other: just close the panel.
+          hideActionPanel();
+        } else if (action.verb === "do") {
+          await state.client.do(address, action.action, values);
+          hideActionPanel();
+        } else if (action.verb === "summon") {
+          await state.client.summon(address, { content: values.content || "", from: address });
+          hideActionPanel();
+        } else if (action.verb === "see") {
+          await state.client.see(address);
+          hideActionPanel();
+        } else {
+          throw new Error(`unknown verb "${action.verb}"`);
+        }
+      } catch (err) {
+        // Re-render the form with the error; user fixes inputs and retries.
+        openActionForm(b, action, address, {
+          error: `${err.code || "error"}: ${err.message || "submit failed"}`,
+        });
+      }
+    },
+  });
+}
+
 function openLlmAssignerPanel() {
   // Requires an authenticated being (the server enforces this on every
-  // op). If unauthenticated, bounce the user to the auth flow first.
+  // op). If unauthenticated, bounce the user to the cherub action
+  // menu (where they pick birth / use).
   if (!state.session?.token) {
-    openAuthPanel();
+    const cherub = (state.descriptor?.beings || []).find((bb) => bb.being === "cherub");
+    if (cherub) openActionMenu(cherub);
     return;
   }
   // The Space tab needs a concrete spaceId. We pull it from the live
@@ -595,41 +670,6 @@ function openLlmAssignerPanel() {
     // one-at-a-time (idempotent).
     onSpawnTutorial: spawnLlmAssignerTutorial,
   });
-}
-
-function openAuthPanel() {
-  if (state.session?.token) {
-    hideAuthSignInPanel();
-    showAuthActions({
-      username: state.session.username,
-      onLogout: async () => { await logout(); },
-    });
-  } else {
-    hideAuthActions();
-    showAuthSignInPanel({
-      reality: state.discovery.reality,
-      onSubmit: async (mode, username, password) => {
-        // `name` is the canonical wire field; the server accepts
-        // `username` as a legacy alias. Pass directly — `client.be`
-        // already wraps these into the BE envelope's payload.
-        const result = await state.client.be(mode, state.discovery.reality, {
-          name: username,
-          password,
-        });
-        const newSession = {
-          placeUrl: state.session?.placeUrl || defaultPlaceUrl(),
-          placeIsProxied: shouldUseProxy(state.session?.placeUrl || defaultPlaceUrl()),
-          token: result.identityToken,
-          username,
-          beingAddress: result.beingAddress,
-        };
-        saveSession(newSession);
-        state.session = newSession;
-        state.client.disconnect();
-        await connectAndPlace(newSession);
-      },
-    });
-  }
 }
 
 function openSummonPanel(b) {
@@ -761,6 +801,7 @@ async function attemptPlant() {
 // Single source of truth for whether gameplay keys (WASD/B/N/E) fire.
 function isGameplayInputBlocked() {
   if (isAnyPanelOpen()) return true;
+  if (isActionPanelOpen()) return true;
   if (isPlanterOpen())  return true;
   const el = document.activeElement;
   if (!el || el === document.body) return false;

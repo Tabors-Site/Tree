@@ -57,14 +57,16 @@ export function showAuthOverlay(reality) {
   cherub.title = "ad-hoc test identity";
   card.appendChild(cherub);
 
-  let mode = "claim";
+  // BE op names: "connect" (binds to existing) or "birth" (mints new).
+  // The UI labels stay user-friendly . decoupled from the underlying op.
+  let mode = "connect";
   claimTab.onclick = () => {
-    mode = "claim";
+    mode = "connect";
     setActive(claimTab, registerTab);
-    submit.textContent = "claim";
+    submit.textContent = "connect";
   };
   registerTab.onclick = () => {
-    mode = "register";
+    mode = "birth";
     setActive(registerTab, claimTab);
     submit.textContent = "register";
   };
@@ -76,12 +78,12 @@ export function showAuthOverlay(reality) {
     if (!name) { showErr(err, "name required"); return; }
     try {
       submit.disabled = true;
-      submit.textContent = mode === "claim" ? "claiming..." : "registering...";
+      submit.textContent = mode === "connect" ? "connecting..." : "registering...";
       await flat.signIn(mode, name, pass);
     } catch (e) {
       showErr(err, `${e.code || "error"}: ${e.message || "sign-in failed"}`);
       submit.disabled = false;
-      submit.textContent = mode;
+      submit.textContent = mode === "connect" ? "connect" : "register";
     }
   };
 
@@ -89,9 +91,9 @@ export function showAuthOverlay(reality) {
     err.classList.add("hidden");
     try {
       cherub.disabled = true;
-      await flat.signIn("claim", "cherub", "");
+      await flat.signIn("connect", "cherub", "");
     } catch (e) {
-      showErr(err, `${e.code || "error"}: ${e.message || "cherub claim failed"}`);
+      showErr(err, `${e.code || "error"}: ${e.message || "cherub connect failed"}`);
       cherub.disabled = false;
     }
   };

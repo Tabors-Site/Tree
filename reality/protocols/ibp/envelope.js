@@ -18,7 +18,7 @@
 //   DO      { action: string, args?: object, ... }
 //   SUMMON  { message, from?, inReplyTo?, rootCorrelation?, priority?,
 //             activeRole?, correlation? }
-//   BE      { op: "register"|"claim"|"release"|"switch", ...credentials }
+//   BE      { op: "birth"|"connect"|"release", ...credentials }
 //
 // `identity` is the caller's auth token (when applicable). Verb handlers
 // read it from the parsed envelope, no per-verb-field destructuring.

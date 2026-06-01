@@ -49,6 +49,15 @@ const NewLandingPage = () => {
         <div className="ns-what-inner">
           <h2 className="ns-what-title">What is this?</h2>
 
+          <figure className="ns-stamper-figure">
+            <img
+              src="/stamper.gif"
+              alt="A looping diagram of the five-beat moment cycle inside the stamper."
+              loading="lazy"
+            />
+            <figcaption>One moment, walked through the stamper.</figcaption>
+          </figure>
+
           <p>
             TreeOS is a runtime for beings. Humans, AI agents, scripted
             characters, whatever shape of mind a system needs. Every being

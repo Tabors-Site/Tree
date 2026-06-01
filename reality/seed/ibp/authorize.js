@@ -166,32 +166,28 @@ export async function authorize(args) {
   const props = await deriveStanceProperties({ beingId, targetSpace: spaceId });
   const stanceLabel = stanceLabelFromProps(props);
 
-  // BE bootstrap exception. All four canonical BE ops are permitted
+  // BE bootstrap exception. All three canonical BE ops are permitted
   // from arrival:
   //
-  //   register / claim    — admission ops, gated downstream by
-  //                         place-level register_enabled / claim_enabled
+  //   birth / connect     — admission ops, gated downstream by
+  //                         place-level birth_enabled / connect_enabled
   //                         flags (the cherub enforces). Without this
   //                         no one could ever sign up on a fresh reality.
   //
-  //   release / switch    — stateless no-ops at the cherub level
-  //                         (release returns {released:true}; switch
-  //                         confirms the client-side swap). Allowing
-  //                         them from arrival unblocks the stale-
-  //                         session cleanup path: a client with a
-  //                         dead cookie can release it, drop to a
-  //                         clean arrival state, then register / claim
-  //                         again. Denying them gates nothing because
-  //                         the handlers don't mutate server state.
+  //   release             — stateless no-op at the cherub level
+  //                         (returns {released:true}). Allowing it
+  //                         from arrival unblocks the stale-session
+  //                         cleanup path: a client with a dead cookie
+  //                         can release it, drop to a clean arrival
+  //                         state, then birth / connect again.
   //
   // Per-op feature flags + cherub-side validation handle actual
   // authorization; this gate just lets the request reach them.
   if (verb === "be" && props.arrival) {
     if (
-      args.operation === "register" ||
-      args.operation === "claim" ||
-      args.operation === "release" ||
-      args.operation === "switch"
+      args.operation === "birth" ||
+      args.operation === "connect" ||
+      args.operation === "release"
     ) {
       return { ok: true, stance: "arrival" };
     }
@@ -524,12 +520,12 @@ export async function seedDefaultStancePermissions(summonCtx) {
     updates[`qualities.permissions.${verb}`] = bucket;
   }
 
-  // Place-level BE config flags (register/claim toggles for operators
+  // Place-level BE config flags (birth/connect toggles for operators
   // who want to lock the place down).
   const auth = quals instanceof Map ? quals.get("auth") : quals?.auth;
   const hasAuth = auth instanceof Map ? auth.size > 0 : !!auth;
   if (!hasAuth) {
-    updates["qualities.auth"] = { register_enabled: true, claim_enabled: true };
+    updates["qualities.auth"] = { birth_enabled: true, connect_enabled: true };
   }
 
   if (Object.keys(updates).length === 0) {
@@ -557,11 +553,11 @@ export async function seedDefaultStancePermissions(summonCtx) {
 
 /**
  * Read the place-level BE configuration flags. Defaults to
- * register_enabled and claim_enabled both true.
+ * birth_enabled and connect_enabled both true.
  */
 export async function getAuthConfig() {
   const spaceRootId = getSpaceRootId();
-  if (!spaceRootId) return { register_enabled: true, claim_enabled: true };
+  if (!spaceRootId) return { birth_enabled: true, connect_enabled: true };
   const root = await Space.findById(spaceRootId).select("qualities.auth").lean();
   const auth = root?.qualities?.auth;
   const get = (key, fallback) => {
@@ -569,8 +565,8 @@ export async function getAuthConfig() {
     return auth && key in auth ? auth[key] : fallback;
   };
   return {
-    register_enabled: get("register_enabled", true) !== false,
-    claim_enabled: get("claim_enabled", true) !== false,
+    birth_enabled: get("birth_enabled", true) !== false,
+    connect_enabled: get("connect_enabled", true) !== false,
   };
 }
 

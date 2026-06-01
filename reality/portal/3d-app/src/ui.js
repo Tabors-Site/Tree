@@ -116,172 +116,12 @@ export function hideLabel() {
   if (labelEl) labelEl.style.display = "none";
 }
 
-// Contextual sign-in panel shown when gazing at the cherub while
-// unestablished. Behaves like the logout panel: appears on gaze, hides
-// on look-away. The panel persists ONLY while the gaze stays on the
-// cherub; if the gaze leaves, the panel removes itself, but state
-// (typed values) is preserved across re-gazes so the user doesn't have
-// to restart on a brief glance-away.
-let _signInPanelEl = null;
-let _signInState = { mode: "claim", username: "", password: "", error: "" };
-
-export function showAuthSignInPanel({ reality, onSubmit }) {
-  if (_signInPanelEl) return;
-  document.exitPointerLock?.();
-
-  const el = document.createElement("div");
-  el.className = "auth-signin";
-  el.style.cssText = `
-    position: fixed; left: 50%; top: 50%;
-    transform: translate(-50%, calc(-50% - 60px));
-    background: rgba(10, 13, 12, 0.94);
-    border: 1px solid #2c3a32; border-radius: 6px;
-    padding: 16px 20px; min-width: 280px;
-    pointer-events: auto; z-index: 12;
-    font-family: ui-monospace, monospace; color: #c8d3cb;
-    box-shadow: 0 8px 30px rgba(0, 0, 0, 0.45);
-  `;
-  el.innerHTML = `
-    <div style="font-size: 11px; color: #6b7d72; margin-bottom: 10px;">
-      arrival at ${escapeHtml(reality)}
-    </div>
-    <form>
-      <div style="margin-bottom: 8px;">
-        <label style="display:block; font-size:10px; color:#6b7d72;
-          text-transform:uppercase; letter-spacing:.05em; margin-bottom:3px;">
-          username
-        </label>
-        <input name="username" type="text" autocomplete="username"
-          style="width:100%; box-sizing:border-box; padding:5px 8px;
-          background:#0a0d0c; color:#c8d3cb; border:1px solid #2c3a32;
-          border-radius:3px; font-family:inherit; font-size:12px;" />
-      </div>
-      <div style="margin-bottom: 10px;">
-        <label style="display:block; font-size:10px; color:#6b7d72;
-          text-transform:uppercase; letter-spacing:.05em; margin-bottom:3px;">
-          password
-        </label>
-        <input name="password" type="password" autocomplete="current-password"
-          style="width:100%; box-sizing:border-box; padding:5px 8px;
-          background:#0a0d0c; color:#c8d3cb; border:1px solid #2c3a32;
-          border-radius:3px; font-family:inherit; font-size:12px;" />
-      </div>
-      <button type="submit" class="btn-submit" style="width:100%;
-        padding:7px 10px; background:#1a3424; color:#c8d3cb;
-        border:1px solid #2f6b48; border-radius:3px;
-        font-family:inherit; font-size:12px; cursor:pointer;">
-        claim
-      </button>
-      <button type="button" class="btn-toggle" style="width:100%;
-        padding:5px 0; margin-top:4px; background:none; border:none;
-        color:#6b7d72; font-family:inherit; font-size:11px; cursor:pointer;">
-        or register a new being
-      </button>
-      <div class="error" style="color:#d97a7a; font-size:11px;
-        margin-top:6px; display:none;"></div>
-    </form>
-  `;
-  document.body.appendChild(el);
-  _signInPanelEl = el;
-
-  const form = el.querySelector("form");
-  const usernameInput = form.querySelector("input[name=username]");
-  const passwordInput = form.querySelector("input[name=password]");
-  const submitBtn = form.querySelector(".btn-submit");
-  const toggleBtn = form.querySelector(".btn-toggle");
-  const errBox = form.querySelector(".error");
-
-  // Restore preserved state.
-  usernameInput.value = _signInState.username;
-  passwordInput.value = _signInState.password;
-  submitBtn.textContent = _signInState.mode;
-  toggleBtn.textContent = _signInState.mode === "claim"
-    ? "or register a new being"
-    : "or claim an existing being";
-  if (_signInState.error) {
-    errBox.style.display = "block";
-    errBox.textContent = _signInState.error;
-  }
-  setTimeout(() => usernameInput.focus(), 30);
-
-  // Persist typed values so look-away/look-back doesn't lose them.
-  usernameInput.addEventListener("input", () => { _signInState.username = usernameInput.value; });
-  passwordInput.addEventListener("input", () => { _signInState.password = passwordInput.value; });
-
-  toggleBtn.addEventListener("click", () => {
-    _signInState.mode = _signInState.mode === "claim" ? "register" : "claim";
-    submitBtn.textContent = _signInState.mode;
-    toggleBtn.textContent = _signInState.mode === "claim"
-      ? "or register a new being"
-      : "or claim an existing being";
-  });
-
-  form.addEventListener("submit", async (e) => {
-    e.preventDefault();
-    errBox.style.display = "none";
-    _signInState.error = "";
-    const username = usernameInput.value.trim();
-    const password = passwordInput.value;
-    if (!username || !password) return;
-    try {
-      await onSubmit(_signInState.mode, username, password);
-      // Success: clear state so a future arrival starts fresh.
-      _signInState = { mode: "claim", username: "", password: "", error: "" };
-      hideAuthSignInPanel();
-    } catch (err) {
-      const msg = `${err.code || "error"}: ${err.message || "sign-in failed"}`;
-      _signInState.error = msg;
-      errBox.style.display = "block";
-      errBox.textContent = msg;
-    }
-  });
-}
-
-export function hideAuthSignInPanel() {
-  _signInPanelEl?.remove();
-  _signInPanelEl = null;
-}
-
-// Small action panel shown when gazing at the cherub while signed in.
-// Persists while the gaze stays on the cherub; closes when the user
-// looks away or the action completes.
-let _authActionsEl = null;
-export function showAuthActions({ username, onLogout }) {
-  if (_authActionsEl) return;
-  document.exitPointerLock?.();
-  const el = document.createElement("div");
-  el.className = "auth-actions";
-  el.style.cssText = `
-    position: fixed; left: 50%; top: 50%;
-    transform: translate(-50%, calc(-50% - 80px));
-    background: rgba(10, 13, 12, 0.92);
-    border: 1px solid #2c3a32; border-radius: 6px;
-    padding: 14px 18px; min-width: 220px;
-    pointer-events: auto; z-index: 12;
-    font-family: ui-monospace, monospace; color: #c8d3cb;
-  `;
-  el.innerHTML = `
-    <div style="font-size: 11px; color: #6b7d72; margin-bottom: 10px;">
-      signed in as ${escapeHtml(username || "you")}
-    </div>
-    <button class="btn-logout" style="width:100%; padding:6px 10px;
-      background:#2a1414; color:#d97a7a;
-      border:1px solid #5a2a2a; border-radius:3px;
-      font-family:inherit; font-size:12px; cursor:pointer;">
-      logout
-    </button>
-  `;
-  el.querySelector(".btn-logout").addEventListener("click", async () => {
-    try { await onLogout(); } finally { hideAuthActions(); }
-  });
-  document.body.appendChild(el);
-  _authActionsEl = el;
-}
-
-export function hideAuthActions() {
-  _authActionsEl?.remove();
-  _authActionsEl = null;
-}
+// Hardcoded auth panels (showAuthSignInPanel / showAuthActions) retired
+// with the verbs-as-language UI cleanup. Cherub now exposes its four BE
+// ops (birth / use / release / switch) through the descriptor's
+// `actions[]` block, and the 3D portal renders them via the generic
+// actionRenderer in src/actionRenderer.js. Everything previously
+// hardcoded for cherub lives in that one path.
 
 // Summon panel: shown when in proximity+gaze of a non-cherub being.
 // Lets the user type a message and send a SUMMON. Typed state is
@@ -400,8 +240,11 @@ export function resetSummonState() {
 
 // Any modal panel currently open. Used to gate gameplay input (WASD/B/N)
 // so the user can interact with panels without the camera moving.
+// Cherub's action menu / form panels live in actionRenderer.js and are
+// queried separately by callers that need the unified "any panel open"
+// signal (main.js composes the two).
 export function isAnyPanelOpen() {
-  return !!(_signInPanelEl || _authActionsEl || _summonPanelEl);
+  return !!_summonPanelEl;
 }
 
 // Bottom-right sky clock. Shows the place's local time (HH:MM in 24h),

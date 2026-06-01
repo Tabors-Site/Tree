@@ -88,7 +88,7 @@ const SCALAR_SET_FIELDS = new Set([
   "coord",
   "size",
   // `position` (Being.position): the Space this being is in right
-  // now. Historically written via be:switch with params.toPosition;
+  // now. Written via be:occupy with params.toPosition;
   // set-being:position is the symmetric DO-side path used by the
   // portal on navigate ("I am now in this space") so the being
   // shows up in descriptor.occupantsByPosition. The reducer
@@ -232,7 +232,7 @@ export function applySetField(state, fact) {
  * @returns {object} new state
  */
 export function applyCreateBeing(state, fact) {
-  if (fact?.verb !== "be" || fact?.action !== "register") return state;
+  if (fact?.verb !== "be" || fact?.action !== "birth") return state;
   if (fact?.target?.kind !== "being") return state;
   const spec = fact?.params?.spec;
   if (!spec || typeof spec !== "object") return state; // legacy slim params

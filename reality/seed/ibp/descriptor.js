@@ -49,6 +49,7 @@ import { getInboxSummary } from "../present/intake/inbox.js";
 import { getRole, listRoles } from "../present/roles/registry.js";
 import { findOpenForBeing, findLastSealedForBeing } from "../present/beats/2-fold/reelChains.js";
 import { fold } from "../present/beats/2-fold/foldEngine.js";
+import { BE_OPS } from "./beOps.js";
 
 // Fold an aggregate before reading its qualities. Per FOLD.md: the
 // projection IS the cache, and fold() catches it up to the reel head
@@ -361,11 +362,18 @@ async function placeAtSpaceRoot(resolved, { identity } = {}) {
   // makes them addressable from the place descriptor without walking
   // qualities.beings. `available` reflects whether the role's
   // backing extension is currently registered.
-  const spaceRootBeings = [
-    { being: "cherub",         invocableBy: "anyone",        available: isRegistered("cherub") },
-    { being: "llm-assigner", invocableBy: "authenticated", available: isRegistered("llm-assigner") },
-    { being: "reality-manager", invocableBy: "owner",         available: isRegistered("reality-manager") },
-  ];
+  //
+  // The raw list runs through enrichBeings so each entry picks up the
+  // role's `actions[]` surface (from canBe + BE_OPS) plus identity,
+  // permissions, inbox, activity, qualities, etc. Without this the
+  // 3D portal sees the bare {being, invocableBy, available} triple
+  // and renders cherub with "no actions" because the actions array
+  // is undefined.
+  const spaceRootBeings = await enrichBeings(spaceRootId, [
+    { being: "cherub",          invocableBy: "anyone",        available: isRegistered("cherub"),         _beingId: null },
+    { being: "llm-assigner",    invocableBy: "authenticated", available: isRegistered("llm-assigner"),   _beingId: null },
+    { being: "reality-manager", invocableBy: "owner",         available: isRegistered("reality-manager"), _beingId: null },
+  ], { identity });
 
   return {
     address: {
@@ -486,6 +494,7 @@ async function placeAtSpace(resolved, { identity, payload } = {}) {
   const beings = await enrichBeings(
     space._id,
     [...registered, ...transient],
+    { identity },
   );
 
   return {
@@ -619,10 +628,60 @@ function buildLineage(resolved) {
   return lineage;
 }
 
+// Build the `actions[]` block for one being. Reads the role's `canBe`
+// license, cross-references the seed's static BE_OPS table, and
+// returns `[{verb, action, label, description, args, bootstrap}, ...]`
+// . the wire shape the portal's actionRenderer consumes to render a
+// generic menu + form for each action.
+//
+// For cherub specifically, the identity-state filter trims the list:
+// authenticated callers don't see birth/use; unauthenticated callers
+// don't see release/switch. Portal stays state-blind.
+//
+// canDo / canSee / canSummon are not surfaced as actions today . they
+// describe what an LLM-driven role is licensed to dispatch via the
+// four seed verb-tools, which is a separate concern from the
+// portal's "click a being and invoke an action" UI. When a real case
+// surfaces, the same `actions[]` field generalizes.
+function buildActions(beingName, def, identity) {
+  if (!def?.canBe || !Array.isArray(def.canBe) || def.canBe.length === 0) {
+    return [];
+  }
+  const isAuthenticated = !!identity?.beingId;
+  const out = [];
+  for (const entry of def.canBe) {
+    const opName = typeof entry === "string"
+      ? entry
+      : (entry?.action || entry?.name || null);
+    if (!opName) continue;
+    const op = BE_OPS[opName];
+    if (!op) continue;
+    // Identity-state filter (cherub): hide birth/connect when already
+    // bound; hide release when not bound. Other beings' canBe lists
+    // pass through unfiltered.
+    if (beingName === "cherub") {
+      const isAcquireOp = opName === "birth" || opName === "connect";
+      const isHeldOp    = opName === "release";
+      if (isAcquireOp && isAuthenticated) continue;
+      if (isHeldOp && !isAuthenticated)   continue;
+    }
+    out.push({
+      verb:        "be",
+      action:      opName,
+      label:       op.label || opName,
+      description: op.description || "",
+      args:        op.args || {},
+      bootstrap:   op.bootstrap === true,
+    });
+  }
+  return out;
+}
+
 // Attach the registered role's wire fields, the per-being inbox, the
 // active Act's activity, and the being's own qualities to each
 // entry produced by beingsAtSpace.
-async function enrichBeings(spaceId, entries) {
+async function enrichBeings(spaceId, entries, opts = {}) {
+  const identity = opts.identity || null;
   const inboxByBeing = await getInboxSummary(spaceId);
 
   // Slice H: fold each being before reading qualities. Per FOLD.md
@@ -669,6 +728,10 @@ async function enrichBeings(spaceId, entries) {
       permissions: def ? def.permissions : null,
       respondMode: def ? def.respondMode : null,
       triggerOn:   def ? def.triggerOn   : null,
+      // Per-being action surface. The portal renders this generically
+      // as a menu + arg-schema form; one entry per BE op the role is
+      // licensed for, filtered by identity state (cherub-only today).
+      actions:     buildActions(entry.being, def, identity),
       inbox: inb,
       activity: activities[i],
       busy:        inb.activeFrom !== null,

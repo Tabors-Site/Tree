@@ -84,7 +84,7 @@ const register = async (req, res) => {
     const ack = await dispatchAndWait(carrier, {
       verb:    "be",
       address: getRealityDomain(),
-      payload: { op: "register", name, password },
+      payload: { op: "birth", name, password },
     });
 
     if (ack.status === "error") return sendAckError(res, ack, "Registration failed");
@@ -114,7 +114,7 @@ const login = async (req, res) => {
     const ack = await dispatchAndWait(carrier, {
       verb:    "be",
       address: getRealityDomain(),
-      payload: { op: "claim", name, password },
+      payload: { op: "connect", name, password },
     });
 
     if (ack.status === "error") return sendAckError(res, ack, "Invalid credentials");

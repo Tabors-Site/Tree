@@ -39,6 +39,7 @@ const IbpPage = () => {
             or a position. Send a payload. Get an ack back, then optionally a
             later push.
           </p>
+
           <p>
             Transports come and go. The verbs do not. IBP is the protocol.
             WebSocket and HTTP are just the carriers.
@@ -329,10 +330,8 @@ const IbpPage = () => {
   verb:    "summon",
   address: "treeos.ai/@tabor :: treeos.ai/notes@archivist",
   payload: {
-    message: {
-      content: "summarize what I wrote this week",
-      correlation: "c-001"
-    }
+    message:     { content: "summarize what I wrote this week" },
+    correlation: "c-001"
   }
 }`}
             </pre>
@@ -349,25 +348,24 @@ const IbpPage = () => {
           <div className="ns-verb">
             <h3>BE</h3>
             <p className="ns-verb-line">
-              Identity operations. Register, claim, release, switch.
+              Identity operations. Birth, connect, release.
             </p>
             <pre className="ns-code">
 {`{
   verb:    "be",
   address: "treeos.ai/@arrival :: treeos.ai/@cherub",
-  payload: { op: "register", name: "tabor", password: "..." }
+  payload: { op: "birth", name: "tabor", password: "..." }
 }`}
             </pre>
             <p className="ns-small">
               BE is for session binding. Bring a new identity into being,
-              claim an existing one with credentials, release the current
-              session, or switch which identity the session holds. All four
-              route through the cherub, the welcome being at the reality
-              root, so the right stance is always{" "}
-              <code>&lt;reality&gt;/@cherub</code>. The left stance is
-              whoever is currently driving the session. Before register or
-              claim that is the pre-claim arrival being the transport
-              minted on connect; after claim it is the user being.
+              connect an existing one with credentials, or release the
+              current session. All three route through the cherub, the
+              welcome being at the reality root, so the right stance is
+              always <code>&lt;reality&gt;/@cherub</code>. The left stance is
+              whoever is currently driving the session. Before birth or
+              connect that is the pre-bind arrival being the transport
+              minted on connect; after connect it is the user being.
             </p>
           </div>
         </section>

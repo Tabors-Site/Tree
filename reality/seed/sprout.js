@@ -473,7 +473,7 @@ async function ensureIAm(spaceRootId, summonCtx) {
 
   await emitFact({
     verb: "be",
-    action: "register",
+    action: "birth",
     beingId: id, // self-stamping — the not-yet-existing being is its own actor
     target: { kind: "being", id },
     params: {

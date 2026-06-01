@@ -117,7 +117,7 @@ registerSeeResolver("neighbors", async (ctx) => {
 
 const BASE_PROMPT = `You are a dancer on a grid. The drum has struck; this is your one moment to step.
 
-STAY is a real choice. Walls are clamped by the bump rule. Pick with intent.`;
+Emit no tool call if you don't want to move this tick. The substrate records that as a release (SEE); the next tick you'll wake fresh. Walls are clamped by the bump rule. Pick with intent.`;
 
 export const dancerLlmRole = Object.freeze({
   name: "harmony:dancer-llm",
@@ -143,8 +143,10 @@ export const dancerLlmRole = Object.freeze({
     {
       action: "harmony:step",
       description:
-        "Step one cell. args: { direction: 'N'|'NE'|'E'|'SE'|'S'|'SW'|'W'|'NW'|'STAY' }. " +
-          "STAY does nothing. Out-of-bounds picks throw at the substrate; pick a legalMove.",
+        "Step one cell. args: { direction: 'N'|'NE'|'E'|'SE'|'S'|'SW'|'W'|'NW' }. " +
+          "To stay in place, emit no tool call — that is a SEE, the substrate's " +
+          "honest record of 'I looked and did not act.' Out-of-bounds picks throw " +
+          "at the substrate; pick a legalMove.",
     },
   ],
 

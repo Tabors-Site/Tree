@@ -321,6 +321,22 @@
   .ns-doc {
     padding: 32px 16px 48px;
   }
+  .ns-addr {
+    margin: 20px 0 12px;
+    padding: 14px 12px;
+  }
+  .ns-addr-bar {
+    padding: 10px 10px;
+    /* shrink the address-diagram font on narrow phones so each
+       stance fits on one logical chunk even when the bar wraps */
+    font-size: clamp(0.8rem, 3.4vw, 0.95rem);
+  }
+  .ns-addr-label {
+    padding: 8px 10px;
+  }
+  .ns-addr-part {
+    padding: 10px;
+  }
   .ns-addr-labels,
   .ns-addr-parts {
     grid-template-columns: 1fr;
@@ -328,6 +344,7 @@
   .ns-grammar-row {
     grid-template-columns: 1fr;
     gap: 6px;
+    padding: 10px 12px;
   }
   .ns-code {
     padding: 14px 16px;
@@ -336,5 +353,12 @@
   .ns-doc-aside {
     padding: 18px 18px;
     margin-top: 36px;
+  }
+  .ns-figure {
+    padding: 8px;
+    margin: 18px 0 6px;
+  }
+  .ns-verb {
+    padding: 14px 0;
   }
 }

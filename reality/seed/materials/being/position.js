@@ -11,7 +11,7 @@
 //
 //   position   the specific Space the being is attending to.
 //              Persisted to Being.position on every set (write-
-//              through, fire-and-forget via the be:switch fact).
+//              through, fire-and-forget via the be:occupy fact).
 //
 //   rootId     the tree-root the being is currently inside.
 //              Derived — computed from position's ancestor chain on
@@ -67,7 +67,7 @@ function getBeingPositionRecord(beingId) {
 
 // Fire-and-forget fact emit for being position change. The cache is
 // the hot path; DB persistence happens through the fact-driven flow:
-// logFact appends a be:switch Fact on the being's reel under the
+// logFact appends a be:occupy Fact on the being's reel under the
 // append lock, eager-fold runs the being reducer (which writes
 // Being.position from params.toPosition), and applyProjection
 // writes the row.
@@ -78,12 +78,12 @@ function getBeingPositionRecord(beingId) {
 // event-sourced model.
 //
 // `beingId` doubles as actor and target — the being is acting on
-// itself (BE.switch is identity acting on identity).
+// itself (the being occupies a new position).
 function persistBeingPosition(beingId, spaceId, summonCtx = null) {
   if (!beingId) return;
   const spec = {
     verb:    "be",
-    action:  "switch",
+    action:  "occupy",
     beingId: String(beingId),
     target:  { kind: "being", id: String(beingId) },
     params:  { toPosition: spaceId || null },

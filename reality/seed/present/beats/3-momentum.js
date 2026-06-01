@@ -111,7 +111,7 @@ export async function momentum(setup = {}) {
  *     args    = op-specific params
  *
  *   verb: "be"  → beVerb(operation, opPayload, ctx)
- *     target  = BE op name ("register", "claim", "release", "switch")
+ *     target  = BE op name ("birth", "connect", "release")
  *     args    = { opPayload, address, addressKind, callerIdentity }
  *     action  = ignored
  *
