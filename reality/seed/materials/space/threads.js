@@ -32,6 +32,7 @@
 // flips; the rows underneath remain for audit.
 
 import Act from "../../past/act/act.js";
+import { attachActFacts } from "../../past/act/actChain.js";
 import Space from "./space.js";
 import { SEED_SPACE } from "./seedSpaces.js";
 import { I_AM } from "../being/seedBeings.js";
@@ -253,7 +254,10 @@ export async function describeThread(rootCorrelation) {
     lastAct,
     // Surface the acts on the thread so clients can render the chain
     // without a second query. Oldest-first for natural reading order.
-    acts: sortedAsc.map(serializeThreadAct),
+    // attachActFacts enriches each with a compact Fact summary so a
+    // structured act (empty prose, Facts-as-content) renders as what it
+    // did, not as an empty moment.
+    acts: await attachActFacts(sortedAsc.map(serializeThreadAct)),
   };
 }
 

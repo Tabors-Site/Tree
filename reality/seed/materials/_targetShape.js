@@ -112,8 +112,15 @@ export function targetIdOf(target) {
  * `expectedKind` disambiguates string targets (and asserts the typed
  * kind matches what the handler expects). Throws when the kind
  * doesn't match or the row isn't found.
+ *
+ * `opts.summonCtx`, when threaded by a handler running inside a moment,
+ * lets the loader fall back to in-flight create-<kind> specs in
+ * `summonCtx.deltaF` when the row hasn't materialized in Mongo yet.
+ * Returns a sparse row (`_id` + the create spec's fields, `_pending:true`).
+ * Handlers needing rich row data should fetch it via the spec's
+ * spaceId/parent fields rather than expecting a full Mongoose doc.
  */
-export async function loadTargetRow(target, expectedKind) {
+export async function loadTargetRow(target, expectedKind, { summonCtx = null } = {}) {
   if (!expectedKind || !KINDS.has(expectedKind)) {
     throw new Error(`loadTargetRow: expectedKind must be space/being/matter; got "${expectedKind}"`);
   }
@@ -165,10 +172,45 @@ export async function loadTargetRow(target, expectedKind) {
 
   const Model = await _modelFor(expectedKind);
   const row = await Model.findById(id);
-  if (!row) {
-    throw new Error(`loadTargetRow: ${expectedKind} not found with id "${id}"`);
+  if (row) return row;
+
+  // Row absent — check the moment's deltaF for a pending create-<kind>
+  // spec at this id. Scaffolds chain creates and immediate sets within
+  // one moment; the row only materializes at sealAct, so handlers
+  // running inside the same moment can't read back from Mongo. They
+  // can read from deltaF, the locally-known source of truth for what
+  // this moment is bringing into being.
+  //
+  // Synthesizes a sparse row carrying _id plus whatever the create spec
+  // declared. Handlers that need more (e.g. set-matter's coord clamp
+  // reads Space.size) still go through their own lookups — but those
+  // lookups land at the target's spaceId, which is in the spec.
+  // Create-fact shape varies by kind: space and matter ride do:create-*,
+  // being rides be:birth. The expected (verb, action) pair per kind:
+  const CREATE_FACT = {
+    space:  { verb: "do", action: "create-space" },
+    matter: { verb: "do", action: "create-matter" },
+    being:  { verb: "be", action: "birth" },
+  };
+  const deltaF = Array.isArray(summonCtx?.deltaF) ? summonCtx.deltaF : null;
+  if (deltaF && deltaF.length) {
+    const create = CREATE_FACT[expectedKind];
+    const pending = create
+      ? deltaF.find(
+          (f) =>
+            f?.verb === create.verb &&
+            f?.action === create.action &&
+            f?.target?.kind === expectedKind &&
+            String(f?.target?.id) === id,
+        )
+      : null;
+    if (pending) {
+      const spec = pending.params?.spec || {};
+      return { _id: id, _pending: true, ...spec };
+    }
   }
-  return row;
+
+  throw new Error(`loadTargetRow: ${expectedKind} not found with id "${id}"`);
 }
 
 async function _modelFor(kind) {

@@ -47,9 +47,14 @@ const UUID_RE =
  * @param {boolean} [opts.requireRealityMatch=true]
  *   reject stances whose reality doesn't match this server (only false for
  *   cross-reality previews that intentionally inspect remote paths).
+ * @param {object|null} [opts.identity]
+ *   the calling being's identity. Required when the path starts with "/~",
+ *   because "~" means "the caller's homeSpace" — it's a self-relative
+ *   shorthand, not a being-named address. Without identity, "/~" can't
+ *   resolve.
  */
 export async function resolveStance(stance, opts = {}) {
-  const { requireRealityMatch = true } = opts;
+  const { requireRealityMatch = true, identity = null } = opts;
   if (!stance) {
     throw new IbpError(IBP_ERR.ADDRESS_PARSE_ERROR, "Stance is required");
   }
@@ -82,55 +87,112 @@ export async function resolveStance(stance, opts = {}) {
     });
   }
 
-  // Being home: path starts with "/~". First segment after ~ names the
-  // being; remaining segments walk into their home tree.
+  // Home shorthand: path starts with "/~". "~" means "a being's
+  // homeSpace" — which being is decided by the @qualifier:
+  //
+  //   "<reality>/~@tabor"  — tabor's home (explicit being)
+  //   "<reality>/~"        — the caller's own home (implicit, default)
+  //
+  // Both forms collapse to a normal Space resolution. "~" is sugar; the
+  // resolver swaps it for the actual Being.homeSpace row. Anything
+  // after "/~/" walks into children of that home, e.g.
+  // "<reality>/~@tabor/projects" → tabor's home's "projects" child.
   if (path.startsWith("/~")) {
-    const segments = path.slice(2).split("/").filter(Boolean);
-    const name = segments[0];
-    if (!name) {
+    // Pick the target being. An explicit @qualifier wins; otherwise
+    // default to the caller. Without either, "~" has nothing to
+    // attach to.
+    let targetBeing = null;
+    if (being) {
+      targetBeing = await Being.findOne({ name: being })
+        .select("_id name homeSpace")
+        .lean();
+      if (!targetBeing) {
+        throw new IbpError(
+          IBP_ERR.BEING_NOT_FOUND,
+          `No being named "${being}" on this reality`,
+          { being },
+        );
+      }
+    } else {
+      if (!identity?.beingId) {
+        throw new IbpError(
+          IBP_ERR.UNAUTHORIZED,
+          `Cannot resolve "~" without an @qualifier and no caller identity`,
+        );
+      }
+      targetBeing = await Being.findById(identity.beingId)
+        .select("_id name homeSpace")
+        .lean();
+      if (!targetBeing) {
+        throw new IbpError(
+          IBP_ERR.BEING_NOT_FOUND,
+          `Caller being not found`,
+          { beingId: String(identity.beingId) },
+        );
+      }
+    }
+    if (!targetBeing.homeSpace) {
       throw new IbpError(
-        IBP_ERR.ADDRESS_PARSE_ERROR,
-        `Invalid home path "${path}" (missing being name after ~)`,
+        IBP_ERR.SPACE_NOT_FOUND,
+        `@${targetBeing.name} has no homeSpace`,
+        { beingId: String(targetBeing._id) },
       );
     }
 
-    const beingDoc = await Being.findOne({ name }).select("_id name").lean();
-    if (!beingDoc) {
+    // "/~" stays literal — the parser no longer auto-expands it.
+    // Everything after "/~" is a walk INTO the resolved home's
+    // children: "/~" → [], "/~/projects" → ["projects"].
+    const subPath = path.slice(2).split("/").filter(Boolean);
+
+    const homeSpace = await Space
+      .findById(targetBeing.homeSpace)
+      .select("_id name type status parent rootOwner contributors visibility qualities")
+      .lean();
+    if (!homeSpace) {
       throw new IbpError(
-        IBP_ERR.BEING_NOT_FOUND,
-        `No being named "${name}" on this reality`,
-        { name },
+        IBP_ERR.SPACE_NOT_FOUND,
+        `@${targetBeing.name}'s homeSpace row not found`,
+        { beingId: String(targetBeing._id), homeSpace: String(targetBeing.homeSpace) },
       );
     }
 
-    const subPath = segments.slice(1);
-    // Bare "/~name" → the home position itself. spaceId is the place
-    // root because the home address denotes the "where" inside the
-    // tree at the same level — authorize uses spaceId to walk
-    // ancestor permission rules, and the closest containing space
-    // for a home is the place root. Without this, every DO at a
-    // home address would have spaceIdForAuth fall through to the
-    // beingId, which isn't a valid space, and the wildcard rule on
-    // the place root would never be found.
+    // Display name for the home segment. Self-relative "/~" (no
+    // @qualifier) stays cosmetic — chain shows "~" and the descriptor's
+    // pathByNames reads back as "/~". With an explicit @qualifier the
+    // sugar dissolves into the real space name: "/~@salem" displays
+    // as "/<salem-home-name>".
+    const homeChainName = being ? homeSpace.name : "~";
+
     if (subPath.length === 0) {
+      // Resolve to the homeSpace itself. Normal placeAtSpace handles
+      // the descriptor — no home-specific branching downstream.
+      let rootId = null;
+      try {
+        const treeRoot = await resolveRootSpace(homeSpace._id);
+        rootId = treeRoot?._id || null;
+      } catch {
+        rootId = homeSpace.rootOwner ? homeSpace._id : null;
+      }
       return base({
-        isHomeRoot: true,
-        beingId: beingDoc._id,
-        name: beingDoc.name,
-        spaceId: getSpaceRootId(),
-        chain: [{ name: `~${beingDoc.name}`, id: beingDoc._id }],
-        leafName: `~${beingDoc.name}`,
-        leafId: beingDoc._id,
+        beingId: targetBeing._id,
+        name: targetBeing.name,
+        rootId,
+        spaceId: homeSpace._id,
+        chain: [{ name: homeChainName, id: homeSpace._id }],
+        leafName: homeChainName,
+        leafId: homeSpace._id,
         being,
+        leafSpace: homeSpace,
       });
     }
 
-    // "/~name/<segments>" → walk the being's home tree.
+    // Walk children of the homeSpace.
     return walkSpacePath({
       segments: subPath,
-      ownerFilter: { rootOwner: beingDoc._id },
-      contextBeing: beingDoc,
+      ownerFilter: {},
+      contextBeing: null,
       being,
+      startAt: { ...homeSpace, name: homeChainName },
     });
   }
 
@@ -178,19 +240,25 @@ function base(over = {}) {
  * Walk a sequence of path segments under the place root, matching each
  * segment by UUID (preferred) or by name. Returns the resolved-stance
  * shape pointing at the final leaf.
+ *
+ * `startAt` (optional) seeds the walk inside a known Space row instead
+ * of starting from the place root — used by the "/~" branch to walk
+ * children of the caller's homeSpace.
  */
-async function walkSpacePath({ segments, ownerFilter, contextBeing, being }) {
+async function walkSpacePath({ segments, ownerFilter, contextBeing, being, startAt = null }) {
   const spaceRootId = getSpaceRootId();
   if (!spaceRootId) {
     throw new IbpError(IBP_ERR.INTERNAL, "Space root not initialized yet");
   }
 
-  const chain = contextBeing
-    ? [{ name: `~${contextBeing.name}`, id: contextBeing._id }]
-    : [];
+  const chain = startAt
+    ? [{ name: startAt.name, id: startAt._id }]
+    : (contextBeing
+        ? [{ name: `~${contextBeing.name}`, id: contextBeing._id }]
+        : []);
 
-  let currentParent = spaceRootId;
-  let leafSpace = null;
+  let currentParent = startAt ? startAt._id : spaceRootId;
+  let leafSpace = startAt;
 
   for (let i = 0; i < segments.length; i++) {
     const seg = segments[i];

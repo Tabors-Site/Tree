@@ -82,7 +82,7 @@ export async function seeVerb(target, opts = {}) {
 
   assertVerbCaller("see", opts);
 
-  const { identity = null, currentUser = null, currentReality = null, payload = null } = opts;
+  const { identity = null, currentUser = null, currentReality = null, payload = null, summonCtx = null } = opts;
   const addressKind = opts.addressKind
     || (target && typeof target === "object" && target.kind)
     || inferAddressKind(addrString);
@@ -107,6 +107,7 @@ export async function seeVerb(target, opts = {}) {
       identity,
       verb: "see",
       target: { kind: "position", spaceId: threadsSpaceId, isDiscovery: false },
+      summonCtx,
     });
     if (!decision.ok) {
       throw new IbpError(
@@ -238,7 +239,7 @@ export async function seeVerb(target, opts = {}) {
     };
   }
 
-  const resolved = await resolveStance(expanded.right);
+  const resolved = await resolveStance(expanded.right, { identity });
 
   // Stance auth.
   const decision = await authorize({
@@ -249,6 +250,7 @@ export async function seeVerb(target, opts = {}) {
       spaceId:     resolved.spaceId,
       isDiscovery: false,
     },
+    summonCtx,
   });
   if (!decision.ok) {
     throw new IbpError(

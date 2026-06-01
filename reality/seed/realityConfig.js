@@ -257,6 +257,20 @@ export const CONFIG_DEFAULTS = {
   jwtExpiryDays: 30,
   cookieDomain: null,
 
+  // Spatial defaults for spaces (Space.size shape: `{ x, y, z? }`).
+  // `defaultSpaceSize` fills in when a space is created without a
+  // size in the spec . the reality root, being homes, and ad-hoc
+  // user-created spaces all land at this size unless the caller
+  // overrides. Beings' coord writes are clamped against the space's
+  // size (per being.coord), so a sized space lets the portal render
+  // a walkable grid and the substrate keep positions in-bounds.
+  //
+  // `maxSpaceSize` caps any axis on size writes (create + set-space).
+  // A request to make a 10^9-cell space throws INVALID_INPUT. Keep
+  // this generous . it's a sanity guard, not a budget.
+  defaultSpaceSize: { x: 50, y: 50 },
+  maxSpaceSize:     { x: 1000, y: 1000, z: 1000 },
+
   // Protected (shown but not modifiable via public API)
   seedVersion: null,
   disabledExtensions: [],

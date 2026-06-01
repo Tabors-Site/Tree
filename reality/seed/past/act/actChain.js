@@ -12,8 +12,10 @@
 // explorer in client surfaces (flat-app, future tooling).
 
 import Act from "./act.js";
+import Fact from "../fact/fact.js";
 
 const MAX_LIMIT = 500;
+const MAX_FACT_PARAM_BYTES = 512;
 
 /**
  * Build the act-chain descriptor for one being. Newest-first.
@@ -39,10 +41,79 @@ export async function describeActChain(beingId, opts = {}) {
     beingName = row?.name || null;
   } catch { /* best-effort */ }
 
+  const serialized = acts.map(serializeAct);
+  await attachActFacts(serialized);
+
   return {
     being: { id: String(beingId), name: beingName },
-    acts: acts.map(serializeAct),
+    acts: serialized,
     count: acts.length,
+  };
+}
+
+/**
+ * Attach a compact Fact summary to each serialized Act, in one batched
+ * query (no N+1). An Act row deliberately does not store its Facts
+ * (act.js: "what happened inside this moment" is Fact.find({ actId })),
+ * but a client rendering the chain needs to show what a moment DID when
+ * it produced no prose: a structured act (a dancer's step, any tool
+ * call) has an empty endMessage because its content IS the Facts it
+ * stamped. This surfaces those Facts so the UI can render the action
+ * instead of treating the moment as empty.
+ *
+ * Each fact is reduced to { verb, action, target:{kind,id}, params },
+ * params capped so a large write (set-render, matter content) can't
+ * bloat the descriptor. Facts ride oldest-first within each Act.
+ *
+ * Mutates and returns the passed array.
+ *
+ * @param {Array<{_id:string}>} serializedActs
+ * @returns {Promise<Array>}
+ */
+export async function attachActFacts(serializedActs) {
+  if (!Array.isArray(serializedActs) || serializedActs.length === 0) {
+    return serializedActs;
+  }
+  const ids = serializedActs.map((a) => String(a._id));
+  let facts = [];
+  try {
+    facts = await Fact.find({ actId: { $in: ids } })
+      .select("actId verb action target params seq")
+      .sort({ seq: 1, _id: 1 })
+      .lean();
+  } catch {
+    // Best-effort enrichment; the act chain still renders without it.
+    facts = [];
+  }
+  const byAct = new Map();
+  for (const f of facts) {
+    const key = String(f.actId);
+    if (!byAct.has(key)) byAct.set(key, []);
+    byAct.get(key).push(compactFact(f));
+  }
+  for (const a of serializedActs) {
+    a.facts = byAct.get(String(a._id)) || [];
+  }
+  return serializedActs;
+}
+
+function compactFact(f) {
+  let params = f.params ?? null;
+  try {
+    const s = params == null ? "" : JSON.stringify(params);
+    if (s && Buffer.byteLength(s, "utf8") > MAX_FACT_PARAM_BYTES) {
+      params = { _truncated: true, preview: s.slice(0, MAX_FACT_PARAM_BYTES) + "…" };
+    }
+  } catch {
+    params = null;
+  }
+  return {
+    verb:   f.verb || null,
+    action: f.action || null,
+    target: f.target
+      ? { kind: f.target.kind || null, id: f.target.id ? String(f.target.id) : null }
+      : null,
+    params,
   };
 }
 

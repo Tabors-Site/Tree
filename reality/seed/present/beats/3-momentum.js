@@ -135,10 +135,16 @@ async function runTransportAct(summonCtx) {
   const { doVerb } = await import("../../ibp/verbs/do.js");
   const { beVerb } = await import("../../ibp/verbs/be.js");
 
+  // Thread the FULL parent summonCtx into the inner verb. The verb's
+  // emitFact reads ctx.deltaF to push its Fact onto the moment's ΔF;
+  // a truncated `{ actId }` would silently make emitFact fall back to
+  // a sealFacts singleton, the inner Fact would self-seal, and the
+  // outer Act's deltaF would stay empty — sealAct's invariant gate
+  // would then refuse the Act (content:null + deltaF:[] = orphan).
   if (verb === "do") {
     return doVerb(target, action, args || {}, {
       identity:  summonCtx.identity || null,
-      summonCtx: { actId: summonCtx.actId || null },
+      summonCtx,
     });
   }
 
@@ -148,6 +154,6 @@ async function runTransportAct(summonCtx) {
     address,
     addressKind,
     identity:  callerIdentity,
-    summonCtx: { actId: summonCtx.actId || null },
+    summonCtx,
   });
 }

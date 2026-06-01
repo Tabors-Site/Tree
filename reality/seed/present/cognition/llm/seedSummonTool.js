@@ -108,9 +108,12 @@ export const seedSummonTool = {
         message,
         {
           identity: { beingId, name: name || null },
-          summonCtx: callCtx?.summonCtx
-            ? { actId: callCtx.summonCtx.actId || null }
-            : null,
+          // Pass the FULL moment ctx, not a { actId } slice. summonVerb's
+          // emitFact reads ctx.deltaF to push the be:summon Fact onto the
+          // moment's ΔF; a truncated copy self-seals it outside the
+          // moment and orphans the outer Act. callCtx.summonCtx carries
+          // deltaF.
+          summonCtx: callCtx?.summonCtx || null,
         },
       );
       return {

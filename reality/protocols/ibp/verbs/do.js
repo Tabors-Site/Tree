@@ -89,7 +89,9 @@ export async function handleDo(socket, env, ack) {
       currentReality: getRealityDomain(),
       currentUser: socket.name,
     });
-    const resolved = await resolveStance(expanded.right);
+    const resolved = await resolveStance(expanded.right, {
+      identity: { beingId, name: socket.name },
+    });
 
     // Hand the verb layer a typed identity, not a Mongoose row. The
     // IBP boundary speaks { kind, id }; raw rows are storage, and

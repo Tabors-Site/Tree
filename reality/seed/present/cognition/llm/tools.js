@@ -661,20 +661,36 @@ export async function executeTool(toolCall, session, ctx, presenceKey) {
     // and the Fact rides the open Act. Without this every extension
     // tool would have to repack ctx fields from args by hand and
     // forgetting throws "missing ambient actId" mid-stream.
+    // Thread the live moment ctx so a tool that delegates to
+    // doVerb/summonVerb/beVerb pushes its Fact onto THIS moment's ΔF.
+    // ctx.summonCtx is the deltaF/foldedSeqs/afterSeal-bearing object
+    // assign built and the seal drains; we spread it (preserving the
+    // deltaF/afterSeal array references and the foldedSeqs Map) and add
+    // the wake/reply fields the seed summon tool reads. Rebuilding a
+    // deltaF-less copy here was the bug: the handler's emitFact then
+    // self-sealed its Fact outside the moment and the Act orphaned. The
+    // minimal fallback covers standalone tool paths with no live moment.
+    const liveCtx = ctx.summonCtx || null;
     const callCtx = {
       identity: { beingId: ctx.beingId, name: ctx.username || null },
-      summonCtx: {
-        actId: ctx.actId || null,
-        sessionId: ctx.sessionId || null,
-        rootActId: ctx.rootActId || ctx.actId || null,
-        ibpAddress: presenceKey || null,
-        // Wake context for reply-threading tools (e.g. the seed
-        // summon tool). Optional; only set when the moment was
-        // opened by an incoming summon llmMoment knows about.
-        wakeFrom: ctx.wakeFrom || null,
-        wakeCorrelation: ctx.wakeCorrelation || null,
-        spaceId: ctx.currentSpace || ctx.rootId || null,
-      },
+      summonCtx: liveCtx
+        ? {
+            ...liveCtx,
+            rootActId: liveCtx.rootActId || ctx.rootActId || ctx.actId || null,
+            ibpAddress: liveCtx.ibpAddress || presenceKey || null,
+            wakeFrom: liveCtx.wakeFrom || ctx.wakeFrom || null,
+            wakeCorrelation: liveCtx.wakeCorrelation || ctx.wakeCorrelation || null,
+            spaceId: liveCtx.spaceId || ctx.currentSpace || ctx.rootId || null,
+          }
+        : {
+            actId: ctx.actId || null,
+            sessionId: ctx.sessionId || null,
+            rootActId: ctx.rootActId || ctx.actId || null,
+            ibpAddress: presenceKey || null,
+            wakeFrom: ctx.wakeFrom || null,
+            wakeCorrelation: ctx.wakeCorrelation || null,
+            spaceId: ctx.currentSpace || ctx.rootId || null,
+          },
     };
     const nodeToolTimeout =
       session._nodeLlmConfig?.toolCallTimeout ?? getToolCallTimeoutMs();

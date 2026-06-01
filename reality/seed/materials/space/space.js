@@ -77,6 +77,24 @@ const SpaceSchema = new mongoose.Schema({
     _id: false,
   },
 
+  // The space's coord WITHIN its parent space. The sibling of `size`:
+  // `size` is "how big am I inside myself"; `coord` is "where do I
+  // sit in my parent." Shape `{ x, y, z? }`, clamped against the
+  // parent's size at write time the same way Being.coord is clamped.
+  //
+  // createSpace assigns a random coord inside the parent's size when
+  // the caller doesn't pass one and the parent has a size. The portal
+  // reads this at the parent's SEE to position the child tree on the
+  // grid (instead of the hash-derived ring it was falling back to).
+  // The unified `move` op writes here for space targets, same as it
+  // does for matter.
+  coord: {
+    x: { type: Number, default: null },
+    y: { type: Number, default: null },
+    z: { type: Number, default: null },
+    _id: false,
+  },
+
   qualities: { type: Map, of: mongoose.Schema.Types.Mixed, default: () => new Map() },
 
   // Projection cache markers. Per FOLD.md / STAMPER.md, the Space row

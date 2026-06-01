@@ -79,9 +79,101 @@ export default {
       "do:my-ext:read-only":{ requires: {} },                 // anyone
       "summon:@my-coach":   { requires: { homeInDomain: true } },
     },
+
+    assets: {                            // Sensory-asset registry.
+      // Files in <ext-dir>/assets/ that the seed serves at
+      // /assets/<ext-name>/*. The loader generates a synthetic
+      // /assets/<ext-name>/manifest.json from this block; the portal
+      // fetches it once on first reference to resolve `<ext>:<name>`
+      // identifiers in qualities.render.
+      //
+      // Per-channel maps: each key is the canonical asset name used
+      // inside qualities.render; each value is the path inside the
+      // extension's assets/ directory (subdirectories allowed).
+      models: {
+        "drum":   "drum.glb",                // qualities.render.model = "my-ext:drum"
+        "dancer": "models/dancer.glb",       // subdirs are fine
+      },
+      sounds: {
+        "drum-hit": "drum-hit.mp3",          // sounds[fact] = "my-ext:drum-hit"
+        "footstep": "sounds/footstep.mp3",
+      },
+      // Future sensory channels (effects, haptics, ambient, voice)
+      // add their own per-channel maps under provides.assets.
+    },
   },
 };
 ```
+
+### Sensory assets and `qualities.render`
+
+`provides.assets` declares the per-channel registry of files the extension ships. The loader mounts `<ext-dir>/assets/` at `/assets/<ext-name>/*` (static-file serving) and serves the registry block at `/assets/<ext-name>/manifest.json`.
+
+How declared assets get used: any matter, space, or being can carry a `qualities.render` block declaring how it's rendered across every sensory channel. The block is the seed-owned namespace any extension may write through the `set-render` DO op (the only legitimate writer):
+
+```js
+await reality.do(matterId, "set-render", {
+  model:      "my-ext:drum",                          // model channel
+  scale:      1.0,
+  rotation:   { x: 0, y: 0, z: 0 },
+  animations: { "my-ext:tick": "tick" },              // animation channel (fact-action → anim clip name)
+  sounds:     { "my-ext:tick": "drum-hit" },          // sound channel (fact-action → "<ext>:<asset>")
+});
+```
+
+The portal reads `entry.qualities.render` from the descriptor, resolves each `<ext>:<name>` identifier against the extension's asset manifest, and renders accordingly. A matter without a render block falls back to its default substrate primitive.
+
+**Asset-name ↔ kind-name independence.** Extensions typically choose to align asset names with the kinds they create (e.g. `model: "harmony:drum"` for matter whose kind is `harmony:drum`), but the two are independent registries. The matter's kind is whatever the extension stamped at creation; the asset name is whatever the extension wrote in `provides.assets.models`. An extension may legitimately ship an asset named `"hand-drum"` while its matter's kind is `"harmony:drum"`; the link is exactly whatever string is written into `qualities.render.model`. The freedom matters when one model serves multiple kinds, or when refactoring kind names without touching asset files.
+
+### Asset budget
+
+Every extension's `assets/` directory is gated at load against two limits. An extension that exceeds either is refused entirely (no half-loaded state).
+
+**Per-file limits, by extension:**
+
+| Extension | Channel | Limit | Hitting this means |
+|-----------|---------|-------|---------------------|
+| `.glb`, `.gltf` | model | 15 MB | enable Draco mesh compression + KTX2 textures, then re-export. `gltf-pipeline -i in.glb -o out.glb -d` does the Draco step in one command. A 5k-tri Mixamo character with both compressions lands at 200-500 KB. |
+| `.mp3`, `.ogg`, `.wav` | sound | 5 MB | convert to 192 kbps MP3 or trim length |
+
+Other file types (textures, JSON sidecars, etc.) have no per-file limit but still count toward the per-extension total below.
+
+**Per-extension cumulative:**
+
+- **100 MB** — warning logged at load (`extension X ships <N> MB of assets`). Extension still loads. Treat as a signal to audit.
+- **250 MB** — hard refusal. The extension fails to load with a clear error naming the size; init() never runs.
+
+These limits match how Sketchfab, Mixamo, and standard web-3D pipelines size assets. Most successful extensions ship well under them. Optimize aggressively; if you need more than 250 MB of assets, ship as two extensions or stream from a remote CDN that you mount via `provides.routes`.
+
+If the limits ever change, they will only loosen — never tighten — once existing extensions ship against them. Target the current numbers when authoring.
+
+### LOD policy for animated characters
+
+Animated characters are the heaviest asset class an extension can ship. A raw Mixamo download is 30 to 80k triangles before you do anything; standard web 3D practice is to author at three polycounts and let the renderer swap based on distance. Three tiers:
+
+| Tier | Triangles | Use |
+|------|-----------|-----|
+| **Close LOD** | 5k max | In front of the camera. The figure the user reads as a character. |
+| **Medium LOD** | 1k | Background characters; in-scene but not the focal figure. |
+| **Far LOD** | 200 tri or impostor | Distant or crowd. Below this, use a billboarded sprite. |
+
+**The portal does NOT yet auto-swap LODs.** Until it does, ship close-LOD assets only (5k tri) and rely on aggressive culling in the portal scene. Do not ship a 50k-tri Mixamo character and expect the runtime to fix it.
+
+**Tooling.** Blender's Decimate modifier (Ratio 0.05 to 0.1 is typical for Mixamo characters) gets you to the close-LOD budget without destroying silhouette. On top of that, run `gltf-pipeline --draco` for mesh compression. Order matters: decimate first, then Draco.
+
+**Reference point.** A 5k-tri Mixamo character with Draco compression lands at 200 to 500 KB shipped. The same character uncompressed at the default 65k tri is ~65 MB. Three orders of magnitude. Do the work.
+
+### Asset hosting
+
+Where the binary bytes actually live. The decision space and the current recommendation:
+
+**Today (development).** Assets live in `<ext>/assets/` on the server's disk and are served by `express.static` mounted by the loader at `/assets/<ext-name>/*`. Free, simple, works the moment you drop a file in. Binary files are gitignored at the repo level (see `.gitignore` patterns for `.glb` / `.gltf` / `.fbx` / `.mp3` / `.ogg` / `.wav`), so the working tree carries them but the commits don't.
+
+**Distribution problem.** A fresh clone of the repo has the manifest entries but not the bytes. Extension authors today must ship assets out-of-band: a release tarball, a separate "assets bundle" download, or a manual drop into `<ext>/assets/` after install. This is the unsolved part. Document the out-of-band path in your extension's README until the future direction lands.
+
+**Future direction.** Per-extension object storage (Cloudflare R2 or S3) with a manifest-declared CDN base URL and per-extension prefix. The loader downloads the bundle on plant; the bytes never enter git. Costs scale with usage, which is the right shape for a registry-distributed system. Not built yet; this is the named seam.
+
+**Git LFS** is technically an option for the in-between. It works, but cloning is slow and every installing operator pays the bandwidth at clone time rather than at install time. Adds friction without solving the right problem. Not recommended.
 
 ## CRITICAL: Service and Dependency Declarations
 

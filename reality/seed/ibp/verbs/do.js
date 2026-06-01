@@ -131,6 +131,7 @@ export async function doVerb(target, operation, params = {}, opts = {}) {
       target: { kind: "position", spaceId: spaceIdForAuth },
       action: operation,
       namespace,
+      summonCtx: opts.summonCtx,
     });
     if (!decision.ok) {
       throw new IbpError(

@@ -48,6 +48,14 @@ export const SEE_PUSH = Object.freeze({
   // ever apply one), not the fact's raw params. Clients order by
   // lastMoveSeq and discard stale deliveries.
   POSITION:   "position",
+  // Rung-3 fact-arrival push. Payload shape:
+  //   { spaceId, data: { targetKind, targetId, action } }
+  // Fired by the cross-cutting fold handler when any do:* fact lands
+  // on a being or matter, so portals can drive their per-character
+  // THREE.AnimationMixer + Web Audio renderers off the fact stream.
+  // Body is minimal . the portal looks the action up against the
+  // target entity's cached qualities.render block.
+  FACT:       "fact",
 });
 
 /**

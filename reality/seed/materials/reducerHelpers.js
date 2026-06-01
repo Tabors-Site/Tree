@@ -311,6 +311,10 @@ export function applyCreateSpace(state, fact) {
     seedSpace:    spec.seedSpace ?? null,
     llmDefault:   spec.llmDefault ?? null,
     size:         spec.size ?? null,
+    // Space's own coord within its parent. The createSpace handler
+    // assigns a random coord inside the parent's size when none was
+    // passed; the reducer just records it.
+    coord:        spec.coord ?? null,
     qualities:    spec.qualities ?? {},
     dateCreated:  fact.date,
     position:     spec.parent ?? spec.parentId ?? null,

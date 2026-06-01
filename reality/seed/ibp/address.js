@@ -323,21 +323,11 @@ function parseReality(s) {
 function parsePath(s, ctx) {
   const trimmed = s.trim();
   if (!trimmed) return null;
-  // Home shorthand: "~" or "/~" alone → current user's home.
-  if (trimmed === "~" || trimmed === "/~") {
-    if (!ctx.currentUser) {
-      throw paError(
-        "missing-user-context",
-        trimmed,
-        "Cannot expand '~' without ctx.currentUser",
-      );
-    }
-    return `/~${ctx.currentUser}`;
-  }
-  // "~user/..." → "/~user/..."
-  if (trimmed.startsWith("~") && !trimmed.startsWith("/~")) {
-    return `/${trimmed}`;
-  }
+  // Home shorthand: "~" alone is sugar for "/~". Both stay literal —
+  // no name expansion. Resolution decides whose home (@qualifier wins;
+  // else the caller's identity). The wire shape stays "/~" for the
+  // self-relative case, which is the honest representation.
+  if (trimmed === "~") return "/~";
   // Place root: "/" stays "/".
   if (trimmed === "/") return "/";
   // Otherwise must start with "/".
@@ -433,11 +423,13 @@ export function isValidPath(path) {
   if (segments.length === 0) return false;
   for (let i = 0; i < segments.length; i++) {
     const seg = segments[i];
-    if (i === 0 && seg.startsWith("~")) {
-      // "~user" — validate the user part
-      const userSlug = seg.slice(1);
-      if (!userSlug || !/^[a-z0-9_-]+$/i.test(userSlug)) return false;
-    } else if (!SEGMENT_RE.test(seg)) {
+    if (i === 0 && seg === "~") {
+      // "/~" or "/~/<sub>" — the home shorthand. Bare "~" is the
+      // only home segment; "~name" is no longer a thing (the
+      // @qualifier names the being, not a path segment).
+      continue;
+    }
+    if (!SEGMENT_RE.test(seg)) {
       return false;
     }
   }

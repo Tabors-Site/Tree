@@ -17,6 +17,7 @@ import {
   deleteSpaceBranch,
   assertValidSpaceName,
   assertValidSpaceType,
+  assertValidSpaceSize,
   assertNameAvailableAt,
   resolveSpaceAccess,
 } from "./spaces.js";
@@ -67,7 +68,7 @@ async function createSpaceHandler(ctx) {
 //   "qualities.<namespace>.<innerKey>"               → merge one inner key
 //   value=null on a qualities path                   → unset
 
-async function setOnSpaceHandler({ target, params, identity }) {
+async function setOnSpaceHandler({ target, params, identity, summonCtx }) {
   const { field, value, merge = true } = params || {};
   if (!field || typeof field !== "string") {
     throw new Error("set-space: `field` is required");
@@ -177,7 +178,7 @@ async function setOnSpaceHandler({ target, params, identity }) {
       return { spaceId: String(spaceId), name: normalized };
     }
     // Typed-space path. Identical validation; reducer writes.
-    const row = await loadTargetRow(target, "space");
+    const row = await loadTargetRow(target, "space", { summonCtx });
     if (row.seedSpace) {
       throw new Error("set-space: cannot rename seed spaces");
     }
@@ -248,33 +249,74 @@ async function setOnSpaceHandler({ target, params, identity }) {
     return { spaceId, contributors: value };
   }
 
+  // coord: this space's position INSIDE its parent. Sibling of `size`
+  // ("how big am I") . coord is "where do I sit in my parent." The
+  // unified `move` op also writes here for space targets; this branch
+  // is the explicit set-space form (used by the portal's move tool
+  // and direct IBP calls). Shape `{ x, y, z? }` or null to unset.
+  // Clamped against the parent's size; out-of-bounds throws.
+  if (field === "coord") {
+    const spaceId = targetIdOf(target);
+    if (value === null || value === undefined) {
+      return { spaceId, coord: null };
+    }
+    if (typeof value !== "object" || Array.isArray(value)) {
+      throw new IbpError(IBP_ERR.INVALID_INPUT, "set-space: coord must be {x, y, z?} or null");
+    }
+    const out = {};
+    for (const a of ["x", "y", "z"]) {
+      if (value[a] === undefined) continue;
+      if (typeof value[a] !== "number" || !Number.isFinite(value[a])) {
+        throw new IbpError(IBP_ERR.INVALID_INPUT, `set-space: coord.${a} must be a finite number`);
+      }
+      out[a] = value[a];
+    }
+    if (Object.keys(out).length === 0) {
+      throw new IbpError(IBP_ERR.INVALID_INPUT, "set-space: coord requires at least one axis");
+    }
+    // Bounds-check against the parent's size. Same doctrine as
+    // set-being:coord (assertCoordInBounds in being/ops.js): silent
+    // clamping was a lie; throw and let cognition reface.
+    const row = await Space.findById(spaceId).select("parent").lean();
+    const parentId = row?.parent;
+    if (parentId) {
+      const parentRow = await Space.findById(parentId).select("size").lean();
+      const parentSize = parentRow?.size || null;
+      if (parentSize) {
+        for (const a of ["x", "y", "z"]) {
+          if (out[a] === undefined) continue;
+          const cap = typeof parentSize[a] === "number" && parentSize[a] > 0 ? parentSize[a] : null;
+          if (cap === null) continue;
+          const high = Number.isInteger(out[a]) ? Math.trunc(cap) - 1 : cap - Number.EPSILON;
+          if (out[a] < 0 || out[a] > high) {
+            throw new IbpError(
+              IBP_ERR.INVALID_INPUT,
+              `set-space: coord.${a}=${out[a]} is out of bounds (0..${high} for the parent space)`,
+              { axis: a, value: out[a], cap: high },
+            );
+          }
+        }
+      }
+    }
+    return { spaceId, coord: out };
+  }
+
   // size: the space's bounding box. Shape `{ x, y, z? }` or null to
   // unset (the space becomes unbounded). Beings inside this space
   // have their `coord` clamped against this size on each set-being
-  // write. We accept positive finite numbers per axis; anything
-  // else is ignored.
+  // write. assertValidSpaceSize enforces the configured maxSpaceSize
+  // cap and the per-axis shape rules; null passes through to unset.
   if (field === "size") {
     const spaceId = targetIdOf(target);
     if (value === null || value === undefined) {
       return { spaceId, size: null };
     }
-    if (typeof value !== "object" || Array.isArray(value)) {
-      throw new Error("set-space: `size` value must be an object {x,y,z?} or null");
-    }
-    const out = {};
-    for (const a of ["x", "y", "z"]) {
-      if (typeof value[a] === "number" && Number.isFinite(value[a]) && value[a] > 0) {
-        out[a] = value[a];
-      }
-    }
-    if (Object.keys(out).length === 0) {
-      throw new Error("set-space: `size` requires at least one positive numeric axis");
-    }
+    const out = assertValidSpaceSize(value, { applyDefault: false });
     return { spaceId, size: out };
   }
 
   throw new Error(
-    `set-space: unknown field "${field}". Supported: name, type, parent, llmDefault, rootOwner, contributors, size, qualities.<namespace>[.<innerKey>]`,
+    `set-space: unknown field "${field}". Supported: name, type, parent, llmDefault, rootOwner, contributors, size, coord, qualities.<namespace>[.<innerKey>]`,
   );
 }
 
@@ -379,22 +421,8 @@ async function createSpaceChild({ target, params, identity, summonCtx, scaffold,
   if (target.isSpaceRoot) {
     throw new IbpError(
       IBP_ERR.INVALID_INPUT,
-      "Cannot create-child at the place root. Create the tree under your home (~) instead.",
+      "Cannot create-child at the place root. Create inside your home (~) instead.",
     );
-  }
-  if (target.isHomeRoot) {
-    if (String(target.beingId) !== String(beingId)) {
-      throw new IbpError(
-        IBP_ERR.FORBIDDEN,
-        "Cannot create a tree root in another being's home",
-      );
-    }
-    try {
-      const newSpace = await createSpace({ name, type, size, isRoot: true, beingId, actId, summonCtx, scaffold });
-      return shapeNewSpace(newSpace);
-    } catch (err) {
-      throw mapPatternsToIbpError(err, KERNEL_ERROR_PATTERNS.createChild);
-    }
   }
   if (!target.spaceId) {
     throw new IbpError(

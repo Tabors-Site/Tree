@@ -76,9 +76,13 @@ export const seedDoTool = {
     try {
       const result = await doVerb(resolvedTarget, action, args || {}, {
         identity: beingId ? { beingId, name: name || null } : null,
-        summonCtx: callCtx?.summonCtx
-          ? { actId: callCtx.summonCtx.actId || null }
-          : null,
+        // Pass the FULL moment ctx, not a { actId } slice. doVerb's
+        // emitFact reads ctx.deltaF to push its Fact onto the moment's
+        // ΔF; a truncated copy makes emitFact fall back to a sealFacts
+        // singleton, self-sealing the Fact outside the moment and
+        // leaving the outer Act's deltaF empty (orphan, refused by
+        // sealAct). callCtx.summonCtx already carries deltaF.
+        summonCtx: callCtx?.summonCtx || null,
       });
       return {
         content: [{

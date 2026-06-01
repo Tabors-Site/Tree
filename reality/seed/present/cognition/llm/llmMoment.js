@@ -297,7 +297,13 @@ async function runLlmMomentInner({ being, envelope, role, signal, summonCtx }) {
   const reqParams = { model, messages };
   if (tools.length > 0) {
     reqParams.tools = tools;
-    reqParams.tool_choice = "auto";
+    // Roles whose every wake should produce exactly one act declare
+    // `forceToolCall: true` on their spec. The provider is told "call
+    // a tool, no other option" and the model picks one immediately
+    // instead of deliberating in prose. Conversational beings (cherub,
+    // reality-manager) keep the default `auto` so they can answer in
+    // text when that's the right response.
+    reqParams.tool_choice = role?.forceToolCall ? "required" : "auto";
   }
 
   // Conduit-boundary deadline. Owned here so a hung provider releases
@@ -384,9 +390,28 @@ async function runLlmMomentInner({ being, envelope, role, signal, summonCtx }) {
     return cognitionFailure("garbage", "no choice/message in provider response");
   }
   const assistant = choice.message;
-  const toolCalls = Array.isArray(assistant.tool_calls) ? assistant.tool_calls : [];
+  let toolCalls = Array.isArray(assistant.tool_calls) ? assistant.tool_calls : [];
   const proseRaw = typeof assistant.content === "string" ? assistant.content : "";
-  const prose = proseRaw.trim();
+  let prose = proseRaw.trim();
+
+  // Open-weight models (Qwen, Hermes, Llama, Mistral via Ollama / vLLM
+  // / llama.cpp / OpenRouter) emit tool calls as TEXT inside
+  // message.content rather than as structured message.tool_calls.
+  // Hosted models (OpenAI, Anthropic, Gemini) populate tool_calls
+  // natively and this branch is a no-op. The parser handles the
+  // common open-weight syntaxes and lifts a matched tool call into
+  // the OpenAI tool_calls shape so the existing dispatch path below
+  // works unchanged.
+  if (toolCalls.length === 0 && prose.length > 0) {
+    const parsed = _parseTextualToolCalls(prose);
+    if (parsed && parsed.length > 0) {
+      toolCalls = parsed;
+      // The tool call IS the act . the prose is the chat-template
+      // wrapper around it, not narration to keep. Drop it so the
+      // moment seals on the tool result, not the textual call.
+      prose = "";
+    }
+  }
 
   // One moment, one act. Extras are dropped before they become
   // anything . the next moment's fresh fold will see whatever this
@@ -399,8 +424,12 @@ async function runLlmMomentInner({ being, envelope, role, signal, summonCtx }) {
       );
     }
     const firstCall = toolCalls[0];
+    const deltaFBefore = Array.isArray(summonCtx?.deltaF)
+      ? summonCtx.deltaF.length
+      : 0;
+    let toolResult;
     try {
-      await executeTool(
+      toolResult = await executeTool(
         firstCall,
         sessionFacade,
         {
@@ -420,6 +449,13 @@ async function runLlmMomentInner({ being, envelope, role, signal, summonCtx }) {
           // reply to whoever opened this moment.
           wakeFrom: envelope?.from || null,
           wakeCorrelation: envelope?.correlation || null,
+          // The live moment ctx, threaded UNMODIFIED. This is the
+          // deltaF/foldedSeqs/afterSeal-bearing object the seal drains.
+          // executeTool hands it to the tool handler as callCtx.summonCtx
+          // so a tool that delegates to doVerb/summonVerb/beVerb pushes
+          // its Fact onto THIS moment's ΔF and seals atomically with the
+          // Act. Dropping it self-seals the Fact and orphans the Act.
+          summonCtx,
         },
         presenceKey,
       );
@@ -427,6 +463,42 @@ async function runLlmMomentInner({ being, envelope, role, signal, summonCtx }) {
       if (signal?.aborted) return cognitionFailure("aborted", err.message);
       return cognitionFailure("internal", `tool dispatch failed: ${err.message}`);
     }
+
+    // Honor the dispatch outcome. executeTool catches handler errors
+    // INTERNALLY and returns { success:false, error } rather than
+    // throwing, so the try/catch above almost never fires. A failed
+    // tool emitted no Fact; returning a successful empty act here is
+    // what drove the orphan-seal refusal (no content, no Facts). A
+    // failed tool is a failed cognition: surface the real reason so
+    // it shows in the log instead of being masked as an orphan Act.
+    if (toolResult && toolResult.success === false) {
+      const why = toolResult.error || "unknown tool error";
+      log.warn(
+        "LLM",
+        `${role.name} tool "${toolResult.tool || firstCall.function?.name}" ` +
+          `failed; releasing as failure: ${String(why).slice(0, 200)}`,
+      );
+      return cognitionFailure("internal", `tool ${toolResult.tool}: ${why}`);
+    }
+
+    // A tool that succeeded but emitted no Fact AND left no prose is a
+    // read / no-op (the canonical SEE shape): the being looked through
+    // a tool and changed nothing. Release without sealing rather than
+    // orphan an empty Act. With this guard the orphan gate at sealAct
+    // becomes unreachable from the LLM path.
+    const emittedFact =
+      (Array.isArray(summonCtx?.deltaF) ? summonCtx.deltaF.length : 0) >
+      deltaFBefore;
+    const hasProse = typeof prose === "string" && prose.trim().length > 0;
+    if (!emittedFact && !hasProse) {
+      log.info(
+        "LLM",
+        `${role.name} tool "${toolResult?.tool || firstCall.function?.name}" ` +
+          `succeeded but emitted no Fact and no prose; treating as SEE.`,
+      );
+      return cognitionSee();
+    }
+
     // The tool dispatch IS the act . its handler emitted a Fact that
     // will commit with this moment's Act. content is the prose, if
     // any, that the LLM said alongside the tool call (the being's
@@ -459,6 +531,93 @@ async function runLlmMomentInner({ being, envelope, role, signal, summonCtx }) {
 
   // The being looked and chose not to act. This is SEE, not failure.
   return cognitionSee();
+}
+
+// ────────────────────────────────────────────────────────────────────
+// Textual tool-call parsing for open-weight providers.
+//
+// Open-weight chat models trained with Hermes / ChatML / Mistral tool
+// templates emit tool calls as text tokens in message.content rather
+// than as a structured message.tool_calls field. The exact wrappers
+// vary by training data but the inner JSON is consistent:
+// `{name, arguments}`. The handful of patterns below catch the common
+// cases; the dispatched-as-text JSON inside each pattern is parsed and
+// re-shaped into the OpenAI tool_calls form so the downstream
+// executeTool path works against any provider.
+//
+// Patterns handled:
+//   1. <tool_call>{...}</tool_call>            . Hermes / Qwen-Coder
+//   2. {...} </tool_call>                       . Qwen-2.5/3 (open tag eaten by template)
+//   3. [{...}] </tool_call>                     . Same, array shape (multiple calls)
+//   4. <|tool_calls_begin|>{...}<|tool_calls_end|>  . Llama-3.1 prompt template
+//   5. [TOOL_CALLS] [{...}]                     . Mistral-tool-use
+//   6. Bare top-level JSON `{name, arguments}` or `[{...}, ...]`
+//
+// Hosted providers (OpenAI / Anthropic / Gemini) populate the
+// structured tool_calls field directly and this parser never fires.
+// ────────────────────────────────────────────────────────────────────
+
+const _TOOL_CALL_PATTERNS = [
+  /<tool_call>\s*([\s\S]+?)\s*<\/tool_call>/,
+  /<\|tool[_▁▃]*calls[_▁▃]*begin\|>\s*([\s\S]+?)\s*<\|tool[_▁▃]*calls[_▁▃]*end\|>/,
+  /\[TOOL_CALLS\]\s*([\s\S]+?)(?:\[\/TOOL_CALLS\]|$)/,
+  // Bare JSON followed by a closing </tool_call> (the chat template ate
+  // the opening tag). The inner group is greedy up to the closer.
+  /([\[{][\s\S]+?[\]}])\s*<\/tool_call>/,
+];
+
+function _safeJsonParse(s) {
+  try { return JSON.parse(s); } catch { return null; }
+}
+
+function _normalizeToolCallJson(parsed) {
+  if (!parsed) return null;
+  const calls = Array.isArray(parsed) ? parsed : [parsed];
+  const out = [];
+  for (const c of calls) {
+    if (!c || typeof c !== "object") continue;
+    // Hermes / Qwen / Mistral shape: { name, arguments }
+    // arguments may be an object or a JSON-encoded string; OpenAI
+    // always wants the stringified form.
+    const name = typeof c.name === "string" ? c.name : null;
+    if (!name) continue;
+    let args = c.arguments;
+    if (args === undefined && c.parameters) args = c.parameters;
+    if (args === undefined) args = {};
+    if (typeof args !== "string") {
+      try { args = JSON.stringify(args); } catch { args = "{}"; }
+    }
+    out.push({
+      id: `text-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`,
+      type: "function",
+      function: { name, arguments: args },
+    });
+  }
+  return out.length > 0 ? out : null;
+}
+
+function _parseTextualToolCalls(content) {
+  if (typeof content !== "string" || !content) return null;
+
+  // Try each wrapped pattern; the first one that produces valid JSON
+  // wins. Stop at the first hit so we don't double-count.
+  for (const re of _TOOL_CALL_PATTERNS) {
+    const m = content.match(re);
+    if (!m) continue;
+    const calls = _normalizeToolCallJson(_safeJsonParse(m[1]));
+    if (calls) return calls;
+  }
+
+  // Last-ditch: the whole content might just BE the JSON tool-call
+  // payload with no wrapping. Try parsing it as-is (only when it
+  // looks JSON-shaped at the trim boundary . don't try this on prose).
+  const trimmed = content.trim();
+  if ((trimmed.startsWith("{") && trimmed.endsWith("}")) ||
+      (trimmed.startsWith("[") && trimmed.endsWith("]"))) {
+    const calls = _normalizeToolCallJson(_safeJsonParse(trimmed));
+    if (calls) return calls;
+  }
+  return null;
 }
 
 /**

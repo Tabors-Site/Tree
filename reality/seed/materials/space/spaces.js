@@ -47,7 +47,7 @@ import {
 } from "./ancestorCache.js";
 import { hooks } from "../../hooks.js";
 import { getSpaceRootId } from "../../sprout.js";
-import { getRealityConfigValue } from "../../realityConfig.js";
+import { getRealityConfigValue, CONFIG_DEFAULTS } from "../../realityConfig.js";
 import log from "../../seedReality/log.js";
 import { IBP_ERR, IbpError } from "../../ibp/protocol.js";
 import { DELETED, SEED_SPACE } from "./seedSpaces.js";
@@ -84,6 +84,75 @@ export function assertValidSpaceName(raw) {
     );
   }
   return name;
+}
+
+/**
+ * Validate (and optionally default) a space size. Shape `{ x, y, z? }`.
+ *
+ *   - null / undefined size: returns `defaultSpaceSize` from config when
+ *     `applyDefault: true`, otherwise null. Lets create-* paths fall
+ *     through to a sensible grid without forcing every caller to pass
+ *     a size, while set-space:size keeps "null unsets" semantics.
+ *   - non-object: INVALID_INPUT.
+ *   - per-axis: positive finite number. Each axis is capped at
+ *     `maxSpaceSize[axis]` from config; exceeding throws INVALID_INPUT
+ *     with the axis named. Missing axes pass through (a 2D `{x, y}`
+ *     stays 2D).
+ *   - empty after filtering: default-substitute when `applyDefault`,
+ *     else INVALID_INPUT (existing set-space behavior).
+ *
+ * Reads config via getRealityConfigValue; falls back to CONFIG_DEFAULTS
+ * so the helper works at boot (ensureSpaceRoot runs before
+ * initRealityConfig) and after.
+ */
+export function assertValidSpaceSize(raw, { applyDefault = false } = {}) {
+  const defaultSize = getRealityConfigValue("defaultSpaceSize") || CONFIG_DEFAULTS.defaultSpaceSize;
+  const maxSize     = getRealityConfigValue("maxSpaceSize")     || CONFIG_DEFAULTS.maxSpaceSize;
+
+  if (raw === null || raw === undefined) {
+    return applyDefault ? deepCopySize(defaultSize) : null;
+  }
+  if (typeof raw !== "object" || Array.isArray(raw)) {
+    throw new IbpError(IBP_ERR.INVALID_INPUT, "size must be an object {x, y, z?} or null");
+  }
+  const out = {};
+  for (const axis of ["x", "y", "z"]) {
+    if (raw[axis] === undefined) continue;
+    const v = raw[axis];
+    if (typeof v !== "number" || !Number.isFinite(v) || v <= 0) {
+      throw new IbpError(
+        IBP_ERR.INVALID_INPUT,
+        `size.${axis} must be a positive finite number; got ${v}`,
+        { axis, value: v },
+      );
+    }
+    const cap = maxSize?.[axis];
+    if (typeof cap === "number" && Number.isFinite(cap) && v > cap) {
+      throw new IbpError(
+        IBP_ERR.INVALID_INPUT,
+        `size.${axis} (${v}) exceeds maxSpaceSize.${axis} (${cap}). ` +
+          `Raise maxSpaceSize via set-config to permit larger spaces.`,
+        { axis, requested: v, max: cap },
+      );
+    }
+    out[axis] = v;
+  }
+  if (Object.keys(out).length === 0) {
+    if (applyDefault) return deepCopySize(defaultSize);
+    throw new IbpError(IBP_ERR.INVALID_INPUT, "size requires at least one positive numeric axis");
+  }
+  return out;
+}
+
+function deepCopySize(s) {
+  if (!s || typeof s !== "object") return null;
+  const out = {};
+  for (const axis of ["x", "y", "z"]) {
+    if (typeof s[axis] === "number" && Number.isFinite(s[axis]) && s[axis] > 0) {
+      out[axis] = s[axis];
+    }
+  }
+  return Object.keys(out).length > 0 ? out : null;
 }
 
 /**
@@ -172,6 +241,7 @@ export async function createSpace({
   note = null,
   qualities = null,
   size = null,
+  coord = null,
   validatedBeing = null,
   actId = null,
   sessionId = null,
@@ -180,9 +250,36 @@ export async function createSpace({
 } = {}) {
   name = assertValidSpaceName(name);
   type = assertValidSpaceType(type);
+  // Substitute the configured defaultSpaceSize when the caller didn't
+  // specify one, so portals always have a walkable grid to render and
+  // beings have bounds to clamp coords against. Max-cap any explicit
+  // size at maxSpaceSize; throws INVALID_INPUT when exceeded.
+  size = assertValidSpaceSize(size, { applyDefault: true });
 
   if (!isRoot && !parentId)
     throw new Error("Non-root spaces require a parentId");
+
+  // Assign a default coord inside the parent's size when the caller
+  // didn't pass one. Without this every child space falls back to the
+  // portal's hash-derived ring 22-76 units off-origin (the "trees
+  // scattered in the distance" effect). Skip the default for root
+  // spaces (no parent, nothing to position inside) and for spaces
+  // whose parent has no size (nothing to randomize against).
+  if (coord === null || coord === undefined) {
+    if (!isRoot && parentId) {
+      try {
+        const parentRow = await Space.findById(parentId).select("size").lean();
+        const parentSize = parentRow?.size || null;
+        if (parentSize && Number.isFinite(parentSize.x) && Number.isFinite(parentSize.y) &&
+            parentSize.x > 0 && parentSize.y > 0) {
+          coord = {
+            x: Math.floor(Math.random() * parentSize.x),
+            y: Math.floor(Math.random() * parentSize.y),
+          };
+        }
+      } catch { /* defensive: any lookup failure leaves coord null */ }
+    }
+  }
 
   // A child of the space root is a tree root by definition: it carries
   // an owner, lives at the reality's top level, and is reachable both
@@ -330,7 +427,8 @@ export async function createSpace({
           parent:    resolvedParentId,
           rootOwner: isRoot ? String(being._id) : null,
           qualities: specQualities,
-          ...(size ? { size } : {}),
+          ...(size  ? { size }  : {}),
+          ...(coord ? { coord } : {}),
         },
       },
       actId: summonCtx?.actId || actId,

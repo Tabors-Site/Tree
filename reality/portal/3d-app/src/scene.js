@@ -8,6 +8,31 @@
 import * as THREE from "three";
 import { CSS3DRenderer, CSS3DObject } from "three/addons/renderers/CSS3DRenderer.js";
 import { showLabel, hideLabel, setSkyClock, hideSkyClock } from "./ui.js";
+import { loadModel, preloadModels, collectModelIds } from "./assetResolver.js";
+
+// Per-frame gaze raycast against the world's children walks every
+// triangle of every mesh by default. With six Mixamo skinned characters
+// at ~50k triangles each, that's 18M triangle tests per second . the
+// dominant per-frame cost while moving. Override the loaded glTF
+// meshes' raycast to a no-op and put a single bbox check on the
+// outer group so hover labels still work . per-entity raycast cost
+// drops from O(N tris) to O(1).
+const NOOP_RAYCAST = function () {};
+const _bboxRaycastTmpBox = new THREE.Box3();
+const _bboxRaycastTmpCenter = new THREE.Vector3();
+function groupBoxRaycast(raycaster, intersects) {
+  const local = this.userData?._localBBox;
+  if (!local) return;
+  _bboxRaycastTmpBox.copy(local).applyMatrix4(this.matrixWorld);
+  if (raycaster.ray.intersectsBox(_bboxRaycastTmpBox)) {
+    _bboxRaycastTmpBox.getCenter(_bboxRaycastTmpCenter);
+    intersects.push({
+      object: this,
+      distance: raycaster.ray.origin.distanceTo(_bboxRaycastTmpCenter),
+      point: _bboxRaycastTmpCenter.clone(),
+    });
+  }
+}
 
 const MOVE_SPEED = 6.0;       // units / second
 const SPRINT_MULT = 1.9;      // Shift multiplier
@@ -83,6 +108,14 @@ export class Scene {
     // back into world units without re-reading the descriptor.
     this._gridSize = null;
     this._gridCell = null;
+    // Rung-3 sensory state. Per-entity AnimationMixer registry keyed
+    // by `${kind}:${id}` (e.g. "being:abc123", "matter:def456"). Each
+    // entry: { mixer, actions: Map<clipName,AnimationAction>, idleAction,
+    // renderBlock }. Populated by _swapToModel when a glTF loads with
+    // animations; consumed by getEntityMixerState() (called from
+    // factDispatcher on fact-arrival pushes) and swept every frame
+    // by _tick via mixer.update(deltaTime).
+    this._entityMixers = new Map();
     // Track the latest seq applied per being so stale or out-of-order
     // deliveries get dropped.
     this._beingLastMoveSeq = new Map();
@@ -186,6 +219,34 @@ export class Scene {
   //   - default: grassy field, all beings and children rendered.
   //     Movement unlocked.
   renderDescriptor(desc, { isAuthenticated, resetCamera = true } = {}) {
+    // Bail when the visible-scene signature is identical to the last
+    // render. The substrate fires afterFieldWrite-driven invalidates
+    // for every qualities.* write (harmony's per-tick tracking, the
+    // dancers' per-step counters, etc.), and the portal-client routes
+    // them through here as a descriptor refetch. Without this guard
+    // every drum-tick reloads all six Mixamo characters and rebuilds
+    // the AnimationMixer registry, which is 200-500 ms of latency
+    // for no visible change.
+    //
+    // Signature covers the surface the renderer actually consumes:
+    // each entity's identity + render-block model, plus space size
+    // and the self being. Camera resets and arrival mode also flip
+    // it so an auth state change still re-renders.
+    const sig = this._renderSignature(desc, { isAuthenticated, resetCamera });
+    if (sig === this._lastRenderSig) {
+      // Skip the expensive re-render (clearWorld + SkeletonUtils.clone
+      // per entity), but still refresh the lightweight per-being
+      // activity bubbles . those track the descriptor's `activity`
+      // field which changes every fact (drummer tick label, dancer
+      // step content, etc.) and isn't in the signature. Without this,
+      // the "tick N" label above the drummer freezes at whatever
+      // count was current when the signature last flipped, even though
+      // the substrate keeps ticking.
+      this._applyBeingActivity(desc?.beings || []);
+      return;
+    }
+    this._lastRenderSig = sig;
+
     this._clearWorld();
     const isPlaceRoot = !!desc?.isPlaceRoot;
     const arrival    = isPlaceRoot && !isAuthenticated;
@@ -257,6 +318,11 @@ export class Scene {
         mesh.userData = beingUserData(cherubBeing);
         this.world.add(mesh);
         this._beingMeshes.set(cherubBeing.being, mesh);
+        this._swapToModel(
+          mesh,
+          cherubBeing.qualities?.render,
+          cherubBeing.beingId ? { kind: "being", id: cherubBeing.beingId } : null,
+        );
       }
     } else {
       const beingRadius = 6;
@@ -290,6 +356,11 @@ export class Scene {
         this.world.add(mesh);
         this._beingMeshes.set(b.being, mesh);
         if (b.beingId) this._beingMeshesById.set(b.beingId, mesh);
+        this._swapToModel(
+          mesh,
+          b.qualities?.render,
+          b.beingId ? { kind: "being", id: b.beingId } : null,
+        );
       });
     }
 
@@ -345,6 +416,11 @@ export class Scene {
         isDoorway: true,
       };
       this.world.add(mesh);
+      this._swapToModel(
+        mesh,
+        child.qualities?.render,
+        child.spaceId ? { kind: "space", id: child.spaceId } : null,
+      );
     });
 
     // Place matter (notes, plan emissions, etc.) at their server
@@ -390,6 +466,17 @@ export class Scene {
         }, mesh.userData || {});
         this.world.add(mesh);
         this._matterMeshes.set(id, mesh);
+        // Skip the model swap for the YouTube video matter . its
+        // CSS3DObject placement is intrinsic to the iframe wrapper and
+        // a glTF would clobber the live video surface. Other matter
+        // kinds receive their declared model normally.
+        if (!isVideo) {
+          this._swapToModel(
+            mesh,
+            mt.qualities?.render,
+            id ? { kind: "matter", id } : null,
+          );
+        }
       });
     }
 
@@ -1195,6 +1282,245 @@ export class Scene {
       if (Array.isArray(obj.material)) obj.material.forEach((m) => m.dispose?.());
       else obj.material?.dispose?.();
     }
+    // Drop every per-entity AnimationMixer for the scene we just
+    // tore down. New meshes get fresh mixers when renderDescriptor
+    // walks the next descriptor and calls _swapToModel again.
+    this._entityMixers.clear();
+  }
+
+  /**
+   * Preload every glTF the descriptor references. Called before the
+   * first paint (and before replay starts) so the scene resolves with
+   * loaded models in one frame instead of a sea of placeholder
+   * primitives that swap in piecemeal. Returns when every load settles
+   * or the 3 s timeout elapses; partial loads fall back to primitives
+   * for any model that didn't return in time.
+   */
+  async preloadDescriptor(desc) {
+    const ids = collectModelIds(desc);
+    if (ids.length === 0) return;
+    await preloadModels(ids, { timeoutMs: 3000 });
+  }
+
+  /**
+   * Replace a placeholder mesh's children with a loaded glTF clone and
+   * apply the render block's scale + rotation. The placeholder group
+   * stays so position, userData, and any registered proximity / click
+   * handlers keep working unchanged; only the visible mesh contents
+   * swap.
+   *
+   * Async. When `loadModel` returns null (missing asset, network
+   * failure, etc.) the placeholder is left in place . the primitive
+   * fallback is the correct rendering for an unresolvable model.
+   */
+  async _swapToModel(group, render, entity = null) {
+    if (!group || !render?.model) return;
+    const result = await loadModel(render.model);
+    if (!result) return;
+    const { scene: loadedScene, animations } = result;
+    // Dispose and remove the placeholder primitives so they don't leak
+    // GPU memory once they're invisible.
+    while (group.children.length) {
+      const child = group.children[0];
+      group.remove(child);
+      child.geometry?.dispose?.();
+      if (Array.isArray(child.material)) child.material.forEach((m) => m.dispose?.());
+      else child.material?.dispose?.();
+    }
+    if (render.rotation) {
+      const r = render.rotation;
+      loadedScene.rotation.set(
+        Number.isFinite(r.x) ? r.x : 0,
+        Number.isFinite(r.y) ? r.y : 0,
+        Number.isFinite(r.z) ? r.z : 0,
+      );
+    }
+
+    // Compute the loaded scene's bbox in GEOMETRY-LOCAL space BEFORE
+    // attaching to the group. At this point loadedScene has no parent,
+    // so its world matrix equals its own matrix (identity). The bbox
+    // captures the pure geometry extents we'll transform through the
+    // group's world matrix at raycast time.
+    loadedScene.updateMatrixWorld(true);
+    const localBBox = new THREE.Box3().setFromObject(loadedScene);
+
+    group.add(loadedScene);
+
+    // Disable per-triangle raycast on every mesh inside the loaded
+    // glTF and put a single bbox check on the outer group instead.
+    // This is the dominant per-frame cost for the gaze hover system
+    // when characters have ~50k triangles each; the bbox swap drops
+    // raycast per entity from O(N tris) to O(1). The hover label
+    // logic (which walks up to userData.kind) still finds the right
+    // entity because the group carries the kind.
+    loadedScene.traverse((node) => {
+      if (node.isMesh || node.isSkinnedMesh) {
+        node.raycast = NOOP_RAYCAST;
+      }
+    });
+
+    // Apply scale to the OUTER group, not the inner loaded scene.
+    // glTFs from FBX-derived pipelines (Mixamo et al.) often carry
+    // baked transforms on intermediate nodes that don't compose
+    // predictably with a scale on the scene root. Scaling the outer
+    // group cascades over everything inside the parent transform . a
+    // value that should be 0.01 actually renders at 0.01x.
+    if (typeof render.scale === "number" && Number.isFinite(render.scale) && render.scale > 0) {
+      group.scale.setScalar(render.scale);
+
+      // Ground the loaded model. The outer `group` was positioned by
+      // the renderer at the primitive placeholder's height (y=0.7 for
+      // beings . the placeholder cube was 1.4 tall, centered on the
+      // position so its bottom landed at y=0; or y=0 for child / matter
+      // entities). Mixamo characters pivot at the feet so the loaded
+      // scene's bbox.min.y is near 0 . meaning feet end up at world
+      // y=0.7 (floating 0.7 above the floor). Shift the loaded scene
+      // downward in group-local space so its bbox bottom lands at
+      // world y=0 regardless of pivot location. Sketchfab models with
+      // origin at the hip get the same correction.
+      const shiftY = -group.position.y / render.scale - localBBox.min.y;
+      // Center the model horizontally on its coord. glTFs from
+      // pipelines that pivot off-center (corner-pivoted props, asset
+      // packs with origin at the bbox edge) otherwise render visibly
+      // offset from the cell they're at. Mixamo-style feet-centered
+      // characters have bbox center already ~0 on X/Z, so this is a
+      // no-op for them.
+      const shiftX = -((localBBox.min.x + localBBox.max.x) / 2);
+      const shiftZ = -((localBBox.min.z + localBBox.max.z) / 2);
+      loadedScene.position.x += shiftX;
+      loadedScene.position.y += shiftY;
+      loadedScene.position.z += shiftZ;
+      // Translate the stored bbox by the same shifts so the proxy
+      // raycast (which applies group.matrixWorld to localBBox) sees
+      // the correct world bbox after correction.
+      localBBox.translate(new THREE.Vector3(shiftX, shiftY, shiftZ));
+    }
+
+    // Wire the proxy raycast for the gaze-hover system.
+    group.userData._localBBox = localBBox;
+    group.raycast = groupBoxRaycast;
+
+    // (bbox diagnostic removed: the per-load log fired on every
+    // descriptor re-render, which is many times per minute when the
+    // drummer ticks and dancers step. If you need it for scale
+    // tuning, uncomment temporarily.)
+
+    // Rung-3 sensory wiring. If the loaded glTF carries animations and
+    // the caller passed an entity identifier, instantiate a per-mesh
+    // AnimationMixer, build a clip-name → AnimationAction map, find
+    // the idle clip (case-insensitive match on "idle"), and start it
+    // looping. factDispatcher looks the entity up via
+    // getEntityMixerState(kind, id) on every fact-arrival push.
+    if (entity?.kind && entity?.id && Array.isArray(animations) && animations.length > 0) {
+      const mixer = new THREE.AnimationMixer(loadedScene);
+      const actions = new Map();
+      let idleAction = null;
+      for (const clip of animations) {
+        if (!clip || typeof clip.name !== "string") continue;
+        const action = mixer.clipAction(clip);
+        actions.set(clip.name, action);
+        // Strict match: only treat clips actually named "idle" as the
+        // looping default. Mixamo's per-animation exports don't ship
+        // a real idle, so most characters land here with idleAction
+        // null . the dispatcher will play each fact's clip once and
+        // clamp at the last frame, which reads as "only animates on
+        // fact arrival" (the user's expectation). Authors who want a
+        // breathing rest pose should download Mixamo's "Standing Idle"
+        // and merge it into the character file as a clip named "idle".
+        if (/(^|\W)idle(\W|$)/i.test(clip.name)) idleAction = action;
+      }
+      if (idleAction) {
+        idleAction.setLoop(THREE.LoopRepeat, Infinity).play();
+      }
+      const key = `${entity.kind}:${entity.id}`;
+      this._entityMixers.set(key, {
+        mixer,
+        actions,
+        idleAction,
+        renderBlock: render,
+      });
+    }
+  }
+
+  /**
+   * Public lookup for factDispatcher. Returns the mixer state for the
+   * entity identified by (kind, id), or null if the entity isn't
+   * loaded in the current scene (different space, descriptor stale,
+   * or the model failed to load and the entity is still a primitive).
+   */
+  getEntityMixerState(kind, id) {
+    if (!kind || !id) return null;
+    return this._entityMixers.get(`${kind}:${id}`) || null;
+  }
+
+  /**
+   * Iterate every entity currently carrying an AnimationMixer in
+   * the scene. factDispatcher uses this for population-level fact
+   * dispatch: when a fact lands, every entity whose render block
+   * names the fact's action reacts, regardless of whether the fact
+   * targeted that entity directly. That's how dancers sway when
+   * the drum ticks . the chain is the world; each entity declares
+   * what events it cares about via its render block.
+   */
+  getAllEntityMixerStates() {
+    return this._entityMixers.values();
+  }
+
+  /**
+   * Build a stable fingerprint of what renderDescriptor would actually
+   * paint. Used to short-circuit repeat renders when the substrate
+   * fires invalidates for writes that don't change anything the scene
+   * surfaces (per-tick tracking, per-step counters, etc.). Keep it
+   * cheap . a JSON string of the consumed fields is fast for typical
+   * descriptors and avoids the cost of running renderDescriptor on
+   * every qualities.* write.
+   */
+  _renderSignature(desc, { isAuthenticated, resetCamera }) {
+    if (!desc) return null;
+    // Beings have a lightweight per-coord delta path (applyPositionDelta
+    // fires off `kind:"position"` envelopes and lerps the mesh without
+    // a full re-render), so coord is intentionally NOT in the beings
+    // signature . including it was the lag root, flipping the sig 10x
+    // per walking second.
+    const sigBeing = (e) => [
+      e?.beingId || e?.name || null,
+      e?.qualities?.render?.model || null,
+      e?.qualities?.render?.scale ?? null,
+    ];
+    // Children (spaces) and matter have NO skinny delta path. Their
+    // coord changes land only through descriptor refetch + re-render,
+    // so coord MUST be in the signature . without it, moving a tree
+    // or a drum succeeds at the substrate but the portal repaints to
+    // the same old position.
+    const coordKey = (c) => c && Number.isFinite(c.x) && Number.isFinite(c.y)
+      ? `${c.x},${c.y}${c.z !== undefined ? `,${c.z}` : ""}`
+      : null;
+    const sigPositional = (e) => [
+      e?.matterId || e?.spaceId || e?.name || null,
+      coordKey(e?.coord),
+      e?.qualities?.render?.model || null,
+      e?.qualities?.render?.scale ?? null,
+    ];
+    const selfId = desc?.identity?.beingId || null;
+    // Self being doesn't render (camera IS self). Skip it from the
+    // signature so its coord/activity churn never triggers re-render.
+    const isSelf = (e) => selfId && e?.beingId && String(e.beingId) === String(selfId);
+    const block = {
+      addr: desc?.address?.pathByNames || null,
+      sid:  desc?.address?.spaceId    || null,
+      auth: !!isAuthenticated,
+      cam:  !!resetCamera,
+      size: desc?.size || null,
+      self: selfId,
+      beings:   (desc.beings   || []).filter((e) => !isSelf(e)).map(sigBeing),
+      matter:   (desc.matter   || []).map(sigPositional),
+      children: (desc.children || []).map(sigPositional),
+    };
+    try {
+      return JSON.stringify(block);
+    } catch {
+      return null;
+    }
   }
 
   _makeBeingMesh(b) {
@@ -1642,6 +1968,16 @@ export class Scene {
     this._checkBeingProximity();
     this._updateBeingMovement(dt);
     this._updateActivityBubbles();
+    // Rung-3 sensory loop. Advance every per-entity AnimationMixer
+    // by this frame's delta. Mixers are populated by _swapToModel
+    // when a glTF with animations loads on an entity that came with
+    // a render block; the registry is cleared by _clearWorld on
+    // navigation. Cost is O(n) over loaded characters per frame.
+    if (this._entityMixers.size > 0) {
+      for (const state of this._entityMixers.values()) {
+        state.mixer.update(dt);
+      }
+    }
     if (this._skyMode === "default") {
       this._updateTimeOfDay();
       this._driftClouds(dt);

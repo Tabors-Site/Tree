@@ -105,7 +105,7 @@ async function assertCoordInBounds(beingDoc, raw) {
 //   "qualities.<namespace>.<innerKey>"               → merge one inner key
 //   value=null on a qualities path                   → unset
 
-async function setOnBeingHandler({ target, params }) {
+async function setOnBeingHandler({ target, params, summonCtx }) {
   const { field, value, merge = true } = params || {};
   if (!field || typeof field !== "string") {
     throw new Error("set-being: `field` is required");
@@ -114,8 +114,10 @@ async function setOnBeingHandler({ target, params }) {
   // string id. set-being needs row contents (qualities namespaces
   // for merge, current name for uniqueness check, current position
   // for the clamp helper). Load the row once at the top — the rest
-  // of the handler reads from the doc.
-  target = await loadTargetRow(target, "being");
+  // of the handler reads from the doc. summonCtx threads the moment's
+  // deltaF so an in-flight being just stamped in the same scaffold
+  // can be set without waiting for sealAct.
+  target = await loadTargetRow(target, "being", { summonCtx });
 
   // ── qualities paths ────────────────────────────────────
   if (field.startsWith("qualities.")) {
@@ -275,7 +277,7 @@ async function addLlmConnectionHandler({ target, params, identity, summonCtx }) 
     );
   }
   // Load the row to read llmDefault for the auto-assign-on-first-connection branch.
-  const beingRow = await loadTargetRow(target, "being");
+  const beingRow = await loadTargetRow(target, "being", { summonCtx });
   const { addLlmConnection, assignConnection } = await import(
     "../../present/cognition/llm/connect.js"
   );

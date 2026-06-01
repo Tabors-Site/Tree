@@ -3,6 +3,7 @@ import { Routes, Route } from "react-router-dom";
 // New site (post-rebuild 2026)
 import NewLandingPage from "./NewLandingPage.jsx";
 import IbpPage from "./IbpPage.jsx";
+import PortalPage from "./PortalPage.jsx";
 import GetStartedPage from "./GetStartedPage.jsx";
 import FactoryLayout from "./FactoryLayout.jsx";
 import FactoryOverview from "./FactoryOverview.jsx";
@@ -29,6 +30,7 @@ import NotFound from "./old/NotFound.jsx";
  *
  *   /                       NEW landing (two buttons plus "What is this?")
  *   /ibp                    NEW IBP page (transport plus four verbs)
+ *   /portal                 NEW Portal page (renderer / client surface)
  *   /factory                NEW factory overview plus chapter walk
  *   /factory/<chapter>      NEW factory chapter (intake / assign / fold / momentum / stamped)
  *   /blog, /blog/:slug      Blog at root (component lives under old/Blog/)
@@ -45,6 +47,7 @@ const WelcomeRoutes = () => {
       {/* New site */}
       <Route path="/" element={<NewLandingPage />} />
       <Route path="/ibp" element={<IbpPage />} />
+      <Route path="/portal" element={<PortalPage />} />
       <Route path="/start" element={<GetStartedPage />} />
       <Route path="/factory" element={<FactoryLayout />}>
         <Route index element={<FactoryOverview />} />

@@ -14,6 +14,7 @@ const SiteFooter = () => {
           <Link to="/" className="ns-footer-brand">TreeOS</Link>
           <nav className="ns-footer-nav" aria-label="Footer">
             <Link to="/ibp" className="ns-footer-link">IBP</Link>
+            <Link to="/portal" className="ns-footer-link">Portal</Link>
             <Link to="/factory" className="ns-footer-link">Factory</Link>
             <Link to="/start" className="ns-footer-link">Get started</Link>
             <a

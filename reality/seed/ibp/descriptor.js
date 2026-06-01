@@ -43,7 +43,6 @@ import { listLiveThreads } from "../materials/space/threads.js";
 import {
   resolveSpaceAccess,
   listSpaceChildren,
-  listBeingSpaces,
 } from "../materials/space/spaces.js";
 import { getInboxSummary } from "../present/intake/inbox.js";
 import { getRole, listRoles } from "../present/roles/registry.js";
@@ -345,7 +344,6 @@ async function inferActivityTarget(summon) {
  */
 export async function buildPlaceDescriptor(resolved, opts = {}) {
   if (resolved.isSpaceRoot) return placeAtSpaceRoot(resolved, opts);
-  if (resolved.isHomeRoot) return placeAtBeingHome(resolved, opts);
   return placeAtSpace(resolved, opts);
 }
 
@@ -390,6 +388,12 @@ async function placeAtSpaceRoot(resolved, { identity } = {}) {
     },
     isSpaceRoot: true,
     isHomeRoot: false,
+    // Surface the space root's `size` on the wire, same as placeAtSpace
+    // does for non-root positions. Without this the 3D portal's sized-
+    // land render branch never fires at the reality root . it falls
+    // back to the infinite outdoor scene even though the root now
+    // carries a default size at creation time.
+    size: spaceRoot?.size || null,
     beings: spaceRootBeings,
     children,
     matters,
@@ -399,50 +403,6 @@ async function placeAtSpaceRoot(resolved, { identity } = {}) {
     },
     identity: identityBlock(identity, { authorizedHere: true, writeAllowed: false }),
     _meta: meta(),
-  };
-}
-
-async function placeAtBeingHome(resolved, { identity } = {}) {
-  const realityDomain = getRealityDomain();
-  const homePath = `/~${resolved.name}`;
-  const beingSpaces = await listBeingSpaces(resolved.beingId);
-  // Each space the being owns becomes a child entry at place scope
-  // (`/<name>`). The home view is a listing surface; entering a
-  // space takes you to that space's own address.
-  const children = beingSpaces.map((s) => ({
-    name: s.name,
-    spaceId: s._id,
-    type: s.type || null,
-    path: `/${s.name}`,
-  }));
-  const isOwner = !!(identity && String(identity.beingId) === String(resolved.beingId));
-  return {
-    address: {
-      place: realityDomain,
-      path: homePath,
-      being: resolved.being || null,
-      spaceId: null,
-      beingId: resolved.beingId,
-      chain: resolved.chain,
-      pathByNames: homePath,
-      pathByIds: `/~${resolved.beingId}`,
-      leafName: resolved.leafName,
-      leafId: resolved.leafId,
-    },
-    isSpaceRoot: false,
-    isHomeRoot: true,
-    // The owning being is the only resident here by default.
-    // Extensions can place others by writing qualities.beings on the
-    // being's home Space; placeAtSpace surfaces them via beingsAtSpace.
-    beings: [{ being: resolved.name, invocableBy: "owner", available: isOwner }],
-    children,
-    matters: [],
-    // Home view is being-anchored, not space-anchored, so no
-    // qualities surface here. To see a being's home space's
-    // qualities, SEE that space directly.
-    qualities: {},
-    identity: identityBlock(identity, { authorizedHere: isOwner, writeAllowed: isOwner }),
-    _meta: meta(isOwner ? [] : ["read-only"]),
   };
 }
 

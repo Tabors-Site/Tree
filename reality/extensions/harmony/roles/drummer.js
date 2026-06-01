@@ -105,10 +105,17 @@ export const drummerRole = Object.freeze({
         if (step.dx === 0 && step.dy === 0) continue;
         const nextCoord = { x: myCoord.x + step.dx, y: myCoord.y + step.dy };
         try {
+          // harmony:walk is a semantic wrapper around set-being:coord.
+          // The wrapper stamps a "harmony:walk" fact on the drummer's
+          // reel that the rung-3 fact-arrival push delivers to portals,
+          // which look it up in qualities.render.animations and play
+          // the "walk" clip on the AnimationMixer. Without the
+          // wrapper, the only fact would be set-being which the
+          // portal can't map to a specific animation cleanly.
           await doVerb(
             { kind: "being", id: drummerId },
-            "set-being",
-            { field: "coord", value: nextCoord },
+            "harmony:walk",
+            { coord: nextCoord },
             { identity, summonCtx: ctx },
           );
           stepped = nextCoord;

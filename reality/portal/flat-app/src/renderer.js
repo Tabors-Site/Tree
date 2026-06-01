@@ -1192,18 +1192,30 @@ function renderActBlock(a, discovery) {
     ? a.endMessage.content
     : null;
   const startText = formatActPayload(a.startMessage?.content);
-  const headline = endText || startText;
+
+  // A structured act has no prose response: its content IS the Facts it
+  // stamped (a dancer's step, any tool call). When endMessage is empty
+  // but the act produced Facts, show what it DID rather than echoing the
+  // wake that triggered it. An act with neither prose nor Facts is a
+  // SEE that left no trace and never reaches here.
+  const actText = (!endText && Array.isArray(a.facts) && a.facts.length)
+    ? a.facts.map(factActionLabel).filter(Boolean).join(", ")
+    : null;
+  const headline = endText || actText || startText;
   const isResponse = !!endText;
+  const isStructuredAct = !endText && !!actText;
 
   const content = document.createElement("div");
   content.className = "block-content";
   content.textContent = headline;
   content.title = headline;
-  if (isResponse) {
+  if (isResponse || isStructuredAct) {
     const tag = document.createElement("span");
     tag.className = "content-tag dim";
-    tag.textContent = "↳";
-    tag.title = "this being's response (end message)";
+    tag.textContent = isResponse ? "↳" : "⚙";
+    tag.title = isResponse
+      ? "this being's response (end message)"
+      : "what this moment did (stamped facts)";
     content.prepend(tag);
   }
   head.appendChild(content);
@@ -1253,7 +1265,7 @@ function renderActBlock(a, discovery) {
   // glance. If the headline was the response (endMessage), the sub-line
   // shows the trigger (startMessage). If the headline was the trigger,
   // and there's an endMessage, surface it here.
-  if (isResponse) {
+  if (isResponse || isStructuredAct) {
     const triggerLine = document.createElement("span");
     triggerLine.className = "block-trigger dim";
     triggerLine.textContent = "from: " + truncate(startText, 100);
@@ -1286,6 +1298,11 @@ function renderActBlock(a, discovery) {
   if (a.answers)         detail.appendChild(kvBlock("answers (summon)", a.answers,        { mono: true }));
   if (a.startMessage?.content) detail.appendChild(jsonKv("in (start message)", a.startMessage));
   if (a.endMessage?.content || a.endMessage?.stopped) detail.appendChild(jsonKv("out (end message)", a.endMessage));
+  // The Facts this moment stamped — the act's substrate-change content,
+  // the other half of "what happened" alongside any prose end message.
+  if (Array.isArray(a.facts) && a.facts.length) {
+    detail.appendChild(jsonKv(`facts (${a.facts.length})`, a.facts));
+  }
   if (a.severedAt)       detail.appendChild(kvBlock("severed at", String(a.severedAt)));
   if (a.receivedAt)      detail.appendChild(kvBlock("received at", String(a.receivedAt)));
   if (a.stampedAt)       detail.appendChild(kvBlock("stamped at", String(a.stampedAt)));
@@ -1305,6 +1322,17 @@ function renderActBlock(a, discovery) {
   head.onclick = expand;
   sub.onclick  = expand;
   return li;
+}
+
+// Headline label for one stamped fact: the action plus its summary,
+// so an act-block whose moment produced no prose still reads as what it
+// did ("harmony:step → (5, 4)", "create-space name \"dance-floor\""). The
+// action name carries the verb intent; factSummaryLine carries the
+// payload. Returns null only for a fact with no action at all.
+function factActionLabel(f) {
+  if (!f || !f.action) return null;
+  const summary = factSummaryLine(f);
+  return summary ? `${f.action} ${summary}` : f.action;
 }
 
 // Derive a one-line content summary from a fact's verb/action/params.
@@ -1328,9 +1356,13 @@ function factSummaryLine(f) {
   if (/^create/.test(f.action) && p?.spec?.name) {
     return `name "${p.spec.name}"${p.spec.type ? ` (type ${p.spec.type})` : ""}`;
   }
-  // set-* — field = value.
+  // set-* — field = value. coord renders as a position so a dancer's
+  // step reads "→ (5, 4)" rather than "coord = {"x":5,"y":4}".
   if (/^set/.test(f.action) && p?.field) {
     const v = p.value;
+    if (p.field === "coord" && v && typeof v.x === "number" && typeof v.y === "number") {
+      return `→ (${v.x}, ${v.y})`;
+    }
     const vs = typeof v === "string" ? v
               : typeof v === "number" || typeof v === "boolean" ? String(v)
               : safeJson(v, 60);

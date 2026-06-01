@@ -146,10 +146,16 @@ const REALITY_ROOT_DEFAULT_PERMISSIONS = Object.freeze({
  * @param {string} [args.namespace] set-qualities namespace
  * @param {string} [args.intent]   SUMMON intent
  * @param {string} [args.operation] BE operation
+ * @param {object} [args.summonCtx] caller's moment context (carries deltaF
+ *                                  so the ancestor walk can see in-flight
+ *                                  create-space specs that haven't sealed
+ *                                  yet — needed for scaffolds that chain
+ *                                  do:create-space → do:create-matter at
+ *                                  the just-stamped space within one moment)
  * @returns {Promise<{ ok: boolean, stance: string, reason?: string }>}
  */
 export async function authorize(args) {
-  const { identity, verb, target } = args;
+  const { identity, verb, target, summonCtx = null } = args;
   const beingId = identity?.beingId || null;
   const spaceId = target?.spaceId || null;
 
@@ -248,7 +254,7 @@ export async function authorize(args) {
   }
 
   // ── Layer 3: walk the parent chain looking for a matching rule ──
-  const matched = await findMatchingRule({ spaceId, verb, keyParts });
+  const matched = await findMatchingRule({ spaceId, verb, keyParts, summonCtx });
   if (matched) {
     return evaluateRequires(matched.rule, props, stanceLabel, matched.source);
   }
@@ -334,29 +340,84 @@ function buildKeyParts(args) {
 // Layer 3: rule lookup
 // ─────────────────────────────────────────────────────────────────────
 
-async function findMatchingRule({ spaceId, verb, keyParts }) {
+async function findMatchingRule({ spaceId, verb, keyParts, summonCtx = null }) {
   if (!spaceId) {
     const spaceRootId = getSpaceRootId();
     if (!spaceRootId) return null;
     return matchOnSpace(spaceRootId, verb, keyParts);
   }
 
-  let chain;
-  try {
-    chain = await getAncestorChain(spaceId);
-  } catch {
-    chain = null;
-  }
-  const path =
-    Array.isArray(chain) && chain.length
-      ? chain.map((n) => String(n._id))
-      : [String(spaceId)];
-
+  const path = await walkAncestorsWithDeltaF(spaceId, summonCtx);
   for (const id of path) {
     const match = await matchOnSpace(id, verb, keyParts);
     if (match) return match;
   }
   return null;
+}
+
+// Walk the ancestor chain, consulting summonCtx.deltaF for in-flight
+// create-space specs that haven't sealed yet. Returns a list of space ids
+// from the starting space up to (and including) the place root.
+//
+// The doctrinal shape: a moment that creates a space and then acts at
+// the new space (seed scaffolds chain do:create-space → do:create-matter)
+// must be able to authorize the inner act. The new space's row doesn't
+// materialize until sealAct's foldAfterCommit; until then it lives only
+// as a fact spec in summonCtx.deltaF. Authorize falls back to the
+// in-flight spec for its parent, then continues via Mongo's cache for
+// the rest of the chain.
+//
+// No deltaF (boot, outside any moment, or a moment that emitted no
+// creates yet): fast-path to getAncestorChain.
+async function walkAncestorsWithDeltaF(spaceId, summonCtx) {
+  const deltaF = Array.isArray(summonCtx?.deltaF) ? summonCtx.deltaF : null;
+  if (!deltaF || deltaF.length === 0) {
+    let chain;
+    try { chain = await getAncestorChain(spaceId); } catch { chain = null; }
+    return Array.isArray(chain) && chain.length
+      ? chain.map((n) => String(n._id))
+      : [String(spaceId)];
+  }
+
+  const path = [];
+  const seen = new Set();
+  let cursor = String(spaceId);
+  while (cursor && !seen.has(cursor)) {
+    seen.add(cursor);
+    path.push(cursor);
+
+    const row = await Space.findById(cursor).select("parent").lean();
+    if (row) {
+      // Mongo has the row — defer the rest of the walk to the cache.
+      let chain;
+      try { chain = await getAncestorChain(cursor); } catch { chain = null; }
+      if (Array.isArray(chain) && chain.length) {
+        for (const node of chain) {
+          const id = String(node._id);
+          if (seen.has(id)) continue;
+          seen.add(id);
+          path.push(id);
+        }
+      }
+      break;
+    }
+
+    // Row absent. Look for a pending create-space spec for this id and
+    // continue walking through its declared parent. Without a match we
+    // stop — the caller is acting at a space that exists nowhere.
+    const pending = deltaF.find(
+      (f) =>
+        f?.verb === "do" &&
+        f?.action === "create-space" &&
+        f?.target?.kind === "space" &&
+        String(f?.target?.id) === cursor,
+    );
+    if (!pending) break;
+    cursor = pending.params?.spec?.parent
+      ? String(pending.params.spec.parent)
+      : null;
+  }
+  return path;
 }
 
 async function matchOnSpace(spaceId, verb, keyParts) {

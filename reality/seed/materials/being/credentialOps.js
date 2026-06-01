@@ -72,7 +72,7 @@ registerOperation("credential-read", {
   targets: ["being"],
   ownerExtension: "seed",
   factAction: "credential-read",
-  handler: async ({ target, identity, scaffold }) => {
+  handler: async ({ target, identity, scaffold, summonCtx }) => {
     const targetBeingId = targetBeingIdOf(target);
     const askerBeingId = askerBeingIdOf(identity, scaffold);
     if (!scaffold) {
@@ -86,7 +86,7 @@ registerOperation("credential-read", {
       }
     }
     const { loadTargetRow } = await import("../_targetShape.js");
-    const beingRow = await loadTargetRow(target, "being");
+    const beingRow = await loadTargetRow(target, "being", { summonCtx });
     const blob = readCredentialPlainFromBeing(beingRow);
     const plaintext = blob ? decryptCredential(blob) : null;
     const reelBeingId = askerBeingId || targetBeingId;

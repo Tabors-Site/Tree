@@ -83,12 +83,16 @@ export async function defaultSummon({ message, ctx, role }) {
       envelope: { ...message, content: messageBody, actId: ctx?.actId || message.actId || null },
       role,
       signal: ctx.signal,
-      summonCtx: {
-        actId: ctx?.actId || message.actId || null,
-        sessionId: ctx?.sessionId || null,
-        rootActId: ctx?.rootActId || ctx?.actId || message.actId || null,
-        ibpAddress: ctx?.ibpAddress || null,
-      },
+      // Thread the FULL moment ctx. `ctx` IS the object assign built and
+      // the seal drains: it carries deltaF, foldedSeqs, afterSeal, the
+      // open actId, and identity. A truncated copy (the old { actId,
+      // sessionId, ... } literal) dropped deltaF, so every tool handler's
+      // emitFact fell back to a sealFacts singleton, self-sealed its Fact
+      // outside the moment, and left the outer Act's deltaF empty. sealAct
+      // then refused that Act as an orphan (no content, no Facts). Pass
+      // the same object so a handler's emitFact pushes onto the very ΔF
+      // the seal commits. This mirrors runTransportAct in 3-momentum.js.
+      summonCtx: ctx,
     });
   } catch (err) {
     if (ctx.signal?.aborted) {

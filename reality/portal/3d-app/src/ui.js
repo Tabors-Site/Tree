@@ -66,7 +66,7 @@ export function updateAddressBar({ username, placeDomain, pathByNames, chain, is
   const nameEl = document.getElementById("chip-name");
   const placeEl = document.getElementById("chip-place");
   if (nameEl) nameEl.textContent = isAuthenticated ? (username || "you") : "arrival";
-  if (placeEl) placeEl.textContent = `@${placeDomain || "<place>"}`;
+  if (placeEl) placeEl.textContent = `@${placeDomain || "<reality>"}`;
   const place = placeDomain || "";
   const path = pathByNames || "/";
   _addressApi.input.value = place ? `${place}${path === "/" ? "/" : path}` : path;

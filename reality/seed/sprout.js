@@ -77,7 +77,7 @@ import { v4 as uuidv4 } from "uuid";
 import Space from "./materials/space/space.js";
 import { SEED_SPACE } from "./materials/space/seedSpaces.js";
 import { I_AM } from "./materials/being/seedBeings.js";
-import { createRealitySeedSpace } from "./materials/space/spaces.js";
+import { createRealitySeedSpace, assertValidSpaceSize } from "./materials/space/spaces.js";
 import { emitFact } from "./past/fact/facts.js";
 import { sealAct } from "./present/beats/4-stamped.js";
 
@@ -302,6 +302,11 @@ export async function ensureSpaceRoot(summonCtx) {
     // ΔF; sealAct commits it with the rest of genesis in one Mongo
     // transaction. The reducer's applyCreateSpace + initProjection
     // materializes the SPACE_ROOT row at commit time.
+    //
+    // Fill `size` with the configured defaultSpaceSize so the portal
+    // has a walkable grid to render the place root and beings' coord
+    // writes have bounds to clamp against. ensureSpaceRoot runs before
+    // initRealityConfig, so the helper falls back to CONFIG_DEFAULTS.
     const rootId = uuidv4();
     await emitFact({
       verb: "do",
@@ -315,6 +320,7 @@ export async function ensureSpaceRoot(summonCtx) {
           parent: null,
           rootOwner: I_AM,
           seedSpace: SEED_SPACE.SPACE_ROOT,
+          size: assertValidSpaceSize(null, { applyDefault: true }),
           qualities: {},
         },
       },

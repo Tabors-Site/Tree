@@ -486,8 +486,14 @@ export async function createBeingWithHome(opts) {
       parent = { _id: homeParent, _pending: true };
     }
 
+    // The home space's stored name is the being's name (no tilde).
+    // "~" is IBP address sugar only — at the substrate layer the home
+    // is a regular space with a regular name, listable like any other
+    // child of its parent. "/~" and "/~@<name>" are how addresses
+    // reach it; the listing surface ("/<name>") shows it by its real
+    // name.
     const resolvedName =
-      homeName || (operatingMode === "human" ? `~${name}` : `${role}-home`);
+      homeName || (operatingMode === "human" ? name : `${role}-home`);
     const resolvedType =
       homeType ||
       (operatingMode === "human" ? "home-territory" : `${role}-home`);
@@ -498,6 +504,28 @@ export async function createBeingWithHome(opts) {
     // one explicitly.
     const resolvedSize =
       homeSize || (operatingMode === "human" ? { x: 100, y: 100 } : null);
+
+    // Compute a random coord inside the parent's size so the home tree
+    // lands on the parent's grid rather than the portal's hash-derived
+    // ring 22-76 units off-origin (the "homes scattered outside the
+    // grid" effect). Mirrors createSpace's default-coord logic; this
+    // path bypasses that helper so we replicate the rule inline.
+    // Falls back to no coord when the parent has no size (the renderer
+    // takes its hash-ring fallback in that case).
+    let resolvedCoord = null;
+    try {
+      const parentSpace = parent && !parent._pending
+        ? parent
+        : await Space.findById(homeParent).select("size").lean();
+      const parentSize = parentSpace?.size || null;
+      if (parentSize && Number.isFinite(parentSize.x) && Number.isFinite(parentSize.y) &&
+          parentSize.x > 0 && parentSize.y > 0) {
+        resolvedCoord = {
+          x: Math.floor(Math.random() * parentSize.x),
+          y: Math.floor(Math.random() * parentSize.y),
+        };
+      }
+    } catch { /* defensive: any lookup failure leaves coord null */ }
 
     // Home-space birth fact. Inside a moment (boot or runtime), the
     // fact joins ctx.deltaF and seals with the rest of the ΔF.
@@ -522,7 +550,8 @@ export async function createBeingWithHome(opts) {
           parent:    String(homeParent),
           rootOwner: null, // set below for humans only via do.set-space
           qualities: specQualities,
-          ...(resolvedSize ? { size: resolvedSize } : {}),
+          ...(resolvedSize  ? { size:  resolvedSize  } : {}),
+          ...(resolvedCoord ? { coord: resolvedCoord } : {}),
         },
       },
       actId: summonCtx?.actId || actId,

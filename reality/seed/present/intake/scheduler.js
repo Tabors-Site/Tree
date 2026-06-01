@@ -80,6 +80,12 @@ function CFG_MAX_AGE_SECONDS() {
 //   beingId -> { tokens, lastRefillMs }
 const _rate = new Map();
 
+// Backoff window on rate-limit. At cap=60/sec refill is one token per
+// ~17ms; 50ms is three tokens, enough headroom to make progress on the
+// retry without spinning, and short enough that the user doesn't feel
+// the backoff during normal traffic.
+const RATE_LIMIT_BACKOFF_MS = 50;
+
 // ────────────────────────────────────────────────────────────────
 // Public API
 // ────────────────────────────────────────────────────────────────
@@ -254,15 +260,11 @@ async function runLoop(beingId) {
         // by pickNextIntake, which always returns the current top.
         let safetyCounter = 1000; // hard cap so a runaway producer can't loop forever
         while (safetyCounter-- > 0) {
-          if (!_checkRate(beingId)) {
-            // Rate-limited — put spaceId back so we revisit on the next wake.
-            state.wakeQueue.add(spaceId);
-            log.warn(
-              "Scheduler",
-              `being ${beingId.slice(0, 8)} rate-limited; deferring`,
-            );
-            break;
-          }
+          // Pick first, charge the token only for real work. Picking is
+          // a cheap indexed DB read; charging the bucket for empty
+          // pick-attempts (or for entries we'd dedupe via
+          // seenCorrelations) used to drain tokens during quiet periods
+          // and force the rate-limit branch on legitimate traffic.
           const picked = await pickNextIntake(spaceId, beingId);
           if (!picked) break;
           if (seenCorrelations.has(picked.entry.correlation)) {
@@ -271,6 +273,21 @@ async function runLoop(beingId) {
             // shape for a moment that didn't seal). A future external
             // wake gets a fresh run and a fresh attempt.
             break;
+          }
+          if (!_checkRate(beingId)) {
+            // Real work is queued but the per-being summons-per-second
+            // bucket is empty. Yield the event loop and wait for a
+            // refill window before retrying — `continue` re-picks the
+            // same entry (still in the inbox, not yet added to
+            // seenCorrelations). Without the await, the outer wakeQueue
+            // re-add path would spin synchronously, hammering the log
+            // and starving the bucket of wall-clock to refill against.
+            log.warn(
+              "Scheduler",
+              `being ${beingId.slice(0, 8)} rate-limited; deferring`,
+            );
+            await new Promise((r) => setTimeout(r, RATE_LIMIT_BACKOFF_MS));
+            continue;
           }
           seenCorrelations.add(picked.entry.correlation);
           await processEntry(beingId, spaceId, picked);

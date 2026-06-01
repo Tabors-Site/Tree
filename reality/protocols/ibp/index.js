@@ -20,6 +20,7 @@ import { attachIbpHandlers } from "./protocol.js";
 import { hooks } from "../../seed/hooks.js";
 import Space from "../../seed/materials/space/space.js";
 import { emitPositionInvalidate, emitPositionDelta } from "./live.js";
+import { registerFactPush } from "./factPush.js";
 import { emitToSubscribers } from "../../seed/present/wakes/subscriptions.js";
 import { startTickLoop as startScheduleTick } from "../../seed/present/wakes/wakeSchedule.js";
 
@@ -85,7 +86,15 @@ function wireLiveHooks() {
   // the delta doesn't carry.
   hooks.register("afterFieldWrite", async ({ spaceId, field, target }) => {
     if (!spaceId) return;
-    if (field === "coord") return;
+    // Skip coord ONLY for being writes . set-being:coord has its own
+    // lightweight emitPositionDelta path (see afterPositionUpdate
+    // above) so an extra invalidate would force a debounced full
+    // descriptor refetch 10x/sec while a human walks. For space and
+    // matter coord changes, there's no delta path . the parent
+    // descriptor must be invalidated so the portal repaints the
+    // child at its new cell. Without this, moving a space or matter
+    // succeeds at the substrate but the visual stays at the old cell.
+    if (field === "coord" && target?.kind === "being") return;
     emitPositionInvalidate(spaceId, `field:${field}`);
     if (target?.kind === "space") {
       try {
@@ -163,6 +172,12 @@ export function initIBPWS(io) {
     return;
   }
   wireLiveHooks();
+  // Rung-3 fact-arrival push. Installs a cross-cutting handler at the
+  // fold boundary that emits a SEE/fact envelope on every do:* fact
+  // landing on a being or matter. Portals listening live see the
+  // envelope alongside position deltas and drive their per-character
+  // AnimationMixer + Web Audio renderers off it.
+  registerFactPush();
   attachIbpHandlers(io);
   // Rehydrate the durable shadows. Subscriptions and schedules are
   // in-memory at runtime; their write-through collections

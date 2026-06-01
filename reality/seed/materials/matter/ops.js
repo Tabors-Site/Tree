@@ -121,14 +121,17 @@ async function createMatterHandler(ctx) {
 //   "qualities.<namespace>.<innerKey>"               → merge one inner key
 //   value=null on a qualities path                   → unset
 
-async function setOnMatterHandler({ target, params }) {
+async function setOnMatterHandler({ target, params, summonCtx }) {
   const { field, value, merge = true } = params || {};
   if (!field || typeof field !== "string") {
     throw new Error("set-matter: `field` is required");
   }
   // Load the row at the top — set-matter needs spaceId for coord
-  // clamping plus the doc for id-emitting return shapes.
-  target = await loadTargetRow(target, "matter");
+  // clamping plus the doc for id-emitting return shapes. Passes
+  // summonCtx so an in-moment chain (create-matter → set-matter
+  // before seal) reads the in-flight spec from deltaF when the row
+  // hasn't materialized yet.
+  target = await loadTargetRow(target, "matter", { summonCtx });
 
   // ── qualities paths ────────────────────────────────────
   if (field.startsWith("qualities.")) {

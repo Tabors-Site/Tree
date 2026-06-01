@@ -137,6 +137,26 @@ export const danceFloorSeed = {
     }, opOpts);
     log.info("Harmony", `placed drum at (${drumStart.x},${drumStart.y})`);
 
+    // 2b. Render the drum. set-render writes qualities.render . the
+    // seed-owned sensory block (model + animations + sounds + future
+    // channels). Animations and sounds ride today even though the
+    // portal won't play them until rung 3 wires fact-arrival push;
+    // capturing them now means the substrate is ready and rung 3 is
+    // a portal-side addition only.
+    await reality.do({ kind: "matter", id: drumMatterId }, "set-render", {
+      model: "harmony:drum",
+      // The drum exported from Mixamo / Sketchfab at FBX cm-units too;
+      // 56-unit-tall drum gets the same 0.015 correction down to ~84cm,
+      // which fits the cell grid (1.5 world units / cell). Tune if the
+      // drum source ships in different units.
+      scale: 0.015,
+      // No animations . the static drum prop has no clips. Sound
+      // dispatch is parallel to animation; per assets.md sounds use
+      // the namespaced `<ext>:<asset-name>` form so the audio
+      // resolver can split it.
+      sounds: { "harmony:tick": "harmony:drum-hit" },
+    }, opOpts);
+
     // 3. drummer being. Use summonCreateBeing directly (the same path
     // hello-world's seed uses). `reality.be("create-being", ...)` is a
     // doc-claimed shape but cherub's honoredOperations does not
@@ -176,6 +196,31 @@ export const danceFloorSeed = {
     await reality.do(drummerBeingId, "set-being", {
       field: "qualities.harmony.role",
       value: { drumMatterId, gridSpaceId, gridW: GRID_W, gridH: GRID_H, tickMs: TICK_MS },
+    }, opOpts);
+
+    // 4a. Render the drummer. Rung-3 sensory block: the drummer's
+    // own reel carries two fact actions . harmony:tick (when he strikes
+    // the drum) and harmony:walk (when he steps toward the drum).
+    // Clip names match what the user's drummer.glb exports from
+    // Mixamo: "Playing Drums_1" is the strike, "Walking_2" is the
+    // step. With no explicit "idle" clip in the file, the AnimationMixer
+    // falls back to looping the first clip (Playing Drums_1) as the
+    // default pose . the drummer is always-drumming between events,
+    // which reads correctly for the demo. No sound on the drummer
+    // himself . the drum-hit sound rides on the drum matter's render
+    // block (harmony:tick on the drum).
+    await reality.do({ kind: "being", id: drummerBeingId }, "set-render", {
+      model: "harmony:drummer",
+      // Mixamo characters export at FBX cm-units; converters that
+      // don't auto-rescale land in three.js as 100x the intended
+      // size. 0.01 brings a typical Mixamo character down to ~1.7m,
+      // which fits the scene's cell grid (1.5 world units / cell).
+      // Tune per-character if the source uses different units.
+      scale: 0.015,
+      animations: {
+        "harmony:tick": "Playing Drums_1",
+        "harmony:walk": "Walking_2",
+      },
     }, opOpts);
 
     // 5. dancers — same summonCreateBeing pattern. operatingMode is
@@ -222,6 +267,32 @@ export const danceFloorSeed = {
       await reality.do({ kind: "being", id: dancerBeingId }, "set-being", {
         field: "coord",
         value: { x: spec.start.x, y: spec.start.y },
+      }, opOpts);
+
+      // 5b'. Render the dancer. The 3D portal dispatches facts
+      // population-level: every loaded entity whose render block
+      // names an incoming fact's action reacts in parallel. So the
+      // dancer can declare a reaction to harmony:tick (stamped by
+      // the drummer onto the drum matter) even though the dancer
+      // isn't the fact's target . the dance-floor space's subscriber
+      // bucket carries the push to every viewer, who walks every
+      // loaded entity. Clip names match the user's dancer.glb (from
+      // Mixamo): "Catwalk Walk_2" is the step motion; "Shuffling_1"
+      // is the dance-shuffle that doubles as the looping idle (it's
+      // also the on-beat pulse here . restarts from frame 0 on each
+      // tick fact, which reads as a rhythmic shuffle pulse).
+      await reality.do({ kind: "being", id: dancerBeingId }, "set-render", {
+        model: "harmony:dancer",
+        // Same Mixamo cm→m correction the drummer needs.
+        scale: 0.015,
+        animations: {
+          "harmony:step": "Catwalk Walk_2",
+          "harmony:tick": "Shuffling_1",
+        },
+        // Sound references use the namespaced `<ext>:<asset-name>`
+        // form per assets.md . the audio resolver splits on `:` to
+        // look the file up in harmony's asset manifest.
+        sounds: { "harmony:step": "harmony:footstep" },
       }, opOpts);
 
       // 5c. subscribe the dancer to drum ticks. The drummer no longer

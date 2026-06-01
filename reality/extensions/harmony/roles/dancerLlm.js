@@ -103,6 +103,9 @@ registerSeeResolver("neighbors", async (ctx) => {
     }
   }
 
+  // legalMoves names exactly the values the harmony:step tool accepts:
+  // STAY is always legal; the eight compass directions minus walls.
+  // The dancer prompt directs the model to pick one of these every wake.
   const legalMoves = ["STAY", ...DIRS.map((d) => d.key).filter((k) => !walls.includes(k))];
 
   return {
@@ -115,9 +118,7 @@ registerSeeResolver("neighbors", async (ctx) => {
   };
 }, "harmony");
 
-const BASE_PROMPT = `You are a dancer on a grid. The drum has struck; this is your one moment to step.
-
-Emit no tool call if you don't want to move this tick. The substrate records that as a release (SEE); the next tick you'll wake fresh. Walls are clamped by the bump rule. Pick with intent.`;
+const BASE_PROMPT = `You are a harmony dancer on a grid. On each beat, call harmony:step(direction) where direction is one of legalMoves (N/NE/E/SE/S/SW/W/NW/STAY). STAY means stay put . it is still a step and still recorded. No prose. Just call the tool.`;
 
 export const dancerLlmRole = Object.freeze({
   name: "harmony:dancer-llm",
@@ -143,12 +144,17 @@ export const dancerLlmRole = Object.freeze({
     {
       action: "harmony:step",
       description:
-        "Step one cell. args: { direction: 'N'|'NE'|'E'|'SE'|'S'|'SW'|'W'|'NW' }. " +
-          "To stay in place, emit no tool call — that is a SEE, the substrate's " +
-          "honest record of 'I looked and did not act.' Out-of-bounds picks throw " +
-          "at the substrate; pick a legalMove.",
+        "Step one cell or stay. args: { direction: 'N'|'NE'|'E'|'SE'|'S'|'SW'|'W'|'NW'|'STAY' }. " +
+          "Pick exactly one of legalMoves. STAY records a deliberate hold at the current cell.",
     },
   ],
+
+  // Force the provider to call a tool on every wake. Without this the
+  // model deliberates in prose ("I'm a harmony dancer, this is my
+  // first moment to step . let me explore") and emits no tool call,
+  // which the substrate treats as a SEE. Forced tool calls drop
+  // latency from minutes to seconds.
+  forceToolCall: true,
 
   // Presentism. Every tick is a fresh "now" — the face is rebuilt
   // from substrate each summon (identity + see-resolvers +

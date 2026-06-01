@@ -118,6 +118,7 @@ export async function summonVerb(stance, message, opts = {}) {
       identity,
       verb:   "summon",
       target: { kind: "thread", id: targetThreadId, spaceId: threadsSpaceId },
+      summonCtx,
     });
     if (!decision.ok) {
       throw new IbpError(IBP_ERR.FORBIDDEN, decision.reason || "Not allowed to address .threads");
@@ -146,7 +147,7 @@ export async function summonVerb(stance, message, opts = {}) {
     };
   }
 
-  const resolved = await resolveStance(expanded.right);
+  const resolved = await resolveStance(expanded.right, { identity });
 
   const qualifier = resolved.being;
   if (!qualifier) {
@@ -320,11 +321,15 @@ export async function summonCreateBeing({ spec, identity, summonCtx = null, scaf
   // Authorize against the new being's home space. I_AM short-circuits
   // inherently; cherub passes the seed-shipped place-root
   // default; extensions pass through Layer 3 rules they registered.
+  // summonCtx threads the calling moment's deltaF so a scaffold whose
+  // create-space and create-being land in the same moment can authorize
+  // the being against the in-flight home space (the dance-floor case).
   const decision = await authorize({
     identity,
     verb:      "be",
     operation: "create-being",
     target:    { kind: "space", spaceId: spec.homeSpace || spec.homeParent },
+    summonCtx,
   });
   if (!decision.ok) {
     throw new IbpError(
@@ -473,6 +478,7 @@ async function _dispatchSummon({
     identity,
     verb:   "summon",
     target: { kind: "stance", spaceId: resolved.spaceId, being: activeRole, activeRole },
+    summonCtx,
   });
   if (!decision.ok) {
     throw new IbpError(

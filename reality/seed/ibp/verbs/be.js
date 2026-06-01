@@ -115,6 +115,7 @@ export async function beVerb(operation, payload = {}, opts = {}) {
       verb: "be",
       target: { kind: addressKind, value: address },
       operation,
+      summonCtx,
     });
     if (!decision.ok) {
       throw new IbpError(
@@ -158,6 +159,7 @@ export async function beVerb(operation, payload = {}, opts = {}) {
     verb: "be",
     target: { kind: addressKind, value: address },
     operation,
+    summonCtx,
   });
   if (!decision.ok) {
     throw new IbpError(

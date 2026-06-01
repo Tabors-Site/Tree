@@ -5,6 +5,7 @@
 import fs from "fs";
 import path from "path";
 import crypto from "crypto";
+import express from "express";
 import { fileURLToPath, pathToFileURL } from "url";
 import { buildRealityServices } from "../seed/services.js";
 import { hooks } from "../seed/hooks.js";
@@ -314,6 +315,145 @@ function appendToEnvFile(key, value, description) {
   } catch {}
 }
 
+// ---------------------------------------------------------------------------
+// Sensory asset budget
+// ---------------------------------------------------------------------------
+//
+// Per-file and per-extension limits, enforced at extension load BEFORE
+// init() runs. Hard limits keep extensions tight by default; the warn
+// threshold catches asset bloat early without blocking install.
+//
+// Per-file (by extension):
+//   .glb / .gltf     . 15 MB  (Mixamo character + textures comfortably)
+//   .mp3 / .ogg / .wav .  5 MB  (any single SFX, music loop, voice line)
+// Other file types (textures, JSON sidecars, etc.) have no per-file cap
+// but count toward the per-extension cumulative below.
+//
+// Per-extension cumulative:
+//   100 MB warn  . log "extension ships <N> MB of assets"
+//   250 MB fail  . refuse to load the extension entirely
+//
+// Tuning later is fine; loosen is easier than tighten. See
+// EXTENSION_FORMAT.md for the contract authors should target.
+
+const ASSET_LIMITS = Object.freeze({
+  perFile: {
+    // Per assets.md doctrine. A glTF character with Draco mesh
+    // compression and KTX2 textures lands comfortably under 15 MB
+    // (a 5k-tri Mixamo character is 200-500 KB shipped). Authors
+    // hitting this cap have skipped either Draco or texture
+    // compression; the budget exists to push that discipline.
+    model: 15 * 1024 * 1024,
+    sound:  5 * 1024 * 1024,
+  },
+  perExtension: {
+    warn: 100 * 1024 * 1024,
+    fail: 250 * 1024 * 1024,
+  },
+});
+
+const MODEL_EXTENSIONS = new Set([".glb", ".gltf"]);
+const SOUND_EXTENSIONS = new Set([".mp3", ".ogg", ".wav"]);
+
+function classifyAssetFile(filename) {
+  const ext = path.extname(filename).toLowerCase();
+  if (MODEL_EXTENSIONS.has(ext)) return "model";
+  if (SOUND_EXTENSIONS.has(ext)) return "sound";
+  return "other";
+}
+
+function walkAssetFiles(dirPath) {
+  const out = [];
+  if (!fs.existsSync(dirPath)) return out;
+  const stack = [dirPath];
+  while (stack.length) {
+    const cur = stack.pop();
+    let entries;
+    try {
+      entries = fs.readdirSync(cur, { withFileTypes: true });
+    } catch {
+      continue;
+    }
+    for (const entry of entries) {
+      const full = path.join(cur, entry.name);
+      if (entry.isDirectory()) {
+        stack.push(full);
+      } else if (entry.isFile()) {
+        let size = 0;
+        try { size = fs.statSync(full).size; } catch { continue; }
+        out.push({
+          path: full,
+          relPath: path.relative(dirPath, full),
+          size,
+          kind: classifyAssetFile(entry.name),
+        });
+      }
+    }
+  }
+  return out;
+}
+
+function fmtMB(bytes) {
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+/**
+ * Enforce the per-file and per-extension asset budget for an extension
+ * that declared provides.assets. Throws (with an actionable message)
+ * when any limit is breached. Returns a summary of what was counted
+ * so the caller can log it on successful load.
+ *
+ * Called BEFORE init() runs so a budget breach refuses the entire
+ * extension cleanly . no zombie state from a half-loaded extension.
+ */
+function enforceAssetBudget(manifest, dir) {
+  const assetsDir = path.join(dir, "assets");
+  if (!fs.existsSync(assetsDir)) {
+    // Declaring provides.assets without an assets/ directory is a
+    // manifest mistake. Surface it loudly rather than silently
+    // serving nothing.
+    throw new Error(
+      `provides.assets declared but ${assetsDir} does not exist.`,
+    );
+  }
+
+  const files = walkAssetFiles(assetsDir);
+  const tally = { model: 0, sound: 0, other: 0, total: 0 };
+
+  for (const f of files) {
+    tally[f.kind] += f.size;
+    tally.total += f.size;
+
+    if (f.kind === "model" && f.size > ASSET_LIMITS.perFile.model) {
+      throw new Error(
+        `asset "${f.relPath}" is ${fmtMB(f.size)}; max ${fmtMB(ASSET_LIMITS.perFile.model)} for models. ` +
+        `Reduce polycount or compress textures (KTX2/Draco) and re-export.`,
+      );
+    }
+    if (f.kind === "sound" && f.size > ASSET_LIMITS.perFile.sound) {
+      throw new Error(
+        `asset "${f.relPath}" is ${fmtMB(f.size)}; max ${fmtMB(ASSET_LIMITS.perFile.sound)} for sounds. ` +
+        `Convert to 192 kbps MP3 (or trim length) to fit.`,
+      );
+    }
+  }
+
+  if (tally.total > ASSET_LIMITS.perExtension.fail) {
+    throw new Error(
+      `cumulative assets are ${fmtMB(tally.total)}; max ${fmtMB(ASSET_LIMITS.perExtension.fail)} per extension. ` +
+      `Trim or split the asset set.`,
+    );
+  }
+  if (tally.total > ASSET_LIMITS.perExtension.warn) {
+    log.warn(
+      "Extensions",
+      `"${manifest.name}" ships ${fmtMB(tally.total)} of assets (warn threshold ${fmtMB(ASSET_LIMITS.perExtension.warn)}; hard limit ${fmtMB(ASSET_LIMITS.perExtension.fail)}).`,
+    );
+  }
+
+  return tally;
+}
+
 // buildScopedReality moved to scopedReality.js. Imported above.
 
 // ---------------------------------------------------------------------------
@@ -483,6 +623,29 @@ export async function loadExtensions(app, mcpServer, opts = {}) {
 
       // Apply no-op stubs for optional deps
       applyOptionalStubs(manifest, realityServices);
+
+      // Pre-init asset-budget gate. An extension that declares
+      // provides.assets must fit the substrate-wide budget: per-file
+      // limits per channel + a cumulative cap per extension. Oversized
+      // assets refuse to load BEFORE init() runs, so no zombie state
+      // accumulates from a half-loaded extension. The summary returned
+      // is logged after a successful load.
+      let assetBudgetSummary = null;
+      if (manifest.provides?.assets) {
+        try {
+          assetBudgetSummary = enforceAssetBudget(manifest, dir);
+        } catch (budgetErr) {
+          log.error(
+            "Extensions",
+            `"${manifest.name}": ${budgetErr.message} Skipped.`,
+          );
+          _bootSkipped.push({
+            name: manifest.name,
+            reason: "asset budget",
+          });
+          continue;
+        }
+      }
 
       // Load the extension's init function
       const extModule = await import(toImportURL(entryPath));
@@ -767,6 +930,35 @@ export async function loadExtensions(app, mcpServer, opts = {}) {
         }
       }
 
+      // Mount the extension's sensory-asset directory.
+      //
+      // `provides.assets = { models: {...}, sounds: {...}, ... }` declares
+      // the asset registry; the loader serves the directory `<dir>/assets/`
+      // at `/assets/<ext-name>/*` and a synthetic `manifest.json` at
+      // `/assets/<ext-name>/manifest.json` returning `provides.assets`
+      // verbatim. The portal fetches the manifest once on first reference
+      // and resolves `<ext>:<asset-name>` against the per-channel maps.
+      //
+      // Mount happens in the loader (not the seed, not the extension) .
+      // same boundary as middleware and routers. The assets directory
+      // is guaranteed to exist by enforceAssetBudget() which already
+      // gated the load above.
+      if (manifest.provides?.assets && app) {
+        const assetsBlock = manifest.provides.assets;
+        const assetsDir = path.join(dir, "assets");
+        const mountUrl = `/assets/${manifest.name}`;
+        // Synthetic manifest endpoint . registered BEFORE the static
+        // mount so the JSON wins over any file at that path.
+        app.get(`${mountUrl}/manifest.json`, (_req, res) => {
+          res.json(assetsBlock);
+        });
+        app.use(mountUrl, express.static(assetsDir));
+        log.verbose(
+          "Extensions",
+          `${manifest.name}: mounted ${mountUrl}/ from ${assetsDir}`,
+        );
+      }
+
       // Store
       loaded.set(manifest.name, { manifest, instance, dir });
 
@@ -776,6 +968,15 @@ export async function loadExtensions(app, mcpServer, opts = {}) {
       if (instance.jobs?.length) parts.push(`${instance.jobs.length} jobs`);
       if (instance.middleware?.length)
         parts.push(`${instance.middleware.length} middleware`);
+      if (assetBudgetSummary && assetBudgetSummary.total > 0) {
+        const breakdown = [];
+        if (assetBudgetSummary.model) breakdown.push(`${fmtMB(assetBudgetSummary.model)} models`);
+        if (assetBudgetSummary.sound) breakdown.push(`${fmtMB(assetBudgetSummary.sound)} sounds`);
+        if (assetBudgetSummary.other) breakdown.push(`${fmtMB(assetBudgetSummary.other)} other`);
+        parts.push(
+          `assets ${fmtMB(assetBudgetSummary.total)}${breakdown.length ? ` (${breakdown.join(", ")})` : ""}`,
+        );
+      }
       log.verbose("Extensions", `Loaded: ${parts.join(" | ")}`);
     } catch (err) {
       log.error(

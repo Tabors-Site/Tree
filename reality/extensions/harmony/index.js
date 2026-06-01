@@ -19,6 +19,7 @@
 import log from "../../seed/seedReality/log.js";
 import tickOp from "./ops/tick.js";
 import stepOp from "./ops/step.js";
+import walkOp from "./ops/walk.js";
 import { drummerRole } from "./roles/drummer.js";
 import { dancerTowardRole } from "./roles/dancerToward.js";
 import { dancerLlmRole } from "./roles/dancerLlm.js";
@@ -28,7 +29,8 @@ export async function init(reality) {
   // 1. DO operations (loader auto-namespaces each to harmony:<name>).
   reality.do.registerOperation("tick", tickOp);
   reality.do.registerOperation("step", stepOp);
-  log.verbose("Harmony", "registered ops: tick, step");
+  reality.do.registerOperation("walk", walkOp);
+  log.verbose("Harmony", "registered ops: tick, step, walk");
 
   // 2. Roles.
   reality.declare.registerRole("harmony:drummer",       drummerRole);

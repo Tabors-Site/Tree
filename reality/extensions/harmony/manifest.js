@@ -32,5 +32,27 @@ export default {
       // Operators plant from the seed hotbar in the portal.
     },
     hooks: { fires: [], listens: [] },
+
+    // Sensory assets the extension ships. The loader mounts
+    // <ext>/assets/ at /assets/harmony/* and serves a synthetic
+    // manifest.json at /assets/harmony/manifest.json returning this
+    // block verbatim. The portal resolves `harmony:drum` against
+    // assets.models["drum"] → /assets/harmony/drum.glb.
+    //
+    // Sound files ride along even though rung 1's portal doesn't
+    // play them yet . once rung 3 wires the fact-arrival push and
+    // the Web Audio renderer, every drum tick will sound without
+    // re-shipping the extension.
+    assets: {
+      models: {
+        "drum":    "models/drum.glb",
+        "drummer": "models/drummer.glb",
+        "dancer":  "models/dancer.glb",
+      },
+      sounds: {
+        "drum-hit": "sounds/drumhit.mp3",
+        "footstep": "sounds/footstep.mp3",
+      },
+    },
   },
 };

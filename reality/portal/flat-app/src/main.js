@@ -77,7 +77,9 @@ async function main() {
 //   <reality>/<path>@<being>    — stance SEE
 //   <reality>/.beings           — global being catalog
 //   /<path>                     — current reality, alternate path
-//   ~tabor/notes                — home shorthand
+//   ~                            — caller's home shorthand
+//   /~/<sub>                     — caller's home + child
+//   /~@<being>                   — explicit being's home
 function wireAddressForm() {
   const form  = document.getElementById("address-form");
   const input = document.getElementById("address-input");
@@ -159,7 +161,7 @@ function wireKeyboardShortcuts() {
         location.hash = `#${reality}/.threads`;
       } else if (ev.key === "i" && state.session?.username) {
         ev.preventDefault();
-        location.hash = `#${reality}/~${state.session.username}`;
+        location.hash = `#${reality}/~`;
       }
     }
   });

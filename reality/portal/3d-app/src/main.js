@@ -27,6 +27,8 @@ import {
   hideActionPanel,
   isActionPanelOpen,
 } from "./actionRenderer.js";
+import { ensureUnlockOverlay, preloadSounds } from "./audioPlayer.js";
+import { createFactDispatcher } from "./factDispatcher.js";
 
 const SESSION_KEY = "treeos-portal-3d-session";
 
@@ -48,6 +50,15 @@ const state = {
   // Hotbar API (returned by initHotbar). Holds plantable seeds.
   hotbar: null,
 };
+
+// Expose for browser-console debugging. Access as window.__state from
+// devtools to inspect descriptor, scene meshes, current address, etc.
+// Safe to ship . the same data is available over the IBP socket the
+// portal is already using, and the user can already see the rendered
+// version.
+if (typeof window !== "undefined") {
+  window.__state = state;
+}
 
 main().catch((err) => {
   console.error("[3D] fatal:", err);
@@ -80,6 +91,14 @@ async function main() {
   state.scene.onMove = (intent) => fireMove(intent);
   state.scene.onMoveModeChange = (on, carrying) => updateMoveHud(on, carrying);
   state.scene.setPlaceTimezone(state.discovery.timezone || null);
+
+  // Rung-3 sensory dispatch. factDispatcher consumes the new SEE/fact
+  // envelopes (kind:"fact") and triggers per-entity AnimationMixer
+  // clips + Web Audio playback. ensureUnlockOverlay() injects a small
+  // "tap to enable sound" prompt the first time the page loads;
+  // browser autoplay policy refuses audio without a user gesture.
+  state.factDispatcher = createFactDispatcher({ scene: state.scene });
+  ensureUnlockOverlay();
   state.scene.start();
 
   // Best-effort flush on tab close: walk any live video meshes, grab
@@ -337,6 +356,16 @@ function handleDescriptorEvent(event) {
     state.scene.applyPositionDelta(event.payload);
     return;
   }
+  // Rung-3 fact-arrival push. Wraps the unwrapped portal-client event
+  // back into the {payload:{data}} shape the dispatcher expects . the
+  // dispatcher was authored against the raw envelope (so the same
+  // module could be reused over a different wire). Don't trigger a
+  // descriptor refetch . fact arrivals don't change descriptor shape,
+  // only fire animations / sounds on entities already loaded.
+  if (event?.kind === "fact") {
+    state.factDispatcher?.({ payload: { data: event.payload } });
+    return;
+  }
   if (_refetchTimer) return; // already scheduled
   _refetchTimer = setTimeout(async () => {
     _refetchTimer = null;
@@ -437,17 +466,31 @@ async function spawnLlmAssignerTutorial() {
 async function navigate(address, { fromHistory = false } = {}) {
   if (!state.client) return;
   try {
-    const resolved = expandHomeShorthand(address);
     // Subscribe live: every change to this position (placements, beings
     // appearing/disappearing, queue state, activity) places as a
-    // descriptor event we can refetch on.
-    const desc = await state.client.see(resolved, { live: true });
+    // descriptor event we can refetch on. "/~" goes on the wire as
+    // "/~"; the server resolver swaps it for the caller's Being.homeSpace.
+    const desc = await state.client.see(address, { live: true });
     state.descriptor = desc;
-    state.currentAddress = resolved;
+    state.currentAddress = address;
     // Hand the current spaceId to the scene so the Move tool can
     // resolve "put down here in this space" without an extra
     // descriptor lookup.
     state.scene.setCurrentSpaceId?.(desc?.address?.spaceId || null);
+    // Preload every glTF model + sound referenced in the descriptor
+    // before the first paint. Models stream over HTTP; on a fresh
+    // navigate (or replay start) this prevents the scene from
+    // rendering as a sea of placeholder primitives that swap to their
+    // gltf piecemeal. Sounds preload in parallel so the first fact
+    // arrival doesn't lag. 3 s timeout means even a slow asset never
+    // blocks the paint.
+    setHud("loading scene...");
+    const { collectSoundIds } = await import("./assetResolver.js");
+    const soundIds = collectSoundIds(desc);
+    await Promise.all([
+      state.scene.preloadDescriptor(desc),
+      preloadSounds(soundIds),
+    ]);
     state.scene.renderDescriptor(desc, {
       isAuthenticated: !!state.session?.token,
     });
@@ -852,19 +895,6 @@ function saveSession(s) {
 
 function clearSession() {
   localStorage.removeItem(SESSION_KEY);
-}
-
-// "~" and "/~" are home shorthands the server resolves with the
-// authenticated socket's `currentUser`. Clicking "home" without a live
-// auth on the socket triggers a parse error. Substitute locally when
-// we know the username; the server's parser stops needing context.
-function expandHomeShorthand(address) {
-  if (typeof address !== "string") return address;
-  const username = state.session?.username;
-  if (!username) return address;
-  if (address === "~" || address === "/~") return `/~${username}`;
-  if (address.startsWith("/~/")) return `/~${username}${address.slice(2)}`;
-  return address;
 }
 
 function defaultPlaceUrl() {

@@ -1,3 +1,4 @@
+import { Link } from "react-router-dom";
 import SiteHeader from "./SiteHeader.jsx";
 import SiteFooter from "./SiteFooter.jsx";
 import "./GetStartedPage.css";
@@ -40,7 +41,10 @@ const GetStartedPage = () => {
               <h2 className="ns-start-card-title">Install Portal</h2>
               <p className="ns-start-card-body">
                 Step into a reality someone else is running. Bring your
-                identity, leave your facts where they belong.
+                identity, leave your facts where they belong.{" "}
+                <Link to="/portal" className="ns-inline-link">
+                  What's the Portal?
+                </Link>
               </p>
               <span className="ns-start-card-cta">Coming soon</span>
             </div>

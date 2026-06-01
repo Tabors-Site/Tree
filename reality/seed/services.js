@@ -164,6 +164,11 @@ import "./materials/moveOp.js";
 import "./materials/being/ops.js";
 import "./materials/being/credentialOps.js";
 import "./materials/seeds.js";
+// Side-effect import. Registers `set-render` . the canonical sensory
+// write op against `qualities.render` (the seed-owned namespace any
+// matter/space/being can carry: model + animations + sounds + future
+// channels). Sugar over set-<kind>; see seed/ibp/setRender.js.
+import "./ibp/setRender.js";
 // realityConfig.js self-registers the set-config / delete-config DO
 // ops alongside the setters they wrap. Importing for the side effect.
 import "./realityConfig.js";

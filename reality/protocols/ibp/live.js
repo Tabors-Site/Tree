@@ -126,6 +126,22 @@ export function emitPositionDelta(spaceId, delta) {
   _pushSee(spaceId, SEE_PUSH.POSITION, delta);
 }
 
+/**
+ * Generic SEE-push escape hatch for kinds the seed/protocol layers
+ * add alongside the existing position-delta path. The caller passes
+ * the kind name (matched against SEE_PUSH) and an opaque data block.
+ * Reuses the same per-space subscriber bucket so all kinds share one
+ * fan-out path.
+ *
+ * Rung-3 fact arrivals route through here with kind="fact"; future
+ * sibling kinds (effects, ambient, voice) plug in the same way
+ * without touching this surface.
+ */
+export function emitSeeKind(spaceId, kind, data) {
+  if (!spaceId || !kind) return;
+  _pushSee(spaceId, kind, data || {});
+}
+
 function _pushSee(spaceId, kind, data) {
   if (!spaceId) return;
   const bucket = _subscribers.get(String(spaceId));

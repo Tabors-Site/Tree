@@ -55,9 +55,11 @@ export const seedBeTool = {
       const result = await beVerb(operation, payload || {}, {
         address: address || null,
         identity: beingId ? { beingId, name: name || null } : null,
-        summonCtx: callCtx?.summonCtx
-          ? { actId: callCtx.summonCtx.actId || null }
-          : null,
+        // Pass the FULL moment ctx, not a { actId } slice. beVerb's
+        // emitFact reads ctx.deltaF to push its Fact onto the moment's
+        // ΔF; a truncated copy self-seals it outside the moment and
+        // orphans the outer Act. callCtx.summonCtx carries deltaF.
+        summonCtx: callCtx?.summonCtx || null,
       });
       return {
         content: [{
