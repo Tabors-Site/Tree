@@ -204,7 +204,7 @@ export async function ensureSeedDelegates(spaceRootId, summonCtx, opts = {}) {
     try {
       // Look up by name (the canonical identifier per place).
       const existingBeing = await Being.findOne({ name: spec.name }).select(
-        "_id roles defaultRole homeSpace qualities parentBeingId",
+        "_id defaultRole homeSpace qualities parentBeingId",
       );
       if (existingBeing) {
         // Idempotent drift correction: keep cognition/role/home/parent
@@ -228,12 +228,6 @@ export async function ensureSeedDelegates(spaceRootId, summonCtx, opts = {}) {
           : quals?.cognition?.defaultKind;
         if (existingCognition !== spec.cognition) {
           await setField("qualities.cognition", { defaultKind: spec.cognition });
-        }
-        const carried = Array.isArray(existingBeing.roles)
-          ? existingBeing.roles
-          : [];
-        if (!carried.includes(spec.role) || carried.length !== 1) {
-          await setField("roles", [spec.role]);
         }
         if (existingBeing.defaultRole !== spec.role) {
           await setField("defaultRole", spec.role);

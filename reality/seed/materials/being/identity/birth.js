@@ -167,19 +167,16 @@ export async function createBeing(name, password, opts = {}) {
   if (existing)
     throw new IbpError(IBP_ERR.RESOURCE_CONFLICT, "Name already taken");
 
-  // Roles + defaultRole. opts.role (singular) is the common shape: AI
-  // beings declare one role at creation; that becomes the default and
-  // the only entry in roles[]. Composite beings pass roles[] +
-  // defaultRole directly. Humans have empty roles[] at registration;
-  // they acquire roles later as they're granted.
-  let rolesList = [];
-  let defaultRole = null;
-  if (Array.isArray(opts.roles) && opts.roles.length > 0) {
-    rolesList = opts.roles.slice();
-    defaultRole = opts.defaultRole || rolesList[0];
-  } else if (opts.role) {
-    rolesList = [opts.role];
-    defaultRole = opts.role;
+  // defaultRole — the being's unconditional fallback voice. The carry
+  // list (`roles: [String]`) retired with the RoleFlow build; a
+  // being's wearable roles are now the union of every role its
+  // `qualities.roleFlow` can reference plus its defaultRole. opts.role
+  // (singular) and opts.defaultRole both feed this one field; opts.roles
+  // (plural, legacy) is honored only for its first entry as a fallback
+  // for callers that haven't migrated yet.
+  let defaultRole = opts.defaultRole || opts.role || null;
+  if (!defaultRole && Array.isArray(opts.roles) && opts.roles.length > 0) {
+    defaultRole = opts.roles[0];
   }
 
   const credential = await mintCredentialSpec(password || null);
@@ -195,6 +192,14 @@ export async function createBeing(name, password, opts = {}) {
   // cherub's human-registration path overrides with "human"; seed
   // delegates and extensions pass their own.
   qualities.cognition = { defaultKind: opts.cognition || "llm" };
+  // Optional birth-time roleFlow. Birther's create-being path lets the
+  // operator hand a child being its initial behavioral program;
+  // birth.js stamps it into qualities so the very first moment-assign
+  // already reads from the flow. Subsequent edits go through
+  // set-being:qualities.roleFlow like any other quality.
+  if (Array.isArray(opts.roleFlow)) {
+    qualities.roleFlow = opts.roleFlow;
+  }
 
   const id = uuidv4();
   const position = opts.position || opts.currentSpace || opts.homeSpace || null;
@@ -237,7 +242,6 @@ export async function createBeing(name, password, opts = {}) {
   const spec = {
     name,
     password: credential.hash,
-    roles: rolesList,
     defaultRole,
     parentBeingId: opts.parentBeingId || null,
     homeSpace: opts.homeSpace || null,
@@ -385,14 +389,6 @@ export async function generateUniqueName(role, opts = {}) {
  */
 export async function createBeingWithHome(opts) {
   const {
-    // Plural shape — used when the caller knows the being needs more
-    // than one role from birth (e.g. a human registered with
-    // ["human"]). When BOTH `role` (singular) and `roles` (plural)
-    // are absent, the being is born with empty roles[] and no
-    // defaultRole; the moment-open path will skip transport-acts on
-    // it with "no role registered for null". createBeing collapses
-    // singular into plural; passing both is fine, `roles` wins.
-    roles = null,
     defaultRole = null,
     llmDefault = null,
     // `homeSpace` matches the schema field on Being. The caller passes
@@ -419,16 +415,17 @@ export async function createBeingWithHome(opts) {
     // pinned to specific spots) pass this; createBeing falls back to a
     // random in-bounds coord otherwise.
     coord = null,
+    // Optional birth-time roleFlow. Set by the birther's create-being
+    // path when the operator hands the child its initial behavioral
+    // program. Lands at qualities.roleFlow on the new being row.
+    roleFlow = null,
   } = opts || {};
   let { name, password } = opts || {};
-  // `role` is declared as `let` outside the destructure so the
-  // validation below can fill it in from `roles[0]` when only the
-  // plural shape was passed. After this block, the rest of the
-  // function uses `role` uniformly.
-  let role = opts?.role || null;
-  if (!role && Array.isArray(roles) && roles.length > 0) {
-    role = roles[0];
-  }
+  // The being's birth role. Non-human beings declare a role at birth
+  // so the moment-open path has a fallback voice. `role` and
+  // `defaultRole` both feed Being.defaultRole; `role` is the
+  // historical alias.
+  const role = opts?.role || defaultRole || null;
 
   // Cognition: default to "llm" (substrate default). Caller can pass
   // "human" (cherub's human-registration path), "scripted" (seed
@@ -446,13 +443,13 @@ export async function createBeingWithHome(opts) {
       `createBeingWithHome: cognition must be "llm" | "human" | "scripted"; got "${cognition}"`,
     );
   }
-  // Non-human beings must declare at least one role at birth; humans
-  // may have none. `role` was filled in from `roles[0]` above when
-  // only the plural shape was passed.
+  // Non-human beings must declare a role at birth so they have a
+  // fallback voice for transport-acts and place-driven wakes. Humans
+  // may have none (their cognition is outside the substrate).
   if (cognition !== "human" && !role) {
     throw new Error(
       "createBeingWithHome: non-human beings require a role. Pass `role` " +
-      "(singular) or `roles` (array with at least one entry).",
+      "or `defaultRole`.",
     );
   }
   // Home resolution — three sources in priority order:
@@ -646,7 +643,6 @@ export async function createBeingWithHome(opts) {
     being = await createBeing(name, password, {
       cognition,
       role,
-      roles,
       defaultRole,
       homeSpace: String(home._id),
       llmDefault,
@@ -657,6 +653,9 @@ export async function createBeingWithHome(opts) {
       // deterministic placement; createBeing's default in-bounds
       // randomization stays available when coord is null.
       coord,
+      // Initial roleFlow stamps onto qualities at birth so the very
+      // first moment-assign honors it.
+      roleFlow,
       actId, // ride the caller's moment when threaded through
       summonCtx, // be:register joins moment's ΔF when in-moment
     });

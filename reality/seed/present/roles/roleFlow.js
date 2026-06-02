@@ -43,6 +43,10 @@
 //   caller.beingId       — same as connectedFrom but explicit
 //   caller.name          — the asker's @name
 //   caller.role          — the asker's active role (the SUMMON envelope's)
+//   caller.cognition     — the asker's effective cognition (llm/human/scripted)
+//   caller.isSelf        — true when caller is the same being as me
+//   caller.isAncestor    — true when caller is an ancestor of me on the being-tree
+//   caller.isDescendant  — true when caller is a descendant of me on the being-tree
 //   verb                 — "see" | "do" | "summon" | "be"
 //   action               — DO action name (when verb=="do")
 //   operation            — BE op name (when verb=="be")
@@ -51,14 +55,24 @@
 //   space.name           — the moment's space name
 //   space.type           — the moment's space type
 //   space.seedSpace      — non-null when the moment opens at a seed space
+//   space.quality.<ns>.<k>  — read a quality on the moment's space row
 //   coords.x / coords.y  — the being's current coord, if any
 //   inHomeSpace          — true when space.id === me.homeSpace
 //   me.beingId           — the being's _id
 //   me.name              — the being's name
 //   me.role              — the being's defaultRole (not the resolved active one)
+//   me.previousRole      — the activeRole from this being's last sealed moment
 //   me.cognition         — the being's effective cognition (inhabit-aware)
 //   me.position          — the being's current position spaceId
 //   me.homeSpace         — the being's home space id
+//   me.quality.<ns>.<k>  — read a quality on the being row
+//   time.hour            — moment-open hour (0–23, local server time)
+//   time.dayOfWeek       — moment-open weekday (0=Sun … 6=Sat)
+//   time.iso             — moment-open ISO timestamp
+//   time.sinceLastMoment — seconds since this being's previous sealed moment (null on first)
+//   world.<ns>.<key>     — read a world signal published on reality root
+//                          (set-world-signal writes to reality-root.qualities.world.<ns>.<key>;
+//                          coordination + environmental patterns ride on this surface)
 //
 // Operators (object-form):
 //   { eq: x }            value === x
@@ -68,6 +82,8 @@
 //   { gte: n }           value >= n
 //   { lte: n }           value <= n
 //   { gt: n } / { lt: n }
+//   { present: true }    field has a non-null, non-undefined value
+//   { present: false }   field is null or undefined
 //
 // Composition (at the outer when level OR nested):
 //   { and: [c1, c2, ...] }   every clause matches
@@ -88,86 +104,117 @@
 // Reach for `and:` only when you want grouped negation (`not: { and:
 // [...] }`) or when composing with `or:`.
 //
-// ── Hooks ──────────────────────────────────────────────────────────
+// ── Determinism ────────────────────────────────────────────────────
 //
-// The evaluator runs in `seed/present/beats/1-assign.js` after the
-// entry/defaultRole resolution, BEFORE the role-registry lookup.
-// When no flow is set on the being, the legacy `entry.activeRole ||
-// toBeing.defaultRole` selection runs unchanged.
-//
-// Future Step 2.1: cache the flow per (beingId, foldedSeq) so re-
-// reading qualities on every moment-open isn't a fresh deserialize.
-// Not in this slice; flows are small.
+// The evaluator is a pure function of its inputs. No clock reads, no
+// DB calls, no randomness. All time / lineage / qualities data is
+// passed in via the call site (assign.js gathers it once per
+// moment-open). Same chain replays to the same role.
 
 import { getRole } from "./registry.js";
 import { beingCognition } from "../../materials/being/identity/lookups.js";
 
-const OPERATORS = new Set(["eq", "ne", "in", "notIn", "gt", "gte", "lt", "lte"]);
+const OPERATORS = new Set(["eq", "ne", "in", "notIn", "gt", "gte", "lt", "lte", "present"]);
 const COMPOSITES = new Set(["and", "or", "not"]);
 
 /**
- * Resolve the active role for an opening moment.
+ * Resolve the active role STACK for an opening moment.
  *
- * @param {object} args
- * @param {object} args.toBeing        the recipient being (lean row); must include qualities + roles
- * @param {object} args.entry          the inbox entry (kind, activeRole, content, from, ...)
- * @param {object} [args.handoff]      summon handoff (carries asker identity for kind="summon")
- * @param {object} [args.space]        the moment's space row (lean) — for space.name / type / seedSpace
- * @returns {string|null}              role name, or null when no clause applies and no fallback hits
+ * The stack is `[primary, ...modifiers]`:
+ *   - PRIMARY — the first non-stacked clause whose `when` passes AND
+ *     whose role's requiredCognition matches `me.cognition`. Determines
+ *     what this being IS for this moment.
+ *   - MODIFIERS — every stacked clause (`stack: true`) whose `when`
+ *     passes AND whose requiredCognition matches. Stack on top of the
+ *     primary; their prompts and capabilities union in.
+ *
+ * @param {object} args                          (see `resolveActiveRole` for field semantics)
+ * @returns {string[]}                           role-name stack; empty when no primary resolves
  */
-export function resolveActiveRole({ toBeing, entry, handoff = null, space = null }) {
-  if (!toBeing) return null;
+export function resolveActiveStack({
+  toBeing,
+  entry,
+  handoff = null,
+  space = null,
+  callerEnrichment = null,
+  previousMoment = null,
+  now = null,
+  worldSignals = null,
+}) {
+  if (!toBeing) return [];
 
   // Highest priority: an explicit activeRole on the entry. The caller
   // specifically requested this voice (e.g. `summon @being:role-name`);
-  // honor it without running the flow. The carried-roles validation
-  // happens later in assign.js; here we just return the requested name.
-  if (entry?.activeRole) return entry.activeRole;
-
-  // No flow declared → legacy: defaultRole wins. Returns null when the
-  // being has no defaultRole either; assign.js then logs and skips.
+  // honor it as the primary without running the flow. Modifiers still
+  // evaluate from the flow on top of that primary.
   const quals = toBeing.qualities;
-  const roleFlow = qGet(quals, "roleFlow");
-  if (!Array.isArray(roleFlow) || roleFlow.length === 0) {
-    return toBeing.defaultRole || null;
+  const roleFlow = Array.isArray(qGet(quals, "roleFlow")) ? qGet(quals, "roleFlow") : null;
+
+  const ctx = buildCtx({
+    toBeing,
+    entry,
+    handoff,
+    space,
+    callerEnrichment,
+    previousMoment,
+    now,
+    worldSignals,
+  });
+
+  let primary = null;
+  if (entry?.activeRole) primary = entry.activeRole;
+
+  // No flow declared → defaultRole is the only voice; no modifiers.
+  if (!roleFlow || roleFlow.length === 0) {
+    if (!primary) primary = toBeing.defaultRole || null;
+    return primary ? [primary] : [];
   }
 
-  // Build the evaluation context. All paths the flow can reference
-  // resolve through this single object — defensive about every field
-  // being optional.
-  const ctx = buildCtx({ toBeing, entry, handoff, space });
-
+  // Walk the flow once: collect primary (first non-stacked match that
+  // passes requiredCognition) and all stacked matches.
+  const modifiers = [];
   for (const clause of roleFlow) {
     if (!clause || typeof clause !== "object") continue;
-    const { when: whenClause, role: roleName } = clause;
+    const { when: whenClause, role: roleName, stack: isStacked } = clause;
     if (typeof roleName !== "string" || !roleName) continue;
 
-    // No `when` → unconditional clause (terminal default).
     const conditionPasses = whenClause == null ? true : evalWhen(whenClause, ctx);
     if (!conditionPasses) continue;
 
-    // requiredCognition guard. Unregistered roles or role/cognition
-    // mismatches fall through to the next clause rather than failing
-    // the whole moment.
     const role = getRole(roleName);
     if (!role) continue;
-    if (role.requiredCognition && role.requiredCognition !== ctx.me.cognition) {
-      continue;
+    if (role.requiredCognition && role.requiredCognition !== ctx.me.cognition) continue;
+
+    if (isStacked) {
+      if (!modifiers.includes(roleName)) modifiers.push(roleName);
+    } else if (!primary) {
+      primary = roleName;
     }
-    return roleName;
+    // Non-stacked clauses past the first matching one are SKIPPED —
+    // first-match-wins for primary selection. Stacked clauses keep
+    // accumulating regardless.
   }
 
-  // Flow exhausted with no match: fall back to defaultRole. Common case
-  // is a flow that handles specific situations but expects defaultRole
-  // for everything else; this makes the terminal default optional.
-  return toBeing.defaultRole || null;
+  if (!primary) primary = toBeing.defaultRole || null;
+  if (!primary) return modifiers; // pathological: only modifiers, no primary
+  return [primary, ...modifiers];
 }
+
 
 // ────────────────────────────────────────────────────────────────────
 // Context builder
 // ────────────────────────────────────────────────────────────────────
 
-function buildCtx({ toBeing, entry, handoff, space }) {
+function buildCtx({
+  toBeing,
+  entry,
+  handoff,
+  space,
+  callerEnrichment,
+  previousMoment,
+  now,
+  worldSignals,
+}) {
   const quals = toBeing.qualities;
   const meHomeSpace = toBeing.homeSpace ? String(toBeing.homeSpace) : null;
   const mePosition  = toBeing.position  ? String(toBeing.position)  : null;
@@ -184,6 +231,7 @@ function buildCtx({ toBeing, entry, handoff, space }) {
     ? toBeing.name
     : (handoff?.identity?.name || parseQualifier(entry?.from) || null);
   const callerRole = entry?.activeRole || null;
+  const callerIsSelf = !!(callerBeingId && String(callerBeingId) === String(toBeing._id));
 
   // verb / action / operation hints — only present when the envelope
   // routes through DO or BE (transport-act). For SUMMON, verb="summon"
@@ -210,16 +258,43 @@ function buildCtx({ toBeing, entry, handoff, space }) {
     name:      space?.name      || null,
     type:      space?.type      || null,
     seedSpace: space?.seedSpace || null,
+    // Qualities map → plain object so dot-paths land.
+    quality:   serializeQualitiesShallow(space?.qualities),
   };
 
   const inHomeSpace = !!(spaceId && meHomeSpace && spaceId === meHomeSpace);
 
+  // Time anchors. The caller passes `now` (the moment's open
+  // wall-clock); if absent we fall back to entry.receivedAt or null
+  // (conditions on time.* then evaluate to undefined and short-circuit
+  // false, leaving the clause to fall through).
+  const nowDate = now instanceof Date
+    ? now
+    : (entry?.receivedAt ? new Date(entry.receivedAt) : null);
+  const lastDate = previousMoment?.stampedAt
+    ? new Date(previousMoment.stampedAt)
+    : null;
+  const timeCtx = nowDate
+    ? Object.freeze({
+        hour:             nowDate.getHours(),
+        dayOfWeek:        nowDate.getDay(),
+        iso:              nowDate.toISOString(),
+        sinceLastMoment:  lastDate
+          ? Math.max(0, Math.floor((nowDate.getTime() - lastDate.getTime()) / 1000))
+          : null,
+      })
+    : Object.freeze({ hour: null, dayOfWeek: null, iso: null, sinceLastMoment: null });
+
   return Object.freeze({
     connectedFrom: callerBeingId,
     caller: Object.freeze({
-      beingId: callerBeingId,
-      name:    callerName,
-      role:    callerRole,
+      beingId:      callerBeingId,
+      name:         callerName,
+      role:         callerRole,
+      cognition:    callerEnrichment?.cognition    ?? null,
+      isSelf:       callerIsSelf,
+      isAncestor:   callerEnrichment?.isAncestor   ?? false,
+      isDescendant: callerEnrichment?.isDescendant ?? false,
     }),
     verb,
     action,
@@ -231,13 +306,23 @@ function buildCtx({ toBeing, entry, handoff, space }) {
       : Object.freeze({ x: null, y: null, z: null }),
     inHomeSpace,
     me: Object.freeze({
-      beingId:   String(toBeing._id),
-      name:      toBeing.name || null,
-      role:      toBeing.defaultRole || null,
-      cognition: beingCognition(toBeing),
-      position:  mePosition,
-      homeSpace: meHomeSpace,
+      beingId:      String(toBeing._id),
+      name:         toBeing.name || null,
+      role:         toBeing.defaultRole || null,
+      previousRole: previousMoment?.activeRole || null,
+      cognition:    beingCognition(toBeing),
+      position:     mePosition,
+      homeSpace:    meHomeSpace,
+      // me.quality.<ns>.<key> reads through a serialized snapshot.
+      quality:      serializeQualitiesShallow(toBeing.qualities),
     }),
+    time: timeCtx,
+    // world.<namespace>.<key> reads from reality root's qualities.world
+    // namespace, which set-world-signal writes to. Passed in by assign.js
+    // (a single space-row lookup per moment-open).
+    world: worldSignals && typeof worldSignals === "object"
+      ? Object.freeze(worldSignals)
+      : Object.freeze({}),
   });
 }
 
@@ -322,15 +407,19 @@ function evalField(path, constraint, ctx) {
 
 function applyOperator(op, value, operand) {
   switch (op) {
-    case "eq":    return value === operand;
-    case "ne":    return value !== operand;
-    case "in":    return Array.isArray(operand) && operand.includes(value);
-    case "notIn": return Array.isArray(operand) && !operand.includes(value);
-    case "gt":    return typeof value === "number" && typeof operand === "number" && value >  operand;
-    case "gte":   return typeof value === "number" && typeof operand === "number" && value >= operand;
-    case "lt":    return typeof value === "number" && typeof operand === "number" && value <  operand;
-    case "lte":   return typeof value === "number" && typeof operand === "number" && value <= operand;
-    default:      return false;
+    case "eq":      return value === operand;
+    case "ne":      return value !== operand;
+    case "in":      return Array.isArray(operand) && operand.includes(value);
+    case "notIn":   return Array.isArray(operand) && !operand.includes(value);
+    case "gt":      return typeof value === "number" && typeof operand === "number" && value >  operand;
+    case "gte":     return typeof value === "number" && typeof operand === "number" && value >= operand;
+    case "lt":      return typeof value === "number" && typeof operand === "number" && value <  operand;
+    case "lte":     return typeof value === "number" && typeof operand === "number" && value <= operand;
+    case "present": {
+      const exists = value !== null && value !== undefined;
+      return operand === false ? !exists : exists;
+    }
+    default:        return false;
   }
 }
 
@@ -355,6 +444,21 @@ function qGet(quals, ns) {
   if (!quals) return null;
   if (quals instanceof Map) return quals.get(ns) || null;
   return quals[ns] || null;
+}
+
+// Convert the qualities Map (or plain object) into a shallow plain
+// object so dot-paths like `me.quality.ambient.tone` resolve through
+// `readPath`. Internal — values are passed through by reference, not
+// deep-copied, since the ctx is immediately frozen and read-only.
+function serializeQualitiesShallow(quals) {
+  if (!quals) return Object.freeze({});
+  if (quals instanceof Map) {
+    const out = {};
+    for (const [k, v] of quals.entries()) out[k] = v;
+    return Object.freeze(out);
+  }
+  if (typeof quals === "object") return Object.freeze({ ...quals });
+  return Object.freeze({});
 }
 
 function parseQualifier(stance) {

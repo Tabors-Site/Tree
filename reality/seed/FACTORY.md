@@ -944,6 +944,46 @@ A role is the unit of summonable behavior. A being declares which
 roles it can wear; a SUMMON arrives with an `activeRole`; my
 dispatcher routes the summon to that role's `summon(message, ctx)`.
 
+### RoleFlow — the role STACK is the moment's voice
+
+A being doesn't wear one role at a moment — it wears a STACK. The
+stack is computed at moment-assign from the being's
+`qualities.roleFlow`: an ordered list of `{ when, role, stack? }`
+clauses. The first non-stacked clause whose `when` matches becomes the
+**primary**; every stacked clause (`stack: true`) whose `when` matches
+becomes a **modifier**. The composed stack is what the moment runs:
+permissions union across the stack, system prompts concatenate with
+`\n\n---\n\n` between frames.
+
+The flow's condition vocabulary reads the moment's open-context: the
+asker (`caller.role / caller.cognition / caller.isAncestor / …`), the
+verb (`verb / action / operation / intent`), the place (`space.* /
+coords.* / inHomeSpace`), the being (`me.* / me.previousRole /
+me.quality.<ns>.<k>`), the wall-clock (`time.hour / dayOfWeek /
+sinceLastMoment`), and **world signals** (`world.<ns>.<key>` — values
+published on reality root's `qualities.world` namespace, the shared
+slate beings coordinate through without messaging). Operators include
+`eq / ne / in / notIn / gt / gte / lt / lte / present` plus composites
+`and / or / not`. The evaluator is a pure function of its inputs —
+same chain replays to the same stack.
+
+Live authoring rides on the role-manager delegate:
+
+- `do(role-manager, "set-role", {...})` creates or replaces a role.
+  Hot-registers into the in-memory registry; persists via a `./roles`
+  mirror entry tagged `origin: "live"` so boot rebuilds it.
+- `do(role-manager, "delete-role", { name })` removes a live role.
+  Refuses by default when any being's roleFlow references it.
+- `do(role-manager, "set-world-signal", { namespace, key, value })`
+  publishes a world signal at `<reality-root>.qualities.world.<ns>.<key>`.
+  Beings whose flows read `world.<ns>.<key>` see it at their next
+  moment-open.
+
+The doctrinal landing — what a Being IS, WEARS, IS-DRIVEN-BY — and
+the build plan that brought it in live in
+[role-manager.md](role-manager.md). Read that when in doubt about
+how behavior composes from chain to act.
+
 ### The complete LLM role spec
 
 Every LLM role's complete declaration is its four `can*` lists plus

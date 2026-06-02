@@ -66,7 +66,6 @@ const SCALAR_SET_FIELDS = new Set([
   // longer lives here as a schema field — it's at
   // qualities.cognition.defaultKind and writes through the qualities
   // path, not SCALAR_SET_FIELDS.
-  "roles",
   "defaultRole",
   "homeSpace",
   // password: bcrypt hash. credential-reset (and any future flow that
@@ -308,23 +307,19 @@ export function applyCreateBeing(state, fact) {
   const spec = fact?.params?.spec;
   if (!spec || typeof spec !== "object") return state; // legacy slim params
 
-  // Normalize roles + defaultRole. Accept either {roles:[], defaultRole}
-  // or single {role} shape; produce the canonical {roles, defaultRole}.
-  let rolesList = [];
-  let defaultRole = null;
-  if (Array.isArray(spec.roles) && spec.roles.length > 0) {
-    rolesList = spec.roles.slice();
-    defaultRole = spec.defaultRole || rolesList[0];
-  } else if (spec.role) {
-    rolesList = [spec.role];
-    defaultRole = spec.role;
+  // Resolve defaultRole. The carry list (`roles: [String]`) retired
+  // 2026-06-01 with the RoleFlow build; the be:birth fact's spec may
+  // still carry `roles` for back-compat (legacy chains) but we only
+  // honor the first entry as a fallback for defaultRole.
+  let defaultRole = spec.defaultRole || spec.role || null;
+  if (!defaultRole && Array.isArray(spec.roles) && spec.roles.length > 0) {
+    defaultRole = spec.roles[0];
   }
 
   return {
     ...state,
     name:          spec.name,
     password:      spec.password,
-    roles:         rolesList,
     defaultRole,
     parentBeingId: spec.parentBeingId ?? null,
     homeSpace:     spec.homeSpace ?? null,

@@ -182,15 +182,10 @@ async function setOnBeingHandler({ target, params, summonCtx }) {
   }
 
   if (
-    field === "roles" ||
     field === "defaultRole" ||
     field === "homeSpace"
   ) {
-    if (field === "roles" && value !== null && !Array.isArray(value)) {
-      throw new Error("set-being: `roles` value must be an array or null");
-    }
     if (
-      field !== "roles" &&
       value !== null && value !== undefined &&
       typeof value !== "string"
     ) {
@@ -239,7 +234,7 @@ async function setOnBeingHandler({ target, params, summonCtx }) {
   }
 
   throw new Error(
-    `set-being: unknown field "${field}". Supported: name, roles, defaultRole, homeSpace, llmDefault, parentBeingId, password, position, coord, qualities.<namespace>[.<innerKey>]`,
+    `set-being: unknown field "${field}". Supported: name, defaultRole, homeSpace, llmDefault, parentBeingId, password, position, coord, qualities.<namespace>[.<innerKey>]`,
   );
 }
 

@@ -58,11 +58,14 @@ import { v4 as uuidv4 } from "uuid";
 import Being from "../../materials/being/being.js";
 import Act from "../../past/act/act.js";
 import { getRealityConfigValue } from "../../realityConfig.js";
-import { getRole } from "../roles/registry.js";
-import { resolveActiveRole } from "../roles/roleFlow.js";
+import { resolveActiveStack } from "../roles/roleFlow.js";
+import { composeStack } from "../roles/roleComposer.js";
 import Space from "../../materials/space/space.js";
 import { computeIbpStampAddress } from "../../ibp/address.js";
 import { validateOrientation, DEFAULT_ORIENTATION } from "./2-fold/orientation.js";
+import { isAncestorOf, beingCognition } from "../../materials/being/identity/lookups.js";
+import { findLastSealedForBeing } from "./2-fold/reelChains.js";
+import { getSpaceRootId } from "../../sprout.js";
 
 /**
  * Set up one moment for stamping. Loads the being, resolves the
@@ -99,26 +102,51 @@ export async function assign({ beingId, spaceId, entry, handoff = null, signal =
   // ── assign: resolve the active role ──────────────────────────────
   // Resolution order (see seed/present/roles/roleFlow.js for the doctrine):
   //   1. entry.activeRole — caller specifically requested this voice;
-  //      honor without running flow. Must be in toBeing.roles[].
+  //      honor without running flow.
   //   2. Being.qualities.roleFlow — per-being conditional program; first
   //      clause whose `when` matches AND whose role's requiredCognition
   //      matches the being's effective cognition wins.
   //   3. toBeing.defaultRole — terminal fallback.
   //
-  // resolveActiveRole returns a role name string (or null). We then
-  // validate carry + registry presence here.
+  // resolveActiveStack returns an ordered [primary, ...modifiers] role-name
+  // list (empty when nothing resolves). composeStack folds it into one
+  // role-shaped spec the rest of the moment runner reads uniformly.
   const spaceRow = spaceId
-    ? await Space.findById(spaceId).select("_id name type seedSpace").lean()
+    ? await Space.findById(spaceId).select("_id name type seedSpace qualities").lean()
     : null;
 
-  const activeRole = resolveActiveRole({
+  // ── precompute caller enrichment for the evaluator ──
+  // The flow's `caller.cognition / isAncestor / isDescendant` paths
+  // need data that lives one DB hop away. We do those lookups here
+  // (assign is async; the evaluator stays pure) and pass the result in.
+  const callerEnrichment = await enrichCallerForFlow({ toBeing, handoff, entry });
+
+  // Previous moment lookup for `me.previousRole` and
+  // `time.sinceLastMoment`. Best-effort; a being with no prior moment
+  // gets a null `previousRole` and a null `sinceLastMoment`.
+  const lastSealed = await findLastSealedForBeing(String(toBeing._id));
+  const previousMoment = lastSealed
+    ? { activeRole: lastSealed.activeRole || null, stampedAt: lastSealed.stampedAt || null }
+    : null;
+
+  // World signals lookup. Snapshots reality root's `qualities.world`
+  // namespace so `world.<ns>.<key>` paths in the flow resolve to the
+  // current published values. One findById per moment-open;
+  // set-world-signal writes propagate at the next moment.
+  const worldSignals = await loadWorldSignals();
+
+  const stack = resolveActiveStack({
     toBeing,
     entry,
     handoff,
-    space: spaceRow,
+    space:            spaceRow,
+    callerEnrichment,
+    previousMoment,
+    now:              entry?.receivedAt ? new Date(entry.receivedAt) : null,
+    worldSignals,
   });
 
-  if (!activeRole) {
+  if (!stack || stack.length === 0) {
     log.warn(
       "Assign",
       `no active role resolves for being ${String(beingId).slice(0, 8)} ` +
@@ -127,27 +155,27 @@ export async function assign({ beingId, spaceId, entry, handoff = null, signal =
     return { skipped: "role-unresolved" };
   }
 
-  // Carry check. The being must declare this role in its roles[].
-  // (RoleFlow returns names from its own clauses; defaultRole is
-  // assumed declared; entry.activeRole could be anything — check here.)
-  const carried = Array.isArray(toBeing.roles) ? toBeing.roles : [];
-  if (!carried.includes(activeRole)) {
-    log.warn(
-      "Assign",
-      `resolved activeRole "${activeRole}" not carried by being ` +
-        `${String(beingId).slice(0, 8)} (roles: ${carried.join(", ") || "none"})`,
-    );
-    return { skipped: "role-not-carried" };
-  }
-
-  const role = getRole(activeRole);
+  // Compose [primary, ...modifiers] into a single role-shaped spec.
+  // Past this boundary nothing else in the moment runner knows about
+  // stacking — buildPrompt, momentum, llmMoment all see one role with
+  // unioned can*-arrays and a prompt that joins each stack member's
+  // body with a divider. composeStack returns null only when the
+  // primary role is unregistered or its requiredCognition can't be met.
+  //
+  // The carry list (toBeing.roles[]) check that used to live here is
+  // gone with the one-role-per-being world. RoleFlow is the source of
+  // truth: if a clause names a role, that's authorization. The flow's
+  // author already had set-being permission on the being to write it.
+  const role = composeStack({ stack, toBeing });
   if (!role) {
     log.warn(
       "Assign",
-      `no role registered for "${activeRole}" of being ${String(beingId).slice(0, 8)}`,
+      `no role registered (or cognition mismatch) for primary "${stack[0]}" ` +
+        `of being ${String(beingId).slice(0, 8)}`,
     );
     return { skipped: "role-unavailable" };
   }
+  const activeRole = role.primaryName;
 
   // ── assign: open the Act row for this moment ───────────────────
   // For kind="summon" the asker is the SUMMON's sender (from handoff
@@ -443,4 +471,59 @@ async function planActRow(opts = {}) {
     startMessage: { content: safeMessage, source },
     ...(priority ? { priority } : {}),
   };
+}
+
+// Precompute the caller-side data the roleFlow evaluator's
+// `caller.cognition / isAncestor / isDescendant` paths need. The
+// evaluator is sync; doing these lookups here lets us serve those
+// vocabulary additions without giving the evaluator DB access.
+//
+// Transport-act has no separate caller (the being acts on its own
+// behalf); we return an enrichment that resolves to "isSelf-ish"
+// readings. SUMMON without an identified asker (rare; happens for
+// scheduled wakes that didn't thread an identity) also returns null
+// data — the flow then sees `caller.cognition: null`, `isAncestor:
+// false`, etc., which is the correct conservative default.
+async function enrichCallerForFlow({ toBeing, handoff, entry }) {
+  const kind = entry?.kind || "summon";
+  if (kind === "transport-act") {
+    return {
+      cognition:    beingCognition(toBeing),
+      isAncestor:   false,
+      isDescendant: false,
+    };
+  }
+  const callerBeingId = handoff?.identity?.beingId || null;
+  if (!callerBeingId || String(callerBeingId) === String(toBeing._id)) {
+    return { cognition: null, isAncestor: false, isDescendant: false };
+  }
+  const [callerRow, callerIsAncestor, meIsAncestorOfCaller] = await Promise.all([
+    Being.findById(callerBeingId).select("_id qualities").lean(),
+    isAncestorOf(callerBeingId, String(toBeing._id)),
+    isAncestorOf(String(toBeing._id), callerBeingId),
+  ]);
+  return {
+    cognition:    callerRow ? beingCognition(callerRow) : null,
+    isAncestor:   callerIsAncestor,
+    isDescendant: meIsAncestorOfCaller,
+  };
+}
+
+// Snapshot reality root's `qualities.world` namespace so the flow's
+// `world.<ns>.<key>` paths resolve at evaluation time. set-world-signal
+// writes to reality-root.qualities.world.<ns>.<key>; this read returns
+// the whole world subtree once per moment-open so all flow clauses
+// share one consistent view.
+async function loadWorldSignals() {
+  const rootId = getSpaceRootId();
+  if (!rootId) return null;
+  try {
+    const row = await Space.findById(rootId).select("qualities").lean();
+    if (!row) return null;
+    const quals = row.qualities;
+    const world = quals instanceof Map ? quals.get("world") : quals?.world;
+    return world && typeof world === "object" ? world : null;
+  } catch {
+    return null;
+  }
 }

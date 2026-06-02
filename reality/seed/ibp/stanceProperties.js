@@ -106,7 +106,6 @@ export async function deriveStanceProperties({ beingId, targetSpace }) {
     // handler passes `activeRole` separately into authorize so
     // per-role gates can use the more specific value when present.
     role:                 being.defaultRole || null,
-    roles:                Array.isArray(being.roles) ? being.roles : [],
     arrival:              false,
     owner:                false,
     contributor:          false,

@@ -100,12 +100,15 @@ const BeingSchema = new mongoose.Schema({
   // 2026-05-23) — see the file's commented-out hook block below.
   password: { type: String, select: false },
 
-  // Roles the being can act in. Identity is durable on this row;
-  // active role composes per SUMMON. Each SUMMON resolves an active
-  // role: the envelope's `activeRole` if it names one of `roles`,
-  // else `defaultRole`. The Act row stamps the resolved role for
-  // audit.
-  roles:       { type: [String], default: [] },
+  // The being's unconditional fallback role. `qualities.roleFlow` is
+  // the authoring surface for context-sensitive role selection
+  // (primary + stacked modifiers, evaluated per moment from world
+  // state); `defaultRole` is the floor every being has when no flow
+  // clause matches and no explicit `entry.activeRole` was requested.
+  // The carry list (`roles: [String]`) that lived here before retired
+  // 2026-06-01 with the RoleFlow build: a being's wearable roles are
+  // the union of every role its flow can reference plus its
+  // defaultRole. The flow's author is the authorization.
   defaultRole: { type: String, default: null },
 
   // The being tree. Beings form a recursive lineage parallel to the
@@ -200,9 +203,8 @@ const BeingSchema = new mongoose.Schema({
   updatedAt: { type: Date, default: null },
 });
 
-BeingSchema.index({ homeSpace: 1 });
+// homeSpace index declared inline on the field above (index: true).
 BeingSchema.index({ parentBeingId: 1, _id: 1 });
-BeingSchema.index({ roles: 1 });
 BeingSchema.index({ defaultRole: 1 });
 BeingSchema.index({ homeReality: 1, isRemote: 1 });
 

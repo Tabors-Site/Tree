@@ -140,8 +140,28 @@ export async function beVerb(operation, payload = {}, opts = {}) {
     const childName = payload?.name;
     const childCognition = payload?.cognition || "llm";  // substrate default
     const childPassword  = payload?.password || null;
-    const childRoleField = payload?.role || null;
-    const childRolesArr  = Array.isArray(payload?.roles) ? payload.roles : null;
+    const childRoleField = payload?.role || payload?.defaultRole || null;
+    // Initial roleFlow: when the operator wants the child born with a
+    // configured behavioral program (the spec's Step 5 birther flow:
+    // "Set initial roleFlow. Set initial cognition."). Accepts either
+    // a parsed array or a JSON string; createBeing's qualities
+    // pipeline lands it at qualities.roleFlow.
+    let childRoleFlow = null;
+    if (Array.isArray(payload?.roleFlow)) {
+      childRoleFlow = payload.roleFlow;
+    } else if (typeof payload?.roleFlow === "string" && payload.roleFlow.trim()) {
+      try { childRoleFlow = JSON.parse(payload.roleFlow); }
+      catch (e) {
+        throw new IbpError(
+          IBP_ERR.INVALID_INPUT,
+          `BE:birth: roleFlow must be a valid JSON array (parse error: ${e.message})`,
+        );
+      }
+      if (!Array.isArray(childRoleFlow)) {
+        throw new IbpError(IBP_ERR.INVALID_INPUT,
+          "BE:birth: roleFlow must be an array of clauses");
+      }
+    }
     if (!childName || typeof childName !== "string") {
       throw new IbpError(IBP_ERR.INVALID_INPUT, "BE:birth requires payload.name");
     }
@@ -171,8 +191,8 @@ export async function beVerb(operation, payload = {}, opts = {}) {
     };
     if (childHomeSpace)  childSpec.homeSpace  = childHomeSpace;
     if (childHomeParent) childSpec.homeParent = childHomeParent;
-    if (childRoleField) childSpec.role = childRoleField;
-    if (childRolesArr)  childSpec.roles = childRolesArr;
+    if (childRoleField)  childSpec.role       = childRoleField;
+    if (childRoleFlow)   childSpec.roleFlow   = childRoleFlow;
 
     const result = await summonCreateBeing({
       spec: childSpec,

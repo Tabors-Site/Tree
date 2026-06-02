@@ -18,6 +18,8 @@ const NEW_ROUTES = [
   "/ibp",                   // IbpPage
   "/start",                 // GetStartedPage
   "/factory",               // FactoryOverview (in FactoryLayout)
+  "/factory/being-types",
+  "/factory/roles",
   "/factory/intake",
   "/factory/assign",
   "/factory/fold",
@@ -102,6 +104,14 @@ const PAGE_META = {
   "/factory": {
     title: "The Factory . How a moment works",
     description: "Every moment of every being walks the same five beats: intake, assign, fold, momentum, stamped. The engine that walks them.",
+  },
+  "/factory/being-types": {
+    title: "Being types . The Factory",
+    description: "What a being is in TreeOS, the cognition kinds, and what an LLM being's one moment looks like.",
+  },
+  "/factory/roles": {
+    title: "Roles . The Factory",
+    description: "Roles are the IDE for building in reality. Extensions ship the parts (matter types, world signals, role definitions); operators mix them in role-manager. Stack them per moment via roleFlow conditions on the world.",
   },
   "/factory/intake": {
     title: "Intake . Beat 1 . The Factory",

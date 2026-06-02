@@ -15,6 +15,7 @@ import { flat } from "./main.js";
 import { openChatFor, isChatOpen, getChatBeing } from "./chat.js";
 import { showAuthOverlay } from "./identity.js";
 import { renderRoleManagerPanel } from "../../shared/role-manager-panel.js";
+import { renderBeingFlowPanel } from "../../shared/being-flow-panel.js";
 
 // ────────────────────────────────────────────────────────────────
 // Public surface
@@ -1764,6 +1765,25 @@ function renderBeingInspector(insp, b) {
     }
   }
   insp.appendChild(be);
+
+  // ─── Role Flow editor (when signed in — server gates the save)
+  // The mad-libs editor authors the being's `qualities.roleFlow`. Per
+  // RoleFlow doctrine, the flow is the source of truth for which roles
+  // wake the being and how they compose. Reading the existing flow is
+  // public (rides on the descriptor's beings[]); saving goes through
+  // set-being which authorize gates per-stance.
+  if (fl.session?.username) {
+    const flowSec = document.createElement("section");
+    flowSec.className = "panel-section";
+    insp.appendChild(flowSec);
+    renderBeingFlowPanel(flowSec, b, {
+      reality:    reality,
+      username:   fl.session.username,
+      descriptor: fl.descriptor,
+      see:        (addr) => fl.client.see(addr),
+      doOp:       flat.doOp,
+    });
+  }
 
   // ─── DO actions (ops whose targets include being or stance)
   const ops = [

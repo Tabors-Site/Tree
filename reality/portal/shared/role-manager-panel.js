@@ -42,33 +42,50 @@
 // needs when the roleFlow evaluator's vocabulary grows. See
 // seed/present/roles/roleFlow.js for the matching set on the server.
 const FIELDS = [
-  { path: "verb",           label: "the verb",            type: "select", options: ["see", "do", "summon", "be"] },
-  { path: "action",         label: "the DO action name",  type: "text"   },
-  { path: "operation",      label: "the BE op name",      type: "text"   },
-  { path: "intent",         label: "the intent",          type: "text"   },
-  { path: "connectedFrom",  label: "the asker's beingId", type: "text"   },
-  { path: "caller.role",    label: "the asker's role",    type: "role"   },
-  { path: "caller.name",    label: "the asker's name",    type: "text"   },
-  { path: "space.id",       label: "this space's id",     type: "text"   },
-  { path: "space.name",     label: "this space's name",   type: "text"   },
-  { path: "space.type",     label: "this space's type",   type: "text"   },
-  { path: "coords.x",       label: "my X coord",          type: "number" },
-  { path: "coords.y",       label: "my Y coord",          type: "number" },
-  { path: "inHomeSpace",    label: "I am at home",        type: "bool"   },
-  { path: "me.cognition",   label: "my cognition",        type: "select", options: ["llm", "human", "scripted"] },
-  { path: "me.role",        label: "my default role",     type: "role"   },
-  { path: "me.position",    label: "my current position", type: "text"   },
+  // Who
+  { path: "verb",                 label: "the verb",                  type: "select", options: ["see", "do", "summon", "be"] },
+  { path: "action",               label: "the DO action name",        type: "text"   },
+  { path: "operation",            label: "the BE op name",            type: "text"   },
+  { path: "intent",               label: "the intent",                type: "text"   },
+  { path: "connectedFrom",        label: "the asker's beingId",       type: "text"   },
+  { path: "caller.role",          label: "the asker's role",          type: "role"   },
+  { path: "caller.name",          label: "the asker's name",          type: "text"   },
+  { path: "caller.cognition",     label: "the asker's cognition",     type: "select", options: ["llm", "human", "scripted"] },
+  { path: "caller.isSelf",        label: "the asker is me",           type: "bool"   },
+  { path: "caller.isAncestor",    label: "the asker is my ancestor",  type: "bool"   },
+  { path: "caller.isDescendant",  label: "the asker is my descendant", type: "bool"  },
+
+  // Where
+  { path: "space.id",             label: "this space's id",            type: "text"   },
+  { path: "space.name",           label: "this space's name",          type: "text"   },
+  { path: "space.type",           label: "this space's type",          type: "text"   },
+  { path: "space.seedSpace",      label: "this space's seedSpace tag", type: "text"   },
+  { path: "coords.x",             label: "my X coord",                 type: "number" },
+  { path: "coords.y",             label: "my Y coord",                 type: "number" },
+  { path: "inHomeSpace",          label: "I am at home",               type: "bool"   },
+
+  // Me
+  { path: "me.cognition",         label: "my cognition",               type: "select", options: ["llm", "human", "scripted"] },
+  { path: "me.role",              label: "my default role",            type: "role"   },
+  { path: "me.previousRole",      label: "my previous moment's role",  type: "role"   },
+  { path: "me.position",          label: "my current position",        type: "text"   },
+
+  // Time
+  { path: "time.hour",            label: "hour of day (0–23)",         type: "number" },
+  { path: "time.dayOfWeek",       label: "day of week (0=Sun…6=Sat)",  type: "number" },
+  { path: "time.sinceLastMoment", label: "seconds since last moment",  type: "number" },
 ];
 
 const OPS = [
-  { value: "eq",    label: "is"           },
-  { value: "ne",    label: "is not"       },
-  { value: "in",    label: "is one of"    },
-  { value: "notIn", label: "is not one of"},
-  { value: "gt",    label: ">"            },
-  { value: "gte",   label: "≥"            },
-  { value: "lt",    label: "<"            },
-  { value: "lte",   label: "≤"            },
+  { value: "eq",      label: "is"                },
+  { value: "ne",      label: "is not"            },
+  { value: "in",      label: "is one of"         },
+  { value: "notIn",   label: "is not one of"     },
+  { value: "gt",      label: ">"                 },
+  { value: "gte",     label: "≥"                 },
+  { value: "lt",      label: "<"                 },
+  { value: "lte",     label: "≤"                 },
+  { value: "present", label: "is present"        }, // value: true | false
 ];
 
 // ──────────────────────────────────────────────────────────────
@@ -374,20 +391,45 @@ function chipPicker({ label, source, state }) {
 // ──────────────────────────────────────────────────────────────
 
 async function renderFlowEditorSection(allRoles, ctx) {
+  // Self editor. Loads the caller's own flow and saves back to
+  // <reality>/@<self>. The reusable renderer below handles arbitrary
+  // targets; this is the role-manager panel's "edit your own flow"
+  // entry point.
+  const flow = await loadFlowForSelf(ctx);
+  return renderFlowEditor(allRoles, ctx, {
+    headerLabel:    "your role flow",
+    initialFlow:    flow,
+    targetStance:   `${ctx.reality}/@${ctx.username}`,
+  });
+}
+
+/**
+ * Reusable RoleFlow mad-libs editor. Exported via the shared module's
+ * public surface (re-exported from a sibling wrapper) so the
+ * being-flow panel can mount the same UI against any being's stance.
+ *
+ * @param {Array} allRoles                 role-name list for clause role pickers
+ * @param {object} ctx                     panel ctx (reality, username, doOp, …)
+ * @param {object} target
+ * @param {string} target.headerLabel      h4 label ("your role flow", "@food-coach's flow", …)
+ * @param {Array}  target.initialFlow      current roleFlow on the target being (or empty)
+ * @param {string} target.targetStance     where to save (`<reality>/@<name>`)
+ */
+export function renderFlowEditor(allRoles, ctx, { headerLabel, initialFlow, targetStance }) {
+  ensureStyles();
   const sec = document.createElement("section");
   sec.className = "rm-section";
 
   const h4 = document.createElement("h4");
-  h4.textContent = "your role flow";
+  h4.textContent = headerLabel || "role flow";
   sec.appendChild(h4);
 
   const hint = document.createElement("div");
   hint.className = "rm-sub";
-  hint.textContent = "First clause whose conditions all match wins. Last clause runs when nothing else matches.";
+  hint.textContent = "Primary clauses compete via first-match-wins; stacked clauses (modifiers) ALL apply when their conditions match. Permissions union; prompts concatenate.";
   sec.appendChild(hint);
 
-  const flow = await loadFlowForSelf(ctx);
-  const draft = Array.isArray(flow) ? deepCopy(flow) : [];
+  const draft = Array.isArray(initialFlow) ? deepCopy(initialFlow) : [];
 
   const list = document.createElement("ol");
   list.className = "rm-clauses";
@@ -429,11 +471,11 @@ async function renderFlowEditorSection(allRoles, ctx) {
     saveBtn.disabled = true;
     status.textContent = "saving...";
     try {
-      const me = ctx.username;
-      if (!me) throw new Error("not signed in");
-      // The flow lives on the caller's qualities. set-being writes
-      // the whole array atomically (merge:false) so removals propagate.
-      await ctx.doOp(`${ctx.reality}/@${me}`, "set-being", {
+      if (!targetStance) throw new Error("no target stance");
+      // set-being writes the whole array atomically (merge:false) so
+      // removals propagate. Authorization is handled at the verb gate
+      // — the panel surfaces FORBIDDEN as-is rather than pre-checking.
+      await ctx.doOp(targetStance, "set-being", {
         field: "qualities.roleFlow",
         value: draft,
         merge: false,
@@ -455,7 +497,29 @@ async function renderFlowEditorSection(allRoles, ctx) {
 
 function renderClause(clause, idx, draft, allRoles, onChange) {
   const row = document.createElement("li");
-  row.className = "rm-clause";
+  row.className = `rm-clause ${clause.stack ? "rm-clause-stacked" : ""}`;
+
+  // Header: stack toggle. Primary clauses compete via first-match-wins;
+  // stacked clauses ALL apply when their `when` matches and union their
+  // permissions / prompts onto the primary.
+  const headerLine = document.createElement("div");
+  headerLine.className = "rm-clause-header";
+  const stackToggle = document.createElement("label");
+  stackToggle.className = "rm-stack-toggle";
+  const cb = document.createElement("input");
+  cb.type = "checkbox";
+  cb.checked = !!clause.stack;
+  cb.onchange = () => {
+    if (cb.checked) clause.stack = true;
+    else delete clause.stack;
+    onChange();
+  };
+  stackToggle.appendChild(cb);
+  const tlabel = document.createElement("span");
+  tlabel.textContent = "modifier (stacks onto primary)";
+  stackToggle.appendChild(tlabel);
+  headerLine.appendChild(stackToggle);
+  row.appendChild(headerLine);
 
   if (Object.keys(clause.when || {}).length === 0) {
     // Defensive: add-clause always seeds one condition, but a hand-edited
@@ -489,7 +553,7 @@ function renderClause(clause, idx, draft, allRoles, onChange) {
   thenLine.className = "rm-then-line";
   const thenLabel = document.createElement("span");
   thenLabel.className = "rm-keyword";
-  thenLabel.textContent = "THEN use role";
+  thenLabel.textContent = clause.stack ? "STACK role" : "THEN use role";
   thenLine.appendChild(thenLabel);
 
   const roleSelect = document.createElement("select");
@@ -526,27 +590,37 @@ function renderConditionLine({ clause, path, value, prefix, allRoles, onChange }
   kw.textContent = prefix;
   line.appendChild(kw);
 
-  const fieldSel = document.createElement("select");
-  fieldSel.className = "rm-input";
+  // Field picker. A typeable input + datalist gives both the curated
+  // catalog (the FIELDS doctrine list, surfaced as suggestions) AND
+  // free-form path entry, so authors can reference `world.<ns>.<key>`
+  // or any extension-published path that isn't in the catalog.
+  const datalistId = `rm-fields-${randomId()}`;
+  const fieldInput = document.createElement("input");
+  fieldInput.type = "text";
+  fieldInput.className = "rm-input rm-field-picker";
+  fieldInput.setAttribute("list", datalistId);
+  fieldInput.placeholder = "field path (e.g. world.harmony.tick)";
+  fieldInput.value = path;
+  const datalist = document.createElement("datalist");
+  datalist.id = datalistId;
   for (const f of FIELDS) {
     const opt = document.createElement("option");
     opt.value = f.path;
-    opt.textContent = f.label;
-    fieldSel.appendChild(opt);
+    opt.label = f.label;
+    datalist.appendChild(opt);
   }
-  fieldSel.value = path;
-  fieldSel.onchange = () => {
-    const oldKey = path;
-    const newKey = fieldSel.value;
-    if (oldKey === newKey) return;
-    const old = clause.when[oldKey];
-    delete clause.when[oldKey];
+  line.appendChild(fieldInput);
+  line.appendChild(datalist);
+  fieldInput.onchange = () => {
+    const newKey = fieldInput.value.trim();
+    if (!newKey || newKey === path) return;
+    const old = clause.when[path];
+    delete clause.when[path];
     clause.when[newKey] = old;
     onChange();
   };
-  line.appendChild(fieldSel);
 
-  const fieldSpec = FIELDS.find((f) => f.path === path) || FIELDS[0];
+  const fieldSpec = FIELDS.find((f) => f.path === path) || inferFieldSpec(path);
   const { op, raw } = unpackOperand(value);
 
   const opSel = document.createElement("select");
@@ -586,6 +660,21 @@ function renderConditionLine({ clause, path, value, prefix, allRoles, onChange }
 }
 
 function renderValueInput(fieldSpec, op, raw, allRoles, onUpdate) {
+  // `present` always takes a boolean — overrides the field's natural type.
+  if (op === "present") {
+    const sel = document.createElement("select");
+    sel.className = "rm-input rm-value";
+    for (const v of ["true", "false"]) {
+      const opt = document.createElement("option");
+      opt.value = v;
+      opt.textContent = v;
+      sel.appendChild(opt);
+    }
+    sel.value = raw === false || raw === "false" ? "false" : "true";
+    sel.onchange = () => onUpdate(sel.value === "true");
+    return sel;
+  }
+
   const isList = (op === "in" || op === "notIn");
   if (isList) {
     const input = document.createElement("input");
@@ -803,6 +892,21 @@ function deepCopy(o) {
   return JSON.parse(JSON.stringify(o));
 }
 
+// Render-stable random id for <datalist> uniqueness within a rerender.
+let _idCounter = 0;
+function randomId() {
+  _idCounter += 1;
+  return `rm-id-${_idCounter}`;
+}
+
+// For free-form paths the field-spec catalog doesn't know about
+// (e.g. `world.harmony.tick.alive`), default to a text input. Authors
+// using numeric world signals can still pick `gte`/`lte` and type a
+// number; the operand coercion is lenient.
+function inferFieldSpec(path) {
+  return { path, label: path, type: "text" };
+}
+
 // ──────────────────────────────────────────────────────────────
 // Styles — injected once. Self-contained so both portals render the
 // panel identically without depending on host stylesheets. Hosts may
@@ -909,6 +1013,27 @@ function ensureStyles() {
       border-radius: 4px;
       padding: 8px 10px;
     }
+    .rm-clause-stacked {
+      background: #11211a;
+      border-color: #2f6b48;
+    }
+    .rm-clause-header {
+      display: flex;
+      justify-content: flex-end;
+      margin-bottom: 4px;
+    }
+    .rm-stack-toggle {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      font-size: 10px;
+      color: #888f8b;
+      cursor: pointer;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+    .rm-stack-toggle input { margin: 0; }
+    .rm-field-picker { min-width: 180px; }
     .rm-condition,
     .rm-then-line {
       display: flex;

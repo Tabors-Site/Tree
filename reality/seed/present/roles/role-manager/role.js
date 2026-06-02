@@ -1,6 +1,7 @@
 // TreeOS Seed . AGPL-3.0 . https://treeos.ai . Tabor Holly
 //
-// role-manager. The being that authors and edits live roles.
+// role-manager. The being that authors and edits live roles AND
+// publishes world signals.
 //
 // Seed and extension roles are declared in code and registered at
 // boot (genesis.js calls registerRole(name, def, "seed") or the
@@ -12,35 +13,29 @@
 // at the reality root clicks @role-manager, fills in a form (name,
 // cognition guard, canSee/canDo/canSummon/canBe, prompt), and the
 // resulting role-definition Fact lands at `./roles/<name>` tagged
-// `origin: "live"`. A boot-time loader walks `./roles` for live
-// entries and registerRole's them into the in-memory registry so
-// they're addressable like any other role.
+// `origin: "live"`. The set-role op also HOT-REGISTERS the role into
+// the in-memory registry so the next moment-assign picks it up
+// without a restart; the boot loader rebuilds the registry from the
+// .roles mirror on subsequent boots.
 //
-// Two precedence questions and their answers:
+// Live → live edits and deletions apply immediately. Name collisions
+// with seed/extension roles overwrite in-memory (live wins), the same
+// way the boot loader does on restart.
 //
-//   1. What happens when a live role's name collides with a seed/
-//      extension one? The boot loader runs AFTER seed + extension
-//      registration; it registerRole's the live entry, overwriting
-//      the in-memory map for that name. Operators authoring a "human"
-//      override get exactly that — their human definition replaces
-//      the seed's. Reverting is "delete the live entry, restart."
+// World signals (set-world-signal) write to reality root's
+// qualities.world.<ns>.<key>. Beings whose flows read
+// `world.<ns>.<key>` see the value at their next moment-open. The
+// authoring surface for environmental + coordination patterns
+// (drummer publishes tick.alive; dancers' flows fire off it).
 //
-//   2. Are live roles editable live, or restart-required? v1 = restart.
-//      The boot loader runs once. Editing a live role writes a new
-//      ./roles/<name> entry, but the in-memory registry only picks it
-//      up on next boot. A future slice can hot-reload via an
-//      afterMatter hook on ./roles changes. The cost of restart is
-//      low; the cost of stale-cache bugs from hot-reload is high.
-//
-// I am a scripted-cognition delegate. My only canDo is the "set-role"
-// DO op (defined in materials/being/roleOps.js); the actual form
-// rendering happens in the portal, which discovers what fields exist
-// by reading my canDo schema off the descriptor.
+// I am a scripted-cognition delegate. My canDo lists the three ops;
+// the portal discovers them by reading my descriptor entry's
+// catalogs + actions and renders forms generically.
 
 export const roleManagerRole = Object.freeze({
   name: "role-manager",
   description:
-    "Authors and edits live-defined roles. Click @role-manager at the reality root to add a new role (live origin) or replace an existing one. Restart picks up live changes.",
+    "Authors and edits live-defined roles, publishes world signals. Click @role-manager at the reality root to open the panel.",
   requiredCognition: "scripted",
   permissions: ["do"],
   respondMode: "async",
@@ -49,7 +44,15 @@ export const roleManagerRole = Object.freeze({
   canDo: [
     {
       action:      "set-role",
-      description: "create or replace a live role. The role is registered at next boot (or now via the runtime registry refresh if the operator triggers it).",
+      description: "create or replace a live role. Hot-registers into the in-memory registry; survives restart via the .roles mirror.",
+    },
+    {
+      action:      "delete-role",
+      description: "remove a live role. Refuses if any being's roleFlow references it (pass force:true to bypass).",
+    },
+    {
+      action:      "set-world-signal",
+      description: "publish a world signal at reality root. Flows that read world.<ns>.<key> see the new value at their next moment-open.",
     },
   ],
 

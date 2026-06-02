@@ -32,6 +32,11 @@ import {
   hideRoleManagerPanel,
   isRoleManagerPanelOpen,
 } from "./role-manager-panel.js";
+import {
+  showBeingFlowPanel,
+  hideBeingFlowPanel,
+  isBeingFlowPanelOpen,
+} from "./being-flow-panel.js";
 import { ensureUnlockOverlay, preloadSounds } from "./audioPlayer.js";
 import { createFactDispatcher } from "./factDispatcher.js";
 
@@ -690,14 +695,36 @@ function openBeingActionMenu(b) {
     args:        {},
     __synthetic: "summon",
   };
+  const flowAction = {
+    verb:        "do",
+    action:      "set-being",
+    label:       "Edit Role Flow",
+    description: "Author this being's roleFlow (conditional role stack evaluated per moment).",
+    args:        {},
+    __synthetic: "edit-flow",
+  };
 
-  const composed = [...roleActions, inhabitAction, summonAction];
+  const composed = [...roleActions, inhabitAction, flowAction, summonAction];
   showActionMenu({ ...fullBeing, actions: composed }, {
     onActionPicked: (action) => {
-      if (action.__synthetic === "inhabit") return doInhabit(b, address);
-      if (action.__synthetic === "summon")  { openSummonPanel(b); return; }
+      if (action.__synthetic === "inhabit")   return doInhabit(b, address);
+      if (action.__synthetic === "summon")    { openSummonPanel(b); return; }
+      if (action.__synthetic === "edit-flow") { openBeingFlowPanel(fullBeing); return; }
       openActionForm({ ...fullBeing, actions: composed }, action, address);
     },
+    onClose: () => {},
+  });
+}
+
+function openBeingFlowPanel(beingEntry) {
+  if (!state.session?.token) {
+    const cherub = (state.descriptor?.beings || []).find((bb) => bb.being === "cherub");
+    if (cherub) openActionMenu(cherub);
+    return;
+  }
+  showBeingFlowPanel({
+    state,
+    beingEntry,
     onClose: () => {},
   });
 }
@@ -1002,6 +1029,7 @@ function isGameplayInputBlocked() {
   if (isAnyPanelOpen()) return true;
   if (isActionPanelOpen()) return true;
   if (isRoleManagerPanelOpen()) return true;
+  if (isBeingFlowPanelOpen()) return true;
   if (isPlanterOpen())  return true;
   const el = document.activeElement;
   if (!el || el === document.body) return false;

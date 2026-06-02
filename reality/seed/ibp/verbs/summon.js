@@ -228,22 +228,15 @@ export async function summonVerb(stance, message, opts = {}) {
   }
 
   // Resolve activeRole: envelope > toBeing.defaultRole > qualifier.
-  // Strict membership check on envelope-specified role.
-  let activeRole;
-  const envelopeRole = validatedMessage.activeRole || null;
-  if (envelopeRole) {
-    const carriedRoles = Array.isArray(toBeing.roles) ? toBeing.roles : [];
-    if (!carriedRoles.includes(envelopeRole)) {
-      throw new IbpError(
-        IBP_ERR.ROLE_UNAVAILABLE,
-        `Being @${toBeing.name} does not carry role "${envelopeRole}" ` +
-        `(roles: ${carriedRoles.length ? carriedRoles.join(", ") : "none"})`,
-      );
-    }
-    activeRole = envelopeRole;
-  } else {
-    activeRole = toBeing.defaultRole || qualifier;
-  }
+  // With the carry list retired (RoleFlow build, 2026-06-01), an
+  // envelope-named role is honored as long as the registry knows it;
+  // the flow's author is the authorization (anyone with set-being
+  // permission writes the flow that gates which roles wake the being).
+  // We still want to fail loudly if the role itself doesn't exist —
+  // that catches typos before they reach the moment runner.
+  const activeRole = validatedMessage.activeRole
+    || toBeing.defaultRole
+    || qualifier;
 
   const role = getRole(activeRole);
   if (!role) {
@@ -304,16 +297,16 @@ export async function summonCreateBeing({ spec, identity, summonCtx = null, scaf
   const cognition = spec.cognition || "llm";
   // Identity is durable; roles compose. A non-human being must come
   // into the world wearing at least one role. The spec may name it
-  // singular (`role: "x"`, the legacy shape AI callers still use) or
-  // plural (`roles: ["x", ...]`, the canonical shape per the role-
-  // pluralization slice). Mirror birth.js's resolution exactly so the
-  // gate accepts whatever the downstream `createBeingWithHome` will.
-  const firstRole = spec.role
-    || (Array.isArray(spec.roles) && spec.roles.length > 0 ? spec.roles[0] : null);
+  // The new being's birth role. `spec.role` and `spec.defaultRole` are
+  // both accepted as the single source of birth voice (the carry list
+  // retired with the RoleFlow build, 2026-06-01). Mirror birth.js's
+  // resolution exactly so this gate accepts whatever createBeingWithHome
+  // will.
+  const firstRole = spec.role || spec.defaultRole || null;
   if (cognition !== "human" && !firstRole) {
     throw new IbpError(
       IBP_ERR.INVALID_INPUT,
-      "summonCreateBeing: non-human-cognition spec requires role (singular `role` or non-empty `roles[]`)",
+      "summonCreateBeing: non-human-cognition spec requires `role` or `defaultRole`",
       { spec },
     );
   }

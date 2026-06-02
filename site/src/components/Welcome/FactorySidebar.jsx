@@ -16,6 +16,7 @@ import "./FactorySidebar.css";
 const CHAPTERS = [
   { to: "/factory",             label: "Overview", end: true },
   { to: "/factory/being-types", label: "Being types"         },
+  { to: "/factory/roles",       label: "Roles"               },
   { to: "/factory/intake",      label: "1. Intake"           },
   { to: "/factory/assign",      label: "2. Assign"           },
   { to: "/factory/fold",        label: "3. Fold"             },

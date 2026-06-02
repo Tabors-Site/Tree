@@ -693,7 +693,7 @@ async function listBeingChildren(parentBeingId) {
   const { beingCognition } = await import("../materials/being/identity/lookups.js");
   const rows = await Being
     .find({ parentBeingId: String(parentBeingId) })
-    .select("_id name roles defaultRole homeSpace qualities createdAt")
+    .select("_id name defaultRole homeSpace qualities createdAt")
     .sort({ createdAt: 1 })
     .limit(200)
     .lean();
@@ -701,7 +701,6 @@ async function listBeingChildren(parentBeingId) {
     beingId:     String(b._id),
     name:        b.name || null,
     defaultRole: b.defaultRole || null,
-    roles:       Array.isArray(b.roles) ? b.roles : [],
     cognition:   beingCognition(b),
     homeSpace:   b.homeSpace ? String(b.homeSpace) : null,
     createdAt:   b.createdAt || null,
@@ -787,10 +786,20 @@ function buildActions(beingName, def, identity) {
         },
         role: {
           type:    "select",
-          label:   "Role",
+          label:   "Default role (fallback when no roleFlow clause matches)",
           enum:    roleNames,
           required: true,
           default: roleNames.includes("human") ? "human" : (roleNames[0] || ""),
+        },
+        // Optional birth-time roleFlow. Operators paste a JSON array
+        // of clauses; be.js parses and the spec lands at
+        // qualities.roleFlow on the new being. Empty = use defaultRole
+        // unconditionally (no flow program).
+        roleFlow: {
+          type:        "multiline",
+          label:       "Initial role flow (JSON array of clauses, optional)",
+          required:    false,
+          description: "[{ \"when\": {...}, \"role\": \"foo\" }, { \"stack\": true, \"when\": {...}, \"role\": \"bar\" }]",
         },
       };
     }

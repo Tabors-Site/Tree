@@ -191,7 +191,7 @@ export async function emitReplyToAsker({
     const fromQualifier =
       fromRoleName ||
       fromBeing?.name ||
-      (Array.isArray(fromBeing?.roles) && fromBeing.roles[0]) ||
+      fromBeing?.defaultRole ||
       "sub-being";
     const fromStance = `${realityDomain}/${fromNodeId}@${fromQualifier}`;
 
@@ -309,7 +309,7 @@ export async function emitReplyToStance({
     const fromQualifier =
       fromRoleName ||
       fromBeing?.name ||
-      (Array.isArray(fromBeing?.roles) && fromBeing.roles[0]) ||
+      fromBeing?.defaultRole ||
       "sub-being";
     const fromStance = `${realityDomain}/${fromNodeId}@${fromQualifier}`;
 
