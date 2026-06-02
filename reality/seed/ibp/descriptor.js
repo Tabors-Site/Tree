@@ -46,6 +46,8 @@ import {
 } from "../materials/space/spaces.js";
 import { getInboxSummary } from "../present/intake/inbox.js";
 import { getRole, listRoles } from "../present/roles/registry.js";
+import { listOperations } from "./operations.js";
+import { listBeOpNames, getBeOp } from "./beOps.js";
 import { findOpenForBeing, findLastSealedForBeing } from "../present/beats/2-fold/reelChains.js";
 import { fold } from "../present/beats/2-fold/foldEngine.js";
 import { BE_OPS } from "./beOps.js";
@@ -859,6 +861,14 @@ async function enrichBeings(spaceId, entries, opts = {}) {
       // as a menu + arg-schema form; one entry per BE op the role is
       // licensed for, filtered by identity state (cherub-only today).
       actions:     buildActions(entry.being, def, identity),
+      // Delegate-as-catalog: a delegate publishes the registry-shaped
+      // data it mediates as part of its own descriptor entry. Askers
+      // who can SEE the delegate (which is liberal — beings list at the
+      // place root) get the catalog through this surface without ever
+      // reading the heaven-gated mirror spaces directly. role-manager
+      // publishes roles/tools/operations/be-ops; future delegates that
+      // gate other registries follow the same shape.
+      catalogs:    buildCatalogs(entry.being),
       inbox: inb,
       activity: activities[i],
       busy:        inb.activeFrom !== null,
@@ -867,6 +877,90 @@ async function enrichBeings(spaceId, entries, opts = {}) {
       pendingFrom: inb.pendingFrom,
       coord:       (inboxKey && coordByBeing.get(inboxKey)) || null,
       qualities:   (inboxKey && qualitiesByBeing.get(inboxKey)) || {},
+    };
+  });
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// Catalog builders. The descriptor is rendered server-side where the
+// in-memory registries are directly readable; folding their contents
+// into the publishing delegate's entry hands askers the data they need
+// to operate the delegate, without giving them a heaven SEE.
+//
+// Each catalog is a lightweight projection: names + the surface info
+// a UI needs to render pickers / forms. Internal-implementation detail
+// (handler refs, prompt closures) is stripped. Stable wire shape — if
+// a delegate's catalog grows, the asker's renderer ignores fields it
+// doesn't know.
+// ─────────────────────────────────────────────────────────────────────
+
+function buildCatalogs(beingName) {
+  if (beingName === "role-manager") return buildRoleManagerCatalogs();
+  return null;
+}
+
+function buildRoleManagerCatalogs() {
+  return {
+    roles:      catalogRoles(),
+    addresses:  catalogAddresses(),
+    operations: catalogOperations(),
+    beOps:      catalogBeOps(),
+  };
+}
+
+function catalogRoles() {
+  return listRoles().slice().sort().map((name) => {
+    const r = getRole(name);
+    return {
+      name,
+      origin:            r?.origin || null,
+      requiredCognition: r?.requiredCognition || null,
+      permissions:       Array.isArray(r?.permissions) ? r.permissions : [],
+    };
+  });
+}
+
+// canSee on a role names IBP addresses (paths the LLM may read via the
+// generic `see` tool), NOT tool names. The runtime tool registry only
+// holds the four seed verb-tools (see/do/summon/be) — those are the
+// LLM's tool palette, not what canSee admits. We surface a curated
+// catalog of commonly-useful addresses: the Tier-3 seed-space paths
+// and the home-shorthand. Operators add anything else free-form in
+// the picker.
+const SUGGESTED_ADDRESSES = [
+  "~",
+  "./identity",
+  "./config",
+  "./peers",
+  "./extensions",
+  "./tools",
+  "./roles",
+  "./operations",
+  "./source",
+  "./threads",
+];
+function catalogAddresses() {
+  return SUGGESTED_ADDRESSES.map((path) => ({ name: path }));
+}
+
+function catalogOperations() {
+  return listOperations()
+    .map((op) => ({
+      name:           op.name,
+      targets:        op.targets,
+      factAction:     op.factAction,
+      ownerExtension: op.ownerExtension,
+    }))
+    .sort((a, b) => a.name.localeCompare(b.name));
+}
+
+function catalogBeOps() {
+  return listBeOpNames().sort().map((name) => {
+    const op = getBeOp(name);
+    return {
+      name,
+      label:       op?.label || null,
+      description: op?.description || null,
     };
   });
 }

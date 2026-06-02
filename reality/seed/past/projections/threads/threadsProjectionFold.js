@@ -18,7 +18,7 @@
 //   be:sever   → set severedAt on the matching rootCorrelation row.
 //                The InboxProjection handler dropped the affected
 //                open summons separately; this marks the thread
-//                itself cut so SEE on .threads can render the
+//                itself cut so SEE on ./threads can render the
 //                severance.
 //
 //   (act seal) → noteActSealOnThread(rootCorrelation) — bumps

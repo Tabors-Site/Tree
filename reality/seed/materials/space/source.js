@@ -3,10 +3,10 @@
 // My own source, as substrate.
 //
 // At boot I walk the place/ directory on disk and plant a recursive
-// filesystem-origin Matter tree under the .source place seed space.
-// Each directory becomes a folder-Matter; each file becomes a
+// filesystem-origin Matter tree under the `./source` Tier-3 seed
+// space. Each directory becomes a folder-Matter; each file becomes a
 // file-Matter; parentMatterId chains the tree so what's under
-// .source faithfully mirrors what's on the floor.
+// `./source` faithfully mirrors what's on the floor.
 //
 // The point is reflection. A being running inside this place can SEE
 // the code I am running through the same protocol it uses to look at
@@ -14,7 +14,7 @@
 // other position is substrate.
 //
 // One-way sync. Disk → substrate; never the other way. DO operations
-// against .source Matter reject with ORIGIN_READ_ONLY (gate in
+// against `./source` Matter reject with ORIGIN_READ_ONLY (gate in
 // ibp/verbs/do.js). The reconciliation walk uses direct Matter
 // saves and bypasses the public createMatter path because that path
 // also (correctly) refuses to author into place seed spaces.
@@ -78,8 +78,8 @@ let sourceSpaceIdCache = null;
 // ────────────────────────────────────────────────────────────────────
 
 /**
- * Bootstrap the `.source` matter tree. Idempotent. Verifies the
- * `.source` place seed space exists, then kicks off a reconciliation walk
+ * Bootstrap the `./source` matter tree. Idempotent. Verifies the
+ * `./source` Tier-3 seed space exists, then kicks off a reconciliation walk
  * **detached** so boot is not blocked by a multi-thousand-file scan.
  *
  * Call after ensureSpaceRoot() so the place seed space already exists.
@@ -101,7 +101,7 @@ export async function ensureSourceTree(opts = {}) {
   if (!sourceSpace) {
     log.warn(
       "Source",
-      `.source place seed space missing; cannot populate source tree`,
+      `./source seed space missing; cannot populate source tree`,
     );
     return null;
   }
@@ -119,7 +119,7 @@ export async function ensureSourceTree(opts = {}) {
       const ms = Date.now() - started;
       log.verbose(
         "Source",
-        `synced .source from ${rootPath} in ${ms}ms: +${stats.created} ~${stats.updated} -${stats.removed} =${stats.kept}`,
+        `synced ./source from ${rootPath} in ${ms}ms: +${stats.created} ~${stats.updated} -${stats.removed} =${stats.kept}`,
       );
     } catch (err) {
       log.error("Source", `sync failed: ${err.message}`);
@@ -148,13 +148,13 @@ export async function syncSourceTree({
   const sourceSpace = await Space.findOne({ seedSpace: SEED_SPACE.SOURCE })
     .select("_id")
     .lean();
-  if (!sourceSpace) throw new Error(".source seed space not found");
+  if (!sourceSpace) throw new Error("./source seed space not found");
   const sourceSpaceId = String(sourceSpace._id);
   sourceSpaceIdCache = sourceSpaceId;
 
   const stats = { created: 0, updated: 0, removed: 0, kept: 0 };
 
-  // Root matter for targetPath. One root per .source space: lookup by
+  // Root matter for targetPath. One root per `./source` space: lookup by
   // (spaceId, parentMatterId: null, origin: filesystem).
   let rootMatter = await Matter.findOne({
     spaceId: sourceSpaceId,
@@ -201,7 +201,7 @@ export async function syncSourceTree({
 }
 
 /**
- * Cached lookup of the .source place seed space id. Returns null before
+ * Cached lookup of the `./source` seed space id. Returns null before
  * ensureSourceTree has run, or if the space has not been created.
  * Used by the DO gate to deny writes against .source matters.
  */

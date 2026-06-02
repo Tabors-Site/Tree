@@ -7,7 +7,7 @@
 // domains. Things the discovery payload surfaces, things a peer
 // reality sees when it reaches in.
 //
-// At genesis I plant the `.config` seed space and write the
+// At genesis I plant the `./config` seed space and write the
 // boot-time settings into its qualities Map. Every later boot, I
 // read that Map back through `initRealityConfig()`.
 // `getRealityConfigValue(key)` and `setRealityConfigValue(key, value)`
@@ -152,7 +152,7 @@ export function getRealityConfigValue(key) {
   return null;
 }
 
-// Cached _id of the .config seed space. Looked up on first write
+// Cached _id of the `./config` seed space. Looked up on first write
 // and stable thereafter — the seed spaces are created once at
 // genesis and never deleted. Avoids the seedSpace-marker scan on every
 // config write during boot.
@@ -185,7 +185,7 @@ export async function setRealityConfigValue(key, value, { internal, identity, su
     throw new Error("Config write failed: config seed space not found at <reality>/./config. Reality may need repair.");
   }
 
-  // Route through do.set-space so the write IS a Fact on the .config
+  // Route through do.set-space so the write IS a Fact on the `./config`
   // space's reel. internal=true (seed scaffolding) attributes via the
   // scaffold path; user-driven writes thread caller identity. Either
   // way, the fact joins the wrapping moment's ΔF.
@@ -313,13 +313,13 @@ export function getConfigWithDefaults() {
 export async function initRealityConfig() {
   await loadConfigFromDb();
   initialized = true;
-  log.verbose("Reality", `Config loaded from .config space (${Object.keys(configCache).length} keys)`);
+  log.verbose("Reality", `Config loaded from ./config space (${Object.keys(configCache).length} keys)`);
 }
 
-// For when another process modifies .config directly (migration, manual repair).
+// For when another process modifies ./config directly (migration, manual repair).
 export async function reloadRealityConfig() {
   await loadConfigFromDb();
-  log.info("Reality", `Config reloaded from .config space (${Object.keys(configCache).length} keys)`);
+  log.info("Reality", `Config reloaded from ./config space (${Object.keys(configCache).length} keys)`);
 }
 
 // ─────────────────────────────────────────────────────────────────────
@@ -334,7 +334,7 @@ export async function reloadRealityConfig() {
 // scaffold flows).
 //
 // `skipAudit: true` because the underlying helpers route their writes
-// through `do.set-space` on the .config space and that inner set IS
+// through `do.set-space` on the `./config` space and that inner set IS
 // the canonical audit Fact. Without skipAudit the outer op would
 // double-stamp.
 //

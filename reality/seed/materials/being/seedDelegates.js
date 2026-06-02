@@ -96,7 +96,7 @@ export const SEED_DELEGATES = [
     cognition: "scripted",
     invocableBy: "authenticated",
     description:
-      "Authors and edits live-defined roles. Click @role-manager at the reality root to add or replace a role with origin:'live'. Restart picks up live changes; the in-memory registry rebuilds from .roles on boot.",
+      "Authors and edits live-defined roles. Click @role-manager at the reality root to add or replace a role with origin:'live'. Restart picks up live changes; the in-memory registry rebuilds from ./roles on boot.",
   },
   {
     name: "llm-assigner",

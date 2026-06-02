@@ -7,7 +7,7 @@
 // at THAT position. The catalog returned here is the cross-position
 // view: every Being row, regardless of home. Used by clients (the
 // flat-app, future tooling) to render a global list — answers "what
-// beings exist?" the way `.operations` answers "what operations exist?"
+// beings exist?" the way `./operations` answers "what operations exist?"
 //
 // Read-only. No moment. Auth: any authenticated being can list; tighten
 // later if a position-scoped variant is needed.

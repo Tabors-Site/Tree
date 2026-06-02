@@ -20,7 +20,7 @@
 //     further down).
 //
 // The manifest declares scope: "confined" for dangerous or
-// specialized extensions. The .extensions place seed space stores
+// specialized extensions. The `./extensions` Tier-3 seed space stores
 // scope on each extension's registry space; loadConfinedExtensions
 // reads it at boot.
 //
@@ -69,7 +69,7 @@ export function setExtensionInstanceLookup(fn) {
 }
 
 /**
- * Load confined extension names from .extensions place seed space.
+ * Load confined extension names from `./extensions` seed space.
  * Called once during extension loading, after syncExtensionsToTree.
  */
 export async function loadConfinedExtensions() {

@@ -156,6 +156,20 @@ export function buildScopedReality(manifest, fullReality, availableServices) {
     scoped.do = scopedDo;
   }
 
+  // Declare bindings: inject the extension name into registerRole so the
+  // registered role's `origin` reflects the registering extension rather
+  // than the default "role-registry" → "seed" tag. Without this wrap
+  // every extension role appears as a seed role in the role-manager
+  // catalog and the operator can't tell where it came from.
+  if (scoped.declare?.registerRole) {
+    const extName = manifest.name;
+    const origDeclare = scoped.declare;
+    scoped.declare = {
+      ...origDeclare,
+      registerRole: (name, def) => origDeclare.registerRole(name, def, extName),
+    };
+  }
+
   // Push-channel event binding: auto-namespace event names. Extensions
   // write the local event name; the seed prefixes their extension
   // name on the way to the wire. Reserved events (the seed's own

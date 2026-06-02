@@ -5,14 +5,14 @@
 // Seed and extension roles are declared in code and registered at
 // boot (genesis.js calls registerRole(name, def, "seed") or the
 // loader does the same for extensions). Operators reach those role
-// definitions through `<reality>/.roles/<name>` — read-only mirrors
+// definitions through `<reality>/./roles/<name>` — read-only mirrors
 // of the in-memory registry, synced by syncRolesToSubstrate.
 //
 // role-manager opens a third path: live-authored roles. An operator
 // at the reality root clicks @role-manager, fills in a form (name,
 // cognition guard, canSee/canDo/canSummon/canBe, prompt), and the
-// resulting role-definition Fact lands at `.roles/<name>` tagged
-// `origin: "live"`. A boot-time loader walks `.roles` for live
+// resulting role-definition Fact lands at `./roles/<name>` tagged
+// `origin: "live"`. A boot-time loader walks `./roles` for live
 // entries and registerRole's them into the in-memory registry so
 // they're addressable like any other role.
 //
@@ -27,9 +27,9 @@
 //
 //   2. Are live roles editable live, or restart-required? v1 = restart.
 //      The boot loader runs once. Editing a live role writes a new
-//      .roles/<name> entry, but the in-memory registry only picks it
+//      ./roles/<name> entry, but the in-memory registry only picks it
 //      up on next boot. A future slice can hot-reload via an
-//      afterMatter hook on .roles changes. The cost of restart is
+//      afterMatter hook on ./roles changes. The cost of restart is
 //      low; the cost of stale-cache bugs from hot-reload is high.
 //
 // I am a scripted-cognition delegate. My only canDo is the "set-role"

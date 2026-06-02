@@ -14,7 +14,7 @@
 import { flat } from "./main.js";
 import { openChatFor, isChatOpen, getChatBeing } from "./chat.js";
 import { showAuthOverlay } from "./identity.js";
-import { renderRoleManagerPanel } from "./role-manager-panel.js";
+import { renderRoleManagerPanel } from "../../shared/role-manager-panel.js";
 
 // ────────────────────────────────────────────────────────────────
 // Public surface
@@ -1650,7 +1650,13 @@ function showInspector({ kind, entry }) {
     // generic being inspector. The being itself is scripted (no chat),
     // and the panel is the whole point of the being's existence.
     if (entry?.being === "role-manager") {
-      renderRoleManagerPanel(insp, entry);
+      renderRoleManagerPanel(insp, entry, {
+        reality:    flat.state.discovery?.reality,
+        username:   flat.state.session?.username || null,
+        descriptor: flat.state.descriptor,
+        see:        (addr) => flat.state.client.see(addr),
+        doOp:       flat.doOp,
+      });
       return;
     }
     renderBeingInspector(insp, entry);

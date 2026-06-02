@@ -57,11 +57,15 @@ const COLOR_BEING_OTHER = 0xa3c3b1;
 
 // Visual modes for the place scene.
 const VISUAL_ARRIVAL = {
-  bgColor:    0x0a0d0c,
+  // Pure black void. Arrival is the threshold . the player faces the
+  // cherub at the gate and nothing else exists yet. No ground, no
+  // grid, no sky, no fog gradient . the cherub stands lit against
+  // the dark.
+  bgColor:    0x000000,
   fogNear:    8,
   fogFar:     35,
-  groundColor: 0x141a17,
-  gridColor:   0x223028,
+  groundColor: 0x000000,
+  gridColor:   0x000000,
   ambientI:    0.25,
   sunI:        0.4,
 };
@@ -757,6 +761,7 @@ export class Scene {
 
   _applyVisualMode(mode) {
     this._skyMode = mode === VISUAL_DEFAULT ? "default" : "arrival";
+    const isArrival = mode === VISUAL_ARRIVAL;
     this.scene.background = new THREE.Color(mode.bgColor);
     this.scene.fog = new THREE.Fog(mode.bgColor, mode.fogNear, mode.fogFar);
     if (this._ambient)  this._ambient.intensity = mode.ambientI;
@@ -765,6 +770,11 @@ export class Scene {
     if (this._grid) {
       this._grid.material.color = new THREE.Color(mode.gridColor);
     }
+    // Arrival mode is pure void. Hide ground and grid so the cherub
+    // stands alone against the dark; later modes show them again,
+    // subject to the sized-space override in renderDescriptor.
+    if (this._ground) this._ground.visible = !isArrival;
+    if (this._grid)   this._grid.visible   = !isArrival;
     if (this._sky) this._sky.visible = this._skyMode === "default";
     if (this._skyMode === "default") {
       this._updateTimeOfDay();

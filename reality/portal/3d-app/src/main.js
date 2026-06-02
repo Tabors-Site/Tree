@@ -27,6 +27,11 @@ import {
   hideActionPanel,
   isActionPanelOpen,
 } from "./actionRenderer.js";
+import {
+  showRoleManagerPanel,
+  hideRoleManagerPanel,
+  isRoleManagerPanelOpen,
+} from "./role-manager-panel.js";
 import { ensureUnlockOverlay, preloadSounds } from "./audioPlayer.js";
 import { createFactDispatcher } from "./factDispatcher.js";
 
@@ -628,14 +633,18 @@ function onChatBeingProximity(b, inRange) {
 // Click-to-activate dispatcher. Fires from scene.js when the player
 // clicks while gazing at a being within INTERACT_RANGE.
 function onBeingActivate(b) {
-  if (b.being === "cherub" || b.being === "birther" || b.being === "role-manager") {
-    // Reality-root delegates that surface their work through the
-    // action menu's data-driven form. Cherub: register/log-in.
-    // Birther: mint child. Role-manager: create/replace a live role.
-    // All carry a `canBe` or `canDo` list; the descriptor turns each
-    // entry into an action with its args schema, and the form renders
-    // it generically.
+  if (b.being === "cherub" || b.being === "birther") {
+    // Reality-root identity delegates. Cherub: register/log-in.
+    // Birther: mint child. Both carry a `canBe` list; the descriptor
+    // turns each entry into an action with its args schema and the
+    // form renders it generically.
     openActionMenu(b);
+  } else if (b.being === "role-manager") {
+    // role-manager opens the dedicated authoring panel — same shared
+    // surface the flat-app uses. The panel reads catalogs from
+    // b.catalogs (descriptor.js#buildRoleManagerCatalogs) and writes
+    // through DO set-role / DO set-being.
+    openRoleManagerPanel(b);
   } else if (b.being === "llm-assigner") {
     openLlmAssignerPanel();
   } else {
@@ -733,10 +742,12 @@ async function doInhabit(b, address) {
 function openActionMenu(b) {
   const reality = state.discovery?.reality;
   const path = state.descriptor?.address?.pathByNames || "/";
-  // Reality-root delegates address as <reality>/@<name> (bare-place
-  // stance). Other beings address against the current path.
+  // Reality-root identity delegates address as <reality>/@<name>
+  // (bare-place stance). Other beings address against the current path.
+  // role-manager is also a root delegate but has its own panel and
+  // never reaches openActionMenu — kept off this list.
   const isRootDelegate =
-    b.being === "cherub" || b.being === "birther" || b.being === "role-manager";
+    b.being === "cherub" || b.being === "birther";
   const address = isRootDelegate
     ? `${reality}/@${b.being}`
     : `${reality}${path}@${b.being}`.replace(/\/+@/, "/@");
@@ -812,6 +823,25 @@ function openActionForm(b, action, address, { error = null } = {}) {
         });
       }
     },
+  });
+}
+
+function openRoleManagerPanel(b) {
+  // The shared panel needs an authenticated caller (it writes through
+  // DO set-role / DO set-being). If unauthenticated, route to the
+  // cherub menu so the user can register first.
+  if (!state.session?.token) {
+    const cherub = (state.descriptor?.beings || []).find((bb) => bb.being === "cherub");
+    if (cherub) openActionMenu(cherub);
+    return;
+  }
+  // Pull the freshest role-manager entry from the descriptor — the
+  // scene's userData carries a trimmed shape without `catalogs`.
+  const rmEntry = (state.descriptor?.beings || []).find((bb) => bb.being === "role-manager") || b;
+  showRoleManagerPanel({
+    state,
+    beingEntry: rmEntry,
+    onClose:    () => {},
   });
 }
 
@@ -971,6 +1001,7 @@ async function attemptPlant() {
 function isGameplayInputBlocked() {
   if (isAnyPanelOpen()) return true;
   if (isActionPanelOpen()) return true;
+  if (isRoleManagerPanelOpen()) return true;
   if (isPlanterOpen())  return true;
   const el = document.activeElement;
   if (!el || el === document.body) return false;

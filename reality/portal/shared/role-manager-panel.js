@@ -1,15 +1,16 @@
 // role-manager-panel.js — the operator's seat for authoring roles
-// and roleFlow.
+// and roleFlow. Shared between the flat-app and the 3D portal; the
+// two callers pass a small `ctx` adapter for accessing their
+// portal-specific state and the WS client.
 //
 // Three sections:
 //
-//   1. Existing roles — list of every registered role at this reality
-//      (seed, extension, and operator-authored "live"). Read-only for
-//      now; a future iteration can let operators edit live entries.
+//   1. Existing roles — every registered role at this reality
+//      (seed, extension, and operator-authored "live").
 //
-//   2. Create new role — form that calls DO set-role on @role-manager.
-//      The role lands at <reality>/./roles/<name> with origin: "live"
-//      and shows up after the next boot's live-role loader.
+//   2. Create new role — calls DO set-role on @role-manager. The role
+//      lands at <reality>/./roles/<name> with origin: "live" and shows
+//      up after the next boot's live-role loader.
 //
 //   3. Author your roleFlow — mad-libs editor for your own being's
 //      qualities.roleFlow. Conditions are dropdowns + value inputs;
@@ -20,25 +21,25 @@
 //        ...
 //        THEN use role [role]
 //
-//      Plus a terminal default ("otherwise, use role [role]"). Save
-//      dispatches DO set-being on your own stance with the assembled
-//      array; the substrate's reducer projects qualities.roleFlow and
-//      the next moment-assign honors it via resolveActiveRole.
+//      Plus a terminal default. Save dispatches DO set-being on the
+//      caller's own stance; the substrate's reducer projects
+//      qualities.roleFlow and the next moment-assign honors it via
+//      resolveActiveRole.
 //
-// All three sections render INSIDE the inspector pane when the user
-// inspects @role-manager.
-
-import { flat } from "./main.js";
-
-// ── Condition vocabulary. ─────────────────────────────────────────
-// Each field declares its label and how its value should be rendered:
-//   { label, type, options?, defaultOp?, defaultValue? }
-// type = "select" | "text" | "number" | "bool"
-// options = string[] when type === "select"
-// defaultOp = which operator to default to for this field
+// Delegate-as-catalog: the panel reads its source lists from
+// `beingEntry.catalogs`, which descriptor.js populates server-side
+// for the role-manager being. No SEEs against heaven-gated mirrors;
+// the asker (the user) never needs reigning to author roles.
 //
-// Adding a field here is the only place the UI needs to grow when the
-// roleFlow evaluator's vocabulary grows. See
+// ctx shape:
+//   reality       string                                 — discovery.reality
+//   username      string | null                          — caller's being name
+//   descriptor    object                                 — current SEE result (for fallback lookup)
+//   see(address)  async (address) => descriptor          — used by loadFlowForSelf
+//   doOp(addr, action, params) async                     — fires DO verb
+
+// ── Condition vocabulary. Adding a path here is the only edit the UI
+// needs when the roleFlow evaluator's vocabulary grows. See
 // seed/present/roles/roleFlow.js for the matching set on the server.
 const FIELDS = [
   { path: "verb",           label: "the verb",            type: "select", options: ["see", "do", "summon", "be"] },
@@ -70,99 +71,82 @@ const OPS = [
   { value: "lte",   label: "≤"            },
 ];
 
-// ────────────────────────────────────────────────────────────────
+// ──────────────────────────────────────────────────────────────
 // Entry point
-// ────────────────────────────────────────────────────────────────
+// ──────────────────────────────────────────────────────────────
 
-export async function renderRoleManagerPanel(insp, _b) {
-  insp.innerHTML = "";
+export async function renderRoleManagerPanel(container, beingEntry, ctx) {
+  ensureStyles();
+  container.innerHTML = "";
 
   const head = document.createElement("h3");
-  head.className = "pane-title";
+  head.className = "rm-pane-title";
   head.textContent = "Role Manager";
-  insp.appendChild(head);
+  container.appendChild(head);
 
   const sub = document.createElement("div");
-  sub.className = "sub";
+  sub.className = "rm-sub";
   sub.textContent = "Author roles. Compose role flows for your being.";
-  insp.appendChild(sub);
+  container.appendChild(sub);
 
-  // The panel's surfaces (.tools, .roles, .operations) all live under
-  // heaven, which gates SEE by `reigning`. Arrival fails that walk and
-  // gets FORBIDDEN. Bail loud rather than silently render an empty
-  // panel — the operator wants to know why.
-  if (!flat.state.session?.username) {
+  if (!ctx?.username) {
     const msg = document.createElement("div");
-    msg.className = "sub";
+    msg.className = "rm-sub";
     msg.style.marginTop = "8px";
-    msg.textContent = "Sign in to use the role manager. The catalogs it reads live under heaven and aren't visible to arrival.";
-    insp.appendChild(msg);
+    msg.textContent = "Sign in to use the role manager.";
+    container.appendChild(msg);
     return;
   }
 
-  // Load every catalog the panel needs in parallel. Each fetch
-  // degrades to an empty list on failure so one missing surface
-  // doesn't break the whole panel. FORBIDDEN responses surface in
-  // the per-section status; the panel renders even when partial.
-  const [allRoles, allTools, allBeOps] = await Promise.all([
-    fetchAllRoles(),
-    fetchAllTools(),
-    Promise.resolve(KNOWN_BE_OPS),
-  ]);
-  // DO operations are already loaded into flat.state.operations on
-  // boot; surface just the names for the picker.
-  const allDoActions = (flat.state.operations || [])
-    .map((op) => op.name)
-    .filter(Boolean)
-    .sort();
+  const rmEntry = findRoleManagerEntry(beingEntry, ctx);
+  if (!rmEntry?.catalogs) {
+    const msg = document.createElement("div");
+    msg.className = "rm-sub";
+    msg.style.marginTop = "8px";
+    msg.textContent = "role-manager catalogs missing from descriptor. Reload the place and try again.";
+    container.appendChild(msg);
+    return;
+  }
+  const c = rmEntry.catalogs;
 
   const catalogs = {
-    roles:      allRoles.map((r) => r.name).sort(),
-    tools:      allTools.sort(),
-    doActions:  allDoActions,
-    beOps:      allBeOps,
+    roles:      (c.roles      || []).map((r) => r.name).sort(),
+    addresses:  (c.addresses  || []).map((a) => a.name),
+    doActions:  (c.operations || []).map((o) => o.name).sort(),
+    beOps:      (c.beOps      || []).map((o) => o.name).sort(),
   };
 
-  insp.appendChild(await renderRolesSection(allRoles));
-  insp.appendChild(renderCreateRoleSection(catalogs, async () => {
-    // Re-render the whole panel after a successful create so every
-    // catalog refreshes and the new role appears in role dropdowns.
-    renderRoleManagerPanel(insp, _b);
+  container.appendChild(renderRolesSection(c.roles || []));
+  container.appendChild(renderCreateRoleSection(catalogs, ctx, () => {
+    renderRoleManagerPanel(container, beingEntry, ctx);
   }));
-  insp.appendChild(await renderFlowEditorSection(catalogs.roles.map((n) => ({ name: n }))));
+  container.appendChild(await renderFlowEditorSection(
+    catalogs.roles.map((n) => ({ name: n })),
+    ctx,
+  ));
 }
 
-// Canonical BE ops the cherub/birther static table exposes. The
-// substrate freezes this set in seed/ibp/beOps.js — surfacing it
-// over the wire would be overkill; keeping the list inline here keeps
-// the picker honest. Bump alongside that file if it ever grows.
-const KNOWN_BE_OPS = ["birth", "connect", "release"];
+function findRoleManagerEntry(beingEntry, ctx) {
+  if (beingEntry?.catalogs) return beingEntry;
+  const desc = ctx?.descriptor;
+  const pool = [].concat(desc?.beings || [], desc?.residents || []);
+  return pool.find((e) => e.being === "role-manager") || null;
+}
 
-// ────────────────────────────────────────────────────────────────
+// ──────────────────────────────────────────────────────────────
 // Section 1 — Roles list
-// ────────────────────────────────────────────────────────────────
+// ──────────────────────────────────────────────────────────────
 
-async function renderRolesSection(allRoles) {
+function renderRolesSection(allRoles) {
   const sec = document.createElement("section");
-  sec.className = "panel-section rm-section";
+  sec.className = "rm-section";
 
   const h4 = document.createElement("h4");
   h4.textContent = `roles · ${allRoles.length}`;
   sec.appendChild(h4);
 
   if (allRoles.length === 0) {
-    const reason = allRoles._fetchReason;
-    if (reason === "FORBIDDEN") {
-      sec.appendChild(emptyHint(
-        "denied: this being can't read /./roles. " +
-        "The roles space lives under heaven (only reigning beings see it). " +
-        "Sign in as the root operator (or another reigning being) to manage roles.",
-      ));
-    } else if (reason) {
-      sec.appendChild(emptyHint(`load failed: ${reason}`));
-    } else {
-      sec.appendChild(emptyHint("no roles registered"));
-    }
+    sec.appendChild(emptyHint("no roles registered"));
     return sec;
   }
 
@@ -192,13 +176,13 @@ async function renderRolesSection(allRoles) {
   return sec;
 }
 
-// ────────────────────────────────────────────────────────────────
+// ──────────────────────────────────────────────────────────────
 // Section 2 — Create new role
-// ────────────────────────────────────────────────────────────────
+// ──────────────────────────────────────────────────────────────
 
-function renderCreateRoleSection(catalogs, onCreated) {
+function renderCreateRoleSection(catalogs, ctx, onCreated) {
   const sec = document.createElement("section");
-  sec.className = "panel-section rm-section";
+  sec.className = "rm-section";
 
   const h4 = document.createElement("h4");
   h4.textContent = "create new role";
@@ -207,43 +191,19 @@ function renderCreateRoleSection(catalogs, onCreated) {
   const form = document.createElement("div");
   form.className = "rm-form";
 
-  // Working state for the four chip-picker fields. We hold the selected
-  // list here and the picker mutates it in place; submit reads the
-  // arrays directly. Free-form entries (typed but not in the source
-  // catalog) are allowed because extensions can introduce names this
-  // panel doesn't know about yet.
-  const selected = {
-    canSee:    [],
-    canDo:     [],
-    canSummon: [],
-    canBe:     [],
-  };
+  // Working state for the four chip-picker fields. Pickers mutate
+  // these in place; submit reads the arrays at the end.
+  const selected = { canSee: [], canDo: [], canSummon: [], canBe: [] };
 
-  const nameInput        = field("name (kebab-case)",         "text");
-  const cognitionSelect  = selectField("required cognition",   ["", "llm", "human", "scripted"]);
+  const nameInput        = field("name (kebab-case)",       "text");
+  const cognitionSelect  = selectField("required cognition", ["", "llm", "human", "scripted"]);
 
-  const canSeePicker     = chipPicker({
-    label:  "canSee — tools this role can call",
-    source: catalogs.tools,
-    state:  selected.canSee,
-  });
-  const canDoPicker      = chipPicker({
-    label:  "canDo — DO actions",
-    source: catalogs.doActions,
-    state:  selected.canDo,
-  });
-  const canSummonPicker  = chipPicker({
-    label:  "canSummon — role shorthands",
-    source: catalogs.roles,
-    state:  selected.canSummon,
-  });
-  const canBePicker      = chipPicker({
-    label:  "canBe — BE ops",
-    source: catalogs.beOps,
-    state:  selected.canBe,
-  });
+  const canSeePicker     = chipPicker({ label: "canSee — IBP addresses this role can read", source: catalogs.addresses, state: selected.canSee });
+  const canDoPicker      = chipPicker({ label: "canDo — DO action names",                    source: catalogs.doActions, state: selected.canDo  });
+  const canSummonPicker  = chipPicker({ label: "canSummon — role shorthands / stances",      source: catalogs.roles,     state: selected.canSummon });
+  const canBePicker      = chipPicker({ label: "canBe — BE op names",                        source: catalogs.beOps,     state: selected.canBe  });
 
-  const promptInput      = field("system prompt",              "multiline");
+  const promptInput      = field("system prompt", "multiline");
 
   form.appendChild(nameInput.wrap);
   form.appendChild(cognitionSelect.wrap);
@@ -254,21 +214,18 @@ function renderCreateRoleSection(catalogs, onCreated) {
   form.appendChild(promptInput.wrap);
 
   const status = document.createElement("div");
-  status.className = "rm-status sub";
+  status.className = "rm-status rm-sub";
   form.appendChild(status);
 
   const submit = document.createElement("button");
-  submit.className = "btn-primary";
+  submit.className = "rm-btn rm-btn-primary";
   submit.textContent = "create role";
   submit.onclick = async () => {
     submit.disabled = true;
     status.textContent = "saving...";
     try {
-      const reality = flat.state.discovery?.reality;
-      const stance = `${reality}/@role-manager`;
-      // set-role's parseLines accepts arrays directly (seed/present/roles/
-      // role-manager/ops.js), so we hand the chip arrays through as-is.
-      await flat.doOp(stance, "set-role", {
+      const stance = `${ctx.reality}/@role-manager`;
+      await ctx.doOp(stance, "set-role", {
         name:              nameInput.input.value.trim(),
         requiredCognition: cognitionSelect.input.value || "",
         canSee:            selected.canSee,
@@ -295,16 +252,16 @@ function renderCreateRoleSection(catalogs, onCreated) {
 // Chip picker — searchable, addable, x-able
 // ──────────────────────────────────────────────────────────────
 //
-// One field per `canSee/canDo/canSummon/canBe` slot. Each picker:
-//
+// One field per can*-slot. Each picker:
 //   - shows the current selection as chips with × to remove
 //   - has an input that filters a source catalog as you type
 //   - shows matching suggestions in a dropdown; click to add
-//   - accepts free-form entries on Enter (so extensions adding new
-//     names not yet known to this client still work)
+//   - accepts free-form entries on Enter (so extensions adding
+//     names this client doesn't know yet still work)
 //
-// `state` is mutated in place so the surrounding form just reads it
+// `state` is mutated in place so the surrounding form reads it
 // at submit time.
+
 function chipPicker({ label, source, state }) {
   const wrap = document.createElement("div");
   wrap.className = "rm-field";
@@ -313,7 +270,6 @@ function chipPicker({ label, source, state }) {
   lbl.textContent = label;
   wrap.appendChild(lbl);
 
-  // The container holds chips + input together on one wrap-friendly row.
   const box = document.createElement("div");
   box.className = "rm-chip-box";
   wrap.appendChild(box);
@@ -323,14 +279,11 @@ function chipPicker({ label, source, state }) {
   input.className = "rm-chip-input";
   input.placeholder = "type to search, Enter to add";
 
-  // Dropdown of suggestions sits below the input.
   const drop = document.createElement("div");
-  drop.className = "rm-chip-drop hidden";
+  drop.className = "rm-chip-drop rm-hidden";
   wrap.appendChild(drop);
 
   function renderChips() {
-    // Wipe everything in box except the input. We hold a stable input
-    // reference so it doesn't lose focus when chips rerender.
     box.innerHTML = "";
     for (const item of state) {
       const chip = document.createElement("span");
@@ -358,25 +311,21 @@ function chipPicker({ label, source, state }) {
 
   function renderDrop() {
     const q = input.value.trim().toLowerCase();
-    // Filter suggestions: prefix match first, then substring, then
-    // drop anything already selected.
     const selectedSet = new Set(state);
     const matches = (source || [])
       .filter((s) => !selectedSet.has(s))
       .filter((s) => !q || s.toLowerCase().includes(q));
     drop.innerHTML = "";
-    if (!matches.length || !document.activeElement || document.activeElement !== input) {
-      drop.classList.add("hidden");
+    if (!matches.length || document.activeElement !== input) {
+      drop.classList.add("rm-hidden");
       return;
     }
-    drop.classList.remove("hidden");
+    drop.classList.remove("rm-hidden");
     for (const s of matches.slice(0, 12)) {
       const opt = document.createElement("div");
       opt.className = "rm-chip-drop-item";
       opt.textContent = s;
       opt.onmousedown = (ev) => {
-        // mousedown beats input's blur so the click registers before
-        // the dropdown collapses.
         ev.preventDefault();
         addItem(s);
       };
@@ -392,8 +341,7 @@ function chipPicker({ label, source, state }) {
 
   function addItem(name) {
     const v = String(name || "").trim();
-    if (!v) return;
-    if (state.includes(v)) return;
+    if (!v || state.includes(v)) return;
     state.push(v);
     input.value = "";
     renderChips();
@@ -403,20 +351,14 @@ function chipPicker({ label, source, state }) {
 
   input.oninput = renderDrop;
   input.onfocus = renderDrop;
-  input.onblur  = () => {
-    // Defer so a mousedown on a suggestion still resolves.
-    setTimeout(() => drop.classList.add("hidden"), 120);
-  };
+  input.onblur  = () => setTimeout(() => drop.classList.add("rm-hidden"), 120);
   input.onkeydown = (ev) => {
     if (ev.key === "Enter") {
       ev.preventDefault();
-      // Enter prefers an exact catalog match if one exists, falls
-      // through to whatever the user typed.
       const q = input.value.trim();
       const exact = (source || []).find((s) => s.toLowerCase() === q.toLowerCase());
       addItem(exact || q);
     } else if (ev.key === "Backspace" && input.value === "" && state.length) {
-      // Backspace on empty input drops the last chip.
       state.pop();
       renderChips();
       renderDrop();
@@ -427,28 +369,24 @@ function chipPicker({ label, source, state }) {
   return { wrap, state };
 }
 
-// ────────────────────────────────────────────────────────────────
+// ──────────────────────────────────────────────────────────────
 // Section 3 — Author your roleFlow (mad-libs)
-// ────────────────────────────────────────────────────────────────
+// ──────────────────────────────────────────────────────────────
 
-async function renderFlowEditorSection(allRoles) {
+async function renderFlowEditorSection(allRoles, ctx) {
   const sec = document.createElement("section");
-  sec.className = "panel-section rm-section";
+  sec.className = "rm-section";
 
   const h4 = document.createElement("h4");
   h4.textContent = "your role flow";
   sec.appendChild(h4);
 
   const hint = document.createElement("div");
-  hint.className = "sub";
+  hint.className = "rm-sub";
   hint.textContent = "First clause whose conditions all match wins. Last clause runs when nothing else matches.";
   sec.appendChild(hint);
 
-  // Load current flow from the user's own being. SEE on the user's
-  // stance returns desc.beings[] containing the user with their
-  // qualities. roleFlow lives at qualities.roleFlow on the being.
-  const flow = await loadFlowForSelf();
-  // Working copy — edits stay in memory until "save".
+  const flow = await loadFlowForSelf(ctx);
   const draft = Array.isArray(flow) ? deepCopy(flow) : [];
 
   const list = document.createElement("ol");
@@ -464,16 +402,14 @@ async function renderFlowEditorSection(allRoles) {
   }
   rerender();
 
-  // ── Add clause + save row
   const actions = document.createElement("div");
   actions.className = "rm-flow-actions";
 
   const addClauseBtn = document.createElement("button");
-  addClauseBtn.className = "btn-sm";
+  addClauseBtn.className = "rm-btn rm-btn-sm";
   addClauseBtn.textContent = "+ when…";
   addClauseBtn.onclick = () => {
-    // Add a new clause BEFORE the terminal default. The default is the
-    // last clause with no `when`; everything else goes above it.
+    // Insert before the terminal default (the clause with no `when`).
     const insertAt = draft.findIndex((c) => !c.when);
     const newClause = { when: { [FIELDS[0].path]: "" }, role: allRoles[0]?.name || "" };
     if (insertAt >= 0) draft.splice(insertAt, 0, newClause);
@@ -483,23 +419,21 @@ async function renderFlowEditorSection(allRoles) {
   actions.appendChild(addClauseBtn);
 
   const status = document.createElement("span");
-  status.className = "rm-status sub";
+  status.className = "rm-status rm-sub";
   actions.appendChild(status);
 
   const saveBtn = document.createElement("button");
-  saveBtn.className = "btn-primary";
+  saveBtn.className = "rm-btn rm-btn-primary";
   saveBtn.textContent = "save flow";
   saveBtn.onclick = async () => {
     saveBtn.disabled = true;
     status.textContent = "saving...";
     try {
-      const reality = flat.state.discovery?.reality;
-      const me = flat.state.session?.username;
+      const me = ctx.username;
       if (!me) throw new Error("not signed in");
-      // The flow lives on the being's qualities. set-being writes the
-      // whole roleFlow array atomically (merge:false) so removals
-      // propagate.
-      await flat.doOp(`${reality}/@${me}`, "set-being", {
+      // The flow lives on the caller's qualities. set-being writes
+      // the whole array atomically (merge:false) so removals propagate.
+      await ctx.doOp(`${ctx.reality}/@${me}`, "set-being", {
         field: "qualities.roleFlow",
         value: draft,
         merge: false,
@@ -523,11 +457,9 @@ function renderClause(clause, idx, draft, allRoles, onChange) {
   const row = document.createElement("li");
   row.className = "rm-clause";
 
-  // "WHEN" / "AND" prefix for each condition.
-  const conditions = Object.keys(clause.when || {});
-  if (conditions.length === 0) {
-    // Shouldn't happen — add-clause always adds at least one — but
-    // defend against manual JSON edits.
+  if (Object.keys(clause.when || {}).length === 0) {
+    // Defensive: add-clause always seeds one condition, but a hand-edited
+    // JSON could land here. Insert a placeholder so the clause renders.
     clause.when = { [FIELDS[0].path]: "" };
   }
 
@@ -542,12 +474,10 @@ function renderClause(clause, idx, draft, allRoles, onChange) {
     }));
   });
 
-  // "+ AND" button at the bottom of conditions.
   const andBtn = document.createElement("button");
-  andBtn.className = "btn-sm rm-and-btn";
+  andBtn.className = "rm-btn rm-btn-sm rm-and-btn";
   andBtn.textContent = "+ and";
   andBtn.onclick = () => {
-    // Pick the first field not already used (or default to first).
     const usedPaths = new Set(Object.keys(clause.when));
     const available = FIELDS.find((f) => !usedPaths.has(f.path)) || FIELDS[0];
     clause.when[available.path] = "";
@@ -555,7 +485,6 @@ function renderClause(clause, idx, draft, allRoles, onChange) {
   };
   row.appendChild(andBtn);
 
-  // THEN ROLE line.
   const thenLine = document.createElement("div");
   thenLine.className = "rm-then-line";
   const thenLabel = document.createElement("span");
@@ -572,13 +501,11 @@ function renderClause(clause, idx, draft, allRoles, onChange) {
     roleSelect.appendChild(opt);
   }
   roleSelect.value = clause.role || "";
-  roleSelect.onchange = () => {
-    clause.role = roleSelect.value;
-  };
+  roleSelect.onchange = () => { clause.role = roleSelect.value; };
   thenLine.appendChild(roleSelect);
 
   const removeClauseBtn = document.createElement("button");
-  removeClauseBtn.className = "btn-sm rm-danger";
+  removeClauseBtn.className = "rm-btn rm-btn-sm rm-danger";
   removeClauseBtn.textContent = "remove clause";
   removeClauseBtn.onclick = () => {
     draft.splice(idx, 1);
@@ -599,7 +526,6 @@ function renderConditionLine({ clause, path, value, prefix, allRoles, onChange }
   kw.textContent = prefix;
   line.appendChild(kw);
 
-  // Field selector — picks which path in ctx to test.
   const fieldSel = document.createElement("select");
   fieldSel.className = "rm-input";
   for (const f of FIELDS) {
@@ -610,8 +536,6 @@ function renderConditionLine({ clause, path, value, prefix, allRoles, onChange }
   }
   fieldSel.value = path;
   fieldSel.onchange = () => {
-    // Rename the key in clause.when. Preserve operator + value when
-    // possible; reset value otherwise.
     const oldKey = path;
     const newKey = fieldSel.value;
     if (oldKey === newKey) return;
@@ -622,9 +546,6 @@ function renderConditionLine({ clause, path, value, prefix, allRoles, onChange }
   };
   line.appendChild(fieldSel);
 
-  // Operator + value pair. Stored shape can be a bare value
-  // (equality shortcut) or { eq/ne/in/notIn/gt/gte/lt/lte: x }.
-  // Display: split into op + value.
   const fieldSpec = FIELDS.find((f) => f.path === path) || FIELDS[0];
   const { op, raw } = unpackOperand(value);
 
@@ -638,28 +559,22 @@ function renderConditionLine({ clause, path, value, prefix, allRoles, onChange }
   }
   opSel.value = op;
   opSel.onchange = () => {
-    clause.when[path] = packOperand(opSel.value, raw, fieldSpec);
+    clause.when[path] = packOperand(opSel.value, raw);
     onChange();
   };
   line.appendChild(opSel);
 
-  // Value input — typed per field. For "is one of" / "is not one of",
-  // input is a comma-separated list.
   const valInput = renderValueInput(fieldSpec, opSel.value, raw, allRoles, (next) => {
-    clause.when[path] = packOperand(opSel.value, next, fieldSpec);
+    clause.when[path] = packOperand(opSel.value, next);
   });
   line.appendChild(valInput);
 
-  // Remove condition button.
   const rm = document.createElement("button");
-  rm.className = "btn-sm rm-danger";
+  rm.className = "rm-btn rm-btn-sm rm-danger";
   rm.textContent = "×";
   rm.title = "remove this condition";
   rm.onclick = () => {
     delete clause.when[path];
-    // Don't leave an empty when{}: callers expect at least one condition
-    // per clause, otherwise the clause becomes a default. Insert a
-    // placeholder field if the user removed the last condition.
     if (Object.keys(clause.when).length === 0) {
       clause.when[FIELDS[0].path] = "";
     }
@@ -671,8 +586,6 @@ function renderConditionLine({ clause, path, value, prefix, allRoles, onChange }
 }
 
 function renderValueInput(fieldSpec, op, raw, allRoles, onUpdate) {
-  // For list operators we render a free-text input the user types
-  // a comma-separated list into.
   const isList = (op === "in" || op === "notIn");
   if (isList) {
     const input = document.createElement("input");
@@ -735,7 +648,6 @@ function renderValueInput(fieldSpec, op, raw, allRoles, onUpdate) {
       inp.oninput = () => onUpdate(inp.value === "" ? "" : Number(inp.value));
       return inp;
     }
-    case "text":
     default: {
       const inp = document.createElement("input");
       inp.type = "text";
@@ -750,7 +662,6 @@ function renderValueInput(fieldSpec, op, raw, allRoles, onUpdate) {
 // ── Default (terminal) row ─────────────────────────────────────
 
 function renderDefaultRow(draft, allRoles, onChange) {
-  // The terminal default is a clause with no `when` and just `role`.
   let defaultClause = draft.find((c) => !c.when || Object.keys(c.when).length === 0);
   if (!defaultClause) {
     defaultClause = { role: "" };
@@ -767,7 +678,6 @@ function renderDefaultRow(draft, allRoles, onChange) {
 
   const sel = document.createElement("select");
   sel.className = "rm-input";
-  // First option is empty so the user can clear the default.
   const blank = document.createElement("option");
   blank.value = "";
   blank.textContent = "(unset — fall back to defaultRole)";
@@ -782,8 +692,6 @@ function renderDefaultRow(draft, allRoles, onChange) {
   sel.onchange = () => {
     defaultClause.role = sel.value;
     if (!sel.value) {
-      // Empty default → remove the clause so the substrate falls back
-      // to Being.defaultRole.
       const i = draft.indexOf(defaultClause);
       if (i >= 0) draft.splice(i, 1);
       onChange();
@@ -794,72 +702,23 @@ function renderDefaultRow(draft, allRoles, onChange) {
   return row;
 }
 
-// ────────────────────────────────────────────────────────────────
+// ──────────────────────────────────────────────────────────────
 // Data loaders
-// ────────────────────────────────────────────────────────────────
+// ──────────────────────────────────────────────────────────────
+//
+// Catalogs ride on the role-manager being's descriptor entry. The
+// only thing this section still loads is the caller's own roleFlow,
+// which lives on her being at her home space.
 
-// Catalog fetches share one error shape so the panel can render
-// "denied / failed / empty" distinctly. heaven-scoped reads
-// (`.roles`, `.tools`) return FORBIDDEN for any caller that isn't
-// reigning; we want that to surface rather than silently empty.
-async function fetchCatalog(seedSpace, project) {
-  const reality = flat.state.discovery?.reality;
-  if (!reality) return { ok: false, reason: "no-reality", items: [] };
+async function loadFlowForSelf(ctx) {
+  const { reality, username, see } = ctx || {};
+  if (!reality || !username || typeof see !== "function") return [];
   try {
-    const desc = await flat.state.client.see(`${reality}/./${seedSpace}`);
-    const children = Array.isArray(desc.children) ? desc.children : [];
-    return { ok: true, items: children.map(project).filter(Boolean) };
-  } catch (err) {
-    const code = err?.code || "ERR";
-    return { ok: false, reason: code, items: [], message: err?.message || String(err) };
-  }
-}
-
-async function fetchAllRoles() {
-  // Roles are mirrored under <reality>/./roles/<name> with
-  // qualities.role containing the spec. syncRolesToSubstrate writes
-  // every registered role (seed, extension, live) at boot, so this
-  // SEE is the canonical "give me every role" surface.
-  const res = await fetchCatalog("roles", (c) => {
-    const r = c.qualities?.role || {};
-    return {
-      name:              c.name,
-      origin:            r.origin || null,
-      requiredCognition: r.requiredCognition || null,
-      permissions:       Array.isArray(r.permissions) ? r.permissions : [],
-    };
-  });
-  // Stash the reason on the array so the rendering section can show
-  // a denied/failed badge inline. Arrays propagate cleanly through the
-  // existing renderers; the extra prop is invisible to consumers that
-  // don't look for it.
-  res.items._fetchReason = res.ok ? null : res.reason;
-  return res.items;
-}
-
-async function fetchAllTools() {
-  // Tools are mirrored under <reality>/./tools/<name> by
-  // syncToolsToSubstrate at boot. Each child is one tool; the name
-  // alone is what canSee wants.
-  const res = await fetchCatalog("tools", (c) => c.name);
-  res.items._fetchReason = res.ok ? null : res.reason;
-  return res.items;
-}
-
-async function loadFlowForSelf() {
-  const reality = flat.state.discovery?.reality;
-  const me      = flat.state.session?.username;
-  if (!reality || !me) return [];
-  try {
-    // SEE @self resolves to the user's home space. The user shows up
-    // in desc.beings if physically present, otherwise in desc.residents
-    // (their home registration). Either entry carries qualities (the
-    // descriptor's enrichBeings folds the being row).
-    const desc = await flat.state.client.see(`${reality}/@${me}`);
+    const desc = await see(`${reality}/@${username}`);
     const myId = desc.identity?.beingId || null;
     const pool = [].concat(desc.beings || [], desc.residents || []);
     const mine = (myId && pool.find((b) => String(b.beingId) === String(myId)))
-              || pool.find((b) => b.being === me || b.name === me);
+              || pool.find((b) => b.being === username || b.name === username);
     const rf = mine?.qualities?.roleFlow;
     return Array.isArray(rf) ? rf : [];
   } catch {
@@ -867,42 +726,38 @@ async function loadFlowForSelf() {
   }
 }
 
-// ────────────────────────────────────────────────────────────────
-// Pack / unpack operand shape
-// ────────────────────────────────────────────────────────────────
-
-// The substrate's evalWhen accepts either a bare value (equality shorthand)
-// or an operator object `{ eq/ne/in/notIn/gt/gte/lt/lte: x }`. The UI
-// keeps an explicit op + raw value in editor state and converts at the
-// boundary.
+// ──────────────────────────────────────────────────────────────
+// Operand pack / unpack
+// ──────────────────────────────────────────────────────────────
+//
+// The substrate's evalWhen accepts either a bare value (equality
+// shorthand) or an operator object `{ eq/ne/in/notIn/gt/gte/lt/lte: x }`.
+// The UI keeps an explicit op + raw value in editor state and converts
+// at the boundary.
 
 function unpackOperand(stored) {
   if (stored === null || stored === undefined) return { op: "eq", raw: "" };
   if (typeof stored !== "object" || Array.isArray(stored)) {
     return { op: "eq", raw: stored };
   }
-  const keys = Object.keys(stored);
-  for (const k of keys) {
-    if (OPS.find((o) => o.value === k)) {
-      return { op: k, raw: stored[k] };
-    }
+  for (const k of Object.keys(stored)) {
+    if (OPS.find((o) => o.value === k)) return { op: k, raw: stored[k] };
   }
-  // Object value with no recognized op key — treat as bare equality.
   return { op: "eq", raw: stored };
 }
 
-function packOperand(op, raw, _fieldSpec) {
+function packOperand(op, raw) {
   if (op === "eq") return raw;
   return { [op]: raw };
 }
 
-// ────────────────────────────────────────────────────────────────
+// ──────────────────────────────────────────────────────────────
 // Small DOM helpers
-// ────────────────────────────────────────────────────────────────
+// ──────────────────────────────────────────────────────────────
 
 function emptyHint(msg) {
   const div = document.createElement("div");
-  div.className = "sub";
+  div.className = "rm-sub";
   div.textContent = msg;
   return div;
 }
@@ -944,11 +799,222 @@ function selectField(labelText, options) {
   return { wrap, input };
 }
 
-function setStatusInPanel(insp, msg) {
-  const status = insp.querySelector(".rm-status");
-  if (status) status.textContent = msg;
-}
-
 function deepCopy(o) {
   return JSON.parse(JSON.stringify(o));
+}
+
+// ──────────────────────────────────────────────────────────────
+// Styles — injected once. Self-contained so both portals render the
+// panel identically without depending on host stylesheets. Hosts may
+// still override via the .rm-* class prefix.
+// ──────────────────────────────────────────────────────────────
+
+let _stylesInjected = false;
+function ensureStyles() {
+  if (_stylesInjected) return;
+  _stylesInjected = true;
+  const style = document.createElement("style");
+  style.setAttribute("data-rm-panel", "true");
+  style.textContent = `
+    .rm-pane-title {
+      margin: 0 0 4px 0;
+      font-size: 14px;
+      letter-spacing: 0.04em;
+      color: #cfd8d3;
+    }
+    .rm-sub {
+      color: #888f8b;
+      font-size: 11px;
+      margin: -2px 0 14px 0;
+      word-break: break-word;
+    }
+    .rm-section { margin-bottom: 22px; }
+    .rm-section h4 {
+      margin: 0 0 6px 0;
+      font-size: 10px;
+      color: #888f8b;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+    .rm-hidden { display: none !important; }
+
+    .rm-roles-list { list-style: none; margin: 0; padding: 0; }
+    .rm-roles-row {
+      display: grid;
+      grid-template-columns: 160px 1fr;
+      gap: 8px;
+      padding: 4px 0;
+      border-bottom: 1px dotted #2a3330;
+      font-size: 12px;
+    }
+    .rm-role-name { color: #8fbf9f; }
+    .rm-role-meta { color: #888f8b; font-size: 11px; }
+
+    .rm-form { display: flex; flex-direction: column; gap: 8px; }
+    .rm-field { display: flex; flex-direction: column; gap: 3px; }
+    .rm-field label {
+      font-size: 10px;
+      color: #888f8b;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+    .rm-input {
+      background: #0a0f0d;
+      color: #cfd8d3;
+      border: 1px solid #2a3330;
+      border-radius: 3px;
+      padding: 5px 7px;
+      font-family: inherit;
+      font-size: 12px;
+    }
+    .rm-input:focus { outline: none; border-color: #8fbf9f; }
+    textarea.rm-input { resize: vertical; min-height: 56px; }
+
+    .rm-status { margin-left: 8px; }
+
+    .rm-btn {
+      background: #131a17;
+      color: #cfd8d3;
+      border: 1px solid #2a3330;
+      border-radius: 3px;
+      padding: 4px 10px;
+      font-family: inherit;
+      font-size: 11px;
+      cursor: pointer;
+    }
+    .rm-btn:hover:not(:disabled) { border-color: #8fbf9f; color: #8fbf9f; }
+    .rm-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+    .rm-btn-sm { padding: 3px 8px; font-size: 11px; }
+    .rm-btn-primary {
+      background: #1a3a2a;
+      border-color: #2f6b48;
+      color: #cfe6d8;
+    }
+    .rm-btn-primary:hover:not(:disabled) { background: #224e38; }
+    .rm-danger { color: #c97a7a; }
+    .rm-danger:hover:not(:disabled) { border-color: #c97a7a; color: #c97a7a; }
+
+    /* Mad-libs flow editor */
+    .rm-clauses {
+      list-style: none;
+      margin: 8px 0;
+      padding: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .rm-clause {
+      background: #131a17;
+      border: 1px solid #2a3330;
+      border-radius: 4px;
+      padding: 8px 10px;
+    }
+    .rm-condition,
+    .rm-then-line {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 6px;
+      margin: 4px 0;
+      font-size: 12px;
+    }
+    .rm-keyword {
+      font-size: 10px;
+      letter-spacing: 0.08em;
+      color: #888f8b;
+      text-transform: uppercase;
+      min-width: 56px;
+    }
+    .rm-condition .rm-input,
+    .rm-then-line .rm-input { padding: 3px 6px; font-size: 12px; }
+    .rm-op { min-width: 90px; }
+    .rm-value { min-width: 120px; }
+    .rm-and-btn { margin-top: 4px; }
+    .rm-default {
+      background: #0d1311;
+      border: 1px dashed #2a3330;
+      border-radius: 4px;
+      padding: 8px 10px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .rm-flow-actions {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-top: 8px;
+    }
+
+    /* Chip picker */
+    .rm-chip-box {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 4px;
+      padding: 4px;
+      background: #0a0f0d;
+      border: 1px solid #2a3330;
+      border-radius: 3px;
+      min-height: 28px;
+      align-items: center;
+    }
+    .rm-chip-box:focus-within { border-color: #8fbf9f; }
+    .rm-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      background: #131a17;
+      border: 1px solid #2a3330;
+      border-radius: 12px;
+      padding: 2px 4px 2px 8px;
+      font-size: 11px;
+      color: #8fbf9f;
+    }
+    .rm-chip-x {
+      background: transparent;
+      border: none;
+      color: #888f8b;
+      cursor: pointer;
+      padding: 0 4px;
+      font-size: 13px;
+      line-height: 1;
+    }
+    .rm-chip-x:hover { color: #c97a7a; }
+    .rm-chip-input {
+      flex: 1;
+      min-width: 100px;
+      background: transparent;
+      color: #cfd8d3;
+      border: none;
+      outline: none;
+      padding: 2px 4px;
+      font-family: inherit;
+      font-size: 12px;
+    }
+    .rm-chip-drop {
+      position: relative;
+      margin-top: 2px;
+      background: #131a17;
+      border: 1px solid #2a3330;
+      border-radius: 3px;
+      max-height: 180px;
+      overflow-y: auto;
+      z-index: 5;
+    }
+    .rm-chip-drop-item {
+      padding: 4px 8px;
+      font-size: 12px;
+      cursor: pointer;
+      color: #cfd8d3;
+    }
+    .rm-chip-drop-item:hover { background: #0a0f0d; color: #8fbf9f; }
+    .rm-chip-drop-hint {
+      padding: 4px 8px;
+      font-size: 11px;
+      color: #888f8b;
+      border-top: 1px dotted #2a3330;
+      font-style: italic;
+    }
+  `;
+  document.head.appendChild(style);
 }

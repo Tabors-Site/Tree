@@ -58,7 +58,7 @@ registerOperation("set-role", {
       required: false,
       default: "",
     },
-    canSee:    { type: "multiline", label: "canSee — tool names, one per line",      required: false },
+    canSee:    { type: "multiline", label: "canSee — IBP addresses, one per line",   required: false },
     canDo:     { type: "multiline", label: "canDo — DO action names, one per line",  required: false },
     canSummon: { type: "multiline", label: "canSummon — being shorthands",            required: false },
     canBe:     { type: "multiline", label: "canBe — BE op names",                     required: false },

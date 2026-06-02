@@ -1094,6 +1094,55 @@ marks the row. The I-Am (me) is `rootOwner`. The reign roster (one
 matter at heaven carrying `qualities.reign.beings`) gates SEE/DO/SUMMON
 on heaven and every Tier-3 space below.
 
+### Delegates publish what they mediate
+
+The heaven gate is real: SEE on heaven and every Tier-3 seed space
+requires the reigning stance. Beings of the land cannot read
+`<reality>/./roles`, `<reality>/./tools`, `<reality>/./operations`
+directly. Yet they routinely need to **act on** what those rooms
+hold — humans authoring roleFlows on themselves need the role catalog
+to pick from, extensions registering tools need the namespace of names
+already taken, and any UI offering "pick an op to invoke" needs the
+list.
+
+The seed never reaches across the membrane. The doctrine is the same
+one that solved every other access question: the four verbs, applied
+correctly.
+
+**The delegate that mediates a registry publishes the registry on its
+own descriptor entry.** When I (descriptor.js#enrichBeings) shape a
+being's entry, if the being is a publisher I fold the catalog it
+gates into `entry.catalogs`. The role-manager — a Tier-1 delegate I
+spawn at boot, parented under me, reigning by construction — carries
+`catalogs: { roles, tools, operations, beOps }`. Each catalog is a
+lightweight projection (names + the surface metadata a UI needs to
+render pickers); the rich heaven mirror keeps the full specs.
+
+Three IBP-native properties fall out:
+
+- **Asker stays asker.** A user reading the role catalog through
+  `descriptor.beings[role-manager].catalogs` is performing a SEE on
+  the place they're already standing in. They never SEE
+  `/./roles` — the heaven gate is honored. The data reaches them
+  through the publishing delegate's descriptor, not by a
+  gate-circumvention.
+- **The reigning view is inherent.** I render the descriptor
+  server-side. I have full read of my own registries. Folding their
+  contents into the delegate's entry doesn't elevate the asker —
+  it elevates the projection that's shown to them.
+- **Writes still go through DO on the delegate.** The role-manager
+  exposes `do:set-role`; the asker invokes it; the delegate's handler
+  (reigning, with full registry access) does the write. Same four
+  verbs, same authorize chain, no new concepts.
+
+Future delegates that gate other registries follow the same shape.
+An inventory-manager publishes `catalogs.items`. A content-manager
+publishes `catalogs.assets`. The pattern is uniform: publishers
+declare what they publish in
+`descriptor.js#buildCatalogs`; consumers read from the entry; writes
+go through DO. This is the doctrinal answer to "how do askers get
+registry-shaped data they shouldn't SEE directly."
+
 ### Threads as addressable places
 
 A thread is a live tree of coordinated SUMMONs sharing one

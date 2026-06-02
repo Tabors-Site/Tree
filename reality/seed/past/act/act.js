@@ -64,7 +64,7 @@ const ActSchema = new mongoose.Schema({
   // field records that B was spawned from A. The seed stamps it at
   // emit time from the asker's current rootCorrelation (scheduler
   // knows it via getCurrentRootCorrelation). Walks: B → A → ... give
-  // the cross-thread lineage SEE on `.threads/<id>` surfaces as
+  // the cross-thread lineage SEE on `./threads/<id>` surfaces as
   // `parentThread`. The ancestor-severance check on intake pickup
   // walks this same chain to decide whether a spawned thread should
   // still run when its parent's been cut.
@@ -92,7 +92,7 @@ const ActSchema = new mongoose.Schema({
   },
 
   // Set by the cut handler when a thread (this Act's rootCorrelation)
-  // is severed via SUMMON to .threads/<id>. Distinct from
+  // is severed via SUMMON to ./threads/<id>. Distinct from
   // endMessage.stopped (which means the role halted its loop):
   // severedAt records that the line was cut from outside. The
   // scheduler skips intake entries whose rootCorrelation appears
