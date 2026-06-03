@@ -88,6 +88,7 @@ function persistBeingPosition(beingId, spaceId, summonCtx = null) {
     target:  { kind: "being", id: String(beingId) },
     params:  { toPosition: spaceId || null },
     actId:   summonCtx?.actId || null,
+    branch:  summonCtx?.branch || "0",
   };
   // Phase 2: when inside a moment, push synchronously to ctx.deltaF.
   // Outside a moment (boot, no summonCtx), keep fire-and-forget for

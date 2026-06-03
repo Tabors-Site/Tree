@@ -165,12 +165,12 @@ export async function summonVerb(stance, message, opts = {}) {
   // support); the role-shorthand search walks values to find a match.
   // When multiple beings share the role, the first hit wins; addressing
   // a specific instance uses its name.
-  const { findByName, loadProjection } = await import("../../materials/projections.js");
+  const { findByName, loadOrFold } = await import("../../materials/projections.js");
   const branch = summonCtx?.branch || "0";
   let toBeingSlot = await findByName("being", qualifier, branch);
   let toBeing = toBeingSlot ? { _id: toBeingSlot.id, ...toBeingSlot.state } : null;
   if (!toBeing && resolved.spaceId) {
-    const spaceSlot = await loadProjection("space", resolved.spaceId, branch);
+    const spaceSlot = await loadOrFold("space", resolved.spaceId, branch);
     const beings = spaceSlot?.state?.qualities instanceof Map
       ? spaceSlot.state.qualities.get("beings")
       : spaceSlot?.state?.qualities?.beings;
@@ -183,7 +183,7 @@ export async function summonVerb(stance, message, opts = {}) {
       homeBeingId = hit?.beingId || null;
     }
     if (homeBeingId) {
-      const slot = await loadProjection("being", homeBeingId, branch);
+      const slot = await loadOrFold("being", homeBeingId, branch);
       toBeing = slot ? { _id: slot.id, ...slot.state } : null;
     }
   }
@@ -446,9 +446,9 @@ export async function summonByResolved(args) {
 
   const validatedMessage = validateSummonMessage(message);
 
-  const { loadProjection } = await import("../../materials/projections.js");
+  const { loadOrFold } = await import("../../materials/projections.js");
   const branch = summonCtx?.branch || "0";
-  const toSlot = await loadProjection("being", toBeingId, branch);
+  const toSlot = await loadOrFold("being", toBeingId, branch);
   if (!toSlot) {
     throw new IbpError(IBP_ERR.BEING_NOT_FOUND, `No being with id ${toBeingId} on branch ${branch}`);
   }

@@ -66,6 +66,7 @@ export function showRoleManagerPanel({ state, beingEntry, onClose }) {
   // 3D portal's state already satisfies.
   renderRoleManagerPanel(body, beingEntry, {
     reality:    state.discovery?.reality,
+    branch:     state.descriptor?.address?.branch || "0",
     username:   state.session?.username || null,
     descriptor: state.descriptor,
     see:        (addr) => state.client.see(addr),

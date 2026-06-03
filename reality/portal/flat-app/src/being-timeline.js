@@ -81,7 +81,12 @@ export async function renderTimelineSection(container, being, ctx) {
 async function fetchActs(reality, beingId) {
   if (!reality) return [];
   try {
-    const desc = await flat.state.client.see(`${reality}/.acts/${beingId}`);
+    // Qualify the SEE with the active branch so the timeline reads the
+    // right reel. Without the qualifier, typed reality means main, and
+    // a #1 user's flat-app timeline silently displays main's acts.
+    const branch = flat.state.descriptor?.address?.branch || "0";
+    const bq = branch === "0" ? "" : `#${branch}`;
+    const desc = await flat.state.client.see(`${reality}${bq}/.acts/${beingId}`);
     const chain = desc?.actChain;
     return Array.isArray(chain?.acts) ? chain.acts.slice(0, MAX_ACTS) : [];
   } catch {
@@ -183,7 +188,9 @@ async function openHistoricalView({ reality, being, whenISO, pastContainer }) {
   // identity — everything — folds to its own state at that point.
   let descriptor;
   try {
-    descriptor = await flat.state.client.see(`${reality}/@${being.being}`, {
+    const branch = flat.state.descriptor?.address?.branch || "0";
+    const bq = branch === "0" ? "" : `#${branch}`;
+    descriptor = await flat.state.client.see(`${reality}${bq}/@${being.being}`, {
       at: { atTimestamp: whenISO },
     });
   } catch (err) {

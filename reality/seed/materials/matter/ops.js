@@ -39,8 +39,8 @@ async function assertMatterCoordInBounds(matterDoc, raw, branch = "0") {
   if (Object.keys(out).length === 0) return null;
   const spaceId = matterDoc?.spaceId || null;
   if (!spaceId) return out;
-  const { loadProjection } = await import("../projections.js");
-  const spaceSlot = await loadProjection("space", spaceId, branch);
+  const { loadOrFold } = await import("../projections.js");
+  const spaceSlot = await loadOrFold("space", spaceId, branch);
   const size = spaceSlot?.state?.size || null;
   if (!size) return out;
   for (const a of COORD_AXES) {
@@ -200,8 +200,8 @@ async function endMatterHandler({ target, identity, summonCtx }) {
   const { deleteMatterAndFile } = await import("./matters.js");
   let beingId = identity?.beingId;
   if (!beingId) {
-    const { loadProjection } = await import("../projections.js");
-    const matterSlot = await loadProjection("matter", matterId, branch);
+    const { loadOrFold } = await import("../projections.js");
+    const matterSlot = await loadOrFold("matter", matterId, branch);
     beingId = matterSlot?.state?.beingId;
   }
   await deleteMatterAndFile({

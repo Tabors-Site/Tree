@@ -184,6 +184,11 @@ async function main() {
         isAuthenticated: !!state.session?.token,
       });
       state.branchBar?.update(desc);
+      // Address bar + scene visual cue follow rewind — the chip should
+      // reflect "you are looking at the past on #<branch>" and the
+      // canvas should desaturate so the user can never miss it.
+      refreshAddressBar();
+      _setHistoricalVisualCue(true);
       setHud(`rewound to ${atTimestamp}`);
     } catch (err) {
       console.warn("[3D] rewind failed:", err?.message);
@@ -192,6 +197,7 @@ async function main() {
   window.addEventListener("branchbar:now", () => {
     // Same address, no at-qualifier → live again.
     if (state.currentAddress) navigate(state.currentAddress);
+    _setHistoricalVisualCue(false);
   });
 
   // Branch-tree clicks set `location.hash` to the target branch's
@@ -544,6 +550,10 @@ function handleDescriptorEvent(event) {
   if (!state.currentAddress) return;
   if (event?.kind === "position") {
     state.scene.applyPositionDelta(event.payload);
+    // A position fact (someone walked, including us) IS an act on a
+    // being reel — refresh the timeline strip so the user sees the
+    // mark land within a tick. Coalesced via the bar's own debouncer.
+    _scheduleBranchBarRefresh();
     return;
   }
   // Rung-3 fact-arrival push. Wraps the unwrapped portal-client event
@@ -554,6 +564,8 @@ function handleDescriptorEvent(event) {
   // only fire animations / sounds on entities already loaded.
   if (event?.kind === "fact") {
     state.factDispatcher?.({ payload: { data: event.payload } });
+    // Every live fact is a candidate timeline mark — refresh.
+    _scheduleBranchBarRefresh();
     return;
   }
   if (_refetchTimer) return; // already scheduled
@@ -567,10 +579,25 @@ function handleDescriptorEvent(event) {
         resetCamera: false,
       });
       refreshAddressBar();
+      // Push the fresh descriptor into the timeline strip too so its
+      // marks reflect the just-landed facts.
+      state.branchBar?.update(desc);
     } catch (err) {
       console.warn("[3D] live refetch failed:", err);
     }
   }, 100); // debounce a touch so a flurry of patches collapses into one render
+}
+
+// Timeline strip refresh — debounced so a flurry of fact-arrival
+// pushes (e.g. a harmony dance floor ticking) collapses into one
+// SEE on the acts catalog rather than one per tick.
+let _branchBarRefreshTimer = null;
+function _scheduleBranchBarRefresh() {
+  if (_branchBarRefreshTimer) return;
+  _branchBarRefreshTimer = setTimeout(() => {
+    _branchBarRefreshTimer = null;
+    if (state.descriptor) state.branchBar?.update(state.descriptor);
+  }, 500);
 }
 
 // Async SUMMON reply arrives via `ibp:summon`. Bookkeeping only . the
@@ -671,6 +698,11 @@ async function navigate(address, { fromHistory = false } = {}) {
     const desc = await state.client.see(address, { live: true });
     state.descriptor = desc;
     state.currentAddress = address;
+    // Live navigate clears the historical visual cue — a rewind that
+    // landed here via timeline:rewind sets it; any plain navigate
+    // (address bar, child doorway, branch click) takes us to the
+    // present and the desaturation must drop.
+    _setHistoricalVisualCue(!!desc?.isHistorical);
     // Hand the current spaceId to the scene so the Move tool can
     // resolve "put down here in this space" without an extra
     // descriptor lookup.
@@ -724,7 +756,18 @@ async function navigate(address, { fromHistory = false } = {}) {
       state.client.do(selfStance, "set-being", {
         field: "position",
         value: desc.address.spaceId,
-      }).catch((err) => console.warn("[3D] set-being:position failed:", err?.message));
+      }).catch((err) => {
+        // Surface the failure to the HUD so silent rejections (auth,
+        // cross-branch, malformed stance) don't masquerade as "the
+        // portal isn't tracking my walks." This is the seam where
+        // every navigate stamps a position fact; if it's not landing
+        // on the reel the user reads "no timeline entries for home"
+        // and assumes the portal is broken — usually it's the DO
+        // bouncing here without anybody seeing the reason.
+        const msg = `${err?.code || ""} ${err?.message || err}`.trim();
+        console.warn("[3D] set-being:position failed:", msg);
+        setHud(`position write failed: ${msg}`);
+      });
     }
     _lastEmittedCoord = null;
     _startSelfPositionLoop();
@@ -754,6 +797,19 @@ async function navigate(address, { fromHistory = false } = {}) {
     // at substrate that no longer exists (DB reset, tombstone, etc.).
     throw err;
   }
+}
+
+// Past-view visual indicator. The user reads this in two ways:
+//   - canvas + scene: desaturated, so the 3D world reads as a
+//     memory rather than the present
+//   - HUD: a colored chip the user can't ignore
+// Both are applied via CSS classes set on <body>; scene.css and the
+// HUD-chip styles do the actual paint.
+function _setHistoricalVisualCue(on) {
+  if (typeof document === "undefined") return;
+  const cls = "ghost-view";
+  if (on) document.body.classList.add(cls);
+  else    document.body.classList.remove(cls);
 }
 
 function _syncLocationHash(desc) {

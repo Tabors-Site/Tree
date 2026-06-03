@@ -34,6 +34,28 @@ function assertType(type) {
   }
 }
 
+// Doctrine (locked with Tabor 2026-06-04): branch is a required argument
+// on every projection API. Internal callers MUST thread it explicitly.
+// Silent defaults to main were the failure mode — a caller forgot to
+// pass branch, the lookup landed on the wrong slot, and the user saw a
+// "ghost" state with no error. The IBP parser is the only layer
+// allowed to fill in absent branches (it resolves the wire-side default
+// to "0" at expandStance); every other layer downstream of that
+// resolution holds the value it was handed.
+//
+// `assertBranch` is the canonical check. It throws on any value that
+// isn't a non-empty string, so a function called with `undefined`,
+// `null`, or `""` fails loudly at the boundary instead of silently
+// hitting main.
+function assertBranch(branch) {
+  if (typeof branch !== "string" || !branch.length) {
+    throw new Error(
+      `projections: branch is required (got ${JSON.stringify(branch)}). ` +
+      `Internal callers must thread branch from the moment's summonCtx or the wire layer.`,
+    );
+  }
+}
+
 // ─────────────────────────────────────────────────────────────────────
 // Read / write a single slot
 // ─────────────────────────────────────────────────────────────────────
@@ -54,9 +76,10 @@ function assertType(type) {
  * @param {string} [branch="0"]
  * @returns {Promise<{state, foldedSeq, position, tombstoned, type, id, branch}|null>}
  */
-export async function loadProjection(type, id, branch = MAIN) {
+export async function loadProjection(type, id, branch) {
   if (!id) return null;
   assertType(type);
+  assertBranch(branch);
   const slot = await Projection.findById(projectionKey(branch, type, id)).lean();
   if (!slot) return null;
   return {
@@ -89,7 +112,8 @@ export async function loadProjection(type, id, branch = MAIN) {
  * @param {string} id
  * @param {string} [branch="0"]
  */
-export async function loadOrFold(type, id, branch = MAIN) {
+export async function loadOrFold(type, id, branch) {
+  assertBranch(branch);
   const existing = await loadProjection(type, id, branch);
   if (existing) return existing;
   // Cold-fold via the engine. fold writes to the branch slot via
@@ -122,6 +146,7 @@ export async function loadOrFold(type, id, branch = MAIN) {
 export async function saveProjection(type, id, branch, next, expectedFoldedSeq) {
   if (!id) return false;
   assertType(type);
+  assertBranch(branch);
   const { state = {}, foldedSeq, position } = next;
   if (typeof foldedSeq !== "number") {
     throw new Error("saveProjection: next.foldedSeq must be a number");
@@ -151,6 +176,7 @@ export async function saveProjection(type, id, branch, next, expectedFoldedSeq) 
 export async function initProjection(type, id, branch, next) {
   if (!id) throw new Error("initProjection: id is required");
   assertType(type);
+  assertBranch(branch);
   if (!next || typeof next !== "object") {
     throw new Error("initProjection: next object is required");
   }
@@ -193,6 +219,7 @@ export async function initProjection(type, id, branch, next) {
 export async function tombstoneProjection(type, id, branch, atFoldedSeq) {
   if (!id) throw new Error("tombstoneProjection: id is required");
   assertType(type);
+  assertBranch(branch);
   if (typeof atFoldedSeq !== "number") {
     throw new Error("tombstoneProjection: atFoldedSeq must be a number");
   }
@@ -228,8 +255,9 @@ export async function tombstoneProjection(type, id, branch, atFoldedSeq) {
  * @param {string} spaceId
  * @param {string} [branch="0"]
  */
-export async function findByPosition(spaceId, branch = MAIN) {
+export async function findByPosition(spaceId, branch) {
   if (!spaceId) return [];
+  assertBranch(branch);
   if (branch === MAIN) {
     const rows = await Projection.find({
       branch: MAIN, position: spaceId, tombstoned: { $ne: true },
@@ -273,8 +301,9 @@ export async function findByPosition(spaceId, branch = MAIN) {
  * @param {string} [branch="0"]
  * @returns {Promise<{state, foldedSeq, position, type, id, branch}|null>}
  */
-export async function findByName(type, name, branch = MAIN) {
+export async function findByName(type, name, branch) {
   assertType(type);
+  assertBranch(branch);
   if (!name) return null;
   // Branch-local match first (works for main too — main IS just-another-branch).
   const branchSlot = await Projection.findOne({
@@ -313,8 +342,9 @@ export async function findByName(type, name, branch = MAIN) {
  * @param {string} beingId
  * @param {string} [branch="0"]
  */
-export async function findByParent(beingId, branch = MAIN) {
+export async function findByParent(beingId, branch) {
   if (!beingId) return [];
+  assertBranch(branch);
   if (branch === MAIN) {
     const rows = await Projection.find({
       branch: MAIN, type: "being",
@@ -350,8 +380,9 @@ export async function findByParent(beingId, branch = MAIN) {
  * @param {"being"|"space"|"matter"} type
  * @param {string} [branch="0"]
  */
-export async function listByType(type, branch = MAIN) {
+export async function listByType(type, branch) {
   assertType(type);
+  assertBranch(branch);
   if (branch === MAIN) {
     const rows = await Projection.find({
       branch: MAIN, type, tombstoned: { $ne: true },
@@ -385,8 +416,9 @@ export async function listByType(type, branch = MAIN) {
  * @param {string} [branch="0"]
  * @returns {Promise<Array<{type, id, foldedSeq, position}>>}
  */
-export async function findRoot(type, branch = MAIN) {
+export async function findRoot(type, branch) {
   assertType(type);
+  assertBranch(branch);
   const parentField = type === "being" ? "state.parentBeingId" : "state.parent";
   const where = {
     branch, type,
@@ -409,8 +441,9 @@ export async function findRoot(type, branch = MAIN) {
  * @param {string} [branch="0"]
  * @returns {Promise<Array<{state, foldedSeq, position, type, id}>>}
  */
-export async function findByNamePattern(type, pattern, branch = MAIN) {
+export async function findByNamePattern(type, pattern, branch) {
   assertType(type);
+  assertBranch(branch);
   if (!pattern) return [];
   const re = pattern instanceof RegExp ? pattern : new RegExp(pattern);
   const rows = await Projection.find({
@@ -435,8 +468,9 @@ export async function findByNamePattern(type, pattern, branch = MAIN) {
  * @param {string} [branch="0"]
  * @returns {Promise<number>}
  */
-export async function countByType(type, branch = MAIN) {
+export async function countByType(type, branch) {
   assertType(type);
+  assertBranch(branch);
   return await Projection.countDocuments({
     branch, type, tombstoned: { $ne: true },
   });
@@ -449,8 +483,9 @@ export async function countByType(type, branch = MAIN) {
  * @param {string} [branch="0"]
  * @returns {Promise<number>}
  */
-export async function countByParent(beingId, branch = MAIN) {
+export async function countByParent(beingId, branch) {
   if (!beingId) return 0;
+  assertBranch(branch);
   return await Projection.countDocuments({
     branch, type: "being",
     "state.parentBeingId": beingId,
@@ -467,8 +502,9 @@ export async function countByParent(beingId, branch = MAIN) {
  * @param {string} [branch="0"]
  * @returns {Promise<Map<string, {state, foldedSeq, position, tombstoned, type, id, branch}>>}
  */
-export async function loadProjections(type, ids, branch = MAIN) {
+export async function loadProjections(type, ids, branch) {
   assertType(type);
+  assertBranch(branch);
   if (!Array.isArray(ids) || ids.length === 0) return new Map();
   const keys = ids.map((id) => projectionKey(branch, type, id));
   const rows = await Projection.find({ _id: { $in: keys } }).lean();
@@ -496,8 +532,9 @@ export async function loadProjections(type, ids, branch = MAIN) {
  * @param {string} [branch="0"]
  * @returns {Promise<{state, foldedSeq, position, type, id}|null>}
  */
-export async function findBySeedSpace(seedSpaceKind, branch = MAIN) {
+export async function findBySeedSpace(seedSpaceKind, branch) {
   if (!seedSpaceKind) return null;
+  assertBranch(branch);
   const slot = await Projection.findOne({
     branch, type: "space",
     "state.seedSpace": seedSpaceKind,
@@ -524,7 +561,8 @@ export async function findBySeedSpace(seedSpaceKind, branch = MAIN) {
  * @param {string} [branch="0"]
  * @returns {Promise<{id, name}|null>}
  */
-export async function findRootOperator(systemNames, branch = MAIN) {
+export async function findRootOperator(systemNames, branch) {
+  assertBranch(branch);
   // First find cherub's id (registered through findByName); main+branch.
   const cherubSlot = await findByName("being", "cherub", branch);
   const allowedParents = ["i-am"];

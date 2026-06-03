@@ -549,8 +549,16 @@ async function _branchHere() {
   if (!_state.atTimestamp) return;
   const parent = _state.timelineBranch || "0";
   try {
+    // Caller's socket is whatever branch they were viewing live last
+    // (rewinds don't move the socket). The cross-branch gate refuses
+    // DO when caller and target branches differ, so qualify the stance
+    // with the caller's branch — branch-manager being itself folds via
+    // lineage so it's reachable from any branch's slot.
+    const callerBranch =
+      window.state?.descriptor?.address?.branch || "0";
+    const callerBq = callerBranch === "0" ? "" : `#${callerBranch}`;
     const result = await _state.client.do(
-      `${_state.reality}/@branch-manager`,
+      `${_state.reality}${callerBq}/@branch-manager`,
       "create-branch",
       { parent, atTimestamp: _state.atTimestamp, label: null },
     );

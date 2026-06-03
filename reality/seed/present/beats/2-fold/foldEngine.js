@@ -109,7 +109,13 @@ function assertType(type) {
  * @param {string}      [branch="0"]     branch identifier (default "0" = main)
  * @returns {Promise<Array<object>>}
  */
-export async function readReelBetween(type, id, afterSeq, untilSeq, branch = MAIN) {
+export async function readReelBetween(type, id, afterSeq, untilSeq, branch) {
+  if (typeof branch !== "string" || !branch.length) {
+    throw new Error(
+      `readReelBetween: branch is required (got ${JSON.stringify(branch)}). ` +
+      `Pass the moment's branch explicitly; no silent default to main.`,
+    );
+  }
   // Main short-circuit: legacy data has no `branch` field on Fact.
   // Skip the branch filter entirely so pre-Pass-2 rows participate.
   if (isMain(branch)) {
@@ -205,7 +211,13 @@ export async function fold(type, id, opts = {}) {
   assertType(type);
   if (!id) throw new Error("fold: id is required");
   const skipCrossCutting = opts.skipCrossCutting === true;
-  const branch = opts.branch || MAIN;
+  if (typeof opts.branch !== "string" || !opts.branch.length) {
+    throw new Error(
+      `fold: opts.branch is required (got ${JSON.stringify(opts.branch)}). ` +
+      `Pass it from the fact's branch, summonCtx.branch, or the wire layer.`,
+    );
+  }
+  const branch = opts.branch;
 
   const slot = await loadProjection(type, id, branch);
   if (!slot) {
@@ -266,7 +278,13 @@ export async function rebuild(type, id, opts = {}) {
   assertType(type);
   if (!id) throw new Error("rebuild: id is required");
   const skipCrossCutting = opts.skipCrossCutting === true;
-  const branch = opts.branch || MAIN;
+  if (typeof opts.branch !== "string" || !opts.branch.length) {
+    throw new Error(
+      `rebuild: opts.branch is required (got ${JSON.stringify(opts.branch)}). ` +
+      `Pass it from the fact's branch, summonCtx.branch, or the wire layer.`,
+    );
+  }
+  const branch = opts.branch;
 
   const reducer = reducers.get(type);
   // Pass 2 substrate: readReelBetween with a branch returns the

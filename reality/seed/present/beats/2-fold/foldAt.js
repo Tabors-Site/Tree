@@ -122,19 +122,44 @@ export async function resolveUntil(type, id, until, opts = {}) {
   if (Number.isNaN(at.getTime())) {
     throw new Error(`resolveUntil: invalid atTimestamp "${until.atTimestamp}"`);
   }
-  // Branch-aware: the latest fact at-or-before the timestamp on the
-  // appropriate branch. Main has no `branch` field on legacy rows so
-  // we accept either branch="0" or absent.
+  // Branch-aware AND lineage-aware: the latest fact at-or-before the
+  // timestamp anywhere in the branch's inherited reel. For main this is
+  // just main's facts; for a child branch this is main up to the branch
+  // point + the branch's own divergent facts. Without the lineage walk,
+  // a past view on #1 where no divergent facts exist for the target
+  // returns null → foldAt throws → descriptor drops the row, and the
+  // entire scene empties out (the user's "grid spaces disappear in
+  // past view on #1" symptom).
   const branch = opts.branch || until.branch || "0";
-  const branchMatch = branch === "0"
-    ? { $or: [{ branch: "0" }, { branch: { $exists: false } }] }
-    : { branch };
+  if (branch === "0") {
+    const row = await Fact.findOne({
+      "target.kind": type,
+      "target.id":   id,
+      seq:           { $type: "number" },
+      date:          { $lte: at },
+      $or:           [{ branch: "0" }, { branch: { $exists: false } }],
+    })
+      .sort({ seq: -1 })
+      .select("seq")
+      .lean();
+    return row ? row.seq : null;
+  }
+  // Non-main: walk the lineage and union per-ancestor branchMatch
+  // clauses so a fact on the inherited prefix of main counts toward
+  // the branch's view at past time.
+  const { resolveBranchLineage, isMain } = await import("../../../materials/branch/branches.js");
+  const lineage = await resolveBranchLineage(branch);
+  const orClauses = lineage.map((b) =>
+    isMain(b)
+      ? { $or: [{ branch: "0" }, { branch: { $exists: false } }] }
+      : { branch: b },
+  );
   const row = await Fact.findOne({
     "target.kind": type,
     "target.id":   id,
     seq:           { $type: "number" },
     date:          { $lte: at },
-    ...branchMatch,
+    $or:           orClauses,
   })
     .sort({ seq: -1 })
     .select("seq")

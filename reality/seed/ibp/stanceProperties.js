@@ -85,8 +85,15 @@ const ARRIVAL_PROPS = Object.freeze({
 export async function deriveStanceProperties({ beingId, targetSpace, branch = "0" }) {
   if (!beingId) return { ...ARRIVAL_PROPS };
 
-  const { loadProjection } = await import("../materials/projections.js");
-  const slot = await loadProjection("being", beingId, branch);
+  // loadOrFold (not loadProjection): on a fresh branch the being's slot
+  // hasn't been cold-folded yet. A bare loadProjection returns null and
+  // this function falls back to ARRIVAL_PROPS — the user is silently
+  // treated as a stranger, loses reigning, loses owner/contributor
+  // relations, and gets denied at heaven on every branch they create.
+  // loadOrFold walks the lineage (branchPoint-respecting) so the slot
+  // resolves the same way it does on main.
+  const { loadOrFold } = await import("../materials/projections.js");
+  const slot = await loadOrFold("being", beingId, branch);
   if (!slot) return { ...ARRIVAL_PROPS, beingId };
   const being = { _id: slot.id, ...slot.state };
 

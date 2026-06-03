@@ -239,8 +239,8 @@ export async function plantSeed({
   if (!identity?.beingId)
     throw new Error("plantSeed requires identity.beingId");
 
-  const { loadProjection } = await import("./projections.js");
-  const targetSlot = await loadProjection("space", atSpaceId, summonCtx?.branch || "0");
+  const { loadOrFold } = await import("./projections.js");
+  const targetSlot = await loadOrFold("space", atSpaceId, summonCtx?.branch || "0");
   if (!targetSlot)
     throw new Error(`Target space ${String(atSpaceId).slice(0, 8)} not found`);
   const target = { _id: targetSlot.id, name: targetSlot.state?.name };
@@ -291,7 +291,7 @@ export async function plantSeed({
   // configured. Fact-driven: do.set on qualities.seeds. The do.plant
   // op caller threads summonCtx so the inner set Fact rides the
   // plant moment's actId.
-  const spaceSlot = await loadProjection("space", atSpaceId, summonCtx?.branch || "0");
+  const spaceSlot = await loadOrFold("space", atSpaceId, summonCtx?.branch || "0");
   const space = spaceSlot ? { _id: spaceSlot.id, ...spaceSlot.state } : null;
   if (space) {
     const currentSeeds = space.qualities instanceof Map

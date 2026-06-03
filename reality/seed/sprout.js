@@ -352,6 +352,9 @@ export async function ensureSpaceRoot(summonCtx) {
         },
       },
       actId: summonCtx.actId,
+      // Genesis runs on main by definition — there are no other branches
+      // at this point in time. Explicit value, not a default.
+      branch: "0",
     }, summonCtx);
     // Row doesn't exist yet (the moment hasn't sealed). The boot
     // moment's subsequent steps read the planned id, not the row.
@@ -586,6 +589,8 @@ async function ensureIAm(homeSpaceId, summonCtx) {
       },
     },
     actId: summonCtx.actId,
+    // Genesis is main-only — I_AM births before any branch exists.
+    branch: "0",
   }, summonCtx);
 
   // The Being row materializes when the boot moment seals. Return a

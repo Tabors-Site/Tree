@@ -141,19 +141,18 @@ FactSchema.index({ "target.kind": 1, "target.id": 1, date: -1 }, { sparse: true 
 FactSchema.index({ "target.kind": 1, "target.id": 1, seq: 1 }, {                     // a target's reel (seq-ordered, fold path; main / branch-implicit)
   partialFilterExpression: { seq: { $type: "number" } },
 });
-FactSchema.index({ "target.kind": 1, "target.id": 1, seq: 1 }, {                     // per-reel uniqueness backstop
+// Per-reel uniqueness backstop — branch-aware. Reel identity is
+// (branch, target.kind, target.id); seq is per-reel. The old
+// branch-blind unique index collided whenever main and a branch
+// both held seq N on the same target, even though they're separate
+// reels. The unique constraint MUST include branch.
+//
+// Old index name `target_seq_unique` (without branch) is dropped at
+// startup by the index-sync repair to release the collision.
+FactSchema.index({ branch: 1, "target.kind": 1, "target.id": 1, seq: 1 }, {
   unique: true,
   partialFilterExpression: { seq: { $type: "number" } },
-  name: "target_seq_unique",
-});
-// Branch-aware reel scan. Non-main reads filter by branch first then
-// walk seq within that branch's owned range. Main reads still hit the
-// older (target.kind, target.id, seq) index via Mongo's selectivity
-// choice; this index is reserved for queries that explicitly filter
-// by branch.
-FactSchema.index({ branch: 1, "target.kind": 1, "target.id": 1, seq: 1 }, {
-  partialFilterExpression: { seq: { $type: "number" } },
-  name: "branch_target_seq",
+  name: "branch_target_seq_unique",
 });
 FactSchema.index({ actId: 1 }, { sparse: true });                                 // facts within a summon
 FactSchema.index({ verb: 1, action: 1, date: -1 });                                  // "every register, newest first"

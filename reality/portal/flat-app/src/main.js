@@ -219,24 +219,28 @@ function wireKeyboardShortcuts() {
       if (gTimer) { clearTimeout(gTimer); gTimer = null; }
       const reality = state.discovery?.reality;
       if (!reality) return;
+      // Keyboard shortcuts stay on the current branch — pressing g h on
+      // #1 should land on #1's home, not silently flip back to main.
+      const branch = state.descriptor?.address?.branch || "0";
+      const bq = branch === "0" ? "" : `#${branch}`;
       if (ev.key === "h") {
         ev.preventDefault();
-        location.hash = `#${reality}/`;
+        location.hash = `#${reality}${bq}/`;
       } else if (ev.key === "b") {
         ev.preventDefault();
-        location.hash = `#${reality}/.beings`;
+        location.hash = `#${reality}${bq}/.beings`;
       } else if (ev.key === "o") {
         ev.preventDefault();
-        location.hash = `#${reality}/./operations`;
+        location.hash = `#${reality}${bq}/./operations`;
       } else if (ev.key === "r") {
         ev.preventDefault();
-        location.hash = `#${reality}/./roles`;
+        location.hash = `#${reality}${bq}/./roles`;
       } else if (ev.key === "t") {
         ev.preventDefault();
-        location.hash = `#${reality}/./threads`;
+        location.hash = `#${reality}${bq}/./threads`;
       } else if (ev.key === "i" && state.session?.username) {
         ev.preventDefault();
-        location.hash = `#${reality}/~`;
+        location.hash = `#${reality}${bq}/~`;
       }
     }
   });

@@ -109,7 +109,8 @@ export async function doVerb(target, operation, params = {}, opts = {}) {
     // reality-root default `do.*` fallback) the same way it would for
     // a direct space target.
     const auditTarget = resolveAuditTarget(target, null, op);
-    const spaceIdForAuth = await resolveAuthSpaceId(target, auditTarget);
+    const authBranch = opts.summonCtx?.branch || "0";
+    const spaceIdForAuth = await resolveAuthSpaceId(target, auditTarget, authBranch);
     // Extract namespace for namespace-aware authorization. Three
     // forms handled: legacy set-qualities/clear-qualities (params.namespace),
     // and the material-scoped set-<kind> ops with
@@ -235,7 +236,7 @@ doVerb.listOperations = listOperations;
  * Returns null when nothing resolves (rare; the auth chain falls
  * through to the reality root via getSpaceRootId in findMatchingRule).
  */
-async function resolveAuthSpaceId(target, auditTarget) {
+async function resolveAuthSpaceId(target, auditTarget, branch) {
   // The audit target's kind tells us what to look up. When the
   // op-handler already returned a kind (via result._factTarget or
   // schema-typed shapes), trust it.
@@ -244,24 +245,39 @@ async function resolveAuthSpaceId(target, auditTarget) {
   if (!id) return null;
 
   if (kind === "space") return id;
-  const { loadProjection } = await import("../../materials/projections.js");
+  // loadOrFold (not loadProjection): on a fresh branch the target's
+  // slot hasn't been cold-folded yet. resolveAuthSpaceId returning null
+  // sends authorize() to "no space, no rule" which denies the write.
+  // Walking the lineage gets the same answer the user gets on main
+  // until they explicitly diverge.
+  const { loadOrFold } = await import("../../materials/projections.js");
+
+  // Branch is required — strict-default doctrine. Authorize walks
+  // permissions on the branch the act is happening on; reading the
+  // wrong branch's slot returns the wrong position and the wrong
+  // ancestor chain, which silently rejects writes that should pass.
+  if (typeof branch !== "string" || !branch.length) {
+    throw new Error(
+      `resolveAuthSpaceId: branch is required (got ${JSON.stringify(branch)})`,
+    );
+  }
 
   // For being/matter, look up the live slot's position / spaceId.
   if (kind === "being") {
-    const slot = await loadProjection("being", id, "0");
+    const slot = await loadOrFold("being", id, branch);
     return slot?.position || slot?.state?.homeSpace || null;
   }
   if (kind === "matter") {
-    const slot = await loadProjection("matter", id, "0");
+    const slot = await loadOrFold("matter", id, branch);
     return slot?.state?.spaceId ? String(slot.state.spaceId) : null;
   }
 
   // Kind unknown. Probe each type in order.
-  const spaceSlot = await loadProjection("space", id, "0");
+  const spaceSlot = await loadOrFold("space", id, branch);
   if (spaceSlot) return String(spaceSlot.id);
-  const beingSlot = await loadProjection("being", id, "0");
+  const beingSlot = await loadOrFold("being", id, branch);
   if (beingSlot) return beingSlot.position || beingSlot.state?.homeSpace || null;
-  const matterSlot = await loadProjection("matter", id, "0");
+  const matterSlot = await loadOrFold("matter", id, branch);
   if (matterSlot) return matterSlot.state?.spaceId ? String(matterSlot.state.spaceId) : null;
   return null;
 }

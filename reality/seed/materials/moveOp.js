@@ -94,16 +94,16 @@ async function moveHandler({ target, params }) {
   // params.fromSpaceId to fire the invalidate without an extra
   // post-fold query.
   let fromSpaceId = null;
-  const { loadProjection } = await import("./projections.js");
+  const { loadOrFold } = await import("./projections.js");
   const branch = opts?.summonCtx?.branch || "0";
   if (kind === "space") {
-    const slot = await loadProjection("space", targetId, branch);
+    const slot = await loadOrFold("space", targetId, branch);
     if (!slot) {
       throw new IbpError(IBP_ERR.SPACE_NOT_FOUND, `move: space "${targetId}" not found`);
     }
     fromSpaceId = slot.state?.parent ? String(slot.state.parent) : null;
   } else {
-    const slot = await loadProjection("matter", targetId, branch);
+    const slot = await loadOrFold("matter", targetId, branch);
     if (!slot) {
       throw new IbpError(IBP_ERR.INVALID_INPUT, `move: matter "${targetId}" not found`);
     }
@@ -121,7 +121,7 @@ async function moveHandler({ target, params }) {
   if (coord) {
     const containerId = fromSpaceId;
     if (containerId) {
-      const containerSlot = await loadProjection("space", containerId, branch);
+      const containerSlot = await loadOrFold("space", containerId, branch);
       const size = containerSlot?.state?.size || null;
       if (size) {
         for (const axis of ["x", "y", "z"]) {

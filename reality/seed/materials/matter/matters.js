@@ -38,7 +38,7 @@ import { fileURLToPath } from "url";
 import { v4 as uuidv4 } from "uuid";
 import Matter from "./matter.js";
 import Space from "../space/space.js";
-import { loadProjection } from "../projections.js";
+import { loadProjection, loadOrFold } from "../projections.js";
 import Fact from "../../past/fact/fact.js";
 import { emitFact, sealFacts } from "../../past/fact/facts.js";
 import { escapeRegex } from "../../utils.js";
@@ -130,9 +130,9 @@ async function createMatter({
   }
   const branch = summonCtx?.branch || "0";
 
-  const { loadProjection } = await import("../projections.js");
+  const { loadOrFold } = await import("../projections.js");
   const { default: Projection } = await import("../branch/projection.js");
-  const _spaceSlot = await loadProjection("space", spaceId, branch);
+  const _spaceSlot = await loadOrFold("space", spaceId, branch);
   const targetSpace = _spaceSlot ? {
     seedSpace: _spaceSlot.state?.seedSpace,
     parent:    _spaceSlot.state?.parent,
@@ -252,7 +252,7 @@ async function editMatter({
   if (!matterId || !beingId) throw new Error("Missing required fields");
 
   const branch = summonCtx?.branch || "0";
-  const _matterSlot = await loadProjection("matter", matterId, branch);
+  const _matterSlot = await loadOrFold("matter", matterId, branch);
   if (!_matterSlot) throw new Error("Matter not found");
   const matter = { _id: _matterSlot.id, ...(_matterSlot.state || {}) };
   if (matter.beingId.toString() !== beingId.toString()) throw new Error("Unauthorized");
@@ -379,7 +379,7 @@ async function deleteMatterAndFile({
   summonCtx = null,
 }) {
   const branch = summonCtx?.branch || "0";
-  const _mSlot = await loadProjection("matter", matterId, branch);
+  const _mSlot = await loadOrFold("matter", matterId, branch);
   if (!_mSlot) throw new Error("Matter not found");
   const matter = { _id: _mSlot.id, ...(_mSlot.state || {}) };
 
@@ -466,7 +466,7 @@ async function transferMatter({
   }
 
   const branch = summonCtx?.branch || "0";
-  const _mSlot2 = await loadProjection("matter", matterId, branch);
+  const _mSlot2 = await loadOrFold("matter", matterId, branch);
   if (!_mSlot2) throw new Error("Matter not found");
   const matter = { _id: _mSlot2.id, ...(_mSlot2.state || {}) };
   if (matter.spaceId === DELETED) throw new Error("Cannot transfer deleted matter");
@@ -478,7 +478,7 @@ async function transferMatter({
     throw new Error("Only the matter author or the tree owner can transfer this matter");
   }
 
-  const _tSlot = await loadProjection("space", targetSpace, branch);
+  const _tSlot = await loadOrFold("space", targetSpace, branch);
   if (!_tSlot) throw new Error("Target Space not found");
 
   const targetRoot = await resolveRootSpace(targetSpace);
@@ -704,7 +704,7 @@ async function listMattersAt(spaceId, { limit = 50, branch = "0" } = {}) {
 async function getMatter(matterId, opts = {}) {
   if (!matterId || typeof matterId !== "string") return null;
   const branch = opts?.branch || "0";
-  const slot = await loadProjection("matter", matterId, branch);
+  const slot = await loadOrFold("matter", matterId, branch);
   if (!slot) return null;
   return { _id: slot.id, ...(slot.state || {}) };
 }

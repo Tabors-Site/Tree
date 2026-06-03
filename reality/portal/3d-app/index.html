@@ -176,6 +176,31 @@
       #hotbar-tooltip .tt-title { color: #c8d3cb; font-weight: 500; margin-bottom: 2px; }
       #hotbar-tooltip .tt-name { color: #6b7d72; font-family: ui-monospace, monospace; font-size: 10px; margin-bottom: 6px; }
       #hotbar-tooltip .tt-desc { color: #9ab0a3; }
+
+      /* Past-view visual cue. body.ghost-view is set by main.js when
+         the descriptor is historical (timeline rewind landed at a past
+         moment). Desaturation makes the world read as a memory; a
+         labeled chip in the top-right reinforces it so the user can
+         never forget they're looking at the past. */
+      body.ghost-view canvas#scene {
+        filter: grayscale(1) brightness(0.85);
+      }
+      body.ghost-view::after {
+        content: "GHOST VIEW · viewing the past";
+        position: fixed;
+        top: 16px;
+        right: 16px;
+        z-index: 50;
+        background: rgba(20, 12, 4, 0.85);
+        color: #e8b762;
+        border: 1px solid #6b5320;
+        border-radius: 4px;
+        padding: 6px 12px;
+        font: 600 11px ui-monospace, monospace;
+        letter-spacing: 0.05em;
+        pointer-events: none;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+      }
     </style>
   </head>
   <body>

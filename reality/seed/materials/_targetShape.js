@@ -128,7 +128,13 @@ export async function loadTargetRow(target, expectedKind, { summonCtx = null } =
   // branch via summonCtx; handlers get a row-shaped view scoped to
   // that branch.
   const branch = summonCtx?.branch || "0";
-  const { loadProjection, findByName } = await import("./projections.js");
+  // loadOrFold (not loadProjection): every DO/BE/SUMMON op flows through
+  // loadTargetRow. On a fresh branch the target's slot hasn't been
+  // cold-folded yet — bare loadProjection returns null, the handler
+  // throws "target not found," and the user can't act on their OWN
+  // being or anything else inherited from main. loadOrFold walks the
+  // lineage so branch-N targets resolve transparently from main.
+  const { loadOrFold, findByName } = await import("./projections.js");
 
   // Stance-target shortcut for being-loading ops. The IBP resolver
   // hands the verb a stance object carrying `{ chain, spaceId, being }`;
@@ -168,7 +174,7 @@ export async function loadTargetRow(target, expectedKind, { summonCtx = null } =
     );
   }
 
-  const slot = await loadProjection(expectedKind, id, branch);
+  const slot = await loadOrFold(expectedKind, id, branch);
   if (slot) return { _id: slot.id, position: slot.position, ...(slot.state || {}) };
 
   // Row absent — check the moment's deltaF for a pending create-<kind>

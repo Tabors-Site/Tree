@@ -109,16 +109,24 @@ export async function logFact(input, opts = {}) {
     homeReality = null,
     wasRemote = false,
     foldSeq = null,
-    // Branch this fact lives in. Default `"0"` (main). Callers that
-    // know they're acting in a non-main branch pass the branch path
-    // from summonCtx.branch. The cross-branch dispatch gate (Pass 4)
-    // enforces single-branch moments before this fact ever reaches
-    // logFact, so by the time we're here the branch is settled.
-    branch = "0",
+    // Branch this fact lives on. REQUIRED — no silent default. The
+    // cross-branch dispatch gate (Pass 4) settled the branch before the
+    // fact ever reaches logFact; if it's missing here, a caller forgot
+    // to thread summonCtx.branch and the fact would silently land on
+    // main. Throw loudly so the offender shows up in stacks instead
+    // of producing a "ghost" main-branch write nobody asked for.
+    branch,
   } = input;
 
   if (!beingId || !action) {
     throw new Error("logFact requires beingId and action");
+  }
+  if (typeof branch !== "string" || !branch.length) {
+    throw new Error(
+      `logFact: branch is required (got ${JSON.stringify(branch)}). ` +
+      `Thread it from summonCtx.branch (in-moment), the wire layer (entry-point), ` +
+      `or pass "0" explicitly for genesis/scaffold paths.`,
+    );
   }
   if (typeof action !== "string" || action.length > MAX_ACTION_LENGTH) {
     throw new Error(
@@ -261,8 +269,14 @@ export async function logFact(input, opts = {}) {
         await withReelLock(finalTarget.kind, finalTarget.id, runAppend);
       }
     } catch (err) {
-      log.error("DB", `Fact append failed (${action} on ${finalTarget.kind}:${finalTarget.id}): ${err.message}`);
-      throw new Error("Failed to stamp Fact");
+      log.error("DB", `Fact append failed (${action} on ${finalTarget.kind}:${finalTarget.id} branch=${branch}): ${err.message}`);
+      // Carry the underlying message + code through so callers see the
+      // actual cause (E11000 duplicate, missing index, schema validation)
+      // instead of the bare "Failed to stamp Fact" wrapper.
+      const wrapped = new Error(`Failed to stamp Fact (${branch}:${finalTarget.kind}:${finalTarget.id} ${action}): ${err.message}`);
+      wrapped.cause = err;
+      if (err?.code) wrapped.code = err.code;
+      throw wrapped;
     }
 
     // Eager-fold. Per STAMPER.md Decision: "eager-fold is an inline
@@ -278,7 +292,10 @@ export async function logFact(input, opts = {}) {
     if (!skipEagerFold) {
       try {
         const { fold } = await import("../../present/beats/2-fold/foldEngine.js");
-        await fold(finalTarget.kind, finalTarget.id);
+        // Fold runs on the SAME branch the fact landed on. Without
+        // threading branch the fold engine throws "branch is required"
+        // (post-doctrine-shift) and the seal aborts.
+        await fold(finalTarget.kind, finalTarget.id, { branch });
       } catch (err) {
         // Self-healing: the next fold catches up. Log but don't throw —
         // the fact is the source of truth and is already on disk.
@@ -369,13 +386,18 @@ export function groupByReel(deltaF) {
   for (const spec of deltaF) {
     const target = spec?.target;
     if (target && REEL_KINDS.has(target.kind) && target.id) {
-      // Reel identity is now (branch, kind, id). A fact on branch=1
+      // Reel identity is (branch, kind, id). A fact on branch=1
       // targeting being:X writes a different reel than a fact on
-      // branch=0 targeting the same being. The post-commit fold needs
-      // the branch dimension to land on the right projection slot.
-      const branch = typeof spec.branch === "string" && spec.branch
-        ? spec.branch
-        : "0";
+      // branch=0 targeting the same being. logFact already required
+      // branch upstream, so here we hold the caller to it — no silent
+      // remap to main. If branch is absent we throw rather than guess.
+      if (typeof spec.branch !== "string" || !spec.branch.length) {
+        throw new Error(
+          `groupByReel: fact spec is missing branch (${spec.verb}:${spec.action} on ` +
+          `${target.kind}:${String(target.id).slice(0,8)}). Upstream caller must thread it.`,
+        );
+      }
+      const branch = spec.branch;
       const key = `${branch}:${target.kind}:${target.id}`;
       const entry = factsByReel.get(key)
         || { branch, kind: target.kind, id: String(target.id), facts: [] };

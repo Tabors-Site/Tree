@@ -270,27 +270,43 @@ export async function sealAct(plannedAct, { content = null, deltaF = [], afterSe
         const field = f.params.field;
         const factBranch = f?.branch || "0";
         const spaceId = await resolveSpaceForLiveSee(target, factBranch);
-        const payload = {
-          target,
-          field,
-          value: f.params.value,
-          beingId: baseBeing,
-          actId: baseActId,
-          spaceId,
-          // Branch this write happened on. Live-SEE subscribers filter
-          // by branch on their end so a write on #1 doesn't invalidate
-          // subscribers viewing main, and vice versa.
-          branch: factBranch,
-        };
-        try {
-          if (field.startsWith("qualities.")) {
-            payload.ns = field.slice("qualities.".length).split(".")[0];
-            await hooks.run("afterQualityWrite", payload);
-          } else {
-            await hooks.run("afterFieldWrite", payload);
+        // Position changes need BOTH the old and new rooms to invalidate
+        // so the room the being LEFT also refreshes. set-being's handler
+        // captures the prior position into params.fromPosition; the
+        // fold by this point has already updated the slot to the new
+        // value, so resolveSpaceForLiveSee returns the new room.
+        const isPositionChange =
+          action === "set-being" && field === "position";
+        const fromSpaceId =
+          isPositionChange && typeof f?.params?.fromPosition === "string"
+            ? f.params.fromPosition
+            : null;
+        const spaceIds = fromSpaceId && fromSpaceId !== spaceId
+          ? [spaceId, fromSpaceId]
+          : [spaceId];
+        for (const sid of spaceIds) {
+          const payload = {
+            target,
+            field,
+            value: f.params.value,
+            beingId: baseBeing,
+            actId: baseActId,
+            spaceId: sid,
+            // Branch this write happened on. Live-SEE subscribers filter
+            // by branch on their end so a write on #1 doesn't invalidate
+            // subscribers viewing main, and vice versa.
+            branch: factBranch,
+          };
+          try {
+            if (field.startsWith("qualities.")) {
+              payload.ns = field.slice("qualities.".length).split(".")[0];
+              await hooks.run("afterQualityWrite", payload);
+            } else {
+              await hooks.run("afterFieldWrite", payload);
+            }
+          } catch (err) {
+            log.warn("Stamped", `field-write hook fan failed: ${err.message}`);
           }
-        } catch (err) {
-          log.warn("Stamped", `field-write hook fan failed: ${err.message}`);
         }
         continue;
       }
@@ -331,6 +347,44 @@ export async function sealAct(plannedAct, { content = null, deltaF = [], afterSe
           } catch (err) {
             log.warn("Stamped", `move hook fan failed: ${err.message}`);
           }
+        }
+        continue;
+      }
+
+      // create-space / end-space inside a moment fire afterSpaceCreate /
+      // afterSpaceDelete here, post-seal — the in-moment helper in
+      // spaces.js can't fire them inline because the row isn't yet
+      // materialized at that point and subscribers refetching too early
+      // would miss it. The protocols/ibp/index.js handler reads
+      // `space.parent` off the payload to invalidate the parent's
+      // descriptor — the spec carries it, so we don't need the slot.
+      if (action === "create-space" && f?.params?.spec) {
+        try {
+          await hooks.run("afterSpaceCreate", {
+            space: {
+              _id:    String(target.id),
+              parent: f.params.spec.parent ?? null,
+              name:   f.params.spec.name ?? null,
+            },
+            beingId: baseBeing,
+            // Branch the create happened on. Live-SEE filters by branch
+            // so a #1 create doesn't invalidate main subscribers.
+            branch:  f?.branch || "0",
+          });
+        } catch (err) {
+          log.warn("Stamped", `afterSpaceCreate hook fan failed: ${err.message}`);
+        }
+        continue;
+      }
+      if (action === "end-space") {
+        try {
+          await hooks.run("afterSpaceDelete", {
+            space: { _id: String(target.id) },
+            beingId: baseBeing,
+            branch:  f?.branch || "0",
+          });
+        } catch (err) {
+          log.warn("Stamped", `afterSpaceDelete hook fan failed: ${err.message}`);
         }
         continue;
       }

@@ -538,8 +538,19 @@ async function placeAtSpace(resolved, { identity, payload, until = null, branch 
   // to its reel head so any bypass write (legacy qualities.js direct
   // path) gets overwritten on the next round, and the descriptor's
   // exposed qualities are the fact-chain's truth.
+  //
+  // CRITICAL: foldRead returns the slot's `state` object — name, parent,
+  // qualities, etc. — but NOT `_id` (which rides at the slot level, not
+  // inside state). Without re-attaching `resolved.leafSpace._id` here,
+  // every downstream `space._id` read returns undefined: the descriptor
+  // surfaces `address.spaceId = undefined`, the portal's
+  // set-being:position fires with the wrong value (often coerced to a
+  // sibling space's id), occupant queries miss, and the user keeps
+  // showing up at the wrong room every navigate.
   const folded = await foldRead("space", resolved.leafSpace._id, until, branch);
-  const space = folded || resolved.leafSpace;
+  const space = folded
+    ? { _id: resolved.leafSpace._id, ...folded }
+    : resolved.leafSpace;
 
   const pathByNames = "/" + resolved.chain.map((c) => c.name).join("/");
   const pathByIds   = "/" + resolved.chain.map((c) => c.id).join("/");

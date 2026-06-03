@@ -74,8 +74,8 @@ async function assertCoordInBounds(beingDoc, raw, branch = "0") {
   }
   const spaceId = beingDoc?.position || beingDoc?.homeSpace || null;
   if (!spaceId) return out;
-  const { loadProjection } = await import("../projections.js");
-  const _sSlot = await loadProjection("space", spaceId, branch);
+  const { loadOrFold } = await import("../projections.js");
+  const _sSlot = await loadOrFold("space", spaceId, branch);
   const space = _sSlot ? { size: _sSlot.state?.size } : null;
   const size = space?.size || null;
   if (!size) return out;
@@ -218,7 +218,17 @@ async function setOnBeingHandler({ target, params, summonCtx }) {
     if (value !== null && typeof value !== "string") {
       throw new Error("set-being: `position` value must be a spaceId string or null");
     }
-    return { beingId: String(target._id), position: value };
+    // Capture the OLD position into the fact's params so the live-SEE
+    // hook fan can invalidate BOTH rooms — the one the being left and
+    // the one they entered. Without this, anyone subscribed to the old
+    // room sees a "ghost being" still sitting there until they refetch
+    // manually (the bug that made the 2D flat app show tabor at root
+    // while the 3D portal had already walked him into a tree).
+    const fromPosition = target?.position ? String(target.position) : null;
+    if (fromPosition && fromPosition !== value) {
+      params.fromPosition = fromPosition;
+    }
+    return { beingId: String(target._id), position: value, fromPosition };
   }
 
   // coord: the being's coord inside its position space. Shape `{ x, y, z? }`

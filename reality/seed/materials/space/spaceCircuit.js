@@ -186,6 +186,9 @@ export async function tripTree(treeId, reason, scores = {}) {
     beingId: I_AM,
     target:  { kind: "space", id: String(treeId) },
     params:  { field: "qualities.circuit", value: circuit, merge: false },
+    // Circuit-trip job runs on main; tree-level health is a place-wide
+    // concern, not a branch-divergent one.
+    branch:  "0",
   }, null);
   invalidateSpace(treeId);
 
@@ -226,6 +229,8 @@ export async function reviveTree(treeId, beingId) {
     beingId: String(beingId),
     target:  { kind: "space", id: String(treeId) },
     params:  { field: "qualities.circuit", value: { tripped: false }, merge: false },
+    // Same place-wide concern as the trip emit above.
+    branch:  "0",
   }, null);
   invalidateSpace(treeId);
 

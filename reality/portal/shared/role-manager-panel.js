@@ -241,7 +241,8 @@ function renderCreateRoleSection(catalogs, ctx, onCreated) {
     submit.disabled = true;
     status.textContent = "saving...";
     try {
-      const stance = `${ctx.reality}/@role-manager`;
+      const bq = ctx.branch && ctx.branch !== "0" ? `#${ctx.branch}` : "";
+      const stance = `${ctx.reality}${bq}/@role-manager`;
       await ctx.doOp(stance, "set-role", {
         name:              nameInput.input.value.trim(),
         requiredCognition: cognitionSelect.input.value || "",
@@ -399,7 +400,7 @@ async function renderFlowEditorSection(allRoles, ctx) {
   return renderFlowEditor(allRoles, ctx, {
     headerLabel:    "your role flow",
     initialFlow:    flow,
-    targetStance:   `${ctx.reality}/@${ctx.username}`,
+    targetStance:   `${ctx.reality}${ctx.branch && ctx.branch !== "0" ? `#${ctx.branch}` : ""}/@${ctx.username}`,
   });
 }
 
@@ -800,10 +801,11 @@ function renderDefaultRow(draft, allRoles, onChange) {
 // which lives on her being at her home space.
 
 async function loadFlowForSelf(ctx) {
-  const { reality, username, see } = ctx || {};
+  const { reality, username, branch, see } = ctx || {};
   if (!reality || !username || typeof see !== "function") return [];
   try {
-    const desc = await see(`${reality}/@${username}`);
+    const bq = branch && branch !== "0" ? `#${branch}` : "";
+    const desc = await see(`${reality}${bq}/@${username}`);
     const myId = desc.identity?.beingId || null;
     const pool = [].concat(desc.beings || [], desc.residents || []);
     const mine = (myId && pool.find((b) => String(b.beingId) === String(myId)))

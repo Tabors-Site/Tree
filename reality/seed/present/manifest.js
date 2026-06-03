@@ -48,6 +48,7 @@ async function createChildByFact({ parentId, name, type, qualities, summonCtx })
       },
     },
     actId: summonCtx.actId,
+    branch: summonCtx?.branch || "0",
   }, summonCtx);
   return id;
 }
@@ -63,8 +64,9 @@ async function refreshQualitiesByFact(spaceId, qualities, summonCtx) {
   if (entries.length === 0) return;
   const { doVerb } = await import("../ibp/verbs/do.js");
   const { loadProjection } = await import("../materials/projections.js");
+  const branch = summonCtx?.branch || "0";
   for (const [ns, value] of entries) {
-    const refreshed = await loadProjection("space", spaceId, "0");
+    const refreshed = await loadProjection("space", spaceId, branch);
     if (!refreshed) return;
     await doVerb(
       { kind: "space", id: String(refreshed.id) },

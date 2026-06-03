@@ -180,8 +180,12 @@ export function assertValidSpaceType(raw) {
 
 async function getBeingOrThrow(beingId, branch = "0") {
   if (!beingId) throw new Error("beingId is required");
-  const { loadProjection } = await import("../projections.js");
-  const slot = await loadProjection("being", beingId, branch);
+  // loadOrFold so a being created in main is visible from any branch
+  // before it's been touched there. Without this, the user's first
+  // create-space on a fresh branch throws "Being not found" because
+  // their being slot hasn't been cold-folded onto the branch yet.
+  const { loadOrFold } = await import("../projections.js");
+  const slot = await loadOrFold("being", beingId, branch);
   if (!slot) throw new Error("Being not found");
   return { _id: slot.id, position: slot.position, ...slot.state };
 }
@@ -572,6 +576,9 @@ export async function createRealitySeedSpace({
       },
     },
     actId: summonCtx.actId,
+    // Boot-seed helper — runs inside the genesis moment. Genesis is
+    // main-only; explicit value, not a silent default.
+    branch: summonCtx?.branch || "0",
   }, summonCtx);
 
   // Row materializes at boot seal. Return a pending shape so the

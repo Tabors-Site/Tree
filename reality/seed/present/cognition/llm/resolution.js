@@ -73,8 +73,8 @@ async function walkBeingChain(rootBeing, branch = "0") {
     const id = String(curId);
     if (seen.has(id)) break;
     seen.add(id);
-    const { loadProjection } = await import("../../../materials/projections.js");
-    const slot = await loadProjection("being", id, branch).catch(() => null);
+    const { loadOrFold } = await import("../../../materials/projections.js");
+    const slot = await loadOrFold("being", id, branch).catch(() => null);
     if (!slot) break;
     const parent = { _id: slot.id, ...slot.state };
     chain.push(parent);
@@ -95,8 +95,8 @@ async function spaceChainResolve(spaceId, slot, branch = "0") {
   try {
     chain = await getAncestorChain(spaceId);
   } catch {
-    const { loadProjection } = await import("../../../materials/projections.js");
-    const slotProj = await loadProjection("space", spaceId, branch);
+    const { loadOrFold } = await import("../../../materials/projections.js");
+    const slotProj = await loadOrFold("space", spaceId, branch);
     const single = slotProj ? { _id: slotProj.id, ...slotProj.state } : null;
     chain = single ? [single] : [];
   }
@@ -152,8 +152,8 @@ export async function resolveLlmConnection({
 } = {}) {
   let being = null;
   if (beingId) {
-    const { loadProjection } = await import("../../../materials/projections.js");
-    const slotProj = await loadProjection("being", beingId, branch).catch(() => null);
+    const { loadOrFold } = await import("../../../materials/projections.js");
+    const slotProj = await loadOrFold("being", beingId, branch).catch(() => null);
     being = slotProj ? { _id: slotProj.id, ...slotProj.state } : null;
   }
   const beingChain = await walkBeingChain(being, branch);

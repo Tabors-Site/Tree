@@ -435,8 +435,8 @@ async function walkAncestorsWithDeltaF(spaceId, summonCtx) {
     seen.add(cursor);
     path.push(cursor);
 
-    const { loadProjection } = await import("../materials/projections.js");
-    const _slot = await loadProjection("space", cursor, summonCtx?.branch || "0");
+    const { loadOrFold } = await import("../materials/projections.js");
+    const _slot = await loadOrFold("space", cursor, summonCtx?.branch || "0");
     const row = _slot ? { parent: _slot.state?.parent } : null;
     if (row) {
       // Mongo has the row — defer the rest of the walk to the cache.
@@ -472,8 +472,14 @@ async function walkAncestorsWithDeltaF(spaceId, summonCtx) {
 }
 
 async function matchOnSpace(spaceId, verb, keyParts, branch = "0") {
-  const { loadProjection } = await import("../materials/projections.js");
-  const slot = await loadProjection("space", spaceId, branch);
+  // loadOrFold (not loadProjection): on a fresh branch the space's slot
+  // hasn't been cold-folded yet. A bare loadProjection returns null,
+  // matchOnSpace finds no permissions, and the ancestor walk falls
+  // through to "no rule" — denying writes (and heaven access) the
+  // user has on main. loadOrFold walks lineage so branch-1 sees main's
+  // permissions until they get explicitly overridden.
+  const { loadOrFold } = await import("../materials/projections.js");
+  const slot = await loadOrFold("space", spaceId, branch);
   const quals = slot?.state?.qualities;
   if (!quals) return null;
   const perms =

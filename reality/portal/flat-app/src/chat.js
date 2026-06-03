@@ -32,7 +32,12 @@ export function openChatFor(beingEntry, { refresh = false } = {}) {
   if (!reality) return;
 
   const path = fl.descriptor?.address?.pathByNames || "/";
-  const stance = `${reality}${path}@${beingEntry.being}`.replace(/\/+@/, "/@");
+  // Carry the active branch qualifier through; otherwise a chat opened
+  // on #1 silently addresses the same name on main and the cross-branch
+  // gate rejects (or worse, hits a different being with the same name).
+  const branch = fl.descriptor?.address?.branch || "0";
+  const bq = branch === "0" ? "" : `#${branch}`;
+  const stance = `${reality}${bq}${path}@${beingEntry.being}`.replace(/\/+@/, "/@");
 
   // If we're already open on this being and just refreshing, only redraw
   // the inbox section (don't lose live messages).
