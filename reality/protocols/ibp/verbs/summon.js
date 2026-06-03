@@ -69,10 +69,39 @@ export async function handleSummon(socket, env, ack) {
 
     const identity = socket.beingId ? { beingId: socket.beingId, name: socket.name } : null;
 
+    // Cross-branch gate at the wire boundary. The caller's first-person
+    // frame is the socket's tracked branch; the target stance's branch
+    // is what the address carries. Mismatch is forbidden until
+    // cross-branch portals exist.
+    const callerBranch = socket.currentBranch || "0";
+    try {
+      const { parseFromSocket, expand, getRealityDomain } =
+        await import("../../../seed/ibp/address.js");
+      const parsed = parseFromSocket(socket, address);
+      const expanded = expand(parsed, {
+        currentReality: getRealityDomain(),
+        currentUser:    socket.name,
+        currentBranch:  callerBranch,
+        currentPath:    socket.currentPath || null,
+      });
+      const targetBranch = expanded?.right?.branch || "0";
+      if (callerBranch !== targetBranch) {
+        throw new IbpError(IBP_ERR.CROSS_BRANCH_FORBIDDEN,
+          `SUMMON across branches forbidden: caller is on #${callerBranch}, ` +
+          `target is on #${targetBranch}. Navigate to the target's branch first.`,
+          { callerBranch, targetBranch });
+      }
+    } catch (err) {
+      if (err && err.code === IBP_ERR.CROSS_BRANCH_FORBIDDEN) throw err;
+      // Parse failures fall through; summonVerb owns address validation.
+    }
+
     const result = await summonVerb(address, message, {
       identity,
-      currentUser: socket.name,
-      onResponse:  emitUpdateForSocket(socket),
+      currentUser:   socket.name,
+      currentBranch: callerBranch,
+      currentPath:   socket.currentPath || null,
+      onResponse:    emitUpdateForSocket(socket),
     });
 
     return ackOk(ack, id, result);

@@ -104,17 +104,15 @@ function deepCopy(value) {
 
 async function loadConfigFromDb() {
   try {
-    const configSpace = await Space.findOne({ seedSpace: SEED_SPACE.CONFIG }).lean();
-    if (!configSpace || !configSpace.qualities) {
+    const { findBySeedSpace } = await import("./materials/projections.js");
+    const configSlot = await findBySeedSpace(SEED_SPACE.CONFIG, "0");
+    if (!configSlot || !configSlot.state?.qualities) {
       log.warn("Reality", "No config seed space found or qualities is empty. Using empty config.");
       configCache = {};
       return;
     }
-    // All config keys live under qualities.config.<key> so the set
-    // handler treats each entry as a field inside the "config"
-    // namespace (where scalars are allowed) instead of as its own
-    // top-level namespace (which must be an object).
-    const q = configSpace.qualities;
+    // All config keys live under qualities.config.<key>.
+    const q = configSlot.state.qualities;
     const configNs = q instanceof Map ? q.get("config") : q.config;
     if (!configNs || typeof configNs !== "object") {
       configCache = {};
@@ -158,14 +156,18 @@ export function getRealityConfigValue(key) {
 // config write during boot.
 let cachedConfigSpaceId = null;
 async function getConfigSpace() {
+  const { loadProjection, findBySeedSpace } = await import("./materials/projections.js");
   if (cachedConfigSpaceId) {
-    const doc = await Space.findById(cachedConfigSpaceId);
-    if (doc) return doc;
+    const slot = await loadProjection("space", cachedConfigSpaceId, "0");
+    if (slot) return { _id: slot.id, ...slot.state };
     cachedConfigSpaceId = null; // stale; refetch
   }
-  const doc = await Space.findOne({ seedSpace: SEED_SPACE.CONFIG });
-  if (doc) cachedConfigSpaceId = String(doc._id);
-  return doc;
+  const slot = await findBySeedSpace(SEED_SPACE.CONFIG, "0");
+  if (slot) {
+    cachedConfigSpaceId = String(slot.id);
+    return { _id: slot.id, ...slot.state };
+  }
+  return null;
 }
 
 export async function setRealityConfigValue(key, value, { internal, identity, summonCtx } = {}) {

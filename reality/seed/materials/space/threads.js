@@ -157,11 +157,10 @@ export function threadIdFromPath(path) {
 let _threadsSpaceIdCache = null;
 export async function getThreadsSpaceId() {
   if (_threadsSpaceIdCache) return _threadsSpaceIdCache;
-  const space = await Space.findOne({ seedSpace: SEED_SPACE.THREADS })
-    .select("_id")
-    .lean();
+  const { findBySeedSpace } = await import("../projections.js");
+  const space = await findBySeedSpace(SEED_SPACE.THREADS, "0");
   if (!space) return null;
-  _threadsSpaceIdCache = String(space._id);
+  _threadsSpaceIdCache = String(space.id);
   return _threadsSpaceIdCache;
 }
 
@@ -452,6 +451,7 @@ export async function cutThread({
       target:  { kind: "being", id: severerBeingId }, // severer's own reel
       params:  { rootCorrelation, reason, priority },
       actId:   summonCtx?.actId || null,
+      branch:  summonCtx?.branch || "0",
     }, summonCtx);
     // When summonCtx is present, the be:sever Fact lives in the
     // caller's ΔF and commits at sealAct; the cross-cutting fold runs

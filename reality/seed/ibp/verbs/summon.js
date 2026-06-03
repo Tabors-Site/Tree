@@ -56,7 +56,7 @@ import {
 } from "../../materials/space/threads.js";
 import { getRole } from "../../present/roles/registry.js";
 import { attachHandoff, wake } from "../../present/intake/scheduler.js";
-import { assertVerbCaller } from "./_shared.js";
+import { assertVerbCaller, refuseHistoricalWrite } from "./_shared.js";
 
 // Legacy numeric priority (used by inbox queue ordering and the
 // older wake APIs) mapped to the SUMMON envelope's enum. The Act
@@ -87,6 +87,7 @@ const _PRIORITY_NUM_TO_ENUM = {
  */
 export async function summonVerb(stance, message, opts = {}) {
   assertVerbCaller("summon", opts);
+  refuseHistoricalWrite("summon", stance, opts);
   const validatedMessage = validateSummonMessage(message);
 
   const { identity = null, currentUser = null, currentReality = null, onResponse = null, onError = null, summonCtx = null } = opts;
@@ -164,14 +165,15 @@ export async function summonVerb(stance, message, opts = {}) {
   // support); the role-shorthand search walks values to find a match.
   // When multiple beings share the role, the first hit wins; addressing
   // a specific instance uses its name.
-  const Being = (await import("../../materials/being/being.js")).default;
-  let toBeing = await Being.findOne({ name: qualifier });
+  const { findByName, loadProjection } = await import("../../materials/projections.js");
+  const branch = summonCtx?.branch || "0";
+  let toBeingSlot = await findByName("being", qualifier, branch);
+  let toBeing = toBeingSlot ? { _id: toBeingSlot.id, ...toBeingSlot.state } : null;
   if (!toBeing && resolved.spaceId) {
-    const Space = (await import("../../materials/space/space.js")).default;
-    const targetSpace = await Space.findById(resolved.spaceId).select("qualities").lean();
-    const beings = targetSpace?.qualities instanceof Map
-      ? targetSpace.qualities.get("beings")
-      : targetSpace?.qualities?.beings;
+    const spaceSlot = await loadProjection("space", resolved.spaceId, branch);
+    const beings = spaceSlot?.state?.qualities instanceof Map
+      ? spaceSlot.state.qualities.get("beings")
+      : spaceSlot?.state?.qualities?.beings;
     let homeBeingId = beings?.[qualifier]?.beingId || null;
     if (!homeBeingId && beings && typeof beings === "object") {
       const entries = beings instanceof Map
@@ -180,7 +182,10 @@ export async function summonVerb(stance, message, opts = {}) {
       const hit = entries.find((e) => e && e.role === qualifier);
       homeBeingId = hit?.beingId || null;
     }
-    if (homeBeingId) toBeing = await Being.findById(homeBeingId);
+    if (homeBeingId) {
+      const slot = await loadProjection("being", homeBeingId, branch);
+      toBeing = slot ? { _id: slot.id, ...slot.state } : null;
+    }
   }
   if (!toBeing) {
     // Creation pathway. When the addressed @qualifier doesn't yet
@@ -401,6 +406,9 @@ export async function summonCreateBeing({ spec, identity, summonCtx = null, scaf
       homeSpace:      spec.homeSpace || null,
     },
     actId: factStampId,
+    // Branch the be:summon-create fact lands on. Inherited from the
+    // ambient moment; "0" outside a moment (genesis I_AM scaffold).
+    branch: summonCtx?.branch || "0",
   }, summonCtx);
 
   return {
@@ -438,11 +446,13 @@ export async function summonByResolved(args) {
 
   const validatedMessage = validateSummonMessage(message);
 
-  const Being = (await import("../../materials/being/being.js")).default;
-  const toBeing = await Being.findById(toBeingId);
-  if (!toBeing) {
-    throw new IbpError(IBP_ERR.BEING_NOT_FOUND, `No being with id ${toBeingId}`);
+  const { loadProjection } = await import("../../materials/projections.js");
+  const branch = summonCtx?.branch || "0";
+  const toSlot = await loadProjection("being", toBeingId, branch);
+  if (!toSlot) {
+    throw new IbpError(IBP_ERR.BEING_NOT_FOUND, `No being with id ${toBeingId} on branch ${branch}`);
   }
+  const toBeing = { _id: toSlot.id, position: toSlot.position, ...toSlot.state };
 
   const activeRole = roleOverride || validatedMessage.activeRole || toBeing.defaultRole || toBeing.name;
   const role = getRole(activeRole);
@@ -554,6 +564,10 @@ async function _dispatchSummon({
       sentAt,
     },
     actId: summonCtx?.actId || null,
+    // Branch the be:summon fact lands on. Self-summons inherit the
+    // moment's branch; cross-being summons inherit the caller's. The
+    // address-level bridge gate already rejected mixed-branch addresses.
+    branch: summonCtx?.branch || "0",
   }, summonCtx);
 
   const innerCtx = {

@@ -69,9 +69,14 @@ export async function cleanOrphanedUploads({ graceMs = DEFAULT_GRACE_MS } = {}) 
   // the path field holds the basename in the uploads folder.
   const referencedFiles = new Set();
 
-  const matterCursor = Matter.find({ origin: MATTER_ORIGIN.FILESYSTEM }).select("content").lean().cursor();
-  for await (const matter of matterCursor) {
-    const p = matter?.content?.path;
+  const { default: Projection } = await import("../branch/projection.js");
+  const matterCursor = Projection.find({
+    branch: "0", type: "matter",
+    "state.origin": MATTER_ORIGIN.FILESYSTEM,
+    tombstoned: { $ne: true },
+  }).select("state").lean().cursor();
+  for await (const row of matterCursor) {
+    const p = row?.state?.content?.path;
     if (p) referencedFiles.add(p);
   }
 

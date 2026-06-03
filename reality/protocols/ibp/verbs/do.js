@@ -87,8 +87,24 @@ export async function handleDo(socket, env, ack) {
     const parsed = parseFromSocket(socket, positionString);
     const expanded = expand(parsed, {
       currentReality: getRealityDomain(),
-      currentUser: socket.name,
+      currentUser:    socket.name,
+      currentBranch:  socket.currentBranch || "0",
+      currentPath:    socket.currentPath   || null,
     });
+
+    // Cross-branch gate at the wire boundary. The caller's first-person
+    // frame is the socket's tracked branch; the target's branch is the
+    // expanded right stance. Mismatch is a cross-reality call (different
+    // fold-chains), refused until cross-branch portals exist.
+    const callerBranch = socket.currentBranch || "0";
+    const targetBranch = expanded.right?.branch || "0";
+    if (callerBranch !== targetBranch) {
+      throw new IbpError(IBP_ERR.CROSS_BRANCH_FORBIDDEN,
+        `DO across branches forbidden: caller is on #${callerBranch}, ` +
+        `target is on #${targetBranch}. Navigate to the target's branch first.`,
+        { callerBranch, targetBranch });
+    }
+
     const resolved = await resolveStance(expanded.right, {
       identity: { beingId, name: socket.name },
     });
@@ -111,16 +127,16 @@ export async function handleDo(socket, env, ack) {
     // target.)
     let target;
     if (beingTargetedOnly && qualifier) {
-      const Being = (await import("../../../seed/materials/being/being.js")).default;
-      const beingRow = await Being.findOne({ name: qualifier }).select("_id").lean();
-      if (!beingRow) {
+      const { findByName } = await import("../../../seed/materials/projections.js");
+      const beingSlot = await findByName("being", qualifier, callerBranch);
+      if (!beingSlot) {
         throw new IbpError(
           IBP_ERR.BEING_NOT_FOUND,
           `No being named "${qualifier}" on this reality`,
           { qualifier },
         );
       }
-      target = { kind: "being", id: String(beingRow._id) };
+      target = { kind: "being", id: String(beingSlot.id) };
     } else if (resolved?.spaceId) {
       target = { kind: "space", id: String(resolved.spaceId) };
     } else {
@@ -158,6 +174,11 @@ export async function handleDo(socket, env, ack) {
       },
       correlation,
       identity,
+      // Branch the moment lives in. Sourced from the socket's
+      // first-person stance (the caller's frame). The cross-branch
+      // gate above already enforced that this equals the target's
+      // branch, so they're guaranteed consistent here.
+      branch: callerBranch,
     });
 
     // Fire-and-forget: when the moment seals, push the result to

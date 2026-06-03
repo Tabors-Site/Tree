@@ -38,6 +38,7 @@ import { fileURLToPath } from "url";
 import { v4 as uuidv4 } from "uuid";
 import Matter from "./matter.js";
 import Space from "../space/space.js";
+import { loadProjection } from "../projections.js";
 import Fact from "../../past/fact/fact.js";
 import { emitFact, sealFacts } from "../../past/fact/facts.js";
 import { escapeRegex } from "../../utils.js";
@@ -119,6 +120,7 @@ async function createMatter({
   actId = null,
   sessionId = null,
   initialQualities = {},
+  summonCtx = null,
 }) {
   if (!Object.values(MATTER_ORIGIN).includes(origin)) {
     throw new Error(`Invalid matter origin: ${origin}`);
@@ -126,16 +128,25 @@ async function createMatter({
   if (!beingId || !spaceId) {
     throw new Error("Missing required fields: beingId, spaceId");
   }
+  const branch = summonCtx?.branch || "0";
 
-  const targetSpace = await Space.findOne({
-    _id: spaceId,
-    parent: { $exists: true, $ne: null },
-  }).select("seedSpace parent").lean();
+  const { loadProjection } = await import("../projections.js");
+  const { default: Projection } = await import("../branch/projection.js");
+  const _spaceSlot = await loadProjection("space", spaceId, branch);
+  const targetSpace = _spaceSlot ? {
+    seedSpace: _spaceSlot.state?.seedSpace,
+    parent:    _spaceSlot.state?.parent,
+  } : null;
   if (!targetSpace) throw new Error("Space not found or deleted");
+  if (!targetSpace.parent) throw new Error("Space not found or deleted");
   if (targetSpace.seedSpace) throw new Error("Cannot modify seed spaces");
 
   const max = maxMatterPerSpace();
-  const count = await Matter.countDocuments({ spaceId });
+  const count = await Projection.countDocuments({
+    branch, type: "matter",
+    "state.spaceId": spaceId,
+    tombstoned: { $ne: true },
+  });
   if (count >= max) {
     throw new Error(`Space has reached the maximum of ${max} matter entries. Delete old matter before adding new ones.`);
   }
@@ -193,13 +204,15 @@ async function createMatter({
     },
     actId,
     sessionId,
+    branch,
   }]);
-  const newMatter = await Matter.findById(matterId);
-  if (!newMatter) {
+  const _newSlot = await loadProjection("matter", matterId, branch);
+  if (!_newSlot) {
     throw new Error(
       `createMatter: birth Fact stamped but row ${matterId} not materialized`,
     );
   }
+  const newMatter = { _id: _newSlot.id, ...(_newSlot.state || {}) };
 
   // Size attributed to the matter owner. Passed through to afterMatter
   // for the future projection. Per the every-write-through-DO/BE
@@ -234,11 +247,14 @@ async function editMatter({
   matterId, content, beingId,
   lineStart = null, lineEnd = null,
   actId = null, sessionId = null,
+  summonCtx = null,
 }) {
   if (!matterId || !beingId) throw new Error("Missing required fields");
 
-  const matter = await Matter.findById(matterId);
-  if (!matter) throw new Error("Matter not found");
+  const branch = summonCtx?.branch || "0";
+  const _matterSlot = await loadProjection("matter", matterId, branch);
+  if (!_matterSlot) throw new Error("Matter not found");
+  const matter = { _id: _matterSlot.id, ...(_matterSlot.state || {}) };
   if (matter.beingId.toString() !== beingId.toString()) throw new Error("Unauthorized");
   if (!isIbpOrigin(matter.origin)) {
     throw new Error(`Cannot edit matter with origin "${matter.origin}". Only ibp-origin matter has editable text content.`);
@@ -292,7 +308,8 @@ async function editMatter({
     params:  { field: "content", value: finalContent },
     actId,
     sessionId,
-  });
+    branch,
+  }, summonCtx);
   matter.content = finalContent;
 
   // deltaKB threads into afterMatter for downstream reactions. No
@@ -309,42 +326,62 @@ async function editMatter({
   return { message: "Matter updated successfully", matter };
 }
 
-async function getMatters({ spaceId, limit, offset, startDate, endDate }) {
+async function getMatters({ spaceId, limit, offset, startDate, endDate, branch = "0" }) {
   if (!spaceId) throw new Error("Missing required parameter: spaceId");
 
-  const query = { spaceId, ...validateDateRange(startDate, endDate) };
+  const dateRange = validateDateRange(startDate, endDate);
   const safeLimit = Math.min(Math.max(Number(limit) || 100, 1), matterQueryLimit());
   const safeOffset = Math.max(0, Number(offset) || 0);
 
-  const matters = await Matter.find(query)
-    .sort({ createdAt: -1 })
-    .populate("beingId", "name")
+  const { default: Projection } = await import("../branch/projection.js");
+  const where = {
+    branch, type: "matter",
+    "state.spaceId": spaceId,
+    tombstoned: { $ne: true },
+  };
+  if (dateRange.createdAt) {
+    where["state.createdAt"] = dateRange.createdAt;
+  }
+  const rows = await Projection.find(where)
+    .sort({ "state.createdAt": -1 })
     .skip(safeOffset)
     .limit(safeLimit)
     .lean();
 
+  // Batch-load author names from the being projection slots.
+  const authorIds = [...new Set(rows.map((r) => r.state?.beingId).filter(Boolean))];
+  const { loadProjections: _lP } = await import("../projections.js");
+  const authorSlots = await _lP("being", authorIds, "0");
+
   return {
-    matters: matters.map(m => ({
-      _id:        m._id,
-      origin:     m.origin,
-      content:    m.content,
-      name:       m.name ?? null,                       // matter's own name
-      authorName: m.beingId?.name ?? null,              // populated from beingId
-      beingId:    m.beingId?._id ? String(m.beingId._id) : null,
-      spaceId:     m.spaceId,
-      qualities:  m.qualities,
-      createdAt:  m.createdAt,
-      updatedAt:  m.updatedAt,
-    })),
+    matters: rows.map(s => {
+      const m = s.state || {};
+      const author = m.beingId ? authorSlots.get(String(m.beingId)) : null;
+      return {
+        _id:        s.id,
+        origin:     m.origin,
+        content:    m.content,
+        name:       m.name ?? null,
+        authorName: author?.state?.name ?? null,
+        beingId:    m.beingId ? String(m.beingId) : null,
+        spaceId:    m.spaceId,
+        qualities:  m.qualities,
+        createdAt:  m.createdAt,
+        updatedAt:  m.updatedAt,
+      };
+    }),
   };
 }
 
 async function deleteMatterAndFile({
   matterId, beingId,
   actId = null, sessionId = null,
+  summonCtx = null,
 }) {
-  const matter = await Matter.findById(matterId);
-  if (!matter) throw new Error("Matter not found");
+  const branch = summonCtx?.branch || "0";
+  const _mSlot = await loadProjection("matter", matterId, branch);
+  if (!_mSlot) throw new Error("Matter not found");
+  const matter = { _id: _mSlot.id, ...(_mSlot.state || {}) };
 
   const rootSpace = await resolveRootSpace(matter.spaceId);
   const isAuthor = matter.beingId?.toString() === beingId.toString();
@@ -390,7 +427,8 @@ async function deleteMatterAndFile({
       params:  { field, value },
       actId,
       sessionId,
-    });
+      branch,
+    }, summonCtx);
   if (isFilesystemOrigin(matter.origin)) {
     await setMatterField("content", matter.content);
   }
@@ -421,13 +459,16 @@ async function deleteMatterAndFile({
 async function transferMatter({
   matterId, targetSpace, beingId,
   actId = null, sessionId = null,
+  summonCtx = null,
 }) {
   if (!matterId || !targetSpace || !beingId) {
     throw new Error("Missing required fields: matterId, targetSpace, beingId");
   }
 
-  const matter = await Matter.findById(matterId);
-  if (!matter) throw new Error("Matter not found");
+  const branch = summonCtx?.branch || "0";
+  const _mSlot2 = await loadProjection("matter", matterId, branch);
+  if (!_mSlot2) throw new Error("Matter not found");
+  const matter = { _id: _mSlot2.id, ...(_mSlot2.state || {}) };
   if (matter.spaceId === DELETED) throw new Error("Cannot transfer deleted matter");
 
   const rootSpace = await resolveRootSpace(matter.spaceId);
@@ -437,8 +478,8 @@ async function transferMatter({
     throw new Error("Only the matter author or the tree owner can transfer this matter");
   }
 
-  const targetSpaceDoc = await Space.findById(targetSpace).select("_id").lean();
-  if (!targetSpaceDoc) throw new Error("Target Space not found");
+  const _tSlot = await loadProjection("space", targetSpace, branch);
+  if (!_tSlot) throw new Error("Target Space not found");
 
   const targetRoot = await resolveRootSpace(targetSpace);
   if (targetRoot._id.toString() !== rootSpace._id.toString()) {
@@ -456,7 +497,8 @@ async function transferMatter({
     params:  { field: "spaceId", value: String(targetSpace) },
     actId,
     sessionId,
-  });
+    branch,
+  }, summonCtx);
   matter.spaceId = targetSpace;
 
   return { message: "Matter transferred successfully", matterId: matterId.toString(), from: { spaceId: sourceSpaceId }, to: { spaceId: targetSpace } };
@@ -592,22 +634,60 @@ async function getMatterHistory({ matterId, limit = 100, offset = 0 } = {}) {
  * overwrites name with the being's name, which the descriptor pass
  * specifically needs to avoid.
  */
-async function listMattersAt(spaceId, { limit = 50 } = {}) {
+async function listMattersAt(spaceId, { limit = 50, branch = "0" } = {}) {
   if (!spaceId) return [];
-  const list = await Matter.find({ spaceId: String(spaceId) })
-    .sort({ createdAt: -1 })
-    .limit(limit)
-    .lean();
-  return list.map((m) => ({
-    matterId: String(m._id),
-    name: m.name || null,
-    beingId: m.beingId ? String(m.beingId) : null,
-    origin: m.origin || "ibp",
-    content: m.content || null,
-    qualities: m.qualities instanceof Map
-      ? Object.fromEntries(m.qualities)
-      : (m.qualities || {}),
-  }));
+  const { default: Projection } = await import("../branch/projection.js");
+  const toEntry = (s) => {
+    const m = s.state || {};
+    return {
+      matterId: String(s.id),
+      name: m.name || null,
+      beingId: m.beingId ? String(m.beingId) : null,
+      origin: m.origin || "ibp",
+      content: m.content || null,
+      qualities: m.qualities instanceof Map
+        ? Object.fromEntries(m.qualities)
+        : (m.qualities || {}),
+    };
+  };
+  const baseQuery = (b) => ({
+    branch: b, type: "matter",
+    "state.spaceId": String(spaceId),
+    tombstoned: { $ne: true },
+  });
+
+  if (branch === "0") {
+    const rows = await Projection.find(baseQuery("0"))
+      .sort({ "state.createdAt": -1 })
+      .limit(limit)
+      .lean();
+    return rows.map(toEntry);
+  }
+  // Non-main: union branch's own matters with main's matters that
+  // existed at branch creation. Shadow + tombstone semantics.
+  const { getBranchPoint } = await import("../branch/branches.js");
+  const [branchRows, mainRows] = await Promise.all([
+    Projection.find(baseQuery(branch)).lean(),
+    Projection.find(baseQuery("0")).lean(),
+  ]);
+  const shadowedIds = new Set(branchRows.map((s) => s.id));
+  const tombs = await Projection.find({
+    branch, type: "matter", tombstoned: true,
+  }).select("id").lean();
+  for (const t of tombs) shadowedIds.add(t.id);
+  const mainVisible = [];
+  for (const cand of mainRows) {
+    if (shadowedIds.has(cand.id)) continue;
+    const bp = await getBranchPoint(branch, "matter", cand.id);
+    if (bp && bp > 0) mainVisible.push(cand);
+  }
+  const all = [...branchRows, ...mainVisible];
+  all.sort((a, b) => {
+    const at = a.state?.createdAt ? new Date(a.state.createdAt).getTime() : 0;
+    const bt = b.state?.createdAt ? new Date(b.state.createdAt).getTime() : 0;
+    return bt - at; // newest first
+  });
+  return all.slice(0, limit).map(toEntry);
 }
 
 /**
@@ -623,8 +703,10 @@ async function listMattersAt(spaceId, { limit = 50 } = {}) {
  */
 async function getMatter(matterId, opts = {}) {
   if (!matterId || typeof matterId !== "string") return null;
-  if (opts.doc) return Matter.findById(matterId);
-  return Matter.findById(matterId).lean();
+  const branch = opts?.branch || "0";
+  const slot = await loadProjection("matter", matterId, branch);
+  if (!slot) return null;
+  return { _id: slot.id, ...(slot.state || {}) };
 }
 
 export {

@@ -48,6 +48,31 @@ export function assertVerbCaller(verb, opts) {
 }
 
 /**
+ * Historical-read doctrine gate. SEE accepts an `at: { atSeq?,
+ * atTimestamp? }` qualifier that returns the substrate's state as
+ * of a past point. The verbs of CHANGE — DO, SUMMON, BE — are not
+ * compatible with a frozen view; acting in the past is structurally
+ * impossible.
+ *
+ * Each write verb calls this with its `target` and `opts` at the top
+ * of its entry function. If `at` is present anywhere it could ride
+ * the wire (opts.at, or `target.at` when target is an object), this
+ * throws HISTORICAL_READ_ONLY with the specific actionable message
+ * the doctrine line names.
+ */
+export function refuseHistoricalWrite(verb, target, opts) {
+  const fromOpts = opts && typeof opts === "object" ? opts.at : null;
+  const fromTarget = (target && typeof target === "object") ? target.at : null;
+  if (fromOpts == null && fromTarget == null) return;
+  throw new IbpError(
+    IBP_ERR.HISTORICAL_READ_ONLY,
+    `place.${verb}: Historical reads cannot include write verbs. ` +
+    `SEE with at: is allowed; DO/SUMMON/BE are not. ` +
+    `To act, omit at: and operate on current state.`,
+  );
+}
+
+/**
  * Walk past frames inside verbs/ so the reported caller is the actual
  * offending site, not assertVerbCaller or the verb function itself.
  */

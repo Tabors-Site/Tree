@@ -38,8 +38,14 @@ export function extractTargetReality(address) {
   if (typeof address !== "string" || !address) return null;
   // Stance pair: take the right side (the callee).
   const rhs = address.includes("::") ? address.split("::").pop().trim() : address;
-  // Place is everything up to the first slash (or the whole string).
-  const realityDomain = rhs.split("/")[0].trim();
+  // Place is everything up to the first slash (or the whole string),
+  // then strip any `#<branchPath>` qualifier. Branches are a property of
+  // the same reality, not a different reality — without this strip,
+  // `localhost#1/` would be misread as the foreign place `localhost#1`
+  // and federation would PEER_NOT_FOUND it.
+  let realityDomain = rhs.split("/")[0].trim();
+  const hashIdx = realityDomain.indexOf("#");
+  if (hashIdx >= 0) realityDomain = realityDomain.slice(0, hashIdx);
   return realityDomain || null;
 }
 

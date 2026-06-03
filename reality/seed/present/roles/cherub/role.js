@@ -166,9 +166,9 @@ async function birthHandler({ payload, ctx }) {
     throw new IbpError(code, hookResult.reason || "Registration blocked");
   }
 
-  const cherubParent = await Being.findOne({ name: "cherub" })
-    .select("_id").lean();
-  const parentBeingId = cherubParent ? String(cherubParent._id) : null;
+  const { findByName } = await import("../../../materials/projections.js");
+  const cherubParent = await findByName("being", "cherub", ctx?.summonCtx?.branch || "0");
+  const parentBeingId = cherubParent ? String(cherubParent.id) : null;
 
   let being;
   try {

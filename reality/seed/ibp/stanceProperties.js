@@ -82,13 +82,13 @@ const ARRIVAL_PROPS = Object.freeze({
  * @param {string|null} args.targetSpace  the position the verb is acting on (null = place/discovery)
  * @returns {Promise<object>}              the stance property bag
  */
-export async function deriveStanceProperties({ beingId, targetSpace }) {
+export async function deriveStanceProperties({ beingId, targetSpace, branch = "0" }) {
   if (!beingId) return { ...ARRIVAL_PROPS };
 
-  const being = await Being.findById(beingId)
-    .select("name roles defaultRole homeSpace isRemote homeReality")
-    .lean();
-  if (!being) return { ...ARRIVAL_PROPS, beingId };
+  const { loadProjection } = await import("../materials/projections.js");
+  const slot = await loadProjection("being", beingId, branch);
+  if (!slot) return { ...ARRIVAL_PROPS, beingId };
+  const being = { _id: slot.id, ...slot.state };
 
   // Reigning stance . membership in heaven's reign.beings list.
   // Cached in seed/materials/being/reigning.js; loaded at boot,

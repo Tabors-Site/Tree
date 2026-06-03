@@ -62,11 +62,12 @@ async function refreshQualitiesByFact(spaceId, qualities, summonCtx) {
     : Object.entries(qualities);
   if (entries.length === 0) return;
   const { doVerb } = await import("../ibp/verbs/do.js");
+  const { loadProjection } = await import("../materials/projections.js");
   for (const [ns, value] of entries) {
-    const refreshed = await Space.findById(spaceId).select("_id").lean();
+    const refreshed = await loadProjection("space", spaceId, "0");
     if (!refreshed) return;
     await doVerb(
-      { kind: "space", id: String(refreshed._id) },
+      { kind: "space", id: String(refreshed.id) },
       "set-space",
       { field: `qualities.${ns}`, value, merge: false },
       { scaffold: true, summonCtx },
@@ -99,21 +100,30 @@ export async function manifestItems({
   if (!seedSpace) throw new Error("manifestItems requires seedSpace");
   if (!Array.isArray(items)) items = [];
 
-  const parent = await Space.findOne({ seedSpace });
-  if (!parent) {
+  const { findBySeedSpace } = await import("../materials/projections.js");
+  const parentSlot = await findBySeedSpace(seedSpace, "0");
+  if (!parentSlot) {
     log.warn(
       "Manifest",
       `place seed space for ${seedSpace} not found; skipping sync`,
     );
     return { created: 0, removed: 0, kept: 0 };
   }
+  const parent = { _id: parentSlot.id };
 
-  const existingChildren = await Space.find({
-    parent: parent._id,
-    type: itemType,
-  })
-    .select("_id name qualities")
-    .lean();
+  // Children with parent === parentSlot.id and type matching itemType.
+  // Direct projection query for the type+parent intersection.
+  const { default: Projection } = await import("../materials/branch/projection.js");
+  const existingChildren = (await Projection.find({
+    branch: "0", type: "space",
+    "state.parent": parentSlot.id,
+    "state.type": itemType,
+    tombstoned: { $ne: true },
+  }).select("id state").lean()).map((s) => ({
+    _id: s.id,
+    name: s.state?.name,
+    qualities: s.state?.qualities,
+  }));
 
   const existingByName = new Map(existingChildren.map((c) => [c.name, c]));
   const desiredByName = new Map(items.map((it) => [it.name, it]));
@@ -164,20 +174,23 @@ export async function addManifestChild({
     );
   }
   if (!name) return null;
-  const parent = await Space.findOne({ seedSpace });
-  if (!parent) return null;
-  const existing = await Space.findOne({
-    parent: parent._id,
-    name,
-    type: itemType,
-  })
-    .select("_id")
-    .lean();
+  const { findBySeedSpace } = await import("../materials/projections.js");
+  const parentSlot = await findBySeedSpace(seedSpace, "0");
+  if (!parentSlot) return null;
+  const parent = { _id: parentSlot.id };
+  const { default: Projection } = await import("../materials/branch/projection.js");
+  const existing = await Projection.findOne({
+    branch: "0", type: "space",
+    "state.parent": parentSlot.id,
+    "state.name": name,
+    "state.type": itemType,
+    tombstoned: { $ne: true },
+  }).select("id").lean();
   if (existing) {
     if (qualities) {
-      await refreshQualitiesByFact(existing._id, qualities, summonCtx);
+      await refreshQualitiesByFact(existing.id, qualities, summonCtx);
     }
-    return existing._id;
+    return existing.id;
   }
   return await createChildByFact({
     parentId: parent._id,
@@ -200,16 +213,18 @@ export async function removeManifestChild({
     );
   }
   if (!name) return false;
-  const parent = await Space.findOne({ seedSpace });
-  if (!parent) return false;
-  const child = await Space.findOne({
-    parent: parent._id,
-    name,
-    type: itemType,
-  })
-    .select("_id")
-    .lean();
+  const { findBySeedSpace } = await import("../materials/projections.js");
+  const parentSlot = await findBySeedSpace(seedSpace, "0");
+  if (!parentSlot) return false;
+  const { default: Projection } = await import("../materials/branch/projection.js");
+  const child = await Projection.findOne({
+    branch: "0", type: "space",
+    "state.parent": parentSlot.id,
+    "state.name": name,
+    "state.type": itemType,
+    tombstoned: { $ne: true },
+  }).select("id").lean();
   if (!child) return false;
-  await deleteChildByFact(child._id, summonCtx);
+  await deleteChildByFact(child.id, summonCtx);
   return true;
 }

@@ -153,8 +153,15 @@ export class PortalClient {
    * @param {string} address  position or stance ("<place>/<path>", "<place>/<path>@<being>", "<place>")
    * @param {object} [options] { live?: boolean }
    */
-  async see(address, { live = false } = {}) {
-    return this._call("see", normalize(address), live ? { live: true } : {});
+  async see(address, { live = false, at = null } = {}) {
+    const payload = {};
+    if (live) payload.live = true;
+    // Historical-read qualifier: { atSeq?, atTimestamp? }. Server
+    // returns a minimal { isHistorical: true, asOf, target, state }
+    // descriptor instead of the live weave. Live updates are NOT
+    // subscribed on the historical path — the past doesn't move.
+    if (at) payload.at = at;
+    return this._call("see", normalize(address), payload);
   }
 
   /**

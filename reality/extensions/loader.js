@@ -2159,22 +2159,25 @@ export async function runExtensionMigrations() {
   }
 
   // Find the .extensions place seed space once, so per-extension queries are scoped correctly.
-  // Without this, a user-created tree space named the same as an extension would be matched.
   const { SEED_SPACE } = await import("../seed/materials/space/seedSpaces.js");
-  const extensionsParent = await Space.findOne({
-    seedSpace: SEED_SPACE.EXTENSIONS,
-  })
-    .select("_id")
-    .lean();
+  const { findBySeedSpace } = await import("../seed/materials/projections.js");
+  const { default: Projection } = await import("../seed/materials/branch/projection.js");
+  const extensionsParent = await findBySeedSpace(SEED_SPACE.EXTENSIONS, "0");
 
   for (const [name, { manifest, instance }] of loaded) {
     const targetVersion = manifest.provides?.schemaVersion;
     if (!targetVersion) continue; // No schema versioning declared
 
     // Get current version from the extension's child space under .extensions
-    const extSpace = extensionsParent
-      ? await Space.findOne({ parent: extensionsParent._id, name }).lean()
+    const _extRow = extensionsParent
+      ? await Projection.findOne({
+          branch: "0", type: "space",
+          "state.parent": extensionsParent.id,
+          "state.name": name,
+          tombstoned: { $ne: true },
+        }).lean()
       : null;
+    const extSpace = _extRow ? { _id: _extRow.id, ...(_extRow.state || {}) } : null;
 
     const meta =
       extSpace?.qualities instanceof Map
@@ -2229,11 +2232,16 @@ export async function runExtensionMigrations() {
         }
       }
 
-      // Update stored version
+      // Update stored version via the fact-driven path. Direct
+      // Space.findByIdAndUpdate is gone with the projection unification.
       if (ran > 0 && extSpace) {
-        await Space.findByIdAndUpdate(extSpace._id, {
-          $set: { "qualities.schemaVersion": targetVersion },
-        });
+        const { doVerb } = await import("../seed/ibp/verbs/do.js");
+        await doVerb(
+          { kind: "space", id: String(extSpace._id) },
+          "set-space",
+          { field: "qualities.schemaVersion", value: targetVersion },
+          { scaffold: true },
+        );
         log.verbose(
           "Extensions",
           `${name}: schema updated to v${targetVersion} (${ran} migration(s))`,

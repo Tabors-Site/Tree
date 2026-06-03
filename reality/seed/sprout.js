@@ -75,6 +75,16 @@
 import log from "./seedReality/log.js";
 import { v4 as uuidv4 } from "uuid";
 import Space from "./materials/space/space.js";
+import { findBySeedSpace, loadProjection, findByParent as findByParentSlot, countByParent as countByParentSlot } from "./materials/projections.js";
+
+// Sprout-local helper: find the space whose seedSpace marker matches.
+// Returns a row-shaped object with `_id` so downstream genesis code
+// (which expects Space-row shape) keeps working without rewrites.
+async function findRootForSeedSpace(seedSpaceKind) {
+  const slot = await findBySeedSpace(seedSpaceKind, "0");
+  if (!slot) return null;
+  return { _id: slot.id, ...slot.state };
+}
 import { SEED_SPACE } from "./materials/space/seedSpaces.js";
 import { I_AM } from "./materials/being/seedBeings.js";
 import { createRealitySeedSpace, assertValidSpaceSize } from "./materials/space/spaces.js";
@@ -297,6 +307,12 @@ const REALITY_SEED_SPACES = [
   // descriptor is computed on demand from inbox + Act records.
   // SUMMON to a thread address is a cut. See seed/materials/space/threads.js.
   { name: "threads", seedSpace: SEED_SPACE.THREADS },
+  // branches mirrors the Branch collection — each child names a
+  // divergent world by path. Pass 3 adds the create-branch op that
+  // plants child rows here; Pass 2 ships the container space so the
+  // SEE surface and child-discovery paths work the moment branches
+  // start landing. See seed/materials/branch/.
+  { name: "branches", seedSpace: SEED_SPACE.BRANCHES },
 ];
 
 export async function ensureSpaceRoot(summonCtx) {
@@ -305,7 +321,7 @@ export async function ensureSpaceRoot(summonCtx) {
       "ensureSpaceRoot requires summonCtx (the boot moment's ctx). Call this from inside withBootMoment(...).",
     );
   }
-  let spaceRoot = await Space.findOne({ seedSpace: SEED_SPACE.SPACE_ROOT });
+  let spaceRoot = await findRootForSeedSpace(SEED_SPACE.SPACE_ROOT);
 
   if (!spaceRoot) {
     const realityName = process.env.REALITY_NAME || "My Place";
@@ -348,7 +364,7 @@ export async function ensureSpaceRoot(summonCtx) {
   // the heaven room instead of cluttering the place root. Repair: a
   // pre-existing heaven row found at the wrong parent gets moved back
   // under spaceRoot. The repair Fact joins genesis's ΔF.
-  let heavenSpace = await Space.findOne({ seedSpace: SEED_SPACE.HEAVEN });
+  let heavenSpace = await findRootForSeedSpace(SEED_SPACE.HEAVEN);
   if (!heavenSpace) {
     try {
       heavenSpace = await createRealitySeedSpace({
@@ -386,7 +402,7 @@ export async function ensureSpaceRoot(summonCtx) {
   const seedSpaceParentId = heavenSpace ? heavenSpace._id : spaceRoot._id;
 
   for (const def of REALITY_SEED_SPACES) {
-    let space = await Space.findOne({ seedSpace: def.seedSpace });
+    let space = await findRootForSeedSpace(def.seedSpace);
 
     if (!space) {
       try {
@@ -436,10 +452,14 @@ export async function ensureSpaceRoot(summonCtx) {
   // when a prior boot crashed mid-creation. Bring them home by
   // stamping a do:set-space parent Fact inside the boot moment.
   try {
-    const orphanRoots = await Space.find({
-      rootOwner: { $nin: [null, I_AM] },
-      parent: null,
-    });
+    const { findRoot } = await import("./materials/projections.js");
+    const allRoots = await findRoot("space", "0");
+    const orphanRoots = [];
+    for (const r of allRoots) {
+      const slot = await loadProjection("space", r.id, "0");
+      const owner = slot?.state?.rootOwner;
+      if (owner != null && owner !== I_AM) orphanRoots.push({ _id: r.id });
+    }
     const { doVerb } = await import("./ibp/verbs/do.js");
     for (const root of orphanRoots) {
       try {
@@ -483,7 +503,14 @@ export async function ensureSpaceRoot(summonCtx) {
 
   // childCount read only meaningful on Awakening (rows exist).
   if (!spaceRoot._pending) {
-    const childCount = await Space.countDocuments({ parent: spaceRoot._id });
+    // Count children of the space root in the projection collection.
+    const { countByParent: _ } = await import("./materials/projections.js");
+    const { default: Projection } = await import("./materials/branch/projection.js");
+    const childCount = await Projection.countDocuments({
+      branch: "0", type: "space",
+      "state.parent": spaceRoot._id,
+      tombstoned: { $ne: true },
+    });
     log.verbose(
       "Place",
       `Space root verified: ${spaceRoot._id} (${childCount} children)`,
@@ -509,11 +536,11 @@ async function ensureIAm(homeSpaceId, summonCtx) {
       "ensureIAm requires summonCtx (the boot moment's ctx). Reachable only from inside withBootMoment(...).",
     );
   }
-  const Being = (await import("./materials/being/being.js")).default;
-  const existing = await Being.findOne({ name: I_AM }).select("_id").lean();
+  const { findByName } = await import("./materials/projections.js");
+  const existing = await findByName("being", I_AM, "0");
   if (existing) {
-    iAmBeingIdCache = String(existing._id);
-    return existing;
+    iAmBeingIdCache = String(existing.id);
+    return { _id: existing.id, ...existing.state };
   }
 
   // The I-Am's _id IS the I_AM string constant. This is the
@@ -571,7 +598,7 @@ async function ensureIAm(homeSpaceId, summonCtx) {
 
 export async function getSpaceRoot() {
   if (spaceRootCache) return spaceRootCache;
-  spaceRootCache = await Space.findOne({ seedSpace: SEED_SPACE.SPACE_ROOT });
+  spaceRootCache = await findRootForSeedSpace(SEED_SPACE.SPACE_ROOT);
   return spaceRootCache;
 }
 
@@ -624,13 +651,16 @@ export async function syncExtensionsToTree(manifests, summonCtx) {
       "syncExtensionsToTree requires summonCtx. Wrap the call in withIAmAct(...).",
     );
   }
-  const extSpace = await Space.findOne({ seedSpace: SEED_SPACE.EXTENSIONS });
+  const extSpace = await findRootForSeedSpace(SEED_SPACE.EXTENSIONS);
   if (!extSpace) return;
 
   // Query by parent — children[] on the parent is retired.
-  const existingChildren = await Space.find({ parent: extSpace._id })
-    .select("_id name")
-    .lean();
+  const { default: Projection } = await import("./materials/branch/projection.js");
+  const existingChildren = (await Projection.find({
+    branch: "0", type: "space",
+    "state.parent": extSpace._id,
+    tombstoned: { $ne: true },
+  }).lean()).map((s) => ({ _id: s.id, name: s.state?.name }));
 
   const existingByName = new Map();
   for (const c of existingChildren) existingByName.set(c.name, c._id);

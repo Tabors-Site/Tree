@@ -239,9 +239,11 @@ export async function plantSeed({
   if (!identity?.beingId)
     throw new Error("plantSeed requires identity.beingId");
 
-  const target = await Space.findById(atSpaceId).select("_id name").lean();
-  if (!target)
+  const { loadProjection } = await import("./projections.js");
+  const targetSlot = await loadProjection("space", atSpaceId, summonCtx?.branch || "0");
+  if (!targetSlot)
     throw new Error(`Target space ${String(atSpaceId).slice(0, 8)} not found`);
+  const target = { _id: targetSlot.id, name: targetSlot.state?.name };
 
   // Defensive copy so the recipe cannot mutate the caller's params.
   // Reject obviously dangerous shapes (non-object, null, array).
@@ -289,7 +291,8 @@ export async function plantSeed({
   // configured. Fact-driven: do.set on qualities.seeds. The do.plant
   // op caller threads summonCtx so the inner set Fact rides the
   // plant moment's actId.
-  const space = await Space.findById(atSpaceId);
+  const spaceSlot = await loadProjection("space", atSpaceId, summonCtx?.branch || "0");
+  const space = spaceSlot ? { _id: spaceSlot.id, ...spaceSlot.state } : null;
   if (space) {
     const currentSeeds = space.qualities instanceof Map
       ? space.qualities.get("seeds")
@@ -326,14 +329,13 @@ export async function plantSeed({
  * Read the planted-seed entries on a space. Returns an array of
  * { plantedSeedId, name, plantedAt, plantedBy, plantedThings } records.
  */
-export async function listPlantedAt(spaceId) {
+export async function listPlantedAt(spaceId, { branch = "0" } = {}) {
   if (!spaceId) return [];
-  const space = await Space.findById(spaceId).select("_id qualities").lean();
-  if (!space) return [];
-  const planted =
-    space.qualities instanceof Map
-      ? space.qualities.get("seeds")
-      : space.qualities?.seeds;
+  const { loadProjection } = await import("./projections.js");
+  const slot = await loadProjection("space", spaceId, branch);
+  if (!slot) return [];
+  const quals = slot.state?.qualities;
+  const planted = quals instanceof Map ? quals.get("seeds") : quals?.seeds;
   if (!planted || typeof planted !== "object") return [];
   return Object.entries(planted).map(([plantedSeedId, entry]) => ({
     plantedSeedId,
@@ -357,9 +359,11 @@ export async function unplantSeed({
   if (!atSpaceId || !plantedSeedId) {
     throw new Error("unplantSeed requires atSpaceId and plantedSeedId");
   }
-  const space = await Space.findById(atSpaceId);
-  if (!space)
+  const { loadProjection: _lP } = await import("./projections.js");
+  const _spaceSlot = await _lP("space", atSpaceId, summonCtx?.branch || "0");
+  if (!_spaceSlot)
     throw new Error(`Target space ${String(atSpaceId).slice(0, 8)} not found`);
+  const space = { _id: _spaceSlot.id, ...(_spaceSlot.state || {}) };
 
   const currentSeeds = space.qualities instanceof Map
     ? space.qualities.get("seeds")

@@ -16,6 +16,7 @@ import { openChatFor, isChatOpen, getChatBeing } from "./chat.js";
 import { showAuthOverlay } from "./identity.js";
 import { renderRoleManagerPanel } from "../../shared/role-manager-panel.js";
 import { renderBeingFlowPanel } from "../../shared/being-flow-panel.js";
+import { renderTimelineSection } from "./being-timeline.js";
 
 // ────────────────────────────────────────────────────────────────
 // Public surface
@@ -98,8 +99,43 @@ function restoreNormalLayout() {
 function renderTopBar(desc, { session, discovery }) {
   renderBreadcrumb(desc, discovery);
   renderQuickNav(desc, discovery);
+  renderBranchChip(desc, discovery);
   renderIdentityChip(session, discovery);
   syncAddressInput(desc, discovery);
+}
+
+// Branch chip — the small indicator showing which divergent world the
+// portal is looking at. Main ("0") is implicit and the chip stays empty
+// to keep the top bar quiet for the common case. On any other branch
+// the chip lights up with `#<path>` and clicking it switches back to
+// main. The branch travels in the address itself (the `#` qualifier the
+// substrate parses); this chip just surfaces and toggles it.
+function renderBranchChip(desc, discovery) {
+  const el = document.getElementById("branch-chip");
+  if (!el) return;
+  el.innerHTML = "";
+  const branch = desc.address?.branch || "0";
+  if (branch === "0") {
+    // Main is implicit. Stay quiet.
+    el.classList.add("hidden");
+    return;
+  }
+  el.classList.remove("hidden");
+  const reality = discovery?.reality || "";
+  const path = desc.address?.pathByNames || "/";
+  const being = desc.address?.being ? `@${desc.address.being}` : "";
+  const chip = document.createElement("button");
+  chip.className = "chip chip-branch";
+  chip.textContent = `#${branch}`;
+  chip.title =
+    `on branch #${branch} (divergent world)\n` +
+    `click to return to main`;
+  chip.onclick = () => {
+    // Strip the # qualifier and navigate back to main at the same
+    // position. The substrate treats `treeos.ai/path` as `#0/path`.
+    location.hash = `#${reality}${path === "/" ? "/" : path}${being}`;
+  };
+  el.appendChild(chip);
 }
 
 // Lineage breadcrumb — clickable trail from reality root → current
@@ -111,9 +147,14 @@ function renderBreadcrumb(desc, discovery) {
   const bc = document.getElementById("breadcrumb");
   bc.innerHTML = "";
   const reality = discovery?.reality || "?";
+  // Preserve the active branch qualifier across crumb clicks so walking
+  // up the tree stays in the same divergent world. The branch chip is
+  // the explicit way back to main.
+  const branch = desc.address?.branch || "0";
+  const bq = branch === "0" ? "" : `#${branch}`;
 
   // Reality root segment — always clickable.
-  bc.appendChild(crumbLink(reality, `${reality}/`, { home: true }));
+  bc.appendChild(crumbLink(reality, `${reality}${bq}/`, { home: true }));
 
   const path = desc.address?.pathByNames || "/";
   if (path && path !== "/" && path !== "") {
@@ -127,7 +168,7 @@ function renderBreadcrumb(desc, discovery) {
       bc.appendChild(sep);
       // Decorate system segments differently.
       const isSystem = seg.startsWith(".");
-      bc.appendChild(crumbLink(seg, `${reality}${accum}`, { system: isSystem }));
+      bc.appendChild(crumbLink(seg, `${reality}${bq}${accum}`, { system: isSystem }));
     }
   }
 
@@ -136,7 +177,7 @@ function renderBreadcrumb(desc, discovery) {
   const spaceId = desc.address?.spaceId;
   if (spaceId && !desc.isReel && !desc.isActChain && !desc.isBeingsCatalog) {
     const reel = document.createElement("a");
-    reel.href = `#${reality}/.reel/space/${spaceId}`;
+    reel.href = `#${reality}${bq}/.reel/space/${spaceId}`;
     reel.className = "breadcrumb-side";
     reel.textContent = "⛓ facts";
     reel.title = "view this space's fact reel";
@@ -157,13 +198,18 @@ function crumbLink(text, address, { home = false, system = false } = {}) {
 function renderQuickNav(desc, discovery) {
   const reality = discovery?.reality;
   if (!reality) return;
+  // Quick-nav stays inside the active branch — clicking "ops" on `#1a`
+  // takes you to `#1a/./operations`, not back to main. The branch chip
+  // is the explicit return to main.
+  const branch = desc.address?.branch || "0";
+  const bq = branch === "0" ? "" : `#${branch}`;
   const QN = {
-    home:       `${reality}/`,
-    beings:     `${reality}/.beings`,
-    operations: `${reality}/./operations`,
-    roles:      `${reality}/./roles`,
-    threads:    `${reality}/./threads`,
-    extensions: `${reality}/./extensions`,
+    home:       `${reality}${bq}/`,
+    beings:     `${reality}${bq}/.beings`,
+    operations: `${reality}${bq}/./operations`,
+    roles:      `${reality}${bq}/./roles`,
+    threads:    `${reality}${bq}/./threads`,
+    extensions: `${reality}${bq}/./extensions`,
   };
   for (const chip of document.querySelectorAll("#quick-nav .qn-chip")) {
     const tag = chip.dataset.tag;
@@ -206,7 +252,11 @@ function syncAddressInput(desc, discovery) {
   if (document.activeElement === input) return; // don't clobber typing
   const reality = discovery?.reality || "";
   const path = desc.address?.pathByNames || "/";
-  input.value = `${reality}${path === "/" ? "/" : path}`;
+  // Surface the branch in the address bar when non-main, the way it
+  // would appear if the user typed it. Main stays implicit.
+  const branch = desc.address?.branch || "0";
+  const branchPart = branch === "0" ? "" : `#${branch}`;
+  input.value = `${reality}${branchPart}${path === "/" ? "/" : path}`;
 }
 
 // Render the count badge next to each section title.
@@ -1784,6 +1834,9 @@ function renderBeingInspector(insp, b) {
       doOp:       flat.doOp,
     });
   }
+
+  // ─── Timeline (recent acts on this being's reel; click to fold to past)
+  renderTimelineSection(insp, b, { reality });
 
   // ─── DO actions (ops whose targets include being or stance)
   const ops = [

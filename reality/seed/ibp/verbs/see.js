@@ -30,7 +30,16 @@ import { threadIdFromPath, getThreadsSpaceId, describeThread } from "../../mater
 import { describeReel } from "../../past/fact/facts.js";
 import { describeActChain } from "../../past/act/actChain.js";
 import { describeBeingsCatalog } from "../../materials/being/beingsCatalog.js";
+import { describeBranchesCatalog } from "../../materials/branch/branchesCatalog.js";
 import { assertVerbCaller } from "./_shared.js";
+import { foldAt, NoSuchHistoricalState } from "../../present/beats/2-fold/foldAt.js";
+// The historical SEE path routes most of its work through
+// buildPlaceDescriptor with `until`, where descriptor.js's foldRead
+// handles the foldAt / NoSuchHistoricalState boundary internally.
+// foldAt is imported here only for the being-position follow-step:
+// when the address carries an @qualifier, we fold the being to
+// `until` and swap the descriptor target to wherever the being
+// actually was at that point.
 
 // Path matchers for synthetic explorer addresses.
 //   `<reality>/.reel/<kind>/<id>` — facts targeting (kind, id).
@@ -52,6 +61,17 @@ function actChainTargetFromPath(path) {
 function isBeingsCatalogPath(path) {
   if (typeof path !== "string") return false;
   return /^\/?\.beings\/?$/.test(path);
+}
+// `.branches` / `.branches/<branchPath>` — branch tree catalog. Bare
+// returns the root view (main + its children). With a path returns the
+// lineage for that branch + its direct children. Read-only synthetic
+// catalog; no Act/Fact, no scheduler involvement. Mirrors the
+// .beings / .acts pattern.
+function branchesTargetFromPath(path) {
+  if (typeof path !== "string") return null;
+  const m = path.match(/^\/?\.branches(?:\/([^/]+))?\/?$/);
+  if (!m) return null;
+  return { branchPath: m[1] ? decodeURIComponent(m[1]) : "0" };
 }
 
 /**
@@ -83,6 +103,37 @@ export async function seeVerb(target, opts = {}) {
   assertVerbCaller("see", opts);
 
   const { identity = null, currentUser = null, currentReality = null, payload = null, summonCtx = null } = opts;
+
+  // Historical-read qualifier. When set, SEE returns the substrate's
+  // state as of a past point via foldAt. Accepted on the wire as
+  // either opts.at (verb-options shape) or target.at (envelope shape
+  // when target is an object); both normalize to { atSeq?, atTimestamp? }.
+  //
+  // Slice B: the FULL descriptor builder threads `until` through every
+  // internal fold call. Beings, matters, children, qualities, identity
+  // — all rendered as they were at the past point. The shape stays the
+  // same as live SEE; the data is historical. Top-level
+  // `isHistorical: true` + `asOf: { atSeq?, atTimestamp? }` flags let
+  // portal renderers branch cleanly.
+  //
+  // Doctrine: there is no globally-consistent "world snapshot" — each
+  // reel resolves `until` to its own per-reel seq. For multi-reel
+  // rewinds the caller passes `{atTimestamp}`; each reel's foldAt finds
+  // its latest fact whose date <= timestamp and folds to that seq.
+  const at = normalizeAtQualifier(opts.at, target);
+  if (at) {
+    return await seeAtTime({
+      addrString,
+      at,
+      identity,
+      currentReality,
+      currentUser,
+      payload,
+      summonCtx,
+      addressKind: opts.addressKind,
+    });
+  }
+
   const addressKind = opts.addressKind
     || (target && typeof target === "object" && target.kind)
     || inferAddressKind(addrString);
@@ -209,13 +260,51 @@ export async function seeVerb(target, opts = {}) {
     };
   }
 
+  // Branches catalog short-circuit. SEE on `<reality>/.branches` (or
+  // `<reality>/.branches/<branchPath>`) returns the branch tree as a
+  // read-only graph. No Act, no Fact, no scheduler — same posture as
+  // .beings / .acts. The portal calls this on every navigate to draw
+  // the branch chips; routing it through SEE keeps the chips out of
+  // the rate-limit budget on the caller's being.
+  const branchesTarget = branchesTargetFromPath(expanded.right?.path);
+  if (branchesTarget) {
+    const realityDomain = getRealityDomain();
+    const graph = await describeBranchesCatalog(branchesTarget.branchPath);
+    return {
+      address: {
+        reality:     realityDomain,
+        path:        `/.branches/${branchesTarget.branchPath}`,
+        being:       null,
+        spaceId:     null,
+        beingId:     null,
+        chain:       [],
+        pathByNames: `/.branches/${branchesTarget.branchPath}`,
+        pathByIds:   `/.branches/${branchesTarget.branchPath}`,
+        leafName:    ".branches",
+        leafId:      null,
+        branch:      branchesTarget.branchPath,
+      },
+      isSpaceRoot:    false,
+      isHomeRoot:     false,
+      isBranchesCatalog: true,
+      branches:       graph,
+      children:       [],
+      matters:        [],
+      qualities:      {},
+    };
+  }
+
   // Act-chain explorer short-circuit. SEE on `<reality>/.acts/<beingId>`
   // returns the being's chain of moments (newest-first). Same auth
   // posture as .reel for the first cut.
   const actChainBeingId = actChainTargetFromPath(expanded.right?.path);
   if (actChainBeingId) {
     const realityDomain = getRealityDomain();
-    const chain = await describeActChain(actChainBeingId);
+    // Allow callers (the 3D portal timeline) to bump the limit so a
+    // long session of fine-grained acts doesn't truncate the visible
+    // history window. describeActChain still caps at its MAX_LIMIT.
+    const requestedLimit = Number(payload?.limit) || undefined;
+    const chain = await describeActChain(actChainBeingId, requestedLimit ? { limit: requestedLimit } : {});
     return {
       address: {
         reality:     realityDomain,
@@ -274,4 +363,224 @@ function inferAddressKind(addrString) {
   if (addrString.includes("@")) return "stance";
   if (addrString.includes("/")) return "position";
   return "place";
+}
+
+// ──────────────────────────────────────────────────────────────────
+// Historical SEE (Slice A — see/timeline.md)
+// ──────────────────────────────────────────────────────────────────
+
+/**
+ * Accept the historical qualifier from either opts.at or target.at
+ * and validate the shape. Returns null when no qualifier is present;
+ * returns the normalized `{ atSeq?, atTimestamp? }` object otherwise.
+ *
+ * Wire shape forward-compat: caller may pass either atSeq or
+ * atTimestamp (or both — atSeq wins). Substrate resolves timestamp
+ * to seq internally before any fold work begins.
+ */
+function normalizeAtQualifier(optsAt, target) {
+  const fromOpts   = optsAt;
+  const fromTarget = (target && typeof target === "object") ? target.at : null;
+  const at         = fromOpts || fromTarget || null;
+  if (at == null) return null;
+  if (typeof at !== "object") {
+    throw new IbpError(
+      IBP_ERR.INVALID_INPUT,
+      "SEE `at` qualifier must be an object: { atSeq?, atTimestamp? }",
+    );
+  }
+  if (at.atSeq == null && at.atTimestamp == null) {
+    throw new IbpError(
+      IBP_ERR.INVALID_INPUT,
+      "SEE `at` qualifier requires atSeq or atTimestamp",
+    );
+  }
+  return at;
+}
+
+/**
+ * Historical SEE. Resolves and authorizes like live SEE, then routes
+ * through the standard `buildPlaceDescriptor` with `until` threaded
+ * down into every internal fold call. Every reel that contributes to
+ * the descriptor (the leaf space, neighboring beings, matters,
+ * children, the asker's row) folds to its OWN per-reel seq derived
+ * from `until` — so the whole place rewinds coherently.
+ *
+ * Returns the standard descriptor shape (same as live SEE) with two
+ * additional top-level flags:
+ *   isHistorical: true
+ *   asOf:         { atSeq?, atTimestamp? }
+ *
+ * Portal renderers branch on isHistorical to surface visual cues and
+ * disable action UIs; the shape is otherwise live-compatible so they
+ * can reuse all existing render code.
+ */
+async function seeAtTime({
+  addrString,
+  at,
+  identity,
+  currentReality,
+  currentUser,
+  payload,
+  summonCtx,
+  addressKind: addressKindHint,
+}) {
+  // Reject the short-circuit surfaces. Historical-at doesn't compose
+  // with discovery (pre-identity), threads (synthetic-now projection),
+  // .reel/.acts (fact-history surfaces — themselves the substrate's
+  // historical primitives), or .beings (whole-place catalog). The
+  // honest answer for any of these is "use the live form."
+  if (typeof addrString === "string" && /\/\.discovery$/i.test(addrString)) {
+    throw new IbpError(IBP_ERR.INVALID_INPUT,
+      "SEE `at` is not supported on /.discovery (discovery is pre-identity, not a reel-bearing target)");
+  }
+
+  const parseCtx = {
+    currentReality: currentReality || getRealityDomain(),
+    currentUser:    currentUser    || identity?.name || null,
+  };
+  const parsed   = parseWithContext(addrString, parseCtx);
+  const expanded = expand(parsed, parseCtx);
+
+  if (threadIdFromPath(expanded.right?.path)) {
+    throw new IbpError(IBP_ERR.INVALID_INPUT,
+      "SEE `at` is not supported on threads (threads are a live projection; use .reel for historical facts)");
+  }
+  if (/^\/?\.reel\//.test(expanded.right?.path || "")) {
+    throw new IbpError(IBP_ERR.INVALID_INPUT,
+      "SEE `at` is not supported on /.reel/... (the reel surface IS the substrate's history primitive)");
+  }
+  if (/^\/?\.acts\//.test(expanded.right?.path || "")) {
+    throw new IbpError(IBP_ERR.INVALID_INPUT,
+      "SEE `at` is not supported on /.acts/... (the act-chain surface IS the substrate's history primitive)");
+  }
+  if (/^\/?\.beings\/?$/.test(expanded.right?.path || "")) {
+    throw new IbpError(IBP_ERR.INVALID_INPUT,
+      "SEE `at` is not supported on /.beings (whole-place catalog; query per-being instead)");
+  }
+
+  let resolved     = await resolveStance(expanded.right, { identity });
+  const addressKind = addressKindHint
+    || (expanded.right?.being ? "stance" : "position");
+
+  // Follow the historical PERSPECTIVE. Doctrine: a historical SEE
+  // shows the world from the asker's being at that time. The being to
+  // follow is:
+  //   1. The explicit @qualifier on the address (resolved.beingId) if
+  //      the user named one ("show me where @bob was at 3pm").
+  //   2. The CALLER's own being (identity.beingId) when the address has
+  //      no @qualifier ("show me where I was at 3pm" — the default for
+  //      a portal timeline scrub).
+  //
+  // Fold that being to `until`, read state.position, swap the descriptor
+  // target if it disagrees with the address-resolved one. Past states
+  // are immutable; the new target's leafSpace folds at `until` too, so
+  // the whole place rewinds coherently.
+  //
+  // Falls through (no swap) when:
+  //   . the asker has no identity (arrival) AND the address carried no @
+  //   . the being didn't exist yet at `until` (NoSuchHistoricalState)
+  //   . the being's historical position matches the resolved space
+  //   . the historical position resolves to a missing space row
+  const followBeingId = resolved.beingId
+    || (identity?.beingId ? String(identity.beingId) : null);
+  if (followBeingId) {
+    try {
+      const { state: beingState } = await foldAt(
+        "being",
+        String(followBeingId),
+        at,
+      );
+      const histPosition = beingState?.position ? String(beingState.position) : null;
+      if (histPosition && histPosition !== String(resolved.spaceId)) {
+        const { loadProjection } = await import("../../materials/projections.js");
+        const _pSlot = await loadProjection("space", histPosition, resolved.branch || "0");
+        const positionRow = _pSlot ? {
+          _id: _pSlot.id,
+          name: _pSlot.state?.name,
+          parent: _pSlot.state?.parent,
+        } : null;
+        if (positionRow) {
+          resolved = await _redirectResolvedToSpace(resolved, positionRow);
+          // If the redirect came from caller identity (not an explicit
+          // @qualifier), surface the caller's beingId on the resolved
+          // stance so the descriptor's identityBlock keeps reading the
+          // right being and the past-self's qualities show up.
+          if (!resolved.beingId) resolved.beingId = followBeingId;
+        }
+      }
+    } catch (err) {
+      if (!(err instanceof NoSuchHistoricalState)) throw err;
+      // Being didn't exist yet at the queried point; render the
+      // address-resolved space anyway so the user sees something.
+    }
+  }
+
+  const decision = await authorize({
+    identity,
+    verb: "see",
+    target: {
+      kind:        addressKind === "stance" ? "stance" : "position",
+      spaceId:     resolved.spaceId,
+      isDiscovery: false,
+    },
+    summonCtx,
+  });
+  if (!decision.ok) {
+    throw new IbpError(
+      identity ? IBP_ERR.FORBIDDEN : IBP_ERR.UNAUTHORIZED,
+      `SEE denied for stance "${decision.stance}": ${decision.reason}`,
+      { stance: decision.stance },
+    );
+  }
+
+  // Route through the standard descriptor builder with `until`. Every
+  // internal foldRead now uses foldAt under the hood; the descriptor
+  // populates `beings[]`, `matters[]`, `children[]`, etc. with their
+  // historical projections. `isHistorical: true` + `asOf` ride at the
+  // top level (placeAtSpaceRoot / placeAtSpace add them).
+  try {
+    return await buildPlaceDescriptor(resolved, {
+      identity,
+      payload,
+      until: at,
+    });
+  } catch (err) {
+    // foldRead absorbs NoSuchHistoricalState internally (returns
+    // null), so the descriptor degrades gracefully when individual
+    // reels weren't yet at the queried point. If the WHOLE descriptor
+    // fails for another reason, surface honestly.
+    throw err;
+  }
+}
+
+// Build a new `resolved` object pointing at the given Space, walking
+// its ancestor chain so chain/leafName/leafId match what placeAtSpace
+// expects. Preserves the being qualifier from the original resolution
+// so the descriptor still attributes to the right stance.
+async function _redirectResolvedToSpace(resolved, positionRow) {
+  const Space = (await import("../../materials/space/space.js")).default;
+  // Walk parents to build the chain. Stop at the place root (parent
+  // === null). The chain rendered into the descriptor's `pathByNames`
+  // / `pathByIds` mirrors the live resolver's output.
+  const chain = [];
+  let cursor = positionRow;
+  while (cursor) {
+    chain.unshift({ name: cursor.name, id: cursor._id });
+    if (!cursor.parent) break;
+    const { loadProjection: _lP } = await import("../../materials/projections.js");
+    const _cSlot = await _lP("space", cursor.parent, "0");
+    cursor = _cSlot ? { _id: _cSlot.id, name: _cSlot.state?.name, parent: _cSlot.state?.parent } : null;
+    if (!cursor) break;
+  }
+  const isSpaceRoot = !positionRow.parent;
+  return {
+    ...resolved,
+    spaceId:    String(positionRow._id),
+    leafSpace:  positionRow,
+    leafName:   positionRow.name,
+    leafId:     String(positionRow._id),
+    chain,
+    isSpaceRoot,
+  };
 }

@@ -43,10 +43,15 @@ registerSeeResolver("neighbors", async (ctx) => {
   let positions, bounds;
   try {
     positions = await readPositionsInSpace(gridSpaceId);
-    const space = await Space.findById(gridSpaceId).select("size").lean();
+    // Branch comes from the moment ctx — extensions never assume a
+    // particular branch, just thread whatever's live.
+    const branch = ctx?.summonCtx?.branch || ctx?.branch || "0";
+    const { loadProjection } = await import("../../../seed/materials/projections.js");
+    const _gSlot = await loadProjection("space", gridSpaceId, branch);
+    const size = _gSlot?.state?.size;
     bounds = {
-      w: space?.size?.x > 0 ? space.size.x : null,
-      h: space?.size?.y > 0 ? space.size.y : null,
+      w: size?.x > 0 ? size.x : null,
+      h: size?.y > 0 ? size.y : null,
     };
   } catch (err) {
     log.warn("DancerLlm", `see-resolver read failed: ${err.message}`);

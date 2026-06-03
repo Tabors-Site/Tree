@@ -109,6 +109,12 @@ export async function logFact(input, opts = {}) {
     homeReality = null,
     wasRemote = false,
     foldSeq = null,
+    // Branch this fact lives in. Default `"0"` (main). Callers that
+    // know they're acting in a non-main branch pass the branch path
+    // from summonCtx.branch. The cross-branch dispatch gate (Pass 4)
+    // enforces single-branch moments before this fact ever reaches
+    // logFact, so by the time we're here the branch is settled.
+    branch = "0",
   } = input;
 
   if (!beingId || !action) {
@@ -183,6 +189,7 @@ export async function logFact(input, opts = {}) {
     wasRemote: Boolean(hookData.wasRemote ?? wasRemote),
     foldSeq: typeof foldSeq === "number" ? foldSeq : null,
     date: new Date(),
+    branch,
   };
 
   // Reel-bearing path: allocate seq, chain the hash, insert — all
@@ -203,12 +210,20 @@ export async function logFact(input, opts = {}) {
     // it for the whole transaction across reels, so a nested
     // withReelLock here would deadlock.
     const runAppend = async () => {
-      const seq = await allocSeq(finalTarget.kind, finalTarget.id, { session });
+      const seq = await allocSeq(finalTarget.kind, finalTarget.id, { session, branch });
 
       // INTEGRITY chain: read prev fact's h. seq is monotonic per
       // reel; under this lock, prev sits at exactly seq-1. A missing
       // prev (legacy pre-INTEGRITY row, or a true gap from a crashed
       // alloc) falls back to GENESIS_PREV.
+      //
+      // Pass 3 territory: when non-main branches start writing facts,
+      // this lookup needs to filter the prev by branch lineage — the
+      // first divergent fact in branch X has prev pointing at the
+      // parent's fact at branchPoint, not at an X-local fact. For
+      // Pass 2 only main exists at runtime, so the unbranded query
+      // resolves correctly (every fact in the DB carries branch="0"
+      // or no field, which is also main).
       let p = GENESIS_PREV;
       if (seq > 1) {
         let prevQuery = Fact.findOne(
@@ -354,9 +369,16 @@ export function groupByReel(deltaF) {
   for (const spec of deltaF) {
     const target = spec?.target;
     if (target && REEL_KINDS.has(target.kind) && target.id) {
-      const key = `${target.kind}:${target.id}`;
+      // Reel identity is now (branch, kind, id). A fact on branch=1
+      // targeting being:X writes a different reel than a fact on
+      // branch=0 targeting the same being. The post-commit fold needs
+      // the branch dimension to land on the right projection slot.
+      const branch = typeof spec.branch === "string" && spec.branch
+        ? spec.branch
+        : "0";
+      const key = `${branch}:${target.kind}:${target.id}`;
       const entry = factsByReel.get(key)
-        || { kind: target.kind, id: String(target.id), facts: [] };
+        || { branch, kind: target.kind, id: String(target.id), facts: [] };
       entry.facts.push(spec);
       factsByReel.set(key, entry);
     } else {
@@ -433,9 +455,12 @@ export async function foldAfterCommit(sortedReels) {
     const { fold } = await import("../../present/beats/2-fold/foldEngine.js");
     for (const reel of sortedReels) {
       try {
-        await fold(reel.kind, reel.id);
+        // Branch-aware: each reel carries its branch from groupByReel.
+        // The post-commit fold lands the new state on the branch's
+        // projection slot, never on main's slot for a non-main reel.
+        await fold(reel.kind, reel.id, { branch: reel.branch || "0" });
       } catch (err) {
-        log.debug("Fold", `post-seal fold failed for ${reel.kind}:${reel.id}: ${err.message}`);
+        log.debug("Fold", `post-seal fold failed for ${reel.branch || "0"}:${reel.kind}:${reel.id}: ${err.message}`);
       }
     }
   } catch {}
@@ -709,19 +734,9 @@ export async function describeReel(targetKind, targetId, opts = {}) {
   const { facts } = await getReel({ targetKind, targetId, ...opts });
   let targetName = null;
   try {
-    if (targetKind === "space") {
-      const Space = (await import("../../materials/space/space.js")).default;
-      const row = await Space.findById(targetId).select("name").lean();
-      targetName = row?.name || null;
-    } else if (targetKind === "matter") {
-      const Matter = (await import("../../materials/matter/matter.js")).default;
-      const row = await Matter.findById(targetId).select("name").lean();
-      targetName = row?.name || null;
-    } else if (targetKind === "being") {
-      const Being = (await import("../../materials/being/being.js")).default;
-      const row = await Being.findById(targetId).select("name").lean();
-      targetName = row?.name || null;
-    }
+    const { loadProjection } = await import("../../materials/projections.js");
+    const slot = await loadProjection(targetKind, targetId, "0");
+    targetName = slot?.state?.name || null;
   } catch { /* name lookup is best-effort */ }
   return {
     target: { kind: targetKind, id: String(targetId), name: targetName },

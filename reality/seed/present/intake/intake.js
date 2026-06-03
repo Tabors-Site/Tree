@@ -124,6 +124,10 @@ export async function enqueueIntake(spaceId, beingId, entry) {
       sentAt,
       transportAct:    true,            // marker for the scheduler / moment
     },
+    // Branch threads off the entry; the inbox fold reads fact.branch
+    // when upserting the projection row so the scheduler can pick
+    // branch-scoped.
+    branch:  entry.branch || "0",
   });
 
   return { correlation, sentAt };
@@ -197,6 +201,10 @@ export async function pickNextIntake(spaceId, beingId) {
       // them on summonCtx without re-reading row.content.
       act:             row.content?.act || null,
       identity:        row.content?.identity || null,
+      // Branch the moment will run in. Sourced from the inbox row's
+      // branch field (written by the fold from the be:summon fact's
+      // branch). assign.js reads entry.branch to seed summonCtx.
+      branch:          row.branch || "0",
     },
     index: row._id, // correlation as identifier
   };

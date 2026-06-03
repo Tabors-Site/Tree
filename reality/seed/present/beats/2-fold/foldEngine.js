@@ -22,7 +22,13 @@
 
 import Fact from "../../../past/fact/fact.js";
 import * as reducers from "../../../materials/reducers.js";
-import { getProjection, applyProjection, initProjection } from "../../../materials/projections.js";
+import { loadProjection, saveProjection, initProjection } from "../../../materials/projections.js";
+import {
+  resolveBranchLineage,
+  getBranchPoint,
+  isMain,
+  MAIN,
+} from "../../../materials/branch/branches.js";
 
 const REEL_TYPES = new Set(["being", "space", "matter"]);
 
@@ -69,25 +75,104 @@ function assertType(type) {
 }
 
 /**
- * Read facts on an aggregate's reel after a given marker, sorted by
- * seq ascending. Only facts with a numeric seq are returned (non-reel
- * facts have seq:null and don't participate in the fold).
+ * Read facts on an aggregate's reel within a seq range, sorted by seq
+ * ascending. Only facts with a numeric seq are returned (non-reel
+ * facts carry seq:null and don't participate in the fold).
+ *
+ * Both bounds optional. Their semantics differ deliberately:
+ *   - afterSeq is EXCLUSIVE — match the live-fold "advance past my
+ *     marker" semantic: `proj.foldedSeq` is the seq I've already
+ *     applied, so I want seqs strictly greater than it.
+ *   - untilSeq is INCLUSIVE — match the historical-fold "give me
+ *     the world as of seq N" semantic: a target seq is the last
+ *     fact I want applied, not the first I want excluded.
+ *
+ * ── Branch semantics ─────────────────────────────────────────────
+ *
+ * Reading a reel in branch B is "main's facts up to main's branchPoint
+ * for this reel, plus #X's facts up to #X's branchPoint for this reel
+ * (for every X in lineage main→B), plus B's own divergent facts." For
+ * branch "0" (main) the body short-circuits to the legacy single-
+ * branch query (no branch filter — accommodates pre-Pass-2 rows that
+ * lack the `branch` field).
+ *
+ * For non-main branches the body walks `resolveBranchLineage(branch)`
+ * once, then runs a single OR-of-ranges query against the Fact
+ * collection — each ancestor contributes the seqs it OWNS for this
+ * reel (between its own branchPoint and the next branch up's
+ * branchPoint, or untilSeq for the leaf).
  *
  * @param {string} type
  * @param {string} id
- * @param {number|null} afterSeq  exclusive lower bound (null = from beginning)
+ * @param {number|null} afterSeq         EXCLUSIVE lower bound; null = from beginning
+ * @param {number|null} untilSeq         INCLUSIVE upper bound; null = to the end
+ * @param {string}      [branch="0"]     branch identifier (default "0" = main)
  * @returns {Promise<Array<object>>}
  */
-async function readReelAfter(type, id, afterSeq) {
-  const query = {
-    "target.kind": type,
-    "target.id":   id,
-    seq:           { $type: "number" },
-  };
-  if (typeof afterSeq === "number") {
-    query.seq = { $type: "number", $gt: afterSeq };
+export async function readReelBetween(type, id, afterSeq, untilSeq, branch = MAIN) {
+  // Main short-circuit: legacy data has no `branch` field on Fact.
+  // Skip the branch filter entirely so pre-Pass-2 rows participate.
+  if (isMain(branch)) {
+    const seqFilter = { $type: "number" };
+    if (typeof afterSeq === "number") seqFilter.$gt  = afterSeq;
+    if (typeof untilSeq === "number") seqFilter.$lte = untilSeq;
+    return await Fact.find({
+      "target.kind": type,
+      "target.id":   id,
+      seq:           seqFilter,
+    }).sort({ seq: 1 }).lean();
   }
-  return await Fact.find(query).sort({ seq: 1 }).lean();
+
+  // Non-main: walk the lineage and build a per-ancestor range query.
+  // The lineage is ordered main → leaf (e.g. ["0", "1", "1a", "1a1"]).
+  // For each branch X in that list, X owns the seqs from its own
+  // branchPoint (or 1 for main) up to (but not including) the NEXT
+  // branch's branchPoint — OR up to untilSeq if X is the leaf.
+  const lineage = await resolveBranchLineage(branch);
+
+  // Compute each ancestor's owned [lo, hi] seq range for this reel.
+  // The leaf inherits the global upper bound (untilSeq). Each non-leaf
+  // X stops at the next branch's branchPoint (which is the seq at
+  // which the next branch diverged from X).
+  const ranges = [];
+  for (let i = 0; i < lineage.length; i++) {
+    const here = lineage[i];
+    const next = lineage[i + 1] || null; // the branch that forked off `here`
+    const lo = isMain(here) ? 0 : await getBranchPoint(here, type, id);
+    // `lo` is EXCLUSIVE in the inherited semantics: facts strictly
+    // after `here`'s starting point. For the LEAF (the branch we're
+    // actually reading) the lower bound is afterSeq if set.
+    const isLeaf = i === lineage.length - 1;
+    const lower = isLeaf
+      ? (typeof afterSeq === "number" ? Math.max(afterSeq, lo) : lo)
+      : lo;
+    const upper = isLeaf
+      ? (typeof untilSeq === "number" ? untilSeq : null)
+      : await getBranchPoint(next, type, id);
+    if (upper != null && upper <= lower) continue; // empty range; skip
+    ranges.push({ branch: here, lower, upper });
+  }
+  if (ranges.length === 0) return [];
+
+  // Build the OR-of-ranges query. Each clause filters by branch and
+  // its seq range. For main rows that lack the `branch` field, match
+  // via `$in: ["0", null, undefined]` ($exists:false) so pre-Pass-2
+  // data participates in lineages that include main.
+  const orClauses = ranges.map(({ branch: b, lower, upper }) => {
+    const seqFilter = { $type: "number", $gt: lower };
+    if (upper != null) seqFilter.$lte = upper;
+    const branchClause = isMain(b)
+      ? { $or: [{ branch: MAIN }, { branch: { $exists: false } }] }
+      : { branch: b };
+    return {
+      "target.kind": type,
+      "target.id":   id,
+      seq:           seqFilter,
+      ...branchClause,
+    };
+  });
+
+  return await Fact.find({ $or: orClauses }).sort({ seq: 1 }).lean();
 }
 
 /**
@@ -108,44 +193,54 @@ async function readReelAfter(type, id, afterSeq) {
  *
  * @param {"being"|"space"|"matter"} type
  * @param {string} id
+ * @param {object} [opts]
+ * @param {boolean} [opts.skipCrossCutting=false]  suppress cross-cutting handler
+ *   dispatch on every applied fact. Defaults to false — the live fold ALWAYS
+ *   keeps inbox / position / threads projections in sync. The historical
+ *   read path (foldAt.js) passes true: re-firing cross-cutting handlers for
+ *   facts already long-applied would corrupt current-state projections.
  * @returns {Promise<{ state: object, foldedSeq: number }>}
  */
-export async function fold(type, id) {
+export async function fold(type, id, opts = {}) {
   assertType(type);
   if (!id) throw new Error("fold: id is required");
+  const skipCrossCutting = opts.skipCrossCutting === true;
+  const branch = opts.branch || MAIN;
 
-  const proj = await getProjection(type, id);
-  if (!proj) {
-    // No projection row exists — the aggregate's row is missing.
-    // Rebuild from the reel head (no row to seed from).
-    return await rebuild(type, id);
+  const slot = await loadProjection(type, id, branch);
+  if (!slot) {
+    // No slot in this branch yet. Cold-fold via lineage-aware
+    // readReelBetween (Pass 2 substrate) and land via initProjection.
+    return await rebuild(type, id, opts);
+  }
+  if (slot.tombstoned) {
+    // Released in this branch. No further folding; the aggregate is
+    // gone here. Return the marker state so callers can render
+    // "gone-in-this-branch" cleanly.
+    return { state: slot.state, foldedSeq: slot.foldedSeq ?? 0, tombstoned: true };
   }
 
-  const tail = await readReelAfter(type, id, proj.foldedSeq);
+  const tail = await readReelBetween(type, id, slot.foldedSeq, null, branch);
   if (tail.length === 0) {
     // Hot path: nothing new since last fold. Cache read, no write.
-    return { state: projectionState(proj), foldedSeq: proj.foldedSeq ?? 0 };
+    return { state: slot.state, foldedSeq: slot.foldedSeq ?? 0 };
   }
 
   const reducer = reducers.get(type);
-  // Start from the cached state. The projection row is sparse — only
-  // fields the reducer chose to write live in `state`. Reducers should
-  // be defensive about missing fields (treat undefined as initial).
-  let state = projectionState(proj);
+  let state = slot.state;
   for (const f of tail) {
     state = reducer.reduce(state, f);
-    await dispatchCrossCutting(f, type, id);
+    if (!skipCrossCutting) await dispatchCrossCutting(f, type, id);
   }
   const newFoldedSeq = tail[tail.length - 1].seq;
   const position = state.position !== undefined ? state.position : undefined;
 
-  // CAS: only advance if no one beat us. On failure, the projection
-  // is self-healing — the next fold catches up.
-  await applyProjection(
-    type,
-    id,
+  // CAS: only advance if no one beat us. On failure, the next fold
+  // catches up. Per-branch slot — main and #1 don't contend.
+  await saveProjection(
+    type, id, branch,
     { state, foldedSeq: newFoldedSeq, position },
-    proj.foldedSeq,
+    slot.foldedSeq,
   );
 
   return { state, foldedSeq: newFoldedSeq };
@@ -163,62 +258,50 @@ export async function fold(type, id) {
  *
  * @param {"being"|"space"|"matter"} type
  * @param {string} id
+ * @param {object} [opts]
+ * @param {boolean} [opts.skipCrossCutting=false]  see `fold` docstring above.
  * @returns {Promise<{ state: object, foldedSeq: number }>}
  */
-export async function rebuild(type, id) {
+export async function rebuild(type, id, opts = {}) {
   assertType(type);
   if (!id) throw new Error("rebuild: id is required");
+  const skipCrossCutting = opts.skipCrossCutting === true;
+  const branch = opts.branch || MAIN;
 
   const reducer = reducers.get(type);
-  const facts = await readReelAfter(type, id, null);
+  // Pass 2 substrate: readReelBetween with a branch returns the
+  // lineage-aware fact chain (main's facts up to branchPoint plus
+  // this branch's divergent facts, in seq order). For main, returns
+  // every fact on the reel. For a deeper branch, walks the parent
+  // chain. The reducer doesn't see the lineage; it just sees the
+  // ordered facts.
+  const facts = await readReelBetween(type, id, null, null, branch);
   let state = reducer.initial();
   for (const f of facts) {
     state = reducer.reduce(state, f);
-    await dispatchCrossCutting(f, type, id);
+    if (!skipCrossCutting) await dispatchCrossCutting(f, type, id);
   }
   const lastSeq = facts.length > 0 ? facts[facts.length - 1].seq : 0;
 
   // Phantom guard. Every aggregate's reel doctrinally begins with a
   // create-fact (be:register for beings, do:create-space / do:birth
-  // for spaces and matter). If the reducer walked every fact on
-  // this reel and produced an empty state, no creating fact was
-  // found — the reel is malformed (most often: a be:release or
-  // similar non-create fact landed against an unknown id, sometimes
-  // via wire-layer arrival/session quirks). initProjection's
-  // `$setOnInsert: { _id }` would materialize a row with no name
-  // and no parentBeingId; that row pollutes lookups
-  // (findRootOperator used to trip on it). Refusing to materialize
-  // empty state cleanly drops these orphan reels — the next fold
-  // round still self-heals if a create-fact later appears, because
-  // the row simply doesn't exist yet.
+  // for spaces and matter). If the reducer walked every fact and
+  // produced an empty state, no creating fact was found — the reel
+  // is malformed (most often: a be:release or similar non-create
+  // fact landed against an unknown id, sometimes via wire-layer
+  // arrival/session quirks). Refusing to materialize empty state
+  // cleanly drops these orphan reels — the next fold round still
+  // self-heals if a create-fact later appears.
   if (Object.keys(state).length === 0) {
     return { state, foldedSeq: lastSeq };
   }
 
   const position = state.position !== undefined ? state.position : undefined;
-
-  // Upsert. The row may be new (first-ever fold for this aggregate)
-  // or being restored over an existing row. initProjection handles
-  // both atomically. The reducer's output is authoritative.
-  await initProjection(type, id, { state, foldedSeq: lastSeq, position });
+  await initProjection(type, id, branch, { state, foldedSeq: lastSeq, position });
 
   return { state, foldedSeq: lastSeq };
 }
 
-/**
- * Extract the reducer-state slice from a projection row. Today the
- * projection row IS the cache, so "state" is whatever fields the
- * reducer cares about. Reducers stay defensive — they read what they
- * wrote, ignore what they didn't.
- *
- * Future: if the projection row's reducer-derived state grows into a
- * dedicated nested field (`projectionState: {...}`), this is the one
- * place to unwrap it.
- */
-function projectionState(proj) {
-  if (!proj) return {};
-  // Today: pass through. Reducers write top-level fields; their state
-  // is the row. position is included so reducers see it on the next
-  // round.
-  return proj;
-}
+// projectionState helper retired 2026-06-03 — slot.state IS the
+// reducer-state slice now (the Projection collection stores state in
+// a dedicated `state` field rather than at the row's top level).

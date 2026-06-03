@@ -43,7 +43,9 @@ import { acquireSpaceLock, releaseSpaceLock } from "./spaceLocks.js";
  * Read-modify-write under the space lock; whole-array fact replace.
  */
 export async function addContributor(spaceId, contributorId, beingId) {
-  const space = await Space.findById(spaceId).select("seedSpace").lean();
+  const { loadProjection } = await import("../projections.js");
+  const _spaceSlot = await loadProjection("space", spaceId, "0");
+  const space = _spaceSlot ? { seedSpace: _spaceSlot.state?.seedSpace } : null;
   if (!space) throw new Error("Space not found");
   if (space.seedSpace) throw new Error("Cannot modify seed spaces");
 
@@ -63,7 +65,9 @@ export async function addContributor(spaceId, contributorId, beingId) {
     throw new IbpError(IBP_ERR.RESOURCE_CONFLICT, "Space is being modified");
   }
   try {
-    const current = await Space.findById(spaceId).select("contributors").lean();
+    const { loadProjection: _loadP } = await import("../projections.js");
+    const _curSlot = await _loadP("space", spaceId, "0");
+    const current = _curSlot ? { contributors: _curSlot.state?.contributors } : null;
     const list = current?.contributors || [];
     if (list.length >= MAX_CONTRIBUTORS) {
       throw new Error(`Space has reached the maximum of ${MAX_CONTRIBUTORS} contributors`);
@@ -92,7 +96,9 @@ export async function addContributor(spaceId, contributorId, beingId) {
  * The resolved owner or the contributor themselves can remove.
  */
 export async function removeContributor(spaceId, contributorId, beingId) {
-  const space = await Space.findById(spaceId).select("seedSpace").lean();
+  const { loadProjection } = await import("../projections.js");
+  const _spaceSlot = await loadProjection("space", spaceId, "0");
+  const space = _spaceSlot ? { seedSpace: _spaceSlot.state?.seedSpace } : null;
   if (!space) throw new Error("Space not found");
   if (space.seedSpace) throw new Error("Cannot modify seed spaces");
 
@@ -108,7 +114,9 @@ export async function removeContributor(spaceId, contributorId, beingId) {
     throw new IbpError(IBP_ERR.RESOURCE_CONFLICT, "Space is being modified");
   }
   try {
-    const current = await Space.findById(spaceId).select("contributors").lean();
+    const { loadProjection: _loadP } = await import("../projections.js");
+    const _curSlot = await _loadP("space", spaceId, "0");
+    const current = _curSlot ? { contributors: _curSlot.state?.contributors } : null;
     const list = current?.contributors || [];
     if (!list.includes(contributorId)) return; // already absent
     const next = list.filter((id) => id !== contributorId);
@@ -141,7 +149,13 @@ export async function removeContributor(spaceId, contributorId, beingId) {
  * fact lands.
  */
 export async function setOwner(spaceId, newOwnerId, beingId) {
-  const space = await Space.findById(spaceId).select("seedSpace rootOwner parent").lean();
+  const { loadProjection: _loadP1 } = await import("../projections.js");
+  const _ownerSlot = await _loadP1("space", spaceId, "0");
+  const space = _ownerSlot ? {
+    seedSpace: _ownerSlot.state?.seedSpace,
+    rootOwner: _ownerSlot.state?.rootOwner,
+    parent:    _ownerSlot.state?.parent,
+  } : null;
   if (!space) throw new Error("Space not found");
   if (space.seedSpace) throw new Error("Cannot set ownership on seed spaces");
 
@@ -174,7 +188,12 @@ export async function setOwner(spaceId, newOwnerId, beingId) {
     // CAS check on rootOwner inside the lock: if a concurrent writer
     // changed ownership between our initial read and lock acquire, the
     // previousOwnerId we computed above is stale — abort.
-    const current = await Space.findById(spaceId).select("rootOwner contributors").lean();
+    const { loadProjection: _loadP2 } = await import("../projections.js");
+    const _curSlot2 = await _loadP2("space", spaceId, "0");
+    const current = _curSlot2 ? {
+      rootOwner:    _curSlot2.state?.rootOwner,
+      contributors: _curSlot2.state?.contributors,
+    } : null;
     const currentOwner = current?.rootOwner ? String(current.rootOwner) : null;
     if (currentOwner !== previousOwnerId) {
       throw new Error("Ownership changed concurrently. Retry the operation.");
@@ -215,7 +234,13 @@ export async function setOwner(spaceId, newOwnerId, beingId) {
  * from their own authority, which makes no sense).
  */
 export async function removeOwner(spaceId, beingId) {
-  const space = await Space.findById(spaceId).select("seedSpace rootOwner parent").lean();
+  const { loadProjection: _loadP3 } = await import("../projections.js");
+  const _rmSlot = await _loadP3("space", spaceId, "0");
+  const space = _rmSlot ? {
+    seedSpace: _rmSlot.state?.seedSpace,
+    rootOwner: _rmSlot.state?.rootOwner,
+    parent:    _rmSlot.state?.parent,
+  } : null;
   if (!space) throw new Error("Space not found");
   if (space.seedSpace) throw new Error("Cannot modify seed spaces");
   if (!space.rootOwner || space.rootOwner === I_AM) throw new Error("Space has no owner to remove");
@@ -259,7 +284,12 @@ export async function removeOwner(spaceId, beingId) {
  * contributors if they had been one.
  */
 export async function transferOwnership(spaceId, newOwnerId, beingId) {
-  const space = await Space.findById(spaceId).select("seedSpace rootOwner").lean();
+  const { loadProjection: _loadP4 } = await import("../projections.js");
+  const _txSlot = await _loadP4("space", spaceId, "0");
+  const space = _txSlot ? {
+    seedSpace: _txSlot.state?.seedSpace,
+    rootOwner: _txSlot.state?.rootOwner,
+  } : null;
   if (!space) throw new Error("Space not found");
   if (space.seedSpace) throw new Error("Cannot modify seed spaces");
   if (!space.rootOwner || space.rootOwner === I_AM) throw new Error("Space has no owner to transfer from");
@@ -279,7 +309,9 @@ export async function transferOwnership(spaceId, newOwnerId, beingId) {
   const locked = await acquireSpaceLock(spaceId, beingId);
   if (!locked) throw new IbpError(IBP_ERR.RESOURCE_CONFLICT, "Space ownership is being modified");
   try {
-    const current = await Space.findById(spaceId).select("contributors").lean();
+    const { loadProjection: _loadP } = await import("../projections.js");
+    const _curSlot = await _loadP("space", spaceId, "0");
+    const current = _curSlot ? { contributors: _curSlot.state?.contributors } : null;
     const list = current?.contributors || [];
     const filtered = list.includes(newOwnerId) ? list.filter((id) => id !== newOwnerId) : list;
     const next = filtered.includes(oldOwnerId) ? filtered : [...filtered, oldOwnerId];
@@ -317,8 +349,9 @@ async function assertOwner(spaceId, beingId) {
   throw new Error("Only the tree owner can perform this action");
 }
 
-async function assertBeingExists(beingId) {
+async function assertBeingExists(beingId, branch = "0") {
   if (!beingId) throw new Error("Being id is required");
-  const being = await Being.findById(beingId).select("_id").lean();
-  if (!being) throw new Error("Being not found");
+  const { loadProjection } = await import("../projections.js");
+  const slot = await loadProjection("being", beingId, branch);
+  if (!slot) throw new Error("Being not found");
 }

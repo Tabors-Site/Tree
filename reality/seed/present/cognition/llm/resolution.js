@@ -63,7 +63,7 @@ const LOCKDOWN = Symbol("LOCKDOWN");
  * Cycle-guarded + depth-capped. Returns an array starting with the
  * passed-in being and ending at the chain root.
  */
-async function walkBeingChain(rootBeing) {
+async function walkBeingChain(rootBeing, branch = "0") {
   if (!rootBeing) return [];
   const chain = [rootBeing];
   const seen = new Set([String(rootBeing._id)]);
@@ -73,11 +73,10 @@ async function walkBeingChain(rootBeing) {
     const id = String(curId);
     if (seen.has(id)) break;
     seen.add(id);
-    const parent = await Being.findById(id)
-      .select("llmDefault qualities parentBeingId")
-      .lean()
-      .catch(() => null);
-    if (!parent) break;
+    const { loadProjection } = await import("../../../materials/projections.js");
+    const slot = await loadProjection("being", id, branch).catch(() => null);
+    if (!slot) break;
+    const parent = { _id: slot.id, ...slot.state };
     chain.push(parent);
     curId = parent.parentBeingId || null;
     depth++;
@@ -90,15 +89,15 @@ async function walkBeingChain(rootBeing) {
  * connection, or a normal hit. Returns LOCKDOWN sentinel on lock,
  * { connectionId, enforced } on hit, null when no candidate found.
  */
-async function spaceChainResolve(spaceId, slot) {
+async function spaceChainResolve(spaceId, slot, branch = "0") {
   if (!spaceId) return null;
   let chain;
   try {
     chain = await getAncestorChain(spaceId);
   } catch {
-    const single = await Space.findById(spaceId)
-      .select("llmDefault qualities")
-      .lean();
+    const { loadProjection } = await import("../../../materials/projections.js");
+    const slotProj = await loadProjection("space", spaceId, branch);
+    const single = slotProj ? { _id: slotProj.id, ...slotProj.state } : null;
     chain = single ? [single] : [];
   }
   let firstHit = null;
@@ -149,16 +148,17 @@ export async function resolveLlmConnection({
   beingId = null,
   spaceId = null,
   slot = "main",
+  branch = "0",
 } = {}) {
-  const being = beingId
-    ? await Being.findById(beingId)
-        .select("llmDefault qualities parentBeingId")
-        .lean()
-        .catch(() => null)
-    : null;
-  const beingChain = await walkBeingChain(being);
+  let being = null;
+  if (beingId) {
+    const { loadProjection } = await import("../../../materials/projections.js");
+    const slotProj = await loadProjection("being", beingId, branch).catch(() => null);
+    being = slotProj ? { _id: slotProj.id, ...slotProj.state } : null;
+  }
+  const beingChain = await walkBeingChain(being, branch);
 
-  const spaceHit = await spaceChainResolve(spaceId, slot);
+  const spaceHit = await spaceChainResolve(spaceId, slot, branch);
   const beingHit = beingChainResolve(beingChain, slot);
 
   // Layer 1: Lockout wins over everything.

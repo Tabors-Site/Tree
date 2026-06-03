@@ -88,9 +88,8 @@ export async function ensureReignMatter(summonCtx) {
       "ensureReignMatter requires summonCtx (the boot moment's ctx).",
     );
   }
-  const heaven = await Space.findOne({ seedSpace: SEED_SPACE.HEAVEN })
-    .select("_id")
-    .lean();
+  const { findBySeedSpace } = await import("../projections.js");
+  const heaven = await findBySeedSpace(SEED_SPACE.HEAVEN, "0");
   if (!heaven) {
     log.warn(
       "Reigning",
@@ -98,19 +97,21 @@ export async function ensureReignMatter(summonCtx) {
     );
     return null;
   }
-  const existing = await Matter.findOne({
-    spaceId: heaven._id,
-    kind: REIGN_MATTER_KIND,
-  })
-    .select("_id")
-    .lean();
+  // Find existing reign matter by direct projection query.
+  const { default: Projection } = await import("../branch/projection.js");
+  const existing = await Projection.findOne({
+    branch: "0", type: "matter",
+    "state.spaceId": heaven.id,
+    "state.kind": REIGN_MATTER_KIND,
+    tombstoned: { $ne: true },
+  }).select("id").lean();
   if (existing) {
-    _reignMatterId = String(existing._id);
+    _reignMatterId = String(existing.id);
     return _reignMatterId;
   }
   const { doVerb } = await import("../../ibp/verbs/do.js");
   const result = await doVerb(
-    { kind: "space", id: String(heaven._id) },
+    { kind: "space", id: String(heaven.id) },
     "create-matter",
     {
       kind: REIGN_MATTER_KIND,
@@ -133,18 +134,18 @@ export async function ensureReignMatter(summonCtx) {
  */
 async function getReignMatterId() {
   if (_reignMatterId) return _reignMatterId;
-  const heaven = await Space.findOne({ seedSpace: SEED_SPACE.HEAVEN })
-    .select("_id")
-    .lean();
+  const { findBySeedSpace } = await import("../projections.js");
+  const heaven = await findBySeedSpace(SEED_SPACE.HEAVEN, "0");
   if (!heaven) return null;
-  const existing = await Matter.findOne({
-    spaceId: heaven._id,
-    kind: REIGN_MATTER_KIND,
-  })
-    .select("_id")
-    .lean();
+  const { default: Projection } = await import("../branch/projection.js");
+  const existing = await Projection.findOne({
+    branch: "0", type: "matter",
+    "state.spaceId": heaven.id,
+    "state.kind": REIGN_MATTER_KIND,
+    tombstoned: { $ne: true },
+  }).select("id").lean();
   if (existing) {
-    _reignMatterId = String(existing._id);
+    _reignMatterId = String(existing.id);
     return _reignMatterId;
   }
   return null;
@@ -160,11 +161,10 @@ export async function loadReigningBeings() {
   try {
     const matterId = await getReignMatterId();
     if (!matterId) return;
-    const matter = await Matter.findById(matterId)
-      .select("qualities")
-      .lean();
-    if (!matter) return;
-    const quals = matter.qualities;
+    const { loadProjection } = await import("../projections.js");
+    const matterSlot = await loadProjection("matter", matterId, "0");
+    if (!matterSlot) return;
+    const quals = matterSlot.state?.qualities;
     const reign = quals instanceof Map ? quals.get("reign") : quals?.reign;
     const beings = reign?.beings;
     if (Array.isArray(beings)) {
@@ -306,21 +306,20 @@ export async function ensureSeedDelegatesReign(summonCtx) {
     );
   }
   const { SEED_DELEGATES } = await import("./seedDelegates.js");
-  const Being = (await import("./being.js")).default;
+  const { findByName } = await import("../projections.js");
   const names = SEED_DELEGATES.map((d) => d.name);
-  const rows = await Being.find({ name: { $in: names } })
-    .select("_id name")
-    .lean();
-  for (const row of rows) {
+  const slots = (await Promise.all(names.map((n) => findByName("being", n, "0"))))
+    .filter(Boolean);
+  for (const slot of slots) {
     try {
-      await addReigningBeing(String(row._id), {
+      await addReigningBeing(String(slot.id), {
         summonCtx,
         addedBy: I_AM,
       });
     } catch (err) {
       log.error(
         "Reigning",
-        `failed to add seed delegate ${row.name} to reign: ${err.message}`,
+        `failed to add seed delegate ${slot.state?.name} to reign: ${err.message}`,
       );
     }
   }
@@ -342,18 +341,17 @@ export async function ensureIAmChildrenReign(summonCtx) {
       "ensureIAmChildrenReign requires summonCtx (the boot moment's ctx).",
     );
   }
-  const Being = (await import("./being.js")).default;
-  const rows = await Being.find({ parentBeingId: I_AM })
-    .select("_id name")
-    .lean();
-  for (const row of rows) {
-    const id = String(row._id);
+  const { findByParent, loadProjection } = await import("../projections.js");
+  const children = await findByParent(I_AM, "0");
+  for (const child of children) {
+    const id = String(child.id);
     if (_reigningBeings.has(id)) continue;
     try {
       await addReigningBeing(id, { summonCtx, addedBy: I_AM });
+      const slot = await loadProjection("being", id, "0");
       log.info(
         "Reigning",
-        `boot repair: anointed I-Am child @${row.name} (was missing from roster)`,
+        `boot repair: anointed I-Am child @${slot?.state?.name || id.slice(0, 8)} (was missing from roster)`,
       );
     } catch (err) {
       log.error(

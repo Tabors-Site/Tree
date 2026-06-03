@@ -2,157 +2,554 @@
 //
 // Projections — the cache the fold writes to and the engine reads from.
 //
-// A projection IS the Space / Being / Matter row, extended with two
-// projection-only fields: `foldedSeq` (the highest fact-seq applied)
-// and `position` (reducer-derived occupant key).
+// Doctrine (locked with Tabor 2026-06-03):
+//   1. Main is just-another-branch with no parent. Branch is a
+//      first-class dimension of every projection lookup.
+//   2. Names are per-branch identifiers; identity is `_id`. IBP
+//      `#<branch>` disambiguates.
+//   3. Branches inherit parent state lazily. Modifications shadow main
+//      for in-branch queries.
+//   4. Reducers are branch-blind. The substrate handles branch routing
+//      around them.
 //
-// Per FOLD.md / STAMPER.md, this module is the **only** writer of
-// projection state outside of legacy direct writes. The fold engine
-// calls `applyProjection(type, id, {state, foldedSeq, position}, expectedFoldedSeq)`
-// to advance the row; the compare-and-set on `foldedSeq` prevents
-// marker regression when concurrent folds race.
+// Storage: a single `projections` collection
+// ([seed/materials/branch/projection.js](branch/projection.js)) holds
+// every cache slot keyed `<branch>:<type>:<id>`. Main (branch="0") is
+// not special-cased — its slots live alongside every other branch's.
 //
-// State shape: the `state` object holds the fields the reducer decided
-// to derive. Today reducers are minimal — they advance foldedSeq and
-// (when known) position, leaving the rest of the row untouched. As
-// reducers gain content, they'll write more fields here; the row's
-// non-projection fields (today the source of truth) will be replaced
-// piece-by-piece as the bypass closure progresses.
+// No legacy compatibility paths. Callers that still read directly from
+// Being / Space / Matter rows for projection data are now broken until
+// swept onto this API (Phase 3). That is intentional: silent dual-shape
+// fallbacks rot the architecture; loud breaks at the boundary are how
+// the sweep gets finished.
 
-import Being from "../materials/being/being.js";
-import Space from "../materials/space/space.js";
-import Matter from "../materials/matter/matter.js";
+import Projection, { projectionKey } from "./branch/projection.js";
 
-const MODELS = {
-  being:  Being,
-  space:  Space,
-  matter: Matter,
-};
+const MAIN = "0";
+const VALID_TYPES = new Set(["being", "space", "matter"]);
 
-function modelFor(type) {
-  const M = MODELS[type];
-  if (!M) throw new Error(`projections: unknown type "${type}"`);
-  return M;
+function assertType(type) {
+  if (!VALID_TYPES.has(type)) {
+    throw new Error(`projections: unknown type "${type}" (expected being|space|matter)`);
+  }
 }
 
+// ─────────────────────────────────────────────────────────────────────
+// Read / write a single slot
+// ─────────────────────────────────────────────────────────────────────
+
 /**
- * Read the current projection state for an aggregate. Returns null
- * when the aggregate row doesn't exist. The shape is the full row
- * (since today the row IS the cache); reducers and the fold engine
- * read `foldedSeq` and `position` plus whatever fields they derive.
+ * Read a projection slot in a branch. Returns null when the slot has
+ * never been initialized (the aggregate has never been touched in this
+ * branch's lineage), or a slot object — including tombstoned slots
+ * (state-less, marker only). Callers handle tombstones explicitly.
+ *
+ * Lazy inheritance from parent branches is NOT done here. This function
+ * is a single-slot read; the fold engine's cold-fold path walks the
+ * lineage when the slot is missing, calls back through initProjection,
+ * and subsequent reads land on the populated slot.
  *
  * @param {"being"|"space"|"matter"} type
  * @param {string} id
- * @returns {Promise<object|null>}
+ * @param {string} [branch="0"]
+ * @returns {Promise<{state, foldedSeq, position, tombstoned, type, id, branch}|null>}
  */
-export async function getProjection(type, id) {
+export async function loadProjection(type, id, branch = MAIN) {
   if (!id) return null;
-  const M = modelFor(type);
-  return await M.findById(id).lean();
+  assertType(type);
+  const slot = await Projection.findById(projectionKey(branch, type, id)).lean();
+  if (!slot) return null;
+  return {
+    state:      slot.state || {},
+    foldedSeq:  slot.foldedSeq ?? null,
+    position:   slot.position ?? null,
+    tombstoned: !!slot.tombstoned,
+    type:       slot.type,
+    id:         slot.id,
+    branch:     slot.branch,
+  };
 }
 
 /**
- * Conditional advance — CAS update on an existing projection row.
- * Only writes when current `foldedSeq` equals `expectedFoldedSeq`.
- * Returns true on success, false when the precondition failed
- * (someone else advanced first — caller lets the next fold catch up).
+ * Lazy cold-fold load. When the branch has no slot for this aggregate,
+ * triggers a fold() against the branch's lineage. fold() walks
+ * `readReelBetween(type, id, null, null, branch)` — lineage-aware,
+ * branch-point-respecting — and either populates the slot or returns
+ * null (the aggregate truly doesn't exist in this branch, e.g. created
+ * in main AFTER branch point).
  *
- * Used by the incremental fold path. For first-fold / rebuild (where
- * the row may not exist), use `initProjection` instead.
- *
- * The `state` object IS the row's content. The reducer is the source
- * of truth for what a being/space/matter looks like; this method
- * writes whatever the reducer produced. There is no "required field"
- * negotiation between the schema and the projection — the schema is a
- * cache shape, not an authority.
+ * Use this when a caller NEEDS the branch's state and a null result
+ * is genuinely "doesn't exist here" rather than "cache not warm."
+ * Most callers (descriptor builders, etc.) should keep using
+ * loadProjection; the fold engine runs cold-fold during its own
+ * hot path. Reserved for entry-point callers (transportAct, auth,
+ * etc.) that hit a branch with an unbuilt cache.
  *
  * @param {"being"|"space"|"matter"} type
  * @param {string} id
- * @param {{state: object, foldedSeq: number, position: string|null}} next
- * @param {number|null} expectedFoldedSeq  the foldedSeq the caller read
- * @returns {Promise<boolean>} true when the advance landed
+ * @param {string} [branch="0"]
  */
-export async function applyProjection(type, id, next, expectedFoldedSeq) {
+export async function loadOrFold(type, id, branch = MAIN) {
+  const existing = await loadProjection(type, id, branch);
+  if (existing) return existing;
+  // Cold-fold via the engine. fold writes to the branch slot via
+  // initProjection on the way out; the next loadProjection hits cache.
+  try {
+    const { fold } = await import("../present/beats/2-fold/foldEngine.js");
+    const { state, foldedSeq } = await fold(type, id, { branch });
+    if (!state || Object.keys(state).length === 0) return null;
+    // Re-read the slot — fold's initProjection landed the canonical
+    // shape (with `position` lifted to the slot level for indexing).
+    return await loadProjection(type, id, branch);
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Conditional advance of an existing slot. Returns false when
+ * `expectedFoldedSeq` doesn't match (someone else advanced first; the
+ * next fold catches up). The slot MUST already exist — use
+ * initProjection to land a cold-fold's first write.
+ *
+ * @param {"being"|"space"|"matter"} type
+ * @param {string} id
+ * @param {string} branch
+ * @param {{state, foldedSeq, position}} next
+ * @param {number|null} expectedFoldedSeq
+ * @returns {Promise<boolean>}
+ */
+export async function saveProjection(type, id, branch, next, expectedFoldedSeq) {
   if (!id) return false;
-  const M = modelFor(type);
+  assertType(type);
   const { state = {}, foldedSeq, position } = next;
   if (typeof foldedSeq !== "number") {
-    throw new Error("applyProjection: next.foldedSeq must be a number");
+    throw new Error("saveProjection: next.foldedSeq must be a number");
   }
-
-  const $set = { ...state, foldedSeq };
-  if (position !== undefined) $set.position = position;
-
+  const _id = projectionKey(branch, type, id);
   const guard = expectedFoldedSeq == null
     ? { $or: [{ foldedSeq: null }, { foldedSeq: { $exists: false } }] }
     : { foldedSeq: expectedFoldedSeq };
-
-  const result = await M.updateOne(
-    { _id: id, ...guard },
-    { $set },
+  const r = await Projection.updateOne(
+    { _id, ...guard },
+    { $set: { state, foldedSeq, position: position ?? null } },
   );
-  return result.matchedCount > 0;
+  return r.matchedCount > 0;
 }
 
 /**
- * Insert-or-overwrite the projection. Used by rebuild and the
- * first-fold path where the row may not yet exist. Unconditional —
- * the reducer's output is authoritative, the row IS that output.
- *
- * `state` should contain the `_id` either implicitly (via the
- * `id` arg) or explicitly. We set `_id` from the arg via
- * `$setOnInsert` so the row materializes correctly when missing.
+ * Insert-or-overwrite a slot. Used by the cold-fold landing path where
+ * the slot may not yet exist. Unconditional — the reducer's output is
+ * authoritative, the slot IS that output.
  *
  * @param {"being"|"space"|"matter"} type
  * @param {string} id
- * @param {{state: object, foldedSeq: number, position: string|null}} next
+ * @param {string} branch
+ * @param {{state, foldedSeq, position}} next
  * @returns {Promise<void>}
  */
-export async function initProjection(type, id, next) {
+export async function initProjection(type, id, branch, next) {
   if (!id) throw new Error("initProjection: id is required");
-  const M = modelFor(type);
+  assertType(type);
+  if (!next || typeof next !== "object") {
+    throw new Error("initProjection: next object is required");
+  }
   const { state = {}, foldedSeq, position } = next;
   if (typeof foldedSeq !== "number") {
     throw new Error("initProjection: next.foldedSeq must be a number");
   }
-
-  const $set = { ...state, foldedSeq };
-  if (position !== undefined) $set.position = position;
-  // Strip _id from $set if present — it goes in $setOnInsert.
-  delete $set._id;
-
-  await M.updateOne(
-    { _id: id },
+  const _id = projectionKey(branch, type, id);
+  await Projection.updateOne(
+    { _id },
     {
-      $set,
-      $setOnInsert: { _id: id },
+      $set: {
+        state,
+        foldedSeq,
+        position:   position ?? null,
+        tombstoned: false,
+      },
+      $setOnInsert: { _id, branch, type, id },
     },
     { upsert: true },
   );
 }
 
 /**
- * Find aggregates positioned at a given space. Returns
- * [{type, id, foldedSeq, position}, ...] for every being and matter
- * whose projection.position equals the given spaceId, plus every
- * child Space whose position equals the parent.
+ * Mark an aggregate as released-in-branch. Tombstoned slots are
+ * filtered out of findByPosition / findByName / listByType / findByParent
+ * but preserved by loadProjection so callers can render "gone here."
  *
- * The query hits the per-collection position index (sparse). Spaces,
- * Beings, and Matter each have their own index on `position`.
+ * Tombstones DO shadow parent-branch projections during query: a being
+ * tombstoned in #1 will not leak through from main when a #1 query
+ * runs. Without the tombstone marker the lazy-inheritance rule would
+ * resurrect it on every query.
  *
- * @param {string} spaceId  the space to find occupants of
- * @returns {Promise<Array<{type:string, id:string, foldedSeq:number|null, position:string|null}>>}
+ * @param {"being"|"space"|"matter"} type
+ * @param {string} id
+ * @param {string} branch
+ * @param {number} atFoldedSeq
+ * @returns {Promise<void>}
  */
-export async function findByPosition(spaceId) {
+export async function tombstoneProjection(type, id, branch, atFoldedSeq) {
+  if (!id) throw new Error("tombstoneProjection: id is required");
+  assertType(type);
+  if (typeof atFoldedSeq !== "number") {
+    throw new Error("tombstoneProjection: atFoldedSeq must be a number");
+  }
+  const _id = projectionKey(branch, type, id);
+  await Projection.updateOne(
+    { _id },
+    {
+      $set: {
+        tombstoned: true,
+        foldedSeq:  atFoldedSeq,
+        position:   null,
+      },
+      $setOnInsert: { _id, branch, type, id, state: {} },
+    },
+    { upsert: true },
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// Branch-aware queries with shadow + tombstone semantics.
+//
+// The pattern in every non-main query: union main's contributions
+// (filtered by ids the branch has TOUCHED — modified or tombstoned)
+// with the branch's own slots. This is how lazy inheritance manifests
+// at the query layer: untouched-in-branch aggregates show through from
+// main; touched-in-branch ones are shadowed by branch's slot.
+// ─────────────────────────────────────────────────────────────────────
+
+/**
+ * Find aggregates positioned at a space in the given branch. Returns
+ * [{ type, id, foldedSeq, position }].
+ *
+ * @param {string} spaceId
+ * @param {string} [branch="0"]
+ */
+export async function findByPosition(spaceId, branch = MAIN) {
   if (!spaceId) return [];
-  const [beings, spaces, matters] = await Promise.all([
-    Being.find({ position: spaceId }).select("_id foldedSeq position").lean(),
-    Space.find({ position: spaceId }).select("_id foldedSeq position").lean(),
-    Matter.find({ position: spaceId }).select("_id foldedSeq position").lean(),
+  if (branch === MAIN) {
+    const rows = await Projection.find({
+      branch: MAIN, position: spaceId, tombstoned: { $ne: true },
+    }).select("type id foldedSeq position").lean();
+    return rows.map(toOccupant);
+  }
+  // Non-main: union with shadowing AND branchPoint filtering. A main
+  // aggregate at this position is only visible in `branch` if it
+  // existed at branch creation (has a branchPoint entry for its reel).
+  // Without this filter, aggregates created in main AFTER the branch
+  // would leak into the branch's view of this space.
+  const { getBranchPoint } = await import("./branch/branches.js");
+  const [branchHere, mainOccupants, branchTouched] = await Promise.all([
+    Projection.find({
+      branch, position: spaceId, tombstoned: { $ne: true },
+    }).select("type id foldedSeq position").lean(),
+    findByPosition(spaceId, MAIN),
+    Projection.find({ branch }).select("type id").lean(),
   ]);
-  return [
-    ...beings.map((d) => ({ type: "being",  id: String(d._id), foldedSeq: d.foldedSeq ?? null, position: d.position ?? null })),
-    ...spaces.map((d) => ({ type: "space",  id: String(d._id), foldedSeq: d.foldedSeq ?? null, position: d.position ?? null })),
-    ...matters.map((d) => ({ type: "matter", id: String(d._id), foldedSeq: d.foldedSeq ?? null, position: d.position ?? null })),
-  ];
+  const shadowedKey = (t, i) => `${t}:${i}`;
+  const shadowed = new Set(branchTouched.map((s) => shadowedKey(s.type, s.id)));
+  // Filter main candidates: (1) not shadowed, (2) existed at branchPoint.
+  const mainVisible = [];
+  for (const o of mainOccupants) {
+    if (shadowed.has(shadowedKey(o.type, o.id))) continue;
+    const bp = await getBranchPoint(branch, o.type, o.id);
+    if (bp && bp > 0) mainVisible.push(o);
+  }
+  return [...mainVisible, ...branchHere.map(toOccupant)];
+}
+
+/**
+ * Find an aggregate by name in the given branch. Name uniqueness is
+ * per-branch (unique partial index excludes tombstoned slots).
+ *
+ * Lazy inheritance: if no branch slot matches by name, walks to main —
+ * but skips main's row if the branch has tombstoned that aggregate.
+ *
+ * @param {"being"|"space"|"matter"} type
+ * @param {string} name
+ * @param {string} [branch="0"]
+ * @returns {Promise<{state, foldedSeq, position, type, id, branch}|null>}
+ */
+export async function findByName(type, name, branch = MAIN) {
+  assertType(type);
+  if (!name) return null;
+  // Branch-local match first (works for main too — main IS just-another-branch).
+  const branchSlot = await Projection.findOne({
+    branch, type, "state.name": name, tombstoned: { $ne: true },
+  }).lean();
+  if (branchSlot) {
+    return {
+      state:     branchSlot.state || {},
+      foldedSeq: branchSlot.foldedSeq ?? null,
+      position:  branchSlot.position ?? null,
+      type:      branchSlot.type,
+      id:        branchSlot.id,
+      branch:    branchSlot.branch,
+    };
+  }
+  if (branch === MAIN) return null;
+  // Lazy fall-through to main, gated by branchPoint. The aggregate
+  // must have existed at branch creation; otherwise it was named in
+  // main AFTER the branch and is invisible to this branch.
+  const mainSlot = await findByName(type, name, MAIN);
+  if (!mainSlot) return null;
+  const tomb = await Projection.findOne({
+    branch, type, id: mainSlot.id, tombstoned: true,
+  }).select("_id").lean();
+  if (tomb) return null;
+  const { getBranchPoint } = await import("./branch/branches.js");
+  const bp = await getBranchPoint(branch, type, mainSlot.id);
+  if (!bp || bp <= 0) return null;
+  return mainSlot;
+}
+
+/**
+ * Find children of a being (by parentBeingId) in the given branch.
+ * Used by being-lineage queries (descriptor's being-children).
+ *
+ * @param {string} beingId
+ * @param {string} [branch="0"]
+ */
+export async function findByParent(beingId, branch = MAIN) {
+  if (!beingId) return [];
+  if (branch === MAIN) {
+    const rows = await Projection.find({
+      branch: MAIN, type: "being",
+      "state.parentBeingId": beingId,
+      tombstoned: { $ne: true },
+    }).select("type id foldedSeq position").lean();
+    return rows.map(toOccupant);
+  }
+  const { getBranchPoint } = await import("./branch/branches.js");
+  const [branchChildren, mainChildren, branchTouched] = await Promise.all([
+    Projection.find({
+      branch, type: "being",
+      "state.parentBeingId": beingId,
+      tombstoned: { $ne: true },
+    }).select("type id foldedSeq position").lean(),
+    findByParent(beingId, MAIN),
+    Projection.find({ branch, type: "being" }).select("id").lean(),
+  ]);
+  const shadowed = new Set(branchTouched.map((s) => s.id));
+  const mainVisible = [];
+  for (const o of mainChildren) {
+    if (shadowed.has(o.id)) continue;
+    const bp = await getBranchPoint(branch, "being", o.id);
+    if (bp && bp > 0) mainVisible.push(o);
+  }
+  return [...mainVisible, ...branchChildren.map(toOccupant)];
+}
+
+/**
+ * List every aggregate of a type in the given branch. Powers
+ * .beings / .spaces / .matters catalog SEEs.
+ *
+ * @param {"being"|"space"|"matter"} type
+ * @param {string} [branch="0"]
+ */
+export async function listByType(type, branch = MAIN) {
+  assertType(type);
+  if (branch === MAIN) {
+    const rows = await Projection.find({
+      branch: MAIN, type, tombstoned: { $ne: true },
+    }).select("type id foldedSeq position").lean();
+    return rows.map(toOccupant);
+  }
+  const { getBranchPoint } = await import("./branch/branches.js");
+  const [branchSlots, mainAll, branchTouched] = await Promise.all([
+    Projection.find({
+      branch, type, tombstoned: { $ne: true },
+    }).select("type id foldedSeq position").lean(),
+    listByType(type, MAIN),
+    Projection.find({ branch, type }).select("id").lean(),
+  ]);
+  const shadowed = new Set(branchTouched.map((s) => s.id));
+  const mainVisible = [];
+  for (const o of mainAll) {
+    if (shadowed.has(o.id)) continue;
+    const bp = await getBranchPoint(branch, type, o.id);
+    if (bp && bp > 0) mainVisible.push(o);
+  }
+  return [...mainVisible, ...branchSlots.map(toOccupant)];
+}
+
+/**
+ * Find root-of-the-tree aggregates: beings with no parentBeingId,
+ * spaces with no parent, matter with no... well, matter is always at
+ * a space, so this only meaningfully applies to beings + spaces.
+ *
+ * @param {"being"|"space"} type
+ * @param {string} [branch="0"]
+ * @returns {Promise<Array<{type, id, foldedSeq, position}>>}
+ */
+export async function findRoot(type, branch = MAIN) {
+  assertType(type);
+  const parentField = type === "being" ? "state.parentBeingId" : "state.parent";
+  const where = {
+    branch, type,
+    tombstoned: { $ne: true },
+    $or: [
+      { [parentField]: null },
+      { [parentField]: { $exists: false } },
+    ],
+  };
+  const rows = await Projection.find(where).select("type id foldedSeq position").lean();
+  return rows.map(toOccupant);
+}
+
+/**
+ * Find aggregates whose name matches a regex pattern. Used by the
+ * case-insensitive name lookup callers (auth flows).
+ *
+ * @param {"being"|"space"|"matter"} type
+ * @param {RegExp|string} pattern
+ * @param {string} [branch="0"]
+ * @returns {Promise<Array<{state, foldedSeq, position, type, id}>>}
+ */
+export async function findByNamePattern(type, pattern, branch = MAIN) {
+  assertType(type);
+  if (!pattern) return [];
+  const re = pattern instanceof RegExp ? pattern : new RegExp(pattern);
+  const rows = await Projection.find({
+    branch, type,
+    "state.name": { $regex: re.source, $options: re.flags },
+    tombstoned: { $ne: true },
+  }).lean();
+  return rows.map((slot) => ({
+    state:     slot.state || {},
+    foldedSeq: slot.foldedSeq ?? null,
+    position:  slot.position ?? null,
+    type:      slot.type,
+    id:        slot.id,
+    branch:    slot.branch,
+  }));
+}
+
+/**
+ * Count aggregates of a type in a branch.
+ *
+ * @param {"being"|"space"|"matter"} type
+ * @param {string} [branch="0"]
+ * @returns {Promise<number>}
+ */
+export async function countByType(type, branch = MAIN) {
+  assertType(type);
+  return await Projection.countDocuments({
+    branch, type, tombstoned: { $ne: true },
+  });
+}
+
+/**
+ * Count beings whose parentBeingId matches the given being id.
+ *
+ * @param {string} beingId
+ * @param {string} [branch="0"]
+ * @returns {Promise<number>}
+ */
+export async function countByParent(beingId, branch = MAIN) {
+  if (!beingId) return 0;
+  return await Projection.countDocuments({
+    branch, type: "being",
+    "state.parentBeingId": beingId,
+    tombstoned: { $ne: true },
+  });
+}
+
+/**
+ * Batch-load multiple projection slots. Returns a Map keyed by id;
+ * missing entries are absent from the map (callers handle via map.get).
+ *
+ * @param {"being"|"space"|"matter"} type
+ * @param {Array<string>} ids
+ * @param {string} [branch="0"]
+ * @returns {Promise<Map<string, {state, foldedSeq, position, tombstoned, type, id, branch}>>}
+ */
+export async function loadProjections(type, ids, branch = MAIN) {
+  assertType(type);
+  if (!Array.isArray(ids) || ids.length === 0) return new Map();
+  const keys = ids.map((id) => projectionKey(branch, type, id));
+  const rows = await Projection.find({ _id: { $in: keys } }).lean();
+  const out = new Map();
+  for (const slot of rows) {
+    out.set(slot.id, {
+      state:      slot.state || {},
+      foldedSeq:  slot.foldedSeq ?? null,
+      position:   slot.position ?? null,
+      tombstoned: !!slot.tombstoned,
+      type:       slot.type,
+      id:         slot.id,
+      branch:     slot.branch,
+    });
+  }
+  return out;
+}
+
+/**
+ * Find the space whose `seedSpace` marker matches the given kind. Used
+ * by the migrations runner and seed-space lookups (.config, .threads,
+ * heaven, etc.). Seed-space markers are singletons within a branch.
+ *
+ * @param {string} seedSpaceKind  e.g. "config", "heaven", "threads"
+ * @param {string} [branch="0"]
+ * @returns {Promise<{state, foldedSeq, position, type, id}|null>}
+ */
+export async function findBySeedSpace(seedSpaceKind, branch = MAIN) {
+  if (!seedSpaceKind) return null;
+  const slot = await Projection.findOne({
+    branch, type: "space",
+    "state.seedSpace": seedSpaceKind,
+    tombstoned: { $ne: true },
+  }).lean();
+  if (!slot) return null;
+  return {
+    state:     slot.state || {},
+    foldedSeq: slot.foldedSeq ?? null,
+    position:  slot.position ?? null,
+    type:      slot.type,
+    id:        slot.id,
+    branch:    slot.branch,
+  };
+}
+
+/**
+ * Reality's root operator — the first non-system being admitted
+ * through cherub. Encapsulates the doctrine (parent-must-be-I_AM-or-
+ * cherub + name-not-in-system-set + earliest-by-createdAt) so callers
+ * can't drift from it.
+ *
+ * @param {Array<string>} systemNames  set of seed system being names
+ * @param {string} [branch="0"]
+ * @returns {Promise<{id, name}|null>}
+ */
+export async function findRootOperator(systemNames, branch = MAIN) {
+  // First find cherub's id (registered through findByName); main+branch.
+  const cherubSlot = await findByName("being", "cherub", branch);
+  const allowedParents = ["i-am"];
+  if (cherubSlot) allowedParents.push(cherubSlot.id);
+  const row = await Projection.findOne({
+    branch, type: "being",
+    "state.name": { $type: "string", $nin: systemNames },
+    "state.parentBeingId": { $in: allowedParents },
+    tombstoned: { $ne: true },
+  })
+    .sort({ "state.createdAt": 1, _id: 1 })
+    .select("id state.name")
+    .lean();
+  return row ? { _id: row.id, name: row.state?.name } : null;
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// Helpers
+// ─────────────────────────────────────────────────────────────────────
+
+function toOccupant(s) {
+  return {
+    type: s.type,
+    id: s.id,
+    foldedSeq: s.foldedSeq ?? null,
+    position: s.position ?? null,
+  };
 }

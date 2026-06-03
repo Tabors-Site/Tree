@@ -163,7 +163,9 @@ async function setOnSpaceHandler({ target, params, identity, summonCtx }) {
       if (!access?.ok || access.write !== true) {
         throw new IbpError(IBP_ERR.FORBIDDEN, "Not authorized to rename at this place");
       }
-      const row = await Space.findById(spaceId).select("name parent seedSpace").lean();
+      const { loadProjection } = await import("../projections.js");
+      const _slot1 = await loadProjection("space", spaceId, summonCtx?.branch || "0");
+      const row = _slot1 ? { _id: _slot1.id, ...(_slot1.state || {}) } : null;
       if (!row) {
         throw new IbpError(IBP_ERR.SPACE_NOT_FOUND, "Space not found");
       }
@@ -201,7 +203,9 @@ async function setOnSpaceHandler({ target, params, identity, summonCtx }) {
       // validates seed-space immutability via the row check below,
       // then returns the shape; doVerb auto-stamps do:set-space and
       // the space reducer's applySetField writes Space.type.
-      const row = await Space.findById(spaceId).select("seedSpace").lean();
+      const { loadProjection } = await import("../projections.js");
+      const _slot2 = await loadProjection("space", spaceId, summonCtx?.branch || "0");
+      const row = _slot2 ? { seedSpace: _slot2.state?.seedSpace } : null;
       if (!row) {
         throw new IbpError(IBP_ERR.SPACE_NOT_FOUND, "Space not found");
       }
@@ -277,10 +281,12 @@ async function setOnSpaceHandler({ target, params, identity, summonCtx }) {
     // Bounds-check against the parent's size. Same doctrine as
     // set-being:coord (assertCoordInBounds in being/ops.js): silent
     // clamping was a lie; throw and let cognition reface.
-    const row = await Space.findById(spaceId).select("parent").lean();
-    const parentId = row?.parent;
+    const { loadProjection } = await import("../projections.js");
+    const _selfSlot = await loadProjection("space", spaceId, summonCtx?.branch || "0");
+    const parentId = _selfSlot?.state?.parent;
     if (parentId) {
-      const parentRow = await Space.findById(parentId).select("size").lean();
+      const _parentSlot = await loadProjection("space", parentId, summonCtx?.branch || "0");
+      const parentRow = _parentSlot ? { size: _parentSlot.state?.size } : null;
       const parentSize = parentRow?.size || null;
       if (parentSize) {
         for (const a of ["x", "y", "z"]) {

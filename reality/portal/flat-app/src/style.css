@@ -46,11 +46,11 @@ body {
 
 #top-bar {
   display: grid;
-  grid-template-columns: auto auto 1fr auto;
+  grid-template-columns: auto auto 1fr auto auto;
   grid-template-rows: auto auto;
   grid-template-areas:
-    "brand connpill breadcrumb idchip"
-    "addr  addr     addr       qnav";
+    "brand connpill breadcrumb brchip idchip"
+    "addr  addr     addr       qnav   qnav";
   gap: 8px 14px;
   padding: 10px 16px 12px;
   border-bottom: 1px solid var(--border);
@@ -150,6 +150,24 @@ body {
   text-decoration: none;
 }
 .breadcrumb-side:hover { border-color: var(--accent); }
+
+/* Branch chip sits just left of the identity chip. Hidden when on
+ * main (branch "0"); the renderer toggles the .hidden class. Styled
+ * with an amber tint so it reads as "you are in an alternate world." */
+#branch-chip { grid-area: brchip; justify-self: end; }
+#branch-chip.hidden { display: none; }
+#branch-chip .chip-branch {
+  background: #2a1f0a;
+  border: 1px solid #6b5320;
+  border-radius: 14px;
+  color: #e8b762;
+  padding: 4px 10px;
+  font-family: var(--mono, monospace);
+  font-size: 11px;
+  cursor: pointer;
+  transition: border-color 80ms, background 80ms;
+}
+#branch-chip .chip-branch:hover { border-color: #e8b762; background: #3a2c10; }
 
 /* Identity chip lives in row 1 right column. */
 #identity-chip { grid-area: idchip; justify-self: end; }
@@ -1133,5 +1151,117 @@ a.kv-block-value:hover { color: var(--accent); text-decoration: underline; }
   color: var(--err);
   font-size: 11px;
   margin-top: 8px;
+}
+
+/* ── Timeline (being inspector) ─────────────────────────────── */
+.tl-list {
+  list-style: none;
+  margin: 8px 0;
+  padding: 0;
+  max-height: 280px;
+  overflow-y: auto;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+}
+.tl-row {
+  padding: 6px 8px;
+  border-bottom: 1px dotted var(--border);
+  font-size: 11px;
+}
+.tl-row:last-child { border-bottom: none; }
+.tl-row-clickable { cursor: pointer; }
+.tl-row-clickable:hover { background: var(--bg-2); }
+.tl-row-active { background: var(--bg-3, var(--bg-2)); border-left: 2px solid var(--accent); }
+.tl-row-inert { color: var(--fg-faint); cursor: not-allowed; }
+.tl-row-head {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+  margin-bottom: 2px;
+}
+.tl-row-when { color: var(--fg); }
+.tl-row-role { color: var(--accent); font-size: 10px; text-transform: uppercase; letter-spacing: 0.04em; }
+.tl-row-seq { color: var(--fg-faint); font-size: 10px; margin-left: auto; }
+.tl-row-summary { color: var(--fg-dim); font-size: 11px; }
+
+/* Past view panel */
+.tl-past {
+  margin-top: 10px;
+  border: 1px dashed var(--accent);
+  border-radius: 3px;
+  padding: 10px;
+  background: rgba(143, 191, 159, 0.04);
+}
+.tl-past.hidden { display: none; }
+.tl-past-banner {
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--accent);
+  margin-bottom: 8px;
+}
+.tl-past-state {
+  margin: 8px 0;
+}
+.tl-state-grid { display: flex; flex-direction: column; gap: 4px; }
+.tl-state-row {
+  display: grid;
+  grid-template-columns: 130px 1fr;
+  gap: 8px;
+  font-size: 11px;
+  align-items: start;
+}
+.tl-state-key {
+  color: var(--fg-faint);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  font-size: 10px;
+}
+.tl-state-value {
+  color: var(--fg);
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-family: ui-monospace, monospace;
+  font-size: 11px;
+}
+
+.tl-past-section-head {
+  margin: 14px 0 4px;
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--fg-faint);
+  border-bottom: 1px dotted var(--border);
+  padding-bottom: 4px;
+}
+.tl-past-section-head:first-child { margin-top: 0; }
+.tl-past-others {
+  list-style: none;
+  margin: 4px 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 11px;
+  font-family: ui-monospace, monospace;
+}
+.tl-past-others li {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+  padding: 2px 0;
+}
+.tl-other-name { color: var(--accent); }
+.tl-other-coord { color: var(--fg-faint); font-size: 10px; }
+.tl-past-json {
+  font-size: 11px;
+  color: var(--fg-dim);
+  background: var(--bg-3, var(--bg-2));
+  padding: 6px 8px;
+  border-radius: 3px;
+  max-height: 200px;
+  overflow: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
 }
 

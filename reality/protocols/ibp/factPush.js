@@ -128,18 +128,19 @@ const _SKIP_ACTIONS = new Set([
  * . target.kind="matter" . Matter.spaceId
  * Returns null when the target cannot be located (deleted, malformed).
  */
-async function _resolveSpaceId(targetKind, targetId) {
+async function _resolveSpaceId(targetKind, targetId, branch = "0") {
   if (!targetKind || !targetId) return null;
   try {
+    const { loadProjection } = await import("../../seed/materials/projections.js");
     if (targetKind === "being") {
-      const b = await Being.findById(targetId).select("position homeSpace").lean();
-      if (!b) return null;
-      return b.position || b.homeSpace || null;
+      const slot = await loadProjection("being", targetId, branch);
+      if (!slot) return null;
+      return slot.position || slot.state?.homeSpace || null;
     }
     if (targetKind === "matter") {
-      const m = await Matter.findById(targetId).select("spaceId").lean();
-      if (!m) return null;
-      return m.spaceId || null;
+      const slot = await loadProjection("matter", targetId, branch);
+      if (!slot) return null;
+      return slot.state?.spaceId || null;
     }
   } catch (err) {
     log.warn("FactPush", `resolve spaceId failed (${targetKind}:${targetId}): ${err.message}`);
@@ -173,7 +174,7 @@ async function _handleFact(fact, _type, _id) {
   // currentTime later without re-shipping server code.
   const at = (fact?.params && typeof fact.params.at === "string") ? fact.params.at : null;
 
-  const spaceId = await _resolveSpaceId(targetKind, targetId);
+  const spaceId = await _resolveSpaceId(targetKind, targetId, fact?.branch || "0");
   if (!spaceId) return;
 
   const emit = await _loadEmitter();

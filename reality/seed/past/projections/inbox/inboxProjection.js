@@ -92,13 +92,21 @@ const InboxProjectionSchema = new mongoose.Schema({
   inboxSpaceId:    { type: String, default: null, index: true },
 
   sentAt: { type: Date, required: true },
+
+  // Branch this summon belongs to. Summons can never cross branches
+  // (the IBP parse-time bridge gate rejects mixed-branch addresses),
+  // so every row is single-branch. The scheduler keys its pick on
+  // (recipient, branch) so a being summoned on #1 doesn't see their
+  // #2 inbox in their #1 fold. Default "0" so pre-branch rows are
+  // legible after migration.
+  branch:          { type: String, default: "0", index: true },
 });
 
-// The scheduler's pick query — per being, by priority and arrival.
+// The scheduler's pick query — per being + branch, by priority and arrival.
 // HUMAN < GATEWAY < INTERACTIVE < BACKGROUND lexically, which matches
 // the desired priority order (HUMAN first). Sort by sentAt to break
 // ties oldest-first (FIFO within priority class).
-InboxProjectionSchema.index({ recipient: 1, priority: 1, sentAt: 1 });
+InboxProjectionSchema.index({ recipient: 1, branch: 1, priority: 1, sentAt: 1 });
 
 // Sever sweep target.
 InboxProjectionSchema.index({ rootCorrelation: 1 }, { sparse: true });

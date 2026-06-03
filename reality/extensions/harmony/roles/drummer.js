@@ -55,9 +55,12 @@ export const drummerRole = Object.freeze({
     // either. Stay, log, and try again next wake.
     let drumCoord = null;
     try {
-      const drum = await Matter.findById(drumMatterId).select("coord").lean();
-      if (drum?.coord && Number.isFinite(drum.coord.x) && Number.isFinite(drum.coord.y)) {
-        drumCoord = { x: drum.coord.x, y: drum.coord.y };
+      const branch = ctx?.summonCtx?.branch || ctx?.branch || "0";
+      const { loadProjection } = await import("../../../seed/materials/projections.js");
+      const slot = await loadProjection("matter", drumMatterId, branch);
+      const c = slot?.state?.coord;
+      if (c && Number.isFinite(c.x) && Number.isFinite(c.y)) {
+        drumCoord = { x: c.x, y: c.y };
       }
     } catch (err) {
       log.warn("Drummer", `drum lookup failed: ${err.message}`);

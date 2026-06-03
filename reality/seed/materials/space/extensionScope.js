@@ -74,16 +74,17 @@ export function setExtensionInstanceLookup(fn) {
  */
 export async function loadConfinedExtensions() {
   try {
-    const extSpace = await Space.findOne({ seedSpace: SEED_SPACE.EXTENSIONS })
-      .select("_id")
-      .lean();
+    const { findBySeedSpace } = await import("../projections.js");
+    const extSpace = await findBySeedSpace(SEED_SPACE.EXTENSIONS, "0");
     if (!extSpace) return;
 
-    // Query by parent (the new authoritative direction for the
-    // child-of relationship); children[] on the parent is retired.
-    const children = await Space.find({ parent: extSpace._id })
-      .select("name qualities")
-      .lean();
+    // Query by parent. Direct projection query because we need state.qualities.
+    const { default: Projection } = await import("../branch/projection.js");
+    const children = (await Projection.find({
+      branch: "0", type: "space",
+      "state.parent": extSpace.id,
+      tombstoned: { $ne: true },
+    }).select("state").lean()).map((s) => ({ name: s.state?.name, qualities: s.state?.qualities }));
 
     const confined = new Set();
     for (const child of children) {

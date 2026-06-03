@@ -55,6 +55,9 @@ async function handleBeSummon(fact /*, type, id*/) {
         inReplyTo:       params.inReplyTo || null,
         inboxSpaceId:    params.inboxSpaceId || null,
         sentAt:          params.sentAt ? new Date(params.sentAt) : (fact.date || new Date()),
+        // Branch the summon was stamped on. Single-branch by parse-time
+        // gate, so the row's branch IS the fact's branch.
+        branch:          fact.branch || "0",
       },
       $setOnInsert: { _id: params.correlation },
     },

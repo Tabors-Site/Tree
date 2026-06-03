@@ -65,9 +65,11 @@ export default {
       );
     }
 
-    const me = await Being.findById(beingId).select("coord").lean();
-    const cur = (me?.coord && Number.isFinite(me.coord.x) && Number.isFinite(me.coord.y))
-      ? { x: me.coord.x, y: me.coord.y }
+    const { loadProjection } = await import("../../../seed/materials/projections.js");
+    const _mSlot = await loadProjection("being", beingId, ctx?.summonCtx?.branch || "0");
+    const meCoord = _mSlot?.state?.coord || _mSlot?.state?.qualities?.coord;
+    const cur = (meCoord && Number.isFinite(meCoord.x) && Number.isFinite(meCoord.y))
+      ? { x: meCoord.x, y: meCoord.y }
       : { x: 0, y: 0 };
     const next = { x: cur.x + delta.dx, y: cur.y + delta.dy };
 

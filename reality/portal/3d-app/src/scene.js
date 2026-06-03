@@ -602,7 +602,12 @@ export class Scene {
     // server-side position so the world matches what other tabs see
     // of you.
     if (resetCamera) {
-      const selfWorld = this._selfBeing?.coord ? coordToWorld(this._selfBeing.coord) : null;
+      // Self coord precedence: identity.coord (the substrate's first-
+      // person source of truth — present on every authed SEE, including
+      // historical) over the beings-list entry (which may not list self
+      // if self wasn't AT this position at the queried time).
+      const selfCoord = desc?.identity?.coord || this._selfBeing?.coord || null;
+      const selfWorld = selfCoord ? coordToWorld(selfCoord) : null;
       if (selfWorld) {
         this.camera.position.set(selfWorld.x, 1.7, selfWorld.z);
       } else {
@@ -1570,6 +1575,13 @@ export class Scene {
       cam:  !!resetCamera,
       size: desc?.size || null,
       self: selfId,
+      // Historical anchor + self coord are part of the signature so
+      // every rewind click triggers a fresh render (cam reposition).
+      // For live navigation self coord is already excluded from the
+      // delta path; the camera is authoritative, no churn risk.
+      hist: desc?.isHistorical ? (desc?.asOf?.atTimestamp || desc?.asOf?.atSeq || true) : false,
+      selfCoord: coordKey(desc?.identity?.coord),
+      branch: desc?.address?.branch || "0",
       beings:   (desc.beings   || []).filter((e) => !isSelf(e)).map(sigBeing),
       matter:   (desc.matter   || []).map(sigPositional),
       children: (desc.children || []).map(sigPositional),

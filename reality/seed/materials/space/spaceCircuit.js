@@ -61,12 +61,12 @@ export async function isTreeAlive(treeId) {
   if (!treeId) return true;
   if (!isEnabled()) return true;
 
-  const anchor = await Space.findById(treeId).select("qualities").lean();
-  if (!anchor) return true;
+  const { loadProjection } = await import("../projections.js");
+  const slot = await loadProjection("space", treeId, "0");
+  if (!slot) return true;
 
-  const meta = anchor.qualities instanceof Map
-    ? anchor.qualities.get("circuit")
-    : anchor.qualities?.circuit;
+  const quals = slot.state?.qualities;
+  const meta = quals instanceof Map ? quals.get("circuit") : quals?.circuit;
 
   return !meta?.tripped;
 }
@@ -212,11 +212,12 @@ export async function reviveTree(treeId, beingId) {
     throw new Error("Only the tree's owner can revive a tripped tree");
   }
 
-  const anchor = await Space.findById(treeId).select("qualities").lean();
-  if (!anchor) throw new Error("Tree not found");
-  const circuit = anchor.qualities instanceof Map
-    ? anchor.qualities.get("circuit")
-    : anchor.qualities?.circuit;
+  const { loadProjection: _lP2 } = await import("../projections.js");
+  const _slot2 = await _lP2("space", treeId, "0");
+  if (!_slot2) throw new Error("Tree not found");
+  const _q2 = _slot2.state?.qualities;
+  const anchor = { _id: _slot2.id, qualities: _q2 };
+  const circuit = _q2 instanceof Map ? _q2.get("circuit") : _q2?.circuit;
   if (!circuit?.tripped) return; // already alive, no-op
 
   await emitFact({
@@ -245,9 +246,13 @@ export function startCircuitJob() {
 
   const timer = setInterval(async () => {
     try {
-      const anchors = await Space.find({
-        rootOwner: { $nin: [null, I_AM] },
-      }).select("_id name qualities").lean();
+      const { default: Projection } = await import("../branch/projection.js");
+      const rows = await Projection.find({
+        branch: "0", type: "space",
+        "state.rootOwner": { $nin: [null, I_AM] },
+        tombstoned: { $ne: true },
+      }).lean();
+      const anchors = rows.map((s) => ({ _id: s.id, ...(s.state || {}) }));
 
       for (const anchor of anchors) {
         const meta = anchor.qualities instanceof Map

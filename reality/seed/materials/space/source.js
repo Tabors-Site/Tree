@@ -95,9 +95,9 @@ export async function ensureSourceTree(opts = {}) {
   const ignore = opts.ignore || DEFAULT_IGNORE;
   const detached = opts.detached !== false;
 
-  const sourceSpace = await Space.findOne({ seedSpace: SEED_SPACE.SOURCE })
-    .select("_id")
-    .lean();
+  const { findBySeedSpace } = await import("../projections.js");
+  const _sourceSlot = await findBySeedSpace(SEED_SPACE.SOURCE, "0");
+  const sourceSpace = _sourceSlot ? { _id: _sourceSlot.id } : null;
   if (!sourceSpace) {
     log.warn(
       "Source",
@@ -145,22 +145,27 @@ export async function syncSourceTree({
   const targetPath =
     rootPath || process.env.SOURCE_TREE_ROOT || DEFAULT_SOURCE_ROOT;
 
-  const sourceSpace = await Space.findOne({ seedSpace: SEED_SPACE.SOURCE })
-    .select("_id")
-    .lean();
+  const { findBySeedSpace } = await import("../projections.js");
+  const _sourceSlot = await findBySeedSpace(SEED_SPACE.SOURCE, "0");
+  const sourceSpace = _sourceSlot ? { _id: _sourceSlot.id } : null;
   if (!sourceSpace) throw new Error("./source seed space not found");
   const sourceSpaceId = String(sourceSpace._id);
   sourceSpaceIdCache = sourceSpaceId;
 
   const stats = { created: 0, updated: 0, removed: 0, kept: 0 };
 
-  // Root matter for targetPath. One root per `./source` space: lookup by
-  // (spaceId, parentMatterId: null, origin: filesystem).
-  let rootMatter = await Matter.findOne({
-    spaceId: sourceSpaceId,
-    parentMatterId: null,
-    origin: MATTER_ORIGIN.FILESYSTEM,
-  });
+  // Root matter for targetPath. Branch-aware via direct Projection query
+  // — the matter-by-spaceId + filesystem origin is a substrate-internal
+  // lookup pattern, not a wire-facing one.
+  const { default: ProjectionModel } = await import("../branch/projection.js");
+  const _rootMatterSlot = await ProjectionModel.findOne({
+    branch: "0", type: "matter",
+    "state.spaceId": sourceSpaceId,
+    "state.parentMatterId": null,
+    "state.origin": MATTER_ORIGIN.FILESYSTEM,
+    tombstoned: { $ne: true },
+  }).lean();
+  let rootMatter = _rootMatterSlot ? { _id: _rootMatterSlot.id, ...(_rootMatterSlot.state || {}) } : null;
 
   const rootName = path.basename(targetPath) || "/";
   if (!rootMatter) {
@@ -247,12 +252,16 @@ async function reconcileChildren({
   }
 
   // Existing mirrored children for this parent.
-  const existing = await Matter.find({
-    parentMatterId,
-    origin: MATTER_ORIGIN.FILESYSTEM,
-  })
-    .select("_id name content")
-    .lean();
+  const { default: Projection } = await import("../branch/projection.js");
+  const _existRows = await Projection.find({
+    branch: "0", type: "matter",
+    "state.parentMatterId": parentMatterId,
+    "state.origin": MATTER_ORIGIN.FILESYSTEM,
+    tombstoned: { $ne: true },
+  }).lean();
+  const existing = _existRows.map((s) => ({
+    _id: s.id, name: s.state?.name, content: s.state?.content,
+  }));
   const existingByName = new Map(existing.map((a) => [a.name, a]));
 
   // Create / update / recurse.
@@ -376,21 +385,25 @@ async function reconcileChildren({
 }
 
 async function removeMatterSubtree(rootId, stats) {
+  const { default: Projection } = await import("../branch/projection.js");
+  const { tombstoneProjection } = await import("../projections.js");
   const toDelete = [];
   const stack = [String(rootId)];
   while (stack.length) {
     const id = stack.pop();
     toDelete.push(id);
-    const kids = await Matter.find({ parentMatterId: id }).select("_id").lean();
-    for (const k of kids) stack.push(String(k._id));
+    const kids = await Projection.find({
+      branch: "0", type: "matter",
+      "state.parentMatterId": id,
+    }).select("id").lean();
+    for (const k of kids) stack.push(String(k.id));
   }
   if (toDelete.length === 0) return;
-  // Detach from any parent.children arrays before deleting the docs.
-  await Matter.updateMany(
-    { children: { $in: toDelete } },
-    { $pull: { children: { $in: toDelete } } },
-  );
-  await Matter.deleteMany({ _id: { $in: toDelete } });
+  // Tombstone each — the projections collection records the deletion
+  // explicitly so future queries filter them out.
+  for (const id of toDelete) {
+    await tombstoneProjection("matter", id, "0", 0).catch(() => {});
+  }
   stats.removed += toDelete.length;
 }
 

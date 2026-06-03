@@ -21,18 +21,30 @@
 // witness.
 //
 // Full grammar (see docs/ibp-address.md):
-//
+//   FULL ADDRESS: treeos.ai#3/spaceName@being :: treeos.ai#3/spaceName@being
+//                  LEFT STANCE                BRIDGE     RIGHT STANCE
+// Left side is always a full stance (position+being). Right side can be a partial stance or full, depending on verb.
 //   IbpAddress := Bridge | Stance
 //   Bridge     := Stance "::" Stance
 //   Stance     := Position "@" Being | Position | Being
-//   Position   := Place? Path?
+//   Position   := Place? Branch? Path?
 //   Place       := Domain (":" Port)?
+//   Branch     := "#" BranchPath          (omitted = "0" = main)
+//   BranchPath := number(letter+number)*  (e.g. "1", "1a", "1a1", "22zb")
 //   Path       := "/"                            (place space)
 //               | "/" Segment ("/" Segment)*     (space — full chain or leaf-only)
 //               | "/~" UserSlug ("/" Segment)*   (home zone)
 //               | "~" ...                        (home shorthand; expands to /~<user>)
 //   Segment    := space-name | space-id (uuid)
 //   Being      := "@" Identifier
+//
+// Branch (`#<path>`) names which divergent world the stance is in. Main
+// is `"0"` and is implicit when omitted. Branches diverge from a parent
+// at a chosen past moment; the path alternates number/letter segments,
+// with letters rolling over `a..z, za..zz, zza..zzz` (so the 27th branch
+// under main is `#1za`, the 27th sub-branch under `#22` is `#22zb`).
+// A bridge whose two stances sit on different branches is forbidden —
+// different branches are different worlds with no shared fold to bridge.
 //
 // Path representations (portal switches between freely):
 //   Each space has a stable id (uuid) AND a display name. A path can be
@@ -117,6 +129,25 @@ export function parse(input, ctx = {}) {
   }
   const right = parseStance(rightStr, ctx);
   const left = leftStr ? parseStance(leftStr, ctx, { isLeftSide: true }) : null;
+
+  // Cross-branch bridge gate. Different branches are different worlds —
+  // their fact-chains never converge, so a bridge across them has no
+  // shared fold to authorize against. Reject at parse time before any
+  // verb-level dispatch tries to resolve the call. Both sides default to
+  // "0" when omitted, so absent-vs-absent never trips this.
+  if (left && right) {
+    const lb = left.branch || "0";
+    const rb = right.branch || "0";
+    if (lb !== rb) {
+      throw paError(
+        "cross-branch-bridge",
+        input,
+        `Cross-branch bridge forbidden: left is on #${lb}, right is on #${rb}. ` +
+          `Bridges must keep both stances on the same branch.`,
+      );
+    }
+  }
+
   return { left, right };
 }
 
@@ -190,6 +221,14 @@ export function validate(pa) {
         reason: "invalid-path",
       });
     }
+    if (stance.branch != null && !isValidBranch(stance.branch)) {
+      errors.push({
+        side: label,
+        field: "branch",
+        value: stance.branch,
+        reason: "invalid-branch",
+      });
+    }
     if (stance.being != null && !isValidBeing(stance.being)) {
       errors.push({
         side: label,
@@ -219,10 +258,16 @@ function parseStance(input, ctx, opts = {}) {
     // On the left side of a bridge, `@tabor` is the explicit-@ form of
     // the human-user shorthand: it means the user `tabor` at the place root.
     if (isLeftSide) {
-      return { reality: ctx.currentReality || null, path: "/", being: parseBeing(s) };
+      return {
+        reality: ctx.currentReality || null,
+        branch: null,
+        path: "/",
+        being: parseBeing(s),
+      };
     }
     return {
       reality: ctx.currentReality || null,
+      branch: null,
       path: ctx.currentPath || null,
       being: parseBeing(s),
     };
@@ -235,14 +280,48 @@ function parseStance(input, ctx, opts = {}) {
     being = parseBeing(s.slice(atIdx));
     rest = s.slice(0, atIdx);
   }
-  // After stripping being, `rest` is a position (place+path).
+  // After stripping being, `rest` is a position (place+branch?+path).
   if (!rest) {
     return {
       reality: ctx.currentReality || null,
+      branch: null,
       path: ctx.currentPath || null,
       being,
     };
   }
+
+  // Branch qualifier (`#<branchPath>`) sits between reality and path.
+  // Pull it off `rest` first so reality/path detection below stays
+  // simple. The qualifier is optional; absence means "0" (main) after
+  // expand. Allowed shapes: `treeos.ai#1a/path`, `#1a/path`, `#1a`,
+  // `treeos.ai#1a`. Forbidden: more than one `#`, or `#` inside a path
+  // segment (path comes after `#`, not before).
+  let branch = null;
+  const hashIdx = rest.indexOf("#");
+  if (hashIdx >= 0) {
+    if (rest.indexOf("#", hashIdx + 1) >= 0) {
+      throw paError("multiple-branches", input,
+        `Only one "#" branch qualifier allowed per stance`);
+    }
+    const before = rest.slice(0, hashIdx);
+    const after = rest.slice(hashIdx + 1);
+    // Branch ends at the first "/" or "~" (whichever starts the path).
+    const sl = after.indexOf("/");
+    const ti = after.indexOf("~");
+    let pathStart = -1;
+    if (sl >= 0 && ti >= 0) pathStart = Math.min(sl, ti);
+    else if (sl >= 0) pathStart = sl;
+    else if (ti >= 0) pathStart = ti;
+    const branchStr = pathStart >= 0 ? after.slice(0, pathStart) : after;
+    if (!branchStr) {
+      throw paError("empty-branch", input,
+        `Branch qualifier "#" cannot be empty`);
+    }
+    branch = parseBranch(branchStr);
+    const pathPortion = pathStart >= 0 ? after.slice(pathStart) : "";
+    rest = before + pathPortion;
+  }
+
   // Determine if `rest` includes a place identifier or is just a zone marker.
   // The three zone markers are:
   //   "/"            → place zone (literal slash IS the place)
@@ -250,8 +329,22 @@ function parseStance(input, ctx, opts = {}) {
   //   "~" / "~user"  → home zone (shorthand; expands to "/~<user>")
   // A place identifier (e.g. "treeos.ai") never starts with "/" or "~", so a
   // leading slash or tilde means we're already inside the current place.
+  if (!rest) {
+    // Pure-branch stance: `#1a` or `#1a@being` — no reality, no path.
+    return {
+      reality: ctx.currentReality || null,
+      branch,
+      path: ctx.currentPath || null,
+      being,
+    };
+  }
   if (rest.startsWith("/") || rest.startsWith("~")) {
-    return { reality: ctx.currentReality || null, path: parsePath(rest, ctx), being };
+    return {
+      reality: ctx.currentReality || null,
+      branch,
+      path: parsePath(rest, ctx),
+      being,
+    };
   }
   // Otherwise `rest` starts with a place identifier.
   // Find first "/" — that's the place/path boundary.
@@ -267,13 +360,23 @@ function parseStance(input, ctx, opts = {}) {
     // `tabor`. On either side without a path, this can also be a
     // place-only reference (rare).
     if (isLeftSide && !being) {
-      return { reality: ctx.currentReality || null, path: "/", being: rest };
+      return {
+        reality: ctx.currentReality || null,
+        branch,
+        path: "/",
+        being: rest,
+      };
     }
-    return { reality: parseReality(rest), path: null, being };
+    return { reality: parseReality(rest), branch, path: null, being };
   }
   const realityPart = rest.slice(0, boundary);
   const pathPart = rest.slice(boundary);
-  return { reality: parseReality(realityPart), path: parsePath(pathPart, ctx), being };
+  return {
+    reality: parseReality(realityPart),
+    branch,
+    path: parsePath(pathPart, ctx),
+    being,
+  };
 }
 
 // Find an "@" that's NOT inside a path segment. The grammar puts the
@@ -284,7 +387,11 @@ function findStandaloneAt(s) {
 
 function parseBeing(s) {
   if (!s.startsWith("@")) {
-    throw paError("invalid-being-prefix", s, "Being qualifier must start with @");
+    throw paError(
+      "invalid-being-prefix",
+      s,
+      "Being qualifier must start with @",
+    );
   }
   const id = s.slice(1).trim();
   if (!id) {
@@ -303,12 +410,26 @@ function parseBeing(s) {
       "invalid-being-chars",
       s,
       `Being qualifier "${id}" must be lowercase kebab-case (e.g. "@cherub", ` +
-      `"@tabor") or an extension role shorthand (e.g. "@hello-world:greeter"). ` +
-      `Roles may contain a single ":" separating the extension namespace from ` +
-      `the role name; bare being names cannot.`,
+        `"@tabor") or an extension role shorthand (e.g. "@hello-world:greeter"). ` +
+        `Roles may contain a single ":" separating the extension namespace from ` +
+        `the role name; bare being names cannot.`,
     );
   }
   return id;
+}
+
+function parseBranch(s) {
+  const trimmed = s.trim();
+  if (!isValidBranch(trimmed)) {
+    throw paError(
+      "invalid-branch",
+      trimmed,
+      `Branch path "${trimmed}" must be "0" (main) or a number/letter chain ` +
+        `(e.g. "1", "1a", "22zb"). Alternates number/letter; letters wrap a..z, ` +
+        `za..zz, zza..zzz.`,
+    );
+  }
+  return trimmed;
 }
 
 function parseReality(s) {
@@ -356,6 +477,14 @@ function formatStance(stance, opts = {}) {
   if (!stance) return "";
   let out = "";
   if (stance.reality) out += stance.reality;
+  // Branch qualifier renders only when explicitly non-main. Canonical
+  // addresses omit `#0` the way URLs omit default ports — the address
+  // bar should stay quiet for the common case. Empty-string branches
+  // are treated as absent: never render `#` with nothing after it,
+  // because re-parsing that would throw "empty-branch".
+  if (typeof stance.branch === "string" && stance.branch && stance.branch !== "0") {
+    out += `#${stance.branch}`;
+  }
   if (stance.path) {
     // "/" at place root with a being renders as "/" + "@xxx".
     // The grammar shows the canonical form as `<reality>/@<being>`,
@@ -379,9 +508,26 @@ function formatStance(stance, opts = {}) {
 
 function expandStance(stance, ctx) {
   if (!stance) return stance;
+  // Branch inheritance is keyed off whether the stance already named
+  // a reality before expand. The doctrine (locked 2026-06-04 with
+  // Tabor): when a typed address pins a reality, the user pinned the
+  // whole address — absence of `#` MEANS main, not "stay on whatever
+  // branch I happen to be on." Only shorthands that omit the reality
+  // (relative paths like `/foo`, `~`, `@bare`) fall through to the
+  // ambient branch.
+  //
+  // This is what makes left-stance follow right-stance automatically:
+  // the address bar is the source of truth, so the parser respects
+  // exactly what the user typed (or what the URL hash says).
+  const realityWasTyped = !!stance.reality;
+  const reality = stance.reality || ctx.currentReality || null;
+  const branch = stance.branch
+    ? stance.branch
+    : (realityWasTyped ? "0" : (ctx.currentBranch || "0"));
   return {
     ...stance,
-    reality: stance.reality || ctx.currentReality || null,
+    reality,
+    branch,
     path: stance.path || ctx.currentPath || null,
     being: stance.being || ctx.defaultBeing || null,
   };
@@ -444,6 +590,19 @@ const BEING_RE = /^[a-z][a-z0-9-]*$/;
 
 export function isValidBeing(being) {
   return typeof being === "string" && BEING_RE.test(being);
+}
+
+// Branch paths alternate number / letter segments. Main is "0". Children
+// of main are "1", "2", ... — single number segment. Grandchildren add a
+// letter segment ("1a", "1b", ..., "1z", "1za", ...). Great-grandchildren
+// add another number, and so on. The grammar is intentionally minimal so
+// nesting depth reads off the path at a glance. See
+// seed/materials/branch/branchPath.js for the canonical parser used by
+// createBranch; this validator just enforces the wire-side shape.
+const BRANCH_RE = /^(?:0|\d+(?:[a-z]+\d+)*(?:[a-z]+)?)$/;
+
+export function isValidBranch(branch) {
+  return typeof branch === "string" && BRANCH_RE.test(branch);
 }
 
 // ─────────────────────────────────────────────────────────────────────
@@ -540,7 +699,12 @@ export function getRealityDomain() {
 export function parseFromSocket(socket, input, extraCtx = {}) {
   const ctx = {
     currentReality: getRealityDomain(),
-    currentUser: socket?.name || null,
+    currentUser:    socket?.name || null,
+    // The socket's first-person stance. The address parser fills
+    // omitted fields from this ctx, so a client typing `/~` while on
+    // `#1/some-place` correctly resolves to `treeos.ai#1/~`, not main.
+    currentBranch:  socket?.currentBranch || "0",
+    currentPath:    socket?.currentPath   || null,
     ...extraCtx,
   };
   try {
@@ -571,14 +735,16 @@ export function parseWithContext(input, ctx = {}) {
 
 /**
  * @typedef {object} Stance
- * @property {string|null} place   — e.g. "treeos.ai" (or null when implicit)
- * @property {string|null} path   — e.g. "/~tabor/flappybird" (or null)
- * @property {string|null} being  — e.g. "ruler" (or null)
+ * @property {string|null} reality — e.g. "treeos.ai" (or null when implicit)
+ * @property {string|null} branch — e.g. "1a" (or null pre-expand; "0" after expand for main)
+ * @property {string|null} path    — e.g. "/~tabor/flappybird" (or null)
+ * @property {string|null} being   — e.g. "ruler" (or null)
  *
- * A Stance carries both a Position (place + path) and a Being.
- * When `being` is null, the Stance reduces to a bare Position.
+ * A Stance carries both a Position (reality + branch + path) and a Being.
+ * When `being` is null, the Stance reduces to a bare Position. When
+ * `branch` is null in a freshly-parsed stance, the caller has not asked
+ * for a specific branch and expand() will fill in "0" (main).
  */
-
 
 // ─────────────────────────────────────────────────────────────────────────
 // CANONICAL STANCE-PAIR ADDRESS (the lane two beings share)
@@ -646,9 +812,12 @@ function canonicalStancePair(stanceA, stanceB) {
 const STANCE_CACHE_MAX = 2048;
 const stanceCache = new Map();
 
-async function loadBeingStanceFields(beingId) {
+async function loadBeingStanceFields(beingId, branch = "0") {
   if (!beingId) return null;
-  const key = String(beingId);
+  // Cache key includes branch so a being's per-branch state
+  // (name + homeSpace can both differ across branches) doesn't
+  // serve stale data when the wire layer fetches on a non-main branch.
+  const key = `${branch}:${String(beingId)}`;
   if (stanceCache.has(key)) {
     const v = stanceCache.get(key);
     stanceCache.delete(key);
@@ -657,7 +826,9 @@ async function loadBeingStanceFields(beingId) {
   }
   let row = null;
   try {
-    row = await Being.findById(key).select("name homeSpace").lean();
+    const { loadOrFold } = await import("../materials/projections.js");
+    const slot = await loadOrFold("being", String(beingId), branch);
+    row = slot ? { name: slot.state?.name, homeSpace: slot.state?.homeSpace } : null;
   } catch {
     row = null;
   }
@@ -683,9 +854,12 @@ export function invalidateStanceCache(beingId) {
   stanceCache.delete(String(beingId));
 }
 
-async function composeStanceForBeing(beingId, { currentPosition = null, place = null } = {}) {
+async function composeStanceForBeing(
+  beingId,
+  { currentPosition = null, place = null, branch = "0" } = {},
+) {
   if (!beingId) return null;
-  const fields = await loadBeingStanceFields(beingId);
+  const fields = await loadBeingStanceFields(beingId, branch);
   if (!fields) return null;
   const spaceId = currentPosition || fields.homeSpace;
   if (!spaceId || !fields.name) return null;

@@ -104,6 +104,21 @@ export const IBP_ERR = Object.freeze({
   // mutate the seed's own source files through verbs.
   ORIGIN_READ_ONLY:       "ORIGIN_READ_ONLY",
 
+  // Historical-read doctrine. SEE accepts an `at: { atSeq?, atTimestamp? }`
+  // qualifier that returns the substrate's state as of a past point.
+  // Acting in the past is structurally impossible — the verb of
+  // change (DO / SUMMON / BE) is not compatible with a frozen view.
+  // This code throws when a write verb arrives carrying `at`; the
+  // message says what's allowed instead.
+  HISTORICAL_READ_ONLY:   "HISTORICAL_READ_ONLY",
+
+  // Cross-branch doctrine. Different branches are different worlds —
+  // their fact-chains never converge. A bridge or verb dispatch that
+  // crosses branches has no shared fold to authorize against. This code
+  // throws when an address bridge mixes branches, or when a verb's
+  // ambient summonCtx.branch disagrees with the target stance's branch.
+  CROSS_BRANCH_FORBIDDEN: "CROSS_BRANCH_FORBIDDEN",
+
   // System
   INTERNAL:               "INTERNAL",
   TIMEOUT:                "TIMEOUT",
@@ -185,6 +200,8 @@ const STATUS_FOR_CODE = Object.freeze({
   SESSION_EXPIRED:        403,
   UPLOAD_DISABLED:        403,
   ORIGIN_READ_ONLY:       403,
+  HISTORICAL_READ_ONLY:   403,
+  CROSS_BRANCH_FORBIDDEN: 403,
   NOT_A_BEING:            403,
   NOT_A_SEED:             403,
 

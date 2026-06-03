@@ -61,15 +61,24 @@ export function setHistoryButtonsEnabled({ back, forward }) {
   _addressApi.navForward.disabled = !forward;
 }
 
-export function updateAddressBar({ username, placeDomain, pathByNames, chain, isAuthenticated }) {
+export function updateAddressBar({ username, placeDomain, pathByNames, chain, isAuthenticated, branch }) {
   if (!_addressApi) return;
   const nameEl = document.getElementById("chip-name");
   const placeEl = document.getElementById("chip-place");
   if (nameEl) nameEl.textContent = isAuthenticated ? (username || "you") : "arrival";
-  if (placeEl) placeEl.textContent = `@${placeDomain || "<reality>"}`;
+  // Identity chip now carries the branch suffix too — `@reality#1` reads
+  // at a glance as "I'm signed in on branch #1 of this reality." Main
+  // stays implicit (no suffix).
+  const branchSuffix = (branch && branch !== "0") ? `#${branch}` : "";
+  if (placeEl) placeEl.textContent = `@${placeDomain || "<reality>"}${branchSuffix}`;
   const place = placeDomain || "";
   const path = pathByNames || "/";
-  _addressApi.input.value = place ? `${place}${path === "/" ? "/" : path}` : path;
+  // Address-input mirrors the canonical IBP address shape:
+  // `<reality>[#<branch>]<path>`. URL hash is the source of truth; the
+  // input should always match.
+  _addressApi.input.value = place
+    ? `${place}${branchSuffix}${path === "/" ? "/" : path}`
+    : `${branchSuffix}${path}`;
 
   // Tree root computation: walk the chain past the optional ~user segment.
   let rootPath = null;

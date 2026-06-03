@@ -62,7 +62,7 @@ const COORD_AXES = ["x", "y", "z"];
  * any coord passes. The check is "stay inside the declared box";
  * without a box there's nothing to enforce.
  */
-async function assertCoordInBounds(beingDoc, raw) {
+async function assertCoordInBounds(beingDoc, raw, branch = "0") {
   const out = {};
   for (const a of COORD_AXES) {
     if (typeof raw[a] === "number" && Number.isFinite(raw[a])) {
@@ -74,7 +74,9 @@ async function assertCoordInBounds(beingDoc, raw) {
   }
   const spaceId = beingDoc?.position || beingDoc?.homeSpace || null;
   if (!spaceId) return out;
-  const space = await Space.findById(spaceId).select("size").lean();
+  const { loadProjection } = await import("../projections.js");
+  const _sSlot = await loadProjection("space", spaceId, branch);
+  const space = _sSlot ? { size: _sSlot.state?.size } : null;
   const size = space?.size || null;
   if (!size) return out;
   for (const a of COORD_AXES) {
@@ -150,9 +152,11 @@ async function setOnBeingHandler({ target, params, summonCtx }) {
     if (!value || typeof value !== "string") {
       throw new Error("set-being: `value` must be a string for field=name");
     }
-    const existing = await Being.findOne({ name: value }).select("_id");
-    if (existing && String(existing._id) !== String(target._id)) {
-      throw new Error(`set-being: name "${value}" already taken`);
+    const branch = summonCtx?.branch || "0";
+    const { findByName } = await import("../projections.js");
+    const existing = await findByName("being", value, branch);
+    if (existing && String(existing.id) !== String(target._id)) {
+      throw new Error(`set-being: name "${value}" already taken on branch ${branch}`);
     }
     return { beingId: String(target._id), name: value };
   }
@@ -229,7 +233,7 @@ async function setOnBeingHandler({ target, params, summonCtx }) {
     if (typeof value !== "object" || Array.isArray(value)) {
       throw new Error("set-being: `coord` value must be an object {x,y,z?} or null");
     }
-    const validated = await assertCoordInBounds(target, value);
+    const validated = await assertCoordInBounds(target, value, summonCtx?.branch || "0");
     return { beingId: String(target._id), coord: validated };
   }
 

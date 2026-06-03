@@ -138,8 +138,10 @@ export async function createBeing(name, password, opts = {}) {
         `explicit parent set by the caller. Pass opts.parentBeingId.`,
       );
     }
-    const parentRow = await Being.findById(parentBeingId).select("_id").lean();
-    if (!parentRow) {
+    const { loadProjection, findByNamePattern } = await import("../../projections.js");
+    const branch = opts.summonCtx?.branch || "0";
+    const parentSlot = await loadProjection("being", parentBeingId, branch);
+    if (!parentSlot) {
       const pendingInBatch = opts.summonCtx?.deltaF?.find(
         (f) =>
           f?.verb === "be" &&
@@ -158,13 +160,18 @@ export async function createBeing(name, password, opts = {}) {
     }
   }
 
-  // Case-insensitive uniqueness check. Regex because Mongo collation
-  // support varies across deployments. The unique index on `name` is
-  // the safety net; this check produces a friendly error first.
-  const existing = await Being.findOne({
-    name: { $regex: `^${escapeRegex(name)}$`, $options: "i" },
-  });
-  if (existing)
+  // Case-insensitive uniqueness check on the current branch. Branch-aware
+  // because names are per-branch identifiers (locked 2026-06-03); the
+  // partial-unique index on the Projection collection enforces this at
+  // the storage layer.
+  const branchForName = opts.summonCtx?.branch || "0";
+  const { findByNamePattern } = await import("../../projections.js");
+  const existingMatches = await findByNamePattern(
+    "being",
+    new RegExp(`^${escapeRegex(name)}$`, "i"),
+    branchForName,
+  );
+  if (existingMatches.length > 0)
     throw new IbpError(IBP_ERR.RESOURCE_CONFLICT, "Name already taken");
 
   // defaultRole — the being's unconditional fallback voice. The carry
@@ -217,8 +224,9 @@ export async function createBeing(name, password, opts = {}) {
   let resolvedCoord = opts.coord || null;
   if (!resolvedCoord && position) {
     try {
-      const live = await Space.findById(position).select("size").lean();
-      let size = live?.size || null;
+      const { loadProjection: _lP } = await import("../../projections.js");
+      const _liveSlot = await _lP("space", position, opts.summonCtx?.branch || "0");
+      let size = _liveSlot?.state?.size || null;
       if (!size) {
         const pendingCreate = opts.summonCtx?.deltaF?.find(
           (f) =>
@@ -296,6 +304,7 @@ export async function createBeing(name, password, opts = {}) {
       target:  { kind: "being", id },
       params:  { spec },
       actId:   opts.actId || null,
+      branch:  opts.summonCtx?.branch || "0",
     }, opts.summonCtx);
   } catch (err) {
     if (err.code === 11000)
@@ -308,14 +317,15 @@ export async function createBeing(name, password, opts = {}) {
     return { _id: id, ...spec, _pending: true };
   }
 
-  // Standalone: row exists now (sealFacts singleton committed).
-  const being = await Being.findById(id);
-  if (!being) {
+  // Standalone: slot exists now (sealFacts singleton committed).
+  const { loadProjection } = await import("../../projections.js");
+  const slot = await loadProjection("being", id, opts.summonCtx?.branch || "0");
+  if (!slot) {
     throw new Error(
-      `createBeing: register Fact stamped but row ${id} not materialized`,
+      `createBeing: register Fact stamped but slot ${id} not materialized`,
     );
   }
-  return being;
+  return { _id: slot.id, position: slot.position, ...slot.state };
 }
 
 /**
@@ -332,12 +342,11 @@ export async function generateUniqueName(role, opts = {}) {
     const bits = 4 + i;
     const suffix = crypto.randomBytes(bits).toString("hex").slice(0, 6);
     const candidate = `${base}${suffix}`;
-    const clash = await Being.findOne({
-      name: { $regex: `^${escapeRegex(candidate)}$`, $options: "i" },
-    })
-      .select("_id")
-      .lean();
-    if (!clash) return candidate;
+    const { findByNamePattern } = await import("../../projections.js");
+    const branch = opts.branch || "0";
+    const clashes = await findByNamePattern("being",
+      new RegExp(`^${escapeRegex(candidate)}$`, "i"), branch);
+    if (clashes.length === 0) return candidate;
   }
   // Last resort: full UUID slice
   return `${base}${crypto.randomUUID().replace(/-/g, "").slice(0, 12)}`;
@@ -464,7 +473,9 @@ export async function createBeingWithHome(opts) {
   // I-Am is the one exception (no parent), and ensureIAm sets
   // homeSpace explicitly at genesis.
   if (!homeSpace && !homeParent && parentBeingId) {
-    const parentRow = await Being.findById(parentBeingId).select("homeSpace").lean();
+    const { loadProjection } = await import("../../projections.js");
+    const parentSlot = await loadProjection("being", parentBeingId, opts.summonCtx?.branch || "0");
+    const parentRow = parentSlot ? { homeSpace: parentSlot.state?.homeSpace } : null;
     if (parentRow?.homeSpace) {
       homeSpace = String(parentRow.homeSpace);
     }
@@ -500,7 +511,9 @@ export async function createBeingWithHome(opts) {
   let createdNewHome = false;
 
   if (homeSpace) {
-    home = await Space.findById(homeSpace);
+    const { loadProjection: _lP2 } = await import("../../projections.js");
+    const _hSlot = await _lP2("space", homeSpace, opts.summonCtx?.branch || "0");
+    home = _hSlot ? { _id: _hSlot.id, ...(_hSlot.state || {}) } : null;
     if (!home) {
       // Multi-act atomic batch: when this birth runs inside a moment
       // whose ΔF carries an EARLIER act's create-space fact for this
@@ -525,7 +538,9 @@ export async function createBeingWithHome(opts) {
       home = { _id: homeSpace, _pending: true };
     }
   } else {
-    let parent = await Space.findById(homeParent).select("_id").lean();
+    const { loadProjection: _lP3 } = await import("../../projections.js");
+    const _pSlot3 = await _lP3("space", homeParent, opts.summonCtx?.branch || "0");
+    let parent = _pSlot3 ? { _id: _pSlot3.id } : null;
     if (!parent) {
       // Same atomic-batch reference resolution as above.
       const pendingInBatch = summonCtx?.deltaF?.find(
@@ -571,9 +586,12 @@ export async function createBeingWithHome(opts) {
     // takes its hash-ring fallback in that case).
     let resolvedCoord = null;
     try {
-      const parentSpace = parent && !parent._pending
-        ? parent
-        : await Space.findById(homeParent).select("size").lean();
+      let parentSpace = parent && !parent._pending ? parent : null;
+      if (!parentSpace) {
+        const { loadProjection: _lP4 } = await import("../../projections.js");
+        const _pSlot4 = await _lP4("space", homeParent, opts.summonCtx?.branch || "0");
+        parentSpace = _pSlot4 ? { size: _pSlot4.state?.size } : null;
+      }
       const parentSize = parentSpace?.size || null;
       if (parentSize && Number.isFinite(parentSize.x) && Number.isFinite(parentSize.y) &&
           parentSize.x > 0 && parentSize.y > 0) {
@@ -612,6 +630,7 @@ export async function createBeingWithHome(opts) {
         },
       },
       actId: summonCtx?.actId || actId,
+      branch: summonCtx?.branch || "0",
     }, summonCtx);
     // Inside a moment, the home row materializes at seal — keep a
     // pending view carrying the id + parent + name so downstream code
@@ -627,12 +646,14 @@ export async function createBeingWithHome(opts) {
         rootOwner: null,
       };
     } else {
-      home = await Space.findById(homeId);
-      if (!home) {
+      const { loadProjection: _lP5 } = await import("../../projections.js");
+      const _hSlot5 = await _lP5("space", homeId, opts.summonCtx?.branch || "0");
+      if (!_hSlot5) {
         throw new Error(
           `createBeingWithHome: home-space birth Fact stamped but row ${homeId} not materialized`,
         );
       }
+      home = { _id: _hSlot5.id, ...(_hSlot5.state || {}) };
     }
     createdNewHome = true;
   }

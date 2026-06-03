@@ -51,11 +51,12 @@ async function handleSetBeingCoord(fact /*, type, id*/) {
 
   // Resolve which space this coord belongs in. The fact carries the
   // being's reel only; the being's current `position` names the
-  // space the coord is within. See positionProjection.js header for
-  // the live-vs-rebuild timing note.
-  const Being = mongoose.model("Being");
-  const b = await Being.findById(beingId).select("position").lean();
-  const spaceId = b?.position ? String(b.position) : null;
+  // space the coord is within. Branch-aware: a fact on #1 lives in
+  // #1's projection slot.
+  const { loadProjection } = await import("../../../materials/projections.js");
+  const branch = fact.branch || "0";
+  const slot = await loadProjection("being", beingId, branch);
+  const spaceId = slot?.position ? String(slot.position) : null;
   if (!spaceId) return;
 
   const _id = positionRowId(beingId, spaceId);

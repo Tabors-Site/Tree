@@ -6,6 +6,7 @@
 import { PortalClient } from "./portal-client.js";
 import { Scene } from "./scene.js";
 import { mountIbpConsole } from "./ibp-console.js";
+import { mountBranchBar } from "./branch-bar.js";
 import { initHotbar } from "./hotbar.js";
 import { promptForName, plantSeed as runPlantSeed, isPlanterOpen, closePrompt } from "./planter.js";
 import {
@@ -156,6 +157,57 @@ async function main() {
     getPlace: () => state.discovery?.reality || "treeos.ai",
   });
 
+  // Mount the branch-and-timeline bar at the bottom of the screen.
+  // navigate() pings .update(desc) on every refresh; the bar renders
+  // the branch graph + time-anchored timeline and dispatches custom
+  // events for rewind / return-to-now / branch-here that we wire below.
+  state.branchBar = mountBranchBar({
+    client:  state.client,
+    reality: state.discovery?.reality || "treeos.ai",
+  });
+
+  // Rewind / return / branch-here events flow back through navigate().
+  // Rewinding means re-SEEing the current position with an at:
+  // qualifier; the descriptor builder threads `until` through every
+  // internal fold call so the whole world rewinds together.
+  window.addEventListener("branchbar:rewind", async (ev) => {
+    if (!state.currentAddress) return;
+    const atTimestamp = ev?.detail?.atTimestamp;
+    if (!atTimestamp) return;
+    try {
+      const desc = await state.client.see(state.currentAddress, {
+        at: { atTimestamp },
+      });
+      state.descriptor = desc;
+      state.scene.setCurrentSpaceId?.(desc?.address?.spaceId || null);
+      state.scene.renderDescriptor(desc, {
+        isAuthenticated: !!state.session?.token,
+      });
+      state.branchBar?.update(desc);
+      setHud(`rewound to ${atTimestamp}`);
+    } catch (err) {
+      console.warn("[3D] rewind failed:", err?.message);
+    }
+  });
+  window.addEventListener("branchbar:now", () => {
+    // Same address, no at-qualifier → live again.
+    if (state.currentAddress) navigate(state.currentAddress);
+  });
+
+  // Branch-tree clicks set `location.hash` to the target branch's
+  // address; this listener turns that into a real navigate. Without
+  // this the URL changes silently and the descriptor stays put.
+  // Inhabit-hash and inheriter flows have their own consume paths
+  // earlier in boot, so by the time this runs only branch-switch
+  // hashes flow through.
+  window.addEventListener("hashchange", () => {
+    const raw = location.hash.replace(/^#/, "");
+    if (!raw) return;
+    // Inhabit / inheriter hashes carry an "=" payload; ignore them.
+    if (raw.startsWith("inhabit=")) return;
+    navigate(raw);
+  });
+
   // Mount the hotbar. Populated from the place's discovery payload
   // (refreshed on every connect — see refreshSeedCatalog). Selecting
   // the built-in Move tool toggles the scene's pick-up mode; any
@@ -207,38 +259,106 @@ async function refreshSeedCatalog() {
   }
 }
 
+// Ghost-mode guard. When the user is looking at a past moment
+// (state.descriptor.isHistorical === true), every DO/SUMMON/BE is
+// blocked at the client boundary. The camera still moves locally
+// (scene.js owns that), but no facts get stamped — the past is
+// observation only. Returning to "now" makes the guard fall through.
+//
+// One exception. `create-branch` IS the legitimate past-time DO —
+// branching is how the past stays causally accessible without
+// retconning the existing reel. The button in the timeline strip
+// must reach the substrate even when the view is historical.
+const GHOST_ALLOWED_DO_ACTIONS = new Set(["create-branch"]);
+function _ghostGuard(client) {
+  for (const verb of ["do", "summon", "be"]) {
+    const original = client[verb].bind(client);
+    client[verb] = async (...args) => {
+      if (state.descriptor?.isHistorical) {
+        if (verb === "do" && GHOST_ALLOWED_DO_ACTIONS.has(args[1])) {
+          return await original(...args);
+        }
+        setHud(`ghost view — ${verb.toUpperCase()} suspended. return to now to act.`);
+        const err = new Error(`${verb.toUpperCase()} blocked: viewing the past`);
+        err.code = "GHOST_VIEW";
+        throw err;
+      }
+      return await original(...args);
+    };
+  }
+  return client;
+}
+
 async function connectAnonymous(placeUrl, useProxy) {
-  state.client = new PortalClient({
+  state.client = _ghostGuard(new PortalClient({
     placeUrl,
     token: null,
     useProxy,
     onConnectionChange: (status) => setHud(`socket: ${status}`),
     onSummon: handleSummon,
     onDescriptorEvent: handleDescriptorEvent,
-  });
+  }));
   state.client.connect();
   await waitForConnect(state.client);
-  await navigate("/");
+  // Restore last view from URL hash if present; else land at "/".
+  // Anonymous SEE on a non-existent space still throws SPACE_NOT_FOUND,
+  // so wrap the navigate and fall back to "/" on substrate-gone errors.
+  const restored = _restoreAddressFromHash() || "/";
+  try {
+    await navigate(restored);
+  } catch (err) {
+    if (STALE_SESSION_CODES.has(err?.code) && restored !== "/") {
+      try { history.replaceState(null, "", location.pathname); } catch {}
+      try { await navigate("/"); } catch {}
+    }
+  }
+}
+
+// Error codes that mean "this saved session no longer corresponds to
+// real substrate" — typically because the operator reset the DB, but
+// also covers a deleted being, a tombstoned home, or a JWT secret
+// rotation. Anything in this set drops the stored session and reconnects
+// anonymously instead of leaving a "ghost user" chip in the address bar.
+const STALE_SESSION_CODES = new Set([
+  "UNAUTHORIZED",
+  "FORBIDDEN",
+  "NODE_NOT_FOUND",
+  "BEING_NOT_FOUND",
+  "SPACE_NOT_FOUND",
+]);
+
+async function _dropStaleSessionAndReconnect(session) {
+  console.warn("[3D] stored session is no longer valid; dropping it.");
+  clearSession();
+  state.session = null;
+  try { state.client.disconnect(); } catch {}
+  const placeUrl = session.placeUrl || defaultPlaceUrl();
+  // Clear the URL hash too — it may point at a space that no longer
+  // exists on the fresh DB, and the anonymous landing should start
+  // clean at "/", not retry the dead address.
+  try { history.replaceState(null, "", location.pathname); } catch {}
+  await connectAnonymous(placeUrl, shouldUseProxy(placeUrl));
 }
 
 async function connectAndPlace(session) {
-  state.client = new PortalClient({
+  state.client = _ghostGuard(new PortalClient({
     placeUrl: session.placeUrl,
     token: session.token,
     useProxy: session.placeIsProxied,
     onConnectionChange: (status) => setHud(`${session.username} | ${status}`),
     onSummon: handleSummon,
     onDescriptorEvent: handleDescriptorEvent,
-  });
+  }));
   state.client.connect();
   await waitForConnect(state.client);
 
   // The token may be stale (expired, signed under a previous JWT_SECRET,
-  // or for a being that no longer exists). The socket accepts the
-  // connection regardless; auth-only happens at verb dispatch. Verify
-  // explicitly with one SEE on the being's own stance. If the server
-  // refuses, drop the local session and reconnect anonymously rather
-  // than lie to the user with a stale "tabor" chip.
+  // or for a being that no longer exists — the common case being the
+  // operator reset the DB). The socket accepts the connection regardless;
+  // auth-only happens at verb dispatch. Verify explicitly with one SEE
+  // on the being's own stance. If the server refuses, drop the local
+  // session and reconnect anonymously rather than lie to the user with
+  // a stale "tabor" chip.
   const beingAddress = session.beingAddress
     || (session.username && state.discovery?.reality
         ? `${state.discovery.reality}/@${session.username}`
@@ -246,39 +366,70 @@ async function connectAndPlace(session) {
   // The being's last-known position (server-side state) is surfaced
   // on the descriptor's identity block. Reuse it to land the camera
   // where the being actually IS, instead of teleporting to / on
-  // every login / reconnect. Falls back to the being's stance (home),
-  // then to / if even that fails.
-  let landingAddress = "/";
+  // every login / reconnect.
+  //
+  // Priority for landing:
+  //   1. location.hash (if user refreshed mid-session — restore the
+  //      exact view they were on, including branch qualifier)
+  //   2. Being's saved position (server-side state)
+  //   3. Being's stance address (resolves to home)
+  //   4. "/" (place root)
+  let landingAddress = _restoreAddressFromHash() || "/";
+  let landingFromHash = !!landingAddress && landingAddress !== "/";
   if (beingAddress) {
     try {
       const desc = await state.client.see(beingAddress);
-      const pos = desc?.identity?.position || null;
-      if (pos && state.discovery?.reality) {
-        // Position is a spaceId — the resolver accepts UUID paths.
-        landingAddress = `${state.discovery.reality}/${pos}`;
-      } else {
-        // No saved position yet — fall back to the being's stance
-        // address (which resolves to their home).
-        landingAddress = beingAddress;
+      if (!landingFromHash) {
+        const pos = desc?.identity?.position || null;
+        if (pos && state.discovery?.reality) {
+          // Position is a spaceId — the resolver accepts UUID paths.
+          landingAddress = `${state.discovery.reality}/${pos}`;
+        } else {
+          // No saved position yet — fall back to the being's stance
+          // address (which resolves to their home).
+          landingAddress = beingAddress;
+        }
       }
     } catch (err) {
-      if (err?.code === "UNAUTHORIZED" || err?.code === "NODE_NOT_FOUND") {
-        console.warn("[3D] stored session is no longer valid; dropping it.");
-        clearSession();
-        state.session = null;
-        state.client.disconnect();
-        const placeUrl = session.placeUrl || defaultPlaceUrl();
-        await connectAnonymous(placeUrl, shouldUseProxy(placeUrl));
+      if (STALE_SESSION_CODES.has(err?.code)) {
+        await _dropStaleSessionAndReconnect(session);
         return;
       }
       // Other errors (network, TIMEOUT) — fall through to landing.
     }
   }
 
-  await navigate(landingAddress);
+  try {
+    await navigate(landingAddress);
+  } catch (err) {
+    // Landing address pointed at substrate that no longer exists
+    // (DB reset; tombstoned position; renamed branch). Don't strand
+    // the user on a black screen — drop the dead pointer and retry
+    // from a known-good fallback.
+    if (STALE_SESSION_CODES.has(err?.code)) {
+      try { history.replaceState(null, "", location.pathname); } catch {}
+      try { await navigate(beingAddress || "/"); }
+      catch (err2) {
+        if (STALE_SESSION_CODES.has(err2?.code)) {
+          await _dropStaleSessionAndReconnect(session);
+          return;
+        }
+      }
+    }
+  }
   // The hotbar may have mounted before the socket reconnected (auth flow
   // disconnects + reconnects). Refresh the seed list against the new socket.
   if (state.hotbar) await refreshSeedCatalog();
+}
+
+// Extract a navigable address from location.hash, ignoring the inhabit
+// and inheriter payloads that ride the same channel. Returns null when
+// the hash isn't a plain address (or is empty).
+function _restoreAddressFromHash() {
+  const raw = (typeof location !== "undefined" ? location.hash : "").replace(/^#/, "");
+  if (!raw) return null;
+  if (raw.startsWith("inhabit=")) return null;
+  return raw;
 }
 
 // Self-position emit loop. Polls the camera's grid coord at a
@@ -299,6 +450,12 @@ function _startSelfPositionLoop() {
 async function _tickSelfPosition() {
   if (_selfEmitInflight) return;
   if (!state.scene || !state.descriptor) return;
+  // Historical mode is observer-only. Acting on the world while
+  // looking at the past would pollute the present's reel with moves
+  // the user didn't intend ("I was reviewing my path when WASD
+  // shifted me in the live world"). Freeze emits until they return
+  // to now.
+  if (state.descriptor.isHistorical) return;
   const grid = state.scene.getCurrentGridCoord();
   if (!grid) return;
   if (_lastEmittedCoord &&
@@ -499,6 +656,14 @@ async function spawnLlmAssignerTutorial() {
 async function navigate(address, { fromHistory = false } = {}) {
   if (!state.client) return;
   try {
+    // Branch-stickiness: if the user is currently on a non-main branch
+    // and the target address doesn't already specify one, inject the
+    // active branch as a `#<path>` qualifier so walking into a child
+    // doesn't silently drop them back to main. Address shapes covered:
+    //   "/foo/bar"           → "<reality>#<branch>/foo/bar"
+    //   "<reality>/foo"      → "<reality>#<branch>/foo"
+    //   "<reality>#X/foo"    → untouched (explicit branch wins)
+    address = _withActiveBranch(address);
     // Subscribe live: every change to this position (placements, beings
     // appearing/disappearing, queue state, activity) places as a
     // descriptor event we can refetch on. "/~" goes on the wire as
@@ -527,6 +692,10 @@ async function navigate(address, { fromHistory = false } = {}) {
     state.scene.renderDescriptor(desc, {
       isAuthenticated: !!state.session?.token,
     });
+    // Refresh the branch+timeline bar with this descriptor so the
+    // chips reflect the active branch and the slider shows the right
+    // time-axis for it.
+    state.branchBar?.update(desc);
     hideActionPanel();
     hideSummonPanel();
     resetSummonState();
@@ -535,11 +704,22 @@ async function navigate(address, { fromHistory = false } = {}) {
     setHud(formatLocation(desc, state.session));
 
     // Two-humans-walking: mark this space as my current position so
-    // I appear in other tabs' descriptors (occupantsByPosition scans
-    // Being.position == spaceId). Best-effort; ignore failure (the
-    // descriptor will refetch on the next live event and pick up
-    // whatever coord state landed).
-    if (desc?.size && desc?.identity?.beingId && desc?.address?.spaceId) {
+    // I appear in other tabs' descriptors. Skip in historical mode —
+    // a navigate that landed here via a timeline rewind/space-redirect
+    // shouldn't write our LIVE position to the past space we're just
+    // observing. Live navigation only.
+    //
+    // The size requirement was wrong: it gated on whether the space
+    // has a 2D grid, but a being's position should follow them through
+    // every space, sized or not. Without this, walking from a sized
+    // space (root) into an unsized one (a synthetic catalog, a tree
+    // without size) silently kept position pinned at the prior space,
+    // and the user's tree-in-home write never landed because position
+    // never advanced past root.
+    if (
+      !desc?.isHistorical &&
+      desc?.identity?.beingId && desc?.address?.spaceId
+    ) {
       const selfStance = `${desc.address.pathByNames}@${desc.identity.name}`;
       state.client.do(selfStance, "set-being", {
         field: "position",
@@ -561,8 +741,37 @@ async function navigate(address, { fromHistory = false } = {}) {
       }
     }
     updateHistoryButtons();
+    // Mirror the canonical address into location.hash so a page
+    // refresh restores the view (and the branch qualifier), and so
+    // the browser back/forward + bookmarks act on the actual position.
+    // Skip when an inhabit/inheriter payload still owns the hash
+    // (those carry "=" + base64 and would corrupt on overwrite).
+    _syncLocationHash(desc);
   } catch (err) {
     setHud(`see failed: ${err.code || ""} ${err.message || ""}`);
+    // Re-throw so connect-time handlers (connectAndPlace,
+    // connectAnonymous) can fall back when the landing address points
+    // at substrate that no longer exists (DB reset, tombstone, etc.).
+    throw err;
+  }
+}
+
+function _syncLocationHash(desc) {
+  if (typeof location === "undefined") return;
+  const existing = location.hash.replace(/^#/, "");
+  if (existing.startsWith("inhabit=")) return;
+  const reality = desc?.address?.place || state.discovery?.reality || "";
+  if (!reality) return;
+  const branch = desc?.address?.branch || "0";
+  const path = desc?.address?.pathByNames || "/";
+  const bq = branch === "0" ? "" : `#${branch}`;
+  const next = `${reality}${bq}${path === "/" ? "/" : path}`;
+  // Use replaceState so we don't pollute the browser's back-button
+  // stack — internal navigation history already tracks that. Only
+  // location.hash mutations from branch-tree clicks should add to
+  // the browser stack (those already use location.hash = ...).
+  if (existing !== next) {
+    try { history.replaceState(null, "", `${location.pathname}#${next}`); } catch {}
   }
 }
 
@@ -587,6 +796,36 @@ function updateHistoryButtons() {
   });
 }
 
+// Inject the user's active branch (#<path>) into an address that
+// doesn't already carry one. Returns the original string when the
+// active branch is main, when the address already has a `#`, or when
+// we have no descriptor yet.
+function _withActiveBranch(address) {
+  // Doctrine (2026-06-04): the address bar IS the source of truth.
+  // When the user types a full address (starts with the reality), the
+  // absence of `#` MEANS main, not "inherit my current branch." The
+  // server-side expand respects this too — see expandStance in
+  // seed/ibp/address.js. Only RELATIVE shorthands (no reality prefix)
+  // inherit the active branch, so walking into a child via "/foo" or
+  // clicking "~" stays on the current branch without forcing the user
+  // to retype #X every time.
+  if (typeof address !== "string" || !address) return address;
+  if (address.includes("#")) return address;
+  const activeBranch = state.descriptor?.address?.branch || "0";
+  if (activeBranch === "0") return address;
+  const reality = state.discovery?.reality;
+  if (!reality) return address;
+  // Full typed address: leave it alone. User said "go to <reality>/foo"
+  // explicitly — that's main.
+  if (address.startsWith(reality)) return address;
+  if (address.startsWith("/") || address.startsWith("~")) {
+    // Relative shorthand: prepend "<reality>#<branch>" and keep the path.
+    return `${reality}#${activeBranch}${address === "/" ? "/" : address}`;
+  }
+  // Foreign reality or shape we don't recognize — leave untouched.
+  return address;
+}
+
 function refreshAddressBar() {
   updateAddressBar({
     username: state.session?.username,
@@ -594,6 +833,7 @@ function refreshAddressBar() {
     pathByNames: state.descriptor?.address?.pathByNames,
     chain: state.descriptor?.address?.chain,
     isAuthenticated: !!state.session?.token,
+    branch: state.descriptor?.address?.branch || "0",
   });
 }
 
@@ -995,7 +1235,14 @@ async function attemptPlant() {
 
   const reality = state.discovery.reality;
   const path = state.descriptor.address?.pathByNames || "/";
-  const parentAddress = `${reality}${path}`.replace(/\/+$/, "") || reality;
+  // Include the active branch qualifier so the plant lands on the
+  // branch the user is viewing. Without this, planting on `#1` silently
+  // resolves to main (the parser's typed-reality doctrine: bare
+  // reality = main), and the new tree appears in the wrong branch.
+  const branch = state.descriptor.address?.branch || "0";
+  const bq = branch === "0" ? "" : `#${branch}`;
+  const parentAddress =
+    `${reality}${bq}${path}`.replace(/\/+$/, "") || `${reality}${bq}`;
 
   let answer;
   try {

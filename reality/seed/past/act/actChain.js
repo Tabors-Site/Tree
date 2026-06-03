@@ -14,7 +14,11 @@
 import Act from "./act.js";
 import Fact from "../fact/fact.js";
 
-const MAX_LIMIT = 500;
+// Cap is high so per-being scrubbable history reaches back to the
+// being's first act even after long sessions of fine-grained
+// movement (every coord tick is one Act). Timeline UIs request the
+// max explicitly.
+const MAX_LIMIT = 10000;
 const MAX_FACT_PARAM_BYTES = 512;
 
 /**
@@ -36,13 +40,16 @@ export async function describeActChain(beingId, opts = {}) {
 
   let beingName = null;
   try {
-    const Being = (await import("../../materials/being/being.js")).default;
-    const row = await Being.findById(beingId).select("name").lean();
-    beingName = row?.name || null;
+    const { loadProjection } = await import("../../materials/projections.js");
+    const slot = await loadProjection("being", beingId, "0");
+    beingName = slot?.state?.name || null;
   } catch { /* best-effort */ }
 
   const serialized = acts.map(serializeAct);
-  await attachActFacts(serialized);
+  // Pass the being's own id so attachActFacts can compute each act's
+  // `lastFactSeq` per the BEING'S OWN reel (seqs are per-reel; the
+  // cross-reel max would be meaningless for foldAt("being", id, seq)).
+  await attachActFacts(serialized, { reelKind: "being", reelId: String(beingId) });
 
   return {
     being: { id: String(beingId), name: beingName },
@@ -65,12 +72,24 @@ export async function describeActChain(beingId, opts = {}) {
  * params capped so a large write (set-render, matter content) can't
  * bloat the descriptor. Facts ride oldest-first within each Act.
  *
+ * Optional `reel` selector computes `a.lastFactSeq` per the named
+ * reel rather than per-act-globally. Per-reel is what the timeline-
+ * rewind UI wants: clicking a row means "fold THIS being to this
+ * seq," and seqs are per-reel — the cross-reel max would be
+ * meaningless. When the act sealed no facts on the named reel,
+ * `lastFactSeq` is null (the row renders inert).
+ *
  * Mutates and returns the passed array.
  *
  * @param {Array<{_id:string}>} serializedActs
+ * @param {object} [opts]
+ * @param {string} [opts.reelKind] target.kind to filter the seq
+ *   computation by ("being" | "space" | "matter").
+ * @param {string} [opts.reelId]   target.id to filter the seq
+ *   computation by.
  * @returns {Promise<Array>}
  */
-export async function attachActFacts(serializedActs) {
+export async function attachActFacts(serializedActs, opts = {}) {
   if (!Array.isArray(serializedActs) || serializedActs.length === 0) {
     return serializedActs;
   }
@@ -85,14 +104,35 @@ export async function attachActFacts(serializedActs) {
     // Best-effort enrichment; the act chain still renders without it.
     facts = [];
   }
-  const byAct = new Map();
+  const byAct       = new Map();
+  const lastSeqByAct = new Map();
+  const reelKind = typeof opts.reelKind === "string" ? opts.reelKind : null;
+  const reelId   = opts.reelId != null ? String(opts.reelId) : null;
   for (const f of facts) {
     const key = String(f.actId);
     if (!byAct.has(key)) byAct.set(key, []);
     byAct.get(key).push(compactFact(f));
+    // Track the highest seq per act, optionally filtered to facts on
+    // ONE specific reel. Per-reel filtering is what callers
+    // computing a "fold this aggregate to seq N" anchor need, since
+    // seqs are local to each reel.
+    if (typeof f.seq === "number") {
+      if (reelKind && reelId) {
+        const t = f.target;
+        if (!t || t.kind !== reelKind || String(t.id) !== reelId) continue;
+      }
+      const prev = lastSeqByAct.get(key);
+      if (prev == null || f.seq > prev) lastSeqByAct.set(key, f.seq);
+    }
   }
   for (const a of serializedActs) {
     a.facts = byAct.get(String(a._id)) || [];
+    // The "as-of" seq for the act's POST-SEAL state on the requested
+    // reel. Timeline rows render at this point so clicking shows
+    // the state AFTER the act's facts applied, not mid-moment. Null
+    // when the act sealed no facts on the requested reel (a SEE-only
+    // moment, or an act whose facts targeted other reels).
+    a.lastFactSeq = lastSeqByAct.get(String(a._id)) ?? null;
   }
   return serializedActs;
 }

@@ -477,6 +477,80 @@ its space, and that space's occupants. Per FOLD.md, reach is one hop.
 Child spaces are listed but not deep-folded; a being deep-folds a
 child space only when it moves in.
 
+### Live fold vs historical fold — the two flavors
+
+Folds come in two flavors. Both share the reducer; they differ in
+whether the computation commits anything.
+
+**Live folds** ([present/beats/2-fold/foldEngine.js#fold](present/beats/2-fold/foldEngine.js))
+advance current-state projections and dispatch cross-cutting handlers
+as side effects of reading current truth. `fold("being", id)` writes
+the new projection row via `applyProjection`, fires every registered
+cross-cutting handler for each applied fact, and returns the
+current-as-of-now state.
+
+**Historical folds** ([present/beats/2-fold/foldAt.js#foldAt](present/beats/2-fold/foldAt.js))
+compute past projections as pure functions of the chain, with no side
+effects. `foldAt("being", id, { atSeq: 12347 })` walks the reel from
+genesis to seq 12347, applies the reducer cold from `initial()`, and
+returns the state-as-of-that-seq. **Nothing is written.** Cross-cutting
+handlers don't fire. Repeat calls produce byte-identical state.
+
+The same `skipCrossCutting: true` option exists on the live `fold` and
+`rebuild` for callers that need cold-walk semantics without surfacing
+the historical primitive (e.g. test harnesses, future internal
+re-projection passes).
+
+### `seq` is the truth; `date` is a human helper
+
+Every reel-bearing Fact carries two temporal fields:
+
+- **`seq`** — per-reel monotonic, allocated under the append lock at
+  the seal site. The only valid ordering across facts on the same reel.
+  This is what the substrate trusts.
+- **`date`** — wall-clock `new Date()` set at append. Decorative —
+  used for human-friendly indexes and time-range queries, but the
+  substrate never trusts it for ordering. Clock skew can invert order;
+  multiple facts can share a millisecond.
+
+Historical queries internally always operate on `seq`. The
+`atTimestamp` shape on `foldAt` is a human helper: it resolves to the
+highest seq with `date <= target` via a two-step query
+([foldAt.js#resolveUntil](present/beats/2-fold/foldAt.js)), THEN
+folds. Timestamps translate to seq before any fold work begins.
+
+**Cross-reel ordering by timestamp is never trusted.** There is no
+global "world at time T" — only per-reel "this reel's latest fact
+whose date ≤ T." Historical queries that need cross-reel state at a
+moment assemble per-reel folds independently; the substrate cannot
+deliver a globally-consistent timestamp slice. That's a property,
+not a limitation to fix.
+
+### The historical primitive's contract
+
+```
+foldAt(type, id, until)
+  until = { atSeq?: number, atTimestamp?: Date|string, branch?: "0" }
+```
+
+| Outcome | Trigger |
+|---|---|
+| `{ state, foldedSeq }` returned | The target had ≥1 fact at or before the queried point. State is the cold-reduced result; foldedSeq is the highest seq applied. |
+| `NoSuchHistoricalState` thrown | The target had no facts at or before the queried point. The target did not exist yet. |
+| Result clamps to current head | When `atSeq` is greater than the reel's current head, foldAt returns the current state (without writing to the projection cache). |
+
+Callers who want graceful "didn't exist" handling catch
+`NoSuchHistoricalState` ([foldAt.js#NoSuchHistoricalState](present/beats/2-fold/foldAt.js))
+specifically — the named class distinguishes "this thing did not
+exist yet" from any other failure.
+
+The `branch` parameter is forward-compatible. Today only `"0"` (main)
+exists; the read path is single-branch. When the branch storage layer
+lands (see [timeline.md](timeline.md)), the signature stays — only the
+body grows to walk inherited facts from parent branches up to the
+branch point, then divergent facts from the current branch. Callers
+don't need to change.
+
 ## Orientation — the three turns
 
 Every moment carries an orientation. The fold signature is

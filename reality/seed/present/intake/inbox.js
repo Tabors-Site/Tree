@@ -34,7 +34,8 @@ import InboxProjection from "../../past/projections/inbox/inboxProjection.js";
  */
 export async function readInbox(spaceId, beingId, options = {}) {
   if (!spaceId || !beingId) return [];
-  const q = { recipient: String(beingId), inboxSpaceId: String(spaceId) };
+  const branch = options.branch || "0";
+  const q = { recipient: String(beingId), inboxSpaceId: String(spaceId), branch };
   if (options.since) q.sentAt = { $gte: new Date(options.since) };
   let cursor = InboxProjection.find(q).sort({ sentAt: 1 });
   if (typeof options.limit === "number") cursor = cursor.limit(options.limit);
@@ -47,10 +48,10 @@ export async function readInbox(spaceId, beingId, options = {}) {
  * for human-readable display. Aggregates over InboxProjection by
  * recipient with a per-recipient count and recent slice.
  */
-export async function getInboxSummary(spaceId) {
+export async function getInboxSummary(spaceId, { branch = "0" } = {}) {
   if (!spaceId) return {};
   const rows = await InboxProjection.aggregate([
-    { $match: { inboxSpaceId: String(spaceId) } },
+    { $match: { inboxSpaceId: String(spaceId), branch } },
     { $sort: { sentAt: 1 } },
     {
       $group: {

@@ -322,6 +322,13 @@ export async function genesis(app, opts = {}) {
   const { roleManagerRole } = await import("./seed/present/roles/role-manager/role.js");
   registerRole("role-manager", roleManagerRole, "seed");
 
+  // branch-manager: creates branches (divergent worlds) from past
+  // points of existing branches. canDo:["create-branch"]. Substrate
+  // helpers in seed/materials/branch/ do the path arithmetic and
+  // branchPoint snapshotting; the role just routes the op.
+  const { branchManagerRole } = await import("./seed/present/roles/branch-manager/role.js");
+  registerRole("branch-manager", branchManagerRole, "seed");
+
   // The shared stance every unauthenticated visitor carries. SEE
   // bypasses the scheduler so many concurrent visitors share one
   // row without contention.
@@ -386,6 +393,13 @@ export async function genesis(app, opts = {}) {
   const { registerRoleManagerOps } =
     await import("./seed/present/roles/role-manager/ops.js");
   registerRoleManagerOps();
+
+  // branch-manager's create-branch DO op. The substrate's branch
+  // helpers (seed/materials/branch/) own the heavy lifting; the op
+  // is a thin handler routing through createBranch.
+  const { registerBranchManagerOps } =
+    await import("./seed/present/roles/branch-manager/ops.js");
+  registerBranchManagerOps();
 
   // I hand my remembered settings (from ./config) down to the seed
   // modules that depend on them. Per-key failures are logged but

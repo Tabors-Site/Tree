@@ -187,6 +187,14 @@ export function initWebSocketServer(httpServer, originPolicy) {
       }
     }
 
+    // First-person stance tracking. The wire layer reads these to know
+    // which branch + position the caller is in (the left side of every
+    // IBP bridge); SEE handlers update them after each successful read.
+    // Default: main branch, reality root. Once authed, the caller's
+    // being identity is socket.beingId / socket.name.
+    socket.currentBranch = "0";
+    socket.currentPath   = "/";
+
     // Client identity tags. Names like `socket.client` / `socket.conn`
     // are taken by Socket.IO internal getters — overwriting them
     // crashes the connection setup with cryptic errors. Use the

@@ -215,7 +215,9 @@ export async function authorize(args) {
   }
 
   // ── Layer 2: derive stance properties ──
-  const props = await deriveStanceProperties({ beingId, targetSpace: spaceId });
+  const props = await deriveStanceProperties({
+    beingId, targetSpace: spaceId, branch: summonCtx?.branch || "0",
+  });
   const stanceLabel = stanceLabelFromProps(props);
 
   // BE bootstrap exception. All three canonical BE ops are permitted
@@ -387,15 +389,16 @@ function buildKeyParts(args) {
 // ─────────────────────────────────────────────────────────────────────
 
 async function findMatchingRule({ spaceId, verb, keyParts, summonCtx = null }) {
+  const branch = summonCtx?.branch || "0";
   if (!spaceId) {
     const spaceRootId = getSpaceRootId();
     if (!spaceRootId) return null;
-    return matchOnSpace(spaceRootId, verb, keyParts);
+    return matchOnSpace(spaceRootId, verb, keyParts, branch);
   }
 
   const path = await walkAncestorsWithDeltaF(spaceId, summonCtx);
   for (const id of path) {
-    const match = await matchOnSpace(id, verb, keyParts);
+    const match = await matchOnSpace(id, verb, keyParts, branch);
     if (match) return match;
   }
   return null;
@@ -432,7 +435,9 @@ async function walkAncestorsWithDeltaF(spaceId, summonCtx) {
     seen.add(cursor);
     path.push(cursor);
 
-    const row = await Space.findById(cursor).select("parent").lean();
+    const { loadProjection } = await import("../materials/projections.js");
+    const _slot = await loadProjection("space", cursor, summonCtx?.branch || "0");
+    const row = _slot ? { parent: _slot.state?.parent } : null;
     if (row) {
       // Mongo has the row — defer the rest of the walk to the cache.
       let chain;
@@ -466,9 +471,10 @@ async function walkAncestorsWithDeltaF(spaceId, summonCtx) {
   return path;
 }
 
-async function matchOnSpace(spaceId, verb, keyParts) {
-  const space = await Space.findById(spaceId).select("qualities").lean();
-  const quals = space?.qualities;
+async function matchOnSpace(spaceId, verb, keyParts, branch = "0") {
+  const { loadProjection } = await import("../materials/projections.js");
+  const slot = await loadProjection("space", spaceId, branch);
+  const quals = slot?.state?.qualities;
   if (!quals) return null;
   const perms =
     quals instanceof Map ? quals.get("permissions") : quals.permissions;
@@ -617,7 +623,9 @@ export async function seedDefaultStancePermissions(summonCtx) {
   const seededFields = [];
 
   // ── Place root defaults ──
-  const root = await Space.findById(spaceRootId).select("qualities").lean();
+  const { loadProjection: _lProot, findBySeedSpace: _fSS } = await import("../materials/projections.js");
+  const _rootSlot = await _lProot("space", spaceRootId, "0");
+  const root = _rootSlot ? { qualities: _rootSlot.state?.qualities } : null;
   const quals = root?.qualities;
   const permsRoot =
     quals instanceof Map ? quals.get("permissions") : quals?.permissions;
@@ -656,9 +664,8 @@ export async function seedDefaultStancePermissions(summonCtx) {
   // listing) but SEE on "<reality>/." denies. Tier-3 seed spaces under
   // heaven inherit this through the ancestor walk.
   const { SEED_SPACE } = await import("../materials/space/seedSpaces.js");
-  const heaven = await Space.findOne({ seedSpace: SEED_SPACE.HEAVEN })
-    .select("_id qualities")
-    .lean();
+  const _heavenSlot = await _fSS(SEED_SPACE.HEAVEN, "0");
+  const heaven = _heavenSlot ? { _id: _heavenSlot.id, qualities: _heavenSlot.state?.qualities } : null;
   if (heaven) {
     const heavenQuals = heaven.qualities;
     const heavenPerms =
@@ -695,8 +702,9 @@ export async function seedDefaultStancePermissions(summonCtx) {
 export async function getAuthConfig() {
   const spaceRootId = getSpaceRootId();
   if (!spaceRootId) return { birth_enabled: true, connect_enabled: true };
-  const root = await Space.findById(spaceRootId).select("qualities.auth").lean();
-  const auth = root?.qualities?.auth;
+  const { loadProjection: _lProot2 } = await import("../materials/projections.js");
+  const _rootSlot2 = await _lProot2("space", spaceRootId, "0");
+  const auth = _rootSlot2?.state?.qualities?.auth;
   const get = (key, fallback) => {
     if (auth instanceof Map) return auth.has(key) ? auth.get(key) : fallback;
     return auth && key in auth ? auth[key] : fallback;

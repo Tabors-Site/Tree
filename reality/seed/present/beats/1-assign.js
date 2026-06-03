@@ -56,6 +56,7 @@ import log from "../../seedReality/log.js";
 import { getInternalConfigValue } from "../../internalConfig.js";
 import { v4 as uuidv4 } from "uuid";
 import Being from "../../materials/being/being.js";
+import { loadProjection } from "../../materials/projections.js";
 import Act from "../../past/act/act.js";
 import { getRealityConfigValue } from "../../realityConfig.js";
 import { resolveActiveStack } from "../roles/roleFlow.js";
@@ -93,11 +94,24 @@ import { getSpaceRootId } from "../../sprout.js";
 export async function assign({ beingId, spaceId, entry, handoff = null, signal = null } = {}) {
   const kind = entry?.kind || "summon";
   // ── assign: load the being ───────────────────────────────────────
-  const toBeing = await Being.findById(beingId);
-  if (!toBeing) {
-    log.warn("Assign", `being ${String(beingId).slice(0, 8)} not found`);
+  // Branch-aware via the intake entry. The moment runs in the caller's
+  // branch (the intake entry was enqueued with branch set by the wire
+  // layer); the being state for this branch is what assign sees.
+  const branch = entry?.branch || entry?.act?.branch || "0";
+  const slot = await loadProjection("being", beingId, branch);
+  if (!slot) {
+    log.warn("Assign", `being ${String(beingId).slice(0, 8)} not found on branch ${branch}`);
     return { skipped: "being-not-found" };
   }
+  // Flatten the slot into a row-shaped object so the downstream code
+  // (resolveActiveStack, composeStack, etc.) keeps reading `toBeing.X`
+  // without changes. Position rides at top level; state fields flatten.
+  const toBeing = {
+    _id: slot.id,
+    position: slot.position,
+    foldedSeq: slot.foldedSeq,
+    ...slot.state,
+  };
 
   // ── assign: resolve the active role ──────────────────────────────
   // Resolution order (see seed/present/roles/roleFlow.js for the doctrine):
@@ -111,15 +125,17 @@ export async function assign({ beingId, spaceId, entry, handoff = null, signal =
   // resolveActiveStack returns an ordered [primary, ...modifiers] role-name
   // list (empty when nothing resolves). composeStack folds it into one
   // role-shaped spec the rest of the moment runner reads uniformly.
-  const spaceRow = spaceId
-    ? await Space.findById(spaceId).select("_id name type seedSpace qualities").lean()
-    : null;
+  let spaceRow = null;
+  if (spaceId) {
+    const _sSlot = await loadProjection("space", spaceId, branch);
+    spaceRow = _sSlot ? { _id: _sSlot.id, ...(_sSlot.state || {}) } : null;
+  }
 
   // ── precompute caller enrichment for the evaluator ──
   // The flow's `caller.cognition / isAncestor / isDescendant` paths
   // need data that lives one DB hop away. We do those lookups here
   // (assign is async; the evaluator stays pure) and pass the result in.
-  const callerEnrichment = await enrichCallerForFlow({ toBeing, handoff, entry });
+  const callerEnrichment = await enrichCallerForFlow({ toBeing, handoff, entry, branch });
 
   // Previous moment lookup for `me.previousRole` and
   // `time.sinceLastMoment`. Best-effort; a being with no prior moment
@@ -231,6 +247,11 @@ export async function assign({ beingId, spaceId, entry, handoff = null, signal =
   // may carry half or inward. Default is forward.
   const orientation = validateOrientation(entry?.orientation, DEFAULT_ORIENTATION);
 
+  // `branch` was extracted up top alongside the projection load; reuse
+  // it. summonCtx.branch is what every Fact this moment emits inherits;
+  // the cross-branch dispatch gate at verb entry rejects targets
+  // pointing at a different branch.
+
   const baseCtx = {
     kind,
     spaceId,
@@ -239,6 +260,7 @@ export async function assign({ beingId, spaceId, entry, handoff = null, signal =
     orientation,
     toBeing,
     actId,
+    branch,
     resolved: handoff?.resolved || {
       being:       activeRole,
       activeRole,
@@ -484,7 +506,7 @@ async function planActRow(opts = {}) {
 // scheduled wakes that didn't thread an identity) also returns null
 // data — the flow then sees `caller.cognition: null`, `isAncestor:
 // false`, etc., which is the correct conservative default.
-async function enrichCallerForFlow({ toBeing, handoff, entry }) {
+async function enrichCallerForFlow({ toBeing, handoff, entry, branch = "0" }) {
   const kind = entry?.kind || "summon";
   if (kind === "transport-act") {
     return {
@@ -497,11 +519,12 @@ async function enrichCallerForFlow({ toBeing, handoff, entry }) {
   if (!callerBeingId || String(callerBeingId) === String(toBeing._id)) {
     return { cognition: null, isAncestor: false, isDescendant: false };
   }
-  const [callerRow, callerIsAncestor, meIsAncestorOfCaller] = await Promise.all([
-    Being.findById(callerBeingId).select("_id qualities").lean(),
-    isAncestorOf(callerBeingId, String(toBeing._id)),
-    isAncestorOf(String(toBeing._id), callerBeingId),
+  const [callerSlot, callerIsAncestor, meIsAncestorOfCaller] = await Promise.all([
+    loadProjection("being", callerBeingId, branch),
+    isAncestorOf(callerBeingId, String(toBeing._id), branch),
+    isAncestorOf(String(toBeing._id), callerBeingId, branch),
   ]);
+  const callerRow = callerSlot ? { _id: callerSlot.id, ...callerSlot.state } : null;
   return {
     cognition:    callerRow ? beingCognition(callerRow) : null,
     isAncestor:   callerIsAncestor,
@@ -518,9 +541,9 @@ async function loadWorldSignals() {
   const rootId = getSpaceRootId();
   if (!rootId) return null;
   try {
-    const row = await Space.findById(rootId).select("qualities").lean();
-    if (!row) return null;
-    const quals = row.qualities;
+    const slot = await loadProjection("space", rootId, "0");
+    if (!slot) return null;
+    const quals = slot.state?.qualities;
     const world = quals instanceof Map ? quals.get("world") : quals?.world;
     return world && typeof world === "object" ? world : null;
   } catch {

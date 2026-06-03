@@ -122,17 +122,38 @@ const FactSchema = new mongoose.Schema({
   // confused by a row-state foldSeq that differs from what was
   // sealed. See past/fact/hash.js.
   foldSeq: { type: Number, default: null },
+
+  // BRANCH — which world this fact lives in. Default "0" = main.
+  // Branches are divergent worlds that share history with main up to
+  // their branch point; reads in a non-main branch walk the parent
+  // chain's facts up to each per-reel branchPoint, then the branch's
+  // own divergent facts. See seed/timeline.md for the full doctrine
+  // and seed/materials/branch/branch.js for the metadata schema.
+  //
+  // Legacy rows from before this field landed have no `branch` value;
+  // the read path treats them as `"0"` via $or-with-$exists matching
+  // so existing data participates in main reads without a migration.
+  branch: { type: String, default: "0", index: true },
 });
 
 FactSchema.index({ beingId: 1, date: -1 });                                          // a being's reel
 FactSchema.index({ "target.kind": 1, "target.id": 1, date: -1 }, { sparse: true }); // a target's reel (date-ordered, legacy)
-FactSchema.index({ "target.kind": 1, "target.id": 1, seq: 1 }, {                     // a target's reel (seq-ordered, fold path)
+FactSchema.index({ "target.kind": 1, "target.id": 1, seq: 1 }, {                     // a target's reel (seq-ordered, fold path; main / branch-implicit)
   partialFilterExpression: { seq: { $type: "number" } },
 });
 FactSchema.index({ "target.kind": 1, "target.id": 1, seq: 1 }, {                     // per-reel uniqueness backstop
   unique: true,
   partialFilterExpression: { seq: { $type: "number" } },
   name: "target_seq_unique",
+});
+// Branch-aware reel scan. Non-main reads filter by branch first then
+// walk seq within that branch's owned range. Main reads still hit the
+// older (target.kind, target.id, seq) index via Mongo's selectivity
+// choice; this index is reserved for queries that explicitly filter
+// by branch.
+FactSchema.index({ branch: 1, "target.kind": 1, "target.id": 1, seq: 1 }, {
+  partialFilterExpression: { seq: { $type: "number" } },
+  name: "branch_target_seq",
 });
 FactSchema.index({ actId: 1 }, { sparse: true });                                 // facts within a summon
 FactSchema.index({ verb: 1, action: 1, date: -1 });                                  // "every register, newest first"

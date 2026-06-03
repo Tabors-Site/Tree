@@ -268,7 +268,8 @@ export async function sealAct(plannedAct, { content = null, deltaF = [], afterSe
         typeof f?.params?.field === "string"
       ) {
         const field = f.params.field;
-        const spaceId = await resolveSpaceForLiveSee(target);
+        const factBranch = f?.branch || "0";
+        const spaceId = await resolveSpaceForLiveSee(target, factBranch);
         const payload = {
           target,
           field,
@@ -276,6 +277,10 @@ export async function sealAct(plannedAct, { content = null, deltaF = [], afterSe
           beingId: baseBeing,
           actId: baseActId,
           spaceId,
+          // Branch this write happened on. Live-SEE subscribers filter
+          // by branch on their end so a write on #1 doesn't invalidate
+          // subscribers viewing main, and vice versa.
+          branch: factBranch,
         };
         try {
           if (field.startsWith("qualities.")) {
@@ -370,21 +375,21 @@ export async function sealAct(plannedAct, { content = null, deltaF = [], afterSe
 // Resolve the descriptor-space affected by a quality write. Used to
 // route live-SEE invalidations on afterQualityWrite. Returns null when
 // the affected space can't be determined (live-SEE then no-ops).
-async function resolveSpaceForLiveSee(target) {
+async function resolveSpaceForLiveSee(target, branch = "0") {
   if (!target || !target.id) return null;
   if (target.kind === "space") return String(target.id);
   if (target.kind === "being") {
     try {
-      const Being = mongoose.model("Being");
-      const b = await Being.findById(target.id).select("position").lean();
-      return b?.position ? String(b.position) : null;
+      const { loadProjection } = await import("../../materials/projections.js");
+      const slot = await loadProjection("being", target.id, branch);
+      return slot?.position ? String(slot.position) : null;
     } catch { return null; }
   }
   if (target.kind === "matter") {
     try {
-      const Matter = mongoose.model("Matter");
-      const m = await Matter.findById(target.id).select("spaceId").lean();
-      return m?.spaceId ? String(m.spaceId) : null;
+      const { loadProjection } = await import("../../materials/projections.js");
+      const slot = await loadProjection("matter", target.id, branch);
+      return slot?.state?.spaceId ? String(slot.state.spaceId) : null;
     } catch { return null; }
   }
   return null;

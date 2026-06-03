@@ -9,8 +9,9 @@
 // flat-app, future tooling) to render a global list — answers "what
 // beings exist?" the way `./operations` answers "what operations exist?"
 //
-// Read-only. No moment. Auth: any authenticated being can list; tighten
-// later if a position-scoped variant is needed.
+// Branch-aware. Default branch is "0" (main); callers can scope to a
+// specific branch to see that branch's beings (lazy inheritance from
+// main applies via listByType).
 
 const MAX_LIMIT = 500;
 
@@ -19,28 +20,41 @@ const MAX_LIMIT = 500;
  *
  * @param {object} [opts]
  * @param {number} [opts.limit=200]
+ * @param {string} [opts.branch="0"]
  * @returns {Promise<{ beings: object[], count: number }>}
  */
 export async function describeBeingsCatalog(opts = {}) {
   const limit = Math.min(Math.max(Number(opts.limit) || 200, 1), MAX_LIMIT);
-  const Being = (await import("./being.js")).default;
+  const branch = opts.branch || "0";
+  const { listByType, loadProjections } = await import("../projections.js");
   const { beingCognition } = await import("./identity/lookups.js");
-  const rows = await Being.find({})
-    .select("_id name qualities defaultRole homeSpace parentBeingId createdAt")
-    .sort({ createdAt: 1 })
-    .limit(limit)
-    .lean();
 
-  return {
-    beings: rows.map((b) => ({
-      beingId:       String(b._id),
-      name:          b.name,
-      cognition:     beingCognition(b),
-      defaultRole:   b.defaultRole || null,
-      homeSpace:     b.homeSpace ? String(b.homeSpace) : null,
-      parentBeingId: b.parentBeingId ? String(b.parentBeingId) : null,
-      createdAt:     b.createdAt || null,
-    })),
-    count: rows.length,
-  };
+  // listByType gives us {type, id} pairs; batch-load the full slots to
+  // get state (name, qualities, etc.) for each.
+  const refs = await listByType("being", branch);
+  const slice = refs.slice(0, limit);
+  const slots = await loadProjections("being", slice.map((r) => r.id), branch);
+
+  const entries = slice.map((ref) => {
+    const slot = slots.get(ref.id);
+    const state = slot?.state || {};
+    return {
+      beingId:       String(ref.id),
+      name:          state.name || null,
+      cognition:     beingCognition(state),
+      defaultRole:   state.defaultRole || null,
+      homeSpace:     state.homeSpace ? String(state.homeSpace) : null,
+      parentBeingId: state.parentBeingId ? String(state.parentBeingId) : null,
+      createdAt:     state.createdAt || null,
+    };
+  });
+  // Sort by createdAt ascending so first-created shows first (matches
+  // the legacy cursor's `.sort({ createdAt: 1 })`).
+  entries.sort((a, b) => {
+    const at = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+    const bt = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+    return at - bt;
+  });
+
+  return { beings: entries, count: entries.length };
 }

@@ -69,7 +69,7 @@ const IbpPage = () => {
 {`{
   id:       "<correlation-id>",
   verb:     "see" | "do" | "summon" | "be",
-  address:  "<reality>/<path>@<being> :: <reality>/<path>@<being>",
+  address:  "<reality>[#<branch>]<path>@<being> :: <reality>[#<branch>]<path>@<being>",
   payload:  { /* verb-specific */ },
   identity: { beingId, name } | null
 }`}
@@ -92,6 +92,13 @@ const IbpPage = () => {
               <code>treeos.ai/notes@archivist</code>,{" "}
               <code>treeos.ai/@cherub</code>. A position plus a being
               qualifier. Used by SUMMON and BE.
+            </li>
+            <li>
+              <strong>Branch qualifier</strong> on either side. Either
+              shape can carry a <code>#&lt;branch&gt;</code> between
+              the reality and the path, naming a divergent world.{" "}
+              <code>treeos.ai#1a/notes@archivist</code>. Without the
+              qualifier the address resolves on main.
             </li>
           </ul>
           <p className="ns-small">
@@ -119,7 +126,7 @@ const IbpPage = () => {
               <span className="ns-addr-being">/@tabor</span>
               <span className="ns-addr-bridge">::</span>
               <span className="ns-addr-reality">treeos.ai</span>
-              <span className="ns-addr-path">/flappybird</span>
+              <span className="ns-addr-path">#1a/flappybird</span>
               <span className="ns-addr-being">@ruler</span>
             </div>
 
@@ -154,6 +161,14 @@ const IbpPage = () => {
                 <div className="ns-addr-part-note">the domain</div>
               </div>
               <div className="ns-addr-part">
+                <div className="ns-addr-part-head">Branch</div>
+                <code className="ns-addr-part-code">#1a</code>
+                <div className="ns-addr-part-note">
+                  which divergent world. Omitted means main (
+                  <code>#0</code>).
+                </div>
+              </div>
+              <div className="ns-addr-part">
                 <div className="ns-addr-part-head">Path to position</div>
                 <code className="ns-addr-part-code">/flappybird</code>
                 <div className="ns-addr-part-note">a place in the tree</div>
@@ -169,7 +184,13 @@ const IbpPage = () => {
           <p className="ns-small ns-addr-readout">
             The being <code>@tabor</code> at the root of{" "}
             <code>treeos.ai</code> is addressing the being{" "}
-            <code>@ruler</code> at <code>treeos.ai/flappybird</code>.
+            <code>@ruler</code> at <code>treeos.ai/flappybird</code>{" "}
+            inside branch <code>#1a</code> of that reality. Without the
+            qualifier the address resolves on main. See{" "}
+            <Link to="/factory/branches" className="ns-inline-link">
+              /factory/branches
+            </Link>{" "}
+            for the branch substrate.
           </p>
 
           <h3>Position vs stance</h3>
@@ -236,11 +257,27 @@ const IbpPage = () => {
                 deep stance. Position plus being. Used by SEE, SUMMON, BE.
               </span>
             </div>
+            <div className="ns-grammar-row">
+              <code className="ns-grammar-form">
+                treeos.ai#1a/flappybird@ruler
+              </code>
+              <span className="ns-grammar-meaning">
+                deep stance on a branch. The <code>#1a</code> qualifier
+                sits between reality and path. Branches are divergent
+                worlds; omitting the qualifier resolves on main. See{" "}
+                <Link to="/factory/branches" className="ns-inline-link">
+                  /factory/branches
+                </Link>
+                .
+              </span>
+            </div>
           </div>
           <p className="ns-small">
             An address is always two of these joined by{" "}
             <code>::</code>. Examples on this page write both sides in
-            full.
+            full. When both sides carry an explicit branch qualifier
+            they must match. A bridge across branches is rejected at
+            parse time.
           </p>
         </section>
 

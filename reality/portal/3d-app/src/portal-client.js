@@ -151,10 +151,25 @@ export class PortalClient {
    * discovery payload for `<place>/.discovery`).
    *
    * @param {string} address  position or stance ("<place>/<path>", "<place>/<path>@<being>", "<place>")
-   * @param {object} [options] { live?: boolean }
+   * @param {object} [options] { live?: boolean, at?: { atSeq?: number, atTimestamp?: string } }
    */
-  async see(address, { live = false } = {}) {
-    return this._call("see", normalize(address), live ? { live: true } : {});
+  async see(address, { live = false, at = null, limit = null } = {}) {
+    const payload = {};
+    if (live) payload.live = true;
+    // Historical SEE qualifier. Returns the substrate's state as of a
+    // past point (seq or wall-clock). The descriptor builder threads
+    // `until` through every internal fold call so the whole world is
+    // returned at that moment, not just the leaf row. Live cannot be
+    // combined with at — the wire layer rejects.
+    if (at && typeof at === "object") {
+      if (Number.isInteger(at.atSeq)) payload.at = { atSeq: at.atSeq };
+      else if (typeof at.atTimestamp === "string") payload.at = { atTimestamp: at.atTimestamp };
+    }
+    // Optional limit for synthetic catalog SEEs (.acts/.beings/...). The
+    // wire-layer reads payload.limit and threads to describeActChain /
+    // describeBeingsCatalog. Ignored on regular position SEEs.
+    if (Number.isInteger(limit) && limit > 0) payload.limit = limit;
+    return this._call("see", normalize(address), payload);
   }
 
   /**

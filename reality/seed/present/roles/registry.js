@@ -304,11 +304,16 @@ export async function syncRolesToSubstrate(summonCtx) {
  */
 export async function loadLiveRolesFromSubstrate() {
   const { SEED_SPACE } = await import("../../materials/space/seedSpaces.js");
-  const Space = (await import("../../materials/space/space.js")).default;
-  const parent = await Space.findOne({ seedSpace: SEED_SPACE.ROLES }).select("_id").lean();
+  const { findBySeedSpace } = await import("../../materials/projections.js");
+  const { default: Projection } = await import("../../materials/branch/projection.js");
+  const parent = await findBySeedSpace(SEED_SPACE.ROLES, "0");
   if (!parent) return { loaded: 0 };
-  const children = await Space.find({ parent: parent._id })
-    .select("name qualities").lean();
+  const rows = await Projection.find({
+    branch: "0", type: "space",
+    "state.parent": parent.id,
+    tombstoned: { $ne: true },
+  }).lean();
+  const children = rows.map((s) => ({ name: s.state?.name, qualities: s.state?.qualities }));
   let loaded = 0;
   for (const child of children) {
     const quals = child.qualities;

@@ -131,6 +131,15 @@ export const SEED_SPACE = Object.freeze({
   // off it). SEE returns the live forest. See
   // seed/materials/space/threads.js.
   THREADS: "threads",
+  // The branches space. Each child names a divergent world by path
+  // ("1", "1a", "1a1", ...); main itself is the implicit "0" and has
+  // no child here. Children carry branch metadata in their qualities
+  // (parent, branchPoint, label, paused state). SEE on
+  // `<reality>/./branches` returns the branch tree; the underlying
+  // truth is the Branch Mongo collection (one row per non-main
+  // branch). See seed/materials/branch/branches.js for the read
+  // helpers and seed/timeline.md for the doctrine.
+  BRANCHES: "branches",
 });
 
 // ============================================================================

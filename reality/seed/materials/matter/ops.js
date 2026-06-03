@@ -29,7 +29,7 @@ const COORD_AXES = ["x", "y", "z"];
  * for assertCoordInBounds): silent clamping was a lie; throwing
  * keeps the chain honest.
  */
-async function assertMatterCoordInBounds(matterDoc, raw) {
+async function assertMatterCoordInBounds(matterDoc, raw, branch = "0") {
   const out = {};
   for (const a of COORD_AXES) {
     if (typeof raw[a] === "number" && Number.isFinite(raw[a])) {
@@ -39,8 +39,9 @@ async function assertMatterCoordInBounds(matterDoc, raw) {
   if (Object.keys(out).length === 0) return null;
   const spaceId = matterDoc?.spaceId || null;
   if (!spaceId) return out;
-  const space = await Space.findById(spaceId).select("size").lean();
-  const size = space?.size || null;
+  const { loadProjection } = await import("../projections.js");
+  const spaceSlot = await loadProjection("space", spaceId, branch);
+  const size = spaceSlot?.state?.size || null;
   if (!size) return out;
   for (const a of COORD_AXES) {
     if (out[a] === undefined) continue;
@@ -104,6 +105,9 @@ async function createMatterHandler(ctx) {
       target: { kind: "matter", id: matterId },
       params: { spec: enrichedSpec },
       actId: summonCtx?.actId || null,
+      // Branch this matter is created on — sourced from the moment ctx
+      // so a plant under #1 lands matter on #1's reel, not main's.
+      branch: summonCtx?.branch || "0",
     },
     summonCtx,
   );
@@ -176,7 +180,7 @@ async function setOnMatterHandler({ target, params, summonCtx }) {
     if (typeof value !== "object" || Array.isArray(value)) {
       throw new Error("set-matter: `coord` value must be an object {x,y,z?} or null");
     }
-    const clamped = await assertMatterCoordInBounds(target, value);
+    const clamped = await assertMatterCoordInBounds(target, value, summonCtx?.branch || "0");
     return { matterId: String(target._id), coord: clamped };
   }
 
@@ -192,15 +196,20 @@ async function setOnMatterHandler({ target, params, summonCtx }) {
 async function endMatterHandler({ target, identity, summonCtx }) {
   const matterId = targetIdOf(target);
   if (!matterId) throw new Error("end-matter: matterId required");
+  const branch = summonCtx?.branch || "0";
   const { deleteMatterAndFile } = await import("./matters.js");
-  const beingId =
-    identity?.beingId ||
-    (await Matter.findById(matterId).select("beingId").lean())?.beingId;
+  let beingId = identity?.beingId;
+  if (!beingId) {
+    const { loadProjection } = await import("../projections.js");
+    const matterSlot = await loadProjection("matter", matterId, branch);
+    beingId = matterSlot?.state?.beingId;
+  }
   await deleteMatterAndFile({
     matterId,
     beingId: String(beingId || ""),
     actId: summonCtx?.actId || null,
     sessionId: summonCtx?.sessionId || null,
+    summonCtx,
   });
   return { removed: true, matterId };
 }

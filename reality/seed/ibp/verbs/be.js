@@ -33,7 +33,7 @@ import { getRealityDomain } from "../address.js";
 import { authorize, getAuthConfig } from "../authorize.js";
 import { BE_OPS, getBeOp } from "../beOps.js";
 import { registerBeHandler, getBeHandler } from "../../materials/being/beRegistry.js";
-import { assertVerbCaller } from "./_shared.js";
+import { assertVerbCaller, refuseHistoricalWrite } from "./_shared.js";
 
 // llm-assigner has not yet migrated to DO ops; keep its legacy
 // `honoredOperations` + per-being method dispatch through beRegistry.
@@ -61,6 +61,7 @@ export async function beVerb(operation, payload = {}, opts = {}) {
   if (typeof operation !== "string" || !operation.length) {
     throw new IbpError(IBP_ERR.INVALID_INPUT, "reality.be requires an operation");
   }
+  refuseHistoricalWrite("be", payload, opts);
 
   const {
     address     = null,
@@ -170,10 +171,9 @@ export async function beVerb(operation, payload = {}, opts = {}) {
     let childHomeParent = payload?.homeParent || null;
     if (!childHomeSpace && !childHomeParent) {
       // Default: move the child into the caller's home. No new space.
-      const callerRow = await Being.findById(identity.beingId)
-        .select("homeSpace")
-        .lean();
-      childHomeSpace = callerRow?.homeSpace ? String(callerRow.homeSpace) : null;
+      const { loadProjection } = await import("../../materials/projections.js");
+      const callerSlot = await loadProjection("being", identity.beingId, summonCtx?.branch || "0");
+      childHomeSpace = callerSlot?.state?.homeSpace ? String(callerSlot.state.homeSpace) : null;
     }
     if (!childHomeSpace && !childHomeParent) {
       throw new IbpError(
@@ -529,6 +529,9 @@ async function writeBeFact({ operation, identity, authResult, payload, beingName
     params:  mergedParams,
     result:  safeResult,
     actId,
+    // Branch the BE fact lands on. Inherited from the ambient moment;
+    // defaults to "0" outside a moment (genesis scaffold path).
+    branch:  summonCtx?.branch || "0",
   }, summonCtx);
 }
 

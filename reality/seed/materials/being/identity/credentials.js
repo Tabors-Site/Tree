@@ -28,6 +28,7 @@ import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
 import crypto from "crypto";
 import Being from "../being.js";
+import { loadProjection } from "../../projections.js";
 import { getRealityConfigValue } from "../../../realityConfig.js";
 
 if (!process.env.JWT_SECRET)
@@ -246,10 +247,9 @@ export async function verifyTokenStrict(token, { loadBeing = true } = {}) {
   const decoded = decodeToken(token);
   if (!decoded) return null;
 
-  const being = await Being.findById(decoded.beingId)
-    .select(loadBeing ? undefined : "_id qualities")
-    .lean();
-  if (!being) return null;
+  const slot = await loadProjection("being", decoded.beingId, "0");
+  if (!slot || slot.tombstoned) return null;
+  const being = { _id: slot.id, position: slot.position, ...slot.state };
 
   const authMeta =
     being.qualities instanceof Map

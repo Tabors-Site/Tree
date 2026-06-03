@@ -124,18 +124,17 @@ export async function loadTargetRow(target, expectedKind, { summonCtx = null } =
   if (!expectedKind || !KINDS.has(expectedKind)) {
     throw new Error(`loadTargetRow: expectedKind must be space/being/matter; got "${expectedKind}"`);
   }
-  // Stance-target shortcut for being-loading ops.
-  //
-  // The portal emits DO against a self-stance ("<reality>/<path>@<name>")
-  // for set-being:position on navigate; the IBP resolver hands the
-  // verb a stance object carrying `{ chain, spaceId, being }`. Ops
-  // that expect a Being row need the @qualifier resolved to a row.
-  // Doing it here means every being-loading op accepts a stance
-  // address out of the box.
-  //
-  // Name uniqueness is enforced at create-being time so this is a
-  // single-row lookup. Falls through to the typed-identity branch
-  // when no `being` qualifier is present.
+  // Branch the lookup happens on. The moment carries the caller's
+  // branch via summonCtx; handlers get a row-shaped view scoped to
+  // that branch.
+  const branch = summonCtx?.branch || "0";
+  const { loadProjection, findByName } = await import("./projections.js");
+
+  // Stance-target shortcut for being-loading ops. The IBP resolver
+  // hands the verb a stance object carrying `{ chain, spaceId, being }`;
+  // ops that expect a Being row need the @qualifier resolved to a row
+  // before the handler runs. Branch-scoped: names are per-branch
+  // identifiers.
   if (
     expectedKind === "being" &&
     target &&
@@ -144,12 +143,11 @@ export async function loadTargetRow(target, expectedKind, { summonCtx = null } =
     target.being.length > 0 &&
     !(target.kind && target.id != null)
   ) {
-    const Model = await _modelFor("being");
-    const row = await Model.findOne({ name: target.being });
-    if (!row) {
-      throw new Error(`loadTargetRow: no being found with name "${target.being}"`);
+    const slot = await findByName("being", target.being, branch);
+    if (!slot) {
+      throw new Error(`loadTargetRow: no being found with name "${target.being}" on branch ${branch}`);
     }
-    return row;
+    return { _id: slot.id, position: slot.position, ...(slot.state || {}) };
   }
 
   // Resolve the id and verify the kind.
@@ -170,9 +168,8 @@ export async function loadTargetRow(target, expectedKind, { summonCtx = null } =
     );
   }
 
-  const Model = await _modelFor(expectedKind);
-  const row = await Model.findById(id);
-  if (row) return row;
+  const slot = await loadProjection(expectedKind, id, branch);
+  if (slot) return { _id: slot.id, position: slot.position, ...(slot.state || {}) };
 
   // Row absent — check the moment's deltaF for a pending create-<kind>
   // spec at this id. Scaffolds chain creates and immediate sets within

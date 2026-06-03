@@ -62,16 +62,15 @@ import { IBP_EVENT, buildTransportActReply } from "../events.js";
 let _cherubBeingIdCache = null;
 async function getCherubBeingId() {
   if (_cherubBeingIdCache) return _cherubBeingIdCache;
-  const row = await Being.findOne({ name: "cherub" })
-    .select("_id homeSpace")
-    .lean();
-  if (!row?._id) {
+  const { findByName } = await import("../../../seed/materials/projections.js");
+  const slot = await findByName("being", "cherub", "0");
+  if (!slot?.id) {
     throw new IbpError(
       IBP_ERR.INTERNAL,
       "Cherub being not found — place is not properly bootstrapped",
     );
   }
-  _cherubBeingIdCache = String(row._id);
+  _cherubBeingIdCache = String(slot.id);
   return _cherubBeingIdCache;
 }
 
@@ -94,6 +93,36 @@ export async function handleBe(socket, env, ack) {
     // payload + the address-bearing ctx; we pack everything into
     // the act's args so runTransportAct can hand them back to
     // beVerb identically.
+    // Branch the moment runs in = the socket's first-person frame.
+    // BE on an arrival socket (no prior SEE) defaults to main, which
+    // is what unauthenticated visitors expect. Cross-branch gate: if
+    // the target address explicitly carries a different branch
+    // qualifier, refuse before opening the moment.
+    const callerBranch = socket.currentBranch || "0";
+    try {
+      const { parseFromSocket, expand, getRealityDomain } =
+        await import("../../../seed/ibp/address.js");
+      const parsed = parseFromSocket(socket, address);
+      const expanded = expand(parsed, {
+        currentReality: getRealityDomain(),
+        currentUser:    socket.name,
+        currentBranch:  callerBranch,
+        currentPath:    socket.currentPath || null,
+      });
+      const targetBranch = expanded?.right?.branch || "0";
+      if (callerBranch !== targetBranch) {
+        throw new IbpError(IBP_ERR.CROSS_BRANCH_FORBIDDEN,
+          `BE across branches forbidden: caller is on #${callerBranch}, ` +
+          `target is on #${targetBranch}. Navigate to the target's branch first.`,
+          { callerBranch, targetBranch });
+      }
+    } catch (err) {
+      // Re-throw structured IBP errors; swallow parse failures so the
+      // downstream beVerb owns address validation.
+      if (err && err.code === IBP_ERR.CROSS_BRANCH_FORBIDDEN) throw err;
+    }
+    const branch = callerBranch;
+
     const { correlation: momentCorrelation, awaitResult } = await dispatchTransportAct({
       beingId:     cherubBeingId,
       correlation: clientCorrelation,
@@ -109,6 +138,7 @@ export async function handleBe(socket, env, ack) {
         },
       },
       identity: callerIdentity || { beingId: cherubBeingId, name: "cherub" },
+      branch,
     });
 
     // Push the result back. If the caller had an authed beingId we

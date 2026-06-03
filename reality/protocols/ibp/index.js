@@ -41,15 +41,14 @@ function wireLiveHooks() {
   // specific event are free to skip — the cost is one descriptor
   // re-fetch by clients with a live subscription, bounded by their
   // own debounce in handleDescriptorEvent.
-  hooks.register("afterQualityWrite", async ({ spaceId, ns, target }) => {
+  hooks.register("afterQualityWrite", async ({ spaceId, ns, target, branch }) => {
     if (!spaceId) return;
     emitPositionInvalidate(spaceId, `qualities:${ns}`);
-    // For space-target writes, also invalidate the parent (which lists
-    // this space as a child with its own qualities surfaced).
     if (target?.kind === "space") {
       try {
-        const s = await Space.findById(target.id).select("parent").lean();
-        if (s?.parent) emitPositionInvalidate(s.parent, `child-metadata:${ns}`);
+        const { loadProjection } = await import("../../seed/materials/projections.js");
+        const slot = await loadProjection("space", target.id, branch || "0");
+        if (slot?.state?.parent) emitPositionInvalidate(slot.state.parent, `child-metadata:${ns}`);
       } catch { /* defensive */ }
     }
   }, "ibp-live");
@@ -84,7 +83,7 @@ function wireLiveHooks() {
   // recreating every mesh in the scene. The delta is the
   // authoritative live path for coord; invalidate covers fields
   // the delta doesn't carry.
-  hooks.register("afterFieldWrite", async ({ spaceId, field, target }) => {
+  hooks.register("afterFieldWrite", async ({ spaceId, field, target, branch }) => {
     if (!spaceId) return;
     // Skip coord ONLY for being writes . set-being:coord has its own
     // lightweight emitPositionDelta path (see afterPositionUpdate
@@ -98,8 +97,9 @@ function wireLiveHooks() {
     emitPositionInvalidate(spaceId, `field:${field}`);
     if (target?.kind === "space") {
       try {
-        const s = await Space.findById(target.id).select("parent").lean();
-        if (s?.parent) emitPositionInvalidate(s.parent, `child-field:${field}`);
+        const { loadProjection } = await import("../../seed/materials/projections.js");
+        const slot = await loadProjection("space", target.id, branch || "0");
+        if (slot?.state?.parent) emitPositionInvalidate(slot.state.parent, `child-field:${field}`);
       } catch { /* defensive */ }
     }
   }, "ibp-live");

@@ -132,9 +132,9 @@ export const llmAssignerBeing = Object.freeze({
     const beingId = String(ctx.identity.beingId);
     const { getBeingLlmAssignments } = await import("../../cognition/llm/connect.js");
 
-    const being = await Being.findById(beingId)
-      .select("llmDefault qualities")
-      .lean();
+    const { loadProjection } = await import("../../../materials/projections.js");
+    const slot = await loadProjection("being", beingId, "0");
+    const being = slot ? { _id: slot.id, ...slot.state } : null;
     const conns = (being?.qualities instanceof Map
       ? being.qualities.get("llmConnections")
       : being?.qualities?.llmConnections) || {};
@@ -195,12 +195,13 @@ export const llmAssignerBeing = Object.freeze({
     // is not a protected key; no scaffold flag needed.
     const { SEED_SPACE } = await import("../../../materials/space/seedSpaces.js");
     const { doVerb } = await import("../../../ibp/verbs/do.js");
-    const configNode = await Space.findOne({ seedSpace: SEED_SPACE.CONFIG }).select("_id").lean();
+    const { findBySeedSpace } = await import("../../../materials/projections.js");
+    const configNode = await findBySeedSpace(SEED_SPACE.CONFIG, "0");
     if (!configNode) {
       throw new IbpError(IBP_ERR.INTERNAL, "Reality .config seed space not found");
     }
     await doVerb(
-      { kind: "space", id: String(configNode._id) },
+      { kind: "space", id: String(configNode.id) },
       "set-config",
       { key: "realityLlmConnection", value: connectionId || null },
       { identity: ctx.identity, summonCtx: ctx.summonCtx },

@@ -178,11 +178,12 @@ export function assertValidSpaceType(raw) {
   return type;
 }
 
-async function getBeingOrThrow(beingId) {
+async function getBeingOrThrow(beingId, branch = "0") {
   if (!beingId) throw new Error("beingId is required");
-  const being = await Being.findById(beingId);
-  if (!being) throw new Error("Being not found");
-  return being;
+  const { loadProjection } = await import("../projections.js");
+  const slot = await loadProjection("being", beingId, branch);
+  if (!slot) throw new Error("Being not found");
+  return { _id: slot.id, position: slot.position, ...slot.state };
 }
 
 /**
@@ -200,12 +201,19 @@ async function getBeingOrThrow(beingId) {
 export async function assertNameAvailableAt(
   parentId,
   name,
-  { excludeSpaceId = null } = {},
+  { excludeSpaceId = null, branch = "0" } = {},
 ) {
   if (!parentId) return;
-  const q = { parent: parentId, name };
-  if (excludeSpaceId) q._id = { $ne: excludeSpaceId };
-  const conflict = await Space.findOne(q).select("_id").lean();
+  // Per-branch sibling name uniqueness via direct projection query.
+  const { default: Projection } = await import("../branch/projection.js");
+  const q = {
+    branch, type: "space",
+    "state.parent": parentId,
+    "state.name": name,
+    tombstoned: { $ne: true },
+  };
+  if (excludeSpaceId) q._id = { $ne: `${branch}:space:${excludeSpaceId}` };
+  const conflict = await Projection.findOne(q).select("id").lean();
   if (conflict) {
     throw new IbpError(IBP_ERR.RESOURCE_CONFLICT,
       `A space named "${name}" already exists at this position`,
@@ -259,6 +267,11 @@ export async function createSpace({
   if (!isRoot && !parentId)
     throw new Error("Non-root spaces require a parentId");
 
+  // Branch the create runs on. Threaded from the moment ctx so a
+  // create under #1 reads parents from #1's lineage (with branchPoint
+  // fall-through) and stamps its birth fact onto #1's reel.
+  const branch = summonCtx?.branch || "0";
+
   // Assign a default coord inside the parent's size when the caller
   // didn't pass one. Without this every child space falls back to the
   // portal's hash-derived ring 22-76 units off-origin (the "trees
@@ -268,8 +281,9 @@ export async function createSpace({
   if (coord === null || coord === undefined) {
     if (!isRoot && parentId) {
       try {
-        const parentRow = await Space.findById(parentId).select("size").lean();
-        const parentSize = parentRow?.size || null;
+        const { loadOrFold: _lP } = await import("../projections.js");
+        const _pSlot = await _lP("space", parentId, branch);
+        const parentSize = _pSlot?.state?.size || null;
         if (parentSize && Number.isFinite(parentSize.x) && Number.isFinite(parentSize.y) &&
             parentSize.x > 0 && parentSize.y > 0) {
           coord = {
@@ -295,14 +309,15 @@ export async function createSpace({
     isRoot = true;
   }
 
-  const being = validatedBeing ?? (await getBeingOrThrow(beingId));
+  const being = validatedBeing ?? (await getBeingOrThrow(beingId, branch));
 
   // beforeSpaceCreate: extensions may modify or cancel. Pass parent
   // type so extensions can validate parent/child type compatibility.
   let parentType = null;
   if (parentId) {
-    const parentDoc = await Space.findById(parentId).select("type").lean();
-    parentType = parentDoc?.type || null;
+    const { loadOrFold: _lP2 } = await import("../projections.js");
+    const _pDoc = await _lP2("space", parentId, branch);
+    parentType = _pDoc?.state?.type || null;
   }
   const hookData = {
     name,
@@ -327,7 +342,7 @@ export async function createSpace({
   // Name must be unique among siblings at the target parent so
   // path-based fetching (`/foo/bar/baz`) resolves unambiguously.
   const siblingParentId = isRoot ? getSpaceRootId() : parentId;
-  await assertNameAvailableAt(siblingParentId, name);
+  await assertNameAvailableAt(siblingParentId, name, { branch });
 
   // Fact-driven (Slice C, 2026-05-23). The new space's row is NOT
   // written directly. Instead the handler stamps a `do:birth` Fact on
@@ -357,9 +372,14 @@ export async function createSpace({
       10,
     );
 
+    const { default: _Proj } = await import("../branch/projection.js");
     if (isRoot) {
       if (resolvedParentId) {
-        const childCount = await Space.countDocuments({ parent: resolvedParentId });
+        const childCount = await _Proj.countDocuments({
+          branch, type: "space",
+          "state.parent": resolvedParentId,
+          tombstoned: { $ne: true },
+        });
         if (childCount >= maxChildren) {
           throw new IbpError(IBP_ERR.INVALID_INPUT,
             `Place root has reached the maximum of ${maxChildren} children`,
@@ -367,9 +387,9 @@ export async function createSpace({
         }
       }
     } else if (parentId) {
-      const parentSpace = await Space.findById(parentId)
-        .select("seedSpace")
-        .lean();
+      const { loadOrFold: _lP3 } = await import("../projections.js");
+      const _pSlot3 = await _lP3("space", parentId, branch);
+      const parentSpace = _pSlot3 ? { seedSpace: _pSlot3.state?.seedSpace } : null;
       // The parent may be pending earlier in this batch (atomic-batch
       // forward reference) — accept either a materialized row or a
       // pending fact in the boot moment's ΔF.
@@ -400,7 +420,11 @@ export async function createSpace({
         // protected breaks the plant verb itself.
         throw new Error("Cannot create spaces under seed spaces");
       }
-      const childCount = await Space.countDocuments({ parent: parentId });
+      const childCount = await _Proj.countDocuments({
+        branch, type: "space",
+        "state.parent": parentId,
+        tombstoned: { $ne: true },
+      });
       if (childCount >= maxChildren) {
         throw new IbpError(IBP_ERR.INVALID_INPUT,
           `Parent space has reached the maximum of ${maxChildren} children`,
@@ -433,6 +457,9 @@ export async function createSpace({
       },
       actId: summonCtx?.actId || actId,
       sessionId,
+      // Branch this space is created on — a plant under #1 must land
+      // its child-space facts on #1's reel so reads on #1 see them.
+      branch: summonCtx?.branch || "0",
     }, summonCtx);
   } finally {
     if (lockTarget) releaseSpaceLock(lockTarget, sessionId);
@@ -451,10 +478,12 @@ export async function createSpace({
       seedSpace: null,
     };
   }
-  const newSpace = await Space.findById(id);
-  if (!newSpace) {
+  const { loadProjection: _lPnew } = await import("../projections.js");
+  const _newSlot = await _lPnew("space", id, "0");
+  if (!_newSlot) {
     throw new Error(`createSpace: birth Fact stamped but row ${id} not materialized`);
   }
+  const newSpace = { _id: _newSlot.id, ...(_newSlot.state || {}) };
 
   if (note?.trim()) {
     await createMatter({
@@ -464,6 +493,7 @@ export async function createSpace({
       spaceId: newSpace._id,
       actId,
       sessionId,
+      summonCtx,
     });
   }
 
@@ -622,24 +652,14 @@ export async function editSpaceName({
   actId = null,
   sessionId = null,
 }) {
-  newName = assertValidSpaceName(newName);
-
-  const space = await Space.findById(spaceId);
-  if (!space) throw new Error("Space not found");
-  if (space.seedSpace) throw new Error("Cannot modify seed spaces");
-
-  // Reject collision with a sibling under the same parent. Skip the
-  // check when the name isn't actually changing (re-saving same name).
-  if (space.name !== newName) {
-    await assertNameAvailableAt(space.parent, newName, {
-      excludeSpaceId: spaceId,
-    });
-  }
-
-  const oldName = space.name;
-  await Space.findByIdAndUpdate(spaceId, { $set: { name: newName } });
-
-  return { space, oldName, newName };
+  // Legacy bypass API. Direct Space row mutations are gone (the row is
+  // no longer a projection cache; the projections collection is). New
+  // callers route through doVerb("set-space", {field:"name"}) instead.
+  // This stub throws so any lingering caller surfaces clearly.
+  throw new Error(
+    "editSpaceName is retired. Use do:set-space with field=\"name\" via doVerb instead. " +
+    "args were: " + JSON.stringify({ spaceId, newName, beingId })
+  );
 }
 
 export async function editSpaceType({
@@ -649,16 +669,12 @@ export async function editSpaceType({
   actId = null,
   sessionId = null,
 }) {
-  newType = assertValidSpaceType(newType);
-
-  const space = await Space.findById(spaceId);
-  if (!space) throw new Error("Space not found");
-  if (space.seedSpace) throw new Error("Cannot modify seed spaces");
-
-  const oldType = space.type;
-  await Space.findByIdAndUpdate(spaceId, { $set: { type: newType } });
-
-  return { space, oldType, newType };
+  // Legacy bypass API. Direct Space row mutations are gone; new callers
+  // route through doVerb("set-space", {field:"type"}).
+  throw new Error(
+    "editSpaceType is retired. Use do:set-space with field=\"type\" via doVerb instead. " +
+    "args were: " + JSON.stringify({ spaceId, newType, beingId })
+  );
 }
 
 // ─────────────────────────────────────────────────────────────────────────
@@ -687,7 +703,16 @@ export async function updateParentRelationship(
   sessionId = null,
   opts = {},
 ) {
-  const child = await Space.findById(childId);
+  // Legacy direct-mutation path. Route through do:set-space {field:"parent"}
+  // for the fact-driven version. This stub throws so callers surface
+  // clearly during the migration.
+  throw new Error(
+    "updateParentRelationship is retired. Use do:set-space with field=\"parent\" via doVerb instead. " +
+    "args: " + JSON.stringify({ childId, newParentId, beingId })
+  );
+  // (unreachable; preserves the original structure for future restoration)
+  // eslint-disable-next-line no-unreachable
+  const child = null;
   if (!child) throw new Error("Child space not found");
   if (child.rootOwner && child.rootOwner !== I_AM) {
     throw new Error("Cannot change a tree root's parent");
@@ -697,8 +722,8 @@ export async function updateParentRelationship(
   }
 
   const oldParentId = child.parent;
-  const oldParent = oldParentId ? await Space.findById(oldParentId) : null;
-  const newParent = await Space.findById(newParentId);
+  const oldParent = oldParentId ? null : null;
+  const newParent = null;
 
   if (!newParent) throw new Error("New parent space not found");
   if (newParent.seedSpace)
@@ -807,15 +832,11 @@ export async function deleteSpaceBranch(
   actId = null,
   sessionId = null,
 ) {
-  const spaceToDelete = await Space.findById(spaceId);
+  const { loadProjection: _lPdel } = await import("../projections.js");
+  const _delSlot = await _lPdel("space", spaceId, "0");
+  const spaceToDelete = _delSlot ? { _id: _delSlot.id, ...(_delSlot.state || {}) } : null;
   if (!spaceToDelete) throw new Error("Space not found");
 
-  // I_AM bypass. The substrate's own identity acts with universal
-  // authority on its own reality — genesis, registry mirror sync,
-  // boot scaffolding all run as I_AM. The normal owner check below
-  // requires resolveSpaceAccess to return isOwner=true, which it
-  // won't for null beingIds; the bypass keeps boot-time cleanup
-  // paths working without weakening the user-facing gate.
   if (beingId !== I_AM) {
     const access = await resolveSpaceAccess(spaceId, beingId);
     if (!access.isOwner || (!access.isRoot && !!spaceToDelete.rootOwner)) {
@@ -900,8 +921,9 @@ export async function deleteSpaceBranch(
  */
 export async function getSpaceName(spaceId) {
   if (!spaceId) return null;
-  const doc = await Space.findById(spaceId, "name").lean();
-  return doc?.name || null;
+  const { loadProjection } = await import("../projections.js");
+  const slot = await loadProjection("space", spaceId, "0");
+  return slot?.state?.name || null;
 }
 
 /**
@@ -928,21 +950,23 @@ export async function buildPathString(spaceId) {
  */
 export async function resolveRootSpace(spaceId) {
   if (!spaceId) throw new Error("spaceId is required");
+  const { loadProjection } = await import("../projections.js");
+  const slotToObj = (s) => s ? {
+    _id: s.id,
+    parent:       s.state?.parent || null,
+    rootOwner:    s.state?.rootOwner || null,
+    contributors: s.state?.contributors || [],
+    seedSpace:    s.state?.seedSpace || null,
+    name:         s.state?.name,
+  } : null;
 
-  let space = await Space.findById(spaceId)
-    .select("parent rootOwner contributors seedSpace")
-    .lean()
-    .exec();
-
+  let space = slotToObj(await loadProjection("space", spaceId, "0"));
   if (!space) throw new Error("Space not found");
   if (space.seedSpace === "source") return space;
 
   while (!space.rootOwner || space.rootOwner === I_AM) {
     if (!space.parent) throw new Error("Invalid tree: no rootOwner found");
-    space = await Space.findById(space.parent)
-      .select("parent rootOwner contributors seedSpace")
-      .lean()
-      .exec();
+    space = slotToObj(await loadProjection("space", space.parent, "0"));
     if (!space) throw new Error("Broken tree");
     if (space.seedSpace) {
       if (space.seedSpace === "source") return space;
@@ -957,12 +981,15 @@ export async function resolveRootSpace(spaceId) {
  * stopping at depth 100 (safety cap).
  */
 export async function isDescendant(ancestorId, spaceId) {
-  let current = await Space.findById(spaceId).select("parent").lean();
+  const { loadProjection } = await import("../projections.js");
+  let curSlot = await loadProjection("space", spaceId, "0");
+  let current = curSlot ? { parent: curSlot.state?.parent } : null;
   let depth = 0;
   const maxDepth = 100;
   while (current && current.parent && depth < maxDepth) {
     if (current.parent.toString() === ancestorId.toString()) return true;
-    current = await Space.findById(current.parent).select("parent").lean();
+    curSlot = await loadProjection("space", current.parent, "0");
+    current = curSlot ? { parent: curSlot.state?.parent } : null;
     depth++;
   }
   return false;
@@ -1006,15 +1033,64 @@ export async function resolveSpaceAccess(spaceId, beingId) {
  * place root yields user-created tree roots, not .config / .tools /
  * etc.). Returns at most `limit` rows, newest-creation first.
  */
-export async function listSpaceChildren(parentId, { exclude = null, limit = 500 } = {}) {
+export async function listSpaceChildren(parentId, { exclude = null, limit = 500, branch = "0" } = {}) {
   if (!parentId) return [];
-  const query = { parent: parentId, seedSpace: null };
-  if (exclude) query._id = { $ne: exclude };
-  return Space.find(query)
-    .select("_id name type dateCreated qualities")
-    .sort({ dateCreated: 1 })
-    .limit(limit)
-    .lean();
+  const { default: Projection } = await import("../branch/projection.js");
+  const buildQuery = (b) => {
+    const q = {
+      branch: b, type: "space",
+      "state.parent": parentId,
+      $or: [
+        { "state.seedSpace": null },
+        { "state.seedSpace": { $exists: false } },
+      ],
+      tombstoned: { $ne: true },
+    };
+    if (exclude) q._id = { $ne: `${b}:space:${exclude}` };
+    return q;
+  };
+  const toRow = (s) => ({ _id: s.id, ...(s.state || {}) });
+
+  if (branch === "0") {
+    const rows = await Projection.find(buildQuery("0"))
+      .sort({ "state.dateCreated": 1 })
+      .limit(limit)
+      .lean();
+    return rows.map(toRow);
+  }
+
+  // Non-main: union the branch's own children with main's children
+  // that EXISTED at branch creation (branchPoint check). A child
+  // created in main AFTER the branch was made must not leak through.
+  const { getBranchPoint } = await import("../branch/branches.js");
+  const [branchRows, mainRows] = await Promise.all([
+    Projection.find(buildQuery(branch)).lean(),
+    Projection.find(buildQuery("0")).lean(),
+  ]);
+  // Branch slots: kept as-is (planted on this branch).
+  const branchOut = branchRows.map(toRow);
+  const shadowedIds = new Set(branchRows.map((s) => s.id));
+  // Also shadow tombstones on this branch — a space killed in branch
+  // shouldn't reappear from main.
+  const tombs = await Projection.find({
+    branch, type: "space", tombstoned: true,
+  }).select("id").lean();
+  for (const t of tombs) shadowedIds.add(t.id);
+  // Filter main candidates by branchPoint: only spaces that had any
+  // fact at-or-before branch creation are in scope.
+  const mainOut = [];
+  for (const cand of mainRows) {
+    if (shadowedIds.has(cand.id)) continue;
+    const bp = await getBranchPoint(branch, "space", cand.id);
+    if (bp && bp > 0) mainOut.push(toRow(cand));
+  }
+  const all = [...mainOut, ...branchOut];
+  all.sort((a, b) => {
+    const at = a.dateCreated ? new Date(a.dateCreated).getTime() : 0;
+    const bt = b.dateCreated ? new Date(b.dateCreated).getTime() : 0;
+    return at - bt;
+  });
+  return all.slice(0, limit);
 }
 
 /**
@@ -1025,13 +1101,19 @@ export async function listBeingSpaces(beingId, { limit = 500 } = {}) {
   if (!beingId) return [];
   const spaceRootId = getSpaceRootId();
   if (!spaceRootId) return [];
-  return Space.find({
-    parent: spaceRootId,
-    rootOwner: beingId,
-    seedSpace: null,
+  const { default: Projection } = await import("../branch/projection.js");
+  const rows = await Projection.find({
+    branch: "0", type: "space",
+    "state.parent": spaceRootId,
+    "state.rootOwner": beingId,
+    $or: [
+      { "state.seedSpace": null },
+      { "state.seedSpace": { $exists: false } },
+    ],
+    tombstoned: { $ne: true },
   })
-    .select("_id name type dateCreated qualities")
-    .sort({ dateCreated: -1 })
+    .sort({ "state.dateCreated": -1 })
     .limit(limit)
     .lean();
+  return rows.map((s) => ({ _id: s.id, ...(s.state || {}) }));
 }

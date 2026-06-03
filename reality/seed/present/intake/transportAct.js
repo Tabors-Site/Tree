@@ -95,10 +95,10 @@
 // ack immediately with a correlationId; push the result through
 // the same `ibp` channel (verb: "moment") when it arrives.
 
-import Being from "../../materials/being/being.js";
 import { randomUUID } from "crypto";
 import { enqueueIntake } from "./intake.js";
 import { attachHandoff, wake } from "./scheduler.js";
+import { loadProjection } from "../../materials/projections.js";
 
 const DEFAULT_TIMEOUT_MS = 60_000;
 
@@ -131,6 +131,7 @@ export async function dispatchTransportAct({
   spaceId,
   identity = null,
   priority,
+  branch = "0",
   timeoutMs = DEFAULT_TIMEOUT_MS,
 } = {}) {
   if (!beingId) throw new Error("dispatchTransportAct requires beingId");
@@ -140,6 +141,9 @@ export async function dispatchTransportAct({
   if (act.verb !== "do" && act.verb !== "be") {
     throw new Error(`dispatchTransportAct: act.verb must be "do" or "be" (got "${act.verb}")`);
   }
+  if (typeof branch !== "string" || branch.length === 0) {
+    throw new Error(`dispatchTransportAct: branch must be a non-empty string (got ${JSON.stringify(branch)})`);
+  }
 
   const finalCorrelation = correlation || randomUUID();
 
@@ -147,8 +151,15 @@ export async function dispatchTransportAct({
   // fix is being-keyed intake storage so this lookup goes away.
   let resolvedSpace = spaceId;
   if (!resolvedSpace) {
-    const beingRow = await Being.findById(beingId).select("homeSpace").lean();
-    resolvedSpace = beingRow?.homeSpace || null;
+    // Branch-aware: the moment runs in the caller's branch; the
+    // intake-storing space comes from the being's state in that branch.
+    // loadOrFold triggers a lineage-cold-fold on miss so a being that
+    // existed pre-branch shows up in the branch's view on first access
+    // without a manual rebuild. Returns null if the being didn't exist
+    // at this branch's branchPoint (legitimate "not here").
+    const { loadOrFold } = await import("../../materials/projections.js");
+    const slot = await loadOrFold("being", beingId, branch);
+    resolvedSpace = slot?.state?.homeSpace || null;
   }
   if (!resolvedSpace) {
     throw new Error(
@@ -163,6 +174,10 @@ export async function dispatchTransportAct({
     act,
     identity,
     priority,
+    // Branch the moment will run in. Inherited from the wire layer
+    // (resolved.branch off the parsed `#` qualifier on the target
+    // address). assign.js reads entry.branch when shaping summonCtx.
+    branch,
   });
 
   const awaitResult = new Promise((resolve, reject) => {

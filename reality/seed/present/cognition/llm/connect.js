@@ -82,29 +82,32 @@ export { resolveAndValidateHost, hostInAllowedLlmDomains };
 let _iAmBeingId = null;
 async function getIAmBeingId() {
   if (_iAmBeingId) return _iAmBeingId;
-  const iAm = await Being.findOne({ name: I_AM }).select("_id").lean();
-  _iAmBeingId = iAm ? String(iAm._id) : null;
+  const { findByName } = await import("../../../materials/projections.js");
+  const iAm = await findByName("being", I_AM, "0");
+  _iAmBeingId = iAm ? String(iAm.id) : null;
   return _iAmBeingId;
 }
 
-function readConnectionsFrom(being) {
-  if (!being?.qualities) return {};
-  const conns = being.qualities instanceof Map
-    ? being.qualities.get("llmConnections")
-    : being.qualities?.llmConnections;
+function readConnectionsFrom(state) {
+  if (!state?.qualities) return {};
+  const conns = state.qualities instanceof Map
+    ? state.qualities.get("llmConnections")
+    : state.qualities?.llmConnections;
   return conns || {};
 }
 
 async function readConnection(beingId, connectionId) {
   if (!beingId || !connectionId) return null;
-  const being = await Being.findById(beingId).select("qualities").lean();
-  return readConnectionsFrom(being)[connectionId] || null;
+  const { loadProjection } = await import("../../../materials/projections.js");
+  const slot = await loadProjection("being", beingId, "0");
+  return readConnectionsFrom(slot?.state)[connectionId] || null;
 }
 
 async function readAllConnections(beingId) {
   if (!beingId) return {};
-  const being = await Being.findById(beingId).select("qualities").lean();
-  return readConnectionsFrom(being);
+  const { loadProjection } = await import("../../../materials/projections.js");
+  const slot = await loadProjection("being", beingId, "0");
+  return readConnectionsFrom(slot?.state);
 }
 
 // ─────────────────────────────────────────────────────────────────────────
@@ -441,8 +444,10 @@ export async function addLlmConnection(
   { name, baseUrl, apiKey, model },
   { identity, summonCtx } = {},
 ) {
-  const being = await Being.findById(beingId);
-  if (!being) throw new Error("Being not found");
+  const { loadProjection } = await import("../../../materials/projections.js");
+  const slot = await loadProjection("being", beingId, summonCtx?.branch || "0");
+  if (!slot) throw new Error("Being not found");
+  const being = { _id: slot.id, ...slot.state };
 
   const existing = readConnectionsFrom(being);
   if (Object.keys(existing).length >= MAX_CONNECTIONS_PER_USER) {
@@ -496,8 +501,10 @@ export async function updateLlmConnection(
   { name, baseUrl, apiKey, model },
   { identity, summonCtx } = {},
 ) {
-  const being = await Being.findById(beingId);
-  if (!being) throw new Error("Being not found");
+  const { loadProjection } = await import("../../../materials/projections.js");
+  const slot = await loadProjection("being", beingId, summonCtx?.branch || "0");
+  if (!slot) throw new Error("Being not found");
+  const being = { _id: slot.id, ...slot.state };
 
   const safeConnId = validateConnectionId(connectionId);
   const existing = readConnectionsFrom(being)[safeConnId];
@@ -572,8 +579,10 @@ export async function updateLlmConnection(
 
 export async function deleteLlmConnection(beingId, connectionId, { identity, summonCtx } = {}) {
   const safeConnId = validateConnectionId(connectionId);
-  const being = await Being.findById(beingId);
-  if (!being) throw new Error("Being not found");
+  const { loadProjection } = await import("../../../materials/projections.js");
+  const slot = await loadProjection("being", beingId, summonCtx?.branch || "0");
+  if (!slot) throw new Error("Being not found");
+  const being = { _id: slot.id, ...slot.state };
 
   const conn = readConnectionsFrom(being)[safeConnId];
   if (!conn) throw new Error("Connection not found");
@@ -624,10 +633,15 @@ export async function deleteLlmConnection(beingId, connectionId, { identity, sum
   // Cascade: every space whose llmDefault points here gets cleared.
   // Per-space do.set so each clear is its own Fact (the projection
   // records the chain of cleanups, not a silent bulk update).
-  const matchingMain = await Space.find({ llmDefault: connectionId }).select("_id").lean();
+  const { default: Projection } = await import("../../../materials/branch/projection.js");
+  const matchingMain = await Projection.find({
+    branch: "0", type: "space",
+    "state.llmDefault": connectionId,
+    tombstoned: { $ne: true },
+  }).select("id").lean();
   for (const s of matchingMain) {
     await doVerb(
-      await Space.findById(s._id),
+      { kind: "space", id: String(s.id) },
       "set-space",
       { field: "llmDefault", value: null },
       opts,
@@ -637,12 +651,14 @@ export async function deleteLlmConnection(beingId, connectionId, { identity, sum
   // Extension-slot cascades on spaces, per slot.
   const extSlots = getAllRootLlmSlots().filter((s) => s !== "default");
   for (const slot of extSlots) {
-    const matchingSlot = await Space.find({
-      [`qualities.llm.slots.${slot}`]: connectionId,
-    }).select("_id").lean();
+    const matchingSlot = await Projection.find({
+      branch: "0", type: "space",
+      [`state.qualities.llm.slots.${slot}`]: connectionId,
+      tombstoned: { $ne: true },
+    }).select("id").lean();
     for (const s of matchingSlot) {
       await doVerb(
-        await Space.findById(s._id),
+        { kind: "space", id: String(s.id) },
         "set-space",
         { field: `qualities.llm.slots.${slot}`, value: null },
         opts,
@@ -665,8 +681,10 @@ export async function assignConnection(beingId, slot, connectionId, { identity, 
     if (!conn) throw new Error("Connection not found");
   }
 
-  const being = await Being.findById(beingId);
-  if (!being) throw new Error("Being not found");
+  const { loadProjection } = await import("../../../materials/projections.js");
+  const beingSlot = await loadProjection("being", beingId, summonCtx?.branch || "0");
+  if (!beingSlot) throw new Error("Being not found");
+  const being = { _id: beingSlot.id, ...beingSlot.state };
 
   const { doVerb } = await import("../../../ibp/verbs/do.js");
   const opts = identity
@@ -728,8 +746,10 @@ export async function assignSpaceConnection(
     }
   }
 
-  const space = await Space.findById(spaceId);
-  if (!space) throw new Error("Space not found");
+  const { loadProjection: _lPspace } = await import("../../../materials/projections.js");
+  const _sSlot = await _lPspace("space", spaceId, "0");
+  if (!_sSlot) throw new Error("Space not found");
+  const space = { _id: _sSlot.id, ...(_sSlot.state || {}) };
 
   const { doVerb } = await import("../../../ibp/verbs/do.js");
   const opts = identity
@@ -832,11 +852,12 @@ export async function resolveConnection(beingId, connectionId, cacheKey, { summo
   // summonCtx is silently skipped rather than erroring.
   if (summonCtx?.actId) {
     try {
-      const being = await Being.findById(beingId);
-      if (being) {
+      const { loadProjection } = await import("../../../materials/projections.js");
+      const slot = await loadProjection("being", beingId, summonCtx?.branch || "0");
+      if (slot) {
         const { doVerb } = await import("../../../ibp/verbs/do.js");
         await doVerb(
-    { kind: "being", id: String(being._id) },
+    { kind: "being", id: String(slot.id) },
           "set-being",
           {
             field: `qualities.llmConnections.${connectionId}.lastUsedAt`,
@@ -910,9 +931,9 @@ export async function getClientForBeing(beingId, slot, overrideConnectionId) {
   }
 
   try {
-    const being = await Being.findById(beingId)
-      .select("llmDefault qualities")
-      .lean();
+    const { loadProjection } = await import("../../../materials/projections.js");
+    const slotProj = await loadProjection("being", beingId, "0");
+    const being = slotProj ? { _id: slotProj.id, ...slotProj.state } : null;
     const quals = being?.qualities || {};
     const extSlots = quals?.beingLlm?.slots || {};
     let connectionId =
@@ -995,11 +1016,13 @@ export { resolveLlmConnection, resolveRootLlmForRole } from "./resolution.js";
  */
 export async function beingHasLlm(beingId) {
   if (!beingId) return false;
-  const being = await Being.findById(beingId).select("qualities").lean();
-  const beingQuals = being?.qualities || {};
+  const { loadProjection } = await import("../../../materials/projections.js");
+  const slot = await loadProjection("being", beingId, "0");
+  const state = slot?.state || {};
+  const beingQuals = state?.qualities || {};
   const beingLlm = beingQuals?.beingLlm?.slots || {};
   if (beingLlm.main) return true;
-  const conns = readConnectionsFrom(being);
+  const conns = readConnectionsFrom(state);
   if (Object.keys(conns).length > 0) return true;
   return !!getRealityConfigValue("realityLlmConnection");
 }

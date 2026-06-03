@@ -72,6 +72,11 @@ export async function resolveStance(stance, opts = {}) {
 
   const path = stance.path || "/";
   const being = stance.being || null;
+  // Branch flows from the parsed stance. Null in the address means
+  // "default to main"; once we're inside the resolver we treat null as
+  // "0" so every return shape carries an explicit branch field. The verb
+  // layer reads this to thread into summonCtx + emitFact.
+  const branch = stance.branch || "0";
 
   // Place root: path is "/". The place root IS a Space (the seedSpace:
   // SPACE_ROOT row created by ensureSpaceRoot), so we surface its id as
@@ -85,6 +90,7 @@ export async function resolveStance(stance, opts = {}) {
       spaceId: spaceRootId,
       leafId: spaceRootId,
       being,
+      branch,
     });
   }
 
@@ -103,17 +109,17 @@ export async function resolveStance(stance, opts = {}) {
     // default to the caller. Without either, "~" has nothing to
     // attach to.
     let targetBeing = null;
+    const { findByName, loadOrFold } = await import("../materials/projections.js");
     if (being) {
-      targetBeing = await Being.findOne({ name: being })
-        .select("_id name homeSpace")
-        .lean();
-      if (!targetBeing) {
+      const slot = await findByName("being", being, branch);
+      if (!slot) {
         throw new IbpError(
           IBP_ERR.BEING_NOT_FOUND,
           `No being named "${being}" on this reality`,
           { being },
         );
       }
+      targetBeing = { _id: slot.id, name: slot.state?.name, homeSpace: slot.state?.homeSpace };
     } else {
       if (!identity?.beingId) {
         throw new IbpError(
@@ -121,16 +127,19 @@ export async function resolveStance(stance, opts = {}) {
           `Cannot resolve "~" without an @qualifier and no caller identity`,
         );
       }
-      targetBeing = await Being.findById(identity.beingId)
-        .select("_id name homeSpace")
-        .lean();
-      if (!targetBeing) {
+      // loadOrFold (not loadProjection): on a branch, the caller's
+      // being may have been created in main before the branch point,
+      // so the branch slot doesn't exist yet. loadOrFold walks the
+      // lineage and cold-folds from the appropriate reel.
+      const slot = await loadOrFold("being", identity.beingId, branch);
+      if (!slot) {
         throw new IbpError(
           IBP_ERR.BEING_NOT_FOUND,
           `Caller being not found`,
           { beingId: String(identity.beingId) },
         );
       }
+      targetBeing = { _id: slot.id, name: slot.state?.name, homeSpace: slot.state?.homeSpace };
     }
     if (!targetBeing.homeSpace) {
       throw new IbpError(
@@ -145,10 +154,12 @@ export async function resolveStance(stance, opts = {}) {
     // children: "/~" → [], "/~/projects" → ["projects"].
     const subPath = path.slice(2).split("/").filter(Boolean);
 
-    const homeSpace = await Space
-      .findById(targetBeing.homeSpace)
-      .select("_id name type status parent rootOwner contributors visibility qualities")
-      .lean();
+    // loadOrFold (not loadProjection): user's home may have been
+    // created in main before the current branch. The lineage walk
+    // produces the correct slot for the branch.
+    const { loadOrFold: _lPhome } = await import("../materials/projections.js");
+    const _hSlot = await _lPhome("space", targetBeing.homeSpace, branch);
+    const homeSpace = _hSlot ? { _id: _hSlot.id, ...(_hSlot.state || {}) } : null;
     if (!homeSpace) {
       throw new IbpError(
         IBP_ERR.SPACE_NOT_FOUND,
@@ -184,6 +195,7 @@ export async function resolveStance(stance, opts = {}) {
         leafId: homeSpace._id,
         being,
         leafSpace: homeSpace,
+        branch,
       });
     }
 
@@ -193,6 +205,7 @@ export async function resolveStance(stance, opts = {}) {
       ownerFilter: {},
       contextBeing: null,
       being,
+      branch,
       startAt: { ...homeSpace, name: homeChainName },
     });
   }
@@ -208,6 +221,7 @@ export async function resolveStance(stance, opts = {}) {
     ownerFilter: {},
     contextBeing: null,
     being,
+    branch,
   });
 }
 
@@ -233,6 +247,10 @@ function base(over = {}) {
     leafId: null,
     being: null,
     leafSpace: null,
+    // Branch the stance points at. Default "0" (main). The verb layer
+    // reads this off the resolved stance to thread into summonCtx and
+    // emitFact so every fact lands on the right branch's reel.
+    branch: "0",
     ...over,
   };
 }
@@ -246,7 +264,7 @@ function base(over = {}) {
  * of starting from the place root — used by the "/~" branch to walk
  * children of the caller's homeSpace.
  */
-async function walkSpacePath({ segments, ownerFilter, contextBeing, being, startAt = null }) {
+async function walkSpacePath({ segments, ownerFilter, contextBeing, being, branch = "0", startAt = null }) {
   const spaceRootId = getSpaceRootId();
   if (!spaceRootId) {
     throw new IbpError(IBP_ERR.INTERNAL, "Space root not initialized yet");
@@ -287,25 +305,55 @@ async function walkSpacePath({ segments, ownerFilter, contextBeing, being, start
     // because `roles` IS a seedSpace and would get filtered out.
     const parentIsHeaven = parentSeedSpace === SEED_SPACE.HEAVEN;
     const allowSeedSpaceChildren = isHeavenDoor || parentIsHeaven;
+    // Branch-aware segment lookup. The walker checks the current
+    // branch's slot first; on miss (and only on a non-main branch),
+    // it falls through to main and validates the main slot existed
+    // at branch creation via getBranchPoint (a tombstone in the
+    // branch defeats the fall-through). Same shadow+lineage pattern
+    // as findByName/listSpaceChildren.
     const baseQuery = {
-      parent: currentParent,
-      ...(allowSeedSpaceChildren ? {} : { seedSpace: null }),
-      ...(isFirst && !isHeavenDoor ? ownerFilter : {}),
+      type: "space",
+      "state.parent": currentParent,
+      tombstoned: { $ne: true },
+      ...(allowSeedSpaceChildren ? {} : {
+        $or: [
+          { "state.seedSpace": null },
+          { "state.seedSpace": { $exists: false } },
+        ],
+      }),
     };
-
-    const fields =
-      "_id name type status parent rootOwner contributors visibility qualities seedSpace";
-    let space = null;
-    if (UUID_RE.test(seg)) {
-      space = await Space.findOne({ ...baseQuery, _id: seg })
-        .select(fields)
-        .lean();
+    if (isFirst && !isHeavenDoor && ownerFilter) {
+      for (const [k, v] of Object.entries(ownerFilter)) {
+        baseQuery[`state.${k}`] = v;
+      }
     }
-    if (!space) {
-      space = await Space.findOne({ ...baseQuery, name: seg })
-        .select(fields)
-        .lean();
+    const { default: Projection } = await import("../materials/branch/projection.js");
+    async function _findIn(br) {
+      if (UUID_RE.test(seg)) {
+        const byId = await Projection.findOne({
+          ...baseQuery, branch: br, _id: `${br}:space:${seg}`,
+        }).lean();
+        if (byId) return byId;
+      }
+      return Projection.findOne({
+        ...baseQuery, branch: br, "state.name": seg,
+      }).lean();
     }
+    let _spaceRow = await _findIn(branch);
+    if (!_spaceRow && branch !== "0") {
+      const mainRow = await _findIn("0");
+      if (mainRow) {
+        const tomb = await Projection.findOne({
+          branch, type: "space", id: mainRow.id, tombstoned: true,
+        }).select("_id").lean();
+        if (!tomb) {
+          const { getBranchPoint } = await import("../materials/branch/branches.js");
+          const bp = await getBranchPoint(branch, "space", mainRow.id);
+          if (bp && bp > 0) _spaceRow = mainRow;
+        }
+      }
+    }
+    const space = _spaceRow ? { _id: _spaceRow.id, ...(_spaceRow.state || {}) } : null;
     if (!space) {
       throw new IbpError(
         IBP_ERR.SPACE_NOT_FOUND,
@@ -340,5 +388,6 @@ async function walkSpacePath({ segments, ownerFilter, contextBeing, being, start
     leafId: leafSpace._id,
     being,
     leafSpace,
+    branch,
   });
 }

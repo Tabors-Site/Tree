@@ -184,15 +184,15 @@ export async function runSeedMigrations(summonCtx) {
   // version bump commits atomically with whatever the migrations did.
   // scaffold:true bypasses stance auth (this is the I-Am acting on
   // its own .config space); summonCtx carries the actId.
-  const Space = (await import("../../materials/space/space.js")).default;
+  const { findBySeedSpace } = await import("../../materials/projections.js");
   const { SEED_SPACE } = await import("../../materials/space/seedSpaces.js");
   const { doVerb } = await import("../../ibp/verbs/do.js");
-  const configNode = await Space.findOne({ seedSpace: SEED_SPACE.CONFIG }).select("_id").lean();
+  const configNode = await findBySeedSpace(SEED_SPACE.CONFIG, "0");
   if (!configNode) {
     throw new Error("Cannot persist seedVersion: .config seed space not found");
   }
   await doVerb(
-    { kind: "space", id: String(configNode._id) },
+    { kind: "space", id: String(configNode.id) },
     "set-config",
     { key: "seedVersion", value: currentVersion },
     { scaffold: true, summonCtx },

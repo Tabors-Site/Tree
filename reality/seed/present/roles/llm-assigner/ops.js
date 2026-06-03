@@ -53,11 +53,15 @@ async function getLlmAssigner() {
 // marker so we never touch unrelated matter authored by the
 // llm-assigner. Returns the lean row, or null.
 async function findTutorialMatter(spaceId, llmAssignerId) {
-  return Matter.findOne({
-    beingId: String(llmAssignerId),
-    spaceId,
-    "qualities.tutorial.purpose": LLM_ASSIGNER_TUTORIAL_MARK,
+  const { default: Projection } = await import("../../../materials/branch/projection.js");
+  const row = await Projection.findOne({
+    branch: "0", type: "matter",
+    "state.beingId": String(llmAssignerId),
+    "state.spaceId": spaceId,
+    "state.qualities.tutorial.purpose": LLM_ASSIGNER_TUTORIAL_MARK,
+    tombstoned: { $ne: true },
   }).lean();
+  return row ? { _id: row.id, ...(row.state || {}) } : null;
 }
 
 // Two-part ownership gate: the matter must be authored by the

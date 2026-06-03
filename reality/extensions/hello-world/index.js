@@ -48,12 +48,17 @@ export async function init(reality) {
       let myPlaceName = "an unnamed space";
       let surroundings = [];
       try {
-        const Space = reality.models.Space;
-        const myPlace = await Space.findById(myPosition).select("name").lean();
-        if (myPlace?.name) myPlaceName = myPlace.name;
-        const children = await Space.find({ parent: myPosition })
-          .select("name").lean();
-        surroundings = children.map(c => c.name).filter(Boolean);
+        const branch = ctx?.summonCtx?.branch || ctx?.branch || "0";
+        const { loadProjection } = await import("../../seed/materials/projections.js");
+        const { default: Projection } = await import("../../seed/materials/branch/projection.js");
+        const myPlace = await loadProjection("space", myPosition, branch);
+        if (myPlace?.state?.name) myPlaceName = myPlace.state.name;
+        const children = await Projection.find({
+          branch, type: "space",
+          "state.parent": myPosition,
+          tombstoned: { $ne: true },
+        }).select("state").lean();
+        surroundings = children.map(c => c.state?.name).filter(Boolean);
       } catch (err) {
         log.warn("HelloWorld", `greeter SEE failed: ${err.message}`);
       }

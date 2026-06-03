@@ -34,7 +34,7 @@ import { MATTER_ORIGIN } from "../../materials/matter/origins.js";
 import { I_AM } from "../../materials/being/seedBeings.js";
 import { isSourceSpaceId } from "../../materials/space/source.js";
 import { authorize } from "../authorize.js";
-import { assertVerbCaller } from "./_shared.js";
+import { assertVerbCaller, refuseHistoricalWrite } from "./_shared.js";
 
 /**
  * DO. Run a registered operation against a target, stamp a Fact, return
@@ -59,6 +59,7 @@ import { assertVerbCaller } from "./_shared.js";
  */
 export async function doVerb(target, operation, params = {}, opts = {}) {
   assertVerbCaller("do", opts);
+  refuseHistoricalWrite("do", target, opts);
   if (typeof operation !== "string" || operation.length === 0) {
     throw new Error("reality.do(target, operation, params): operation must be a non-empty string");
   }
@@ -190,6 +191,11 @@ export async function doVerb(target, operation, params = {}, opts = {}) {
       params:  ctx.params,
       result:  summarizeAuditResult(result),
       actId,
+      // Branch this fact lands on. Inherited from the moment's
+      // summonCtx; assign sets summonCtx.branch from the intake entry
+      // (which the wire layer fills from the parsed `#` qualifier).
+      // Boot/scaffold paths without a moment fall through to "0".
+      branch:  opts.summonCtx?.branch || "0",
     }, opts.summonCtx);
   }
 
@@ -238,32 +244,25 @@ async function resolveAuthSpaceId(target, auditTarget) {
   if (!id) return null;
 
   if (kind === "space") return id;
+  const { loadProjection } = await import("../../materials/projections.js");
 
-  // For being/matter, look up the live row's position / spaceId.
+  // For being/matter, look up the live slot's position / spaceId.
   if (kind === "being") {
-    const Being = (await import("../../materials/being/being.js")).default;
-    const b = await Being.findById(id).select("position homeSpace").lean();
-    return b?.position || b?.homeSpace || null;
+    const slot = await loadProjection("being", id, "0");
+    return slot?.position || slot?.state?.homeSpace || null;
   }
   if (kind === "matter") {
-    const Matter = (await import("../../materials/matter/matter.js")).default;
-    const m = await Matter.findById(id).select("spaceId").lean();
-    return m?.spaceId ? String(m.spaceId) : null;
+    const slot = await loadProjection("matter", id, "0");
+    return slot?.state?.spaceId ? String(slot.state.spaceId) : null;
   }
 
-  // Kind unknown (string id, or target without _factKind). Probe each
-  // model in order. Common case: a Mongoose doc passed directly with
-  // constructor.modelName — but if we got here, the audit-target
-  // walker didn't classify it. Be permissive.
-  const Space  = (await import("../../materials/space/space.js")).default;
-  const space  = await Space.findById(id).select("_id").lean();
-  if (space) return String(space._id);
-  const Being  = (await import("../../materials/being/being.js")).default;
-  const being  = await Being.findById(id).select("position homeSpace").lean();
-  if (being)  return being.position || being.homeSpace || null;
-  const Matter = (await import("../../materials/matter/matter.js")).default;
-  const matter = await Matter.findById(id).select("spaceId").lean();
-  if (matter) return matter.spaceId ? String(matter.spaceId) : null;
+  // Kind unknown. Probe each type in order.
+  const spaceSlot = await loadProjection("space", id, "0");
+  if (spaceSlot) return String(spaceSlot.id);
+  const beingSlot = await loadProjection("being", id, "0");
+  if (beingSlot) return beingSlot.position || beingSlot.state?.homeSpace || null;
+  const matterSlot = await loadProjection("matter", id, "0");
+  if (matterSlot) return matterSlot.state?.spaceId ? String(matterSlot.state.spaceId) : null;
   return null;
 }
 

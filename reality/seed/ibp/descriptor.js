@@ -50,6 +50,8 @@ import { listOperations } from "./operations.js";
 import { listBeOpNames, getBeOp } from "./beOps.js";
 import { findOpenForBeing, findLastSealedForBeing } from "../present/beats/2-fold/reelChains.js";
 import { fold } from "../present/beats/2-fold/foldEngine.js";
+import { foldAt, NoSuchHistoricalState } from "../present/beats/2-fold/foldAt.js";
+import { loadProjection } from "../materials/projections.js";
 import { BE_OPS } from "./beOps.js";
 
 // Fold an aggregate before reading its qualities. Per FOLD.md: the
@@ -60,14 +62,30 @@ import { BE_OPS } from "./beOps.js";
 // inconsistency (the next fold round overwrites it from the fact
 // chain). Per MOMENT.md: facts are truth; the row is the fold-so-far.
 //
-// Returns null when the aggregate doesn't exist; descriptor callers
-// guard with `?.qualities` so missing data degrades to {} cleanly.
-async function foldRead(type, id) {
+// `until` (optional) flips this from a live read to a historical
+// fold. Per the per-reel doctrine (seed/FACTORY.md§"seq is the truth"):
+// each reel resolves the `until` (typically `{atTimestamp}` for
+// multi-reel rewinds) to its OWN per-reel seq, then cold-walks to
+// that point. No projection cache write; no cross-cutting handlers
+// fire. Targets that didn't exist yet at the given point return null
+// — same shape as a missing-current target so descriptor callers
+// degrade gracefully ("this being wasn't here yet at 3pm yesterday"
+// behaves identically to "this being has no projection row").
+//
+// Returns null when the aggregate doesn't exist (live) or hadn't
+// existed yet (historical); descriptor callers guard with
+// `?.qualities` so missing data degrades to {} cleanly.
+async function foldRead(type, id, until = null, branch = "0") {
   if (!id) return null;
   try {
-    const { state } = await fold(type, String(id));
+    if (until) {
+      const { state } = await foldAt(type, String(id), until, { branch });
+      return state;
+    }
+    const { state } = await fold(type, String(id), { branch });
     return state;
-  } catch {
+  } catch (err) {
+    if (err instanceof NoSuchHistoricalState) return null;
     return null;
   }
 }
@@ -157,23 +175,39 @@ function beingsAtSpace(space, { writeAllowed, authorizedHere }) {
 // way without writing into qualities.beings on every step. Merged
 // with the qualities.beings-registered list; entries already present
 // by beingId are skipped so a being doesn't appear twice.
-async function occupantsByPosition(spaceId, existing) {
+// Historical caveat: this lists beings whose CURRENT position is the
+// space. For a past view the honest answer is "who was at this space
+// at time T," which requires walking each being's position-history
+// (set-being:position facts on their reel). For Slice B v1 we accept
+// this limitation: the current-occupant list rides through unchanged
+// and enrichBeings folds each one's row to the past. A being who has
+// since walked away won't appear; a being who walked IN after the
+// past point will appear (with their pre-arrival state). Documented
+// here so the next slice knows what to fix.
+async function occupantsByPosition(spaceId, existing, branch = "0") {
   if (!spaceId) return [];
-  const Being = (await import("../materials/being/being.js")).default;
   const seen = new Set();
   for (const e of existing) {
     if (e._beingId) seen.add(String(e._beingId));
   }
-  const rows = await Being
-    .find({ position: spaceId })
-    .select("_id name")
-    .lean();
+  // Branch-aware position lookup. findByPosition handles shadow +
+  // tombstone semantics for non-main; main short-circuits to its
+  // own path. We only get back {type, id, position, foldedSeq};
+  // resolve names via a batched projection load.
+  const { findByPosition, loadProjections } = await import(
+    "../materials/projections.js"
+  );
+  const refs = (await findByPosition(spaceId, branch))
+    .filter((r) => r.type === "being");
+  const ids = refs.map((r) => r.id);
+  const slots = await loadProjections("being", ids, branch);
   const out = [];
-  for (const row of rows) {
-    const id = String(row._id);
+  for (const ref of refs) {
+    const id = String(ref.id);
     if (seen.has(id)) continue;
+    const slot = slots.get(id);
     out.push({
-      being: row.name || id,
+      being: slot?.state?.name || id,
       invocableBy: "owner",
       available: false,
       _beingId: id,
@@ -298,9 +332,8 @@ async function summonToActivity(summon, opts = {}) {
 // back to role / beingId prefix).
 async function _lookupBeingName(beingId) {
   try {
-    const Being = (await import("../materials/being/being.js")).default;
-    const row = await Being.findById(beingId).select("name").lean();
-    return row?.name || null;
+    const slot = await loadProjection("being", String(beingId), "0");
+    return slot?.state?.name || null;
   } catch {
     return null;
   }
@@ -339,23 +372,46 @@ async function inferActivityTarget(summon) {
  * what angle — the place's front door, a being's home, a regular
  * position) and I build the same descriptor shape for every flavor.
  *
+ * `opts.until` (optional) routes the WHOLE descriptor through
+ * foldAt instead of live fold. Every internal reel (the space row,
+ * each being row, each matter row, the asker's row) folds to its
+ * own per-reel seq derived from the `until` anchor. The shape of
+ * the returned descriptor stays the same — `beings[]`, `matters[]`,
+ * `children[]` all populate — but every projection is historical.
+ * Adds `isHistorical: true` + `asOf` to the descriptor's top level.
+ *
+ * Doctrine: there is no globally-consistent "world snapshot at time
+ * T" — each reel has its own monotonic seq, and `until` is resolved
+ * per-reel ("this reel's latest fact whose date <= T"). For coherent
+ * multi-reel rewinds the caller passes `{atTimestamp}`; for a
+ * pinpoint single-reel fold the caller passes `{atSeq}` and accepts
+ * that other reels resolve their own seq independently.
+ *
  * @param {object} resolved — output of resolver.resolveStance()
  * @param {object} [opts]
  * @param {object} [opts.identity] — { beingId, name } of the asker
+ * @param {object} [opts.until]    — historical anchor: { atSeq?, atTimestamp? }
  * @returns {object} Place descriptor
  */
 export async function buildPlaceDescriptor(resolved, opts = {}) {
-  if (resolved.isSpaceRoot) return placeAtSpaceRoot(resolved, opts);
-  return placeAtSpace(resolved, opts);
+  // Branch flows from the resolved stance (Pass 4 substrate). Threaded
+  // through every descriptor helper alongside `until` so each fold lands
+  // on the right branch's projection slot.
+  const branchedOpts = {
+    ...opts,
+    branch: resolved.branch || opts.branch || "0",
+  };
+  if (resolved.isSpaceRoot) return placeAtSpaceRoot(resolved, branchedOpts);
+  return placeAtSpace(resolved, branchedOpts);
 }
 
-async function placeAtSpaceRoot(resolved, { identity } = {}) {
+async function placeAtSpaceRoot(resolved, { identity, until = null, branch = "0" } = {}) {
   const realityDomain = getRealityDomain();
   const spaceRootId = getSpaceRootId();
   const isRegistered = (beingName) => !!getRole(beingName);
 
-  const spaceRoot = await foldRead("space", spaceRootId);
-  let children = spaceRootId ? await childrenOf(spaceRootId, "/") : [];
+  const spaceRoot = await foldRead("space", spaceRootId, until, branch);
+  let children = spaceRootId ? await childrenOf(spaceRootId, "/", { until, branch }) : [];
 
   // The childrenOf walk filters out seed spaces (so .config/.tools
   // etc. don't pollute the place-root listing). Heaven IS a seed
@@ -364,12 +420,11 @@ async function placeAtSpaceRoot(resolved, { identity } = {}) {
   // happens at SEE-time when a being tries to walk through; here we
   // just surface the door.
   if (spaceRootId) {
-    const Space = (await import("../materials/space/space.js")).default;
-    const heaven = await Space.findOne({ seedSpace: SEED_SPACE.HEAVEN })
-      .select("_id name type qualities coord")
-      .lean();
+    const { findBySeedSpace } = await import("../materials/projections.js");
+    const _hSlot = await findBySeedSpace(SEED_SPACE.HEAVEN, branch);
+    const heaven = _hSlot ? { _id: _hSlot.id, ...(_hSlot.state || {}) } : null;
     if (heaven) {
-      const folded = (await foldRead("space", heaven._id)) || heaven;
+      const folded = (await foldRead("space", heaven._id, until, branch)) || heaven;
       children = [
         {
           name: folded.name || heaven.name,
@@ -385,7 +440,7 @@ async function placeAtSpaceRoot(resolved, { identity } = {}) {
     }
   }
 
-  const matters = spaceRootId ? await listMattersAt(spaceRootId) : [];
+  const matters = spaceRootId ? await listMattersAt(spaceRootId, { until, branch }) : [];
 
   // My place-root beings — ensureSeedDelegates plants them; this list
   // makes them addressable from the place descriptor without walking
@@ -410,12 +465,12 @@ async function placeAtSpaceRoot(resolved, { identity } = {}) {
   // null so the label and action surface still render . it just
   // can't carry coord/inbox/activity until the row catches up.
   const { SEED_DELEGATES } = await import("../materials/being/seedDelegates.js");
-  const delegateNames = SEED_DELEGATES.map((d) => d.name);
-  const delegateRows = await Being.find({ name: { $in: delegateNames } })
-    .select("_id name")
-    .lean();
+  const { findByName } = await import("../materials/projections.js");
+  const delegateSlots = (await Promise.all(
+    SEED_DELEGATES.map((d) => findByName("being", d.name, branch)),
+  )).filter(Boolean);
   const delegateIdByName = new Map(
-    delegateRows.map((r) => [r.name, String(r._id)]),
+    delegateSlots.map((s) => [s.state?.name, String(s.id)]),
   );
   const seedDelegateEntries = SEED_DELEGATES.map((d) => ({
     being:       d.name,
@@ -428,12 +483,12 @@ async function placeAtSpaceRoot(resolved, { identity } = {}) {
   // the placeAtSpace path so the reality root surfaces humans /
   // scripted / LLM beings standing there, not just seed delegates.
   const transientRoot = spaceRootId
-    ? await occupantsByPosition(spaceRootId, seedDelegateEntries)
+    ? await occupantsByPosition(spaceRootId, seedDelegateEntries, branch)
     : [];
   const spaceRootBeings = await enrichBeings(
     spaceRootId,
     [...seedDelegateEntries, ...transientRoot],
-    { identity },
+    { identity, until, branch },
   );
 
   return {
@@ -448,6 +503,10 @@ async function placeAtSpaceRoot(resolved, { identity } = {}) {
       pathByIds: "/",
       leafName: null,
       leafId: null,
+      // Branch this descriptor was folded for. Default "0" (main).
+      // The portal's branch chip reads this to decide whether to
+      // surface the `#<branch>` qualifier in the address bar.
+      branch: resolved.branch || "0",
     },
     isSpaceRoot: true,
     isHomeRoot: false,
@@ -464,12 +523,13 @@ async function placeAtSpaceRoot(resolved, { identity } = {}) {
     place: {
       name: getRealityConfigValue("REALITY_NAME") || "Unnamed Place",
     },
-    identity: await identityBlock(identity, { authorizedHere: true, writeAllowed: false }),
+    identity: await identityBlock(identity, { authorizedHere: true, writeAllowed: false, until, branch }),
+    ...(until ? { isHistorical: true, asOf: serializeAsOf(until) } : {}),
     _meta: meta(),
   };
 }
 
-async function placeAtSpace(resolved, { identity, payload } = {}) {
+async function placeAtSpace(resolved, { identity, payload, until = null, branch = "0" } = {}) {
   const realityDomain = getRealityDomain();
   if (!resolved.leafSpace) throw new Error("Resolved space missing leafSpace reference");
 
@@ -478,7 +538,7 @@ async function placeAtSpace(resolved, { identity, payload } = {}) {
   // to its reel head so any bypass write (legacy qualities.js direct
   // path) gets overwritten on the next round, and the descriptor's
   // exposed qualities are the fact-chain's truth.
-  const folded = await foldRead("space", resolved.leafSpace._id);
+  const folded = await foldRead("space", resolved.leafSpace._id, until, branch);
   const space = folded || resolved.leafSpace;
 
   const pathByNames = "/" + resolved.chain.map((c) => c.name).join("/");
@@ -491,13 +551,18 @@ async function placeAtSpace(resolved, { identity, payload } = {}) {
   // push down to the projection's $match so the listing scales.
   // Each entry is shaped like a normal child so clients render it
   // through the same path as any other space listing.
+  //
+  // Historical caveat: .threads is a live projection (no chain of its
+  // own); a past view of /./threads still surfaces the CURRENT live
+  // forest. The doctrine: threads-at-time would require historical
+  // inbox + Act reconstruction, which is its own future slice.
   const children = space.seedSpace === SEED_SPACE.THREADS
     ? await synthesizeThreadChildren(space._id, pathByNames, payload)
-    : await childrenOf(space._id, pathByNames);
-  const matters  = await mattersAt(space._id);
+    : await childrenOf(space._id, pathByNames, { until, branch });
+  const matters  = await mattersAt(space._id, { until, branch });
   const lineage  = buildLineage(resolved);
   const siblings = space.parent
-    ? await childrenOf(space.parent, parentPath, { exclude: space._id })
+    ? await childrenOf(space.parent, parentPath, { exclude: space._id, until, branch })
     : [];
 
   // Access for the asker. Defensive: leave both false on any error so
@@ -525,7 +590,7 @@ async function placeAtSpace(resolved, { identity, payload } = {}) {
   // — extension UIs that want to render addressable @qualifiers can
   // use residents; the 3D / flat scene renders beings.
   const registered = beingsAtSpace(space, { writeAllowed, authorizedHere });
-  const positionedHere = await occupantsByPosition(space._id, []);
+  const positionedHere = await occupantsByPosition(space._id, [], branch);
   // Cross-index for the residents enrichment.
   const positionedIds = new Set(
     positionedHere.map((e) => e._beingId).filter(Boolean).map(String),
@@ -546,8 +611,8 @@ async function placeAtSpace(resolved, { identity, payload } = {}) {
     const reg = registered.find((r) => r._beingId && String(r._beingId) === String(occ._beingId));
     return reg ? { ...occ, invocableBy: reg.invocableBy, available: reg.available } : occ;
   });
-  const beings    = await enrichBeings(space._id, renderEntries, { identity });
-  const residents = await enrichBeings(space._id, residentsRaw,   { identity });
+  const beings    = await enrichBeings(space._id, renderEntries, { identity, until, branch });
+  const residents = await enrichBeings(space._id, residentsRaw,   { identity, until, branch });
 
   // Being-tree lineage. When the stance carries a beingId (a stance
   // address like <reality>/<path>@<name>), surface the immediate
@@ -555,7 +620,7 @@ async function placeAtSpace(resolved, { identity, payload } = {}) {
   // The portal renders this as the "lineage" panel: who did you
   // birth, who can you inhabit. One Mongo query, lean, capped.
   const beingLineage = resolved.beingId
-    ? await listBeingChildren(resolved.beingId)
+    ? await listBeingChildren(resolved.beingId, { until, branch })
     : null;
 
   return {
@@ -570,6 +635,8 @@ async function placeAtSpace(resolved, { identity, payload } = {}) {
       pathByIds,
       leafName: resolved.leafName,
       leafId: resolved.leafId,
+      // Branch this descriptor was folded for. Default "0" (main).
+      branch: resolved.branch || "0",
     },
     isSpaceRoot: false,
     isHomeRoot: false,
@@ -587,8 +654,21 @@ async function placeAtSpace(resolved, { identity, payload } = {}) {
     siblings,
     size: space.size || null,
     qualities: serializeQualities(space.qualities),
-    identity: await identityBlock(identity, { authorizedHere, writeAllowed }),
+    identity: await identityBlock(identity, { authorizedHere, writeAllowed, until, branch }),
+    ...(until ? { isHistorical: true, asOf: serializeAsOf(until) } : {}),
     _meta: meta(writeAllowed ? [] : ["read-only"]),
+  };
+}
+
+// Surface the historical anchor on the wire. Carries both atSeq and
+// atTimestamp when both were given (atSeq wins for resolution but
+// surface both for client display); foldedSeq is null at the top
+// level because each reel resolves its own per-reel seq.
+function serializeAsOf(until) {
+  if (!until) return null;
+  return {
+    atSeq:       until.atSeq       ?? null,
+    atTimestamp: until.atTimestamp ?? null,
   };
 }
 
@@ -606,8 +686,9 @@ async function placeAtSpace(resolved, { identity, payload } = {}) {
 // in-flight fold-engine append lock + reducer keep each well-
 // bounded.
 async function childrenOf(parentId, parentPath, opts = {}) {
+  const { until = null, branch = "0" } = opts;
   const rows = await listSpaceChildren(parentId, opts);
-  const folded = await Promise.all(rows.map((s) => foldRead("space", s._id)));
+  const folded = await Promise.all(rows.map((s) => foldRead("space", s._id, until, branch)));
   return rows.map((s, i) => {
     const f = folded[i] || s;
     return {
@@ -660,10 +741,10 @@ async function synthesizeThreadChildren(parentId, parentPath, payload) {
 // extra round-trip. Slice H completion (2026-05-23): each matter
 // folds before its qualities surface, same shape as the children
 // loop above.
-async function mattersAt(spaceId) {
+async function mattersAt(spaceId, { until = null, branch = "0" } = {}) {
   if (!spaceId) return [];
-  const rows = await listMattersAt(spaceId);
-  const folded = await Promise.all(rows.map((m) => foldRead("matter", m.matterId)));
+  const rows = await listMattersAt(spaceId, { branch });
+  const folded = await Promise.all(rows.map((m) => foldRead("matter", m.matterId, until, branch)));
   return rows.map((m, i) => {
     const f = folded[i] || {};
     const content = f.content ?? m.content;
@@ -688,7 +769,7 @@ async function mattersAt(spaceId) {
 // affordance: name, beingId, cognition, defaultRole. Cap at 200 to
 // stay bounded for prolific parents; deeper inspection happens via
 // dedicated SEE on each child stance.
-async function listBeingChildren(parentBeingId) {
+async function listBeingChildren(parentBeingId, { until = null, branch = "0" } = {}) {
   if (!parentBeingId) return [];
   const { beingCognition } = await import("../materials/being/identity/lookups.js");
   const rows = await Being
@@ -697,14 +778,39 @@ async function listBeingChildren(parentBeingId) {
     .sort({ createdAt: 1 })
     .limit(200)
     .lean();
-  return rows.map((b) => ({
-    beingId:     String(b._id),
-    name:        b.name || null,
-    defaultRole: b.defaultRole || null,
-    cognition:   beingCognition(b),
-    homeSpace:   b.homeSpace ? String(b.homeSpace) : null,
-    createdAt:   b.createdAt || null,
-  }));
+
+  // Live path: project from the rows as-is.
+  if (!until) {
+    return rows.map((b) => ({
+      beingId:     String(b._id),
+      name:        b.name || null,
+      defaultRole: b.defaultRole || null,
+      cognition:   beingCognition(b),
+      homeSpace:   b.homeSpace ? String(b.homeSpace) : null,
+      createdAt:   b.createdAt || null,
+    }));
+  }
+
+  // Historical path: fold each child to `until`. Children born AFTER
+  // the queried point have no facts at or before it; foldRead returns
+  // null and we filter those out — they "weren't here yet."
+  const folded = await Promise.all(
+    rows.map((b) => foldRead("being", String(b._id), until, branch)),
+  );
+  const out = [];
+  for (let i = 0; i < rows.length; i++) {
+    const f = folded[i];
+    if (!f) continue;
+    out.push({
+      beingId:     String(rows[i]._id),
+      name:        f.name || rows[i].name || null,
+      defaultRole: f.defaultRole || rows[i].defaultRole || null,
+      cognition:   beingCognition(f),
+      homeSpace:   f.homeSpace ? String(f.homeSpace) : null,
+      createdAt:   rows[i].createdAt || null,
+    });
+  }
+  return out;
 }
 
 // Top-down breadcrumb chain: place root + each named segment up to but
@@ -819,28 +925,49 @@ function buildActions(beingName, def, identity) {
 // active Act's activity, and the being's own qualities to each
 // entry produced by beingsAtSpace.
 async function enrichBeings(spaceId, entries, opts = {}) {
+  const branch = opts.branch || "0";
   const identity = opts.identity || null;
-  const inboxByBeing = await getInboxSummary(spaceId);
+  const until    = opts.until    || null;
+  // The inbox + open/sealed-Act helpers are live-only projections
+  // today. For historical SEE we surface empty inbox / null activity
+  // rather than misleading current-state data — a past view shouldn't
+  // claim "this being is currently talking to X" when the asker is
+  // looking at a snapshot of last week. Inbox-at-time is a future
+  // slice; flagging here so the limitation surfaces honestly.
+  const inboxByBeing = until ? {} : await getInboxSummary(spaceId, { branch });
 
   // Slice H: fold each being before reading qualities. Per FOLD.md
   // foldPlace mounts the face for the moment; here the descriptor is
   // doing the same weave at SEE time. Hot path is one cache read per
   // being (foldedSeq current → zero replay).
+  //
+  // Historical path: each being row folds to its own per-reel seq
+  // derived from `until` (typically a timestamp). A being whose reel
+  // had no facts at or before `until` returns null and drops out of
+  // qualitiesByBeing/coordByBeing — its entry renders with empty
+  // qualities/coord, same shape as a live-missing projection.
   const beingIds = entries.map((e) => e._beingId).filter(Boolean);
-  const foldedBeings = await Promise.all(beingIds.map((id) => foldRead("being", id)));
+  const foldedBeings = await Promise.all(
+    beingIds.map((id) => foldRead("being", id, until, branch)),
+  );
+  // Pair folded states with their being ids by index (foldRead may
+  // return a state without _id when historical). We track ids
+  // explicitly so historical fold results map back to the right row.
+  const idsAndFolded = beingIds.map((id, i) => ({ id, folded: foldedBeings[i] }));
   const qualitiesByBeing = new Map(
-    foldedBeings
-      .filter(Boolean)
-      .map((b) => [String(b._id), serializeQualities(b.qualities)]),
+    idsAndFolded
+      .filter(({ folded }) => folded)
+      .map(({ id, folded }) => [String(id), serializeQualities(folded.qualities)]),
   );
   const coordByBeing = new Map(
-    foldedBeings
-      .filter(Boolean)
-      .map((b) => [String(b._id), b.coord || null]),
+    idsAndFolded
+      .filter(({ folded }) => folded)
+      .map(({ id, folded }) => [String(id), folded.coord || null]),
   );
 
   const activities = await Promise.all(entries.map(async (e) => {
     if (!e._beingId) return null;
+    if (until) return null; // historical: see comment on inboxByBeing
     const open = await findOpenForBeing(e._beingId);
     if (open) return summonToActivity(open);
     // No Act in flight. Fall back to what this being last SAID so
@@ -976,24 +1103,39 @@ function catalogBeOps() {
 
 // ── Wire-shape helpers ──
 
-async function identityBlock(identity, { authorizedHere, writeAllowed }) {
+async function identityBlock(identity, { authorizedHere, writeAllowed, until = null, branch = "0" }) {
   if (!identity) return null;
   // Position + coord are server-side state on the Being row. Surface
   // them on every authenticated SEE so the portal can resume the
   // camera at the being's last spot (instead of teleporting to /
   // on every login / reconnect). `coord` may be null on never-moved
   // beings — the client falls back to a default spawn.
+  //
+  // Historical SEE: fold the asker's own row to the same `until` so
+  // the camera resumes at where THEY were at the past point. If the
+  // asker didn't exist yet at that point, we surface null position +
+  // coord (the client falls back to default spawn).
   let position = null;
   let coord    = null;
   if (identity.beingId) {
     try {
-      const row = await Being.findById(identity.beingId)
-        .select("position qualities")
-        .lean();
-      position = row?.position ? String(row.position) : null;
-      const quals = row?.qualities;
-      const coordQ = quals instanceof Map ? quals.get("coord") : quals?.coord;
-      coord = coordQ || row?.coord || null;
+      if (until) {
+        const folded = await foldRead("being", identity.beingId, until, branch);
+        if (folded) {
+          position = folded.position ? String(folded.position) : null;
+          const coordQ = folded.qualities?.coord;
+          coord = coordQ || folded.coord || null;
+        }
+      } else {
+        const slot = await loadProjection("being", identity.beingId, branch);
+        // Position rides at the slot level (sparse-indexed for
+        // findByPosition); qualities + other reducer state ride at
+        // slot.state. Coord lives under qualities.coord typically.
+        position = slot?.position ? String(slot.position) : (slot?.state?.position ? String(slot.state.position) : null);
+        const quals = slot?.state?.qualities;
+        const coordQ = quals instanceof Map ? quals.get("coord") : quals?.coord;
+        coord = coordQ || slot?.state?.coord || null;
+      }
     } catch { /* defensive */ }
   }
   return {

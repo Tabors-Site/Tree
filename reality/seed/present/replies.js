@@ -169,9 +169,9 @@ export async function emitReplyToAsker({
       return false;
     }
 
-    const askerBeing = await Being.findOne({ name: askerStance.qualifier })
-      .select("_id name defaultRole roles")
-      .lean();
+    const { findByName: _findByName1 } = await import("../materials/projections.js");
+    const askerSlot1 = await _findByName1("being", askerStance.qualifier, "0");
+    const askerBeing = askerSlot1 ? { _id: askerSlot1.id, ...askerSlot1.state } : null;
     if (!askerBeing) {
       log.warn(
         "Replies",
@@ -287,9 +287,9 @@ export async function emitReplyToStance({
       );
       return false;
     }
-    const askerBeing = await Being.findOne({ name: parsed.qualifier })
-      .select("_id name defaultRole roles")
-      .lean();
+    const { findByName: _findByName2 } = await import("../materials/projections.js");
+    const askerSlot2 = await _findByName2("being", parsed.qualifier, "0");
+    const askerBeing = askerSlot2 ? { _id: askerSlot2.id, ...askerSlot2.state } : null;
     if (!askerBeing) {
       log.warn(
         "Replies",
@@ -372,10 +372,11 @@ export async function findChainInitialCaller(
   scopeNodeId,
   beingId,
   rootCorrelation,
+  { branch = "0" } = {},
 ) {
   if (!scopeNodeId || !beingId || !rootCorrelation) return null;
   try {
-    const entries = await readInbox(scopeNodeId, beingId);
+    const entries = await readInbox(scopeNodeId, beingId, { branch });
     if (!Array.isArray(entries) || entries.length === 0) return null;
     for (const entry of entries) {
       if (entry?.rootCorrelation === rootCorrelation && !entry.inReplyTo) {

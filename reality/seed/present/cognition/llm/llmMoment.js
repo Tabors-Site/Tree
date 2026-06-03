@@ -679,8 +679,10 @@ async function gatherEnrichedContext({ beingId, currentSpace, rootId, presenceKe
   try {
     const posNodeId = currentSpace || rootId || null;
     if (!posNodeId) return null;
-    const posSpace = await Space.findById(posNodeId).lean();
-    if (!posSpace) return null;
+    const { loadProjection } = await import("../../../materials/projections.js");
+    const _pSlot = await loadProjection("space", posNodeId, "0");
+    if (!_pSlot) return null;
+    const posSpace = { _id: _pSlot.id, ...(_pSlot.state || {}) };
     const meta =
       posSpace.qualities instanceof Map
         ? Object.fromEntries(posSpace.qualities)

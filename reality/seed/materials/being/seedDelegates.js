@@ -49,10 +49,10 @@
 // and the scaffold that ensures their rows exist.
 
 import log from "../../seedReality/log.js";
-import Being from "./being.js";
 import { summonCreateBeing } from "../../ibp/verbs/summon.js";
 import { findIAm, iAmIdentity } from "./identity.js";
 import { I_AM } from "./seedBeings.js";
+import { findByName, loadProjection } from "../projections.js";
 
 // `invocableBy` is a display label the portal shows next to the
 // delegate ("who is this for?"). It is NOT the auth gate . that's
@@ -114,6 +114,14 @@ export const SEED_DELEGATES = [
     description:
       "Conversational interface for place-level administration (extensions, config, peers). Carries no authority of its own; its writes are gated by the caller's stance — root operator, or owner / contributor on the place root.",
   },
+  {
+    name: "branch-manager",
+    role: "branch-manager",
+    cognition: "scripted",
+    invocableBy: "authenticated",
+    description:
+      "Creates and manages branches — divergent worlds forked from a past moment of an existing branch. Click @branch-manager at the reality root to mint a new branch from a chosen parent + anchor point.",
+  },
 ];
 
 /**
@@ -168,7 +176,7 @@ export async function ensureSeedDelegates(spaceRootId, summonCtx, opts = {}) {
   // fallback handle placement.
   let circleCoord = null;
   try {
-    const live = await Space.findById(spaceRootId).select("size").lean();
+    const live = (await loadProjection("space", spaceRootId, "0"))?.state || null;
     let size = live?.size || null;
     if (!size && opts.summonCtx?.deltaF) {
       const pendingCreate = opts.summonCtx.deltaF.find(
@@ -202,40 +210,33 @@ export async function ensureSeedDelegates(spaceRootId, summonCtx, opts = {}) {
   for (let i = 0; i < SEED_DELEGATES.length; i++) {
     const spec = SEED_DELEGATES[i];
     try {
-      // Look up by name (the canonical identifier per place).
-      const existingBeing = await Being.findOne({ name: spec.name }).select(
-        "_id defaultRole homeSpace qualities parentBeingId",
-      );
-      if (existingBeing) {
+      // Look up by name on main (seed delegates are main-branch).
+      const existingSlot = await findByName("being", spec.name, "0");
+      if (existingSlot) {
         // Idempotent drift correction: keep cognition/role/home/parent
-        // in sync via do.set facts (one per field that drifted, on the
-        // delegate's reel). The legacy `existingBeing.save()` direct
-        // write retired (2026-05-23); fact-driven keeps the genesis
-        // exception list short (only the spaceRoot/I_AM creation).
+        // in sync via do.set facts. The legacy direct save() retired
+        // 2026-05-23; fact-driven keeps the genesis exception list short.
         const { doVerb } = await import("../../ibp/verbs/do.js");
         const setOpts = { scaffold: true, summonCtx };
-        const beingTarget = { kind: "being", id: String(existingBeing._id) };
+        const beingTarget = { kind: "being", id: String(existingSlot.id) };
         const setField = (field, value) =>
           doVerb(beingTarget, "set-being", { field, value }, setOpts);
 
-        // Cognition drift correction. The cognition kind lives at
-        // qualities.cognition.defaultKind (closed-set "llm"|"human"|
-        // "scripted"); compare and write through set-being qualities
-        // when the existing delegate has drifted from the spec.
-        const quals = existingBeing.qualities;
+        const st = existingSlot.state || {};
+        const quals = st.qualities;
         const existingCognition = quals instanceof Map
           ? quals.get("cognition")?.defaultKind
           : quals?.cognition?.defaultKind;
         if (existingCognition !== spec.cognition) {
           await setField("qualities.cognition", { defaultKind: spec.cognition });
         }
-        if (existingBeing.defaultRole !== spec.role) {
+        if (st.defaultRole !== spec.role) {
           await setField("defaultRole", spec.role);
         }
-        if (existingBeing.homeSpace !== String(spaceRootId)) {
+        if (st.homeSpace !== String(spaceRootId)) {
           await setField("homeSpace", String(spaceRootId));
         }
-        if (existingBeing.parentBeingId !== rootBeingId) {
+        if (st.parentBeingId !== rootBeingId) {
           await setField("parentBeingId", rootBeingId);
         }
         existing++;

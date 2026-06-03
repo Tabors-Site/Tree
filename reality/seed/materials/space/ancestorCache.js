@@ -167,7 +167,17 @@ async function walkFromDb(spaceId, ttl) {
       _cache.delete(String(cursor));
     }
 
-    const n = await Space.findById(cursor).select(ANCESTOR_FIELDS).lean();
+    const { loadProjection } = await import("../projections.js");
+    const _slot = await loadProjection("space", cursor, "0");
+    const n = _slot ? {
+      _id: _slot.id,
+      name: _slot.state?.name,
+      qualities: _slot.state?.qualities,
+      parent: _slot.state?.parent,
+      seedSpace: _slot.state?.seedSpace,
+      rootOwner: _slot.state?.rootOwner,
+      contributors: _slot.state?.contributors,
+    } : null;
     if (!n) {
       // Space not found. Return what we have if any, null if starting space.
       return ancestors.length > 0 ? ancestors : null;

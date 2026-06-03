@@ -447,10 +447,10 @@ async function _defaultEmitter(entry, nowMs) {
  */
 async function _loadBeingIdentity(beingId) {
   try {
-    const Being = (await import("../../materials/being/being.js")).default;
-    const row = await Being.findById(String(beingId)).select("_id name").lean();
-    if (!row?.name) return null;
-    return { beingId: String(row._id), name: row.name };
+    const { loadProjection } = await import("../../materials/projections.js");
+    const slot = await loadProjection("being", String(beingId), "0");
+    if (!slot?.state?.name) return null;
+    return { beingId: String(slot.id), name: slot.state.name };
   } catch {
     return null;
   }
