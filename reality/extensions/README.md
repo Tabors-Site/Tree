@@ -353,8 +353,10 @@ reality.declare.registerRole("meal-logger", {
   ],
   // canBe absent: not in the tool surface.
 
-  // Multi-moment work. Default false (one act per summon).
-  selfContinue: false,
+  // Multi-moment work is explicit: from inside an act, emit
+  // summon(target=self) to wake yourself again for the next step.
+  // The role's act IS the loop signal; the seed never synthesizes
+  // continuations on its own.
 
   // Role-intent body. NO verb syntax explanation; the assembler handles
   // that. This is the role's character, persona, and goal.
@@ -427,15 +429,25 @@ of a prompt: instruction first, context at the tail.
 Do NOT restate `do({action, args})` syntax. Do NOT restate "call see to
 read state" or similar. The assembler instructs the LLM on the verbs.
 
-### `selfContinue`
+### Multi-moment loops
 
-A role with `selfContinue: true` auto-enqueues a self-SUMMON after each
-sealed act. The being keeps stepping (each step is one moment with a
-freshly-folded world) until the LLM emits no tool call. Silence (SEE)
-is the natural exit.
+Multi-moment work is **explicit**. A role that wants to keep stepping
+emits `summon(target=<own stance>)` as part of its act — same SUMMON
+tool any other being uses, just pointed at itself. The seed never
+synthesizes continuations on its own; every wake-call traces to a
+SUMMON emission by a being. (Doctrine: only SUMMONs make SUMMONs.)
 
-Default `false`: one summon, one act, done. The harmony dancers are
-this kind — externally ticked.
+The self-summon can carry `orientation: "inward"` to fold the act-
+chain alone next moment, `"half"` to fold world plus surfaced past
+acts, or `"forward"` (default) to fold the world. Only self-summons
+may carry `half` or `inward`; cross-being summons must stay `forward`.
+
+The no-act release (the explicit `end-turn` tool, or simply no tool
+call at all) ends the loop. Roles with one-shot work declare nothing
+extra — they act once and the moment closes naturally.
+
+Harmony dancers are externally ticked: each wake comes from outside
+(a tick summon, a peer summon), not from a self-emitted continuation.
 
 ---
 
@@ -563,8 +575,9 @@ await reality.summon(`${realityDomain}/${spaceId}@${helper.name}`, {
 
 For LLM beings, the cognition is one call to the model per moment via
 [`../seed/present/cognition/llm/llmMoment.js`](../seed/present/cognition/llm/llmMoment.js).
-One call, one decision, one act. Multi-step work uses many moments via
-`selfContinue: true`. The detailed shape is at
+One call, one decision, one act. Multi-step work uses many moments;
+the role keeps stepping by emitting `summon(target=self)` as part of
+its act (any orientation). The detailed shape is at
 [`/factory/being-types`](../../site/src/components/Welcome/FactoryBeingTypes.jsx)
 on the site.
 

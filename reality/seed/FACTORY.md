@@ -176,14 +176,14 @@ Everything inside the world I form is one of six things. The schemas
 are mine alone. Extensions extend through the qualities Map, not
 through new fields.
 
-| Primitive         | What it is                                                                                                                                            | Schema                                                       |
-| ----------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------ |
-| **Being**         | An identity instance. Humans, AI, scripted code, future composites. The I-Am is the first Being.                                                      | [materials/being/being.js](materials/being/being.js)         |
-| **Space**         | A position in the tree. Holds matter, hosts beings, owns quality namespaces.                                                                          | [materials/space/space.js](materials/space/space.js)         |
-| **Matter**        | Stuff inside a space. `origin` names where the underlying content lives (ibp, filesystem, web, cross-place).                                          | [materials/matter/matter.js](materials/matter/matter.js)     |
-| **Fact**          | A thing done. The storage atom. One recorded change to a being / space / matter. A chain of facts, folded, is Truth.                                  | [past/fact/fact.js](past/fact/fact.js)                       |
-| **Act**           | One sealed moment of one being, the doer's committed deed. Opened in assign, sealed in stamped. Every Fact carries the `actId` of the Act it rode.    | [past/act/act.js](past/act/act.js)                           |
-| **LlmConnection** | Per-being LLM client config (URL, key, model). Stored as entries under `Being.qualities.llmConnections`.                                              | (no separate schema; lives on Being qualities)               |
+| Primitive         | What it is                                                                                                                                         | Schema                                                   |
+| ----------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------- |
+| **Being**         | An identity instance. Humans, AI, scripted code, future composites. The I-Am is the first Being.                                                   | [materials/being/being.js](materials/being/being.js)     |
+| **Space**         | A position in the tree. Holds matter, hosts beings, owns quality namespaces.                                                                       | [materials/space/space.js](materials/space/space.js)     |
+| **Matter**        | Stuff inside a space. `origin` names where the underlying content lives (ibp, filesystem, web, cross-place).                                       | [materials/matter/matter.js](materials/matter/matter.js) |
+| **Fact**          | A thing done. The storage atom. One recorded change to a being / space / matter. A chain of facts, folded, is Truth.                               | [past/fact/fact.js](past/fact/fact.js)                   |
+| **Act**           | One sealed moment of one being, the doer's committed deed. Opened in assign, sealed in stamped. Every Fact carries the `actId` of the Act it rode. | [past/act/act.js](past/act/act.js)                       |
+| **LlmConnection** | Per-being LLM client config (URL, key, model). Stored as entries under `Being.qualities.llmConnections`.                                           | (no separate schema; lives on Being qualities)           |
 
 Being, Space, and Matter carry the qualities Map. Fact and Act are
 fixed shapes (the audit and the moment-frame don't grow).
@@ -205,12 +205,12 @@ primitives:
 Every act inside the world is one of four verbs over an IBP address.
 Four verbs are my whole public surface.
 
-| Verb       | Acts on              | What I do                                                                                       |
-| ---------- | -------------------- | ----------------------------------------------------------------------------------------------- |
-| **SEE**    | Space, Matter, Being | Resolve the stance, fold the leaf and occupants, return a place descriptor. Writes nothing.     |
-| **DO**     | Space, Matter        | Mutate at the target through a registered operation. Stamps a Fact on the target's reel.        |
-| **SUMMON** | Being                | Stamp a `be:summon` Fact on the summoner's reel; the cross-cutting fold maintains the inbox.    |
-| **BE**     | Being (self)         | Identity acts: register, claim, release, switch. Stamps a Fact on the actor's own reel.         |
+| Verb       | Acts on              | What I do                                                                                    |
+| ---------- | -------------------- | -------------------------------------------------------------------------------------------- |
+| **SEE**    | Space, Matter, Being | Resolve the stance, fold the leaf and occupants, return a place descriptor. Writes nothing.  |
+| **DO**     | Space, Matter        | Mutate at the target through a registered operation. Stamps a Fact on the target's reel.     |
+| **SUMMON** | Being                | Stamp a `be:summon` Fact on the summoner's reel; the cross-cutting fold maintains the inbox. |
+| **BE**     | Being (self)         | Identity acts: register, claim, release, switch. Stamps a Fact on the actor's own reel.      |
 
 ### Stances and addresses
 
@@ -460,11 +460,11 @@ a reducer plus one registry line. The engine never changes.
 a handler that runs on every fact in the fold tail. For projections
 that span reels. Three uses today, one mechanism:
 
-| Projection             | Handler triggers                                                                  | Built in                                                              |
-| ---------------------- | --------------------------------------------------------------------------------- | --------------------------------------------------------------------- |
-| **Position index**     | Every reducer writes `state.position`; `findByPosition` queries the index.        | Implicit in projection field                                          |
-| **InboxProjection**    | `be:summon` upserts row; `be:sever` deletes by rootCorrelation; Act seal evicts.  | [past/projections/inbox/inboxProjectionFold.js](past/projections/inbox/inboxProjectionFold.js)    |
-| **ThreadsProjection**  | `be:summon` upserts row + adds participants; `be:sever` marks; Act seal bumps.    | [past/projections/threads/threadsProjectionFold.js](past/projections/threads/threadsProjectionFold.js)|
+| Projection            | Handler triggers                                                                 | Built in                                                                                               |
+| --------------------- | -------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
+| **Position index**    | Every reducer writes `state.position`; `findByPosition` queries the index.       | Implicit in projection field                                                                           |
+| **InboxProjection**   | `be:summon` upserts row; `be:sever` deletes by rootCorrelation; Act seal evicts. | [past/projections/inbox/inboxProjectionFold.js](past/projections/inbox/inboxProjectionFold.js)         |
+| **ThreadsProjection** | `be:summon` upserts row + adds participants; `be:sever` marks; Act seal bumps.   | [past/projections/threads/threadsProjectionFold.js](past/projections/threads/threadsProjectionFold.js) |
 
 Future cross-reel projections add one registry line; the engine never
 changes. Per FOLD.md, the engine never grows; the materials catalog
@@ -533,11 +533,11 @@ foldAt(type, id, until)
   until = { atSeq?: number, atTimestamp?: Date|string, branch?: "0" }
 ```
 
-| Outcome | Trigger |
-|---|---|
-| `{ state, foldedSeq }` returned | The target had ≥1 fact at or before the queried point. State is the cold-reduced result; foldedSeq is the highest seq applied. |
-| `NoSuchHistoricalState` thrown | The target had no facts at or before the queried point. The target did not exist yet. |
-| Result clamps to current head | When `atSeq` is greater than the reel's current head, foldAt returns the current state (without writing to the projection cache). |
+| Outcome                         | Trigger                                                                                                                           |
+| ------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| `{ state, foldedSeq }` returned | The target had ≥1 fact at or before the queried point. State is the cold-reduced result; foldedSeq is the highest seq applied.    |
+| `NoSuchHistoricalState` thrown  | The target had no facts at or before the queried point. The target did not exist yet.                                             |
+| Result clamps to current head   | When `atSeq` is greater than the reel's current head, foldAt returns the current state (without writing to the projection cache). |
 
 Callers who want graceful "didn't exist" handling catch
 `NoSuchHistoricalState` ([foldAt.js#NoSuchHistoricalState](present/beats/2-fold/foldAt.js))
@@ -579,9 +579,9 @@ reach from this branch."
 
 **Rule of thumb:**
 
-| Null should mean… | Use… |
-|---|---|
-| "doesn't exist anywhere" | `loadOrFold` |
+| Null should mean…                            | Use…             |
+| -------------------------------------------- | ---------------- |
+| "doesn't exist anywhere"                     | `loadOrFold`     |
 | "my immediately preceding write didn't land" | `loadProjection` |
 
 **Failure mode if you pick wrong.** A behavioral read using
@@ -656,6 +656,117 @@ rehydrate restores. The alternative (always materialize, gate at
 intake) would burn timers on every dead branch forever. The skip-at-
 materialize choice keeps the tick loop's working set proportional to
 the live world.
+
+**Merging is creation, not modification.** A merge produces a third
+branch whose `parent` is the common ancestor of the two sources,
+with `branchPoint` snapshotting the ancestor's current state.
+Reconciliation facts stamped on the merged branch bring its state to
+the user-resolved combined state. The source branches stay immutable.
+The merged branch records `mergeSources: [pathA, pathB]` for forensic
+audit; the canonical lineage walk still consults only `parent`.
+
+**Reconciliation facts are normal facts.** Merging stamps `set-*`,
+`wake-scheduled`, `be:release`, etc. on the merged branch with a
+`params._merge` block for provenance. No new fact action vocabulary;
+the chain stays honest about what happened. The merge-mediator role
+(LLM cognition) is the UX layer; it walks the operator through the
+conflict catalog at `<reality>#<merged>/.branches/<merged>/conflicts`
+and stamps the chosen facts.
+
+**Some reels reset on merge.** State that's branch-private by nature
+cannot be reconciled. The reset-reels registry
+([seed/materials/branch/resetReels.js](materials/branch/resetReels.js))
+enumerates them. V1: inhabit-state on Being. The merge-branches op
+stamps `be:release` for every inhabited being on the ancestor
+projection so the merged branch starts these reels cleared. Future
+rules go alongside in the same registry.
+
+**Canonical paths are immutable structural identifiers.** Every branch
+has a unique canonical path determined by its position in the branch
+tree (`#0`, `#1`, `#1a2`, `#7b3`). Once assigned, a canonical path
+never changes meaning and never refers to anything other than the
+branch it names. `#0` is forever first made; the merged branch produced
+by a `merge-branches` call gets a fresh canonical path and that path
+is its identifier forever after. Historical addresses survive every
+merge, rollback, and deployment swap.
+
+**Named pointers are mutable labels.** A per-reality `@branch-registry`
+being holds `qualities.pointers` mapping names (`main`, `prod`,
+`release-v2`) to canonical paths. Pointer mutations are facts on the
+registry being's reel; pointer history is foldable. The IBP address
+parser distinguishes structurally: anything starting with a digit is
+a canonical path; anything starting with a letter is a pointer name.
+`resolveBranchPointers` (the wire-layer async step) consults the
+registry and fills `stance.branch` with the canonical path before
+dispatch. Foreign-reality stances skip resolution; the foreign
+substrate does its own lookup.
+
+**Reserved pointers.** `main` always exists and points at canonical
+`#0` by default; operators can re-point it after a merge, but cannot
+delete it. The `merge-branches` op accepts a `repointPointers` arg
+(comma-separated names or array) so the front-end can answer "update
+which labels to point at the merged branch?" in one call.
+
+**Cross-reality addresses survive merges.** `treeos.ai#main/library`
+always reaches whatever main currently is on `treeos.ai`. A bookmark
+made before a merge keeps working after, because `#main` is a
+pointer the registry resolves, not a path that itself moves.
+
+## Heaven never branches
+
+Heaven spaces are reality-scoped, not branch-scoped. The Tier-3 seed
+spaces under heaven (`.beings`, `.spaces`, `.matters`, `.config`,
+`.branches`, `.roles`, `.tools`, `.operations`) hold substrate-level
+metadata about the reality itself . which beings exist, what roles
+are available, how branches are structured, what tools and operations
+the reality supports. Their content is identical across every branch
+within the reality.
+
+Branch-scoped state lives on the aggregates underneath (beings,
+spaces, matter, their facts, their qualities, their roleFlows). Their
+projections diverge per branch via the reel-lineage walk. Heaven
+projections do not diverge . there is one projection per heaven
+entry, regardless of which branch is querying.
+
+The distinction worth pinning: **branched state is content; heaven
+is structure.** A being's position is content (branched). A role's
+definition is structure (heaven). A space's world signals are
+content (branched). A branch pointer mapping is structure (heaven).
+
+Implementation implications:
+
+- Heaven classification is DERIVED, not stored. A space is in heaven
+  if it IS `.` or has `.` in its parent chain. No schema field;
+  `isHeavenSpace(spaceId)` walks the existing ancestor cache.
+- Lookups against heaven do not need a branch parameter; one query,
+  one answer, regardless of caller's branch. The substrate's lineage
+  walk machinery is skipped for heaven entries.
+- Heaven entries always store as `branch: "0"` and every branch's
+  read sees that same row. Writes addressed at a heaven space from
+  any branch get routed to `branch: "0"` automatically by the
+  substrate's projection layer.
+- Authorization for heaven mutations is reality-root permission .
+  the same gate as `set-reality-llm`. Branched mutations stay under
+  whatever per-position rules apply to their aggregate.
+
+**What's heaven today (correctly):** the seed spaces themselves
+(`.beings`, `.spaces`, `.matters`, `.config`, `.branches`, `.roles`,
+`.tools`, `.operations`).
+
+**What needs to migrate to heaven:** the role registry (currently
+on `@role-manager`'s qualities; should be a heaven-scoped projection
+under `.roles/`). The pointer registry (currently on
+`@branch-registry`'s qualities, with reads hard-coded to main . that's
+heaven-semantic but not heaven-shaped storage). The federation peer
+list. The future public-directory id→name slices.
+
+**What stays branch-scoped:** every aggregate's state (position,
+qualities, roleFlow per being, world signals per space, content per
+matter), inhabit relationships, wake schedules per being, every
+per-position fact stream.
+
+See [HEAVEN.md](HEAVEN.md) for the substrate-level spec, migration
+plan, and the heaven-aware lookup primitive design.
 
 ## Orientation — the three turns
 
@@ -879,13 +990,13 @@ detects them on the next round.
 ## The qualities Map
 
 Three primitives (Being, Space, Matter) carry an extensible `qualities`
-Map. A bare primitive answers *that* (this is). Qualities answer *what
-sort*. Extensions register their characterizing data under their own
+Map. A bare primitive answers _that_ (this is). Qualities answer _what
+sort_. Extensions register their characterizing data under their own
 namespace (`qualities.governing`, `qualities.energy`, `qualities.review`).
 I never read or write inside an extension's namespace.
 
-The word is Plato's. ποιότης (poiótēs), coined in *Theaetetus*. Cicero
-calqued it to Latin `qualitas` (from *qualis*, "of what kind"). The
+The word is Plato's. ποιότης (poiótēs), coined in _Theaetetus_. Cicero
+calqued it to Latin `qualitas` (from _qualis_, "of what kind"). The
 field is named for exactly what it does.
 
 **Writes go through DO.** Per Slice 3 (2026-05-23) the legacy
@@ -894,9 +1005,19 @@ retired. Every quality write now stamps a material-scoped `do:set-<kind>`
 Fact:
 
 ```js
-await reality.do(target, "set-space",  { field: "qualities.<ns>", value }, opts);
-await reality.do(target, "set-being",  { field: "qualities.<ns>.<innerKey>", value }, opts);
-await reality.do(target, "set-matter", { field: "qualities.<ns>", value }, opts);
+await reality.do(target, "set-space", { field: "qualities.<ns>", value }, opts);
+await reality.do(
+  target,
+  "set-being",
+  { field: "qualities.<ns>.<innerKey>", value },
+  opts,
+);
+await reality.do(
+  target,
+  "set-matter",
+  { field: "qualities.<ns>", value },
+  opts,
+);
 ```
 
 The reducer's `applySetQualities` derives the new state; the fold
@@ -955,6 +1076,7 @@ llm-assigner); `"mixed"` covers composites.
 `qualities` (Map), `foldedSeq`, `position`, `createdAt`, `updatedAt`.
 
 Origin determines content shape and sync behavior:
+
 - `ibp`, TreeOS-native. `content` is a string or null.
 - `filesystem`, bridges to a file on disk. `content` is
   `{ path, size, mimeType, originalName }`.
@@ -1002,9 +1124,9 @@ can already carry it as `actId`), `beingIn` (the asker / caller),
 `beingOut` (the responder; equal to beingIn for self-summons and
 transport-acts), `ibpAddress` (canonical stance pair the moment
 crossed), `activeRole`, `inboxMessageId` (the InboxProjection
-correlation the moment pulled from), `inReplyTo` (parent Act's _id,
+correlation the moment pulled from), `inReplyTo` (parent Act's \_id,
 threading conversations), `rootCorrelation` (the conversation root;
-equals _id for fresh roots), `answers` (the InboxProjection
+equals \_id for fresh roots), `answers` (the InboxProjection
 correlation this moment closes — sealAct fires
 `closeInboxOnAnswer` on it), `parentThread` (spawn lineage when a
 moment running under root A emits a fresh top-level summon),
@@ -1080,25 +1202,25 @@ Per-handler timeout 5s; chain timeout 15s. Five consecutive failures
 from one extension's handler trip a circuit breaker; the handler stops
 firing for 5 minutes, then a half-open test.
 
-| Hook                                     | Type       | Purpose                                                                       |
-| ---------------------------------------- | ---------- | ----------------------------------------------------------------------------- |
-| `beforeSpaceCreate` / `afterSpaceCreate` |            | Gate or react to space creation.                                              |
-| `beforeSpaceDelete`                      | before     | Cleanup or veto deletion.                                                     |
-| `afterSpaceMove`                         | after      | Reparented. Resolution chains shift.                                          |
-| `beforeMatter` / `afterMatter`           |            | Modify or react to matter create/edit/delete.                                 |
-| `beforeFact`                             | before     | Enrich a Fact before it stamps.                                               |
-| `beforeLLMCall` / `afterLLMCall`         |            | Cancel before / meter after.                                                  |
-| `beforeToolCall` / `afterToolCall`       |            | Modify args or cancel / react.                                                |
-| `beforeResponse`                         | before     | Modify AI response before client receives it.                                 |
-| `beforeRegister` / `afterRegister`       |            | Validate registration / initialize being data.                                |
-| `afterSessionCreate` / `afterSessionEnd` |            | Session lifecycle.                                                            |
-| `afterQualityWrite`                      | after      | After a qualities write applies. Zero overhead when no listeners.             |
-| `afterScopeChange`                       | after      | After `extensions.blocked` / `restricted` / `allowed` changes.                |
-| `afterOwnershipChange`                   | after      | After `rootOwner` or `contributors` changed.                                  |
-| `afterBoot`                              | after      | Once after all extensions loaded, config initialized, server listening.        |
-| `enrichContext`                          | sequential | Inject extension data into AI context.                                        |
-| `onDocumentPressure`                     | after      | A document exceeds 80% of `maxDocumentSizeBytes`.                             |
-| `onTreeTripped` / `onTreeRevived`        | after      | Space-tree circuit breaker state changes.                                     |
+| Hook                                     | Type       | Purpose                                                                 |
+| ---------------------------------------- | ---------- | ----------------------------------------------------------------------- |
+| `beforeSpaceCreate` / `afterSpaceCreate` |            | Gate or react to space creation.                                        |
+| `beforeSpaceDelete`                      | before     | Cleanup or veto deletion.                                               |
+| `afterSpaceMove`                         | after      | Reparented. Resolution chains shift.                                    |
+| `beforeMatter` / `afterMatter`           |            | Modify or react to matter create/edit/delete.                           |
+| `beforeFact`                             | before     | Enrich a Fact before it stamps.                                         |
+| `beforeLLMCall` / `afterLLMCall`         |            | Cancel before / meter after.                                            |
+| `beforeToolCall` / `afterToolCall`       |            | Modify args or cancel / react.                                          |
+| `beforeResponse`                         | before     | Modify AI response before client receives it.                           |
+| `beforeRegister` / `afterRegister`       |            | Validate registration / initialize being data.                          |
+| `afterSessionCreate` / `afterSessionEnd` |            | Session lifecycle.                                                      |
+| `afterQualityWrite`                      | after      | After a qualities write applies. Zero overhead when no listeners.       |
+| `afterScopeChange`                       | after      | After `extensions.blocked` / `restricted` / `allowed` changes.          |
+| `afterOwnershipChange`                   | after      | After `rootOwner` or `contributors` changed.                            |
+| `afterBoot`                              | after      | Once after all extensions loaded, config initialized, server listening. |
+| `enrichContext`                          | sequential | Inject extension data into AI context.                                  |
+| `onDocumentPressure`                     | after      | A document exceeds 80% of `maxDocumentSizeBytes`.                       |
+| `onTreeTripped` / `onTreeRevived`        | after      | Space-tree circuit breaker state changes.                               |
 
 Extensions namespace their own hooks as `extName:hookName`.
 
@@ -1108,9 +1230,9 @@ Everything an extension contributes flows through one of three. Same
 pattern. Extensions register; I resolve; failure falls back to me,
 never to silence.
 
-| Registry       | What it registers                                                              | Lookup                                                       |
-| -------------- | ------------------------------------------------------------------------------ | ------------------------------------------------------------ |
-| **Operations** | DO actions, keyed `<ext>:<action>`. Bare names reserved for me.                | [ibp/operations.js](ibp/operations.js)                       |
+| Registry       | What it registers                                                                                                                            | Lookup                                                 |
+| -------------- | -------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------ |
+| **Operations** | DO actions, keyed `<ext>:<action>`. Bare names reserved for me.                                                                              | [ibp/operations.js](ibp/operations.js)                 |
 | **Roles**      | SUMMON-honoring being templates. Each declares permissions, respondMode, `summon(message, ctx)`, optional `buildSystemPrompt` / `toolNames`. | [present/roles/registry.js](present/roles/registry.js) |
 | **Seeds**      | Plantable scaffolds. Recipes that bootstrap a domain. Operators plant via the `plant` DO.                                                    | [materials/seeds.js](materials/seeds.js)               |
 
@@ -1179,13 +1301,13 @@ court-officer-base + a phase-specific judge role:
 
 ```js
 roleFlow: [
-  { stack: true, role: "court-officer-base" },          // always-on shared base
-  { stack: true, role: "judge-base" },                  // always-on judge-specific base
-  { when: { "space.quality.case.phase": "opening"  }, role: "judge-opening"  },
+  { stack: true, role: "court-officer-base" }, // always-on shared base
+  { stack: true, role: "judge-base" }, // always-on judge-specific base
+  { when: { "space.quality.case.phase": "opening" }, role: "judge-opening" },
   { when: { "space.quality.case.phase": "evidence" }, role: "judge-evidence" },
-  { when: { "space.quality.case.phase": "ruling"   }, role: "judge-ruling"   },
-  { role: "judge-idle" },                               // fallback primary
-]
+  { when: { "space.quality.case.phase": "ruling" }, role: "judge-ruling" },
+  { role: "judge-idle" }, // fallback primary
+];
 ```
 
 Why stacking over inheritance:
@@ -1263,22 +1385,20 @@ write what the role IS; I fill in everything derivable.
   canDo:     [...],            // optional, populates the do tool
   canSummon: [...],            // optional, populates the summon tool
   canBe:     [...],            // optional, populates the be tool
-  selfContinue: bool,          // optional, one-act vs many-acts-via-many-moments
   defaultOrientation: "...",   // optional, forward by default
   prompt(ctx) { ... },         // role-intent only; no verb syntax explanation
 }
 ```
 
-| Field                | Optional? | What it does                                                                                                                                                                              |
-| -------------------- | --------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `name`               | required  | Kebab-case identifier (`harmony:dancer-llm`). The activeRole on a SUMMON resolves through it.                                                                                             |
+| Field                | Optional? | What it does                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| -------------------- | --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `name`               | required  | Kebab-case identifier (`harmony:dancer-llm`). The activeRole on a SUMMON resolves through it.                                                                                                                                                                                                                                                                                                                                        |
 | `canSee`             | optional  | Preloaded perceptions. Each entry is either an IBP address (preloaded via `seeVerb` — the position descriptor becomes a face block) or a registered see name (preloaded via the seeResolver registry — the structured return becomes a face block). Both render as `[<label>]\n<JSON>` in the system prompt. NOT a tool; the being does not pick from a menu. Non-empty → permission `see` is added (verb-layer auth still applies). |
-| `canDo`              | optional  | DO action entries the LLM may invoke via the seed's generic `do` tool. Non-empty → `do` tool exposed, permission `do` added.                                                              |
-| `canSummon`          | optional  | Stance/being targets the LLM may summon. Non-empty → `summon` tool exposed. Entries may be literal stances OR relationship tokens (`{rel:"parent"}`, `{pattern:"fitness/@coach"}`).        |
-| `canBe`              | optional  | BE operations the LLM may perform on its own identity (`claim`, `release`, `switch`). Non-empty → `be` tool exposed.                                                                     |
-| `selfContinue`       | optional  | `true` → after an act seals, the sealer enqueues a fresh summon to the same being. Many-acts-via-many-moments. Default `false`: one summon, one moment, done.                            |
-| `defaultOrientation` | optional  | `"forward"` (default), `"half"`, or `"inward"`. Controls what the fold reads. Half / inward are accepted-and-downgraded today until the recall primitives land.                          |
-| `prompt(ctx)`        | required  | Returns role-intent text. Describes WHO the role is and WHAT it does, in role-language. Does NOT explain verb syntax — that's auto-assembled from `can*` lists.                          |
+| `canDo`              | optional  | DO action entries the LLM may invoke via the seed's generic `do` tool. Non-empty → `do` tool exposed, permission `do` added.                                                                                                                                                                                                                                                                                                         |
+| `canSummon`          | optional  | Stance/being targets the LLM may summon. Non-empty → `summon` tool exposed. Entries may be literal stances OR relationship tokens (`{rel:"parent"}`, `{pattern:"fitness/@coach"}`).                                                                                                                                                                                                                                                  |
+| `canBe`              | optional  | BE operations the LLM may perform on its own identity (`claim`, `release`, `switch`). Non-empty → `be` tool exposed.                                                                                                                                                                                                                                                                                                                 |
+| `defaultOrientation` | optional  | `"forward"` (default), `"half"`, or `"inward"`. Controls what the fold reads. Multi-moment loops are explicit: a role that wants to keep stepping calls `summon(target=self)` from inside its act (with whatever orientation the next moment should fold at). No `selfContinue` field — every continuation traces to an explicit SUMMON emission by the being, not a post-seal side effect.                                                                                                                                                                                                                                                                      |
+| `prompt(ctx)`        | required  | Returns role-intent text. Describes WHO the role is and WHAT it does, in role-language. Does NOT explain verb syntax — that's auto-assembled from `can*` lists.                                                                                                                                                                                                                                                                      |
 
 What seed derives:
 
@@ -1320,16 +1440,16 @@ The seed registers a small set of sees at boot so common heaven-
 child perceptions have a bare name. Roles can declare `canSee:
 ["roles"]` instead of `["./roles"]`.
 
-| See name     | What it returns                                              |
-| ------------ | ------------------------------------------------------------ |
-| `place`      | The descriptor for the being's current position.             |
-| `roles`      | The role registry mirror at `<reality>/./roles`.             |
-| `tools`      | The tool registry mirror at `<reality>/./tools`.             |
-| `operations` | The DO operation registry mirror at `<reality>/./operations`.|
-| `identity`   | The I-Am identity bundle at `<reality>/./identity`.          |
-| `config`     | The reality config at `<reality>/./config`.                  |
-| `peers`      | The peer list at `<reality>/./peers`.                        |
-| `extensions` | The extension catalog at `<reality>/./extensions`.           |
+| See name     | What it returns                                               |
+| ------------ | ------------------------------------------------------------- |
+| `place`      | The descriptor for the being's current position.              |
+| `roles`      | The role registry mirror at `<reality>/./roles`.              |
+| `tools`      | The tool registry mirror at `<reality>/./tools`.              |
+| `operations` | The DO operation registry mirror at `<reality>/./operations`. |
+| `identity`   | The I-Am identity bundle at `<reality>/./identity`.           |
+| `config`     | The reality config at `<reality>/./config`.                   |
+| `peers`      | The peer list at `<reality>/./peers`.                         |
+| `extensions` | The extension catalog at `<reality>/./extensions`.            |
 
 Each foundational see wraps `seeVerb` on the corresponding heaven
 address. The content is identical to the legacy `./X` address form;
@@ -1345,9 +1465,9 @@ core.declare.registerSeeResolver("library", async (ctx) => {
   const librarySpace = await findLibrarySpace(ctx);
   if (!librarySpace) return null;
   return {
-    books:  await listBooksAt(librarySpace.id, ctx.summonCtx?.branch),
-    staff:  await findStaffAt(librarySpace.id),
-    hours:  await readHours(librarySpace.id),
+    books: await listBooksAt(librarySpace.id, ctx.summonCtx?.branch),
+    staff: await findStaffAt(librarySpace.id),
+    hours: await readHours(librarySpace.id),
   };
 });
 ```
@@ -1445,17 +1565,17 @@ protocol as everything else. Addressable as `<reality>/./<name>`.
 Every boot I verify they exist; missing ones I recreate. Their owner
 is me; they are unclaimable.
 
-| Tier-3 seed space  | Path                       | Holds                                                                                                                                         |
-| ------------------ | -------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
-| `identity`         | `<reality>/./identity`     | The reality UUID, domain, Ed25519 public key for Canopy federation signing.                                                                   |
-| `config`           | `<reality>/./config`       | Every runtime config key as a key in this space's qualities Map.                                                                               |
-| `peers`            | `<reality>/./peers`        | Canopy federation peer list.                                                                                                                  |
-| `extensions`       | `<reality>/./extensions`   | Extension registry. Each loaded extension is a child space here.                                                                              |
-| `tools`            | `<reality>/./tools`        | Mirror of the runtime tool registry.                                                                                                          |
-| `roles`            | `<reality>/./roles`        | Mirror of the runtime role registry.                                                                                                          |
-| `operations`       | `<reality>/./operations`   | Mirror of the runtime DO operation registry.                                                                                                  |
-| `source`           | `<reality>/./source`       | Mirror of my own host-realm body (the files on disk).                                                                                          |
-| `threads`          | `<reality>/./threads`      | Live coordination chains. Each open thread surfaces as a synthetic child at `./threads/<id>`. SEE returns the ThreadsProjection descriptor; SUMMON to that address is a cut. |
+| Tier-3 seed space | Path                     | Holds                                                                                                                                                                        |
+| ----------------- | ------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `identity`        | `<reality>/./identity`   | The reality UUID, domain, Ed25519 public key for Canopy federation signing.                                                                                                  |
+| `config`          | `<reality>/./config`     | Every runtime config key as a key in this space's qualities Map.                                                                                                             |
+| `peers`           | `<reality>/./peers`      | Canopy federation peer list.                                                                                                                                                 |
+| `extensions`      | `<reality>/./extensions` | Extension registry. Each loaded extension is a child space here.                                                                                                             |
+| `tools`           | `<reality>/./tools`      | Mirror of the runtime tool registry.                                                                                                                                         |
+| `roles`           | `<reality>/./roles`      | Mirror of the runtime role registry.                                                                                                                                         |
+| `operations`      | `<reality>/./operations` | Mirror of the runtime DO operation registry.                                                                                                                                 |
+| `source`          | `<reality>/./source`     | Mirror of my own host-realm body (the files on disk).                                                                                                                        |
+| `threads`         | `<reality>/./threads`    | Live coordination chains. Each open thread surfaces as a synthetic child at `./threads/<id>`. SEE returns the ThreadsProjection descriptor; SUMMON to that address is a cut. |
 
 The `SEED_SPACE` enum names each one. The `seedSpace` field on Space
 marks the row. The I-Am (me) is `rootOwner`. The reign roster (one
@@ -1561,12 +1681,12 @@ Five ownership mutation functions in
 [materials/space/ownership.js](materials/space/ownership.js), all
 chain-validated, all fact-driven (Slice F-ownership):
 
-| Function            | Rule                                                                                                |
-| ------------------- | --------------------------------------------------------------------------------------------------- |
-| `addContributor`    | Resolved owner. Read-modify-write under the space lock; stamps one `do:set` Fact on `contributors`. |
-| `removeContributor` | Resolved owner, or self-removal.                                                                    |
-| `setOwner`          | Owner above. Stamps `do:set` on `rootOwner` (and on `contributors` to prune the new owner).         |
-| `removeOwner`       | Owner above can revoke.                                                                             |
+| Function            | Rule                                                                                                 |
+| ------------------- | ---------------------------------------------------------------------------------------------------- |
+| `addContributor`    | Resolved owner. Read-modify-write under the space lock; stamps one `do:set` Fact on `contributors`.  |
+| `removeContributor` | Resolved owner, or self-removal.                                                                     |
+| `setOwner`          | Owner above. Stamps `do:set` on `rootOwner` (and on `contributors` to prune the new owner).          |
+| `removeOwner`       | Owner above can revoke.                                                                              |
 | `transferOwnership` | Current owner can transfer. Stamps `do:set` on `rootOwner` plus adds previous owner to contributors. |
 
 ## The I-Am, as a Being row
@@ -1653,29 +1773,29 @@ migration ladder from 0.1.0.
 A partial list of the guarantees I enforce. The full list is the
 codebase.
 
-| Protection                     | Detail                                                                                                                                                                                                                                  |
-| ------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Hook timeout / cap / breaker   | 5s per handler; 100 handlers per hook; 5 consecutive failures auto-disable for 5 min with half-open recovery.                                                                                                                            |
-| Tool circuit breaker           | 5 consecutive failures disables a tool for the session.                                                                                                                                                                                  |
-| Extension init timeout         | 10s per extension `init()`. Hanging init skipped, boot continues.                                                                                                                                                                        |
-| LLM concurrency + priority     | Global semaphore (`llmMaxConcurrent`); HUMAN > GATEWAY > INTERACTIVE > BACKGROUND queue. Prevents autonomous extensions from starving human responses.                                                                                    |
-| Per-reel append lock           | `withReelLock(type, id, fn)` collapses (allocSeq, insertFact) into one ordered op per reel. Transient gaps vanish; crashes leave harmless permanent gaps that the fold skips.                                                            |
-| Compare-and-set on foldedSeq   | Concurrent folds race the marker forward; CAS prevents regression. Reducers are pure, so concurrent computes agree.                                                                                                                      |
-| Document size guard            | Every write checks total document size against `maxDocumentSizeBytes` (14MB default). `onDocumentPressure` fires at 80%.                                                                                                                  |
-| Per-namespace cap              | `qualityNamespaceMaxBytes` (default 512KB) per extension namespace on Being / Space / Matter.                                                                                                                                            |
-| Matter count per space         | `maxMatterPerSpace` (default 1000) checked in `createMatter`.                                                                                                                                                                            |
-| Fact query cap                 | `factQueryLimit` (default 5000) on every audit query.                                                                                                                                                                                    |
-| Space locks                    | Structural mutations acquire short-lived locks. Sorted acquisition prevents deadlocks. 30s TTL prevents permanent locks on crash.                                                                                                        |
-| Space-tree circuit breaker     | Score above 1.0 trips the tree. Read access stays. Off by default.                                                                                                                                                                       |
-| Ancestor cache                 | Shared cache for parent-chain walks. One walk serves every resolution chain.                                                                                                                                                              |
-| Session / MCP caps             | 10K sessions, 5K MCP clients, oldest-first eviction.                                                                                                                                                                                     |
-| Password / JWT                 | Bcrypt cost 12; constant-time login (dummy hash on miss); JWT carries `jti` for revocation.                                                                                                                                              |
-| Config key / value validation  | Key regex `^[a-zA-Z][a-zA-Z0-9_]{0,63}$`; dangerous keys rejected; 64KB per value cap.                                                                                                                                                   |
-| SSRF protection                | Federation peer registration and LLM connection baseUrls validate hostname against private-IP patterns.                                                                                                                                  |
-| Boot recovery                  | Every boot verifies the nine seed spaces and the I-Am Being row exist. Missing ones recreated. Partial first-boot crashes leave a recoverable state.                                                                                     |
-| Genesis exception              | Boot scaffolding stamps all facts with `actId: null` via `{ scaffold: true }` on the verb-caller gate. The I-Am self-stamps its own first `be:register` (target = the not-yet-existing row). Seed-delegate births (cherub, arrival, llm-assigner, reality-manager) and seed-space creations follow the same pattern. The first being summoned by a real moment (typically the operator-being via cherub) is the first fact stamped under an open Act. |
-| Cross-cutting handler safety   | A failing handler is logged and skipped; the projection self-heals on the next fold pass touching the same fact.                                                                                                                          |
-| Graceful shutdown              | All interval timers `.unref()`; SIGTERM closes WS, then HTTP, then DB.                                                                                                                                                                   |
+| Protection                    | Detail                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| ----------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Hook timeout / cap / breaker  | 5s per handler; 100 handlers per hook; 5 consecutive failures auto-disable for 5 min with half-open recovery.                                                                                                                                                                                                                                                                                                                                         |
+| Tool circuit breaker          | 5 consecutive failures disables a tool for the session.                                                                                                                                                                                                                                                                                                                                                                                               |
+| Extension init timeout        | 10s per extension `init()`. Hanging init skipped, boot continues.                                                                                                                                                                                                                                                                                                                                                                                     |
+| LLM concurrency + priority    | Global semaphore (`llmMaxConcurrent`); HUMAN > GATEWAY > INTERACTIVE > BACKGROUND queue. Prevents autonomous extensions from starving human responses.                                                                                                                                                                                                                                                                                                |
+| Per-reel append lock          | `withReelLock(type, id, fn)` collapses (allocSeq, insertFact) into one ordered op per reel. Transient gaps vanish; crashes leave harmless permanent gaps that the fold skips.                                                                                                                                                                                                                                                                         |
+| Compare-and-set on foldedSeq  | Concurrent folds race the marker forward; CAS prevents regression. Reducers are pure, so concurrent computes agree.                                                                                                                                                                                                                                                                                                                                   |
+| Document size guard           | Every write checks total document size against `maxDocumentSizeBytes` (14MB default). `onDocumentPressure` fires at 80%.                                                                                                                                                                                                                                                                                                                              |
+| Per-namespace cap             | `qualityNamespaceMaxBytes` (default 512KB) per extension namespace on Being / Space / Matter.                                                                                                                                                                                                                                                                                                                                                         |
+| Matter count per space        | `maxMatterPerSpace` (default 1000) checked in `createMatter`.                                                                                                                                                                                                                                                                                                                                                                                         |
+| Fact query cap                | `factQueryLimit` (default 5000) on every audit query.                                                                                                                                                                                                                                                                                                                                                                                                 |
+| Space locks                   | Structural mutations acquire short-lived locks. Sorted acquisition prevents deadlocks. 30s TTL prevents permanent locks on crash.                                                                                                                                                                                                                                                                                                                     |
+| Space-tree circuit breaker    | Score above 1.0 trips the tree. Read access stays. Off by default.                                                                                                                                                                                                                                                                                                                                                                                    |
+| Ancestor cache                | Shared cache for parent-chain walks. One walk serves every resolution chain.                                                                                                                                                                                                                                                                                                                                                                          |
+| Session / MCP caps            | 10K sessions, 5K MCP clients, oldest-first eviction.                                                                                                                                                                                                                                                                                                                                                                                                  |
+| Password / JWT                | Bcrypt cost 12; constant-time login (dummy hash on miss); JWT carries `jti` for revocation.                                                                                                                                                                                                                                                                                                                                                           |
+| Config key / value validation | Key regex `^[a-zA-Z][a-zA-Z0-9_]{0,63}$`; dangerous keys rejected; 64KB per value cap.                                                                                                                                                                                                                                                                                                                                                                |
+| SSRF protection               | Federation peer registration and LLM connection baseUrls validate hostname against private-IP patterns.                                                                                                                                                                                                                                                                                                                                               |
+| Boot recovery                 | Every boot verifies the nine seed spaces and the I-Am Being row exist. Missing ones recreated. Partial first-boot crashes leave a recoverable state.                                                                                                                                                                                                                                                                                                  |
+| Genesis exception             | Boot scaffolding stamps all facts with `actId: null` via `{ scaffold: true }` on the verb-caller gate. The I-Am self-stamps its own first `be:register` (target = the not-yet-existing row). Seed-delegate births (cherub, arrival, llm-assigner, reality-manager) and seed-space creations follow the same pattern. The first being summoned by a real moment (typically the operator-being via cherub) is the first fact stamped under an open Act. |
+| Cross-cutting handler safety  | A failing handler is logged and skipped; the projection self-heals on the next fold pass touching the same fact.                                                                                                                                                                                                                                                                                                                                      |
+| Graceful shutdown             | All interval timers `.unref()`; SIGTERM closes WS, then HTTP, then DB.                                                                                                                                                                                                                                                                                                                                                                                |
 
 ## Genesis
 

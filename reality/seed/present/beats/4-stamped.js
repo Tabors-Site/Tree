@@ -41,6 +41,7 @@
 import mongoose from "mongoose";
 import { getInternalConfigValue } from "../../internalConfig.js";
 import Act from "../../past/act/act.js";
+import { assertBranchOrThrow } from "../../materials/projections.js";
 import { closeInboxOnAnswer } from "../../past/projections/inbox/inboxProjectionFold.js";
 import { noteActSealOnThread } from "../../past/projections/threads/threadsProjectionFold.js";
 import {
@@ -268,7 +269,11 @@ export async function sealAct(plannedAct, { content = null, deltaF = [], afterSe
         typeof f?.params?.field === "string"
       ) {
         const field = f.params.field;
-        const factBranch = f?.branch || "0";
+        // Fact must carry branch (perimeter doctrine: every fact-emitter
+        // attaches it). assertBranchOrThrow surfaces a missing-branch
+        // fact at the seal-time fan-out site rather than silently
+        // invalidating subscribers on the wrong branch.
+        const factBranch = assertBranchOrThrow(f?.branch, "stamped(afterFieldWrite fan)");
         const spaceId = await resolveSpaceForLiveSee(target, factBranch);
         // Position changes need BOTH the old and new rooms to invalidate
         // so the room the being LEFT also refreshes. set-being's handler
@@ -369,7 +374,7 @@ export async function sealAct(plannedAct, { content = null, deltaF = [], afterSe
             beingId: baseBeing,
             // Branch the create happened on. Live-SEE filters by branch
             // so a #1 create doesn't invalidate main subscribers.
-            branch:  f?.branch || "0",
+            branch:  assertBranchOrThrow(f?.branch, "stamped(afterSpaceCreate)"),
           });
         } catch (err) {
           log.warn("Stamped", `afterSpaceCreate hook fan failed: ${err.message}`);
@@ -381,7 +386,7 @@ export async function sealAct(plannedAct, { content = null, deltaF = [], afterSe
           await hooks.run("afterSpaceDelete", {
             space: { _id: String(target.id) },
             beingId: baseBeing,
-            branch:  f?.branch || "0",
+            branch:  assertBranchOrThrow(f?.branch, "stamped(afterSpaceDelete)"),
           });
         } catch (err) {
           log.warn("Stamped", `afterSpaceDelete hook fan failed: ${err.message}`);

@@ -38,6 +38,7 @@
 import { randomUUID } from "crypto";
 import InboxProjection from "../../past/projections/inbox/inboxProjection.js";
 import { emitFact } from "../../past/fact/facts.js";
+import { assertBranchOrThrow } from "../../materials/projections.js";
 
 // Place-level cap on pending intake entries. Counts InboxProjection
 // rows (cheap to query on demand; the cached counter is a soft hint
@@ -127,8 +128,9 @@ export async function enqueueIntake(spaceId, beingId, entry) {
     },
     // Branch threads off the entry; the inbox fold reads fact.branch
     // when upserting the projection row so the scheduler can pick
-    // branch-scoped.
-    branch:  entry.branch || "0",
+    // branch-scoped. Caller (transport-act dispatch) must attach
+    // branch from the wire layer's parsed address; no silent fallback.
+    branch:  assertBranchOrThrow(entry.branch, "enqueueIntake(entry)"),
   });
 
   return { correlation, sentAt };
@@ -205,7 +207,10 @@ export async function pickNextIntake(spaceId, beingId) {
       // Branch the moment will run in. Sourced from the inbox row's
       // branch field (written by the fold from the be:summon fact's
       // branch). assign.js reads entry.branch to seed summonCtx.
-      branch:          row.branch || "0",
+      // A row with null branch indicates a data integrity issue — the
+      // fold should always have populated it from the originating
+      // fact. assert so the corruption surfaces immediately.
+      branch:          assertBranchOrThrow(row.branch, "intake.pick(row)"),
     },
     index: row._id, // correlation as identifier
   };

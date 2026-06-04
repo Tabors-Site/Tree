@@ -44,7 +44,7 @@
 // and ride the cherub-as-actor path in be.js.
 
 import log from "../../../seed/seedReality/log.js";
-import { parseFromSocket, expand, resolveBeingIds, getRealityDomain } from "../../../seed/ibp/address.js";
+import { parseFromSocket, expand, resolveBeingIds, resolveBranchPointers, getRealityDomain } from "../../../seed/ibp/address.js";
 import { resolveStance } from "../../../seed/ibp/resolver.js";
 import { IbpError, IBP_ERR, isIbpError } from "../../../seed/ibp/protocol.js";
 import { ackOk, ackError, stripBeingQualifier, extractBeingQualifier } from "../envelope.js";
@@ -98,7 +98,12 @@ export async function handleDo(socket, env, ack) {
       currentBranch:  socket.currentBranch || "0",
       currentPath:    socket.currentPath   || null,
     };
-    const expanded = await resolveBeingIds(expand(parsed, expandCtx), expandCtx);
+    // Resolve named pointers (#main, #prod, ...) to canonical paths
+    // before resolveBeingIds runs (findByName needs the canonical
+    // branch for the lineage walk).
+    const expandedWithPointers = await resolveBranchPointers(
+      expand(parsed, expandCtx), expandCtx);
+    const expanded = await resolveBeingIds(expandedWithPointers, expandCtx);
 
     // Impersonation refusal. The address IS the identity. When the
     // caller types an explicit left stance with an @being qualifier,

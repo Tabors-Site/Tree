@@ -70,8 +70,7 @@ const IbpPage = () => {
   id:       "<correlation-id>",
   verb:     "see" | "do" | "summon" | "be",
   address:  "<reality>[#<branch>]<path>@<being> :: <reality>[#<branch>]<path>@<being>",
-  payload:  { /* verb-specific */ },
-  identity: { beingId, name } | null
+  payload:  { /* verb-specific */ }
 }`}
           </pre>
           <p>
@@ -164,8 +163,12 @@ const IbpPage = () => {
                 <div className="ns-addr-part-head">Branch</div>
                 <code className="ns-addr-part-code">#1a</code>
                 <div className="ns-addr-part-note">
-                  which divergent world. Omitted means main (
-                  <code>#0</code>).
+                  which divergent world. A canonical path like{" "}
+                  <code>#1a</code> names a specific branch forever; a
+                  named pointer like <code>#main</code> or{" "}
+                  <code>#prod</code> resolves through a registry.
+                  Omitted means <code>#main</code>, which defaults to{" "}
+                  <code>#0</code> on a fresh reality.
                 </div>
               </div>
               <div className="ns-addr-part">

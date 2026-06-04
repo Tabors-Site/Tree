@@ -244,6 +244,59 @@ async function _resolveStanceBeingId(stance, ctx) {
 }
 
 /**
+ * Resolve named branch pointers on an expanded address to canonical
+ * paths via the per-reality @branch-registry being.
+ *
+ * Doctrine: the parser recognizes pointer references at structure
+ * level (`#main`, `#prod`) and stashes them on `stance.branchPointer`,
+ * leaving `stance.branch` null. This async step looks up each pointer
+ * in the registry (read from MAIN's projection) and fills
+ * `stance.branch` with the canonical path it resolves to. After this
+ * step, downstream code can read `stance.branch` and trust it's
+ * canonical regardless of whether the original address used a pointer
+ * or a canonical path.
+ *
+ * Foreign-reality stances skip resolution: the pointer registry is
+ * per-reality, and the foreign substrate does its own lookup on the
+ * receiving side (see FEDERATION.md).
+ *
+ * Unresolved pointers (the name doesn't exist in the registry) leave
+ * `stance.branch` null; the verb gate throws an appropriate error
+ * downstream with branch path context.
+ *
+ * Idempotent: re-running on an already-resolved stance is a no-op.
+ *
+ * @param {{ left?, right }} pa  expanded address (output of `expand`)
+ * @param {object} ctx
+ * @returns {Promise<{ left?, right }>}
+ */
+export async function resolveBranchPointers(pa, ctx = {}) {
+  if (!pa || typeof pa !== "object") return pa;
+  return {
+    left: pa.left ? await _resolveStancePointer(pa.left, ctx) : null,
+    right: await _resolveStancePointer(pa.right, ctx),
+  };
+}
+
+async function _resolveStancePointer(stance, ctx) {
+  if (!stance || !stance.branchPointer) return stance;
+  if (stance.branch) return stance;  // already canonical
+  const localReality = ctx.currentReality || getRealityDomain();
+  if (stance.reality && stance.reality !== localReality) return stance;
+  try {
+    const { resolvePointer } = await import("../materials/branch/branchRegistry.js");
+    const canonical = await resolvePointer(stance.branchPointer);
+    if (canonical) {
+      return { ...stance, branch: canonical };
+    }
+  } catch {
+    // Registry not yet planted or DB unreachable. Leave branch null;
+    // downstream gate surfaces the failure with proper context.
+  }
+  return stance;
+}
+
+/**
  * Round-trip canonicalization: parse, expand against ctx, re-format.
  * The result is the most explicit form the address can take.
  */
@@ -303,6 +356,11 @@ export function validate(pa) {
 
 function parseStance(input, ctx, opts = {}) {
   const { isLeftSide = false } = opts;
+  // branchPointer rides alongside `branch` throughout the function.
+  // The parser sets one or the other (never both) when a `#` qualifier
+  // is present; both stay null when no `#` was typed. resolveBranchPointers
+  // (wire-layer) later fills `branch` from `branchPointer` if needed.
+  let branchPointer = null;
   const s = input.trim();
   if (!s) {
     throw paError("empty-stance", input, "Stance cannot be empty");
@@ -315,6 +373,7 @@ function parseStance(input, ctx, opts = {}) {
       return {
         reality: ctx.currentReality || null,
         branch: null,
+        branchPointer: null,
         path: "/",
         being: parseBeing(s),
       };
@@ -322,6 +381,7 @@ function parseStance(input, ctx, opts = {}) {
     return {
       reality: ctx.currentReality || null,
       branch: null,
+      branchPointer: null,
       path: ctx.currentPath || null,
       being: parseBeing(s),
     };
@@ -345,6 +405,7 @@ function parseStance(input, ctx, opts = {}) {
       // socket's currentBranch on every relative DO.
       reality: null,
       branch: null,
+      branchPointer: null,
       path: ctx.currentPath || null,
       being,
     };
@@ -377,7 +438,16 @@ function parseStance(input, ctx, opts = {}) {
       throw paError("empty-branch", input,
         `Branch qualifier "#" cannot be empty`);
     }
-    branch = parseBranch(branchStr);
+    const parsedBranch = parseBranchOrPointer(branchStr);
+    if (parsedBranch.kind === "canonical") {
+      branch = parsedBranch.value;
+    } else {
+      // Named pointer (`#main`, `#prod`, ...). Leave `branch` null
+      // and stash the name on `branchPointer`; the wire's
+      // resolveBranchPointers step fills in the canonical path
+      // before dispatch.
+      branchPointer = parsedBranch.value;
+    }
     const pathPortion = pathStart >= 0 ? after.slice(pathStart) : "";
     rest = before + pathPortion;
   }
@@ -395,6 +465,7 @@ function parseStance(input, ctx, opts = {}) {
     return {
       reality: null,
       branch,
+      branchPointer,
       path: ctx.currentPath || null,
       being,
     };
@@ -405,6 +476,7 @@ function parseStance(input, ctx, opts = {}) {
     return {
       reality: null,
       branch,
+      branchPointer,
       path: parsePath(rest, ctx),
       being,
     };
@@ -427,17 +499,19 @@ function parseStance(input, ctx, opts = {}) {
       return {
         reality: null,
         branch,
+        branchPointer,
         path: "/",
         being: rest,
       };
     }
-    return { reality: parseReality(rest), branch, path: null, being };
+    return { reality: parseReality(rest), branch, branchPointer, path: null, being };
   }
   const realityPart = rest.slice(0, boundary);
   const pathPart = rest.slice(boundary);
   return {
     reality: parseReality(realityPart),
     branch,
+    branchPointer,
     path: parsePath(pathPart, ctx),
     being,
   };
@@ -495,6 +569,60 @@ function parseBranch(s) {
   }
   return trimmed;
 }
+
+// Distinguish a canonical branch path from a named pointer at parse
+// time. Returns:
+//   { kind: "canonical", value: "<path>" }   for "0", "1", "1a2", ...
+//   { kind: "pointer",   value: "<name>" }   for "main", "prod", ...
+//
+// The disambiguation is purely structural: canonical paths start with
+// a digit (matching BRANCH_RE); pointers start with a lowercase letter
+// (matching POINTER_NAME_RE). A value that matches neither throws
+// "invalid-branch" with a hint about both shapes.
+//
+// The IBP wire layer's `resolveBranchPointers` step later resolves
+// the pointer name to a canonical path via the @branch-registry being
+// before dispatch. Verbs read `expanded.<side>.branch` and trust it's
+// canonical because resolution either filled it in from a pointer or
+// the parser saw a canonical path to begin with.
+function parseBranchOrPointer(s) {
+  const trimmed = s.trim();
+  if (isValidBranch(trimmed)) {
+    return { kind: "canonical", value: trimmed };
+  }
+  if (trimmed.length > POINTER_NAME_MAX_LENGTH) {
+    throw paError(
+      "invalid-branch",
+      trimmed.slice(0, 16) + "...",
+      `Branch qualifier exceeds max pointer length (${POINTER_NAME_MAX_LENGTH} chars).`,
+    );
+  }
+  if (POINTER_NAME_RE.test(trimmed)) {
+    return { kind: "pointer", value: trimmed.toLowerCase() };
+  }
+  throw paError(
+    "invalid-branch",
+    trimmed,
+    `Branch qualifier "${trimmed}" is neither a canonical path ` +
+      `("0", "1", "1a2", ...) nor a valid pointer name. ` +
+      `Pointer names must start with a lowercase letter, end with a letter or digit, ` +
+      `and contain only lowercase letters, digits, and single hyphens ` +
+      `(no consecutive or trailing hyphens). Max ${POINTER_NAME_MAX_LENGTH} chars. ` +
+      `Examples: "main", "prod", "release-v2", "feature-x".`,
+  );
+}
+
+// Pointer grammar. Tight by design:
+//   . starts with a lowercase letter (canonical paths start with a
+//     digit, so the parser disambiguates structurally)
+//   . middle: lowercase letters, digits, single hyphens (no
+//     consecutive hyphens . every hyphen must be followed by a
+//     letter or digit)
+//   . ends with a letter or digit (the regex's structure enforces
+//     this . a trailing hyphen has no [a-z0-9] follower and fails)
+//   . max length enforced separately
+const POINTER_NAME_RE = /^[a-z](?:[a-z0-9]|-[a-z0-9])*$/;
+const POINTER_NAME_MAX_LENGTH = 64;
 
 function parseReality(s) {
   const trimmed = s.trim();
@@ -575,23 +703,56 @@ function expandStance(stance, ctx) {
   // Branch inheritance is keyed off whether the stance already named
   // a reality before expand. The doctrine (locked 2026-06-04 with
   // Tabor): when a typed address pins a reality, the user pinned the
-  // whole address — absence of `#` MEANS main, not "stay on whatever
-  // branch I happen to be on." Only shorthands that omit the reality
-  // (relative paths like `/foo`, `~`, `@bare`) fall through to the
-  // ambient branch.
+  // whole address — absence of `#` MEANS the `#main` pointer (which
+  // every reality has, defaulting to canonical "0" but operators can
+  // re-point after a merge so the default address follows). Only
+  // shorthands that omit the reality (relative paths like `/foo`,
+  // `~`, `@bare`) fall through to the ambient branch the socket is
+  // tracking.
   //
-  // This is what makes left-stance follow right-stance automatically:
-  // the address bar is the source of truth, so the parser respects
-  // exactly what the user typed (or what the URL hash says).
+  // The "no # = #main pointer" rule lets operators re-point main
+  // after a merge and have every address without an explicit `#`
+  // transparently follow. Without this, `#main` would be a curiosity
+  // and every default address would be stuck at canonical `#0`.
+  //
+  // Named pointer note: when the parser saw `#main` (or any pointer),
+  // it set stance.branchPointer and left stance.branch null. We do
+  // NOT default-fill branch in that case . the resolveBranchPointers
+  // step (called by the wire layer after expand) looks up the pointer
+  // in the .branches heaven space and fills stance.branch with the
+  // canonical path. Until then, branch stays null as a marker.
   const realityWasTyped = !!stance.reality;
   const reality = stance.reality || ctx.currentReality || null;
-  const branch = stance.branch
-    ? stance.branch
-    : (realityWasTyped ? "0" : (ctx.currentBranch || "0"));
+
+  let branch = null;
+  let branchPointer = stance.branchPointer || null;
+  if (stance.branch) {
+    // Canonical was typed; use as-is.
+    branch = stance.branch;
+  } else if (branchPointer) {
+    // Pointer was typed; leave branch null for resolveBranchPointers.
+    branch = null;
+  } else if (realityWasTyped) {
+    // Typed reality, no `#` → default to the `#main` pointer. The
+    // resolver fills branch from the registry; on a fresh reality
+    // main → "0" so behavior is identical at install.
+    branchPointer = "main";
+  } else if (ctx.currentBranch) {
+    // Relative address with ambient branch context (the common case
+    // from a wire-layer call that has a tracked socket.currentBranch).
+    branch = ctx.currentBranch;
+  } else {
+    // Relative address, no ambient context. Fall through to `#main`
+    // pointer rather than the literal "0" so reality-level mains
+    // resolve correctly.
+    branchPointer = "main";
+  }
+
   return {
     ...stance,
     reality,
     branch,
+    branchPointer,
     path: stance.path || ctx.currentPath || null,
     being: stance.being || ctx.defaultBeing || null,
   };

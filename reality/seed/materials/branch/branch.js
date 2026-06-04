@@ -72,6 +72,16 @@ const BranchSchema = new mongoose.Schema({
   deleted:   { type: Boolean, default: false, index: true },
   deletedBy: { type: String, ref: "Being", default: null },
   deletedAt: { type: Date, default: null },
+
+  // Merge provenance. Populated only when this branch was created by
+  // the merge-branches op; the canonical `parent` field stays a
+  // single path (the common ancestor of the merge sources). The
+  // mergeSources array records which two source branches were
+  // combined to produce this branch . forensic audit, not a
+  // structural property the lineage walk consults.
+  //
+  // Empty for branches created by create-branch.
+  mergeSources: { type: [String], default: () => [] },
 });
 
 const Branch = mongoose.model("Branch", BranchSchema, "branches");

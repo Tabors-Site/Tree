@@ -1042,6 +1042,14 @@ export async function resolveSpaceAccess(spaceId, beingId, branch) {
  */
 export async function listSpaceChildren(parentId, { exclude = null, limit = 500, branch = "0" } = {}) {
   if (!parentId) return [];
+  // Heaven routing: children of a heaven parent are themselves
+  // heaven; the parent-children query lives on MAIN regardless of
+  // caller's branch. Without this, a SEE from #1 on `.roles` would
+  // find no children even though heaven roles live on MAIN.
+  if (branch !== "0") {
+    const { isHeavenSpace } = await import("./heavenLineage.js");
+    if (await isHeavenSpace(parentId)) branch = "0";
+  }
   const { default: Projection } = await import("../branch/projection.js");
   const buildQuery = (b) => {
     const q = {

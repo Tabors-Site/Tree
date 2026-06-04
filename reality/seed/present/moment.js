@@ -43,6 +43,8 @@ import { sealAct }  from "./beats/4-stamped.js";
 import { markIntakeRunning, markIntakeComplete } from "./intake/intake.js";
 import { closeInboxOnAnswer } from "../past/projections/inbox/inboxProjectionFold.js";
 import { buildResponseEntry } from "./replies.js";
+import { buildFacadeSnapshot } from "./beats/2-fold/facadeSnapshot.js";
+import { resolveBareCapabilities } from "./cognition/llm/assemble.js";
 
 /**
  * Run one moment for a being. Walks all four beats; never throws —
@@ -110,9 +112,14 @@ export async function runMoment({ beingId, spaceId, entry, index, handoff = null
   // ── Beat 4: seal-gate. ──
   // Three discriminated paths, by cognition.kind:
   //   "act"     . Act row writes; ΔF commits with it; replies fire.
-  //   "see"     . No Act row. The being looked and chose not to act.
-  //               The inbox row CLOSES (the moment ran to completion).
-  //               No eviction-as-failure, no onError handoff.
+  //   "see"     . No Act row. The no-act release: the being looked
+  //               and chose not to act. Two routes feed this in the
+  //               LLM path: (a) explicit end-turn tool call —
+  //               deliberate "I have seen, I will not act"; (b) no
+  //               tool call at all — implicit release. Same outcome
+  //               either way. The inbox row CLOSES (the moment ran
+  //               to completion). No eviction-as-failure, no onError
+  //               handoff.
   //   "failure" . No Act row, ever — including the aborted shape.
   //               Inbox eviction depends on whether the failure is
   //               deterministic (garbage, internal, transport-act —
@@ -144,6 +151,18 @@ export async function runMoment({ beingId, spaceId, entry, index, handoff = null
         });
       }
 
+      // Carry the bounded record of the face the cognition acted
+      // under onto the Act row. The LLM cognition mouth builds and
+      // stashes it on summonCtx during the prompt assembly. Scripted
+      // cognitions and transport-acts don't go through that path, so
+      // we build a fallback snapshot here from whatever the moment
+      // resolved (role + summonCtx) — universal capture per INNER-
+      // FOLD §6, no half-records on the act-chain.
+      if (!setup.summonCtx?.facadeSnapshot) {
+        await applyFallbackSnapshot({ setup, beingId, isTransportAct });
+      }
+      setup.plannedAct.facadeSnapshot = setup.summonCtx?.facadeSnapshot ?? null;
+
       actInserted = await sealAct(setup.plannedAct, {
         content: sealContent,
         stopped: false,
@@ -151,38 +170,24 @@ export async function runMoment({ beingId, spaceId, entry, index, handoff = null
         afterSeal: setup.summonCtx?.afterSeal || [],
       });
 
-      // selfContinue. The role declares whether its being keeps
-      // stepping after each act. When true, enqueue a self-SUMMON
-      // so the next moment folds the post-act world and decides
-      // its next step. SEE is the natural exit . the LLM emits no
-      // tool call, the moment becomes kind:"see", and we don't
-      // reach this branch (so no further self-summon).
+      // Continuation is the role's call, not the seed's. A being that
+      // wants to step again emits SUMMON(self) as part of its act —
+      // explicit, in deltaF, atomic with the seal, with whatever
+      // orientation the next moment should fold at. The seed used to
+      // synthesize a post-seal forward self-summon for roles that
+      // declared `selfContinue:true`, but that hid the loop, hard-
+      // wired forward, and double-queued when the role also emitted
+      // its own self-summon. Doctrine: "only SUMMONs make SUMMONs"
+      // means every wake-call traces to an explicit summon emission
+      // by a being, not a post-seal side effect.
       //
-      // Transport-act moments don't self-continue . they're
-      // pre-decided keystroke-like acts, not deliberation, and the
-      // transport drives cadence.
-      if (
-        actInserted &&
-        setup.role?.selfContinue === true &&
-        !isTransportAct
-      ) {
-        try {
-          await emitSelfContinueSummon({
-            beingId,
-            inboxSpaceId: spaceId,
-            actInserted,
-            entry,
-            roleName: setup.role?.name || null,
-          });
-        } catch (selfErr) {
-          log.warn(
-            "Moment",
-            `selfContinue enqueue failed for being=${beingId.slice(0, 8)}: ${selfErr.message}`,
-          );
-        }
-      }
+      // Transport-acts are still pre-decided keystroke-like; no loop
+      // semantics apply.
     } else if (setup?.plannedAct && cognition?.kind === "see") {
-      // ── SEE path. The being looked and chose not to act. ──
+      // ── No-act release. The being looked and chose not to act. ──
+      // Whether the LLM called end-turn (the explicit deliberate
+      // release) or simply emitted no tool call (the implicit
+      // release), llmMoment returns cognitionSee() and we land here.
       // Distinct from failure: this is a complete moment, the inbox
       // closes cleanly. No Act row, no eviction-as-failure, no
       // onError handoff.
@@ -299,34 +304,64 @@ export async function runMoment({ beingId, spaceId, entry, index, handoff = null
 }
 
 /**
- * Enqueue a self-SUMMON for a being whose role declared
- * `selfContinue: true`. Fires after the moment's Act seals so the
- * next moment folds the post-act world.
+ * Build a fallback facadeSnapshot for moments whose cognition path
+ * didn't already build one (scripted-cognition roles, transport-acts,
+ * and anything else that lands an act through momentum without going
+ * through llmMoment's snapshot capture). Universal capture per
+ * INNER-FOLD §6: every act-chain entry carries the bounded record of
+ * the face the act was committed under; no half-records.
  *
- * The next moment carries the same role name (continuation, not a
- * role switch), the prior actId in rootActId/parentActId for chain
- * tracing, and a synthetic envelope content marking it as a
- * self-continuation so the role's prompt can frame it that way.
+ * For transport-acts the snapshot still records orientation + role +
+ * capabilities + position. The "act was pre-decided" framing doesn't
+ * change what the chain stores — the chain stores what was around
+ * the being when the deed sealed, regardless of who decided.
  *
- * SEE is the natural exit: when the next moment's LLM emits no tool
- * call, the moment becomes kind:"see", no Act seals, no further
- * self-summon enqueues, and the loop stops.
+ * Failures swallow with a warn — never block a seal on snapshot
+ * build trouble; null persists fine and the renderer falls back.
  */
-async function emitSelfContinueSummon({ beingId, inboxSpaceId, actInserted, entry, roleName }) {
-  const { summonByResolved } = await import("../ibp/verbs/summon.js");
-  const { I_AM } = await import("../materials/being/seedBeings.js");
-  const rootCorrelation =
-    entry?.rootCorrelation || actInserted?.rootCorrelation || null;
-  await summonByResolved({
-    toBeingId: beingId,
-    inboxSpaceId,
-    activeRole: roleName || undefined,
-    identity: { beingId: I_AM, name: "i-am" },
-    message: {
-      content: { event: "self-continue", priorActId: String(actInserted._id) },
-      from: "self-continue",
-      priority: entry?.priority || 3,
-      rootCorrelation,
-    },
-  });
+async function applyFallbackSnapshot({ setup, beingId, isTransportAct }) {
+  try {
+    const role = setup?.role;
+    const summonCtx = setup?.summonCtx;
+    if (!role || !summonCtx) return;
+
+    const orientation = summonCtx.orientation || "forward";
+    const currentSpace =
+      summonCtx.currentSpace ||
+      setup.plannedAct?.currentSpace ||
+      null;
+
+    const beingCtx = {
+      being: summonCtx.being || null,
+      role,
+      currentSpace,
+      rootId: summonCtx.rootId || null,
+      name: summonCtx.name || null,
+    };
+    const capabilities = await resolveBareCapabilities(role, beingCtx);
+
+    const snapshot = buildFacadeSnapshot({
+      orientation,
+      role: role?.name || null,
+      // Non-LLM paths don't run foldPlace as part of their dispatch
+      // (transport-act runs the verb directly; scripted roles do
+      // whatever code they do). The face here records the bare
+      // position id without a folded occupant list — the chain
+      // still carries the orientation, role, capabilities, and the
+      // where. A richer fold could land later if any future scripted
+      // cognition wants its forward face captured.
+      face: {
+        space: currentSpace ? { _id: currentSpace, name: null } : null,
+        occupants: [],
+      },
+      capabilities,
+    });
+    summonCtx.facadeSnapshot = snapshot;
+    if (isTransportAct) {
+      log.debug("Moment", `transport-act snapshot captured for being=${beingId.slice(0, 8)}`);
+    }
+  } catch (err) {
+    log.warn("Moment", `fallback facadeSnapshot build failed: ${err.message}`);
+  }
 }
+

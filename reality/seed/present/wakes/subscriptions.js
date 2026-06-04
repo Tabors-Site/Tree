@@ -463,6 +463,14 @@ export async function emitToSubscribers(eventName, payload, options = {}) {
     return 0;
   }
   const rootCorrelation = payload?.rootCorrelation || payload?.actId || null;
+  // Branch rides on the triggering hook's payload (afterMatter,
+  // afterQualityWrite, afterFieldWrite — all populate it from the
+  // moment / fact that fired). The wake we emit lands on the SAME
+  // branch as the trigger; cross-branch waking is forbidden by the
+  // address bridge gate anyway. No fallback: if branch is missing
+  // the hook payload was malformed at the perimeter and we surface
+  // it loud via summonByResolved's MISSING_BRANCH throw.
+  const branch = payload?.branch || null;
 
   let emitted = 0;
   for (const sub of matches) {
@@ -502,6 +510,7 @@ export async function emitToSubscribers(eventName, payload, options = {}) {
           targetSpace,
           rootCorrelation,
           identity: subIdentity,
+          branch,
         });
         emitted++;
       } else {
@@ -513,6 +522,7 @@ export async function emitToSubscribers(eventName, payload, options = {}) {
           content: eventContent,
           rootCorrelation,
           identity: subIdentity,
+          branch,
         });
         emitted++;
       }
@@ -529,6 +539,14 @@ export async function emitToSubscribers(eventName, payload, options = {}) {
 // Single-SUMMON delivery. The verb runs auth (the I_AM passes
 // universally) and dispatches through the standard inbox + role
 // path. There is no direct appendToInbox + wake bypass.
+//
+// Branch rides explicitly as args.branch (not via summonCtx — this
+// path runs from a hook handler, outside any enclosing moment). The
+// triggering hook payload (afterMatter / afterQualityWrite / ...) put
+// the branch here; summonByResolved threads it through to the fact.
+// If branch is null, summonByResolved throws MISSING_BRANCH — that
+// surfaces a perimeter threading gap rather than silently waking on
+// main.
 async function _emitOne({
   inboxSpaceId,
   toBeingId,
@@ -537,12 +555,14 @@ async function _emitOne({
   content,
   rootCorrelation,
   identity,
+  branch,
 }) {
   const correlation = randomUUID();
   await summonByResolved({
     toBeingId,
     inboxSpaceId,
     identity,
+    branch,
     message: {
       from: senderStance,
       content,
@@ -571,6 +591,7 @@ function _enqueueCoalesce(sub, ctx) {
     rootCorrelation: ctx.rootCorrelation,
     eventName: ctx.eventName,
     identity: ctx.identity || null,
+    branch: ctx.branch || null,
     timer: null,
   };
   pending.timer = setTimeout(() => {
@@ -618,6 +639,7 @@ async function _flushCoalesce(sub) {
       content,
       rootCorrelation: pending.rootCorrelation,
       identity,
+      branch: pending.branch,
     });
   } catch (err) {
     log.warn(

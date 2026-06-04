@@ -123,27 +123,31 @@ async function birthHandler({ payload, ctx }) {
     // Anoint the rootOperator. The first human is admitted into
     // heaven from the moment they materialize so they can immediately
     // SEE/DO/SUMMON the seed-internal spaces (config, extensions,
-    // tools, etc.). Subsequent humans default to non-reigning; an
-    // existing reigning being promotes them via the add-reigning DO
-    // op. Best-effort: failures here don't deny the registration
-    // (the operator can repair via the DO op once boot completes).
+    // tools, etc.). Mechanism: add them as a contributor to heaven.
+    // Heaven's default permissions gate on `canWrite` (owner OR
+    // contributor), so contributor status admits them. Subsequent
+    // humans default to non-contributors on heaven; an existing
+    // heaven contributor (or the rootOperator) promotes them via
+    // the standard add-contributor DO op against heaven. Best-effort:
+    // failures here don't deny the registration.
     try {
       const { withIAmAct } = await import("../../../sprout.js");
-      const { addReigningBeing } = await import(
-        "../../../materials/being/reigning.js"
-      );
-      await withIAmAct(`anoint rootOperator @${being.name}`, async (anointCtx) => {
-        await addReigningBeing(String(being._id), {
-          summonCtx: anointCtx,
-          addedBy: cherubBeingId || "cherub",
+      const { findBySeedSpace } = await import("../../../materials/projections.js");
+      const { SEED_SPACE } = await import("../../../materials/space/seedSpaces.js");
+      const { addContributor } = await import("../../../materials/space/ownership.js");
+      const { I_AM } = await import("../../../materials/being/seedBeings.js");
+      const heaven = await findBySeedSpace(SEED_SPACE.HEAVEN, "0");
+      if (heaven) {
+        await withIAmAct(`anoint rootOperator @${being.name}`, async (anointCtx) => {
+          await addContributor(String(heaven.id), String(being._id), I_AM, anointCtx?.branch || "0");
         });
-      });
+      }
     } catch (err) {
       // Log only; the cherub's job is admission, not coronation.
       const { default: log } = await import("../../../seedReality/log.js");
       log.error(
         "Cherub",
-        `failed to anoint rootOperator @${being.name}: ${err.message}. They can be added later via add-reigning.`,
+        `failed to anoint rootOperator @${being.name}: ${err.message}. Add them later with: do(<reality>/., "add-contributor", { contributorId: "<beingId>" }) as an existing heaven contributor.`,
       );
     }
 

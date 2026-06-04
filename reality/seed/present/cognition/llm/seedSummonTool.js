@@ -30,13 +30,22 @@ import { getRealityDomain } from "../../../ibp/address.js";
 export const seedSummonTool = {
   name: "summon",
   description:
-    "Speak to another being. SUMMON carries `content` to the target's inbox; " +
-    "the target wakes and processes the message according to its role. " +
-    "Use this to reply to whoever woke you (target and inReplyTo default to " +
-    "the asker and their wake correlation, so a bare " +
-    "`summon({content: \"...\"})` is a reply) or to address any other being " +
-    "by stance. Authorization runs at the substrate layer; an unauthorized " +
-    "target refuses with FORBIDDEN.",
+    "Carry a message to a being's inbox so it wakes and processes it. Three " +
+    "common shapes: " +
+    "(1) REPLY — bare `summon({content: \"...\"})` defaults target to the asker " +
+    "and threads off the wake correlation. " +
+    "(2) ADDRESS another being — set `target` to their stance to ask them " +
+    "something or hand off work. " +
+    "(3) SELF — set `target` to your own stance to change your NEXT moment's " +
+    "frame. This is how you turn: set `orientation: \"inward\"` to fold your " +
+    "own act-chain alone next moment (pure reflection on what you've done), " +
+    "`\"half\"` to fold the world plus past acts surfaced by causal " +
+    "adjacency, or `\"forward\"` to keep acting in the world after one more " +
+    "wake. Self-summon is for changing direction or what you see, not for " +
+    "looping pointlessly — if you have nothing new to do or you've already " +
+    "replied, call end-turn instead. " +
+    "Authorization runs at the substrate layer; an unauthorized target " +
+    "refuses with FORBIDDEN.",
   verb: "summon",
   schema: {
     content: z
@@ -55,6 +64,19 @@ export const seedSummonTool = {
       .describe(
         "Correlation of a prior summon this reply threads off of. Defaults to " +
           "the correlation of the summon that opened this moment.",
+      ),
+    orientation: z
+      .enum(["forward", "half", "inward"])
+      .optional()
+      .describe(
+        "Only meaningful on self-summons (target = your own stance) — this is " +
+          "how you choose what your next moment folds: 'forward' (default) the " +
+          "world around you; 'inward' your act-chain alone (the world drops out, " +
+          "pure reflection); 'half' the world plus past acts surfaced by causal " +
+          "adjacency to entities currently in front of you. Pick the framing " +
+          "you actually need for the next step — don't self-summon just to loop. " +
+          "Cross-being summons must be 'forward'; the seed rejects 'half' or " +
+          "'inward' against another being.",
       ),
     beingId: z.string().describe("Injected by server. Ignore."),
     name: z.string().optional().describe("Injected by server. Ignore."),
@@ -101,6 +123,13 @@ export const seedSummonTool = {
 
     const message = { from: fromStance, content };
     if (inReplyTo) message.inReplyTo = inReplyTo;
+    // Orientation rides on the envelope. summonVerb validates that
+    // non-forward orientations are self-only (rejects half/inward on
+    // cross-being summons). A being calling summon(target=self,
+    // orientation="inward") wakes its next moment in pure reflection.
+    if (typeof args?.orientation === "string") {
+      message.orientation = args.orientation;
+    }
 
     try {
       const result = await summonVerb(

@@ -116,6 +116,14 @@ export async function readReelBetween(type, id, afterSeq, untilSeq, branch) {
       `Pass the moment's branch explicitly; no silent default to main.`,
     );
   }
+  // Heaven routing: spaces in heaven have one reel per reality, no
+  // lineage. A non-MAIN read against a heaven space rewrites to
+  // MAIN so the reel walk hits the canonical reality-level fact
+  // stream regardless of caller's branch.
+  if (type === "space" && branch !== "0") {
+    const { isHeavenSpace } = await import("../../../materials/space/heavenLineage.js");
+    if (await isHeavenSpace(id)) branch = "0";
+  }
   // Main short-circuit: legacy data has no `branch` field on Fact.
   // Skip the branch filter entirely so pre-Pass-2 rows participate.
   if (isMain(branch)) {

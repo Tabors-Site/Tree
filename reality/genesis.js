@@ -214,42 +214,26 @@ export async function genesis(app, opts = {}) {
     log.info("Genesis", "I set my stance defaults.");
   }
 
-  // Reign roster. Three steps in order:
-  //   1. ensureReignMatter plants the matter at heaven if missing.
-  //   2. loadReigningBeings reads persisted roster into the in-process
-  //      cache (which then becomes the source of truth for next-list
-  //      computation, so multiple add/remove calls in one moment do
-  //      not clobber each other).
-  //   3. ensureSeedDelegatesReign adds any seed delegate not already
-  //      in the cache. Fresh boot writes facts; awakening sees them
-  //      in the cache and writes nothing.
-  await withIAmAct("ensure reign matter", async (ctx) => {
-    const { ensureReignMatter } =
-      await import("./seed/materials/being/reigning.js");
-    await ensureReignMatter(ctx);
-  });
-  {
-    const { loadReigningBeings } =
-      await import("./seed/materials/being/reigning.js");
-    await loadReigningBeings();
-  }
-  await withIAmAct("seed delegates reign", async (ctx) => {
-    const { ensureSeedDelegatesReign } =
-      await import("./seed/materials/being/reigning.js");
-    await ensureSeedDelegatesReign(ctx);
-  });
-  // Repair: any being parented directly under the I-Am is structurally
-  // reigning. Cherub anoints the rootOperator on first-register, but
-  // legacy DBs and any anoint-Fact that failed to seal can leave the
-  // cache missing a being whose parent IS the I-Am. This walks every
-  // such being and adds them. Idempotent on awakening.
-  await withIAmAct("anoint I-Am children", async (ctx) => {
-    const { ensureIAmChildrenReign } =
-      await import("./seed/materials/being/reigning.js");
-    await ensureIAmChildrenReign(ctx);
+  // Heaven contributors. The seed delegates (cherub, birther, llm-
+  // assigner, reality-manager, arrival, etc.) need canWrite on
+  // heaven so they can act inside the Tier-3 seed spaces (./roles,
+  // ./operations, ./tools, ...). Mechanism: add them as contributors
+  // on heaven. I_AM is heaven's rootOwner already; the new
+  // contributors list grows from boot scaffold (seed delegates) and
+  // later cherub.register (rootOperator).
+  //
+  // Earlier this slot ran ensureReignMatter / loadReigningBeings /
+  // ensureSeedDelegatesReign / ensureIAmChildrenReign . a parallel
+  // roster that duplicated rootOwner + contributors with its own
+  // cache, matter, and DO ops. Collapsed 2026-06-04. Heaven uses the
+  // same ownership system every other space uses.
+  await withIAmAct("seed delegates as heaven contributors", async (ctx) => {
+    const { ensureSeedDelegatesOnHeaven } =
+      await import("./seed/materials/being/seedDelegates.js");
+    await ensureSeedDelegatesOnHeaven(ctx);
   });
   if (bootMode === "Beginning") {
-    log.info("Genesis", "I anoint my reigning ones.");
+    log.info("Genesis", "I admit my delegates into heaven.");
   }
 
   // Seed migrations. Each migration's writes ride one I-Am act.
@@ -303,7 +287,14 @@ export async function genesis(app, opts = {}) {
     await import("./seed/present/cognition/llm/seedSummonTool.js");
   const { seedBeTool } =
     await import("./seed/present/cognition/llm/seedBeTool.js");
-  await registerSeedTools([seedDoTool, seedSummonTool, seedBeTool]);
+  // end-turn is the explicit no-act call — the moment-level mirror
+  // of the IBP SEE verb. Always available, bypasses canDo / canSummon
+  // / canBe and the verb-permission filter (see resolveToolsForRole).
+  // Lets the LLM declare "I have seen, I will not act" deliberately
+  // instead of relying on the implicit no-tool-call → cognitionSee path.
+  const { seedEndTurnTool } =
+    await import("./seed/present/cognition/llm/seedEndTurnTool.js");
+  await registerSeedTools([seedDoTool, seedSummonTool, seedBeTool, seedEndTurnTool]);
 
   // The receptive role every human being carries. Without it, SUMMONs
   // to a human are rejected with ROLE_UNAVAILABLE. The role's summon
@@ -345,6 +336,18 @@ export async function genesis(app, opts = {}) {
   // produces the structured roleFlow and writes via set-being-roleflow.
   const { roleflowComposerRole } = await import("./seed/present/roles/roleflow-composer/role.js");
   registerRole("roleflow-composer", roleflowComposerRole, "seed");
+
+  // merge-mediator: LLM helper that walks the operator through
+  // resolving conflicts on a merged branch. Created by the
+  // merge-branches op; reconciliation facts stamp via normal state-
+  // setting ops with params._merge metadata.
+  const { mergeMediatorRole } = await import("./seed/present/roles/merge-mediator/role.js");
+  registerRole("merge-mediator", mergeMediatorRole, "seed");
+
+  // (The @branch-registry delegate retired 2026-06-04 with the
+  // "heaven never branches" landing. Named pointers now live on the
+  // .branches heaven space's qualities; set-pointer / delete-pointer
+  // DO ops live alongside merge-branches on @branch-manager.)
 
   // The shared stance every unauthenticated visitor carries. SEE
   // bypasses the scheduler so many concurrent visitors share one

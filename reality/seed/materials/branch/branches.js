@@ -181,3 +181,93 @@ export async function isBranchDeleted(path) {
   const row = await loadBranch(path);
   return row?.deleted === true;
 }
+
+/**
+ * Find the most recent shared ancestor of two branches. Walks both
+ * lineages (main → leaf) and returns the deepest path present in
+ * both. Always exists because main is in every lineage.
+ *
+ * Examples:
+ *   commonAncestor("1", "2")     → "0"  (both forked from main)
+ *   commonAncestor("1a", "1")    → "1"  (1a forked from 1)
+ *   commonAncestor("1a", "1b")   → "1"  (both forked from 1)
+ *   commonAncestor("1a1", "1a2") → "1a"
+ *
+ * The merged branch produced by merge-branches uses this path as its
+ * parent and snapshots branchPoint from there.
+ */
+export async function commonAncestor(pathA, pathB) {
+  if (typeof pathA !== "string" || !pathA.length) {
+    throw new Error("commonAncestor: pathA required");
+  }
+  if (typeof pathB !== "string" || !pathB.length) {
+    throw new Error("commonAncestor: pathB required");
+  }
+  const lineageA = await resolveBranchLineage(pathA);
+  const lineageB = await resolveBranchLineage(pathB);
+  let i = 0;
+  while (i < lineageA.length && i < lineageB.length && lineageA[i] === lineageB[i]) {
+    i++;
+  }
+  if (i === 0) {
+    // Shouldn't happen since main is in every lineage, but stay loud.
+    throw new Error(`commonAncestor: no shared ancestor between "${pathA}" and "${pathB}"`);
+  }
+  return lineageA[i - 1];
+}
+
+/**
+ * Return every fact on `branch`'s reel-lineage that is NOT also on
+ * `ancestor`'s reel-lineage. Grouped by reel key (`<kind>:<id>`).
+ *
+ * "Divergent" means: facts on the BRANCHES between `ancestor` and
+ * `branch` (exclusive of ancestor; inclusive of branch). Each of
+ * those branches stored its own writes with `branch=<that branch>`;
+ * the query is `branch: { $in: [divergent-branches] }`.
+ *
+ * Used by the merge pipeline:
+ *   diff for side A = divergentFactsSince(sourceA, commonAncestor)
+ *   diff for side B = divergentFactsSince(sourceB, commonAncestor)
+ *   conflicts = reels touched in BOTH diffs
+ *
+ * Returns an empty Map when `branch === ancestor` or when the
+ * divergent set has no fact-emitting reels.
+ *
+ * @param {string} branch
+ * @param {string} ancestor
+ * @returns {Promise<Map<string, Array<object>>>}
+ */
+export async function divergentFactsSince(branch, ancestor) {
+  if (typeof branch !== "string" || !branch.length) {
+    throw new Error("divergentFactsSince: branch required");
+  }
+  if (typeof ancestor !== "string" || !ancestor.length) {
+    throw new Error("divergentFactsSince: ancestor required");
+  }
+  if (branch === ancestor) return new Map();
+
+  const branchLineage = await resolveBranchLineage(branch);
+  const ancestorLineage = await resolveBranchLineage(ancestor);
+  const ancestorSet = new Set(ancestorLineage);
+  const divergentBranches = branchLineage.filter(b => !ancestorSet.has(b));
+  if (divergentBranches.length === 0) return new Map();
+
+  const { default: Fact } = await import("../../past/fact/fact.js");
+  const facts = await Fact.find({
+    branch: { $in: divergentBranches },
+    "target.kind": { $in: ["being", "space", "matter"] },
+    "target.id":   { $exists: true, $ne: null },
+  }).sort({ seq: 1 }).lean();
+
+  const byReel = new Map();
+  for (const f of facts) {
+    const key = `${f.target.kind}:${f.target.id}`;
+    let bucket = byReel.get(key);
+    if (!bucket) {
+      bucket = [];
+      byReel.set(key, bucket);
+    }
+    bucket.push(f);
+  }
+  return byReel;
+}

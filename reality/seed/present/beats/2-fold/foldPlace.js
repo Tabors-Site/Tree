@@ -178,7 +178,7 @@ async function loadActChain(beingId) {
     severedAt: null,
   })
     .sort({ stampedAt: 1 })
-    .select("_id beingIn beingOut activeRole stampedAt startMessage endMessage rootCorrelation inReplyTo answers parentThread")
+    .select("_id beingIn beingOut activeRole stampedAt startMessage endMessage rootCorrelation inReplyTo answers parentThread facadeSnapshot")
     .lean();
 
   return rows.map(r => ({
@@ -193,6 +193,11 @@ async function loadActChain(beingId) {
     inReplyTo:       r.inReplyTo,
     answers:         r.answers,
     parentThread:    r.parentThread,
+    // The bounded record of the face this act was committed under
+    // (role, space, occupants, capabilities). Null on legacy Acts
+    // that pre-date the field. Renderers apply render-time clamps
+    // and fall back to timestamp/in/out only when null.
+    facadeSnapshot:  r.facadeSnapshot ?? null,
   }));
 }
 
@@ -252,7 +257,7 @@ async function recallByBraid(beingId, forwardFace, { cap }) {
   // from one act (a single act stitches multiple entities).
   const actIds = [...new Set(stitchFacts.map(f => f.actId))];
   const acts = await Act.find({ _id: { $in: actIds }, severedAt: null })
-    .select("_id beingIn beingOut activeRole stampedAt startMessage endMessage rootCorrelation")
+    .select("_id beingIn beingOut activeRole stampedAt startMessage endMessage rootCorrelation facadeSnapshot")
     .lean();
 
   // Order acts to match the stitch-fact order so braid-distance
@@ -278,6 +283,9 @@ async function recallByBraid(beingId, forwardFace, { cap }) {
       // The reel this stitch was found on — useful for the face to
       // say WHY this act surfaced (which entity it touched).
       stitchedReel:    { kind: f.target.kind, id: f.target.id },
+      // The bounded record of the face the act was committed under.
+      // Null on legacy Acts; renderers clamp + fall back gracefully.
+      facadeSnapshot:  act.facadeSnapshot ?? null,
     });
   }
   return ordered;

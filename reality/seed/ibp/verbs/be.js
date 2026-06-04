@@ -33,7 +33,7 @@ import { I_AM } from "../../materials/being/seedBeings.js";
 import { getRealityDomain } from "../address.js";
 import { authorize, getAuthConfig } from "../authorize.js";
 import { BE_OPS, getBeOp } from "../beOps.js";
-import { assertVerbCaller, refuseHistoricalWrite } from "./_shared.js";
+import { assertVerbCaller, refuseHistoricalWrite, resolveBranchForFact } from "./_shared.js";
 
 /**
  * BE. Run an identity operation. Returns the operation's result
@@ -62,6 +62,7 @@ export async function beVerb(operation, payload = {}, opts = {}) {
     socket      = null,
     req         = null,
     currentReality = null,
+    currentBranch  = null,
     summonCtx   = null,
   } = opts;
 
@@ -165,7 +166,7 @@ export async function beVerb(operation, payload = {}, opts = {}) {
     if (!childHomeSpace && !childHomeParent) {
       // Default: move the child into the caller's home. No new space.
       const { loadProjection } = await import("../../materials/projections.js");
-      const callerSlot = await loadProjection("being", identity.beingId, summonCtx?.branch || "0");
+      const callerSlot = await loadProjection("being", identity.beingId, resolveBranchForFact(summonCtx, currentBranch, "be"));
       childHomeSpace = callerSlot?.state?.homeSpace ? String(callerSlot.state.homeSpace) : null;
     }
     if (!childHomeSpace && !childHomeParent) {
@@ -468,9 +469,11 @@ async function writeBeFact({ operation, identity, authResult, payload, beingName
     params:  mergedParams,
     result:  safeResult,
     actId,
-    // Branch the BE fact lands on. Inherited from the ambient moment;
-    // defaults to "0" outside a moment (genesis scaffold path).
-    branch:  summonCtx?.branch || "0",
+    // Branch the BE fact lands on. Precedence: summonCtx.branch when
+    // inside a moment (continuation); opts.currentBranch from the wire
+    // layer otherwise. resolveBranchForFact throws MISSING_BRANCH if
+    // neither is present — silent default to "0" hid threading bugs.
+    branch:  resolveBranchForFact(summonCtx, currentBranch, "be"),
   }, summonCtx);
 }
 

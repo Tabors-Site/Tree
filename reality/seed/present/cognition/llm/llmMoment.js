@@ -39,13 +39,18 @@
 //      content lives in the user message. No past-messages array.
 //   4. One provider call. Single shot. No buffer, no loop.
 //   5. Parse the response into one of three outcomes:
-//        kind:"act"     . the LLM dispatched a tool. Prose alongside is
-//                         narration of the act and rides in the Act's
-//                         content.
-//        kind:"see"     . no tool call. The being looked, did not act.
-//                         Includes the case of prose without a tool:
-//                         speech is an act, acts go through tools,
-//                         prose alone means the LLM did not call one.
+//        kind:"act"     . the LLM dispatched a do / summon / be tool.
+//                         Prose alongside is narration of the act and
+//                         rides in the Act's content.
+//        kind:"see"     . the no-act release. Two routes produce it:
+//                         (a) the LLM called end-turn — the explicit
+//                             "I have seen, I will not act" tool;
+//                         (b) the LLM emitted no tool call at all.
+//                         Both mean the same downstream: no Act row,
+//                         inbox row closes clean. Prose without a
+//                         dispatched verb-tool is logged but does not
+//                         enter the act-chain (speech is an act, acts
+//                         go through tools).
 //        kind:"failure" . cognition broke (timeout, http-error, garbage)
 //
 // What does NOT exist here:
@@ -61,9 +66,12 @@
 //
 //   . The multi-step loop. Multi-step cognition happens through
 //     multiple MOMENTS, not multiple LLM calls in one moment. A role
-//     that wants to keep stepping declares `selfContinue: true`; the
-//     seal-handler enqueues a self-SUMMON after each act. SEE is the
-//     natural exit.
+//     that wants to keep stepping does so EXPLICITLY: its act emits
+//     SUMMON(self) (with whatever orientation the next moment should
+//     fold at) and the next moment fires from that summon. No hidden
+//     selfContinue field; the role's act IS the loop signal. The
+//     no-act release (end-turn OR no tool call) is the natural exit:
+//     the LLM signals "I have seen this moment's face and I am done."
 //
 //   . Tool_call/tool_result pairing across moments. One call, one
 //     response. The next moment is a new prompt that folds the new
@@ -94,7 +102,10 @@ import {
   cognitionFailure,
   isCognitionFailure,
 } from "../cognitionResult.js";
-import { buildSystemPromptForRole } from "./assemble.js";
+import { buildSystemPromptForRole, resolveBareCapabilities } from "./assemble.js";
+import { renderInwardPastFace, renderHalfPastFace } from "./pastFaceRender.js";
+import { foldPlace } from "../../beats/2-fold/foldPlace.js";
+import { buildFacadeSnapshot } from "../../beats/2-fold/facadeSnapshot.js";
 import {
   resolveToolsForPosition,
   executeTool,
@@ -238,24 +249,67 @@ async function runLlmMomentInner({ being, envelope, role, signal, summonCtx }) {
   // that secretly carries its own history every tick is a quietly
   // ruminating contemplative, not a forward voice.
   //
-  // ORIENTATION SEAM. When half / inward land they plug in here. half
-  // would push a structured recall(A_b) block onto the user message
-  // (or as a second user message) sourced from the braid-walk
-  // (INNER-FOLD §3) . causally stitched, NOT recency-windowed. inward
-  // would replace the world face entirely with an A_b-only
-  // serialization. Both require the orientation parameter (below) to
-  // be honored, and both require their respective fold primitives to
-  // be implemented.
+  // ORIENTATION (INNER-FOLD §2). The three turns honored here:
+  //   forward — world only. The forward face (preloaded canSee
+  //             blocks via the role) carries the perception. The
+  //             past-face block is empty.
+  //   inward  — A_b alone. foldPlace(beingId, "inward") returns the
+  //             act-chain in act-order; renderInwardPastFace turns
+  //             it into the past-face block. The world drops out:
+  //             ctx.enrichedContext stays empty and the canSee
+  //             preload is skipped (the world block is absent).
+  //   half    — world + braid-walk recall. The forward canSee
+  //             preload still runs (world stays); the past-face
+  //             block holds the recalled subset surfaced by causal
+  //             adjacency (foldPlace's recall walks stitches on
+  //             entities present in the forward face).
+  // Orientation rides on the summon (INNER-FOLD §4). A being only
+  // turns by self-summoning with a new ω; external callers always
+  // arrive forward. The pickOrientation helper enforces the
+  // precedence chain envelope > summonCtx > role default > forward.
   const orientation = pickOrientation(envelope, role, summonCtx);
 
-  const enrichedContext = await gatherEnrichedContext({
-    beingId,
-    currentSpace,
-    rootId,
-    presenceKey,
-    message: envelope.content,
-  });
-  const systemPrompt = await buildSystemPromptForRole(role, {
+  // One foldPlace call per moment, at the moment's orientation. The
+  // returned face does double duty: its forward axis (space +
+  // occupants) feeds the facadeSnapshot's "what was seen" field;
+  // its past axis (actChain for inward, recalled for half) feeds
+  // the past-face block in the prompt. Forward moments still call
+  // foldPlace — they don't need a past-face block, but they DO
+  // need the structured forward face for the snapshot.
+  let foldedFace = null;
+  let pastFaceBlock = "";
+  try {
+    foldedFace = await foldPlace(beingId, orientation, { summonCtx, branch });
+    if (orientation === "inward") {
+      pastFaceBlock = renderInwardPastFace(foldedFace?.actChain);
+    } else if (orientation === "half") {
+      pastFaceBlock = renderHalfPastFace(foldedFace?.recalled);
+    }
+  } catch (foldErr) {
+    log.warn("LLM", `foldPlace(${orientation}) failed for being=${beingId.slice(0, 8)}: ${foldErr.message}`);
+    if (orientation === "inward") {
+      pastFaceBlock = "[Inward fold]\n(act-chain unavailable this moment)";
+    }
+  }
+
+  // Inward drops the world. Skip enrichContext (it gathers per-space
+  // extension surface) so the world-data path stays empty. Half and
+  // forward both keep enrichContext.
+  const enrichedContext = orientation === "inward"
+    ? null
+    : await gatherEnrichedContext({
+        beingId,
+        currentSpace,
+        rootId,
+        presenceKey,
+        message: envelope.content,
+      });
+
+  // promptCtx flows into buildSystemPromptForRole + resolveBare-
+  // Capabilities. The pastFaceBlock rides through into buildPrompt's
+  // assembly; suppressCanSee tells the assembler to skip the role's
+  // preloaded canSee blocks on inward (world drops out).
+  const promptCtx = {
     name: username,
     beingId,
     presenceKey,
@@ -263,7 +317,36 @@ async function runLlmMomentInner({ being, envelope, role, signal, summonCtx }) {
     currentSpace,
     enrichedContext,
     being,
-  });
+    orientation,
+    pastFaceBlock,
+    suppressCanSee: orientation === "inward",
+  };
+  const systemPrompt = await buildSystemPromptForRole(role, promptCtx);
+
+  // Capture the bounded record of the face this moment ran under
+  // and stash it on summonCtx so the seal carries it onto the Act.
+  // Universal capture — every cognition mouth (LLM here, scripted
+  // and human-inhabited at their own runners) builds the snapshot.
+  // Inner-fold §6 forbids half-records on the act-chain.
+  try {
+    const capabilities = await resolveBareCapabilities(role, promptCtx);
+    // For forward/half the foldedFace has {space, occupants}. For
+    // inward the world drops out; pass an empty face — the snapshot
+    // records orientation + role + capabilities and leaves space /
+    // occupants null, matching the doctrine that inward = A_b only.
+    const snapshotFace = orientation === "inward"
+      ? { space: null, occupants: [] }
+      : { space: foldedFace?.space || null, occupants: foldedFace?.occupants || [] };
+    const snapshot = buildFacadeSnapshot({
+      orientation,
+      role: role?.name || null,
+      face: snapshotFace,
+      capabilities,
+    });
+    if (summonCtx) summonCtx.facadeSnapshot = snapshot;
+  } catch (snapErr) {
+    log.warn("LLM", `facadeSnapshot build skipped for being=${beingId.slice(0, 8)}: ${snapErr.message}`);
+  }
   const userTurn = {
     role: "user",
     content:
@@ -489,6 +572,19 @@ async function runLlmMomentInner({ being, envelope, role, signal, summonCtx }) {
       return cognitionFailure("internal", `tool ${toolResult.tool}: ${why}`);
     }
 
+    // end-turn is the explicit no-act call. The LLM dispatched the
+    // moment-control tool that says "I have seen, I will not act."
+    // Route straight to cognitionSee regardless of accompanying prose
+    // (the prose is the LLM's reasoning about why it released; the
+    // act-chain carries no record of this moment per the SEE-seals-
+    // nothing rule). The implicit no-tool-call path below produces
+    // the same outcome; end-turn just lets the LLM declare it.
+    const calledToolName = firstCall.function?.name || toolResult?.tool || null;
+    if (calledToolName === "end-turn") {
+      log.info("LLM", `${role.name} called end-turn; releasing without an Act.`);
+      return cognitionSee();
+    }
+
     // A tool that succeeded but emitted no Fact AND left no prose is a
     // read / no-op (the canonical SEE shape): the being looked through
     // a tool and changed nothing. Release without sealing rather than
@@ -514,13 +610,21 @@ async function runLlmMomentInner({ being, envelope, role, signal, summonCtx }) {
     return await shapedAct(prose, role, beingId, rootId);
   }
 
-  // No tool call . SEE. The rule is uniform: every act in the system
-  // goes through a declared tool. Speech is an act. A being that
-  // should speak declares a speech tool (`canDo: ["respond"]`,
-  // `canDo: ["say"]`, whatever the role conventions choose) and the
-  // tool dispatches the speech-act. A being that has no speech tool
-  // doesn't speak; if its LLM emits prose without calling any tool,
-  // the LLM did not act, which is SEE.
+  // No tool call . the implicit no-act release. The rule is uniform:
+  // every act in the system goes through a declared tool. Speech is
+  // an act. A being that should speak declares a speech tool
+  // (`canDo: ["respond"]`, `canDo: ["say"]`, whatever the role
+  // conventions choose) and the tool dispatches the speech-act. A
+  // being that has no speech tool doesn't speak; if its LLM emits
+  // prose without calling any tool, the LLM did not act.
+  //
+  // This implicit path is equivalent to the LLM calling end-turn:
+  // both produce cognitionSee, both release the moment with no Act.
+  // The explicit end-turn tool exists to give the LLM permission to
+  // do nothing deliberately (especially valuable when the prompt has
+  // a forward / inward / half face that begs for a response); this
+  // branch catches the cases where the LLM didn't bother to call any
+  // tool at all.
   //
   // No proseIsAct flag, no chat-shape vs structured-shape role
   // distinction. There are only beings with tools. The shape of a
@@ -532,12 +636,13 @@ async function runLlmMomentInner({ being, envelope, role, signal, summonCtx }) {
   if (prose.length > 0) {
     log.info(
       "LLM",
-      `${role.name} emitted prose with no tool call; treating as SEE. ` +
+      `${role.name} emitted prose with no tool call; treating as the no-act release. ` +
         `prose="${prose.slice(0, 120).replace(/\s+/g, " ")}"`,
     );
   }
 
-  // The being looked and chose not to act. This is SEE, not failure.
+  // The being looked and chose not to act. This is the no-act
+  // release (cognitionSee), not failure.
   return cognitionSee();
 }
 
@@ -650,11 +755,13 @@ async function shapedAct(text, role, beingId, rootId) {
  *   3. role.defaultOrientation . the role's standing posture
  *   4. "forward" . the substrate's default
  *
- * Today only "forward" is honored. half / inward are accepted and
- * logged but downgraded to forward so an early-arriving turned summon
- * never silently injects past before the braid-walk lands. The seam
- * is named so when half / inward come online they only need to flip
- * here, not unwind every caller.
+ * All three (forward / half / inward) are honored. Per INNER-FOLD §2
+ * the orientation determines what R_scope reaches:
+ *   forward — world only (b's reel + space + matter), no A_b
+ *   inward  — A_b only, world drops out
+ *   half    — world + braid-walked recalled subset of A_b
+ * Unknown values fall back to forward with a warn log so an
+ * envelope-shape regression can never silently inject the past.
  */
 function pickOrientation(envelope, role, summonCtx) {
   const raw =
@@ -666,15 +773,7 @@ function pickOrientation(envelope, role, summonCtx) {
     log.warn("LLM", `unknown orientation "${raw}"; treating as forward`);
     return "forward";
   }
-  if (raw !== "forward") {
-    log.warn(
-      "LLM",
-      `orientation "${raw}" requested but not yet wired ` +
-        `(braid-walk/inner-fold pending); folding forward`,
-    );
-    return "forward";
-  }
-  return "forward";
+  return raw;
 }
 
 /**

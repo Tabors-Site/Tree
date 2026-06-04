@@ -233,7 +233,7 @@ async function createMatter({
   // the AI walk past blocking errors. After hooks run parallel so
   // awaiting the Promise.all adds no serialization latency beyond
   // the slowest single handler.
-  await hooks.run("afterMatter", { matter: newMatter, spaceId, beingId, origin, sizeKB, action: "create", actId, sessionId }).catch((err) => {
+  await hooks.run("afterMatter", { matter: newMatter, spaceId, beingId, origin, sizeKB, action: "create", actId, sessionId, branch }).catch((err) => {
     log.warn("Matter", `afterMatter hook chain failed: ${err?.message}`);
   });
 
@@ -319,7 +319,7 @@ async function editMatter({
   // Awaited: see comment in createMatter above. Callers (tool handlers
   // on the LLM path) need the syntax validator complete before they
   // return, or the next turn reads stale state.
-  await hooks.run("afterMatter", { matter, spaceId: matter.spaceId, beingId, origin: matter.origin, sizeKB: newSizeKB, deltaKB, action: "edit", actId, sessionId }).catch((err) => {
+  await hooks.run("afterMatter", { matter, spaceId: matter.spaceId, beingId, origin: matter.origin, sizeKB: newSizeKB, deltaKB, action: "edit", actId, sessionId, branch }).catch((err) => {
     log.warn("Matter", `afterMatter hook chain failed: ${err?.message}`);
   });
 
@@ -445,7 +445,7 @@ async function deleteMatterAndFile({
       matter, spaceId, beingId: fileOwnerId,
       origin: matter.origin, fileSizeKB,
       action: "delete", fileDeleted,
-      actId, sessionId,
+      actId, sessionId, branch,
     }).catch(() => {});
   }
 

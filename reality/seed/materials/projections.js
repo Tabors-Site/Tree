@@ -56,6 +56,24 @@ function assertBranch(branch) {
   }
 }
 
+// Exported variant for use at substrate consumer boundaries (assign,
+// fold, stamped, intake, inbox, scheduler, matters). Same shape as the
+// projection-local check; callers use it at function entry so a missing
+// branch surfaces at THEIR site rather than masquerading as a projection
+// lookup error one stack frame deeper. The doctrinal commitment is that
+// every interior consumer trusts the perimeter has attached branch and
+// fails loud if not — no silent default to "0" / heaven.
+export function assertBranchOrThrow(branch, callerName) {
+  if (typeof branch !== "string" || !branch.length) {
+    throw new Error(
+      `${callerName || "substrate consumer"}: branch is required ` +
+      `(got ${JSON.stringify(branch)}). The wire layer / enclosing moment ` +
+      `must thread branch through; this consumer no longer silently defaults to heaven.`,
+    );
+  }
+  return branch;
+}
+
 // ─────────────────────────────────────────────────────────────────────
 // Read / write a single slot
 // ─────────────────────────────────────────────────────────────────────
@@ -96,7 +114,18 @@ export async function loadProjection(type, id, branch) {
   if (!id) return null;
   assertType(type);
   assertBranch(branch);
-  const slot = await Projection.findById(projectionKey(branch, type, id)).lean();
+  // Heaven routing: spaces in heaven have one projection per reality,
+  // not per branch. If the caller passed a non-MAIN branch for a
+  // heaven space, transparently rewrite to MAIN so the read returns
+  // the single canonical row. The classifier is async (walks ancestor
+  // cache), so guard on type=space to avoid cost on every being/matter
+  // load.
+  let effectiveBranch = branch;
+  if (type === "space" && branch !== "0") {
+    const { isHeavenSpace } = await import("./space/heavenLineage.js");
+    if (await isHeavenSpace(id)) effectiveBranch = "0";
+  }
+  const slot = await Projection.findById(projectionKey(effectiveBranch, type, id)).lean();
   if (!slot) return null;
   return {
     state:      slot.state || {},
@@ -144,17 +173,25 @@ export async function loadProjection(type, id, branch) {
  */
 export async function loadOrFold(type, id, branch) {
   assertBranch(branch);
-  const existing = await loadProjection(type, id, branch);
+  // Heaven routing: spaces in heaven live only on MAIN. Rewrite to
+  // MAIN before the cold-fold so the fold engine reads/writes the
+  // canonical heaven slot.
+  let effectiveBranch = branch;
+  if (type === "space" && branch !== "0") {
+    const { isHeavenSpace } = await import("./space/heavenLineage.js");
+    if (await isHeavenSpace(id)) effectiveBranch = "0";
+  }
+  const existing = await loadProjection(type, id, effectiveBranch);
   if (existing) return existing;
   // Cold-fold via the engine. fold writes to the branch slot via
   // initProjection on the way out; the next loadProjection hits cache.
   try {
     const { fold } = await import("../present/beats/2-fold/foldEngine.js");
-    const { state, foldedSeq } = await fold(type, id, { branch });
+    const { state, foldedSeq } = await fold(type, id, { branch: effectiveBranch });
     if (!state || Object.keys(state).length === 0) return null;
     // Re-read the slot — fold's initProjection landed the canonical
     // shape (with `position` lifted to the slot level for indexing).
-    return await loadProjection(type, id, branch);
+    return await loadProjection(type, id, effectiveBranch);
   } catch {
     return null;
   }
@@ -579,6 +616,47 @@ export async function findBySeedSpace(seedSpaceKind, branch) {
     id:        slot.id,
     branch:    slot.branch,
   };
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// Heaven-scoped wrappers . explicit-intent helpers for reads that
+// the caller KNOWS are reality-level (not branched). All forward to
+// the branch-required helpers with branch="0".
+//
+// The substrate's projection layer also auto-routes heaven targets
+// to MAIN regardless of caller's branch (via isHeavenSpace), so
+// branched callers that incidentally touch a heaven space don't
+// have to know to use these wrappers. They exist for readability at
+// the call site when the intent is unambiguously heaven.
+// ─────────────────────────────────────────────────────────────────────
+
+/**
+ * Read a heaven-scoped being or space by name. Same as findByName but
+ * locked to MAIN. Used by callers that need a reality-level lookup
+ * regardless of which branch they're acting on (e.g., the pointer
+ * registry reader).
+ *
+ * @param {"being"|"space"|"matter"} type
+ * @param {string} name
+ */
+export async function findInHeaven(type, name) {
+  return await findByName(type, name, "0");
+}
+
+/**
+ * Read a heaven seed-space entry by kind. Same as findBySeedSpace
+ * but locked to MAIN.
+ */
+export async function findHeavenSpace(seedSpaceKind) {
+  return await findBySeedSpace(seedSpaceKind, "0");
+}
+
+/**
+ * Load a heaven projection by (type, id). Same as loadProjection
+ * but locked to MAIN.
+ */
+export async function loadHeavenProjection(type, id) {
+  return await loadProjection(type, id, "0");
 }
 
 /**

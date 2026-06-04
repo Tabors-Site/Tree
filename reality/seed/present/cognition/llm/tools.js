@@ -338,27 +338,35 @@ export function listToolNames() {
 }
 
 /**
- * Audit that the four seed verb-tools are registered. After the
- * verbs-as-language cleanup, the seed ships ONE generic tool per
- * verb (`see`, `do`, `summon`, `be`); that is the entire LLM tool
- * surface. The role's can* lists are descriptors of what the role
- * is licensed for at each verb (addresses, action names, stance
- * targets, BE operations), NOT tool names to resolve.
+ * Audit that the seed's verb-tools are registered. Four tools ship
+ * from the seed:
  *
- * The old audit walked canSee/canDo/canSummon/canBe and looked each
- * entry up in toolDefs. That produced false-positive warnings under
- * the new doctrine . object entries (e.g. `{action, description}`)
+ *   do / summon / be   — the three act-capable verbs. Each is a
+ *                        generic tool the LLM dispatches into the
+ *                        role's licensed surface (canDo / canSummon
+ *                        / canBe describe what the role may invoke).
+ *
+ *   end-turn           — the explicit no-act call. Always available,
+ *                        bypasses the can* gating and verb-permission
+ *                        filter. Routes to cognitionSee() on success;
+ *                        the moment closes without an Act.
+ *
+ * The old audit walked the can* lists and looked each entry up in
+ * toolDefs. That produced false-positive warnings under the verbs-
+ * as-language doctrine . object entries (e.g. `{action, description}`)
  * stringify to `[object Object]`, plain address strings like
  * `.config` aren't registered tool names. Both are correct per the
  * descriptor doctrine, neither should fail the audit.
  *
  * Now the audit checks only the four seed verb-tools; if any are
  * missing, no LLM role can run.
+ *
+ * canSee retired from the LLM toolset. canSee entries preload into
+ * the face as JSON blocks at moment-open via renderCanSeeBlocks;
+ * they are perception, not dispatch.
  */
 export async function auditToolDescriptions() {
-  // SEE retired from the LLM toolset; canSee preloads into the face
-  // at moment-open. Only do / summon / be are exposed as tools.
-  const SEED_VERB_TOOLS = ["do", "summon", "be"];
+  const SEED_VERB_TOOLS = ["do", "summon", "be", "end-turn"];
   const missing = SEED_VERB_TOOLS.filter((name) => !toolDefs[name]);
   if (missing.length === 0) {
     log.verbose("Tools", `verb-tool audit: ${SEED_VERB_TOOLS.length} seed tool(s) registered`);

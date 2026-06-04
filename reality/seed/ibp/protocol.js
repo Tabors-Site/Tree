@@ -125,6 +125,12 @@ export const IBP_ERR = Object.freeze({
   // inspect or rewind frozen state. unpause-branch lifts the gate.
   REALITY_PAUSED: "REALITY_PAUSED",
 
+  // Branch is required at the perimeter but the caller / wire layer
+  // failed to thread it. The substrate used to silently default to
+  // main ("0"); now the wire-side handoff is mandatory and a missing
+  // attachment surfaces here so the threading bug is loud and obvious.
+  MISSING_BRANCH: "MISSING_BRANCH",
+
   // System
   INTERNAL: "INTERNAL",
   TIMEOUT: "TIMEOUT",
@@ -211,6 +217,9 @@ const STATUS_FOR_CODE = Object.freeze({
   REALITY_PAUSED: 403,
   NOT_A_BEING: 403,
   NOT_A_SEED: 403,
+  // Branch missing at perimeter: 500 because it's an internal threading
+  // bug, not a permission. Wire-layer should never let this surface.
+  MISSING_BRANCH: 500,
 
   // 404 Not found
   SPACE_NOT_FOUND: 404,

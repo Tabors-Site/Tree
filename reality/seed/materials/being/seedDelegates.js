@@ -136,7 +136,7 @@ export const SEED_DELEGATES = [
     cognition: "scripted",
     invocableBy: "authenticated",
     description:
-      "Creates and manages branches — divergent worlds forked from a past moment of an existing branch. Click @branch-manager at the reality root to mint a new branch from a chosen parent + anchor point.",
+      "Creates and manages branches — divergent worlds forked from a past moment of an existing branch. Click @branch-manager at the reality root to mint a new branch, merge branches, or manage the named-pointer registry (set-pointer, delete-pointer).",
   },
 ];
 
@@ -307,4 +307,61 @@ export async function ensureSeedDelegates(spaceRootId, summonCtx, opts = {}) {
     );
   }
   return { created, existing, deferred: false };
+}
+
+// ───────────────────────────────────────────────────────────────────
+// Heaven contributors
+// ───────────────────────────────────────────────────────────────────
+
+/**
+ * Add every seed delegate to heaven's `contributors` so they can
+ * SEE/DO/SUMMON inside heaven's Tier-3 spaces. Heaven's default
+ * permissions gate on `canWrite` (owner OR contributor) so I_AM
+ * (heaven's rootOwner) plus the contributors-on-heaven list all
+ * pass. Idempotent: addContributor short-circuits when the being
+ * is already a contributor.
+ *
+ * Replaces the older `ensureSeedDelegatesReign` (and the parallel
+ * reigning roster machinery as a whole). Retired 2026-06-04 — one
+ * ownership model now serves heaven and every other space.
+ */
+export async function ensureSeedDelegatesOnHeaven(summonCtx) {
+  if (!summonCtx) {
+    throw new Error(
+      "ensureSeedDelegatesOnHeaven requires summonCtx (the boot moment's ctx).",
+    );
+  }
+  const { findByName, findBySeedSpace } = await import("../projections.js");
+  const { SEED_SPACE } = await import("../space/seedSpaces.js");
+  const { addContributor } = await import("../space/ownership.js");
+  const heaven = await findBySeedSpace(SEED_SPACE.HEAVEN, "0");
+  if (!heaven) {
+    log.warn(
+      "SeedDelegates",
+      "ensureSeedDelegatesOnHeaven: heaven not yet materialized; skipping",
+    );
+    return { added: 0 };
+  }
+  const branch = summonCtx?.branch || "0";
+  let added = 0;
+  for (const spec of SEED_DELEGATES) {
+    const slot = await findByName("being", spec.name, "0");
+    if (!slot) continue;
+    try {
+      await addContributor(String(heaven.id), String(slot.id), I_AM, branch);
+      added++;
+    } catch (err) {
+      // Already-a-contributor and already-the-owner cases throw; both
+      // are benign here — they mean the desired state already holds.
+      const msg = err?.message || String(err);
+      if (
+        /already a contributor|Cannot add the owner|cannot add yourself/i.test(msg)
+      ) continue;
+      log.warn(
+        "SeedDelegates",
+        `failed to add @${spec.name} as heaven contributor: ${msg}`,
+      );
+    }
+  }
+  return { added };
 }

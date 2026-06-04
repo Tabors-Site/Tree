@@ -107,6 +107,9 @@ export async function logFact(input, opts = {}) {
   if (!input || typeof input !== "object") {
     throw new Error("logFact requires a params object");
   }
+  // `branch` is `let` because heaven routing may rewrite it below.
+  // Everything else stays effectively-const.
+  let branch;
   const {
     beingId,
     verb = "do",
@@ -119,14 +122,14 @@ export async function logFact(input, opts = {}) {
     homeReality = null,
     wasRemote = false,
     foldSeq = null,
-    // Branch this fact lives on. REQUIRED — no silent default. The
-    // cross-branch dispatch gate (Pass 4) settled the branch before the
-    // fact ever reaches logFact; if it's missing here, a caller forgot
-    // to thread summonCtx.branch and the fact would silently land on
-    // main. Throw loudly so the offender shows up in stacks instead
-    // of producing a "ghost" main-branch write nobody asked for.
-    branch,
   } = input;
+  // Branch this fact lives on. REQUIRED — no silent default. The
+  // cross-branch dispatch gate (Pass 4) settled the branch before the
+  // fact ever reaches logFact; if it's missing here, a caller forgot
+  // to thread summonCtx.branch and the fact would silently land on
+  // main. Throw loudly so the offender shows up in stacks instead
+  // of producing a "ghost" main-branch write nobody asked for.
+  branch = input.branch;
 
   if (!beingId || !action) {
     throw new Error("logFact requires beingId and action");
@@ -161,6 +164,34 @@ export async function logFact(input, opts = {}) {
         kind: target.kind || null,
         id: target.id != null ? String(target.id) : null,
       };
+    }
+  }
+
+  // Heaven routing: facts targeting a heaven space always land on
+  // branch="0". The doctrine is that heaven entries have one
+  // projection per reality regardless of caller's branch . the same
+  // applies to their fact streams. Without this rewrite, a set-space
+  // call from #1 against a heaven space would create a per-branch
+  // reel, defeating the doctrine.
+  //
+  // Only applies to space targets (heaven is by space); being and
+  // matter targets keep their requested branch.
+  if (
+    normalizedTarget &&
+    normalizedTarget.kind === "space" &&
+    normalizedTarget.id &&
+    branch !== "0"
+  ) {
+    try {
+      const { isHeavenSpace } = await import(
+        "../../materials/space/heavenLineage.js",
+      );
+      if (await isHeavenSpace(normalizedTarget.id)) {
+        branch = "0";
+      }
+    } catch {
+      // Heaven classifier unavailable (pre-bootstrap): leave branch
+      // as-is. Genesis paths always pass branch="0" anyway.
     }
   }
 

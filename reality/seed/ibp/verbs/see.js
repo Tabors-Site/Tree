@@ -34,7 +34,7 @@ import {
 import { describeReel } from "../../past/fact/facts.js";
 import { describeActChain } from "../../past/act/actChain.js";
 import { describeBeingsCatalog } from "../../materials/being/beingsCatalog.js";
-import { describeBranchesCatalog } from "../../materials/branch/branchesCatalog.js";
+import { describeBranchesCatalog, describeMergeConflicts } from "../../materials/branch/branchesCatalog.js";
 import { assertVerbCaller } from "./_shared.js";
 import {
   foldAt,
@@ -74,11 +74,20 @@ function isBeingsCatalogPath(path) {
 // lineage for that branch + its direct children. Read-only synthetic
 // catalog; no Act/Fact, no scheduler involvement. Mirrors the
 // .beings / .acts pattern.
+//
+// `.branches/<branchPath>/conflicts` — merge conflict catalog. Only
+// meaningful when <branchPath> was created by merge-branches (has
+// mergeSources set). Returns the per-reel conflict descriptors the
+// merge-mediator role walks the operator through.
 function branchesTargetFromPath(path) {
   if (typeof path !== "string") return null;
+  const mConflicts = path.match(/^\/?\.branches\/([^/]+)\/conflicts\/?$/);
+  if (mConflicts) {
+    return { branchPath: decodeURIComponent(mConflicts[1]), kind: "conflicts" };
+  }
   const m = path.match(/^\/?\.branches(?:\/([^/]+))?\/?$/);
   if (!m) return null;
-  return { branchPath: m[1] ? decodeURIComponent(m[1]) : "0" };
+  return { branchPath: m[1] ? decodeURIComponent(m[1]) : "0", kind: "tree" };
 }
 
 /**
@@ -160,7 +169,8 @@ export async function seeVerb(target, opts = {}) {
     currentUser: currentUser || identity?.name || null,
   };
   const parsed = parseWithContext(addrString, parseCtx);
-  const expanded = expand(parsed, parseCtx);
+  const { resolveBranchPointers } = await import("../address.js");
+  const expanded = await resolveBranchPointers(expand(parsed, parseCtx), parseCtx);
 
   // Thread descriptor short-circuit. SEE on `<reality>/./threads/<id>`
   // returns the synthetic projection from describeThread instead of
@@ -286,25 +296,36 @@ export async function seeVerb(target, opts = {}) {
   const branchesTarget = branchesTargetFromPath(expanded.right?.path);
   if (branchesTarget) {
     const realityDomain = getRealityDomain();
-    const graph = await describeBranchesCatalog(branchesTarget.branchPath);
+    const isConflictsView = branchesTarget.kind === "conflicts";
+    const pathSuffix = isConflictsView
+      ? `/.branches/${branchesTarget.branchPath}/conflicts`
+      : `/.branches/${branchesTarget.branchPath}`;
+    const graph = isConflictsView
+      ? null
+      : await describeBranchesCatalog(branchesTarget.branchPath);
+    const conflicts = isConflictsView
+      ? await describeMergeConflicts(branchesTarget.branchPath)
+      : null;
     return {
       address: {
         reality: realityDomain,
-        path: `/.branches/${branchesTarget.branchPath}`,
+        path: pathSuffix,
         being: null,
         spaceId: null,
         beingId: null,
         chain: [],
-        pathByNames: `/.branches/${branchesTarget.branchPath}`,
-        pathByIds: `/.branches/${branchesTarget.branchPath}`,
-        leafName: ".branches",
+        pathByNames: pathSuffix,
+        pathByIds: pathSuffix,
+        leafName: isConflictsView ? "conflicts" : ".branches",
         leafId: null,
         branch: branchesTarget.branchPath,
       },
       isSpaceRoot: false,
       isHomeRoot: false,
-      isBranchesCatalog: true,
+      isBranchesCatalog: !isConflictsView,
+      isMergeConflictsCatalog: isConflictsView,
       branches: graph,
+      conflicts,
       children: [],
       matters: [],
       qualities: {},
@@ -462,7 +483,8 @@ async function seeAtTime({
     currentUser: currentUser || identity?.name || null,
   };
   const parsed = parseWithContext(addrString, parseCtx);
-  const expanded = expand(parsed, parseCtx);
+  const { resolveBranchPointers } = await import("../address.js");
+  const expanded = await resolveBranchPointers(expand(parsed, parseCtx), parseCtx);
 
   if (threadIdFromPath(expanded.right?.path)) {
     throw new IbpError(

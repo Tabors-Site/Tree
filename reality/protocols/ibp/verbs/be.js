@@ -106,7 +106,7 @@ export async function handleBe(socket, env, ack) {
     // qualifier, refuse before opening the moment.
     const callerBranch = socket.currentBranch || "0";
     try {
-      const { parseFromSocket, expand, resolveBeingIds, getRealityDomain } =
+      const { parseFromSocket, expand, resolveBeingIds, resolveBranchPointers, getRealityDomain } =
         await import("../../../seed/ibp/address.js");
       const parsed = parseFromSocket(socket, address);
       const expandCtx = {
@@ -115,7 +115,9 @@ export async function handleBe(socket, env, ack) {
         currentBranch:  callerBranch,
         currentPath:    socket.currentPath || null,
       };
-      const expanded = await resolveBeingIds(expand(parsed, expandCtx), expandCtx);
+      const expandedWithPointers = await resolveBranchPointers(
+        expand(parsed, expandCtx), expandCtx);
+      const expanded = await resolveBeingIds(expandedWithPointers, expandCtx);
 
       // Impersonation refusal . see do.js for the doctrine. BE is the
       // narrow exception case: arrival flows (birth, connect from no

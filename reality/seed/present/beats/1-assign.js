@@ -56,7 +56,7 @@ import log from "../../seedReality/log.js";
 import { getInternalConfigValue } from "../../internalConfig.js";
 import { v4 as uuidv4 } from "uuid";
 import Being from "../../materials/being/being.js";
-import { loadProjection } from "../../materials/projections.js";
+import { loadProjection, assertBranchOrThrow } from "../../materials/projections.js";
 import Act from "../../past/act/act.js";
 import { getRealityConfigValue } from "../../realityConfig.js";
 import { resolveActiveStack } from "../roles/roleFlow.js";
@@ -95,9 +95,14 @@ export async function assign({ beingId, spaceId, entry, handoff = null, signal =
   const kind = entry?.kind || "summon";
   // ── assign: load the being ───────────────────────────────────────
   // Branch-aware via the intake entry. The moment runs in the caller's
-  // branch (the intake entry was enqueued with branch set by the wire
-  // layer); the being state for this branch is what assign sees.
-  const branch = entry?.branch || entry?.act?.branch || "0";
+  // branch — the intake row's `branch` was populated at fact-fold time
+  // from the be:summon Fact, which carries the perimeter-attached
+  // branch. assertBranchOrThrow surfaces any threading gap loudly here
+  // rather than silently letting the moment run on heaven.
+  const branch = assertBranchOrThrow(
+    entry?.branch || entry?.act?.branch,
+    "assign(entry)",
+  );
   const slot = await loadProjection("being", beingId, branch);
   if (!slot) {
     log.warn("Assign", `being ${String(beingId).slice(0, 8)} not found on branch ${branch}`);

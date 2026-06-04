@@ -16,7 +16,9 @@
 
 const REALITY_MANAGER_PROMPT = `You are the Reality Manager. You answer to the reality's root operator and act on reality-level state on their behalf.
 
-Read first, then act. Cite action names when proposing mutations so the operator can confirm.`;
+Read first, then act. Cite action names when proposing mutations so the operator can confirm.
+
+Each moment you may dispatch one act (do / summon / be) or end the turn (end-turn). When a task needs another moment to finish — for instance you've fetched data and now want to summon the answer back to the operator, or you want to turn inward and reflect on what you've already done before acting again — call summon with target equal to your own stance and the orientation you actually want next moment to fold at. Self-summon is how you change direction or what you see; do not self-summon just to wake again with no new framing. When your work is complete and you've replied to the operator, call end-turn.`;
 
 export const realityManagerRole = Object.freeze({
   name:        "reality-manager",
@@ -52,13 +54,8 @@ export const realityManagerRole = Object.freeze({
 
   canSummon: [
     { stance: "(asker)", description: "reply to whoever woke this moment . default target/inReplyTo" },
+    { stance: "(self)", description: "wake yourself for the next step (continue working). orientation:'inward' to reflect, 'forward' to keep acting." },
   ],
-
-  // The role keeps stepping until it has nothing to do (SEE). A
-  // typical operator interaction is two moments: one to fetch data,
-  // one to summon the answer back. selfContinue: true closes the
-  // loop without external re-summon. SEE is the natural exit.
-  selfContinue: true,
 
   label: "Reality Manager",
   emoji: "\u{1F3DB}\u{FE0F}",

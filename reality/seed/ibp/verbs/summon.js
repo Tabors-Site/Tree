@@ -44,7 +44,7 @@ import {
 } from "../../present/beats/2-fold/orientation.js";
 import { IbpError, IBP_ERR } from "../protocol.js";
 import { I_AM } from "../../materials/being/seedBeings.js";
-import { parseWithContext, expand, getRealityDomain } from "../address.js";
+import { parseWithContext, expand, resolveBranchPointers, getRealityDomain } from "../address.js";
 import { resolveStance } from "../resolver.js";
 import { authorize } from "../authorize.js";
 import {
@@ -54,7 +54,7 @@ import {
 } from "../../materials/space/threads.js";
 import { getRole } from "../../present/roles/registry.js";
 import { attachHandoff, wake } from "../../present/intake/scheduler.js";
-import { assertVerbCaller, refuseHistoricalWrite } from "./_shared.js";
+import { assertVerbCaller, refuseHistoricalWrite, resolveBranchForFact } from "./_shared.js";
 
 // Legacy numeric priority (used by inbox queue ordering and the
 // older wake APIs) mapped to the SUMMON envelope's enum. The Act
@@ -88,14 +88,15 @@ export async function summonVerb(stance, message, opts = {}) {
   refuseHistoricalWrite("summon", stance, opts);
   const validatedMessage = validateSummonMessage(message);
 
-  const { identity = null, currentUser = null, currentReality = null, onResponse = null, onError = null, summonCtx = null } = opts;
+  const { identity = null, currentUser = null, currentReality = null, currentBranch = null, onResponse = null, onError = null, summonCtx = null } = opts;
   const realityDomain = currentReality || getRealityDomain();
 
-  const parsed = parseWithContext(stance, {
+  const parseCtx = {
     currentReality: realityDomain,
     currentUser: currentUser || identity?.name || null,
-  });
-  const expanded = expand(parsed, { currentReality: realityDomain, currentUser: currentUser || identity?.name || null });
+  };
+  const parsed = parseWithContext(stance, parseCtx);
+  const expanded = await resolveBranchPointers(expand(parsed, parseCtx), parseCtx);
 
   // Thread-target branch. SUMMON whose right-side path names
   // `.threads/<id>` is a cut, not a call. The thread is addressable
@@ -164,7 +165,11 @@ export async function summonVerb(stance, message, opts = {}) {
   // When multiple beings share the role, the first hit wins; addressing
   // a specific instance uses its name.
   const { findByName, loadOrFold } = await import("../../materials/projections.js");
-  const branch = summonCtx?.branch || "0";
+  // Branch resolution at the perimeter: inside-moment continuations
+  // ride summonCtx.branch; wire-originated calls ride opts.currentBranch.
+  // Throws MISSING_BRANCH if neither was attached (a threading bug at
+  // the perimeter, surfaced loud per the branch-hardening doctrine).
+  const branch = resolveBranchForFact(summonCtx, currentBranch, "summon");
   let toBeingSlot = await findByName("being", qualifier, branch);
   let toBeing = toBeingSlot ? { _id: toBeingSlot.id, ...toBeingSlot.state } : null;
   if (!toBeing && resolved.spaceId) {
@@ -272,17 +277,26 @@ export async function summonVerb(stance, message, opts = {}) {
  * comes through here or through summonVerb. Direct appendToInbox +
  * wake calls bypass the envelope contract and are forbidden.
  *
+ * Branch precedence (no silent default to "0"):
+ *   1. summonCtx.branch — inside-moment caller; inherits the moment's branch
+ *   2. args.branch — explicit attachment from callers without a moment
+ *      (subscriptions firing from a hook, scheduler boot paths, internal
+ *      bootstraps). Required when summonCtx is null.
+ *   resolveBranchForFact throws MISSING_BRANCH if neither is present.
+ *
  * @param {object} args
  * @param {string} args.toBeingId     receiver Being _id
  * @param {string} args.inboxSpaceId  space the inbox lives at
  * @param {object} args.message       SUMMON envelope
  * @param {string} [args.activeRole]  overrides toBeing.defaultRole
  * @param {object} args.identity      asker identity (typically I_AM)
+ * @param {string} [args.branch]      explicit branch for non-moment callers
+ * @param {object} [args.summonCtx]   moment ctx for inside-moment callers
  */
 export async function summonByResolved(args) {
   const {
     toBeingId, inboxSpaceId, message, activeRole: roleOverride,
-    identity, onResponse, onError, summonCtx = null,
+    identity, onResponse, onError, summonCtx = null, branch: argsBranch = null,
   } = args || {};
   if (!toBeingId)    throw new IbpError(IBP_ERR.INVALID_INPUT, "summonByResolved requires toBeingId");
   if (!inboxSpaceId) throw new IbpError(IBP_ERR.INVALID_INPUT, "summonByResolved requires inboxSpaceId");
@@ -290,7 +304,7 @@ export async function summonByResolved(args) {
   const validatedMessage = validateSummonMessage(message);
 
   const { loadOrFold } = await import("../../materials/projections.js");
-  const branch = summonCtx?.branch || "0";
+  const branch = resolveBranchForFact(summonCtx, argsBranch, "summon");
   const toSlot = await loadOrFold("being", toBeingId, branch);
   if (!toSlot) {
     throw new IbpError(IBP_ERR.BEING_NOT_FOUND, `No being with id ${toBeingId} on branch ${branch}`);
@@ -413,10 +427,13 @@ async function _dispatchSummon({
       sentAt,
     },
     actId: summonCtx?.actId || null,
-    // Branch the summon fact lands on. Self-summons inherit the
-    // moment's branch; cross-being summons inherit the caller's. The
-    // address-level bridge gate already rejected mixed-branch addresses.
-    branch: summonCtx?.branch || "0",
+    // Branch the summon fact lands on. Precedence: an enclosing moment's
+    // branch (summonCtx.branch) wins because the moment is already on
+    // its branch; otherwise the wire-layer-attached currentBranch (the
+    // caller's frame for wire-originated summons). No silent default to
+    // "0" — a missing branch at this layer means a bug at the perimeter
+    // and must fail loud so the threading gap surfaces immediately.
+    branch: resolveBranchForFact(summonCtx, currentBranch, "summon"),
   }, summonCtx);
 
   const innerCtx = {

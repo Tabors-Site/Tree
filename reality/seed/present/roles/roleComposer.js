@@ -137,7 +137,6 @@ export function composeStack({ stack, toBeing }) {
     requiredCognition: primary.requiredCognition || null,
     respondMode:       primary.respondMode || "async",
     triggerOn:         primary.triggerOn || ["message"],
-    selfContinue:      !!primary.selfContinue,
     defaultOrientation: primary.defaultOrientation || null,
     replyTo:           primary.replyTo || null,
     origin:            primary.origin || null,

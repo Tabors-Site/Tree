@@ -152,14 +152,19 @@ const REALITY_ROOT_DEFAULT_PERMISSIONS = Object.freeze({
 // Tier-3 seed space (identity, config, tools, roles, operations,
 // extensions, source, peers, threads). It's not a public reality.
 //
-// `requires: { reigning: true }` admits the I-Am, every seed delegate
-// (cherub, llm-assigner, reality-manager, arrival . parented directly
-// under the I-Am by construction), and the rootOperator (first human,
-// planted with parentBeingId = I_AM at cherub.register). Any later
-// operator-designated reigning being joins the same way: parent them
-// under the I-Am and they reign. Beings of the land lacking reigning
-// stance see the door in their reality-root descriptor but SEE on
-// "<reality>/." returns DENIED.
+// `requires: { canWrite: true }` admits the I-Am (heaven's rootOwner)
+// and every being added as a contributor to heaven. Seed delegates
+// (cherub, birther, llm-assigner, reality-manager, arrival, etc.) are
+// contributors by boot scaffold; the rootOperator becomes a heaven
+// contributor when they register through cherub. Later operators
+// added the same way: addContributor on heaven. Beings of the land
+// lacking heaven canWrite see the door in their reality-root
+// descriptor but SEE on "<reality>/." returns DENIED.
+//
+// The earlier `reigning` stance was retired 2026-06-04 . it was a
+// parallel roster duplicating the existing rootOwner + contributors
+// model with a separate cache, matter, and DO ops. Heaven now uses
+// the same ownership system as every other space.
 //
 // Operators can tighten this per their setup by writing explicit
 // `qualities.permissions.see.<keyParts>` on heaven (or on individual
@@ -172,9 +177,9 @@ const REALITY_ROOT_DEFAULT_PERMISSIONS = Object.freeze({
 // ─────────────────────────────────────────────────────────────────────
 
 const HEAVEN_DEFAULT_PERMISSIONS = Object.freeze({
-  see: { "*": { requires: { reigning: true } } },
-  do: { "*": { requires: { reigning: true } } },
-  summon: { "*": { requires: { reigning: true } } },
+  see: { "*": { requires: { canWrite: true } } },
+  do: { "*": { requires: { canWrite: true } } },
+  summon: { "*": { requires: { canWrite: true } } },
 });
 
 // ─────────────────────────────────────────────────────────────────────

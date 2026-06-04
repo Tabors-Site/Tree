@@ -28,20 +28,25 @@
 //     // ownership-tier markers (relative to targetSpace)
 //     owner,                    // is rootOwner along the chain
 //     contributor,              // is in contributors[] along the chain
+//     canWrite,                 // owner OR contributor anywhere on the chain
 //
 //     // home relations
 //     homeAtPosition,           // home === target
 //     homeInDomain,             // target is an ancestor of home (home lives inside target's subtree)
 //     positionInHomeDomain,     // home is an ancestor of target (target lives inside home's subtree)
 //
-//     // heaven-tier reign
-//     reigning,                 // I-Am, or the rootOperator, or a being
-//                               //   explicitly added to heaven's reigningBeings list
-//
 //     // federation
-//     homeOnThisReality,           // !being.isRemote
+//     homeOnThisReality,        // !being.isRemote
 //     federatedFrom,            // being.homeReality if remote, else null
 //   }
+//
+// The earlier `reigning` stance was a separate property tracking
+// membership in heaven's reign matter; it was redundant with the
+// already-existing rootOwner + contributors model. Collapsed
+// 2026-06-04: heaven is owned by I_AM, seed delegates and the
+// rootOperator are contributors on heaven, and the heaven default
+// permission rule gates on `canWrite` (owner OR contributor) so all
+// of them pass. One ownership model, no separate roster.
 //
 // Pure: no side effects, no throws on missing data. Defensive against
 // stale beingIds (returns arrival shape).
@@ -49,7 +54,6 @@
 import Being from "../materials/being/being.js";
 import { resolveSpaceAccess } from "../materials/space/spaces.js";
 import { getAncestorChain } from "../materials/space/ancestorCache.js";
-import { isReigning } from "../materials/being/reigning.js";
 
 const ARRIVAL_PROPS = Object.freeze({
   beingId: null,
@@ -58,6 +62,7 @@ const ARRIVAL_PROPS = Object.freeze({
   arrival: true,
   owner: false,
   contributor: false,
+  canWrite: false,
   homeAtPosition: false,
   homeInDomain: false,
   positionInHomeDomain: false,
@@ -66,12 +71,6 @@ const ARRIVAL_PROPS = Object.freeze({
   // resolve scoped checks like `homeInDomain: "<rulership-spaceId>"`
   // ("is this specific space anywhere in the home's ancestry?").
   homeAncestors: Object.freeze([]),
-  // reigning: true for the I-Am and for every being parented directly
-  // under her . the seed delegates (cherub, llm-assigner, reality-
-  // manager, arrival) and the rootOperator (first human). Many beings
-  // can reign at once. Heaven and Tier-3 seed spaces gate on this
-  // prop. Arrival (unauthenticated) never reigns.
-  reigning: false,
   homeOnThisReality: true,
   federatedFrom: null,
 });
@@ -92,22 +91,14 @@ export async function deriveStanceProperties({
   // loadOrFold (not loadProjection): on a fresh branch the being's slot
   // hasn't been cold-folded yet. A bare loadProjection returns null and
   // this function falls back to ARRIVAL_PROPS — the user is silently
-  // treated as a stranger, loses reigning, loses owner/contributor
-  // relations, and gets denied at heaven on every branch they create.
-  // loadOrFold walks the lineage (branchPoint-respecting) so the slot
-  // resolves the same way it does on main.
+  // treated as a stranger, loses owner/contributor relations, and
+  // gets denied at heaven on every branch they create. loadOrFold
+  // walks the lineage (branchPoint-respecting) so the slot resolves
+  // the same way it does on main.
   const { loadOrFold } = await import("../materials/projections.js");
   const slot = await loadOrFold("being", beingId, branch);
   if (!slot) return { ...ARRIVAL_PROPS, beingId };
   const being = { _id: slot.id, ...slot.state };
-
-  // Reigning stance . membership in heaven's reign.beings list.
-  // Cached in seed/materials/being/reigning.js; loaded at boot,
-  // updated by the add-reigning / remove-reigning DO ops. I-Am is
-  // always reigning; seed delegates auto-add during boot; the
-  // rootOperator (first human) auto-adds in cherub.register; further
-  // additions happen via the DO op.
-  const reigning = isReigning(String(being._id));
 
   const props = {
     beingId: String(being._id),
@@ -120,11 +111,11 @@ export async function deriveStanceProperties({
     arrival: false,
     owner: false,
     contributor: false,
+    canWrite: false,
     homeAtPosition: false,
     homeInDomain: false,
     positionInHomeDomain: false,
     homeAncestors: [],
-    reigning,
     homeOnThisReality: !being.isRemote,
     federatedFrom: being.isRemote ? being.homeReality || null : null,
   };
@@ -148,6 +139,10 @@ export async function deriveStanceProperties({
   if (!targetSpace) return props;
 
   // Ownership relations via the existing tree-access walker.
+  // canWrite is owner OR contributor anywhere on the chain — the
+  // single condition heaven's default permissions gate on (replaces
+  // the legacy `reigning` prop). owner / contributor stay as the
+  // narrower labels for rules that need to distinguish.
   try {
     const access = await resolveSpaceAccess(targetSpace, beingId, branch);
     if (access?.ok) {
@@ -156,6 +151,7 @@ export async function deriveStanceProperties({
       // contributor anywhere on the chain. Mark contributor only when
       // not also the owner — owner subsumes it.
       if (access.canWrite && !access.isOwner) props.contributor = true;
+      if (access.canWrite) props.canWrite = true;
     }
   } catch {
     /* defensive — leave as false */

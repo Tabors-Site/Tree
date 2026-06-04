@@ -206,7 +206,14 @@ export async function buildPrompt(role, ctx) {
   // see name runs its resolver and its return becomes a JSON block.
   // Resolved fresh at every summon . the matter moves and the
   // being's read of it is only ever now.
-  const preloaded = await renderCanSeeBlocks(role, ctx);
+  //
+  // Inward orientation suppresses the preload — INNER-FOLD §2:
+  // "the world drops out" — so the past-face block stands in place
+  // of the world-data. The caller (llmMoment) sets suppressCanSee
+  // via ctx when ω=inward.
+  const preloaded = ctx?.suppressCanSee
+    ? ""
+    : await renderCanSeeBlocks(role, ctx);
 
   // What this being can see, do, summon, and be — for this instant.
   // The capability surface is per-summon; a role's tool set is a
@@ -218,6 +225,17 @@ export async function buildPrompt(role, ctx) {
 
   const body = await Promise.resolve(role.prompt(ctx));
   const bodyStr = typeof body === "string" ? body.trim() : "";
+
+  // Past-face block. Empty on forward. Populated by llmMoment on
+  // half / inward (INNER-FOLD §2). Half appends a block of past acts
+  // surfaced by the braid-walk alongside the live world; inward
+  // replaces the world face with the act-chain in act-order and the
+  // forward path's preloaded canSee blocks are passed empty so the
+  // world drops out. The renderer (renderInwardPastFace /
+  // renderHalfPastFace, in llmMoment.js) has already applied the
+  // render-time clamps to the per-act facadeSnapshots; we just
+  // splice the rendered string in.
+  const pastFaceBlock = typeof ctx?.pastFaceBlock === "string" ? ctx.pastFaceBlock : "";
 
   // Time as a single stamp, the marker of which instant this being
   // exists at. Not a navigable axis — the being is pinned here,
@@ -231,13 +249,50 @@ export async function buildPrompt(role, ctx) {
   // now.
   //
   // Order: identity + capabilities + role-intent ("the question"),
-  // then preloaded canSee face blocks ("the data"), then [Time].
-  // LLMs attend more strongly to the freshly-presented data at the
-  // tail of the prompt when forming their act, so the structured
-  // perception lands last.
-  return [identity, capabilities, bodyStr, preloaded, timeBlock]
+  // then past-face block (turned folds only), then preloaded canSee
+  // face blocks ("the data"), then [Time]. LLMs attend more strongly
+  // to the freshly-presented data at the tail of the prompt when
+  // forming their act, so the structured perception lands last —
+  // and the past-face sits just before it so the LLM enters the
+  // present already aware of where it has been.
+  return [identity, capabilities, bodyStr, pastFaceBlock, preloaded, timeBlock]
     .filter(Boolean)
     .join("\n\n");
+}
+
+/**
+ * Resolve the role's three act-capable can* lists down to bare name
+ * strings for the facadeSnapshot. Same resolver path the prompt
+ * builder uses; we just drop the description and return the names.
+ *
+ * Returns { canDo, canSummon, canBe } — three string arrays.
+ * Empty arrays for an empty / missing list, never null. Used by
+ * llmMoment.js (and any scripted / human-inhabited path that builds
+ * a snapshot) to capture the capabilities the cognition had at the
+ * moment, without re-rendering the prompt or duplicating the
+ * resolver call.
+ */
+export async function resolveBareCapabilities(role, ctx) {
+  if (!role) return { canDo: [], canSummon: [], canBe: [] };
+  const beingCtx = {
+    being: ctx?.being || null,
+    role,
+    currentSpace: ctx?.currentSpace || null,
+    rootId: ctx?.rootId || null,
+    name: ctx?.name || null,
+  };
+  const [doEntries, summonEntries, beEntries] = await Promise.all([
+    resolveCanStar(role.canDo, beingCtx),
+    resolveCanStar(role.canSummon, beingCtx),
+    resolveCanStar(role.canBe, beingCtx),
+  ]);
+  const toNames = list =>
+    list.map(e => (typeof e === "string" ? e : e?.name || null)).filter(Boolean);
+  return {
+    canDo:     toNames(doEntries),
+    canSummon: toNames(summonEntries),
+    canBe:     toNames(beEntries),
+  };
 }
 
 // ────────────────────────────────────────────────────────────────────
@@ -573,8 +628,11 @@ export function resolveToolsForRole(
 ) {
   if (!role) return [];
 
+  // The three act-capable verbs are conditional on the role declaring
+  // a non-empty list. canSee is NOT a tool — it's preloaded into the
+  // face by renderCanSeeBlocks; the prior `canSee → push "see"` line
+  // was a dead reference (no see-verb tool was registered for it).
   let toolNames = [];
-  if (Array.isArray(role.canSee) && role.canSee.length > 0) toolNames.push("see");
   if (Array.isArray(role.canDo) && role.canDo.length > 0) toolNames.push("do");
   if (Array.isArray(role.canSummon) && role.canSummon.length > 0) toolNames.push("summon");
   if (Array.isArray(role.canBe) && role.canBe.length > 0) toolNames.push("be");
@@ -594,6 +652,19 @@ export function resolveToolsForRole(
     : Array.isArray(role.permissions)
       ? role.permissions
       : null;
-  return resolveTools(toolNames, permsForFilter);
+  const acting = resolveTools(toolNames, permsForFilter);
+
+  // end-turn is universally available. It bypasses the role's canDo /
+  // canSummon / canBe gating and the verb-permission filter because
+  // it is moment-control, not a substrate verb — every cognition
+  // needs the option to release a moment without acting, regardless
+  // of what its role is licensed to dispatch. Appended AFTER the
+  // gated set so a role with an empty action surface still has at
+  // least end-turn (the cognition can always say "I see; I do not act").
+  const endTurn = resolveTools(["end-turn"], null);
+  // If end-turn somehow isn't registered (early boot, test harness),
+  // fall through silently — the implicit no-tool-call → cognitionSee
+  // path still works.
+  return endTurn.length > 0 ? [...acting, ...endTurn] : acting;
 }
 

@@ -108,6 +108,20 @@ const ActSchema = new mongoose.Schema({
     enum: ["HUMAN", "GATEWAY", "INTERACTIVE", "BACKGROUND"],
     default: "INTERACTIVE",
   },
+
+  // The bounded record of the face this act was committed under:
+  // orientation, role, what was seen at the position (space +
+  // occupants by name/id/kind), and the canDo/canSummon/canBe
+  // lists the cognition had at that moment. Captured uniformly
+  // across LLM, scripted, and human-inhabited cognitions so the
+  // act-chain never carries half-records. Read only by turned
+  // folds (half/inward); the forward path never reads it. Stored
+  // at defensive caps (10KB per field, 1000-entry lists) to keep
+  // pathological cases bounded; render-time clamps (1000 chars,
+  // 64 entries) are applied separately by prompt builders. The
+  // chain is the truth; this is a bounded record of the face;
+  // full face reconstruction goes through the chain, not here.
+  facadeSnapshot: { type: mongoose.Schema.Types.Mixed, default: null },
 });
 
 // All Acts under one chain (rootCorrelation walk).

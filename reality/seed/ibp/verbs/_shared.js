@@ -73,6 +73,40 @@ export function refuseHistoricalWrite(verb, target, opts) {
 }
 
 /**
+ * Resolve which branch a write-verb's Fact lands on. Precedence:
+ *
+ *   1. summonCtx.branch — an enclosing moment is already on its branch;
+ *      every Fact emitted from inside the moment inherits that branch.
+ *      This is the continuation case (the moment-runner threaded it).
+ *   2. currentBranch — the wire layer's explicit branch attachment for
+ *      wire-originated verbs. See the protocol verb handlers
+ *      (protocols/ibp/verbs/{summon,be,do}.js) — they pull branch from
+ *      the parsed address (or socket.currentBranch for relative addrs)
+ *      and pass it as opts.currentBranch.
+ *
+ * Neither present is a perimeter bug. The seed used to default to "0"
+ * silently in this case, which masked "we forgot to thread branch
+ * through" gaps for months. Now it throws so the missing-attachment
+ * surfaces immediately at the offending call site. Branch is verified
+ * at the perimeter and trusted everywhere inside.
+ */
+export function resolveBranchForFact(summonCtx, currentBranch, verb) {
+  if (summonCtx?.branch && typeof summonCtx.branch === "string" && summonCtx.branch.length > 0) {
+    return summonCtx.branch;
+  }
+  if (typeof currentBranch === "string" && currentBranch.length > 0) {
+    return currentBranch;
+  }
+  const frame = captureCallerFrame();
+  throw new IbpError(
+    IBP_ERR.MISSING_BRANCH || "MISSING_BRANCH",
+    `place.${verb}: branch missing at the perimeter (neither summonCtx.branch ` +
+      `nor opts.currentBranch was attached). The wire layer must thread the ` +
+      `caller's branch into the verb opts. (caller: ${frame})`,
+  );
+}
+
+/**
  * Walk past frames inside verbs/ so the reported caller is the actual
  * offending site, not assertVerbCaller or the verb function itself.
  */
