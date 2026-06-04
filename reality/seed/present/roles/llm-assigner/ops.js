@@ -20,9 +20,11 @@
 
 import log from "../../../seedReality/log.js";
 import Matter from "../../../materials/matter/matter.js";
+import Space from "../../../materials/space/space.js";
 import { registerOperation } from "../../../ibp/operations.js";
 import { doVerb } from "../../../ibp/verbs/do.js";
-import { findBeingByName } from "../../../materials/being/identity.js";
+import { IbpError, IBP_ERR } from "../../../ibp/protocol.js";
+import { findBeingByName, findRootOperator } from "../../../materials/being/identity.js";
 import { getMatter } from "../../../materials/matter/matters.js";
 import {
   LLM_ASSIGNER_TUTORIAL_MARK,
@@ -250,5 +252,207 @@ export function registerLlmAssignerOps() {
     },
   });
 
-  log.verbose("llm-assigner", "registered 3 DO ops (start-tutorial, save-playback, complete-tutorial)");
+  // ────────────────────────────────────────────────────────────────
+  // Connection-management ops.
+  //
+  // BE is the closed identity set (birth/connect/release); LLM
+  // configuration is not identity, so these belong on DO.
+  //
+  // Address convention: targets ["space"] so the portal can address
+  // them at any space, typically the place root (`${place}/`). The
+  // authenticated caller's identity carries who the configuration
+  // applies to; the space target is only meaningful for set-space-llm.
+  // ────────────────────────────────────────────────────────────────
+
+  // Add an LLM connection to the caller's own being. Auto-binds to
+  // "main" if this is the being's first connection (handled by the
+  // seed add-llm-connection DO op).
+  registerOperation("llm-assigner:add-llm", {
+    targets: ["space"],
+    ownerExtension: OWNER,
+    handler: async ({ params, identity, summonCtx }) => {
+      if (!identity?.beingId) {
+        throw new IbpError(
+          IBP_ERR.UNAUTHORIZED,
+          "llm-assigner:add-llm requires an authenticated being. Claim or register through @cherub first.",
+        );
+      }
+      const { name = null, baseUrl, model, apiKey = null } = params || {};
+      if (!baseUrl) throw new IbpError(IBP_ERR.INVALID_INPUT, "`baseUrl` is required");
+      if (!model)   throw new IbpError(IBP_ERR.INVALID_INPUT, "`model` is required");
+      const { addLlmConnection } = await import("../../cognition/llm/connect.js");
+      const connection = await addLlmConnection(
+        String(identity.beingId),
+        { name, baseUrl, model, apiKey },
+        { identity, summonCtx },
+      );
+      return {
+        connectionId: String(connection._id),
+        name:         connection.name,
+        baseUrl:      connection.baseUrl,
+        model:        connection.model,
+      };
+    },
+  });
+
+  // Bind one of the caller's connections to a slot on their own being.
+  // Slot "main" updates Being.llmDefault; named slots write into
+  // Being.qualities.beingLlm.slots.
+  registerOperation("llm-assigner:assign-slot", {
+    targets: ["space"],
+    ownerExtension: OWNER,
+    handler: async ({ params, identity, summonCtx }) => {
+      if (!identity?.beingId) {
+        throw new IbpError(
+          IBP_ERR.UNAUTHORIZED,
+          "llm-assigner:assign-slot requires an authenticated being.",
+        );
+      }
+      const { slot, connectionId } = params || {};
+      if (!slot) throw new IbpError(IBP_ERR.INVALID_INPUT, "`slot` is required");
+      return await doVerb(
+        { kind: "being", id: String(identity.beingId) },
+        "assign-llm-slot",
+        { slot, connectionId: connectionId || null },
+        { identity, summonCtx },
+      );
+    },
+  });
+
+  // List the caller's connections + current slot assignments.
+  registerOperation("llm-assigner:list-llms", {
+    targets: ["space"],
+    ownerExtension: OWNER,
+    skipAudit: true,
+    handler: async ({ identity }) => {
+      if (!identity?.beingId) {
+        throw new IbpError(
+          IBP_ERR.UNAUTHORIZED,
+          "llm-assigner:list-llms requires an authenticated being.",
+        );
+      }
+      const beingId = String(identity.beingId);
+      const { getBeingLlmAssignments } = await import("../../cognition/llm/connect.js");
+      const { loadProjection } = await import("../../../materials/projections.js");
+      const slot = await loadProjection("being", beingId, "0");
+      const being = slot ? { _id: slot.id, ...slot.state } : null;
+      const conns = (being?.qualities instanceof Map
+        ? being.qualities.get("llmConnections")
+        : being?.qualities?.llmConnections) || {};
+      const connections = Object.entries(conns).map(([id, c]) => ({
+        connectionId: id,
+        name:         c.name,
+        baseUrl:      c.baseUrl,
+        model:        c.model,
+        lastUsedAt:   c.lastUsedAt,
+      }));
+      return {
+        connections,
+        slots: getBeingLlmAssignments(being || {}),
+      };
+    },
+  });
+
+  // Delete one of the caller's connections. The seed cascades the
+  // removal across Being.llmDefault, qualities.beingLlm slots, and
+  // Space.qualities.llm.slots references.
+  registerOperation("llm-assigner:delete-llm", {
+    targets: ["space"],
+    ownerExtension: OWNER,
+    handler: async ({ params, identity, summonCtx }) => {
+      if (!identity?.beingId) {
+        throw new IbpError(
+          IBP_ERR.UNAUTHORIZED,
+          "llm-assigner:delete-llm requires an authenticated being.",
+        );
+      }
+      const { connectionId } = params || {};
+      if (!connectionId) throw new IbpError(IBP_ERR.INVALID_INPUT, "`connectionId` is required");
+      const { deleteLlmConnection } = await import("../../cognition/llm/connect.js");
+      await deleteLlmConnection(
+        String(identity.beingId),
+        connectionId,
+        { identity, summonCtx },
+      );
+      return { removed: true, connectionId };
+    },
+  });
+
+  // Set (or clear) the reality-level default LLM connection. Restricted
+  // to the root operator. The set-config DO op writes the canonical
+  // realityLlmConnection key under the .config seed space.
+  registerOperation("llm-assigner:set-reality-llm", {
+    targets: ["space"],
+    ownerExtension: OWNER,
+    handler: async ({ params, identity, summonCtx }) => {
+      if (!identity?.beingId) {
+        throw new IbpError(
+          IBP_ERR.UNAUTHORIZED,
+          "llm-assigner:set-reality-llm requires an authenticated being.",
+        );
+      }
+      const operator = await findRootOperator();
+      if (!operator) {
+        throw new IbpError(
+          IBP_ERR.FORBIDDEN,
+          "No root operator exists on this reality yet. Register the first human via @cherub.",
+        );
+      }
+      if (String(operator._id) !== String(identity.beingId)) {
+        throw new IbpError(
+          IBP_ERR.FORBIDDEN,
+          "Only the reality's root operator can change reality-level LLM configuration.",
+        );
+      }
+      const { connectionId } = params || {};
+      if (connectionId === undefined) {
+        throw new IbpError(IBP_ERR.INVALID_INPUT, "`connectionId` is required (pass null to clear)");
+      }
+      const { SEED_SPACE } = await import("../../../materials/space/seedSpaces.js");
+      const { findBySeedSpace } = await import("../../../materials/projections.js");
+      const configNode = await findBySeedSpace(SEED_SPACE.CONFIG, "0");
+      if (!configNode) {
+        throw new IbpError(IBP_ERR.INTERNAL, "Reality .config seed space not found");
+      }
+      await doVerb(
+        { kind: "space", id: String(configNode.id) },
+        "set-config",
+        { key: "realityLlmConnection", value: connectionId || null },
+        { identity, summonCtx },
+      );
+      return { realityLlmConnection: connectionId || null };
+    },
+  });
+
+  // Set an LLM slot on a space the caller owns. Writes
+  // qualities.llm.slots[slot] via the assign-llm-slot DO op so the
+  // stance-authorization gate runs uniformly.
+  registerOperation("llm-assigner:set-space-llm", {
+    targets: ["space"],
+    ownerExtension: OWNER,
+    handler: async ({ params, identity, summonCtx }) => {
+      if (!identity?.beingId) {
+        throw new IbpError(
+          IBP_ERR.UNAUTHORIZED,
+          "llm-assigner:set-space-llm requires an authenticated being.",
+        );
+      }
+      const { spaceId, slot, connectionId } = params || {};
+      if (!spaceId) throw new IbpError(IBP_ERR.INVALID_INPUT, "`spaceId` is required");
+      if (!slot)    throw new IbpError(IBP_ERR.INVALID_INPUT, "`slot` is required");
+      const exists = await Space.exists({ _id: spaceId });
+      if (!exists) throw new IbpError(IBP_ERR.SPACE_NOT_FOUND, `Space ${spaceId} not found`);
+      const result = await doVerb(
+        { kind: "space", id: String(spaceId) },
+        "assign-llm-slot",
+        { slot, connectionId: connectionId || null },
+        { identity, summonCtx },
+      );
+      log.verbose("llm-assigner",
+        `space ${spaceId} slot "${slot}" → ${connectionId || "(cleared)"} by being ${identity.beingId}`);
+      return result;
+    },
+  });
+
+  log.verbose("llm-assigner", "registered 9 DO ops (3 tutorial + 6 connection-management)");
 }

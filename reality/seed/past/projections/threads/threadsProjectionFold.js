@@ -29,15 +29,19 @@
 import ThreadsProjection from "./threadsProjection.js";
 import { registerCrossCuttingHandler } from "../../../present/beats/2-fold/foldEngine.js";
 
-async function handleBeSummonForThreads(fact /*, type, id*/) {
-  if (fact?.verb !== "be" || fact?.action !== "summon") return;
+async function handleSummonForThreads(fact /*, type, id*/) {
+  if (fact?.verb !== "summon") return;
   const params = fact.params || {};
   const root = params.rootCorrelation || params.correlation;
   if (!root) return;
 
+  // Recipient is now the fact's target (right stance). Summoner is
+  // beingId (the actor). Renamed from be:summon on 2026-06-03.
   const participants = new Set();
   if (fact.beingId) participants.add(String(fact.beingId));
-  if (params.recipient) participants.add(String(params.recipient));
+  if (fact?.target?.kind === "being" && fact?.target?.id) {
+    participants.add(String(fact.target.id));
+  }
 
   const lastAct = params.sentAt
     ? new Date(params.sentAt)
@@ -76,7 +80,7 @@ async function handleBeSeverForThreads(fact /*, type, id*/) {
   );
 }
 
-registerCrossCuttingHandler(handleBeSummonForThreads);
+registerCrossCuttingHandler(handleSummonForThreads);
 registerCrossCuttingHandler(handleBeSeverForThreads);
 
 /**

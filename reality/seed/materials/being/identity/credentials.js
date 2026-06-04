@@ -61,8 +61,9 @@ const CREDENTIAL_KEY = Buffer.from(
 // not leak credentials.
 //
 // "Creator" here means the being that performed the birth act (the
-// be:summon-create). It is NOT the SUMMON sense (anyone calling
-// anyone) and NOT parentBeingId. See lineage.js findCreatorOf.
+// parentBeingId recorded inside the be:birth Fact's spec). It is NOT
+// the SUMMON sense (anyone calling anyone) and NOT the live
+// parentBeingId on the being row. See lineage.js findCreatorOf.
 //
 // Wire format: base64( iv(12) || tag(16) || ciphertext ).
 // ─────────────────────────────────────────────────────────────────────

@@ -83,16 +83,16 @@ export const DEFAULT_ORIENTATION = ORIENTATION.FORWARD;
 //   Outer:  ∃ f ∈ ΔF : target(f).kind ≠ "being" ∨ target(f).id ≠ doer
 //
 // Examples:
-//   - self-summon (turn): one be:summon fact, target=doer/being.
-//     INNER — the canonical inner act.
+//   - self-summon (turn): one summon fact, target=self/being.
+//     INNER — the canonical inner act (target.id === actor).
 //   - DO create matter: do:create fact, target=matter/<newId>.
 //     OUTER — touched another reel.
-//   - SUMMON another being: be:summon, target=doer (single-writer)
-//     but params.recipient names another being. By definition this
-//     is OUTER — the act touches the recipient by causing an
-//     InboxProjection row (cross-cutting fold), even though the
-//     fact itself sits on the doer's reel. Single-writer holds; the
-//     classifier reads INTENT via params.recipient.
+//   - SUMMON another being: verb=summon, target=recipient/being.
+//     OUTER — target.id !== actor; the right-stance target IS the
+//     recipient, so the general target check catches it. SUMMON
+//     joined DO in stamping its target with the right stance on
+//     2026-06-03; before then it stamped target=doer and the
+//     classifier had to read params.recipient as a special case.
 
 export const ACT_KIND = Object.freeze({
   INNER: "inner",
@@ -102,10 +102,12 @@ export const ACT_KIND = Object.freeze({
 /**
  * Classify an in-memory ΔF as inner or outer for a given doer.
  *
- * Returns "inner" only when every fact's target is the doer being
- * AND no fact carries a cross-being intent (be:summon to another
- * recipient counts as outer even though the fact lives on the doer's
- * reel). Returns "outer" otherwise.
+ * Returns "inner" only when every fact's target is the doer being.
+ * The general target check covers all three stamping verbs uniformly
+ * now that SUMMON stamps target=recipient (right stance) like DO
+ * stamps target=thing-acted-upon. A self-summon has target.id===doer
+ * and is INNER; a cross-being summon has target.id!==doer and is
+ * OUTER. No verb-specific special case needed.
  *
  * @param {Array<object>} deltaF  fact specs (logFact shape)
  * @param {string}        doerId  the acting being's id
@@ -120,18 +122,6 @@ export function classifyDeltaF(deltaF, doerId) {
     if (target?.kind && target.kind !== "being") return ACT_KIND.OUTER;
     // Any being target other than the doer is outer.
     if (target?.id && String(target.id) !== doer) return ACT_KIND.OUTER;
-    // be:summon with a recipient that isn't the doer is outer in
-    // intent even though the fact lives on the doer's reel
-    // (single-writer law). The cross-cutting fold creates a row
-    // on the recipient's inbox — that's a touch.
-    if (
-      f?.verb === "be" &&
-      f?.action === "summon" &&
-      f?.params?.recipient &&
-      String(f.params.recipient) !== doer
-    ) {
-      return ACT_KIND.OUTER;
-    }
   }
   return ACT_KIND.INNER;
 }

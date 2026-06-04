@@ -43,7 +43,7 @@ import {
 import { getSpaceRootId } from "../../../sprout.js";
 import { IbpError, IBP_ERR } from "../../../ibp/protocol.js";
 import { getRealityDomain } from "../../../ibp/address.js";
-import { summonCreateBeing } from "../../../ibp/verbs/summon.js";
+import { birthBeing } from "../../../materials/being/identity/birth.js";
 
 const TREEOS_AUTH_WELCOME =
   "Welcome to TreeOS. This place is open to anyone who wants to inhabit it. Pick a username and password; you will receive an identity token immediately and start at your home.";
@@ -100,7 +100,7 @@ async function birthHandler({ payload, ctx }) {
 
     let being;
     try {
-      const result = await summonCreateBeing({
+      const result = await birthBeing({
         spec: {
           cognition: "human",
           name,
@@ -172,7 +172,7 @@ async function birthHandler({ payload, ctx }) {
 
   let being;
   try {
-    const result = await summonCreateBeing({
+    const result = await birthBeing({
       spec: {
         cognition: "human",
         name,

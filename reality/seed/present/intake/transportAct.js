@@ -50,7 +50,7 @@
 // ── The two-fact-per-click thing ────────────────────────────────
 //
 // Every transport interaction puts two facts on the being's reel:
-//   - be:summon (transportAct:true) — the wake-call: "I summoned
+//   - summon (transportAct:true) — the wake-call: "I summoned
 //     myself via the wire."
 //   - the inner do:* / be:* — the act itself.
 //
@@ -111,7 +111,7 @@ const DEFAULT_TIMEOUT_MS = 60_000;
  *
  * @param {object} opts
  * @param {string} opts.beingId        — the acting being's id
- * @param {object} opts.act            — { verb: "do"|"be", target, action, args }
+ * @param {object} opts.act            — { verb: "do"|"be"|"summon", target, action, args }
  * @param {string} [opts.correlation]  — client-supplied idempotency key (recommended); auto-generated if omitted
  * @param {string} [opts.spaceId]      — intake-storing space; defaults to Being.homeSpace
  * @param {object} [opts.identity]     — { beingId, name }
@@ -138,8 +138,8 @@ export async function dispatchTransportAct({
   if (!act || typeof act !== "object") {
     throw new Error("dispatchTransportAct requires act { verb, target, action, args }");
   }
-  if (act.verb !== "do" && act.verb !== "be") {
-    throw new Error(`dispatchTransportAct: act.verb must be "do" or "be" (got "${act.verb}")`);
+  if (act.verb !== "do" && act.verb !== "be" && act.verb !== "summon") {
+    throw new Error(`dispatchTransportAct: act.verb must be "do", "be", or "summon" (got "${act.verb}")`);
   }
   if (typeof branch !== "string" || branch.length === 0) {
     throw new Error(`dispatchTransportAct: branch must be a non-empty string (got ${JSON.stringify(branch)})`);

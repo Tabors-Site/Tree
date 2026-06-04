@@ -55,7 +55,11 @@ function MAX_PAYLOAD_BYTES() {
   return Math.max(1024, Math.min(raw, 2 * 1024 * 1024));
 }
 const MAX_ACTION_LENGTH = 100;
-const VALID_VERBS = new Set(["do", "be"]);
+// The three stamping verbs. SEE never appends a Fact.
+//   - do: action on a target (right stance). target.kind ∈ {space, matter, being, place, stance}.
+//   - be: identity acting on self (left stance). target.kind === "being".
+//   - summon: one being calling another (right stance, the recipient). target.kind === "being".
+const VALID_VERBS = new Set(["do", "be", "summon"]);
 const VALID_TARGET_KINDS = new Set([
   "space",
   "matter",
@@ -63,6 +67,11 @@ const VALID_TARGET_KINDS = new Set([
   "place",
   "stance",
 ]);
+// Per-verb target-kind constraint. DO accepts any kind; BE and
+// SUMMON always act on a being. Enforced in logFact below so a
+// caller can't slip a `verb:"be" target:{kind:"matter"}` past the
+// guard and confuse the fold or the inner/outer classifier.
+const BEING_ONLY_TARGET_VERBS = new Set(["be", "summon"]);
 
 /**
  * Act a Fact onto the reel.
@@ -70,8 +79,9 @@ const VALID_TARGET_KINDS = new Set([
  * @param {object} params           the fact spec (see fields below)
  * @param {string} params.beingId   actor (I_AM for scaffold flows)
  * @param {string} params.action    operation or sub-event name
- * @param {string} [params.verb="do"]   "do" | "be"
- * @param {{kind:string,id:string}|null} [params.target]  what was acted on
+ * @param {string} [params.verb="do"]   "do" | "be" | "summon"
+ * @param {{kind:string,id:string}|null} [params.target]  what was acted on.
+ *   When verb is "be" or "summon", target.kind MUST be "being" (enforced).
  * @param {*} [params.params]       input payload (any JSON; clipped on cap)
  * @param {*} [params.result]       output payload (any JSON; clipped on cap)
  * @param {string|null} [params.actId]   correlation
@@ -151,6 +161,19 @@ export async function logFact(input, opts = {}) {
         kind: target.kind || null,
         id: target.id != null ? String(target.id) : null,
       };
+    }
+  }
+
+  // Per-verb target-kind constraint. BE acts on the actor's own
+  // identity; SUMMON acts on the recipient. Both are always being-
+  // targeted. Only DO can target a non-being kind (space, matter,
+  // place, stance). Catches mis-routed facts at the stamp boundary
+  // before they reach the fold or the inner/outer classifier.
+  if (BEING_ONLY_TARGET_VERBS.has(verb)) {
+    if (!normalizedTarget || normalizedTarget.kind !== "being") {
+      throw new Error(
+        `logFact: verb "${verb}" requires target.kind === "being" (got ${normalizedTarget?.kind ?? "(none)"})`,
+      );
     }
   }
 

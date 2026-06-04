@@ -2,27 +2,28 @@
 //
 // be.js . the BE verb. Identity operations on a being.
 //
-// BE is a closed four-op set: birth, use, release, switch. The static
-// table BE_OPS in [[ibp/beOps.js]] holds the schemas + handlers; this
-// verb's job is to authorize, dispatch, and stamp the audit Fact.
-//
-// Cherub is the canonical being that handles BE. llm-assigner has six
-// historical "honored operations" (add-llm, assign-slot, ...) that
-// belong on DO, not BE; until that migration lands, those still flow
-// through the legacy `beRegistry.getBeHandler` path below.
+// BE is the closed three-op set: birth, connect, release. The static
+// table BE_OPS in [ibp/beOps.js](../beOps.js) holds the schemas +
+// handlers; this verb's job is to authorize, dispatch, and stamp the
+// audit Fact. Cherub is the canonical handler.
 //
 // Dispatch flow:
 //
 //   1. Resolve the target being from the address (bare place defaults
 //      to @cherub, the welcome character).
-//   2. If the op name is in BE_OPS, dispatch through the static table.
-//      - assertVerbCaller unless the op is `bootstrap: true`.
-//      - place-level flags (birth_enabled / connect_enabled) gate
+//   2. Look up the op in BE_OPS. Unknown op = ACTION_NOT_SUPPORTED.
+//      . assertVerbCaller unless the op is `bootstrap: true`.
+//      . place-level flags (birth_enabled / connect_enabled) gate
 //        birth / connect.
-//      - authorize() the BE call.
-//      - run BE_OPS[op].handler(...).
-//      - writeBeFact stamps a `be:<op>` Fact on the actor's reel.
-//   3. Otherwise fall through to legacy per-being dispatch (llm-assigner).
+//      . authorize() the BE call.
+//      . run BE_OPS[op].handler(...).
+//      . writeBeFact stamps a `be:<op>` Fact on the actor's reel.
+//
+// The branches above (birther's BE:birth, release on non-cherub,
+// connect on non-cherub) all route through the same BE_OPS handlers
+// once the auth gate runs. Cherub's handler discriminates on the
+// address inside, so birther-as-target and arbitrary-being-as-target
+// reach the same code path.
 
 import log from "../../seedReality/log.js";
 import Being from "../../materials/being/being.js";
@@ -32,16 +33,7 @@ import { I_AM } from "../../materials/being/seedBeings.js";
 import { getRealityDomain } from "../address.js";
 import { authorize, getAuthConfig } from "../authorize.js";
 import { BE_OPS, getBeOp } from "../beOps.js";
-import { registerBeHandler, getBeHandler } from "../../materials/being/beRegistry.js";
 import { assertVerbCaller, refuseHistoricalWrite } from "./_shared.js";
-
-// llm-assigner has not yet migrated to DO ops; keep its legacy
-// `honoredOperations` + per-being method dispatch through beRegistry.
-// Cherub's static export (cherubBeing) is no longer needed here . its
-// handlers live behind BE_OPS now.
-import { llmAssignerBeing } from "../../present/roles/llm-assigner/role.js";
-
-registerBeHandler("llm-assigner", llmAssignerBeing, "seed");
 
 /**
  * BE. Run an identity operation. Returns the operation's result
@@ -182,7 +174,7 @@ export async function beVerb(operation, payload = {}, opts = {}) {
       );
     }
 
-    const { summonCreateBeing } = await import("./summon.js");
+    const { birthBeing } = await import("../../materials/being/identity/birth.js");
     const childSpec = {
       name:          childName,
       cognition:     childCognition,
@@ -194,24 +186,17 @@ export async function beVerb(operation, payload = {}, opts = {}) {
     if (childRoleField)  childSpec.role       = childRoleField;
     if (childRoleFlow)   childSpec.roleFlow   = childRoleFlow;
 
-    const result = await summonCreateBeing({
+    const result = await birthBeing({
       spec: childSpec,
       identity,
       summonCtx,
       scaffold: opts.scaffold === true,
     });
-    // writeBeFact: audit a self-stamp on the caller's reel ("I gave
-    // birth to X") in addition to the be:register the child stamps.
-    await writeBeFact({
-      operation,
-      identity,
-      authResult: { beingAddress: address, beingId: result.beingId, name: result.name },
-      payload:    { name: childName },
-      beingName,
-      actId:      summonCtx?.actId || null,
-      summonCtx,
-      scaffold:   opts.scaffold === true,
-    });
+    // ONE fact per birth. birthBeing already stamped `be:birth` on the
+    // new being's reel with parentBeingId=<caller> in the spec. No
+    // separate caller-side audit fact . the parent pointer lives on
+    // the birth fact already, and findCreatorOf walks it. Mirrors the
+    // be:summon-create collapse from 2026-06-03.
     return {
       beingId:      result.beingId,
       name:         result.name,
@@ -227,8 +212,8 @@ export async function beVerb(operation, payload = {}, opts = {}) {
   // stream). We route this through cherub's release handler so the
   // writeBeFact below stamps a be:release fact on the target's reel
   // and the connection-tracking reducer clears the inhabitedBy
-  // projection. Without this branch the call fell through to the
-  // legacy beRegistry lookup and threw "no handler for @<name>".
+  // projection. Without this branch the call would land in the
+  // closed-set tail and throw ROLE_UNAVAILABLE.
   if (operation === "release" && beingName !== "cherub") {
     assertVerbCaller("be", opts);
     if (!identity?.beingId) {
@@ -374,66 +359,22 @@ export async function beVerb(operation, payload = {}, opts = {}) {
     return result;
   }
 
-  // ── Legacy per-being dispatch ──
-  // Everything not yet migrated to the registry (currently
-  // llm-assigner's six honored ops) still flows through
-  // beRegistry.getBeHandler → method-on-role. This path retires when
-  // llm-assigner migrates.
-
-  assertVerbCaller("be", opts);
-
-  const decision = await authorize({
-    identity,
-    verb: "be",
-    target: { kind: addressKind, value: address },
-    operation,
-    summonCtx,
-  });
-  if (!decision.ok) {
-    throw new IbpError(
-      IBP_ERR.FORBIDDEN,
-      `BE denied for stance "${decision.stance}": ${decision.reason}`,
-      { stance: decision.stance, operation },
-    );
-  }
-
-  const role = getBeHandler(beingName);
-  if (!role) {
-    throw new IbpError(
-      IBP_ERR.ROLE_UNAVAILABLE,
-      `No being @${beingName} registered for BE operations on this reality`,
-      { beingName },
-    );
-  }
-  if (!role.honoredOperations?.includes(operation)) {
+  // No dispatch matched. BE is the closed birth/connect/release set;
+  // unknown ops throw ACTION_NOT_SUPPORTED. Known ops against a being
+  // that's neither cherub nor birther (and so didn't hit the branches
+  // above) throw ROLE_UNAVAILABLE.
+  if (!beOp) {
     throw new IbpError(
       IBP_ERR.ACTION_NOT_SUPPORTED,
-      `Being @${beingName} does not honor BE ${operation}`,
-      { beingName, operation, honoredOperations: role.honoredOperations || [] },
+      `BE op "${operation}" is not in the closed set (birth, connect, release)`,
+      { operation, available: Object.keys(BE_OPS) },
     );
   }
-
-  const ctx = { socket, address: { kind: addressKind, value: address }, identity, req, summonCtx };
-  const methodName = kebabToCamel(operation);
-  const method = role[methodName];
-  if (typeof method !== "function") {
-    throw new IbpError(
-      IBP_ERR.INTERNAL,
-      `Being @${beingName} declares BE "${operation}" but has no ${methodName}() handler`,
-    );
-  }
-  const beResult = await method.call(role, payload, ctx);
-  await writeBeFact({
-    operation,
-    identity,
-    authResult: beResult,
-    payload,
-    beingName,
-    actId: summonCtx?.actId || null,
-    summonCtx,
-    scaffold: opts.scaffold === true,
-  });
-  return beResult;
+  throw new IbpError(
+    IBP_ERR.ROLE_UNAVAILABLE,
+    `No being @${beingName} handles BE ${operation} on this reality`,
+    { beingName, operation },
+  );
 }
 
 // ─────────────────────────────────────────────────────────────────────
@@ -475,36 +416,33 @@ async function writeBeFact({ operation, identity, authResult, payload, beingName
     ? { name: payload.name || null, from: payload.from || null }
     : null;
 
-  // Target selection. Connect/release need to land on the TARGET being's
-  // reel so the connection-tracking reducer in being/reducer.js sees them
-  // and maintains qualities.connection.inhabitedBy as a projection.
+  // Target selection. BE = identity acting on itself; the fact's
+  // target is always a being (the actor's own identity, or the
+  // specific being whose identity is being changed). Stance targets
+  // retired 2026-06-03 in favor of the runtime invariant
+  // BEING_ONLY_TARGET_VERBS in facts.js.
   //
   //   connect: target = the being being connected to (authResult.beingId
   //            for cherub credential / inherit paths; identity.beingId
   //            for re-claim where the user re-asserts their own session).
   //   release: target = the being being released (identity.beingId — the
   //            caller IS the one releasing their own connection).
-  //   birth / other: keep the legacy shape (stance for new identities,
-  //            actor's being otherwise; these don't drive connection state).
+  //   register / claim / switch / other: target = the actor's own
+  //            being (self-act). authResult.beingAddress is recorded
+  //            in `result` for audit, not as the target shape.
   let target;
   let connectionParams = null;
   if (operation === "connect") {
-    const targetBeingId = authResult?.beingId || identity?.beingId || null;
-    if (targetBeingId) {
-      target = { kind: "being", id: String(targetBeingId) };
-      // inhabitedBy = the identity now driving this being. For
-      // credential-connect (cherub binding fresh auth), this is the
-      // being itself (self-connect). For inherit-connect, this is the
-      // caller (parent driving child).
-      const driverId = identity?.beingId
-        ? String(identity.beingId)
-        : String(targetBeingId);
-      connectionParams = { inhabitedBy: driverId };
-    } else {
-      target = authResult?.beingAddress
-        ? { kind: "stance", id: String(authResult.beingAddress) }
-        : { kind: "being",  id: String(actorBeingId) };
-    }
+    const targetBeingId = authResult?.beingId || identity?.beingId || actorBeingId;
+    target = { kind: "being", id: String(targetBeingId) };
+    // inhabitedBy = the identity now driving this being. For
+    // credential-connect (cherub binding fresh auth), this is the
+    // being itself (self-connect). For inherit-connect, this is the
+    // caller (parent driving child).
+    const driverId = identity?.beingId
+      ? String(identity.beingId)
+      : String(targetBeingId);
+    connectionParams = { inhabitedBy: driverId };
   } else if (operation === "release") {
     // The caller is releasing themselves. Target = caller's being so
     // the fact lands on that being's reel and clears inhabitedBy.
@@ -512,9 +450,9 @@ async function writeBeFact({ operation, identity, authResult, payload, beingName
     target = { kind: "being", id: String(targetBeingId) };
     connectionParams = { inhabitedBy: null };
   } else {
-    target = authResult?.beingAddress
-      ? { kind: "stance", id: String(authResult.beingAddress) }
-      : { kind: "being",  id: String(actorBeingId) };
+    // register / claim / switch and any future BE op: identity-on-
+    // self. The actor's own being is the target.
+    target = { kind: "being", id: String(actorBeingId) };
   }
 
   const mergedParams = connectionParams
@@ -540,12 +478,27 @@ async function writeBeFact({ operation, identity, authResult, payload, beingName
 
 // Pull the reality prefix off an address, if any. Lets beVerb refuse
 // addresses pointing at a different reality before any auth runs.
+//
+// Strips the optional `#<branch>` qualifier and any `@<being>` so the
+// comparison against `getRealityDomain()` (just the DNS name) is
+// apples-to-apples. Without stripping `#`, addresses like
+// `treeos.ai#1/@cherub` would compare `"treeos.ai#1"` against
+// `"treeos.ai"` and falsely report a cross-reality call.
 function extractRealityFromAddress(address, addressKind) {
   if (typeof address !== "string" || !address.length) return null;
-  if (addressKind === "place") return address;
-  const slashIndex = address.indexOf("/");
-  if (slashIndex === -1) return address;
-  return address.slice(0, slashIndex);
+  // For "place" addresses there's no path-separator slash, but the
+  // input may still carry a branch qualifier (e.g. "treeos.ai#1").
+  // Fall through to the strip logic instead of returning whole.
+  let head = address;
+  if (addressKind === "stance") {
+    const slashIndex = head.indexOf("/");
+    if (slashIndex !== -1) head = head.slice(0, slashIndex);
+  }
+  const hashIndex = head.indexOf("#");
+  if (hashIndex !== -1) head = head.slice(0, hashIndex);
+  const atIndex = head.indexOf("@");
+  if (atIndex !== -1) head = head.slice(0, atIndex);
+  return head.length > 0 ? head : null;
 }
 
 // Pull the @qualifier off a stance address — the being-name beVerb
@@ -556,8 +509,3 @@ function extractBeingFromAddress(address, addressKind) {
   return m ? m[1].toLowerCase() : null;
 }
 
-// kebab-case → camelCase for op → method name dispatch on the BE
-// being's role. e.g. "add-llm-connection" → "addLlmConnection".
-function kebabToCamel(s) {
-  return s.replace(/-([a-z])/g, (_, c) => c.toUpperCase());
-}

@@ -40,10 +40,12 @@ const FactSchema = new mongoose.Schema({
   // (pre-being scaffold flows: server boot, migrations).
   beingId: { type: String, ref: "Being", required: true },
 
-  // Which verb stamped the Fact. DO for operations; BE for identity
-  // acts (register / claim / release / switch and any BE-being's
-  // honoredOperations).
-  verb:   { type: String, enum: ["do", "be"], default: "do", index: true },
+  // Which verb stamped the Fact. DO for operations on a target
+  // (right stance), BE for the closed identity set (birth / connect
+  // / release — left stance, the actor itself), SUMMON for one
+  // being calling another (right stance: the recipient). The three
+  // stamping verbs are peers; SEE never appends a Fact.
+  verb:   { type: String, enum: ["do", "be", "summon"], default: "do", index: true },
 
   // The operation or sub-event name. Operations register a
   // `factAction` (defaults to the operation name); helpers may write

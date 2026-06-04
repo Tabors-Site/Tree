@@ -10,9 +10,10 @@
 //
 //   (a) ONE ACT WITH MULTI-REEL FACTS — the common case. A summoner
 //       creating a child being is one act that lands two facts: the
-//       child's be:register on the child's reel + the summoner's
-//       be:summon-create on the summoner's reel. Same act, different
-//       reels, one transaction. Most runtime moments.
+//       child's be:birth on the child's reel (parent recorded
+//       inside the spec) + the summoner's outer-act facts on its
+//       own reels. Same act, different reels, one transaction. Most
+//       runtime moments.
 //
 //   (b) A TRANSACTIONAL BATCH OF ACTS — rare; must-commit-together
 //       compositions where partial state is incoherent. Genesis is

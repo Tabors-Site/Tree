@@ -49,7 +49,7 @@
 // and the scaffold that ensures their rows exist.
 
 import log from "../../seedReality/log.js";
-import { summonCreateBeing } from "../../ibp/verbs/summon.js";
+import { birthBeing } from "./identity/birth.js";
 import { findIAm, iAmIdentity } from "./identity.js";
 import { I_AM } from "./seedBeings.js";
 import { findByName, loadProjection } from "../projections.js";
@@ -267,13 +267,14 @@ export async function ensureSeedDelegates(spaceRootId, summonCtx, opts = {}) {
       // itself; parent = me, so the being-tree chain delegate → me
       // → null is intact.
       // Build the I-Am identity from the planted id without a Mongo
-      // lookup (the row is still pending inside the boot moment). The
-      // be:summon-create Fact summonCreateBeing stamps inside this
-      // moment carries rootBeingId as the actor on its own reel.
+      // lookup (the row is still pending inside the boot moment).
+      // birthBeing stamps a be:birth Fact on the new delegate's reel
+      // carrying parentBeingId=I-Am inside the spec; lineage walks
+      // that pointer when findCreatorOf is called.
       const iAmIdent = iAm._pending
         ? { beingId: rootBeingId, name: I_AM }
         : await iAmIdentity();
-      await summonCreateBeing({
+      await birthBeing({
         spec: {
           name: spec.name,
           role: spec.role,

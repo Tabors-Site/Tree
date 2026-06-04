@@ -1261,7 +1261,7 @@ function renderFactBlock(f, discovery, chainStatus = "edge") {
   li.appendChild(summary);
 
   // Content sub-row — show a human-readable derived from params when
-  // available (be:summon content, create-* name, set-* field=value).
+  // available (summon content, create-* name, set-* field=value).
   // Keeps the headline scannable; full payload still in expand.
   const summaryText = factSummaryLine(f);
   if (summaryText) {
@@ -1524,17 +1524,20 @@ function factActionLabel(f) {
 function factSummaryLine(f) {
   if (!f) return null;
   const p = f.params;
-  // be:summon — the message content is the headline.
-  if (f.verb === "be" && f.action === "summon") {
+  // summon — the message content is the headline.
+  if (f.verb === "summon") {
     const c = p?.content;
     if (typeof c === "string" && c) return `"${c}"`;
     if (c && typeof c === "object" && typeof c.content === "string" && c.content) {
       return `"${c.content}"`;
     }
   }
-  // be:register / be:claim — name of the registered being.
+  // be:register / be:claim / be:birth — name on the spec / params.
   if (f.verb === "be" && (f.action === "register" || f.action === "claim")) {
     if (p?.name) return `@${p.name}`;
+  }
+  if (f.verb === "be" && f.action === "birth" && p?.spec?.name) {
+    return `@${p.spec.name}`;
   }
   // create-* — name on the spec.
   if (/^create/.test(f.action) && p?.spec?.name) {
@@ -1556,10 +1559,6 @@ function factSummaryLine(f) {
   if (/place|move/.test(f.action) && p) {
     if (typeof p.x === "number" && typeof p.y === "number") return `→ (${p.x}, ${p.y})`;
     if (p.path) return `→ ${p.path}`;
-  }
-  // be:summon-create — what got created.
-  if (f.action === "summon-create" && p?.name) {
-    return `created @${p.name}${p.role ? ` as ${p.role}` : ""}`;
   }
   // Generic fallback: short JSON of params.
   if (p && typeof p === "object") {

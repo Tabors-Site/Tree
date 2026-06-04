@@ -89,11 +89,13 @@ export async function createFirstBeing(name, password, opts = {}) {
 //   - `password` arg string -> the creator chose it. Bcrypt only; no plain
 //     stored. The chooser carries it themselves.
 //
-// "Creator" here means the being that performed THIS birth act (the
-// be:summon-create). It is NOT the SUMMON sense (anyone calling anyone)
-// and NOT parentBeingId (the being-tree parent, which can drift later).
+// "Creator" here means the being that performed THIS birth act. It
+// is the `parentBeingId` recorded inside this birth fact's spec; it
+// is NOT the SUMMON sense (anyone calling anyone) and NOT the live
+// parentBeingId on the being row (which can drift later through
+// reparenting). findCreatorOf walks the birth fact's spec for it.
 //
-// opts.actId threads the calling moment so the be:register Fact rides
+// opts.actId threads the calling moment so the be:birth Fact rides
 // the caller's frame. Genesis flows (seedDelegates) pass null actId.
 export async function createBeing(name, password, opts = {}) {
   name = validateName(name);
@@ -284,14 +286,14 @@ export async function createBeing(name, password, opts = {}) {
     qualities,
   };
 
-  // SINGLE-WRITER, structurally enforced: the be:register Fact lands
-  // on the new being's reel with the new being as the actor. The
-  // new being is its own first deed; the creator's "I summoned X"
-  // record lands on the CREATOR's reel as a separate be:summon-create
-  // Fact in the same atomic ΔF (see summonCreateBeing). Two facts on
-  // two reels, both self-stamped, one transaction. No knob.
+  // SINGLE-WRITER, structurally enforced: the be:birth Fact lands
+  // on the new being's reel with the new being as the actor. One
+  // fact per birth: the new being's first deed. The lineage record
+  // (who birthed me) lives inside this fact's params.spec as
+  // `parentBeingId` — no separate creator-side audit fact.
+  // findCreatorOf reads the pointer out of this fact's spec.
   //
-  // ATOMIC BIRTH (math-pure, Phase 2): the be:register Fact joins the
+  // ATOMIC BIRTH (math-pure, Phase 2): the be:birth Fact joins the
   // calling moment's ΔF via emitFact. When inside a moment, the Fact
   // commits with the rest of the moment's ΔF + Act row in one Mongo
   // transaction — the seal is the unit of commit. When standalone
@@ -732,7 +734,7 @@ export async function createBeingWithHome(opts) {
   // else's tree; they inherit access from the parent and leave
   // rootOwner null. Fact-driven via do.set; scaffold attribution
   // because createBeingWithHome is itself a higher-level orchestration
-  // already authorized at the caller (cherub.register, summonCreateBeing).
+  // already authorized at the caller (cherub.register, birthBeing).
   // Stamping under the new being's identity would face a chicken-and-egg
   // with stance auth (the being is becoming the owner; auth needs them
   // to already be the owner).
@@ -822,4 +824,128 @@ export async function createBeingWithHome(opts) {
   }
 
   return { being, home };
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// BIRTH (authorized public entry)
+// ─────────────────────────────────────────────────────────────────────
+
+/**
+ * Birth a being. Authorized public entry that one being uses to mint
+ * another. Runs cognition/role validation, runs the standard
+ * authorize() check (verb="be", op="create-being") against the new
+ * being's home space, then delegates to createBeingWithHome which
+ * stamps the be:birth Fact on the new being's reel.
+ *
+ * BE is identity acting on itself . register/claim/release/switch
+ * are self-acts. Birthing another being is also a be-op: the act's
+ * single fact (be:birth) lands on the NEW BEING'S reel, naming its
+ * spec including parentBeingId. There is no creator-side fact; the
+ * birth fact's spec.parentBeingId IS the lineage record.
+ *
+ * Earlier this function lived in seed/ibp/verbs/summon.js as
+ * `summonCreateBeing`, framed as a SUMMON-creates-a-being primitive.
+ * That framing conflated SUMMON (one being calling another) with BE
+ * (identity). Moved to the BE side on 2026-06-03; the verb is BE,
+ * the fact is be:birth, the function name reflects it.
+ *
+ * Authorization permission key stays "be:create-being" so existing
+ * defaultPermissions rules in extension manifests resolve:
+ *
+ *   provides: {
+ *     defaultPermissions: {
+ *       "be:create-being": { requires: { role: "ruler" } },
+ *     },
+ *   }
+ *
+ * @param {object}  args
+ * @param {object}  args.spec         createBeingWithHome spec (name, role/defaultRole, cognition, homeSpace|homeParent, parentBeingId, ...)
+ * @param {object}  args.identity     caller identity (the parent)
+ * @param {object} [args.summonCtx]   caller's moment ctx — required for atomic ΔF
+ * @param {boolean}[args.scaffold]    GENESIS-ONLY; propagated to createBeingWithHome
+ * @returns {Promise<{status: "created", beingId: string, name: string, being: object}>}
+ */
+export async function birthBeing({ spec, identity, summonCtx = null, scaffold = false }) {
+  if (!spec || !spec.name) {
+    throw new IbpError(
+      IBP_ERR.INVALID_INPUT,
+      "birthBeing requires spec.name",
+      { spec },
+    );
+  }
+  // Cognition is optional; defaults to "llm" inside createBeingWithHome
+  // (substrate default). Callers that need a non-default kind pass
+  // spec.cognition explicitly: cherub's human registration passes "human",
+  // seed delegates pass "scripted" or "llm" per the delegate, harmony's
+  // dancers pass "llm" or "scripted" per the role spec.
+  const cognition = spec.cognition || "llm";
+  // Identity is durable; roles compose. A non-human being must come
+  // into the world wearing at least one role. `spec.role` and
+  // `spec.defaultRole` are both accepted as the single source of
+  // birth voice (the carry list retired with the RoleFlow build,
+  // 2026-06-01). Mirror createBeingWithHome's resolution.
+  const firstRole = spec.role || spec.defaultRole || null;
+  if (cognition !== "human" && !firstRole) {
+    throw new IbpError(
+      IBP_ERR.INVALID_INPUT,
+      "birthBeing: non-human-cognition spec requires `role` or `defaultRole`",
+      { spec },
+    );
+  }
+  if (!spec.homeSpace && !spec.homeParent) {
+    throw new IbpError(
+      IBP_ERR.INVALID_INPUT,
+      "birthBeing: spec requires homeSpace or homeParent",
+      { spec },
+    );
+  }
+  // Authorize against the new being's home space. I_AM short-circuits
+  // inherently; cherub passes the seed-shipped place-root default;
+  // extensions pass through Layer 3 rules they registered. summonCtx
+  // threads the calling moment's deltaF so a scaffold whose
+  // create-space and create-being land in the same moment can
+  // authorize the being against the in-flight home space.
+  const { authorize } = await import("../../../ibp/authorize.js");
+  const decision = await authorize({
+    identity,
+    verb:      "be",
+    operation: "create-being",
+    target:    { kind: "space", spaceId: spec.homeSpace || spec.homeParent },
+    summonCtx,
+  });
+  if (!decision.ok) {
+    throw new IbpError(
+      IBP_ERR.FORBIDDEN,
+      `Stance "${decision.stance}" not authorized to birth beings: ${decision.reason || "no rule matched"}`,
+      { caller: identity?.name || null, stance: decision.stance },
+    );
+  }
+
+  // Thread the caller's moment so the be:birth Fact stamped inside
+  // createBeingWithHome rides the parent's frame. Boot moment passes
+  // summonCtx with scaffold:true; runtime callers pass summonCtx
+  // without scaffold; nothing is allowed to pass scaffold:true
+  // WITHOUT a summonCtx (no second seal path).
+  const factStampId = summonCtx?.actId || null;
+  if (!factStampId) {
+    throw new IbpError(
+      IBP_ERR.INTERNAL,
+      `birthBeing for @${spec.name}: missing ambient actId. Thread summonCtx from the caller's moment (runtime), or open a boot moment via withBootMoment(...) (genesis). scaffold:true alone is no longer sufficient — atomicity is whatever the summonCtx carries.`,
+    );
+  }
+
+  const { being } = await createBeingWithHome({
+    ...spec,
+    identity,
+    actId: factStampId,
+    summonCtx, // be:birth Fact joins the calling moment's ΔF
+    scaffold,
+  });
+
+  return {
+    status:   "created",
+    beingId:  String(being._id),
+    name:     being.name,
+    being,
+  };
 }

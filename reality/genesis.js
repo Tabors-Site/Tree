@@ -159,11 +159,11 @@ export async function genesis(app, opts = {}) {
   // ── THE BOOT MOMENT ──
   //
   // Genesis is ONE moment of the I-Am. ONE act ("I am that I am; let
-  // there be world") deposits ΔF across many reels: I-Am be:register,
-  // ten do:create-space (root + nine seed spaces), four delegate
-  // be:register + four be:summon-create + their home setups. sealAct
-  // commits the whole ΔF + the genesis Act row in one Mongo
-  // transaction. A kill -9 mid-genesis leaves zero trace.
+  // there be world") deposits ΔF across many reels: I-Am be:birth,
+  // ten do:create-space (root + nine seed spaces), and one be:birth
+  // per delegate (with parentBeingId=I-Am in each spec) + their home
+  // setups. sealAct commits the whole ΔF + the genesis Act row in
+  // one Mongo transaction. A kill -9 mid-genesis leaves zero trace.
   //
   // On Awakening (existing world) the moment produces zero facts and
   // skips the seal — nothing to commit.
@@ -353,11 +353,12 @@ export async function genesis(app, opts = {}) {
   registerRole("arrival", arrivalRole, "seed");
 
   // Cherub and llm-assigner are delegates: real work happens through
-  // BE verb routing (cherubBeing.register / llmAssignerBeing.add-llm
-  // / etc.), not through role.summon dispatch. They still need stub
-  // roles in the registry so the @cherub / @llm-assigner stances
-  // resolve and assign doesn't warn when an old inbox row gets
-  // drained. triggerOn: [] on each prevents new SUMMONs from queueing.
+  // their verb handlers (cherub owns the BE_OPS table; llm-assigner
+  // ships DO ops under the llm-assigner:* prefix), not through
+  // role.summon dispatch. They still need stub roles in the registry
+  // so the @cherub / @llm-assigner stances resolve and assign doesn't
+  // warn when an old inbox row gets drained. triggerOn: [] on each
+  // prevents new SUMMONs from queueing.
   const { cherubRole } = await import("./seed/present/roles/cherub/role.js");
   const { llmAssignerRole } = await import("./seed/present/roles/llm-assigner/role.js");
   registerRole("cherub", cherubRole, "seed");
@@ -381,8 +382,8 @@ export async function genesis(app, opts = {}) {
         try {
           const { cherubBeing } = await import("./seed/present/roles/cherub/role.js");
           // Operator mint is the I-Am acting through cherub. One Act
-          // for the whole register flow (cherub's home create, be:register,
-          // be:summon-create, rootOwner set) — all commit atomically.
+          // for the whole register flow (cherub's home create, be:birth,
+          // rootOwner set) — all commit atomically.
           await withIAmAct(`operator-being mint @${plantCtx.operatorName}`, async (ctx) => {
             await cherubBeing.register(
               { name: plantCtx.operatorName, password: plantCtx.operatorPassword },

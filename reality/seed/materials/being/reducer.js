@@ -52,7 +52,7 @@ export function reduce(state, fact) {
 
   // be:register — produces the initial row state from spec. No-op for
   // legacy slim-params facts (no .spec); safe to compose now even
-  // before summonCreateBeing converts.
+  // before birthBeing landed.
   next = applyCreateBeing(next, fact);
 
   // be:connect / be:release — maintains qualities.connection.inhabitedBy

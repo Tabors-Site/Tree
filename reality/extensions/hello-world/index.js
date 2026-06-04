@@ -5,10 +5,10 @@
 //      position + the children around it and returns a greeting
 //      addressed to both the asker AND the world it just saw.
 //   2. The "greeter" seed — when planted at a target space, spawns
-//      one being there with the greeter role. The plant is itself
-//      a SUMMON-create-being (the standard primitive in
-//      seed/ibp/verbs/summon.js#summonCreateBeing); we don't invent a new
-//      creation path.
+//      one being there with the greeter role. The plant calls
+//      birthBeing (the authorized BE-side entry in
+//      seed/materials/being/identity/birth.js); we don't invent a
+//      new creation path.
 //
 // The role is scripted today. Flipping to LLM cognition is a one-
 // line change in the seed (cognition: "scripted" → "llm" +
@@ -85,14 +85,14 @@ export async function init(reality) {
   });
 
   // ── Seed: greeter ──────────────────────────────────────────────
-  // The plant routes through SUMMON-create-being so the canonical
-  // atomic-multi-reel birth shape applies: be:register on the new
-  // greeter's reel (self-stamped) PLUS be:summon-create on the
-  // planter's reel (audit "I summoned the greeter forth") — both
-  // committed in ONE transaction with the planter's moment.
+  // The plant routes through birthBeing (the authorized BE-side
+  // entry) so the canonical birth shape applies: a single be:birth
+  // Fact on the new greeter's reel carrying the full spec
+  // (including parentBeingId=planter) — committed in the planter's
+  // moment ΔF and sealed atomically with the rest of the plant.
   //
   // Idempotent on re-plant: if a being with this name already exists,
-  // summonCreateBeing throws RESOURCE_CONFLICT and we surface it.
+  // birthBeing throws RESOURCE_CONFLICT and we surface it.
   reality.seeds.register("hello-world:greeter", {
     description:
       "Spawns one greeter being at the target space. SUMMON it to receive a hello-world greeting.",
@@ -100,10 +100,10 @@ export async function init(reality) {
       const beingName = `hello-${String(rootSpaceId).slice(0, 8)}`;
       const password = `seed-${Math.random().toString(36).slice(2)}-${Math.random().toString(36).slice(2)}`;
 
-      const { summonCreateBeing } = await import(
-        "../../seed/ibp/verbs/summon.js"
+      const { birthBeing } = await import(
+        "../../seed/materials/being/identity/birth.js"
       );
-      const result = await summonCreateBeing({
+      const result = await birthBeing({
         spec: {
           name:          beingName,
           password,

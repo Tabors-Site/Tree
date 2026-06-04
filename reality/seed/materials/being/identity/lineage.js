@@ -4,15 +4,21 @@
 //
 // "Creator" here is the specific role of HAVING PERFORMED THE BIRTH
 // ACT for a being. It is NOT the generic SUMMON sense (anyone calling
-// anyone). It is NOT parentBeingId (the being-tree parent, which can
-// drift later through reparenting). The creator is whoever stamped
-// the be:summon-create Fact that minted this being.
+// anyone). It is NOT the live parentBeingId on the being row (which
+// can drift later through reparenting). The creator is the
+// `parentBeingId` recorded inside the new being's `be:birth` Fact at
+// the moment of birth — that pointer is permanent and lives on the
+// fact chain.
 //
-// The substrate's claim: "who created me" is not a stored field on the
-// being. It is the answer to a fold question against the fact chain.
-// Every birth leaves two facts: be:register on the new being's reel,
-// be:summon-create on the creator's reel naming the createdBeingId.
-// The creator is whoever stamped the be:summon-create.
+// The substrate's claim: "who created me" is not a stored field on
+// the being. It is the answer to a fold question against the fact
+// chain. Birth leaves one fact: `be:birth` on the new being's reel,
+// carrying `params.spec.parentBeingId`. findCreatorOf reads that.
+// The earlier shape stamped a separate `be:summon-create` Fact on
+// the creator's reel to record lineage, but it was a redundant
+// audit (the same parent pointer lives on the birth fact) AND it
+// mixed summon semantics into the BE namespace. Collapsed into
+// `be:birth` on 2026-06-03.
 //
 // Credential authority (read, reset, detach) is derived here. Self
 // always has authority. Creator has authority until the target stamps
@@ -25,27 +31,30 @@
 import Fact from "../../../past/fact/fact.js";
 
 /**
- * Return the beingId of whoever summoned `targetBeingId`, or null if
- * no be:summon-create Fact names them. The I-Am has no creator (root
- * of the being-tree); callers should special-case that with isIAm()
- * rather than treat null as "orphan".
+ * Return the beingId of whoever birthed `targetBeingId`, or null if
+ * no be:birth Fact names them. The I-Am has no creator (root of the
+ * being-tree); its birth fact carries no parentBeingId, so callers
+ * should special-case that with isIAm() rather than treat null as
+ * "orphan".
  *
- * Genesis-time seed delegates are summoned by the I-Am via the scaffold
- * path in seedDelegates.js, which DOES emit a be:summon-create Fact
- * on the I-Am's reel. So arrival/cherub/llm-assigner/reality-manager
- * resolve to the I-Am here, not null.
+ * Genesis-time seed delegates are birthed by the I-Am via the
+ * scaffold path in seedDelegates.js; their `be:birth` Fact's
+ * `params.spec.parentBeingId` points at the I-Am, so arrival /
+ * cherub / llm-assigner / reality-manager resolve to the I-Am here.
  */
 export async function findCreatorOf(targetBeingId) {
   if (!targetBeingId) return null;
   const fact = await Fact.findOne({
     verb: "be",
-    action: "summon-create",
-    "params.createdBeingId": String(targetBeingId),
+    action: "birth",
+    "target.kind": "being",
+    "target.id": String(targetBeingId),
   })
     .sort({ seq: 1, date: 1 })
-    .select("beingId")
+    .select("params")
     .lean();
-  return fact?.beingId || null;
+  const parentBeingId = fact?.params?.spec?.parentBeingId;
+  return parentBeingId ? String(parentBeingId) : null;
 }
 
 /**

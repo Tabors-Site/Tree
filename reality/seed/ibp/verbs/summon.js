@@ -3,27 +3,20 @@
 // summon.js — the SUMMON verb. Deliver a message to the being at
 // `stance` and wake their scheduler so their role runs.
 //
-// SUMMON is the only verb whose fact lands on the CALLER'S reel
-// (single-writer: a being writes only its own reel). The
-// recipient is named in params.recipient; the cross-cutting fold
-// handler in past/projections/inbox/inboxProjectionFold.js upserts an
-// InboxProjection row keyed by correlation; the scheduler picks
-// from there.
+// SUMMON is its own verb namespace, peer to DO and BE. The summon
+// Fact has target=recipient (right stance, matching DO's target
+// shape) and beingId=summoner (the actor). The cross-cutting fold
+// handler in past/projections/inbox/inboxProjectionFold.js upserts
+// an InboxProjection row keyed by correlation; the scheduler picks
+// from there. Self-summons (orientation turns, transport intake)
+// have target.id === beingId.
 //
-// Three entries:
+// Two entries:
 //
 //   summonVerb         — public, parses the stance, resolves the
-//                        being, dispatches. Two short-circuits before
-//                        the normal flow: `<reality>/./threads/<id>`
-//                        routes to cutThread; an unresolved
-//                        @qualifier with a `create-being` content
-//                        routes to summonCreateBeing (call-forth).
-//
-//   summonCreateBeing  — seed-internal primitive for one being calling
-//                        another forth from non-being. Audit chain is
-//                        Act row + be:register Fact on new being's
-//                        reel + be:summon-create audit Fact on the
-//                        summoner's reel. First real multi-reel ΔF.
+//                        being, dispatches. Threads-cut short-circuit:
+//                        `<reality>/./threads/<id>` routes to
+//                        cutThread.
 //
 //   summonByResolved   — for callers that already have the receiver
 //                        and inbox space resolved (DO-trigger fan-out,
@@ -32,6 +25,11 @@
 //                        path for "internal" summons — anything
 //                        writing to a being's inbox comes through
 //                        here or through summonVerb.
+//
+// Minting a new being is a BE op, not a SUMMON. The auth-running
+// public entry for that is `birthBeing` in
+// materials/being/identity/birth.js. Earlier this file hosted
+// `summonCreateBeing` for historical reasons; moved 2026-06-03.
 //
 // Private: _dispatchSummon (shared tail used by both summonVerb and
 // summonByResolved), validateSummonMessage, runSummoning,
@@ -192,7 +190,7 @@ export async function summonVerb(stance, message, opts = {}) {
     // resolve to a Being row AND the message carries a creation spec
     // AND the caller has identity, this SUMMON is a call-forth: the
     // caller is summoning the @qualifier into existence. Authorize
-    // (via summonCreateBeing's internal authorize() check) decides
+    // (via birthBeing's internal authorize() check) decides
     // whether the caller's stance permits creation at the target
     // space. The audit chain (Act row + BE.register Fact) is
     // stamped by summonCreateBeing.
@@ -257,167 +255,12 @@ export async function summonVerb(stance, message, opts = {}) {
   });
 }
 
-/**
- * SUMMON-creates-a-being. The seed-internal primitive for one being
- * calling another forth from non-being.
- *
- * BE is identity acting on itself (register/claim/release/switch);
- * SUMMON is one being calling another. The act of creation is
- * shaped like SUMMON: the caller names the not-yet, the new being
- * answers by being.
- *
- * The caller is the *parent* of the creation act. They are
- * attributed in the Act audit. After the Being row lands, the
- * parent also stamps a be:summon-create Fact on their own reel
- * naming the new being — first real multi-reel atomic ΔF: the
- * be:register on the new being's reel + the be:summon-create on
- * the summoner's reel commit together in one transaction.
- *
- * Authorization runs through the standard authorize() check with
- * verb="be" operation="create-being" against the new being's home
- * space. I_AM passes inherently (seed short-circuit). The cherub
- * is granted by the seed-shipped default permission seeded at
- * place root. Extensions grant their own roles by declaring
- * defaultPermissions in their manifest:
- *
- *   provides: {
- *     defaultPermissions: {
- *       "be:create-being": { requires: { role: "ruler" } },
- *     },
- *   }
- */
-export async function summonCreateBeing({ spec, identity, summonCtx = null, scaffold = false }) {
-  if (!spec || !spec.name) {
-    throw new IbpError(
-      IBP_ERR.INVALID_INPUT,
-      "summonCreateBeing requires spec.name",
-      { spec },
-    );
-  }
-  // Cognition is optional; defaults to "llm" inside createBeingWithHome
-  // (substrate default). Callers that need a non-default kind pass
-  // spec.cognition explicitly: cherub's human registration passes "human",
-  // seed delegates pass "scripted" or "llm" per the delegate, harmony's
-  // dancers pass "llm" or "scripted" per the role spec.
-  const cognition = spec.cognition || "llm";
-  // Identity is durable; roles compose. A non-human being must come
-  // into the world wearing at least one role. The spec may name it
-  // The new being's birth role. `spec.role` and `spec.defaultRole` are
-  // both accepted as the single source of birth voice (the carry list
-  // retired with the RoleFlow build, 2026-06-01). Mirror birth.js's
-  // resolution exactly so this gate accepts whatever createBeingWithHome
-  // will.
-  const firstRole = spec.role || spec.defaultRole || null;
-  if (cognition !== "human" && !firstRole) {
-    throw new IbpError(
-      IBP_ERR.INVALID_INPUT,
-      "summonCreateBeing: non-human-cognition spec requires `role` or `defaultRole`",
-      { spec },
-    );
-  }
-  if (!spec.homeSpace && !spec.homeParent) {
-    throw new IbpError(
-      IBP_ERR.INVALID_INPUT,
-      "summonCreateBeing: spec requires homeSpace or homeParent",
-      { spec },
-    );
-  }
-  // Authorize against the new being's home space. I_AM short-circuits
-  // inherently; cherub passes the seed-shipped place-root
-  // default; extensions pass through Layer 3 rules they registered.
-  // summonCtx threads the calling moment's deltaF so a scaffold whose
-  // create-space and create-being land in the same moment can authorize
-  // the being against the in-flight home space (the dance-floor case).
-  const decision = await authorize({
-    identity,
-    verb:      "be",
-    operation: "create-being",
-    target:    { kind: "space", spaceId: spec.homeSpace || spec.homeParent },
-    summonCtx,
-  });
-  if (!decision.ok) {
-    throw new IbpError(
-      IBP_ERR.FORBIDDEN,
-      `Stance "${decision.stance}" not authorized to summon beings forth: ${decision.reason || "no rule matched"}`,
-      { caller: identity?.name || null, stance: decision.stance },
-    );
-  }
-
-  // Thread the caller's moment so the be:register Fact stamped inside
-  // createBeing rides the parent's frame. Boot moment passes summonCtx
-  // with scaffold:true; runtime callers pass summonCtx without
-  // scaffold; nothing is allowed to pass scaffold:true WITHOUT a
-  // summonCtx (no second seal path).
-  const factStampId = summonCtx?.actId || null;
-  if (!factStampId) {
-    throw new IbpError(
-      IBP_ERR.INTERNAL,
-      `summonCreateBeing for @${spec.name}: missing ambient actId. Thread summonCtx from the caller's moment (runtime), or open a boot moment via withBootMoment(...) (genesis). scaffold:true alone is no longer sufficient — atomicity is whatever the summonCtx carries.`,
-    );
-  }
-
-  // The spec passes through to createBeingWithHome (the Mongoose
-  // primitive). The full shape (homeSpace | homeParent, password,
-  // llmDefault, scaffolding, homeName, etc.) is accepted because
-  // seed-internal callers vary: I_AM at boot uses homeSpace; auth
-  // at runtime uses homeParent + password for humans. The be:register
-  // Fact is stamped INSIDE createBeing — one canonical birth Fact per
-  // being, on the new being's reel, carrying the full spec for the
-  // reducer to materialize.
-  const { createBeingWithHome } = await import("../../materials/being/identity.js");
-  const { being } = await createBeingWithHome({
-    ...spec,
-    identity,
-    actId: factStampId,
-    summonCtx, // be:register Fact joins the calling moment's ΔF
-    scaffold,  // GENESIS-ONLY. summonCreateBeing only accepts scaffold:true
-               // from the seedDelegates boot path; runtime callers never
-               // pass it. We propagate so the inner home-registration
-               // doVerb lands on the same exception path — without this,
-               // genesis crashes on the actId requirement at boot.
-  });
-
-  // ── Parent audit Fact (Phase 2, step 6: birth-with-parent-fact). ──
-  // The be:register Fact above landed on the NEW being's reel. The
-  // single-writer law forbids us from stamping on another reel for
-  // the same being's "I created X" record, so the summoner stamps
-  // a separate audit Fact on their OWN reel naming the created
-  // being. When the summoner is a real being inside a moment, this
-  // Fact joins ctx.deltaF alongside the be:register — sealAct then
-  // commits both facts (two reels) + the Act row in one transaction.
-  // First real multi-reel atomic ΔF in production. When standalone
-  // (scaffold path, I_AM as actor), emitFact falls back to sealFacts
-  // singleton — eager commit on I_AM's reel.
-  const summonerBeingId = identity?.beingId ? String(identity.beingId) : I_AM;
-  await emitFact({
-    verb:    "be",
-    action:  "summon-create",
-    beingId: summonerBeingId,
-    target:  { kind: "being", id: summonerBeingId }, // summoner's own reel
-    params:  {
-      createdBeingId: String(being._id),
-      name:           being.name,
-      // Resolved first-role matches the validation gate above. A spec
-      // that passed validation has a real role here (or is human-
-      // cognition, in which case both fields are null and that's
-      // intentional).
-      role:           firstRole,
-      cognition:      cognition,
-      homeSpace:      spec.homeSpace || null,
-    },
-    actId: factStampId,
-    // Branch the be:summon-create fact lands on. Inherited from the
-    // ambient moment; "0" outside a moment (genesis I_AM scaffold).
-    branch: summonCtx?.branch || "0",
-  }, summonCtx);
-
-  return {
-    status:   "created",
-    beingId:  String(being._id),
-    name:     being.name,
-    being,
-  };
-}
+// birthBeing (the authorized public entry for one being minting
+// another) lives on the BE side now . see
+// materials/being/identity/birth.js. SUMMON is being-to-being
+// communication; minting a being is a BE op. Earlier this file
+// hosted `summonCreateBeing` for historical reasons (the call-forth
+// metaphor), which conflated the two namespaces. Moved 2026-06-03.
 
 /**
  * SUMMON for callers that already have the receiver and inbox space
@@ -509,10 +352,10 @@ async function _dispatchSummon({
   const recipientBeingId = String(toBeing._id);
 
   // Fact-driven SUMMON. The summon is the summoner's act; it stamps
-  // a be:summon Fact on the summoner's own reel. The recipient
-  // lives in params.recipient (NOT on target — single-writer: facts
-  // only land on the actor's reel for being-targeted ops). The
-  // cross-cutting fold handler in past/projections/inbox/inboxProjectionFold.js
+  // a `summon` Fact with target=recipient (right stance) and
+  // beingId=summoner (the actor). SUMMON joined DO in stamping its
+  // target with the right stance on 2026-06-03; the cross-cutting
+  // fold handler in past/projections/inbox/inboxProjectionFold.js
   // upserts an InboxProjection row keyed by correlation; the
   // scheduler picks from there.
   //
@@ -538,19 +381,25 @@ async function _dispatchSummon({
     );
   }
 
-  // Phase 2: contribute the be:summon Fact to the caller's ΔF (when
+  // Phase 2: contribute the summon Fact to the caller's ΔF (when
   // inside a moment) so it commits atomically with the moment's seal.
   // Outside a moment (boot, scaffold, seed-internal flows), emitFact
   // falls back to sealFacts singleton — immediate commit. The actId
   // rides from the moment's plannedAct (summonCtx.actId) when
   // present; null for boot/scaffold paths.
+  //
+  // SUMMON is its own verb namespace, peer to DO and BE. The fact's
+  // target is the RECIPIENT (right stance), matching the symmetry
+  // with DO (target=thing acted upon). The actor (summoner) is
+  // recorded as `beingId`. Renamed from `be:summon` on 2026-06-03
+  // because the BE namespace is for self-acts (claim/release/birth
+  // /switch); summoning another being is not a self-act.
   await emitFact({
-    verb:    "be",
+    verb:    "summon",
     action:  "summon",
     beingId: summonerBeingId,
-    target:  { kind: "being", id: summonerBeingId }, // summoner's own reel
+    target:  { kind: "being", id: recipientBeingId }, // right stance
     params:  {
-      recipient:       recipientBeingId,
       correlation:     messageId,
       rootCorrelation: validatedMessage.rootCorrelation || messageId,
       inReplyTo:       validatedMessage.inReplyTo || null,
@@ -564,7 +413,7 @@ async function _dispatchSummon({
       sentAt,
     },
     actId: summonCtx?.actId || null,
-    // Branch the be:summon fact lands on. Self-summons inherit the
+    // Branch the summon fact lands on. Self-summons inherit the
     // moment's branch; cross-being summons inherit the caller's. The
     // address-level bridge gate already rejected mixed-branch addresses.
     branch: summonCtx?.branch || "0",

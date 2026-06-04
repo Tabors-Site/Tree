@@ -13,7 +13,7 @@
 // index. One row per live root, maintained by fold handlers on the
 // reality's per-being reels:
 //
-//   `be:summon` fact (any reel) → upsert row keyed by
+//   `summon` fact (any reel) → upsert row keyed by
 //      params.rootCorrelation. Add summoner + recipient to
 //      participants. Record parentThread when the root is itself
 //      spawned from another live root (the fact's
@@ -44,7 +44,7 @@
 // threadsProjectionFold.js are the authority for what each row looks
 // like; the schema is Mongoose mechanics. Three-slot rule applies
 // in adapted form: Identity (`_id` = rootCorrelation), Figure
-// (everything the handlers upsert from be:summon / be:sever facts
+// (everything the handlers upsert from summon / be:sever facts
 // and the Act-seal callback), Cache-control (no foldedSeq here —
 // cross-cutting projections don't carry one). See
 // seed/materials/being/being.js header for the canonical projection

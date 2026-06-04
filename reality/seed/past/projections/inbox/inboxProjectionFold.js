@@ -34,16 +34,22 @@
 import InboxProjection from "./inboxProjection.js";
 import { registerCrossCuttingHandler } from "../../../present/beats/2-fold/foldEngine.js";
 
-async function handleBeSummon(fact /*, type, id*/) {
-  if (fact?.verb !== "be" || fact?.action !== "summon") return;
+async function handleSummon(fact /*, type, id*/) {
+  if (fact?.verb !== "summon") return;
   const params = fact.params || {};
-  if (!params.correlation || !params.recipient) return;
+  // Recipient is the fact's target (right stance); summoner is
+  // beingId (the actor). Renamed from be:summon (which carried
+  // recipient in params and target=summoner) on 2026-06-03.
+  const recipient = fact?.target?.kind === "being" && fact?.target?.id
+    ? String(fact.target.id)
+    : null;
+  if (!params.correlation || !recipient) return;
 
   await InboxProjection.updateOne(
     { _id: params.correlation },
     {
       $set: {
-        recipient:       String(params.recipient),
+        recipient,
         summoner:        fact.beingId ? String(fact.beingId) : null,
         sender:          params.sender || null,
         content:         params.content ?? null,
@@ -76,7 +82,7 @@ async function handleBeSever(fact /*, type, id*/) {
 // handler is invoked directly from stamped.js (see closeInboxOnAnswer
 // below) because Act seals are not fact appends — Acts are their own
 // primitive.
-registerCrossCuttingHandler(handleBeSummon);
+registerCrossCuttingHandler(handleSummon);
 registerCrossCuttingHandler(handleBeSever);
 
 /**

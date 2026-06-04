@@ -96,7 +96,7 @@ export async function handleSummon(socket, env, ack) {
       // Parse failures fall through; summonVerb owns address validation.
     }
 
-    // Pause / delete gate. SUMMON ALWAYS produces a be:summon Fact
+    // Pause / delete gate. SUMMON ALWAYS produces a summon Fact
     // (writes the recipient's inbox); paused or deleted branches
     // refuse so the frozen / hidden world accumulates no new work.
     {

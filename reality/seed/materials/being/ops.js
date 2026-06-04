@@ -12,7 +12,7 @@
 //                           chain walks both)
 //
 // Being birth has NO DO op. Identity is BE territory: `be.register`,
-// `summonCreateBeing`. There is no `create-being`.
+// `birthBeing`. There is no `create-being` DO op.
 //
 // These self-register at module load. `seed/services.js` imports this
 // file for side effects; the registry is populated before any caller

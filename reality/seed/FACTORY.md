@@ -597,6 +597,66 @@ pattern showed up across ~17 sites; fixing them at the seam (not
 patching the symptom per call) meant future branch features inherit
 the correct behavior automatically.
 
+## Branches
+
+Branches are divergent worlds sharing history with their parent up to
+a chosen branch point. `#0` is main; `#1`, `#1a`, `#1a1` descend from
+it. Lineage is captured eagerly in the Branch row's per-reel
+`branchPoint` map so cold-folds don't walk the parent's reel on every
+boot.
+
+**State inheritance through reel-lineage.** A read against a derived
+branch walks the parent reel up to the branchPoint, then the
+divergent tail. `loadOrFold` is the lineage-aware reader. Raw
+`Branch.findById` and `Fact.find({branch})` are not. Every read site
+that drives a behavioral decision must use the lineage walk or it
+silently treats derived branches as empty (the loadProjection vs
+loadOrFold distinction documented above).
+
+**Liveness inheritance through reel-lineage.** Scheduled wakes are
+not runtime-only state. They are facts on the being's reel
+(`wake-scheduled`, `wake-cancelled`). The in-memory scheduler
+registry is a projection of those facts. Branches inherit liveness
+the same way they inherit state, through the lineage walk. A wake
+scheduled on main before `#1` was created is in `#1`'s lineage. A
+cancellation past the branchPoint is not. The doctrinal claim is
+that **the chain is the truth of liveness, not just state.**
+Fold-from-genesis on any branch reconstructs the scheduler that
+produced that branch's facts. Branches are alive by default. Pause
+and delete are explicit. See
+[present/wakes/wakeSchedule.js](present/wakes/wakeSchedule.js) for
+the implementation,
+[.test/scripts/verify-wake-replay.js](../.test/scripts/verify-wake-replay.js)
+for the test that pins the doctrine.
+
+**Branch deletion is mark-deleted, not purge.** Every lifecycle
+operation in TreeOS is append-only. Beings released, not erased.
+Spaces archived, not erased. Branches follow the same shape. The
+chain preserves the fact that a branch existed and was deleted at T.
+Reversal is one `undelete-branch` op away. Deleted branches drop
+from default catalog listings but direct-path lookup still resolves
+so historians can SEE the chain. Purge is a separate explicit
+operation, built only when concrete need surfaces.
+
+**Lifecycle exemption asymmetry.** Paused branches accept the full
+lifecycle set: `pause-branch`, `unpause-branch`, `create-branch`,
+`delete-branch`, `undelete-branch`. The operator must always be able
+to revive a frozen world, including by forking off it. Deleted
+branches accept only `delete-branch` and `undelete-branch`. Forking
+off a deleted branch is forbidden; undelete first to fork. Pause is a
+temporary halt. Deletion is a stronger statement. The wire gates
+(DO, BE, SUMMON) and the scheduler intake gate both honor this
+asymmetry.
+
+**Deleted branches skip materialization, not gate at intake.** At
+boot, `rehydrateFromFacts` enumerates non-deleted branches only.
+Deleted branches' wake facts stay in the chain (mark-deleted, not
+purge), but no runtime entry is instantiated for them. Undelete +
+rehydrate restores. The alternative (always materialize, gate at
+intake) would burn timers on every dead branch forever. The skip-at-
+materialize choice keeps the tick loop's working set proportional to
+the live world.
+
 ## Orientation — the three turns
 
 Every moment carries an orientation. The fold signature is

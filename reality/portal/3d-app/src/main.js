@@ -671,10 +671,9 @@ function handleSummon(entry) {
 // its marker before deleting.
 async function onMatterEnded({ matterId }) {
   if (!state.client || !matterId) return;
-  const place = state.discovery?.reality;
-  if (!place) return;
+  if (!state.discovery?.reality) return;
   try {
-    await state.client.do(`${place}/`, "llm-assigner:complete-tutorial", { matterId });
+    await state.client.do("/", "llm-assigner:complete-tutorial", { matterId });
   } catch (err) {
     console.warn("[3D] llm-assigner:complete-tutorial failed:", err?.code || err?.message || err);
   }
@@ -686,10 +685,9 @@ async function onMatterEnded({ matterId }) {
 // so revisits resume at the saved point across browsers and devices.
 async function onMatterPlaybackTick({ matterId, currentTime }) {
   if (!state.client?.connected || !matterId) return;
-  const place = state.discovery?.reality;
-  if (!place) return;
+  if (!state.discovery?.reality) return;
   try {
-    await state.client.do(`${place}/`, "llm-assigner:save-playback",
+    await state.client.do("/", "llm-assigner:save-playback",
       { matterId, currentTime });
   } catch (err) {
     console.warn("[3D] save-playback failed:",
@@ -706,8 +704,7 @@ async function onMatterPlaybackTick({ matterId, currentTime }) {
 async function spawnLlmAssignerTutorial() {
   if (!state.client) throw new Error("Not connected");
   if (!state.session?.token) throw new Error("Not authenticated. Sign in via @cherub first.");
-  const place = state.discovery?.reality;
-  if (!place) throw new Error("No place");
+  if (!state.discovery?.reality) throw new Error("Reality not yet discovered");
 
   // After an HMR reload (or any transient disconnect) the panel may
   // open before the socket is back. Give it a short window to reconnect
@@ -720,7 +717,7 @@ async function spawnLlmAssignerTutorial() {
     if (!state.client.connected) throw new Error("Portal socket not connected (after 3s)");
   }
 
-  const result = await state.client.do(`${place}/`, "llm-assigner:start-tutorial", {});
+  const result = await state.client.do("/", "llm-assigner:start-tutorial", {});
 
   // Always re-fetch — even when created:false, the live descriptor
   // for this client may not have the matter yet.

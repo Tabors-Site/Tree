@@ -229,9 +229,9 @@ export function applySetField(state, fact) {
  *
  * Important safety: when the fact's params don't carry `spec` (the
  * legacy slim shape: `{name, role, witnessedBy}` from the pre-conversion
- * summonCreateBeing path), this returns state unchanged. That keeps
+ * birthBeing path), this returns state unchanged. That keeps
  * the reducer harmless while the legacy `new Being(...).save()` flow
- * still runs in parallel. Once summonCreateBeing converts to emit a
+ * still runs in parallel. Once birthBeing landed to emit a
  * full spec, the reducer becomes the source.
  *
  * The verb handler is responsible for input normalization BEFORE the

@@ -102,16 +102,17 @@ export async function enqueueIntake(spaceId, beingId, entry) {
   // Self-summon Fact: the being is the actor AND the recipient. The
   // params carry the transport-act payload; the scheduler reads them
   // when picking. The Fact lands on the being's own reel (single-
-  // writer — the being is the actor). enqueueIntake runs OUTSIDE a
-  // moment (it kicks one off), so emitFact's no-summonCtx path
-  // applies: immediate commit via sealFacts singleton.
+  // writer — the being is the actor; target=recipient=self). The
+  // verb is `summon` (its own namespace, peer to DO and BE);
+  // self-summon is the target.id===actor case. enqueueIntake runs
+  // OUTSIDE a moment (it kicks one off), so emitFact's no-summonCtx
+  // path applies: immediate commit via sealFacts singleton.
   await emitFact({
-    verb:    "be",
+    verb:    "summon",
     action:  "summon",
     beingId: String(beingId),
     target:  { kind: "being", id: String(beingId) },
     params:  {
-      recipient:       String(beingId),
       correlation,
       rootCorrelation,
       inReplyTo:       entry.inReplyTo || null,

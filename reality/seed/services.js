@@ -182,11 +182,11 @@ import "./realityConfig.js";
 // seed/materials/being/reigning.js.
 import "./materials/being/reigning.js";
 // Side-effect import. Registers the InboxProjection cross-cutting
-// fold handlers (be:summon → upsert, be:sever → delete-by-root).
+// fold handlers (summon → upsert, be:sever → delete-by-root).
 // See seed/past/projections/inbox/inboxProjectionFold.js.
 import "./past/projections/inbox/inboxProjectionFold.js";
 // Side-effect import. Registers the ThreadsProjection cross-cutting
-// fold handlers (be:summon → upsert+addParticipant, be:sever →
+// fold handlers (summon → upsert+addParticipant, be:sever →
 // mark severed). See seed/past/projections/threads/threadsProjectionFold.js.
 import "./past/projections/threads/threadsProjectionFold.js";
 // Side-effect import. Registers the PositionProjection cross-cutting

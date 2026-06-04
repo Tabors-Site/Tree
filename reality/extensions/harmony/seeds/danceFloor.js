@@ -9,7 +9,7 @@
 //   6. A scheduled wake on the drummer every TICK_MS.
 
 import log from "../../../seed/seedReality/log.js";
-import { summonCreateBeing } from "../../../seed/ibp/verbs/summon.js";
+import { birthBeing } from "../../../seed/materials/being/identity/birth.js";
 
 // Tick cadence. One minute keeps the LLM dancers' per-tick inference
 // load light and gives a human watching the floor time to read each
@@ -157,12 +157,12 @@ export const danceFloorSeed = {
       sounds: { "harmony:tick": "harmony:drum-hit" },
     }, opOpts);
 
-    // 3. drummer being. Use summonCreateBeing directly (the same path
-    // hello-world's seed uses). `reality.be("create-being", ...)` is a
-    // doc-claimed shape but cherub's honoredOperations does not
-    // include "create-being" — that dispatch would throw
-    // ACTION_NOT_SUPPORTED.
-    const drummerResult = await summonCreateBeing({
+    // 3. drummer being. Use birthBeing directly (the authorized
+    // public entry on the BE side; same path hello-world's seed
+    // uses). `reality.be("create-being", ...)` is a doc-claimed
+    // shape but BE is the closed birth/connect/release set, so
+    // "create-being" would throw ACTION_NOT_SUPPORTED.
+    const drummerResult = await birthBeing({
       spec: {
         name: `drummer-${plantedSeedId.slice(0, 6)}`,
         cognition: "scripted",
@@ -177,7 +177,7 @@ export const danceFloorSeed = {
     });
     const drummerBeingId = String(drummerResult?.beingId || drummerResult?.being?._id || "");
     if (!drummerBeingId) {
-      throw new Error("summonCreateBeing drummer returned no beingId");
+      throw new Error("birthBeing drummer returned no beingId");
     }
     log.info("Harmony", `summoned drummer being ${drummerBeingId.slice(0, 8)}`);
 
@@ -223,14 +223,14 @@ export const danceFloorSeed = {
       },
     }, opOpts);
 
-    // 5. dancers — same summonCreateBeing pattern. cognition is
-    //    "llm" so each wake routes through runTurn; the LLM
-    //    connection resolves through the seed's standard chain (set-
-    //    place-llm pins the reality default, dancers inherit).
+    // 5. dancers — same birthBeing pattern. cognition is "llm" so
+    //    each wake routes through runTurn; the LLM connection
+    //    resolves through the seed's standard chain (set-place-llm
+    //    pins the reality default, dancers inherit).
     const dancers = [];
     for (const spec of DANCER_ROSTER) {
       const isLlm = spec.role === "harmony:dancer-llm";
-      const dancerResult = await summonCreateBeing({
+      const dancerResult = await birthBeing({
         spec: {
           name: `${spec.suffix}-${plantedSeedId.slice(0, 6)}`,
           cognition: isLlm ? "llm" : "scripted",
@@ -245,7 +245,7 @@ export const danceFloorSeed = {
       });
       const dancerBeingId = String(dancerResult?.beingId || dancerResult?.being?._id || "");
       if (!dancerBeingId) {
-        throw new Error(`summonCreateBeing dancer ${spec.suffix} returned no beingId`);
+        throw new Error(`birthBeing dancer ${spec.suffix} returned no beingId`);
       }
       log.info("Harmony", `summoned dancer ${spec.suffix} ${dancerBeingId.slice(0, 8)} (${isLlm ? "llm" : "scripted"})`);
 
