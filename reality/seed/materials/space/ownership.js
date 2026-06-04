@@ -26,6 +26,18 @@
 // field, contributors[] as a whole-array replace. The space lock
 // serializes the read-modify-write window so concurrent contributor
 // changes on the same Space don't race.
+//
+// Branch behaviour. Ownership reads here go through loadOrFold like
+// every other behavioural read in the seed: each branch sees its
+// effective view (inherited from main where nothing diverged, branch-
+// local where a divergent set-space rootOwner / contributors fact
+// landed). Writes stamp on the calling branch's reel, so a branch can
+// have different rootOwner / contributors than main without affecting
+// main's view. Cross-branch isolation (v1 design) keeps the graph
+// coherent within each branch . there's no "shared" ownership graph
+// across branches to make incoherent. Callers thread branch through
+// to every helper here; no internal default to "0" so missing-branch
+// calls fail loud rather than silently fold on main.
 
 import Space from "./space.js";
 import { getInternalConfigValue } from "../../internalConfig.js";
@@ -42,18 +54,21 @@ import { acquireSpaceLock, releaseSpaceLock } from "./spaceLocks.js";
  * Add a contributor to a space. Only the resolved owner can do this.
  * Read-modify-write under the space lock; whole-array fact replace.
  */
-export async function addContributor(spaceId, contributorId, beingId) {
-  const { loadProjection } = await import("../projections.js");
-  const _spaceSlot = await loadProjection("space", spaceId, "0");
+export async function addContributor(spaceId, contributorId, beingId, branch) {
+  if (typeof branch !== "string" || !branch) {
+    throw new Error("addContributor: branch is required (thread from summonCtx; no silent main-bias).");
+  }
+  const { loadOrFold } = await import("../projections.js");
+  const _spaceSlot = await loadOrFold("space", spaceId, branch);
   const space = _spaceSlot ? { seedSpace: _spaceSlot.state?.seedSpace } : null;
   if (!space) throw new Error("Space not found");
   if (space.seedSpace) throw new Error("Cannot modify seed spaces");
 
-  await assertBeingExists(contributorId);
-  await assertOwner(spaceId, beingId);
+  await assertBeingExists(contributorId, branch);
+  await assertOwner(spaceId, beingId, branch);
 
   // Prevent adding the resolved owner as a contributor (redundant, logically wrong)
-  const targetAccess = await resolveSpaceAccess(spaceId, contributorId);
+  const targetAccess = await resolveSpaceAccess(spaceId, contributorId, branch);
   if (targetAccess.ok && targetAccess.isOwner) {
     throw new Error("Cannot add the owner as a contributor");
   }
@@ -65,8 +80,8 @@ export async function addContributor(spaceId, contributorId, beingId) {
     throw new IbpError(IBP_ERR.RESOURCE_CONFLICT, "Space is being modified");
   }
   try {
-    const { loadProjection: _loadP } = await import("../projections.js");
-    const _curSlot = await _loadP("space", spaceId, "0");
+    const { loadOrFold: _lOF } = await import("../projections.js");
+    const _curSlot = await _lOF("space", spaceId, branch);
     const current = _curSlot ? { contributors: _curSlot.state?.contributors } : null;
     const list = current?.contributors || [];
     if (list.length >= MAX_CONTRIBUTORS) {
@@ -95,18 +110,21 @@ export async function addContributor(spaceId, contributorId, beingId) {
  * Remove a contributor from a space.
  * The resolved owner or the contributor themselves can remove.
  */
-export async function removeContributor(spaceId, contributorId, beingId) {
-  const { loadProjection } = await import("../projections.js");
-  const _spaceSlot = await loadProjection("space", spaceId, "0");
+export async function removeContributor(spaceId, contributorId, beingId, branch) {
+  if (typeof branch !== "string" || !branch) {
+    throw new Error("removeContributor: branch is required (thread from summonCtx).");
+  }
+  const { loadOrFold } = await import("../projections.js");
+  const _spaceSlot = await loadOrFold("space", spaceId, branch);
   const space = _spaceSlot ? { seedSpace: _spaceSlot.state?.seedSpace } : null;
   if (!space) throw new Error("Space not found");
   if (space.seedSpace) throw new Error("Cannot modify seed spaces");
 
-  await assertBeingExists(contributorId);
+  await assertBeingExists(contributorId, branch);
 
   // Self-removal is always allowed
   if (contributorId !== beingId) {
-    await assertOwner(spaceId, beingId);
+    await assertOwner(spaceId, beingId, branch);
   }
 
   const locked = await acquireSpaceLock(spaceId, beingId);
@@ -114,8 +132,8 @@ export async function removeContributor(spaceId, contributorId, beingId) {
     throw new IbpError(IBP_ERR.RESOURCE_CONFLICT, "Space is being modified");
   }
   try {
-    const { loadProjection: _loadP } = await import("../projections.js");
-    const _curSlot = await _loadP("space", spaceId, "0");
+    const { loadOrFold: _lOF } = await import("../projections.js");
+    const _curSlot = await _lOF("space", spaceId, branch);
     const current = _curSlot ? { contributors: _curSlot.state?.contributors } : null;
     const list = current?.contributors || [];
     if (!list.includes(contributorId)) return; // already absent
@@ -148,9 +166,12 @@ export async function removeContributor(spaceId, contributorId, beingId) {
  * list is consistent with the new ownership at the moment the second
  * fact lands.
  */
-export async function setOwner(spaceId, newOwnerId, beingId) {
-  const { loadProjection: _loadP1 } = await import("../projections.js");
-  const _ownerSlot = await _loadP1("space", spaceId, "0");
+export async function setOwner(spaceId, newOwnerId, beingId, branch) {
+  if (typeof branch !== "string" || !branch) {
+    throw new Error("setOwner: branch is required (thread from summonCtx).");
+  }
+  const { loadOrFold: _lOF1 } = await import("../projections.js");
+  const _ownerSlot = await _lOF1("space", spaceId, branch);
   const space = _ownerSlot ? {
     seedSpace: _ownerSlot.state?.seedSpace,
     rootOwner: _ownerSlot.state?.rootOwner,
@@ -159,7 +180,7 @@ export async function setOwner(spaceId, newOwnerId, beingId) {
   if (!space) throw new Error("Space not found");
   if (space.seedSpace) throw new Error("Cannot set ownership on seed spaces");
 
-  await assertBeingExists(newOwnerId);
+  await assertBeingExists(newOwnerId, branch);
 
   if (space.rootOwner && space.rootOwner.toString() === newOwnerId) {
     throw new Error("Being is already the owner at this space");
@@ -173,7 +194,7 @@ export async function setOwner(spaceId, newOwnerId, beingId) {
     }
   } else if (space.parent) {
     // No rootOwner here. Check the owner above.
-    await assertOwner(space.parent, beingId);
+    await assertOwner(space.parent, beingId, branch);
   } else {
     // Orphaned space with no parent and no owner. No path forward
     // without stance authorization rules; refuse for now.
@@ -188,8 +209,8 @@ export async function setOwner(spaceId, newOwnerId, beingId) {
     // CAS check on rootOwner inside the lock: if a concurrent writer
     // changed ownership between our initial read and lock acquire, the
     // previousOwnerId we computed above is stale — abort.
-    const { loadProjection: _loadP2 } = await import("../projections.js");
-    const _curSlot2 = await _loadP2("space", spaceId, "0");
+    const { loadOrFold: _lOF2 } = await import("../projections.js");
+    const _curSlot2 = await _lOF2("space", spaceId, branch);
     const current = _curSlot2 ? {
       rootOwner:    _curSlot2.state?.rootOwner,
       contributors: _curSlot2.state?.contributors,
@@ -233,9 +254,12 @@ export async function setOwner(spaceId, newOwnerId, beingId) {
  * The delegate cannot revoke themselves (that would orphan the sub-tree
  * from their own authority, which makes no sense).
  */
-export async function removeOwner(spaceId, beingId) {
-  const { loadProjection: _loadP3 } = await import("../projections.js");
-  const _rmSlot = await _loadP3("space", spaceId, "0");
+export async function removeOwner(spaceId, beingId, branch) {
+  if (typeof branch !== "string" || !branch) {
+    throw new Error("removeOwner: branch is required (thread from summonCtx).");
+  }
+  const { loadOrFold: _lOF3 } = await import("../projections.js");
+  const _rmSlot = await _lOF3("space", spaceId, branch);
   const space = _rmSlot ? {
     seedSpace: _rmSlot.state?.seedSpace,
     rootOwner: _rmSlot.state?.rootOwner,
@@ -249,7 +273,7 @@ export async function removeOwner(spaceId, beingId) {
   // have their owner removed under the current rules; stance
   // authorization will eventually grant exceptions per place policy.
   if (space.parent) {
-    await assertOwner(space.parent, beingId);
+    await assertOwner(space.parent, beingId, branch);
   } else {
     throw new Error("Cannot remove owner on a top-level root (stance authorization pending)");
   }
@@ -283,9 +307,12 @@ export async function removeOwner(spaceId, beingId) {
  * access to their former tree. The new owner is also pruned from
  * contributors if they had been one.
  */
-export async function transferOwnership(spaceId, newOwnerId, beingId) {
-  const { loadProjection: _loadP4 } = await import("../projections.js");
-  const _txSlot = await _loadP4("space", spaceId, "0");
+export async function transferOwnership(spaceId, newOwnerId, beingId, branch) {
+  if (typeof branch !== "string" || !branch) {
+    throw new Error("transferOwnership: branch is required (thread from summonCtx).");
+  }
+  const { loadOrFold: _lOF4 } = await import("../projections.js");
+  const _txSlot = await _lOF4("space", spaceId, branch);
   const space = _txSlot ? {
     seedSpace: _txSlot.state?.seedSpace,
     rootOwner: _txSlot.state?.rootOwner,
@@ -294,7 +321,7 @@ export async function transferOwnership(spaceId, newOwnerId, beingId) {
   if (space.seedSpace) throw new Error("Cannot modify seed spaces");
   if (!space.rootOwner || space.rootOwner === I_AM) throw new Error("Space has no owner to transfer from");
 
-  await assertBeingExists(newOwnerId);
+  await assertBeingExists(newOwnerId, branch);
 
   const oldOwnerId = space.rootOwner.toString();
 
@@ -309,8 +336,8 @@ export async function transferOwnership(spaceId, newOwnerId, beingId) {
   const locked = await acquireSpaceLock(spaceId, beingId);
   if (!locked) throw new IbpError(IBP_ERR.RESOURCE_CONFLICT, "Space ownership is being modified");
   try {
-    const { loadProjection: _loadP } = await import("../projections.js");
-    const _curSlot = await _loadP("space", spaceId, "0");
+    const { loadOrFold: _lOFt } = await import("../projections.js");
+    const _curSlot = await _lOFt("space", spaceId, branch);
     const current = _curSlot ? { contributors: _curSlot.state?.contributors } : null;
     const list = current?.contributors || [];
     const filtered = list.includes(newOwnerId) ? list.filter((id) => id !== newOwnerId) : list;
@@ -343,15 +370,21 @@ export async function transferOwnership(spaceId, newOwnerId, beingId) {
 
 // Owner-only gate. Only the tree's owner passes; stance authorization
 // will eventually grant per-stance exceptions, but not yet.
-async function assertOwner(spaceId, beingId) {
-  const access = await resolveSpaceAccess(spaceId, beingId);
+async function assertOwner(spaceId, beingId, branch) {
+  if (typeof branch !== "string" || !branch) {
+    throw new Error("assertOwner: branch is required.");
+  }
+  const access = await resolveSpaceAccess(spaceId, beingId, branch);
   if (access.ok && access.isOwner) return;
   throw new Error("Only the tree owner can perform this action");
 }
 
-async function assertBeingExists(beingId, branch = "0") {
+async function assertBeingExists(beingId, branch) {
   if (!beingId) throw new Error("Being id is required");
-  const { loadProjection } = await import("../projections.js");
-  const slot = await loadProjection("being", beingId, branch);
+  if (typeof branch !== "string" || !branch) {
+    throw new Error("assertBeingExists: branch is required.");
+  }
+  const { loadOrFold } = await import("../projections.js");
+  const slot = await loadOrFold("being", beingId, branch);
   if (!slot) throw new Error("Being not found");
 }

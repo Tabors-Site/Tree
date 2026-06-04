@@ -419,10 +419,11 @@ async function findMatchingRule({ spaceId, verb, keyParts, summonCtx = null }) {
 // No deltaF (boot, outside any moment, or a moment that emitted no
 // creates yet): fast-path to getAncestorChain.
 async function walkAncestorsWithDeltaF(spaceId, summonCtx) {
+  const branch = summonCtx?.branch || "0";
   const deltaF = Array.isArray(summonCtx?.deltaF) ? summonCtx.deltaF : null;
   if (!deltaF || deltaF.length === 0) {
     let chain;
-    try { chain = await getAncestorChain(spaceId); } catch { chain = null; }
+    try { chain = await getAncestorChain(spaceId, branch); } catch { chain = null; }
     return Array.isArray(chain) && chain.length
       ? chain.map((n) => String(n._id))
       : [String(spaceId)];
@@ -436,12 +437,12 @@ async function walkAncestorsWithDeltaF(spaceId, summonCtx) {
     path.push(cursor);
 
     const { loadOrFold } = await import("../materials/projections.js");
-    const _slot = await loadOrFold("space", cursor, summonCtx?.branch || "0");
+    const _slot = await loadOrFold("space", cursor, branch);
     const row = _slot ? { parent: _slot.state?.parent } : null;
     if (row) {
       // Mongo has the row — defer the rest of the walk to the cache.
       let chain;
-      try { chain = await getAncestorChain(cursor); } catch { chain = null; }
+      try { chain = await getAncestorChain(cursor, branch); } catch { chain = null; }
       if (Array.isArray(chain) && chain.length) {
         for (const node of chain) {
           const id = String(node._id);

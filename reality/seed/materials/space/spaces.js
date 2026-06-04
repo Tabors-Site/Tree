@@ -937,8 +937,8 @@ export async function getSpaceName(spaceId) {
  * Build the display path "Root > Branch > Leaf" for a space. Walks the
  * ancestor cache once; sub-paths share entries across calls.
  */
-export async function buildPathString(spaceId) {
-  const chain = await getAncestorChain(spaceId);
+export async function buildPathString(spaceId, branch) {
+  const chain = await getAncestorChain(spaceId, branch);
   if (!chain || chain.length === 0) return "";
   const segments = [];
   for (const ancestor of chain) {
@@ -1015,7 +1015,7 @@ export async function isDescendant(ancestorId, spaceId) {
  * `resolveSpaceAccessFromChain`. Callers that already have the chain
  * snapshotted should call the chain-form directly.
  */
-export async function resolveSpaceAccess(spaceId, beingId) {
+export async function resolveSpaceAccess(spaceId, beingId, branch) {
   if (!spaceId) {
     return {
       ok: false,
@@ -1024,7 +1024,7 @@ export async function resolveSpaceAccess(spaceId, beingId) {
     };
   }
   const safeBeingId = beingId ? String(beingId) : null;
-  const ancestors = await getAncestorChain(String(spaceId));
+  const ancestors = await getAncestorChain(String(spaceId), branch);
   if (!ancestors) {
     return {
       ok: false,

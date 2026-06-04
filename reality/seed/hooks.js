@@ -148,12 +148,20 @@ async function run(hookName, data) {
   if (!handlers || handlers.length === 0) return { cancelled: false };
 
   const spaceId = data?.spaceId || data?.space?._id || null;
+  // Branch rides on the hook payload from whichever moment emitted
+  // the substrate change that triggered the hook. The scope resolver
+  // (registered in genesis.js) walks the ancestor cache to find
+  // confined-extension rules, which is branch-aware. Hook callers
+  // that don't pass branch fall to "0" for the scope walk only;
+  // safer than swallowing the hook's invocation entirely, but worth
+  // surfacing so the caller can be threaded properly.
+  const branch = data?.branch || data?.summonCtx?.branch || "0";
   let blockedExtensions = null;
   if (spaceId && _getScopeFn) {
     try {
-      blockedExtensions = await _getScopeFn(String(spaceId));
+      blockedExtensions = await _getScopeFn(String(spaceId), branch);
     } catch (scopeErr) {
-      log.warn("Hooks", `Scope resolution failed for space ${spaceId}: ${scopeErr.message}. Extensions not filtered.`);
+      log.warn("Hooks", `Scope resolution failed for space ${spaceId} on branch ${branch}: ${scopeErr.message}. Extensions not filtered.`);
     }
   }
 

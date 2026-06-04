@@ -1172,12 +1172,26 @@ export class Scene {
     if (this._skyMode === "default") this._updateTimeOfDay();
   }
 
+  // Pin the sky/sun to a specific past instant. Used by the rewind
+  // path so the dome reflects what the world LOOKED like at that
+  // moment — noon yesterday paints a noon sky, not the current 4am.
+  // Passing null lifts the pin and the sky resumes following wall-
+  // clock now.
+  setFrozenTime(iso) {
+    this._frozenTime = iso ? new Date(iso) : null;
+    this._lastClockMinute = -1;
+    if (this._skyMode === "default") this._updateTimeOfDay();
+  }
+
   _getLocalHour() {
     const tz = this._placeTimezone || undefined;
+    // Frozen time wins when a rewind has pinned the dome to a past
+    // moment; otherwise the clock follows wall-clock now.
+    const when = this._frozenTime instanceof Date ? this._frozenTime : new Date();
     try {
       const parts = new Intl.DateTimeFormat("en-US", {
         timeZone: tz, hour: "numeric", minute: "numeric", hour12: false,
-      }).formatToParts(new Date());
+      }).formatToParts(when);
       let hour = 0, min = 0;
       for (const p of parts) {
         if (p.type === "hour")   hour = parseInt(p.value, 10);
@@ -1187,7 +1201,7 @@ export class Scene {
       if (hour === 24) hour = 0;
       return hour + min / 60;
     } catch {
-      const d = new Date();
+      const d = this._frozenTime instanceof Date ? this._frozenTime : new Date();
       return d.getHours() + d.getMinutes() / 60;
     }
   }

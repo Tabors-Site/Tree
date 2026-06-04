@@ -130,7 +130,7 @@ export async function deriveStanceProperties({ beingId, targetSpace, branch = "0
   // a constant-time membership check. Includes the home itself.
   if (being.homeSpace) {
     try {
-      const homeChain = await getAncestorChain(String(being.homeSpace));
+      const homeChain = await getAncestorChain(String(being.homeSpace), branch);
       if (Array.isArray(homeChain)) {
         props.homeAncestors = homeChain.map((n) => String(n._id));
       } else {
@@ -145,7 +145,7 @@ export async function deriveStanceProperties({ beingId, targetSpace, branch = "0
 
   // Ownership relations via the existing tree-access walker.
   try {
-    const access = await resolveSpaceAccess(targetSpace, beingId);
+    const access = await resolveSpaceAccess(targetSpace, beingId, branch);
     if (access?.ok) {
       if (access.isOwner) props.owner = true;
       // The access walker reports canWrite when the user owns OR is a
@@ -165,7 +165,7 @@ export async function deriveStanceProperties({ beingId, targetSpace, branch = "0
 
     // homeInDomain: targetSpace appears in home's ancestor chain.
     try {
-      const homeChain = await getAncestorChain(homeId);
+      const homeChain = await getAncestorChain(homeId, branch);
       if (Array.isArray(homeChain)) {
         for (const anc of homeChain) {
           if (String(anc._id) === targetId) {
@@ -178,7 +178,7 @@ export async function deriveStanceProperties({ beingId, targetSpace, branch = "0
 
     // positionInHomeDomain: homeSpace appears in target's ancestor chain.
     try {
-      const targetChain = await getAncestorChain(targetId);
+      const targetChain = await getAncestorChain(targetId, branch);
       if (Array.isArray(targetChain)) {
         for (const anc of targetChain) {
           if (String(anc._id) === homeId) {

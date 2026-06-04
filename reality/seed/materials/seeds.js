@@ -331,8 +331,12 @@ export async function plantSeed({
  */
 export async function listPlantedAt(spaceId, { branch = "0" } = {}) {
   if (!spaceId) return [];
-  const { loadProjection } = await import("./projections.js");
-  const slot = await loadProjection("space", spaceId, branch);
+  // loadOrFold: planted-seeds live in qualities, which may be
+  // inherited from a parent branch. loadProjection would show an
+  // empty list for a branch that has never written its own
+  // qualities.seeds.
+  const { loadOrFold } = await import("./projections.js");
+  const slot = await loadOrFold("space", spaceId, branch);
   if (!slot) return [];
   const quals = slot.state?.qualities;
   const planted = quals instanceof Map ? quals.get("seeds") : quals?.seeds;
@@ -359,8 +363,12 @@ export async function unplantSeed({
   if (!atSpaceId || !plantedSeedId) {
     throw new Error("unplantSeed requires atSpaceId and plantedSeedId");
   }
-  const { loadProjection: _lP } = await import("./projections.js");
-  const _spaceSlot = await _lP("space", atSpaceId, summonCtx?.branch || "0");
+  // loadOrFold: read the target space's qualities to find the seed
+  // entry. On a branch, the planted-seed quality may live in main and
+  // a bare loadProjection would throw "not found" for any inherited
+  // planting.
+  const { loadOrFold: _lOF } = await import("./projections.js");
+  const _spaceSlot = await _lOF("space", atSpaceId, summonCtx?.branch || "0");
   if (!_spaceSlot)
     throw new Error(`Target space ${String(atSpaceId).slice(0, 8)} not found`);
   const space = { _id: _spaceSlot.id, ...(_spaceSlot.state || {}) };

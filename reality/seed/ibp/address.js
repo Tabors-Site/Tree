@@ -283,7 +283,13 @@ function parseStance(input, ctx, opts = {}) {
   // After stripping being, `rest` is a position (place+branch?+path).
   if (!rest) {
     return {
-      reality: ctx.currentReality || null,
+      // Leave reality NULL so expand's realityWasTyped check stays
+      // honest: the user didn't type a reality, this was a fully
+      // implicit stance. If parse pre-fills reality from ctx,
+      // expandStance later treats it as typed-reality and applies
+      // the "no # means main" rule — silently overriding the
+      // socket's currentBranch on every relative DO.
+      reality: null,
       branch: null,
       path: ctx.currentPath || null,
       being,
@@ -331,16 +337,19 @@ function parseStance(input, ctx, opts = {}) {
   // leading slash or tilde means we're already inside the current place.
   if (!rest) {
     // Pure-branch stance: `#1a` or `#1a@being` — no reality, no path.
+    // reality NULL (not ctx) so expand's realityWasTyped is honest.
     return {
-      reality: ctx.currentReality || null,
+      reality: null,
       branch,
       path: ctx.currentPath || null,
       being,
     };
   }
   if (rest.startsWith("/") || rest.startsWith("~")) {
+    // Relative path. reality NULL so expand treats it as inherited,
+    // not typed — the "typed reality = main" rule does not apply.
     return {
-      reality: ctx.currentReality || null,
+      reality: null,
       branch,
       path: parsePath(rest, ctx),
       being,
@@ -360,8 +369,9 @@ function parseStance(input, ctx, opts = {}) {
     // `tabor`. On either side without a path, this can also be a
     // place-only reference (rare).
     if (isLeftSide && !being) {
+      // Human shorthand `tabor` on the left side — no reality typed.
       return {
-        reality: ctx.currentReality || null,
+        reality: null,
         branch,
         path: "/",
         being: rest,

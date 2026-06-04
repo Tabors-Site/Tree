@@ -427,6 +427,7 @@ export async function resolveToolsForPosition(
   session,
   beingId,
   rolePermissions = null,
+  branch,
 ) {
   let treeToolConfig = null;
   let blockedExtensions = null;
@@ -435,7 +436,7 @@ export async function resolveToolsForPosition(
   if (currentSpace) {
     try {
       const ancestors =
-        session._ancestorSnapshot || (await getAncestorChain(currentSpace));
+        session._ancestorSnapshot || (await getAncestorChain(currentSpace, branch));
 
       if (ancestors && ancestors.length > 0) {
         // Position-scoped tool allow/block. Walks closest-to-farthest;

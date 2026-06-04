@@ -186,8 +186,13 @@ async function main() {
       });
       state.descriptor = desc;
       state.scene.setCurrentSpaceId?.(desc?.address?.spaceId || null);
+      // resetCamera:false — rewinding is "same place, different
+      // time," not a navigate. Snapping the camera back to the
+      // self-spawn point every scrub would lose the angle the user
+      // set up; they're studying the past, not moving.
       state.scene.renderDescriptor(desc, {
         isAuthenticated: !!state.session?.token,
+        resetCamera: false,
       });
       state.branchBar?.update(desc);
       // Address bar + scene visual cue follow rewind — the chip should
@@ -195,6 +200,10 @@ async function main() {
       // canvas should desaturate so the user can never miss it.
       refreshAddressBar();
       _setHistoricalVisualCue(true);
+      // Pin the sky/sun to the rewound moment's clock so the dome
+      // paints the time of day the user is studying, not the live
+      // wall-clock. Cleared by the branchbar:now handler below.
+      state.scene.setFrozenTime?.(atTimestamp);
       setHud(`rewound to ${atTimestamp}`);
     } catch (err) {
       console.warn("[3D] rewind failed:", err?.message);
@@ -204,6 +213,8 @@ async function main() {
     // Same address, no at-qualifier → live again.
     if (state.currentAddress) navigate(state.currentAddress);
     _setHistoricalVisualCue(false);
+    // Lift the sky pin so wall-clock takes over the dome again.
+    state.scene?.setFrozenTime?.(null);
   });
 
   // Optimistic pause-state sync. When the branch tree's pause button
@@ -729,6 +740,10 @@ async function navigate(address, { fromHistory = false } = {}) {
     // (address bar, child doorway, branch click) takes us to the
     // present and the desaturation must drop.
     _setHistoricalVisualCue(!!desc?.isHistorical);
+    // Same idea for the sky pin: a live navigate lifts the frozen
+    // sun and resumes wall-clock; a historical SEE keeps any pin
+    // the rewind handler set (it owns this state).
+    if (!desc?.isHistorical) state.scene?.setFrozenTime?.(null);
     // Hand the current spaceId to the scene so the Move tool can
     // resolve "put down here in this space" without an extra
     // descriptor lookup.
@@ -816,6 +831,12 @@ async function navigate(address, { fromHistory = false } = {}) {
     // Skip when an inhabit/inheriter payload still owns the hash
     // (those carry "=" + base64 and would corrupt on overwrite).
     _syncLocationHash(desc);
+    // Hand the descriptor to the branch-bar so the strip + chrome
+    // reflect the just-landed state without waiting for a live event
+    // to arrive. Without this, opening the page on a paused branch
+    // never fires the paused chrome (no events flow there), and the
+    // timeline strip stays blank until something else nudges it.
+    state.branchBar?.update(desc);
   } catch (err) {
     setHud(`see failed: ${err.code || ""} ${err.message || ""}`);
     // Re-throw so connect-time handlers (connectAndPlace,

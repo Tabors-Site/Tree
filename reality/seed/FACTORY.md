@@ -551,6 +551,52 @@ body grows to walk inherited facts from parent branches up to the
 branch point, then divergent facts from the current branch. Callers
 don't need to change.
 
+### loadProjection vs loadOrFold — the two flavors of "read a slot"
+
+Two projection-read helpers live in
+[materials/projections.js](materials/projections.js). They look
+similar; they answer different questions; mixing them up is how
+branch features silently break.
+
+**`loadProjection(type, id, branch)` — read-back, branch-anchored.**
+One lookup against the named branch's slot table. No lineage walk.
+Null means the slot doesn't exist in this branch's table — typically,
+your write didn't land. Two legitimate uses:
+
+- **Post-seal read-back.** "I just stamped birth; is the row there?"
+  A null return is a seal-failure signal.
+- **Doctrinal singletons hardcoded to main.** I_AM (reality-anchored
+  by construction), the `./config` cache (one config per reality),
+  boot-time orphan-root walks. Reading these from a non-main branch
+  makes no sense; "0" is correct.
+
+**`loadOrFold(type, id, branch)` — behavioral, lineage-aware.** On
+cache miss, walks the branch's lineage via `fold()` and cold-folds
+from the inherited reel. Branches inherit parent state through this
+path; the first read pays the walk, every subsequent read hits cache.
+Null here means "the aggregate truly doesn't exist anywhere I can
+reach from this branch."
+
+**Rule of thumb:**
+
+| Null should mean… | Use… |
+|---|---|
+| "doesn't exist anywhere" | `loadOrFold` |
+| "my immediately preceding write didn't land" | `loadProjection` |
+
+**Failure mode if you pick wrong.** A behavioral read using
+`loadProjection` on a non-main branch returns null for any aggregate
+inherited from main — the asker, target space, parent being, all of
+them. Auth fails, descriptor surfaces empty, ancestor walks short-
+circuit. The user is silently treated as a stranger on every branch
+they create. This was the load-bearing diagnostic for the seam: the
+heaven scenario (a being-with-main-access trying to walk through `./`
+on a freshly-created branch) failed because `deriveStanceProperties`
+was missing the lineage walk. Once the seam was named, the same
+pattern showed up across ~17 sites; fixing them at the seam (not
+patching the symptom per call) meant future branch features inherit
+the correct behavior automatically.
+
 ## Orientation — the three turns
 
 Every moment carries an orientation. The fold signature is

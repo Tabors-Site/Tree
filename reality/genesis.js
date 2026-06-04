@@ -544,9 +544,11 @@ export async function genesis(app, opts = {}) {
   await runExtensionMigrations();
 
   // Hooks only need the blocked set. Restricted extensions still
-  // fire hooks, just with limited tools.
-  hooks.setScopeResolver(async (spaceId) => {
-    const { blocked } = await getBlockedExtensionsAtSpace(spaceId);
+  // fire hooks, just with limited tools. The scope resolver receives
+  // the firing moment's branch from the hook caller; we thread it
+  // into the ancestor walk so per-branch scope rules apply.
+  hooks.setScopeResolver(async (spaceId, branch) => {
+    const { blocked } = await getBlockedExtensionsAtSpace(spaceId, branch);
     return blocked;
   });
 

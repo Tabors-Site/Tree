@@ -204,11 +204,12 @@ export async function tripTree(treeId, reason, scores = {}) {
  * @param {string} treeId
  * @param {string} beingId - the caller (required for authorization)
  */
-export async function reviveTree(treeId, beingId) {
+export async function reviveTree(treeId, beingId, branch) {
   if (!treeId)  throw new Error("treeId is required");
   if (!beingId) throw new Error("beingId is required");
+  if (typeof branch !== "string" || !branch) throw new Error("reviveTree: branch is required");
 
-  const access = await resolveSpaceAccess(treeId, beingId);
+  const access = await resolveSpaceAccess(treeId, beingId, branch);
   if (!access.ok || !access.isOwner) {
     // Admin bypass retired 2026-05-18; stance authorization gates
     // non-owner revival policies. For now: owner only.

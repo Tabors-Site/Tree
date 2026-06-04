@@ -71,6 +71,22 @@ function assertBranch(branch) {
  * lineage when the slot is missing, calls back through initProjection,
  * and subsequent reads land on the populated slot.
  *
+ * DOCTRINE (read-back, branch-anchored, null = "write didn't land")
+ *
+ * Use loadProjection when you JUST stamped a fact and you're confirming
+ * the slot materialized. Null is a write-failure signal . the seal
+ * didn't reach the slot. Branch-anchored: queries only the named
+ * branch's slot table, no lineage walk. The two canonical uses:
+ *
+ *   - Post-seal read-back ("I just stamped birth; is the row there?")
+ *   - Doctrinal singletons hardcoded to main ("0") . I_AM, the
+ *     `./config` cache, boot-time orphan-root walks. These rows live
+ *     in main by construction; reading from a branch makes no sense.
+ *
+ * Behavioral reads ("does this being exist anywhere I should care
+ * about?", "what is this space's size?") need loadOrFold instead .
+ * see its doc block.
+ *
  * @param {"being"|"space"|"matter"} type
  * @param {string} id
  * @param {string} [branch="0"]
@@ -101,12 +117,26 @@ export async function loadProjection(type, id, branch) {
  * null (the aggregate truly doesn't exist in this branch, e.g. created
  * in main AFTER branch point).
  *
- * Use this when a caller NEEDS the branch's state and a null result
- * is genuinely "doesn't exist here" rather than "cache not warm."
- * Most callers (descriptor builders, etc.) should keep using
- * loadProjection; the fold engine runs cold-fold during its own
- * hot path. Reserved for entry-point callers (transportAct, auth,
- * etc.) that hit a branch with an unbuilt cache.
+ * DOCTRINE (behavioral, lineage-aware, null = "truly absent")
+ *
+ * Use loadOrFold when the slot's value DRIVES a decision and the
+ * caller would be wrong to silently treat a branch-cache miss as
+ * absence. Inherited beings, inherited spaces, ancestor walks for
+ * auth or scope, parent-existence checks before stamping a child .
+ * all of these need to see the branch's effective view, which
+ * includes everything in the lineage up to the branch point. Null
+ * here means "the aggregate truly doesn't exist anywhere I can reach
+ * from this branch."
+ *
+ * Cost: one Mongo lookup on cache hit (fast). On miss: one lineage
+ * walk + reel replay + slot write (slow once, then cached forever).
+ * Branches inherit parent state automatically through this path .
+ * the first lookup pays the walk; every subsequent lookup is fast.
+ *
+ * RULE OF THUMB
+ *   . null should mean "doesn't exist anywhere"      → loadOrFold
+ *   . null should mean "my immediately preceding
+ *     write didn't land"                              → loadProjection
  *
  * @param {"being"|"space"|"matter"} type
  * @param {string} id

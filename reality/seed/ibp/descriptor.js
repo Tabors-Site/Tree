@@ -245,6 +245,7 @@ function truncate(s, n) {
 // endMessage as "what they last said" so the speech bubble can
 // persist between moments.
 async function summonToActivity(summon, opts = {}) {
+  const branch = opts.branch || "0";
   if (!summon) return null;
 
   if (opts.sealed) {
@@ -285,7 +286,7 @@ async function summonToActivity(summon, opts = {}) {
         ? String(lastFact.params.recipient)
         : null;
       const recipientName = recipientBeingId
-        ? await _lookupBeingName(recipientBeingId)
+        ? await _lookupBeingName(recipientBeingId, branch)
         : null;
       return {
         kind: "summoning",
@@ -330,9 +331,15 @@ async function summonToActivity(summon, opts = {}) {
 // pre-resolve the recipient name so the portal can render `→@<name>`
 // without a second roundtrip. Returns null on miss (the portal falls
 // back to role / beingId prefix).
-async function _lookupBeingName(beingId) {
+async function _lookupBeingName(beingId, branch = "0") {
   try {
-    const slot = await loadProjection("being", String(beingId), "0");
+    // loadOrFold (not loadProjection): the recipient being may live
+    // inherited from a parent branch. Without the lineage walk the
+    // bubble would show "→@<id-prefix>" instead of "→@<name>" for any
+    // inherited being addressed from a branch . degraded UX, not a
+    // hard break, but the fix is one swap.
+    const { loadOrFold } = await import("../materials/projections.js");
+    const slot = await loadOrFold("being", String(beingId), branch);
     return slot?.state?.name || null;
   } catch {
     return null;
@@ -582,7 +589,7 @@ async function placeAtSpace(resolved, { identity, payload, until = null, branch 
   let authorizedHere = false;
   if (identity?.beingId) {
     try {
-      const access  = await resolveSpaceAccess(space._id, identity.beingId);
+      const access  = await resolveSpaceAccess(space._id, identity.beingId, branch);
       writeAllowed   = !!(access?.ok && access?.write === true);
       authorizedHere = !!access?.ok;
     } catch { /* defensive */ }
@@ -980,12 +987,12 @@ async function enrichBeings(spaceId, entries, opts = {}) {
     if (!e._beingId) return null;
     if (until) return null; // historical: see comment on inboxByBeing
     const open = await findOpenForBeing(e._beingId);
-    if (open) return summonToActivity(open);
+    if (open) return summonToActivity(open, { branch });
     // No Act in flight. Fall back to what this being last SAID so
     // the speech bubble persists between moments. Without this the
     // bubble vanishes the instant a moment seals.
     const sealed = await findLastSealedForBeing(e._beingId);
-    return summonToActivity(sealed, { sealed: true });
+    return summonToActivity(sealed, { sealed: true, branch });
   }));
 
   return entries.map((entry, i) => {

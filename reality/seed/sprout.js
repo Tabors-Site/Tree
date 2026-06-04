@@ -145,7 +145,11 @@ export async function withBootMoment(genesisFn) {
     },
   };
 
-  const summonCtx = { actId, deltaF: [], afterSeal: [] };
+  // Genesis runs on main by construction. Explicit "0" here so every
+  // internal helper threading summonCtx.branch sees a real value
+  // rather than undefined . that keeps the "branch is required, no
+  // silent main-bias" invariant clean even at the substrate's origin.
+  const summonCtx = { actId, deltaF: [], afterSeal: [], branch: "0" };
 
   log.info("Genesis", "I open my first moment.");
   try {
@@ -231,7 +235,9 @@ export async function withIAmAct(sourceLabel, fn) {
     startMessage: { content: sourceLabel || "I-Am acts.", source: "I-Am" },
   };
 
-  const summonCtx = { actId, deltaF: [], afterSeal: [] };
+  // I-Am scaffold acts on main. Explicit "0" for the same "no silent
+  // main-bias" invariant noted in withBootMoment above.
+  const summonCtx = { actId, deltaF: [], afterSeal: [], branch: "0" };
   const result = await fn(summonCtx);
 
   if (summonCtx.deltaF.length === 0) {

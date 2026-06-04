@@ -89,11 +89,11 @@ async function walkBeingChain(rootBeing, branch = "0") {
  * connection, or a normal hit. Returns LOCKDOWN sentinel on lock,
  * { connectionId, enforced } on hit, null when no candidate found.
  */
-async function spaceChainResolve(spaceId, slot, branch = "0") {
+async function spaceChainResolve(spaceId, slot, branch) {
   if (!spaceId) return null;
   let chain;
   try {
-    chain = await getAncestorChain(spaceId);
+    chain = await getAncestorChain(spaceId, branch);
   } catch {
     const { loadOrFold } = await import("../../../materials/projections.js");
     const slotProj = await loadOrFold("space", spaceId, branch);

@@ -274,6 +274,20 @@ async function runLoop(beingId) {
             // wake gets a fresh run and a fresh attempt.
             break;
           }
+          // Pause gate. Entries land on the picked branch; if that
+          // branch is paused, running the moment would just hit the
+          // wire-layer REALITY_PAUSED gate when its downstream DOs
+          // fire, leaving the row open and triggering a rate-limit
+          // storm. Mark the correlation seen so we don't loop on it,
+          // and break to let the next pass try once unpause lands.
+          {
+            const entryBranch = picked.entry.branch || "0";
+            const { isBranchPaused } = await import("../../materials/branch/branches.js");
+            if (await isBranchPaused(entryBranch)) {
+              seenCorrelations.add(picked.entry.correlation);
+              break;
+            }
+          }
           if (!_checkRate(beingId)) {
             // Real work is queued but the per-being summons-per-second
             // bucket is empty. Yield the event loop and wait for a

@@ -278,21 +278,26 @@ async function _togglePauseBranch(branch) {
   // If the user just paused (or unpaused) the branch they themselves
   // are currently on, flip the grayscale chrome immediately so the
   // visual cue matches the new reality without waiting for navigate.
-  const myBranch = window.state?.descriptor?.address?.branch || "0";
+  const myBranch = window.__state?.descriptor?.address?.branch || "0";
   if (branch.path === myBranch) {
     window.dispatchEvent(new CustomEvent("branchbar:paused-self", {
       detail: { paused: branch.paused },
     }));
   }
 
-  // Route through the caller's own current branch so the DO stays
-  // single-branch (cross-branch gate refuses otherwise). The
-  // branch-manager being folds via lineage so it's reachable from any
-  // branch's slot.
-  const callerBq = myBranch === "0" ? "" : `#${myBranch}`;
+  // Use a RELATIVE address (`/@branch-manager`) so the wire inherits
+  // socket.currentBranch automatically — whichever branch the server
+  // actually thinks the user is on, the DO targets that same branch
+  // and the cross-branch gate stays happy. The earlier approach of
+  // reading window.__state.descriptor.address.branch raced the
+  // descriptor update: after creating a branch the socket flipped to
+  // #1 but the local descriptor was still mid-refresh, so the DO went
+  // out with `localhost/@branch-manager` (typed-reality means main),
+  // caller=#1 vs target=#0, CROSS_BRANCH_FORBIDDEN. Relative dodges
+  // the whole question.
   try {
     await _state.client.do(
-      `${_state.reality}${callerBq}/@branch-manager`,
+      `/@branch-manager`,
       op,
       { branch: branch.path },
     );
@@ -398,6 +403,7 @@ async function _openTimeline(branchPath) {
         <button class="bt-branch" type="button" style="display:none;background:#2a1f0a;color:#e8b762;border:1px solid #6b5320;border-radius:3px;padding:3px 10px;font-family:inherit;font-size:11px;cursor:pointer;">branch here</button>
       </span>
     </div>
+    <div class="bt-detail" style="display:none;color:#c8d3cb;font-size:11px;line-height:1.4;padding:6px 8px;background:#0e1411;border:1px solid #2c3a32;border-radius:3px;font-family:ui-monospace,monospace;"></div>
   `;
   document.body.appendChild(el);
   _state.timelineEl = el;
@@ -433,13 +439,13 @@ async function _openTimeline(branchPath) {
   // without waiting for the navigate's after-call. Same-branch opens
   // need it (no navigate fires); different-branch opens benefit from it
   // (the marks fetch runs concurrent with navigate instead of after).
-  const currentBranch = window.state?.descriptor?.address?.branch || "0";
+  const currentBranch = window.__state?.descriptor?.address?.branch || "0";
   if (currentBranch !== branchPath) {
     const bq = branchPath === "0" ? "" : `#${branchPath}`;
     location.hash = `#${_state.reality}${bq}/`;
   }
-  if (window.state?.descriptor) {
-    _update(window.state.descriptor);
+  if (window.__state?.descriptor) {
+    _update(window.__state.descriptor);
   }
 }
 
@@ -453,6 +459,7 @@ function _closeTimeline() {
   _state.firstTs = null;
   _state.nowTs = null;
   _state.atTimestamp = null;
+  _state.selectedMarkTs = null;
   if (_stripTick) {
     clearInterval(_stripTick);
     _stripTick = null;
@@ -564,25 +571,25 @@ async function _update(desc) {
   _renderTimeline();
 }
 
-// Minimum visible window: 1 hour. The strip grows wider if the user
-// has older marks — never narrower, so acts never "fall off the left"
-// while the user is just sitting and watching. Doctrine (Tabor
-// 2026-06-04): the strip is for the user's full session, not a fixed
-// rolling buffer; older marks must stay visible until the user
-// explicitly decides otherwise.
-const _MIN_WINDOW_MS = 60 * 60 * 1000;
+// Empty-strip default window: 5 minutes. Used ONLY when the being
+// has zero marks yet. Once they have any act, the strip stretches
+// back exactly to their earliest mark and no further — the time axis
+// covers the being's actual lifespan, not a synthetic padded window.
+// Doctrine (Tabor 2026-06-04): the strip is a faithful reading of
+// what this being has done; padding empty axis on either side lies
+// about how long they've been around.
+const _EMPTY_WINDOW_MS = 5 * 60 * 1000;
 
 function _computeFirstTs(marks) {
-  const wallNowMs = Date.now();
   if (marks.length > 0 && marks[0]?.ts) {
-    const earliestMs = new Date(marks[0].ts).getTime();
-    // firstTs = the earliest mark, but never narrower than the
-    // minimum window. So a fresh session shows 1h of empty axis, then
-    // the strip widens left as the user accumulates older acts.
-    return new Date(Math.min(earliestMs, wallNowMs - _MIN_WINDOW_MS)).toISOString();
+    // firstTs = the earliest mark exactly. The time axis spans the
+    // being's session and grows leftward only as they accumulate
+    // older acts.
+    return marks[0].ts;
   }
-  // No marks yet — show the empty 1-hour window.
-  return new Date(wallNowMs - _MIN_WINDOW_MS).toISOString();
+  // No marks yet — show a tight empty 5-minute window so the strip
+  // has visible chrome to render against.
+  return new Date(Date.now() - _EMPTY_WINDOW_MS).toISOString();
 }
 
 // One-second tick keeps the right edge anchored to wall-clock now
@@ -623,7 +630,20 @@ function _renderTimeline() {
     status.style.color = "#6b7d72";
     nowBtn.style.display = "none";
     branchBtn.style.display = "none";
+    _renderDetail(null);
     return;
+  }
+
+  // If the previously-selected mark is no longer in the marks set
+  // (replaced by a refetch, or scrolled off-window in a future
+  // implementation), drop the selection so the detail row doesn't
+  // describe a mark that's no longer rendered.
+  if (_state.selectedMarkTs) {
+    const stillExists = _state.marks.some((m) => m.ts === _state.selectedMarkTs);
+    if (!stillExists) {
+      _state.selectedMarkTs = null;
+      _renderDetail(null);
+    }
   }
 
   labelL.textContent = _shortStamp(_state.firstTs);
@@ -635,18 +655,27 @@ function _renderTimeline() {
   for (const m of _state.marks) {
     const t = new Date(m.ts).getTime();
     const frac = Math.max(0, Math.min(1, (t - start) / span));
+    const isSelected = _state.selectedMarkTs === m.ts;
     const dot = document.createElement("div");
     dot.style.cssText = [
       "position: absolute",
       `left: ${(frac * 100).toFixed(2)}%`,
       "top: 50%",
-      "width: 4px",
-      "height: 4px",
-      "background: #6b7d72",
+      // Selected marks render bigger + amber so the user sees exactly
+      // which act their detail row is describing.
+      `width: ${isSelected ? 10 : 6}px`,
+      `height: ${isSelected ? 10 : 6}px`,
+      `background: ${isSelected ? "#e8b762" : "#6b7d72"}`,
       "transform: translate(-50%,-50%)",
       "border-radius: 50%",
+      "cursor: pointer",
+      "pointer-events: auto",
     ].join(";");
     dot.title = `${m.label || "fact"} · seq ${m.seq ?? "?"} · ${m.ts}`;
+    dot.addEventListener("click", (ev) => {
+      ev.stopPropagation();
+      _selectMark(m);
+    });
     marksEl.appendChild(dot);
   }
 
@@ -678,30 +707,65 @@ function _renderTimeline() {
 
 function _rewindTo(atTimestamp) {
   if (!atTimestamp) return;
+  // Free-form strip click — not on a specific mark — so clear any
+  // mark selection. The detail row below the buttons hides until the
+  // user clicks a real mark again.
+  _state.selectedMarkTs = null;
+  _renderDetail(null);
   window.dispatchEvent(new CustomEvent("branchbar:rewind", {
     detail: { atTimestamp },
   }));
 }
 
 function _returnToNow() {
+  _state.selectedMarkTs = null;
+  _renderDetail(null);
   window.dispatchEvent(new CustomEvent("branchbar:now", {}));
+}
+
+// Click on a specific mark dot. Rewind the world to that moment AND
+// surface the action's prose below the buttons so the user can see
+// what the act was without scrubbing the title tooltip.
+function _selectMark(mark) {
+  if (!mark?.ts) return;
+  _state.selectedMarkTs = mark.ts;
+  _renderDetail(mark);
+  _renderTimeline(); // re-render so the dot's selected styling lands
+  window.dispatchEvent(new CustomEvent("branchbar:rewind", {
+    detail: { atTimestamp: mark.ts },
+  }));
+}
+
+// Populate (or clear) the detail row below the action buttons. The
+// row stays hidden until a mark is selected so the strip stays slim
+// on the unselected path.
+function _renderDetail(mark) {
+  if (!_state.timelineEl) return;
+  const detail = _state.timelineEl.querySelector(".bt-detail");
+  if (!detail) return;
+  if (!mark) {
+    detail.style.display = "none";
+    detail.textContent = "";
+    return;
+  }
+  const label = mark.label || "fact";
+  const ts = _humanStamp(mark.ts);
+  const seq = mark.seq != null ? ` · seq ${mark.seq}` : "";
+  detail.textContent = `${label} · ${ts}${seq}`;
+  detail.style.display = "block";
 }
 
 async function _branchHere() {
   if (!_state.atTimestamp) return;
   const parent = _state.timelineBranch || "0";
   try {
-    // Caller's socket is whatever branch they were viewing live last
-    // (rewinds don't move the socket). The cross-branch gate refuses
-    // DO when caller and target branches differ, so qualify the stance
-    // with the caller's branch — branch-manager being itself folds via
-    // lineage so it's reachable from any branch's slot.
-    const callerBranch =
-      window.state?.descriptor?.address?.branch || "0";
-    const callerBq = callerBranch === "0" ? "" : `#${callerBranch}`;
+    // Relative `/@branch-manager` lets the wire inherit socket.currentBranch
+    // automatically — no descriptor-state guessing, no race with
+    // mid-flight branch switches. The cross-branch gate sees
+    // caller=target by construction.
     _showBranchEvent(`creating branch from #${parent}…`);
     const result = await _state.client.do(
-      `${_state.reality}${callerBq}/@branch-manager`,
+      `/@branch-manager`,
       "create-branch",
       { parent, atTimestamp: _state.atTimestamp, label: null },
     );

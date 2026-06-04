@@ -360,6 +360,10 @@ export async function getMatchingSubscribers(eventName, payload) {
   if (!eventSet || eventSet.size === 0) return [];
 
   const spaceId = payload?.spaceId ? String(payload.spaceId) : null;
+  // Subscriptions fan out from a fact that was just emitted on a
+  // specific branch; the chain walk has to read that branch's view.
+  // Caller threads payload.branch from the emitting moment.
+  const branch = payload?.branch;
 
   // Pre-compute the ancestor chain for the payload's space once per
   // call; reuse it across every ancestor-scoped subscription this
@@ -374,7 +378,7 @@ export async function getMatchingSubscribers(eventName, payload) {
       return ancestorChainIds;
     }
     try {
-      const chain = await getAncestorChain(spaceId);
+      const chain = await getAncestorChain(spaceId, branch);
       ancestorChainIds = new Set(
         (Array.isArray(chain) ? chain : [])
           .map((n) => String(n?._id))

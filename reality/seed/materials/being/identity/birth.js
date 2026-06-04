@@ -138,9 +138,17 @@ export async function createBeing(name, password, opts = {}) {
         `explicit parent set by the caller. Pass opts.parentBeingId.`,
       );
     }
-    const { loadProjection, findByNamePattern } = await import("../../projections.js");
+    // loadOrFold: behavioral parent-existence check. On a non-main
+    // branch the parent being usually lives in main with no divergent
+    // slot in this branch's table yet. Bare loadProjection would
+    // return null and the deltaF-pending check below would also miss
+    // (the parent was sealed in main long ago, not pending in this
+    // moment), so birth would throw "dangling reference" on every
+    // user-initiated branch summon-create. loadOrFold walks the
+    // lineage and resolves the inherited slot.
+    const { loadOrFold, findByNamePattern } = await import("../../projections.js");
     const branch = opts.summonCtx?.branch || "0";
-    const parentSlot = await loadProjection("being", parentBeingId, branch);
+    const parentSlot = await loadOrFold("being", parentBeingId, branch);
     if (!parentSlot) {
       const pendingInBatch = opts.summonCtx?.deltaF?.find(
         (f) =>
@@ -224,8 +232,13 @@ export async function createBeing(name, password, opts = {}) {
   let resolvedCoord = opts.coord || null;
   if (!resolvedCoord && position) {
     try {
-      const { loadProjection: _lP } = await import("../../projections.js");
-      const _liveSlot = await _lP("space", position, opts.summonCtx?.branch || "0");
+      // loadOrFold: the position space may live inherited from main
+      // when this being is being created on a branch. Bare
+      // loadProjection would miss the inherited size and leave coord
+      // null, dropping the new being to the renderer's hash-ring
+      // fallback instead of inside the bigger inherited home.
+      const { loadOrFold: _lOF } = await import("../../projections.js");
+      const _liveSlot = await _lOF("space", position, opts.summonCtx?.branch || "0");
       let size = _liveSlot?.state?.size || null;
       if (!size) {
         const pendingCreate = opts.summonCtx?.deltaF?.find(
@@ -473,8 +486,12 @@ export async function createBeingWithHome(opts) {
   // I-Am is the one exception (no parent), and ensureIAm sets
   // homeSpace explicitly at genesis.
   if (!homeSpace && !homeParent && parentBeingId) {
-    const { loadProjection } = await import("../../projections.js");
-    const parentSlot = await loadProjection("being", parentBeingId, opts.summonCtx?.branch || "0");
+    // loadOrFold: read the parent's homeSpace for the inherit-home
+    // fallback. Parent often lives in main (e.g. cherub) while this
+    // call runs on a branch. loadProjection would miss the inherited
+    // row and the inherit-home fallback would never fire.
+    const { loadOrFold } = await import("../../projections.js");
+    const parentSlot = await loadOrFold("being", parentBeingId, opts.summonCtx?.branch || "0");
     const parentRow = parentSlot ? { homeSpace: parentSlot.state?.homeSpace } : null;
     if (parentRow?.homeSpace) {
       homeSpace = String(parentRow.homeSpace);
@@ -511,8 +528,14 @@ export async function createBeingWithHome(opts) {
   let createdNewHome = false;
 
   if (homeSpace) {
-    const { loadProjection: _lP2 } = await import("../../projections.js");
-    const _hSlot = await _lP2("space", homeSpace, opts.summonCtx?.branch || "0");
+    // loadOrFold: existing-homeSpace lookup. On a branch this caller's
+    // homeSpace usually lives in main (it was created before the
+    // branch point). loadProjection would miss the inherited row and
+    // the deltaF pending-batch fallback below would also miss (the
+    // home wasn't created in this moment), causing birth to throw
+    // "home space not found." loadOrFold walks the lineage.
+    const { loadOrFold: _lOF2 } = await import("../../projections.js");
+    const _hSlot = await _lOF2("space", homeSpace, opts.summonCtx?.branch || "0");
     home = _hSlot ? { _id: _hSlot.id, ...(_hSlot.state || {}) } : null;
     if (!home) {
       // Multi-act atomic batch: when this birth runs inside a moment
@@ -538,8 +561,13 @@ export async function createBeingWithHome(opts) {
       home = { _id: homeSpace, _pending: true };
     }
   } else {
-    const { loadProjection: _lP3 } = await import("../../projections.js");
-    const _pSlot3 = await _lP3("space", homeParent, opts.summonCtx?.branch || "0");
+    // loadOrFold: the homeParent space (typically the place root or a
+    // tree-root) lives in main from genesis. On a branch loadProjection
+    // would return null and the deltaF check would only catch
+    // same-moment-pending parents, throwing "home parent not found"
+    // for every legitimate branch birth.
+    const { loadOrFold: _lOF3 } = await import("../../projections.js");
+    const _pSlot3 = await _lOF3("space", homeParent, opts.summonCtx?.branch || "0");
     let parent = _pSlot3 ? { _id: _pSlot3.id } : null;
     if (!parent) {
       // Same atomic-batch reference resolution as above.
@@ -588,8 +616,11 @@ export async function createBeingWithHome(opts) {
     try {
       let parentSpace = parent && !parent._pending ? parent : null;
       if (!parentSpace) {
-        const { loadProjection: _lP4 } = await import("../../projections.js");
-        const _pSlot4 = await _lP4("space", homeParent, opts.summonCtx?.branch || "0");
+        // loadOrFold: read homeParent's size for the new home's coord.
+        // Same lineage-walk rationale as the other homeParent reads on
+        // this code path.
+        const { loadOrFold: _lOF4 } = await import("../../projections.js");
+        const _pSlot4 = await _lOF4("space", homeParent, opts.summonCtx?.branch || "0");
         parentSpace = _pSlot4 ? { size: _pSlot4.state?.size } : null;
       }
       const parentSize = parentSpace?.size || null;

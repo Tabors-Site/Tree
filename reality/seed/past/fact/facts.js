@@ -691,11 +691,15 @@ export async function getFacts({
   startDate,
   endDate,
   beingId,
+  branch,
 }) {
   if (!spaceId) throw new Error("Missing required parameter: spaceId");
 
   if (beingId) {
-    const access = await resolveSpaceAccess(spaceId, beingId);
+    if (typeof branch !== "string" || !branch) {
+      throw new Error("getFacts: branch is required when beingId is set (auth walks the chain)");
+    }
+    const access = await resolveSpaceAccess(spaceId, beingId, branch);
     if (!access.ok)
       throw new IbpError(IBP_ERR.SPACE_NOT_FOUND, "Space not found");
   }

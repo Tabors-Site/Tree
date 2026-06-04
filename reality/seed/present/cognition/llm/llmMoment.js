@@ -181,10 +181,17 @@ async function runLlmMomentInner({ being, envelope, role, signal, summonCtx }) {
     || summonCtx?.ibpAddress
     || `pipeline:ephemeral:${crypto.randomUUID()}`;
 
+  // The branch this moment runs on. The wire layer attaches it to the
+  // envelope from the parsed address; summonCtx carries it forward
+  // through every internal call. No default . if branch is missing,
+  // assertBranch in the projection layer will throw and the moment
+  // fails loud rather than silently folding on main.
+  const branch = summonCtx?.branch || envelope?.branch;
+
   // 1. Plant the being at its space. rootId derives from setCurrentSpace.
   const spaceId =
     being.currentPositionId || being.homePositionId || null;
-  if (spaceId) await setCurrentSpace(beingId, spaceId);
+  if (spaceId) await setCurrentSpace(beingId, spaceId, summonCtx);
   const currentSpace = getCurrentSpace(beingId);
   const rootId = getRootIdFor(beingId);
 
@@ -192,7 +199,7 @@ async function runLlmMomentInner({ being, envelope, role, signal, summonCtx }) {
   // chain (scope, tools, LLM, config) reads from this memo.
   const snapshotNodeId = currentSpace || rootId || null;
   const ancestorSnapshot = snapshotNodeId
-    ? await snapshotAncestors(snapshotNodeId)
+    ? await snapshotAncestors(snapshotNodeId, branch)
     : [];
 
   // Tree circuit breaker. If the owning root is tripped, return a
@@ -285,6 +292,7 @@ async function runLlmMomentInner({ being, envelope, role, signal, summonCtx }) {
     sessionFacade,
     beingId,
     Array.isArray(role.permissions) ? role.permissions : null,
+    branch,
   );
   if (envelope.readOnly) {
     tools = tools.filter((t) => {

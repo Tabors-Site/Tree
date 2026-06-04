@@ -114,9 +114,9 @@ function persistBeingPosition(beingId, spaceId, summonCtx = null) {
  * stops at a system boundary), the topmost non-system entry of the
  * chain is treated as the space-root.
  */
-async function deriveSpaceRootId(spaceId) {
+async function deriveSpaceRootId(spaceId, branch) {
   if (!spaceId) return null;
-  const chain = await getAncestorChain(String(spaceId));
+  const chain = await getAncestorChain(String(spaceId), branch);
   if (!chain || chain.length === 0) return null;
   const spaceRootId = getSpaceRootId();
   if (spaceRootId) {
@@ -140,11 +140,15 @@ async function deriveSpaceRootId(spaceId) {
  * concept name "where the being currently is" hasn't changed; only
  * the underlying schema field did (`currentSpace` → `position`).
  */
-export async function setCurrentSpace(beingId, spaceId, summonCtx = null) {
+export async function setCurrentSpace(beingId, spaceId, summonCtx) {
   if (!beingId) return;
+  const branch = summonCtx?.branch;
+  if (typeof branch !== "string" || !branch) {
+    throw new Error("setCurrentSpace: summonCtx.branch is required; planting a being at a position needs the branch to derive the right tree-root.");
+  }
   const p = getBeingPositionRecord(beingId);
   p.position = spaceId || null;
-  p.rootId = await deriveSpaceRootId(spaceId);
+  p.rootId = await deriveSpaceRootId(spaceId, branch);
   persistBeingPosition(beingId, spaceId, summonCtx);
 }
 

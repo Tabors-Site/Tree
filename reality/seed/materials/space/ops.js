@@ -107,6 +107,7 @@ async function setOnSpaceHandler({ target, params, identity, summonCtx }) {
       const access = await resolveSpaceAccess(
         target.spaceId,
         identity?.beingId || null,
+        summonCtx?.branch || "0",
       );
       if (!access?.ok || access.write !== true) {
         throw new IbpError(
@@ -159,7 +160,7 @@ async function setOnSpaceHandler({ target, params, identity, summonCtx }) {
         throw new IbpError(IBP_ERR.SPACE_NOT_FOUND, "Resolved address has no spaceId");
       }
       const beingId = identity?.beingId || null;
-      const access = await resolveSpaceAccess(spaceId, beingId);
+      const access = await resolveSpaceAccess(spaceId, beingId, summonCtx?.branch || "0");
       if (!access?.ok || access.write !== true) {
         throw new IbpError(IBP_ERR.FORBIDDEN, "Not authorized to rename at this place");
       }

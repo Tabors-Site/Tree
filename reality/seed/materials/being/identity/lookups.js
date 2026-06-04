@@ -82,7 +82,12 @@ export async function isAncestorOf(ancestorBeingId, descendantBeingId, branch = 
   while (cursor && !visited.has(cursor) && hops < MAX_HOPS) {
     visited.add(cursor);
     hops++;
-    const slot = await loadProjection("being", cursor, branch);
+    // loadOrFold: behavioral read . the parent being may live in the
+    // branch's main lineage with no divergent slot yet. loadProjection
+    // would short-circuit to false on inherited beings; loadOrFold
+    // walks the lineage and cold-folds from the inherited reel.
+    const { loadOrFold } = await import("../../projections.js");
+    const slot = await loadOrFold("being", cursor, branch);
     if (!slot) return false;
     const parent = slot.state?.parentBeingId ? String(slot.state.parentBeingId) : null;
     if (!parent) return false;
