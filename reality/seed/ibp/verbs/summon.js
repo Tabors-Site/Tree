@@ -254,9 +254,12 @@ export async function summonVerb(stance, message, opts = {}) {
     );
   }
 
+  // branch was already resolved at the top of summonVerb (line ~172)
+  // for the findByName lookup; pass it through to _dispatchSummon so
+  // the fact emission uses the same value.
   return _dispatchSummon({
     resolved, toBeing, activeRole, role, validatedMessage,
-    identity, onResponse, onError, summonCtx,
+    identity, onResponse, onError, summonCtx, branch,
   });
 }
 
@@ -323,7 +326,7 @@ export async function summonByResolved(args) {
   return _dispatchSummon({
     resolved: { spaceId: inboxSpaceId, leafId: inboxSpaceId, being: activeRole },
     toBeing, activeRole, role, validatedMessage,
-    identity, onResponse, onError, summonCtx,
+    identity, onResponse, onError, summonCtx, branch,
   });
 }
 
@@ -339,7 +342,7 @@ export async function summonByResolved(args) {
  */
 async function _dispatchSummon({
   resolved, toBeing, activeRole, role, validatedMessage,
-  identity, onResponse, onError, summonCtx = null,
+  identity, onResponse, onError, summonCtx = null, branch,
 }) {
   const decision = await authorize({
     identity,
@@ -427,13 +430,10 @@ async function _dispatchSummon({
       sentAt,
     },
     actId: summonCtx?.actId || null,
-    // Branch the summon fact lands on. Precedence: an enclosing moment's
-    // branch (summonCtx.branch) wins because the moment is already on
-    // its branch; otherwise the wire-layer-attached currentBranch (the
-    // caller's frame for wire-originated summons). No silent default to
-    // "0" — a missing branch at this layer means a bug at the perimeter
-    // and must fail loud so the threading gap surfaces immediately.
-    branch: resolveBranchForFact(summonCtx, currentBranch, "summon"),
+    // Branch the summon fact lands on, pre-resolved at the entry point
+    // (summonVerb / summonByResolved both call resolveBranchForFact
+    // before dispatching here). _dispatchSummon trusts the value.
+    branch,
   }, summonCtx);
 
   const innerCtx = {

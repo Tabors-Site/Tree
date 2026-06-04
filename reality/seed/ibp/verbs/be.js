@@ -66,6 +66,15 @@ export async function beVerb(operation, payload = {}, opts = {}) {
     summonCtx   = null,
   } = opts;
 
+  // Resolve branch ONCE at the entry. summonCtx.branch wins when we're
+  // inside an existing moment (continuation); otherwise the wire-
+  // attached opts.currentBranch carries it. resolveBranchForFact throws
+  // MISSING_BRANCH if both are absent — surfaces a perimeter threading
+  // gap loud instead of silently defaulting to heaven. All downstream
+  // sites (loadProjection lookups, writeBeFact emissions) use this
+  // value rather than re-resolving from scope.
+  const branch = resolveBranchForFact(summonCtx, currentBranch, "be");
+
   const realityDomain = currentReality || getRealityDomain();
 
   // Address must point at this reality.
@@ -166,7 +175,7 @@ export async function beVerb(operation, payload = {}, opts = {}) {
     if (!childHomeSpace && !childHomeParent) {
       // Default: move the child into the caller's home. No new space.
       const { loadProjection } = await import("../../materials/projections.js");
-      const callerSlot = await loadProjection("being", identity.beingId, resolveBranchForFact(summonCtx, currentBranch, "be"));
+      const callerSlot = await loadProjection("being", identity.beingId, branch);
       childHomeSpace = callerSlot?.state?.homeSpace ? String(callerSlot.state.homeSpace) : null;
     }
     if (!childHomeSpace && !childHomeParent) {
@@ -249,6 +258,7 @@ export async function beVerb(operation, payload = {}, opts = {}) {
       beingName,
       actId: summonCtx?.actId || null,
       summonCtx,
+      branch,
       scaffold: opts.scaffold === true,
     });
     return result;
@@ -302,6 +312,7 @@ export async function beVerb(operation, payload = {}, opts = {}) {
       beingName,
       actId: summonCtx?.actId || null,
       summonCtx,
+      branch,
       scaffold: opts.scaffold === true,
     });
     return result;
@@ -356,6 +367,7 @@ export async function beVerb(operation, payload = {}, opts = {}) {
       beingName,
       actId: summonCtx?.actId || null,
       summonCtx,
+      branch,
       scaffold: opts.scaffold === true,
     });
     return result;
@@ -392,7 +404,7 @@ export async function beVerb(operation, payload = {}, opts = {}) {
  * before emitFact runs — an act without a frame doesn't get a Fact,
  * and a BE without a Fact didn't happen.
  */
-async function writeBeFact({ operation, identity, authResult, payload, beingName = "cherub", actId = null, summonCtx = null, scaffold = false }) {
+async function writeBeFact({ operation, identity, authResult, payload, beingName = "cherub", actId = null, summonCtx = null, branch, scaffold = false }) {
   // Post-refactor: scaffold:true no longer implies "commit as a
   // singleton outside any moment." Callers must thread a summonCtx
   // (boot moment from withBootMoment, or a runtime moment). Without
@@ -469,11 +481,13 @@ async function writeBeFact({ operation, identity, authResult, payload, beingName
     params:  mergedParams,
     result:  safeResult,
     actId,
-    // Branch the BE fact lands on. Precedence: summonCtx.branch when
-    // inside a moment (continuation); opts.currentBranch from the wire
-    // layer otherwise. resolveBranchForFact throws MISSING_BRANCH if
-    // neither is present — silent default to "0" hid threading bugs.
-    branch:  resolveBranchForFact(summonCtx, currentBranch, "be"),
+    // Branch the BE fact lands on, pre-resolved by beVerb at the
+    // entry point. writeBeFact trusts the value rather than
+    // re-resolving from a scope that may not have currentBranch
+    // (this function ran as nested-helper-with-implicit-closure
+    // before B perimeter hardening; missing-branch surfaced as a
+    // ReferenceError only when an actual transport-act fired).
+    branch,
   }, summonCtx);
 }
 

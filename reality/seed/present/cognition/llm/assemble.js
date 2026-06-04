@@ -146,7 +146,7 @@
 
 import log from "../../../seedReality/log.js";
 import { getToolDescription, resolveTools } from "./tools.js";
-import { resolveCanStar } from "./canStarResolver.js";
+import { resolveCanStar } from "../../roles/canStarResolver.js";
 import { resolveCanSee } from "./canSeeResolver.js";
 import { getSpaceName } from "../../../materials/space/spaces.js";
 // Side-effect import: registers the foundational seed sees (place,
@@ -260,40 +260,10 @@ export async function buildPrompt(role, ctx) {
     .join("\n\n");
 }
 
-/**
- * Resolve the role's three act-capable can* lists down to bare name
- * strings for the facadeSnapshot. Same resolver path the prompt
- * builder uses; we just drop the description and return the names.
- *
- * Returns { canDo, canSummon, canBe } — three string arrays.
- * Empty arrays for an empty / missing list, never null. Used by
- * llmMoment.js (and any scripted / human-inhabited path that builds
- * a snapshot) to capture the capabilities the cognition had at the
- * moment, without re-rendering the prompt or duplicating the
- * resolver call.
- */
-export async function resolveBareCapabilities(role, ctx) {
-  if (!role) return { canDo: [], canSummon: [], canBe: [] };
-  const beingCtx = {
-    being: ctx?.being || null,
-    role,
-    currentSpace: ctx?.currentSpace || null,
-    rootId: ctx?.rootId || null,
-    name: ctx?.name || null,
-  };
-  const [doEntries, summonEntries, beEntries] = await Promise.all([
-    resolveCanStar(role.canDo, beingCtx),
-    resolveCanStar(role.canSummon, beingCtx),
-    resolveCanStar(role.canBe, beingCtx),
-  ]);
-  const toNames = list =>
-    list.map(e => (typeof e === "string" ? e : e?.name || null)).filter(Boolean);
-  return {
-    canDo:     toNames(doEntries),
-    canSummon: toNames(summonEntries),
-    canBe:     toNames(beEntries),
-  };
-}
+// resolveBareCapabilities moved to seed/present/roles/capabilities.js
+// to keep cognition-agnostic helpers out of the LLM module. The
+// substrate (moment.js) and any cognition (this LLM module, future
+// scripted / human runners) import from there directly.
 
 // ────────────────────────────────────────────────────────────────────
 // canSee face blocks (preloaded perception)

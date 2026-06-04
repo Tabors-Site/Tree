@@ -44,7 +44,7 @@ import { markIntakeRunning, markIntakeComplete } from "./intake/intake.js";
 import { closeInboxOnAnswer } from "../past/projections/inbox/inboxProjectionFold.js";
 import { buildResponseEntry } from "./replies.js";
 import { buildFacadeSnapshot } from "./beats/2-fold/facadeSnapshot.js";
-import { resolveBareCapabilities } from "./cognition/llm/assemble.js";
+import { resolveBareCapabilities } from "./roles/capabilities.js";
 
 /**
  * Run one moment for a being. Walks all four beats; never throws —

@@ -38,7 +38,7 @@ import { fileURLToPath } from "url";
 import { v4 as uuidv4 } from "uuid";
 import Matter from "./matter.js";
 import Space from "../space/space.js";
-import { loadProjection, loadOrFold } from "../projections.js";
+import { loadProjection, loadOrFold, assertBranchOrThrow } from "../projections.js";
 import Fact from "../../past/fact/fact.js";
 import { emitFact, sealFacts } from "../../past/fact/facts.js";
 import { escapeRegex } from "../../utils.js";
@@ -128,7 +128,7 @@ async function createMatter({
   if (!beingId || !spaceId) {
     throw new Error("Missing required fields: beingId, spaceId");
   }
-  const branch = summonCtx?.branch || "0";
+  const branch = assertBranchOrThrow(summonCtx?.branch, "matters(summonCtx)");
 
   const { loadOrFold } = await import("../projections.js");
   const { default: Projection } = await import("../branch/projection.js");
@@ -251,7 +251,7 @@ async function editMatter({
 }) {
   if (!matterId || !beingId) throw new Error("Missing required fields");
 
-  const branch = summonCtx?.branch || "0";
+  const branch = assertBranchOrThrow(summonCtx?.branch, "matters(summonCtx)");
   const _matterSlot = await loadOrFold("matter", matterId, branch);
   if (!_matterSlot) throw new Error("Matter not found");
   const matter = { _id: _matterSlot.id, ...(_matterSlot.state || {}) };
@@ -326,7 +326,8 @@ async function editMatter({
   return { message: "Matter updated successfully", matter };
 }
 
-async function getMatters({ spaceId, limit, offset, startDate, endDate, branch = "0" }) {
+async function getMatters({ spaceId, limit, offset, startDate, endDate, branch }) {
+  assertBranchOrThrow(branch, "matters.getMatters(opts)");
   if (!spaceId) throw new Error("Missing required parameter: spaceId");
 
   const dateRange = validateDateRange(startDate, endDate);
@@ -378,7 +379,7 @@ async function deleteMatterAndFile({
   actId = null, sessionId = null,
   summonCtx = null,
 }) {
-  const branch = summonCtx?.branch || "0";
+  const branch = assertBranchOrThrow(summonCtx?.branch, "matters(summonCtx)");
   const _mSlot = await loadOrFold("matter", matterId, branch);
   if (!_mSlot) throw new Error("Matter not found");
   const matter = { _id: _mSlot.id, ...(_mSlot.state || {}) };
@@ -465,7 +466,7 @@ async function transferMatter({
     throw new Error("Missing required fields: matterId, targetSpace, beingId");
   }
 
-  const branch = summonCtx?.branch || "0";
+  const branch = assertBranchOrThrow(summonCtx?.branch, "matters(summonCtx)");
   const _mSlot2 = await loadOrFold("matter", matterId, branch);
   if (!_mSlot2) throw new Error("Matter not found");
   const matter = { _id: _mSlot2.id, ...(_mSlot2.state || {}) };
@@ -634,7 +635,8 @@ async function getMatterHistory({ matterId, limit = 100, offset = 0 } = {}) {
  * overwrites name with the being's name, which the descriptor pass
  * specifically needs to avoid.
  */
-async function listMattersAt(spaceId, { limit = 50, branch = "0" } = {}) {
+async function listMattersAt(spaceId, { limit = 50, branch } = {}) {
+  assertBranchOrThrow(branch, "matters.listMattersAt(opts)");
   if (!spaceId) return [];
   const { default: Projection } = await import("../branch/projection.js");
   const toEntry = (s) => {
@@ -703,7 +705,7 @@ async function listMattersAt(spaceId, { limit = 50, branch = "0" } = {}) {
  */
 async function getMatter(matterId, opts = {}) {
   if (!matterId || typeof matterId !== "string") return null;
-  const branch = opts?.branch || "0";
+  const branch = assertBranchOrThrow(opts?.branch, "matters.getMatter(opts)");
   const slot = await loadOrFold("matter", matterId, branch);
   if (!slot) return null;
   return { _id: slot.id, ...(slot.state || {}) };

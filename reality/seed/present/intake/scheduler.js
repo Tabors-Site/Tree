@@ -295,7 +295,10 @@ async function runLoop(beingId) {
           // forking off a paused branch is allowed but forking off a
           // deleted one is not — undelete first if you want that.
           {
-            const entryBranch = picked.entry.branch || "0";
+            // intake.pick now asserts row.branch; this fallback is dead.
+            // Keep the bare read so a future intake refactor can't reintroduce
+            // a silent default here.
+            const entryBranch = picked.entry.branch;
             const innerAction = picked.entry?.act?.action || null;
             const isPauseLifecycleOp =
               picked.entry?.act?.verb === "do" &&

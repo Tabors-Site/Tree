@@ -453,6 +453,12 @@ registerOperation("merge-branches", {
       label:    "Comma-separated list of named pointers (e.g. \"main,prod\") to re-point at the merged branch in one call. Each name must match the pointer grammar (lowercase letter start). Updates land via the .branches heaven space's qualities.pointers.",
       required: false,
     },
+    pauseResult: {
+      type:     "text",
+      label:    "Pause the merged branch immediately after creation (\"true\" or \"false\", default \"false\"). Useful when conflicts need resolution before the branch should be live. Operators unpause via pause-branch op when ready.",
+      required: false,
+      default:  "false",
+    },
   },
   handler: async ({ params, identity, summonCtx }) => {
     const sourceA = String(params?.sourceA || "").trim();
@@ -464,6 +470,12 @@ registerOperation("merge-branches", {
       throw new IbpError(IBP_ERR.INVALID_INPUT,
         `merge-branches: afterAction must be one of: ${[...VALID_AFTER].join(", ")}; got "${afterAction}"`);
     }
+    const pauseResult = (() => {
+      const raw = params?.pauseResult;
+      if (raw === true) return true;
+      if (typeof raw === "string") return raw.trim().toLowerCase() === "true";
+      return false;
+    })();
     if (!sourceA) throw new IbpError(IBP_ERR.INVALID_INPUT, "merge-branches: sourceA is required");
     if (!sourceB) throw new IbpError(IBP_ERR.INVALID_INPUT, "merge-branches: sourceB is required");
     if (sourceA === sourceB) {
@@ -654,6 +666,33 @@ registerOperation("merge-branches", {
       pointersFor(sourceB),
     ]);
 
+    // pauseResult: freeze the merged branch immediately so operators
+    // can resolve conflicts before its scheduler starts ticking and
+    // the state drifts from whatever they decide. Unpause via
+    // pause-branch when ready. Failures here are non-fatal . the
+    // merge succeeded; the freeze is housekeeping.
+    let resultPaused = false;
+    let pauseResultWarning = null;
+    if (pauseResult) {
+      try {
+        await Branch.updateOne(
+          { path: result.path },
+          {
+            $set: {
+              paused:   true,
+              pausedBy: identity?.beingId || null,
+              pausedAt: new Date(),
+              archivedBecause: `paused for conflict resolution after merge of #${sourceA} + #${sourceB}`,
+            },
+          },
+        );
+        invalidateBranchCache(result.path);
+        resultPaused = true;
+      } catch (err) {
+        pauseResultWarning = err.message;
+      }
+    }
+
     const response = {
       merged:       true,
       path:         result.path,
@@ -668,10 +707,12 @@ registerOperation("merge-branches", {
       pointersRepointed,
       sourceAPointers,
       sourceBPointers,
+      resultPaused,
     };
     if (resetWarning) response.resetWarning = resetWarning;
     if (afterWarning) response.afterWarning = afterWarning;
     if (repointWarning) response.repointWarning = repointWarning;
+    if (pauseResultWarning) response.pauseResultWarning = pauseResultWarning;
     return response;
   },
 });

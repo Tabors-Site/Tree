@@ -34,7 +34,7 @@ import { MATTER_ORIGIN } from "../../materials/matter/origins.js";
 import { I_AM } from "../../materials/being/seedBeings.js";
 import { isSourceSpaceId } from "../../materials/space/source.js";
 import { authorize } from "../authorize.js";
-import { assertVerbCaller, refuseHistoricalWrite } from "./_shared.js";
+import { assertVerbCaller, refuseHistoricalWrite, resolveBranchForFact } from "./_shared.js";
 
 /**
  * DO. Run a registered operation against a target, stamp a Fact, return
@@ -68,6 +68,12 @@ export async function doVerb(target, operation, params = {}, opts = {}) {
   if (!op) {
     throw new Error(`Unknown DO operation: "${operation}". Use reality.do.listOperations() to see available operations.`);
   }
+
+  // Resolve branch ONCE at the entry point. summonCtx.branch wins when
+  // inside an existing moment (continuation); otherwise opts.currentBranch
+  // from the wire layer. resolveBranchForFact throws MISSING_BRANCH if
+  // both are absent — silent default to "0" hid threading bugs.
+  const branch = resolveBranchForFact(opts.summonCtx, opts.currentBranch, "do");
 
   // Read-only origin gate. DO is always a write; if the target lives in
   // a read-only realm (filesystem-origin matter, the .source self-tree),
@@ -109,8 +115,7 @@ export async function doVerb(target, operation, params = {}, opts = {}) {
     // reality-root default `do.*` fallback) the same way it would for
     // a direct space target.
     const auditTarget = resolveAuditTarget(target, null, op);
-    const authBranch = opts.summonCtx?.branch || "0";
-    const spaceIdForAuth = await resolveAuthSpaceId(target, auditTarget, authBranch);
+    const spaceIdForAuth = await resolveAuthSpaceId(target, auditTarget, branch);
     // Extract namespace for namespace-aware authorization. Three
     // forms handled: legacy set-qualities/clear-qualities (params.namespace),
     // and the material-scoped set-<kind> ops with
@@ -192,11 +197,11 @@ export async function doVerb(target, operation, params = {}, opts = {}) {
       params:  ctx.params,
       result:  summarizeAuditResult(result),
       actId,
-      // Branch this fact lands on. Inherited from the moment's
-      // summonCtx; assign sets summonCtx.branch from the intake entry
-      // (which the wire layer fills from the parsed `#` qualifier).
-      // Boot/scaffold paths without a moment fall through to "0".
-      branch:  opts.summonCtx?.branch || "0",
+      // Branch this fact lands on, pre-resolved at the entry. Inherited
+      // from the moment's summonCtx (set by assign from the intake
+      // entry, which the wire layer fills from the parsed `#`
+      // qualifier) or attached as opts.currentBranch by the wire.
+      branch,
     }, opts.summonCtx);
   }
 

@@ -47,6 +47,7 @@
 import Fact from "../../../past/fact/fact.js";
 import * as reducers from "../../../materials/reducers.js";
 import { readReelBetween } from "./foldEngine.js";
+import { assertBranchOrThrow } from "../../../materials/projections.js";
 
 const REEL_TYPES = new Set(["being", "space", "matter"]);
 
@@ -123,14 +124,15 @@ export async function resolveUntil(type, id, until, opts = {}) {
     throw new Error(`resolveUntil: invalid atTimestamp "${until.atTimestamp}"`);
   }
   // Branch-aware AND lineage-aware: the latest fact at-or-before the
-  // timestamp anywhere in the branch's inherited reel. For main this is
-  // just main's facts; for a child branch this is main up to the branch
-  // point + the branch's own divergent facts. Without the lineage walk,
-  // a past view on #1 where no divergent facts exist for the target
-  // returns null → foldAt throws → descriptor drops the row, and the
-  // entire scene empties out (the user's "grid spaces disappear in
-  // past view on #1" symptom).
-  const branch = opts.branch || until.branch || "0";
+  // timestamp anywhere in the branch's inherited reel. For heaven this
+  // is just heaven's facts; for a child branch this is heaven up to the
+  // branch point + the branch's own divergent facts. Without the lineage
+  // walk, a past view on #1 where no divergent facts exist for the
+  // target returns null → foldAt throws → descriptor drops the row, and
+  // the entire scene empties out (the user's "grid spaces disappear in
+  // past view on #1" symptom). Branch is required from the caller; the
+  // historian path used to default to heaven silently.
+  const branch = assertBranchOrThrow(opts.branch || until.branch, "resolveUntil(opts)");
   if (branch === "0") {
     const row = await Fact.findOne({
       "target.kind": type,
@@ -190,8 +192,9 @@ export async function foldAt(type, id, until, opts = {}) {
   // Branch can come from opts.branch (the descriptor's threaded value)
   // or from until.branch (legacy callers that packed it into the
   // historical anchor). Prefer opts so the descriptor sweep doesn't
-  // have to re-pack until objects.
-  const branch = opts.branch || until?.branch || "0";
+  // have to re-pack until objects. No silent default — caller must
+  // attach branch via descriptor or until anchor.
+  const branch = assertBranchOrThrow(opts.branch || until?.branch, "foldAt(opts)");
 
   const untilSeq = await resolveUntil(type, id, until, { branch });
   if (untilSeq == null) {

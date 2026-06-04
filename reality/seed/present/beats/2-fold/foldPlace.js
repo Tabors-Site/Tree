@@ -34,7 +34,7 @@
 // moment re-folds. The actor model holds.
 
 import { fold } from "./foldEngine.js";
-import { findByPosition } from "../../../materials/projections.js";
+import { findByPosition, assertBranchOrThrow } from "../../../materials/projections.js";
 import { ORIENTATION, validateOrientation } from "./orientation.js";
 import Act from "../../../past/act/act.js";
 import Fact from "../../../past/fact/fact.js";
@@ -83,10 +83,16 @@ export async function foldPlace(beingId, orientation = ORIENTATION.FORWARD, opts
   const ω = validateOrientation(orientation);
 
   // Branch this fold runs in. Sourced from summonCtx (the moment
-  // already carries the caller's branch via Pass 4 substrate). Every
-  // sub-fold inside this place-fold inherits the same branch so the
-  // whole place renders against one branch's facts.
-  const branch = opts.summonCtx?.branch || opts.branch || "0";
+  // already carries the caller's branch via Pass 4 substrate) or an
+  // explicit opts.branch from non-moment callers. Every sub-fold
+  // inside this place-fold inherits the same branch so the whole
+  // place renders against one branch's facts. No silent default —
+  // a missing branch here means a perimeter threading bug, surfaced
+  // loud at the fold seam.
+  const branch = assertBranchOrThrow(
+    opts.summonCtx?.branch || opts.branch,
+    "foldPlace(opts)",
+  );
 
   // Optional summonCtx for the stale-detection key (PARALLEL FACTS §1.3).
   // When the moment-open caller passes summonCtx, every reel we fold

@@ -21,6 +21,7 @@ import Space from "../materials/space/space.js";
 import log from "../seedReality/log.js";
 import { emitFact } from "../past/fact/facts.js";
 import { I_AM } from "../materials/being/seedBeings.js";
+import { assertBranchOrThrow } from "../materials/projections.js";
 
 // Stamp a do:birth Fact for a new manifest child Space. Slice C
 // (2026-05-23): the legacy Space.create bypass is gone; eager-fold
@@ -48,7 +49,7 @@ async function createChildByFact({ parentId, name, type, qualities, summonCtx })
       },
     },
     actId: summonCtx.actId,
-    branch: summonCtx?.branch || "0",
+    branch: assertBranchOrThrow(summonCtx?.branch, "manifest(createSpace)"),
   }, summonCtx);
   return id;
 }
@@ -64,7 +65,7 @@ async function refreshQualitiesByFact(spaceId, qualities, summonCtx) {
   if (entries.length === 0) return;
   const { doVerb } = await import("../ibp/verbs/do.js");
   const { loadProjection } = await import("../materials/projections.js");
-  const branch = summonCtx?.branch || "0";
+  const branch = assertBranchOrThrow(summonCtx?.branch, "manifest(refreshQualitiesByFact)");
   for (const [ns, value] of entries) {
     const refreshed = await loadProjection("space", spaceId, branch);
     if (!refreshed) return;

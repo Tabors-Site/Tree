@@ -296,15 +296,34 @@ export async function seeVerb(target, opts = {}) {
   const branchesTarget = branchesTargetFromPath(expanded.right?.path);
   if (branchesTarget) {
     const realityDomain = getRealityDomain();
+    // Resolve named pointers to canonical paths. A request for
+    // `.branches/main` should walk main's current canonical lineage;
+    // re-pointing main later changes what this catalog returns
+    // without needing per-caller updates. Canonical paths (digit
+    // start) pass through untouched.
+    let canonicalBranchPath = branchesTarget.branchPath;
+    if (/^[a-z]/.test(canonicalBranchPath)) {
+      try {
+        const { resolvePointer, isPointerName } = await import("../../materials/branch/branchRegistry.js");
+        if (isPointerName(canonicalBranchPath)) {
+          const resolved = await resolvePointer(canonicalBranchPath);
+          if (resolved) canonicalBranchPath = resolved;
+        }
+      } catch {
+        // Pointer resolution unavailable (pre-bootstrap): fall through
+        // with the literal string. describeBranchesCatalog throws if
+        // it can't find a Branch row, surfacing the bad input.
+      }
+    }
     const isConflictsView = branchesTarget.kind === "conflicts";
     const pathSuffix = isConflictsView
       ? `/.branches/${branchesTarget.branchPath}/conflicts`
       : `/.branches/${branchesTarget.branchPath}`;
     const graph = isConflictsView
       ? null
-      : await describeBranchesCatalog(branchesTarget.branchPath);
+      : await describeBranchesCatalog(canonicalBranchPath);
     const conflicts = isConflictsView
-      ? await describeMergeConflicts(branchesTarget.branchPath)
+      ? await describeMergeConflicts(canonicalBranchPath)
       : null;
     return {
       address: {

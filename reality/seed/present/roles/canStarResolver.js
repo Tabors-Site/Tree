@@ -1,40 +1,44 @@
 // TreeOS Seed . AGPL-3.0 . https://treeos.ai . Tabor Holly
 //
 // canStarResolver.js . expand can* entries from descriptors into
-// concrete options for the prompt.
+// concrete options.
 //
 // The role's four can* lists (canSee / canDo / canSummon / canBe)
 // describe what the being is licensed to dispatch through each verb.
 // Most entries are concrete strings ("@operator", "set-config") or
-// self-describing objects ({name, description}). Both render straight
-// to the prompt.
+// self-describing objects ({name, description}). Both pass through.
 //
 // Some entries are RELATIONSHIPS that resolve per-moment-per-being .
 // "my parent in lineage", "the predecessor at this domain", "every
 // being I minted". These cannot be hard-coded at role-design time
 // because the answer depends on the current being and its history.
-// This file is the resolver layer that expands such tokens at
-// prompt-build time.
+// This file is the resolver layer that expands such tokens.
 //
 // Entry shapes accepted:
 //
-//   "name"                      . concrete descriptor, rendered as-is
-//   { name, description }        . self-describing, rendered as-is
+//   "name"                      . concrete descriptor, used as-is
+//   { name, description }        . self-describing, used as-is
 //   { rel: "<token>" }           . resolved via registered rel-resolver
 //   { pattern: "<glob>" }        . resolved via registered pattern-resolver
 //   { resolver: "<key>", ... }   . resolved via a named resolver, any shape
 //
 // Resolvers are registered at boot. Today the registry is empty;
-// every entry falls through to the as-is renderer. As lineage,
-// predecessor, child-list, and pattern-resolution land they plug
-// in here without changing the renderer or the role specs.
+// every entry falls through as-is. As lineage, predecessor,
+// child-list, and pattern-resolution land they plug in here without
+// changing consumers or the role specs.
 //
 // Multi-step rituals (coronation, succession, role-chain) are NOT
 // solved here. They are multiple moments, driven by the inbox /
 // summon / reply / wake loop. This file only expands what's allowed
-// for ONE moment's prompt.
+// for ONE moment.
+//
+// Cognition-agnostic. Lives in present/roles/ because the can*
+// lists originate on the role spec; every cognition that consumes
+// them (LLM prompt assembly, scripted introspection, facadeSnapshot
+// capture) imports from here. Previously lived in cognition/llm/
+// which was the wrong dependency direction.
 
-import log from "../../../seedReality/log.js";
+import log from "../../seedReality/log.js";
 
 // resolverKey -> async (entry, beingCtx) -> [resolvedEntry, ...]
 const relResolvers = new Map();
@@ -105,18 +109,18 @@ export function registerNamedResolver(key, resolverFn) {
 }
 
 /**
- * Expand a can* list into concrete entries for the prompt. Each
- * entry is either returned as-is (literal descriptor) or expanded
- * via a registered resolver (relationship token).
+ * Expand a can* list into concrete entries. Each entry is either
+ * returned as-is (literal descriptor) or expanded via a registered
+ * resolver (relationship token).
  *
  * Failures in a resolver are logged and the entry is dropped from
- * the expanded list (prompt-discipline-plus-substrate-auth: a
- * resolver miss never escalates to a broken prompt; the being just
- * does not see that token in this moment's options).
+ * the expanded list (resolver miss never escalates to a broken
+ * downstream — the being just does not see that token in this
+ * moment's options).
  *
  * @param {Array<string|object>} entries . raw can* list from the role spec
  * @param {object} beingCtx              . { being, role, currentSpace, rootId, ... }
- * @returns {Promise<Array<string|object>>} . expanded list, same shapes the renderer accepts
+ * @returns {Promise<Array<string|object>>} . expanded list, same shapes consumers accept
  */
 export async function resolveCanStar(entries, beingCtx = {}) {
   if (!Array.isArray(entries) || entries.length === 0) return [];

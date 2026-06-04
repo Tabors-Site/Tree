@@ -102,7 +102,8 @@ import {
   cognitionFailure,
   isCognitionFailure,
 } from "../cognitionResult.js";
-import { buildSystemPromptForRole, resolveBareCapabilities } from "./assemble.js";
+import { buildSystemPromptForRole } from "./assemble.js";
+import { resolveBareCapabilities } from "../../roles/capabilities.js";
 import { renderInwardPastFace, renderHalfPastFace } from "./pastFaceRender.js";
 import { foldPlace } from "../../beats/2-fold/foldPlace.js";
 import { buildFacadeSnapshot } from "../../beats/2-fold/facadeSnapshot.js";

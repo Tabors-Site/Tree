@@ -138,11 +138,20 @@ async function _openPanel() {
       <button type="button" class="bp-close" style="background:transparent;color:#6b7d72;border:none;font-size:18px;cursor:pointer;padding:0 4px;">×</button>
     </div>
     <div class="bp-tree" style="font-size:12px;line-height:1.7;"></div>
-    <div style="margin-top:12px;color:#6b7d72;font-size:10px;">click a branch to open its timeline · esc to close</div>
+    <div class="bp-actions" style="margin-top:12px;padding-top:10px;border-top:1px solid #2c3a32;display:flex;gap:8px;align-items:center;">
+      <button type="button" class="bp-merge" style="background:#13201b;color:#8fbf9f;border:1px solid #3d7a52;border-radius:3px;padding:4px 10px;font-family:inherit;font-size:11px;cursor:pointer;">
+        ⇄ merge two branches…
+      </button>
+      <span style="color:#6b7d72;font-size:10px;margin-left:auto;">click a branch to open its timeline · esc to close</span>
+    </div>
   `;
   document.body.appendChild(el);
   _state.panelEl = el;
   el.querySelector(".bp-close").addEventListener("click", _closePanel);
+  el.querySelector(".bp-merge").addEventListener("click", (ev) => {
+    ev.stopPropagation();
+    _openMergeDialog();
+  });
 
   // Fetch every branch in one pass.
   const tree = await _loadBranchTree();
@@ -216,6 +225,15 @@ function _renderTree(container, tree) {
     const parts = [];
     if (branch.label && branch.label !== `main` && branch.label !== `#${branch.path}`) {
       parts.push(branch.label);
+    }
+    if (Array.isArray(branch.mergeSources) && branch.mergeSources.length === 2) {
+      const [a, b] = branch.mergeSources;
+      parts.push(`↶ merged from #${a} + #${b}`);
+      // Lazy-load conflict counts. We don't block the tree render on
+      // this; the SEE fires after first paint and patches the row
+      // when it returns. Cached per session so reopening the tree is
+      // cheap.
+      _decorateRowWithConflictCount(row, branch.path);
     }
     if (branch.createdAt) parts.push(_shortStamp(branch.createdAt));
     if (branch.anchor) {
@@ -340,6 +358,84 @@ async function _togglePauseBranch(branch) {
     _showBranchEvent(`${op} failed: ${err?.message || err}`, { error: true });
   } finally {
     _toggleInFlight = Math.max(0, _toggleInFlight - 1);
+  }
+}
+
+// ── Per-merged-branch conflict count cache ────────────────────────
+// Per-session cache so reopening the tree doesn't refire every SEE.
+// Invalidated when the user opens the conflict panel + makes any
+// resolution (the panel's refresh path nukes the cached entry).
+const _conflictCountCache = new Map(); // path → { open, resolved, totalConflicts }
+
+async function _decorateRowWithConflictCount(row, mergedPath) {
+  // Append a placeholder badge first so the row's layout is stable.
+  const badge = document.createElement("button");
+  badge.type = "button";
+  badge.style.cssText = [
+    "background: transparent",
+    "color: #6b7d72",
+    "border: 1px solid #2c3a32",
+    "border-radius: 3px",
+    "padding: 1px 6px",
+    "font-family: inherit",
+    "font-size: 10px",
+    "cursor: pointer",
+    "margin-left: 4px",
+  ].join(";");
+  badge.textContent = "↶ …";
+  badge.title = "view merge conflicts";
+  badge.addEventListener("click", (ev) => {
+    ev.stopPropagation();
+    _openConflictPanel(mergedPath);
+  });
+  row.appendChild(badge);
+
+  // Fetch + apply.
+  const apply = (counts) => {
+    if (!badge.isConnected) return;
+    if (!counts) {
+      badge.textContent = "↶ conflicts";
+      badge.style.color = "#6b7d72";
+      badge.style.borderColor = "#2c3a32";
+      return;
+    }
+    const open = counts.open ?? 0;
+    const resolved = counts.resolved ?? 0;
+    if (open > 0) {
+      badge.textContent = `⚠ ${open} open`;
+      badge.style.color = "#e8b762";
+      badge.style.borderColor = "#6b5320";
+      badge.title = `${open} open conflict${open === 1 ? "" : "s"}, ${resolved} resolved`;
+    } else if (resolved > 0) {
+      badge.textContent = `✓ ${resolved} resolved`;
+      badge.style.color = "#8fbf9f";
+      badge.style.borderColor = "#3d7a52";
+      badge.title = `${resolved} resolved conflict${resolved === 1 ? "" : "s"}`;
+    } else {
+      badge.textContent = "↶ clean merge";
+      badge.style.color = "#6b7d72";
+      badge.style.borderColor = "#2c3a32";
+      badge.title = "no two-sided conflicts";
+    }
+  };
+  if (_conflictCountCache.has(mergedPath)) {
+    apply(_conflictCountCache.get(mergedPath));
+    return;
+  }
+  try {
+    const catalog = await _state.client.see(
+      `${_state.reality}/.branches/${mergedPath}/conflicts`,
+    );
+    const totals = catalog?.conflicts?.totals || {};
+    const counts = {
+      open: totals.conflictsOpen ?? 0,
+      resolved: totals.conflictsResolved ?? 0,
+      totalConflicts: totals.conflicts ?? 0,
+    };
+    _conflictCountCache.set(mergedPath, counts);
+    apply(counts);
+  } catch {
+    apply(null);
   }
 }
 
@@ -820,6 +916,540 @@ async function _branchHere() {
     console.warn("[branch-bar] create-branch failed:", err?.message);
     _showBranchEvent(`branch failed: ${err?.message || err}`, { error: true });
   }
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// MERGE DIALOG
+// ─────────────────────────────────────────────────────────────────────
+//
+// One modal overlay over the branch tree panel. Two source pickers,
+// the three afterAction choices, an optional comma-separated list of
+// named pointers to re-point at the merged branch, and a checkbox to
+// also summon the @merge-mediator role at the result for the LLM
+// walkthrough. All resolved in one `merge-branches` substrate call.
+//
+// The dialog is a thin wrapper; substrate carries the doctrine. Every
+// decision the user makes lands as a fact on the merged branch's reel
+// (either the merge fact itself or the mediator's reconciliation
+// stamps), so live SEE on the conflict catalog stays the source of
+// truth for both UI re-renders and the next mediator pickup point.
+
+let _mergeDialogEl = null;
+
+function _openMergeDialog() {
+  if (_mergeDialogEl) return;
+  if (!_state.graphAll) {
+    _showBranchEvent("tree not loaded yet", { error: true });
+    return;
+  }
+  const branches = Array.from(_state.graphAll.byPath.values())
+    .filter(b => !b.deleted)
+    .sort((a, b) => a.path.localeCompare(b.path));
+
+  const opt = (b, selected) => {
+    const label = b.path === "0" ? "main (#0)" : `#${b.path}${b.label ? ` — ${_escape(b.label)}` : ""}`;
+    const sel = selected ? " selected" : "";
+    return `<option value="${b.path}"${sel}>${label}</option>`;
+  };
+
+  const el = document.createElement("div");
+  el.id = "merge-dialog";
+  el.style.cssText = [
+    "position: fixed",
+    "top: 50%", "left: 50%",
+    "transform: translate(-50%, -50%)",
+    "width: min(520px, 92vw)",
+    "max-height: 80vh",
+    "overflow: auto",
+    "background: rgba(10, 13, 12, 0.97)",
+    "backdrop-filter: blur(6px)",
+    "border: 1px solid #3d7a52",
+    "border-radius: 8px",
+    "color: #c8d3cb",
+    "font-family: ui-monospace, monospace",
+    "font-size: 12px",
+    "z-index: 14",
+    "padding: 16px 18px",
+    "pointer-events: auto",
+    "box-shadow: 0 10px 40px rgba(0,0,0,0.55)",
+  ].join(";");
+  el.innerHTML = `
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
+      <span style="color:#8fbf9f;font-size:13px;">merge two branches</span>
+      <button type="button" class="md-close" style="background:transparent;color:#6b7d72;border:none;font-size:18px;cursor:pointer;padding:0 4px;">×</button>
+    </div>
+    <form class="md-form" style="display:grid;gap:12px;">
+      <label style="display:grid;gap:4px;">
+        <span style="color:#9ab2a3;font-size:10px;text-transform:uppercase;letter-spacing:0.5px;">source A</span>
+        <select name="sourceA" style="background:#0a0d0c;color:#c8d3cb;border:1px solid #2c3a32;border-radius:3px;padding:5px 7px;font-family:inherit;font-size:12px;">
+          ${branches.map((b, i) => opt(b, i === 0)).join("")}
+        </select>
+      </label>
+      <label style="display:grid;gap:4px;">
+        <span style="color:#9ab2a3;font-size:10px;text-transform:uppercase;letter-spacing:0.5px;">source B</span>
+        <select name="sourceB" style="background:#0a0d0c;color:#c8d3cb;border:1px solid #2c3a32;border-radius:3px;padding:5px 7px;font-family:inherit;font-size:12px;">
+          ${branches.map((b, i) => opt(b, i === 1)).join("")}
+        </select>
+      </label>
+      <label style="display:grid;gap:4px;">
+        <span style="color:#9ab2a3;font-size:10px;text-transform:uppercase;letter-spacing:0.5px;">label for the merged branch (optional)</span>
+        <input name="label" type="text" placeholder="e.g. release-candidate" style="background:#0a0d0c;color:#c8d3cb;border:1px solid #2c3a32;border-radius:3px;padding:5px 7px;font-family:inherit;font-size:12px;" />
+      </label>
+      <fieldset style="border:1px solid #2c3a32;border-radius:4px;padding:8px 10px;display:grid;gap:6px;">
+        <legend style="color:#9ab2a3;font-size:10px;text-transform:uppercase;letter-spacing:0.5px;padding:0 4px;">after the merge</legend>
+        <label style="display:flex;gap:6px;align-items:center;cursor:pointer;">
+          <input type="radio" name="afterAction" value="keep" checked /> keep the source branches as they are
+        </label>
+        <label style="display:flex;gap:6px;align-items:center;cursor:pointer;">
+          <input type="radio" name="afterAction" value="pause" /> pause both sources (they stop ticking; can resume)
+        </label>
+        <label style="display:flex;gap:6px;align-items:center;cursor:pointer;">
+          <input type="radio" name="afterAction" value="delete" /> delete both sources (soft delete; can undelete)
+        </label>
+      </fieldset>
+      <fieldset style="border:1px solid #2c3a32;border-radius:4px;padding:8px 10px;display:grid;gap:6px;">
+        <legend style="color:#9ab2a3;font-size:10px;text-transform:uppercase;letter-spacing:0.5px;padding:0 4px;">the merged branch</legend>
+        <label style="display:flex;gap:6px;align-items:center;cursor:pointer;">
+          <input type="radio" name="pauseResult" value="false" checked /> keep it live (continue running while you resolve)
+        </label>
+        <label style="display:flex;gap:6px;align-items:center;cursor:pointer;">
+          <input type="radio" name="pauseResult" value="true" /> pause until conflicts resolved (no drift, no ticks)
+        </label>
+      </fieldset>
+      <label style="display:grid;gap:4px;">
+        <span style="color:#9ab2a3;font-size:10px;text-transform:uppercase;letter-spacing:0.5px;">re-point named pointers at the merged branch</span>
+        <input name="repointPointers" type="text" placeholder="e.g. main,prod (comma-separated; blank to skip)" style="background:#0a0d0c;color:#c8d3cb;border:1px solid #2c3a32;border-radius:3px;padding:5px 7px;font-family:inherit;font-size:12px;" />
+        <span style="color:#6b7d72;font-size:10px;">canonical paths stay forever; pointers move so default addresses follow main wherever it goes</span>
+      </label>
+      <label style="display:flex;gap:6px;align-items:center;cursor:pointer;padding:6px 8px;background:#0e1a14;border:1px solid #2c3a32;border-radius:4px;">
+        <input type="checkbox" name="summonMediator" checked />
+        <div style="display:grid;gap:2px;">
+          <span style="color:#c8d3cb;">summon @merge-mediator after the merge</span>
+          <span style="color:#6b7d72;font-size:10px;">LLM walks you through conflicts; each decision lands as a fact and the catalog updates live</span>
+        </div>
+      </label>
+      <div class="md-error" style="display:none;color:#d97a7a;font-size:11px;padding:4px 6px;background:rgba(217,122,122,0.08);border:1px solid #5c2323;border-radius:3px;"></div>
+      <div style="display:flex;gap:8px;align-items:center;margin-top:4px;">
+        <button type="submit" class="md-submit" style="background:#1a3424;color:#c8d3cb;border:1px solid #3d7a52;border-radius:3px;padding:6px 12px;font-family:inherit;font-size:12px;cursor:pointer;flex:1;">
+          ⇄ merge now
+        </button>
+        <button type="button" class="md-cancel" style="background:transparent;color:#6b7d72;border:1px solid #2c3a32;border-radius:3px;padding:6px 12px;font-family:inherit;font-size:12px;cursor:pointer;">
+          cancel
+        </button>
+      </div>
+    </form>
+  `;
+  document.body.appendChild(el);
+  _mergeDialogEl = el;
+
+  const close = () => _closeMergeDialog();
+  el.querySelector(".md-close").addEventListener("click", close);
+  el.querySelector(".md-cancel").addEventListener("click", close);
+
+  const form = el.querySelector(".md-form");
+  form.addEventListener("submit", async (ev) => {
+    ev.preventDefault();
+    const errEl = el.querySelector(".md-error");
+    errEl.style.display = "none";
+    errEl.textContent = "";
+    const fd = new FormData(form);
+    const sourceA = String(fd.get("sourceA") || "").trim();
+    const sourceB = String(fd.get("sourceB") || "").trim();
+    if (!sourceA || !sourceB) {
+      errEl.textContent = "pick both sources";
+      errEl.style.display = "block";
+      return;
+    }
+    if (sourceA === sourceB) {
+      errEl.textContent = "sources must differ";
+      errEl.style.display = "block";
+      return;
+    }
+    const submitBtn = el.querySelector(".md-submit");
+    const prevSubmitText = submitBtn.textContent;
+    submitBtn.disabled = true;
+    submitBtn.textContent = "merging…";
+    try {
+      const args = {
+        sourceA,
+        sourceB,
+        label: String(fd.get("label") || "").trim() || undefined,
+        afterAction: String(fd.get("afterAction") || "keep"),
+        pauseResult: String(fd.get("pauseResult") || "false"),
+      };
+      const repointPointers = String(fd.get("repointPointers") || "").trim();
+      if (repointPointers) args.repointPointers = repointPointers;
+
+      const result = await _state.client.do(
+        "/@branch-manager",
+        "merge-branches",
+        args,
+      );
+      const r = result?.result || result;
+      if (!r?.path) {
+        throw new Error(r?.error?.message || "merge returned no path");
+      }
+
+      const summonMediator = fd.get("summonMediator") === "on";
+      _closeMergeDialog();
+      _closePanel();
+      _showBranchEvent(
+        `⇄ merged #${sourceA} + #${sourceB} → #${r.path}${summonMediator ? " · summoning mediator…" : ""}`,
+        { sticky: 3500 },
+      );
+
+      // Navigate to the merged branch so the conflict catalog (and
+      // any in-flight mediator messages) surface in the active view.
+      location.hash = `#${_state.reality}#${r.path}/`;
+
+      if (summonMediator) {
+        // Fire-and-forget. The mediator's first response arrives via
+        // the SUMMON push channel; the conflict catalog SEE on the
+        // merged branch reflects each reconciliation fact as it lands.
+        try {
+          await _state.client.summon(
+            `/@merge-mediator`,
+            {
+              from: "user",
+              content: `Walk me through the conflicts on #${r.path}. The conflict catalog is at /.branches/${r.path}/conflicts.`,
+            },
+          );
+        } catch (err) {
+          console.warn("[branch-bar] mediator summon failed:", err?.message || err);
+          _showBranchEvent(`mediator summon failed: ${err?.message || err}`, { error: true });
+        }
+      }
+    } catch (err) {
+      console.warn("[branch-bar] merge-branches failed:", err);
+      errEl.textContent = err?.message || String(err);
+      errEl.style.display = "block";
+      submitBtn.disabled = false;
+      submitBtn.textContent = prevSubmitText;
+    }
+  });
+
+  // Esc closes the dialog (without closing the underlying tree panel).
+  function escClose(ev) {
+    if (ev.key === "Escape") {
+      ev.stopPropagation();
+      close();
+      window.removeEventListener("keydown", escClose, true);
+    }
+  }
+  window.addEventListener("keydown", escClose, true);
+}
+
+function _closeMergeDialog() {
+  if (_mergeDialogEl) {
+    _mergeDialogEl.remove();
+    _mergeDialogEl = null;
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// CONFLICT CATALOG PANEL
+// ─────────────────────────────────────────────────────────────────────
+//
+// Opens via the "↶ N open" link on a merged-branch row in the tree.
+// SEEs `<reality>/.branches/<mergedPath>/conflicts` and renders the
+// per-reel decision log. Every action on the panel either stamps a
+// reconciliation fact (via DO) or summons the mediator (via SUMMON);
+// both land in the same chain and the panel's re-render reflects
+// whichever showed up.
+//
+// Refresh strategy: re-fetch the catalog after every action. Live
+// push-based updates are a follow-up; the catalog SEE is cheap.
+
+let _conflictPanelEl = null;
+let _conflictPanelBranch = null;
+
+async function _openConflictPanel(mergedPath) {
+  _conflictPanelBranch = mergedPath;
+  if (_conflictPanelEl) _conflictPanelEl.remove();
+
+  const el = document.createElement("div");
+  el.id = "conflict-panel";
+  el.style.cssText = [
+    "position: fixed",
+    "top: 50%", "left: 50%",
+    "transform: translate(-50%, -50%)",
+    "width: min(720px, 94vw)",
+    "max-height: 84vh",
+    "overflow: hidden",
+    "background: rgba(10, 13, 12, 0.97)",
+    "backdrop-filter: blur(6px)",
+    "border: 1px solid #3d7a52",
+    "border-radius: 8px",
+    "color: #c8d3cb",
+    "font-family: ui-monospace, monospace",
+    "font-size: 12px",
+    "z-index: 14",
+    "padding: 0",
+    "pointer-events: auto",
+    "display: flex",
+    "flex-direction: column",
+    "box-shadow: 0 10px 40px rgba(0,0,0,0.55)",
+  ].join(";");
+  el.innerHTML = `
+    <div style="display:flex;justify-content:space-between;align-items:center;padding:14px 18px 10px;border-bottom:1px solid #2c3a32;">
+      <div>
+        <div style="color:#8fbf9f;font-size:13px;">resolve merge conflicts</div>
+        <div class="cp-subtitle" style="color:#6b7d72;font-size:10px;margin-top:2px;">loading…</div>
+      </div>
+      <div style="display:flex;gap:8px;align-items:center;">
+        <button type="button" class="cp-mediator" style="background:#13201b;color:#8fbf9f;border:1px solid #3d7a52;border-radius:3px;padding:5px 10px;font-family:inherit;font-size:11px;cursor:pointer;">
+          ✨ summon @merge-mediator
+        </button>
+        <button type="button" class="cp-refresh" style="background:transparent;color:#6b7d72;border:1px solid #2c3a32;border-radius:3px;padding:5px 10px;font-family:inherit;font-size:11px;cursor:pointer;">
+          ↻ refresh
+        </button>
+        <button type="button" class="cp-close" style="background:transparent;color:#6b7d72;border:none;font-size:18px;cursor:pointer;padding:0 4px;">×</button>
+      </div>
+    </div>
+    <div class="cp-body" style="overflow:auto;padding:14px 18px;flex:1;">
+      <div class="cp-loading" style="color:#6b7d72;padding:24px;text-align:center;">loading catalog…</div>
+    </div>
+  `;
+  document.body.appendChild(el);
+  _conflictPanelEl = el;
+
+  el.querySelector(".cp-close").addEventListener("click", _closeConflictPanel);
+  el.querySelector(".cp-refresh").addEventListener("click", () => _refreshConflictPanel());
+  el.querySelector(".cp-mediator").addEventListener("click", () => _summonMediatorForBranch(mergedPath));
+
+  function escClose(ev) {
+    if (ev.key === "Escape" && _conflictPanelEl) {
+      ev.stopPropagation();
+      _closeConflictPanel();
+      window.removeEventListener("keydown", escClose, true);
+    }
+  }
+  window.addEventListener("keydown", escClose, true);
+
+  await _refreshConflictPanel();
+}
+
+function _closeConflictPanel() {
+  if (_conflictPanelEl) {
+    _conflictPanelEl.remove();
+    _conflictPanelEl = null;
+    _conflictPanelBranch = null;
+  }
+}
+
+async function _refreshConflictPanel() {
+  if (!_conflictPanelEl || !_conflictPanelBranch) return;
+  // Invalidate cached counts for this branch so the tree-row badge
+  // re-fetches when the panel closes or the tree re-renders.
+  _conflictCountCache.delete(_conflictPanelBranch);
+  const body = _conflictPanelEl.querySelector(".cp-body");
+  const subtitle = _conflictPanelEl.querySelector(".cp-subtitle");
+  body.innerHTML = `<div style="color:#6b7d72;padding:24px;text-align:center;">loading catalog…</div>`;
+  let catalog;
+  try {
+    catalog = await _state.client.see(
+      `${_state.reality}/.branches/${_conflictPanelBranch}/conflicts`,
+    );
+  } catch (err) {
+    body.innerHTML = `<div style="color:#d97a7a;padding:16px;">failed to load catalog: ${_escape(err?.message || String(err))}</div>`;
+    return;
+  }
+  const c = catalog?.conflicts || catalog;
+  if (c?.notFound) {
+    body.innerHTML = `<div style="color:#6b7d72;padding:16px;">branch #${_conflictPanelBranch} not found</div>`;
+    return;
+  }
+  if (c?.notAMerge) {
+    body.innerHTML = `<div style="color:#6b7d72;padding:16px;">#${_conflictPanelBranch} is not a merge result (no mergeSources)</div>`;
+    return;
+  }
+
+  const sourceA = c?.sourceA;
+  const sourceB = c?.sourceB;
+  const totals = c?.totals || {};
+  subtitle.textContent =
+    `#${_conflictPanelBranch} merged from #${sourceA} + #${sourceB} · ` +
+    `${totals.conflictsOpen || 0} open, ${totals.conflictsResolved || 0} resolved, ${totals.cleanA + totals.cleanB || 0} clean`;
+
+  const items = Array.isArray(c?.conflicts) ? c.conflicts : [];
+  if (items.length === 0) {
+    body.innerHTML = `<div style="color:#8fbf9f;padding:16px;">no divergent reels . nothing to resolve.</div>`;
+    return;
+  }
+
+  const groups = {
+    open:     items.filter(it => it.side === "conflict" && it.status === "open"),
+    resolved: items.filter(it => it.side === "conflict" && it.status === "resolved"),
+    cleanA:   items.filter(it => it.side === "clean-A"),
+    cleanB:   items.filter(it => it.side === "clean-B"),
+  };
+
+  body.innerHTML = "";
+  if (groups.open.length === 0 && groups.resolved.length === 0) {
+    const note = document.createElement("div");
+    note.style.cssText = "color:#8fbf9f;padding:8px 0 12px;";
+    note.textContent = "no two-sided conflicts. the merged branch inherits everything cleanly through reel-lineage.";
+    body.appendChild(note);
+  }
+  if (groups.open.length > 0) {
+    body.appendChild(_groupHeader(`open conflicts (${groups.open.length})`, "#e8b762"));
+    for (const it of groups.open) body.appendChild(_renderConflictRow(it, sourceA, sourceB, "open"));
+  }
+  if (groups.resolved.length > 0) {
+    body.appendChild(_groupHeader(`resolved (${groups.resolved.length})`, "#8fbf9f"));
+    for (const it of groups.resolved) body.appendChild(_renderConflictRow(it, sourceA, sourceB, "resolved"));
+  }
+  if (groups.cleanA.length + groups.cleanB.length > 0) {
+    body.appendChild(_groupHeader(`clean (${groups.cleanA.length + groups.cleanB.length}) — auto-inherits from one side`, "#6b7d72"));
+    const cleanSummary = document.createElement("div");
+    cleanSummary.style.cssText = "padding:4px 0 12px;color:#6b7d72;font-size:10px;";
+    cleanSummary.textContent = `${groups.cleanA.length} from #${sourceA}, ${groups.cleanB.length} from #${sourceB}`;
+    body.appendChild(cleanSummary);
+  }
+}
+
+function _groupHeader(text, color) {
+  const h = document.createElement("div");
+  h.style.cssText = `color:${color};text-transform:uppercase;letter-spacing:0.6px;font-size:10px;margin:12px 0 6px;border-top:1px solid #2c3a32;padding-top:8px;`;
+  h.textContent = text;
+  return h;
+}
+
+function _renderConflictRow(item, sourceA, sourceB, kind) {
+  const row = document.createElement("div");
+  row.style.cssText = "border:1px solid #2c3a32;border-radius:4px;padding:8px 10px;margin-bottom:6px;display:grid;gap:6px;";
+  if (kind === "resolved") row.style.background = "rgba(45, 76, 55, 0.12)";
+
+  const head = document.createElement("div");
+  head.style.cssText = "display:flex;justify-content:space-between;align-items:baseline;gap:8px;";
+  const reel = document.createElement("code");
+  reel.style.cssText = "color:#c8d3cb;font-size:11px;";
+  reel.textContent = item.reelKey;
+  head.appendChild(reel);
+  const status = document.createElement("span");
+  status.style.cssText = `font-size:10px;color:${kind === "open" ? "#e8b762" : "#8fbf9f"};`;
+  status.textContent = kind === "open" ? "open" : "resolved";
+  head.appendChild(status);
+  row.appendChild(head);
+
+  if (kind === "open") {
+    const sides = document.createElement("div");
+    sides.style.cssText = "display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:10px;";
+    sides.appendChild(_sidePreview(`#${sourceA}`, item.lastFactA));
+    sides.appendChild(_sidePreview(`#${sourceB}`, item.lastFactB));
+    row.appendChild(sides);
+
+    const actions = document.createElement("div");
+    actions.style.cssText = "display:flex;gap:6px;margin-top:4px;";
+    actions.appendChild(_actionButton("✨ delegate to mediator", () =>
+      _summonMediatorForConflict(item, sourceA, sourceB)));
+    row.appendChild(actions);
+  } else {
+    const res = item.resolution || {};
+    const r = document.createElement("div");
+    r.style.cssText = "font-size:10px;color:#9ab2a3;";
+    const strategy = res.strategy ? `strategy: ${res.strategy}` : "manual override";
+    const src = res.sourceBranch ? ` · from #${res.sourceBranch}` : "";
+    const when = res.date ? ` · ${_shortStamp(res.date)}` : "";
+    r.textContent = `${strategy}${src}${when}`;
+    row.appendChild(r);
+    if (res.value) {
+      const v = document.createElement("pre");
+      v.style.cssText = "margin:0;padding:4px 6px;background:rgba(0,0,0,0.25);border-radius:3px;color:#c8d3cb;font-size:10px;white-space:pre-wrap;word-break:break-word;max-height:80px;overflow:auto;";
+      v.textContent = JSON.stringify(res.value, null, 2);
+      row.appendChild(v);
+    }
+  }
+  return row;
+}
+
+function _sidePreview(label, fact) {
+  const card = document.createElement("div");
+  card.style.cssText = "border:1px solid #1f2a23;border-radius:3px;padding:5px 7px;background:rgba(0,0,0,0.18);";
+  const top = document.createElement("div");
+  top.style.cssText = "color:#9ab2a3;margin-bottom:3px;";
+  top.textContent = label;
+  card.appendChild(top);
+  if (!fact) {
+    const empty = document.createElement("div");
+    empty.style.cssText = "color:#6b7d72;font-style:italic;";
+    empty.textContent = "(no divergent writes)";
+    card.appendChild(empty);
+    return card;
+  }
+  const action = document.createElement("div");
+  action.style.cssText = "color:#c8d3cb;";
+  action.textContent = fact.action || "(action)";
+  card.appendChild(action);
+  if (fact.params) {
+    const params = document.createElement("pre");
+    params.style.cssText = "margin:2px 0 0;padding:0;color:#9ab2a3;font-size:10px;white-space:pre-wrap;word-break:break-word;max-height:70px;overflow:auto;";
+    params.textContent = JSON.stringify(fact.params, null, 2);
+    card.appendChild(params);
+  }
+  return card;
+}
+
+function _actionButton(label, onclick) {
+  const b = document.createElement("button");
+  b.type = "button";
+  b.textContent = label;
+  b.style.cssText = "background:#13201b;color:#8fbf9f;border:1px solid #3d7a52;border-radius:3px;padding:4px 8px;font-family:inherit;font-size:10px;cursor:pointer;";
+  b.addEventListener("click", onclick);
+  return b;
+}
+
+async function _summonMediatorForBranch(branchPath) {
+  try {
+    _showBranchEvent("✨ summoning @merge-mediator…");
+    await _state.client.summon(
+      `/@merge-mediator`,
+      {
+        from: "user",
+        content:
+          `Walk me through the conflicts on #${branchPath}. ` +
+          `The catalog is at ${_state.reality}/.branches/${branchPath}/conflicts. ` +
+          `Pick up at the first row marked status=open and propose a resolution.`,
+      },
+    );
+    _showBranchEvent("✨ mediator summoned", { sticky: 2200 });
+    setTimeout(() => _refreshConflictPanel(), 800);
+  } catch (err) {
+    console.warn("[branch-bar] mediator summon failed:", err?.message || err);
+    _showBranchEvent(`mediator summon failed: ${err?.message || err}`, { error: true });
+  }
+}
+
+async function _summonMediatorForConflict(item, sourceA, sourceB) {
+  try {
+    _showBranchEvent("✨ summoning @merge-mediator for one conflict…");
+    await _state.client.summon(
+      `/@merge-mediator`,
+      {
+        from: "user",
+        content:
+          `Resolve this specific conflict on #${_conflictPanelBranch}: ` +
+          `reel ${item.reelKey} was touched on both #${sourceA} and #${sourceB}. ` +
+          `Suggested strategy: ${item.suggestedStrategy}. ` +
+          `Propose a resolution and stamp the reconciliation fact.`,
+      },
+    );
+    setTimeout(() => _refreshConflictPanel(), 800);
+  } catch (err) {
+    _showBranchEvent(`mediator summon failed: ${err?.message || err}`, { error: true });
+  }
+}
+
+// Small HTML-entity escape for user-provided strings rendered into the
+// dialog (branch labels, etc.). Defensive against any control chars
+// that might end up in option text.
+function _escape(s) {
+  return String(s)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
 }
 
 // Transient on-screen branch-event chip. Used for branch switches and
