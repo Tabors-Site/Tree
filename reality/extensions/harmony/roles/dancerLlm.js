@@ -132,12 +132,12 @@ export const dancerLlmRole = Object.freeze({
   respondMode: "async",
   triggerOn: ["message"],
 
-  // Declared eyes. The seed's assembler resolves this every summon
-  // and renders the result in the face — fresh, never cached.
-  // Bare name ("neighbors") — getSeeResolver suffix-matches against
-  // the extension-scoped key, so no prefix is needed inside this
-  // extension.
-  see: ["neighbors"],
+  // Declared eyes. canSee is the role's preloaded face. Each entry
+  // resolves at moment-open . a registered see name runs its
+  // resolver and the structured return becomes a JSON face block.
+  // Bare name "neighbors" suffix-matches the extension-scoped key
+  // (`harmony:neighbors`); no prefix needed inside this extension.
+  canSee: ["neighbors"],
 
   // Declared action surface. The face shows this; the LLM picks
   // The body of the being. The dancer's only act is to step. The

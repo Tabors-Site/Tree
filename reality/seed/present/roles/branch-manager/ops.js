@@ -225,6 +225,115 @@ registerOperation("unpause-branch", {
   },
 });
 
+// delete-branch / undelete-branch . mark-deleted toggle on the Branch
+// row. Mirrors pause/unpause structurally. Soft delete by doctrine:
+// every other lifecycle op in TreeOS is append-only (beings are
+// released not erased, spaces are archived not erased), so branches
+// follow the same shape. The chain preserves the fact that a branch
+// existed and was deleted at T. Undelete is one toggle away.
+//
+// Deleted branches refuse DO/BE/SUMMON at the wire-layer gate (see
+// protocols/ibp/verbs/*) and at the scheduler intake gate. SEE stays
+// open so historians can still walk the chain. Branch listings filter
+// out deleted by default; the catalog still surfaces a specific
+// deleted branch if its path is asked for directly.
+//
+// Main IS deletable (symmetric-branch doctrine; same as pause). The
+// gates exempt undelete-branch and delete-branch themselves so a
+// fully-deleted reality can always be revived.
+
+registerOperation("delete-branch", {
+  targets: ["being", "stance"],
+  ownerExtension: "seed",
+  skipAudit: false,
+  args: {
+    branch: {
+      type:        "text",
+      label:       "Branch path to delete (\"0\" for main; \"1\", \"1a\", etc.)",
+      required:    true,
+    },
+    reason: {
+      type:     "text",
+      label:    "Optional reason recorded with the deletion",
+      required: false,
+    },
+  },
+  handler: async ({ params, identity }) => {
+    const branchPath = String(params?.branch || "").trim();
+    if (!branchPath) {
+      throw new IbpError(IBP_ERR.INVALID_INPUT, "delete-branch: branch is required");
+    }
+    const isMainBranch = branchPath === MAIN;
+    if (!isMainBranch) {
+      const existing = await Branch.findOne({ path: branchPath }).lean();
+      if (!existing) {
+        throw new IbpError(IBP_ERR.SPACE_NOT_FOUND, `delete-branch: no branch "${branchPath}"`);
+      }
+      if (existing.deleted) {
+        return { deleted: true, path: branchPath, alreadyDeleted: true };
+      }
+    } else {
+      const existing = await Branch.findOne({ path: MAIN }).lean();
+      if (existing?.deleted) {
+        return { deleted: true, path: MAIN, alreadyDeleted: true };
+      }
+    }
+    await Branch.updateOne(
+      { path: branchPath },
+      {
+        $set: {
+          deleted:   true,
+          deletedBy: identity?.beingId || null,
+          deletedAt: new Date(),
+          ...(params?.reason ? { archivedBecause: String(params.reason) } : {}),
+        },
+        $setOnInsert: {
+          _id:    branchPath,
+          path:   branchPath,
+          parent: isMainBranch ? null : undefined,
+        },
+      },
+      { upsert: true },
+    );
+    invalidateBranchCache(branchPath);
+    return { deleted: true, path: branchPath };
+  },
+});
+
+registerOperation("undelete-branch", {
+  targets: ["being", "stance"],
+  ownerExtension: "seed",
+  skipAudit: false,
+  args: {
+    branch: {
+      type:        "text",
+      label:       "Branch path to undelete",
+      required:    true,
+    },
+  },
+  handler: async ({ params }) => {
+    const branchPath = String(params?.branch || "").trim();
+    if (!branchPath) {
+      throw new IbpError(IBP_ERR.INVALID_INPUT, "undelete-branch: branch is required");
+    }
+    const row = await Branch.findOne({ path: branchPath }).lean();
+    if (!row) {
+      return { deleted: false, path: branchPath, alreadyLive: true };
+    }
+    if (!row.deleted) {
+      return { deleted: false, path: branchPath, alreadyLive: true };
+    }
+    await Branch.updateOne(
+      { path: branchPath },
+      {
+        $set: { deleted: false, deletedAt: null, deletedBy: null },
+      },
+    );
+    invalidateBranchCache(branchPath);
+    return { deleted: false, path: branchPath };
+  },
+});
+
 // list-branches lived here briefly as a DO op. Retired 2026-06-02: the
 // read-only graph belongs on a synthetic SEE catalog
 // (`<reality>/.branches[/<path>]`), not a DO op. DOs open transport-act

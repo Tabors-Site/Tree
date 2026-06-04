@@ -102,7 +102,6 @@ export function composeStack({ stack, toBeing }) {
   const canBe     = unionEntries(resolved.map((r) => r.canBe));
 
   const permissions = unionStrings(resolved.map((r) => r.permissions));
-  const see         = unionEntries(resolved.map((r) => r.see));
 
   // Prompt composition. Each role's prompt may be a function (the
   // canonical seed/extension shape — registry.js's makeLazyDefaultSummon
@@ -133,7 +132,6 @@ export function composeStack({ stack, toBeing }) {
     stackedNames:      resolved.map((r) => r.name),
     canSee, canDo, canSummon, canBe,
     permissions,
-    see,
     prompt:            composedPrompt,
     summon:            primary.summon,        // scripted dispatch, primary only
     requiredCognition: primary.requiredCognition || null,

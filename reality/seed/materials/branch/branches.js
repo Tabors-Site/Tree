@@ -167,3 +167,17 @@ export async function isBranchPaused(path) {
   const row = await loadBranch(path);
   return row?.paused === true;
 }
+
+/**
+ * Cheap delete check. Mirrors isBranchPaused. Soft delete: the branch
+ * still exists in the chain, its facts are still readable via SEE,
+ * but new writes (DO/BE/SUMMON) refuse and the scheduler skips it.
+ * Main is deletable (same symmetric-branch doctrine as pause).
+ *
+ * Reads via loadBranch (cached). The delete-branch / undelete-branch
+ * ops invalidate the cache after writes.
+ */
+export async function isBranchDeleted(path) {
+  const row = await loadBranch(path);
+  return row?.deleted === true;
+}

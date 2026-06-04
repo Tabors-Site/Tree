@@ -263,6 +263,16 @@ function _renderTree(container, tree) {
   }
 }
 
+// In-flight toggle lock. While a pause/unpause DO is on the wire,
+// _update's auto-refresh would otherwise re-fetch the catalog and
+// repaint the panel with the SERVER's current (still-pre-toggle)
+// state — undoing the optimistic flip mid-flight and making the
+// button bounce back. The lock tells _update "don't touch the panel
+// until the DO completes," and the DO's own success-path refresh
+// lands the authoritative state.
+let _toggleInFlight = 0;
+function _isToggleInFlight() { return _toggleInFlight > 0; }
+
 async function _togglePauseBranch(branch) {
   const op = branch.paused ? "unpause-branch" : "pause-branch";
   // Optimistic local flip so the button changes the instant the user
@@ -271,6 +281,7 @@ async function _togglePauseBranch(branch) {
   // the DO fails the catch path restores and surfaces the error.
   const prevPaused = !!branch.paused;
   branch.paused = !prevPaused;
+  _toggleInFlight++;
   if (_state.panelEl) {
     const treeContainer = _state.panelEl.querySelector(".bp-tree");
     if (treeContainer) _renderTree(treeContainer, _state.graphAll);
@@ -327,6 +338,8 @@ async function _togglePauseBranch(branch) {
     }
     console.warn(`[branch-bar] ${op} failed:`, err?.message || err);
     _showBranchEvent(`${op} failed: ${err?.message || err}`, { error: true });
+  } finally {
+    _toggleInFlight = Math.max(0, _toggleInFlight - 1);
   }
 }
 
@@ -483,10 +496,36 @@ async function _update(desc) {
     // it to the chrome layer (main.js listens for the same custom
     // event the optimistic pause-button flip uses, so both paths
     // converge).
-    const myPaused = !!r?.branches?.current?.paused;
-    window.dispatchEvent(new CustomEvent("branchbar:paused-self", {
-      detail: { paused: myPaused },
-    }));
+    // Skip the chrome flip while a toggle is in flight — same race
+    // as the panel: the catalog still reads the pre-toggle row and
+    // would flip the grayscale chrome back, defeating the optimistic
+    // visual the toggle just set.
+    if (!_isToggleInFlight()) {
+      const myPaused = !!r?.branches?.current?.paused;
+      window.dispatchEvent(new CustomEvent("branchbar:paused-self", {
+        detail: { paused: myPaused },
+      }));
+    }
+    // If the branch tree panel is open, refetch the full tree and
+    // repaint it so newly-created branches and freshly-flipped pause
+    // states appear without the user having to close + reopen the
+    // panel or reload the page. The catalog SEE above only fetches
+    // the current branch's lineage; the panel needs every branch in
+    // the place.
+    //
+    // SKIP while a toggle DO is in flight — _togglePauseBranch already
+    // optimistically flipped the row, and a live-event refetch here
+    // would read the SERVER's still-pre-toggle row, snap the panel
+    // back, and confuse the user. The toggle's own success-path
+    // refresh lands authoritative state when the DO completes.
+    if (_state.panelEl && !_isToggleInFlight()) {
+      try {
+        const tree = await _loadBranchTree();
+        _state.graphAll = tree;
+        const container = _state.panelEl.querySelector(".bp-tree");
+        if (container) _renderTree(container, tree);
+      } catch { /* defensive — panel keeps its last paint */ }
+    }
   } catch { _state.graph = null; }
 
   // Track rewound state from descriptor flags.

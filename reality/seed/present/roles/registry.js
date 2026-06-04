@@ -209,8 +209,6 @@ function derivePermissions(def) {
   if (hasEntries(def.canDo))     verbs.add("do");
   if (hasEntries(def.canSummon)) verbs.add("summon");
   if (hasEntries(def.canBe))     verbs.add("be");
-  // Roles with preloaded see content also need SEE permission.
-  if (hasEntries(def.see))       verbs.add("see");
   return [...verbs];
 }
 
@@ -275,7 +273,6 @@ export async function syncRolesToSubstrate(summonCtx) {
           canDo:       role.canDo        || [],
           canSummon:   role.canSummon    || [],
           canBe:       role.canBe        || [],
-          see:         role.see          || [],
           replyTo:     role.replyTo      || null,
           origin:      role.origin       || "seed",
           // Live roles carry a prompt string (seed/extension roles use

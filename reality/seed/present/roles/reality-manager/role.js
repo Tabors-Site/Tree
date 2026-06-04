@@ -25,14 +25,19 @@ export const realityManagerRole = Object.freeze({
   respondMode: "async",
   triggerOn:   ["message"],
 
+  // canSee is the role's preloaded face. Seed-shipped sees
+  // (`identity`, `config`, `peers`, `extensions`, `tools`, `roles`,
+  // `operations`) wrap their heaven children; `./source` stays in
+  // address form (no named see for it). The assembler renders each
+  // as a face block at moment-open; no see-tool call needed.
   canSee: [
-    "./identity",
-    "./config",
-    "./peers",
-    "./extensions",
-    "./tools",
-    "./roles",
-    "./operations",
+    "identity",
+    "config",
+    "peers",
+    "extensions",
+    "tools",
+    "roles",
+    "operations",
     "./source",
   ],
 

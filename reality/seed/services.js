@@ -144,6 +144,11 @@ import {
   registerRole as ibpRegisterRole,
   unregisterRole as ibpUnregisterRole,
 } from "./present/roles/registry.js";
+import {
+  registerSeeResolver as ibpRegisterSeeResolver,
+  unregisterSeeResolver as ibpUnregisterSeeResolver,
+  unregisterResolversForExtension as ibpUnregisterSeesForExtension,
+} from "./present/cognition/llm/seeResolvers.js";
 
 // The four-verb dispatcher. The whole of my public surface for
 // operations on space, matter, and beings.
@@ -433,6 +438,17 @@ export function buildRealityServices({
       // is what runs.
       registerRole: ibpRegisterRole,
       unregisterRole: ibpUnregisterRole,
+
+      // Register a named see. A see is a perception in a moment's
+      // face. The fn receives the moment ctx and returns a
+      // projection (any JSON shape); the assembler inlines it under
+      // a [<name>] header when a role's canSee references it by
+      // name. Bare names from extensions are auto-namespaced
+      // `<ext>:<name>`; roles can resolve them by either form.
+      // Slice this into a role's canSee like canSee: ["my-ext:my-see"].
+      registerSeeResolver: ibpRegisterSeeResolver,
+      unregisterSeeResolver: ibpUnregisterSeeResolver,
+      unregisterSeesForExtension: ibpUnregisterSeesForExtension,
 
       // DO-trigger subscriptions. A being registers interest in
       // some class of DO events; when a matching event fires, the

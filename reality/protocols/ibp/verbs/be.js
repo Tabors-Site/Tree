@@ -123,15 +123,23 @@ export async function handleBe(socket, env, ack) {
     }
     const branch = callerBranch;
 
-    // Pause gate. BE is a write surface (register/claim/connect/
-    // release/birth/sever); paused branches refuse every BE op so a
-    // frozen world stays structurally frozen.
+    // Pause / delete gate. BE is a write surface (register/claim/
+    // connect/release/birth/sever); paused or deleted branches refuse
+    // every BE op so a frozen or hidden world stays structurally that
+    // way. SEE remains open at its own layer so historians can still
+    // walk the chain.
     {
-      const { isBranchPaused } = await import("../../../seed/materials/branch/branches.js");
+      const { isBranchPaused, isBranchDeleted } =
+        await import("../../../seed/materials/branch/branches.js");
       if (await isBranchPaused(branch)) {
         throw new IbpError(IBP_ERR.REALITY_PAUSED,
           `BE refused: branch #${branch} is paused.`,
           { branch });
+      }
+      if (await isBranchDeleted(branch)) {
+        throw new IbpError(IBP_ERR.REALITY_PAUSED,
+          `BE refused: branch #${branch} is deleted.`,
+          { branch, deleted: true });
       }
     }
 

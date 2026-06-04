@@ -291,15 +291,19 @@ export async function genesis(app, opts = {}) {
   // seed roles (cherub, llm-assigner) out of band. Shipped for
   // symmetry; LLM roles that need it (notably for `switch`) just
   // populate canBe.
-  const { seedSeeTool } =
-    await import("./seed/present/cognition/llm/seedSeeTool.js");
+  // SEE is not exposed as an LLM tool. canSee is preloaded into the
+  // face by the assembler at moment-open (address entries via
+  // seeVerb, named entries via the seeResolver registry). To see
+  // more, the being moves (DO), changes role (BE / roleFlow), or
+  // the role spec is edited. The seed registers only do / summon /
+  // be tools below; canSee covers perception.
   const { seedDoTool } =
     await import("./seed/present/cognition/llm/seedDoTool.js");
   const { seedSummonTool } =
     await import("./seed/present/cognition/llm/seedSummonTool.js");
   const { seedBeTool } =
     await import("./seed/present/cognition/llm/seedBeTool.js");
-  await registerSeedTools([seedSeeTool, seedDoTool, seedSummonTool, seedBeTool]);
+  await registerSeedTools([seedDoTool, seedSummonTool, seedBeTool]);
 
   // The receptive role every human being carries. Without it, SUMMONs
   // to a human are rejected with ROLE_UNAVAILABLE. The role's summon
@@ -328,6 +332,19 @@ export async function genesis(app, opts = {}) {
   // branchPoint snapshotting; the role just routes the op.
   const { branchManagerRole } = await import("./seed/present/roles/branch-manager/role.js");
   registerRole("branch-manager", branchManagerRole, "seed");
+
+  // role-finder: LLM helper that authors live roles from English.
+  // Summon @role-finder, describe what a being should be able to do,
+  // it surfaces matches in ./roles or drafts a new role via set-role.
+  const { roleFinderRole } = await import("./seed/present/roles/role-finder/role.js");
+  registerRole("role-finder", roleFinderRole, "seed");
+
+  // roleflow-composer: LLM helper that authors a being's roleFlow
+  // (the behavioral program that picks which role applies per moment).
+  // Summon @roleflow-composer, describe a being's behavior, it
+  // produces the structured roleFlow and writes via set-being-roleflow.
+  const { roleflowComposerRole } = await import("./seed/present/roles/roleflow-composer/role.js");
+  registerRole("roleflow-composer", roleflowComposerRole, "seed");
 
   // The shared stance every unauthenticated visitor carries. SEE
   // bypasses the scheduler so many concurrent visitors share one
@@ -393,6 +410,11 @@ export async function genesis(app, opts = {}) {
   const { registerRoleManagerOps } =
     await import("./seed/present/roles/role-manager/ops.js");
   registerRoleManagerOps();
+
+  // set-being-roleflow . the typed write that puts a roleFlow on a
+  // being's qualities. roleflow-composer (LLM helper) targets this op.
+  // Loaded by side effect; module-load calls registerOperation.
+  await import("./seed/present/roles/role-manager/roleFlowOp.js");
 
   // branch-manager's create-branch DO op. The substrate's branch
   // helpers (seed/materials/branch/) own the heavy lifting; the op

@@ -115,11 +115,16 @@ export async function init(reality) {
   // a scheduler-being extension to swap in an embodied emitter.
   // ───────────────────────────────────────────────────────────────
   //
-  // reality.declare.schedule(beingId, {
+  // await reality.declare.schedule(beingId, {
   //   intervalMs: 60_000 * 30,                  // every 30 minutes
   //   content:    { event: "tick" },
   //   priority:   4,
+  //   branch:     summonCtx.branch,             // REQUIRED. No silent default.
+  //   summonCtx,                                 // rides the act's ΔF if present
   // });
+  // The wake-scheduled fact lands on the being's reel for `branch`.
+  // Branches inherit schedules through reel-lineage automatically; no
+  // explicit "clone schedules to child branch" step is needed.
 
   // ───────────────────────────────────────────────────────────────
   // ───────────────────────────────────────────────────────────────

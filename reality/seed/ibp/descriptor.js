@@ -1135,6 +1135,12 @@ async function identityBlock(identity, { authorizedHere, writeAllowed, until = n
   // coord (the client falls back to default spawn).
   let position = null;
   let coord    = null;
+  // Stale = the JWT names a being that no longer exists in the
+  // substrate (operator dropped the DB, ended the being, etc.). The
+  // portal reads this flag to drop the cached session and reconnect
+  // anonymously, so the user doesn't sit logged in as a ghost and
+  // hit BEING_NOT_FOUND on every action.
+  let stale = false;
   if (identity.beingId) {
     try {
       if (until) {
@@ -1160,6 +1166,14 @@ async function identityBlock(identity, { authorizedHere, writeAllowed, until = n
         // catches up.
         const { loadOrFold } = await import("../materials/projections.js");
         const slot = await loadOrFold("being", identity.beingId, branch);
+        if (!slot) {
+          // JWT decoded to a beingId that has no projection slot AND
+          // no facts to lazy-fold from. The being doesn't exist in
+          // this substrate. Mark stale so the client drops the
+          // session instead of looping into BEING_NOT_FOUND on
+          // every downstream DO.
+          stale = true;
+        }
         // Position rides at the slot level (sparse-indexed for
         // findByPosition); qualities + other reducer state ride at
         // slot.state. Coord lives under qualities.coord typically.
@@ -1177,6 +1191,7 @@ async function identityBlock(identity, { authorizedHere, writeAllowed, until = n
     coord,
     authorizedHere,
     writeAllowed,
+    stale,
   };
 }
 

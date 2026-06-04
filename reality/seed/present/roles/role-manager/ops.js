@@ -124,7 +124,6 @@ registerOperation("set-role", {
       respondMode: "async",
       triggerOn:   ["message"],
       canSee, canDo, canSummon, canBe,
-      see:         [],
       replyTo:     null,
       prompt,
       origin:      "live",

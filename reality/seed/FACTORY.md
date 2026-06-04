@@ -1098,31 +1098,111 @@ Live authoring rides on the role-manager delegate:
   publishes a world signal at `<reality-root>.qualities.world.<ns>.<key>`.
   Beings whose flows read `world.<ns>.<key>` see it at their next
   moment-open.
+- `do(<any-being>, "set-being-roleflow", { beingId, roleFlow })`
+  writes a validated roleFlow onto a being's qualities. Typed front
+  for `set-being: qualities.roleFlow` with schema-aware clause
+  validation and unknown-role warnings.
 
 The doctrinal landing — what a Being IS, WEARS, IS-DRIVEN-BY — and
 the build plan that brought it in live in
 [role-manager.md](role-manager.md). Read that when in doubt about
 how behavior composes from chain to act.
 
+### Composition is stacking, not inheritance
+
+A role does not extend another role. There is no `extends:` field.
+Shared behavior across roles composes through **stacking inside a
+roleFlow**: each `stack: true` clause whose `when` matches contributes
+its capabilities and prompt body on top of the primary. A "court
+officer base" is a role; a "judge" is a roleFlow that stacks
+court-officer-base + a phase-specific judge role:
+
+```js
+roleFlow: [
+  { stack: true, role: "court-officer-base" },          // always-on shared base
+  { stack: true, role: "judge-base" },                  // always-on judge-specific base
+  { when: { "space.quality.case.phase": "opening"  }, role: "judge-opening"  },
+  { when: { "space.quality.case.phase": "evidence" }, role: "judge-evidence" },
+  { when: { "space.quality.case.phase": "ruling"   }, role: "judge-ruling"   },
+  { role: "judge-idle" },                               // fallback primary
+]
+```
+
+Why stacking over inheritance:
+
+- **Visible at the consumption point.** Reading the roleFlow tells
+  you everything that composes. Inheritance hides composition behind
+  a hierarchy you have to trace.
+- **Per-moment, not static.** A stack assembles for THIS moment from
+  whatever clauses match. Inheritance forces the base in every time
+  the role appears, even when it shouldn't.
+- **Bounded reasoning.** "What can this being do right now?" is the
+  union of currently-stacked roles. With inheritance it's a walk up
+  an unbounded tree.
+
+### Sequence comes from world state, not from previous-role tracking
+
+`me.previousRole` exists in the vocabulary but is for **inertia**
+patterns ("if I was bored last moment, lean toward staying bored
+unless something interesting happened"), not for sequencing. A judge
+walking through opening → evidence → ruling does not chain on
+previousRole; it reads a `case.phase` quality from the courtroom
+space, and the judge's act in the opening phase advances the phase
+via a DO. Next moment, world state has changed, the roleFlow naturally
+picks the new role. Sequencing in role names is what state machines
+were invented to be the wrong answer for; the world IS the state
+machine.
+
+### Decompose monolithic roles
+
+LLM tool-calling accuracy drops noticeably past ~10-15 tools per
+call and sharply past 30. A `judge` role with 50 canDo entries and a
+3000-token prompt underperforms three `judge-opening` / `judge-evidence`
+/ `judge-ruling` roles with 5-10 canDo each and tight phase-specific
+prompts. The substrate is neutral — write monolithic roles if your
+world is simple — but the natural decomposition for complex behavior
+is a roleFlow that stacks shared bases + selects a phase-specific
+primary by world state.
+
+### Authoring helpers (LLM-cognition delegates)
+
+Forms-based set-role / set-being-roleflow stay available; for
+behavioral programs at any real complexity, two helper beings ship
+as seed delegates:
+
+- **`@role-finder`** — describes the user's intent, searches `./roles`
+  for matches, drafts new role bodies, saves via `set-role` on
+  approval. The "I want a being that does X" → "here is the role
+  body" path.
+- **`@roleflow-composer`** — translates English ("when court session
+  opens and I'm in the courtroom, become a judge; opening phase does
+  X, evidence does Y, ruling does Z") into a structured roleFlow,
+  iterates with the user, writes via `set-being-roleflow` on approval.
+  The "describe the behavior, get a program" path.
+
+Both live at the reality root, llm-cognition, reigning-gated for now
+(seed delegates auto-anointed at boot). The pattern generalizes: once
+LLM helpers work for role authoring, the same shape works for any
+authorable surface — space design, world-signal setup, anything the
+substrate exposes through structured ops. The user describes; the
+helper materializes.
+
 ### The complete LLM role spec
 
 Every LLM role's complete declaration is its four `can*` lists plus
-optional see resolvers, orientation, continuation flag, and the
-prompt body. Everything else — permissions, respondMode, triggerOn,
-the wrapped `summon` dispatcher, the system-prompt assembler — is
-derived by [registry.js](present/roles/registry.js) at registration.
-Authors write what the role IS; I fill in everything derivable.
+orientation, continuation flag, and the prompt body. Everything else
+— permissions, respondMode, triggerOn, the wrapped `summon`
+dispatcher, the system-prompt assembler — is derived by
+[registry.js](present/roles/registry.js) at registration. Authors
+write what the role IS; I fill in everything derivable.
 
 ```js
-// Every LLM role's complete spec is its four can* lists + optional
-// see resolvers.
 {
   name: "...",
-  canSee:    [...],            // optional, populates the see tool
+  canSee:    [...],            // optional, preloaded perceptions in the face
   canDo:     [...],            // optional, populates the do tool
   canSummon: [...],            // optional, populates the summon tool
   canBe:     [...],            // optional, populates the be tool
-  see: ["name"],               // optional, structured resolver outputs in prompt
   selfContinue: bool,          // optional, one-act vs many-acts-via-many-moments
   defaultOrientation: "...",   // optional, forward by default
   prompt(ctx) { ... },         // role-intent only; no verb syntax explanation
@@ -1132,22 +1212,90 @@ Authors write what the role IS; I fill in everything derivable.
 | Field                | Optional? | What it does                                                                                                                                                                              |
 | -------------------- | --------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `name`               | required  | Kebab-case identifier (`harmony:dancer-llm`). The activeRole on a SUMMON resolves through it.                                                                                             |
-| `canSee`             | optional  | Address entries the LLM may read via the seed's generic `see` tool. Non-empty → the `see` tool is exposed and permission `see` is added.                                                  |
+| `canSee`             | optional  | Preloaded perceptions. Each entry is either an IBP address (preloaded via `seeVerb` — the position descriptor becomes a face block) or a registered see name (preloaded via the seeResolver registry — the structured return becomes a face block). Both render as `[<label>]\n<JSON>` in the system prompt. NOT a tool; the being does not pick from a menu. Non-empty → permission `see` is added (verb-layer auth still applies). |
 | `canDo`              | optional  | DO action entries the LLM may invoke via the seed's generic `do` tool. Non-empty → `do` tool exposed, permission `do` added.                                                              |
 | `canSummon`          | optional  | Stance/being targets the LLM may summon. Non-empty → `summon` tool exposed. Entries may be literal stances OR relationship tokens (`{rel:"parent"}`, `{pattern:"fitness/@coach"}`).        |
 | `canBe`              | optional  | BE operations the LLM may perform on its own identity (`claim`, `release`, `switch`). Non-empty → `be` tool exposed.                                                                     |
-| `see`                | optional  | Names of registered see-resolvers. The assembler runs each one every moment and pre-renders the structured result under `[name]` in the system prompt. NOT a tool; baked into the face. |
 | `selfContinue`       | optional  | `true` → after an act seals, the sealer enqueues a fresh summon to the same being. Many-acts-via-many-moments. Default `false`: one summon, one moment, done.                            |
 | `defaultOrientation` | optional  | `"forward"` (default), `"half"`, or `"inward"`. Controls what the fold reads. Half / inward are accepted-and-downgraded today until the recall primitives land.                          |
 | `prompt(ctx)`        | required  | Returns role-intent text. Describes WHO the role is and WHAT it does, in role-language. Does NOT explain verb syntax — that's auto-assembled from `can*` lists.                          |
 
 What seed derives:
 
-- `permissions` — union of verbs implied by `can*` (and `see` if any preloaded resolvers).
+- `permissions` — union of verbs implied by `can*`.
 - `respondMode` — `"async"` by default; only override for sync replies.
 - `triggerOn` — `["message"]` by default; override for scheduled or hook-fired roles.
 - `summon(message, ctx)` — auto-wrapped with [defaultSummon](present/cognition/defaultSummon.js) when not provided. Scripted roles attach their own `summon` and seed leaves it alone — that flips `_cognitionMode` to `"scripted"` and bypasses the LLM apparatus entirely.
-- `buildSystemPrompt` — auto-assembled by [assemble.js](present/cognition/llm/assemble.js): identity + preloaded `see` resolvers + capabilities rendered from `can*` + role's `prompt(ctx)` body + current time. Roles override this only for unusual prompt shapes.
+- `buildSystemPrompt` — auto-assembled by [assemble.js](present/cognition/llm/assemble.js): identity + do/summon/be capability menus rendered from `can*` + role's `prompt(ctx)` body + preloaded canSee face blocks + current time. Order is "question first, data last" — identity/capabilities/role-intent state who you are and what you can do; the canSee blocks dump the fresh perception just before the time stamp so the LLM attends to it most strongly when forming the act. Roles override this only for unusual prompt shapes.
+
+### canSee is the moment's face, not a menu
+
+The four-verb tool surface is `do / summon / be` — three, not four.
+SEE is not exposed as an LLM tool. canSee is preloaded into the face
+at moment-open: every entry in the role's `canSee` list is rendered
+into the system prompt as a structured block BEFORE the LLM
+inferences. The being does not call `see({address})` and pick from a
+list; the face IS the perception.
+
+Two entry shapes, both legal:
+
+- **IBP address.** `"./roles"`, `"<reality>/<spaceId>"`, etc. The
+  assembler calls `seeVerb` on that address and renders the position
+  descriptor as a JSON block under a header derived from the address
+  (`./roles` → `[roles]`).
+- **Registered see name.** `"place"`, `"library-books"`,
+  `"harmony:dance-floor"`. The assembler calls the registered
+  resolver and renders its structured return as a JSON block under a
+  header derived from the name. Names are arbitrary labels; a see
+  may compose any number of aggregates or compute a derived
+  projection. The slice author decides what the perception means.
+
+To see more, the being moves (DO), changes role (BE / roleFlow), or
+the role spec is edited. Perception is per-role, recomputed per
+moment.
+
+#### Foundational seed sees
+
+The seed registers a small set of sees at boot so common heaven-
+child perceptions have a bare name. Roles can declare `canSee:
+["roles"]` instead of `["./roles"]`.
+
+| See name     | What it returns                                              |
+| ------------ | ------------------------------------------------------------ |
+| `place`      | The descriptor for the being's current position.             |
+| `roles`      | The role registry mirror at `<reality>/./roles`.             |
+| `tools`      | The tool registry mirror at `<reality>/./tools`.             |
+| `operations` | The DO operation registry mirror at `<reality>/./operations`.|
+| `identity`   | The I-Am identity bundle at `<reality>/./identity`.          |
+| `config`     | The reality config at `<reality>/./config`.                  |
+| `peers`      | The peer list at `<reality>/./peers`.                        |
+| `extensions` | The extension catalog at `<reality>/./extensions`.           |
+
+Each foundational see wraps `seeVerb` on the corresponding heaven
+address. The content is identical to the legacy `./X` address form;
+the name swap is doctrinal . roles declare perceptions by name, not
+by walking the address grammar.
+
+#### Authoring a see (registerSeeResolver)
+
+Extensions register their own sees through `core.declare.registerSeeResolver`:
+
+```js
+core.declare.registerSeeResolver("library", async (ctx) => {
+  const librarySpace = await findLibrarySpace(ctx);
+  if (!librarySpace) return null;
+  return {
+    books:  await listBooksAt(librarySpace.id, ctx.summonCtx?.branch),
+    staff:  await findStaffAt(librarySpace.id),
+    hours:  await readHours(librarySpace.id),
+  };
+});
+```
+
+- `ctx` carries `{ being, role, currentSpace, rootId, summonCtx, ... }` so the resolver can branch-thread reads.
+- Return any JSON-serializable shape (or a string the resolver framed itself, or `null` to skip).
+- Bare names are auto-namespaced `<ext>:<name>`; roles inside the same extension can reference the bare suffix (`canSee: ["library"]` resolves to `harmony:library` when no seed name collides).
+- Pure function of (chain, branch, ctx). No random, no wall-clock. Replay safety.
 
 The four `can*` lists ARE the body. Adding a capability is editing
 one list. Tool exposure follows from the body; there is no second

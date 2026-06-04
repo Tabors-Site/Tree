@@ -356,7 +356,9 @@ export function listToolNames() {
  * missing, no LLM role can run.
  */
 export async function auditToolDescriptions() {
-  const SEED_VERB_TOOLS = ["see", "do", "summon", "be"];
+  // SEE retired from the LLM toolset; canSee preloads into the face
+  // at moment-open. Only do / summon / be are exposed as tools.
+  const SEED_VERB_TOOLS = ["do", "summon", "be"];
   const missing = SEED_VERB_TOOLS.filter((name) => !toolDefs[name]);
   if (missing.length === 0) {
     log.verbose("Tools", `verb-tool audit: ${SEED_VERB_TOOLS.length} seed tool(s) registered`);
@@ -364,7 +366,7 @@ export async function auditToolDescriptions() {
     log.error(
       "Tools",
       `seed verb-tools missing from the registry: ${missing.join(", ")}. ` +
-        `Genesis did not register seedSeeTool / seedDoTool / seedSummonTool / seedBeTool ` +
+        `Genesis did not register seedDoTool / seedSummonTool / seedBeTool ` +
         `before role auditing. No LLM role can run until this is fixed.`,
     );
   }

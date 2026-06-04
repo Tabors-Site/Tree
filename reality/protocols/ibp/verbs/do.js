@@ -105,18 +105,45 @@ export async function handleDo(socket, env, ack) {
         { callerBranch, targetBranch });
     }
 
-    // Pause gate. While the target branch is paused, DO refuses every
-    // op EXCEPT unpause-branch (so the operator can revive a paused
-    // world) and create-branch (so they can fork off a paused branch
-    // to keep working in a new lineage). SEE stays open regardless so
-    // the user can still rewind or inspect the frozen state.
-    if (action !== "unpause-branch" && action !== "create-branch") {
+    // Pause / delete gate. While the target branch is paused or
+    // deleted, DO refuses every op EXCEPT the branch-lifecycle ops
+    // (so the operator can revive a paused world, undelete a deleted
+    // one, toggle from a stale UI without bouncing, or fork off a
+    // paused branch). SEE stays open regardless so the user can still
+    // rewind or inspect the frozen state.
+    //
+    // Lifecycle ops are included as their own targets (e.g. delete on
+    // an already-deleted branch is idempotent) because the client UI
+    // is often a few ticks stale and bouncing the call would leave
+    // the operator wondering why their toggle silently failed.
+    //
+    // delete-branch gates differ slightly from pause-branch: deletion
+    // is a stronger statement ("this branch is hidden"), so we don't
+    // exempt create-branch off a deleted target. To fork off a
+    // deleted branch, undelete it first.
+    const PAUSE_LIFECYCLE_OPS = new Set([
+      "unpause-branch", "pause-branch", "create-branch",
+      "delete-branch", "undelete-branch",
+    ]);
+    const DELETE_LIFECYCLE_OPS = new Set([
+      "delete-branch", "undelete-branch",
+    ]);
+    if (!PAUSE_LIFECYCLE_OPS.has(action)) {
       const { isBranchPaused } = await import("../../../seed/materials/branch/branches.js");
       if (await isBranchPaused(targetBranch)) {
         throw new IbpError(IBP_ERR.REALITY_PAUSED,
           `DO refused: branch #${targetBranch} is paused. ` +
           `Unpause via @branch-manager or fork a new branch off it.`,
           { branch: targetBranch });
+      }
+    }
+    if (!DELETE_LIFECYCLE_OPS.has(action)) {
+      const { isBranchDeleted } = await import("../../../seed/materials/branch/branches.js");
+      if (await isBranchDeleted(targetBranch)) {
+        throw new IbpError(IBP_ERR.REALITY_PAUSED,
+          `DO refused: branch #${targetBranch} is deleted. ` +
+          `Undelete via @branch-manager to restore writes.`,
+          { branch: targetBranch, deleted: true });
       }
     }
 

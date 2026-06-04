@@ -13,47 +13,77 @@
 // one tick, stay cheap, and getStats() always says exactly what's
 // pending.
 //
-// Attention, not dispatch. Every scheduled wake is a SELF-WAKE
-// minted as the scheduled being itself, not as the I_AM. A being
-// scheduling itself IS the act of attention; when the tick lands
-// the being's own prior request fires. The from-stance is the
-// being at the place root: `<reality>/<spaceRoot>@<being-name>`.
-// A reality that wants a different routing model installs an
-// extension that calls setEmitter() to swap in its own dispatcher;
-// the registry shape doesn't change.
+// ── Wakes are facts ─────────────────────────────────────────────
+//
+// Scheduling is a world operation, not a being's act. SEE/DO/
+// SUMMON/BE are what beings do; scheduling is the world's plumbing
+// the way reel-heads are plumbing. So the public API is a substrate
+// function (schedule, unschedule), not a verb. BUT the schedule
+// state lives on the fact chain. wake-scheduled and wake-cancelled
+// facts on the being's reel are the truth; this module's in-memory
+// _registry is their runtime projection.
+//
+// The doctrinal claim: the chain is the truth of the world's
+// LIVENESS, not just its STATE. Fold-from-genesis on any branch
+// reconstructs the scheduler that produced that branch's facts.
+// Branches inherit liveness for free through reel-lineage — the
+// same mechanism that inherits state. No special "clone schedules
+// at branch creation" step is needed.
+//
+// ── Branch axis ─────────────────────────────────────────────────
+//
+// Every schedule entry carries the branch it ticks in. A dancer in
+// main and the same dancer in #1 are two separate registry entries
+// keyed by (scheduleId, branch). Each fires onto its own branch;
+// each writes facts onto its own branch's reels. A wake-scheduled
+// fact on main BEFORE #1 was created is inherited by #1's lineage;
+// a wake-cancelled fact on main AFTER #1 was created is past the
+// branchPoint and does not affect #1.
 //
 // Schedule shape:
 //
 //   {
 //     id:            string,
 //     beingId:       string,
-//     intervalMs:    number,        // minimum 250ms
-//     priority:      number,        // SUMMON priority; default BACKGROUND (4)
-//     content:       any,           // payload of the wake SUMMON
-//     nextFireMs:    number,        // when the next wake fires
+//     branch:        string,
+//     intervalMs:    number,           // minimum 250ms
+//     priority:      number,           // SUMMON priority; default BACKGROUND (4)
+//     content:       any,              // payload of the wake SUMMON
+//     nextFireMs:    number,
 //     lastFireMs:    number|null,
-//     skipIfBacklog: boolean,       // skip when being already has
-//                                    // unconsumed scheduled-wakes (default true)
+//     skipIfBacklog: boolean,
 //   }
 //
-// Cron-style scheduling and event-condition triggers ("when phase
-// == awake") land later if a real caller needs them. Simple
-// intervals cover everything we run today (scout, dreams,
-// compression, peer-review).
+// Attention, not dispatch. Every scheduled wake is a SELF-WAKE
+// minted as the scheduled being itself. A reality that wants a
+// different routing model installs an extension that calls
+// setEmitter to swap in its own dispatcher; the registry shape
+// doesn't change.
 
 import { randomUUID } from "crypto";
 import log from "../../seedReality/log.js";
 import { summonByResolved } from "../../ibp/verbs/summon.js";
 import { getRealityDomain } from "../../ibp/address.js";
 import { getSpaceRootId } from "../../sprout.js";
+import { emitFact } from "../../past/fact/facts.js";
+import {
+  MAIN,
+  resolveBranchLineage,
+  getBranchPoint,
+} from "../../materials/branch/branches.js";
 
 const MIN_INTERVAL_MS = 250;
 const DEFAULT_TICK_MS = 1000;
 
-// scheduleId -> schedule entry
+// Composite key. Same scheduleId on two branches = two entries.
+function _key(scheduleId, branch) {
+  return `${scheduleId}:${branch}`;
+}
+
+// `${scheduleId}:${branch}` -> schedule entry
 const _registry = new Map();
 
-// beingId -> Set<scheduleId>
+// beingId -> Set<registryKey>. Used by unscheduleAllForBeing.
 const _byBeing = new Map();
 
 let _tickHandle = null;
@@ -65,20 +95,36 @@ let _emitter = _defaultEmitter;
 // ────────────────────────────────────────────────────────────────
 
 /**
- * Register a wake schedule for a being. Returns the schedule id.
+ * Register a wake schedule for a being on a branch. Returns the
+ * schedule id.
+ *
+ * Emits a wake-scheduled fact on the being's reel for `opts.branch`.
+ * When opts.summonCtx is present, the fact rides that act's ΔF and
+ * commits at sealAct; otherwise it commits standalone via sealFacts.
  *
  * @param {string} beingId
  * @param {object} opts
+ * @param {string} opts.branch           REQUIRED. Which branch this ticks in.
+ *                                       No silent default; pass "0" explicitly
+ *                                       from genesis / seed-plant paths.
  * @param {number} opts.intervalMs       wake cadence (>=250ms)
  * @param {number} [opts.priority]       SUMMON priority; default 4
  * @param {any}    [opts.content]        SUMMON content; default { kind: "scheduled-wake" }
  * @param {boolean}[opts.skipIfBacklog]  skip wake when being already has unconsumed scheduled-wake (default true)
- * @param {string} [opts.id]             caller-supplied stable id (so re-registers replace)
- * @returns {string} schedule id
+ * @param {string} [opts.id]             caller-supplied stable id (re-registers replace)
+ * @param {object} [opts.summonCtx]      in-flight act ctx; fact rides this ΔF
+ * @param {string} [opts.actorBeingId]   actor for the fact; default = scheduled being (self-act)
+ * @returns {Promise<string>} schedule id
  */
-export function schedule(beingId, opts = {}) {
+export async function schedule(beingId, opts = {}) {
   if (!beingId || typeof beingId !== "string") {
     throw new Error("schedule requires beingId");
+  }
+  if (typeof opts.branch !== "string" || !opts.branch.length) {
+    throw new Error(
+      `schedule requires opts.branch (got ${JSON.stringify(opts.branch)}). ` +
+      `No silent default to main . pass "0" explicitly for genesis / seed paths.`,
+    );
   }
   const intervalMs = Number(opts.intervalMs);
   if (!Number.isFinite(intervalMs) || intervalMs < MIN_INTERVAL_MS) {
@@ -87,90 +133,108 @@ export function schedule(beingId, opts = {}) {
     );
   }
 
+  const branch = opts.branch;
   const id = opts.id || randomUUID();
-  // Idempotent re-register: if the id already exists, replace it.
-  unschedule(id);
+  const beingIdStr = String(beingId);
 
-  const now = Date.now();
-  const entry = {
-    id,
-    beingId: String(beingId),
+  // Idempotent re-register on this branch. Drop the prior runtime
+  // entry; the wake-scheduled fact we emit below is the new truth.
+  _dropRegistryEntry(id, branch);
+
+  const params = {
+    scheduleId:    id,
     intervalMs,
-    priority: Number.isFinite(opts.priority) ? Number(opts.priority) : 4,
-    content:
-      opts.content !== undefined ? opts.content : { kind: "scheduled-wake" },
+    priority:      Number.isFinite(opts.priority) ? Number(opts.priority) : 4,
+    content:       opts.content !== undefined ? opts.content : { kind: "scheduled-wake" },
     skipIfBacklog: opts.skipIfBacklog !== false,
-    nextFireMs: now + intervalMs,
-    lastFireMs: null,
   };
 
-  _registry.set(id, entry);
-  let beingSet = _byBeing.get(entry.beingId);
-  if (!beingSet) {
-    beingSet = new Set();
-    _byBeing.set(entry.beingId, beingSet);
-  }
-  beingSet.add(id);
+  await emitFact({
+    beingId: String(opts.actorBeingId || beingIdStr),
+    branch,
+    verb:    "do",
+    action:  "wake-scheduled",
+    target:  { kind: "being", id: beingIdStr },
+    params,
+  }, opts.summonCtx || null);
 
-  // Durability shadow. Same pattern as SubscriptionRecord — the
-  // in-memory registry is the hot-path tick dispatcher; this
-  // write-through is what survives a restart so the drum keeps
-  // beating across server lifecycles. Fire-and-forget per the
-  // self-healing principle: a missed write just means this schedule
-  // doesn't survive the next boot.
-  _persistSchedule(entry).catch((err) => {
-    log.warn(
-      "Schedule",
-      `persistence write failed for ${id.slice(0, 8)}: ${err.message}`,
-    );
+  const now = Date.now();
+  _addRegistryEntry({
+    id,
+    beingId:       beingIdStr,
+    branch,
+    intervalMs:    params.intervalMs,
+    priority:      params.priority,
+    content:       params.content,
+    skipIfBacklog: params.skipIfBacklog,
+    nextFireMs:    now + params.intervalMs,
+    lastFireMs:    null,
   });
 
   log.verbose(
     "Schedule",
-    `scheduled wake for being ${entry.beingId.slice(0, 8)} every ${intervalMs}ms ` +
+    `scheduled wake for being ${beingIdStr.slice(0, 8)} on #${branch} every ${intervalMs}ms ` +
       `(id=${id.slice(0, 8)})`,
   );
   return id;
 }
 
 /**
- * Remove one schedule. Returns true when something was removed.
+ * Cancel a schedule on a branch. Emits a wake-cancelled fact and
+ * drops the runtime entry. Cancellations are per-branch by design:
+ * cancelling on main does not stop the inherited entry on #1, and
+ * cancelling on #1 does not stop main.
+ *
+ * @param {string} scheduleId
+ * @param {object} opts
+ * @param {string} opts.branch          REQUIRED
+ * @param {object} [opts.summonCtx]     in-flight act ctx
+ * @param {string} [opts.actorBeingId]  defaults to the schedule's being
+ * @returns {Promise<boolean>} true when something was removed
  */
-export function unschedule(scheduleId) {
-  const entry = _registry.get(scheduleId);
-  if (!entry) return false;
-  _registry.delete(scheduleId);
-  const beingSet = _byBeing.get(entry.beingId);
-  if (beingSet) {
-    beingSet.delete(scheduleId);
-    if (beingSet.size === 0) _byBeing.delete(entry.beingId);
+export async function unschedule(scheduleId, opts = {}) {
+  if (typeof opts.branch !== "string" || !opts.branch.length) {
+    throw new Error("unschedule requires opts.branch");
   }
-  // Durability: drop the persisted shadow so this schedule doesn't
-  // rehydrate on next boot. Fire-and-forget.
-  _removePersistedSchedule(scheduleId).catch((err) => {
-    log.warn(
-      "Schedule",
-      `persistence delete failed for ${scheduleId.slice(0, 8)}: ${err.message}`,
-    );
-  });
+  const branch = opts.branch;
+  const entry = _registry.get(_key(scheduleId, branch));
+  if (!entry) return false;
+
+  await emitFact({
+    beingId: String(opts.actorBeingId || entry.beingId),
+    branch,
+    verb:    "do",
+    action:  "wake-cancelled",
+    target:  { kind: "being", id: entry.beingId },
+    params:  { scheduleId },
+  }, opts.summonCtx || null);
+
+  _dropRegistryEntry(scheduleId, branch);
   return true;
 }
 
 /**
- * Drop every schedule for a being. Called on being deletion.
+ * Drop every schedule for a being across every branch. Runtime-only
+ * cleanup; no facts emitted. Called when a being is released . the
+ * release fact is the substrate's record of "this being is gone."
+ * A released being's wakes never fire (the identity lookup fails),
+ * so the registry entries are just process overhead.
  */
 export function unscheduleAllForBeing(beingId) {
   if (!beingId) return 0;
-  const beingSet = _byBeing.get(String(beingId));
+  const beingIdStr = String(beingId);
+  const beingSet = _byBeing.get(beingIdStr);
   if (!beingSet) return 0;
-  const ids = Array.from(beingSet);
-  for (const id of ids) unschedule(id);
-  return ids.length;
+  const keys = Array.from(beingSet);
+  for (const key of keys) {
+    _registry.delete(key);
+  }
+  _byBeing.delete(beingIdStr);
+  return keys.length;
 }
 
 /**
- * Start the tick loop. Idempotent; calling twice keeps the existing
- * timer. Pass `{ tickMs }` to override the cadence (default 1s).
+ * Start the tick loop. Idempotent.
  */
 export function startTickLoop({ tickMs } = {}) {
   if (Number.isFinite(tickMs) && tickMs >= MIN_INTERVAL_MS) {
@@ -182,15 +246,10 @@ export function startTickLoop({ tickMs } = {}) {
       log.error("Schedule", `tick failed: ${err.message}`);
     });
   }, _tickMs);
-  // Don't keep the process alive solely on the schedule tick — server
-  // shutdown handles its own lifecycle. Space's unref makes setInterval
-  // non-blocking for exit purposes.
   if (typeof _tickHandle.unref === "function") _tickHandle.unref();
   log.verbose("Schedule", `tick loop started (every ${_tickMs}ms)`);
 }
 
-// Stop the tick loop. Idempotent. Module-private — used by _resetAll
-// during test teardown; not part of the public surface.
 function stopTickLoop() {
   if (!_tickHandle) return;
   clearInterval(_tickHandle);
@@ -199,12 +258,9 @@ function stopTickLoop() {
 }
 
 /**
- * Run one tick manually. Used by the periodic loop and by tests.
- * Walks every registered schedule and fires wakes for schedules whose
- * nextFireMs has passed. Updates lastFireMs/nextFireMs on fire.
- *
- * @param {number} [nowMs]   override the clock (tests)
- * @returns {Promise<number>} number of wakes emitted
+ * Run one tick. Walks every (scheduleId, branch) entry and fires
+ * wakes whose nextFireMs has passed. Each entry's emitter call
+ * routes the SUMMON onto the entry's branch.
  */
 export async function runOnce(nowMs) {
   const now = Number.isFinite(nowMs) ? nowMs : Date.now();
@@ -217,142 +273,101 @@ export async function runOnce(nowMs) {
     } catch (err) {
       log.warn(
         "Schedule",
-        `emit failed for schedule ${entry.id.slice(0, 8)} (being ${entry.beingId.slice(0, 8)}): ${err.message}`,
+        `emit failed for schedule ${entry.id.slice(0, 8)} on #${entry.branch} ` +
+        `(being ${entry.beingId.slice(0, 8)}): ${err.message}`,
       );
     } finally {
       entry.lastFireMs = now;
-      // Advance to the next interval beyond now. If many intervals
-      // were missed (e.g. host slept), skip the catch-up: one wake is
-      // enough; the being doesn't need to drown.
-      const missed = Math.max(
-        1,
-        Math.floor((now - entry.nextFireMs) / entry.intervalMs) + 1,
-      );
-      entry.nextFireMs =
-        now + (missed > 1 ? entry.intervalMs : entry.intervalMs);
-      // Equivalent to: entry.nextFireMs = now + entry.intervalMs;
-      // The branch is left explicit so future "preserve cadence even
-      // after a long sleep" mode is a one-line change.
+      entry.nextFireMs = now + entry.intervalMs;
     }
   }
   return fired;
 }
 
-/**
- * Swap the default emitter. The default mints each wake as the
- * scheduled being itself; an extension can swap in a different
- * dispatcher (e.g. one routing scheduled wakes through an embodied
- * scheduler-being that observes and re-emits) without changing the
- * schedule registry shape.
- *
- * @param {function(entry, nowMs): Promise<void>} fn
- */
 export function setEmitter(fn) {
   _emitter = typeof fn === "function" ? fn : _defaultEmitter;
 }
 
-/**
- * Restore the default code-flavored emitter.
- */
 export function resetEmitter() {
   _emitter = _defaultEmitter;
 }
 
 /**
- * Rehydrate the in-memory registry from the ScheduleRecord
- * collection. Called once at boot (see genesis.js) so a server
- * coming back up still ticks for every being that had a standing
- * cadence — the dance-floor's drum keeps beating across restarts.
+ * Rehydrate the in-memory registry from the fact chain.
  *
- * `nextFireMs` is recomputed as `Date.now() + intervalMs` for each
- * restored entry — we don't try to honor the pre-restart phase,
- * just resume the cadence from now.
+ * For every live branch (main + every non-deleted Branch row), walks
+ * the wake-scheduled / wake-cancelled facts inherited through the
+ * branch's reel-lineage and materializes one runtime entry per live
+ * (scheduleId, branch) pair.
  *
- * Returns the count rehydrated.
+ * The chain is the truth. This function is its projector for the
+ * scheduler's runtime state. Boot calls it once; tests call it to
+ * prove fold-from-genesis recovers liveness identically to the live
+ * registry.
  */
-export async function rehydrateFromDb() {
-  let ScheduleRecord;
+export async function rehydrateFromFacts() {
+  let Fact, Branch;
   try {
-    ScheduleRecord = (await import("../../models/scheduleRecord.js")).default;
+    Fact = (await import("../../past/fact/fact.js")).default;
+    Branch = (await import("../../materials/branch/branch.js")).default;
   } catch (err) {
     log.warn("Schedule", `rehydrate skipped: model load failed (${err.message})`);
     return 0;
   }
-  let restored = 0;
+
+  // Enumerate live branches: main + every non-deleted Branch row.
+  // Soft-deleted branches keep their facts in the chain but don't
+  // tick. Undelete restores by rerunning rehydrate.
+  const branches = [MAIN];
   try {
-    const rows = await ScheduleRecord.find({}).lean();
-    const now = Date.now();
-    for (const row of rows) {
-      try {
-        const intervalMs = Number(row.intervalMs);
-        if (!Number.isFinite(intervalMs) || intervalMs < MIN_INTERVAL_MS) {
-          log.warn(
-            "Schedule",
-            `skipping record ${String(row._id).slice(0, 8)}: invalid intervalMs`,
-          );
-          continue;
-        }
-        const entry = {
-          id: row._id,
-          beingId: String(row.beingId),
-          intervalMs,
-          priority: Number.isFinite(row.priority) ? Number(row.priority) : 4,
-          content: row.content !== undefined ? row.content : { kind: "scheduled-wake" },
-          skipIfBacklog: row.skipIfBacklog !== false,
-          nextFireMs: now + intervalMs,
-          lastFireMs: null,
-        };
-        _registry.set(entry.id, entry);
-        let beingSet = _byBeing.get(entry.beingId);
-        if (!beingSet) {
-          beingSet = new Set();
-          _byBeing.set(entry.beingId, beingSet);
-        }
-        beingSet.add(entry.id);
-        restored++;
-      } catch (rowErr) {
-        log.warn(
-          "Schedule",
-          `skipping malformed record ${String(row?._id || "?").slice(0, 8)}: ${rowErr.message}`,
-        );
-      }
+    const branchRows = await Branch
+      .find({ deleted: { $ne: true } }, "_id")
+      .lean();
+    for (const row of branchRows) {
+      if (row._id !== MAIN) branches.push(row._id);
     }
   } catch (err) {
-    log.warn("Schedule", `rehydrate query failed: ${err.message}`);
+    log.warn("Schedule", `rehydrate branch enumeration failed: ${err.message}`);
   }
+
+  // One query pulls every wake fact across every branch. Sorted by
+  // (date, seq) so cancellations applied within a branch's lineage
+  // take effect after the matching scheduling.
+  const wakeFacts = await Fact.find({
+    verb: "do",
+    action: { $in: ["wake-scheduled", "wake-cancelled"] },
+  }).sort({ date: 1, seq: 1 }).lean();
+
+  const now = Date.now();
+  let restored = 0;
+
+  for (const branch of branches) {
+    const live = new Map();
+    for (const fact of wakeFacts) {
+      const inLineage = await _isInBranchLineage(fact, branch);
+      if (!inLineage) continue;
+      const scheduleId = fact.params?.scheduleId;
+      if (!scheduleId) continue;
+      if (fact.action === "wake-scheduled") {
+        const entry = _entryFromFact(fact, branch, now);
+        if (entry) live.set(scheduleId, entry);
+      } else if (fact.action === "wake-cancelled") {
+        live.delete(scheduleId);
+      }
+    }
+    for (const entry of live.values()) {
+      _addRegistryEntry(entry);
+      restored++;
+    }
+  }
+
   if (restored > 0) {
-    log.info("Schedule", `rehydrated ${restored} schedule(s) from durable store`);
+    log.info(
+      "Schedule",
+      `rehydrated ${restored} schedule(s) from fact chain across ${branches.length} branch(es)`,
+    );
   }
   return restored;
-}
-
-// ────────────────────────────────────────────────────────────────
-// Persistence helpers. Write-through to ScheduleRecord. The
-// in-memory registry is authoritative at runtime; this collection
-// is the boot-rehydration source.
-// ────────────────────────────────────────────────────────────────
-
-async function _persistSchedule(entry) {
-  const ScheduleRecord = (await import("../../models/scheduleRecord.js")).default;
-  await ScheduleRecord.updateOne(
-    { _id: entry.id },
-    {
-      $set: {
-        beingId:       entry.beingId,
-        intervalMs:    entry.intervalMs,
-        priority:      entry.priority,
-        content:       entry.content,
-        skipIfBacklog: entry.skipIfBacklog,
-      },
-      $setOnInsert: { _id: entry.id, createdAt: new Date() },
-    },
-    { upsert: true },
-  );
-}
-
-async function _removePersistedSchedule(id) {
-  const ScheduleRecord = (await import("../../models/scheduleRecord.js")).default;
-  await ScheduleRecord.deleteOne({ _id: id });
 }
 
 /**
@@ -379,9 +394,110 @@ export function _resetAll() {
   _tickMs = DEFAULT_TICK_MS;
 }
 
+/**
+ * Test-only registry inspector. Returns a snapshot of every
+ * (scheduleId, branch) key currently live, plus the entry's shape
+ * for cross-checking against fact-chain rehydration.
+ */
+export function _inspectRegistry() {
+  const snapshot = {};
+  for (const [key, entry] of _registry.entries()) {
+    snapshot[key] = {
+      id: entry.id,
+      beingId: entry.beingId,
+      branch: entry.branch,
+      intervalMs: entry.intervalMs,
+      priority: entry.priority,
+      content: entry.content,
+      skipIfBacklog: entry.skipIfBacklog,
+    };
+  }
+  return snapshot;
+}
+
 // ────────────────────────────────────────────────────────────────
 // Internals
 // ────────────────────────────────────────────────────────────────
+
+function _addRegistryEntry(entry) {
+  const key = _key(entry.id, entry.branch);
+  _registry.set(key, entry);
+  let beingSet = _byBeing.get(entry.beingId);
+  if (!beingSet) {
+    beingSet = new Set();
+    _byBeing.set(entry.beingId, beingSet);
+  }
+  beingSet.add(key);
+}
+
+function _dropRegistryEntry(scheduleId, branch) {
+  const key = _key(scheduleId, branch);
+  const entry = _registry.get(key);
+  if (!entry) return;
+  _registry.delete(key);
+  const beingSet = _byBeing.get(entry.beingId);
+  if (beingSet) {
+    beingSet.delete(key);
+    if (beingSet.size === 0) _byBeing.delete(entry.beingId);
+  }
+}
+
+function _entryFromFact(fact, branch, nowMs) {
+  const params = fact.params || {};
+  const intervalMs = Number(params.intervalMs);
+  if (!Number.isFinite(intervalMs) || intervalMs < MIN_INTERVAL_MS) return null;
+  const beingId = String(fact.target?.id || "");
+  if (!beingId) return null;
+  const scheduleId = params.scheduleId;
+  if (!scheduleId) return null;
+  return {
+    id:            scheduleId,
+    beingId,
+    branch,
+    intervalMs,
+    priority:      Number.isFinite(params.priority) ? Number(params.priority) : 4,
+    content:       params.content !== undefined ? params.content : { kind: "scheduled-wake" },
+    skipIfBacklog: params.skipIfBacklog !== false,
+    nextFireMs:    nowMs + intervalMs,
+    lastFireMs:    null,
+  };
+}
+
+// True when `fact` is inherited by `targetBranch`'s reel-lineage.
+//
+// Rules:
+//   . factBranch === targetBranch         . divergent path, always inherited
+//   . factBranch is an ancestor in lineage . inherited iff fact.seq is at or
+//                                            below the branchPoint cutoff
+//                                            for the next-deeper child on
+//                                            this fact's reel.
+//
+// Non-reel-bearing facts (no target.kind/id) inherit by ancestor
+// inclusion alone. Wake facts always carry target = { kind: "being",
+// id: <beingId> }, so the branchPoint check is the live path.
+async function _isInBranchLineage(fact, targetBranch) {
+  const factBranch = fact.branch || MAIN;
+  if (factBranch === targetBranch) return true;
+
+  const lineage = await resolveBranchLineage(targetBranch);
+  const idx = lineage.indexOf(factBranch);
+  if (idx === -1) return false;
+  if (idx === lineage.length - 1) return true;
+
+  const childBranch = lineage[idx + 1];
+  const kind = fact.target?.kind;
+  const id   = fact.target?.id;
+  if (!kind || !id) return true;
+
+  let bp;
+  try {
+    bp = await getBranchPoint(childBranch, kind, id);
+  } catch {
+    return false;
+  }
+  if (bp == null) return false;
+  return typeof fact.seq === "number" && fact.seq <= bp;
+}
 
 async function _defaultEmitter(entry, nowMs) {
   // Attention, not dispatch.
@@ -389,17 +505,15 @@ async function _defaultEmitter(entry, nowMs) {
   // A scheduled wake is the being's standing assignment of attention
   // to a cadence: "wake me every N ms." When the tick lands, the
   // being's prior request fires. The SUMMON's asker is the being
-  // itself; this is a self-wake. I_AM does not hold the declaration;
-  // the being's own schedule entry does (registry keyed by beingId).
-  //
-  // The receiving role inspects the content payload to learn the
-  // cadence context; everything in it is what the being itself set
-  // at schedule() time.
+  // itself; this is a self-wake. The branch the wake fires on is
+  // the entry's branch, so the resulting summon's fact lands on
+  // that branch's reels.
   const spaceId = getSpaceRootId() || null;
   if (!spaceId) {
     log.debug(
       "Schedule",
-      `skipping wake for being ${entry.beingId.slice(0, 8)}: place root not initialized`,
+      `skipping wake for being ${entry.beingId.slice(0, 8)} on #${entry.branch}: ` +
+      `place root not initialized`,
     );
     return;
   }
@@ -407,48 +521,46 @@ async function _defaultEmitter(entry, nowMs) {
   if (!realityDomain) {
     log.debug(
       "Schedule",
-      `skipping wake for being ${entry.beingId.slice(0, 8)}: reality domain not yet available`,
+      `skipping wake for being ${entry.beingId.slice(0, 8)} on #${entry.branch}: ` +
+      `reality domain not yet available`,
     );
     return;
   }
-  // Load the scheduled being's identity so the wake mints as the
-  // being itself. If the being is gone (deleted but its schedule
-  // wasn't yet unregistered), drop the wake silently — the standing
-  // declaration died with it.
-  const identity = await _loadBeingIdentity(entry.beingId);
+  const identity = await _loadBeingIdentity(entry.beingId, entry.branch);
   if (!identity) {
     log.debug(
       "Schedule",
-      `skipping wake for being ${entry.beingId.slice(0, 8)}: scheduled being not found`,
+      `skipping wake for being ${entry.beingId.slice(0, 8)} on #${entry.branch}: ` +
+      `scheduled being not found`,
     );
     return;
   }
   const correlation = randomUUID();
   const sender = `${realityDomain}/${spaceId}@${identity.name}`;
   await summonByResolved({
-    toBeingId: entry.beingId,
+    toBeingId:    entry.beingId,
     inboxSpaceId: spaceId,
+    branch:       entry.branch,
     identity,
     message: {
-      from: sender,
-      content: entry.content,
+      from:            sender,
+      content:         entry.content,
       correlation,
       rootCorrelation: correlation,
-      priority: entry.priority,
-      sentAt: new Date(nowMs).toISOString(),
+      priority:        entry.priority,
+      sentAt:          new Date(nowMs).toISOString(),
     },
   });
 }
 
-/**
- * Load { beingId, name } for the scheduled being. Self-wakes use
- * this in place of iAmIdentity so the SUMMON mints with the being
- * as asker. Returns null when the being is gone.
- */
-async function _loadBeingIdentity(beingId) {
+// Load { beingId, name } for the scheduled being on its branch.
+// Self-wakes mint with the being as asker; the identity lookup
+// confirms the being still exists. Returns null when the being is
+// gone (released or never created on this branch).
+async function _loadBeingIdentity(beingId, branch) {
   try {
-    const { loadProjection } = await import("../../materials/projections.js");
-    const slot = await loadProjection("being", String(beingId), "0");
+    const { loadOrFold } = await import("../../materials/projections.js");
+    const slot = await loadOrFold("being", String(beingId), branch);
     if (!slot?.state?.name) return null;
     return { beingId: String(slot.id), name: slot.state.name };
   } catch {

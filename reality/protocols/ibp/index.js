@@ -179,20 +179,20 @@ export function initIBPWS(io) {
   // AnimationMixer + Web Audio renderers off it.
   registerFactPush();
   attachIbpHandlers(io);
-  // Rehydrate the durable shadows. Subscriptions and schedules are
-  // in-memory at runtime; their write-through collections
-  // (SubscriptionRecord, ScheduleRecord) are the boot recovery
-  // source. Without this, every server restart wipes every being's
-  // standing attention and cadence — extensions planted before
-  // the restart silently stop responding.
+  // Rehydrate runtime state. Subscriptions still use a durable
+  // shadow (SubscriptionRecord); schedules now fold from the fact
+  // chain. The schedule rehydrate walks every live branch's wake
+  // facts via reel-lineage, materializing one (scheduleId, branch)
+  // entry per inherited or divergent scheduling. Without this,
+  // every server restart wipes every being's standing cadence —
+  // extensions planted before the restart silently stop responding.
   //
   // Fire before startScheduleTick so the tick loop sees the
-  // restored entries on its first sweep. Async — we don't await,
-  // because subscriptions can fan-out asynchronously and the few
-  // hundred-ms catch-up window after boot is acceptable.
+  // restored entries on its first sweep. Async — the few hundred-ms
+  // catch-up window after boot is acceptable.
   (async () => {
     try {
-      const [{ rehydrateFromDb: rehydrateSubs }, { rehydrateFromDb: rehydrateSchedules }] =
+      const [{ rehydrateFromDb: rehydrateSubs }, { rehydrateFromFacts: rehydrateSchedules }] =
         await Promise.all([
           import("../../seed/present/wakes/subscriptions.js"),
           import("../../seed/present/wakes/wakeSchedule.js"),

@@ -62,6 +62,16 @@ const BranchSchema = new mongoose.Schema({
   // (Pass 10 in the build order). Default: only main is live.
   isLive:           { type: Boolean, default: false, index: true },
   archivedBecause:  { type: String, default: null },
+
+  // Soft delete. Mark-deleted, never purge. Matches the append-only
+  // doctrine the rest of the world follows. Deleted branches refuse
+  // new writes (DO/BE/SUMMON gated, scheduler skips), drop out of
+  // default listings, and remain readable via SEE so the chain stays
+  // forensically intact. Undelete is a single toggle. Purge is a
+  // separate explicit op, built only when there's concrete need.
+  deleted:   { type: Boolean, default: false, index: true },
+  deletedBy: { type: String, ref: "Being", default: null },
+  deletedAt: { type: Date, default: null },
 });
 
 const Branch = mongoose.model("Branch", BranchSchema, "branches");

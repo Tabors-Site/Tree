@@ -90,12 +90,7 @@
 //
 //   I am <being.name>, <role.name> at <space.name>.
 //
-//   <preloaded see content (resolved from role.see[])>
-//
 //   and can:
-//
-//   see:
-//     - <canSee tool name>: <description>
 //
 //   do:
 //     - <canDo tool name>: <description>
@@ -108,6 +103,9 @@
 //
 //   <role.prompt() body>
 //
+//   <preloaded canSee face blocks . one per canSee entry,
+//    JSON-inlined under a [<label>] header>
+//
 //   [Time] <ISO timestamp>
 //
 // Sections collapse when empty. A role with no `canSummon` simply
@@ -115,8 +113,23 @@
 // block. The capability rows are the structural lock; the contents
 // vary by what each role declares.
 //
+// canSee is preload, not menu. Every entry is rendered into the face
+// at moment-open . either an IBP address (preloaded via seeVerb) or
+// a registered see name (preloaded via the seeResolver registry).
+// The being does not pick from a list and there is no see tool; the
+// face IS the perception. To see more, the being moves (DO), changes
+// role (BE / roleFlow), or the role spec is edited.
+//
+// Ordering. Identity + capabilities + role-intent come FIRST (the
+// question: who you are, what you can do, why you exist). canSee
+// blocks come LAST, just before [Time] (the data: what you see
+// right now). This mirrors the LLM-practical pattern of asking the
+// question, then pasting the code . the model attends more
+// strongly to the freshly-presented data at the end of the prompt
+// when it forms its act.
+//
 // Roles wired through this assembler write `prompt: () => BODY` and
-// the declarative fields (see, canSee, canDo, canSummon, canBe).
+// the declarative fields (canSee, canDo, canSummon, canBe).
 // Roles that still write their own `buildSystemPrompt` route
 // through the legacy branch of buildSystemPromptForRole below . it
 // composes a [Position] block + the role's hand-rolled body +
@@ -133,9 +146,14 @@
 
 import log from "../../../seedReality/log.js";
 import { getToolDescription, resolveTools } from "./tools.js";
-import { resolveSeeList, registerSeeResolver } from "./seeResolvers.js";
 import { resolveCanStar } from "./canStarResolver.js";
+import { resolveCanSee } from "./canSeeResolver.js";
 import { getSpaceName } from "../../../materials/space/spaces.js";
+// Side-effect import: registers the foundational seed sees (place,
+// roles, tools, operations, identity, config, peers, extensions).
+// Roles can then declare `canSee: ["place"]` etc. and the moment
+// face preloads that view.
+import "./seedSeeResolvers.js";
 
 // ────────────────────────────────────────────────────────────────────
 // The assembler
@@ -182,12 +200,13 @@ export async function buildPrompt(role, ctx) {
     ? `I am ${beingName}, ${roleName} at ${spaceName}.`
     : `I am ${beingName}, ${roleName}.`;
 
-  // Preloaded see-content: substrate the role declared it always
-  // wants to read at this moment (ancestor-plan, lineage, recent
-  // history). Resolved fresh at every summon — never cached across
-  // calls — because the substrate moves and the being's read of it
-  // is only ever now.
-  const preloaded = await renderPreloadedSee(role, ctx);
+  // canSee face blocks. Every entry in the role's canSee list is
+  // preloaded into the face: an IBP address resolves through seeVerb
+  // and the position descriptor becomes a JSON block; a registered
+  // see name runs its resolver and its return becomes a JSON block.
+  // Resolved fresh at every summon . the matter moves and the
+  // being's read of it is only ever now.
+  const preloaded = await renderCanSeeBlocks(role, ctx);
 
   // What this being can see, do, summon, and be — for this instant.
   // The capability surface is per-summon; a role's tool set is a
@@ -210,18 +229,24 @@ export async function buildPrompt(role, ctx) {
   // this LLM call. When the call ends, the being ends; the row
   // persists, but nothing else does. The next summon builds a new
   // now.
-  return [identity, preloaded, capabilities, bodyStr, timeBlock]
+  //
+  // Order: identity + capabilities + role-intent ("the question"),
+  // then preloaded canSee face blocks ("the data"), then [Time].
+  // LLMs attend more strongly to the freshly-presented data at the
+  // tail of the prompt when forming their act, so the structured
+  // perception lands last.
+  return [identity, capabilities, bodyStr, preloaded, timeBlock]
     .filter(Boolean)
     .join("\n\n");
 }
 
 // ────────────────────────────────────────────────────────────────────
-// Preloaded see content
+// canSee face blocks (preloaded perception)
 // ────────────────────────────────────────────────────────────────────
 
-async function renderPreloadedSee(role, ctx) {
-  if (!Array.isArray(role.see) || role.see.length === 0) return "";
-  const blocks = await resolveSeeList(role.see, ctx);
+async function renderCanSeeBlocks(role, ctx) {
+  if (!Array.isArray(role.canSee) || role.canSee.length === 0) return "";
+  const blocks = await resolveCanSee(role.canSee, ctx);
   if (blocks.length === 0) return "";
   return blocks.join("\n\n");
 }
@@ -248,17 +273,15 @@ async function renderCapabilities(role, ctx) {
     rootId: ctx?.rootId || null,
     name: ctx?.name || null,
   };
-  const [seeEntries, doEntries, summonEntries, beEntries] = await Promise.all([
-    resolveCanStar(role.canSee, beingCtx),
+  // canSee is preloaded into the face by renderCanSeeBlocks; it is
+  // not a capability menu. The remaining three verbs (do / summon /
+  // be) stay as menus . the LLM picks one to act through.
+  const [doEntries, summonEntries, beEntries] = await Promise.all([
     resolveCanStar(role.canDo, beingCtx),
     resolveCanStar(role.canSummon, beingCtx),
     resolveCanStar(role.canBe, beingCtx),
   ]);
 
-  const seeBlock = renderCapabilityList(seeEntries, "see", {
-    dispatcher: "see",
-    targetWord: "address",
-  });
   const doBlock = renderCapabilityList(doEntries, "do", {
     dispatcher: "do",
     targetWord: "action",
@@ -273,7 +296,6 @@ async function renderCapabilities(role, ctx) {
     suffix: "(for creating new beings)",
   });
 
-  if (seeBlock) sections.push(seeBlock);
   if (doBlock) sections.push(doBlock);
   if (summonBlock) sections.push(summonBlock);
   if (beBlock) sections.push(beBlock);
@@ -365,7 +387,11 @@ function renderCapabilityEntry(entry) {
  * verb-tools at genesis. If those are missing, no role can run.
  */
 function assertAllToolsResolve(_role) {
-  const SEED_VERB_TOOLS = ["see", "do", "summon", "be"];
+  // SEE retired from the LLM toolset. canSee preloads into the face;
+  // the being does not pick from a menu and the verb is not exposed
+  // as an action. To see more, move (DO), change role (BE /
+  // roleFlow), or edit the role spec.
+  const SEED_VERB_TOOLS = ["do", "summon", "be"];
   const missing = SEED_VERB_TOOLS.filter((name) => !getToolDescription(name));
   if (missing.length === 0) return;
   log.error(
@@ -375,7 +401,7 @@ function assertAllToolsResolve(_role) {
   );
   throw new Error(
     `Seed verb-tools missing from the registry: ${missing.join(", ")}. ` +
-      `genesis.js must register seedSeeTool / seedDoTool / seedSummonTool / seedBeTool ` +
+      `genesis.js must register seedDoTool / seedSummonTool / seedBeTool ` +
       `before any LLM role can be summoned.`,
   );
 }
@@ -402,31 +428,7 @@ async function resolveSpaceName(ctx) {
   }
 }
 
-// ────────────────────────────────────────────────────────────────────
-// Default see-resolvers shipped by seed
-// ────────────────────────────────────────────────────────────────────
-
-// "this-space" renders a one-line summary of where the being is now.
-// Roles that want a richer block register their own resolver under
-// a different name and reference it in role.see.
-registerSeeResolver(
-  "this-space",
-  async (ctx) => {
-    const spaceId = ctx.currentSpace || ctx.targetSpace || ctx.rootId;
-    if (!spaceId) return null;
-    try {
-      const name = await getSpaceName(spaceId);
-      return name
-        ? `[Space] ${name} (${String(spaceId).slice(0, 8)})`
-        : `[Space] ${spaceId}`;
-    } catch {
-      return null;
-    }
-  },
-  "seed",
-);
-
-log.verbose("BuildPrompt", "assembler ready; default resolvers registered");
+log.verbose("BuildPrompt", "assembler ready");
 
 // ────────────────────────────────────────────────────────────────────
 // Frame coordination

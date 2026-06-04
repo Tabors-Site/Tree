@@ -335,11 +335,18 @@ async function connectAnonymous(placeUrl, useProxy) {
   // Restore last view from URL hash if present; else land at "/".
   // Anonymous SEE on a non-existent space still throws SPACE_NOT_FOUND,
   // so wrap the navigate and fall back to "/" on substrate-gone errors.
+  // FORBIDDEN/UNAUTHORIZED also fall back — a stale hash pointing at a
+  // private tree (e.g., the user's own home from a prior session) would
+  // otherwise leave arrival stuck on a deny screen with no way out.
+  const ANON_HASH_FALLBACK_CODES = new Set([
+    ...STALE_SESSION_CODES,
+    "FORBIDDEN",
+  ]);
   const restored = _restoreAddressFromHash() || "/";
   try {
     await navigate(restored);
   } catch (err) {
-    if (STALE_SESSION_CODES.has(err?.code) && restored !== "/") {
+    if (ANON_HASH_FALLBACK_CODES.has(err?.code) && restored !== "/") {
       try { history.replaceState(null, "", location.pathname); } catch {}
       try { await navigate("/"); } catch {}
     }
@@ -411,6 +418,16 @@ async function connectAndPlace(session) {
   if (beingAddress) {
     try {
       const desc = await state.client.see(beingAddress);
+      // Stale-token check. The SEE itself succeeds because the wire
+      // can decode the JWT, but the substrate has no row for that
+      // beingId (operator dropped the DB, ended the being, etc.).
+      // identityBlock surfaces this via `stale: true` so we can
+      // drop the cached session BEFORE the navigate path fires
+      // set-being:position and bounces with BEING_NOT_FOUND.
+      if (desc?.identity?.stale === true) {
+        await _dropStaleSessionAndReconnect(session);
+        return;
+      }
       if (!landingFromHash) {
         const pos = desc?.identity?.position || null;
         if (pos && state.discovery?.reality) {
@@ -733,6 +750,22 @@ async function navigate(address, { fromHistory = false } = {}) {
     // descriptor event we can refetch on. "/~" goes on the wire as
     // "/~"; the server resolver swaps it for the caller's Being.homeSpace.
     const desc = await state.client.see(address, { live: true });
+    // Stale-session mid-flight: the operator dropped the DB while
+    // the page was open. The wire still has our JWT but the substrate
+    // has no row for the beingId. Drop the session and reconnect
+    // anonymously before any DO fires and bounces with BEING_NOT_FOUND.
+    if (desc?.identity?.stale === true && state.session) {
+      const droppedSession = state.session;
+      try { state.client.disconnect(); } catch {}
+      clearSession();
+      state.session = null;
+      try { history.replaceState(null, "", location.pathname); } catch {}
+      await connectAnonymous(
+        droppedSession.placeUrl || defaultPlaceUrl(),
+        shouldUseProxy(droppedSession.placeUrl || defaultPlaceUrl()),
+      );
+      return;
+    }
     state.descriptor = desc;
     state.currentAddress = address;
     // Live navigate clears the historical visual cue — a rewind that

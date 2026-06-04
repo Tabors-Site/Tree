@@ -274,18 +274,53 @@ async function runLoop(beingId) {
             // wake gets a fresh run and a fresh attempt.
             break;
           }
-          // Pause gate. Entries land on the picked branch; if that
-          // branch is paused, running the moment would just hit the
-          // wire-layer REALITY_PAUSED gate when its downstream DOs
-          // fire, leaving the row open and triggering a rate-limit
-          // storm. Mark the correlation seen so we don't loop on it,
-          // and break to let the next pass try once unpause lands.
+          // Pause / delete gate. Entries land on the picked branch;
+          // if that branch is paused or deleted, running the moment
+          // would just hit the wire-layer REALITY_PAUSED gate when
+          // its downstream DOs fire, leaving the row open and
+          // triggering a rate-limit storm. Mark the correlation seen
+          // so we don't loop on it, and break to let the next pass
+          // try once unpause / undelete lands.
+          //
+          // EXCEPTION: branch-lifecycle ops must run on a paused or
+          // deleted branch . they're the only way to revive one.
+          // Mirrors the wire-side exemption in protocols/ibp/verbs/
+          // do.js. Without this, a click on unpause arrives as a
+          // transport-act, the scheduler skips it because the branch
+          // is paused, and the client times out at awaitResult after
+          // 60s.
+          //
+          // Pause-exempts are broader (pause/unpause/create/delete/
+          // undelete) than delete-exempts (delete/undelete) because
+          // forking off a paused branch is allowed but forking off a
+          // deleted one is not — undelete first if you want that.
           {
             const entryBranch = picked.entry.branch || "0";
-            const { isBranchPaused } = await import("../../materials/branch/branches.js");
-            if (await isBranchPaused(entryBranch)) {
-              seenCorrelations.add(picked.entry.correlation);
-              break;
+            const innerAction = picked.entry?.act?.action || null;
+            const isPauseLifecycleOp =
+              picked.entry?.act?.verb === "do" &&
+              (innerAction === "pause-branch" ||
+               innerAction === "unpause-branch" ||
+               innerAction === "create-branch" ||
+               innerAction === "delete-branch" ||
+               innerAction === "undelete-branch");
+            const isDeleteLifecycleOp =
+              picked.entry?.act?.verb === "do" &&
+              (innerAction === "delete-branch" ||
+               innerAction === "undelete-branch");
+            if (!isPauseLifecycleOp) {
+              const { isBranchPaused } = await import("../../materials/branch/branches.js");
+              if (await isBranchPaused(entryBranch)) {
+                seenCorrelations.add(picked.entry.correlation);
+                break;
+              }
+            }
+            if (!isDeleteLifecycleOp) {
+              const { isBranchDeleted } = await import("../../materials/branch/branches.js");
+              if (await isBranchDeleted(entryBranch)) {
+                seenCorrelations.add(picked.entry.correlation);
+                break;
+              }
             }
           }
           if (!_checkRate(beingId)) {

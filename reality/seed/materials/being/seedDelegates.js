@@ -99,6 +99,22 @@ export const SEED_DELEGATES = [
       "Authors and edits live-defined roles. Click @role-manager at the reality root to add or replace a role with origin:'live'. Restart picks up live changes; the in-memory registry rebuilds from ./roles on boot.",
   },
   {
+    name: "role-finder",
+    role: "role-finder",
+    cognition: "llm",
+    invocableBy: "authenticated",
+    description:
+      "LLM-cognition helper. Summon @role-finder and describe what a being should do; it searches ./roles for matches, drafts new role definitions, and saves via set-role on user approval. Pairs with @roleflow-composer for end-to-end role authoring.",
+  },
+  {
+    name: "roleflow-composer",
+    role: "roleflow-composer",
+    cognition: "llm",
+    invocableBy: "authenticated",
+    description:
+      "LLM-cognition helper. Summon @roleflow-composer and describe a being's behavior; it composes a structured roleFlow (the per-moment role-selection program) and writes it onto the target being's qualities via set-being-roleflow.",
+  },
+  {
     name: "llm-assigner",
     role: "llm-assigner",
     cognition: "scripted",

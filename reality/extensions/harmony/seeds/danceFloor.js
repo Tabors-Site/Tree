@@ -327,12 +327,19 @@ export const danceFloorSeed = {
       dancers.push({ beingId: dancerBeingId, role: spec.role, start: spec.start });
     }
 
-    // 6. schedule the drummer wake. Default emitter sends as @I-AM.
-    const scheduleId = reality.declare.schedule(drummerBeingId, {
+    // 6. schedule the drummer wake. The wake-scheduled fact rides
+    // the planting act's ΔF (summonCtx), so the schedule commits
+    // atomically with the rest of the dance-floor and lands on the
+    // act's branch. A drummer planted on #1 ticks on #1; a drummer
+    // planted on main is inherited by every child branch through
+    // reel-lineage.
+    const scheduleId = await reality.declare.schedule(drummerBeingId, {
       intervalMs: TICK_MS,
       content: { event: "tick", drumMatterId, gridSpaceId },
       priority: 4,
       id: `harmony-tick-${plantedSeedId}`,
+      branch: summonCtx.branch,
+      summonCtx,
     });
     log.info("Harmony", `scheduled drummer wake every ${TICK_MS}ms (id=${String(scheduleId).slice(0, 8)})`);
 

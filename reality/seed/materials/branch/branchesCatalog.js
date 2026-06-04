@@ -46,6 +46,7 @@ export async function describeBranchesCatalog(branchPath = MAIN) {
         anchor:    null,
         label:     "main",
         paused:    false,
+        deleted:   false,
         createdAt: null,
         isLive:    true,
       };
@@ -68,8 +69,16 @@ export async function describeBranchesCatalog(branchPath = MAIN) {
 
   // Direct children: rows whose parent is this path. Main's children
   // carry parent=null (main has no row).
+  //
+  // Deleted branches drop from the default listing. They still exist
+  // in the chain and SEE on a specific deleted path still resolves
+  // (current slot above honors the direct lookup), but they don't
+  // clutter the branch picker. Undelete brings them back.
   const childRows = await Branch
-    .find(isMainPath ? { parent: null } : { parent: path })
+    .find({
+      ...(isMainPath ? { parent: null } : { parent: path }),
+      deleted: { $ne: true },
+    })
     .sort({ path: 1 })
     .lean();
   const children = childRows.map(_serializeBranch);
@@ -92,6 +101,7 @@ function _serializeBranch(row) {
     anchor:      bp,
     label:       row.label || null,
     paused:      !!row.paused,
+    deleted:     !!row.deleted,
     isLive:      !!row.isLive,
     createdAt:   row.createdAt ? new Date(row.createdAt).toISOString() : null,
     createdBy:   row.createdBy || null,
