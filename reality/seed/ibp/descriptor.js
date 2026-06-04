@@ -1138,7 +1138,21 @@ async function identityBlock(identity, { authorizedHere, writeAllowed, until = n
           coord = coordQ || folded.coord || null;
         }
       } else {
-        const slot = await loadProjection("being", identity.beingId, branch);
+        // loadOrFold (not loadProjection): a freshly-registered being
+        // (cherub.birth that JUST sealed) may not have its projection
+        // slot materialized yet, AND on any non-main branch the slot
+        // doesn't exist until the lineage walk cold-folds it. Bare
+        // loadProjection returns null in both cases . the portal then
+        // sees identity.position = null, can't compute a landing
+        // address, and falls back to `<reality>/@<name>` which the
+        // resolver lands at the place root. The user's being IS at
+        // their home with its bigger grid; the portal renders the
+        // place root with its smaller grid; the being-mesh spawns
+        // outside the visible area. loadOrFold walks the lineage so
+        // the slot resolves the same way it does once steady-state
+        // catches up.
+        const { loadOrFold } = await import("../materials/projections.js");
+        const slot = await loadOrFold("being", identity.beingId, branch);
         // Position rides at the slot level (sparse-indexed for
         // findByPosition); qualities + other reducer state ride at
         // slot.state. Coord lives under qualities.coord typically.

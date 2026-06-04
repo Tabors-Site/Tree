@@ -177,16 +177,19 @@
       #hotbar-tooltip .tt-name { color: #6b7d72; font-family: ui-monospace, monospace; font-size: 10px; margin-bottom: 6px; }
       #hotbar-tooltip .tt-desc { color: #9ab0a3; }
 
-      /* Past-view visual cue. body.ghost-view is set by main.js when
-         the descriptor is historical (timeline rewind landed at a past
-         moment). Desaturation makes the world read as a memory; a
-         labeled chip in the top-right reinforces it so the user can
-         never forget they're looking at the past. */
-      body.ghost-view canvas#scene {
+      /* Frozen-world visual cue. body.ghost-view (past view via
+         timeline rewind) and body.paused-branch (the user's current
+         branch has been paused) both desaturate the canvas and pin
+         a chip in the top-right that names WHY the world is frozen.
+         A user can never miss either state — they look identical at
+         the canvas level (no writes possible) and differ only in
+         label. */
+      body.ghost-view canvas#scene,
+      body.paused-branch canvas#scene {
         filter: grayscale(1) brightness(0.85);
       }
-      body.ghost-view::after {
-        content: "GHOST VIEW · viewing the past";
+      body.ghost-view::after,
+      body.paused-branch::after {
         position: fixed;
         top: 16px;
         right: 16px;
@@ -201,6 +204,8 @@
         pointer-events: none;
         box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
       }
+      body.ghost-view::after  { content: "GHOST VIEW · viewing the past"; }
+      body.paused-branch::after { content: "PAUSED · this branch is frozen"; }
     </style>
   </head>
   <body>

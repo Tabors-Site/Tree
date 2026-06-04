@@ -225,14 +225,103 @@ function _renderTree(container, tree) {
         parts.push(`anchor seq=${seq}`);
       }
     }
+    if (branch.paused) parts.push("PAUSED");
     meta.textContent = parts.length ? "  " + parts.join(" · ") : "";
+    if (branch.paused) meta.style.color = "#e8b762";
     row.appendChild(meta);
+    // Pause/unpause control. Every branch including main is
+    // pauseable — the wire-layer gate exempts unpause-branch and
+    // create-branch, so a fully-frozen reality can always be revived
+    // by clicking unpause here or by forking off a paused branch.
+    {
+      const action = document.createElement("button");
+      action.type = "button";
+      action.textContent = branch.paused ? "▶ unpause" : "❚❚ pause";
+      action.style.cssText = [
+        "background: " + (branch.paused ? "#13201b" : "#2a1f0a"),
+        "color: "      + (branch.paused ? "#8fbf9f" : "#e8b762"),
+        "border: 1px solid " + (branch.paused ? "#3d7a52" : "#6b5320"),
+        "border-radius: 3px",
+        "padding: 2px 8px",
+        "margin-left: auto",
+        "font-family: inherit",
+        "font-size: 10px",
+        "cursor: pointer",
+      ].join(";");
+      action.addEventListener("click", async (ev) => {
+        ev.stopPropagation();
+        await _togglePauseBranch(branch);
+      });
+      row.appendChild(action);
+    }
     container.appendChild(row);
     const kids = childrenOf.get(branch.path) || [];
     for (const k of kids) render(k, indent + 1);
   }
   for (const root of tree.roots) {
     render(root, 0);
+  }
+}
+
+async function _togglePauseBranch(branch) {
+  const op = branch.paused ? "unpause-branch" : "pause-branch";
+  // Optimistic local flip so the button changes the instant the user
+  // clicks — no waiting for the DO + tree refetch round-trip. The
+  // server-confirmed state replaces it on the subsequent refetch; if
+  // the DO fails the catch path restores and surfaces the error.
+  const prevPaused = !!branch.paused;
+  branch.paused = !prevPaused;
+  if (_state.panelEl) {
+    const treeContainer = _state.panelEl.querySelector(".bp-tree");
+    if (treeContainer) _renderTree(treeContainer, _state.graphAll);
+  }
+  // If the user just paused (or unpaused) the branch they themselves
+  // are currently on, flip the grayscale chrome immediately so the
+  // visual cue matches the new reality without waiting for navigate.
+  const myBranch = window.state?.descriptor?.address?.branch || "0";
+  if (branch.path === myBranch) {
+    window.dispatchEvent(new CustomEvent("branchbar:paused-self", {
+      detail: { paused: branch.paused },
+    }));
+  }
+
+  // Route through the caller's own current branch so the DO stays
+  // single-branch (cross-branch gate refuses otherwise). The
+  // branch-manager being folds via lineage so it's reachable from any
+  // branch's slot.
+  const callerBq = myBranch === "0" ? "" : `#${myBranch}`;
+  try {
+    await _state.client.do(
+      `${_state.reality}${callerBq}/@branch-manager`,
+      op,
+      { branch: branch.path },
+    );
+    // Refetch the tree so the row's persisted state replaces our
+    // optimistic flip (no-op when they match).
+    await _loadBranchTree();
+    if (_state.panelEl) {
+      const treeContainer = _state.panelEl.querySelector(".bp-tree");
+      if (treeContainer) _renderTree(treeContainer, _state.graphAll);
+    }
+    _showBranchEvent(
+      branch.paused
+        ? `❚❚ paused #${branch.path === "0" ? "main" : branch.path}`
+        : `▶ unpaused #${branch.path === "0" ? "main" : branch.path}`,
+    );
+  } catch (err) {
+    // Revert the optimistic flip and surface the error.
+    branch.paused = prevPaused;
+    if (_state.panelEl) {
+      const treeContainer = _state.panelEl.querySelector(".bp-tree");
+      if (treeContainer) _renderTree(treeContainer, _state.graphAll);
+    }
+    if (branch.path === myBranch) {
+      window.dispatchEvent(new CustomEvent("branchbar:paused-self", {
+        detail: { paused: prevPaused },
+      }));
+    }
+    console.warn(`[branch-bar] ${op} failed:`, err?.message || err);
+    _showBranchEvent(`${op} failed: ${err?.message || err}`, { error: true });
   }
 }
 
@@ -364,6 +453,10 @@ function _closeTimeline() {
   _state.firstTs = null;
   _state.nowTs = null;
   _state.atTimestamp = null;
+  if (_stripTick) {
+    clearInterval(_stripTick);
+    _stripTick = null;
+  }
 }
 
 // ─────────────────────────────────────────────────────────────────────
@@ -375,9 +468,18 @@ async function _update(desc) {
   // Always cache the latest graph for the active branch — even when the
   // panel/timeline isn't open, so opening either is instant.
   const branch = desc?.address?.branch || "0";
+  _maybeSurfaceBranchSwitch(branch);
   try {
     const r = await _state.client.see(`${_state.reality}/.branches/${branch}`);
     _state.graph = r?.branches || null;
+    // Server-confirmed pause state of the branch the user is on. Push
+    // it to the chrome layer (main.js listens for the same custom
+    // event the optimistic pause-button flip uses, so both paths
+    // converge).
+    const myPaused = !!r?.branches?.current?.paused;
+    window.dispatchEvent(new CustomEvent("branchbar:paused-self", {
+      detail: { paused: myPaused },
+    }));
   } catch { _state.graph = null; }
 
   // Track rewound state from descriptor flags.
@@ -446,20 +548,60 @@ async function _update(desc) {
     _state.marks = [];
   }
 
-  // Time axis: earliest own mark on the left, "now" on the right. No
-  // extension beyond first own act — the user wanted leftmost to be
-  // when they first acted on this reality.
-  if (_state.marks.length > 0) {
-    _state.firstTs = _state.marks[0].ts;
-    const latestMark = _state.marks[_state.marks.length - 1].ts;
-    const wallNow = new Date().toISOString();
-    _state.nowTs = latestMark > wallNow ? latestMark : wallNow;
-  } else {
-    _state.firstTs = null;
-    _state.nowTs = null;
-  }
+  // Sliding-window time axis. nowTs is always wall-clock now (so the
+  // present streams in from the right edge as time passes); firstTs is
+  // anchored to (now - WINDOW) OR the earliest mark, whichever is
+  // later — a short session shouldn't pad with empty hours. The
+  // anchor recomputes on every _update + on the 1s tick, so:
+  //   - new marks land at their absolute position
+  //   - older marks drift left as the window slides forward
+  //   - a rewind cursor (atTimestamp) stays at its absolute moment
+  //     and slides left as wall-clock advances — never re-centered
+  _state.firstTs = _computeFirstTs(_state.marks);
+  _state.nowTs   = new Date().toISOString();
+  _ensureTick();
 
   _renderTimeline();
+}
+
+// Minimum visible window: 1 hour. The strip grows wider if the user
+// has older marks — never narrower, so acts never "fall off the left"
+// while the user is just sitting and watching. Doctrine (Tabor
+// 2026-06-04): the strip is for the user's full session, not a fixed
+// rolling buffer; older marks must stay visible until the user
+// explicitly decides otherwise.
+const _MIN_WINDOW_MS = 60 * 60 * 1000;
+
+function _computeFirstTs(marks) {
+  const wallNowMs = Date.now();
+  if (marks.length > 0 && marks[0]?.ts) {
+    const earliestMs = new Date(marks[0].ts).getTime();
+    // firstTs = the earliest mark, but never narrower than the
+    // minimum window. So a fresh session shows 1h of empty axis, then
+    // the strip widens left as the user accumulates older acts.
+    return new Date(Math.min(earliestMs, wallNowMs - _MIN_WINDOW_MS)).toISOString();
+  }
+  // No marks yet — show the empty 1-hour window.
+  return new Date(wallNowMs - _MIN_WINDOW_MS).toISOString();
+}
+
+// One-second tick keeps the right edge anchored to wall-clock now
+// even when no new marks arrive. Slides the window forward; the
+// rewind cursor drifts left because its absolute timestamp doesn't
+// move while now() does.
+let _stripTick = null;
+function _ensureTick() {
+  if (_stripTick || !_state.timelineEl) return;
+  _stripTick = setInterval(() => {
+    if (!_state.timelineEl) {
+      clearInterval(_stripTick);
+      _stripTick = null;
+      return;
+    }
+    _state.firstTs = _computeFirstTs(_state.marks);
+    _state.nowTs   = new Date().toISOString();
+    _renderTimeline();
+  }, 1000);
 }
 
 function _renderTimeline() {
@@ -557,6 +699,7 @@ async function _branchHere() {
     const callerBranch =
       window.state?.descriptor?.address?.branch || "0";
     const callerBq = callerBranch === "0" ? "" : `#${callerBranch}`;
+    _showBranchEvent(`creating branch from #${parent}…`);
     const result = await _state.client.do(
       `${_state.reality}${callerBq}/@branch-manager`,
       "create-branch",
@@ -567,11 +710,70 @@ async function _branchHere() {
       console.warn("[branch-bar] create-branch returned no path:", result);
       return;
     }
+    _showBranchEvent(`✨ branched! now on #${r.path}`, { sticky: 2500 });
     _closeTimeline();
     location.hash = `#${_state.reality}#${r.path}/`;
   } catch (err) {
     console.warn("[branch-bar] create-branch failed:", err?.message);
+    _showBranchEvent(`branch failed: ${err?.message || err}`, { error: true });
   }
+}
+
+// Transient on-screen branch-event chip. Used for branch switches and
+// create-branch confirmations so the user can never miss a world flip.
+// Reuses one DOM node — overlapping events stomp each other rather
+// than stacking, which keeps the chrome out of the way.
+let _branchChipEl = null;
+let _branchChipTimer = null;
+function _showBranchEvent(text, { sticky = 1500, error = false } = {}) {
+  if (typeof document === "undefined") return;
+  if (!_branchChipEl) {
+    _branchChipEl = document.createElement("div");
+    _branchChipEl.style.cssText = [
+      "position: fixed",
+      "top: 50%",
+      "left: 50%",
+      "transform: translate(-50%,-50%)",
+      "z-index: 30",
+      "padding: 14px 24px",
+      "border-radius: 8px",
+      "font-family: ui-monospace, monospace",
+      "font-size: 14px",
+      "font-weight: 600",
+      "letter-spacing: 0.02em",
+      "pointer-events: none",
+      "box-shadow: 0 8px 24px rgba(0,0,0,0.6)",
+      "transition: opacity 0.25s ease-out, transform 0.25s ease-out",
+    ].join(";");
+    document.body.appendChild(_branchChipEl);
+  }
+  const bg = error ? "#3a1212" : "#2a1f0a";
+  const border = error ? "#a04040" : "#6b5320";
+  const color = error ? "#ffb0b0" : "#e8b762";
+  _branchChipEl.style.background = bg;
+  _branchChipEl.style.border = `1px solid ${border}`;
+  _branchChipEl.style.color = color;
+  _branchChipEl.textContent = text;
+  _branchChipEl.style.opacity = "1";
+  _branchChipEl.style.transform = "translate(-50%,-50%) scale(1)";
+  if (_branchChipTimer) clearTimeout(_branchChipTimer);
+  _branchChipTimer = setTimeout(() => {
+    if (_branchChipEl) _branchChipEl.style.opacity = "0";
+  }, sticky);
+}
+
+// Branch-switch detection. main.js calls into update() on every
+// navigate; we compare desc.address.branch against the last seen one
+// and surface the change as an event chip. The user asked for "VERY
+// clear" — center-screen overlay does that.
+let _lastSeenBranch = null;
+function _maybeSurfaceBranchSwitch(branch) {
+  if (branch === _lastSeenBranch) return;
+  const prev = _lastSeenBranch;
+  _lastSeenBranch = branch;
+  if (prev === null) return; // first observation; not a switch
+  const label = branch === "0" ? "main" : `#${branch}`;
+  _showBranchEvent(`→ switched to ${label}`);
 }
 
 function _shortStamp(iso) {

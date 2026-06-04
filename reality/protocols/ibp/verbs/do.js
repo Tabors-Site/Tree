@@ -105,6 +105,21 @@ export async function handleDo(socket, env, ack) {
         { callerBranch, targetBranch });
     }
 
+    // Pause gate. While the target branch is paused, DO refuses every
+    // op EXCEPT unpause-branch (so the operator can revive a paused
+    // world) and create-branch (so they can fork off a paused branch
+    // to keep working in a new lineage). SEE stays open regardless so
+    // the user can still rewind or inspect the frozen state.
+    if (action !== "unpause-branch" && action !== "create-branch") {
+      const { isBranchPaused } = await import("../../../seed/materials/branch/branches.js");
+      if (await isBranchPaused(targetBranch)) {
+        throw new IbpError(IBP_ERR.REALITY_PAUSED,
+          `DO refused: branch #${targetBranch} is paused. ` +
+          `Unpause via @branch-manager or fork a new branch off it.`,
+          { branch: targetBranch });
+      }
+    }
+
     const resolved = await resolveStance(expanded.right, {
       identity: { beingId, name: socket.name },
     });

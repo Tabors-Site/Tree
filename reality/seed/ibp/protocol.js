@@ -119,6 +119,12 @@ export const IBP_ERR = Object.freeze({
   // ambient summonCtx.branch disagrees with the target stance's branch.
   CROSS_BRANCH_FORBIDDEN: "CROSS_BRANCH_FORBIDDEN",
 
+  // Branch is paused. The Branch row carries `paused: true` (set via
+  // do.pause-branch on @branch-manager). Every write verb (DO / BE /
+  // SUMMON) refuses with this code; SEE still works so the user can
+  // inspect or rewind frozen state. unpause-branch lifts the gate.
+  REALITY_PAUSED:         "REALITY_PAUSED",
+
   // System
   INTERNAL:               "INTERNAL",
   TIMEOUT:                "TIMEOUT",
@@ -202,6 +208,7 @@ const STATUS_FOR_CODE = Object.freeze({
   ORIGIN_READ_ONLY:       403,
   HISTORICAL_READ_ONLY:   403,
   CROSS_BRANCH_FORBIDDEN: 403,
+  REALITY_PAUSED:         403,
   NOT_A_BEING:            403,
   NOT_A_SEED:             403,
 

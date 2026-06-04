@@ -96,6 +96,18 @@ export async function handleSummon(socket, env, ack) {
       // Parse failures fall through; summonVerb owns address validation.
     }
 
+    // Pause gate. SUMMON ALWAYS produces a be:summon Fact (writes the
+    // recipient's inbox); paused branches refuse so the frozen world
+    // accumulates no new work.
+    {
+      const { isBranchPaused } = await import("../../../seed/materials/branch/branches.js");
+      if (await isBranchPaused(callerBranch)) {
+        throw new IbpError(IBP_ERR.REALITY_PAUSED,
+          `SUMMON refused: branch #${callerBranch} is paused.`,
+          { branch: callerBranch });
+      }
+    }
+
     const result = await summonVerb(address, message, {
       identity,
       currentUser:   socket.name,

@@ -77,10 +77,12 @@ export function invalidateBranchCache(path) {
 }
 
 /**
- * Look up a Branch by path. Returns null for main (no row).
+ * Look up a Branch by path. Main is implicit (no row exists) UNTIL
+ * the operator first pauses it — at which point pause-branch upserts
+ * a row. Returns null when no doc exists for the path (including
+ * implicit-live main).
  */
 export async function loadBranch(path) {
-  if (isMain(path)) return null;
   if (_branchDocCache.has(path)) return _branchDocCache.get(path);
   const row = await Branch.findById(path).lean();
   _branchDocCache.set(path, row || null);
@@ -152,13 +154,16 @@ export async function getBranchPoint(branch, type, id) {
 }
 
 /**
- * Cheap pause check. Returns false for main always (Pass 6.5 will
- * extend main pause semantics if needed; for now main is the live
- * default and is never paused at this layer). For branches reads the
- * Branch row's `paused` projection.
+ * Cheap pause check. ALL branches including main are pauseable
+ * (Tabor doctrine 2026-06-04: every branch is symmetric). A main row
+ * is only created lazily when the operator first pauses main; before
+ * that no row exists and the default is "not paused" (live).
+ *
+ * Reads via loadBranch (cached). The pause-branch / unpause-branch
+ * ops invalidate the cache after writes so the gate sees fresh
+ * state within a microsecond of the operation.
  */
 export async function isBranchPaused(path) {
-  if (isMain(path)) return false;
   const row = await loadBranch(path);
   return row?.paused === true;
 }

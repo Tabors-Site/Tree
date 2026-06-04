@@ -17,7 +17,8 @@
 import { registerOperation } from "../../../ibp/operations.js";
 import { IbpError, IBP_ERR } from "../../../ibp/protocol.js";
 import { createBranch } from "../../../materials/branch/branchCreation.js";
-import { MAIN } from "../../../materials/branch/branches.js";
+import { MAIN, invalidateBranchCache } from "../../../materials/branch/branches.js";
+import Branch from "../../../materials/branch/branch.js";
 
 export function registerBranchManagerOps() {
   // The actual registerOperation call lives at module load (side
@@ -105,6 +106,122 @@ registerOperation("create-branch", {
       branchPoint: result.branchPoint,
       createdAt:   result.createdAt,
     };
+  },
+});
+
+// pause-branch / unpause-branch — toggle the Branch row's paused
+// state. Paused branches refuse DO/BE/SUMMON at the wire-layer gate
+// (see protocols/ibp/verbs/* — they read isPaused and throw
+// REALITY_PAUSED). SEEs still work so the user can rewind or inspect
+// frozen state.
+//
+// Pause metadata lives on the Branch row directly today; the doc's
+// header notes the eventual fact-driven version. For now this is a
+// direct write — the substrate doctrine says branch metadata is
+// world data, but the reducer + reel haven't shipped yet (Pass 6.5).
+// Treat this as the stable public API regardless: callers see ops,
+// not collection mutations.
+
+registerOperation("pause-branch", {
+  targets: ["being", "stance"],
+  ownerExtension: "seed",
+  skipAudit: false,
+  args: {
+    branch: {
+      type:        "text",
+      label:       "Branch path to pause (\"0\" for main; \"1\", \"1a\", etc.)",
+      required:    true,
+    },
+    reason: {
+      type:     "text",
+      label:    "Optional reason recorded with the pause",
+      required: false,
+    },
+  },
+  handler: async ({ params, identity, summonCtx }) => {
+    const branchPath = String(params?.branch || "").trim();
+    if (!branchPath) {
+      throw new IbpError(IBP_ERR.INVALID_INPUT, "pause-branch: branch is required");
+    }
+    // Main IS pauseable. Doctrine (Tabor 2026-06-04): every branch is
+    // symmetric; main is not privileged. The "how do you unpause if
+    // everything is paused?" recovery is solved by the gate exempting
+    // unpause-branch and create-branch — those run on any branch
+    // regardless of pause state. So a fully-frozen reality can always
+    // be revived. If main doesn't yet have a Branch row, upsert one
+    // (rows are normally only created at branch creation; main is
+    // implicit because its lineage walk starts from "0" without a
+    // backing doc).
+    const isMainBranch = branchPath === MAIN;
+    if (!isMainBranch) {
+      const existing = await Branch.findOne({ path: branchPath }).lean();
+      if (!existing) {
+        throw new IbpError(IBP_ERR.SPACE_NOT_FOUND, `pause-branch: no branch "${branchPath}"`);
+      }
+      if (existing.paused) {
+        return { paused: true, path: branchPath, alreadyPaused: true };
+      }
+    } else {
+      const existing = await Branch.findOne({ path: MAIN }).lean();
+      if (existing?.paused) {
+        return { paused: true, path: MAIN, alreadyPaused: true };
+      }
+    }
+    await Branch.updateOne(
+      { path: branchPath },
+      {
+        $set: {
+          paused:   true,
+          pausedBy: identity?.beingId || null,
+          pausedAt: new Date(),
+          ...(params?.reason ? { archivedBecause: String(params.reason) } : {}),
+        },
+        $setOnInsert: {
+          _id:    branchPath,
+          path:   branchPath,
+          parent: isMainBranch ? null : undefined,
+        },
+      },
+      { upsert: true },
+    );
+    invalidateBranchCache(branchPath);
+    return { paused: true, path: branchPath };
+  },
+});
+
+registerOperation("unpause-branch", {
+  targets: ["being", "stance"],
+  ownerExtension: "seed",
+  skipAudit: false,
+  args: {
+    branch: {
+      type:        "text",
+      label:       "Branch path to unpause",
+      required:    true,
+    },
+  },
+  handler: async ({ params, identity }) => {
+    const branchPath = String(params?.branch || "").trim();
+    if (!branchPath) {
+      throw new IbpError(IBP_ERR.INVALID_INPUT, "unpause-branch: branch is required");
+    }
+    const row = await Branch.findOne({ path: branchPath }).lean();
+    if (!row) {
+      // No row = not paused (main without a row is the implicit-live
+      // default). Treat as alreadyLive idempotently.
+      return { paused: false, path: branchPath, alreadyLive: true };
+    }
+    if (!row.paused) {
+      return { paused: false, path: branchPath, alreadyLive: true };
+    }
+    await Branch.updateOne(
+      { path: branchPath },
+      {
+        $set: { paused: false, pausedAt: null, pausedBy: null, archivedBecause: null },
+      },
+    );
+    invalidateBranchCache(branchPath);
+    return { paused: false, path: branchPath };
   },
 });
 

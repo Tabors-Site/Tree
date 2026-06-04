@@ -68,6 +68,12 @@ const state = {
   historyIndex: -1,
   // Hotbar API (returned by initHotbar). Holds plantable seeds.
   hotbar: null,
+  // Verbose console logging for live event arrivals. Set true from
+  // devtools (state.debugLiveEvents = true) when investigating "the
+  // timeline isn't updating live" issues — every push the server
+  // sends gets logged with its kind + spaceId so we can tell if the
+  // wire is even delivering, vs. the refresh handler dropping it.
+  debugLiveEvents: true,
 };
 
 // Expose for browser-console debugging. Access as window.__state from
@@ -198,6 +204,15 @@ async function main() {
     // Same address, no at-qualifier → live again.
     if (state.currentAddress) navigate(state.currentAddress);
     _setHistoricalVisualCue(false);
+  });
+
+  // Optimistic pause-state sync. When the branch tree's pause button
+  // gets clicked, it dispatches this event BEFORE the DO round-trips
+  // so the chrome flips immediately. The subsequent navigate (or the
+  // next branchBar.update fetching the catalog) confirms the
+  // persisted state.
+  window.addEventListener("branchbar:paused-self", (ev) => {
+    _setPausedVisualCue(!!ev?.detail?.paused);
   });
 
   // Branch-tree clicks set `location.hash` to the target branch's
@@ -548,6 +563,12 @@ function updateMoveHud(on, carrying) {
 let _refetchTimer = null;
 function handleDescriptorEvent(event) {
   if (!state.currentAddress) return;
+  // Diagnostic — keep on while the timeline live-refresh investigation
+  // is open. If the strip stops landing new marks the console here
+  // tells us whether events are even reaching the client.
+  if (state.debugLiveEvents) {
+    console.log("[3D] live event:", event?.kind, event?.spaceId?.slice(0, 8));
+  }
   if (event?.kind === "position") {
     state.scene.applyPositionDelta(event.payload);
     // A position fact (someone walked, including us) IS an act on a
@@ -596,7 +617,12 @@ function _scheduleBranchBarRefresh() {
   if (_branchBarRefreshTimer) return;
   _branchBarRefreshTimer = setTimeout(() => {
     _branchBarRefreshTimer = null;
-    if (state.descriptor) state.branchBar?.update(state.descriptor);
+    if (state.descriptor) {
+      if (state.debugLiveEvents) console.log("[3D] branchBar.update from live");
+      state.branchBar?.update(state.descriptor);
+    } else if (state.debugLiveEvents) {
+      console.log("[3D] live refresh skipped — no descriptor");
+    }
   }, 500);
 }
 
@@ -799,15 +825,19 @@ async function navigate(address, { fromHistory = false } = {}) {
   }
 }
 
-// Past-view visual indicator. The user reads this in two ways:
-//   - canvas + scene: desaturated, so the 3D world reads as a
-//     memory rather than the present
-//   - HUD: a colored chip the user can't ignore
-// Both are applied via CSS classes set on <body>; scene.css and the
-// HUD-chip styles do the actual paint.
+// Frozen-world visual indicators. Two channels — past view (ghost)
+// and paused-branch — both desaturate the canvas and pin a chip; the
+// chip's text differs by class so the user knows WHY the world is
+// frozen. Both apply via <body> classes; index.html styles them.
 function _setHistoricalVisualCue(on) {
   if (typeof document === "undefined") return;
   const cls = "ghost-view";
+  if (on) document.body.classList.add(cls);
+  else    document.body.classList.remove(cls);
+}
+function _setPausedVisualCue(on) {
+  if (typeof document === "undefined") return;
+  const cls = "paused-branch";
   if (on) document.body.classList.add(cls);
   else    document.body.classList.remove(cls);
 }

@@ -24,20 +24,32 @@ export async function describeBranchesCatalog(branchPath = MAIN) {
   // Lineage: just ["0"] for main; ["0", ..., path] for everything else.
   const lineage = isMainPath ? [MAIN] : await resolveBranchLineage(path);
 
-  // Current branch row. Main has no Branch document (it's implicit), so
-  // we synthesize one. The portal renders main and non-main with the
-  // same shape.
+  // Current branch row. Main starts implicit (no document), but
+  // pause-branch upserts a row when the operator first pauses main.
+  // If a real row exists, surface it; otherwise synthesize the
+  // implicit-live default. Either way the portal renders main and
+  // non-main with the same shape.
   let current;
   if (isMainPath) {
-    current = {
-      path:      MAIN,
-      parent:    null,
-      anchor:    null,
-      label:     "main",
-      paused:    false,
-      createdAt: null,
-      isLive:    true,
-    };
+    const mainRow = await loadBranch(MAIN).catch(() => null);
+    if (mainRow) {
+      current = _serializeBranch(mainRow);
+      // Even after a pause row exists, main's structural fields stay
+      // implicit (parent=null, no anchor, the synthetic label).
+      current.parent = null;
+      current.anchor = null;
+      if (!current.label) current.label = "main";
+    } else {
+      current = {
+        path:      MAIN,
+        parent:    null,
+        anchor:    null,
+        label:     "main",
+        paused:    false,
+        createdAt: null,
+        isLive:    true,
+      };
+    }
   } else {
     const row = await loadBranch(path);
     if (!row) {

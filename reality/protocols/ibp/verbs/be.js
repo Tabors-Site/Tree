@@ -123,6 +123,18 @@ export async function handleBe(socket, env, ack) {
     }
     const branch = callerBranch;
 
+    // Pause gate. BE is a write surface (register/claim/connect/
+    // release/birth/sever); paused branches refuse every BE op so a
+    // frozen world stays structurally frozen.
+    {
+      const { isBranchPaused } = await import("../../../seed/materials/branch/branches.js");
+      if (await isBranchPaused(branch)) {
+        throw new IbpError(IBP_ERR.REALITY_PAUSED,
+          `BE refused: branch #${branch} is paused.`,
+          { branch });
+      }
+    }
+
     const { correlation: momentCorrelation, awaitResult } = await dispatchTransportAct({
       beingId:     cherubBeingId,
       correlation: clientCorrelation,
