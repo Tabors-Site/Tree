@@ -25,7 +25,7 @@ export function setHudBottom(text) {
 
 let _addressApi = null;
 
-export function initAddressBar({ onNavigate, onIdentityClick, onBack, onForward }) {
+export function initAddressBar({ onNavigate, onIdentityClick, onBack, onForward, onToggleFlatPanel }) {
   const chip = document.getElementById("identity-chip");
   const input = document.getElementById("address-input");
   const navBack = document.getElementById("nav-back");
@@ -33,6 +33,7 @@ export function initAddressBar({ onNavigate, onIdentityClick, onBack, onForward 
   const navPlace = document.getElementById("nav-place");
   const navHome = document.getElementById("nav-home");
   const navRoot = document.getElementById("nav-root");
+  const navText = document.getElementById("nav-text");
 
   chip.addEventListener("click", () => onIdentityClick?.());
   input.addEventListener("keydown", (e) => {
@@ -47,9 +48,15 @@ export function initAddressBar({ onNavigate, onIdentityClick, onBack, onForward 
   navRoot.addEventListener("click", () => {
     if (_addressApi.treeRootPath) onNavigate(_addressApi.treeRootPath);
   });
+  // "text" button toggles the flat-renderer overlay. The button may
+  // be absent (older HTML) — guard. Keyboard shortcut (\) covers the
+  // same toggle independently.
+  if (navText) {
+    navText.addEventListener("click", () => onToggleFlatPanel?.());
+  }
 
   _addressApi = {
-    chip, input, navBack, navForward, navPlace, navHome, navRoot,
+    chip, input, navBack, navForward, navPlace, navHome, navRoot, navText,
     treeRootPath: null,
   };
   return _addressApi;

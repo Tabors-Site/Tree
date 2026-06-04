@@ -9,7 +9,7 @@
 // Shape of an action entry from the server:
 //
 //   {
-//     verb:        "be" | "do" | "see" | "summon",
+//     verb:        "be" | "do" | "summon",
 //     action:      "<op-name>",
 //     label:       "Register" | "Log in" | ...,
 //     description: "...",

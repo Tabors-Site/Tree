@@ -118,7 +118,7 @@ export function parseUnifiedEnvelope(msg) {
   // standard path-walk. The seed doesn't worry about the difference.
   //
   // BE is intentionally NOT normalized: it accepts bare-place
-  // shorthand for register/claim against the place's cherub, which
+  // shorthand for birth/connect against the place's cherub, which
   // is a distinct semantic shape from "BE on the place root."
   // SUMMON requires a stance (@being qualifier) and rejects bare-
   // place outright; no normalization is meaningful.

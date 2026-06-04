@@ -2,7 +2,7 @@
 //
 // Wire shape. The form every SEE, DO, SUMMON, and BE takes.
 //
-// IBP is my communication primitive. place/ is what I AM; factory/
+// IBP is my communication primitive. reality/ is what I AM; factory/
 // is how my LLM beings THINK; ibp/ is how any of it speaks to any
 // other. Without this folder a being could not SEE a position, DO
 // an action, SUMMON another being, or BE in any stance — every
@@ -50,59 +50,59 @@ import log from "../seedReality/log.js";
 
 export const IBP_ERR = Object.freeze({
   // Data
-  SPACE_NOT_FOUND:        "SPACE_NOT_FOUND",
-  BEING_NOT_FOUND:         "BEING_NOT_FOUND",
-  MATTER_NOT_FOUND:       "MATTER_NOT_FOUND",
+  SPACE_NOT_FOUND: "SPACE_NOT_FOUND",
+  BEING_NOT_FOUND: "BEING_NOT_FOUND",
+  MATTER_NOT_FOUND: "MATTER_NOT_FOUND",
 
   // Auth
-  UNAUTHORIZED:           "UNAUTHORIZED",
-  FORBIDDEN:              "FORBIDDEN",
-  SESSION_EXPIRED:        "SESSION_EXPIRED",
+  UNAUTHORIZED: "UNAUTHORIZED",
+  FORBIDDEN: "FORBIDDEN",
+  SESSION_EXPIRED: "SESSION_EXPIRED",
 
   // Validation
-  INVALID_INPUT:          "INVALID_INPUT",
-  INVALID_TYPE:           "INVALID_TYPE",
-  INVALID_SPACE:          "INVALID_SPACE",
+  INVALID_INPUT: "INVALID_INPUT",
+  INVALID_TYPE: "INVALID_TYPE",
+  INVALID_SPACE: "INVALID_SPACE",
 
   // Rate limiting
-  RATE_LIMITED:           "RATE_LIMITED",
+  RATE_LIMITED: "RATE_LIMITED",
 
   // LLM
-  LLM_TIMEOUT:            "LLM_TIMEOUT",
-  LLM_FAILED:             "LLM_FAILED",
-  LLM_NOT_CONFIGURED:     "LLM_NOT_CONFIGURED",
+  LLM_TIMEOUT: "LLM_TIMEOUT",
+  LLM_FAILED: "LLM_FAILED",
+  LLM_NOT_CONFIGURED: "LLM_NOT_CONFIGURED",
 
   // Document size
   DOCUMENT_SIZE_EXCEEDED: "DOCUMENT_SIZE_EXCEEDED",
 
   // Uploads
-  UPLOAD_DISABLED:        "UPLOAD_DISABLED",
-  UPLOAD_TOO_LARGE:       "UPLOAD_TOO_LARGE",
-  UPLOAD_MIME_REJECTED:   "UPLOAD_MIME_REJECTED",
+  UPLOAD_DISABLED: "UPLOAD_DISABLED",
+  UPLOAD_TOO_LARGE: "UPLOAD_TOO_LARGE",
+  UPLOAD_MIME_REJECTED: "UPLOAD_MIME_REJECTED",
 
   // Space-tree health
-  SPACE_DORMANT:          "SPACE_DORMANT",
+  SPACE_DORMANT: "SPACE_DORMANT",
 
   // Extensions
-  EXTENSION_NOT_FOUND:    "EXTENSION_NOT_FOUND",
-  EXTENSION_BLOCKED:      "EXTENSION_BLOCKED",
+  EXTENSION_NOT_FOUND: "EXTENSION_NOT_FOUND",
+  EXTENSION_BLOCKED: "EXTENSION_BLOCKED",
 
   // Hooks
-  HOOK_TIMEOUT:           "HOOK_TIMEOUT",
-  HOOK_CANCELLED:         "HOOK_CANCELLED",
+  HOOK_TIMEOUT: "HOOK_TIMEOUT",
+  HOOK_CANCELLED: "HOOK_CANCELLED",
 
   // Conflict
-  RESOURCE_CONFLICT:      "RESOURCE_CONFLICT",
+  RESOURCE_CONFLICT: "RESOURCE_CONFLICT",
 
   // Federation
-  PEER_NOT_FOUND:         "PEER_NOT_FOUND",
-  PEER_UNREACHABLE:       "PEER_UNREACHABLE",
+  PEER_NOT_FOUND: "PEER_NOT_FOUND",
+  PEER_UNREACHABLE: "PEER_UNREACHABLE",
 
   // Origin policy. Raised when a write-type DO operation targets a
   // matter whose origin's sync mode is read-only. Filesystem-origin
   // matter under .source is always read-only; the substrate cannot
   // mutate the seed's own source files through verbs.
-  ORIGIN_READ_ONLY:       "ORIGIN_READ_ONLY",
+  ORIGIN_READ_ONLY: "ORIGIN_READ_ONLY",
 
   // Historical-read doctrine. SEE accepts an `at: { atSeq?, atTimestamp? }`
   // qualifier that returns the substrate's state as of a past point.
@@ -110,7 +110,7 @@ export const IBP_ERR = Object.freeze({
   // change (DO / SUMMON / BE) is not compatible with a frozen view.
   // This code throws when a write verb arrives carrying `at`; the
   // message says what's allowed instead.
-  HISTORICAL_READ_ONLY:   "HISTORICAL_READ_ONLY",
+  HISTORICAL_READ_ONLY: "HISTORICAL_READ_ONLY",
 
   // Cross-branch doctrine. Different branches are different worlds —
   // their fact-chains never converge. A bridge or verb dispatch that
@@ -123,20 +123,20 @@ export const IBP_ERR = Object.freeze({
   // do.pause-branch on @branch-manager). Every write verb (DO / BE /
   // SUMMON) refuses with this code; SEE still works so the user can
   // inspect or rewind frozen state. unpause-branch lifts the gate.
-  REALITY_PAUSED:         "REALITY_PAUSED",
+  REALITY_PAUSED: "REALITY_PAUSED",
 
   // System
-  INTERNAL:               "INTERNAL",
-  TIMEOUT:                "TIMEOUT",
+  INTERNAL: "INTERNAL",
+  TIMEOUT: "TIMEOUT",
 
   // Wire-specific. Things the substrate cannot otherwise express.
-  ADDRESS_PARSE_ERROR:    "ADDRESS_PARSE_ERROR",
-  ROLE_UNAVAILABLE:       "ROLE_UNAVAILABLE",
-  VERB_NOT_SUPPORTED:     "VERB_NOT_SUPPORTED",
-  ACTION_NOT_SUPPORTED:   "ACTION_NOT_SUPPORTED",
-  INVALID_INTENT:         "INVALID_INTENT",
-  NOT_A_BEING:            "NOT_A_BEING",
-  NOT_A_SEED:             "NOT_A_SEED",
+  ADDRESS_PARSE_ERROR: "ADDRESS_PARSE_ERROR",
+  ROLE_UNAVAILABLE: "ROLE_UNAVAILABLE",
+  VERB_NOT_SUPPORTED: "VERB_NOT_SUPPORTED",
+  ACTION_NOT_SUPPORTED: "ACTION_NOT_SUPPORTED",
+  INVALID_INTENT: "INVALID_INTENT",
+  NOT_A_BEING: "NOT_A_BEING",
+  NOT_A_SEED: "NOT_A_SEED",
 });
 
 // ============================================================================
@@ -167,7 +167,7 @@ export function isIbpError(e) {
  * wire-shape errors instead of opaque internal messages.
  *
  *   throw mapPatternsToIbpError(err, [
- *     [/place seed spaces|reserved/i, IBP_ERR.FORBIDDEN],
+ *     [/reality seed spaces|reserved/i, IBP_ERR.FORBIDDEN],
  *     [/not found/i,                 IBP_ERR.SPACE_NOT_FOUND],
  *   ], IBP_ERR.INTERNAL);
  */
@@ -191,64 +191,64 @@ export function mapPatternsToIbpError(err, rules, fallback = IBP_ERR.INTERNAL) {
 
 const STATUS_FOR_CODE = Object.freeze({
   // 400 Bad request
-  INVALID_INPUT:          400,
-  INVALID_TYPE:           400,
-  INVALID_SPACE:          400,
-  ADDRESS_PARSE_ERROR:    400,
-  INVALID_INTENT:         400,
+  INVALID_INPUT: 400,
+  INVALID_TYPE: 400,
+  INVALID_SPACE: 400,
+  ADDRESS_PARSE_ERROR: 400,
+  INVALID_INTENT: 400,
 
   // 401 Unauthorized
-  UNAUTHORIZED:           401,
+  UNAUTHORIZED: 401,
 
   // 403 Forbidden
-  FORBIDDEN:              403,
-  EXTENSION_BLOCKED:      403,
-  SESSION_EXPIRED:        403,
-  UPLOAD_DISABLED:        403,
-  ORIGIN_READ_ONLY:       403,
-  HISTORICAL_READ_ONLY:   403,
+  FORBIDDEN: 403,
+  EXTENSION_BLOCKED: 403,
+  SESSION_EXPIRED: 403,
+  UPLOAD_DISABLED: 403,
+  ORIGIN_READ_ONLY: 403,
+  HISTORICAL_READ_ONLY: 403,
   CROSS_BRANCH_FORBIDDEN: 403,
-  REALITY_PAUSED:         403,
-  NOT_A_BEING:            403,
-  NOT_A_SEED:             403,
+  REALITY_PAUSED: 403,
+  NOT_A_BEING: 403,
+  NOT_A_SEED: 403,
 
   // 404 Not found
-  SPACE_NOT_FOUND:        404,
-  BEING_NOT_FOUND:         404,
-  MATTER_NOT_FOUND:       404,
-  PEER_NOT_FOUND:         404,
-  EXTENSION_NOT_FOUND:    404,
-  ROLE_UNAVAILABLE:       404,
-  VERB_NOT_SUPPORTED:     404,
-  ACTION_NOT_SUPPORTED:   404,
+  SPACE_NOT_FOUND: 404,
+  BEING_NOT_FOUND: 404,
+  MATTER_NOT_FOUND: 404,
+  PEER_NOT_FOUND: 404,
+  EXTENSION_NOT_FOUND: 404,
+  ROLE_UNAVAILABLE: 404,
+  VERB_NOT_SUPPORTED: 404,
+  ACTION_NOT_SUPPORTED: 404,
 
   // 409 Conflict
-  RESOURCE_CONFLICT:      409,
+  RESOURCE_CONFLICT: 409,
 
   // 413 Payload too large
   DOCUMENT_SIZE_EXCEEDED: 413,
-  UPLOAD_TOO_LARGE:       413,
+  UPLOAD_TOO_LARGE: 413,
 
   // 415 Unsupported media
-  UPLOAD_MIME_REJECTED:   415,
+  UPLOAD_MIME_REJECTED: 415,
 
   // 429 Rate limited
-  RATE_LIMITED:           429,
+  RATE_LIMITED: 429,
 
   // 500 Internal
-  INTERNAL:               500,
-  TIMEOUT:                500,
-  HOOK_TIMEOUT:           500,
-  HOOK_CANCELLED:         500,
+  INTERNAL: 500,
+  TIMEOUT: 500,
+  HOOK_TIMEOUT: 500,
+  HOOK_CANCELLED: 500,
 
   // 502 Bad gateway
-  PEER_UNREACHABLE:       502,
+  PEER_UNREACHABLE: 502,
 
   // 503 Service unavailable
-  LLM_TIMEOUT:            503,
-  LLM_FAILED:             503,
-  LLM_NOT_CONFIGURED:     503,
-  SPACE_DORMANT:          503,
+  LLM_TIMEOUT: 503,
+  LLM_FAILED: 503,
+  LLM_NOT_CONFIGURED: 503,
+  SPACE_DORMANT: 503,
 });
 
 /**
@@ -314,9 +314,14 @@ export function sendError(res, httpStatus, code, message, detail) {
  */
 export function sendCaughtError(res, err) {
   if (isIbpError(err)) {
-    return sendError(res, httpStatusFor(err.code), err.code, err.message, err.detail);
+    return sendError(
+      res,
+      httpStatusFor(err.code),
+      err.code,
+      err.message,
+      err.detail,
+    );
   }
   log.error("Protocol", `Unhandled error: ${err.message}`);
   return sendError(res, 500, IBP_ERR.INTERNAL, "Something went wrong.");
 }
-

@@ -8,7 +8,7 @@
 // this gate, nothing else in me hears it.
 //
 // I am the only exception. I act with universal authority on my own
-// place — my seed-emitted SUMMONs, my scheduled wakes, my genesis
+// reality — my seed-emitted SUMMONs, my scheduled wakes, my genesis
 // scaffolding — and short past the layered check. Every other
 // being's verb call I evaluate.
 //
@@ -21,7 +21,7 @@
 //
 //   2. I look up the applicable permission rule for this verb at
 //      the target position (Layer 3 — qualities.permissions on the
-//      position, walking up the parent chain to the place root).
+//      position, walking up the parent chain to the reality root).
 //      When no rule matches, I fall through to the extension
 //      defaults registry below, then default deny.
 //
@@ -33,7 +33,7 @@
 //   see:     "*"                                          (universal for now)
 //   do:      "<action>:<param>" or "<action>"             (e.g. "set-qualities:position")
 //   summon:  "@<qualifier>:<intent>" or "@<qualifier>"    (qualifier supports prefix wildcard)
-//   be:      "<operation>"                                (register|claim|release|switch)
+//   be:      "<operation>"                                (birth|connect|release)
 //
 // Specificity precedence: exact > prefix-wildcard > "*" per key
 // part. Position precedence: closer position beats farther via
@@ -54,7 +54,7 @@ import { IBP_ERR } from "./protocol.js";
 import { I_AM } from "../materials/being/seedBeings.js";
 
 // ─────────────────────────────────────────────────────────────────────
-// Default layer-2 stance permissions written on the place root.
+// Default layer-2 stance permissions written on the reality root.
 //
 // Seeded at boot by seedDefaultStancePermissions(); operators can
 // override per-position with their own rules (closer rule wins on the
@@ -85,12 +85,12 @@ const REALITY_ROOT_DEFAULT_PERMISSIONS = Object.freeze({
   // wiping the whole rule. The condition has to carry SOMETHING.
   see: { "*": { requires: { homeOnThisReality: true } } },
   // DO / SUMMON: still authenticated-only. Arrival can look but not
-  // act. (BE register/claim has its own bootstrap exception below
+  // act. (BE birth/connect has its own bootstrap exception below
   // for sign-up flows.)
   do: { "*": { requires: { arrival: false } } },
   summon: { "*": { requires: { arrival: false } } },
-  // BE: arrival can register/claim (so anyone can sign up); only
-  // authenticated callers can release/switch their own session.
+  // BE: arrival can birth/connect (so anyone can sign up); only
+  // authenticated callers can release their own session.
   // create-being: cherub summons beings forth on external
   // callers' behalf; extensions add their own create-being rules
   // (e.g., "my ruler role may create sub-rulers in its tree")
@@ -113,9 +113,9 @@ const REALITY_ROOT_DEFAULT_PERMISSIONS = Object.freeze({
     // SEE rule above documents), wiping the rule entirely. The
     // condition has to carry SOMETHING; homeOnThisReality is the
     // permissive option ARRIVAL_PROPS already satisfies.
-    birth:    { requires: { homeOnThisReality: true } },
-    connect:  { requires: { homeOnThisReality: true } },
-    release:  { requires: { homeOnThisReality: true } },
+    birth: { requires: { homeOnThisReality: true } },
+    connect: { requires: { homeOnThisReality: true } },
+    release: { requires: { homeOnThisReality: true } },
     // create-being: any authenticated being can summon a being forth.
     // The privilege boundary lives DOWNSTREAM — the new being must
     // be parented under a space the actor can write to (their home,
@@ -138,19 +138,19 @@ const REALITY_ROOT_DEFAULT_PERMISSIONS = Object.freeze({
     // "tree owner" check inline. Without these rules every fresh
     // operator hits "no rule matched be:add-llm" the first time
     // they try to configure a connection.
-    "add-llm":         { requires: { arrival: false } },
-    "assign-slot":     { requires: { arrival: false } },
-    "list-llms":       { requires: { arrival: false } },
-    "delete-llm":      { requires: { arrival: false } },
+    "add-llm": { requires: { arrival: false } },
+    "assign-slot": { requires: { arrival: false } },
+    "list-llms": { requires: { arrival: false } },
+    "delete-llm": { requires: { arrival: false } },
     "set-reality-llm": { requires: { arrival: false } },
-    "set-space-llm":   { requires: { arrival: false } },
+    "set-space-llm": { requires: { arrival: false } },
   },
 });
 
 // ─────────────────────────────────────────────────────────────────────
 // Heaven space defaults. Heaven is the I-Am's room and parents every
 // Tier-3 seed space (identity, config, tools, roles, operations,
-// extensions, source, peers, threads). It's not a public place.
+// extensions, source, peers, threads). It's not a public reality.
 //
 // `requires: { reigning: true }` admits the I-Am, every seed delegate
 // (cherub, llm-assigner, reality-manager, arrival . parented directly
@@ -158,7 +158,7 @@ const REALITY_ROOT_DEFAULT_PERMISSIONS = Object.freeze({
 // planted with parentBeingId = I_AM at cherub.register). Any later
 // operator-designated reigning being joins the same way: parent them
 // under the I-Am and they reign. Beings of the land lacking reigning
-// stance see the door in their place-root descriptor but SEE on
+// stance see the door in their reality-root descriptor but SEE on
 // "<reality>/." returns DENIED.
 //
 // Operators can tighten this per their setup by writing explicit
@@ -166,14 +166,14 @@ const REALITY_ROOT_DEFAULT_PERMISSIONS = Object.freeze({
 // Tier-3 spaces). The closer rule wins on the ancestor walk.
 //
 // BE intentionally omitted: heaven is not a sign-up destination. The
-// nearest applicable BE rule comes from the place root (register and
+// nearest applicable BE rule comes from the reality root (register and
 // claim from arrival, the rest from authenticated stances), reached
 // via the ancestor walk when no rule matches at heaven itself.
 // ─────────────────────────────────────────────────────────────────────
 
 const HEAVEN_DEFAULT_PERMISSIONS = Object.freeze({
-  see:    { "*": { requires: { reigning: true } } },
-  do:     { "*": { requires: { reigning: true } } },
+  see: { "*": { requires: { reigning: true } } },
+  do: { "*": { requires: { reigning: true } } },
   summon: { "*": { requires: { reigning: true } } },
 });
 
@@ -206,7 +206,7 @@ export async function authorize(args) {
   const spaceId = target?.spaceId || null;
 
   // The I_AM has universal authority. The seed is the source of all
-  // permission on its place. Authority flows outward from the I_AM;
+  // permission on its reality. Authority flows outward from the I_AM;
   // nothing extensions or operators do can gate it. Every seed-
   // emitted act (DO-trigger fan-out, scheduled wakes, genesis
   // scaffolding) runs as the I_AM and shorts past the layered check.
@@ -216,7 +216,9 @@ export async function authorize(args) {
 
   // ── Layer 2: derive stance properties ──
   const props = await deriveStanceProperties({
-    beingId, targetSpace: spaceId, branch: summonCtx?.branch || "0",
+    beingId,
+    targetSpace: spaceId,
+    branch: summonCtx?.branch || "0",
   });
   const stanceLabel = stanceLabelFromProps(props);
 
@@ -224,7 +226,7 @@ export async function authorize(args) {
   // from arrival:
   //
   //   birth / connect     — admission ops, gated downstream by
-  //                         place-level birth_enabled / connect_enabled
+  //                         reality-level birth_enabled / connect_enabled
   //                         flags (the cherub enforces). Without this
   //                         no one could ever sign up on a fresh reality.
   //
@@ -247,7 +249,7 @@ export async function authorize(args) {
     }
   }
 
-  // SEE discovery exception: <reality>/.discovery is the place's
+  // SEE discovery exception: <reality>/.discovery is the reality's
   // capability surface — always visible.
   if (verb === "see" && target?.isDiscovery) {
     return { ok: true, stance: stanceLabel };
@@ -266,15 +268,19 @@ export async function authorize(args) {
   // Seed ops (bare names) and the other verbs don't have
   // extension-association at the verb level today; tool-level scope
   // checks for SEE/SUMMON/BE happen in the LLM voice's tool dispatcher.
-  if (verb === "do" && spaceId && typeof args.action === "string" && args.action.includes(":")) {
+  if (
+    verb === "do" &&
+    spaceId &&
+    typeof args.action === "string" &&
+    args.action.includes(":")
+  ) {
     try {
       const { getOperation } = await import("./operations.js");
       const op = getOperation(args.action);
       const ownerExt = op?.ownerExtension;
       if (ownerExt && ownerExt !== "seed") {
-        const { isExtensionBlockedAtSpace } = await import(
-          "../materials/space/extensionScope.js"
-        );
+        const { isExtensionBlockedAtSpace } =
+          await import("../materials/space/extensionScope.js");
         const blocked = await isExtensionBlockedAtSpace(ownerExt, spaceId);
         if (blocked) {
           return {
@@ -286,7 +292,7 @@ export async function authorize(args) {
       }
     } catch {
       // Lookup failure (registry not initialized in some test paths,
-      // dynamic-import flake) shouldn't lock the place out. Fall
+      // dynamic-import flake) shouldn't lock the reality out. Fall
       // through to normal stance-rule matching.
     }
   }
@@ -302,7 +308,12 @@ export async function authorize(args) {
   }
 
   // ── Layer 3: walk the parent chain looking for a matching rule ──
-  const matched = await findMatchingRule({ spaceId, verb, keyParts, summonCtx });
+  const matched = await findMatchingRule({
+    spaceId,
+    verb,
+    keyParts,
+    summonCtx,
+  });
   if (matched) {
     return evaluateRequires(matched.rule, props, stanceLabel, matched.source);
   }
@@ -366,8 +377,8 @@ function buildKeyParts(args) {
     case "summon": {
       // Thread target: SUMMON `./threads/<id>` is a cut. The keyParts
       // route to `summon:threads:*` so operators can pin a stricter
-      // rule at the place root if they want; the cut handler in
-      // place/space/threads.js does its own participation check
+      // rule at the reality root if they want; the cut handler in
+      // reality/space/threads.js does its own participation check
       // (you must be in the rootCorrelation chain to sever it).
       if (args.target?.kind === "thread") {
         return ["threads", String(args.target.id || "*")];
@@ -406,7 +417,7 @@ async function findMatchingRule({ spaceId, verb, keyParts, summonCtx = null }) {
 
 // Walk the ancestor chain, consulting summonCtx.deltaF for in-flight
 // create-space specs that haven't sealed yet. Returns a list of space ids
-// from the starting space up to (and including) the place root.
+// from the starting space up to (and including) the reality root.
 //
 // The doctrinal shape: a moment that creates a space and then acts at
 // the new space (seed scaffolds chain do:create-space → do:create-matter)
@@ -423,7 +434,11 @@ async function walkAncestorsWithDeltaF(spaceId, summonCtx) {
   const deltaF = Array.isArray(summonCtx?.deltaF) ? summonCtx.deltaF : null;
   if (!deltaF || deltaF.length === 0) {
     let chain;
-    try { chain = await getAncestorChain(spaceId, branch); } catch { chain = null; }
+    try {
+      chain = await getAncestorChain(spaceId, branch);
+    } catch {
+      chain = null;
+    }
     return Array.isArray(chain) && chain.length
       ? chain.map((n) => String(n._id))
       : [String(spaceId)];
@@ -442,7 +457,11 @@ async function walkAncestorsWithDeltaF(spaceId, summonCtx) {
     if (row) {
       // Mongo has the row — defer the rest of the walk to the cache.
       let chain;
-      try { chain = await getAncestorChain(cursor, branch); } catch { chain = null; }
+      try {
+        chain = await getAncestorChain(cursor, branch);
+      } catch {
+        chain = null;
+      }
       if (Array.isArray(chain) && chain.length) {
         for (const node of chain) {
           const id = String(node._id);
@@ -600,19 +619,19 @@ function stanceLabelFromProps(props) {
 }
 
 // ─────────────────────────────────────────────────────────────────────
-// Seed defaults on place boot
+// Seed defaults on reality boot
 // ─────────────────────────────────────────────────────────────────────
 
 /**
- * Plant the seed's default stance-permission rules on the place root.
+ * Plant the seed's default stance-permission rules on the reality root.
  * Idempotent. Writes the unified layer-2 rule shape that the authorize
  * walk reads at every verb call:
  *
  *   qualities.permissions.<verb>.<keyParts> = { requires: { ... } }
  *
  * The defaults preserve the historical semantics: any authenticated
- * being can act at the place root (any verb, any keyParts); arrival
- * can only BE register/claim. Per-position rules at sub-positions
+ * being can act at the reality root (any verb, any keyParts); arrival
+ * can only BE birth/connect. Per-position rules at sub-positions
  * override these via the ancestor walk picking the nearest match.
  */
 export async function seedDefaultStancePermissions(summonCtx) {
@@ -623,14 +642,15 @@ export async function seedDefaultStancePermissions(summonCtx) {
   }
   const spaceRootId = getSpaceRootId();
   if (!spaceRootId)
-    return { seeded: false, reason: "place root not initialized" };
+    return { seeded: false, reason: "reality root not initialized" };
 
   const { doVerb } = await import("./verbs/do.js");
 
   const seededFields = [];
 
-  // ── Place root defaults ──
-  const { loadProjection: _lProot, findBySeedSpace: _fSS } = await import("../materials/projections.js");
+  // ── reality root defaults ──
+  const { loadProjection: _lProot, findBySeedSpace: _fSS } =
+    await import("../materials/projections.js");
   const _rootSlot = await _lProot("space", spaceRootId, "0");
   const root = _rootSlot ? { qualities: _rootSlot.state?.qualities } : null;
   const quals = root?.qualities;
@@ -641,18 +661,23 @@ export async function seedDefaultStancePermissions(summonCtx) {
 
   // Seed each verb's bucket only if it isn't already populated. We do
   // not overwrite operator customizations.
-  for (const [verb, bucket] of Object.entries(REALITY_ROOT_DEFAULT_PERMISSIONS)) {
+  for (const [verb, bucket] of Object.entries(
+    REALITY_ROOT_DEFAULT_PERMISSIONS,
+  )) {
     const existingVerb = permsRoot?.[verb];
     if (existingVerb && Object.keys(existingVerb).length > 0) continue;
     rootUpdates[`qualities.permissions.${verb}`] = bucket;
   }
 
-  // Place-level BE config flags (birth/connect toggles for operators
-  // who want to lock the place down).
+  // reality-level BE config flags (birth/connect toggles for operators
+  // who want to lock the reality down).
   const auth = quals instanceof Map ? quals.get("auth") : quals?.auth;
   const hasAuth = auth instanceof Map ? auth.size > 0 : !!auth;
   if (!hasAuth) {
-    rootUpdates["qualities.auth"] = { birth_enabled: true, connect_enabled: true };
+    rootUpdates["qualities.auth"] = {
+      birth_enabled: true,
+      connect_enabled: true,
+    };
   }
 
   for (const [field, value] of Object.entries(rootUpdates)) {
@@ -667,12 +692,14 @@ export async function seedDefaultStancePermissions(summonCtx) {
 
   // ── Heaven defaults ──
   // Heaven is the I-Am's room. Owner-only by default. Beings of the
-  // land see the door (heaven shows up in the place-root children
+  // land see the door (heaven shows up in the reality-root children
   // listing) but SEE on "<reality>/." denies. Tier-3 seed spaces under
   // heaven inherit this through the ancestor walk.
   const { SEED_SPACE } = await import("../materials/space/seedSpaces.js");
   const _heavenSlot = await _fSS(SEED_SPACE.HEAVEN, "0");
-  const heaven = _heavenSlot ? { _id: _heavenSlot.id, qualities: _heavenSlot.state?.qualities } : null;
+  const heaven = _heavenSlot
+    ? { _id: _heavenSlot.id, qualities: _heavenSlot.state?.qualities }
+    : null;
   if (heaven) {
     const heavenQuals = heaven.qualities;
     const heavenPerms =
@@ -703,13 +730,14 @@ export async function seedDefaultStancePermissions(summonCtx) {
 }
 
 /**
- * Read the place-level BE configuration flags. Defaults to
+ * Read the reality-level BE configuration flags. Defaults to
  * birth_enabled and connect_enabled both true.
  */
 export async function getAuthConfig() {
   const spaceRootId = getSpaceRootId();
   if (!spaceRootId) return { birth_enabled: true, connect_enabled: true };
-  const { loadProjection: _lProot2 } = await import("../materials/projections.js");
+  const { loadProjection: _lProot2 } =
+    await import("../materials/projections.js");
   const _rootSlot2 = await _lProot2("space", spaceRootId, "0");
   const auth = _rootSlot2?.state?.qualities?.auth;
   const get = (key, fallback) => {

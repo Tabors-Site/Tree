@@ -852,8 +852,8 @@ function buildLineage(resolved) {
 // generic menu + form for each action.
 //
 // For cherub specifically, the identity-state filter trims the list:
-// authenticated callers don't see birth/use; unauthenticated callers
-// don't see release/switch. Portal stays state-blind.
+// authenticated callers don't see birth/connect; unauthenticated
+// callers don't see release. Portal stays state-blind.
 //
 // canDo / canSee / canSummon are not surfaced as actions today . they
 // describe what an LLM-driven role is licensed to dispatch via the

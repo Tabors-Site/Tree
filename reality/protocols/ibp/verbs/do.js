@@ -33,7 +33,7 @@
 // ── Auth ─────────────────────────────────────────────────────────
 // Unauth DO is rejected. The model is "no act without a being." A
 // DO with no actor has no reel, no stamp, no fact — a contradiction.
-// Pre-auth flows (register / claim from arrival) are BE, not DO,
+// Pre-auth flows (birth / connect from arrival) are BE, not DO,
 // and ride the cherub-as-actor path in be.js.
 
 import log from "../../../seed/seedReality/log.js";

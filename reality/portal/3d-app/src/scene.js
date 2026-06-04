@@ -211,14 +211,72 @@ export class Scene {
   }
 
   start() {
+    this._paused = false;
     const loop = () => {
+      this._rafId = requestAnimationFrame(loop);
+      if (this._paused) return;
       this._tick(this.clock.getDelta());
       this.renderer.render(this.scene, this.camera);
       this.cssRenderer.render(this.scene, this.camera);
-      requestAnimationFrame(loop);
     };
     loop();
     window.addEventListener("resize", () => this._onResize());
+  }
+
+  // Stop the render loop without disposing scene graph + GPU assets.
+  // WebSocket / descriptor subscription stays live (driven externally);
+  // only the visual update halts. Cheap toggle for "I'm showing text
+  // mode, don't burn the GPU." Resume snaps back to the latest state
+  // because renderDescriptor keeps running into the off-screen graph.
+  pause() {
+    this._paused = true;
+    this.clock.getDelta(); // drain accumulated delta so resume doesn't lurch
+  }
+
+  resume() {
+    this._paused = false;
+    this.clock.getDelta(); // same drain on the resume side
+  }
+
+  // Glide camera over a being's current cell. Called on text-mode
+  // close so the user lands where the interaction was. beingId comes
+  // from L.state.selectedBeing.
+  recenterCamera(beingId) {
+    if (!beingId) return false;
+    const id = String(beingId);
+    let target = null;
+    if (typeof this.getAllEntityMixerStates === "function") {
+      const states = this.getAllEntityMixerStates();
+      for (const s of states) {
+        if (String(s?.beingId) === id || String(s?.id) === id) {
+          target = s.mesh || s.group || null;
+          break;
+        }
+      }
+    }
+    if (!target && this.scene) {
+      this.scene.traverse((obj) => {
+        if (target) return;
+        const data = obj.userData;
+        if (data && (String(data.beingId) === id || String(data.id) === id)) {
+          target = obj;
+        }
+      });
+    }
+    if (!target) return false;
+    try {
+      const v = target.position;
+      if (v && typeof v.x === "number") {
+        if (this.controls?.target) {
+          this.controls.target.set(v.x, v.y, v.z);
+          this.controls.update?.();
+        } else if (this.camera) {
+          this.camera.lookAt(v.x, v.y, v.z);
+        }
+        return true;
+      }
+    } catch { /* fall through */ }
+    return false;
   }
 
   _onResize() {

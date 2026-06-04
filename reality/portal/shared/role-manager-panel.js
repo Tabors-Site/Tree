@@ -1,5 +1,5 @@
 // role-manager-panel.js — the operator's seat for authoring roles
-// and roleFlow. Shared between the flat-app and the 3D portal; the
+// and roleFlow. Shared between text mode and the 3D scene; the
 // two callers pass a small `ctx` adapter for accessing their
 // portal-specific state and the WS client.
 //
@@ -43,7 +43,7 @@
 // seed/present/roles/roleFlow.js for the matching set on the server.
 const FIELDS = [
   // Who
-  { path: "verb",                 label: "the verb",                  type: "select", options: ["see", "do", "summon", "be"] },
+  { path: "verb",                 label: "the verb",                  type: "select", options: ["do", "summon", "be"] },
   { path: "action",               label: "the DO action name",        type: "text"   },
   { path: "operation",            label: "the BE op name",            type: "text"   },
   { path: "intent",               label: "the intent",                type: "text"   },

@@ -392,8 +392,8 @@ async function _dispatchSummon({
   // target is the RECIPIENT (right stance), matching the symmetry
   // with DO (target=thing acted upon). The actor (summoner) is
   // recorded as `beingId`. Renamed from `be:summon` on 2026-06-03
-  // because the BE namespace is for self-acts (claim/release/birth
-  // /switch); summoning another being is not a self-act.
+  // because the BE namespace is for self-acts (birth/connect/release);
+  // summoning another being is not a self-act.
   await emitFact({
     verb:    "summon",
     action:  "summon",

@@ -5,7 +5,7 @@
 // Overlay is shown by main.js when the descriptor's identity is missing,
 // or by the identity chip on click.
 
-import { flat } from "./main.js";
+import { flat } from "./host.js";
 
 let _overlayMounted = false;
 

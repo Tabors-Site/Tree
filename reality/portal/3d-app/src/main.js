@@ -40,6 +40,12 @@ import {
 } from "./being-flow-panel.js";
 import { ensureUnlockOverlay, preloadSounds } from "./audioPlayer.js";
 import { createFactDispatcher } from "./factDispatcher.js";
+import {
+  openFlatPanel,
+  closeFlatPanel,
+  toggleFlatPanel,
+  isFlatPanelOpen,
+} from "./flat-panel.js";
 
 const SESSION_KEY = "treeos-portal-3d-session";
 
@@ -68,6 +74,17 @@ const state = {
   historyIndex: -1,
   // Hotbar API (returned by initHotbar). Holds plantable seeds.
   hotbar: null,
+  // Active being from interaction: set when the summon panel opens
+  // on a being, when the action menu opens on a being, or when the
+  // flat-panel inspector focuses on one. Carries `{ beingId, name,
+  // lastSetAt }`. Cleared on navigate() (new space, new context).
+  // Persists across flat-panel toggle — that's how text mode opens
+  // pre-focused on the same being the user was just acting with.
+  selectedBeing: null,
+  // Set of descriptor-update subscribers. Anyone (the flat panel
+  // today, more later) can subscribe via subscribeDescriptor(fn);
+  // every navigate / descriptor refresh fans out to all listeners.
+  _descriptorListeners: new Set(),
   // Verbose console logging for live event arrivals. Set true from
   // devtools (state.debugLiveEvents = true) when investigating "the
   // timeline isn't updating live" issues — every push the server
@@ -83,6 +100,92 @@ const state = {
 // version.
 if (typeof window !== "undefined") {
   window.__state = state;
+}
+
+// Fan-out helper. Anyone (flat panel today) who needs descriptor
+// updates calls subscribeDescriptor(fn) and is added to the listener
+// set; navigate() and the live-refetch path call _fireDescriptorListeners
+// after updating state.descriptor. Errors in a listener are swallowed
+// so one buggy subscriber can't break the others.
+function _fireDescriptorListeners(desc) {
+  if (!desc) return;
+  for (const fn of state._descriptorListeners) {
+    try { fn(desc); } catch (err) {
+      console.warn("[3D] descriptor listener error:", err?.message);
+    }
+  }
+}
+
+export function subscribeDescriptor(fn) {
+  if (typeof fn !== "function") return () => {};
+  state._descriptorListeners.add(fn);
+  return () => state._descriptorListeners.delete(fn);
+}
+
+// Set the active being (the one the user is interacting with). Called
+// from summon-panel open, action-menu open, and from the flat
+// panel's inspector. Persists across flat-panel toggle so text mode
+// opens pre-focused on the same being the user was acting with.
+// Cleared on navigate() to a different space (see navigate()).
+export function setSelectedBeing(beingId, name) {
+  if (!beingId) {
+    state.selectedBeing = null;
+    return;
+  }
+  state.selectedBeing = {
+    beingId: String(beingId),
+    name:    name || null,
+    lastSetAt: new Date().toISOString(),
+  };
+}
+
+// Adapter object the flat panel uses to reach state, scene, and
+// navigation without main.js exporting a wide surface. Built once
+// and reused; flat-panel reads through it.
+const L = {
+  get state()  { return state; },
+  get scene()  { return state.scene; },
+  navigate,
+  signIn:  (op, name, password) => _flatSignIn(op, name, password),
+  signOut: () => _flatSignOut(),
+  subscribeDescriptor,
+};
+
+async function _flatSignIn(op, name, password) {
+  if (op !== "birth" && op !== "connect") {
+    throw new Error(`flat signIn: unsupported op "${op}"`);
+  }
+  if (!state.client) throw new Error("flat signIn: no client");
+  const reality = state.discovery?.reality;
+  if (!reality) throw new Error("flat signIn: no reality");
+  const result = await state.client.be(op, reality, { name, password });
+  const session = {
+    placeUrl:       state.session?.placeUrl || defaultPlaceUrl(),
+    placeIsProxied: shouldUseProxy(state.session?.placeUrl || defaultPlaceUrl()),
+    token:          result.identityToken,
+    username:       result.name || name,
+    beingAddress:   result.beingAddress,
+  };
+  saveSession(session);
+  state.session = session;
+  state.client.disconnect();
+  await connectAndPlace(session);
+  return result;
+}
+
+async function _flatSignOut() {
+  if (!state.session?.token) return;
+  const stance = state.session.beingAddress
+    || `${state.discovery?.reality}/@${state.session.username}`;
+  try {
+    await state.client.be("release", stance, {});
+  } catch (err) {
+    console.warn("[3D] flat signOut release failed:", err?.code || err?.message);
+  }
+  clearSession();
+  state.session = null;
+  try { state.client.disconnect(); } catch {}
+  await connectAnonymous(defaultPlaceUrl(), shouldUseProxy(defaultPlaceUrl()));
 }
 
 main().catch((err) => {
@@ -146,6 +249,7 @@ async function main() {
     },
     onBack: () => historyBack(),
     onForward: () => historyForward(),
+    onToggleFlatPanel: () => toggleFlatPanel(L),
   });
 
   // Open the IBP socket.
@@ -623,6 +727,7 @@ function handleDescriptorEvent(event) {
     try {
       const desc = await state.client.see(state.currentAddress);
       state.descriptor = desc;
+      _fireDescriptorListeners(desc);
       state.scene.renderDescriptor(desc, {
         isAuthenticated: !!state.session?.token,
         resetCamera: false,
@@ -763,8 +868,19 @@ async function navigate(address, { fromHistory = false } = {}) {
       );
       return;
     }
+    // Clear selectedBeing when navigating to a different space — the
+    // active being was contextual to the previous position; in a new
+    // space the user has no active selection until they pick one. We
+    // preserve it across a same-space refresh so a refetch (live
+    // event, branch update) doesn't blow away the focus.
+    const priorSpaceId = state.descriptor?.address?.spaceId || null;
+    const nextSpaceId  = desc?.address?.spaceId || null;
+    if (priorSpaceId && nextSpaceId && priorSpaceId !== nextSpaceId) {
+      state.selectedBeing = null;
+    }
     state.descriptor = desc;
     state.currentAddress = address;
+    _fireDescriptorListeners(desc);
     // Live navigate clears the historical visual cue — a rewind that
     // landed here via timeline:rewind sets it; any plain navigate
     // (address bar, child doorway, branch click) takes us to the
@@ -1082,6 +1198,9 @@ function openBeingActionMenu(b) {
   };
 
   const composed = [...roleActions, inhabitAction, flowAction, summonAction];
+  // Set this being as the active interaction target. Carries across
+  // flat-panel toggle so text mode opens on this being's inspector.
+  setSelectedBeing(fullBeing.beingId, fullBeing.being);
   showActionMenu({ ...fullBeing, actions: composed }, {
     onActionPicked: (action) => {
       if (action.__synthetic === "inhabit")   return doInhabit(b, address);
@@ -1158,6 +1277,8 @@ function openActionMenu(b) {
   // The scene's mesh.userData carries a trimmed being shape (no actions).
   // Pull the full descriptor entry so the renderer sees actions[].
   const fullBeing = state.descriptor?.beings?.find((bb) => bb.being === b.being) || b;
+  // Carry selectedBeing across flat-panel toggle.
+  setSelectedBeing(fullBeing.beingId, fullBeing.being);
   showActionMenu(fullBeing, {
     onActionPicked: (action) => openActionForm(fullBeing, action, address),
     onClose: () => {},
@@ -1214,10 +1335,10 @@ function openActionForm(b, action, address, { error = null } = {}) {
         } else if (action.verb === "summon") {
           await state.client.summon(address, { content: values.content || "", from: address });
           hideActionPanel();
-        } else if (action.verb === "see") {
-          await state.client.see(address);
-          hideActionPanel();
         } else {
+          // SEE retired as an LLM-dispatchable verb on 2026-06-03.
+          // canSee preloads face content at moment-open; the being
+          // has no see-tool. Action menus surface do / summon / be only.
           throw new Error(`unknown verb "${action.verb}"`);
         }
       } catch (err) {
@@ -1277,6 +1398,12 @@ function openLlmAssignerPanel() {
 
 function openSummonPanel(b) {
   state.currentSummonBeing = b.being;
+  // The active being for the moment. Persists across flat-panel
+  // toggle so text mode opens pre-focused on whoever the user was
+  // chatting with. setSelectedBeing also fires the active-position
+  // hook (currently a stub) so the future reconciler can move the
+  // being adjacent to the user.
+  setSelectedBeing(b.beingId, b.being);
   showSummonPanel({
     being: b,
     onSubmit: (text) => sendSummon(b, text),
@@ -1339,6 +1466,10 @@ async function sendSummon(b, text) {
 // whole gameplay input surface turns off together while interacting.
 addEventListener("keydown", (e) => {
   if (e.key === "Escape") {
+    // Esc closes whichever surface is up. The flat panel handles
+    // its own Esc internally (closes itself), so we ignore Esc when
+    // it's open.
+    if (isFlatPanelOpen()) return;
     hideAuthActions();
     hideAuthSignInPanel();
     if (state.currentSummonBeing) {
@@ -1346,6 +1477,16 @@ addEventListener("keydown", (e) => {
       state.currentSummonBeing = null;
     }
     if (isPlanterOpen()) closePrompt();
+    return;
+  }
+  // Text-mode toggle. Backslash (\) sits next to Enter and reads as
+  // "swap render modes." Backtick is already wired to the IBP
+  // console. Active even when other panels are open (mid-summon,
+  // mid-action-menu) so the user can flip without dismissing —
+  // closing text mode returns to whatever was open.
+  if (e.code === "Backslash") {
+    e.preventDefault();
+    toggleFlatPanel(L);
     return;
   }
   if (isGameplayInputBlocked()) return;
@@ -1415,6 +1556,7 @@ function isGameplayInputBlocked() {
   if (isRoleManagerPanelOpen()) return true;
   if (isBeingFlowPanelOpen()) return true;
   if (isPlanterOpen())  return true;
+  if (isFlatPanelOpen()) return true;
   const el = document.activeElement;
   if (!el || el === document.body) return false;
   const tag = el.tagName;

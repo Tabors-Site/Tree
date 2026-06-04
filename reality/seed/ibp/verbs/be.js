@@ -42,10 +42,10 @@ import { assertVerbCaller, refuseHistoricalWrite } from "./_shared.js";
  * opts:
  *   address      stance or place string the BE call addresses
  *   addressKind  "stance" | "place"
- *   identity     authenticated identity (required for release/switch)
+ *   identity     authenticated identity (required for release)
  *   socket       optional WS socket passed through to auth hooks
  *   req          optional Express req for HTTP-arrival flows
- *   currentReality  defaults to this place
+ *   currentReality  defaults to the current reality domain (getRealityDomain)
  *   summonCtx    moment context (so the audit Fact joins ctx.deltaF)
  *   scaffold     boot/scaffold bypass
  */
@@ -80,10 +80,11 @@ export async function beVerb(operation, payload = {}, opts = {}) {
   // Bare-place address defaults to @cherub, the welcome character.
   const beingName = extractBeingFromAddress(address, addressKind) || "cherub";
 
-  // Static-table dispatch. BE_OPS holds the canonical four ops; if the
-  // operation name is in the table AND cherub is the resolved being,
-  // dispatch through it. Future seed change could license other beings
-  // for these ops, but cherub is the only one today.
+  // Static-table dispatch. BE_OPS holds the canonical three ops
+  // (birth/connect/release); if the operation name is in the table AND
+  // cherub is the resolved being, dispatch through it. Future seed
+  // change could license other beings for these ops, but cherub is the
+  // only one today.
   const beOp = getBeOp(operation);
 
   // ── Birther path (BE:birth on @birther). ────────────────────────
@@ -383,7 +384,7 @@ export async function beVerb(operation, payload = {}, opts = {}) {
 
 /**
  * One Fact per BE op, same as DO. The actor is the calling identity;
- * register/claim from arrival has none, so the row names the newly-
+ * birth/connect from arrival has none, so the row names the newly-
  * bound being from authResult. The wire layer routes BE through
  * cherub-as-actor so the actId is always present; the only escape
  * is boot scaffolding, which sets scaffold=true. The guard throws
@@ -427,9 +428,9 @@ async function writeBeFact({ operation, identity, authResult, payload, beingName
   //            for re-claim where the user re-asserts their own session).
   //   release: target = the being being released (identity.beingId — the
   //            caller IS the one releasing their own connection).
-  //   register / claim / switch / other: target = the actor's own
-  //            being (self-act). authResult.beingAddress is recorded
-  //            in `result` for audit, not as the target shape.
+  //   birth / other: target = the actor's own being (self-act).
+  //            authResult.beingAddress is recorded in `result` for
+  //            audit, not as the target shape.
   let target;
   let connectionParams = null;
   if (operation === "connect") {
@@ -450,8 +451,8 @@ async function writeBeFact({ operation, identity, authResult, payload, beingName
     target = { kind: "being", id: String(targetBeingId) };
     connectionParams = { inhabitedBy: null };
   } else {
-    // register / claim / switch and any future BE op: identity-on-
-    // self. The actor's own being is the target.
+    // birth and any future BE op: identity-on-self. The actor's own
+    // being is the target.
     target = { kind: "being", id: String(actorBeingId) };
   }
 

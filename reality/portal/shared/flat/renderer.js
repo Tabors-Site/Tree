@@ -11,11 +11,11 @@
 // updates location.hash; main.js's hashchange listener calls navigate().
 // Chat opens via chat.js#openChatFor.
 
-import { flat } from "./main.js";
+import { flat } from "./host.js";
 import { openChatFor, isChatOpen, getChatBeing } from "./chat.js";
 import { showAuthOverlay } from "./identity.js";
-import { renderRoleManagerPanel } from "../../shared/role-manager-panel.js";
-import { renderBeingFlowPanel } from "../../shared/being-flow-panel.js";
+import { renderRoleManagerPanel } from "../role-manager-panel.js";
+import { renderBeingFlowPanel } from "../being-flow-panel.js";
 import { renderTimelineSection } from "./being-timeline.js";
 
 // ────────────────────────────────────────────────────────────────
@@ -462,7 +462,7 @@ async function triggerInhabit(child, { reality }) {
   if (!reality || !child?.name) return;
   setStatus(`inheriting @${child.name}...`);
   try {
-    const { flat } = await import("./main.js");
+    const { flat } = await import("./host.js");
     const stance = `${reality}/@${child.name}`;
     const ack = await flat.beOp("connect", stance, {});
     if (!ack || ack.status === "error") {
@@ -753,13 +753,15 @@ function renderRoleDetail(pane, role, name) {
   if (role.replyTo) top.appendChild(kvBlock("replyTo", role.replyTo));
   pane.appendChild(top);
 
-  // Capabilities — one section per verb.
+  // Capabilities — one section per verb. canSee is preloaded face
+  // content (named sees + IBP addresses, rendered at moment-open);
+  // do/summon/be are menus the LLM picks via tool calls. The legacy
+  // `role.see` field collapsed into canSee on 2026-06-03.
   const caps = [
     ["canSee",    role.canSee],
     ["canDo",     role.canDo],
     ["canSummon", role.canSummon],
     ["canBe",     role.canBe],
-    ["see",       role.see],
   ];
   for (const [label, list] of caps) {
     if (!Array.isArray(list) || list.length === 0) continue;

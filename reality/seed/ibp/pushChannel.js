@@ -35,17 +35,17 @@ export const IBP_EVENT = "ibp";
 let _channel = null;
 
 const NOOP_CHANNEL = Object.freeze({
-  emitToBeing:             () => {},
-  emitToBeingRoom:         () => {},
-  emitNavigate:            () => {},
-  getIO:                   () => null,
-  getHttpServer:           () => null,
-  registerSocketHandler:   () => {},
+  emitToBeing: () => {},
+  emitToBeingRoom: () => {},
+  emitNavigate: () => {},
+  getIO: () => null,
+  getHttpServer: () => null,
+  registerSocketHandler: () => {},
   unregisterSocketHandler: () => {},
 });
 
 /**
- * Register the push channel for this place. Called once per transport
+ * Register the push channel for this reality. Called once per transport
  * at boot. Re-registration overwrites; a transport that hot-reloads
  * should clear via `resetPushChannel()` first.
  *
@@ -60,7 +60,10 @@ const NOOP_CHANNEL = Object.freeze({
  */
 export function setPushChannel(impl) {
   if (!impl || typeof impl !== "object") {
-    log.warn("PushChannel", "setPushChannel: implementation object is required");
+    log.warn(
+      "PushChannel",
+      "setPushChannel: implementation object is required",
+    );
     return;
   }
   _channel = impl;
@@ -96,7 +99,11 @@ export function emitToBeingRoom(beingId, event, data) {
  * the wire event name.
  */
 export function pushIbp(beingId, envelope) {
-  return (_channel || NOOP_CHANNEL).emitToBeingRoom(beingId, IBP_EVENT, envelope);
+  return (_channel || NOOP_CHANNEL).emitToBeingRoom(
+    beingId,
+    IBP_EVENT,
+    envelope,
+  );
 }
 
 export function emitNavigate(args) {

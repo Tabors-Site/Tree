@@ -22,7 +22,7 @@
 // The substrate primitive (foldAt) is the same; the descriptor
 // builder grows. Doesn't change this UI's wire shape.
 
-import { flat } from "./main.js";
+import { flat } from "./host.js";
 
 const MAX_ACTS = 100;
 

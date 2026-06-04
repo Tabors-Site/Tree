@@ -11,7 +11,7 @@
 // drives PortalClient. Incoming pushes arrive in handleIncomingSummon
 // (wired as the client's onSummon handler from main.js).
 
-import { flat } from "./main.js";
+import { flat } from "./host.js";
 
 const state = {
   open:    false,

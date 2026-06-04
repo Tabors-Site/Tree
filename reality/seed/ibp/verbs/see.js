@@ -26,13 +26,20 @@ import { parseWithContext, expand, getRealityDomain } from "../address.js";
 import { resolveStance } from "../resolver.js";
 import { buildPlaceDescriptor, buildDiscovery } from "../descriptor.js";
 import { authorize } from "../authorize.js";
-import { threadIdFromPath, getThreadsSpaceId, describeThread } from "../../materials/space/threads.js";
+import {
+  threadIdFromPath,
+  getThreadsSpaceId,
+  describeThread,
+} from "../../materials/space/threads.js";
 import { describeReel } from "../../past/fact/facts.js";
 import { describeActChain } from "../../past/act/actChain.js";
 import { describeBeingsCatalog } from "../../materials/being/beingsCatalog.js";
 import { describeBranchesCatalog } from "../../materials/branch/branchesCatalog.js";
 import { assertVerbCaller } from "./_shared.js";
-import { foldAt, NoSuchHistoricalState } from "../../present/beats/2-fold/foldAt.js";
+import {
+  foldAt,
+  NoSuchHistoricalState,
+} from "../../present/beats/2-fold/foldAt.js";
 // The historical SEE path routes most of its work through
 // buildPlaceDescriptor with `until`, where descriptor.js's foldRead
 // handles the foldAt / NoSuchHistoricalState boundary internally.
@@ -95,14 +102,23 @@ export async function seeVerb(target, opts = {}) {
 
   // Discovery short-circuit — pre-identity surface, runs before the
   // caller gate.
-  const addrString = typeof target === "string" ? target : (target.value || target.address || null);
+  const addrString =
+    typeof target === "string"
+      ? target
+      : target.value || target.address || null;
   if (typeof addrString === "string" && /\/\.discovery$/i.test(addrString)) {
     return buildDiscovery();
   }
 
   assertVerbCaller("see", opts);
 
-  const { identity = null, currentUser = null, currentReality = null, payload = null, summonCtx = null } = opts;
+  const {
+    identity = null,
+    currentUser = null,
+    currentReality = null,
+    payload = null,
+    summonCtx = null,
+  } = opts;
 
   // Historical-read qualifier. When set, SEE returns the substrate's
   // state as of a past point via foldAt. Accepted on the wire as
@@ -134,15 +150,16 @@ export async function seeVerb(target, opts = {}) {
     });
   }
 
-  const addressKind = opts.addressKind
-    || (target && typeof target === "object" && target.kind)
-    || inferAddressKind(addrString);
+  const addressKind =
+    opts.addressKind ||
+    (target && typeof target === "object" && target.kind) ||
+    inferAddressKind(addrString);
 
   const parseCtx = {
     currentReality: currentReality || getRealityDomain(),
     currentUser: currentUser || identity?.name || null,
   };
-  const parsed   = parseWithContext(addrString, parseCtx);
+  const parsed = parseWithContext(addrString, parseCtx);
   const expanded = expand(parsed, parseCtx);
 
   // Thread descriptor short-circuit. SEE on `<reality>/./threads/<id>`
@@ -188,12 +205,12 @@ export async function seeVerb(target, opts = {}) {
         leafId: targetThreadId,
       },
       isSpaceRoot: false,
-      isHomeRoot:  false,
-      isThread:    true,
-      thread:      desc,
-      children:    [],
-      matters:     [],
-      qualities:   {},
+      isHomeRoot: false,
+      isThread: true,
+      thread: desc,
+      children: [],
+      matters: [],
+      qualities: {},
     };
   }
 
@@ -208,24 +225,24 @@ export async function seeVerb(target, opts = {}) {
     const reel = await describeReel(reelTarget.kind, reelTarget.id);
     return {
       address: {
-        reality:     realityDomain,
-        path:        `/.reel/${reelTarget.kind}/${reelTarget.id}`,
-        being:       null,
-        spaceId:     null,
-        beingId:     null,
-        chain:       [],
+        reality: realityDomain,
+        path: `/.reel/${reelTarget.kind}/${reelTarget.id}`,
+        being: null,
+        spaceId: null,
+        beingId: null,
+        chain: [],
         pathByNames: `/.reel/${reelTarget.kind}/${reelTarget.id}`,
-        pathByIds:   `/.reel/${reelTarget.kind}/${reelTarget.id}`,
-        leafName:    reel.target.name || reelTarget.id,
-        leafId:      reelTarget.id,
+        pathByIds: `/.reel/${reelTarget.kind}/${reelTarget.id}`,
+        leafName: reel.target.name || reelTarget.id,
+        leafId: reelTarget.id,
       },
       isSpaceRoot: false,
-      isHomeRoot:  false,
-      isReel:      true,
+      isHomeRoot: false,
+      isReel: true,
       reel,
-      children:    [],
-      matters:     [],
-      qualities:   {},
+      children: [],
+      matters: [],
+      qualities: {},
     };
   }
 
@@ -239,24 +256,24 @@ export async function seeVerb(target, opts = {}) {
     const catalog = await describeBeingsCatalog();
     return {
       address: {
-        reality:     realityDomain,
-        path:        `/.beings`,
-        being:       null,
-        spaceId:     null,
-        beingId:     null,
-        chain:       [],
+        reality: realityDomain,
+        path: `/.beings`,
+        being: null,
+        spaceId: null,
+        beingId: null,
+        chain: [],
         pathByNames: `/.beings`,
-        pathByIds:   `/.beings`,
-        leafName:    ".beings",
-        leafId:      null,
+        pathByIds: `/.beings`,
+        leafName: ".beings",
+        leafId: null,
       },
-      isSpaceRoot:   false,
-      isHomeRoot:    false,
+      isSpaceRoot: false,
+      isHomeRoot: false,
       isBeingsCatalog: true,
       beingsCatalog: catalog,
-      children:      [],
-      matters:       [],
-      qualities:     {},
+      children: [],
+      matters: [],
+      qualities: {},
     };
   }
 
@@ -272,25 +289,25 @@ export async function seeVerb(target, opts = {}) {
     const graph = await describeBranchesCatalog(branchesTarget.branchPath);
     return {
       address: {
-        reality:     realityDomain,
-        path:        `/.branches/${branchesTarget.branchPath}`,
-        being:       null,
-        spaceId:     null,
-        beingId:     null,
-        chain:       [],
+        reality: realityDomain,
+        path: `/.branches/${branchesTarget.branchPath}`,
+        being: null,
+        spaceId: null,
+        beingId: null,
+        chain: [],
         pathByNames: `/.branches/${branchesTarget.branchPath}`,
-        pathByIds:   `/.branches/${branchesTarget.branchPath}`,
-        leafName:    ".branches",
-        leafId:      null,
-        branch:      branchesTarget.branchPath,
+        pathByIds: `/.branches/${branchesTarget.branchPath}`,
+        leafName: ".branches",
+        leafId: null,
+        branch: branchesTarget.branchPath,
       },
-      isSpaceRoot:    false,
-      isHomeRoot:     false,
+      isSpaceRoot: false,
+      isHomeRoot: false,
       isBranchesCatalog: true,
-      branches:       graph,
-      children:       [],
-      matters:        [],
-      qualities:      {},
+      branches: graph,
+      children: [],
+      matters: [],
+      qualities: {},
     };
   }
 
@@ -304,27 +321,30 @@ export async function seeVerb(target, opts = {}) {
     // long session of fine-grained acts doesn't truncate the visible
     // history window. describeActChain still caps at its MAX_LIMIT.
     const requestedLimit = Number(payload?.limit) || undefined;
-    const chain = await describeActChain(actChainBeingId, requestedLimit ? { limit: requestedLimit } : {});
+    const chain = await describeActChain(
+      actChainBeingId,
+      requestedLimit ? { limit: requestedLimit } : {},
+    );
     return {
       address: {
-        reality:     realityDomain,
-        path:        `/.acts/${actChainBeingId}`,
-        being:       null,
-        spaceId:     null,
-        beingId:     actChainBeingId,
-        chain:       [],
+        reality: realityDomain,
+        path: `/.acts/${actChainBeingId}`,
+        being: null,
+        spaceId: null,
+        beingId: actChainBeingId,
+        chain: [],
         pathByNames: `/.acts/${actChainBeingId}`,
-        pathByIds:   `/.acts/${actChainBeingId}`,
-        leafName:    chain.being.name || actChainBeingId,
-        leafId:      actChainBeingId,
+        pathByIds: `/.acts/${actChainBeingId}`,
+        leafName: chain.being.name || actChainBeingId,
+        leafId: actChainBeingId,
       },
       isSpaceRoot: false,
-      isHomeRoot:  false,
-      isActChain:  true,
-      actChain:    chain,
-      children:    [],
-      matters:     [],
-      qualities:   {},
+      isHomeRoot: false,
+      isActChain: true,
+      actChain: chain,
+      children: [],
+      matters: [],
+      qualities: {},
     };
   }
 
@@ -335,8 +355,8 @@ export async function seeVerb(target, opts = {}) {
     identity,
     verb: "see",
     target: {
-      kind:        addressKind === "stance" ? "stance" : "position",
-      spaceId:     resolved.spaceId,
+      kind: addressKind === "stance" ? "stance" : "position",
+      spaceId: resolved.spaceId,
       isDiscovery: false,
     },
     summonCtx,
@@ -379,9 +399,9 @@ function inferAddressKind(addrString) {
  * to seq internally before any fold work begins.
  */
 function normalizeAtQualifier(optsAt, target) {
-  const fromOpts   = optsAt;
-  const fromTarget = (target && typeof target === "object") ? target.at : null;
-  const at         = fromOpts || fromTarget || null;
+  const fromOpts = optsAt;
+  const fromTarget = target && typeof target === "object" ? target.at : null;
+  const at = fromOpts || fromTarget || null;
   if (at == null) return null;
   if (typeof at !== "object") {
     throw new IbpError(
@@ -400,11 +420,11 @@ function normalizeAtQualifier(optsAt, target) {
 
 /**
  * Historical SEE. Resolves and authorizes like live SEE, then routes
- * through the standard `buildPlaceDescriptor` with `until` threaded
+ * through the standard `buildrealityDescriptor` with `until` threaded
  * down into every internal fold call. Every reel that contributes to
  * the descriptor (the leaf space, neighboring beings, matters,
  * children, the asker's row) folds to its OWN per-reel seq derived
- * from `until` — so the whole place rewinds coherently.
+ * from `until` — so the whole view rewinds coherently.
  *
  * Returns the standard descriptor shape (same as live SEE) with two
  * additional top-level flags:
@@ -428,40 +448,50 @@ async function seeAtTime({
   // Reject the short-circuit surfaces. Historical-at doesn't compose
   // with discovery (pre-identity), threads (synthetic-now projection),
   // .reel/.acts (fact-history surfaces — themselves the substrate's
-  // historical primitives), or .beings (whole-place catalog). The
+  // historical primitives), or .beings (reality-wide catalog). The
   // honest answer for any of these is "use the live form."
   if (typeof addrString === "string" && /\/\.discovery$/i.test(addrString)) {
-    throw new IbpError(IBP_ERR.INVALID_INPUT,
-      "SEE `at` is not supported on /.discovery (discovery is pre-identity, not a reel-bearing target)");
+    throw new IbpError(
+      IBP_ERR.INVALID_INPUT,
+      "SEE `at` is not supported on /.discovery (discovery is pre-identity, not a reel-bearing target)",
+    );
   }
 
   const parseCtx = {
     currentReality: currentReality || getRealityDomain(),
-    currentUser:    currentUser    || identity?.name || null,
+    currentUser: currentUser || identity?.name || null,
   };
-  const parsed   = parseWithContext(addrString, parseCtx);
+  const parsed = parseWithContext(addrString, parseCtx);
   const expanded = expand(parsed, parseCtx);
 
   if (threadIdFromPath(expanded.right?.path)) {
-    throw new IbpError(IBP_ERR.INVALID_INPUT,
-      "SEE `at` is not supported on threads (threads are a live projection; use .reel for historical facts)");
+    throw new IbpError(
+      IBP_ERR.INVALID_INPUT,
+      "SEE `at` is not supported on threads (threads are a live projection; use .reel for historical facts)",
+    );
   }
   if (/^\/?\.reel\//.test(expanded.right?.path || "")) {
-    throw new IbpError(IBP_ERR.INVALID_INPUT,
-      "SEE `at` is not supported on /.reel/... (the reel surface IS the substrate's history primitive)");
+    throw new IbpError(
+      IBP_ERR.INVALID_INPUT,
+      "SEE `at` is not supported on /.reel/... (the reel surface IS the substrate's history primitive)",
+    );
   }
   if (/^\/?\.acts\//.test(expanded.right?.path || "")) {
-    throw new IbpError(IBP_ERR.INVALID_INPUT,
-      "SEE `at` is not supported on /.acts/... (the act-chain surface IS the substrate's history primitive)");
+    throw new IbpError(
+      IBP_ERR.INVALID_INPUT,
+      "SEE `at` is not supported on /.acts/... (the act-chain surface IS the substrate's history primitive)",
+    );
   }
   if (/^\/?\.beings\/?$/.test(expanded.right?.path || "")) {
-    throw new IbpError(IBP_ERR.INVALID_INPUT,
-      "SEE `at` is not supported on /.beings (whole-place catalog; query per-being instead)");
+    throw new IbpError(
+      IBP_ERR.INVALID_INPUT,
+      "SEE `at` is not supported on /.beings (reality-wide catalog; query per-being instead)",
+    );
   }
 
-  let resolved     = await resolveStance(expanded.right, { identity });
-  const addressKind = addressKindHint
-    || (expanded.right?.being ? "stance" : "position");
+  let resolved = await resolveStance(expanded.right, { identity });
+  const addressKind =
+    addressKindHint || (expanded.right?.being ? "stance" : "position");
 
   // Follow the historical PERSPECTIVE. Doctrine: a historical SEE
   // shows the world from the asker's being at that time. The being to
@@ -475,15 +505,15 @@ async function seeAtTime({
   // Fold that being to `until`, read state.position, swap the descriptor
   // target if it disagrees with the address-resolved one. Past states
   // are immutable; the new target's leafSpace folds at `until` too, so
-  // the whole place rewinds coherently.
+  // the whole view rewinds coherently.
   //
   // Falls through (no swap) when:
   //   . the asker has no identity (arrival) AND the address carried no @
   //   . the being didn't exist yet at `until` (NoSuchHistoricalState)
   //   . the being's historical position matches the resolved space
   //   . the historical position resolves to a missing space row
-  const followBeingId = resolved.beingId
-    || (identity?.beingId ? String(identity.beingId) : null);
+  const followBeingId =
+    resolved.beingId || (identity?.beingId ? String(identity.beingId) : null);
   if (followBeingId) {
     try {
       const { state: beingState } = await foldAt(
@@ -491,15 +521,24 @@ async function seeAtTime({
         String(followBeingId),
         at,
       );
-      const histPosition = beingState?.position ? String(beingState.position) : null;
+      const histPosition = beingState?.position
+        ? String(beingState.position)
+        : null;
       if (histPosition && histPosition !== String(resolved.spaceId)) {
-        const { loadProjection } = await import("../../materials/projections.js");
-        const _pSlot = await loadProjection("space", histPosition, resolved.branch || "0");
-        const positionRow = _pSlot ? {
-          _id: _pSlot.id,
-          name: _pSlot.state?.name,
-          parent: _pSlot.state?.parent,
-        } : null;
+        const { loadProjection } =
+          await import("../../materials/projections.js");
+        const _pSlot = await loadProjection(
+          "space",
+          histPosition,
+          resolved.branch || "0",
+        );
+        const positionRow = _pSlot
+          ? {
+              _id: _pSlot.id,
+              name: _pSlot.state?.name,
+              parent: _pSlot.state?.parent,
+            }
+          : null;
         if (positionRow) {
           resolved = await _redirectResolvedToSpace(resolved, positionRow);
           // If the redirect came from caller identity (not an explicit
@@ -520,8 +559,8 @@ async function seeAtTime({
     identity,
     verb: "see",
     target: {
-      kind:        addressKind === "stance" ? "stance" : "position",
-      spaceId:     resolved.spaceId,
+      kind: addressKind === "stance" ? "stance" : "position",
+      spaceId: resolved.spaceId,
       isDiscovery: false,
     },
     summonCtx,
@@ -568,18 +607,25 @@ async function _redirectResolvedToSpace(resolved, positionRow) {
   while (cursor) {
     chain.unshift({ name: cursor.name, id: cursor._id });
     if (!cursor.parent) break;
-    const { loadProjection: _lP } = await import("../../materials/projections.js");
+    const { loadProjection: _lP } =
+      await import("../../materials/projections.js");
     const _cSlot = await _lP("space", cursor.parent, "0");
-    cursor = _cSlot ? { _id: _cSlot.id, name: _cSlot.state?.name, parent: _cSlot.state?.parent } : null;
+    cursor = _cSlot
+      ? {
+          _id: _cSlot.id,
+          name: _cSlot.state?.name,
+          parent: _cSlot.state?.parent,
+        }
+      : null;
     if (!cursor) break;
   }
   const isSpaceRoot = !positionRow.parent;
   return {
     ...resolved,
-    spaceId:    String(positionRow._id),
-    leafSpace:  positionRow,
-    leafName:   positionRow.name,
-    leafId:     String(positionRow._id),
+    spaceId: String(positionRow._id),
+    leafSpace: positionRow,
+    leafName: positionRow.name,
+    leafId: String(positionRow._id),
     chain,
     isSpaceRoot,
   };
