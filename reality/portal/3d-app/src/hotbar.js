@@ -22,13 +22,21 @@ let _slotsDom  = [];
 let _slots     = new Array(SLOT_COUNT).fill(null);
 let _selected  = 0;
 let _onChange  = () => {};
+// Caller-provided predicate. main.js wires this to
+// isGameplayInputBlocked so the hotbar's keyboard / wheel
+// handlers stay quiet whenever any panel is open (flat panel,
+// action menu, role manager, summon dialog, etc.). Without it
+// the wheel rotated the selected slot in the background even
+// while the user was scrolling content in an overlay.
+let _isInputBlocked = () => false;
 
 /**
  * Mount the hotbar into the given parent element. Returns the public
  * API. Call once at boot.
  */
-export function initHotbar(parent, { onSelectionChange } = {}) {
+export function initHotbar(parent, { onSelectionChange, isInputBlocked } = {}) {
   _onChange = typeof onSelectionChange === "function" ? onSelectionChange : () => {};
+  if (typeof isInputBlocked === "function") _isInputBlocked = isInputBlocked;
 
   _root = document.createElement("div");
   _root.id = "hotbar";
@@ -210,14 +218,16 @@ function _onWheel(e) {
 }
 
 function _isTypingInUI() {
+  // Main.js's isGameplayInputBlocked is the authoritative check —
+  // it covers every panel and overlay (flat panel, action menu,
+  // role manager, summon, planter, etc.) so any new overlay
+  // automatically silences hotbar input without touching this file.
+  if (_isInputBlocked()) return true;
   const el = document.activeElement;
   if (!el || el === document.body) return false;
   const tag = el.tagName;
   if (tag === "INPUT" || tag === "TEXTAREA") return true;
   if (el.isContentEditable) return true;
-  // A modal panel is open ⇒ block hotbar input. We detect via the
-  // .overlay class the existing UI uses for sign-in / summon / etc.
-  if (document.querySelector(".overlay")) return true;
   return false;
 }
 

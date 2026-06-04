@@ -249,6 +249,13 @@ export async function genesis(app, opts = {}) {
     await import("./seed/materials/space/threads.js");
   await primeSeveredRootsCache();
 
+  // Install the seed's refs contribution into the refs registry.
+  // Substrate-level prerequisite for replicate + graft (publishing.md
+  // Phase 4 + 5). Extensions add their own entries via the loader.
+  // Idempotent; safe to call before extensions load.
+  const { installSeedRefs } = await import("./seed/materials/seedRefs.js");
+  installSeedRefs();
+
   // Register seed-shipped role specs into the role registry so
   // SUMMON can dispatch to them. Auth and llm-assigner are BE only,
   // routed via seed delegates planted by ensureSeedDelegates, and need no role

@@ -152,14 +152,25 @@ const REALITY_ROOT_DEFAULT_PERMISSIONS = Object.freeze({
 // Tier-3 seed space (identity, config, tools, roles, operations,
 // extensions, source, peers, threads). It's not a public reality.
 //
-// `requires: { canWrite: true }` admits the I-Am (heaven's rootOwner)
-// and every being added as a contributor to heaven. Seed delegates
-// (cherub, birther, llm-assigner, reality-manager, arrival, etc.) are
-// contributors by boot scaffold; the rootOperator becomes a heaven
-// contributor when they register through cherub. Later operators
-// added the same way: addContributor on heaven. Beings of the land
-// lacking heaven canWrite see the door in their reality-root
-// descriptor but SEE on "<reality>/." returns DENIED.
+// Heaven splits read from write:
+//
+//   SEE: any being whose home is this reality may read the catalogs
+//     (./beings, ./operations, ./roles, ./threads, ./extensions, ...).
+//     Reading is how operators and ordinary beings introspect what
+//     the reality has — gating SEE on canWrite hid the catalogs
+//     entirely from anyone who hadn't yet been added as a heaven
+//     contributor (including the rootOperator before their cherub
+//     registration completes). `homeOnThisReality: true` matches the
+//     same admission rule the reality root uses for SEE.
+//
+//   DO / SUMMON: `requires: { canWrite: true }` admits the I-Am
+//     (heaven's rootOwner) and every being added as a contributor to
+//     heaven. Seed delegates (cherub, birther, llm-assigner, reality-
+//     manager, arrival, etc.) are contributors by boot scaffold; the
+//     rootOperator becomes a heaven contributor when they register
+//     through cherub. Later operators added the same way:
+//     addContributor on heaven. Beings of the land lacking heaven
+//     canWrite can SEE but cannot mutate.
 //
 // The earlier `reigning` stance was retired 2026-06-04 . it was a
 // parallel roster duplicating the existing rootOwner + contributors
@@ -177,10 +188,35 @@ const REALITY_ROOT_DEFAULT_PERMISSIONS = Object.freeze({
 // ─────────────────────────────────────────────────────────────────────
 
 const HEAVEN_DEFAULT_PERMISSIONS = Object.freeze({
-  see: { "*": { requires: { canWrite: true } } },
+  see: { "*": { requires: { homeOnThisReality: true } } },
   do: { "*": { requires: { canWrite: true } } },
   summon: { "*": { requires: { canWrite: true } } },
 });
+
+// Historic heaven seed defaults — past values of HEAVEN_DEFAULT_PERMISSIONS
+// that the seeder should migrate to the current default on boot rather
+// than treat as an operator customization. When changing the heaven
+// defaults, add the old shape here so persisted-from-prior-boot rules
+// migrate automatically (no DB drop required).
+//
+// Compare shapes with `JSON.stringify` rather than deep equality
+// since the persisted Mixed-type value comes back as a plain object
+// either way.
+const _HISTORIC_HEAVEN_SEED_DEFAULTS = {
+  see: [
+    // 2026-06-04 — original reigning-collapse default; tightened too
+    // far. Required canWrite, hid the catalogs from anyone who hadn't
+    // completed cherub registration.
+    { "*": { requires: { canWrite: true } } },
+  ],
+  do: [],
+  summon: [],
+};
+function _isHistoricHeavenSeedDefault(verb, bucket) {
+  const olds = _HISTORIC_HEAVEN_SEED_DEFAULTS[verb] || [];
+  const bucketJson = JSON.stringify(bucket);
+  return olds.some((old) => JSON.stringify(old) === bucketJson);
+}
 
 // ─────────────────────────────────────────────────────────────────────
 // Entry point
@@ -714,7 +750,17 @@ export async function seedDefaultStancePermissions(summonCtx) {
     const heavenUpdates = {};
     for (const [verb, bucket] of Object.entries(HEAVEN_DEFAULT_PERMISSIONS)) {
       const existingVerb = heavenPerms?.[verb];
-      if (existingVerb && Object.keys(existingVerb).length > 0) continue;
+      // Three cases:
+      //   1. No existing rule for this verb — apply current default.
+      //   2. Existing rule matches a known historic seed default that
+      //      we've since changed — reseed (migrate stale defaults).
+      //   3. Existing rule doesn't match any historic default —
+      //      treat as an operator customization, leave alone.
+      // Case 2 catches the gap that without it would force the
+      // operator to drop the DB whenever a seed default changes.
+      if (existingVerb && Object.keys(existingVerb).length > 0) {
+        if (!_isHistoricHeavenSeedDefault(verb, existingVerb)) continue;
+      }
       heavenUpdates[`qualities.permissions.${verb}`] = bucket;
     }
     for (const [field, value] of Object.entries(heavenUpdates)) {

@@ -67,7 +67,11 @@ function actChainTargetFromPath(path) {
 }
 function isBeingsCatalogPath(path) {
   if (typeof path !== "string") return false;
-  return /^\/?\.beings\/?$/.test(path);
+  // Canonical path: `/./beings` (heaven child, branch-0-pinned like
+  // every other heaven catalog). The earlier `/.beings` top-level
+  // form was retired . it sat outside heaven and could fork into
+  // branches, which the cross-branch being catalog isn't supposed to.
+  return /^\/?\.\/beings\/?$/.test(path);
 }
 // `.branches` / `.branches/<branchPath>` — branch tree catalog. Bare
 // returns the root view (main + its children). With a path returns the
@@ -125,6 +129,7 @@ export async function seeVerb(target, opts = {}) {
     identity = null,
     currentUser = null,
     currentReality = null,
+    currentBranch = null,
     payload = null,
     summonCtx = null,
   } = opts;
@@ -153,6 +158,7 @@ export async function seeVerb(target, opts = {}) {
       identity,
       currentReality,
       currentUser,
+      currentBranch,
       payload,
       summonCtx,
       addressKind: opts.addressKind,
@@ -167,6 +173,7 @@ export async function seeVerb(target, opts = {}) {
   const parseCtx = {
     currentReality: currentReality || getRealityDomain(),
     currentUser: currentUser || identity?.name || null,
+    currentBranch: currentBranch || "0",
   };
   const parsed = parseWithContext(addrString, parseCtx);
   const { resolveBranchPointers } = await import("../address.js");
@@ -256,25 +263,27 @@ export async function seeVerb(target, opts = {}) {
     };
   }
 
-  // Global being catalog short-circuit. SEE on `<reality>/.beings`
+  // Global being catalog short-circuit. SEE on `<reality>/./beings`
   // returns every Being row across the reality, regardless of home.
-  // Mirrors `.operations` (catalog of registered DO ops). Per-position
+  // Mirrors `./operations` (catalog of registered DO ops). Per-position
   // beings still surface via normal SEE on a position; this is the
-  // cross-position view for clients building global lists.
+  // cross-position view for clients building global lists. Lives under
+  // heaven so the catalog stays pinned to branch 0 like every other
+  // heaven space — the cross-reality being view doesn't fork.
   if (isBeingsCatalogPath(expanded.right?.path)) {
     const realityDomain = getRealityDomain();
     const catalog = await describeBeingsCatalog();
     return {
       address: {
         reality: realityDomain,
-        path: `/.beings`,
+        path: `/./beings`,
         being: null,
         spaceId: null,
         beingId: null,
         chain: [],
-        pathByNames: `/.beings`,
-        pathByIds: `/.beings`,
-        leafName: ".beings",
+        pathByNames: `/./beings`,
+        pathByIds: `/./beings`,
+        leafName: "beings",
         leafId: null,
       },
       isSpaceRoot: false,
@@ -481,6 +490,7 @@ async function seeAtTime({
   identity,
   currentReality,
   currentUser,
+  currentBranch,
   payload,
   summonCtx,
   addressKind: addressKindHint,
@@ -500,6 +510,7 @@ async function seeAtTime({
   const parseCtx = {
     currentReality: currentReality || getRealityDomain(),
     currentUser: currentUser || identity?.name || null,
+    currentBranch: currentBranch || "0",
   };
   const parsed = parseWithContext(addrString, parseCtx);
   const { resolveBranchPointers } = await import("../address.js");
@@ -523,10 +534,10 @@ async function seeAtTime({
       "SEE `at` is not supported on /.acts/... (the act-chain surface IS the substrate's history primitive)",
     );
   }
-  if (/^\/?\.beings\/?$/.test(expanded.right?.path || "")) {
+  if (/^\/?\.\/beings\/?$/.test(expanded.right?.path || "")) {
     throw new IbpError(
       IBP_ERR.INVALID_INPUT,
-      "SEE `at` is not supported on /.beings (reality-wide catalog; query per-being instead)",
+      "SEE `at` is not supported on /./beings (reality-wide catalog; query per-being instead)",
     );
   }
 
@@ -557,10 +568,16 @@ async function seeAtTime({
     resolved.beingId || (identity?.beingId ? String(identity.beingId) : null);
   if (followBeingId) {
     try {
+      // Historical fold runs on the same branch the live SEE resolved
+      // to. resolved.branch is populated by expand() from the wire's
+      // currentBranch (seeVerb now threads it into parseCtx); foldAt's
+      // assertBranchOrThrow surfaces any threading regression here
+      // loud rather than silently defaulting to heaven.
       const { state: beingState } = await foldAt(
         "being",
         String(followBeingId),
         at,
+        { branch: resolved.branch },
       );
       const histPosition = beingState?.position
         ? String(beingState.position)

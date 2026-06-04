@@ -37,7 +37,48 @@ let _state = {
   firstTs:       null,
   nowTs:         null,
   atTimestamp:   null,    // null = present
+
+  // Timeline playback state. speed is a tier index from the
+  // PLAYBACK_SPEEDS list. 0 = paused; >0 = forward playback (1x, 2x,
+  // 4x, 8x); <0 = reverse (-1x, -2x, -4x, -8x). The playback timer
+  // ticks at PLAYBACK_TICK_MS and advances the cursor by
+  // speed * PLAYBACK_TICK_MS in timeline-time. Auto-stops: forward
+  // hits present → snap live; reverse hits genesis → pause at firstTs.
+  playbackSpeed: 0,
+  playbackTimer: null,
+  // The cursor's current timeline-time during playback. Tracked
+  // independently of atTimestamp so we can advance smoothly between
+  // marks even when atTimestamp lags behind (the rewind round-trip
+  // is async; playback continues optimistically).
+  cursorMs: null,
 };
+
+// Tick cadence for the playback loop. Short enough that 8x feels
+// smooth, long enough that the rewind round-trip can keep up. Each
+// tick advances cursorMs by speedFactor * PLAYBACK_TICK_MS.
+const PLAYBACK_TICK_MS = 250;
+// Speed factor labels keyed off the signed tier. Index by `speed`:
+// negative for reverse, positive for forward, 0 for paused.
+const PLAYBACK_SPEEDS = {
+  "-4": -8,
+  "-3": -4,
+  "-2": -2,
+  "-1": -1,
+  "0":   0,
+  "1":   1,
+  "2":   2,
+  "3":   4,
+  "4":   8,
+};
+const MIN_SPEED_TIER = -4;
+const MAX_SPEED_TIER = 4;
+function _speedFactor(tier) { return PLAYBACK_SPEEDS[String(tier)] ?? 0; }
+function _speedLabel(tier) {
+  const f = _speedFactor(tier);
+  if (f === 0) return "paused";
+  const sign = f < 0 ? "◀ " : "▶ ";
+  return `${sign}${Math.abs(f)}x`;
+}
 
 export function mountBranchBar({ client, reality }) {
   _state.client = client;
@@ -507,6 +548,12 @@ async function _openTimeline(branchPath) {
     </div>
     <div class="bt-actions" style="display:flex;gap:8px;align-items:center;justify-content:space-between;">
       <span class="bt-status" style="color:#6b7d72;">live</span>
+      <span class="bt-playback" style="display:flex;gap:4px;align-items:center;">
+        <button class="bt-rew" type="button" title="rewind (each click doubles reverse speed)" style="background:#131a17;color:#c8d3cb;border:1px solid #2c3a32;border-radius:3px;padding:3px 8px;font-family:inherit;font-size:12px;cursor:pointer;">⏪</button>
+        <button class="bt-playpause" type="button" title="play / pause" style="background:#131a17;color:#c8d3cb;border:1px solid #2c3a32;border-radius:3px;padding:3px 8px;font-family:inherit;font-size:12px;cursor:pointer;">▶</button>
+        <button class="bt-ff" type="button" title="fast-forward (each click doubles forward speed)" style="background:#131a17;color:#c8d3cb;border:1px solid #2c3a32;border-radius:3px;padding:3px 8px;font-family:inherit;font-size:12px;cursor:pointer;">⏩</button>
+        <span class="bt-speed" style="color:#8fbf9f;font-size:11px;min-width:48px;text-align:center;">paused</span>
+      </span>
       <span class="bt-buttons" style="display:flex;gap:6px;">
         <button class="bt-now" type="button" style="display:none;background:#131a17;color:#c8d3cb;border:1px solid #2c3a32;border-radius:3px;padding:3px 10px;font-family:inherit;font-size:11px;cursor:pointer;">return to now</button>
         <button class="bt-branch" type="button" style="display:none;background:#2a1f0a;color:#e8b762;border:1px solid #6b5320;border-radius:3px;padding:3px 10px;font-family:inherit;font-size:11px;cursor:pointer;">branch here</button>
@@ -531,12 +578,28 @@ async function _openTimeline(branchPath) {
     const start = new Date(_state.firstTs).getTime();
     const end = new Date(_state.nowTs).getTime();
     const t = new Date(start + frac * (end - start));
+    // Clicking the strip is an explicit scrub — kill any active
+    // playback so the user's click position sticks until they press
+    // play again. Sync cursorMs to the click so a subsequent play
+    // resumes from where they pointed.
+    _stopPlayback();
+    _state.cursorMs = t.getTime();
     if (frac >= 0.995) {
+      _state.cursorMs = null;
       _returnToNow();
       return;
     }
     _rewindTo(t.toISOString());
   });
+
+  // Playback controls. Rewind / fast-forward each click bumps the
+  // signed speed tier by 1; pause/play toggles between 0 and the
+  // last non-zero tier (default 1x forward). The tick loop reads
+  // _state.playbackSpeed and advances cursorMs accordingly.
+  el.querySelector(".bt-rew").addEventListener("click", () => _bumpSpeed(-1));
+  el.querySelector(".bt-ff").addEventListener("click",  () => _bumpSpeed(+1));
+  el.querySelector(".bt-playpause").addEventListener("click", _togglePlayPause);
+  _renderSpeedDisplay();
 
   // The doctrine: clicking a branch in the panel switches to that
   // branch's live present AND opens its timeline. Branch-switching is
@@ -559,6 +622,11 @@ async function _openTimeline(branchPath) {
 }
 
 function _closeTimeline() {
+  // Kill any active playback before tearing down so the tick loop
+  // doesn't keep firing into a detached UI.
+  _stopPlayback();
+  _state.cursorMs = null;
+  _state.resumeSpeed = 0;
   if (_state.timelineEl) {
     _state.timelineEl.remove();
     _state.timelineEl = null;
@@ -842,33 +910,198 @@ function _renderTimeline() {
 
 function _rewindTo(atTimestamp) {
   if (!atTimestamp) return;
-  // Free-form strip click — not on a specific mark — so clear any
-  // mark selection. The detail row below the buttons hides until the
-  // user clicks a real mark again.
-  _state.selectedMarkTs = null;
-  _renderDetail(null);
+  // Auto-select the act currently "active" at this position so the
+  // detail row shows the same sentence the user would see if they
+  // had clicked the mark directly. Used by both the free-form strip
+  // click and the playback tick — same surface area means scrubbing
+  // and playing through marks both surface their prose continuously.
+  // Convention: the "active" mark is the most-recent one at-or-before
+  // the cursor (the world reflects every act up to and including it).
+  const cursorMs = new Date(atTimestamp).getTime();
+  const activeMark = _findMarkAtCursor(cursorMs);
+  const nextSelectedTs = activeMark?.ts || null;
+  if (nextSelectedTs !== _state.selectedMarkTs) {
+    _state.selectedMarkTs = nextSelectedTs;
+    _renderDetail(activeMark);
+    // Re-render the strip so the selected dot's styling updates.
+    // _renderTimeline is the strip-only repaint; we don't want to
+    // call _update here (that re-SEEs the catalog every tick).
+    _renderTimeline();
+  }
   window.dispatchEvent(new CustomEvent("branchbar:rewind", {
     detail: { atTimestamp },
   }));
 }
 
-function _returnToNow() {
-  _state.selectedMarkTs = null;
-  _renderDetail(null);
-  window.dispatchEvent(new CustomEvent("branchbar:now", {}));
+// Find the most-recent mark whose timestamp is ≤ cursorMs. Returns
+// null when no marks exist or all marks are after the cursor (the
+// user is rewinding past the first act). Marks are kept sorted by
+// timestamp ascending in _state.marks, so a single forward pass is
+// O(n) but tight; for the n=O(thousands) case the list is short
+// enough that this stays well under one tick.
+function _findMarkAtCursor(cursorMs) {
+  const marks = _state.marks;
+  if (!Array.isArray(marks) || marks.length === 0) return null;
+  let last = null;
+  for (const m of marks) {
+    const ts = m?.ts ? new Date(m.ts).getTime() : NaN;
+    if (Number.isNaN(ts)) continue;
+    if (ts <= cursorMs) last = m;
+    else break;
+  }
+  return last;
 }
 
-// Click on a specific mark dot. Rewind the world to that moment AND
-// surface the action's prose below the buttons so the user can see
-// what the act was without scrubbing the title tooltip.
+function _returnToNow(opts = {}) {
+  _state.selectedMarkTs = null;
+  _renderDetail(null);
+  // preserveCamera flag distinguishes "play caught up to now" from
+  // "user explicitly clicked return-to-now." Main reads it on the
+  // rendering side and skips the camera reset when preserving, so a
+  // fast-forward that crosses into live doesn't yank the user's view.
+  window.dispatchEvent(new CustomEvent("branchbar:now", {
+    detail: { preserveCamera: opts.preserveCamera === true },
+  }));
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// PLAYBACK CONTROLS — speed-tiered scrub through the timeline.
+//
+// The tier model: PLAYBACK_SPEEDS maps tier indices (-4..+4) to time-
+// warp factors (-8x..+8x with 0 = paused). Each ⏪ click bumps tier
+// down by 1; each ⏩ click bumps up by 1. ⏸/▶ toggles between 0 and
+// the last non-zero tier (defaults to +1 if no prior).
+//
+// The driver: a setInterval at PLAYBACK_TICK_MS reads the current
+// signed speed factor, advances _state.cursorMs by speed * tick, and
+// dispatches a rewind event with the new timestamp. The render path
+// already preserves camera on rewinds, so frame-to-frame stepping
+// stays in the user's vantage.
+//
+// Boundary behaviour:
+//   forward reaches nowTs → snap live with preserveCamera (just play
+//     normally at present)
+//   reverse reaches firstTs → pause at firstTs (we're as far back as
+//     the being's act-chain goes)
+// ─────────────────────────────────────────────────────────────────────
+
+function _bumpSpeed(delta) {
+  // Find current tier from the signed factor; bump and clamp.
+  const currentFactor = _state.playbackSpeed === 0 && _state.cursorMs == null
+    ? 0
+    : _state.playbackSpeed;
+  // Re-derive tier from stored speed (speeds are stored as tier values
+  // directly, so just clamp).
+  let nextTier = Math.max(MIN_SPEED_TIER, Math.min(MAX_SPEED_TIER, currentFactor + delta));
+  _setSpeed(nextTier);
+}
+
+function _togglePlayPause() {
+  if (_state.playbackSpeed !== 0) {
+    // Currently playing — pause but remember the tier so play resumes there.
+    _state.resumeSpeed = _state.playbackSpeed;
+    _setSpeed(0);
+    return;
+  }
+  // Currently paused — resume at the prior tier, or +1 (forward 1x) if none.
+  _setSpeed(_state.resumeSpeed || 1);
+}
+
+function _setSpeed(tier) {
+  _state.playbackSpeed = tier;
+  _renderSpeedDisplay();
+  if (tier === 0) {
+    _stopPlayback();
+    return;
+  }
+  // Seed cursorMs if we don't have one yet. Honour current rewind
+  // position; if we're live, start playback FROM nowTs (so forward
+  // playback at live is a no-op until a rewind has happened — but
+  // reverse from live immediately works).
+  if (_state.cursorMs == null) {
+    if (_state.atTimestamp) {
+      _state.cursorMs = new Date(_state.atTimestamp).getTime();
+    } else if (_state.nowTs) {
+      _state.cursorMs = new Date(_state.nowTs).getTime();
+    } else {
+      _state.cursorMs = Date.now();
+    }
+  }
+  _startPlayback();
+}
+
+function _startPlayback() {
+  if (_state.playbackTimer) return;
+  _state.playbackTimer = setInterval(_playbackTick, PLAYBACK_TICK_MS);
+  if (typeof _state.playbackTimer.unref === "function") _state.playbackTimer.unref();
+}
+
+function _stopPlayback() {
+  if (_state.playbackTimer) {
+    clearInterval(_state.playbackTimer);
+    _state.playbackTimer = null;
+  }
+  if (_state.playbackSpeed !== 0) {
+    _state.playbackSpeed = 0;
+    _renderSpeedDisplay();
+  }
+}
+
+function _playbackTick() {
+  const factor = _speedFactor(_state.playbackSpeed);
+  if (factor === 0 || _state.cursorMs == null) {
+    _stopPlayback();
+    return;
+  }
+  // Advance cursor in timeline-time by factor * tick. Positive
+  // factor = forward (cursor advances toward nowTs); negative =
+  // reverse (cursor recedes toward firstTs).
+  const nextMs = _state.cursorMs + factor * PLAYBACK_TICK_MS;
+
+  // Forward stop: cursor reached or passed present. Snap to live
+  // with preserveCamera so the user's vantage carries through the
+  // historical→live transition cleanly.
+  const nowMs = _state.nowTs ? new Date(_state.nowTs).getTime() : null;
+  if (factor > 0 && nowMs != null && nextMs >= nowMs) {
+    _stopPlayback();
+    _state.cursorMs = null;
+    _returnToNow({ preserveCamera: true });
+    return;
+  }
+
+  // Reverse stop: cursor reached or passed the earliest mark. Pause
+  // at firstTs and hold there so the user can scrub forward again
+  // from the beginning.
+  const firstMs = _state.firstTs ? new Date(_state.firstTs).getTime() : null;
+  if (factor < 0 && firstMs != null && nextMs <= firstMs) {
+    _state.cursorMs = firstMs;
+    _rewindTo(new Date(firstMs).toISOString());
+    _stopPlayback();
+    return;
+  }
+
+  _state.cursorMs = nextMs;
+  _rewindTo(new Date(nextMs).toISOString());
+}
+
+function _renderSpeedDisplay() {
+  if (!_state.timelineEl) return;
+  const speedEl = _state.timelineEl.querySelector(".bt-speed");
+  if (speedEl) speedEl.textContent = _speedLabel(_state.playbackSpeed);
+  const playEl = _state.timelineEl.querySelector(".bt-playpause");
+  if (playEl) playEl.textContent = _state.playbackSpeed === 0 ? "▶" : "⏸";
+}
+
+// Click on a specific mark dot. Rewind the world to that moment;
+// _rewindTo handles the detail-row update and the selected-dot
+// styling automatically since the cursor lands exactly at the mark.
 function _selectMark(mark) {
   if (!mark?.ts) return;
-  _state.selectedMarkTs = mark.ts;
-  _renderDetail(mark);
-  _renderTimeline(); // re-render so the dot's selected styling lands
-  window.dispatchEvent(new CustomEvent("branchbar:rewind", {
-    detail: { atTimestamp: mark.ts },
-  }));
+  // Explicit mark click is a hard scrub: kill active playback and
+  // pin the cursor here.
+  _stopPlayback();
+  _state.cursorMs = new Date(mark.ts).getTime();
+  _rewindTo(mark.ts);
 }
 
 // Populate (or clear) the detail row below the action buttons. The

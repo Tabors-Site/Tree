@@ -808,6 +808,36 @@ export async function loadExtensions(app, mcpServer, opts = {}) {
       // the entire LLM-facing surface; extensions add ops to the DO
       // operation registry instead. See seed/FACTORY.md.
 
+      // Register refs contributions into the refs registry. The
+      // substrate uses this manifest to know which fact-action params
+      // and qualities-namespace paths carry aggregate IDs, so the
+      // replicate + graft layer can substitute placeholders with
+      // new local IDs in the target reality. See seed/REFS_MANIFEST.md.
+      //
+      // Two forms accepted:
+      //   manifest.refs: { ops: {...}, qualities: {...} }
+      //   instance.refs: same shape, returned from init()
+      // The merge keeps both (manifest takes precedence on conflict
+      // because it loaded first).
+      const refsFromManifest = manifest.refs || null;
+      const refsFromInstance = instance?.refs || null;
+      if (refsFromManifest || refsFromInstance) {
+        try {
+          const { registerRefs } = await import("../seed/materials/refs.js");
+          if (refsFromManifest) registerRefs(refsFromManifest, manifest.name);
+          if (refsFromInstance) registerRefs(refsFromInstance, manifest.name);
+        } catch (err) {
+          // A refs conflict is doctrinal . the substrate must surface
+          // it. Skip the extension load rather than half-installing.
+          log.warn(
+            "Extensions",
+            `Skipping "${manifest.name}": refs registration failed: ${err.message}`,
+          );
+          _bootSkipped.push({ name: manifest.name, reason: "refs conflict" });
+          continue;
+        }
+      }
+
       // Register models from manifest (add to reality.models so other extensions can use them)
       if (manifest.provides?.models) {
         for (const [modelName, modelPath] of Object.entries(

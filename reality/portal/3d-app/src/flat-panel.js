@@ -92,6 +92,27 @@ export function closeFlatPanel(L) {
   _overlay.remove();
   _overlay = null;
 
+  // Heaven-child redirect. The flat view lets the user browse heaven
+  // catalogs (./beings, ./operations, ./roles, ./threads, ./extensions)
+  // that the 3D scene has nothing to render at. If the panel is
+  // closing on one, navigate back to the last "real" place the user
+  // was at before showing the scene again. That way text mode is the
+  // tool for catalog browsing without yanking the world out from
+  // under the user on close.
+  const currentAddr = L?.state?.currentAddress;
+  const lastReal    = L?.state?.lastNonHeavenAddress;
+  const isHeaven    = typeof L?.isHeavenChildAddress === "function"
+    && L.isHeavenChildAddress(currentAddr);
+  if (isHeaven && lastReal && lastReal !== currentAddr && typeof L.navigate === "function") {
+    // navigate() updates state.currentAddress, refetches descriptor,
+    // and re-renders the scene. Fire-and-forget — the resume below
+    // unpauses the loop; once the descriptor lands the scene renders
+    // the restored place.
+    L.navigate(lastReal).catch((err) => {
+      console.warn("[flat-panel] restore navigation failed:", err?.message);
+    });
+  }
+
   if (L?.scene && typeof L.scene.resume === "function") {
     L.scene.resume();
   }
@@ -100,8 +121,10 @@ export function closeFlatPanel(L) {
   // if there is one. The being may have moved (active-position
   // reconciler, once it ships); either way the camera lands wherever
   // the being currently is, so the user doesn't have to hunt.
+  // Skipped when we just kicked off a navigation above — the new
+  // descriptor's preload + render owns the camera placement.
   const sel = L?.state?.selectedBeing;
-  if (sel?.beingId && L?.scene?.recenterCamera) {
+  if (!isHeaven && sel?.beingId && L?.scene?.recenterCamera) {
     L.scene.recenterCamera(sel.beingId);
   }
 }

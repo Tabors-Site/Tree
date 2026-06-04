@@ -210,7 +210,7 @@ function renderQuickNav(desc, discovery) {
   const bq = branch === "0" ? "" : `#${branch}`;
   const QN = {
     home:       `${reality}${bq}/`,
-    beings:     `${reality}${bq}/.beings`,
+    beings:     `${reality}${bq}/./beings`,
     operations: `${reality}${bq}/./operations`,
     roles:      `${reality}${bq}/./roles`,
     threads:    `${reality}${bq}/./threads`,
@@ -223,7 +223,7 @@ function renderQuickNav(desc, discovery) {
     const here = (desc.address?.pathByNames || "/");
     let active = false;
     if (tag === "home"       && here === "/") active = true;
-    else if (tag === "beings"     && /^\/\.beings\b/.test(here))     active = true;
+    else if (tag === "beings"     && /^\/\.\/beings\b/.test(here))   active = true;
     else if (tag === "operations" && /^\/\.operations\b/.test(here)) active = true;
     else if (tag === "roles"      && /^\/\.roles\b/.test(here))      active = true;
     else if (tag === "threads"    && /^\/\.threads\b/.test(here))    active = true;

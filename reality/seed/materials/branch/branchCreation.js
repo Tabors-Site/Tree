@@ -37,7 +37,7 @@ import { nextChildPath, isValidBranchPath } from "./branchPath.js";
  * @param {string} [args.createdBy]           beingId of the operator
  * @returns {Promise<{ path, parent, branchPoint, anchor, createdAt }>}
  */
-export async function createBranch({ parent = MAIN, anchor, label = null, createdBy = null } = {}) {
+export async function createBranch({ parent = MAIN, anchor, label = null, createdBy = null, scope = null } = {}) {
   if (!isValidBranchPath(parent)) {
     throw new Error(`createBranch: invalid parent path "${parent}"`);
   }
@@ -50,6 +50,23 @@ export async function createBranch({ parent = MAIN, anchor, label = null, create
   // Walk the parent's lineage to validate it's reachable. Throws if
   // anything in the chain is missing.
   if (!isMain(parent)) await resolveBranchLineage(parent);
+
+  // Resolve scope.path → canonical spaceId against the parent. The
+  // scope is locked at creation time: re-pointing the path later
+  // doesn't widen or narrow the gate. Writes outside this subtree
+  // refuse with SCOPE_VIOLATION at the fact-emission boundary.
+  let resolvedScope = null;
+  if (scope) {
+    if (typeof scope !== "object" || typeof scope.path !== "string" || !scope.path.length) {
+      throw new Error("createBranch: scope must be { path: string }");
+    }
+    const { resolvePathToSpaceId } = await import("./branchScope.js");
+    const spaceId = await resolvePathToSpaceId(scope.path, parent);
+    if (!spaceId) {
+      throw new Error(`createBranch: scope.path "${scope.path}" doesn't resolve to a space on parent "#${parent}"`);
+    }
+    resolvedScope = { path: scope.path, spaceId };
+  }
 
   // 1. Pick the new branch's path.
   const siblings = await Branch
@@ -80,6 +97,7 @@ export async function createBranch({ parent = MAIN, anchor, label = null, create
     branchPoint: branchPointObj,
     createdBy:   createdBy || null,
     label:       label || null,
+    scope:       resolvedScope,
   });
 
   // 4. Invalidate the lineage cache so the new branch is visible to

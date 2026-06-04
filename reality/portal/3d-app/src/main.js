@@ -79,8 +79,16 @@ const state = {
   // flat-panel inspector focuses on one. Carries `{ beingId, name,
   // lastSetAt }`. Cleared on navigate() (new space, new context).
   // Persists across flat-panel toggle — that's how text mode opens
-  // pre-focused on the same being the user was just acting with.
+  // pre-focused on the same being the user was acting with.
   selectedBeing: null,
+  // Last navigated address that wasn't a heaven child (`./beings`,
+  // `./operations`, etc.). Updated by navigate() whenever the target
+  // is a "real" place — somewhere the 3D scene can render meaningfully.
+  // Read by closeFlatPanel: if the flat view is closing on a heaven
+  // child (e.g. the user opened text mode to browse the operations
+  // catalog), the 3D restores to this address rather than landing on
+  // the heaven catalog (which 3D has no scene for).
+  lastNonHeavenAddress: null,
   // Set of descriptor-update subscribers. Anyone (the flat panel
   // today, more later) can subscribe via subscribeDescriptor(fn);
   // every navigate / descriptor refresh fans out to all listeners.
@@ -139,6 +147,34 @@ export function setSelectedBeing(beingId, name) {
   };
 }
 
+// Heaven children — the catalog / registry spaces (`./beings`,
+// `./operations`, `./roles`, `./threads`, `./extensions`, plus the
+// system-set `./identity` / `./config` / `./peers` / `./tools` /
+// `./source`) — are text-mode-only views. The 3D scene has nothing
+// meaningful to render at them. navigate() still lets the address
+// bar / flat panel walk there (they're real substrate spaces with
+// real descriptors), but the 3D portal tracks the "last real place"
+// so closing the flat panel can restore the user there instead of
+// landing on an empty catalog scene.
+//
+// Heaven is the `.` space; its children live at `/./<name>`. The
+// detector also catches per-being synthetic views (`/.acts/<id>`,
+// `/.reel/...`, `/.branches`) which similarly can't render in 3D —
+// the 3D portal "real place" we restore to is always a navigable
+// position, not a catalog of any kind.
+export function isHeavenChildAddress(address) {
+  if (typeof address !== "string" || address.length === 0) return false;
+  // Strip any branch qualifier (`<reality>#<branch>/...`) and reality
+  // prefix before checking the path.
+  const noBranch = address.replace(/#[^/]+/, "");
+  const slash = noBranch.indexOf("/");
+  const path = slash >= 0 ? noBranch.slice(slash) : noBranch;
+  // Any path starting with `/.` is heaven, a heaven child, or a
+  // dot-prefixed synthetic catalog — none of which the 3D scene can
+  // meaningfully render. Covers `/.`, `/./X`, and `/.X` forms.
+  return path.startsWith("/.");
+}
+
 // Adapter object the flat panel uses to reach state, scene, and
 // navigation without main.js exporting a wide surface. Built once
 // and reused; flat-panel reads through it.
@@ -149,6 +185,7 @@ const L = {
   signIn:  (op, name, password) => _flatSignIn(op, name, password),
   signOut: () => _flatSignOut(),
   subscribeDescriptor,
+  isHeavenChildAddress,
 };
 
 async function _flatSignIn(op, name, password) {
@@ -313,9 +350,32 @@ async function main() {
       console.warn("[3D] rewind failed:", err?.message);
     }
   });
-  window.addEventListener("branchbar:now", () => {
-    // Same address, no at-qualifier → live again.
-    if (state.currentAddress) navigate(state.currentAddress);
+  window.addEventListener("branchbar:now", async (ev) => {
+    // Same address, no at-qualifier → live again. `preserveCamera`
+    // distinguishes "user clicked return-to-now" (default — camera
+    // resets to the spawn vantage) from "fast-forward playback caught
+    // up to present" (preserveCamera:true — keep the user's current
+    // angle since they were just continuously watching the scene).
+    const preserveCamera = ev?.detail?.preserveCamera === true;
+    if (state.currentAddress) {
+      if (preserveCamera) {
+        try {
+          const desc = await state.client.see(state.currentAddress);
+          state.descriptor = desc;
+          state.scene.setCurrentSpaceId?.(desc?.address?.spaceId || null);
+          state.scene.renderDescriptor(desc, {
+            isAuthenticated: !!state.session?.token,
+            resetCamera: false,
+          });
+          state.branchBar?.update(desc);
+          refreshAddressBar();
+        } catch (err) {
+          console.warn("[3D] resume-live (preserveCamera) failed:", err?.message);
+        }
+      } else {
+        navigate(state.currentAddress);
+      }
+    }
     _setHistoricalVisualCue(false);
     // Lift the sky pin so wall-clock takes over the dome again.
     state.scene?.setFrozenTime?.(null);
@@ -353,6 +413,11 @@ async function main() {
       const isMoveTool = item?.kind === "tool" && item?.name === "move";
       state.scene?.setMoveMode?.(isMoveTool);
     },
+    // Share the same panel-aware predicate the scene uses so wheel /
+    // key events that fire over any open overlay (flat panel, action
+    // menu, role manager, summon dialog, etc.) don't rotate the
+    // hotbar selection in the background.
+    isInputBlocked: isGameplayInputBlocked,
   });
   await refreshSeedCatalog();
 }
@@ -880,6 +945,12 @@ async function navigate(address, { fromHistory = false } = {}) {
     }
     state.descriptor = desc;
     state.currentAddress = address;
+    // Track last navigated address that wasn't a heaven child so the
+    // flat panel can restore the user there on close (rather than
+    // landing on a heaven catalog the 3D has no scene for).
+    if (!isHeavenChildAddress(address)) {
+      state.lastNonHeavenAddress = address;
+    }
     _fireDescriptorListeners(desc);
     // Live navigate clears the historical visual cue — a rewind that
     // landed here via timeline:rewind sets it; any plain navigate

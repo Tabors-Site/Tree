@@ -195,6 +195,49 @@ export async function logFact(input, opts = {}) {
     }
   }
 
+  // Subtree-scope gate. When the branch declares a scope (a space
+  // subtree), writes to aggregates outside the scope refuse loud.
+  // Heaven writes routed above are exempt (heaven targets bypass this
+  // check by virtue of branch already being "0"). The check is a
+  // single classifier hit + an ancestor walk on miss; cached.
+  //
+  // Doctrine: subtree branches let operators experiment on one feature
+  // without contaminating the rest of the reality. Outside the scope,
+  // the branch is transparent (reads inherit from parent); inside,
+  // it diverges normally. Writes outside the scope are loud bugs
+  // (you forgot to switch branches), not silent forwards.
+  if (
+    normalizedTarget &&
+    normalizedTarget.kind &&
+    normalizedTarget.id &&
+    branch !== "0"
+  ) {
+    try {
+      const { isTargetInBranchScope, getBranchScopeSpaceId } = await import(
+        "../../materials/branch/branchScope.js",
+      );
+      const scopeSpaceId = await getBranchScopeSpaceId(branch);
+      if (scopeSpaceId) {
+        const allowed = await isTargetInBranchScope(branch, normalizedTarget);
+        if (!allowed) {
+          throw new IbpError(
+            IBP_ERR.FORBIDDEN,
+            `SCOPE_VIOLATION: branch "#${branch}" is scoped to a subtree and ` +
+            `cannot write to ${normalizedTarget.kind}:${normalizedTarget.id} ` +
+            `(outside scope spaceId "${scopeSpaceId}"). ` +
+            `Switch to the parent branch to act on out-of-scope targets, ` +
+            `or widen the branch's scope via re-creation.`,
+            { branch, target: normalizedTarget, scopeSpaceId },
+          );
+        }
+      }
+    } catch (err) {
+      // Re-throw IbpErrors (the SCOPE_VIOLATION above); swallow any
+      // module-load failures as pre-bootstrap signals.
+      if (err instanceof IbpError) throw err;
+    }
+  }
+
   // Per-verb target-kind constraint. BE acts on the actor's own
   // identity; SUMMON acts on the recipient. Both are always being-
   // targeted. Only DO can target a non-being kind (space, matter,

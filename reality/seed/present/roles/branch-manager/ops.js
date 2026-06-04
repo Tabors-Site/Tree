@@ -79,6 +79,11 @@ registerOperation("create-branch", {
       label:    "Optional named pointer to attach to the new branch in the same call (e.g. \"feature-x\"). Equivalent to following create-branch with set-pointer.",
       required: false,
     },
+    scope: {
+      type:     "text",
+      label:    "Optional space path (e.g. \"/library\") to scope this branch to a subtree. Writes outside the subtree refuse with SCOPE_VIOLATION; reads outside inherit from parent. Use when experimenting on one feature without contaminating the rest of the reality.",
+      required: false,
+    },
   },
   handler: async ({ params, identity, summonCtx }) => {
     const parent  = String(params?.parent || MAIN).trim() || MAIN;
@@ -117,6 +122,12 @@ registerOperation("create-branch", {
         "create-branch: provide atSeq or atTimestamp to anchor the branch point");
     }
 
+    const scopePath = params?.scope ? String(params.scope).trim() : null;
+    if (scopePath && !scopePath.startsWith("/")) {
+      throw new IbpError(IBP_ERR.INVALID_INPUT,
+        `create-branch: scope must be a path starting with "/" (e.g. "/library"); got "${scopePath}"`);
+    }
+
     let result;
     try {
       result = await createBranch({
@@ -124,6 +135,7 @@ registerOperation("create-branch", {
         anchor,
         label,
         createdBy: identity?.beingId || null,
+        scope: scopePath ? { path: scopePath } : null,
       });
     } catch (err) {
       // Path / lineage / arg errors surface as INVALID_INPUT; anything
@@ -170,6 +182,7 @@ registerOperation("create-branch", {
     };
     if (pointerAttached) response.pointerAttached = pointerAttached;
     if (pointerWarning) response.pointerWarning = pointerWarning;
+    if (scopePath) response.scope = { path: scopePath };
     return response;
   },
 });

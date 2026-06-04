@@ -292,7 +292,7 @@ function wireQuickNav(root, _ctx) {
       const branch = _state.descriptor?.address?.branch || "0";
       const bq = branch === "0" ? "" : `#${branch}`;
       let path = "/";
-      if (tag === "beings")     path = "/.beings";
+      if (tag === "beings")     path = "/./beings";
       else if (tag === "operations") path = "/./operations";
       else if (tag === "roles")      path = "/./roles";
       else if (tag === "threads")    path = "/./threads";
@@ -341,7 +341,7 @@ function wireKeyboardShortcuts(ctx) {
       const branch = _state.descriptor?.address?.branch || "0";
       const bq = branch === "0" ? "" : `#${branch}`;
       if      (ev.key === "h") { ev.preventDefault(); flat.navigate(`${reality}${bq}/`); }
-      else if (ev.key === "b") { ev.preventDefault(); flat.navigate(`${reality}${bq}/.beings`); }
+      else if (ev.key === "b") { ev.preventDefault(); flat.navigate(`${reality}${bq}/./beings`); }
       else if (ev.key === "o") { ev.preventDefault(); flat.navigate(`${reality}${bq}/./operations`); }
       else if (ev.key === "r") { ev.preventDefault(); flat.navigate(`${reality}${bq}/./roles`); }
       else if (ev.key === "t") { ev.preventDefault(); flat.navigate(`${reality}${bq}/./threads`); }

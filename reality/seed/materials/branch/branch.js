@@ -82,6 +82,32 @@ const BranchSchema = new mongoose.Schema({
   //
   // Empty for branches created by create-branch.
   mergeSources: { type: [String], default: () => [] },
+
+  // Subtree scope. When set, this branch is scoped to a specific
+  // space subtree . writes to aggregates whose home space is NOT
+  // inside `scope.spaceId`'s lineage are refused at the fact-emission
+  // boundary (SCOPE_VIOLATION). Reads outside scope inherit from
+  // the parent branch's projection unchanged.
+  //
+  // The doctrine: a subtree branch lets operators experiment on a
+  // single feature without contaminating the rest of the reality.
+  // Outside the scope, the branch is transparent . callers see the
+  // parent's state. Inside the scope, the branch diverges normally.
+  //
+  // `scope.path` is the user-facing path (e.g. "/library"); stored
+  // for display + audit. `scope.spaceId` is the resolved canonical
+  // _id, captured at branch creation time when the scope is locked
+  // against the parent's view.
+  //
+  // Whole-reality branches (the default) have `scope: null`. The
+  // fast path in logFact short-circuits when scope is null.
+  scope: {
+    type: {
+      path:    { type: String },
+      spaceId: { type: String },
+    },
+    default: null,
+  },
 });
 
 const Branch = mongoose.model("Branch", BranchSchema, "branches");
