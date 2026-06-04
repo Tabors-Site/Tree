@@ -84,8 +84,15 @@ export function extractBeingQualifier(address) {
 /**
  * Parse + validate a unified IBP envelope.
  *
- * Returns `{ id, verb, address, addressKind, payload, identity }`. The
- * verb handlers consume this directly; no per-verb-field extraction.
+ * Returns `{ id, verb, address, addressKind, payload }`. The verb
+ * handlers consume this directly; no per-verb-field extraction.
+ *
+ * Identity is NOT carried in the envelope. The address IS the actor:
+ * left stance's resolved beingId names the caller, the authenticated
+ * socket proves they're allowed to be that caller. Cross-reality
+ * provenance arrives via a signed-envelope mechanism documented in
+ * FEDERATION.md (Diff B); local calls authenticate purely through
+ * the transport-attached auth (socket / req).
  *
  * Throws IbpError(INVALID_INPUT) when:
  *   - envelope is not an object
@@ -174,7 +181,12 @@ export function parseUnifiedEnvelope(msg) {
   }
 
   const payload = (msg.payload && typeof msg.payload === "object") ? msg.payload : {};
-  const identity = msg.identity !== undefined ? msg.identity : (payload.identity !== undefined ? payload.identity : null);
+
+  // Identity is intentionally not extracted. Per Diff A, the address
+  // IS the actor (left stance resolved to beingId at the wire). Legacy
+  // callers may still send `identity` in the envelope or payload; the
+  // parser ignores it. The transport-attached auth (socket / req) is
+  // what the verb gate trusts.
 
   return {
     id:          msg.id || null,
@@ -182,7 +194,6 @@ export function parseUnifiedEnvelope(msg) {
     address,
     addressKind,
     payload,
-    identity,
   };
 }
 

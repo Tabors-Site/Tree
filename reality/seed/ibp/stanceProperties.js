@@ -52,37 +52,41 @@ import { getAncestorChain } from "../materials/space/ancestorCache.js";
 import { isReigning } from "../materials/being/reigning.js";
 
 const ARRIVAL_PROPS = Object.freeze({
-  beingId:              null,
-  name:                 null,
-  role:                 null,
-  arrival:              true,
-  owner:                false,
-  contributor:          false,
-  homeAtPosition:       false,
-  homeInDomain:         false,
+  beingId: null,
+  name: null,
+  role: null,
+  arrival: true,
+  owner: false,
+  contributor: false,
+  homeAtPosition: false,
+  homeInDomain: false,
   positionInHomeDomain: false,
   // homeAncestors: the set of spaceIds along the home's ancestor chain
   // (including the home itself). Layer 4's comparator uses this to
   // resolve scoped checks like `homeInDomain: "<rulership-spaceId>"`
   // ("is this specific space anywhere in the home's ancestry?").
-  homeAncestors:        Object.freeze([]),
+  homeAncestors: Object.freeze([]),
   // reigning: true for the I-Am and for every being parented directly
   // under her . the seed delegates (cherub, llm-assigner, reality-
   // manager, arrival) and the rootOperator (first human). Many beings
   // can reign at once. Heaven and Tier-3 seed spaces gate on this
   // prop. Arrival (unauthenticated) never reigns.
-  reigning:             false,
-  homeOnThisReality:       true,
-  federatedFrom:        null,
+  reigning: false,
+  homeOnThisReality: true,
+  federatedFrom: null,
 });
 
 /**
  * @param {object} args
  * @param {string|null} args.beingId       acting being's id (null = unauthenticated arrival)
- * @param {string|null} args.targetSpace  the position the verb is acting on (null = place/discovery)
+ * @param {string|null} args.targetSpace  the position the verb is acting on (null = reality/discovery)
  * @returns {Promise<object>}              the stance property bag
  */
-export async function deriveStanceProperties({ beingId, targetSpace, branch = "0" }) {
+export async function deriveStanceProperties({
+  beingId,
+  targetSpace,
+  branch = "0",
+}) {
   if (!beingId) return { ...ARRIVAL_PROPS };
 
   // loadOrFold (not loadProjection): on a fresh branch the being's slot
@@ -106,23 +110,23 @@ export async function deriveStanceProperties({ beingId, targetSpace, branch = "0
   const reigning = isReigning(String(being._id));
 
   const props = {
-    beingId:              String(being._id),
-    name:             being.name,
+    beingId: String(being._id),
+    name: being.name,
     // `role` here is the derived default capacity for authorization
     // gating when the summon hasn't named an active role. The verb
     // handler passes `activeRole` separately into authorize so
     // per-role gates can use the more specific value when present.
-    role:                 being.defaultRole || null,
-    arrival:              false,
-    owner:                false,
-    contributor:          false,
-    homeAtPosition:       false,
-    homeInDomain:         false,
+    role: being.defaultRole || null,
+    arrival: false,
+    owner: false,
+    contributor: false,
+    homeAtPosition: false,
+    homeInDomain: false,
     positionInHomeDomain: false,
-    homeAncestors:        [],
+    homeAncestors: [],
     reigning,
-    homeOnThisReality:       !being.isRemote,
-    federatedFrom:        being.isRemote ? (being.homeReality || null) : null,
+    homeOnThisReality: !being.isRemote,
+    federatedFrom: being.isRemote ? being.homeReality || null : null,
   };
 
   // Precompute the home's ancestor chain (as ids) so the comparator
@@ -153,7 +157,9 @@ export async function deriveStanceProperties({ beingId, targetSpace, branch = "0
       // not also the owner — owner subsumes it.
       if (access.canWrite && !access.isOwner) props.contributor = true;
     }
-  } catch { /* defensive — leave as false */ }
+  } catch {
+    /* defensive — leave as false */
+  }
 
   // Home relations. Two directions: home-inside-target's-subtree, and
   // target-inside-home's-subtree. Either or both can be true.
@@ -174,7 +180,9 @@ export async function deriveStanceProperties({ beingId, targetSpace, branch = "0
           }
         }
       }
-    } catch { /* defensive */ }
+    } catch {
+      /* defensive */
+    }
 
     // positionInHomeDomain: homeSpace appears in target's ancestor chain.
     try {
@@ -187,7 +195,9 @@ export async function deriveStanceProperties({ beingId, targetSpace, branch = "0
           }
         }
       }
-    } catch { /* defensive */ }
+    } catch {
+      /* defensive */
+    }
   }
 
   return props;

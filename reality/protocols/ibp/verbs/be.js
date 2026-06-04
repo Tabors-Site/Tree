@@ -2,7 +2,13 @@
 //
 // Consumes the unified envelope:
 //
-//   { id, verb: "be", address (stance or place), payload, identity? }
+//   { id, verb: "be", address (stance or place), payload }
+//
+// Identity is NOT in the envelope. See do.js for the address-as-actor
+// doctrine. BE has one special case: arrival flows (birth, connect
+// from an unauthenticated socket) legitimately have socket.beingId
+// === null. The impersonation gate only fires when BOTH sides are
+// set, so arrival-cherub flows are unaffected.
 //
 // `payload.op` is one of "birth" | "connect" | "release".
 // Remaining payload fields carry operation-specific credentials/state.
@@ -100,15 +106,35 @@ export async function handleBe(socket, env, ack) {
     // qualifier, refuse before opening the moment.
     const callerBranch = socket.currentBranch || "0";
     try {
-      const { parseFromSocket, expand, getRealityDomain } =
+      const { parseFromSocket, expand, resolveBeingIds, getRealityDomain } =
         await import("../../../seed/ibp/address.js");
       const parsed = parseFromSocket(socket, address);
-      const expanded = expand(parsed, {
+      const expandCtx = {
         currentReality: getRealityDomain(),
         currentUser:    socket.name,
         currentBranch:  callerBranch,
         currentPath:    socket.currentPath || null,
-      });
+      };
+      const expanded = await resolveBeingIds(expand(parsed, expandCtx), expandCtx);
+
+      // Impersonation refusal . see do.js for the doctrine. BE is the
+      // narrow exception case: arrival flows (birth, connect from no
+      // identity) legitimately have socket.beingId === null. The check
+      // only fires when BOTH sides are set, so arrival-cherub flows are
+      // unaffected.
+      if (
+        expanded.left?.beingId &&
+        socket?.beingId &&
+        expanded.left.beingId !== socket.beingId
+      ) {
+        throw new IbpError(
+          IBP_ERR.FORBIDDEN,
+          `Address actor (@${expanded.left.being}) does not match ` +
+          `authenticated being. Caller cannot impersonate.`,
+          { addressBeingId: expanded.left.beingId, socketBeingId: socket.beingId },
+        );
+      }
+
       const targetBranch = expanded?.right?.branch || "0";
       if (callerBranch !== targetBranch) {
         throw new IbpError(IBP_ERR.CROSS_BRANCH_FORBIDDEN,
@@ -119,7 +145,8 @@ export async function handleBe(socket, env, ack) {
     } catch (err) {
       // Re-throw structured IBP errors; swallow parse failures so the
       // downstream beVerb owns address validation.
-      if (err && err.code === IBP_ERR.CROSS_BRANCH_FORBIDDEN) throw err;
+      if (err && (err.code === IBP_ERR.CROSS_BRANCH_FORBIDDEN
+                || err.code === IBP_ERR.FORBIDDEN)) throw err;
     }
     const branch = callerBranch;
 

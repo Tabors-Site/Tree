@@ -1,10 +1,15 @@
 // IBP SEE — wire adapter.
 //
-// Envelope: { id, verb: "see", address, payload: { live?, at? }, identity? }
+// Envelope: { id, verb: "see", address, payload: { live?, at? } }
 //
 // Thin glue: delegates to `seeVerb` in seed/ibp/verbs/see.js for the
 // descriptor, then subscribes the socket to live updates when the
 // payload asks for them.
+//
+// Identity flows from the authenticated socket, NOT from the envelope.
+// The address IS the identity for verb dispatch (per Diff A doctrine);
+// the seed-side seeVerb takes an `identity` opt for back-compat
+// during the migration but the wire constructs it from socket.
 //
 // `payload.at = { atSeq?, atTimestamp? }` is the historical-read
 // qualifier. When present, the descriptor returned is the substrate's

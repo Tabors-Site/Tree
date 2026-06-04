@@ -79,11 +79,25 @@ Every transport produces the same envelope before calling `dispatchIbp`:
   verb:     "see" | "do" | "summon" | "be",
   address:  "<position | stance | ibp-address>",
   payload:  { /* per-verb */ },
-  identity: { beingId, username } | null,
 }
 ```
 
-WebSocket carries it on the single `"ibp"` event in both directions. HTTP carries it in the URL (`verb` + `address`) plus body (`payload`) and header / cookie (`identity`). Different envelopes; same dispatcher; same execution.
+Identity is NOT in the envelope. The address IS the actor — the left
+stance's `@being` resolves to a canonical `beingId` at the wire
+boundary (`resolveBeingIds` in `seed/ibp/address.js`), and the verb
+dispatcher reads it from there. Transport-attached auth (the socket
+or req) proves the caller is who the address says they are; the wire
+refuses on mismatch (impersonation gate).
+
+Cross-reality provenance (envelopes signed by foreign realities) is
+specified in `protocols/ibp/FEDERATION.md` (Diff B); it adds an
+optional `signature` block. Local calls authenticate purely through
+transport-attached auth and carry no signature.
+
+WebSocket carries the envelope on the single `"ibp"` event in both
+directions. HTTP carries it in the URL (`verb` + `address`) plus body
+(`payload`); auth flows via header / cookie on the request. Different
+envelopes; same dispatcher; same execution.
 
 ## What this folder must never do
 

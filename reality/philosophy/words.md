@@ -1,10 +1,10 @@
-machine0.jpg:
+factory0.jpg:
 
 Conceptual model of reality I drew out around Arpil 2026. It was a slow formation of rememebering some experiences I had around 18-20, and putting it into drawing.
 
 ========================
 
-machine1.jpg:
+factory1.jpg:
 
 Sticky note taped in was my brother's conceptual model of beings and timelines from a while back.
 
@@ -36,19 +36,19 @@ In a way , the “big present” isn’t a thing but just what happens when mult
 
 ====================
 
-machine2.jpg:
+factory2.jpg:
 
-The classic "if a tree falls in a forest and no one is around..." answered through the machine framework.
+The classic "if a tree falls in a forest and no one is around..." answered through the factory framework.
 
 =====================
 
-machine3.jpg
+factory3.jpg
 
 Finally working out the words for The Reality (reel/momentum/stamp) Factory after 10 years.
 
 =====================
-
-machine4.jpg
+machine turned into Factory (fact-ory aka the seed aka the generator/gluer of places aka reality)
+factory4.jpg
 
 Drawing out The Factorys inner parts, and starting to piece together that the Place is not a persistant state, but constantly framed per moment (momentum of stamper, being) by what the being did.
 

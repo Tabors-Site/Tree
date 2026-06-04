@@ -106,12 +106,14 @@ async function ibpHttpHandler(req, res) {
   });
 
   // Build the unified envelope and dispatch through the shared handler.
+  // Identity flows via the carrier (req.beingId/name set above); the
+  // wire verbs read it from there, not from the envelope. The address
+  // IS the actor per Diff A doctrine.
   const msg = {
     id:       body.id || req.headers["x-ibp-id"] || null,
     verb,
     address,
     payload,
-    identity: identity ? { beingId: identity.beingId, username: identity.name } : null,
   };
 
   const ack = await dispatchAndWait(carrier, msg);

@@ -190,6 +190,60 @@ export function expand(pa, ctx = {}) {
 }
 
 /**
+ * Resolve `@being` names to canonical beingIds on an expanded address.
+ *
+ * Doctrine: the address IS the identity. The left stance's `@being`
+ * name plus the stance's (reality, branch) triple uniquely identifies
+ * a being row via findByName. After this resolution, every local
+ * stance with a `@being` qualifier also carries its `beingId`, and
+ * the verb dispatcher reads the actor from the address directly . no
+ * separate `identity` envelope field.
+ *
+ * Foreign-reality stances (reality !== ctx.currentReality) pass through
+ * with no beingId resolution; the foreign substrate does its own
+ * lookup when the envelope arrives there.
+ *
+ * Stances with no `@being` (position-only or stance with just a path)
+ * leave beingId unset.
+ *
+ * Idempotent: re-running on an already-resolved stance is a no-op.
+ *
+ * @param {{ left?, right }} pa  expanded address (output of `expand`)
+ * @param {object} ctx
+ * @param {string} ctx.currentReality   this server's reality domain
+ * @returns {Promise<{ left?, right }>}  same shape, with beingId on resolved stances
+ */
+export async function resolveBeingIds(pa, ctx = {}) {
+  if (!pa || typeof pa !== "object") return pa;
+  return {
+    left: pa.left ? await _resolveStanceBeingId(pa.left, ctx) : null,
+    right: await _resolveStanceBeingId(pa.right, ctx),
+  };
+}
+
+async function _resolveStanceBeingId(stance, ctx) {
+  if (!stance || !stance.being) return stance;
+  if (stance.beingId) return stance;
+  const localReality = ctx.currentReality || getRealityDomain();
+  // Foreign reality: no local resolution. The receiving substrate
+  // handles it. beingId stays unset on this side.
+  if (stance.reality && stance.reality !== localReality) return stance;
+  try {
+    const { findByName } = await import("../materials/projections.js");
+    const branch = stance.branch || "0";
+    const slot = await findByName("being", stance.being, branch);
+    if (slot?.id) {
+      return { ...stance, beingId: String(slot.id) };
+    }
+  } catch {
+    // Lookup failure leaves beingId unset; the caller's verb gate
+    // throws BEING_NOT_FOUND. Don't swallow into a generic error here
+    // . the verb layer has better context for the message.
+  }
+  return stance;
+}
+
+/**
  * Round-trip canonicalization: parse, expand against ctx, re-format.
  * The result is the most explicit form the address can take.
  */

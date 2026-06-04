@@ -3,22 +3,29 @@
 // Login menu (opened when you gaze at the cherub), gaze labels above
 // objects, and a small HUD line at the top of the screen.
 
+import { setPortalStatus } from "../../shared/portal-status.js";
+
 const overlayRoot = () => document.getElementById("overlays");
 const hudTop = () => document.getElementById("hud-top");
 const hudBottom = () => document.getElementById("hud-bottom");
 
 let labelEl = null;
 
+// All status / HUD messages route through the shared toast at body
+// level so they stay visible in both render modes (3D scene + text
+// mode) and sit above every panel (hotbar, timeline, flat overlay).
+// Errors render red; info renders dim gray. See
+// portal/shared/portal-status.js for the classifier.
 export function setHud(text) {
-  // Use the bottom HUD as the status line; the top is occupied by the
-  // address bar now.
+  setPortalStatus(text);
+  // Keep writing the legacy #hud-bottom slot too so any consumer that
+  // reads back via textContent (debug tools, tests) still works.
   const el = hudBottom();
-  if (el) el.textContent = text;
+  if (el) el.textContent = text || "";
 }
 
 export function setHudBottom(text) {
-  const el = hudBottom();
-  if (el) el.textContent = text;
+  setHud(text);
 }
 
 // ── Address bar ────────────────────────────────────────────────────

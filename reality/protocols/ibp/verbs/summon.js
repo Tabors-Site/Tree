@@ -2,7 +2,10 @@
 //
 // Consumes the unified envelope per [[project_ibp_wire_shape]]:
 //
-//   { id, verb: "summon", address (stance), payload: { message, ...threading }, identity? }
+//   { id, verb: "summon", address (stance), payload: { message, ...threading } }
+//
+// Identity is NOT in the envelope. See do.js for the address-as-actor
+// doctrine.
 //
 // `payload.message` is the inbox payload: `{ from, content,
 // correlation?, inReplyTo?, attachments?, sentAt?, activeRole? }`.
@@ -75,15 +78,31 @@ export async function handleSummon(socket, env, ack) {
     // cross-branch portals exist.
     const callerBranch = socket.currentBranch || "0";
     try {
-      const { parseFromSocket, expand, getRealityDomain } =
+      const { parseFromSocket, expand, resolveBeingIds, getRealityDomain } =
         await import("../../../seed/ibp/address.js");
       const parsed = parseFromSocket(socket, address);
-      const expanded = expand(parsed, {
+      const expandCtx = {
         currentReality: getRealityDomain(),
         currentUser:    socket.name,
         currentBranch:  callerBranch,
         currentPath:    socket.currentPath || null,
-      });
+      };
+      const expanded = await resolveBeingIds(expand(parsed, expandCtx), expandCtx);
+
+      // Impersonation refusal . see do.js for the doctrine.
+      if (
+        expanded.left?.beingId &&
+        socket?.beingId &&
+        expanded.left.beingId !== socket.beingId
+      ) {
+        throw new IbpError(
+          IBP_ERR.FORBIDDEN,
+          `Address actor (@${expanded.left.being}) does not match ` +
+          `authenticated being. Caller cannot impersonate.`,
+          { addressBeingId: expanded.left.beingId, socketBeingId: socket.beingId },
+        );
+      }
+
       const targetBranch = expanded?.right?.branch || "0";
       if (callerBranch !== targetBranch) {
         throw new IbpError(IBP_ERR.CROSS_BRANCH_FORBIDDEN,
@@ -92,7 +111,8 @@ export async function handleSummon(socket, env, ack) {
           { callerBranch, targetBranch });
       }
     } catch (err) {
-      if (err && err.code === IBP_ERR.CROSS_BRANCH_FORBIDDEN) throw err;
+      if (err && (err.code === IBP_ERR.CROSS_BRANCH_FORBIDDEN
+                || err.code === IBP_ERR.FORBIDDEN)) throw err;
       // Parse failures fall through; summonVerb owns address validation.
     }
 

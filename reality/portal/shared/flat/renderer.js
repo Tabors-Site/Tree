@@ -17,14 +17,19 @@ import { showAuthOverlay } from "./identity.js";
 import { renderRoleManagerPanel } from "../role-manager-panel.js";
 import { renderBeingFlowPanel } from "../being-flow-panel.js";
 import { renderTimelineSection } from "./being-timeline.js";
+import { setPortalStatus } from "../portal-status.js";
 
 // ────────────────────────────────────────────────────────────────
 // Public surface
 // ────────────────────────────────────────────────────────────────
 
+// Status messages route through the shared body-level toast (above
+// every panel, red for errors). Also writes the legacy #status-line
+// slot if it exists so any consumer reading it back still sees it.
 export function setStatus(text) {
+  setPortalStatus(text);
   const el = document.getElementById("status-line");
-  if (el) el.textContent = text;
+  if (el) el.textContent = text || "";
 }
 
 export function clearDetail() {

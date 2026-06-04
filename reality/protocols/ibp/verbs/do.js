@@ -2,11 +2,18 @@
 //
 // Consumes the unified envelope:
 //
-//   { id, verb: "do", address, payload: { action, args?, correlation? }, identity? }
+//   { id, verb: "do", address, payload: { action, args?, correlation? } }
 //
 // `address` is a position; a stance shape is accepted but its @being
 // qualifier is informational (stripped). The world is data at positions;
 // beings are not data targets.
+//
+// Identity is NOT in the envelope. The address IS the actor (per Diff
+// A doctrine): the wire constructs the left stance from the socket's
+// authenticated being, resolveBeingIds attaches the canonical beingId,
+// and the verb dispatcher reads it from there. If the caller types an
+// explicit left stance with a different @being than the socket
+// authenticated, the wire refuses (impersonation gate).
 //
 // `payload.action` names the registered DO operation. `payload.args`
 // carries the operation's arguments (legacy: any non-reserved field).
@@ -37,7 +44,7 @@
 // and ride the cherub-as-actor path in be.js.
 
 import log from "../../../seed/seedReality/log.js";
-import { parseFromSocket, expand, getRealityDomain } from "../../../seed/ibp/address.js";
+import { parseFromSocket, expand, resolveBeingIds, getRealityDomain } from "../../../seed/ibp/address.js";
 import { resolveStance } from "../../../seed/ibp/resolver.js";
 import { IbpError, IBP_ERR, isIbpError } from "../../../seed/ibp/protocol.js";
 import { ackOk, ackError, stripBeingQualifier, extractBeingQualifier } from "../envelope.js";
@@ -85,12 +92,32 @@ export async function handleDo(socket, env, ack) {
     const positionString = stripBeingQualifier(address);
 
     const parsed = parseFromSocket(socket, positionString);
-    const expanded = expand(parsed, {
+    const expandCtx = {
       currentReality: getRealityDomain(),
       currentUser:    socket.name,
       currentBranch:  socket.currentBranch || "0",
       currentPath:    socket.currentPath   || null,
-    });
+    };
+    const expanded = await resolveBeingIds(expand(parsed, expandCtx), expandCtx);
+
+    // Impersonation refusal. The address IS the identity. When the
+    // caller types an explicit left stance with an @being qualifier,
+    // its resolved beingId must match the authenticated socket. No
+    // current caller types left stances, so this gate is a no-op
+    // today . it's the wire-side enforcement that becomes load-bearing
+    // when cross-reality addressing lands (see FEDERATION.md, Diff B).
+    if (
+      expanded.left?.beingId &&
+      socket?.beingId &&
+      expanded.left.beingId !== socket.beingId
+    ) {
+      throw new IbpError(
+        IBP_ERR.FORBIDDEN,
+        `Address actor (@${expanded.left.being}) does not match ` +
+        `authenticated being. Caller cannot impersonate.`,
+        { addressBeingId: expanded.left.beingId, socketBeingId: socket.beingId },
+      );
+    }
 
     // Cross-branch gate at the wire boundary. The caller's first-person
     // frame is the socket's tracked branch; the target's branch is the
