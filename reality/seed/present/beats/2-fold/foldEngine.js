@@ -253,13 +253,7 @@ export async function fold(type, id, opts = {}) {
     if (!skipCrossCutting) await dispatchCrossCutting(f, type, id);
   }
   const newFoldedSeq = tail[tail.length - 1].seq;
-  // Denormalized position cache stores the bare-string id; see initProjection
-  // call above for rationale.
-  const { refId: _refId } = await import("../../../materials/ref.js");
-  const rawPosition2 = state.position !== undefined ? state.position : undefined;
-  const position = rawPosition2 && typeof rawPosition2 === "object"
-    ? _refId(rawPosition2)
-    : rawPosition2;
+  const position = state.position !== undefined ? state.position : undefined;
 
   // CAS: only advance if no one beat us. On failure, the next fold
   // catches up. Per-branch slot — main and #1 don't contend.
@@ -328,15 +322,7 @@ export async function rebuild(type, id, opts = {}) {
     return { state, foldedSeq: lastSeq };
   }
 
-  // state.position is a space-Ref (REFS.md) when set; the projection's
-  // top-level `position` field is a bare-string denormalized cache
-  // (sparse-indexed for findByPosition). Extract the bare id here so
-  // the denormalized cache stays string-typed.
-  const { refId } = await import("../../../materials/ref.js");
-  const rawPosition = state.position !== undefined ? state.position : undefined;
-  const position = rawPosition && typeof rawPosition === "object"
-    ? refId(rawPosition)
-    : rawPosition;
+  const position = state.position !== undefined ? state.position : undefined;
   await initProjection(type, id, branch, { state, foldedSeq: lastSeq, position });
 
   return { state, foldedSeq: lastSeq };

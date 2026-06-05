@@ -1,13 +1,14 @@
 // TreeOS Seed . AGPL-3.0 . https://treeos.ai . Tabor Holly
 //
-// Refs — TreeOS's typed identity primitive.
+// Refs — TreeOS's content-walking primitive.
 //
-// Anywhere the substrate carries an aggregate ID, the value is a
-// tagged Ref, not a bare string. Cross-substrate operations
-// (replicate, graft, future mirror, future deep-clone) detect refs
-// by structure and remap them automatically.
+// Refs exist for ONE job: walking arbitrary content to find
+// aggregate references where the schema isn't accessible. Three seams:
+// replicate, clone, federation. Everywhere else the substrate's
+// schemas know what's an ID; bare IDs flow through.
 //
-// See seed/REFS.md for the full doctrine and public API.
+// See seed/REFS.md for the doctrine and the scope of where Refs do
+// and do not earn their place.
 //
 // Shape:
 //   { __ref: "being",  id: "abc-123" }
@@ -120,10 +121,19 @@ export function refKind(v) {
 }
 
 /**
- * The aggregate id of a Ref, or null when the input is a sentinel or
- * not a Ref. Use this to look up the local id in a remap table.
+ * The aggregate id from a Ref OR a bare string. Tolerant by design:
+ *   refId(ref("being", "abc"))  → "abc"
+ *   refId("abc")                → "abc"
+ *   refId(null) / refId(undef)  → null
+ *   refId(sentinelRef)          → null
+ *
+ * Consumers that read possibly-mixed substrate data (during the lazy
+ * cleanup of Phase 1.6 over-reach, where storage may hold either
+ * bare strings or Refs) call refId() unconditionally; no branch needed.
  */
 export function refId(v) {
+  if (v == null) return null;
+  if (typeof v === "string") return v.length ? v : null;
   return isAggregateRef(v) ? v.id : null;
 }
 

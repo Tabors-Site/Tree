@@ -3,7 +3,7 @@
 This licensing applies to **the seed** only: the code in
 [seed/](seed/), the apparatus that defines what TreeOS IS. Nothing
 else in this repository is governed by it. Extensions, roleFlows,
-clones, portals (browsers), and work replicated or posted to Horizon
+clones/replicates (branches), portals (browsers), and work pulled or pushed to Horizon
 are not covered here; they carry their own terms (or none).
 
 The seed is dual licensed.

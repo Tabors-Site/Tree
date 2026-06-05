@@ -402,7 +402,6 @@ async function _registerHumanWithFreshHome({
   const homeId = uuidv4();
   const placeRootId = getSpaceRootId();
   const actorId = cherubIdentity?.beingId || I_AM;
-  const { ref: makeSpaceRef } = await import("../../../materials/ref.js");
   await emitFact({
     verb:   "do",
     action: "create-space",
@@ -412,8 +411,7 @@ async function _registerHumanWithFreshHome({
       spec: {
         name,                           // home space is named for the user
         type: "home-territory",
-        // parent is a typed space-Ref (REFS.md).
-        parent: makeSpaceRef("space", String(placeRootId)),
+        parent: String(placeRootId),
         rootOwner: null,                 // becomes the new being after step 3
         size: { x: 100, y: 100 },
         qualities: {},
@@ -424,15 +422,14 @@ async function _registerHumanWithFreshHome({
   }, summonCtx);
 
   // ── 2. Birth the being into the new home ──
-  const { ref } = await import("../../../materials/ref.js");
   const result = await birthBeing({
     spec: {
       cognition:     "human",
       name,
       password,
       defaultRole:   "human",
-      homeId:        ref("space", String(homeId)),
-      parentBeingId: parentBeingId ? ref("being", String(parentBeingId)) : null,
+      homeId:        String(homeId),
+      parentBeingId: parentBeingId ? String(parentBeingId) : null,
       // birthHere stays false (default): the being appears at their
       // own home, which is what registration semantically means.
     },
@@ -447,11 +444,10 @@ async function _registerHumanWithFreshHome({
   // the new being's identity faces a chicken-and-egg with stance auth
   // (they're becoming the owner; auth needs them to already be one).
   const { doVerb } = await import("../../../ibp/verbs/do.js");
-  // rootOwner is a being-Ref (REFS.md).
   await doVerb(
     { kind: "space", id: homeId },
     "set-space",
-    { field: "rootOwner", value: makeSpaceRef("being", String(result.beingId)) },
+    { field: "rootOwner", value: String(result.beingId) },
     { scaffold: true, summonCtx },
   );
 

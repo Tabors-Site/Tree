@@ -178,23 +178,21 @@ export const danceFloorSeed = {
       throw new Error("birthBeing drummer returned no beingId");
     }
     // Register the drummer on the dance-floor's qualities.beings so
-    // stance resolution by name works at this position.
-    {
-      const { ref: _ref } = await import("../../../seed/materials/ref.js");
-      await reality.do(gridSpaceId, "set-space", {
-        field: "qualities.beings",
-        value: {
-          [`drummer-${plantedSeedId.slice(0, 6)}`]: {
-            // beingId is a typed being-Ref (REFS.md).
-            beingId: _ref("being", drummerBeingId),
-            role: "harmony:drummer",
-            installedAt: new Date().toISOString(),
-            installedBy: "harmony:danceFloor",
-          },
+    // stance resolution by name works at this position. beingId is
+    // a bare being-id string; the substrate's schema knows what kind
+    // of ID this is.
+    await reality.do(gridSpaceId, "set-space", {
+      field: "qualities.beings",
+      value: {
+        [`drummer-${plantedSeedId.slice(0, 6)}`]: {
+          beingId: String(drummerBeingId),
+          role: "harmony:drummer",
+          installedAt: new Date().toISOString(),
+          installedBy: "harmony:danceFloor",
         },
-        merge: true,
-      }, opOpts);
-    }
+      },
+      merge: true,
+    }, opOpts);
     log.info("Harmony", `summoned drummer being ${drummerBeingId.slice(0, 8)}`);
 
     // 3a. Place the drummer at a starting cell adjacent to the drum
@@ -261,23 +259,20 @@ export const danceFloorSeed = {
       if (!dancerBeingId) {
         throw new Error(`birthBeing dancer ${spec.suffix} returned no beingId`);
       }
-      // Register on the dance-floor's qualities.beings.
-      {
-        const { ref: _ref } = await import("../../../seed/materials/ref.js");
-        await reality.do(gridSpaceId, "set-space", {
-          field: "qualities.beings",
-          value: {
-            [`${spec.suffix}-${plantedSeedId.slice(0, 6)}`]: {
-              // beingId is a typed being-Ref (REFS.md).
-              beingId: _ref("being", dancerBeingId),
-              role: spec.role,
-              installedAt: new Date().toISOString(),
-              installedBy: "harmony:danceFloor",
-            },
+      // Register on the dance-floor's qualities.beings. beingId is a
+      // bare being-id string per substrate doctrine.
+      await reality.do(gridSpaceId, "set-space", {
+        field: "qualities.beings",
+        value: {
+          [`${spec.suffix}-${plantedSeedId.slice(0, 6)}`]: {
+            beingId: String(dancerBeingId),
+            role: spec.role,
+            installedAt: new Date().toISOString(),
+            installedBy: "harmony:danceFloor",
           },
-          merge: true,
-        }, opOpts);
-      }
+        },
+        merge: true,
+      }, opOpts);
       log.info("Harmony", `summoned dancer ${spec.suffix} ${dancerBeingId.slice(0, 8)} (${isLlm ? "llm" : "scripted"})`);
 
       // 5a. persona on qualities. The dancer-llm role's

@@ -72,10 +72,7 @@ async function assertCoordInBounds(beingDoc, raw, branch = "0") {
   if (Object.keys(out).length === 0) {
     return null;
   }
-  // position + homeSpace are space-Refs on projection state (REFS.md).
-  // Extract the bare id for loadOrFold lookups.
-  const { refId } = await import("../ref.js");
-  const spaceId = refId(beingDoc?.position) || refId(beingDoc?.homeSpace) || null;
+  const spaceId = beingDoc?.position || beingDoc?.homeSpace || null;
   if (!spaceId) return out;
   const { loadOrFold } = await import("../projections.js");
   const _sSlot = await loadOrFold("space", spaceId, branch);
@@ -165,16 +162,12 @@ async function setOnBeingHandler({ target, params, summonCtx }) {
   }
 
   if (field === "parentBeingId") {
-    // Identity primitive: Refs only (seed/REFS.md). The substrate does
-    // not accept bare-string IDs for parent references . callers wrap
-    // via ref("being", id) or pass null.
     if (value === null || value === undefined) {
       return { beingId: String(target._id), parentBeingId: null };
     }
-    const { isAggregateRef, refKind } = await import("../ref.js");
-    if (!isAggregateRef(value) || refKind(value) !== "being") {
+    if (typeof value !== "string" || !value.length) {
       throw new Error(
-        `set-being: parentBeingId requires a being-Ref or null . got ${typeof value === "object" ? JSON.stringify(value) : typeof value}`,
+        `set-being: parentBeingId must be a being id string or null . got ${typeof value}`,
       );
     }
     return { beingId: String(target._id), parentBeingId: value };
@@ -208,15 +201,12 @@ async function setOnBeingHandler({ target, params, summonCtx }) {
   }
 
   if (field === "homeSpace") {
-    // Identity primitive: Refs only (seed/REFS.md). callers wrap via
-    // ref("space", id) or pass null.
     if (value === null || value === undefined) {
       return { beingId: String(target._id), homeSpace: null };
     }
-    const { isAggregateRef, refKind } = await import("../ref.js");
-    if (!isAggregateRef(value) || refKind(value) !== "space") {
+    if (typeof value !== "string" || !value.length) {
       throw new Error(
-        `set-being: homeSpace requires a space-Ref or null . got ${typeof value === "object" ? JSON.stringify(value) : typeof value}`,
+        `set-being: homeSpace must be a space id string or null . got ${typeof value}`,
       );
     }
     return { beingId: String(target._id), homeSpace: value };
@@ -238,25 +228,21 @@ async function setOnBeingHandler({ target, params, summonCtx }) {
   // through the reducer. The portal emits this on navigate-to-sized-
   // space so the being shows up in descriptor.occupantsByPosition
   // for everyone else in that space.
-  //
-  // Identity primitive: position is a space-Ref or null (REFS.md).
   if (field === "position") {
-    const { isAggregateRef: isAggRef, refKind: rk, refId: getRefId } = await import("../ref.js");
-    if (value !== null && value !== undefined && (!isAggRef(value) || rk(value) !== "space")) {
+    if (value !== null && value !== undefined && (typeof value !== "string" || !value.length)) {
       throw new Error(
-        `set-being: position requires a space-Ref or null . got ${typeof value === "object" ? JSON.stringify(value) : typeof value}`,
+        `set-being: position must be a space id string or null . got ${typeof value}`,
       );
     }
+    const newId = value || null;
     // Capture the OLD position into the fact's params so the live-SEE
     // hook fan can invalidate BOTH rooms — the one the being left and
-    // the one they entered. fromPosition is also a Ref (or null).
-    const fromPositionRef = target?.position && isAggRef(target.position) ? target.position : null;
-    const newId = value ? getRefId(value) : null;
-    const fromId = fromPositionRef ? getRefId(fromPositionRef) : null;
-    if (fromPositionRef && fromId !== newId) {
-      params.fromPosition = fromPositionRef;
+    // the one they entered.
+    const fromId = target?.position || null;
+    if (fromId && fromId !== newId) {
+      params.fromPosition = fromId;
     }
-    return { beingId: String(target._id), position: value || null, fromPosition: fromPositionRef };
+    return { beingId: String(target._id), position: newId, fromPosition: fromId };
   }
 
   // coord: the being's coord inside its position space. Shape `{ x, y, z? }`

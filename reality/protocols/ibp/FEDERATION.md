@@ -55,29 +55,30 @@ Diff B adds the optional `signature` block. NO `identity` field returns —
 identity is in `address.left` regardless of whether the call is local or
 cross-reality.
 
-### Refs in the cross-reality envelope
+### IDs in the cross-reality envelope
 
-Phase 1.6 of the Refs migration (in flight; see `seed/REFS.md` and
-`seed/REFS_BACKLOG.md`) is making typed `Ref` values the substrate's
-only ID-passing mechanism. By the time Diff B ships, every ID-bearing
-position in the envelope payload — `params.value` on `set-being:position`,
-`params.spec.parent` on `create-space`, `params.to` on `move`, etc. —
-will carry a tagged `{ __ref: kind, id }` value rather than a bare
-string.
+The envelope payload carries bare-string IDs (`params.value` on
+`set-being:position`, `params.spec.parent` on `create-space`,
+`params.to` on `move`, etc.). The substrate's schemas know which
+fields hold which kind of aggregate; the wire doesn't tag them.
 
-Federation inherits this directly: the canonical envelope bytes that
-the sender signs include the Ref-typed payload, and the receiver
-verifies signature + dispatches the same wire validator. No
-"cross-reality envelopes may use bare strings" carve-out exists; the
-wire-layer Refs validator is reality-agnostic. The federation router
-short-circuits to canopy-forward BEFORE the local dispatcher runs,
-so foreign envelopes never hit a local handler, but the validator
-applies identically on the receiving side.
+Federation propagates **facts**, not bundles of state — and a fact
+carries its target kind in the envelope (`target: { kind, id }`).
+The receiver's reducer knows what each `params` field means from the
+fact's `(verb, action, target.kind)` triple. No type-tagging in the
+payload is needed.
 
-Diff B does not need to define its own ID format. The Refs primitive
-is the format; federation just carries it across substrates and
-remaps `id`s in the receiver's local namespace at graft time
-(`seed/publishing.md`).
+The case where ID-tagging earns its place is **replicate** (and the
+future clone): a foreign-reality export bundle of beings/spaces/matter
+arriving at a fresh local namespace needs a walker to find every
+aggregate reference in the bundle and remap to new local IDs. That
+walker reads tagged `{ __ref, id }` values out of bundle content
+where the receiving substrate doesn't have schema knowledge for the
+foreign data shapes. See `seed/REFS.md` for the walker primitive
+and `seed/publishing.md` for the export/replicate flow.
+
+Federation itself (fact propagation) does not bundle this kind of
+content. It rides the substrate's existing structural typing.
 
 ## What Diff B needs to build
 

@@ -46,20 +46,12 @@ const MatterSchema = new mongoose.Schema({
   // Matter does not exist outside a position. The DELETED sentinel
   // on spaceId / beingId marks soft-deleted matter.
   //
-  // spaceId is a typed space-Ref: { __ref: "space", id: "..." }
-  // (REFS.md), OR the bare-string DELETED sentinel ("deleted") for
-  // soft-deleted matter. Mongoose Mixed lets both shapes round-trip;
-  // the set-matter handler validates Ref-or-sentinel at emission time
-  // (same pattern as Space.rootOwner's I_AM-sentinel coexistence).
-  // The .id subpath is indexed via the projection schema for
-  // findByPosition / listMattersAt queries.
-  spaceId: { type: mongoose.Schema.Types.Mixed, required: true },
-  // beingId is a typed being-Ref: { __ref: "being", id: "..." }
-  // (REFS.md), OR the bare-string I_AM constant for genesis / scaffold
-  // attribution, OR the DELETED sentinel for soft-deleted matter.
-  // Mongoose Mixed handles all three shapes. Same coexistence pattern
-  // as Space.rootOwner (Ref + I_AM sentinel).
-  beingId: { type: mongoose.Schema.Types.Mixed, required: true },
+  // spaceId is a bare space-id, OR the DELETED sentinel ("deleted")
+  // for soft-deleted matter (the set-matter handler validates which).
+  spaceId: { type: String, required: true },
+  // beingId is the creator's bare being-id (I_AM for genesis / scaffold
+  // attribution) OR the DELETED sentinel for soft-deleted matter.
+  beingId: { type: String, required: true },
 
   // Optional human-readable label. Used by set-name and by
   // filesystem-origin mirroring (the file's name).
@@ -67,12 +59,7 @@ const MatterSchema = new mongoose.Schema({
 
   // The matter tree at this space. Root matter has
   // parentMatterId: null; descendants chain through parentMatterId.
-  //
-  // parentMatterId is a typed matter-Ref: { __ref: "matter", id: "..." }
-  // (REFS.md). Mongoose Mixed lets the Ref object round-trip cleanly.
-  // The .id subpath is indexed via the projection schema for child-
-  // matter lookups; the legacy index on this field stays harmless.
-  parentMatterId: { type: mongoose.Schema.Types.Mixed, default: null, index: true },
+  parentMatterId: { type: String, ref: "Matter", default: null, index: true },
   children:       [{ type: String, ref: "Matter" }],
 
   // Which realm the underlying content lives in. Required — origin

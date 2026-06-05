@@ -1,5 +1,11 @@
-# Refs Migration Sweep — Phase 1.6
+# Refs Migration Sweep — Phase 1.6 (ARCHIVED — rolled back)
 
+> **This document is archived.** It describes a substrate-wide Refs migration that was attempted on 2026-06-04 and rolled back the same day. The doctrine sharpened during the work: schemas know what's an ID inside the substrate; Refs only earn their place at content-walking seams (replicate / clone / federation). The walker primitive lives on; the substrate-wide strictness this document plans is no longer the goal. See `seed/REFS.md` for the current scope.
+
+---
+
+> *(Original intent below, preserved for forensic interest.)*
+>
 > *The substrate ships typed Refs as its identity primitive. Phase 1.6 migrates every existing site that uses bare-string IDs to use Refs instead. When the sweep completes, the legacy refs manifest is deleted and bare-string IDs become a doctrinal violation. There is no fallback path.*
 
 ## Why this document exists

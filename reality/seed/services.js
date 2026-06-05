@@ -168,6 +168,11 @@ import "./materials/moveOp.js";
 import "./materials/being/ops.js";
 import "./materials/being/credentialOps.js";
 import "./materials/seeds.js";
+// Side-effect import. Registers the publish layer: replicate-subtree
+// (extract a subtree's current shape into a portable bundle) and
+// graft-replicate (apply a bundle into a target). The walker primitive
+// in materials/refWalker.js is the engine; these ops wire it to DO.
+import "./materials/publish/ops.js";
 // Side-effect import. Registers `set-render` . the canonical sensory
 // write op against `qualities.render` (the seed-owned namespace any
 // matter/space/being can carry: model + animations + sounds + future

@@ -51,22 +51,35 @@ export async function createBranch({ parent = MAIN, anchor, label = null, create
   // anything in the chain is missing.
   if (!isMain(parent)) await resolveBranchLineage(parent);
 
-  // Resolve scope.path → canonical spaceId against the parent. The
-  // scope is locked at creation time: re-pointing the path later
-  // doesn't widen or narrow the gate. Writes outside this subtree
-  // refuse with SCOPE_VIOLATION at the fact-emission boundary.
-  let resolvedScope = null;
-  if (scope) {
-    if (typeof scope !== "object" || typeof scope.path !== "string" || !scope.path.length) {
-      throw new Error("createBranch: scope must be { path: string }");
-    }
-    const { resolvePathToSpaceId } = await import("./branchScope.js");
-    const spaceId = await resolvePathToSpaceId(scope.path, parent);
-    if (!spaceId) {
-      throw new Error(`createBranch: scope.path "${scope.path}" doesn't resolve to a space on parent "#${parent}"`);
-    }
-    resolvedScope = { path: scope.path, spaceId };
-  }
+  // Resolve scope against the parent. Inheritance + permission asymmetry:
+  //
+  //   - If the parent branch has no scope, `passed` becomes the scope
+  //     (null/undefined → no scope; explicit `{path}` → that subtree).
+  //   - If the parent has a scope and `passed` is null/undefined, the
+  //     new branch INHERITS the parent's scope. Scope behaves like state
+  //     and liveness: a property of the lineage. Forking a library-
+  //     scoped branch produces another library-scoped branch by default.
+  //   - If the parent has a scope and `passed` is narrower-or-equal
+  //     (passed.path resolves to the parent.scope.spaceId itself or to
+  //     one of its descendants), use `passed`. Narrowing further is free.
+  //   - If `passed` is wider (resolves to an ancestor of parent.scope) OR
+  //     disjoint (lives outside parent's subtree entirely) OR explicitly
+  //     null/undefined on a scoped parent with the special `clearScope: true`
+  //     flag, the operation is widening. Widening requires reality-root
+  //     permission (heaven owner OR contributor); otherwise refused.
+  //
+  // The scope is locked at creation: re-pointing the path later doesn't
+  // widen or narrow the gate. Writes outside the resolved subtree refuse
+  // with SCOPE_VIOLATION at the fact-emission boundary.
+  const parentScopeData = isMain(parent)
+    ? null
+    : ((await Branch.findOne({ _id: parent }).lean())?.scope || null);
+  const resolvedScope = await _resolveBranchScope({
+    passed: scope,
+    parentScope: parentScopeData,
+    parentBranchPath: parent,
+    createdBy,
+  });
 
   // 1. Pick the new branch's path.
   const siblings = await Branch
@@ -203,4 +216,110 @@ async function snapshotParentHeads({ parent, anchor }) {
   }
 
   return heads;
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// Scope resolution + permission asymmetry
+// ─────────────────────────────────────────────────────────────────────
+
+/**
+ * Resolve the new branch's scope, given what the caller passed and what
+ * the parent branch's scope is. Implements the inheritance + asymmetry
+ * doctrine documented above createBranch's `scope` block.
+ *
+ * Throws when the caller tries to widen or move to a disjoint scope
+ * without reality-root permission.
+ */
+async function _resolveBranchScope({ passed, parentScope, parentBranchPath, createdBy }) {
+  const noScopePassed = (passed === null || passed === undefined);
+
+  // Validate + resolve any explicit scope first so shape errors throw
+  // before lineage / permission logic runs.
+  let resolvedPassed = null;
+  if (!noScopePassed) {
+    if (typeof passed !== "object" || typeof passed.path !== "string" || !passed.path.length) {
+      throw new Error("createBranch: scope must be { path: string }");
+    }
+    const { resolvePathToSpaceId } = await import("./branchScope.js");
+    const spaceId = await resolvePathToSpaceId(passed.path, parentBranchPath);
+    if (!spaceId) {
+      throw new Error(`createBranch: scope.path "${passed.path}" doesn't resolve to a space on parent "#${parentBranchPath}"`);
+    }
+    resolvedPassed = { path: passed.path, spaceId };
+  }
+
+  // Parent has no scope. Passed wins (whether null or explicit subtree).
+  // No widening to check since parent imposes no floor.
+  if (!parentScope) return resolvedPassed;
+
+  // Parent has scope. Default behavior: inherit.
+  if (noScopePassed) {
+    return { path: parentScope.path, spaceId: parentScope.spaceId };
+  }
+
+  // Passed explicit scope. Check whether resolvedPassed.spaceId is the
+  // parent's scope spaceId OR a descendant of it. The "narrower or equal"
+  // test: walk resolvedPassed.spaceId's ancestor chain on the parent
+  // branch and look for parentScope.spaceId.
+  const within = await _isSpaceWithinScope(
+    resolvedPassed.spaceId,
+    parentScope.spaceId,
+    parentBranchPath,
+  );
+  if (within) return resolvedPassed;
+
+  // Wider or disjoint — widening. Reality-root permission required.
+  const allowed = await _hasRealityRootPermission(createdBy);
+  if (!allowed) {
+    throw new Error(
+      `createBranch: scope "${passed.path}" is not within parent branch's scope "${parentScope.path}". ` +
+      `Widening or moving to a disjoint scope requires reality-root permission ` +
+      `(heaven owner or contributor). ` +
+      `Sub-branches inherit parent's scope by default; declare a narrower scope to fork within.`,
+    );
+  }
+  return resolvedPassed;
+}
+
+/**
+ * True when `targetSpaceId` IS `scopeSpaceId` OR has `scopeSpaceId` in
+ * its ancestor chain on the given branch. Uses the same ancestor cache
+ * the fact-emission gate consults.
+ */
+async function _isSpaceWithinScope(targetSpaceId, scopeSpaceId, branchPath) {
+  if (String(targetSpaceId) === String(scopeSpaceId)) return true;
+  try {
+    const { getAncestorChain } = await import("../space/ancestorCache.js");
+    const chain = await getAncestorChain(String(targetSpaceId), branchPath);
+    if (!Array.isArray(chain)) return false;
+    return chain.some((node) => String(node._id || node.id) === String(scopeSpaceId));
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Reality-root permission = heaven owner (I_AM sentinel) OR heaven
+ * contributor. Heaven's contributors[] is the substrate's canonical
+ * "anointed by the root operator" roster.
+ *
+ * Returns false when beingId is null (createdBy not threaded) so
+ * scope-widening from anonymous callers refuses by default.
+ */
+async function _hasRealityRootPermission(beingId) {
+  if (!beingId) return false;
+  const { I_AM } = await import("../being/seedBeings.js");
+  if (String(beingId) === String(I_AM)) return true;
+
+  try {
+    const { findBySeedSpace, loadProjection } = await import("../projections.js");
+    const { SEED_SPACE } = await import("../space/seedSpaces.js");
+    const heavenSlot = await findBySeedSpace(SEED_SPACE.HEAVEN, "0");
+    if (!heavenSlot) return false;
+    const heaven = await loadProjection("space", heavenSlot.id, "0");
+    const contributors = heaven?.state?.contributors || [];
+    return contributors.some((c) => String(c) === String(beingId));
+  } catch {
+    return false;
+  }
 }

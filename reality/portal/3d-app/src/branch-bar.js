@@ -179,10 +179,17 @@ async function _openPanel() {
       <button type="button" class="bp-close" style="background:transparent;color:#6b7d72;border:none;font-size:18px;cursor:pointer;padding:0 4px;">×</button>
     </div>
     <div class="bp-tree" style="font-size:12px;line-height:1.7;"></div>
-    <div class="bp-actions" style="margin-top:12px;padding-top:10px;border-top:1px solid #2c3a32;display:flex;gap:8px;align-items:center;">
+    <div class="bp-actions" style="margin-top:12px;padding-top:10px;border-top:1px solid #2c3a32;display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
       <button type="button" class="bp-merge" style="background:#13201b;color:#8fbf9f;border:1px solid #3d7a52;border-radius:3px;padding:4px 10px;font-family:inherit;font-size:11px;cursor:pointer;">
         ⇄ merge two branches…
       </button>
+      <button type="button" class="bp-replicate" title="Download a portable snapshot of the current place's subtree" style="background:#13201b;color:#8fbf9f;border:1px solid #3d7a52;border-radius:3px;padding:4px 10px;font-family:inherit;font-size:11px;cursor:pointer;">
+        ⬇ replicate this place
+      </button>
+      <button type="button" class="bp-graft" title="Upload a .replicate.json bundle and graft it under the current place" style="background:#13201b;color:#8fbf9f;border:1px solid #3d7a52;border-radius:3px;padding:4px 10px;font-family:inherit;font-size:11px;cursor:pointer;">
+        ⬆ graft a bundle…
+      </button>
+      <input type="file" class="bp-graft-file" accept=".json,application/json" style="display:none;">
       <span style="color:#6b7d72;font-size:10px;margin-left:auto;">click a branch to open its timeline · esc to close</span>
     </div>
   `;
@@ -192,6 +199,26 @@ async function _openPanel() {
   el.querySelector(".bp-merge").addEventListener("click", (ev) => {
     ev.stopPropagation();
     _openMergeDialog();
+  });
+  el.querySelector(".bp-replicate").addEventListener("click", (ev) => {
+    ev.stopPropagation();
+    _downloadReplicate().catch((err) => {
+      _showBranchEvent(`replicate failed: ${err?.message || err}`);
+    });
+  });
+  el.querySelector(".bp-graft").addEventListener("click", (ev) => {
+    ev.stopPropagation();
+    el.querySelector(".bp-graft-file").click();
+  });
+  el.querySelector(".bp-graft-file").addEventListener("change", (ev) => {
+    const file = ev.target.files?.[0];
+    if (file) {
+      _graftFromFile(file).catch((err) => {
+        _showBranchEvent(`graft failed: ${err?.message || err}`);
+      });
+    }
+    // Reset so the same filename can be re-picked.
+    ev.target.value = "";
   });
 
   // Fetch every branch in one pass.
@@ -953,6 +980,16 @@ function _findMarkAtCursor(cursorMs) {
 }
 
 function _returnToNow(opts = {}) {
+  // Return-to-now is a full stop. Kill any active playback, clear the
+  // cursor, and reset the resume speed so the next ▶ click starts
+  // fresh at present instead of resuming the prior rewind / scrub.
+  // Without this reset, clicking ⏮ during a rewind left playback
+  // running and the next rewind would resume from the stale cursor
+  // instead of from the new present.
+  _stopPlayback();
+  _state.cursorMs = null;
+  _state.resumeSpeed = 0;
+  _state.markAccumulator = 0;
   _state.selectedMarkTs = null;
   _renderDetail(null);
   // preserveCamera flag distinguishes "play caught up to now" from
@@ -1166,6 +1203,81 @@ async function _branchHere() {
 // (either the merge fact itself or the mediator's reconciliation
 // stamps), so live SEE on the conflict catalog stays the source of
 // truth for both UI re-renders and the next mediator pickup point.
+
+// ────────────────────────────────────────────────────────────────
+// Replicate + graft
+// ────────────────────────────────────────────────────────────────
+//
+// `replicate this place`: calls do(currentPath, "replicate-subtree",
+// {name}) and downloads the returned bundle as a .replicate.json file.
+// The subtree is rooted at the user's current position; the seed's
+// replicateSubtree primitive walks descendants + their beings + matter.
+//
+// `graft a bundle…`: file-picker → reads JSON → calls do(currentPath,
+// "graft-replicate", {bundle}). The bundle's content lands as fresh
+// spaces / beings / matter under the user's current position. Refs
+// inside the bundle remap to bare-string ids in the target's namespace
+// (the substrate everywhere stores bare; the bundle is the only place
+// Refs live).
+
+function _currentAddressPath() {
+  return window.__state?.descriptor?.address?.pathByNames || null;
+}
+
+async function _downloadReplicate() {
+  const addr = _currentAddressPath();
+  if (!addr) {
+    throw new Error("no current address to replicate from");
+  }
+  const placeName = window.__state?.descriptor?.address?.spaceName || "place";
+  _showBranchEvent(`replicating ${placeName}…`);
+  const result = await _state.client.do(addr, "replicate-subtree", {
+    name: placeName,
+  });
+  const bundle = result?.bundle;
+  if (!bundle) {
+    throw new Error("replicate returned no bundle");
+  }
+  // Pretty-print + JSON download.
+  const blob = new Blob([JSON.stringify(bundle, null, 2)], { type: "application/json" });
+  const url  = URL.createObjectURL(blob);
+  const stamp = bundle.meta?.createdAt?.replace(/[:.]/g, "-").slice(0, 19) || "snapshot";
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `${placeName}-${stamp}.replicate.json`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  const counts = `${bundle.content?.spaces?.length || 0} spaces, ${bundle.content?.beings?.length || 0} beings, ${bundle.content?.matter?.length || 0} matter`;
+  _showBranchEvent(`✓ replicated ${placeName} (${counts})`);
+}
+
+async function _graftFromFile(file) {
+  const addr = _currentAddressPath();
+  if (!addr) {
+    throw new Error("no current address to graft into");
+  }
+  const text = await file.text();
+  let bundle;
+  try {
+    bundle = JSON.parse(text);
+  } catch (err) {
+    throw new Error(`bundle file is not valid JSON: ${err.message}`);
+  }
+  const srcName = bundle?.meta?.sourceScopeName || "bundle";
+  _showBranchEvent(`grafting ${srcName} under ${addr}…`);
+  const result = await _state.client.do(addr, "graft-replicate", { bundle });
+  const counts = `${result?.counts?.spaces || 0} spaces, ${result?.counts?.beings || 0} beings, ${result?.counts?.matter || 0} matter`;
+  _showBranchEvent(`✓ grafted ${srcName} (${counts})`);
+  // Refetch the tree so any newly created branches surface (replicates
+  // don't make branches, but operators may follow up with a branch).
+  await _loadBranchTree();
+  if (_state.panelEl) {
+    const treeContainer = _state.panelEl.querySelector(".bp-tree");
+    if (treeContainer) _renderTree(treeContainer, _state.graphAll);
+  }
+}
 
 let _mergeDialogEl = null;
 

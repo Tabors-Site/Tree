@@ -442,11 +442,10 @@ export function applyMove(state, fact) {
     return { ...state, coord: next, updatedAt: fact.date };
   }
 
-  // params.to is a typed space-Ref (REFS.md). Reducer is value-agnostic:
-  // writes the Ref directly to state.parent / state.spaceId (both now
-  // typed-Ref fields). foldEngine extracts refId() at the denormalized
-  // position cache write.
-  if (to && typeof to === "object" && to.__ref === "space" && to.id) {
+  // params.to is a bare space-id. Reducer writes it through to the
+  // appropriate field (state.parent for space, state.spaceId for matter)
+  // plus the denormalized position cache.
+  if (typeof to === "string" && to) {
     if (kind === "space")  return { ...state, parent: to, position: to, updatedAt: fact.date };
     if (kind === "matter") return { ...state, spaceId: to, position: to, updatedAt: fact.date };
   }

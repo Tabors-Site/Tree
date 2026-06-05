@@ -89,8 +89,7 @@ export async function checkTreeHealth(treeId) {
   const errorWeight   = parseFloat(getInternalConfigValue("circuitErrorWeight")   || "0.3");
 
   // 1. Space count in this tree.
-  // rootOwner is a typed being-Ref (REFS.md); query via .id subpath.
-  const spaceCount = await Space.countDocuments({ "rootOwner.id": treeId });
+  const spaceCount = await Space.countDocuments({ "rootOwner": treeId });
 
   // 2. Quality density (estimate total qualities-map size). Sample up to
   //    100 spaces, average, multiply. Random sample — sequential
@@ -99,7 +98,7 @@ export async function checkTreeHealth(treeId) {
   let qualitiesDensity = 0;
   if (sampleSize > 0) {
     const sample = await Space.aggregate([
-      { $match: { "rootOwner.id": treeId } },
+      { $match: { "rootOwner": treeId } },
       { $sample: { size: sampleSize } },
       { $project: { qualities: 1 } },
     ]);
@@ -134,8 +133,7 @@ export async function checkTreeHealth(treeId) {
       },
       { $lookup: { from: "spaces", localField: "target.id", foreignField: "_id", as: "_space" } },
       { $unwind: "$_space" },
-      // rootOwner is a typed Ref (REFS.md).
-      { $match: { "_space.rootOwner.id": treeId } },
+      { $match: { "_space.rootOwner": treeId } },
       { $count: "total" },
     ]);
     factErrors = errResult[0]?.total || 0;
@@ -255,12 +253,11 @@ export function startCircuitJob() {
   const timer = setInterval(async () => {
     try {
       const { default: Projection } = await import("../branch/projection.js");
-      // state.rootOwner is a typed being-Ref (REFS.md) OR the I_AM
-      // sentinel string for system-owned spaces. Filter to non-system
-      // owners: Ref present AND its .id is not I_AM.
+      // Filter to non-system owners: rootOwner present AND not the I_AM
+      // sentinel string (system-owned spaces).
       const rows = await Projection.find({
         branch: "0", type: "space",
-        "state.rootOwner.id": { $exists: true, $ne: I_AM },
+        "state.rootOwner": { $exists: true, $ne: I_AM },
         tombstoned: { $ne: true },
       }).lean();
       const anchors = rows.map((s) => ({ _id: s.id, ...(s.state || {}) }));

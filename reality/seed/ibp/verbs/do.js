@@ -274,10 +274,7 @@ async function resolveAuthSpaceId(target, auditTarget, branch) {
   }
   if (kind === "matter") {
     const slot = await loadOrFold("matter", id, branch);
-    // state.spaceId is a typed Ref (REFS.md) or DELETED sentinel.
-    const { refId: _refId, isAggregateRef: _isRef } = await import("../../materials/ref.js");
-    const raw = slot?.state?.spaceId;
-    return _isRef(raw) ? _refId(raw) : (raw ? String(raw) : null);
+    return slot?.state?.spaceId ? String(slot.state.spaceId) : null;
   }
 
   // Kind unknown. Probe each type in order.
@@ -287,9 +284,7 @@ async function resolveAuthSpaceId(target, auditTarget, branch) {
   if (beingSlot) return beingSlot.position || beingSlot.state?.homeSpace || null;
   const matterSlot = await loadOrFold("matter", id, branch);
   if (matterSlot) {
-    const { refId: _refId, isAggregateRef: _isRef } = await import("../../materials/ref.js");
-    const raw = matterSlot.state?.spaceId;
-    return _isRef(raw) ? _refId(raw) : (raw ? String(raw) : null);
+    return matterSlot.state?.spaceId ? String(matterSlot.state.spaceId) : null;
   }
   return null;
 }

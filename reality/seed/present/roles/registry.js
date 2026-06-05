@@ -307,8 +307,7 @@ export async function loadLiveRolesFromSubstrate() {
   if (!parent) return { loaded: 0 };
   const rows = await Projection.find({
     branch: "0", type: "space",
-    // state.parent is a typed Ref (REFS.md).
-    "state.parent.id": parent.id,
+    "state.parent": parent.id,
     tombstoned: { $ne: true },
   }).lean();
   const children = rows.map((s) => ({ name: s.state?.name, qualities: s.state?.qualities }));

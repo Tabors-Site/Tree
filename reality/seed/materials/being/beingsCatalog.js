@@ -28,7 +28,6 @@ export async function describeBeingsCatalog(opts = {}) {
   const branch = opts.branch || "0";
   const { listByType, loadProjections } = await import("../projections.js");
   const { beingCognition } = await import("./identity/lookups.js");
-  const { refId } = await import("../ref.js");
 
   // listByType gives us {type, id} pairs; batch-load the full slots to
   // get state (name, qualities, etc.) for each.
@@ -39,15 +38,13 @@ export async function describeBeingsCatalog(opts = {}) {
   const entries = slice.map((slotRef) => {
     const slot = slots.get(slotRef.id);
     const state = slot?.state || {};
-    // parentBeingId is a typed Ref in state (REFS.md). Extract bare id
-    // for the wire response.
     return {
       beingId:       String(slotRef.id),
       name:          state.name || null,
       cognition:     beingCognition(state),
       defaultRole:   state.defaultRole || null,
-      homeSpace:     refId(state.homeSpace),
-      parentBeingId: refId(state.parentBeingId),
+      homeSpace:     state.homeSpace || null,
+      parentBeingId: state.parentBeingId || null,
       createdAt:     state.createdAt || null,
     };
   });

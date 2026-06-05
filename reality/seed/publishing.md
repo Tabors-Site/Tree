@@ -2,7 +2,7 @@
 
 > *Replicates are projections of current state, packaged for portability. Grafting re-creates content as fresh facts in the target with new local IDs. History does not transfer; only current shape. The chain in each reality stays the truth of what happened there.*
 >
-> *IDs are typed at the substrate level. Every reference to a being, space, or matter is a tagged Ref, never a bare string. The substrate detects refs by structure; replicate and graft consume them through the walker without per-action declarations. See seed/REFS.md for the Ref doctrine.*
+> *Inside a substrate, schemas know what's an ID — IDs are bare strings. Refs (`{ __ref, id }`) appear ONLY in replicate / clone / federation bundles, where content traverses substrate boundaries and the receiver has no schema knowledge of the source. The walker (`findRefs` / `remapRefs`) reads and remaps those Refs at bundle-extract and bundle-apply time. See `seed/REFS.md` for the walker primitive.*
 
 ## What this document is
 
@@ -10,7 +10,7 @@ TreeOS supports three layers of publishable content. Understanding the layering 
 
 This document is the canonical reference for the publishing model. It pins the doctrinal commitments, names the three layers and what each does, and describes the underlying mechanism (snapshot-and-graft) that makes replicates work without contaminating any reality's chain.
 
-For implementation status and the concrete build, see the "Build Status" section at the end. For the prerequisite refs inventory that #4 and #5 depend on, see `REFS_MANIFEST.md` in this directory.
+For implementation status and the concrete build, see the "Build Status" section at the end. The walker primitive that replicate / graft consume is documented in `REFS.md`.
 
 ## Vocabulary
 
@@ -250,6 +250,14 @@ No foreign facts. No replayed reels. Every fact in a reality's chain was stamped
 
 This is what makes audits trustworthy. A reality's chain is a complete record of its own existence. Nothing grafted pretends to be local-from-the-beginning.
 
+**Principle 4: Scope is a property of branch lineage. Sub-branches inherit by default; widening requires elevation.**
+
+A subtree branch's scope (`/library`, `/library/wing`) is *structural* — it defines what part of the world the branch is about, the same way state and liveness define what's true and live in the branch. Like state and liveness, scope inherits through lineage. A sub-branch of a scoped parent is also scoped, by default, to the parent's scope; forking a library-scoped branch produces another library-scoped branch.
+
+Sub-branches can constrain further freely (narrower scopes use a sub-path of parent's scope; any caller can fork that way). Widening or moving to a disjoint scope — broadening what the sub-branch may write to — is privileged: the caller must hold reality-root permission (heaven owner or contributor). This makes scope behave as a *security floor* inherited through lineage. Sub-branches can only further constrain without explicit elevation; an experiment forked from `/library` cannot quietly grant itself the rest of the reality.
+
+The scope is locked at branch creation. Re-pointing the scope path later doesn't widen or narrow the gate; the spaceId resolved at create time is what the fact-emission boundary consults.
+
 ## Authoring guidance
 
 When deciding what to publish:
@@ -298,10 +306,10 @@ The verb is **plant** (extending the existing `plant` op for seeds — you plant
 | Within-reality merge + conflict catalog + mediator | shipped (2026-06-04) |
 | Heaven (reality-level metadata that never branches) | shipped |
 | Pointers (`#main`, `#prod`) | shipped |
-| **Typed Refs primitive** (`ref()`, `isRef()`, walker) | shipped (2026-06-04) |
+| **Refs walker primitive** (`ref()`, `findRefs`, `remapRefs`) | shipped (2026-06-04) — for replicate/clone/federation bundles only |
 | Subtree branching | shipped (2026-06-04) |
 | Refs runtime manifest registry | **deleted** (2026-06-04) — was transition bridge; no runtime code consults it now |
-| Refs migration sweep (seed ops + qualities → Refs) | Phase 1.6 (in flight) — backlog tracked in `seed/REFS_BACKLOG.md` |
+| Refs substrate-wide migration (handlers + storage everywhere) | **rolled back** (2026-06-04) — was over-scoped; schemas know IDs inside substrate. Walker stays as the federation primitive |
 | Asset content-addressing | not yet (Phase 3) |
 | Replicates (replicate + graft) | not yet (Phase 4 + 5) |
 | RoleFlows as first-class publishable (in Horizon) | not yet (Phase 6) |
@@ -312,25 +320,25 @@ The verb is **plant** (extending the existing `plant` op for seeds — you plant
 
 ## Build order
 
-**Doctrinal commitment: there is no fallback path.** The substrate's identity primitive is typed Refs (`{ __ref: kind, id }`); there is one way to reference an aggregate, and bare-string IDs are not it. The legacy refs manifest exists as a temporary transition bridge while the seed's existing op handlers and qualities sites migrate; once the sweep is complete, the manifest is deleted. New code — seed or extension — uses `ref()` from day one. Builders never write a manifest entry.
+**Doctrinal commitment: Refs are the bundle format, not the substrate format.** Inside the substrate, schemas know what's an ID — handlers, reducers, projections all carry the type information they need. Internal references are bare-string IDs; the substrate doesn't need self-describing tags to act on its own data. Refs (`{ __ref: kind, id }`) appear only when content **leaves substrate schema knowledge** — when a subtree is extracted into a replicate bundle for transport to another reality. The extraction process produces Refs so the bundle survives in transit without its source schema; the receiver reads Refs to remap aggregate references during graft. Once the receiver stamps fresh facts, IDs return to bare strings on the new reality's reels.
 
-This commitment is the same shape as `assertBranch` (no `|| "0"` defaults), heaven-never-branches (no exceptions), and address-as-identity (no separate identity field). Absolute doctrines hold their shape; fallback paths rot architectures.
+The walker (`findRefs` / `remapRefs` in `seed/materials/refWalker.js`) is the federation primitive. It operates on bundles, not on substrate state. Extension code uses bare IDs in storage, handlers, and the wire; the bundle-builder (when replicate / graft lands) walks an extracted subtree and tags aggregate references on its way out.
 
 ### Phases
 
-1. **~~Refs manifest registry~~** — shipped and then deleted on the same day (2026-06-04). The runtime registry was architectural overhead pretending to be a transition bridge; deleted before it could metastasize. No code consults it now. The seed inventory it once held is now markdown in `seed/REFS_BACKLOG.md`.
+1. **~~Refs manifest registry~~** — shipped and then deleted on the same day (2026-06-04). The runtime registry was architectural overhead pretending to be a transition bridge; deleted before it could metastasize. No code consults it now.
 
-1.5. **Typed Refs primitive** — `ref()`, `isRef()`, `refKind()`, `refId()`, sentinels, walker (`findRefs`, `remapRefs`, `collectUniqueAggregateIds`). Shipped 2026-06-04. See `seed/REFS.md` for the doctrine.
+1.5. **Refs walker primitive** — `ref()`, `findRefs`, `remapRefs`, `collectUniqueAggregateIds`, sentinels. Shipped 2026-06-04. See `seed/REFS.md` for the scope (bundle-walking only) and the historical pin on why a substrate-wide migration would have been over-scoped.
 
-1.6. **Refs migration sweep** — every seed action handler migrates to emit Ref-typed params; every qualities namespace stores Refs. Each migration is atomic per field (handler + reducer + storage + all consumers + tests). Backlog tracked as markdown in `seed/REFS_BACKLOG.md`; entries get checked off as fields migrate. **Required before Phase 4 (replicate) ships** so the graft layer can be Refs-only with no fallback. When the backlog reaches zero entries the file is deleted and the substrate is uniformly Ref-typed.
+1.6. ~~**Refs substrate-wide migration**~~ — attempted 2026-06-04, rolled back the same day. The attempt tried to make Refs the substrate's identity primitive end-to-end (handlers, storage, queries, indexes, wire). The rollback corrected the doctrine: schemas know IDs inside the substrate; the walker handles the case where they don't. Forensic backlog at `seed/done/REFS_BACKLOG.md`.
 
 2. **Subtree branching** — shipped (2026-06-04). Branches scoped to a path; write gate at fact-emission boundary refuses out-of-scope writes; reads pass through.
 
 3. **Asset content-addressing** — sha256 hashes for binaries; `.assets/<hash>` directory; `Matter.origin = "assets"` references by hash.
 
-4. **Within-reality replicate** — `replicateSubtree(branch, scopePath, opts) → replicateBundle`. Walks projections (NOT chains). Snapshots current state with Refs throughout. Manifest of dependencies. Walker uses `findRefs` to discover what to remap.
+4. **Within-reality replicate** — `replicateSubtree(branch, scopePath, opts) → replicateBundle`. Walks projections (NOT chains). The walker (`findRefs`) tags every aggregate ID in the extracted state as a Ref on the way into the bundle. Manifest of dependencies + the Ref-tagged content travel together; bare-string IDs stay inside the source substrate.
 
-5. **Within-reality graft** — `graftReplicate(bundle, targetParentPath) → graftedBranch`. Validates dependencies, resolves insertion point, detects conflicts via existing merge catalog, builds remap table, walker (`remapRefs`) substitutes placeholder Refs with new local Refs, stamps creation facts in dependency order, records `graft-completed` meta-fact.
+5. **Within-reality graft** — `graftReplicate(bundle, targetParentPath) → graftedBranch`. Validates dependencies, resolves insertion point, detects conflicts via existing merge catalog, builds remap table, walker (`remapRefs`) substitutes bundle Refs with new bare-string IDs in the target's namespace, stamps creation facts in dependency order, records `graft-completed` meta-fact. After the graft, the new content lives in the target substrate as bare-string IDs — Refs are gone from the receiver's storage.
 
 6. **RoleFlow registry + install pipeline** — `.roleflows` heaven space, `install-roleflow` DO op, by-name references from beings, conflict detection on definition disagreement.
 
@@ -344,7 +352,7 @@ This commitment is the same shape as `assertBranch` (no `|| "0"` defaults), heav
 
 Minimum-viable proof of the snapshot-and-graft doctrine:
 
-- Refs manifest (#1) for the seed's own ops (extensions can contribute later)
+- Walker primitive shipped (`findRefs` / `remapRefs`)
 - Replicate of a single being (projection + manifest)
 - Stamp `birth-being` + `set-being` on graft (one fact per quality namespace)
 - One conflict type (name collision in target's scope)

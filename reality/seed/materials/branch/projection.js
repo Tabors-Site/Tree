@@ -76,37 +76,31 @@ ProjectionSchema.index(
 );
 
 // Lineage queries: "give me children of being X in branch B."
-// state.parentBeingId is a typed Ref { __ref:"being", id }; index the
-// .id subpath because that's what every findByParent / countByParent
-// query filters on (see seed/REFS.md).
+// state.parentBeingId is a bare being-id; findByParent / countByParent
+// filter on it directly.
 ProjectionSchema.index(
-  { branch: 1, type: 1, "state.parentBeingId.id": 1 },
+  { branch: 1, type: 1, "state.parentBeingId": 1 },
   { sparse: true },
 );
 
 // Lineage queries for spaces: "give me children of space X in branch B."
-// state.parent is a typed Ref { __ref:"space", id }; same .id-subpath
-// pattern as parentBeingId.
 ProjectionSchema.index(
-  { branch: 1, type: 1, "state.parent.id": 1 },
+  { branch: 1, type: 1, "state.parent": 1 },
   { sparse: true },
 );
 
 // Lineage queries for matter: "give me children of matter X in branch B."
-// state.parentMatterId is a typed Ref { __ref:"matter", id }; same
-// .id-subpath pattern.
 ProjectionSchema.index(
-  { branch: 1, type: 1, "state.parentMatterId.id": 1 },
+  { branch: 1, type: 1, "state.parentMatterId": 1 },
   { sparse: true },
 );
 
 // Matter-in-space queries: "give me matters at space X in branch B."
-// state.spaceId is a typed Ref { __ref:"space", id } OR the DELETED
-// sentinel; the .id-subpath only matches Ref-shaped values, which is
-// what every live-matter query wants (DELETED matters are filtered
-// out via tombstoned/origin/spaceId.id-missing).
+// state.spaceId is a bare space-id (or the DELETED sentinel for soft-
+// deleted matter; live-matter queries filter sentinels out via
+// tombstoned).
 ProjectionSchema.index(
-  { branch: 1, type: 1, "state.spaceId.id": 1 },
+  { branch: 1, type: 1, "state.spaceId": 1 },
   { sparse: true },
 );
 

@@ -183,11 +183,8 @@ export async function beVerb(operation, payload = {}, opts = {}) {
     const childHomeParent = payload?.homeParent || null;
     if (!childHomeId && !childHomeParent) {
       const { loadProjection } = await import("../../materials/projections.js");
-      const { refId } = await import("../../materials/ref.js");
       const callerSlot = await loadProjection("being", identity.beingId, branch);
-      // state.homeSpace is a space-Ref (REFS.md). Extract bare id; the
-      // ref() wrap below re-tags for birthBeing.
-      childHomeId = refId(callerSlot?.state?.homeSpace);
+      childHomeId = callerSlot?.state?.homeSpace || null;
     }
     if (!childHomeId && !childHomeParent) {
       throw new IbpError(
@@ -205,7 +202,6 @@ export async function beVerb(operation, payload = {}, opts = {}) {
       const { emitFact: _emitFact } = await import("../../past/fact/facts.js");
       const { v4: _uuidv4 } = await import("uuid");
       const newHomeId = _uuidv4();
-      const { ref: makeSpaceRef } = await import("../../materials/ref.js");
       await _emitFact({
         verb:    "do",
         action:  "create-space",
@@ -215,8 +211,7 @@ export async function beVerb(operation, payload = {}, opts = {}) {
           spec: {
             name: childName,
             type: "child-home",
-            // parent is a typed space-Ref (REFS.md).
-            parent: makeSpaceRef("space", String(childHomeParent)),
+            parent: String(childHomeParent),
             rootOwner: null,
             size: { x: 100, y: 100 },
             qualities: {},
@@ -229,13 +224,12 @@ export async function beVerb(operation, payload = {}, opts = {}) {
     }
 
     const { birthBeing } = await import("../../materials/being/identity/birth.js");
-    const { ref } = await import("../../materials/ref.js");
     const childSpec = {
       name:          childName,
       cognition:     childCognition,
       password:      childPassword,
-      parentBeingId: ref("being", String(identity.beingId)),
-      homeId:        ref("space", String(childHomeId)),
+      parentBeingId: String(identity.beingId),
+      homeId:        String(childHomeId),
     };
     if (childRoleField)  childSpec.role     = childRoleField;
     if (childRoleFlow)   childSpec.roleFlow = childRoleFlow;

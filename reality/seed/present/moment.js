@@ -266,7 +266,36 @@ export async function runMoment({ beingId, spaceId, entry, index, handoff = null
       );
     }
   } catch (err) {
+    // sealAct (or anything else in the seal branch above) threw. This
+    // is a SUBSTRATE failure — distinct from a cognition failure: the
+    // cognition decided to act and produced an act-shape return, but
+    // the substrate refused to seal it (no facts + no endMessage, an
+    // index conflict, a fact-emission throw mid-sealAct, etc.).
+    //
+    // The cognition-failure branch above handles its own
+    // closeInboxOnAnswer + handoff.onError. Substrate failures land
+    // here and used to do neither — which left the InboxProjection row
+    // permanently OPEN. Every subsequent wake re-picked that row first
+    // (oldest sentAt wins in pickNextIntake), the seenCorrelations
+    // guard broke out of the loop, and the being's queue was frozen
+    // until process restart (no per-being state surviving in scheduler,
+    // just the un-evicted DB row).
+    //
+    // Treat substrate failures as DETERMINISTIC: retrying produces the
+    // same failure. Evict the row, fire onError so the wire-caller
+    // gets a fast failure instead of timing out, log the cause.
     log.warn("Moment", `seal failed: ${err.message}`);
+    try { await closeInboxOnAnswer(entry.correlation); } catch {}
+    if (handoff?.onError) {
+      try {
+        handoff.onError(
+          Object.assign(
+            new Error(err?.message || "substrate seal refused"),
+            { shape: "internal", cause: "seal-failed" },
+          ),
+        );
+      } catch {}
+    }
   }
 
   // ── Bookkeeping. ──

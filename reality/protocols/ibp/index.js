@@ -48,10 +48,7 @@ function wireLiveHooks() {
       try {
         const { loadProjection } = await import("../../seed/materials/projections.js");
         const slot = await loadProjection("space", target.id, branch || "0");
-        // state.parent is a typed space-Ref (REFS.md); extract bare id.
-        const { refId } = await import("../../seed/materials/ref.js");
-        const parentId = refId(slot?.state?.parent);
-        if (parentId) emitPositionInvalidate(parentId, `child-metadata:${ns}`);
+        if (slot?.state?.parent) emitPositionInvalidate(slot.state.parent, `child-metadata:${ns}`);
       } catch { /* defensive */ }
     }
   }, "ibp-live");
@@ -102,10 +99,7 @@ function wireLiveHooks() {
       try {
         const { loadProjection } = await import("../../seed/materials/projections.js");
         const slot = await loadProjection("space", target.id, branch || "0");
-        // state.parent is a typed space-Ref (REFS.md); extract bare id.
-        const { refId } = await import("../../seed/materials/ref.js");
-        const parentId = refId(slot?.state?.parent);
-        if (parentId) emitPositionInvalidate(parentId, `child-field:${field}`);
+        if (slot?.state?.parent) emitPositionInvalidate(slot.state.parent, `child-field:${field}`);
       } catch { /* defensive */ }
     }
   }, "ibp-live");
@@ -113,15 +107,10 @@ function wireLiveHooks() {
   // Structural changes: new/removed/moved children change the parent's
   // descriptor. Matter writes change the affected position's content.
   hooks.register("afterSpaceCreate", async ({ space }) => {
-    // space.parent is a typed space-Ref (REFS.md) when set.
-    const { refId } = await import("../../seed/materials/ref.js");
-    const parentId = refId(space?.parent);
-    if (parentId) emitPositionInvalidate(parentId, "child-created");
+    if (space?.parent) emitPositionInvalidate(space.parent, "child-created");
   }, "ibp-live");
   hooks.register("afterSpaceDelete", async ({ space }) => {
-    const { refId } = await import("../../seed/materials/ref.js");
-    const parentId = refId(space?.parent);
-    if (parentId) emitPositionInvalidate(parentId, "child-deleted");
+    if (space?.parent) emitPositionInvalidate(space.parent, "child-deleted");
   }, "ibp-live");
   hooks.register("afterMatter", async ({ spaceId }) => {
     if (spaceId) emitPositionInvalidate(spaceId, "matter-changed");

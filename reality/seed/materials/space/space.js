@@ -41,10 +41,7 @@ const SpaceSchema = new mongoose.Schema({
   // Connection uuid key into the owning being's qualities.llmConnections.
   llmDefault: { type: String, default: null },
 
-  // parent is a typed space-Ref: { __ref: "space", id: "..." } (REFS.md).
-  // Mongoose Mixed lets the Ref object round-trip. The .id subpath is
-  // available for indexing; substrate queries filter on `parent.id`.
-  parent: { type: mongoose.Schema.Types.Mixed, default: null },
+  parent: { type: String, ref: "Space", default: null },
   // children[] retired (2026-05-23). The parent-side cache is gone;
   // `parent` on each child is the single source of truth for the
   // relation. listSpaceChildren / findByPosition query the parent
@@ -53,16 +50,8 @@ const SpaceSchema = new mongoose.Schema({
 
   // rootOwner non-null marks a tree root. Contributors gain write
   // access at any depth, capped per space by `maxContributorsPerSpace`.
-  // rootOwner is a typed being-Ref: { __ref: "being", id: "..." } (REFS.md).
-  // I_AM is a sentinel string ("i-am") that may be stored bare for genesis
-  // paths; consumers compare via refId(value) === I_AM. Mongoose Mixed
-  // accommodates both shapes.
-  rootOwner: { type: mongoose.Schema.Types.Mixed, default: null },
-  // contributors is an array of typed being-Refs: each entry is
-  // { __ref: "being", id: "..." } (REFS.md). Mongoose Mixed lets the
-  // Ref objects round-trip cleanly. Membership checks extract the
-  // bare id via refId() before comparing.
-  contributors: [{ type: mongoose.Schema.Types.Mixed }],
+  rootOwner: { type: String, ref: "Being", default: null },
+  contributors: [{ type: String, ref: "Being" }],
 
   // Non-null marks one of the spaces I plant at boot. The enum
   // values are in seed/materials/space/seedSpaces.js.
@@ -122,11 +111,8 @@ const SpaceSchema = new mongoose.Schema({
 // Soft-delete only. Deleting a Space sets `parent = DELETED`
 // (see seed/materials/space/spaces.js). I never hard-delete.
 
-// parent is a typed Ref; index the .id subpath so child-of-parent
-// queries (`{ "parent.id": parentId }`) hit an index.
-SpaceSchema.index({ "parent.id": 1 });
-// rootOwner is a typed Ref; index the .id subpath.
-SpaceSchema.index({ "rootOwner.id": 1 });
+SpaceSchema.index({ parent: 1 });
+SpaceSchema.index({ rootOwner: 1 });
 SpaceSchema.index({ seedSpace: 1 }, { sparse: true });
 
 // Public-Space listing. A Space is public when authorize finds a
@@ -138,7 +124,7 @@ SpaceSchema.index({ "qualities.permissions.see.*": 1 }, { sparse: true });
 // child is allowed per parent. partialFilterExpression limits the
 // constraint to type === "plan"; other sibling types are unaffected.
 SpaceSchema.index(
-  { "parent.id": 1, type: 1 },
+  { "parent": 1, type: 1 },
   {
     unique: true,
     partialFilterExpression: { type: "plan" },

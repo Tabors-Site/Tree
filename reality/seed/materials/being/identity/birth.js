@@ -166,48 +166,27 @@ export async function birthBeing({ spec, identity, summonCtx = null, scaffold = 
   const name = validateName(spec.name);
   validatePassword(spec.password);
 
-  // Identity primitive: spec.parentBeingId is a being-Ref. See REFS.md.
-  // The substrate does not accept bare-string IDs; callers wrap via
-  // ref("being", id). This is a doctrinal commitment, not a transition.
-  const { isAggregateRef, refKind, refId } = await import("../../ref.js");
-  const parentBeingRef = spec.parentBeingId || null;
-  if (!parentBeingRef) {
+  const parentBeingId = spec.parentBeingId || null;
+  if (!parentBeingId) {
     throw new IbpError(
       IBP_ERR.INVALID_INPUT,
       `birthBeing("${name}"): spec.parentBeingId is required. The being-tree ` +
         `is rooted at the I-Am; every other being chains back through its ` +
-        `parent. Pass ref("being", identity.beingId) or ref("being", iAm._id). ` +
+        `parent. Pass identity.beingId or iAm._id. ` +
         `Genesis (I_AM itself) bypasses this file and stamps its own be:birth ` +
         `from ensureIAm.`,
     );
   }
-  if (!isAggregateRef(parentBeingRef) || refKind(parentBeingRef) !== "being") {
-    throw new IbpError(
-      IBP_ERR.INVALID_INPUT,
-      `birthBeing("${name}"): spec.parentBeingId must be a being-Ref . got ${typeof parentBeingRef === "object" ? JSON.stringify(parentBeingRef) : typeof parentBeingRef}. Use ref("being", id).`,
-    );
-  }
-  const parentBeingId = refId(parentBeingRef);  // bare id for substrate lookups
 
-  // spec.homeId is a space-Ref (REFS.md). Callers wrap with
-  // ref("space", id). The substrate does not accept bare-string IDs.
-  const homeRef = spec.homeId || null;
-  if (!homeRef) {
+  const homeId = spec.homeId || null;
+  if (!homeId) {
     throw new IbpError(
       IBP_ERR.INVALID_INPUT,
       `birthBeing("${name}"): spec.homeId is required. The being's home is ` +
         `an existing space (or one created earlier in the same moment's ΔF). ` +
-        `Real-world analog: build the room before you have the baby. Pass ` +
-        `ref("space", id) for the home.`,
+        `Real-world analog: build the room before you have the baby.`,
     );
   }
-  if (!isAggregateRef(homeRef) || refKind(homeRef) !== "space") {
-    throw new IbpError(
-      IBP_ERR.INVALID_INPUT,
-      `birthBeing("${name}"): spec.homeId must be a space-Ref . got ${typeof homeRef === "object" ? JSON.stringify(homeRef) : typeof homeRef}. Use ref("space", id).`,
-    );
-  }
-  const homeId = refId(homeRef);  // bare id for substrate lookups
 
   const cognition = spec.cognition || "llm";
   if (cognition !== "human" && cognition !== "llm" && cognition !== "scripted") {
@@ -317,31 +296,21 @@ export async function birthBeing({ spec, identity, summonCtx = null, scaffold = 
   //   current position) — useful for spawning a companion right beside
   //   you. Reads the parent's projection slot for the live position.
   //
-  // position is a space-Ref (REFS.md). Defaults to homeRef; when
-  // birthHere is true we read the parent's already-Ref position.
-  let position = homeRef;
+  let position = homeId;
   if (spec.birthHere === true) {
-    const parentPositionRef = parentSlot?.state?.position || parentSlot?.position || null;
-    if (!parentPositionRef) {
+    const parentPositionId = parentSlot?.state?.position || parentSlot?.position || null;
+    if (!parentPositionId) {
       throw new IbpError(
         IBP_ERR.INVALID_INPUT,
         `birthBeing("${name}"): birthHere=true but parent has no current position. ` +
           `The parent must be placed somewhere for "next to me" to mean anything.`,
       );
     }
-    if (!isAggregateRef(parentPositionRef) || refKind(parentPositionRef) !== "space") {
-      throw new IbpError(
-        IBP_ERR.INTERNAL,
-        `birthBeing("${name}"): parent position is not a space-Ref (got ${typeof parentPositionRef}). Substrate identity primitive violation.`,
-      );
-    }
-    position = parentPositionRef;
+    position = parentPositionId;
   }
 
   // ── Resolve coord (random in-bounds inside position space's size) ──
-  // position is a space-Ref (REFS.md); extract bare id for loadOrFold
-  // and deltaF comparisons.
-  const positionId = refId(position);
+  const positionId = position;
   let resolvedCoord = spec.coord || null;
   if (!resolvedCoord && positionId) {
     try {
@@ -399,15 +368,13 @@ export async function birthBeing({ spec, identity, summonCtx = null, scaffold = 
   // (no separate creator-side audit fact).
   //
   // parentBeingId in the stamped fact is the Ref (typed identity
-  // primitive, REFS.md); the local `parentBeingId` variable above is
-  // the bare id used only for substrate lookups.
   const id = uuidv4();
   const factSpec = {
     name,
     password: credential.hash,
     defaultRole,
-    parentBeingId: parentBeingRef,
-    homeSpace: homeRef,
+    parentBeingId,
+    homeSpace: homeId,
     position,
     ...(resolvedCoord ? { coord: resolvedCoord } : {}),
     llmDefault: spec.llmDefault || null,

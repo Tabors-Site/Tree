@@ -132,10 +132,7 @@ async function createMatter({
 
   const { loadOrFold } = await import("../projections.js");
   const { default: Projection } = await import("../branch/projection.js");
-  const { ref, refId, isAggregateRef } = await import("../ref.js");
-  // Accept bare-string spaceId from legacy internal callers; substrate
-  // queries always need the bare id. Outgoing fact-spec wraps as Ref.
-  const spaceIdBare = isAggregateRef(spaceId) ? refId(spaceId) : spaceId;
+  const spaceIdBare = String(spaceId);
   const _spaceSlot = await loadOrFold("space", spaceIdBare, branch);
   const targetSpace = _spaceSlot ? {
     seedSpace: _spaceSlot.state?.seedSpace,
@@ -148,8 +145,7 @@ async function createMatter({
   const max = maxMatterPerSpace();
   const count = await Projection.countDocuments({
     branch, type: "matter",
-    // state.spaceId is a typed Ref (REFS.md); query via .id subpath.
-    "state.spaceId.id": spaceIdBare,
+    "state.spaceId": spaceIdBare,
     tombstoned: { $ne: true },
   });
   if (count >= max) {
@@ -202,9 +198,8 @@ async function createMatter({
       spec: {
         origin,
         content:   finalContent,
-        // spaceId / beingId are typed Refs (REFS.md).
-        spaceId:   ref("space", spaceIdBare),
-        beingId:   ref("being", String(beingId)),
+        spaceId:   spaceIdBare,
+        beingId:   String(beingId),
         qualities: hookData.qualities || {},
       },
     },
@@ -261,12 +256,7 @@ async function editMatter({
   const _matterSlot = await loadOrFold("matter", matterId, branch);
   if (!_matterSlot) throw new Error("Matter not found");
   const matter = { _id: _matterSlot.id, ...(_matterSlot.state || {}) };
-  // matter.beingId is a typed being-Ref (REFS.md); extract bare id for auth check.
-  {
-    const { refId: _r, isAggregateRef: _ir } = await import("../ref.js");
-    const matterBeingId = _ir(matter.beingId) ? _r(matter.beingId) : matter.beingId;
-    if (String(matterBeingId) !== String(beingId)) throw new Error("Unauthorized");
-  }
+  if (String(matter.beingId) !== String(beingId)) throw new Error("Unauthorized");
   if (!isIbpOrigin(matter.origin)) {
     throw new Error(`Cannot edit matter with origin "${matter.origin}". Only ibp-origin matter has editable text content.`);
   }
@@ -346,12 +336,10 @@ async function getMatters({ spaceId, limit, offset, startDate, endDate, branch }
   const safeOffset = Math.max(0, Number(offset) || 0);
 
   const { default: Projection } = await import("../branch/projection.js");
-  const { refId, isAggregateRef } = await import("../ref.js");
-  const spaceIdBare = isAggregateRef(spaceId) ? refId(spaceId) : spaceId;
+  const spaceIdBare = String(spaceId);
   const where = {
     branch, type: "matter",
-    // state.spaceId is a typed Ref (REFS.md); query via .id subpath.
-    "state.spaceId.id": spaceIdBare,
+    "state.spaceId": spaceIdBare,
     tombstoned: { $ne: true },
   };
   if (dateRange.createdAt) {
@@ -364,17 +352,14 @@ async function getMatters({ spaceId, limit, offset, startDate, endDate, branch }
     .lean();
 
   // Batch-load author names from the being projection slots.
-  // state.beingId is a typed being-Ref (REFS.md); extract bare id for lookup.
-  const { refId: _rg, isAggregateRef: _irg } = await import("../ref.js");
-  const extractBeingId = (raw) => (_irg(raw) ? _rg(raw) : (raw ? String(raw) : null));
-  const authorIds = [...new Set(rows.map((r) => extractBeingId(r.state?.beingId)).filter(Boolean))];
+  const authorIds = [...new Set(rows.map((r) => r.state?.beingId).filter(Boolean))];
   const { loadProjections: _lP } = await import("../projections.js");
   const authorSlots = await _lP("being", authorIds, "0");
 
   return {
     matters: rows.map(s => {
       const m = s.state || {};
-      const beingIdBare = extractBeingId(m.beingId);
+      const beingIdBare = m.beingId || null;
       const author = beingIdBare ? authorSlots.get(beingIdBare) : null;
       return {
         _id:        s.id,
@@ -402,23 +387,15 @@ async function deleteMatterAndFile({
   if (!_mSlot) throw new Error("Matter not found");
   const matter = { _id: _mSlot.id, ...(_mSlot.state || {}) };
 
-  // matter.spaceId is a typed Ref (REFS.md); resolveRootSpace expects bare id.
-  const { refId: _refId2, isAggregateRef: _isRef2 } = await import("../ref.js");
-  const matterSpaceIdBare = _isRef2(matter.spaceId) ? _refId2(matter.spaceId) : matter.spaceId;
-  const rootSpace = await resolveRootSpace(matterSpaceIdBare);
-  // matter.beingId is a typed being-Ref (REFS.md); extract bare id for auth.
-  const matterBeingIdBare = _isRef2(matter.beingId) ? _refId2(matter.beingId) : matter.beingId;
-  const isAuthor = String(matterBeingIdBare) === String(beingId);
+  const rootSpace = await resolveRootSpace(matter.spaceId);
+  const isAuthor = String(matter.beingId) === String(beingId);
   const isRootOwner = rootSpace.rootOwner?.toString() === beingId.toString();
 
   if (!isAuthor && !isRootOwner) {
     throw new Error("Only the matter author or the tree owner can delete this matter");
   }
 
-  // matter.beingId is a typed Ref; extract bare id for the disk/hook handoff.
-  const fileOwnerId = _isRef2(matter.beingId) ? _refId2(matter.beingId) : matter.beingId?.toString();
-  // spaceId here carries the original Ref shape for downstream hook
-  // reporting; consumers extract bare id via refId() if needed.
+  const fileOwnerId = matter.beingId;
   const { spaceId } = matter;
   let fileDeleted = false;
   let fileSizeKB = 0;
@@ -498,17 +475,10 @@ async function transferMatter({
   const matter = { _id: _mSlot2.id, ...(_mSlot2.state || {}) };
   if (matter.spaceId === DELETED) throw new Error("Cannot transfer deleted matter");
 
-  // matter.spaceId is a typed Ref (REFS.md); extract bare id for the
-  // root-resolve lookup. Caller passes targetSpace as a bare string;
-  // wrap into Ref for the emit.
-  const { ref, refId, isAggregateRef } = await import("../ref.js");
-  const matterSpaceIdBare = isAggregateRef(matter.spaceId) ? refId(matter.spaceId) : matter.spaceId;
-  const targetSpaceBare = isAggregateRef(targetSpace) ? refId(targetSpace) : targetSpace;
+  const targetSpaceBare = String(targetSpace);
 
-  const rootSpace = await resolveRootSpace(matterSpaceIdBare);
-  // matter.beingId is a typed Ref (REFS.md); extract bare id for auth.
-  const matterBeingIdBare = isAggregateRef(matter.beingId) ? refId(matter.beingId) : matter.beingId;
-  const isAuthor = String(matterBeingIdBare) === String(beingId);
+  const rootSpace = await resolveRootSpace(matter.spaceId);
+  const isAuthor = String(matter.beingId) === String(beingId);
   const isRootOwner = rootSpace.rootOwner?.toString() === beingId.toString();
   if (!isAuthor && !isRootOwner) {
     throw new Error("Only the matter author or the tree owner can transfer this matter");
@@ -523,22 +493,21 @@ async function transferMatter({
   }
 
   const sourceSpaceId = matter.spaceId;
-  // Fact-driven transfer (Slice C-matter-full, 2026-05-23). One do:set
-  // Fact updates spaceId; the reducer's applySetField writes the row.
-  // value is a typed space-Ref (REFS.md).
+  // Fact-driven transfer. One do:set fact updates spaceId; the reducer's
+  // applySetField writes the row.
   await emitFact({
     verb:    "do",
     action:  "set-matter",
     beingId: String(beingId),
     target:  { kind: "matter", id: String(matter._id) },
-    params:  { field: "spaceId", value: ref("space", targetSpaceBare) },
+    params:  { field: "spaceId", value: targetSpaceBare },
     actId,
     sessionId,
     branch,
   }, summonCtx);
-  matter.spaceId = ref("space", targetSpaceBare);
+  matter.spaceId = targetSpaceBare;
 
-  return { message: "Matter transferred successfully", matterId: matterId.toString(), from: { spaceId: sourceSpaceId }, to: { spaceId: ref("space", targetSpaceBare) } };
+  return { message: "Matter transferred successfully", matterId: matterId.toString(), from: { spaceId: sourceSpaceId }, to: { spaceId: targetSpaceBare } };
 }
 
 //
@@ -675,15 +644,12 @@ async function listMattersAt(spaceId, { limit = 50, branch } = {}) {
   assertBranchOrThrow(branch, "matters.listMattersAt(opts)");
   if (!spaceId) return [];
   const { default: Projection } = await import("../branch/projection.js");
-  const { refId: _refId, isAggregateRef: _isRef } = await import("../ref.js");
   const toEntry = (s) => {
     const m = s.state || {};
-    // state.beingId is a typed Ref (REFS.md); extract bare id for the return.
-    const beingIdBare = _isRef(m.beingId) ? _refId(m.beingId) : (m.beingId ? String(m.beingId) : null);
     return {
       matterId: String(s.id),
       name: m.name || null,
-      beingId: beingIdBare,
+      beingId: m.beingId || null,
       origin: m.origin || "ibp",
       content: m.content || null,
       qualities: m.qualities instanceof Map
@@ -691,11 +657,10 @@ async function listMattersAt(spaceId, { limit = 50, branch } = {}) {
         : (m.qualities || {}),
     };
   };
-  const spaceIdBare = _isRef(spaceId) ? _refId(spaceId) : String(spaceId);
+  const spaceIdBare = String(spaceId);
   const baseQuery = (b) => ({
     branch: b, type: "matter",
-    // state.spaceId is a typed Ref (REFS.md); query via .id subpath.
-    "state.spaceId.id": spaceIdBare,
+    "state.spaceId": spaceIdBare,
     tombstoned: { $ne: true },
   });
 

@@ -59,18 +59,33 @@ export async function resolvePathToSpaceId(pathString, branch) {
 
   let cursorId = rootId;
   const { default: Projection } = await import("./projection.js");
+  const { isMain } = await import("./branches.js");
+  const { resolveBranchLineage } = await import("./branches.js");
+
+  // Build the branch's lineage chain (e.g. ["0"] for main, ["0", "1"]
+  // for a child of main, etc.) so segment lookups walk inherited
+  // content. A subtree branch may need to find a space planted on its
+  // parent's reel; querying only the current branch's projection table
+  // misses it.
+  const lineage = isMain(branch) ? ["0"] : await resolveBranchLineage(branch);
+  // From leaf branch outward to root, so the most-divergent branch
+  // wins on shadow.
+  const orderedBranches = [...lineage].reverse();
 
   for (const segment of segments) {
-    const child = await Projection.findOne({
-      branch,
-      type: "space",
-      // state.parent is a typed space-Ref (REFS.md).
-      "state.parent.id": cursorId,
-      "state.name": segment,
-      tombstoned: { $ne: true },
-    }).lean();
-    if (!child) return null;
-    cursorId = String(child.id);
+    let resolvedChild = null;
+    for (const b of orderedBranches) {
+      const child = await Projection.findOne({
+        branch: b,
+        type: "space",
+        "state.parent": cursorId,
+        "state.name": segment,
+        tombstoned: { $ne: true },
+      }).lean();
+      if (child) { resolvedChild = child; break; }
+    }
+    if (!resolvedChild) return null;
+    cursorId = String(resolvedChild.id);
   }
   return cursorId;
 }
@@ -150,27 +165,23 @@ async function _isSpaceInScope(spaceId, scopeSpaceId, branchPath) {
  * Resolve a target to its home space id (for beings) or parent space
  * id (for matter). Returns null when classification is impossible.
  *
- * Reads through loadProjection. The projection is the same one
- * the fact's reducer would have read; on warm cache this is free.
+ * Lineage-aware via loadOrFold: a being inherited from the parent
+ * branch (no divergent slot on this branch yet) still resolves to its
+ * homeSpace via cold-fold over the inherited reel. Bare loadProjection
+ * here would return null for inherited aggregates and the gate's
+ * defensive "can't classify → allow" fallback would let out-of-scope
+ * writes against inherited targets through silently.
  */
 async function _resolveHomeSpace(target, branchPath) {
   if (target.kind === "space") return String(target.id);
 
-  const { loadProjection } = await import("../projections.js");
-  const { refId } = await import("../ref.js");
-  const slot = await loadProjection(target.kind, String(target.id), branchPath);
+  const { loadOrFold } = await import("../projections.js");
+  const slot = await loadOrFold(target.kind, String(target.id), branchPath);
   if (!slot) return null;
   const state = slot.state || {};
 
-  if (target.kind === "being") {
-    // state.homeSpace is a space-Ref (REFS.md).
-    return refId(state.homeSpace);
-  }
-  if (target.kind === "matter") {
-    return state.parentSpace
-      ? String(state.parentSpace)
-      : (state.spaceId ? String(state.spaceId) : null);
-  }
+  if (target.kind === "being") return state.homeSpace || null;
+  if (target.kind === "matter") return state.spaceId || null;
   return null;
 }
 

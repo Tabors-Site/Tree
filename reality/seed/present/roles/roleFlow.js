@@ -113,7 +113,6 @@
 
 import { getRole } from "./registry.js";
 import { beingCognition } from "../../materials/being/identity/lookups.js";
-import { refId } from "../../materials/ref.js";
 
 const OPERATORS = new Set(["eq", "ne", "in", "notIn", "gt", "gte", "lt", "lte", "present"]);
 const COMPOSITES = new Set(["and", "or", "not"]);
@@ -217,9 +216,8 @@ function buildCtx({
   worldSignals,
 }) {
   const quals = toBeing.qualities;
-  // homeSpace + position are space-Refs on state (REFS.md). Extract bare ids.
-  const meHomeSpace = refId(toBeing.homeSpace);
-  const mePosition  = refId(toBeing.position);
+  const meHomeSpace = toBeing.homeSpace || null;
+  const mePosition  = toBeing.position || null;
   const meCoord     = qGet(quals, "coord") || toBeing.coord || null;
 
   // SUMMON envelope shape carries `activeRole` and `from` (a stance

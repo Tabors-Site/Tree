@@ -206,8 +206,8 @@ export async function summonVerb(stance, message, opts = {}) {
       content.kind === "create-being" &&
       content.spec && typeof content.spec === "object"
     ) {
-      const { ref, isAggregateRef } = await import("../../materials/ref.js");
       const parentBeingId = content.spec.parentBeingId || identity.beingId;
+      const homeSpace = content.spec.homeSpace || resolved.spaceId || null;
       const spec = {
         ...content.spec,
         name:      content.spec.name      || qualifier,
@@ -215,21 +215,14 @@ export async function summonVerb(stance, message, opts = {}) {
         // parent is who summoned the being forth. The being-tree
         // invariant is "only I-Am has null parentBeingId"; honoring
         // identity.beingId here keeps the chain intact when the
-        // caller didn't explicitly set it. Typed Refs (REFS.md): wrap
-        // if the spec carried a bare id.
-        parentBeingId: isAggregateRef(parentBeingId)
-          ? parentBeingId
-          : (parentBeingId ? ref("being", String(parentBeingId)) : null),
+        // caller didn't explicitly set it.
+        parentBeingId: parentBeingId ? String(parentBeingId) : null,
         // homeSpace defaults to where the being was summoned at
         // (resolved.spaceId). createBeingWithHome will fall back to
         // the parent's home if neither homeSpace nor homeParent is
         // set; this keeps the legacy "summoned at X → home is X"
         // behavior intact for the wire path.
-        homeSpace: isAggregateRef(content.spec.homeSpace)
-          ? content.spec.homeSpace
-          : (content.spec.homeSpace
-              ? ref("space", String(content.spec.homeSpace))
-              : (resolved.spaceId ? ref("space", String(resolved.spaceId)) : null)),
+        homeSpace: homeSpace ? String(homeSpace) : null,
       };
       const result = await summonCreateBeing({ spec, identity, summonCtx: opts.summonCtx || null });
       return {
@@ -367,9 +360,7 @@ async function _dispatchSummon({
     );
   }
 
-  // toBeing.homeSpace is a space-Ref (REFS.md); extract the bare id.
-  const { refId } = await import("../../materials/ref.js");
-  const inboxNodeId = resolved.spaceId || refId(toBeing.homeSpace) || null;
+  const inboxNodeId = resolved.spaceId || toBeing.homeSpace || null;
   if (!inboxNodeId) {
     throw new IbpError(
       IBP_ERR.VERB_NOT_SUPPORTED,

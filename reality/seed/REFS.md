@@ -1,35 +1,63 @@
-# Refs — TreeOS's typed identity primitive
+# Refs — TreeOS's content-walking primitive
 
-> *Anywhere the substrate carries an aggregate ID, the value is a tagged Ref, not a bare string. Cross-substrate operations (replicate, graft, mirror, future ops) detect refs by structure and remap them automatically. Builders use `ref()` to wrap IDs; the substrate handles the rest.*
+> *Refs exist for ONE job: walking arbitrary content to find aggregate references where the schema isn't accessible. That happens at three seams — replicate, clone, federation. Everywhere else, the schema knows what's an ID. Don't reach for Refs.*
 
 ## What this is
 
-Every reference to a being, space, or matter in TreeOS goes through a single typed value: a **Ref**. A Ref is a tagged object that captures both *what kind of aggregate is referenced* and *which instance* — making ID-bearing fields self-describing wherever they appear.
+A Ref is a tagged object that says "this field is a reference to an aggregate of kind K":
 
 ```js
-const aliceRef = ref("being", aliceId);
-// → { __ref: "being", id: "abc-123-def" }
-
-const libraryRef = ref("space", libraryId);
-// → { __ref: "space", id: "456-789-ghi" }
+ref("being", aliceId);   // → { __ref: "being", id: "abc-123-def" }
+ref("space", libraryId); // → { __ref: "space", id: "456-789-ghi" }
 ```
 
-This is the substrate's identity primitive. It replaces "ID-is-a-bare-string-and-you-have-to-know-which-strings-are-IDs" with "ID-is-a-tagged-value-and-the-substrate-knows-by-structure."
+Refs are **NOT** the substrate's identity primitive. They are NOT the wire contract. They are NOT what handlers receive. They are NOT how rows store IDs.
 
-## Why typed Refs
+Refs exist for the cases where code traverses content **without access to the originating schema**. That walker needs *some* way to detect "this is an ID, this is just a string." The Ref tag is that signal. Outside those traversal seams, schemas are right there — handler logic, reducer code, projection field names. Use them. Pass bare IDs.
 
-The earlier model required every action handler and every qualities namespace to declare its ID-bearing fields in a manifest (`REFS_MANIFEST.md`). This works but creates a builder foot-gun: every extension author has to remember to declare; forgetting silently breaks replicate, graft, and any future cross-substrate operation.
+## When Refs earn their place
 
-Typed Refs eliminate the foot-gun:
+Three seams in the substrate, and only these:
 
-- **Self-describing.** The substrate detects refs by structure. No manifest needed for the common case.
-- **Compose freely.** Refs work inside arrays, objects, Maps, deeply nested qualities — anywhere the substrate's projection layer stores data.
-- **Type-safe end-to-end.** A Ref's `__ref` field names its kind; the graft walker dispatches on that, not on which-string-might-be-an-ID guessing.
-- **Builders learn one helper.** `ref(kind, id)` to create. `isRef(v)` to detect. That's the whole API surface most authors need.
+1. **Replicate** — `seed/publishing.md`. Snapshot a tree of content, hand it to a new substrate, recreate it with a fresh ID namespace. The replicator walks the content tree, finds every aggregate reference, remaps to the new substrate's IDs. Without Refs the walker can't tell "is this string an ID or just a name?"
 
-## The Ref shape
+2. **Clone / mitosis** (future) — exact-copy a tree of content into another substrate, preserving structure. Same walker, different remap policy (identity vs new-namespace).
 
-A Ref is a plain object with exactly two required fields:
+3. **Federation** (future, see `protocols/ibp/FEDERATION.md` Diff B) — when content from another reality enters our substrate via grafted facts, the walker remaps the foreign IDs into local namespace. Federation propagates facts (not beings or live state); the foreign IDs in those facts get remapped at the boundary.
+
+That's the entire load. The walker is the keeper. Refs exist to serve the walker.
+
+## What the substrate does NOT do with Refs
+
+- **Storage** doesn't store IDs as Refs (with rare transitional exceptions during the lazy cleanup of Phase 1.6's over-reach; see history).
+- **Handlers** don't refuse bare IDs. `set-being { field: "position", value: "abc-123" }` is the normal shape.
+- **Reducers** don't write Refs to projection state.
+- **Wire / portal** doesn't wrap IDs in `ref()` before sending. Portal sends bare IDs and names; the wire resolves names to IDs.
+- **Mongo queries** don't filter on `.id` subpaths.
+- **Indexes** are on the bare field, not `field.id`.
+
+If you find yourself writing code that wraps a bare ID in `ref()` because "the substrate expects Refs," stop. The substrate doesn't. Pass the bare ID.
+
+## The walker — public API
+
+```js
+import { findRefs, remapRefs } from "./seed/materials/refWalker.js";
+
+// Collect every Ref in a value (deep)
+const refs = findRefs(bundle);
+
+// Substitute Refs via a callback (deep; structure preserved)
+const remapped = remapRefs(bundle, (r) => {
+  if (isSentinelRef(r)) return resolveSentinel(r);
+  return ref(refKind(r), remapTable[refId(r)] || refId(r));
+});
+```
+
+`findRefs` and `remapRefs` operate on plain objects, arrays, Maps, nested combinations. Refs are detected by the `__ref` shape.
+
+Helpers for content that doesn't yet carry Refs (an export from a bare-ID substrate): the walker accepts a **manifest** — a configuration that says "in this content shape, the field at path X is a being-Ref" — and applies the Ref interpretation during walk. The manifest is walker configuration, not a runtime validator. Define the manifest only when you're building a content-export or content-import pipeline.
+
+## Ref shape
 
 ```js
 {
@@ -38,7 +66,7 @@ A Ref is a plain object with exactly two required fields:
 }
 ```
 
-Five kinds:
+Five kinds. Three name aggregates (being / space / matter). Two are graft sentinels.
 
 | Kind | Meaning | id required? |
 |---|---|---|
@@ -48,162 +76,44 @@ Five kinds:
 | `"graft-initiator"` | Sentinel: resolves to the operator running the graft | no |
 | `"insertion-point"` | Sentinel: resolves to the operator-chosen target parent | no |
 
-Sentinels are how the substrate expresses graft-time behavior in the export bundle. They serialize identically (`{ __ref: "graft-initiator" }`) and the graft walker resolves them via context, not the remap table.
+Sentinels serialize as Refs and the graft walker resolves them via context, not the remap table.
 
-## Public API
-
-### Creating refs
+## Helper API (for walker authors)
 
 ```js
-import { ref } from "./seed/materials/ref.js";
+import { ref, isRef, refKind, refId, isAggregateRef, isSentinelRef } from "./seed/materials/ref.js";
 
-ref("being", aliceId);   // → { __ref: "being", id: aliceId }
-ref("space", libraryId); // → { __ref: "space", id: libraryId }
-ref("matter", bookId);   // → { __ref: "matter", id: bookId }
+ref("being", id)         // construct
+isRef(value)             // any Ref shape
+isAggregateRef(value)    // being/space/matter (has id)
+isSentinelRef(value)     // graft-time (no id)
+refKind(value)           // "being" / "space" / ...
+refId(value)             // the id, or null for sentinels or non-Refs
 ```
 
-### Sentinels
+`refId` is tolerant — it accepts bare strings and passes them through. This is intentional: callers that read possibly-mixed data (during the lazy storage cleanup) don't need to branch.
 
-```js
-import { REF_GRAFT_INITIATOR, REF_INSERTION_POINT } from "./seed/materials/ref.js";
+## Why this scope
 
-REF_GRAFT_INITIATOR;  // → { __ref: "graft-initiator" }
-REF_INSERTION_POINT;  // → { __ref: "insertion-point" }
-```
+A type tag earns its place when the **consumer** of the data lacks access to a schema. Storage rows have schemas. Handlers have schemas (they know which field they're writing). Reducers have schemas (they know what they write to). Wire dispatchers have op contracts. None of them need a tag — they already know.
 
-### Detection + accessors
+The walker is the only consumer that genuinely lacks schema knowledge. The content it walks could come from any substrate version, any extension's qualities namespace, any future ID-bearing field. The tag is what makes that walk possible without a per-substrate-version dispatch.
 
-```js
-import { isRef, refKind, refId, isAggregateRef, isSentinelRef } from "./seed/materials/ref.js";
+Tagging IDs everywhere else was over-engineering: scaffolding around the walker that didn't need to be there. The substrate's actual identity model is — and always was — schema-derived. Refs are the federation primitive that lets cross-substrate operations work; they are not the substrate's identity primitive.
 
-isRef(value)            // → true if value is any Ref shape
-isAggregateRef(value)   // → true if a being/space/matter Ref (has an id)
-isSentinelRef(value)    // → true if a graft-time sentinel (no id)
-refKind(value)          // → "being" / "space" / "matter" / "graft-initiator" / "insertion-point"
-refId(value)            // → the id, or null for sentinels
-```
+## History
 
-### Coercion
+Phase 1.6 (2026-06-04) initially migrated every ID-bearing field in the substrate to typed Refs, including handler-side strict validation that refused bare strings. This was over-scoped: the substrate's handlers already knew what kind each field was via their own logic and didn't need the tags. The strictness was rolled back the same day; the walker primitive and Ref helpers stayed. The doctrine was sharpened to its current scope: Refs are content-walking, not substrate-internal.
 
-```js
-import { coerceRef } from "./seed/materials/ref.js";
-
-coerceRef(aliceId, "being");  // bare string + hint → ref
-coerceRef(aliceRef, "being"); // already a ref → unchanged (kind verified)
-```
-
-Use `coerceRef` at substrate boundaries where legacy callers may still pass bare strings. Throws if the kind hint disagrees with an incoming Ref's kind.
-
-### Walking + remapping
-
-```js
-import { findRefs, remapRefs } from "./seed/materials/refWalker.js";
-
-// Collect every Ref in a value (deep)
-const refs = findRefs(bundle);
-// → [{ __ref: "being", id: "..." }, { __ref: "space", id: "..." }, ...]
-
-// Substitute Refs via a callback (deep; structure preserved)
-const remapped = remapRefs(bundle, (r) => {
-  if (isSentinelRef(r)) return resolveSentinel(r);
-  return ref(refKind(r), remapTable[refId(r)] || refId(r));
-});
-```
-
-The walker handles plain objects, arrays, Maps, nested combinations. Primitives and `null` pass through unchanged. Refs are detected by their `__ref` field, not by path or schema.
-
-## Where Refs go
-
-The substrate's commitment is that **anywhere an aggregate ID would appear, a Ref appears instead**. Concretely:
-
-- **Fact params.** When a fact references another aggregate, the params field carries a Ref. `set-being { value: ref("being", parentId) }` instead of bare string.
-- **Qualities namespaces.** Stored values that reference aggregates are Refs. `qualities.connection.inhabitedBy = ref("being", id)`.
-- **Schema-field writes.** `homeSpace`, `parentBeingId`, `position`, `rootOwner`, etc. all carry Refs in their stored value.
-- **Manifest references inside replicates.** Export bundles use Refs throughout.
-- **IBP envelope payloads** that carry IDs use Refs.
-
-What stays a bare string:
-
-- **Branch paths** (`"0"`, `"1a2"`) — these aren't aggregate IDs.
-- **Reality domains** (`"treeos.example"`) — these aren't aggregate IDs.
-- **Names** (role names, pointer names, world-signal namespaces) — name-keyed, not ID-keyed.
-- **Stamp IDs / Act IDs / Session IDs** — substrate metadata, not user-facing aggregates.
-
-## No fallback path
-
-The substrate's identity primitive is typed Refs. There is one way to reference an aggregate. Bare-string IDs are not it.
-
-The runtime manifest registry was deleted on 2026-06-04 — the moment it became clear that keeping it as a "transition fallback" would corrode the doctrine. The remaining seed handlers (`set-being`, `create-space`, etc.) still emit bare-string IDs *for their unmigrated fields*; this is a punch list, not an API. The migration progress is tracked in `seed/REFS_BACKLOG.md` (markdown only — no runtime code consults it).
-
-This commitment is intentional. Fallback paths corrode systems:
-
-- Two paths means two correct answers. Bugs proliferate at the seam.
-- Builders have to know about both. Mixed conventions persist forever.
-- The legacy path never goes away without forcing function.
-- Doctrines become "mostly true with exceptions," which is the same as "not doctrines."
-
-The substrate's strength is absolute doctrines (chain is truth, heaven never branches, identity is local, address is actor). Typed Refs joins that set: every aggregate reference is a Ref. Period.
-
-**For builders during the migration:**
-
-- Use `ref()` for all ID-bearing values in new code.
-- The unmigrated seed handlers still emit bare-string IDs; the backlog tracks which.
-- Each migration is atomic per field: handler emits Ref, reducer stores Ref, all consumers read Refs, tests use Refs, backlog row checked off. No half-migrations.
-- The graft layer ships only after the backlog is empty. There is no "graft with fallback" stage.
-
-Sentinel semantics (`<GRAFT_INITIATOR>`, `<INSERTION_POINT>`) are first-class Ref kinds (`REF_GRAFT_INITIATOR`, `REF_INSERTION_POINT`) on the type module — not a manifest holdout.
-
-## Implementation status
-
-| Piece | Status |
-|---|---|
-| `Ref` type + helpers (`ref`, `isRef`, `refKind`, `refId`, sentinels) | shipped (2026-06-04) |
-| Walker (`findRefs`, `remapRefs`, `collectUniqueAggregateIds`) | shipped (2026-06-04) |
-| Runtime manifest registry | **deleted** (2026-06-04) — no runtime code consults it |
-| Migration backlog | `seed/REFS_BACKLOG.md` (markdown-only punch list) |
-| Migration sweep: seed ops emit Refs | Phase 1.6 (in flight) |
-| Migration sweep: qualities namespaces store Refs | Phase 1.6 (in flight) |
-| Backlog file deletion | end of Phase 1.6 |
-| Graft layer (Refs only, no fallback) | Phase 5 (after sweep) |
-
-## Design choices
-
-### Why `__ref` and not `__type` or `$kind`
-
-- `__ref` reads as "this is a reference," which matches reader intent.
-- Double-underscore prefix is a clear "substrate metadata" convention; nothing in user qualities will accidentally collide.
-- The single shape `{ __ref, id }` is simple to detect with one predicate.
-
-### Why a tagged object instead of a string prefix
-
-Tagged objects survive serialization through every transport the substrate uses (JSON, BSON, IBP envelopes) without parsing tricks. String prefixes (`"@being:abc"`) would require every consumer to know the prefix convention; tagged objects are self-describing.
-
-### Why kinds as a closed set
-
-The substrate's three aggregates (being, space, matter) are doctrinal. Other kinds (acts, summons, facts) are substrate metadata, not user-facing references. Restricting Ref kinds to the three aggregates plus two sentinels prevents Refs from becoming a generic "I'm an ID of something" wrapper that loses its semantic punch.
-
-### Why both `isRef` and `isAggregateRef`
-
-`isRef` is the broad predicate — "this is any Ref shape." `isAggregateRef` is narrower — "this is a being/space/matter Ref with a remappable id." The graft walker uses the broad predicate to find candidates and the narrow one to decide whether to consult the remap table.
+The completed schema-field migrations (handlers, queries, indexes flipped to `.id` subpaths) get rolled back over time — handlers accept bare IDs again, queries use bare paths, Mongoose schemas drift back to `String` as files are touched for other reasons. Storage may contain stale Refs from the migration period; `refId()` is tolerant of both shapes so consumers read either way.
 
 ## Doctrinal pin
 
-> **IDs are typed at the substrate level.** Every reference to a being, space, or matter is a `Ref`, not a bare string. The substrate detects refs by structure; cross-substrate operations (replicate, graft, future mirror, future deep-clone) consume them through the walker without per-action declarations. The legacy manifest (REFS_MANIFEST.md) remains as a fallback bridge for unmigrated ops and as the home for sentinel semantics; it is not the long-term substrate API.
+> **Refs are a content-walking primitive, not a type system.** They appear at three seams — replicate, clone, federation — where code traverses content without access to the originating schema. The walker (`findRefs` / `remapRefs`) is the substrate's federation primitive; the Ref type exists to serve that walker. Everywhere else in the substrate, schemas know types and bare IDs flow through.
 
-## Migration guidance
+## See also
 
-When you're writing a new op or a new qualities namespace:
-
-- Use `ref(kind, id)` for any ID-bearing field. Substrate handles the rest.
-- Use sentinels (`REF_GRAFT_INITIATOR`, `REF_INSERTION_POINT`) for graft-time behavior.
-- Don't touch the legacy refs manifest.
-
-When you're updating an existing op or namespace during Phase 1.6:
-
-- Migrate the field to Refs. Drop its manifest entry. You're done.
-- If a migration is harder than expected (e.g., touches many consumers), split it into a separate PR — don't ship a partial migration that leaves some sites bare-string.
-
-When you're reading data:
-
-- Use `refKind` and `refId` to introspect. Don't pattern-match `__ref` directly.
-- Use `coerceRef(value, kindHint)` at boundaries that receive incoming protocol payloads (HTTP/WS bodies). These are conversion-at-boundary points; inside the substrate, everything is already a Ref.
+- `seed/materials/ref.js` — Ref type + helpers
+- `seed/materials/refWalker.js` — `findRefs`, `remapRefs`
+- `seed/publishing.md` — replicate/graft semantics where Refs are used
+- `protocols/ibp/FEDERATION.md` — federation Diff B, where Refs cross substrates

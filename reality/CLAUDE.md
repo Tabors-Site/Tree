@@ -91,6 +91,8 @@ genesis.js The unfolding. Indexes, config, migrations, beings, extensions, jobs.
 
 **The operator always decides.** Extensions suggest. Intent proposes actions. Delegate matches work to humans. Evolve writes specs. Governance shows compatibility. Nothing forces. Nothing auto-installs. Nothing pushes code onto the reality. The seed is sovereign. The directory coordinates through exclusion, not injection.
 
+**Schemas know types; runtime tags appear only where schema knowledge runs out.** Inside the substrate, handlers know what kind each field holds, reducers know what they write, projections carry types. IDs flow as bare strings; the schema is the type system. Runtime type tags (`{ __ref, id }`) earn their place ONLY at content-walking seams where the receiver lacks schema knowledge of the source — replicate / clone / federation bundles. The walker (`findRefs` / `remapRefs` in `seed/materials/refWalker.js`) reads those tags; the substrate everywhere else uses bare IDs. When a "should we tag this structurally?" question comes up, ask: *does the consumer have schema knowledge?* If yes, no tag. If no, tag. The forensic record of why this matters lives in `seed/done/REFS_BACKLOG.md` (the over-scoped Phase 1.6 attempt that taught the heuristic).
+
 ## Building an extension
 
 ```bash

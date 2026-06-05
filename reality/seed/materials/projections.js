@@ -427,8 +427,7 @@ export async function findByParent(beingId, branch) {
   if (branch === MAIN) {
     const rows = await Projection.find({
       branch: MAIN, type: "being",
-      // state.parentBeingId is a being-Ref (REFS.md); query via .id subpath.
-      "state.parentBeingId.id": beingId,
+      "state.parentBeingId": beingId,
       tombstoned: { $ne: true },
     }).select("type id foldedSeq position").lean();
     return rows.map(toOccupant);
@@ -437,8 +436,7 @@ export async function findByParent(beingId, branch) {
   const [branchChildren, mainChildren, branchTouched] = await Promise.all([
     Projection.find({
       branch, type: "being",
-      // state.parentBeingId is a being-Ref (REFS.md); query via .id subpath.
-      "state.parentBeingId.id": beingId,
+      "state.parentBeingId": beingId,
       tombstoned: { $ne: true },
     }).select("type id foldedSeq position").lean(),
     findByParent(beingId, MAIN),
@@ -569,8 +567,7 @@ export async function countByParent(beingId, branch) {
   assertBranch(branch);
   return await Projection.countDocuments({
     branch, type: "being",
-    // state.parentBeingId is a being-Ref (REFS.md); query via .id subpath.
-    "state.parentBeingId.id": beingId,
+    "state.parentBeingId": beingId,
     tombstoned: { $ne: true },
   });
 }
@@ -693,7 +690,7 @@ export async function findRootOperator(systemNames, branch) {
   const row = await Projection.findOne({
     branch, type: "being",
     "state.name": { $type: "string", $nin: systemNames },
-    "state.parentBeingId.id": { $in: allowedParents },
+    "state.parentBeingId": { $in: allowedParents },
     tombstoned: { $ne: true },
   })
     .sort({ "state.createdAt": 1, _id: 1 })
