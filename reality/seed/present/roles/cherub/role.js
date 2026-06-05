@@ -100,21 +100,14 @@ async function birthHandler({ payload, ctx }) {
 
     let being;
     try {
-      const result = await birthBeing({
-        spec: {
-          cognition: "human",
-          name,
-          password,
-          roles:         ["human"],
-          defaultRole:   "human",
-          homeParent:    getSpaceRootId(),
-          parentBeingId: iAm ? String(iAm._id) : null,
-        },
-        identity:  { name: "cherub", beingId: cherubBeingId },
+      being = await _registerHumanWithFreshHome({
+        name,
+        password,
+        parentBeingId: iAm ? String(iAm._id) : null,
+        cherubIdentity: { name: "cherub", beingId: cherubBeingId },
         summonCtx: ctx?.summonCtx || null,
-        scaffold:  ctx?.scaffold === true,
+        scaffold: ctx?.scaffold === true,
       });
-      being = result.being;
     } catch (err) {
       throw mapSeedError(err);
     }
@@ -176,20 +169,14 @@ async function birthHandler({ payload, ctx }) {
 
   let being;
   try {
-    const result = await birthBeing({
-      spec: {
-        cognition: "human",
-        name,
-        password,
-        roles:         ["human"],
-        defaultRole:   "human",
-        homeParent:    getSpaceRootId(),
-        parentBeingId,
-      },
-      identity:  { name: "cherub", beingId: parentBeingId },
+    being = await _registerHumanWithFreshHome({
+      name,
+      password,
+      parentBeingId,
+      cherubIdentity: { name: "cherub", beingId: parentBeingId },
       summonCtx: ctx?.summonCtx || null,
+      scaffold: false,
     });
-    being = result.being;
   } catch (err) {
     throw mapSeedError(err);
   }
@@ -382,6 +369,94 @@ export const cherubBeOps = Object.freeze({
 // ────────────────────────────────────────────────────────────────────
 // Helpers
 // ────────────────────────────────────────────────────────────────────
+
+/**
+ * Register a human: create their fresh home space under the place
+ * root, birth the being into it, set the new being as the home's
+ * rootOwner. Three facts (do:create-space, be:birth, do:set-space)
+ * all ride the same `summonCtx.deltaF` so they seal atomically.
+ *
+ * Inlined from the retired `createBeingWithHome` orchestrator —
+ * cherub is the only register flow that needs the "fresh child
+ * home" pattern, so the steps live where they're used rather than
+ * hiding inside the birth primitive.
+ *
+ * Returns the new being row (pending view during seal).
+ */
+async function _registerHumanWithFreshHome({
+  name,
+  password,
+  parentBeingId,
+  cherubIdentity,
+  summonCtx,
+  scaffold,
+}) {
+  const { v4: uuidv4 } = await import("uuid");
+  const { emitFact } = await import("../../../past/fact/facts.js");
+  const { I_AM } = await import("../../../materials/being/seedBeings.js");
+
+  // ── 1. Create the home space ──
+  // Human homes are 100×100 grid bounded territories under the place
+  // root. The home's `rootOwner` lands in step 3 (after the being
+  // exists to reference); step 1 stamps the space with rootOwner=null.
+  const homeId = uuidv4();
+  const placeRootId = getSpaceRootId();
+  const actorId = cherubIdentity?.beingId || I_AM;
+  const { ref: makeSpaceRef } = await import("../../../materials/ref.js");
+  await emitFact({
+    verb:   "do",
+    action: "create-space",
+    beingId: String(actorId),
+    target: { kind: "space", id: homeId },
+    params: {
+      spec: {
+        name,                           // home space is named for the user
+        type: "home-territory",
+        // parent is a typed space-Ref (REFS.md).
+        parent: makeSpaceRef("space", String(placeRootId)),
+        rootOwner: null,                 // becomes the new being after step 3
+        size: { x: 100, y: 100 },
+        qualities: {},
+      },
+    },
+    actId:  summonCtx?.actId || null,
+    branch: summonCtx?.branch || "0",
+  }, summonCtx);
+
+  // ── 2. Birth the being into the new home ──
+  const { ref } = await import("../../../materials/ref.js");
+  const result = await birthBeing({
+    spec: {
+      cognition:     "human",
+      name,
+      password,
+      defaultRole:   "human",
+      homeId:        ref("space", String(homeId)),
+      parentBeingId: parentBeingId ? ref("being", String(parentBeingId)) : null,
+      // birthHere stays false (default): the being appears at their
+      // own home, which is what registration semantically means.
+    },
+    identity:  cherubIdentity,
+    summonCtx,
+    scaffold,
+  });
+
+  // ── 3. Set the new being as rootOwner on the home ──
+  // The home is a tree root they own. Stamped as scaffold because
+  // cherub already authorized the whole compound act; doing it under
+  // the new being's identity faces a chicken-and-egg with stance auth
+  // (they're becoming the owner; auth needs them to already be one).
+  const { doVerb } = await import("../../../ibp/verbs/do.js");
+  // rootOwner is a being-Ref (REFS.md).
+  await doVerb(
+    { kind: "space", id: homeId },
+    "set-space",
+    { field: "rootOwner", value: makeSpaceRef("being", String(result.beingId)) },
+    { scaffold: true, summonCtx },
+  );
+
+  return result.being;
+}
 
 function mapSeedError(err) {
   if (err && err.name === "IbpError" && err.code) {

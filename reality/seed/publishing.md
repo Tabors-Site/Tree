@@ -298,10 +298,10 @@ The verb is **plant** (extending the existing `plant` op for seeds — you plant
 | Within-reality merge + conflict catalog + mediator | shipped (2026-06-04) |
 | Heaven (reality-level metadata that never branches) | shipped |
 | Pointers (`#main`, `#prod`) | shipped |
-| **Typed Refs primitive** (`ref()`, `isRef()`, walker) | type shipped (2026-06-04); walker pending |
+| **Typed Refs primitive** (`ref()`, `isRef()`, walker) | shipped (2026-06-04) |
 | Subtree branching | shipped (2026-06-04) |
-| Refs manifest (LEGACY, scheduled for deletion) | shipped as transition bridge only; deleted in Phase 1.6 |
-| Refs migration sweep (seed ops + qualities → Refs) | Phase 1.6 (next) |
+| Refs runtime manifest registry | **deleted** (2026-06-04) — was transition bridge; no runtime code consults it now |
+| Refs migration sweep (seed ops + qualities → Refs) | Phase 1.6 (in flight) — backlog tracked in `seed/REFS_BACKLOG.md` |
 | Asset content-addressing | not yet (Phase 3) |
 | Replicates (replicate + graft) | not yet (Phase 4 + 5) |
 | RoleFlows as first-class publishable (in Horizon) | not yet (Phase 6) |
@@ -318,11 +318,11 @@ This commitment is the same shape as `assertBranch` (no `|| "0"` defaults), heav
 
 ### Phases
 
-1. **Refs manifest registry** — shipped (2026-06-04). Becomes the temporary fallback for legacy bare-string IDs in the seed's existing op handlers.
+1. **~~Refs manifest registry~~** — shipped and then deleted on the same day (2026-06-04). The runtime registry was architectural overhead pretending to be a transition bridge; deleted before it could metastasize. No code consults it now. The seed inventory it once held is now markdown in `seed/REFS_BACKLOG.md`.
 
-1.5. **Typed Refs primitive** — `ref()`, `isRef()`, `refKind()`, `refId()`, sentinels, walker (`findRefs`, `remapRefs`). The Ref type is shipped; walker comes next. See `seed/REFS.md` for the doctrine.
+1.5. **Typed Refs primitive** — `ref()`, `isRef()`, `refKind()`, `refId()`, sentinels, walker (`findRefs`, `remapRefs`, `collectUniqueAggregateIds`). Shipped 2026-06-04. See `seed/REFS.md` for the doctrine.
 
-1.6. **Refs migration sweep** — every seed action handler migrates to emit Ref-typed params; every qualities namespace stores Refs. As each site migrates, its manifest entry is deleted. Manifest shrinks to zero. **Required before Phase 4 (replicate) ships** so the graft layer can be Ref-only with no fallback.
+1.6. **Refs migration sweep** — every seed action handler migrates to emit Ref-typed params; every qualities namespace stores Refs. Each migration is atomic per field (handler + reducer + storage + all consumers + tests). Backlog tracked as markdown in `seed/REFS_BACKLOG.md`; entries get checked off as fields migrate. **Required before Phase 4 (replicate) ships** so the graft layer can be Refs-only with no fallback. When the backlog reaches zero entries the file is deleted and the substrate is uniformly Ref-typed.
 
 2. **Subtree branching** — shipped (2026-06-04). Branches scoped to a path; write gate at fact-emission boundary refuses out-of-scope writes; reads pass through.
 

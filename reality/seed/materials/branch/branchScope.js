@@ -64,7 +64,8 @@ export async function resolvePathToSpaceId(pathString, branch) {
     const child = await Projection.findOne({
       branch,
       type: "space",
-      "state.parent": cursorId,
+      // state.parent is a typed space-Ref (REFS.md).
+      "state.parent.id": cursorId,
       "state.name": segment,
       tombstoned: { $ne: true },
     }).lean();
@@ -156,12 +157,14 @@ async function _resolveHomeSpace(target, branchPath) {
   if (target.kind === "space") return String(target.id);
 
   const { loadProjection } = await import("../projections.js");
+  const { refId } = await import("../ref.js");
   const slot = await loadProjection(target.kind, String(target.id), branchPath);
   if (!slot) return null;
   const state = slot.state || {};
 
   if (target.kind === "being") {
-    return state.homeSpace ? String(state.homeSpace) : null;
+    // state.homeSpace is a space-Ref (REFS.md).
+    return refId(state.homeSpace);
   }
   if (target.kind === "matter") {
     return state.parentSpace

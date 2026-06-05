@@ -37,8 +37,13 @@ async function assertMatterCoordInBounds(matterDoc, raw, branch = "0") {
     }
   }
   if (Object.keys(out).length === 0) return null;
-  const spaceId = matterDoc?.spaceId || null;
-  if (!spaceId) return out;
+  // matterDoc.spaceId is a space-Ref (REFS.md) or DELETED sentinel.
+  // For coord-clamping we need the bare id to look up the space.
+  // Refs round-trip through Mongoose Mixed; extract via refId.
+  const { refId, isAggregateRef } = await import("../ref.js");
+  const spaceIdRaw = matterDoc?.spaceId || null;
+  const spaceId = isAggregateRef(spaceIdRaw) ? refId(spaceIdRaw) : spaceIdRaw;
+  if (!spaceId || spaceId === "deleted") return out;
   const { loadOrFold } = await import("../projections.js");
   const spaceSlot = await loadOrFold("space", spaceId, branch);
   const size = spaceSlot?.state?.size || null;
@@ -79,8 +84,28 @@ async function createMatterHandler(ctx) {
   const targetKind = detectTargetKind(target);
 
   const matterId = uuidv4();
-  const spaceId =
-    targetKind === "space" ? targetIdOf(target) : (spec.spaceId ?? null);
+
+  // spaceId is a typed space-Ref (REFS.md). Two sources:
+  //   1. target is a space — wrap targetIdOf into ref("space", id).
+  //   2. spec.spaceId from the caller — must already be a space-Ref;
+  //      no DELETED sentinel on create (deletion goes through
+  //      set-matter where the sentinel is accepted).
+  let spaceId;
+  if (targetKind === "space") {
+    const { ref } = await import("../ref.js");
+    spaceId = ref("space", targetIdOf(target));
+  } else if (spec.spaceId === null || spec.spaceId === undefined) {
+    spaceId = null;
+  } else {
+    const { isAggregateRef, refKind } = await import("../ref.js");
+    if (!isAggregateRef(spec.spaceId) || refKind(spec.spaceId) !== "space") {
+      throw new IbpError(
+        IBP_ERR.INVALID_INPUT,
+        `create-matter: spec.spaceId requires a space-Ref . got ${typeof spec.spaceId === "object" ? JSON.stringify(spec.spaceId) : typeof spec.spaceId}`,
+      );
+    }
+    spaceId = spec.spaceId;
+  }
 
   // parentMatterId is a typed matter-Ref (REFS.md). Two sources:
   //   1. target is a matter (nested creation under a parent matter) —
@@ -106,11 +131,31 @@ async function createMatterHandler(ctx) {
     parentMatterId = spec.parentMatterId;
   }
 
+  // beingId is a typed being-Ref (REFS.md). identity.beingId is bare
+  // (substrate-internal actor id); wrap it. spec.beingId may already
+  // be a Ref from migrated callers OR I_AM sentinel from scaffold
+  // (genesis / source.js mirror) paths.
+  const { ref: _ref, isAggregateRef: _isRef } = await import("../ref.js");
+  let beingIdValue;
+  const rawCreator = identity?.beingId || spec.beingId || null;
+  if (rawCreator === null) {
+    beingIdValue = null;
+  } else if (_isRef(rawCreator)) {
+    beingIdValue = rawCreator;
+  } else {
+    // Bare string — could be I_AM sentinel or a substrate-internal
+    // actor id. Wrap into a being-Ref for storage consistency. The
+    // I_AM constant rides as a Ref too (its id field is "i-am"); the
+    // I_AM-as-bare-sentinel coexistence applies to fields the schema
+    // explicitly allows it on (Space.rootOwner), not here.
+    beingIdValue = _ref("being", String(rawCreator));
+  }
+
   const enrichedSpec = {
     ...spec,
     spaceId,
     parentMatterId,
-    beingId: identity?.beingId || spec.beingId || null,
+    beingId: beingIdValue,
     origin: spec.origin || "ibp",
   };
   const actorBeingId = identity?.beingId || (scaffold ? I_AM : null);
@@ -134,7 +179,16 @@ async function createMatterHandler(ctx) {
     },
     summonCtx,
   );
-  return { matterId, spaceId, parentMatterId };
+  // Return bare ids alongside the Ref shapes the fact carries. The
+  // downstream resolveAuditTarget reads result.spaceId / .matterId /
+  // .parentMatterId as bare strings to build the outer DO audit fact;
+  // Refs live on the spec, bare ids ride the return.
+  const { refId, isAggregateRef } = await import("../ref.js");
+  return {
+    matterId,
+    spaceId:        isAggregateRef(spaceId) ? refId(spaceId) : spaceId,
+    parentMatterId: isAggregateRef(parentMatterId) ? refId(parentMatterId) : parentMatterId,
+  };
 }
 
 // ─────────────────────────────────────────────────────────────────────
@@ -192,6 +246,37 @@ async function setOnMatterHandler({ target, params, summonCtx }) {
     return { matterId: String(target._id), name: value };
   }
 
+  // spaceId: where the matter sits. Two valid value shapes:
+  //   - space-Ref { __ref: "space", id }  (transfer to a new space)
+  //   - DELETED sentinel ("deleted")       (soft-delete marker)
+  // Same Ref-or-sentinel pattern as Space.rootOwner's I_AM exemption.
+  if (field === "spaceId") {
+    const { DELETED } = await import("../space/seedSpaces.js");
+    if (value === DELETED) {
+      return { matterId: String(target._id), spaceId: DELETED };
+    }
+    const { isAggregateRef, refKind } = await import("../ref.js");
+    if (!isAggregateRef(value) || refKind(value) !== "space") {
+      throw new Error(
+        `set-matter: spaceId requires a space-Ref or the DELETED sentinel . got ${typeof value === "object" ? JSON.stringify(value) : typeof value}`,
+      );
+    }
+    return { matterId: String(target._id), spaceId: value };
+  }
+
+  // beingId: who created the matter. Set-matter uses this only at
+  // delete time to record DELETED. Live writes during create-matter
+  // ride on the create-matter handler, not here.
+  if (field === "beingId") {
+    const { DELETED } = await import("../space/seedSpaces.js");
+    if (value === DELETED) {
+      return { matterId: String(target._id), beingId: DELETED };
+    }
+    throw new Error(
+      `set-matter: beingId only accepts the DELETED sentinel through set-matter; the creator is fixed at birth`,
+    );
+  }
+
   // coord: the matter's position inside spaceId. Same shape and
   // semantics as Being.coord — `{ x, y, z? }` clamped to Space.size.
   // A being moving matter inside a space writes here through the
@@ -225,7 +310,10 @@ async function endMatterHandler({ target, identity, summonCtx }) {
   if (!beingId) {
     const { loadOrFold } = await import("../projections.js");
     const matterSlot = await loadOrFold("matter", matterId, branch);
-    beingId = matterSlot?.state?.beingId;
+    // state.beingId is a typed being-Ref (REFS.md); extract bare id.
+    const { refId: _refId, isAggregateRef: _isRef } = await import("../ref.js");
+    const raw = matterSlot?.state?.beingId;
+    beingId = _isRef(raw) ? _refId(raw) : raw;
   }
   await deleteMatterAndFile({
     matterId,

@@ -525,9 +525,10 @@ async function walkAncestorsWithDeltaF(spaceId, summonCtx) {
         String(f?.target?.id) === cursor,
     );
     if (!pending) break;
-    cursor = pending.params?.spec?.parent
-      ? String(pending.params.spec.parent)
-      : null;
+    // spec.parent is a typed space-Ref (REFS.md). refId() returns null
+    // for non-Refs, halting the walk cleanly when the chain ends.
+    const { refId } = await import("../materials/ref.js");
+    cursor = refId(pending.params?.spec?.parent);
   }
   return path;
 }

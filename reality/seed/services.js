@@ -26,8 +26,7 @@ import Matter from "./materials/matter/matter.js";
 import { emitFact } from "./past/fact/facts.js";
 import { resolveSpaceAccess } from "./materials/space/spaces.js";
 import {
-  createBeing,
-  createFirstBeing,
+  birthBeing,
   verifyPassword,
   generateToken,
   isFirstBeing,
@@ -245,7 +244,7 @@ export function buildRealityServices({
     facts: { emitFact },
     auth: {
       resolveSpaceAccess,
-      createBeing,
+      birthBeing,
       verifyPassword,
       generateToken,
       isFirstBeing,

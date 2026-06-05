@@ -133,7 +133,7 @@ What stays a bare string:
 
 The substrate's identity primitive is typed Refs. There is one way to reference an aggregate. Bare-string IDs are not it.
 
-The legacy refs manifest (REFS_MANIFEST.md) exists as a temporary transition bridge while the seed's existing op handlers and qualities sites migrate to Refs. **It is not the long-term substrate API; it is scheduled for deletion.** Once the migration sweep completes (publishing.md Phase 1.6), the manifest registry is removed and bare-string IDs in ID-bearing positions become a doctrinal violation.
+The runtime manifest registry was deleted on 2026-06-04 — the moment it became clear that keeping it as a "transition fallback" would corrode the doctrine. The remaining seed handlers (`set-being`, `create-space`, etc.) still emit bare-string IDs *for their unmigrated fields*; this is a punch list, not an API. The migration progress is tracked in `seed/REFS_BACKLOG.md` (markdown only — no runtime code consults it).
 
 This commitment is intentional. Fallback paths corrode systems:
 
@@ -144,24 +144,26 @@ This commitment is intentional. Fallback paths corrode systems:
 
 The substrate's strength is absolute doctrines (chain is truth, heaven never branches, identity is local, address is actor). Typed Refs joins that set: every aggregate reference is a Ref. Period.
 
-**For builders during the transition:**
+**For builders during the migration:**
 
-- Use `ref()` for all ID-bearing values in new code. Don't add manifest entries for new ops.
-- The legacy seed handlers (`set-being`, `create-space`, etc.) still emit bare-string IDs during the transition — they will be swept in Phase 1.6.
-- The graft layer ships only after the sweep completes. There is no "graft with fallback to manifest" stage.
+- Use `ref()` for all ID-bearing values in new code.
+- The unmigrated seed handlers still emit bare-string IDs; the backlog tracks which.
+- Each migration is atomic per field: handler emits Ref, reducer stores Ref, all consumers read Refs, tests use Refs, backlog row checked off. No half-migrations.
+- The graft layer ships only after the backlog is empty. There is no "graft with fallback" stage.
 
-The manifest's only permanent successor is the sentinel semantics — `<GRAFT_INITIATOR>` and `<INSERTION_POINT>` — which are graft-behavior markers, not ID kinds. After the sweep, these become explicit Ref sentinels (`REF_GRAFT_INITIATOR`, `REF_INSERTION_POINT`) and the manifest goes away.
+Sentinel semantics (`<GRAFT_INITIATOR>`, `<INSERTION_POINT>`) are first-class Ref kinds (`REF_GRAFT_INITIATOR`, `REF_INSERTION_POINT`) on the type module — not a manifest holdout.
 
 ## Implementation status
 
 | Piece | Status |
 |---|---|
 | `Ref` type + helpers (`ref`, `isRef`, `refKind`, `refId`, sentinels) | shipped (2026-06-04) |
-| Walker (`findRefs`, `remapRefs`) | pending (Phase 1.5 finish) |
-| Legacy refs manifest registry | shipped, scheduled for deletion in Phase 1.6 |
-| Migration sweep: seed ops emit Refs | next (Phase 1.6) |
-| Migration sweep: qualities namespaces store Refs | next (Phase 1.6) |
-| Manifest registry deletion | end of Phase 1.6 |
+| Walker (`findRefs`, `remapRefs`, `collectUniqueAggregateIds`) | shipped (2026-06-04) |
+| Runtime manifest registry | **deleted** (2026-06-04) — no runtime code consults it |
+| Migration backlog | `seed/REFS_BACKLOG.md` (markdown-only punch list) |
+| Migration sweep: seed ops emit Refs | Phase 1.6 (in flight) |
+| Migration sweep: qualities namespaces store Refs | Phase 1.6 (in flight) |
+| Backlog file deletion | end of Phase 1.6 |
 | Graft layer (Refs only, no fallback) | Phase 5 (after sweep) |
 
 ## Design choices

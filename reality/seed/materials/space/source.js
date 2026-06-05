@@ -158,9 +158,10 @@ export async function syncSourceTree({
   // — the matter-by-spaceId + filesystem origin is a substrate-internal
   // lookup pattern, not a wire-facing one.
   const { default: ProjectionModel } = await import("../branch/projection.js");
+  // state.spaceId is a typed space-Ref (REFS.md); query via .id subpath.
   const _rootMatterSlot = await ProjectionModel.findOne({
     branch: "0", type: "matter",
-    "state.spaceId": sourceSpaceId,
+    "state.spaceId.id": sourceSpaceId,
     "state.parentMatterId": null,
     "state.origin": MATTER_ORIGIN.FILESYSTEM,
     tombstoned: { $ne: true },
@@ -252,10 +253,11 @@ async function reconcileChildren({
   }
 
   // Existing mirrored children for this parent.
+  // state.parentMatterId is a typed matter-Ref (REFS.md); query via .id subpath.
   const { default: Projection } = await import("../branch/projection.js");
   const _existRows = await Projection.find({
     branch: "0", type: "matter",
-    "state.parentMatterId": parentMatterId,
+    "state.parentMatterId.id": parentMatterId,
     "state.origin": MATTER_ORIGIN.FILESYSTEM,
     tombstoned: { $ne: true },
   }).lean();
@@ -392,9 +394,10 @@ async function removeMatterSubtree(rootId, stats) {
   while (stack.length) {
     const id = stack.pop();
     toDelete.push(id);
+    // state.parentMatterId is a typed matter-Ref (REFS.md); query via .id subpath.
     const kids = await Projection.find({
       branch: "0", type: "matter",
-      "state.parentMatterId": id,
+      "state.parentMatterId.id": id,
     }).select("id").lean();
     for (const k of kids) stack.push(String(k.id));
   }
@@ -441,10 +444,16 @@ async function createSourceMatter({
   if (mimeType != null) content.mimeType = mimeType;
   if (oversize) content.oversize = true;
 
+  // spaceId / parentMatterId are typed Refs (REFS.md). Source.js's
+  // direct-Mongo writes still bypass the DO ops (TODO: route through
+  // create-matter handler in a future cleanup); for now we conform to
+  // the Refs storage shape so ops-driven queries via .id subpath find
+  // these rows the same way they find ops-created matter.
+  const { ref: _ref } = await import("../ref.js");
   const matter = new Matter({
-    spaceId,
-    parentMatterId,
-    beingId: I_AM,
+    spaceId: _ref("space", spaceId),
+    parentMatterId: parentMatterId ? _ref("matter", parentMatterId) : null,
+    beingId: _ref("being", I_AM),
     name,
     origin: MATTER_ORIGIN.FILESYSTEM,
     content,

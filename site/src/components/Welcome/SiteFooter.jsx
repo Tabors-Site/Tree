@@ -3,8 +3,8 @@ import "./SiteFooter.css";
 
 /**
  * SiteFooter. Small footer for the new site. Brand on the left, the
- * primary nav in the middle, license link on the right; a quiet credit
- * line sits underneath.
+ * primary nav in the middle, the License link (to the /license page) on
+ * the right; a quiet credit line sits underneath.
  */
 const SiteFooter = () => {
   return (
@@ -17,18 +17,16 @@ const SiteFooter = () => {
             <Link to="/portal" className="ns-footer-link">Portal</Link>
             <Link to="/factory" className="ns-footer-link">Factory</Link>
             <Link to="/start" className="ns-footer-link">Get started</Link>
-            <a
-              href="https://github.com/taborgreat/create-treeos/blob/main/template/seed/LICENSE"
+            <Link
+              to="/license"
               className="ns-footer-link ns-footer-link--muted"
-              target="_blank"
-              rel="noreferrer"
             >
-              AGPL-3.0 License
-            </a>
+              License
+            </Link>
           </nav>
         </div>
         <div className="ns-footer-tag">
-          TreeOS . AGPL-3.0 . Created by{" "}
+          TreeOS . AGPL-3.0 with commercial option . Created by{" "}
           <a
             href="https://tabors.site"
             className="ns-footer-credit"

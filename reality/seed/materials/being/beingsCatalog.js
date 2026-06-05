@@ -28,23 +28,26 @@ export async function describeBeingsCatalog(opts = {}) {
   const branch = opts.branch || "0";
   const { listByType, loadProjections } = await import("../projections.js");
   const { beingCognition } = await import("./identity/lookups.js");
+  const { refId } = await import("../ref.js");
 
   // listByType gives us {type, id} pairs; batch-load the full slots to
   // get state (name, qualities, etc.) for each.
-  const refs = await listByType("being", branch);
-  const slice = refs.slice(0, limit);
+  const slotRefs = await listByType("being", branch);
+  const slice = slotRefs.slice(0, limit);
   const slots = await loadProjections("being", slice.map((r) => r.id), branch);
 
-  const entries = slice.map((ref) => {
-    const slot = slots.get(ref.id);
+  const entries = slice.map((slotRef) => {
+    const slot = slots.get(slotRef.id);
     const state = slot?.state || {};
+    // parentBeingId is a typed Ref in state (REFS.md). Extract bare id
+    // for the wire response.
     return {
-      beingId:       String(ref.id),
+      beingId:       String(slotRef.id),
       name:          state.name || null,
       cognition:     beingCognition(state),
       defaultRole:   state.defaultRole || null,
-      homeSpace:     state.homeSpace ? String(state.homeSpace) : null,
-      parentBeingId: state.parentBeingId ? String(state.parentBeingId) : null,
+      homeSpace:     refId(state.homeSpace),
+      parentBeingId: refId(state.parentBeingId),
       createdAt:     state.createdAt || null,
     };
   });

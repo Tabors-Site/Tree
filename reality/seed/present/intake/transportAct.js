@@ -158,8 +158,11 @@ export async function dispatchTransportAct({
     // without a manual rebuild. Returns null if the being didn't exist
     // at this branch's branchPoint (legitimate "not here").
     const { loadOrFold } = await import("../../materials/projections.js");
+    const { refId } = await import("../../materials/ref.js");
     const slot = await loadOrFold("being", beingId, branch);
-    resolvedSpace = slot?.state?.homeSpace || null;
+    // state.homeSpace is a space-Ref (REFS.md). Extract bare id for
+    // the enqueueIntake lookup.
+    resolvedSpace = refId(slot?.state?.homeSpace);
   }
   if (!resolvedSpace) {
     throw new Error(

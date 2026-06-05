@@ -209,10 +209,11 @@ export async function assertNameAvailableAt(
 ) {
   if (!parentId) return;
   // Per-branch sibling name uniqueness via direct projection query.
+  // state.parent is a typed Ref (REFS.md).
   const { default: Projection } = await import("../branch/projection.js");
   const q = {
     branch, type: "space",
-    "state.parent": parentId,
+    "state.parent.id": parentId,
     "state.name": name,
     tombstoned: { $ne: true },
   };
@@ -381,7 +382,8 @@ export async function createSpace({
       if (resolvedParentId) {
         const childCount = await _Proj.countDocuments({
           branch, type: "space",
-          "state.parent": resolvedParentId,
+          // state.parent is a typed Ref (REFS.md); query via .id subpath.
+          "state.parent.id": resolvedParentId,
           tombstoned: { $ne: true },
         });
         if (childCount >= maxChildren) {
@@ -426,7 +428,8 @@ export async function createSpace({
       }
       const childCount = await _Proj.countDocuments({
         branch, type: "space",
-        "state.parent": parentId,
+        // state.parent is a typed Ref (REFS.md).
+        "state.parent.id": parentId,
         tombstoned: { $ne: true },
       });
       if (childCount >= maxChildren) {
@@ -452,8 +455,9 @@ export async function createSpace({
         spec: {
           name,
           type:      type ?? null,
-          parent:    resolvedParentId,
-          rootOwner: isRoot ? String(being._id) : null,
+          // parent + rootOwner are typed Refs (REFS.md). null for root.
+          parent:    resolvedParentId ? (await import("../ref.js")).ref("space", String(resolvedParentId)) : null,
+          rootOwner: isRoot ? (await import("../ref.js")).ref("being", String(being._id)) : null,
           qualities: specQualities,
           ...(size  ? { size }  : {}),
           ...(coord ? { coord } : {}),
@@ -560,6 +564,7 @@ export async function createRealitySeedSpace({
     ? Object.fromEntries(qualities)
     : (qualities || {});
 
+  const { ref: makeSpaceRef } = await import("../ref.js");
   await emitFact({
     verb:    "do",
     action:  "create-space",
@@ -569,7 +574,8 @@ export async function createRealitySeedSpace({
       spec: {
         name,
         type:      null,
-        parent:    String(parentId),
+        // parent is a typed space-Ref (REFS.md).
+        parent:    parentId ? makeSpaceRef("space", String(parentId)) : null,
         rootOwner: I_AM,
         seedSpace: seedSpace || null,
         qualities: specQualities,
@@ -790,9 +796,11 @@ export async function updateParentRelationship(
     // Single-aggregate write: set the child's parent. Old-parent and
     // new-parent children[] caches are retired — listSpaceChildren
     // queries by parent, so this one update is the whole reparent.
+    // parent is a typed space-Ref (REFS.md).
+    const { ref: makeSpaceRef } = await import("../ref.js");
     await Space.findByIdAndUpdate(
       childId,
-      { $set: { parent: newParentId } },
+      { $set: { parent: newParentId ? makeSpaceRef("space", String(newParentId)) : null } },
       txOpts,
     );
 
@@ -888,14 +896,16 @@ export async function deleteSpaceBranch(
     // (rootOwner, parent) pair keeps them visible-together to a
     // concurrent fold.
     const { doVerb } = await import("../../ibp/verbs/do.js");
+    const { ref: makeRef } = await import("../ref.js");
     const opts = beingId
       ? { identity: { beingId: String(beingId) }, summonCtx: actId ? { actId } : null, scaffold: !actId }
       : { scaffold: true, summonCtx: actId ? { actId } : null };
     const target = { kind: "space", id: String(spaceId) };
+    // rootOwner is a being-Ref (REFS.md); parent stays DELETED sentinel.
     await doVerb(
       target,
       "set-space",
-      { field: "rootOwner", value: String(beingId) },
+      { field: "rootOwner", value: makeRef("being", String(beingId)) },
       opts,
     );
     await doVerb(
@@ -958,11 +968,18 @@ export async function buildPathString(spaceId, branch) {
 export async function resolveRootSpace(spaceId) {
   if (!spaceId) throw new Error("spaceId is required");
   const { loadProjection } = await import("../projections.js");
+  const { refId } = await import("../ref.js");
+  // state.parent + state.rootOwner are typed Refs (REFS.md); rootOwner
+  // may also be the I_AM sentinel string. Normalize to bare ids here so
+  // the walk uses plain string comparisons downstream.
+  const ownerIdOf = (v) => v === I_AM ? I_AM : refId(v);
   const slotToObj = (s) => s ? {
     _id: s.id,
-    parent:       s.state?.parent || null,
-    rootOwner:    s.state?.rootOwner || null,
-    contributors: s.state?.contributors || [],
+    parent:       refId(s.state?.parent) || null,
+    rootOwner:    ownerIdOf(s.state?.rootOwner),
+    // contributors entries are typed being-Refs (REFS.md); extract bare
+    // ids so consumers can compare directly without Ref-unwrapping.
+    contributors: (s.state?.contributors || []).map((e) => (typeof e === "string" ? e : refId(e))),
     seedSpace:    s.state?.seedSpace || null,
     name:         s.state?.name,
   } : null;
@@ -989,14 +1006,16 @@ export async function resolveRootSpace(spaceId) {
  */
 export async function isDescendant(ancestorId, spaceId) {
   const { loadProjection } = await import("../projections.js");
+  const { refId } = await import("../ref.js");
   let curSlot = await loadProjection("space", spaceId, "0");
-  let current = curSlot ? { parent: curSlot.state?.parent } : null;
+  // current.parent is a typed space-Ref (REFS.md); extract id for walks.
+  let currentParentId = refId(curSlot?.state?.parent);
   let depth = 0;
   const maxDepth = 100;
-  while (current && current.parent && depth < maxDepth) {
-    if (current.parent.toString() === ancestorId.toString()) return true;
-    curSlot = await loadProjection("space", current.parent, "0");
-    current = curSlot ? { parent: curSlot.state?.parent } : null;
+  while (currentParentId && depth < maxDepth) {
+    if (currentParentId === ancestorId.toString()) return true;
+    curSlot = await loadProjection("space", currentParentId, "0");
+    currentParentId = refId(curSlot?.state?.parent);
     depth++;
   }
   return false;
@@ -1054,7 +1073,8 @@ export async function listSpaceChildren(parentId, { exclude = null, limit = 500,
   const buildQuery = (b) => {
     const q = {
       branch: b, type: "space",
-      "state.parent": parentId,
+      // state.parent is a typed Ref (REFS.md).
+      "state.parent.id": parentId,
       $or: [
         { "state.seedSpace": null },
         { "state.seedSpace": { $exists: false } },
@@ -1119,8 +1139,9 @@ export async function listBeingSpaces(beingId, { limit = 500 } = {}) {
   const { default: Projection } = await import("../branch/projection.js");
   const rows = await Projection.find({
     branch: "0", type: "space",
-    "state.parent": spaceRootId,
-    "state.rootOwner": beingId,
+    // state.parent + state.rootOwner are typed Refs (REFS.md).
+    "state.parent.id": spaceRootId,
+    "state.rootOwner.id": beingId,
     $or: [
       { "state.seedSpace": null },
       { "state.seedSpace": { $exists: false } },

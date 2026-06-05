@@ -87,9 +87,12 @@ export async function isAncestorOf(ancestorBeingId, descendantBeingId, branch = 
     // would short-circuit to false on inherited beings; loadOrFold
     // walks the lineage and cold-folds from the inherited reel.
     const { loadOrFold } = await import("../../projections.js");
+    const { refId } = await import("../../ref.js");
     const slot = await loadOrFold("being", cursor, branch);
     if (!slot) return false;
-    const parent = slot.state?.parentBeingId ? String(slot.state.parentBeingId) : null;
+    // state.parentBeingId is a being-Ref (REFS.md). refId extracts the
+    // bare id for the ancestor walk; returns null when missing.
+    const parent = refId(slot.state?.parentBeingId);
     if (!parent) return false;
     if (parent === ancestor) return true;
     cursor = parent;

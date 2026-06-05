@@ -393,7 +393,8 @@ export async function ensureSpaceRoot(summonCtx) {
     }
   } else if (
     heavenSpace.parent &&
-    heavenSpace.parent.toString() !== spaceRoot._id.toString()
+    // heavenSpace.parent is a typed space-Ref (REFS.md); compare ids.
+    ((heavenSpace.parent.id || heavenSpace.parent.toString()) !== spaceRoot._id.toString())
   ) {
     log.warn("Place", `Heaven space has wrong parent. Repairing.`);
     const { doVerb } = await import("./ibp/verbs/do.js");
@@ -441,7 +442,8 @@ export async function ensureSpaceRoot(summonCtx) {
     if (
       space.parent &&
       !space._pending &&
-      space.parent.toString() !== seedSpaceParentId.toString()
+      // space.parent is a typed space-Ref (REFS.md).
+      ((space.parent.id || space.parent.toString()) !== seedSpaceParentId.toString())
     ) {
       log.warn(
         "Place",
@@ -465,10 +467,13 @@ export async function ensureSpaceRoot(summonCtx) {
     const { findRoot } = await import("./materials/projections.js");
     const allRoots = await findRoot("space", "0");
     const orphanRoots = [];
+    // state.rootOwner is a typed being-Ref (REFS.md) OR the I_AM sentinel.
+    const { refId } = await import("./materials/ref.js");
     for (const r of allRoots) {
       const slot = await loadProjection("space", r.id, "0");
-      const owner = slot?.state?.rootOwner;
-      if (owner != null && owner !== I_AM) orphanRoots.push({ _id: r.id });
+      const ownerRaw = slot?.state?.rootOwner;
+      const ownerId = ownerRaw === I_AM ? I_AM : refId(ownerRaw);
+      if (ownerId != null && ownerId !== I_AM) orphanRoots.push({ _id: r.id });
     }
     const { doVerb } = await import("./ibp/verbs/do.js");
     for (const root of orphanRoots) {
@@ -518,7 +523,8 @@ export async function ensureSpaceRoot(summonCtx) {
     const { default: Projection } = await import("./materials/branch/projection.js");
     const childCount = await Projection.countDocuments({
       branch: "0", type: "space",
-      "state.parent": spaceRoot._id,
+      // state.parent is a typed space-Ref (REFS.md).
+      "state.parent.id": spaceRoot._id,
       tombstoned: { $ne: true },
     });
     log.verbose(
@@ -575,6 +581,8 @@ async function ensureIAm(homeSpaceId, summonCtx) {
     cognition: { defaultKind: "scripted" },
   };
 
+  const { ref } = await import("./materials/ref.js");
+  const homeSpaceRef = ref("space", String(homeSpaceId));
   await emitFact({
     verb: "be",
     action: "birth",
@@ -586,9 +594,11 @@ async function ensureIAm(homeSpaceId, summonCtx) {
         password: credential.hash,
         roles: [],
         defaultRole: null,
+        // parentBeingId is null . the I-Am is the root of the being-tree.
         parentBeingId: null,
-        homeSpace: String(homeSpaceId),
-        position: String(homeSpaceId),
+        // homeSpace + position are space-Refs (REFS.md).
+        homeSpace: homeSpaceRef,
+        position: homeSpaceRef,
         llmDefault: null,
         isRemote: false,
         homeReality: null,
@@ -637,12 +647,20 @@ export function getIAmBeingId() {
 export function isBeingRoot(space) {
   if (!space) return false;
   if (space.seedSpace) return false;
-  if (!space.rootOwner || String(space.rootOwner) === I_AM) return false;
+  // rootOwner is a typed being-Ref (REFS.md) OR the I_AM sentinel.
+  const ownerId = space.rootOwner === I_AM
+    ? I_AM
+    : (space.rootOwner?.__ref === "being" ? space.rootOwner.id : null);
+  if (!ownerId || ownerId === I_AM) return false;
   const spaceRootId = getSpaceRootId();
+  // space.parent is a typed space-Ref (REFS.md) when set; extract id.
+  const parentId = space.parent
+    ? (space.parent.id || String(space.parent))
+    : null;
   if (
     spaceRootId &&
-    space.parent &&
-    String(space.parent) !== String(spaceRootId)
+    parentId &&
+    parentId !== String(spaceRootId)
   )
     return false;
   return true;
@@ -667,10 +685,11 @@ export async function syncExtensionsToTree(manifests, summonCtx) {
   if (!extSpace) return;
 
   // Query by parent — children[] on the parent is retired.
+  // state.parent is a typed space-Ref (REFS.md).
   const { default: Projection } = await import("./materials/branch/projection.js");
   const existingChildren = (await Projection.find({
     branch: "0", type: "space",
-    "state.parent": extSpace._id,
+    "state.parent.id": extSpace._id,
     tombstoned: { $ne: true },
   }).lean()).map((s) => ({ _id: s.id, name: s.state?.name }));
 
@@ -730,6 +749,7 @@ export async function syncExtensionsToTree(manifests, summonCtx) {
         // wrapping I-Am moment's ΔF; reducer's applyCreateSpace
         // materializes the row at seal.
         const { doVerb } = await import("./ibp/verbs/do.js");
+        const { ref: makeRef } = await import("./materials/ref.js");
         await doVerb(
           { kind: "space", id: String(extSpace._id) },
           "create-space",
@@ -737,7 +757,8 @@ export async function syncExtensionsToTree(manifests, summonCtx) {
             spec: {
               name: manifest.name,
               type: "resource",
-              parent: String(extSpace._id),
+              // parent is a typed space-Ref (REFS.md).
+              parent: makeRef("space", String(extSpace._id)),
               rootOwner: null,
               qualities: Object.fromEntries(qualities),
             },

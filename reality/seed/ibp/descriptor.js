@@ -153,6 +153,11 @@ function beingsAtSpace(space, { writeAllowed, authorizedHere }) {
     const names = beingHomes instanceof Map
       ? Array.from(beingHomes.keys())
       : Object.keys(beingHomes);
+    // qualities.beings.<role>.beingId is a typed being-Ref (REFS.md);
+    // extract bare id once so downstream consumers (enrichBeings,
+    // wire shape, inbox lookups) work with plain strings. Inlined
+    // because beingsAtSpace is synchronous (no dynamic import).
+    const toBareId = (v) => (v && typeof v === "object" && v.__ref === "being" && v.id ? v.id : (v || null));
     for (const name of names) {
       if (STANCE_NAMES.has(name)) continue;
       const home = beingHomes instanceof Map ? beingHomes.get(name) : beingHomes[name];
@@ -163,7 +168,7 @@ function beingsAtSpace(space, { writeAllowed, authorizedHere }) {
         available: invocableBy === "anyone" ? authorizedHere : writeAllowed,
         // Internal-only, stripped before the wire — enrichBeings uses
         // it to attach the being's currently-active Act.
-        _beingId: home?.beingId || null,
+        _beingId: toBareId(home?.beingId),
       });
     }
   }
@@ -580,8 +585,12 @@ async function placeAtSpace(resolved, { identity, payload, until = null, branch 
     : await childrenOf(space._id, pathByNames, { until, branch });
   const matters  = await mattersAt(space._id, { until, branch });
   const lineage  = buildLineage(resolved);
-  const siblings = space.parent
-    ? await childrenOf(space.parent, parentPath, { exclude: space._id, until, branch })
+  // space.parent is a typed space-Ref (REFS.md); extract id for the
+  // childrenOf lookup.
+  const { refId: _refId } = await import("../materials/ref.js");
+  const spaceParentId = _refId(space.parent);
+  const siblings = spaceParentId
+    ? await childrenOf(spaceParentId, parentPath, { exclude: space._id, until, branch })
     : [];
 
   // Access for the asker. Defensive: leave both false on any error so
@@ -1178,10 +1187,12 @@ async function identityBlock(identity, { authorizedHere, writeAllowed, until = n
           stale = true;
         }
         // Position rides at the slot level (sparse-indexed for
-        // findByPosition); qualities + other reducer state ride at
-        // slot.state. Coord lives under qualities.coord typically.
-        position  = slot?.position ? String(slot.position) : (slot?.state?.position ? String(slot.state.position) : null);
-        homeSpace = slot?.state?.homeSpace ? String(slot.state.homeSpace) : null;
+        // findByPosition, denormalized as a bare-string id); qualities +
+        // other reducer state ride at slot.state. state.position is a
+        // typed space-Ref (REFS.md); homeSpace is a typed space-Ref too.
+        const { refId: _rid } = await import("../materials/ref.js");
+        position  = slot?.position ? String(slot.position) : _rid(slot?.state?.position);
+        homeSpace = _rid(slot?.state?.homeSpace);
         const quals = slot?.state?.qualities;
         const coordQ = quals instanceof Map ? quals.get("coord") : quals?.coord;
         coord = coordQ || slot?.state?.coord || null;

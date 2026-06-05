@@ -87,8 +87,13 @@ export async function addContributor(spaceId, contributorId, beingId, branch) {
     if (list.length >= MAX_CONTRIBUTORS) {
       throw new Error(`Space has reached the maximum of ${MAX_CONTRIBUTORS} contributors`);
     }
-    if (list.includes(contributorId)) return; // already a contributor
-    const next = [...list, contributorId];
+    // contributors entries are typed being-Refs (REFS.md). Membership
+    // check extracts each entry's bare id via refId before comparing
+    // against the new contributor.
+    const { ref: _ref, refId: _refId, isAggregateRef: _isRef } = await import("../ref.js");
+    const alreadyMember = list.some((e) => (_isRef(e) ? _refId(e) : e) === contributorId);
+    if (alreadyMember) return;
+    const next = [...list, _ref("being", String(contributorId))];
 
     const target = { kind: "space", id: String(spaceId) };
     const { doVerb } = await import("../../ibp/verbs/do.js");
@@ -136,8 +141,12 @@ export async function removeContributor(spaceId, contributorId, beingId, branch)
     const _curSlot = await _lOF("space", spaceId, branch);
     const current = _curSlot ? { contributors: _curSlot.state?.contributors } : null;
     const list = current?.contributors || [];
-    if (!list.includes(contributorId)) return; // already absent
-    const next = list.filter((id) => id !== contributorId);
+    // contributors entries are typed being-Refs (REFS.md); extract bare
+    // id for membership + filter so each Ref entry's id is compared.
+    const { refId: _refId, isAggregateRef: _isRef } = await import("../ref.js");
+    const present = list.some((e) => (_isRef(e) ? _refId(e) : e) === contributorId);
+    if (!present) return;
+    const next = list.filter((e) => (_isRef(e) ? _refId(e) : e) !== contributorId);
 
     const target = { kind: "space", id: String(spaceId) };
     const { doVerb } = await import("../../ibp/verbs/do.js");
@@ -170,7 +179,11 @@ export async function setOwner(spaceId, newOwnerId, beingId, branch) {
   if (typeof branch !== "string" || !branch) {
     throw new Error("setOwner: branch is required (thread from summonCtx).");
   }
+  // state.rootOwner is a typed being-Ref (REFS.md); I_AM may be bare.
+  // Read sites compare via refId().
   const { loadOrFold: _lOF1 } = await import("../projections.js");
+  const { refId, ref: makeRef } = await import("../ref.js");
+  const ownerIdFrom = (v) => v === I_AM ? I_AM : refId(v);
   const _ownerSlot = await _lOF1("space", spaceId, branch);
   const space = _ownerSlot ? {
     seedSpace: _ownerSlot.state?.seedSpace,
@@ -182,26 +195,27 @@ export async function setOwner(spaceId, newOwnerId, beingId, branch) {
 
   await assertBeingExists(newOwnerId, branch);
 
-  if (space.rootOwner && space.rootOwner.toString() === newOwnerId) {
+  const currentRootOwnerId = ownerIdFrom(space.rootOwner);
+  if (currentRootOwnerId === newOwnerId) {
     throw new Error("Being is already the owner at this space");
   }
 
   // If this space already has rootOwner, only that owner can change it.
   // If it doesn't, resolve the owner above.
-  if (space.rootOwner && space.rootOwner !== I_AM) {
-    if (space.rootOwner.toString() !== beingId) {
+  if (currentRootOwnerId && currentRootOwnerId !== I_AM) {
+    if (currentRootOwnerId !== beingId) {
       throw new Error("Only the current owner can reassign rootOwner");
     }
   } else if (space.parent) {
-    // No rootOwner here. Check the owner above.
-    await assertOwner(space.parent, beingId, branch);
+    // No rootOwner here. Check the owner above. space.parent is a Ref.
+    await assertOwner(refId(space.parent), beingId, branch);
   } else {
     // Orphaned space with no parent and no owner. No path forward
     // without stance authorization rules; refuse for now.
     throw new Error("Cannot set owner on a top-level space with no current owner (stance authorization pending)");
   }
 
-  const previousOwnerId = space.rootOwner ? space.rootOwner.toString() : null;
+  const previousOwnerId = currentRootOwnerId;
 
   const locked = await acquireSpaceLock(spaceId, beingId);
   if (!locked) throw new IbpError(IBP_ERR.RESOURCE_CONFLICT, "Space ownership is being modified");
@@ -215,7 +229,7 @@ export async function setOwner(spaceId, newOwnerId, beingId, branch) {
       rootOwner:    _curSlot2.state?.rootOwner,
       contributors: _curSlot2.state?.contributors,
     } : null;
-    const currentOwner = current?.rootOwner ? String(current.rootOwner) : null;
+    const currentOwner = ownerIdFrom(current?.rootOwner);
     if (currentOwner !== previousOwnerId) {
       throw new Error("Ownership changed concurrently. Retry the operation.");
     }
@@ -225,13 +239,17 @@ export async function setOwner(spaceId, newOwnerId, beingId, branch) {
     await doVerb(
       target,
       "set-space",
-      { field: "rootOwner", value: newOwnerId },
+      { field: "rootOwner", value: makeRef("being", newOwnerId) },
       { identity: { beingId } },
     );
 
     const list = current?.contributors || [];
-    if (list.includes(newOwnerId)) {
-      const next = list.filter((id) => id !== newOwnerId);
+    // contributors entries are typed being-Refs (REFS.md); extract bare
+    // id for the membership + filter.
+    const { refId: _refId, isAggregateRef: _isRef } = await import("../ref.js");
+    const isMember = list.some((e) => (_isRef(e) ? _refId(e) : e) === newOwnerId);
+    if (isMember) {
+      const next = list.filter((e) => (_isRef(e) ? _refId(e) : e) !== newOwnerId);
       // (no row load; typed target above already names this space)
       await doVerb(
         target,
@@ -259,6 +277,7 @@ export async function removeOwner(spaceId, beingId, branch) {
     throw new Error("removeOwner: branch is required (thread from summonCtx).");
   }
   const { loadOrFold: _lOF3 } = await import("../projections.js");
+  const { refId } = await import("../ref.js");
   const _rmSlot = await _lOF3("space", spaceId, branch);
   const space = _rmSlot ? {
     seedSpace: _rmSlot.state?.seedSpace,
@@ -267,18 +286,21 @@ export async function removeOwner(spaceId, beingId, branch) {
   } : null;
   if (!space) throw new Error("Space not found");
   if (space.seedSpace) throw new Error("Cannot modify seed spaces");
-  if (!space.rootOwner || space.rootOwner === I_AM) throw new Error("Space has no owner to remove");
+  // rootOwner is a typed Ref (REFS.md) OR the I_AM sentinel string.
+  const ownerId = space.rootOwner === I_AM ? I_AM : refId(space.rootOwner);
+  if (!ownerId || ownerId === I_AM) throw new Error("Space has no owner to remove");
 
   // Only the owner ABOVE this space can revoke. Top-level roots can't
   // have their owner removed under the current rules; stance
   // authorization will eventually grant exceptions per place policy.
   if (space.parent) {
-    await assertOwner(space.parent, beingId, branch);
+    // space.parent is a space-Ref.
+    await assertOwner(refId(space.parent), beingId, branch);
   } else {
     throw new Error("Cannot remove owner on a top-level root (stance authorization pending)");
   }
 
-  const removedOwnerId = space.rootOwner.toString();
+  const removedOwnerId = ownerId;
 
   const locked = await acquireSpaceLock(spaceId, beingId);
   if (!locked) throw new IbpError(IBP_ERR.RESOURCE_CONFLICT, "Space ownership is being modified");
@@ -312,6 +334,7 @@ export async function transferOwnership(spaceId, newOwnerId, beingId, branch) {
     throw new Error("transferOwnership: branch is required (thread from summonCtx).");
   }
   const { loadOrFold: _lOF4 } = await import("../projections.js");
+  const { refId, ref: makeRef } = await import("../ref.js");
   const _txSlot = await _lOF4("space", spaceId, branch);
   const space = _txSlot ? {
     seedSpace: _txSlot.state?.seedSpace,
@@ -319,11 +342,11 @@ export async function transferOwnership(spaceId, newOwnerId, beingId, branch) {
   } : null;
   if (!space) throw new Error("Space not found");
   if (space.seedSpace) throw new Error("Cannot modify seed spaces");
-  if (!space.rootOwner || space.rootOwner === I_AM) throw new Error("Space has no owner to transfer from");
+  // rootOwner is a typed being-Ref (REFS.md) OR the I_AM sentinel.
+  const oldOwnerId = space.rootOwner === I_AM ? I_AM : refId(space.rootOwner);
+  if (!oldOwnerId || oldOwnerId === I_AM) throw new Error("Space has no owner to transfer from");
 
   await assertBeingExists(newOwnerId, branch);
-
-  const oldOwnerId = space.rootOwner.toString();
 
   if (oldOwnerId === newOwnerId) {
     throw new Error("User is already the owner at this space");
@@ -340,15 +363,24 @@ export async function transferOwnership(spaceId, newOwnerId, beingId, branch) {
     const _curSlot = await _lOFt("space", spaceId, branch);
     const current = _curSlot ? { contributors: _curSlot.state?.contributors } : null;
     const list = current?.contributors || [];
-    const filtered = list.includes(newOwnerId) ? list.filter((id) => id !== newOwnerId) : list;
-    const next = filtered.includes(oldOwnerId) ? filtered : [...filtered, oldOwnerId];
+    // contributors entries are typed being-Refs (REFS.md); extract bare
+    // id for membership comparison; wrap when pushing the old owner
+    // back onto the list (now-contributor since they transferred away).
+    const { ref: _ref, refId: _refId, isAggregateRef: _isRef } = await import("../ref.js");
+    const baseId = (e) => (_isRef(e) ? _refId(e) : e);
+    const filtered = list.some((e) => baseId(e) === newOwnerId)
+      ? list.filter((e) => baseId(e) !== newOwnerId)
+      : list;
+    const next = filtered.some((e) => baseId(e) === oldOwnerId)
+      ? filtered
+      : [...filtered, _ref("being", String(oldOwnerId))];
 
     const target = { kind: "space", id: String(spaceId) };
     const { doVerb } = await import("../../ibp/verbs/do.js");
     await doVerb(
       target,
       "set-space",
-      { field: "rootOwner", value: newOwnerId },
+      { field: "rootOwner", value: makeRef("being", newOwnerId) },
       { identity: { beingId } },
     );
     // (no row load; typed target above already names this space)

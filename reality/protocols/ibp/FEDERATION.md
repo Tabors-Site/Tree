@@ -55,6 +55,30 @@ Diff B adds the optional `signature` block. NO `identity` field returns —
 identity is in `address.left` regardless of whether the call is local or
 cross-reality.
 
+### Refs in the cross-reality envelope
+
+Phase 1.6 of the Refs migration (in flight; see `seed/REFS.md` and
+`seed/REFS_BACKLOG.md`) is making typed `Ref` values the substrate's
+only ID-passing mechanism. By the time Diff B ships, every ID-bearing
+position in the envelope payload — `params.value` on `set-being:position`,
+`params.spec.parent` on `create-space`, `params.to` on `move`, etc. —
+will carry a tagged `{ __ref: kind, id }` value rather than a bare
+string.
+
+Federation inherits this directly: the canonical envelope bytes that
+the sender signs include the Ref-typed payload, and the receiver
+verifies signature + dispatches the same wire validator. No
+"cross-reality envelopes may use bare strings" carve-out exists; the
+wire-layer Refs validator is reality-agnostic. The federation router
+short-circuits to canopy-forward BEFORE the local dispatcher runs,
+so foreign envelopes never hit a local handler, but the validator
+applies identically on the receiving side.
+
+Diff B does not need to define its own ID format. The Refs primitive
+is the format; federation just carries it across substrates and
+remaps `id`s in the receiver's local namespace at graft time
+(`seed/publishing.md`).
+
 ## What Diff B needs to build
 
 ### 1. Cross-reality router

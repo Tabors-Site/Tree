@@ -53,8 +53,11 @@ export async function findCreatorOf(targetBeingId) {
     .sort({ seq: 1, date: 1 })
     .select("params")
     .lean();
-  const parentBeingId = fact?.params?.spec?.parentBeingId;
-  return parentBeingId ? String(parentBeingId) : null;
+  // spec.parentBeingId is a typed being-Ref (REFS.md) in post-migration
+  // facts; refId() returns null for non-Refs which is the correct
+  // semantic when parentBeingId is unset (I-Am birth fact has null).
+  const { refId } = await import("../ref.js");
+  return refId(fact?.params?.spec?.parentBeingId);
 }
 
 /**

@@ -249,11 +249,17 @@ export async function ensureSeedDelegates(spaceRootId, summonCtx, opts = {}) {
         if (st.defaultRole !== spec.role) {
           await setField("defaultRole", spec.role);
         }
-        if (st.homeSpace !== String(spaceRootId)) {
-          await setField("homeSpace", String(spaceRootId));
+        // homeSpace + parentBeingId are typed Refs on state (REFS.md).
+        // Compare via refId; re-emit through setField with the Ref so
+        // the substrate stores Refs uniformly.
+        const { ref, refId } = await import("../ref.js");
+        const stHomeId = refId(st.homeSpace);
+        if (stHomeId !== String(spaceRootId)) {
+          await setField("homeSpace", ref("space", String(spaceRootId)));
         }
-        if (st.parentBeingId !== rootBeingId) {
-          await setField("parentBeingId", rootBeingId);
+        const stParentId = refId(st.parentBeingId);
+        if (stParentId !== rootBeingId) {
+          await setField("parentBeingId", ref("being", String(rootBeingId)));
         }
         existing++;
         continue;
@@ -274,15 +280,16 @@ export async function ensureSeedDelegates(spaceRootId, summonCtx, opts = {}) {
       const iAmIdent = iAm._pending
         ? { beingId: rootBeingId, name: I_AM }
         : await iAmIdentity();
-      await birthBeing({
+      const { ref } = await import("../ref.js");
+      const result = await birthBeing({
         spec: {
           name: spec.name,
           role: spec.role,
           cognition: spec.cognition,
-          homeSpace: String(spaceRootId),
-          parentBeingId: rootBeingId,
+          homeId: ref("space", String(spaceRootId)),
+          parentBeingId: ref("being", String(rootBeingId)),
           // Deterministic ring position when the place root has a
-          // size. Falls through to createBeing's random-in-bounds
+          // size. Falls through to birthBeing's random-in-bounds
           // default when circleCoord couldn't be computed.
           ...(circleCoord ? { coord: circleCoord(i) } : {}),
         },
@@ -290,6 +297,32 @@ export async function ensureSeedDelegates(spaceRootId, summonCtx, opts = {}) {
         scaffold: true,
         summonCtx,
       });
+
+      // Register the delegate on the place root's qualities.beings
+      // so stance resolution by name (`<reality>/@cherub`, etc.) finds
+      // it. Inlined from the retired createBeingWithHome helper —
+      // delegates share the place root as their home, so the registry
+      // entry is what makes them addressable.
+      const { doVerb } = await import("../../ibp/verbs/do.js");
+      const { ref } = await import("../ref.js");
+      await doVerb(
+        { kind: "space", id: String(spaceRootId) },
+        "set-space",
+        {
+          field: "qualities.beings",
+          value: {
+            [spec.name]: {
+              // beingId is a typed being-Ref (REFS.md).
+              beingId: ref("being", String(result.beingId)),
+              role: spec.role,
+              installedAt: new Date().toISOString(),
+              installedBy: "seedDelegates",
+            },
+          },
+          merge: true,
+        },
+        { scaffold: true, summonCtx },
+      );
       created++;
       log.info("Genesis", `I create ${spec.name}.`);
     } catch (err) {

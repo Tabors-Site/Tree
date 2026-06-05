@@ -170,32 +170,75 @@ export async function beVerb(operation, payload = {}, opts = {}) {
       throw new IbpError(IBP_ERR.INVALID_INPUT, "BE:birth requires payload.name");
     }
 
-    let childHomeSpace  = payload?.homeSpace  || null;
-    let childHomeParent = payload?.homeParent || null;
-    if (!childHomeSpace && !childHomeParent) {
-      // Default: move the child into the caller's home. No new space.
+    // Home resolution. The wire carries one of three shapes:
+    //   payload.homeId      — existing space the child homes at
+    //   payload.homeParent  — create a fresh child space under this
+    //                         parent; that becomes the home
+    //   (neither)           — default: inherit the caller's home
+    //
+    // The createBeingWithHome orchestrator that used to live inside
+    // birth retired 2026-06-04; the homeParent path now inlines a
+    // do:create-space here before calling birthBeing.
+    let childHomeId = payload?.homeId || payload?.homeSpace || null;  // homeSpace accepted as legacy alias during caller migration
+    const childHomeParent = payload?.homeParent || null;
+    if (!childHomeId && !childHomeParent) {
       const { loadProjection } = await import("../../materials/projections.js");
+      const { refId } = await import("../../materials/ref.js");
       const callerSlot = await loadProjection("being", identity.beingId, branch);
-      childHomeSpace = callerSlot?.state?.homeSpace ? String(callerSlot.state.homeSpace) : null;
+      // state.homeSpace is a space-Ref (REFS.md). Extract bare id; the
+      // ref() wrap below re-tags for birthBeing.
+      childHomeId = refId(callerSlot?.state?.homeSpace);
     }
-    if (!childHomeSpace && !childHomeParent) {
+    if (!childHomeId && !childHomeParent) {
       throw new IbpError(
         IBP_ERR.INVALID_INPUT,
-        "BE:birth requires a homeSpace or homeParent (caller has no homeSpace to inherit)",
+        "BE:birth requires a homeId or homeParent (caller has no homeSpace to inherit)",
       );
     }
 
+    // Inline the home-creation step when the wire named a parent
+    // rather than an existing space. Same shape the retired
+    // createBeingWithHome used: default 100×100 grid, child's name
+    // as the space name. Callers wanting a different shape emit
+    // do:create-space themselves and pass homeId.
+    if (!childHomeId && childHomeParent) {
+      const { emitFact: _emitFact } = await import("../../past/fact/facts.js");
+      const { v4: _uuidv4 } = await import("uuid");
+      const newHomeId = _uuidv4();
+      const { ref: makeSpaceRef } = await import("../../materials/ref.js");
+      await _emitFact({
+        verb:    "do",
+        action:  "create-space",
+        beingId: String(identity.beingId),
+        target:  { kind: "space", id: newHomeId },
+        params: {
+          spec: {
+            name: childName,
+            type: "child-home",
+            // parent is a typed space-Ref (REFS.md).
+            parent: makeSpaceRef("space", String(childHomeParent)),
+            rootOwner: null,
+            size: { x: 100, y: 100 },
+            qualities: {},
+          },
+        },
+        actId:  summonCtx?.actId || null,
+        branch: summonCtx?.branch || "0",
+      }, summonCtx);
+      childHomeId = newHomeId;
+    }
+
     const { birthBeing } = await import("../../materials/being/identity/birth.js");
+    const { ref } = await import("../../materials/ref.js");
     const childSpec = {
       name:          childName,
       cognition:     childCognition,
       password:      childPassword,
-      parentBeingId: String(identity.beingId),
+      parentBeingId: ref("being", String(identity.beingId)),
+      homeId:        ref("space", String(childHomeId)),
     };
-    if (childHomeSpace)  childSpec.homeSpace  = childHomeSpace;
-    if (childHomeParent) childSpec.homeParent = childHomeParent;
-    if (childRoleField)  childSpec.role       = childRoleField;
-    if (childRoleFlow)   childSpec.roleFlow   = childRoleFlow;
+    if (childRoleField)  childSpec.role     = childRoleField;
+    if (childRoleFlow)   childSpec.roleFlow = childRoleFlow;
 
     const result = await birthBeing({
       spec: childSpec,

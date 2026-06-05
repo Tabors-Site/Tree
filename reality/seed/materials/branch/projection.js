@@ -100,6 +100,16 @@ ProjectionSchema.index(
   { sparse: true },
 );
 
+// Matter-in-space queries: "give me matters at space X in branch B."
+// state.spaceId is a typed Ref { __ref:"space", id } OR the DELETED
+// sentinel; the .id-subpath only matches Ref-shaped values, which is
+// what every live-matter query wants (DELETED matters are filtered
+// out via tombstoned/origin/spaceId.id-missing).
+ProjectionSchema.index(
+  { branch: 1, type: 1, "state.spaceId.id": 1 },
+  { sparse: true },
+);
+
 // Catalog: "list every being / space / matter in branch B."
 ProjectionSchema.index({ branch: 1, type: 1 });
 

@@ -332,7 +332,8 @@ async function walkSpacePath({
     // as findByName/listSpaceChildren.
     const baseQuery = {
       type: "space",
-      "state.parent": currentParent,
+      // state.parent is a typed space-Ref (REFS.md).
+      "state.parent.id": currentParent,
       tombstoned: { $ne: true },
       ...(allowSeedSpaceChildren
         ? {}

@@ -195,11 +195,14 @@ async function walkFromDb(spaceId, ttl, branch) {
     // the branch sees its full effective ancestry.
     const { loadOrFold } = await import("../projections.js");
     const _slot = await loadOrFold("space", cursor, branch);
+    // state.parent is a typed space-Ref (REFS.md); extract bare id
+    // so the chain walk + ancestors[].parent stay string-typed.
+    const { refId: _refId } = await import("../ref.js");
     const n = _slot ? {
       _id: _slot.id,
       name: _slot.state?.name,
       qualities: _slot.state?.qualities,
-      parent: _slot.state?.parent,
+      parent: _refId(_slot.state?.parent),
       seedSpace: _slot.state?.seedSpace,
       rootOwner: _slot.state?.rootOwner,
       contributors: _slot.state?.contributors,
@@ -218,10 +221,17 @@ async function walkFromDb(spaceId, ttl, branch) {
       _id: String(n._id),
       name: n.name || null,
       qualities: quals,
-      parent: n.parent ? String(n.parent) : null,
+      // n.parent already extracted to bare id above
+      parent: n.parent || null,
       seedSpace: n.seedSpace || null,
-      rootOwner: n.rootOwner ? String(n.rootOwner) : null,
-      contributors: (n.contributors || []).map(String),
+      // rootOwner is a typed being-Ref OR the I_AM sentinel (REFS.md).
+      rootOwner: n.rootOwner === undefined || n.rootOwner === null
+        ? null
+        : (typeof n.rootOwner === "string" ? n.rootOwner : _refId(n.rootOwner)),
+      // contributors entries are typed being-Refs (REFS.md); extract
+      // bare id so the cached ancestor row carries plain strings for
+      // fast `=== beingId` comparisons during stance-resolution walks.
+      contributors: (n.contributors || []).map((e) => (typeof e === "string" ? e : _refId(e))),
     });
 
     // Continue past any intermediate seed space. The loop ends

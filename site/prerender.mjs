@@ -17,6 +17,7 @@ const NEW_ROUTES = [
   "/",                      // NewLandingPage
   "/ibp",                   // IbpPage
   "/start",                 // GetStartedPage
+  "/license",               // LicensePage
   "/factory",               // FactoryOverview (in FactoryLayout)
   "/factory/being-types",
   "/factory/roles",
@@ -100,6 +101,10 @@ const PAGE_META = {
   "/start": {
     title: "Get started . TreeOS",
     description: "Run your own reality or get a portal to join one. Every reality is sovereign, customizable, and connects to the others through IBP.",
+  },
+  "/license": {
+    title: "Licensing . TreeOS",
+    description: "The TreeOS seed is dual licensed: free and open under the AGPL-3.0 by default, with a separate commercial license for closed-source or hosted use. Covers the seed only.",
   },
   "/factory": {
     title: "The Factory . How a moment works",

@@ -282,10 +282,14 @@ export async function sealAct(plannedAct, { content = null, deltaF = [], afterSe
         // value, so resolveSpaceForLiveSee returns the new room.
         const isPositionChange =
           action === "set-being" && field === "position";
-        const fromSpaceId =
-          isPositionChange && typeof f?.params?.fromPosition === "string"
-            ? f.params.fromPosition
-            : null;
+        // fromPosition is a space-Ref (REFS.md) when set by the set-being
+        // position handler. refId() returns null for non-Ref values which
+        // is the correct semantic here (no previous position to invalidate).
+        let fromSpaceId = null;
+        if (isPositionChange) {
+          const { refId } = await import("../../materials/ref.js");
+          fromSpaceId = refId(f?.params?.fromPosition);
+        }
         const spaceIds = fromSpaceId && fromSpaceId !== spaceId
           ? [spaceId, fromSpaceId]
           : [spaceId];
@@ -334,8 +338,12 @@ export async function sealAct(plannedAct, { content = null, deltaF = [], afterSe
       // signal that something changed enough to warrant a refetch,
       // bypassing the coord-skip without losing the optimization.
       if (action === "move") {
+        // params.fromSpaceId is a bare-string id (handler-set for the
+        // live-SEE pipeline). params.to is a typed space-Ref (REFS.md);
+        // extract bare id for the hook fan.
+        const { refId } = await import("../../materials/ref.js");
         const from = f.params?.fromSpaceId ? String(f.params.fromSpaceId) : null;
-        const to   = f.params?.to ? String(f.params.to) : null;
+        const to   = refId(f.params?.to);
         const seen = new Set();
         for (const spaceId of [from, to]) {
           if (!spaceId || seen.has(spaceId)) continue;

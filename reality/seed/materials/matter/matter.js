@@ -45,8 +45,21 @@ const MatterSchema = new mongoose.Schema({
 
   // Matter does not exist outside a position. The DELETED sentinel
   // on spaceId / beingId marks soft-deleted matter.
-  spaceId: { type: String, ref: "Space", required: true },
-  beingId: { type: String, ref: "Being", required: true },
+  //
+  // spaceId is a typed space-Ref: { __ref: "space", id: "..." }
+  // (REFS.md), OR the bare-string DELETED sentinel ("deleted") for
+  // soft-deleted matter. Mongoose Mixed lets both shapes round-trip;
+  // the set-matter handler validates Ref-or-sentinel at emission time
+  // (same pattern as Space.rootOwner's I_AM-sentinel coexistence).
+  // The .id subpath is indexed via the projection schema for
+  // findByPosition / listMattersAt queries.
+  spaceId: { type: mongoose.Schema.Types.Mixed, required: true },
+  // beingId is a typed being-Ref: { __ref: "being", id: "..." }
+  // (REFS.md), OR the bare-string I_AM constant for genesis / scaffold
+  // attribution, OR the DELETED sentinel for soft-deleted matter.
+  // Mongoose Mixed handles all three shapes. Same coexistence pattern
+  // as Space.rootOwner (Ref + I_AM sentinel).
+  beingId: { type: mongoose.Schema.Types.Mixed, required: true },
 
   // Optional human-readable label. Used by set-name and by
   // filesystem-origin mirroring (the file's name).

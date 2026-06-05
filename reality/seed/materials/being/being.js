@@ -123,7 +123,11 @@ const BeingSchema = new mongoose.Schema({
   // beings can share one home (the Ruler/Planner/Contractor/Foreman
   // trio at a rulership space) while parenting through this tree
   // captures the cognitive hierarchy.
-  parentBeingId: { type: String, ref: "Being", default: null, index: true },
+  // parentBeingId is a typed being-Ref: { __ref: "being", id: "..." }
+  // (REFS.md). Mongoose Mixed lets the Ref object round-trip cleanly.
+  // The .id subpath is indexed via the projection schema for child
+  // lookups; the legacy index on this field stays harmless.
+  parentBeingId: { type: mongoose.Schema.Types.Mixed, default: null },
   // children[] retired (2026-05-23). The parent-side cache is gone;
   // each being's `parentBeingId` is the single source of truth for
   // the being-tree relation. Downward walks query by parentBeingId
@@ -133,7 +137,10 @@ const BeingSchema = new mongoose.Schema({
   // registration; non-human beings are placed at creation by whatever
   // extension scaffolds them. Durable across summons. Navigation is
   // tracked by `position`, not by mutating this field.
-  homeSpace: { type: String, ref: "Space", default: null, index: true },
+  //
+  // homeSpace is a typed space-Ref: { __ref: "space", id: "..." }
+  // (REFS.md). Mongoose Mixed; .id subpath available for indexing.
+  homeSpace: { type: mongoose.Schema.Types.Mixed, default: null },
 
   // Legacy `currentSpace` field retired 2026-05-29. Replaced by the
   // universal `position` field declared below; readers that used to
@@ -189,7 +196,9 @@ const BeingSchema = new mongoose.Schema({
   // kinds by querying this one field. Drives the asker stance for
   // new summons: `<reality>/<position>@<name>`.
   foldedSeq: { type: Number, default: null },
-  position:  { type: String, ref: "Space", default: null },
+  // position is a typed space-Ref: { __ref: "space", id: "..." }
+  // (REFS.md). Mongoose Mixed; .id subpath available for indexing.
+  position:  { type: mongoose.Schema.Types.Mixed, default: null },
 
   // Reducer-owned timestamps. Set from fact.date so the row is
   // deterministic from the reel alone (the replay test asserts

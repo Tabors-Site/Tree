@@ -126,5 +126,57 @@ them at a position.
 
 ## License
 
-AGPL-3.0. See [reality/seed/LICENSE](reality/seed/LICENSE) for the
-full text and the seed preamble.
+TreeOS is built for the people and is meant to stay free.
+
+### Licensing model
+
+TreeOS uses **dual licensing**:
+
+- **AGPL-3.0** (default, free and open source)
+- **Commercial / Enterprise License** (paid option)
+
+### AGPL-3.0, the free and open license
+
+You are free to use, study, modify, and share TreeOS at no cost.
+
+The only requirement: if you modify the core seed and offer it to
+others over a network (a hosted service, SaaS, or public API), you
+must make your modified source available under the same AGPL-3.0
+license. This ensures the core of TreeOS stays open and improvable by
+everyone.
+
+### Commercial license
+
+A paid commercial license is for organizations that need to:
+
+- Host TreeOS realities as a service for their customers without
+  opening their modifications
+- Build closed-source products or internal tools on top of TreeOS
+- Keep their modifications private
+- Receive priority support, security updates, or custom development
+
+Companies who purchase the commercial license receive the same source
+code as everyone else, plus a separate legal agreement that supersedes
+the AGPL-3.0 requirements for their usage.
+
+### What is covered
+
+This licensing applies only to **the seed**, the core codebase in
+[reality/seed/](reality/seed/) that defines the TreeOS runtime
+(Factory, IBP, branching, folding). Extensions, roleFlows, clones,
+portals (browsers), and any content created by users or published on
+Horizon are **not** covered by this license. Those remain fully owned
+by their creators.
+
+### Full license text
+
+- AGPL-3.0: [reality/seed/LICENSE](reality/seed/LICENSE)
+- Commercial license terms: available on request
+- The full picture: [reality/LICENSING.md](reality/LICENSING.md)
+
+### Contact
+
+Interested in a commercial license, or need clarification? Email
+**taborgreat@gmail.com**.
+
+TreeOS. AGPL-3.0 with commercial option. Created by Tabor Holly.

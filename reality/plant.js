@@ -223,6 +223,13 @@ async function interactiveSetup(existingEnv = {}) {
   }
 
   console.log("");
+  console.log("  The seed is dual licensed. By default it is free and open");
+  console.log("  under the AGPL-3.0; a separate commercial license is");
+  console.log("  available for closed-source or hosted use. This covers the");
+  console.log("  seed only, not extensions, roleFlows, clones, or portals.");
+  console.log("  See seed/LICENSE and reality/LICENSING.md, or write");
+  console.log("  taborgreat@gmail.com.");
+  console.log("");
   const consentAns = (
     await rl.question(
       `  Do you, ${operatorName}, want to plant this seed to start new places, moment by moment? (y/N) `,

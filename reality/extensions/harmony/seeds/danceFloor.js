@@ -166,10 +166,8 @@ export const danceFloorSeed = {
       spec: {
         name: `drummer-${plantedSeedId.slice(0, 6)}`,
         cognition: "scripted",
-        roles: ["harmony:drummer"],
         defaultRole: "harmony:drummer",
-        homeSpace: gridSpaceId,
-        position: gridSpaceId,
+        homeId: gridSpaceId,
         parentBeingId: identity?.beingId || null,
       },
       identity,
@@ -178,6 +176,24 @@ export const danceFloorSeed = {
     const drummerBeingId = String(drummerResult?.beingId || drummerResult?.being?._id || "");
     if (!drummerBeingId) {
       throw new Error("birthBeing drummer returned no beingId");
+    }
+    // Register the drummer on the dance-floor's qualities.beings so
+    // stance resolution by name works at this position.
+    {
+      const { ref: _ref } = await import("../../../seed/materials/ref.js");
+      await reality.do(gridSpaceId, "set-space", {
+        field: "qualities.beings",
+        value: {
+          [`drummer-${plantedSeedId.slice(0, 6)}`]: {
+            // beingId is a typed being-Ref (REFS.md).
+            beingId: _ref("being", drummerBeingId),
+            role: "harmony:drummer",
+            installedAt: new Date().toISOString(),
+            installedBy: "harmony:danceFloor",
+          },
+        },
+        merge: true,
+      }, opOpts);
     }
     log.info("Harmony", `summoned drummer being ${drummerBeingId.slice(0, 8)}`);
 
@@ -234,10 +250,8 @@ export const danceFloorSeed = {
         spec: {
           name: `${spec.suffix}-${plantedSeedId.slice(0, 6)}`,
           cognition: isLlm ? "llm" : "scripted",
-          roles: [spec.role],
           defaultRole: spec.role,
-          homeSpace: gridSpaceId,
-          position: gridSpaceId,
+          homeId: gridSpaceId,
           parentBeingId: identity?.beingId || null,
         },
         identity,
@@ -246,6 +260,23 @@ export const danceFloorSeed = {
       const dancerBeingId = String(dancerResult?.beingId || dancerResult?.being?._id || "");
       if (!dancerBeingId) {
         throw new Error(`birthBeing dancer ${spec.suffix} returned no beingId`);
+      }
+      // Register on the dance-floor's qualities.beings.
+      {
+        const { ref: _ref } = await import("../../../seed/materials/ref.js");
+        await reality.do(gridSpaceId, "set-space", {
+          field: "qualities.beings",
+          value: {
+            [`${spec.suffix}-${plantedSeedId.slice(0, 6)}`]: {
+              // beingId is a typed being-Ref (REFS.md).
+              beingId: _ref("being", dancerBeingId),
+              role: spec.role,
+              installedAt: new Date().toISOString(),
+              installedBy: "harmony:danceFloor",
+            },
+          },
+          merge: true,
+        }, opOpts);
       }
       log.info("Harmony", `summoned dancer ${spec.suffix} ${dancerBeingId.slice(0, 8)} (${isLlm ? "llm" : "scripted"})`);
 

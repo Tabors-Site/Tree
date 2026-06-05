@@ -120,8 +120,11 @@ async function deriveSpaceRootId(spaceId, branch) {
   if (!chain || chain.length === 0) return null;
   const spaceRootId = getSpaceRootId();
   if (spaceRootId) {
+    // space.parent is a typed space-Ref (REFS.md); extract id for compare.
+    const { refId } = await import("../ref.js");
     for (const space of chain) {
-      if (space?.parent && String(space.parent) === String(spaceRootId)) {
+      const parentId = refId(space?.parent);
+      if (parentId && parentId === String(spaceRootId)) {
         return String(space._id);
       }
     }

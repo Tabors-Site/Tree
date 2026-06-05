@@ -31,7 +31,7 @@ import { registerOperation } from "../ibp/operations.js";
 import { IbpError, IBP_ERR } from "../ibp/protocol.js";
 import { detectTargetKind, targetIdOf } from "./_targetShape.js";
 
-async function moveHandler({ target, params }) {
+async function moveHandler({ target, params, summonCtx }) {
   const { coord, to, target: explicitTarget } = params || {};
 
   if (!coord && !to) {
@@ -71,18 +71,31 @@ async function moveHandler({ target, params }) {
 
   // Container-mode validation. Self-move on space is degenerate;
   // dest must exist so the fact doesn't seal pointing at nothing.
+  // params.to is a typed space-Ref (REFS.md); extract bare id for
+  // the existence + self-move checks. The fact's params.to STAYS a
+  // Ref so applyMove can write the Ref directly to state.parent
+  // (space target) or state.spaceId (matter target).
+  let toId = null;
   if (to) {
-    if (kind === "space" && String(to) === String(targetId)) {
+    const { isAggregateRef, refKind, refId } = await import("./ref.js");
+    if (!isAggregateRef(to) || refKind(to) !== "space") {
+      throw new IbpError(
+        IBP_ERR.INVALID_INPUT,
+        `move: \`to\` requires a space-Ref . got ${typeof to === "object" ? JSON.stringify(to) : typeof to}. Wrap with ref("space", id).`,
+      );
+    }
+    toId = refId(to);
+    if (kind === "space" && toId === String(targetId)) {
       throw new IbpError(
         IBP_ERR.INVALID_INPUT,
         "move: cannot move a space into itself",
       );
     }
-    const destExists = await Space.exists({ _id: to });
+    const destExists = await Space.exists({ _id: toId });
     if (!destExists) {
       throw new IbpError(
         IBP_ERR.SPACE_NOT_FOUND,
-        `move: destination space "${to}" not found`,
+        `move: destination space "${toId}" not found`,
       );
     }
   }
@@ -92,22 +105,33 @@ async function moveHandler({ target, params }) {
   // container); for container-mode they differ. Mutating params
   // means the fact itself records both halves; stamped.js reads
   // params.fromSpaceId to fire the invalidate without an extra
-  // post-fold query.
+  // post-fold query. fromSpaceId is a bare-string id (the live-SEE
+  // pipeline uses it as a Mongo key); state-field writes stay
+  // Ref-typed via params.to.
   let fromSpaceId = null;
   const { loadOrFold } = await import("./projections.js");
-  const branch = opts?.summonCtx?.branch || "0";
+  const branch = summonCtx?.branch || "0";
   if (kind === "space") {
     const slot = await loadOrFold("space", targetId, branch);
     if (!slot) {
       throw new IbpError(IBP_ERR.SPACE_NOT_FOUND, `move: space "${targetId}" not found`);
     }
-    fromSpaceId = slot.state?.parent ? String(slot.state.parent) : null;
+    // state.parent is a typed space-Ref (REFS.md).
+    const { refId } = await import("./ref.js");
+    fromSpaceId = refId(slot.state?.parent);
   } else {
     const slot = await loadOrFold("matter", targetId, branch);
     if (!slot) {
       throw new IbpError(IBP_ERR.INVALID_INPUT, `move: matter "${targetId}" not found`);
     }
-    fromSpaceId = slot.state?.spaceId ? String(slot.state.spaceId) : null;
+    // state.spaceId is a typed space-Ref (REFS.md) OR the DELETED
+    // sentinel for soft-deleted matter (matter.js comment). The
+    // DELETED case shouldn't reach move (deletion is a terminal
+    // state) but refId returns null on non-Refs, so the downstream
+    // null-check naturally rejects the case rather than threading
+    // the sentinel through.
+    const { refId } = await import("./ref.js");
+    fromSpaceId = refId(slot.state?.spaceId);
   }
   if (fromSpaceId && params) params.fromSpaceId = fromSpaceId;
 

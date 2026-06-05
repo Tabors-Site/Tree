@@ -15,6 +15,16 @@ You may modify the seed, redistribute it, or fork it. The AGPL-3.0
 below is the contract. Code that runs network-accessible derivatives
 must stay free under the same license. The seed remains the seed.
 
+The seed is dual licensed. The AGPL-3.0 below is the free and open
+default. A separate commercial license is available for organizations
+that cannot meet the AGPL network-copyleft terms (closed-source
+derivatives, hosted services, enterprise support). The commercial
+license grants the same seed source under different legal permissions.
+This dual licensing covers the seed only; extensions, roleFlows,
+clones, portals (browsers), and work posted to Horizon are not
+governed by it. For terms, contact taborgreat@gmail.com. See
+reality/LICENSING.md for the full picture.
+
 ──────────────────────────────────────────────────────────────────
 
 GNU AFFERO GENERAL PUBLIC LICENSE

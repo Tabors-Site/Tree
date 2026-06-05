@@ -218,11 +218,27 @@ async function setOnSpaceHandler({ target, params, identity, summonCtx }) {
   }
 
   if (field === "parent") {
-    if (value !== null && value !== undefined && typeof value !== "string") {
-      throw new Error("set-space: `parent` value must be a spaceId string or null");
+    // Identity primitive: parent is a space-Ref, null, or the DELETED
+    // sentinel string (REFS.md). Soft-delete marks parent = "deleted"
+    // so the space drops out of listings; the sentinel stays bare
+    // because it is not an aggregate id.
+    const { DELETED } = await import("./seedSpaces.js");
+    if (value === null || value === undefined) {
+      const spaceId = targetIdOf(target);
+      return { spaceId, parent: null };
+    }
+    if (value === DELETED) {
+      const spaceId = targetIdOf(target);
+      return { spaceId, parent: DELETED };
+    }
+    const { isAggregateRef, refKind } = await import("../ref.js");
+    if (!isAggregateRef(value) || refKind(value) !== "space") {
+      throw new Error(
+        `set-space: parent requires a space-Ref, null, or the DELETED sentinel . got ${typeof value === "object" ? JSON.stringify(value) : typeof value}`,
+      );
     }
     const spaceId = targetIdOf(target);
-    return { spaceId, parent: value || null };
+    return { spaceId, parent: value };
   }
 
   if (field === "llmDefault") {
@@ -234,20 +250,52 @@ async function setOnSpaceHandler({ target, params, identity, summonCtx }) {
   }
 
   if (field === "rootOwner") {
-    if (value !== null && value !== undefined && typeof value !== "string") {
-      throw new Error("set-space: `rootOwner` value must be a beingId string or null");
+    // Identity primitive: rootOwner is a being-Ref or null (REFS.md).
+    // I_AM is a sentinel string passed bare from genesis ("i-am"); the
+    // handler accepts it as-is since the reducer + consumers treat
+    // refId(value) === I_AM identically to value === I_AM.
+    if (value === null || value === undefined) {
+      const spaceId = targetIdOf(target);
+      return { spaceId, rootOwner: null };
+    }
+    const { isAggregateRef, refKind } = await import("../ref.js");
+    if (typeof value === "string") {
+      // bare I_AM sentinel (genesis only) or boundary-legacy. Storage
+      // keeps the bare string; consumers normalize via refId() OR
+      // direct compare. Per REFS doctrine this should be ref("being", I_AM)
+      // at the emit site . accept the bare during transition only
+      // when the value IS the I_AM sentinel literal.
+      const { I_AM } = await import("../being/seedBeings.js");
+      if (value !== I_AM) {
+        throw new Error(
+          `set-space: rootOwner requires a being-Ref or null . got bare string "${value}". Wrap with ref("being", id).`,
+        );
+      }
+      const spaceId = targetIdOf(target);
+      return { spaceId, rootOwner: value };  // I_AM sentinel stays bare
+    }
+    if (!isAggregateRef(value) || refKind(value) !== "being") {
+      throw new Error(
+        `set-space: rootOwner requires a being-Ref or null . got ${typeof value === "object" ? JSON.stringify(value) : typeof value}`,
+      );
     }
     const spaceId = targetIdOf(target);
-    return { spaceId, rootOwner: value || null };
+    return { spaceId, rootOwner: value };
   }
 
   if (field === "contributors") {
     if (!Array.isArray(value)) {
-      throw new Error("set-space: `contributors` value must be an array of beingIds");
+      throw new Error("set-space: `contributors` value must be an array of being-Refs");
     }
-    for (const id of value) {
-      if (typeof id !== "string") {
-        throw new Error("set-space: `contributors` array must contain beingId strings");
+    // Identity primitive: Refs only (seed/REFS.md). Each entry must be
+    // a being-Ref. Callers wrap via ref("being", id) per the same
+    // discipline as rootOwner / parent / position fields.
+    const { isAggregateRef, refKind } = await import("../ref.js");
+    for (const entry of value) {
+      if (!isAggregateRef(entry) || refKind(entry) !== "being") {
+        throw new Error(
+          `set-space: \`contributors\` entries must be being-Refs . got ${typeof entry === "object" ? JSON.stringify(entry) : typeof entry}. Use ref("being", id).`,
+        );
       }
     }
     const spaceId = targetIdOf(target);

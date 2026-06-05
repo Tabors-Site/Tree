@@ -5,6 +5,7 @@ import NewLandingPage from "./NewLandingPage.jsx";
 import IbpPage from "./IbpPage.jsx";
 import PortalPage from "./PortalPage.jsx";
 import GetStartedPage from "./GetStartedPage.jsx";
+import LicensePage from "./LicensePage.jsx";
 import FactoryLayout from "./FactoryLayout.jsx";
 import FactoryOverview from "./FactoryOverview.jsx";
 import FactoryIntake from "./FactoryIntake.jsx";
@@ -33,6 +34,7 @@ import NotFound from "./old/NotFound.jsx";
  *   /                       NEW landing (two buttons plus "What is this?")
  *   /ibp                    NEW IBP page (transport plus four verbs)
  *   /portal                 NEW Portal page (renderer / client surface)
+ *   /license                NEW License page (dual license, links to seed/LICENSE)
  *   /factory                NEW factory overview plus chapter walk
  *   /factory/<chapter>      NEW factory chapter (intake / assign / fold / momentum / stamped)
  *   /blog, /blog/:slug      Blog at root (component lives under old/Blog/)
@@ -51,6 +53,7 @@ const WelcomeRoutes = () => {
       <Route path="/ibp" element={<IbpPage />} />
       <Route path="/portal" element={<PortalPage />} />
       <Route path="/start" element={<GetStartedPage />} />
+      <Route path="/license" element={<LicensePage />} />
       <Route path="/factory" element={<FactoryLayout />}>
         <Route index element={<FactoryOverview />} />
         <Route path="intake"   element={<FactoryIntake />} />

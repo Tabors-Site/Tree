@@ -72,7 +72,10 @@ async function assertCoordInBounds(beingDoc, raw, branch = "0") {
   if (Object.keys(out).length === 0) {
     return null;
   }
-  const spaceId = beingDoc?.position || beingDoc?.homeSpace || null;
+  // position + homeSpace are space-Refs on projection state (REFS.md).
+  // Extract the bare id for loadOrFold lookups.
+  const { refId } = await import("../ref.js");
+  const spaceId = refId(beingDoc?.position) || refId(beingDoc?.homeSpace) || null;
   if (!spaceId) return out;
   const { loadOrFold } = await import("../projections.js");
   const _sSlot = await loadOrFold("space", spaceId, branch);
@@ -162,10 +165,19 @@ async function setOnBeingHandler({ target, params, summonCtx }) {
   }
 
   if (field === "parentBeingId") {
-    if (value !== null && value !== undefined && typeof value !== "string") {
-      throw new Error("set-being: `parentBeingId` value must be a beingId string or null");
+    // Identity primitive: Refs only (seed/REFS.md). The substrate does
+    // not accept bare-string IDs for parent references . callers wrap
+    // via ref("being", id) or pass null.
+    if (value === null || value === undefined) {
+      return { beingId: String(target._id), parentBeingId: null };
     }
-    return { beingId: String(target._id), parentBeingId: value || null };
+    const { isAggregateRef, refKind } = await import("../ref.js");
+    if (!isAggregateRef(value) || refKind(value) !== "being") {
+      throw new Error(
+        `set-being: parentBeingId requires a being-Ref or null . got ${typeof value === "object" ? JSON.stringify(value) : typeof value}`,
+      );
+    }
+    return { beingId: String(target._id), parentBeingId: value };
   }
 
   if (field === "llmDefault") {
@@ -185,17 +197,29 @@ async function setOnBeingHandler({ target, params, summonCtx }) {
     return { beingId: String(target._id), llmDefault: null };
   }
 
-  if (
-    field === "defaultRole" ||
-    field === "homeSpace"
-  ) {
+  if (field === "defaultRole") {
     if (
       value !== null && value !== undefined &&
       typeof value !== "string"
     ) {
-      throw new Error(`set-being: \`${field}\` value must be a string or null`);
+      throw new Error(`set-being: \`defaultRole\` value must be a string or null`);
     }
-    return { beingId: String(target._id), [field]: value };
+    return { beingId: String(target._id), defaultRole: value };
+  }
+
+  if (field === "homeSpace") {
+    // Identity primitive: Refs only (seed/REFS.md). callers wrap via
+    // ref("space", id) or pass null.
+    if (value === null || value === undefined) {
+      return { beingId: String(target._id), homeSpace: null };
+    }
+    const { isAggregateRef, refKind } = await import("../ref.js");
+    if (!isAggregateRef(value) || refKind(value) !== "space") {
+      throw new Error(
+        `set-being: homeSpace requires a space-Ref or null . got ${typeof value === "object" ? JSON.stringify(value) : typeof value}`,
+      );
+    }
+    return { beingId: String(target._id), homeSpace: value };
   }
 
   // password is bcrypt-hashed by the caller (credential ops, register
@@ -214,21 +238,25 @@ async function setOnBeingHandler({ target, params, summonCtx }) {
   // through the reducer. The portal emits this on navigate-to-sized-
   // space so the being shows up in descriptor.occupantsByPosition
   // for everyone else in that space.
+  //
+  // Identity primitive: position is a space-Ref or null (REFS.md).
   if (field === "position") {
-    if (value !== null && typeof value !== "string") {
-      throw new Error("set-being: `position` value must be a spaceId string or null");
+    const { isAggregateRef: isAggRef, refKind: rk, refId: getRefId } = await import("../ref.js");
+    if (value !== null && value !== undefined && (!isAggRef(value) || rk(value) !== "space")) {
+      throw new Error(
+        `set-being: position requires a space-Ref or null . got ${typeof value === "object" ? JSON.stringify(value) : typeof value}`,
+      );
     }
     // Capture the OLD position into the fact's params so the live-SEE
     // hook fan can invalidate BOTH rooms — the one the being left and
-    // the one they entered. Without this, anyone subscribed to the old
-    // room sees a "ghost being" still sitting there until they refetch
-    // manually (the bug that made the 2D flat app show tabor at root
-    // while the 3D portal had already walked him into a tree).
-    const fromPosition = target?.position ? String(target.position) : null;
-    if (fromPosition && fromPosition !== value) {
-      params.fromPosition = fromPosition;
+    // the one they entered. fromPosition is also a Ref (or null).
+    const fromPositionRef = target?.position && isAggRef(target.position) ? target.position : null;
+    const newId = value ? getRefId(value) : null;
+    const fromId = fromPositionRef ? getRefId(fromPositionRef) : null;
+    if (fromPositionRef && fromId !== newId) {
+      params.fromPosition = fromPositionRef;
     }
-    return { beingId: String(target._id), position: value, fromPosition };
+    return { beingId: String(target._id), position: value || null, fromPosition: fromPositionRef };
   }
 
   // coord: the being's coord inside its position space. Shape `{ x, y, z? }`

@@ -34,6 +34,7 @@ async function createChildByFact({ parentId, name, type, qualities, summonCtx })
   const specQualities = qualities instanceof Map
     ? Object.fromEntries(qualities)
     : (qualities || {});
+  const { ref: makeSpaceRef } = await import("../materials/ref.js");
   await emitFact({
     verb:    "do",
     action:  "create-space",
@@ -43,7 +44,8 @@ async function createChildByFact({ parentId, name, type, qualities, summonCtx })
       spec: {
         name,
         type:      type ?? null,
-        parent:    String(parentId),
+        // parent is a typed space-Ref (REFS.md).
+        parent:    makeSpaceRef("space", String(parentId)),
         rootOwner: null,
         qualities: specQualities,
       },
@@ -119,7 +121,8 @@ export async function manifestItems({
   const { default: Projection } = await import("../materials/branch/projection.js");
   const existingChildren = (await Projection.find({
     branch: "0", type: "space",
-    "state.parent": parentSlot.id,
+    // state.parent is a typed Ref (REFS.md); query via .id subpath.
+    "state.parent.id": parentSlot.id,
     "state.type": itemType,
     tombstoned: { $ne: true },
   }).select("id state").lean()).map((s) => ({
@@ -184,7 +187,8 @@ export async function addManifestChild({
   const { default: Projection } = await import("../materials/branch/projection.js");
   const existing = await Projection.findOne({
     branch: "0", type: "space",
-    "state.parent": parentSlot.id,
+    // state.parent is a typed Ref (REFS.md); query via .id subpath.
+    "state.parent.id": parentSlot.id,
     "state.name": name,
     "state.type": itemType,
     tombstoned: { $ne: true },
@@ -222,7 +226,8 @@ export async function removeManifestChild({
   const { default: Projection } = await import("../materials/branch/projection.js");
   const child = await Projection.findOne({
     branch: "0", type: "space",
-    "state.parent": parentSlot.id,
+    // state.parent is a typed Ref (REFS.md); query via .id subpath.
+    "state.parent.id": parentSlot.id,
     "state.name": name,
     "state.type": itemType,
     tombstoned: { $ne: true },

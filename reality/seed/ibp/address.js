@@ -1052,8 +1052,11 @@ async function loadBeingStanceFields(beingId, branch = "0") {
   let row = null;
   try {
     const { loadOrFold } = await import("../materials/projections.js");
+    const { refId } = await import("../materials/ref.js");
     const slot = await loadOrFold("being", String(beingId), branch);
-    row = slot ? { name: slot.state?.name, homeSpace: slot.state?.homeSpace } : null;
+    // state.homeSpace is a space-Ref (REFS.md). Cache the bare id so
+    // stance composition can build addresses without re-walking.
+    row = slot ? { name: slot.state?.name, homeSpace: refId(slot.state?.homeSpace) } : null;
   } catch {
     row = null;
   }
