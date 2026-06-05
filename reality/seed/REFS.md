@@ -129,26 +129,40 @@ What stays a bare string:
 - **Names** (role names, pointer names, world-signal namespaces) — name-keyed, not ID-keyed.
 - **Stamp IDs / Act IDs / Session IDs** — substrate metadata, not user-facing aggregates.
 
-## Coexistence with the legacy manifest
+## No fallback path
 
-The substrate ships with both mechanisms running in parallel:
+The substrate's identity primitive is typed Refs. There is one way to reference an aggregate. Bare-string IDs are not it.
 
-- **Primary (typed Refs):** Refs are detected by structure via `findRefs` / `remapRefs`. New ops use Refs in their params. Migrated qualities namespaces store Refs.
-- **Fallback (manifest, REFS_MANIFEST.md):** For ops and qualities that haven't yet migrated to typed Refs, the manifest declares which bare-string paths carry IDs. The graft walker checks tagged Refs first, then falls back to manifest paths for anything still in legacy form.
+The legacy refs manifest (REFS_MANIFEST.md) exists as a temporary transition bridge while the seed's existing op handlers and qualities sites migrate to Refs. **It is not the long-term substrate API; it is scheduled for deletion.** Once the migration sweep completes (publishing.md Phase 1.6), the manifest registry is removed and bare-string IDs in ID-bearing positions become a doctrinal violation.
 
-This isn't a permanent design — it's a migration bridge. Over time, every op and every qualities namespace migrates to Refs. The manifest shrinks to just sentinel rules (for builders who need explicit graft-time-behavior semantics that can't be expressed structurally).
+This commitment is intentional. Fallback paths corrode systems:
+
+- Two paths means two correct answers. Bugs proliferate at the seam.
+- Builders have to know about both. Mixed conventions persist forever.
+- The legacy path never goes away without forcing function.
+- Doctrines become "mostly true with exceptions," which is the same as "not doctrines."
+
+The substrate's strength is absolute doctrines (chain is truth, heaven never branches, identity is local, address is actor). Typed Refs joins that set: every aggregate reference is a Ref. Period.
+
+**For builders during the transition:**
+
+- Use `ref()` for all ID-bearing values in new code. Don't add manifest entries for new ops.
+- The legacy seed handlers (`set-being`, `create-space`, etc.) still emit bare-string IDs during the transition — they will be swept in Phase 1.6.
+- The graft layer ships only after the sweep completes. There is no "graft with fallback to manifest" stage.
+
+The manifest's only permanent successor is the sentinel semantics — `<GRAFT_INITIATOR>` and `<INSERTION_POINT>` — which are graft-behavior markers, not ID kinds. After the sweep, these become explicit Ref sentinels (`REF_GRAFT_INITIATOR`, `REF_INSERTION_POINT`) and the manifest goes away.
 
 ## Implementation status
 
 | Piece | Status |
 |---|---|
-| `Ref` type + helpers (`ref`, `isRef`, `refKind`, `refId`, sentinels) | shipped |
-| Walker (`findRefs`, `remapRefs`) | shipped |
-| Refs manifest registry (legacy/sentinel) | shipped (becomes fallback) |
-| Migration sweep: seed ops emit Refs | future (Phase 9) |
-| Migration sweep: qualities namespaces store Refs | future (Phase 9) |
-| Graft layer uses Refs primary + manifest fallback | scheduled (Phase 5) |
-| Mongoose Mixed-field round-trip verified | shipped |
+| `Ref` type + helpers (`ref`, `isRef`, `refKind`, `refId`, sentinels) | shipped (2026-06-04) |
+| Walker (`findRefs`, `remapRefs`) | pending (Phase 1.5 finish) |
+| Legacy refs manifest registry | shipped, scheduled for deletion in Phase 1.6 |
+| Migration sweep: seed ops emit Refs | next (Phase 1.6) |
+| Migration sweep: qualities namespaces store Refs | next (Phase 1.6) |
+| Manifest registry deletion | end of Phase 1.6 |
+| Graft layer (Refs only, no fallback) | Phase 5 (after sweep) |
 
 ## Design choices
 
@@ -180,14 +194,14 @@ When you're writing a new op or a new qualities namespace:
 
 - Use `ref(kind, id)` for any ID-bearing field. Substrate handles the rest.
 - Use sentinels (`REF_GRAFT_INITIATOR`, `REF_INSERTION_POINT`) for graft-time behavior.
-- Don't add an entry to the legacy refs manifest — it's only for legacy.
+- Don't touch the legacy refs manifest.
 
-When you're updating an existing op or namespace:
+When you're updating an existing op or namespace during Phase 1.6:
 
-- Same. Migrate the field to Refs; drop its manifest entry; you're done.
-- If you can't migrate yet (external consumer expects bare strings), leave the manifest entry in place until you can.
+- Migrate the field to Refs. Drop its manifest entry. You're done.
+- If a migration is harder than expected (e.g., touches many consumers), split it into a separate PR — don't ship a partial migration that leaves some sites bare-string.
 
 When you're reading data:
 
 - Use `refKind` and `refId` to introspect. Don't pattern-match `__ref` directly.
-- Use `coerceRef(value, kindHint)` at boundaries that might receive legacy bare strings.
+- Use `coerceRef(value, kindHint)` at boundaries that receive incoming protocol payloads (HTTP/WS bodies). These are conversion-at-boundary points; inside the substrate, everything is already a Ref.

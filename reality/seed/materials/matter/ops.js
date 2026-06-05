@@ -81,8 +81,31 @@ async function createMatterHandler(ctx) {
   const matterId = uuidv4();
   const spaceId =
     targetKind === "space" ? targetIdOf(target) : (spec.spaceId ?? null);
-  const parentMatterId =
-    targetKind === "matter" ? targetIdOf(target) : (spec.parentMatterId ?? null);
+
+  // parentMatterId is a typed matter-Ref (REFS.md). Two sources:
+  //   1. target is a matter (nested creation under a parent matter) —
+  //      wrap targetIdOf into a Ref here.
+  //   2. spec.parentMatterId from the caller — must already be a Ref
+  //      or null; validated below.
+  // Legacy bare-string callers fail validation rather than silently
+  // round-trip through the substrate as a mixed-shape field.
+  let parentMatterId;
+  if (targetKind === "matter") {
+    const { ref } = await import("../ref.js");
+    parentMatterId = ref("matter", targetIdOf(target));
+  } else if (spec.parentMatterId === null || spec.parentMatterId === undefined) {
+    parentMatterId = null;
+  } else {
+    const { isAggregateRef, refKind } = await import("../ref.js");
+    if (!isAggregateRef(spec.parentMatterId) || refKind(spec.parentMatterId) !== "matter") {
+      throw new IbpError(
+        IBP_ERR.INVALID_INPUT,
+        `create-matter: spec.parentMatterId requires a matter-Ref or null . got ${typeof spec.parentMatterId === "object" ? JSON.stringify(spec.parentMatterId) : typeof spec.parentMatterId}`,
+      );
+    }
+    parentMatterId = spec.parentMatterId;
+  }
+
   const enrichedSpec = {
     ...spec,
     spaceId,

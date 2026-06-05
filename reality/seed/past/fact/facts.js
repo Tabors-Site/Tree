@@ -579,10 +579,21 @@ export async function foldAfterCommit(sortedReels) {
         // projection slot, never on main's slot for a non-main reel.
         await fold(reel.kind, reel.id, { branch: reel.branch || "0" });
       } catch (err) {
-        log.debug("Fold", `post-seal fold failed for ${reel.branch || "0"}:${reel.kind}:${reel.id}: ${err.message}`);
+        // Warn (not debug): the projection slot for this reel did NOT
+        // materialize. Anyone who SEEs the aggregate next will hit
+        // loadOrFold's cold path; if that also fails (or the inner
+        // facts have an issue) the user lands at a fallback. We
+        // need to see this in dev — silent debug-level masked the
+        // "newly registered being lands off-grid" class of bugs.
+        log.warn(
+          "Fold",
+          `post-seal fold failed for ${reel.branch || "0"}:${reel.kind}:${String(reel.id).slice(0, 8)}: ${err.message}`,
+        );
       }
     }
-  } catch {}
+  } catch (err) {
+    log.warn("Fold", `foldAfterCommit unexpected error: ${err.message}`);
+  }
 }
 
 /**

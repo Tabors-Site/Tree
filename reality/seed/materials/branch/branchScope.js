@@ -19,7 +19,7 @@
 
 import { loadBranch } from "./branches.js";
 import { getAncestorChain } from "../space/ancestorCache.js";
-import { getSpaceRootId } from "../../sprout.js";
+import { getSpaceRoot } from "../../sprout.js";
 
 // ─────────────────────────────────────────────────────────────────────
 // Path resolution (for scope creation)
@@ -45,12 +45,16 @@ export async function resolvePathToSpaceId(pathString, branch) {
   if (typeof pathString !== "string" || !pathString.length) return null;
   const trimmed = pathString.trim();
   if (!trimmed.startsWith("/")) return null;
-  if (trimmed === "/") return getSpaceRootId();
+  if (trimmed === "/") {
+    const root = await getSpaceRoot();
+    return root?._id ? String(root._id) : null;
+  }
 
   const segments = trimmed.split("/").filter(Boolean);
   if (segments.length === 0) return null;
 
-  const rootId = getSpaceRootId();
+  const root = await getSpaceRoot();
+  const rootId = root?._id ? String(root._id) : null;
   if (!rootId) return null;
 
   let cursorId = rootId;

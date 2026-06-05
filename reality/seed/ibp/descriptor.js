@@ -31,6 +31,7 @@
 // because both descriptor and discovery are wire payloads my SEE
 // verb returns, and they share types and version constants.
 
+import log from "../seedReality/log.js";
 import { getRealityDomain } from "./address.js";
 import { getRealityConfigValue, getRealityUrl } from "../realityConfig.js";
 import Being from "../materials/being/being.js";
@@ -1133,8 +1134,9 @@ async function identityBlock(identity, { authorizedHere, writeAllowed, until = n
   // the camera resumes at where THEY were at the past point. If the
   // asker didn't exist yet at that point, we surface null position +
   // coord (the client falls back to default spawn).
-  let position = null;
-  let coord    = null;
+  let position  = null;
+  let coord     = null;
+  let homeSpace = null;
   // Stale = the JWT names a being that no longer exists in the
   // substrate (operator dropped the DB, ended the being, etc.). The
   // portal reads this flag to drop the cached session and reconnect
@@ -1146,7 +1148,8 @@ async function identityBlock(identity, { authorizedHere, writeAllowed, until = n
       if (until) {
         const folded = await foldRead("being", identity.beingId, until, branch);
         if (folded) {
-          position = folded.position ? String(folded.position) : null;
+          position  = folded.position ? String(folded.position) : null;
+          homeSpace = folded.homeSpace ? String(folded.homeSpace) : null;
           const coordQ = folded.qualities?.coord;
           coord = coordQ || folded.coord || null;
         }
@@ -1177,17 +1180,50 @@ async function identityBlock(identity, { authorizedHere, writeAllowed, until = n
         // Position rides at the slot level (sparse-indexed for
         // findByPosition); qualities + other reducer state ride at
         // slot.state. Coord lives under qualities.coord typically.
-        position = slot?.position ? String(slot.position) : (slot?.state?.position ? String(slot.state.position) : null);
+        position  = slot?.position ? String(slot.position) : (slot?.state?.position ? String(slot.state.position) : null);
+        homeSpace = slot?.state?.homeSpace ? String(slot.state.homeSpace) : null;
         const quals = slot?.state?.qualities;
         const coordQ = quals instanceof Map ? quals.get("coord") : quals?.coord;
         coord = coordQ || slot?.state?.coord || null;
+        // Visibility for the "freshly-registered being lands off-grid"
+        // class of bugs. When the slot resolved but position is null,
+        // something upstream (the be:birth reducer, the post-seal
+        // fold, the lineage walk on a non-main branch) failed to
+        // populate it. Without this warn the portal silently falls
+        // back to homeSpace and the user never gets a signal that
+        // anything went wrong — the deeper bug stays hidden.
+        if (slot && !position) {
+          log.warn(
+            "Descriptor",
+            `identity.position resolved null for being=${String(identity.beingId).slice(0, 8)} ` +
+              `on branch ${branch} (slot=${slot?.state ? "present" : "missing"}, ` +
+              `homeSpace=${homeSpace ? "yes" : "no"}). Portal will fall back to homeSpace. ` +
+              `Investigate post-seal fold for the be:birth reel.`,
+          );
+        }
       }
-    } catch { /* defensive */ }
+    } catch (err) {
+      // Defensive catch — never let an identity-block failure deny
+      // the SEE. But log it so we can see when the fold path is
+      // failing silently (the prior empty catch swallowed everything
+      // and the portal's only signal was a null position).
+      log.warn(
+        "Descriptor",
+        `identityBlock fold failed for being=${String(identity.beingId).slice(0, 8)}: ${err.message}`,
+      );
+    }
   }
   return {
     beingId: identity.beingId,
     name:    identity.name,
     position,
+    // homeSpace exposed so the portal can fall back to "/<homeSpace>"
+    // when position is null (freshly-registered being whose slot
+    // hasn't materialized yet, slow cold-fold, etc.). Without this
+    // the portal's only fallback was `<reality>/@<name>` which
+    // resolves to the reality root — and the being's home-grid coord
+    // then renders far outside the much larger root grid.
+    homeSpace,
     coord,
     authorizedHere,
     writeAllowed,

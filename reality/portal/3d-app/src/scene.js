@@ -659,7 +659,21 @@ export class Scene {
     // generic spawn — your first-person view starts at your
     // server-side position so the world matches what other tabs see
     // of you.
-    if (resetCamera) {
+    //
+    // Two paths into camera placement here:
+    //   resetCamera:true  — navigate / spawn. Snap camera to self
+    //     coord (or default spawn if no coord) AND reset yaw/pitch
+    //     so the user starts looking forward.
+    //   isHistorical:true — rewind / playback. Place the camera at
+    //     the historical self coord so coord-only changes in the
+    //     same space are actually visible. PRESERVE yaw / pitch so
+    //     the user's angle survives the scrub (the doctrine from
+    //     the rewind handler is "same place, different time").
+    // Live re-fetch (neither flag) leaves the camera alone — the
+    // user is driving via WASD and the live PositionProjection delta
+    // path handles their own movement.
+    const isHistorical = !!desc?.isHistorical;
+    if (resetCamera || isHistorical) {
       // Self coord precedence: identity.coord (the substrate's first-
       // person source of truth — present on every authed SEE, including
       // historical) over the beings-list entry (which may not list self
@@ -668,12 +682,20 @@ export class Scene {
       const selfWorld = selfCoord ? coordToWorld(selfCoord) : null;
       if (selfWorld) {
         this.camera.position.set(selfWorld.x, 1.7, selfWorld.z);
-      } else {
+      } else if (resetCamera) {
+        // No self coord — only fall back to default spawn on an
+        // explicit navigate / reset. A rewind that lands somewhere
+        // with no coord leaves the camera alone rather than yanking
+        // it to a synthetic spawn point.
         this.camera.position.set(0, 1.7, arrival ? 2 : 8);
       }
-      this.yaw = 0;
-      this.pitch = 0;
-      this.velocityY = 0;
+      if (resetCamera) {
+        // Yaw / pitch only reset on a full navigate. Rewind keeps the
+        // user's vantage.
+        this.yaw = 0;
+        this.pitch = 0;
+        this.velocityY = 0;
+      }
     }
     this._applyLook();
   }

@@ -192,7 +192,19 @@ export async function loadOrFold(type, id, branch) {
     // Re-read the slot — fold's initProjection landed the canonical
     // shape (with `position` lifted to the slot level for indexing).
     return await loadProjection(type, id, effectiveBranch);
-  } catch {
+  } catch (err) {
+    // Surface the failure. The empty catch that used to live here
+    // hid every cold-fold issue (missing reel facts, branch lineage
+    // walk errors, reducer throws) as "slot returned null" with no
+    // signal to anyone investigating. callers that legitimately
+    // expect null (a never-touched aggregate) still see null — the
+    // log just makes the "fold threw" case visible.
+    const { default: log } = await import("../seedReality/log.js");
+    log.warn(
+      "Projections",
+      `loadOrFold(${type}, ${String(id).slice(0, 8)}, ${effectiveBranch}) ` +
+        `cold-fold failed: ${err.message}`,
+    );
     return null;
   }
 }

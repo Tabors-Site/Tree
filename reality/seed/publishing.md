@@ -1,6 +1,8 @@
 # Publishable Units in TreeOS
 
 > *Replicates are projections of current state, packaged for portability. Grafting re-creates content as fresh facts in the target with new local IDs. History does not transfer; only current shape. The chain in each reality stays the truth of what happened there.*
+>
+> *IDs are typed at the substrate level. Every reference to a being, space, or matter is a tagged Ref, never a bare string. The substrate detects refs by structure; replicate and graft consume them through the walker without per-action declarations. See seed/REFS.md for the Ref doctrine.*
 
 ## What this document is
 
@@ -296,11 +298,13 @@ The verb is **plant** (extending the existing `plant` op for seeds — you plant
 | Within-reality merge + conflict catalog + mediator | shipped (2026-06-04) |
 | Heaven (reality-level metadata that never branches) | shipped |
 | Pointers (`#main`, `#prod`) | shipped |
-| RoleFlows as first-class publishable (in Horizon) | not yet (Phase 6) |
-| Replicates (replicate + graft) | not yet (Phase 4 + 5) |
-| Subtree branching | not yet (Phase 2) |
+| **Typed Refs primitive** (`ref()`, `isRef()`, walker) | type shipped (2026-06-04); walker pending |
+| Subtree branching | shipped (2026-06-04) |
+| Refs manifest (LEGACY, scheduled for deletion) | shipped as transition bridge only; deleted in Phase 1.6 |
+| Refs migration sweep (seed ops + qualities → Refs) | Phase 1.6 (next) |
 | Asset content-addressing | not yet (Phase 3) |
-| Refs manifest (prerequisite) | inventoried (see REFS_MANIFEST.md) |
+| Replicates (replicate + graft) | not yet (Phase 4 + 5) |
+| RoleFlows as first-class publishable (in Horizon) | not yet (Phase 6) |
 | Horizon three-tab UX | not yet (Phase 7) |
 | Cross-reality replicate flow | not yet (Phase 8) |
 | Clones + plant (full fact-chain) | future (after replicates) |
@@ -308,15 +312,25 @@ The verb is **plant** (extending the existing `plant` op for seeds — you plant
 
 ## Build order
 
-1. **Refs manifest** — single audit pass across every action handler (seed + extensions). Each handler declares which params and which qualities-paths carry IDs. Output: a JSON registry. Prerequisite for #4, #5. See `seed/REFS_MANIFEST.md` for the seed inventory and the contribution shape for extensions.
+**Doctrinal commitment: there is no fallback path.** The substrate's identity primitive is typed Refs (`{ __ref: kind, id }`); there is one way to reference an aggregate, and bare-string IDs are not it. The legacy refs manifest exists as a temporary transition bridge while the seed's existing op handlers and qualities sites migrate; once the sweep is complete, the manifest is deleted. New code — seed or extension — uses `ref()` from day one. Builders never write a manifest entry.
 
-2. **Subtree branching** — branches scoped to a path. Write gate at fact-emission boundary refuses out-of-scope writes. Read inheritance routes outside-scope reads to parent. Same routing pattern as heaven, inverted direction. Bounded.
+This commitment is the same shape as `assertBranch` (no `|| "0"` defaults), heaven-never-branches (no exceptions), and address-as-identity (no separate identity field). Absolute doctrines hold their shape; fallback paths rot architectures.
 
-3. **Asset content-addressing** — sha256 hashes for binaries; `.assets/<hash>` directory; `Matter.origin = "assets"` references by hash. Pull in alongside other phases.
+### Phases
 
-4. **Within-reality replicate** — `replicateSubtree(branch, scopePath, opts) → replicateBundle`. Walks projections (NOT chains). Snapshots current state. Manifest of dependencies. Placeholder IDs.
+1. **Refs manifest registry** — shipped (2026-06-04). Becomes the temporary fallback for legacy bare-string IDs in the seed's existing op handlers.
 
-5. **Within-reality graft** — `graftReplicate(bundle, targetParentPath) → graftedBranch`. Validates dependencies, resolves insertion point, detects conflicts (via existing merge catalog), builds remap table, stamps creation facts in dependency order, records `graft-completed` meta-fact.
+1.5. **Typed Refs primitive** — `ref()`, `isRef()`, `refKind()`, `refId()`, sentinels, walker (`findRefs`, `remapRefs`). The Ref type is shipped; walker comes next. See `seed/REFS.md` for the doctrine.
+
+1.6. **Refs migration sweep** — every seed action handler migrates to emit Ref-typed params; every qualities namespace stores Refs. As each site migrates, its manifest entry is deleted. Manifest shrinks to zero. **Required before Phase 4 (replicate) ships** so the graft layer can be Ref-only with no fallback.
+
+2. **Subtree branching** — shipped (2026-06-04). Branches scoped to a path; write gate at fact-emission boundary refuses out-of-scope writes; reads pass through.
+
+3. **Asset content-addressing** — sha256 hashes for binaries; `.assets/<hash>` directory; `Matter.origin = "assets"` references by hash.
+
+4. **Within-reality replicate** — `replicateSubtree(branch, scopePath, opts) → replicateBundle`. Walks projections (NOT chains). Snapshots current state with Refs throughout. Manifest of dependencies. Walker uses `findRefs` to discover what to remap.
+
+5. **Within-reality graft** — `graftReplicate(bundle, targetParentPath) → graftedBranch`. Validates dependencies, resolves insertion point, detects conflicts via existing merge catalog, builds remap table, walker (`remapRefs`) substitutes placeholder Refs with new local Refs, stamps creation facts in dependency order, records `graft-completed` meta-fact.
 
 6. **RoleFlow registry + install pipeline** — `.roleflows` heaven space, `install-roleflow` DO op, by-name references from beings, conflict detection on definition disagreement.
 
@@ -324,7 +338,7 @@ The verb is **plant** (extending the existing `plant` op for seeds — you plant
 
 8. **Cross-reality replicate flow** — IBP-carried bundles, canopy-advertised replicates, foreign-graft via the same graft operation.
 
-9. **Clones + plant** (future phase) — full fact-chain export, planting into fresh substrate (or grafting into existing one with full-history option). Built on the same refs manifest; the same merge mediator handles the rare collision cases.
+9. **Clones + plant** (future phase) — full fact-chain export, planting into fresh substrate (or grafting into existing one with full-history option). Built on the same Ref primitive; the same merge mediator handles the rare collision cases.
 
 ## Smallest viable v1
 

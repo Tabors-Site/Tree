@@ -54,7 +54,12 @@ const MatterSchema = new mongoose.Schema({
 
   // The matter tree at this space. Root matter has
   // parentMatterId: null; descendants chain through parentMatterId.
-  parentMatterId: { type: String, ref: "Matter", default: null, index: true },
+  //
+  // parentMatterId is a typed matter-Ref: { __ref: "matter", id: "..." }
+  // (REFS.md). Mongoose Mixed lets the Ref object round-trip cleanly.
+  // The .id subpath is indexed via the projection schema for child-
+  // matter lookups; the legacy index on this field stays harmless.
+  parentMatterId: { type: mongoose.Schema.Types.Mixed, default: null, index: true },
   children:       [{ type: String, ref: "Matter" }],
 
   // Which realm the underlying content lives in. Required — origin

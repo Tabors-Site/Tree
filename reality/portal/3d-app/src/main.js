@@ -598,13 +598,26 @@ async function connectAndPlace(session) {
         return;
       }
       if (!landingFromHash) {
+        // Landing priority for an authenticated being:
+        //   1. identity.position — the server-tracked current location
+        //      (the being's last set-being:position).
+        //   2. identity.homeSpace — fallback when position is null
+        //      (most commonly: a being who just registered and whose
+        //      projection slot hasn't quite caught up to the be:birth
+        //      Fact yet, OR a never-moved being). Without this fallback,
+        //      the portal would land at the reality root and render the
+        //      being's home-grid coord against the root's grid — putting
+        //      the avatar far outside the visible area.
+        //   3. beingAddress stance — last-resort; resolves to the
+        //      reality root via the @qualifier surface. Only reached
+        //      if neither position nor homeSpace is known.
         const pos = desc?.identity?.position || null;
-        if (pos && state.discovery?.reality) {
-          // Position is a spaceId — the resolver accepts UUID paths.
-          landingAddress = `${state.discovery.reality}/${pos}`;
+        const home = desc?.identity?.homeSpace || null;
+        const targetSpace = pos || home;
+        if (targetSpace && state.discovery?.reality) {
+          // Space id is a UUID — the resolver accepts UUID paths.
+          landingAddress = `${state.discovery.reality}/${targetSpace}`;
         } else {
-          // No saved position yet — fall back to the being's stance
-          // address (which resolves to their home).
           landingAddress = beingAddress;
         }
       }
