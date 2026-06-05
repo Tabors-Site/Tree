@@ -152,7 +152,7 @@ Two siblings at the root:
 - **`manifest.js`**: makes the I-Am's runtime collections (tools, roles, operations) manifest as Space children under `./tools`, `./roles`, `./operations` (Tier-3 spaces beneath heaven) so SEE can introspect them through the standard pipeline. It writes Space rows, so it belongs here alongside the world it shapes.
 - **`space/threads.js`**: the `./threads` projection and the seed cut handler. A thread is a live tree of coordinated SUMMONs sharing one `rootCorrelation`. Made addressable at `<place>/./threads/<id>` so SEE returns its descriptor (participants, depth, state) and SUMMON severs it. Pure derived view: no new persistence; the descriptor is computed from Summon + inbox rows. Same verb, same envelope; the address tells the seed whether the operation is a call (to a being) or a cut (of a line). A cut is just SUMMONing the line itself.
 
-The schemas for all six primitives (the three above plus Fact, Summon, LlmConnection) live at `seed/models/` so they sit in one place. The operations on the three world-shape primitives live here.
+The schemas for each primitive live colocated with the code that owns it: Being at `seed/materials/being/being.js`, Space at `seed/materials/space/space.js`, Matter at `seed/materials/matter/matter.js`, Branch at `seed/materials/branch/branch.js`, Fact at `seed/past/fact/fact.js`, Act at `seed/past/act/act.js`, the inbox projection at `seed/past/projections/inbox/inboxProjection.js`, SubscriptionRecord at `seed/present/wakes/subscriptionRecord.js`. Schema and behavior travel together; there is no separate `models/` folder.
 
 ## What does NOT live here
 

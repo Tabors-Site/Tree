@@ -22,7 +22,7 @@ import stepOp from "./ops/step.js";
 import walkOp from "./ops/walk.js";
 import { drummerRole } from "./roles/drummer.js";
 import { dancerTowardRole } from "./roles/dancerToward.js";
-import { dancerLlmRole } from "./roles/dancerLlm.js";
+import { dancerLlmRole, neighborsSeeResolver } from "./roles/dancerLlm.js";
 import { danceFloorSeed } from "./seeds/danceFloor.js";
 
 export async function init(reality) {
@@ -33,10 +33,15 @@ export async function init(reality) {
   log.verbose("Harmony", "registered ops: tick, step, walk");
 
   // 2. Roles.
-  reality.declare.registerRole("harmony:drummer",       drummerRole);
-  reality.declare.registerRole("harmony:dancer-toward", dancerTowardRole);
-  reality.declare.registerRole("harmony:dancer-llm",    dancerLlmRole);
+  reality.declare.registerRole("drummer",       drummerRole);
+  reality.declare.registerRole("dancer-toward", dancerTowardRole);
+  reality.declare.registerRole("dancer-llm",    dancerLlmRole);
   log.verbose("Harmony", "registered roles: drummer, dancer-toward, dancer-llm");
+
+  // 2b. SEE-resolver for dancer-llm's `neighbors` preloaded face.
+  // Load-time registration routes through declare, matching the rule:
+  // ctx.X = moment-time, reality.declare.X = load-time.
+  reality.declare.registerSeeResolver("neighbors", neighborsSeeResolver);
 
   return {
     seeds: [

@@ -8,7 +8,7 @@ branch pointer registry work surfaced it.
 
 ## The principle
 
-The Tier-3 seed spaces under heaven hold substrate-level metadata
+The Tier-3 heaven spaces under heaven hold substrate-level metadata
 about the reality: which beings exist, what roles are available, how
 branches are structured, what tools and operations the reality
 supports. Their content is identical across every branch.
@@ -77,8 +77,8 @@ export async function findInHeaven(type, name) {
  * Read a heaven seed-space entry. Same as findByHeavenSpace but locked
  * to MAIN.
  */
-export async function findHeavenSpace(seedSpaceKind) {
-  return await findByHeavenSpace(seedSpaceKind, "0");
+export async function findHeavenSpace(heavenSpaceKind) {
+  return await findByHeavenSpace(heavenSpaceKind, "0");
 }
 ```
 
@@ -93,7 +93,7 @@ MAIN (heaven-semantic) but storage is on a Being row (branch-shaped
 schema).
 
 Target: `.branches` heaven space's `qualities.pointers`. Reads still
-locked to MAIN; storage on the seed space's qualities map; mutations
+locked to MAIN; storage on the heaven space's qualities map; mutations
 land via `set-space` on the `.branches` space.
 
 Touched files:
@@ -134,7 +134,7 @@ isHeaven(spaceId) = the space is `.` itself
                   OR `.` appears in its parent chain
 ```
 
-Heaven is the `.` seed space and every descendant under it.
+Heaven is the `.` heaven space and every descendant under it.
 `.beings`, `.spaces`, `.matters`, `.config`, `.branches`, `.roles`,
 `.tools`, `.operations` all sit directly under `.`; their children
 (e.g., a specific live role planted under `.roles/<name>`) are
@@ -148,7 +148,7 @@ A small helper:
 // seed/materials/space/heavenLineage.js
 export async function isHeavenSpace(spaceId) {
   // Walk ancestors via the existing ancestor cache; if `.` (the
-  // HEAVEN seed space's id) appears, it's heaven.
+  // HEAVEN heaven space's id) appears, it's heaven.
   const chain = await getAncestorChain(spaceId);
   const heavenId = await findHeavenRootId();
   return chain.some(node => String(node.id) === heavenId);

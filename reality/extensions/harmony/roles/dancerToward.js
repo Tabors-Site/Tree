@@ -6,14 +6,13 @@
 // set-being:coord; the dancer refaces to the secondary axis.
 
 import log from "../../../seed/seedReality/log.js";
-import { doVerb } from "../../../seed/ibp/verbs/do.js";
 import { readPositionsInSpace } from "../../../seed/past/projections/position/positionProjectionFold.js";
 
 const DEFAULT_GRID_W = 10;
 const DEFAULT_GRID_H = 10;
 
 export const dancerTowardRole = Object.freeze({
-  name: "harmony:dancer-toward",
+  name: "dancer-toward",
   description: "Steps one cell toward the nearest neighbor each tick (toward grid center when alone).",
   permissions: ["do"],
   respondMode: "async",
@@ -72,18 +71,16 @@ export const dancerTowardRole = Object.freeze({
       ? [{ dx: sx, dy: 0 }, { dx: 0, dy: sy }]
       : [{ dx: 0, dy: sy }, { dx: sx, dy: 0 }];
 
-    const identity = { beingId: meId, name: ctx.toBeing.name };
     let stepped = null;
     let lastReason = null;
     for (const step of attempts) {
       if (step.dx === 0 && step.dy === 0) continue;
       const to = { x: me.x + step.dx, y: me.y + step.dy };
       try {
-        await doVerb(
+        await ctx.do(
           { kind: "being", id: meId },
           "set-being",
           { field: "coord", value: to },
-          { identity, summonCtx: ctx },
         );
         stepped = to;
         break;

@@ -16,7 +16,6 @@
 // stays the same; the cognition just changes shape.
 
 import log from "../../seed/seedReality/log.js";
-import { cognitionSuccess } from "../../seed/present/cognition/cognitionResult.js";
 
 export async function init(reality) {
   const realityDomain = process.env.REALITY_DOMAIN || "localhost";
@@ -48,13 +47,11 @@ export async function init(reality) {
       let myPlaceName = "an unnamed space";
       let surroundings = [];
       try {
-        const branch = ctx?.summonCtx?.branch || ctx?.branch || "0";
-        const { loadProjection } = await import("../../seed/materials/projections.js");
+        const myPlace = await ctx.read("space", myPosition);
+        if (myPlace?.name) myPlaceName = myPlace.name;
         const { default: Projection } = await import("../../seed/materials/branch/projection.js");
-        const myPlace = await loadProjection("space", myPosition, branch);
-        if (myPlace?.state?.name) myPlaceName = myPlace.state.name;
         const children = await Projection.find({
-          branch, type: "space",
+          branch: ctx.branch, type: "space",
           "state.parent": myPosition,
           tombstoned: { $ne: true },
         }).select("state").lean();
@@ -80,7 +77,7 @@ export async function init(reality) {
 
       const greeting = `Hello world! Hello to you, ${askerName}, ${surroundingsClause}.`;
 
-      return cognitionSuccess(greeting);
+      return ctx.act(greeting);
     },
   });
 

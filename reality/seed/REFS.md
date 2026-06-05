@@ -1,19 +1,19 @@
 # Refs — TreeOS's content-walking primitive
 
-> *Refs exist for ONE job: walking arbitrary content to find aggregate references where the schema isn't accessible. That happens at three seams — replicate, clone, federation. Everywhere else, the schema knows what's an ID. Don't reach for Refs.*
+> _Refs exist for ONE job: walking arbitrary content to find aggregate references where the schema isn't accessible. That happens at three seams — replicate, clone, federation. Everywhere else, the schema knows what's an ID. Don't reach for Refs._
 
 ## What this is
 
 A Ref is a tagged object that says "this field is a reference to an aggregate of kind K":
 
 ```js
-ref("being", aliceId);   // → { __ref: "being", id: "abc-123-def" }
+ref("being", aliceId); // → { __ref: "being", id: "abc-123-def" }
 ref("space", libraryId); // → { __ref: "space", id: "456-789-ghi" }
 ```
 
 Refs are **NOT** the substrate's identity primitive. They are NOT the wire contract. They are NOT what handlers receive. They are NOT how rows store IDs.
 
-Refs exist for the cases where code traverses content **without access to the originating schema**. That walker needs *some* way to detect "this is an ID, this is just a string." The Ref tag is that signal. Outside those traversal seams, schemas are right there — handler logic, reducer code, projection field names. Use them. Pass bare IDs.
+Refs exist for the cases where code traverses content **without access to the originating schema**. That walker needs _some_ way to detect "this is an ID, this is just a string." The Ref tag is that signal. Outside those traversal seams, schemas are right there — handler logic, reducer code, projection field names. Use them. Pass bare IDs.
 
 ## When Refs earn their place
 
@@ -21,7 +21,7 @@ Three seams in the substrate, and only these:
 
 1. **Replicate** — `seed/publishing.md`. Snapshot a tree of content, hand it to a new substrate, recreate it with a fresh ID namespace. The replicator walks the content tree, finds every aggregate reference, remaps to the new substrate's IDs. Without Refs the walker can't tell "is this string an ID or just a name?"
 
-2. **Clone / mitosis** (future) — exact-copy a tree of content into another substrate, preserving structure. Same walker, different remap policy (identity vs new-namespace).
+2. **Clone / mitosis** (future) — exact-copy a tree of content into another substrate, preserving full fact/act history. Same walker, different remap policy (identity vs new-namespace).
 
 3. **Federation** (future, see `protocols/ibp/FEDERATION.md` Diff B) — when content from another reality enters our substrate via grafted facts, the walker remaps the foreign IDs into local namespace. Federation propagates facts (not beings or live state); the foreign IDs in those facts get remapped at the boundary.
 
@@ -68,27 +68,34 @@ Helpers for content that doesn't yet carry Refs (an export from a bare-ID substr
 
 Five kinds. Three name aggregates (being / space / matter). Two are graft sentinels.
 
-| Kind | Meaning | id required? |
-|---|---|---|
-| `"being"` | A being identity | yes |
-| `"space"` | A space (position) | yes |
-| `"matter"` | A matter (in-space content) | yes |
-| `"graft-initiator"` | Sentinel: resolves to the operator running the graft | no |
-| `"insertion-point"` | Sentinel: resolves to the operator-chosen target parent | no |
+| Kind                | Meaning                                                 | id required? |
+| ------------------- | ------------------------------------------------------- | ------------ |
+| `"being"`           | A being identity                                        | yes          |
+| `"space"`           | A space (position)                                      | yes          |
+| `"matter"`          | A matter (in-space content)                             | yes          |
+| `"graft-initiator"` | Sentinel: resolves to the operator running the graft    | no           |
+| `"insertion-point"` | Sentinel: resolves to the operator-chosen target parent | no           |
 
 Sentinels serialize as Refs and the graft walker resolves them via context, not the remap table.
 
 ## Helper API (for walker authors)
 
 ```js
-import { ref, isRef, refKind, refId, isAggregateRef, isSentinelRef } from "./seed/materials/ref.js";
+import {
+  ref,
+  isRef,
+  refKind,
+  refId,
+  isAggregateRef,
+  isSentinelRef,
+} from "./seed/materials/ref.js";
 
-ref("being", id)         // construct
-isRef(value)             // any Ref shape
-isAggregateRef(value)    // being/space/matter (has id)
-isSentinelRef(value)     // graft-time (no id)
-refKind(value)           // "being" / "space" / ...
-refId(value)             // the id, or null for sentinels or non-Refs
+ref("being", id); // construct
+isRef(value); // any Ref shape
+isAggregateRef(value); // being/space/matter (has id)
+isSentinelRef(value); // graft-time (no id)
+refKind(value); // "being" / "space" / ...
+refId(value); // the id, or null for sentinels or non-Refs
 ```
 
 `refId` is tolerant — it accepts bare strings and passes them through. This is intentional: callers that read possibly-mixed data (during the lazy storage cleanup) don't need to branch.

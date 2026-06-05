@@ -164,9 +164,61 @@ export function buildScopedReality(manifest, fullReality, availableServices) {
   if (scoped.declare?.registerRole) {
     const extName = manifest.name;
     const origDeclare = scoped.declare;
+
+    // Auto-prefix bare action/role/op names in a role's can* lists
+    // with the registering extension's namespace. Inside an extension,
+    // canDo: [{ action: "step" }] becomes [{ action: "<ext>:step" }]
+    // before the role-registry sees it. Already-prefixed entries
+    // (any string containing `:`) pass through untouched so an
+    // extension can still reference another extension's actions or
+    // bare seed actions explicitly.
+    //
+    // canSee has its own bare-name suffix-match at resolve time and
+    // doesn't need rewriting here.
+    const prefixOwn = (entry) => {
+      if (typeof entry === "string") {
+        return entry.includes(":") ? entry : `${extName}:${entry}`;
+      }
+      if (entry && typeof entry === "object" && typeof entry.action === "string") {
+        return entry.action.includes(":")
+          ? entry
+          : { ...entry, action: `${extName}:${entry.action}` };
+      }
+      return entry;
+    };
+    const rewriteRoleDef = (def) => {
+      if (!def || typeof def !== "object") return def;
+      const out = { ...def };
+      // role.name field: same auto-prefix rule. So a role file can
+      // write { name: "drummer", ... } and the registered spec carries
+      // name: "<ext>:drummer". Already-prefixed names pass through.
+      if (typeof def.name === "string" && !def.name.includes(":")) {
+        out.name = `${extName}:${def.name}`;
+      }
+      if (Array.isArray(def.canDo))     out.canDo     = def.canDo.map(prefixOwn);
+      if (Array.isArray(def.canSummon)) out.canSummon = def.canSummon.map(prefixOwn);
+      if (Array.isArray(def.canBe))     out.canBe     = def.canBe.map(prefixOwn);
+      return out;
+    };
+
+    // Same rule for the `name` first-argument: bare names auto-prefix.
+    const prefixRoleName = (name) => {
+      if (typeof name !== "string") return name;
+      return name.includes(":") ? name : `${extName}:${name}`;
+    };
+
     scoped.declare = {
       ...origDeclare,
-      registerRole: (name, def) => origDeclare.registerRole(name, def, extName),
+      registerRole: (name, def) => origDeclare.registerRole(prefixRoleName(name), rewriteRoleDef(def), extName),
+      // SEE-resolvers auto-namespace under the registering extension —
+      // same shape as registerRole's wrap. Without this, an extension
+      // calling reality.declare.registerSeeResolver("neighbors", fn)
+      // would register under bare "neighbors" instead of
+      // "<ext>:neighbors", colliding with other extensions and missing
+      // the canSee bare-name suffix-match the role engine performs.
+      registerSeeResolver: origDeclare.registerSeeResolver
+        ? (name, fn) => origDeclare.registerSeeResolver(name, fn, extName)
+        : undefined,
     };
   }
 

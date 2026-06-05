@@ -218,6 +218,142 @@ The four verbs (`reality.see`, `reality.do`, `reality.summon`, `reality.be`), `r
 
 The three sub-namespaces of `reality.qualities` mirror each other. Every namespaced operation that works on a space also works on a being and on a matter, with the same nine atomic primitives on each (`reality.qualities.space.setQuality` / `reality.qualities.being.setQuality` / `reality.qualities.matter.setQuality`, and so on). Pick the sub-namespace that matches the primitive you are tagging.
 
+### Reading aggregates inside a handler (`ctx.read`)
+
+Role.summon handlers, DO op handlers, and SEE-resolvers all receive a context with one branch-aware reader. Use it for direct row reads:
+
+```js
+const me    = await ctx.read("being",  beingId);
+const place = await ctx.read("space",  spaceId);
+const m     = await ctx.read("matter", matterId);
+```
+
+Returns the row-shaped object — `{ _id, position?, ...stateFields }` — or `null` if no row resolves. Hides branch threading and lineage cold-fold; **never** import `loadProjection` or `loadOrFold` from the seed directly. On a sub-branch with content inherited from the parent, `ctx.read` resolves via lineage walk so inherited beings, spaces, and matter show up the same way they do on main.
+
+Same shape in every handler context:
+
+| Handler | How you call it |
+|---------|-----------------|
+| `role.summon(message, ctx)` | `await ctx.read("being", id)` |
+| DO op `handler({ summonCtx, ... })` | `await summonCtx.read("being", id)` |
+| `registerSeeResolver(name, async (ctx) => ...)` | `await ctx.read("being", id)` |
+
+Same null-on-miss semantics. Same row shape — fields flatten onto the returned object so `me.coord` works (not `me.state.coord`). For richer reads — descriptors with computed fields, walked children, derived qualities — use `reality.see(address)` instead; `ctx.read` is the bare-row primitive.
+
+### Two lifecycles, two namespaces — `reality.declare.*` vs `ctx.*`
+
+Extensions interact with the substrate at two distinct lifecycles, and there's one namespace for each:
+
+| When | Namespace | What you do here |
+|------|-----------|------------------|
+| **Load time** (inside `init(reality)`, before any moment is running) | `reality.declare.*` | Register your role definitions, SEE-resolvers, schedules, hooks, etc. — anything that needs to exist in the in-memory registries by the time the first moment fires. |
+| **Moment time** (inside a `role.summon`, DO/BE op handler, or seed-plant scaffold) | `ctx.*` | Act on the substrate during a running moment: read aggregates, emit verbs, build cognition results. Identity + summonCtx + branch are already pre-bound. |
+
+Anything you register at load time goes through `reality.declare`. Anything you do at moment time goes through `ctx`. Two namespaces, two purposes, two lifecycles — keep them straight and you'll never need to import from `seed/` directly.
+
+### Auto-namespacing inside your own extension
+
+When you register something inside `init(reality)`, the substrate auto-prefixes bare names with your extension's name. So inside the `harmony` extension:
+
+```js
+// Both work — the second form is preferred.
+reality.declare.registerRole("harmony:drummer", drummerRole);
+reality.declare.registerRole("drummer", drummerRole);          // ← auto-prefixed to "harmony:drummer"
+```
+
+Same rule applies inside a role definition's own self-name and its can* lists:
+
+```js
+export const drummerRole = Object.freeze({
+  name: "drummer",          // ← auto-prefixed to "harmony:drummer" at register time
+  canDo: ["tick"],          // ← auto-prefixed to "harmony:tick"
+  canSummon: [],
+  canBe: [],
+  // ...
+});
+```
+
+The auto-prefix only triggers for bare names (no `:` in them). Already-prefixed entries (`"harmony:tick"`, `"other-ext:foo"`, `"set-being"`) pass through untouched, so you can still reference other extensions' actions or seed actions explicitly.
+
+**Important:** auto-prefixing only applies at registration time inside your own `init()`. Runtime references — e.g. `await ctx.do(target, "harmony:tick", ...)` from inside a role handler — still need the full prefixed name, since the substrate doesn't know which extension owns the calling code at runtime.
+
+### The four verbs from a handler (`ctx.do` / `ctx.see` / `ctx.summon` / `ctx.be`)
+
+Inside a handler, the four verbs ride on `ctx` pre-bound with the moment's identity and summonCtx. No more `import { doVerb } from "...seed/ibp/verbs/do.js"` and no more threading `{ identity, summonCtx: ctx }` on every call:
+
+```js
+// Before — substrate-leaky
+await doVerb(target, action, args, { identity, summonCtx: ctx });
+
+// After — substrate-clean
+await ctx.do(target, action, args);
+```
+
+| Verb | Signature | What it does |
+|------|-----------|--------------|
+| `ctx.do(target, action, args)` | act on a target with a registered DO operation | Mutate matter, beings, spaces. Returns the operation's result. The fact rides this moment's ΔF. |
+| `ctx.see(address, opts?)` | read a descriptor at an IBP address | Bare-string addresses (`<reality>/<path>@<being>`) resolve to a full SEE descriptor with computed fields. For raw row reads, use `ctx.read` instead. |
+| `ctx.summon(address, message)` | call another being | Wakes the target being's inbox with `message`. Returns the SUMMON envelope. |
+| `ctx.be(operation, payload)` | act on the caller's own identity | Birth, connect, release — the canonical BE operations. |
+
+All four are pre-bound with:
+- **`identity`** — the caller's identity (the asking being from the handoff). Verbs need this for permission gating.
+- **`summonCtx`** — the moment's ctx itself, so any facts the verb stamps join this moment's ΔF and seal atomically.
+
+You should never need to thread these explicitly from a handler. If a fact emitted by `ctx.do(...)` doesn't show up on the right branch, it's an audit-worthy substrate bug, not a handler responsibility.
+
+### Seed-plant scaffolds get the same ctx surface
+
+A plant scaffold (the function on `provides.seeds.*.scaffold`) receives a ctx with the exact same shape as a moment handler. The planter's identity + the plant moment's summonCtx are pre-bound on `ctx.read / ctx.do / ctx.see / ctx.be / ctx.summon`. A substrate-clean plant scaffold:
+
+```js
+export const danceFloorSeed = {
+  description: "Plant a dance-floor: grid + drum + drummer + dancers.",
+  async scaffold(ctx) {
+    const { rootSpaceId, plantedSeedId, reality, params } = ctx;
+
+    // Birth a being (planter becomes parentBeingId automatically):
+    const drummer = await ctx.be("birth", {
+      name: `drummer-${plantedSeedId.slice(0, 6)}`,
+      cognition: "scripted",
+      defaultRole: "harmony:drummer",
+      homeId: rootSpaceId,
+    });
+
+    // Run a DO (same shape as a handler ctx):
+    await ctx.do(rootSpaceId, "set-space", { field: "size", value: { x: 30, y: 30 } });
+
+    return { rootSpaceId, drummer: drummer.beingId };
+  },
+};
+```
+
+No `birthBeing` import. No `{ identity, summonCtx }` threading. The planter is the parent of every birthed being, the actor of every DO, the asker of every SUMMON — all by virtue of being the moment that owns this scaffold's facts.
+
+### Returning from a role.summon handler (`ctx.act` / `ctx.idle` / `ctx.failure`)
+
+A role's `summon(message, ctx)` handler returns one of three discriminated shapes. The ctx exposes a builder for each so handlers don't import from `seed/present/cognition/`:
+
+```js
+return ctx.act("the closing utterance");      // seal an Act
+return ctx.idle();                             // looked, chose not to act
+return ctx.failure("internal", "thing broke"); // structured failure
+```
+
+> Why `ctx.idle()` and not `ctx.see()`? The cognition outcome is doctrinally a "see" (the being looked and didn't act). But `ctx.see` is the SEE verb wrapper (`await ctx.see("/some/address")`). Same name, two purposes — collision. The cognition-result builder is named `idle` here to keep both functions on `ctx` without conflict. The underlying kind is still `{ kind: "see" }` on the wire.
+
+Each shape has its own downstream effect:
+
+| Shape | What seals | When you use it |
+|-------|------------|-----------------|
+| **`ctx.act(text)`** | Stamps an Act row with `text` as the closing utterance (`Act.endMessage`). The being DID. Inbox row closes, ΔF commits with the seal, replies fire to anyone awaiting. | Any role that takes an action. Drummer hits the drum → `ctx.act("Tick.")`. Dancer steps → `ctx.act("Stepped to (3,4).")`. The common case. |
+| **`ctx.idle()`** | No Act row. The being looked and chose not to act. Inbox row closes — the moment ran to completion. Not a failure. | A wake fires but there's nothing to do this turn: gating / debouncing / polling roles that only act when conditions are met. A drummer that wakes at a half-beat: `ctx.idle()`. A vote-counter that wakes after each vote and only stamps a tally when the threshold is met: `ctx.idle()` between thresholds. |
+| **`ctx.failure(shape, reason)`** | No Act. Inbox eviction depends on the shape — deterministic shapes evict, transient ones may stay for retry. Wire-side awaiters get a structured error fast. | Cognition broke. Shapes: `"timeout"` (call took too long), `"http-error"` (external HTTP failed), `"garbage"` (malformed input/output), `"aborted"` (explicit abort / user cut), `"internal"` (anything else). |
+
+`ctx.idle()` vs `ctx.failure("internal", "...")` is the most often-confused pair. **`idle` is a successful nothing; `failure` is a broken cognition.** A polling role that finds nothing to do should always `idle`. A polling role that crashed talking to an API should `failure("http-error", "...")`. A being that always `idle`s is quietly contemplative; a being that always `failure`s is broken and should be inspected.
+
+Legacy shapes still work at the normalization boundary — `{ ok: true, content: "..." }` and bare `{ content: "..." }` and `"text"` all normalize into `kind:"act"` — but the `ctx.*` builders are the discoverable, explicit form. Use them.
+
 ### Extension-provided services
 
 Extensions can register services on the core object during init: `reality.energy = { useEnergy, ... }`. Later extensions that declare `needs.services: ["energy"]` or `optional.services: ["energy"]` receive it. If the providing extension hasn't loaded yet, optional services get a no-op stub. Required services cause the dependent extension to skip.
@@ -731,7 +867,7 @@ export default [
 ### How it works
 
 1. The loader reads `schemaVersion` from your manifest (e.g. `2`)
-2. It checks the `.extensions` place seed space for your extension's stored version (e.g. `1`)
+2. It checks the `.extensions` place heaven space for your extension's stored version (e.g. `1`)
 3. If stored < declared, it loads your `migrations.js` and runs pending migrations in order
 4. After all migrations succeed, it updates the stored version to match
 5. If a migration fails, it stops and logs the error. Your extension still loads but data may be inconsistent.
@@ -824,11 +960,11 @@ export default [
 ];
 ```
 
-On boot, the loader checks each extension's stored schema version (in the .extensions place seed space) against the declared version, and runs pending migrations in order.
+On boot, the loader checks each extension's stored schema version (in the .extensions place heaven space) against the declared version, and runs pending migrations in order.
 
 ## .extensions Place Seed Space
 
-Each loaded extension is mirrored as a child space under the `.extensions` place seed space:
+Each loaded extension is mirrored as a child space under the `.extensions` place heaven space:
 
 ```
 Place Root

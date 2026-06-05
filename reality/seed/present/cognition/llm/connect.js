@@ -444,8 +444,12 @@ export async function addLlmConnection(
   { name, baseUrl, apiKey, model },
   { identity, summonCtx } = {},
 ) {
-  const { loadProjection } = await import("../../../materials/projections.js");
-  const slot = await loadProjection("being", beingId, summonCtx?.branch || "0");
+  // loadOrFold: a being inherited from main onto a sub-branch
+  // resolves via lineage cold-fold. Bare loadProjection returned null
+  // and threw "Being not found" for LLM-config writes against
+  // inherited beings.
+  const { loadOrFold } = await import("../../../materials/projections.js");
+  const slot = await loadOrFold("being", beingId, summonCtx?.branch || "0");
   if (!slot) throw new Error("Being not found");
   const being = { _id: slot.id, ...slot.state };
 
@@ -501,8 +505,12 @@ export async function updateLlmConnection(
   { name, baseUrl, apiKey, model },
   { identity, summonCtx } = {},
 ) {
-  const { loadProjection } = await import("../../../materials/projections.js");
-  const slot = await loadProjection("being", beingId, summonCtx?.branch || "0");
+  // loadOrFold: a being inherited from main onto a sub-branch
+  // resolves via lineage cold-fold. Bare loadProjection returned null
+  // and threw "Being not found" for LLM-config writes against
+  // inherited beings.
+  const { loadOrFold } = await import("../../../materials/projections.js");
+  const slot = await loadOrFold("being", beingId, summonCtx?.branch || "0");
   if (!slot) throw new Error("Being not found");
   const being = { _id: slot.id, ...slot.state };
 
@@ -579,8 +587,12 @@ export async function updateLlmConnection(
 
 export async function deleteLlmConnection(beingId, connectionId, { identity, summonCtx } = {}) {
   const safeConnId = validateConnectionId(connectionId);
-  const { loadProjection } = await import("../../../materials/projections.js");
-  const slot = await loadProjection("being", beingId, summonCtx?.branch || "0");
+  // loadOrFold: a being inherited from main onto a sub-branch
+  // resolves via lineage cold-fold. Bare loadProjection returned null
+  // and threw "Being not found" for LLM-config writes against
+  // inherited beings.
+  const { loadOrFold } = await import("../../../materials/projections.js");
+  const slot = await loadOrFold("being", beingId, summonCtx?.branch || "0");
   if (!slot) throw new Error("Being not found");
   const being = { _id: slot.id, ...slot.state };
 
@@ -681,8 +693,9 @@ export async function assignConnection(beingId, slot, connectionId, { identity, 
     if (!conn) throw new Error("Connection not found");
   }
 
-  const { loadProjection } = await import("../../../materials/projections.js");
-  const beingSlot = await loadProjection("being", beingId, summonCtx?.branch || "0");
+  // loadOrFold: same inherited-being lineage-cold-fold rationale.
+  const { loadOrFold } = await import("../../../materials/projections.js");
+  const beingSlot = await loadOrFold("being", beingId, summonCtx?.branch || "0");
   if (!beingSlot) throw new Error("Being not found");
   const being = { _id: beingSlot.id, ...beingSlot.state };
 
@@ -852,8 +865,9 @@ export async function resolveConnection(beingId, connectionId, cacheKey, { summo
   // summonCtx is silently skipped rather than erroring.
   if (summonCtx?.actId) {
     try {
-      const { loadProjection } = await import("../../../materials/projections.js");
-      const slot = await loadProjection("being", beingId, summonCtx?.branch || "0");
+      // loadOrFold: same inherited-being lineage-cold-fold rationale.
+      const { loadOrFold } = await import("../../../materials/projections.js");
+      const slot = await loadOrFold("being", beingId, summonCtx?.branch || "0");
       if (slot) {
         const { doVerb } = await import("../../../ibp/verbs/do.js");
         await doVerb(

@@ -749,7 +749,7 @@ Implementation implications:
   the same gate as `set-reality-llm`. Branched mutations stay under
   whatever per-position rules apply to their aggregate.
 
-**What's heaven today (correctly):** the seed spaces themselves
+**What's heaven today (correctly):** the heaven spaces themselves
 (`.beings`, `.spaces`, `.matters`, `.config`, `.branches`, `.roles`,
 `.tools`, `.operations`).
 
@@ -1549,9 +1549,9 @@ code; throw sites pass only the code.
 role. Returns `{ answer }`. Handles session, Act, `beforeResponse`
 hook, abort.
 
-## Heaven and the nine Tier-3 seed spaces I plant
+## Heaven and the nine Tier-3 heaven spaces I plant
 
-When I wake, I plant two tiers of seed space beneath the reality root.
+When I wake, I plant two tiers of heaven space beneath the reality root.
 
 **Tier 2 . heaven (`.`).** A single space directly under SPACE_ROOT,
 named `.` (the bare presence-marker, "here, where I stand"). This is
@@ -1565,7 +1565,7 @@ protocol as everything else. Addressable as `<reality>/./<name>`.
 Every boot I verify they exist; missing ones I recreate. Their owner
 is me; they are unclaimable.
 
-| Tier-3 seed space | Path                     | Holds                                                                                                                                                                        |
+| Tier-3 heaven space | Path                     | Holds                                                                                                                                                                        |
 | ----------------- | ------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `identity`        | `<reality>/./identity`   | The reality UUID, domain, Ed25519 public key for Canopy federation signing.                                                                                                  |
 | `config`          | `<reality>/./config`     | Every runtime config key as a key in this space's qualities Map.                                                                                                             |
@@ -1584,7 +1584,7 @@ on heaven and every Tier-3 space below.
 
 ### Delegates publish what they mediate
 
-The heaven gate is real: SEE on heaven and every Tier-3 seed space
+The heaven gate is real: SEE on heaven and every Tier-3 heaven space
 requires the reigning stance. Beings of the land cannot read
 `<reality>/./roles`, `<reality>/./tools`, `<reality>/./operations`
 directly. Yet they routinely need to **act on** what those rooms
@@ -1656,7 +1656,7 @@ I have matter on both sides of the membrane.
 - **Inner-realm matter.** Matter rows inside spaces.
 
 The two are joined at `./source`. At genesis I mirror the `reality/`
-directory into Matter rows under the source seed space, with
+directory into Matter rows under the source heaven space, with
 `origin: filesystem`. Subsequent boots reconcile incrementally.
 
 Through `./source` the inner beings I formed can SEE the source I am
@@ -1792,7 +1792,7 @@ codebase.
 | Password / JWT                | Bcrypt cost 12; constant-time login (dummy hash on miss); JWT carries `jti` for revocation.                                                                                                                                                                                                                                                                                                                                                           |
 | Config key / value validation | Key regex `^[a-zA-Z][a-zA-Z0-9_]{0,63}$`; dangerous keys rejected; 64KB per value cap.                                                                                                                                                                                                                                                                                                                                                                |
 | SSRF protection               | Federation peer registration and LLM connection baseUrls validate hostname against private-IP patterns.                                                                                                                                                                                                                                                                                                                                               |
-| Boot recovery                 | Every boot verifies the nine seed spaces and the I-Am Being row exist. Missing ones recreated. Partial first-boot crashes leave a recoverable state.                                                                                                                                                                                                                                                                                                  |
+| Boot recovery                 | Every boot verifies the nine heaven spaces and the I-Am Being row exist. Missing ones recreated. Partial first-boot crashes leave a recoverable state.                                                                                                                                                                                                                                                                                                  |
 | Genesis exception             | Boot scaffolding stamps all facts with `actId: null` via `{ scaffold: true }` on the verb-caller gate. The I-Am self-stamps its own first `be:register` (target = the not-yet-existing row). Seed-delegate births (cherub, arrival, llm-assigner, reality-manager) and seed-space creations follow the same pattern. The first being summoned by a real moment (typically the operator-being via cherub) is the first fact stamped under an open Act. |
 | Cross-cutting handler safety  | A failing handler is logged and skipped; the projection self-heals on the next fold pass touching the same fact.                                                                                                                                                                                                                                                                                                                                      |
 | Graceful shutdown             | All interval timers `.unref()`; SIGTERM closes WS, then HTTP, then DB.                                                                                                                                                                                                                                                                                                                                                                                |

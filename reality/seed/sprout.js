@@ -81,8 +81,8 @@ import { findByHeavenSpace, loadProjection, findByParent as findByParentSlot, co
 // Sprout-local helper: find the space whose heavenSpace marker matches.
 // Returns a row-shaped object with `_id` so downstream genesis code
 // (which expects Space-row shape) keeps working without rewrites.
-async function findRootForHeavenSpace(seedSpaceKind) {
-  const slot = await findByHeavenSpace(seedSpaceKind, "0");
+async function findRootForHeavenSpace(heavenSpaceKind) {
+  const slot = await findByHeavenSpace(heavenSpaceKind, "0");
   if (!slot) return null;
   return { _id: slot.id, ...slot.state };
 }
@@ -409,7 +409,7 @@ export async function ensureSpaceRoot(summonCtx) {
   // spaceRoot only if heaven failed to plant above (degraded boot);
   // the repair pass on next boot will adopt these spaces back under
   // heaven once it materializes.
-  const seedSpaceParentId = heavenSpace ? heavenSpace._id : spaceRoot._id;
+  const heavenSpaceParentId = heavenSpace ? heavenSpace._id : spaceRoot._id;
 
   for (const def of REALITY_HEAVEN_SPACES) {
     let space = await findRootForHeavenSpace(def.heavenSpace);
@@ -418,7 +418,7 @@ export async function ensureSpaceRoot(summonCtx) {
       try {
         space = await createRealityHeavenSpace({
           name: def.name,
-          parentId: seedSpaceParentId,
+          parentId: heavenSpaceParentId,
           heavenSpace: def.heavenSpace,
           qualities: def.buildQualities ? def.buildQualities() : null,
           summonCtx,
@@ -441,7 +441,7 @@ export async function ensureSpaceRoot(summonCtx) {
     if (
       space.parent &&
       !space._pending &&
-      (space.parent.toString() !== seedSpaceParentId.toString())
+      (space.parent.toString() !== heavenSpaceParentId.toString())
     ) {
       log.warn(
         "Place",
@@ -451,7 +451,7 @@ export async function ensureSpaceRoot(summonCtx) {
       await doVerb(
         { kind: "space", id: String(space._id) },
         "set-space",
-        { field: "parent", value: String(seedSpaceParentId) },
+        { field: "parent", value: String(heavenSpaceParentId) },
         { scaffold: true, summonCtx },
       );
     }

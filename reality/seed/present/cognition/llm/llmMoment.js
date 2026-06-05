@@ -310,6 +310,13 @@ async function runLlmMomentInner({ being, envelope, role, signal, summonCtx }) {
   // Capabilities. The pastFaceBlock rides through into buildPrompt's
   // assembly; suppressCanSee tells the assembler to skip the role's
   // preloaded canSee blocks on inward (world drops out).
+  // Branch-aware aggregate reader for see-resolvers and prompt builders.
+  // Same shape as ctx.read on summonCtx (see 1-assign.js baseCtx): hides
+  // loadOrFold + branch threading behind one call. SEE-resolvers run
+  // inside the prompt-build phase BEFORE the summon dispatch — they
+  // don't get a summonCtx, only this promptCtx — so the reader has to
+  // live here too.
+  const _summonBranch = summonCtx?.branch || "0";
   const promptCtx = {
     name: username,
     beingId,
@@ -321,6 +328,14 @@ async function runLlmMomentInner({ being, envelope, role, signal, summonCtx }) {
     orientation,
     pastFaceBlock,
     suppressCanSee: orientation === "inward",
+    branch: _summonBranch,
+    read: async (kind, id) => {
+      if (!id) return null;
+      const { loadOrFold } = await import("../../../materials/projections.js");
+      const slot = await loadOrFold(kind, String(id), _summonBranch);
+      if (!slot) return null;
+      return { _id: slot.id, position: slot.position, ...(slot.state || {}) };
+    },
   };
   const systemPrompt = await buildSystemPromptForRole(role, promptCtx);
 

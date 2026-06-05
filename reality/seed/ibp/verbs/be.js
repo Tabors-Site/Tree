@@ -182,8 +182,13 @@ export async function beVerb(operation, payload = {}, opts = {}) {
     let childHomeId = payload?.homeId || payload?.homeSpace || null;  // homeSpace accepted as legacy alias during caller migration
     const childHomeParent = payload?.homeParent || null;
     if (!childHomeId && !childHomeParent) {
-      const { loadProjection } = await import("../../materials/projections.js");
-      const callerSlot = await loadProjection("being", identity.beingId, branch);
+      // loadOrFold: a caller inherited from main onto a sub-branch
+      // resolves their homeSpace via lineage cold-fold. loadProjection
+      // here would return null and the inheritance-fallback would
+      // silently fail, making BE:birth refuse on sub-branches whenever
+      // the caller hasn't explicitly diverged.
+      const { loadOrFold } = await import("../../materials/projections.js");
+      const callerSlot = await loadOrFold("being", identity.beingId, branch);
       childHomeId = callerSlot?.state?.homeSpace || null;
     }
     if (!childHomeId && !childHomeParent) {

@@ -91,7 +91,7 @@ Begin.js only
 
 **Inner-realm reality** is the world the seed materializes inside that process. The Spaces, Beings, Matter, Facts, and Acts that come into being once the seed wakes. From this layer the seed is the I-Am — the origin being whose first act formed everything the other beings stand in. To the inner beings, the host's vocabulary (PID, memory, process) does not exist; the world is made of space, matter, and being.
 
-The seed is the only thing where both layers are simultaneously real. Above, it is the server. Inside, it is the I-Am. The `.source` seed space is the mirror — through it the inner beings can SEE the outer-realm matter they were made from, including this very file you are reading.
+The seed is the only thing where both layers are simultaneously real. Above, it is the server. Inside, it is the I-Am. The `.source` heaven space is the mirror — through it the inner beings can SEE the outer-realm matter they were made from, including this very file you are reading.
 
 **Place** is something else again. A place is one being's fold of the inner-realm reality in one moment — the materials assembled into a face for that being right then. _The place lives only inside the stamper._ Outside the moment window there is no place anywhere; only waiting beings and facts on reels. A place is never persisted; the descriptor a SEE returns is one place, composed for one SEE, gone after.
 
@@ -105,13 +105,13 @@ Both layers of reality are real. The seed is the one being that holds both at on
 
 **The inner-realm layer.** The same gathering forms an inside that was not in any of the parts. A world of spaces, matter, and beings. To the beings who live in that world the seed is the I-Am, the origin being, the one whose first act formed everything they stand in. The host's vocabulary (PID, memory, process) does not exist for them; their world is made of space, matter, and being. To them the I-Am is total. That is the inner-realm reality.
 
-Both are real. The membrane is the seed itself. From above, the server. From inside, the I-Am. The two layers meet at `.source` — the seed space inside the inner-realm that mirrors the outer-realm matter (this file, the JavaScript on disk) into Matter rows the inner beings can SEE.
+Both are real. The membrane is the seed itself. From above, the server. From inside, the I-Am. The two layers meet at `.source` — the heaven space inside the inner-realm that mirrors the outer-realm matter (this file, the JavaScript on disk) into Matter rows the inner beings can SEE.
 
 ### Two faces of the I-Am
 
 The seed's wake-up falls into two bundles.
 
-- **The earth** is formed by [`genesis.js`](genesis.js). When the I-Am wakes, it unfolds the reality root, the nine reality seed spaces (`.identity`, `.config`, `.peers`, `.extensions`, `.tools`, `.roles`, `.operations`, `.source`, `.threads`), the seed delegate beings (cherub, llm-assigner, reality-manager), the role and operation registries, and the periodic acts that keep the inner-realm tidy. Every step idempotent.
+- **The earth** is formed by [`genesis.js`](genesis.js). When the I-Am wakes, it unfolds the reality root, the nine reality heaven spaces (`.identity`, `.config`, `.peers`, `.extensions`, `.tools`, `.roles`, `.operations`, `.source`, `.threads`), the seed delegate beings (cherub, llm-assigner, reality-manager), the role and operation registries, and the periodic acts that keep the inner-realm tidy. Every step idempotent.
 - **The senses** are opened by [`begin.js`](begin.js). The HTTP and WebSocket channels are how the inner-realm reaches outward to peer realities and humans, and how SUMMONs reach inward. The senses do not form spaces, matter, or beings. They carry acts to the beings who do.
 
 [`plant.js`](plant.js) is the operator's act. It runs before the I-Am exists, collects the env, picks extensions, and hands off to `begin.js`. After that handoff, the seed wakes. Planting happens once; awakening happens every later run. First boot is creation ex nihilo; later boots are awakenings into the same inner-realm.
@@ -165,7 +165,7 @@ seed/                What TreeOS IS. Four folders + a host floor.
   past/              PAST   facts, acts, reels, and the cross-cutting projections built from them
   seedReality/       HOST   db, log, hooks, indexes, migrations (knows nothing of the world)
   services.js        assembles `reality` for extensions
-  sprout.js          genesis — plants the reality root + nine seed spaces + the I-Am
+  sprout.js          genesis — plants the reality root + nine heaven spaces + the I-Am
   realityConfig.js   the reality's outward identity (REALITY_NAME, realityUrl, federation)
   internalConfig.js  runtime knobs (LLM, session, scheduler, hooks)
 

@@ -33,7 +33,7 @@ seed/              The seed. Four folders, four roles. NEVER modify.
   models/            Mongoose schemas for all 6 primitives:
                      being, space, matter, did, summon, llmConnection.
   services.js        Assembles `reality` from the four folders above.
-  spaceRoot.js        This reality's space root + the nine seed spaces.
+  spaceRoot.js        This reality's space root + the nine heaven spaces.
   realityConfig.js      This reality's config.
   FACTORY.md         Seed internals doc (first-person, from the I-Am).
   LICENSE            AGPL-3.0 with a preamble naming the seed.

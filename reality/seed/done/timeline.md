@@ -630,7 +630,7 @@ To support this, the substrate gets these specific additions:
 
 **6. Branch-aware sealing.** The seal transaction opens against the branch's storage. The hash chain extends correctly (first divergent fact's prev points at the branch point fact in the parent).
 
-**7. Branch creation operation.** Creates the directory structure, writes meta.json with the branch point per reel, initializes empty reelheads, registers the branch in canopy's `.branches` seed space.
+**7. Branch creation operation.** Creates the directory structure, writes meta.json with the branch point per reel, initializes empty reelheads, registers the branch in canopy's `.branches` heaven space.
 
 These are real changes but each is contained. Most existing code that takes a target ID just needs to also take a branch path (or read it from summonCtx). The actual logic of how facts and reducers and seals work doesn't change.
 

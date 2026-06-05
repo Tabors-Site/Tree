@@ -249,7 +249,7 @@ export function _resetAll() {
 export async function rehydrateFromDb() {
   let SubscriptionRecord;
   try {
-    SubscriptionRecord = (await import("../../models/subscriptionRecord.js")).default;
+    SubscriptionRecord = (await import("./subscriptionRecord.js")).default;
   } catch (err) {
     log.warn("Subscriptions", `rehydrate skipped: model load failed (${err.message})`);
     return 0;
@@ -311,7 +311,7 @@ export async function rehydrateFromDb() {
 // ────────────────────────────────────────────────────────────────
 
 async function _persistSubscription(entry) {
-  const SubscriptionRecord = (await import("../../models/subscriptionRecord.js")).default;
+  const SubscriptionRecord = (await import("./subscriptionRecord.js")).default;
   await SubscriptionRecord.updateOne(
     { _id: entry.id },
     {
@@ -330,7 +330,7 @@ async function _persistSubscription(entry) {
 }
 
 async function _removePersistedSubscription(id) {
-  const SubscriptionRecord = (await import("../../models/subscriptionRecord.js")).default;
+  const SubscriptionRecord = (await import("./subscriptionRecord.js")).default;
   await SubscriptionRecord.deleteOne({ _id: id });
 }
 

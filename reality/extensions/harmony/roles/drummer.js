@@ -19,18 +19,16 @@
 // what they hear. Substrate-self-referential: the tick fact is
 // how the substrate tells itself to dance.
 
-import Matter from "../../../seed/materials/matter/matter.js";
 import log from "../../../seed/seedReality/log.js";
-import { doVerb } from "../../../seed/ibp/verbs/do.js";
 
 export const drummerRole = Object.freeze({
-  name: "harmony:drummer",
+  name: "drummer",
   description: "Walks to the drum and strikes it. Dancers react via subscription, not fan-out.",
   permissions: ["do"],
   respondMode: "async",
   triggerOn: ["message"],
 
-  canDo: ["harmony:tick"],
+  canDo: ["tick"],
   canSummon: [],
   canBe: [],
   canSee: [],
@@ -47,7 +45,6 @@ export const drummerRole = Object.freeze({
     }
 
     const drummerId = String(ctx.toBeing._id);
-    const identity = { beingId: drummerId, name: ctx.toBeing.name };
 
     // Read the drum's current coord. The drummer cannot strike
     // unless he's within one cell of the drum, so no coord on the
@@ -55,10 +52,8 @@ export const drummerRole = Object.freeze({
     // either. Stay, log, and try again next wake.
     let drumCoord = null;
     try {
-      const branch = ctx?.summonCtx?.branch || ctx?.branch || "0";
-      const { loadProjection } = await import("../../../seed/materials/projections.js");
-      const slot = await loadProjection("matter", drumMatterId, branch);
-      const c = slot?.state?.coord;
+      const drum = await ctx.read("matter", drumMatterId);
+      const c = drum?.coord;
       if (c && Number.isFinite(c.x) && Number.isFinite(c.y)) {
         drumCoord = { x: c.x, y: c.y };
       }
@@ -115,11 +110,10 @@ export const drummerRole = Object.freeze({
           // the "walk" clip on the AnimationMixer. Without the
           // wrapper, the only fact would be set-being which the
           // portal can't map to a specific animation cleanly.
-          await doVerb(
+          await ctx.do(
             { kind: "being", id: drummerId },
             "harmony:walk",
             { coord: nextCoord },
-            { identity, summonCtx: ctx },
           );
           stepped = nextCoord;
           break;
@@ -143,11 +137,10 @@ export const drummerRole = Object.freeze({
 
     // Adjacent to the drum — strike.
     try {
-      const r = await doVerb(
+      const r = await ctx.do(
         { kind: "matter", id: String(drumMatterId) },
         "harmony:tick",
         {},
-        { identity, summonCtx: ctx },
       );
       return { ok: true, content: `tick ${r?.tick || 0}` };
     } catch (err) {

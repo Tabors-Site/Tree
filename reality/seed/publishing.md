@@ -78,7 +78,7 @@ The seed already has a `plant` op (it fans a registered seed structure into a sp
 
 **Dependencies.** A roleflow depends on the extensions that provide the roles it references. Declared in the roleflow manifest.
 
-**Storage.** RoleFlow definitions live in heaven (the `.roleflows` seed space). Beings reference them by name. Same name-keyed indirection as roles.
+**Storage.** RoleFlow definitions live in heaven (the `.roleflows` heaven space). Beings reference them by name. Same name-keyed indirection as roles.
 
 ### Layer 3: Replicates (current-state snapshots)
 

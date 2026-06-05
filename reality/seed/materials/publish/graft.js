@@ -52,11 +52,14 @@ export async function graftReplicate(bundle, targetParentSpaceId, opts = {}) {
   }
   const branch = opts.branch || "0";
 
-  const { loadProjection } = await import("../projections.js");
+  const { loadProjection, loadOrFold } = await import("../projections.js");
   const { default: Projection } = await import("../branch/projection.js");
 
   // ── 1. Verify the target parent space exists. ──
-  const targetParentSlot = await loadProjection("space", targetParentSpaceId, branch);
+  // loadOrFold: a target parent inherited from the parent branch
+  // resolves via lineage cold-fold. Bare loadProjection threw
+  // "target parent space not found" when grafting onto a sub-branch.
+  const targetParentSlot = await loadOrFold("space", targetParentSpaceId, branch);
   if (!targetParentSlot) {
     throw new Error(`graftReplicate: target parent space "${targetParentSpaceId}" not found in branch "${branch}"`);
   }

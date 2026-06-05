@@ -64,10 +64,15 @@ async function refreshQualitiesByFact(spaceId, qualities, summonCtx) {
     : Object.entries(qualities);
   if (entries.length === 0) return;
   const { doVerb } = await import("../ibp/verbs/do.js");
-  const { loadProjection } = await import("../materials/projections.js");
+  // loadOrFold: a space inherited from the parent branch needs its
+  // slot materialized before we issue a qualities write against it.
+  // Bare loadProjection returned null and the refresh silently dropped
+  // (return) on sub-branches — qualities writes against inherited
+  // spaces never persisted.
+  const { loadOrFold } = await import("../materials/projections.js");
   const branch = assertBranchOrThrow(summonCtx?.branch, "manifest(refreshQualitiesByFact)");
   for (const [ns, value] of entries) {
-    const refreshed = await loadProjection("space", spaceId, branch);
+    const refreshed = await loadOrFold("space", spaceId, branch);
     if (!refreshed) return;
     await doVerb(
       { kind: "space", id: String(refreshed.id) },

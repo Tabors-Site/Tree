@@ -12,9 +12,9 @@
 // structured world face. The seed enforces grid bounds via
 // Space.size at set-being:coord time.
 
-import Being from "../../../seed/materials/being/being.js";
-import Space from "../../../seed/materials/space/space.js";
-import { registerSeeResolver } from "../../../seed/present/cognition/llm/seeResolvers.js";
+// TODO(substrate-clean): readPositionsInSpace is still imported from seed
+// internals — the substrate doesn't expose a list-by-space helper yet.
+// Tracked in EXTENSION_FORMAT.md follow-ups.
 import { readPositionsInSpace } from "../../../seed/past/projections/position/positionProjectionFold.js";
 import log from "../../../seed/seedReality/log.js";
 
@@ -32,7 +32,11 @@ const DIRS = [
 // Structured world face for the dancer. Returns a JSON object;
 // assemble.js stringifies it under [neighbors] in the system prompt.
 // Source of truth: the seed's PositionProjection (factory-owned).
-registerSeeResolver("neighbors", async (ctx) => {
+//
+// Registered from harmony/index.js via reality.declare.registerSeeResolver
+// (load-time registration goes through the declare namespace, never
+// through a seed-internal import).
+export const neighborsSeeResolver = async (ctx) => {
   const beingId = String(ctx.being?._id || "");
   const gridSpaceId =
     (ctx.being?.position && String(ctx.being.position)) ||
@@ -45,10 +49,8 @@ registerSeeResolver("neighbors", async (ctx) => {
     positions = await readPositionsInSpace(gridSpaceId);
     // Branch comes from the moment ctx — extensions never assume a
     // particular branch, just thread whatever's live.
-    const branch = ctx?.summonCtx?.branch || ctx?.branch || "0";
-    const { loadProjection } = await import("../../../seed/materials/projections.js");
-    const _gSlot = await loadProjection("space", gridSpaceId, branch);
-    const size = _gSlot?.state?.size;
+    const grid = await ctx.read("space", gridSpaceId);
+    const size = grid?.size;
     bounds = {
       w: size?.x > 0 ? size.x : null,
       h: size?.y > 0 ? size.y : null,
@@ -95,11 +97,15 @@ registerSeeResolver("neighbors", async (ctx) => {
   }
 
   if (neighborIds.size > 0) {
-    const rows = await Being
-      .find({ _id: { $in: [...neighborIds] } })
-      .select("_id name")
-      .lean();
-    const nameById = new Map(rows.map((r) => [String(r._id), r.name]));
+    // N parallel ctx.read calls (≤ 8 neighbors in practice — eight
+    // compass cells). Each goes through the branch-aware reader so
+    // inherited dancers resolve on sub-branches too. Slower than a
+    // single $in query in absolute terms, but the surrounding fold
+    // dominates and the extension stays substrate-clean.
+    const lookups = await Promise.all(
+      [...neighborIds].map(async (id) => [String(id), await ctx.read("being", id)]),
+    );
+    const nameById = new Map(lookups.map(([id, row]) => [id, row?.name]));
     for (const k of Object.keys(neighbors)) {
       const v = neighbors[k];
       if (v !== "empty" && v !== "WALL") {
@@ -121,12 +127,12 @@ registerSeeResolver("neighbors", async (ctx) => {
     walls,
     legalMoves,
   };
-}, "harmony");
+};
 
 const BASE_PROMPT = `You are a harmony dancer on a grid. On each beat, call harmony:step(direction) where direction is one of legalMoves (N/NE/E/SE/S/SW/W/NW/STAY). STAY means stay put . it is still a step and still recorded. No prose. Just call the tool.`;
 
 export const dancerLlmRole = Object.freeze({
-  name: "harmony:dancer-llm",
+  name: "dancer-llm",
   description: "LLM-cognition dancer. Sees its 8-cell neighborhood, steps with intent.",
   permissions: ["see", "do"],
   respondMode: "async",
@@ -147,7 +153,7 @@ export const dancerLlmRole = Object.freeze({
   // No toolNames field. The role spec IS its can* lists.
   canDo: [
     {
-      action: "harmony:step",
+      action: "step",
       description:
         "Step one cell or stay. args: { direction: 'N'|'NE'|'E'|'SE'|'S'|'SW'|'W'|'NW'|'STAY' }. " +
           "Pick exactly one of legalMoves. STAY records a deliberate hold at the current cell.",

@@ -9,7 +9,6 @@
 //   6. A scheduled wake on the drummer every TICK_MS.
 
 import log from "../../../seed/seedReality/log.js";
-import { birthBeing } from "../../../seed/materials/being/identity/birth.js";
 
 // Tick cadence. One minute keeps the LLM dancers' per-tick inference
 // load light and gives a human watching the floor time to read each
@@ -157,21 +156,15 @@ export const danceFloorSeed = {
       sounds: { "harmony:tick": "harmony:drum-hit" },
     }, opOpts);
 
-    // 3. drummer being. Use birthBeing directly (the authorized
-    // public entry on the BE side; same path hello-world's seed
-    // uses). `reality.be("create-being", ...)` is a doc-claimed
-    // shape but BE is the closed birth/connect/release set, so
-    // "create-being" would throw ACTION_NOT_SUPPORTED.
-    const drummerResult = await birthBeing({
-      spec: {
-        name: `drummer-${plantedSeedId.slice(0, 6)}`,
-        cognition: "scripted",
-        defaultRole: "harmony:drummer",
-        homeId: gridSpaceId,
-        parentBeingId: identity?.beingId || null,
-      },
-      identity,
-      summonCtx,
+    // 3. drummer being. ctx.be is the substrate-public BE-verb wrapper:
+    // identity, summonCtx, and the parent-being inheritance from the
+    // planter all flow through automatically. Flat payload, no spec
+    // wrapper, no seed-internal import.
+    const drummerResult = await ctx.be("birth", {
+      name: `drummer-${plantedSeedId.slice(0, 6)}`,
+      cognition: "scripted",
+      defaultRole: "harmony:drummer",
+      homeId: gridSpaceId,
     });
     const drummerBeingId = String(drummerResult?.beingId || drummerResult?.being?._id || "");
     if (!drummerBeingId) {
@@ -244,20 +237,15 @@ export const danceFloorSeed = {
     const dancers = [];
     for (const spec of DANCER_ROSTER) {
       const isLlm = spec.role === "harmony:dancer-llm";
-      const dancerResult = await birthBeing({
-        spec: {
-          name: `${spec.suffix}-${plantedSeedId.slice(0, 6)}`,
-          cognition: isLlm ? "llm" : "scripted",
-          defaultRole: spec.role,
-          homeId: gridSpaceId,
-          parentBeingId: identity?.beingId || null,
-        },
-        identity,
-        summonCtx,
+      const dancerResult = await ctx.be("birth", {
+        name: `${spec.suffix}-${plantedSeedId.slice(0, 6)}`,
+        cognition: isLlm ? "llm" : "scripted",
+        defaultRole: spec.role,
+        homeId: gridSpaceId,
       });
       const dancerBeingId = String(dancerResult?.beingId || dancerResult?.being?._id || "");
       if (!dancerBeingId) {
-        throw new Error(`birthBeing dancer ${spec.suffix} returned no beingId`);
+        throw new Error(`dancer ${spec.suffix} birth returned no beingId`);
       }
       // Register on the dance-floor's qualities.beings. beingId is a
       // bare being-id string per substrate doctrine.

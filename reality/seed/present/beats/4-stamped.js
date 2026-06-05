@@ -434,17 +434,24 @@ export async function sealAct(plannedAct, { content = null, deltaF = [], afterSe
 async function resolveSpaceForLiveSee(target, branch = "0") {
   if (!target || !target.id) return null;
   if (target.kind === "space") return String(target.id);
+  // loadOrFold (not loadProjection): on a sub-branch with an inherited
+  // being/matter, the slot only materializes via lineage cold-fold.
+  // Bare loadProjection returns null, this function returns null, the
+  // live-SEE invalidation no-ops, and portals subscribed to the
+  // descriptor never get the "world changed" event. That's why beings
+  // appeared frozen in the 3D/flat portals on non-main branches even
+  // though facts were landing correctly.
   if (target.kind === "being") {
     try {
-      const { loadProjection } = await import("../../materials/projections.js");
-      const slot = await loadProjection("being", target.id, branch);
+      const { loadOrFold } = await import("../../materials/projections.js");
+      const slot = await loadOrFold("being", target.id, branch);
       return slot?.position ? String(slot.position) : null;
     } catch { return null; }
   }
   if (target.kind === "matter") {
     try {
-      const { loadProjection } = await import("../../materials/projections.js");
-      const slot = await loadProjection("matter", target.id, branch);
+      const { loadOrFold } = await import("../../materials/projections.js");
+      const slot = await loadOrFold("matter", target.id, branch);
       return slot?.state?.spaceId ? String(slot.state.spaceId) : null;
     } catch { return null; }
   }

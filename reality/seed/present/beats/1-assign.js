@@ -277,6 +277,91 @@ export async function assign({ beingId, spaceId, entry, handoff = null, signal =
     toBeing,
     actId,
     branch,
+    // Branch-aware aggregate reader. Extensions and roles call
+    // `await ctx.read("being"|"space"|"matter", id)` and get the
+    // row-shaped object back (or null). Internally walks lineage via
+    // loadOrFold using this moment's branch — extension authors don't
+    // need to know about branch threading, lineage cold-folds, or the
+    // loadOrFold/loadProjection distinction. Return shape matches
+    // `ctx.toBeing` (id baked in as `_id`, state fields flattened).
+    read: async (kind, id) => {
+      if (!id) return null;
+      const { loadOrFold } = await import("../../materials/projections.js");
+      const slot = await loadOrFold(kind, String(id), branch);
+      if (!slot) return null;
+      return { _id: slot.id, position: slot.position, ...(slot.state || {}) };
+    },
+    // Cognition-result builders. Role.summon handlers return one of
+    // these three discriminated shapes; extensions don't need to know
+    // about CognitionResult internals or import from seed/cognition/.
+    // Bare strings, plain objects, and legacy { ok, content } shapes
+    // are still accepted at the normalize boundary — these helpers
+    // are the discoverable form.
+    //
+    //   ctx.act(text)               — seal an Act with `text` as the
+    //                                 closing utterance. The common
+    //                                 case for any role that DOES.
+    //   ctx.idle()                  — looked, chose not to act.
+    //                                 Legitimate completion: inbox
+    //                                 closes, no Act, no retry. Use
+    //                                 when a wake fires but there's
+    //                                 nothing to do this turn (gating,
+    //                                 polling, debounce). Maps to
+    //                                 cognition `{ kind: "see" }` —
+    //                                 named `idle` here to avoid
+    //                                 collision with the SEE verb
+    //                                 wrapper below (ctx.see).
+    //   ctx.failure(shape, reason)  — structured failure. Shapes:
+    //                                 "timeout" | "http-error" |
+    //                                 "garbage" | "aborted" |
+    //                                 "internal". Inbox eviction
+    //                                 follows the shape's recover-
+    //                                 ability semantics.
+    act: (content) => ({ kind: "act", ok: true, content: String(content ?? "") }),
+    idle: () => ({ kind: "see", ok: false }),
+    failure: (shape, reason) => ({
+      kind:   "failure",
+      ok:     false,
+      shape:  String(shape || "internal"),
+      reason: String(reason || ""),
+    }),
+    // The four verbs, pre-bound with this moment's identity + summonCtx.
+    // Extensions don't need to import doVerb/seeVerb/beVerb/summon* and
+    // they don't need to thread { identity, summonCtx: ctx } on every
+    // call. The wrapped form is the canonical handler-side surface:
+    //   await ctx.do(target, action, args)
+    //   await ctx.see(address, opts)
+    //   await ctx.be(operation, payload)
+    //   await ctx.summon(address, message)  — relative or absolute IBP address
+    do: async (target, action, args = {}) => {
+      const { doVerb } = await import("../../ibp/verbs/do.js");
+      return doVerb(target, action, args, {
+        identity: handoff?.identity || entry?.identity || null,
+        summonCtx: baseCtx,
+      });
+    },
+    see: async (address, opts = {}) => {
+      const { seeVerb } = await import("../../ibp/verbs/see.js");
+      return seeVerb(address, {
+        ...opts,
+        identity: opts.identity || handoff?.identity || entry?.identity || null,
+        summonCtx: baseCtx,
+      });
+    },
+    be: async (operation, payload = {}) => {
+      const { beVerb } = await import("../../ibp/verbs/be.js");
+      return beVerb(operation, payload, {
+        identity: handoff?.identity || entry?.identity || null,
+        summonCtx: baseCtx,
+      });
+    },
+    summon: async (address, message) => {
+      const { summonVerb } = await import("../../ibp/verbs/summon.js");
+      return summonVerb(address, message, {
+        identity: handoff?.identity || entry?.identity || null,
+        summonCtx: baseCtx,
+      });
+    },
     resolved: handoff?.resolved || {
       being:       activeRole,
       activeRole,

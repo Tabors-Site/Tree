@@ -54,7 +54,14 @@ export async function replicateSubtree(scopeSpaceId, opts = {}) {
     throw new Error("replicateSubtree: scopeSpaceId is required");
   }
   const branch = opts.branch || "0";
-  const { loadProjection } = await import("../projections.js");
+  // loadOrFold throughout this file: replicate walks aggregates on the
+  // source branch and captures their state for bundling. An aggregate
+  // inherited from main onto the source branch lives only on main's
+  // table until lineage cold-fold materializes it here; bare
+  // loadProjection silently skipped (continue on !slot) those rows and
+  // produced incomplete bundles. The walker only sees what loadOrFold
+  // surfaces.
+  const { loadProjection, loadOrFold } = await import("../projections.js");
   const { default: Projection } = await import("../branch/projection.js");
 
   // Direct projection query for "children of space X in branch B".
@@ -68,7 +75,7 @@ export async function replicateSubtree(scopeSpaceId, opts = {}) {
     }).select("id").lean();
   };
 
-  const rootSlot = await loadProjection("space", scopeSpaceId, branch);
+  const rootSlot = await loadOrFold("space", scopeSpaceId, branch);
   if (!rootSlot) {
     throw new Error(`replicateSubtree: space "${scopeSpaceId}" not found in branch "${branch}"`);
   }
@@ -95,7 +102,7 @@ export async function replicateSubtree(scopeSpaceId, opts = {}) {
   while (spaceQueue.length > 0) {
     const { id, depth } = spaceQueue.shift();
     if (capturedSpaceIds.has(id)) continue;
-    const slot = await loadProjection("space", id, branch);
+    const slot = await loadOrFold("space", id, branch);
     if (!slot) continue;
     // Skip heaven spaces (dot-namespace) UNLESS this is the scope root
     // the operator explicitly chose. Two cases:
@@ -242,7 +249,7 @@ export async function replicateSubtree(scopeSpaceId, opts = {}) {
   };
 
   for (const spaceId of orderedSpaceIds) {
-    const slot = await loadProjection("space", spaceId, branch);
+    const slot = await loadOrFold("space", spaceId, branch);
     if (!slot) continue;
     const state = slot.state || {};
     bundle.content.spaces.push({
@@ -269,7 +276,7 @@ export async function replicateSubtree(scopeSpaceId, opts = {}) {
 
   // ── 6. Capture beings ──
   for (const beingId of capturedBeingIds) {
-    const slot = await loadProjection("being", beingId, branch);
+    const slot = await loadOrFold("being", beingId, branch);
     if (!slot) continue;
     const state = slot.state || {};
     bundle.content.beings.push({
@@ -286,7 +293,7 @@ export async function replicateSubtree(scopeSpaceId, opts = {}) {
 
   // ── 7. Capture matter ──
   for (const matterId of capturedMatterIds) {
-    const slot = await loadProjection("matter", matterId, branch);
+    const slot = await loadOrFold("matter", matterId, branch);
     if (!slot) continue;
     const state = slot.state || {};
     bundle.content.matter.push({

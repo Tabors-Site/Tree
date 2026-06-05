@@ -265,13 +265,57 @@ export async function plantSeed({
   // (the user-observed case: the dance-floor space materialized
   // but the subsequent set-space size write was denied, leaving
   // an orphan grid with no bounds).
+  // Planter ctx. Mirrors the moment-handler baseCtx (1-assign.js):
+  // identity + summonCtx + branch get pre-bound onto the same
+  // ctx.read / ctx.do / ctx.see / ctx.be / ctx.summon helpers that
+  // role.summon handlers use, so seed authors write a flat substrate-
+  // clean recipe without threading identity/summonCtx on every call
+  // and without importing from seed internals.
+  const planterBranch = summonCtx?.branch || "0";
+  const planterIdentity = identity || null;
   const ctx = {
     rootSpaceId: String(atSpaceId),
     plantedSeedId,
-    identity,
+    identity: planterIdentity,
     reality,
     params: safeParams,
     summonCtx,
+    branch: planterBranch,
+    read: async (kind, id) => {
+      if (!id) return null;
+      const slot = await loadOrFold(kind, String(id), planterBranch);
+      if (!slot) return null;
+      return { _id: slot.id, position: slot.position, ...(slot.state || {}) };
+    },
+    do: async (target, action, args = {}) => {
+      const { doVerb } = await import("../ibp/verbs/do.js");
+      return doVerb(target, action, args, {
+        identity: planterIdentity,
+        summonCtx,
+      });
+    },
+    see: async (address, opts = {}) => {
+      const { seeVerb } = await import("../ibp/verbs/see.js");
+      return seeVerb(address, {
+        ...opts,
+        identity: opts.identity || planterIdentity,
+        summonCtx,
+      });
+    },
+    be: async (operation, payload = {}) => {
+      const { beVerb } = await import("../ibp/verbs/be.js");
+      return beVerb(operation, payload, {
+        identity: planterIdentity,
+        summonCtx,
+      });
+    },
+    summon: async (address, message) => {
+      const { summonVerb } = await import("../ibp/verbs/summon.js");
+      return summonVerb(address, message, {
+        identity: planterIdentity,
+        summonCtx,
+      });
+    },
   };
 
   let plantedThings;

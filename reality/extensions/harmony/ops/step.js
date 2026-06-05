@@ -15,8 +15,6 @@
 // overlap. STAY-on-same-cell stamps a fact identically; the reel
 // shows the dancer chose to stand still.
 
-import Being from "../../../seed/materials/being/being.js";
-import { doVerb } from "../../../seed/ibp/verbs/do.js";
 
 const DIRS = {
   N:  { dx:  0, dy: -1 },
@@ -65,9 +63,8 @@ export default {
       );
     }
 
-    const { loadProjection } = await import("../../../seed/materials/projections.js");
-    const _mSlot = await loadProjection("being", beingId, ctx?.summonCtx?.branch || "0");
-    const meCoord = _mSlot?.state?.coord || _mSlot?.state?.qualities?.coord;
+    const me = await summonCtx.read("being", beingId);
+    const meCoord = me?.coord || me?.qualities?.coord;
     const cur = (meCoord && Number.isFinite(meCoord.x) && Number.isFinite(meCoord.y))
       ? { x: meCoord.x, y: meCoord.y }
       : { x: 0, y: 0 };
@@ -79,11 +76,10 @@ export default {
     // is to the same value the row already holds; the seed records
     // the fact so the dancer's reel shows a deliberate hold, not
     // a silent gap.
-    await doVerb(
+    await summonCtx.do(
       { kind: "being", id: beingId },
       "set-being",
       { field: "coord", value: next },
-      { identity, summonCtx },
     );
 
     // _factTarget pins the harmony:step auto-Fact onto the DANCER's
