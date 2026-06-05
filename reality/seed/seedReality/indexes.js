@@ -40,7 +40,7 @@ const REQUIRED_INDEXES = [
   // to a tree root.
   { collection: "spaces", fields: { parent: 1, name: 1 } },
   { collection: "spaces", fields: { rootOwner: 1, dateCreated: -1 } },
-  { collection: "spaces", fields: { parent: 1, seedSpace: 1 }, options: { sparse: true } },
+  { collection: "spaces", fields: { parent: 1, heavenSpace: 1 }, options: { sparse: true } },
 ];
 
 /**

@@ -381,7 +381,7 @@ export function registerLlmAssignerOps() {
 
   // Set (or clear) the reality-level default LLM connection. Restricted
   // to the root operator. The set-config DO op writes the canonical
-  // realityLlmConnection key under the .config seed space.
+  // realityLlmConnection key under the .config heaven space.
   registerOperation("llm-assigner:set-reality-llm", {
     targets: ["space"],
     ownerExtension: OWNER,
@@ -409,11 +409,11 @@ export function registerLlmAssignerOps() {
       if (connectionId === undefined) {
         throw new IbpError(IBP_ERR.INVALID_INPUT, "`connectionId` is required (pass null to clear)");
       }
-      const { SEED_SPACE } = await import("../../../materials/space/seedSpaces.js");
-      const { findBySeedSpace } = await import("../../../materials/projections.js");
-      const configNode = await findBySeedSpace(SEED_SPACE.CONFIG, "0");
+      const { HEAVEN_SPACE } = await import("../../../materials/space/heavenSpaces.js");
+      const { findByHeavenSpace } = await import("../../../materials/projections.js");
+      const configNode = await findByHeavenSpace(HEAVEN_SPACE.CONFIG, "0");
       if (!configNode) {
-        throw new IbpError(IBP_ERR.INTERNAL, "Reality .config seed space not found");
+        throw new IbpError(IBP_ERR.INTERNAL, "Reality .config heaven space not found");
       }
       await doVerb(
         { kind: "space", id: String(configNode.id) },

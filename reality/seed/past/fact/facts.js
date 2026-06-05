@@ -572,6 +572,20 @@ export async function appendDeltaFInSession(deltaF, session) {
 export async function foldAfterCommit(sortedReels) {
   try {
     const { fold } = await import("../../present/beats/2-fold/foldEngine.js");
+    // DB-health gate. When Mongoose dropped its connection between the
+    // commit and the post-seal fold (most commonly: a long synchronous
+    // burst starves the heartbeat), every fold below will fail the
+    // same way. The projection is a cache — missed folds just defer to
+    // the next read's cold-fold path; nothing breaks, but warning per
+    // reel produces a log flood when an act touched many aggregates
+    // (a dance-floor plant births 5+ aggregates, so one disconnect
+    // produces 5+ warnings on top of any per-tick noise). Skip the
+    // batch and log once.
+    const { isDbHealthy } = await import("../../seedReality/dbConfig.js");
+    if (!isDbHealthy()) {
+      _noteFoldDeferredOnce(sortedReels.length);
+      return;
+    }
     for (const reel of sortedReels) {
       try {
         // Branch-aware: each reel carries its branch from groupByReel.
@@ -593,6 +607,18 @@ export async function foldAfterCommit(sortedReels) {
     }
   } catch (err) {
     log.warn("Fold", `foldAfterCommit unexpected error: ${err.message}`);
+  }
+}
+
+let _foldDeferredNotedAt = 0;
+function _noteFoldDeferredOnce(reelCount) {
+  const now = Date.now();
+  if (now - _foldDeferredNotedAt > 30000) {
+    _foldDeferredNotedAt = now;
+    log.warn(
+      "Fold",
+      `post-seal fold deferred for ${reelCount} reel(s) — Mongoose disconnected. The next read on each aggregate will cold-fold from its reel.`,
+    );
   }
 }
 

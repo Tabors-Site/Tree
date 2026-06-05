@@ -65,6 +65,16 @@ export async function momentum(setup = {}) {
   if (kind === "transport-act") {
     try {
       const verbResult = await runTransportAct(summonCtx);
+      // If the transport-act's verb is a pure-read op (skipAudit on the
+      // registration + no facts pushed into deltaF), the moment closes
+      // as a SEE — there's nothing to seal. verbResult still rides
+      // through to the handoff so the wire-caller gets its answer.
+      // Without this, sealAct refuses no-fact moments and the broken
+      // act-shape moment leaves the inbox row open.
+      const facts = summonCtx?.deltaF;
+      if (Array.isArray(facts) && facts.length === 0) {
+        return { kind: "see", ok: true, content: "", verbResult };
+      }
       // Transport-act success: the verb ran. content is "" because
       // the act was a substrate write, not a closing utterance.
       // verbResult rides through for the handoff.

@@ -257,7 +257,7 @@ function makeLazyDefaultSummon(role) {
  * after extensions register; idempotent.
  */
 export async function syncRolesToSubstrate(summonCtx) {
-  const { SEED_SPACE } = await import("../../materials/space/seedSpaces.js");
+  const { HEAVEN_SPACE } = await import("../../materials/space/heavenSpaces.js");
   const { manifestItems } = await import("../manifest.js");
   const items = [];
   for (const [name, role] of REGISTRY) {
@@ -283,7 +283,7 @@ export async function syncRolesToSubstrate(summonCtx) {
       ]),
     });
   }
-  return manifestItems({ seedSpace: SEED_SPACE.ROLES, items, summonCtx });
+  return manifestItems({ heavenSpace: HEAVEN_SPACE.ROLES, items, summonCtx });
 }
 
 /**
@@ -300,10 +300,10 @@ export async function syncRolesToSubstrate(summonCtx) {
  * @returns {Promise<{ loaded: number }>}
  */
 export async function loadLiveRolesFromSubstrate() {
-  const { SEED_SPACE } = await import("../../materials/space/seedSpaces.js");
-  const { findBySeedSpace } = await import("../../materials/projections.js");
+  const { HEAVEN_SPACE } = await import("../../materials/space/heavenSpaces.js");
+  const { findByHeavenSpace } = await import("../../materials/projections.js");
   const { default: Projection } = await import("../../materials/branch/projection.js");
-  const parent = await findBySeedSpace(SEED_SPACE.ROLES, "0");
+  const parent = await findByHeavenSpace(HEAVEN_SPACE.ROLES, "0");
   if (!parent) return { loaded: 0 };
   const rows = await Projection.find({
     branch: "0", type: "space",

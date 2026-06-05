@@ -3,8 +3,8 @@
 // Heaven lineage classifier.
 //
 // "Heaven never branches" (FACTORY.md). A space is in heaven if it
-// IS `.` (the HEAVEN seed space) or its parent chain reaches `.`.
-// The Tier-3 seed spaces (`.beings`, `.spaces`, `.matters`,
+// IS `.` (the HEAVEN heaven space) or its parent chain reaches `.`.
+// The Tier-3 heaven spaces (`.beings`, `.spaces`, `.matters`,
 // `.config`, `.branches`, `.roles`, `.tools`, `.operations`) sit
 // directly under `.`; their child spaces are heaven too because
 // their lineage walks through `.`.
@@ -15,20 +15,20 @@
 // The substrate's projection layer consults this to route heaven
 // reads / writes to branch="0" regardless of caller's branch.
 
-import { findBySeedSpace } from "../projections.js";
-import { SEED_SPACE } from "./seedSpaces.js";
+import { findByHeavenSpace } from "../projections.js";
+import { HEAVEN_SPACE } from "./heavenSpaces.js";
 import { getAncestorChain } from "./ancestorCache.js";
 
 const MAIN = "0";
 
-// Cache the HEAVEN seed space's id for the process lifetime. The
+// Cache the HEAVEN heaven space's id for the process lifetime. The
 // HEAVEN space is planted once at genesis and its id never changes;
 // caching avoids hitting the projections collection on every
 // heaven-classification call (and there will be many).
 let _heavenIdCache = null;
 
 /**
- * Look up the HEAVEN seed space's id on MAIN. Cached for the process
+ * Look up the HEAVEN heaven space's id on MAIN. Cached for the process
  * lifetime. Returns null if heaven hasn't been planted yet
  * (pre-bootstrap), in which case isHeavenSpace conservatively
  * returns false for all callers.
@@ -36,7 +36,7 @@ let _heavenIdCache = null;
 export async function findHeavenRootId() {
   if (_heavenIdCache) return _heavenIdCache;
   try {
-    const slot = await findBySeedSpace(SEED_SPACE.HEAVEN, MAIN);
+    const slot = await findByHeavenSpace(HEAVEN_SPACE.HEAVEN, MAIN);
     if (slot?.id) {
       _heavenIdCache = String(slot.id);
       return _heavenIdCache;
@@ -49,7 +49,7 @@ export async function findHeavenRootId() {
 
 /**
  * True when this space is in heaven. A space is in heaven when:
- *   . it IS `.` (the HEAVEN seed space)
+ *   . it IS `.` (the HEAVEN heaven space)
  *   . OR `.` appears in its ancestor chain on MAIN
  *
  * Walks the ancestor cache at MAIN. Branch-agnostic by design:

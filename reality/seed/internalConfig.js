@@ -11,7 +11,7 @@
 // internally.
 //
 // Both write to the same underlying store — the `./config` Tier-3
-// seed space's qualities Map — through the storage primitives
+// heaven space's qualities Map — through the storage primitives
 // realityConfig owns. This file is a thin facade: its own defaults
 // table, its own get/set names so callers reach the right surface at
 // import time.

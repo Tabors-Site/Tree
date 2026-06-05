@@ -345,20 +345,23 @@ export async function ensureSeedDelegates(spaceRootId, summonCtx, opts = {}) {
  * pass. Idempotent: addContributor short-circuits when the being
  * is already a contributor.
  *
+ * One moment per delegate. addContributor does read-modify-write on
+ * the contributors array; a single shared moment would have every
+ * iteration read the pre-moment state (empty), push one delegate, and
+ * write a singleton replacement — last-write-wins on seal, only one
+ * delegate landed. Each delegate gets its own withIAmAct so the prior
+ * write seals + folds before the next loadOrFold reads.
+ *
  * Replaces the older `ensureSeedDelegatesReign` (and the parallel
  * reigning roster machinery as a whole). Retired 2026-06-04 — one
  * ownership model now serves heaven and every other space.
  */
-export async function ensureSeedDelegatesOnHeaven(summonCtx) {
-  if (!summonCtx) {
-    throw new Error(
-      "ensureSeedDelegatesOnHeaven requires summonCtx (the boot moment's ctx).",
-    );
-  }
-  const { findByName, findBySeedSpace } = await import("../projections.js");
-  const { SEED_SPACE } = await import("../space/seedSpaces.js");
+export async function ensureSeedDelegatesOnHeaven() {
+  const { findByName, findByHeavenSpace } = await import("../projections.js");
+  const { HEAVEN_SPACE } = await import("../space/heavenSpaces.js");
   const { addContributor } = await import("../space/ownership.js");
-  const heaven = await findBySeedSpace(SEED_SPACE.HEAVEN, "0");
+  const { withIAmAct } = await import("../../sprout.js");
+  const heaven = await findByHeavenSpace(HEAVEN_SPACE.HEAVEN, "0");
   if (!heaven) {
     log.warn(
       "SeedDelegates",
@@ -366,13 +369,17 @@ export async function ensureSeedDelegatesOnHeaven(summonCtx) {
     );
     return { added: 0 };
   }
-  const branch = summonCtx?.branch || "0";
   let added = 0;
   for (const spec of SEED_DELEGATES) {
     const slot = await findByName("being", spec.name, "0");
     if (!slot) continue;
     try {
-      await addContributor(String(heaven.id), String(slot.id), I_AM, branch);
+      await withIAmAct(`anoint @${spec.name} on heaven`, async (ctx) => {
+        await addContributor(
+          String(heaven.id), String(slot.id), I_AM,
+          ctx?.branch || "0", ctx,
+        );
+      });
       added++;
     } catch (err) {
       // Already-a-contributor and already-the-owner cases throw; both

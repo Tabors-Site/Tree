@@ -149,7 +149,7 @@ const REALITY_ROOT_DEFAULT_PERMISSIONS = Object.freeze({
 
 // ─────────────────────────────────────────────────────────────────────
 // Heaven space defaults. Heaven is the I-Am's room and parents every
-// Tier-3 seed space (identity, config, tools, roles, operations,
+// Tier-3 heaven space (identity, config, tools, roles, operations,
 // extensions, source, peers, threads). It's not a public reality.
 //
 // Heaven splits read from write:
@@ -688,7 +688,7 @@ export async function seedDefaultStancePermissions(summonCtx) {
   const seededFields = [];
 
   // ── reality root defaults ──
-  const { loadProjection: _lProot, findBySeedSpace: _fSS } =
+  const { loadProjection: _lProot, findByHeavenSpace: _fSS } =
     await import("../materials/projections.js");
   const _rootSlot = await _lProot("space", spaceRootId, "0");
   const root = _rootSlot ? { qualities: _rootSlot.state?.qualities } : null;
@@ -732,10 +732,10 @@ export async function seedDefaultStancePermissions(summonCtx) {
   // ── Heaven defaults ──
   // Heaven is the I-Am's room. Owner-only by default. Beings of the
   // land see the door (heaven shows up in the reality-root children
-  // listing) but SEE on "<reality>/." denies. Tier-3 seed spaces under
+  // listing) but SEE on "<reality>/." denies. Tier-3 heaven spaces under
   // heaven inherit this through the ancestor walk.
-  const { SEED_SPACE } = await import("../materials/space/seedSpaces.js");
-  const _heavenSlot = await _fSS(SEED_SPACE.HEAVEN, "0");
+  const { HEAVEN_SPACE } = await import("../materials/space/heavenSpaces.js");
+  const _heavenSlot = await _fSS(HEAVEN_SPACE.HEAVEN, "0");
   const heaven = _heavenSlot
     ? { _id: _heavenSlot.id, qualities: _heavenSlot.state?.qualities }
     : null;

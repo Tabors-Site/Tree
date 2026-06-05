@@ -1,6 +1,6 @@
 // TreeOS Seed . AGPL-3.0 . https://treeos.ai . Tabor Holly
 //
-// Genesis. I plant the reality root, the nine reality seed spaces, my
+// Genesis. I plant the reality root, the nine reality heaven spaces, my
 // own Being row, and the seed delegates — all in ONE moment of the
 // I-Am, the first moment.
 //
@@ -76,19 +76,19 @@
 import log from "./seedReality/log.js";
 import { v4 as uuidv4 } from "uuid";
 import Space from "./materials/space/space.js";
-import { findBySeedSpace, loadProjection, findByParent as findByParentSlot, countByParent as countByParentSlot } from "./materials/projections.js";
+import { findByHeavenSpace, loadProjection, findByParent as findByParentSlot, countByParent as countByParentSlot } from "./materials/projections.js";
 
-// Sprout-local helper: find the space whose seedSpace marker matches.
+// Sprout-local helper: find the space whose heavenSpace marker matches.
 // Returns a row-shaped object with `_id` so downstream genesis code
 // (which expects Space-row shape) keeps working without rewrites.
-async function findRootForSeedSpace(seedSpaceKind) {
-  const slot = await findBySeedSpace(seedSpaceKind, "0");
+async function findRootForHeavenSpace(seedSpaceKind) {
+  const slot = await findByHeavenSpace(seedSpaceKind, "0");
   if (!slot) return null;
   return { _id: slot.id, ...slot.state };
 }
-import { SEED_SPACE } from "./materials/space/seedSpaces.js";
+import { HEAVEN_SPACE } from "./materials/space/heavenSpaces.js";
 import { I_AM } from "./materials/being/seedBeings.js";
-import { createRealitySeedSpace, assertValidSpaceSize } from "./materials/space/spaces.js";
+import { createRealityHeavenSpace, assertValidSpaceSize } from "./materials/space/spaces.js";
 import { emitFact } from "./past/fact/facts.js";
 import { sealAct } from "./present/beats/4-stamped.js";
 
@@ -270,19 +270,19 @@ export function isBootMomentInFlight() {
 }
 
 // The heaven space. Named "." . sits directly under the space root
-// and parents every Tier-3 seed space below. The I-Am's home.
+// and parents every Tier-3 heaven space below. The I-Am's home.
 // Beings of the land lacking heaven stance see the door but cannot
 // enter; the place root stays uncluttered by the I-Am's working
 // memory rooms.
 const REALITY_HEAVEN_SPACE = {
   name: ".",
-  seedSpace: SEED_SPACE.HEAVEN,
+  heavenSpace: HEAVEN_SPACE.HEAVEN,
 };
 
-const REALITY_SEED_SPACES = [
+const REALITY_HEAVEN_SPACES = [
   {
     name: "identity",
-    seedSpace: SEED_SPACE.IDENTITY,
+    heavenSpace: HEAVEN_SPACE.IDENTITY,
     buildQualities: () => {
       const domain = process.env.REALITY_DOMAIN || "localhost";
       return new Map([["domain", domain]]);
@@ -290,7 +290,7 @@ const REALITY_SEED_SPACES = [
   },
   {
     name: "config",
-    seedSpace: SEED_SPACE.CONFIG,
+    heavenSpace: HEAVEN_SPACE.CONFIG,
     buildQualities: () => {
       const name = process.env.REALITY_NAME || "My Place";
       const domain = process.env.REALITY_DOMAIN || "localhost";
@@ -300,26 +300,26 @@ const REALITY_SEED_SPACES = [
       ]);
     },
   },
-  { name: "peers", seedSpace: SEED_SPACE.PEERS },
-  { name: "extensions", seedSpace: SEED_SPACE.EXTENSIONS },
-  { name: "tools", seedSpace: SEED_SPACE.TOOLS },
-  { name: "roles", seedSpace: SEED_SPACE.ROLES },
-  { name: "operations", seedSpace: SEED_SPACE.OPERATIONS },
+  { name: "peers", heavenSpace: HEAVEN_SPACE.PEERS },
+  { name: "extensions", heavenSpace: HEAVEN_SPACE.EXTENSIONS },
+  { name: "tools", heavenSpace: HEAVEN_SPACE.TOOLS },
+  { name: "roles", heavenSpace: HEAVEN_SPACE.ROLES },
+  { name: "operations", heavenSpace: HEAVEN_SPACE.OPERATIONS },
   // source is read-only. Populated by seed/materials/space/source.js
   // as a filesystem mirror of reality/. DO writes against children
   // reject with ORIGIN_READ_ONLY.
-  { name: "source", seedSpace: SEED_SPACE.SOURCE },
+  { name: "source", heavenSpace: HEAVEN_SPACE.SOURCE },
   // threads is a derived projection. Live rootCorrelation chains
   // surface as synthetic children at `<reality>/./threads/<id>`; the
   // descriptor is computed on demand from inbox + Act records.
   // SUMMON to a thread address is a cut. See seed/materials/space/threads.js.
-  { name: "threads", seedSpace: SEED_SPACE.THREADS },
+  { name: "threads", heavenSpace: HEAVEN_SPACE.THREADS },
   // branches mirrors the Branch collection — each child names a
   // divergent world by path. Pass 3 adds the create-branch op that
   // plants child rows here; Pass 2 ships the container space so the
   // SEE surface and child-discovery paths work the moment branches
   // start landing. See seed/materials/branch/.
-  { name: "branches", seedSpace: SEED_SPACE.BRANCHES },
+  { name: "branches", heavenSpace: HEAVEN_SPACE.BRANCHES },
 ];
 
 export async function ensureSpaceRoot(summonCtx) {
@@ -328,7 +328,7 @@ export async function ensureSpaceRoot(summonCtx) {
       "ensureSpaceRoot requires summonCtx (the boot moment's ctx). Call this from inside withBootMoment(...).",
     );
   }
-  let spaceRoot = await findRootForSeedSpace(SEED_SPACE.SPACE_ROOT);
+  let spaceRoot = await findRootForHeavenSpace(HEAVEN_SPACE.SPACE_ROOT);
 
   if (!spaceRoot) {
     const realityName = process.env.REALITY_NAME || "My Place";
@@ -353,7 +353,7 @@ export async function ensureSpaceRoot(summonCtx) {
           type: null,
           parent: null,
           rootOwner: I_AM,
-          seedSpace: SEED_SPACE.SPACE_ROOT,
+          heavenSpace: HEAVEN_SPACE.SPACE_ROOT,
           size: assertValidSpaceSize(null, { applyDefault: true }),
           qualities: {},
         },
@@ -370,17 +370,17 @@ export async function ensureSpaceRoot(summonCtx) {
   }
 
   // Plant heaven first . the "." space under the space root. Its id
-  // is then the parent of every Tier-3 seed space, so they gather in
+  // is then the parent of every Tier-3 heaven space, so they gather in
   // the heaven room instead of cluttering the place root. Repair: a
   // pre-existing heaven row found at the wrong parent gets moved back
   // under spaceRoot. The repair Fact joins genesis's ΔF.
-  let heavenSpace = await findRootForSeedSpace(SEED_SPACE.HEAVEN);
+  let heavenSpace = await findRootForHeavenSpace(HEAVEN_SPACE.HEAVEN);
   if (!heavenSpace) {
     try {
-      heavenSpace = await createRealitySeedSpace({
+      heavenSpace = await createRealityHeavenSpace({
         name: REALITY_HEAVEN_SPACE.name,
         parentId: spaceRoot._id,
-        seedSpace: REALITY_HEAVEN_SPACE.seedSpace,
+        heavenSpace: REALITY_HEAVEN_SPACE.heavenSpace,
         qualities: null,
         summonCtx,
       });
@@ -405,35 +405,35 @@ export async function ensureSpaceRoot(summonCtx) {
     );
   }
 
-  // Heaven is the parent of every Tier-3 seed space. Fall back to
+  // Heaven is the parent of every Tier-3 heaven space. Fall back to
   // spaceRoot only if heaven failed to plant above (degraded boot);
   // the repair pass on next boot will adopt these spaces back under
   // heaven once it materializes.
   const seedSpaceParentId = heavenSpace ? heavenSpace._id : spaceRoot._id;
 
-  for (const def of REALITY_SEED_SPACES) {
-    let space = await findRootForSeedSpace(def.seedSpace);
+  for (const def of REALITY_HEAVEN_SPACES) {
+    let space = await findRootForHeavenSpace(def.heavenSpace);
 
     if (!space) {
       try {
-        space = await createRealitySeedSpace({
+        space = await createRealityHeavenSpace({
           name: def.name,
           parentId: seedSpaceParentId,
-          seedSpace: def.seedSpace,
+          heavenSpace: def.heavenSpace,
           qualities: def.buildQualities ? def.buildQualities() : null,
           summonCtx,
         });
-        log.verbose("Reality", `Planned seed space: ${def.name}`);
+        log.verbose("Reality", `Planned heaven space: ${def.name}`);
       } catch (err) {
         log.error(
           "Place",
-          `Failed to create seed space ${def.name}: ${err.message}. Boot continues.`,
+          `Failed to create heaven space ${def.name}: ${err.message}. Boot continues.`,
         );
         continue;
       }
     }
 
-    // Repair: a Tier-3 seed space found at the wrong parent (manual
+    // Repair: a Tier-3 heaven space found at the wrong parent (manual
     // DB edit, corruption, or migration from an older layout where
     // they parented directly under the place root) gets moved back
     // under heaven. Routes through do.set-space inside the boot
@@ -612,7 +612,7 @@ async function ensureIAm(homeSpaceId, summonCtx) {
 
 export async function getSpaceRoot() {
   if (spaceRootCache) return spaceRootCache;
-  spaceRootCache = await findRootForSeedSpace(SEED_SPACE.SPACE_ROOT);
+  spaceRootCache = await findRootForHeavenSpace(HEAVEN_SPACE.SPACE_ROOT);
   return spaceRootCache;
 }
 
@@ -635,10 +635,10 @@ export function getIAmBeingId() {
 }
 
 // A tree root is a child of the space root with a non-seed rootOwner
-// and no seedSpace. Single source of truth; use everywhere.
+// and no heavenSpace. Single source of truth; use everywhere.
 export function isBeingRoot(space) {
   if (!space) return false;
-  if (space.seedSpace) return false;
+  if (space.heavenSpace) return false;
   // rootOwner is a bare being-id, or the I_AM sentinel for system-owned
   // spaces. A real being-root has a non-I_AM owner.
   const ownerId = space.rootOwner === I_AM ? I_AM : (space.rootOwner ? String(space.rootOwner) : null);
@@ -654,7 +654,7 @@ export function isBeingRoot(space) {
   return true;
 }
 
-// Mirror loaded extensions into the `./extensions` seed space so SEE
+// Mirror loaded extensions into the `./extensions` heaven space so SEE
 // on `<reality>/./extensions/<name>` returns the extension's surface
 // (capabilities, deps, scope) via the standard descriptor pipeline.
 //
@@ -669,7 +669,7 @@ export async function syncExtensionsToTree(manifests, summonCtx) {
       "syncExtensionsToTree requires summonCtx. Wrap the call in withIAmAct(...).",
     );
   }
-  const extSpace = await findRootForSeedSpace(SEED_SPACE.EXTENSIONS);
+  const extSpace = await findRootForHeavenSpace(HEAVEN_SPACE.EXTENSIONS);
   if (!extSpace) return;
 
   // Query by parent — children[] on the parent is retired.

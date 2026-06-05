@@ -20,7 +20,7 @@ const router = express.Router();
  * GET /api/v1/place/root
  *
  * Returns the place root space with children visible to the asker:
- *   - Place seed spaces (.identity, .config, .peers, ...)
+ *   - Place heaven spaces (.identity, .config, .peers, ...)
  *   - Space-trees the being owns
  *   - Space-trees the being contributes to
  *   - Public space-trees on this reality
@@ -43,7 +43,7 @@ router.get("/reality/root", authenticateOptional, async (req, res) => {
 
     // Fetch all place-root children with the fields needed to filter.
     const children = await Space.find({ _id: { $in: spaceRoot.children } })
-      .select("_id name seedSpace rootOwner contributors llmDefault qualities")
+      .select("_id name heavenSpace rootOwner contributors llmDefault qualities")
       .lean();
 
     // A child is public if it carries a wildcard SEE permission rule
@@ -56,11 +56,11 @@ router.get("/reality/root", authenticateOptional, async (req, res) => {
     };
 
     // Filter: anonymous sees only public trees; authenticated sees
-    // seed spaces + owned + contributing + public.
+    // heaven spaces + owned + contributing + public.
     const visible = children.filter((c) => {
       const pub = isPublicSpace(c);
       if (isAnon) return pub;
-      if (c.seedSpace) return true;
+      if (c.heavenSpace) return true;
       if (c.rootOwner && String(c.rootOwner) === String(beingId)) return true;
       if (c.contributors && c.contributors.map(String).includes(String(beingId))) return true;
       return pub;
@@ -74,7 +74,7 @@ router.get("/reality/root", authenticateOptional, async (req, res) => {
         return {
           _id: c._id,
           name: c.name,
-          seedSpace: isAnon ? null : (c.seedSpace || null),
+          heavenSpace: isAnon ? null : (c.heavenSpace || null),
           rootOwner: c.rootOwner || null,
           isOwned: !isAnon && c.rootOwner && String(c.rootOwner) === String(beingId),
           isPublic: pub,

@@ -7,7 +7,7 @@
 // domains. Things the discovery payload surfaces, things a peer
 // reality sees when it reaches in.
 //
-// At genesis I plant the `./config` seed space and write the
+// At genesis I plant the `./config` heaven space and write the
 // boot-time settings into its qualities Map. Every later boot, I
 // read that Map back through `initRealityConfig()`.
 // `getRealityConfigValue(key)` and `setRealityConfigValue(key, value)`
@@ -22,7 +22,7 @@
 
 import log from "./seedReality/log.js";
 import Space from "./materials/space/space.js";
-import { SEED_SPACE } from "./materials/space/seedSpaces.js";
+import { HEAVEN_SPACE } from "./materials/space/heavenSpaces.js";
 import { registerOperation } from "./ibp/operations.js";
 
 let configCache = null;
@@ -104,10 +104,10 @@ function deepCopy(value) {
 
 async function loadConfigFromDb() {
   try {
-    const { findBySeedSpace } = await import("./materials/projections.js");
-    const configSlot = await findBySeedSpace(SEED_SPACE.CONFIG, "0");
+    const { findByHeavenSpace } = await import("./materials/projections.js");
+    const configSlot = await findByHeavenSpace(HEAVEN_SPACE.CONFIG, "0");
     if (!configSlot || !configSlot.state?.qualities) {
-      log.warn("Reality", "No config seed space found or qualities is empty. Using empty config.");
+      log.warn("Reality", "No config heaven space found or qualities is empty. Using empty config.");
       configCache = {};
       return;
     }
@@ -150,19 +150,19 @@ export function getRealityConfigValue(key) {
   return null;
 }
 
-// Cached _id of the `./config` seed space. Looked up on first write
-// and stable thereafter — the seed spaces are created once at
-// genesis and never deleted. Avoids the seedSpace-marker scan on every
+// Cached _id of the `./config` heaven space. Looked up on first write
+// and stable thereafter — the heaven spaces are created once at
+// genesis and never deleted. Avoids the heavenSpace-marker scan on every
 // config write during boot.
 let cachedConfigSpaceId = null;
 async function getConfigSpace() {
-  const { loadProjection, findBySeedSpace } = await import("./materials/projections.js");
+  const { loadProjection, findByHeavenSpace } = await import("./materials/projections.js");
   if (cachedConfigSpaceId) {
     const slot = await loadProjection("space", cachedConfigSpaceId, "0");
     if (slot) return { _id: slot.id, ...slot.state };
     cachedConfigSpaceId = null; // stale; refetch
   }
-  const slot = await findBySeedSpace(SEED_SPACE.CONFIG, "0");
+  const slot = await findByHeavenSpace(HEAVEN_SPACE.CONFIG, "0");
   if (slot) {
     cachedConfigSpaceId = String(slot.id);
     return { _id: slot.id, ...slot.state };
@@ -184,7 +184,7 @@ export async function setRealityConfigValue(key, value, { internal, identity, su
 
   const configSpace = await getConfigSpace();
   if (!configSpace) {
-    throw new Error("Config write failed: config seed space not found at <reality>/./config. Reality may need repair.");
+    throw new Error("Config write failed: config heaven space not found at <reality>/./config. Reality may need repair.");
   }
 
   // Route through do.set-space so the write IS a Fact on the `./config`
@@ -221,7 +221,7 @@ export async function deleteRealityConfigValue(key, { internal, identity, summon
 
   const configSpace = await getConfigSpace();
   if (!configSpace) {
-    throw new Error("Config delete failed: config seed space not found at <reality>/./config.");
+    throw new Error("Config delete failed: config heaven space not found at <reality>/./config.");
   }
 
   const { doVerb } = await import("./ibp/verbs/do.js");

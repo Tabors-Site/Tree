@@ -54,15 +54,21 @@ import { acquireSpaceLock, releaseSpaceLock } from "./spaceLocks.js";
  * Add a contributor to a space. Only the resolved owner can do this.
  * Read-modify-write under the space lock; whole-array fact replace.
  */
-export async function addContributor(spaceId, contributorId, beingId, branch) {
+export async function addContributor(spaceId, contributorId, beingId, branch, summonCtx = null) {
   if (typeof branch !== "string" || !branch) {
     throw new Error("addContributor: branch is required (thread from summonCtx; no silent main-bias).");
   }
   const { loadOrFold } = await import("../projections.js");
   const _spaceSlot = await loadOrFold("space", spaceId, branch);
-  const space = _spaceSlot ? { seedSpace: _spaceSlot.state?.seedSpace } : null;
+  const space = _spaceSlot ? { heavenSpace: _spaceSlot.state?.heavenSpace } : null;
   if (!space) throw new Error("Space not found");
-  if (space.seedSpace) throw new Error("Cannot modify seed spaces");
+  // Heaven is the one heaven space whose contributors[] is documented to
+  // grow at runtime — cherub.register anoints the rootOperator, and
+  // seedDelegates join at boot. Every other heaven space (Tier-3 like
+  // .roles, .config, etc.) stays immutable.
+  if (space.heavenSpace && space.heavenSpace !== "heaven") {
+    throw new Error("Cannot modify heaven spaces");
+  }
 
   await assertBeingExists(contributorId, branch);
   await assertOwner(spaceId, beingId, branch);
@@ -97,7 +103,7 @@ export async function addContributor(spaceId, contributorId, beingId, branch) {
       target,
       "set-space",
       { field: "contributors", value: next },
-      { identity: { beingId } },
+      { identity: { beingId }, currentBranch: branch, summonCtx },
     );
   } finally {
     releaseSpaceLock(spaceId, beingId);
@@ -111,15 +117,19 @@ export async function addContributor(spaceId, contributorId, beingId, branch) {
  * Remove a contributor from a space.
  * The resolved owner or the contributor themselves can remove.
  */
-export async function removeContributor(spaceId, contributorId, beingId, branch) {
+export async function removeContributor(spaceId, contributorId, beingId, branch, summonCtx = null) {
   if (typeof branch !== "string" || !branch) {
     throw new Error("removeContributor: branch is required (thread from summonCtx).");
   }
   const { loadOrFold } = await import("../projections.js");
   const _spaceSlot = await loadOrFold("space", spaceId, branch);
-  const space = _spaceSlot ? { seedSpace: _spaceSlot.state?.seedSpace } : null;
+  const space = _spaceSlot ? { heavenSpace: _spaceSlot.state?.heavenSpace } : null;
   if (!space) throw new Error("Space not found");
-  if (space.seedSpace) throw new Error("Cannot modify seed spaces");
+  // Same heaven carve-out as addContributor — heaven's contributors[]
+  // is a live roster, not an immutable seed-space field.
+  if (space.heavenSpace && space.heavenSpace !== "heaven") {
+    throw new Error("Cannot modify heaven spaces");
+  }
 
   await assertBeingExists(contributorId, branch);
 
@@ -147,7 +157,7 @@ export async function removeContributor(spaceId, contributorId, beingId, branch)
       target,
       "set-space",
       { field: "contributors", value: next },
-      { identity: { beingId } },
+      { identity: { beingId }, currentBranch: branch, summonCtx },
     );
   } finally {
     releaseSpaceLock(spaceId, beingId);
@@ -160,7 +170,7 @@ export async function removeContributor(spaceId, contributorId, beingId, branch)
 /**
  * Set rootOwner on a space (delegate ownership of a sub-tree).
  * Only the resolved owner above this position can delegate.
- * Cannot set rootOwner on place seed spaces.
+ * Cannot set rootOwner on place heaven spaces.
  *
  * Two facts in sequence: the rootOwner write, then a contributors
  * prune (the new owner is removed from contributors[] if they were
@@ -168,7 +178,7 @@ export async function removeContributor(spaceId, contributorId, beingId, branch)
  * list is consistent with the new ownership at the moment the second
  * fact lands.
  */
-export async function setOwner(spaceId, newOwnerId, beingId, branch) {
+export async function setOwner(spaceId, newOwnerId, beingId, branch, summonCtx = null) {
   if (typeof branch !== "string" || !branch) {
     throw new Error("setOwner: branch is required (thread from summonCtx).");
   }
@@ -176,12 +186,12 @@ export async function setOwner(spaceId, newOwnerId, beingId, branch) {
   const ownerIdFrom = (v) => v ? String(v) : null;
   const _ownerSlot = await _lOF1("space", spaceId, branch);
   const space = _ownerSlot ? {
-    seedSpace: _ownerSlot.state?.seedSpace,
+    heavenSpace: _ownerSlot.state?.heavenSpace,
     rootOwner: _ownerSlot.state?.rootOwner,
     parent:    _ownerSlot.state?.parent,
   } : null;
   if (!space) throw new Error("Space not found");
-  if (space.seedSpace) throw new Error("Cannot set ownership on seed spaces");
+  if (space.heavenSpace) throw new Error("Cannot set ownership on heaven spaces");
 
   await assertBeingExists(newOwnerId, branch);
 
@@ -230,7 +240,7 @@ export async function setOwner(spaceId, newOwnerId, beingId, branch) {
       target,
       "set-space",
       { field: "rootOwner", value: newOwnerId },
-      { identity: { beingId } },
+      { identity: { beingId }, currentBranch: branch, summonCtx },
     );
 
     const list = current?.contributors || [];
@@ -242,7 +252,7 @@ export async function setOwner(spaceId, newOwnerId, beingId, branch) {
         target,
         "set-space",
         { field: "contributors", value: next },
-        { identity: { beingId } },
+        { identity: { beingId }, currentBranch: branch, summonCtx },
       );
     }
 
@@ -266,12 +276,12 @@ export async function removeOwner(spaceId, beingId, branch) {
   const { loadOrFold: _lOF3 } = await import("../projections.js");
   const _rmSlot = await _lOF3("space", spaceId, branch);
   const space = _rmSlot ? {
-    seedSpace: _rmSlot.state?.seedSpace,
+    heavenSpace: _rmSlot.state?.heavenSpace,
     rootOwner: _rmSlot.state?.rootOwner,
     parent:    _rmSlot.state?.parent,
   } : null;
   if (!space) throw new Error("Space not found");
-  if (space.seedSpace) throw new Error("Cannot modify seed spaces");
+  if (space.heavenSpace) throw new Error("Cannot modify heaven spaces");
   const ownerId = space.rootOwner || null;
   if (!ownerId || ownerId === I_AM) throw new Error("Space has no owner to remove");
 
@@ -295,7 +305,7 @@ export async function removeOwner(spaceId, beingId, branch) {
       target,
       "set-space",
       { field: "rootOwner", value: null },
-      { identity: { beingId } },
+      { identity: { beingId }, currentBranch: branch, summonCtx },
     );
     invalidateSpace(spaceId);
     hooks.run("afterOwnershipChange", { spaceId, action: "removeOwner", targetUserId: removedOwnerId }).catch(() => {});
@@ -313,18 +323,18 @@ export async function removeOwner(spaceId, beingId, branch) {
  * access to their former tree. The new owner is also pruned from
  * contributors if they had been one.
  */
-export async function transferOwnership(spaceId, newOwnerId, beingId, branch) {
+export async function transferOwnership(spaceId, newOwnerId, beingId, branch, summonCtx = null) {
   if (typeof branch !== "string" || !branch) {
     throw new Error("transferOwnership: branch is required (thread from summonCtx).");
   }
   const { loadOrFold: _lOF4 } = await import("../projections.js");
   const _txSlot = await _lOF4("space", spaceId, branch);
   const space = _txSlot ? {
-    seedSpace: _txSlot.state?.seedSpace,
+    heavenSpace: _txSlot.state?.heavenSpace,
     rootOwner: _txSlot.state?.rootOwner,
   } : null;
   if (!space) throw new Error("Space not found");
-  if (space.seedSpace) throw new Error("Cannot modify seed spaces");
+  if (space.heavenSpace) throw new Error("Cannot modify heaven spaces");
   const oldOwnerId = space.rootOwner || null;
   if (!oldOwnerId || oldOwnerId === I_AM) throw new Error("Space has no owner to transfer from");
 
@@ -358,14 +368,14 @@ export async function transferOwnership(spaceId, newOwnerId, beingId, branch) {
       target,
       "set-space",
       { field: "rootOwner", value: newOwnerId },
-      { identity: { beingId } },
+      { identity: { beingId }, currentBranch: branch, summonCtx },
     );
     // (no row load; typed target above already names this space)
     await doVerb(
         target,
       "set-space",
       { field: "contributors", value: next },
-      { identity: { beingId } },
+      { identity: { beingId }, currentBranch: branch, summonCtx },
     );
 
     invalidateSpace(spaceId);

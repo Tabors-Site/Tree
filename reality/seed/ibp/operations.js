@@ -219,7 +219,7 @@ export function listOperations(filter = {}) {
  * at boot end after extensions register; idempotent.
  */
 export async function syncOperationsToSubstrate(summonCtx) {
-  const { SEED_SPACE } = await import("../materials/space/seedSpaces.js");
+  const { HEAVEN_SPACE } = await import("../materials/space/heavenSpaces.js");
   const { manifestItems } = await import("../present/manifest.js");
   const items = [];
   for (const op of REGISTRY.values()) {
@@ -238,5 +238,5 @@ export async function syncOperationsToSubstrate(summonCtx) {
       ]),
     });
   }
-  return manifestItems({ seedSpace: SEED_SPACE.OPERATIONS, items, summonCtx });
+  return manifestItems({ heavenSpace: HEAVEN_SPACE.OPERATIONS, items, summonCtx });
 }

@@ -11,6 +11,62 @@ import { mountFlatView } from "../../shared/flat/host.js";
 
 let _overlay = null;
 let _handle  = null;
+let _toggleButton = null;
+
+// Standalone fixed-position toggle. Sits below the 🌿 branch button
+// (top:56 + button height + gap ≈ top:96). Previously the toggle
+// lived as a tiny "text" button inside the address bar, which was
+// undiscoverable — too small, too crowded, label too generic.
+// Mounted once from main.js after the branch-bar so both buttons
+// share the same left-edge column.
+export function mountFlatPanelButton(L) {
+  if (_toggleButton) return _toggleButton;
+  const b = document.createElement("button");
+  b.id = "flat-mode-button";
+  b.type = "button";
+  b.title = "letters mode . text view of this place (\\)";
+  b.textContent = "📃 letters";
+  // Z-index 200 sits above the flat-panel overlay so the button stays
+  // reachable when the panel is up — though openFlatPanel hides it
+  // anyway since the flat panel's own top-bar carries the inverse
+  // toggle (a back-to-3D button) right next to where this lives.
+  b.style.cssText = [
+    "position: fixed",
+    "top: 96px",
+    "left: 12px",
+    "z-index: 200",
+    "pointer-events: auto",
+    "background: rgba(10, 13, 12, 0.85)",
+    "color: #c8d3cb",
+    "border: 1px solid #2c3a32",
+    "border-radius: 6px",
+    "padding: 6px 10px",
+    "font-family: ui-monospace, monospace",
+    "font-size: 12px",
+    "cursor: pointer",
+    "display: flex",
+    "align-items: center",
+    "gap: 6px",
+  ].join("; ");
+  b.addEventListener("mouseenter", () => { b.style.borderColor = "#8fbf9f"; });
+  b.addEventListener("mouseleave", () => { b.style.borderColor = "#2c3a32"; });
+  b.addEventListener("click", () => toggleFlatPanel(L));
+  document.body.appendChild(b);
+  _toggleButton = b;
+  return b;
+}
+
+// Show / hide the floating left-column buttons (🌿 branch and 📃
+// letters). When the flat panel is open both are hidden — the panel
+// has its own top-bar controls — to keep the panel's address bar
+// unobstructed.
+function _setLeftColumnVisible(visible) {
+  const display = visible ? "" : "none";
+  const branchBtn = document.getElementById("branch-tree-button");
+  if (branchBtn) branchBtn.style.display = display;
+  const textBtn = document.getElementById("flat-mode-button");
+  if (textBtn) textBtn.style.display = display;
+}
 
 export function isFlatPanelOpen() {
   return !!_overlay;
@@ -33,6 +89,11 @@ export function openFlatPanel(L) {
     overflow: auto; pointer-events: auto;
   `;
   document.body.appendChild(_overlay);
+
+  // Hide the floating 3D-mode toggle buttons (🌿 + 📃) so they stop
+  // covering the flat-panel address bar. The flat panel carries its
+  // own timeline trigger inside #top-bar (see host.js).
+  _setLeftColumnVisible(false);
 
   // Pause the scene before mounting. Mount happens while the scene
   // graph is frozen, so a render-flicker on switch is impossible.
@@ -91,6 +152,10 @@ export function closeFlatPanel(L) {
   _handle = null;
   _overlay.remove();
   _overlay = null;
+
+  // Restore the floating 3D-mode toggle buttons now that the panel
+  // is gone.
+  _setLeftColumnVisible(true);
 
   // Heaven-child redirect. The flat view lets the user browse heaven
   // catalogs (./beings, ./operations, ./roles, ./threads, ./extensions)

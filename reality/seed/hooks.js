@@ -158,10 +158,21 @@ async function run(hookName, data) {
   const branch = data?.branch || data?.summonCtx?.branch || "0";
   let blockedExtensions = null;
   if (spaceId && _getScopeFn) {
-    try {
-      blockedExtensions = await _getScopeFn(String(spaceId), branch);
-    } catch (scopeErr) {
-      log.warn("Hooks", `Scope resolution failed for space ${spaceId} on branch ${branch}: ${scopeErr.message}. Extensions not filtered.`);
+    // DB-health gate. When Mongoose is in a "Client must be connected"
+    // state, scope resolution would walk an ancestor cache that's
+    // backed by Mongo queries — every call fails the same way. A wake
+    // storm (the dance-floor schedules N dancer ticks/min, each fires
+    // multiple hooks each tick) compounds this into a log flood that
+    // can saturate the terminal buffer faster than it flushes. Skip
+    // resolution while disconnected; handlers run without the scope
+    // filter, which is the same fallback as a thrown scope error.
+    const { isDbHealthy } = await import("./seedReality/dbConfig.js");
+    if (isDbHealthy()) {
+      try {
+        blockedExtensions = await _getScopeFn(String(spaceId), branch);
+      } catch (scopeErr) {
+        log.warn("Hooks", `Scope resolution failed for space ${spaceId} on branch ${branch}: ${scopeErr.message}. Extensions not filtered.`);
+      }
     }
   }
 

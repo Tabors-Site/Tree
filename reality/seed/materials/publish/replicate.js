@@ -97,12 +97,19 @@ export async function replicateSubtree(scopeSpaceId, opts = {}) {
     if (capturedSpaceIds.has(id)) continue;
     const slot = await loadProjection("space", id, branch);
     if (!slot) continue;
-    // Skip seed spaces (dot-namespace) — substrate furniture.
-    if (slot.state?.seedSpace) continue;
+    // Skip heaven spaces (dot-namespace) UNLESS this is the scope root
+    // the operator explicitly chose. Two cases:
+    //   - User replicates the place root (`.` / SPACE_ROOT heavenSpace):
+    //     include the root itself but skip its heavenSpace children
+    //     (`.identity`, `.config`, `.tools`, etc. — substrate furniture
+    //     that doesn't replicate). The user's planted content under the
+    //     root still travels.
+    //   - User replicates a regular space deep in the tree: no heavenSpace
+    //     children to filter, just walk normally.
+    const isScopeRoot = id === scopeSpaceId;
+    if (!isScopeRoot && slot.state?.heavenSpace) continue;
     capturedSpaceIds.add(id);
 
-    // Queue children for the next pass. countByParent + findByParent
-    // give us the per-space children list.
     const children = await findSpaceChildren(id);
     for (const child of children) {
       spaceQueue.push({ id: child.id, parentId: id, depth: depth + 1 });
@@ -110,8 +117,26 @@ export async function replicateSubtree(scopeSpaceId, opts = {}) {
   }
 
   // ── 2. Walk beings whose homeSpace is inside the captured set ──
-  // findByPosition gets us per-space inhabitants. A being's homeSpace
-  // is the canonical "is this in the subtree" question.
+  // A being's homeSpace is the canonical "is this in the subtree"
+  // question. Two classes of being get filtered out:
+  //
+  //   - Human-cognition beings — replicating an operator's identity
+  //     onto another reality is a security smell. They stay home.
+  //
+  //   - Seed delegates — cherub, arrival, llm-assigner, branch-manager,
+  //     role-{manager,finder}, roleflow-composer, reality-manager,
+  //     birther. Every reality already plants these at boot
+  //     (seed/materials/being/seedDelegates.js); replicating them
+  //     would duplicate-mint the receiver's existing delegates.
+  //     Skipping them keeps each reality's substrate furniture local.
+  //
+  // Everything else — dancers, drummers, your own LLM/scripted beings
+  // — travels. The earlier check gated on `state.password`, which is
+  // present on every being (birthBeing hashes a credential for all
+  // cognition kinds), so the filter excluded all beings.
+  const { beingCognition } = await import("../being/identity/lookups.js");
+  const { SEED_DELEGATES } = await import("../being/seedDelegates.js");
+  const SEED_DELEGATE_NAMES = new Set(SEED_DELEGATES.map((d) => d.name));
   for (const spaceId of capturedSpaceIds) {
     const beingRows = await Projection.find({
       branch, type: "being",
@@ -120,8 +145,8 @@ export async function replicateSubtree(scopeSpaceId, opts = {}) {
     }).lean();
     for (const row of beingRows) {
       const state = row.state || {};
-      // Skip human-cognition beings (password set). Conservative v1.
-      if (state.password) continue;
+      if (beingCognition(state) === "human") continue;
+      if (state.name && SEED_DELEGATE_NAMES.has(state.name)) continue;
       capturedBeingIds.add(row.id);
     }
   }
@@ -191,6 +216,31 @@ export async function replicateSubtree(scopeSpaceId, opts = {}) {
     (a, b) => (spaceDepth.get(a) || 0) - (spaceDepth.get(b) || 0),
   );
 
+  // Strip qualities.beings entries that point at uncaptured beings
+  // (seed delegates we skipped, beings outside the captured subtree).
+  // Without this, the bundle's qualities.beings on the scope root
+  // would carry source-namespace beingIds for delegates the receiver
+  // never sees, leaving dangling references after graft.
+  const filterQualities = (qualities) => {
+    if (!qualities || typeof qualities !== "object") return qualities || {};
+    const out = qualities instanceof Map
+      ? Object.fromEntries(qualities)
+      : { ...qualities };
+    if (out.beings && typeof out.beings === "object") {
+      const beings = out.beings instanceof Map
+        ? Object.fromEntries(out.beings)
+        : { ...out.beings };
+      for (const [name, entry] of Object.entries(beings)) {
+        const eid = entry?.beingId;
+        if (typeof eid === "string" && !capturedBeingIds.has(eid)) {
+          delete beings[name];
+        }
+      }
+      out.beings = beings;
+    }
+    return out;
+  };
+
   for (const spaceId of orderedSpaceIds) {
     const slot = await loadProjection("space", spaceId, branch);
     if (!slot) continue;
@@ -213,7 +263,7 @@ export async function replicateSubtree(scopeSpaceId, opts = {}) {
         : [],
       size:         state.size || null,
       coord:        state.coord || null,
-      qualities:    state.qualities || {},
+      qualities:    filterQualities(state.qualities),
     });
   }
 

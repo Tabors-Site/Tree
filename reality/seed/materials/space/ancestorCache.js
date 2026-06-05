@@ -12,7 +12,7 @@
 // I cache the walk once and let every chain read from it. Shared
 // ancestors are shared entries; one snapshot serves a whole
 // conversation turn. The cache holds only what changes rarely —
-// qualities, seedSpace, rootOwner, contributors, parent. It does
+// qualities, heavenSpace, rootOwner, contributors, parent. It does
 // NOT hold Matter content or per-caller permission decisions. Those
 // belong to the call.
 //
@@ -78,8 +78,8 @@ function getTTL() {
  * Returns cached chain if fresh, otherwise walks from DB and caches.
  *
  * Each ancestor is a lean object with: _id, qualities, parent,
- * seedSpace, rootOwner, contributors. The array is ordered from the
- * space itself to root (or the last non-place seed space).
+ * heavenSpace, rootOwner, contributors. The array is ordered from the
+ * space itself to root (or the last non-place heaven space).
  *
  * Branch-aware: each branch holds its own cached view of every chain.
  * The walk uses `loadOrFold` so branches that haven't reparented an
@@ -200,7 +200,7 @@ async function walkFromDb(spaceId, ttl, branch) {
       name: _slot.state?.name,
       qualities: _slot.state?.qualities,
       parent: _slot.state?.parent || null,
-      seedSpace: _slot.state?.seedSpace,
+      heavenSpace: _slot.state?.heavenSpace,
       rootOwner: _slot.state?.rootOwner,
       contributors: _slot.state?.contributors,
     } : null;
@@ -219,24 +219,24 @@ async function walkFromDb(spaceId, ttl, branch) {
       name: n.name || null,
       qualities: quals,
       parent: n.parent,
-      seedSpace: n.seedSpace || null,
+      heavenSpace: n.heavenSpace || null,
       rootOwner: n.rootOwner || null,
       contributors: (n.contributors || []).map(String),
     });
 
-    // Continue past any intermediate seed space. The loop ends
+    // Continue past any intermediate heaven space. The loop ends
     // naturally when we reach the place root (parent === null), so
     // every chain walk reaches the place root's qualities.permissions
     // — the system-wide defaults seeded at boot
     // (REALITY_ROOT_DEFAULT_PERMISSIONS in authorize.js). Stopping
-    // the walk at a seed space would silently strip those defaults
+    // the walk at a heaven space would silently strip those defaults
     // whenever a write targets `.config`, `.tools`, etc., and the
     // root operator's privileges (declared at the place root) would
     // be invisible from inside any dot-namespace.
     //
     // Consumers that DO want a per-domain boundary (e.g.
     // resolveExtensionScopeFromChain for extension blocked/allowed
-    // walks) carry their own break on `seedSpace` over the returned
+    // walks) carry their own break on `heavenSpace` over the returned
     // chain; that boundary stays where it belongs, at the consumer,
     // not at the walker.
     cursor = n.parent;
@@ -287,7 +287,7 @@ export function resolveExtensionScopeFromChain(ancestors, confinedExtensions) {
 
   // First pass: accumulate blocked[], restricted{}, and allowed[]
   for (const space of ancestors) {
-    if (space.seedSpace) break;
+    if (space.heavenSpace) break;
     const extConfig = space.qualities?.extensions;
     if (extConfig?.blocked && Array.isArray(extConfig.blocked)) {
       for (const name of extConfig.blocked) blocked.add(name);
@@ -334,26 +334,56 @@ export function resolveSpaceAccessFromChain(startNodeId, beingId, ancestors) {
     };
   }
 
+  // ── Heaven path ────────────────────────────────────────────────
+  // Any space whose chain passes through heaven (heaven itself or any
+  // Tier-3 heaven space beneath it) uses two simple rules: I_AM is the
+  // rootOwner (immutable; this is what lets assertOwner pass for
+  // seed-internal anointing flows), and the contributors[] roster on
+  // heaven is the write-access set for everyone else. cherub.register
+  // anoints the rootOperator into contributors; subsequent humans get
+  // added by an existing contributor via add-contributor on heaven.
+  // No tree-owner walk applies — heaven IS the system tree.
+  const heavenSpace = ancestors.find((s) => s.heavenSpace === "heaven");
+  if (heavenSpace) {
+    const isHeavenOwner = !!(
+      beingId && heavenSpace.rootOwner && heavenSpace.rootOwner === beingId
+    );
+    const isHeavenContributor = !isHeavenOwner && !!(
+      beingId && heavenSpace.contributors?.some((id) => id === beingId)
+    );
+    return {
+      ok: true,
+      rootId: heavenSpace._id,
+      isRoot: heavenSpace._id === startNodeId,
+      isOwner: isHeavenOwner,
+      isContributor: isHeavenContributor,
+      isTripped: false,
+      canWrite: isHeavenOwner || isHeavenContributor,
+    };
+  }
+
+  // ── User-tree path (everything else) ───────────────────────────
   let isContributor = false;
   let ownerNode = null;
 
   for (const space of ancestors) {
-    if (space.seedSpace) {
+    if (space.heavenSpace) {
       // SOURCE is a traversable system tree (live mirror of
       // reality/extensions + reality/seed, see code-workspace/source.js).
       // Treat .source itself as the root of its subtree so everything
       // beneath it is navigable. Read-only by default — canWrite is
       // gated on the code-workspace writeMode quality at the tool
       // handler level, not here.
-      if (space.seedSpace === "source") {
+      if (space.heavenSpace === "source") {
         ownerNode = space;
         break;
       }
-      // Every other seed role is an impassable boundary.
+      // Any other unexpected heaven space in a non-heaven chain is a
+      // structural error — non-heaven chains shouldn't reach one.
       return {
         ok: false,
         error: IBP_ERR.INVALID_TREE,
-        message: "Invalid tree: reached place seed space boundary",
+        message: "Invalid tree: reached place heaven space boundary",
       };
     }
 
@@ -383,7 +413,7 @@ export function resolveSpaceAccessFromChain(startNodeId, beingId, ancestors) {
 
   // .source is a reality-wide system tree. Everyone on the reality can read it.
   // Writes are gated elsewhere (code-workspace write-mode check).
-  if (ownerNode.seedSpace === "source") {
+  if (ownerNode.heavenSpace === "source") {
     return {
       ok: true,
       rootId: ownerNode._id,

@@ -39,7 +39,7 @@ import Fact from "../past/fact/fact.js";
 import { getSpaceRootId } from "../sprout.js";
 import { listSeeds } from "../materials/seeds.js";
 import { listMattersAt } from "../materials/matter/matters.js";
-import { SEED_SPACE } from "../materials/space/seedSpaces.js";
+import { HEAVEN_SPACE } from "../materials/space/heavenSpaces.js";
 import { listLiveThreads } from "../materials/space/threads.js";
 import {
   resolveSpaceAccess,
@@ -421,15 +421,15 @@ async function placeAtSpaceRoot(resolved, { identity, until = null, branch = "0"
   const spaceRoot = await foldRead("space", spaceRootId, until, branch);
   let children = spaceRootId ? await childrenOf(spaceRootId, "/", { until, branch }) : [];
 
-  // The childrenOf walk filters out seed spaces (so .config/.tools
+  // The childrenOf walk filters out heaven spaces (so .config/.tools
   // etc. don't pollute the place-root listing). Heaven IS a seed
   // space but is meant to be visible at the place root as the door
   // into the I-Am's room . inject it explicitly. Reigning gating
   // happens at SEE-time when a being tries to walk through; here we
   // just surface the door.
   if (spaceRootId) {
-    const { findBySeedSpace } = await import("../materials/projections.js");
-    const _hSlot = await findBySeedSpace(SEED_SPACE.HEAVEN, branch);
+    const { findByHeavenSpace } = await import("../materials/projections.js");
+    const _hSlot = await findByHeavenSpace(HEAVEN_SPACE.HEAVEN, branch);
     const heaven = _hSlot ? { _id: _hSlot.id, ...(_hSlot.state || {}) } : null;
     if (heaven) {
       const folded = (await foldRead("space", heaven._id, until, branch)) || heaven;
@@ -439,7 +439,7 @@ async function placeAtSpaceRoot(resolved, { identity, until = null, branch = "0"
           spaceId: heaven._id,
           type: folded.type ?? heaven.type ?? null,
           coord: folded.coord ?? heaven.coord ?? null,
-          seedSpace: SEED_SPACE.HEAVEN,
+          heavenSpace: HEAVEN_SPACE.HEAVEN,
           path: `/${heaven.name}`,
           qualities: serializeQualities(folded.qualities || heaven.qualities),
         },
@@ -575,7 +575,7 @@ async function placeAtSpace(resolved, { identity, payload, until = null, branch 
   // own); a past view of /./threads still surfaces the CURRENT live
   // forest. The doctrine: threads-at-time would require historical
   // inbox + Act reconstruction, which is its own future slice.
-  const children = space.seedSpace === SEED_SPACE.THREADS
+  const children = space.heavenSpace === HEAVEN_SPACE.THREADS
     ? await synthesizeThreadChildren(space._id, pathByNames, payload)
     : await childrenOf(space._id, pathByNames, { until, branch });
   const matters  = await mattersAt(space._id, { until, branch });
@@ -663,7 +663,7 @@ async function placeAtSpace(resolved, { identity, payload, until = null, branch 
     // the room differently per kind . heaven shows as a white-room
     // door-room, threads renders as a stack, etc. Null on user
     // spaces (the common case).
-    seedSpace: space.seedSpace || null,
+    heavenSpace: space.heavenSpace || null,
     beings,
     residents,
     children,

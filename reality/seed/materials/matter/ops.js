@@ -185,7 +185,7 @@ async function setOnMatterHandler({ target, params, summonCtx }) {
   //   - bare space-id (transfer to a new space)
   //   - DELETED sentinel ("deleted") (soft-delete marker)
   if (field === "spaceId") {
-    const { DELETED } = await import("../space/seedSpaces.js");
+    const { DELETED } = await import("../space/heavenSpaces.js");
     if (value === DELETED) {
       return { matterId: String(target._id), spaceId: DELETED };
     }
@@ -201,7 +201,7 @@ async function setOnMatterHandler({ target, params, summonCtx }) {
   // delete time to record DELETED. Live writes during create-matter
   // ride on the create-matter handler, not here.
   if (field === "beingId") {
-    const { DELETED } = await import("../space/seedSpaces.js");
+    const { DELETED } = await import("../space/heavenSpaces.js");
     if (value === DELETED) {
       return { matterId: String(target._id), beingId: DELETED };
     }

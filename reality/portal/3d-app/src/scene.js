@@ -95,7 +95,7 @@ const VISUAL_PYRAMID = {
 // Heaven: the I-Am's white room. Full-white background, near-white
 // ground, soft full-spectrum ambient (no directional sun); doors to
 // children render as black-framed white planes the user can gaze at
-// to enter. Selected when desc.seedSpace === "heaven".
+// to enter. Selected when desc.heavenSpace === "heaven".
 const VISUAL_HEAVEN = {
   bgColor:    0xffffff,
   fogNear:    20,
@@ -354,7 +354,7 @@ export class Scene {
     // descriptor's resolved scene.sceneType picks a preset; unknown or
     // missing sceneTypes fall back to the default outdoor scene. Heaven
     // overrides the default with its own all-white preset.
-    const isHeaven = desc?.seedSpace === "heaven";
+    const isHeaven = desc?.heavenSpace === "heaven";
     let visualMode = VISUAL_DEFAULT;
     if (arrival) {
       visualMode = VISUAL_ARRIVAL;
@@ -2028,7 +2028,7 @@ export class Scene {
     // surfaces heaven as a child, render it as the white-paneled door
     // a reigning being can walk through. Non-reigning beings see the
     // same door but the SEE on the other side denies.
-    if (child.seedSpace === "heaven") return this._makeHeavenDoor(child);
+    if (child.heavenSpace === "heaven") return this._makeHeavenDoor(child);
 
     // Dispatch by the models extension hint. Unknown / missing models
     // fall through to the default tree mesh below.

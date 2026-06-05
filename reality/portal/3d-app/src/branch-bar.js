@@ -51,6 +51,21 @@ let _state = {
   // marks even when atTimestamp lags behind (the rewind round-trip
   // is async; playback continues optimistically).
   cursorMs: null,
+  // Resume speed for ▶ after a paused state. Set when ⏸ is pressed
+  // during active playback; consumed (and zeroed) by the next ▶.
+  resumeSpeed: 0,
+  // Playback mode: "human" advances cursorMs by wall-clock seconds *
+  // speed factor (every gap between marks plays through in real time).
+  // "reality" steps mark-to-mark — the empty time between marks is
+  // collapsed, so each tick of speed advances one act on the reel.
+  // Useful when the being acts sparsely and a +1x human playback would
+  // be mostly waiting.
+  playbackMode: "human",
+  // Accumulator for reality mode. Each tick adds factor * marksPerTick
+  // to the accumulator; when |accumulator| ≥ 1 the cursor steps that
+  // many marks and the integer portion is subtracted out. Lets speeds
+  // below 1 mark/tick advance smoothly (1x = 1 mark/sec at 250ms tick).
+  markAccumulator: 0,
 };
 
 // Tick cadence for the playback loop. Short enough that 8x feels
@@ -113,11 +128,14 @@ function _createBranchButton() {
   b.type = "button";
   b.title = "branches & timeline";
   b.textContent = "🌿";
+  // Z-index 200 sits above the flat-panel overlay (z=100), so the
+  // button + its popups stay reachable from text mode too. Without
+  // this the user can't open the timeline when the flat-panel is up.
   b.style.cssText = [
     "position: fixed",
     "top: 56px",
     "left: 12px",
-    "z-index: 12",
+    "z-index: 200",
     "pointer-events: auto",
     "background: rgba(10, 13, 12, 0.85)",
     "color: #c8d3cb",
@@ -169,7 +187,7 @@ async function _openPanel() {
     "color: #c8d3cb",
     "font-family: ui-monospace, monospace",
     "font-size: 12px",
-    "z-index: 12",
+    "z-index: 200",
     "padding: 14px 16px",
     "pointer-events: auto",
   ].join(";");
@@ -555,7 +573,7 @@ async function _openTimeline(branchPath) {
     "color: #c8d3cb",
     "font-family: ui-monospace, monospace",
     "font-size: 11px",
-    "z-index: 11",
+    "z-index: 200",
     "pointer-events: auto",
     "display: flex",
     "flex-direction: column",
@@ -580,6 +598,7 @@ async function _openTimeline(branchPath) {
         <button class="bt-playpause" type="button" title="play / pause" style="background:#131a17;color:#c8d3cb;border:1px solid #2c3a32;border-radius:3px;padding:3px 8px;font-family:inherit;font-size:12px;cursor:pointer;">▶</button>
         <button class="bt-ff" type="button" title="fast-forward (each click doubles forward speed)" style="background:#131a17;color:#c8d3cb;border:1px solid #2c3a32;border-radius:3px;padding:3px 8px;font-family:inherit;font-size:12px;cursor:pointer;">⏩</button>
         <span class="bt-speed" style="color:#8fbf9f;font-size:11px;min-width:48px;text-align:center;">paused</span>
+        <button class="bt-mode" type="button" title="time mode . human steps by wall clock; reality steps mark-to-mark so quiet stretches collapse" style="background:#131a17;color:#8fbf9f;border:1px solid #2c3a32;border-radius:3px;padding:3px 8px;font-family:inherit;font-size:11px;cursor:pointer;min-width:56px;">human</button>
       </span>
       <span class="bt-buttons" style="display:flex;gap:6px;">
         <button class="bt-now" type="button" style="display:none;background:#131a17;color:#c8d3cb;border:1px solid #2c3a32;border-radius:3px;padding:3px 10px;font-family:inherit;font-size:11px;cursor:pointer;">return to now</button>
@@ -626,7 +645,9 @@ async function _openTimeline(branchPath) {
   el.querySelector(".bt-rew").addEventListener("click", () => _bumpSpeed(-1));
   el.querySelector(".bt-ff").addEventListener("click",  () => _bumpSpeed(+1));
   el.querySelector(".bt-playpause").addEventListener("click", _togglePlayPause);
+  el.querySelector(".bt-mode").addEventListener("click", _toggleMode);
   _renderSpeedDisplay();
+  _renderModeDisplay();
 
   // The doctrine: clicking a branch in the panel switches to that
   // branch's live present AND opens its timeline. Branch-switching is
@@ -1090,9 +1111,13 @@ function _playbackTick() {
     _stopPlayback();
     return;
   }
-  // Advance cursor in timeline-time by factor * tick. Positive
-  // factor = forward (cursor advances toward nowTs); negative =
-  // reverse (cursor recedes toward firstTs).
+  if (_state.playbackMode === "reality") {
+    _playbackTickReality(factor);
+    return;
+  }
+  // Human-time mode: advance cursor in timeline-time by factor * tick.
+  // Positive factor = forward (cursor advances toward nowTs); negative
+  // = reverse (cursor recedes toward firstTs).
   const nextMs = _state.cursorMs + factor * PLAYBACK_TICK_MS;
 
   // Forward stop: cursor reached or passed present. Snap to live
@@ -1119,6 +1144,87 @@ function _playbackTick() {
 
   _state.cursorMs = nextMs;
   _rewindTo(new Date(nextMs).toISOString());
+}
+
+// Reality-time tick. Steps mark-to-mark — the empty wall-clock time
+// between acts collapses. Rate scales with the same speed tier: 1x =
+// 1 mark per second; 2x = 2 marks/sec; 8x = 8 marks/sec. Implemented
+// with an accumulator so fractional rates (1x with 250ms tick = 0.25
+// marks/tick) advance smoothly without stutter.
+function _playbackTickReality(factor) {
+  const TICKS_PER_SEC = 1000 / PLAYBACK_TICK_MS;          // 4 at 250ms
+  const MARKS_PER_TICK_AT_1X = 1 / TICKS_PER_SEC;          // 0.25
+  _state.markAccumulator = (_state.markAccumulator || 0) + factor * MARKS_PER_TICK_AT_1X;
+
+  // Step out integer marks; keep the fractional remainder for next tick.
+  let steps = 0;
+  if (_state.markAccumulator >= 1) {
+    steps = Math.floor(_state.markAccumulator);
+  } else if (_state.markAccumulator <= -1) {
+    steps = Math.ceil(_state.markAccumulator);
+  } else {
+    return;  // sub-mark progress; wait for more ticks
+  }
+  _state.markAccumulator -= steps;
+
+  const marks = _state.marks || [];
+  if (marks.length === 0) {
+    _stopPlayback();
+    return;
+  }
+
+  // Locate the current cursor's mark index (highest mark ≤ cursorMs).
+  const cursorTs = _state.cursorMs;
+  let curIdx = -1;
+  for (let i = 0; i < marks.length; i++) {
+    const t = marks[i]?.ts ? new Date(marks[i].ts).getTime() : NaN;
+    if (Number.isNaN(t)) continue;
+    if (t <= cursorTs) curIdx = i;
+    else break;
+  }
+
+  const targetIdx = curIdx + steps;
+
+  // Forward past the last mark → snap live, same shape as the human-
+  // mode forward-stop branch.
+  if (targetIdx >= marks.length) {
+    _stopPlayback();
+    _state.cursorMs = null;
+    _state.markAccumulator = 0;
+    _returnToNow({ preserveCamera: true });
+    return;
+  }
+
+  // Reverse before the first mark → pause at firstTs.
+  if (targetIdx < 0) {
+    const firstMark = marks[0];
+    if (firstMark?.ts) {
+      _state.cursorMs = new Date(firstMark.ts).getTime();
+      _rewindTo(firstMark.ts);
+    }
+    _state.markAccumulator = 0;
+    _stopPlayback();
+    return;
+  }
+
+  const target = marks[targetIdx];
+  if (!target?.ts) return;
+  _state.cursorMs = new Date(target.ts).getTime();
+  _rewindTo(target.ts);
+}
+
+function _toggleMode() {
+  _state.playbackMode = _state.playbackMode === "human" ? "reality" : "human";
+  // Reset the accumulator so a mode flip mid-playback doesn't carry
+  // stale fractional progress across modes.
+  _state.markAccumulator = 0;
+  _renderModeDisplay();
+}
+
+function _renderModeDisplay() {
+  if (!_state.timelineEl) return;
+  const modeEl = _state.timelineEl.querySelector(".bt-mode");
+  if (modeEl) modeEl.textContent = _state.playbackMode;
 }
 
 function _renderSpeedDisplay() {
@@ -1313,7 +1419,7 @@ function _openMergeDialog() {
     "color: #c8d3cb",
     "font-family: ui-monospace, monospace",
     "font-size: 12px",
-    "z-index: 14",
+    "z-index: 220",
     "padding: 16px 18px",
     "pointer-events: auto",
     "box-shadow: 0 10px 40px rgba(0,0,0,0.55)",
@@ -1528,7 +1634,7 @@ async function _openConflictPanel(mergedPath) {
     "color: #c8d3cb",
     "font-family: ui-monospace, monospace",
     "font-size: 12px",
-    "z-index: 14",
+    "z-index: 220",
     "padding: 0",
     "pointer-events: auto",
     "display: flex",
@@ -1812,7 +1918,7 @@ function _showBranchEvent(text, { sticky = 1500, error = false } = {}) {
       "top: 50%",
       "left: 50%",
       "transform: translate(-50%,-50%)",
-      "z-index: 30",
+      "z-index: 240",
       "padding: 14px 24px",
       "border-radius: 8px",
       "font-family: ui-monospace, monospace",

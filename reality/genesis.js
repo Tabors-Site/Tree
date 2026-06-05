@@ -49,7 +49,7 @@
 //   1. DB connection, then indexes. The physical floor every space,
 //      matter row, being, and Fact sits on.
 //   2. ensureSpaceRoot. The place root, the heaven space ("." . the
-//      I-Am's room), and the nine Tier-3 seed spaces under heaven
+//      I-Am's room), and the nine Tier-3 heaven spaces under heaven
 //      (identity, config, peers, extensions, tools, roles, operations,
 //      source, threads). My own Being row places inside this step so
 //      every Fact from t=0 has an actor.
@@ -160,7 +160,7 @@ export async function genesis(app, opts = {}) {
   //
   // Genesis is ONE moment of the I-Am. ONE act ("I am that I am; let
   // there be world") deposits ΔF across many reels: I-Am be:birth,
-  // ten do:create-space (root + nine seed spaces), and one be:birth
+  // ten do:create-space (root + nine heaven spaces), and one be:birth
   // per delegate (with parentBeingId=I-Am in each spec) + their home
   // setups. sealAct commits the whole ΔF + the genesis Act row in
   // one Mongo transaction. A kill -9 mid-genesis leaves zero trace.
@@ -175,7 +175,7 @@ export async function genesis(app, opts = {}) {
     await ensureSpaceRoot(bootCtx);
     if (bootMode === "Beginning") {
       log.info("Genesis", "I plant the space root.");
-      log.info("Genesis", "I plant my nine seed spaces.");
+      log.info("Genesis", "I plant my nine heaven spaces.");
     }
     // Pass the planted I-Am beingId (resolved via sprout's cache)
     // so seedDelegates can skip the live Mongo lookup — the row is
@@ -216,7 +216,7 @@ export async function genesis(app, opts = {}) {
 
   // Heaven contributors. The seed delegates (cherub, birther, llm-
   // assigner, reality-manager, arrival, etc.) need canWrite on
-  // heaven so they can act inside the Tier-3 seed spaces (./roles,
+  // heaven so they can act inside the Tier-3 heaven spaces (./roles,
   // ./operations, ./tools, ...). Mechanism: add them as contributors
   // on heaven. I_AM is heaven's rootOwner already; the new
   // contributors list grows from boot scaffold (seed delegates) and
@@ -227,11 +227,15 @@ export async function genesis(app, opts = {}) {
   // roster that duplicated rootOwner + contributors with its own
   // cache, matter, and DO ops. Collapsed 2026-06-04. Heaven uses the
   // same ownership system every other space uses.
-  await withIAmAct("seed delegates as heaven contributors", async (ctx) => {
+  // ensureSeedDelegatesOnHeaven manages its own per-delegate moments
+  // (read-modify-write on contributors[] would clobber inside one
+  // shared moment — every iteration would see the empty list and
+  // write a singleton). One withIAmAct per delegate inside the call.
+  {
     const { ensureSeedDelegatesOnHeaven } =
       await import("./seed/materials/being/seedDelegates.js");
-    await ensureSeedDelegatesOnHeaven(ctx);
-  });
+    await ensureSeedDelegatesOnHeaven();
+  }
   if (bootMode === "Beginning") {
     log.info("Genesis", "I admit my delegates into heaven.");
   }
@@ -567,7 +571,12 @@ export async function genesis(app, opts = {}) {
     // callers fall back gracefully.
   }
 
-  await runExtensionMigrations();
+  // Each extension migration's schemaVersion bump rides this I-Am
+  // act so the set-space fact has a moment context. Mirrors how
+  // runSeedMigrations is wrapped above.
+  await withIAmAct("extension migrations", async (ctx) => {
+    await runExtensionMigrations(ctx);
+  });
 
   // Hooks only need the blocked set. Restricted extensions still
   // fire hooks, just with limited tools. The scope resolver receives
@@ -589,7 +598,7 @@ export async function genesis(app, opts = {}) {
   log.info("Genesis", "I start my background jobs.");
 
   // I mirror my live registries into the ./tools, ./roles, and
-  // ./operations seed spaces. SEE on those addresses now reflects
+  // ./operations heaven spaces. SEE on those addresses now reflects
   // the live registry through the standard descriptor pipeline.
   // Detached so a sync failure does not block boot. Errors are
   // logged inside the helpers.

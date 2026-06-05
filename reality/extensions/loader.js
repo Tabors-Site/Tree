@@ -2145,11 +2145,11 @@ export function getRegisteredJobs() {
  *   provides.migrations: "./migrations.js"
  *
  * The migrations module exports an array of { version, up } objects.
- * Schema versions are tracked per extension in the .extensions place seed space values.
+ * Schema versions are tracked per extension in the .extensions place heaven space values.
  *
  * Called from genesis.js after DB connect.
  */
-export async function runExtensionMigrations() {
+export async function runExtensionMigrations(summonCtx) {
   let Space;
   try {
     Space = (await import("../seed/materials/space/space.js")).default;
@@ -2158,11 +2158,11 @@ export async function runExtensionMigrations() {
     return;
   }
 
-  // Find the .extensions place seed space once, so per-extension queries are scoped correctly.
-  const { SEED_SPACE } = await import("../seed/materials/space/seedSpaces.js");
-  const { findBySeedSpace } = await import("../seed/materials/projections.js");
+  // Find the .extensions place heaven space once, so per-extension queries are scoped correctly.
+  const { HEAVEN_SPACE } = await import("../seed/materials/space/heavenSpaces.js");
+  const { findByHeavenSpace } = await import("../seed/materials/projections.js");
   const { default: Projection } = await import("../seed/materials/branch/projection.js");
-  const extensionsParent = await findBySeedSpace(SEED_SPACE.EXTENSIONS, "0");
+  const extensionsParent = await findByHeavenSpace(HEAVEN_SPACE.EXTENSIONS, "0");
 
   for (const [name, { manifest, instance }] of loaded) {
     const targetVersion = manifest.provides?.schemaVersion;
@@ -2240,7 +2240,7 @@ export async function runExtensionMigrations() {
           { kind: "space", id: String(extSpace._id) },
           "set-space",
           { field: "qualities.schemaVersion", value: targetVersion },
-          { scaffold: true },
+          { scaffold: true, summonCtx },
         );
         log.verbose(
           "Extensions",

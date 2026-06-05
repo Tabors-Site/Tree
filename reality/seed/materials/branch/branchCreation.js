@@ -312,9 +312,9 @@ async function _hasRealityRootPermission(beingId) {
   if (String(beingId) === String(I_AM)) return true;
 
   try {
-    const { findBySeedSpace, loadProjection } = await import("../projections.js");
-    const { SEED_SPACE } = await import("../space/seedSpaces.js");
-    const heavenSlot = await findBySeedSpace(SEED_SPACE.HEAVEN, "0");
+    const { findByHeavenSpace, loadProjection } = await import("../projections.js");
+    const { HEAVEN_SPACE } = await import("../space/heavenSpaces.js");
+    const heavenSlot = await findByHeavenSpace(HEAVEN_SPACE.HEAVEN, "0");
     if (!heavenSlot) return false;
     const heaven = await loadProjection("space", heavenSlot.id, "0");
     const contributors = heaven?.state?.contributors || [];

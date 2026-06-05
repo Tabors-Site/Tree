@@ -15,9 +15,12 @@
         padding: 8px 14px; font-size: 12px; color: #9ab0a3;
         background: linear-gradient(rgba(0,0,0,0.4), rgba(0,0,0,0));
       }
+      /* #hud-bottom retired as a visible surface 2026-06-05. Status now
+         routes through the shared body-level toast (portal-status.js)
+         so 3D and flat modes use one element. Hidden but kept in the
+         DOM so any debug tool reading textContent still works. */
       #hud-bottom {
-        background: linear-gradient(rgba(0,0,0,0), rgba(0,0,0,0.4));
-        text-align: center;
+        display: none;
       }
       #address-bar {
         pointer-events: auto;
@@ -224,7 +227,6 @@
         <button class="nav-btn" id="nav-place"  title="Reality root">reality</button>
         <button class="nav-btn" id="nav-home"  title="Your home" disabled>home</button>
         <button class="nav-btn" id="nav-root"  title="Tree root" disabled>root</button>
-        <button class="nav-btn" id="nav-text"  title="Text mode (\\)">text</button>
       </div>
       <div id="hud-top" style="display:none"></div>
       <div id="hud-bottom"></div>

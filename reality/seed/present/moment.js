@@ -89,6 +89,24 @@ export async function runMoment({ beingId, spaceId, entry, index, handoff = null
       // assign couldn't run this entry (being missing, role not
       // carried, role not registered). Already logged inside assign.
       // No actId, no Act row, no inbox close.
+      //
+      // Fire onError so the wire's awaitResult fails fast instead of
+      // waiting out the 60s timeout. Without this, a transport-act
+      // whose receiving being / role isn't resolvable on the moment's
+      // branch leaves the originating socket hanging until the
+      // DEFAULT_TIMEOUT_MS in transportAct.js trips. The substrate has
+      // already decided this entry can't run; tell the wire now.
+      if (handoff?.onError) {
+        try {
+          handoff.onError(
+            Object.assign(
+              new Error(`moment skipped: ${setup.skipped}`),
+              { shape: "internal", cause: `assign-skipped:${setup.skipped}` },
+            ),
+            entry,
+          );
+        } catch {}
+      }
       return { actId: null, result: null, responseEntry: null };
     }
 
@@ -192,6 +210,13 @@ export async function runMoment({ beingId, spaceId, entry, index, handoff = null
       // closes cleanly. No Act row, no eviction-as-failure, no
       // onError handoff.
       try { await closeInboxOnAnswer(entry.correlation); } catch {}
+      // Transport-acts that ran a pure-read verb (replicate-subtree,
+      // future read ops) land here too — momentum returned kind:"see"
+      // with verbResult. The wire-caller is waiting on awaitResult;
+      // deliver the result through the handoff so it doesn't time out.
+      if (isTransportAct) {
+        rawResult = cognition.verbResult ?? null;
+      }
       log.info(
         "Moment",
         `saw being=${beingId.slice(0, 8)} . no act sealed (clean release)`,
@@ -311,14 +336,21 @@ export async function runMoment({ beingId, spaceId, entry, index, handoff = null
   }
 
   // Handoff: only fire onResponse when something actually happened.
-  // For transport-act: fire with the verb return + actId (when sealed).
+  // For transport-act: fire with the verb return + actId. When the
+  // moment closed as a SEE (pure-read DO, no facts → no Act stamped),
+  // actId is null but rawResult still carries the verb's answer; the
+  // wire-caller's awaitResult is waiting on this delivery.
   // For summon: fire with the response entry (built only on ok:true).
   // For ok:false: no handoff fires — the asker's onResponse is for
   // delivering an answer, and there is no answer.
-  if (handoff?.onResponse && actInserted) {
+  const seeWithResult = !actInserted && isTransportAct && cognition?.kind === "see";
+  if (handoff?.onResponse && (actInserted || seeWithResult)) {
     try {
       if (isTransportAct) {
-        handoff.onResponse({ result: rawResult, actId: String(actInserted._id) });
+        handoff.onResponse({
+          result: rawResult,
+          actId: actInserted ? String(actInserted._id) : null,
+        });
       } else if (responseEntry) {
         handoff.onResponse(responseEntry);
       }

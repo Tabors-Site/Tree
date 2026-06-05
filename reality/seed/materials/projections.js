@@ -603,7 +603,7 @@ export async function loadProjections(type, ids, branch) {
 }
 
 /**
- * Find the space whose `seedSpace` marker matches the given kind. Used
+ * Find the space whose `heavenSpace` marker matches the given kind. Used
  * by the migrations runner and seed-space lookups (.config, .threads,
  * heaven, etc.). Seed-space markers are singletons within a branch.
  *
@@ -611,12 +611,12 @@ export async function loadProjections(type, ids, branch) {
  * @param {string} [branch="0"]
  * @returns {Promise<{state, foldedSeq, position, type, id}|null>}
  */
-export async function findBySeedSpace(seedSpaceKind, branch) {
+export async function findByHeavenSpace(seedSpaceKind, branch) {
   if (!seedSpaceKind) return null;
   assertBranch(branch);
   const slot = await Projection.findOne({
     branch, type: "space",
-    "state.seedSpace": seedSpaceKind,
+    "state.heavenSpace": seedSpaceKind,
     tombstoned: { $ne: true },
   }).lean();
   if (!slot) return null;
@@ -656,11 +656,11 @@ export async function findInHeaven(type, name) {
 }
 
 /**
- * Read a heaven seed-space entry by kind. Same as findBySeedSpace
+ * Read a heaven seed-space entry by kind. Same as findByHeavenSpace
  * but locked to MAIN.
  */
 export async function findHeavenSpace(seedSpaceKind) {
-  return await findBySeedSpace(seedSpaceKind, "0");
+  return await findByHeavenSpace(seedSpaceKind, "0");
 }
 
 /**

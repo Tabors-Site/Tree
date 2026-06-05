@@ -125,14 +125,14 @@ async function birthHandler({ payload, ctx }) {
     // failures here don't deny the registration.
     try {
       const { withIAmAct } = await import("../../../sprout.js");
-      const { findBySeedSpace } = await import("../../../materials/projections.js");
-      const { SEED_SPACE } = await import("../../../materials/space/seedSpaces.js");
+      const { findByHeavenSpace } = await import("../../../materials/projections.js");
+      const { HEAVEN_SPACE } = await import("../../../materials/space/heavenSpaces.js");
       const { addContributor } = await import("../../../materials/space/ownership.js");
       const { I_AM } = await import("../../../materials/being/seedBeings.js");
-      const heaven = await findBySeedSpace(SEED_SPACE.HEAVEN, "0");
+      const heaven = await findByHeavenSpace(HEAVEN_SPACE.HEAVEN, "0");
       if (heaven) {
         await withIAmAct(`anoint rootOperator @${being.name}`, async (anointCtx) => {
-          await addContributor(String(heaven.id), String(being._id), I_AM, anointCtx?.branch || "0");
+          await addContributor(String(heaven.id), String(being._id), I_AM, anointCtx?.branch || "0", anointCtx);
         });
       }
     } catch (err) {

@@ -4,7 +4,7 @@
 // branch paths. The IBP address parser uses this to resolve labels
 // like `#main` to canonical paths like `#7`.
 //
-// Storage: heaven. Pointers live on the `.branches` seed space's
+// Storage: heaven. Pointers live on the `.branches` heaven space's
 // `qualities.pointers` map. The `.branches` space is in heaven
 // ("heaven never branches" doctrine), so the storage has one
 // projection per reality regardless of which branch is querying.
@@ -23,7 +23,7 @@
 // can be added freely.
 
 import { findHeavenSpace, loadHeavenProjection } from "../projections.js";
-import { SEED_SPACE } from "../space/seedSpaces.js";
+import { HEAVEN_SPACE } from "../space/heavenSpaces.js";
 import { MAIN } from "./branches.js";
 
 export const RESERVED_POINTERS = Object.freeze(["main"]);
@@ -130,13 +130,13 @@ export async function pointersFor(canonicalPath) {
  * to address writes at the storage location.
  */
 export async function findPointersSpaceId() {
-  const slot = await findHeavenSpace(SEED_SPACE.BRANCHES);
+  const slot = await findHeavenSpace(HEAVEN_SPACE.BRANCHES);
   return slot?.id ? String(slot.id) : null;
 }
 
 async function _readPointerMap() {
   try {
-    const slot = await findHeavenSpace(SEED_SPACE.BRANCHES);
+    const slot = await findHeavenSpace(HEAVEN_SPACE.BRANCHES);
     if (!slot?.id) {
       return { main: MAIN };
     }

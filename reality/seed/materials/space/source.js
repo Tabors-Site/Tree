@@ -17,7 +17,7 @@
 // against `./source` Matter reject with ORIGIN_READ_ONLY (gate in
 // ibp/verbs/do.js). The reconciliation walk uses direct Matter
 // saves and bypasses the public createMatter path because that path
-// also (correctly) refuses to author into place seed spaces.
+// also (correctly) refuses to author into place heaven spaces.
 
 import fs from "fs";
 import path from "path";
@@ -27,7 +27,7 @@ import log from "../../seedReality/log.js";
 import Matter from "../matter/matter.js";
 import Space from "./space.js";
 import { MATTER_ORIGIN } from "../matter/origins.js";
-import { SEED_SPACE } from "./seedSpaces.js";
+import { HEAVEN_SPACE } from "./heavenSpaces.js";
 import { I_AM } from "../being/seedBeings.js";
 
 const __filename = fileURLToPath(import.meta.url);
@@ -79,10 +79,10 @@ let sourceSpaceIdCache = null;
 
 /**
  * Bootstrap the `./source` matter tree. Idempotent. Verifies the
- * `./source` Tier-3 seed space exists, then kicks off a reconciliation walk
+ * `./source` Tier-3 heaven space exists, then kicks off a reconciliation walk
  * **detached** so boot is not blocked by a multi-thousand-file scan.
  *
- * Call after ensureSpaceRoot() so the place seed space already exists.
+ * Call after ensureSpaceRoot() so the place heaven space already exists.
  *
  * @param {object} [opts]
  * @param {string} [opts.rootPath]    - directory to mirror (default place/)
@@ -95,13 +95,13 @@ export async function ensureSourceTree(opts = {}) {
   const ignore = opts.ignore || DEFAULT_IGNORE;
   const detached = opts.detached !== false;
 
-  const { findBySeedSpace } = await import("../projections.js");
-  const _sourceSlot = await findBySeedSpace(SEED_SPACE.SOURCE, "0");
+  const { findByHeavenSpace } = await import("../projections.js");
+  const _sourceSlot = await findByHeavenSpace(HEAVEN_SPACE.SOURCE, "0");
   const sourceSpace = _sourceSlot ? { _id: _sourceSlot.id } : null;
   if (!sourceSpace) {
     log.warn(
       "Source",
-      `./source seed space missing; cannot populate source tree`,
+      `./source heaven space missing; cannot populate source tree`,
     );
     return null;
   }
@@ -145,10 +145,10 @@ export async function syncSourceTree({
   const targetPath =
     rootPath || process.env.SOURCE_TREE_ROOT || DEFAULT_SOURCE_ROOT;
 
-  const { findBySeedSpace } = await import("../projections.js");
-  const _sourceSlot = await findBySeedSpace(SEED_SPACE.SOURCE, "0");
+  const { findByHeavenSpace } = await import("../projections.js");
+  const _sourceSlot = await findByHeavenSpace(HEAVEN_SPACE.SOURCE, "0");
   const sourceSpace = _sourceSlot ? { _id: _sourceSlot.id } : null;
-  if (!sourceSpace) throw new Error("./source seed space not found");
+  if (!sourceSpace) throw new Error("./source heaven space not found");
   const sourceSpaceId = String(sourceSpace._id);
   sourceSpaceIdCache = sourceSpaceId;
 
@@ -206,7 +206,7 @@ export async function syncSourceTree({
 }
 
 /**
- * Cached lookup of the `./source` seed space id. Returns null before
+ * Cached lookup of the `./source` heaven space id. Returns null before
  * ensureSourceTree has run, or if the space has not been created.
  * Used by the DO gate to deny writes against .source matters.
  */
@@ -215,7 +215,7 @@ export function getSourceSpaceId() {
 }
 
 /**
- * Truthy if the given spaceId is the .source place seed space. Synchronous
+ * Truthy if the given spaceId is the .source place heaven space. Synchronous
  * after ensureSourceTree has primed the cache.
  */
 export function isSourceSpaceId(spaceId) {

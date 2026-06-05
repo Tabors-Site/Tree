@@ -801,7 +801,7 @@ export function isValidPath(path) {
       continue;
     }
     // The heaven space is named ".". A bare-"." segment is the door
-    // into the I-Am's room; all Tier-3 seed spaces live one step
+    // into the I-Am's room; all Tier-3 heaven spaces live one step
     // deeper at "/./config", "/./tools", etc.
     if (seg === ".") continue;
     if (!SEGMENT_RE.test(seg)) {

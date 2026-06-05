@@ -134,7 +134,7 @@ Space holds matter; matter qualifies space; the union becomes a being when it ac
 
 The architecture carries the extra fields that go beyond the tree shape:
 
-- **Space** carries `qualities` (the of-what-sort answers for this position, see below), `contributors[]` and `rootOwner` (whose authority lives here), and `seedSpace` (set only on the seed-planted spaces: heaven plus the nine Tier-3 rooms below it).
+- **Space** carries `qualities` (the of-what-sort answers for this position, see below), `contributors[]` and `rootOwner` (whose authority lives here), and `heavenSpace` (set only on the seed-planted spaces: heaven plus the nine Tier-3 rooms below it).
 - **Matter** has an `origin` naming where the underlying content actually lives (`ibp`, `filesystem`, `web`, `cross-place`) and a `content` payload shaped by that origin. The `origin` field is how the world bridges to other realms.
 - **Being** has `name`, `roles[]`, `operatingMode` (`human` | `llm` | `script` | `mixed`), `homeSpace` (where it lives by default), `currentSpace` (where it stands right now), `defaultRole`, and `llmDefault`. Beings act through the four verbs (SEE, DO, SUMMON, BE) and every act they emit attributes back to them.
 
@@ -143,7 +143,7 @@ The architecture carries the extra fields that go beyond the tree shape:
 `seed/materials/` holds the operations on the three primitives. Each subfolder contains the code that creates, mutates, observes, and tears down its primitive:
 
 - **`being/`**: Being operations. Minting beings, walking the being tree, position tracking, the BE-verb handler registry, the I_AM constant. The Being's own homepage in the code.
-- **`space/`**: Space operations. Planting spaces, walking ancestor chains, managing ownership and contributors, the seed-space markers (`SEED_SPACE`, `DELETED`). The Space's homepage.
+- **`space/`**: Space operations. Planting spaces, walking ancestor chains, managing ownership and contributors, the seed-space markers (`HEAVEN_SPACE`, `DELETED`). The Space's homepage.
 - **`matter/`**: Matter operations. Creating and editing matter, managing uploads, the `MATTER_ORIGIN` enum. The Matter's homepage.
 - **`qualities.js`**: the consolidated per-primitive extension-data API. Three sub-namespaces (`qualities.being`, `qualities.space`, `qualities.matter`), each with the same nine atomic primitives for reading and writing what kind a given primitive is.
 

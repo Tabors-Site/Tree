@@ -123,6 +123,38 @@ export function wake(beingId, spaceId) {
   }
 }
 
+// DB-health gate. When Mongoose's connection has dropped (readyState
+// not 1), every query throws "Client must be connected before running
+// operations." Without this gate, a wake storm (the dance-floor seed
+// schedules ticks; each tick fans N dancer wakes) crashes every dancer
+// runLoop in parallel and re-fires on every tick, producing the cascade
+// the operator sees nonstop in logs. We pause picking until the
+// connection comes back; wakes still enqueue, and the next post-recovery
+// wake drains them.
+let _dbReadyState = null;
+async function _isDbHealthy() {
+  if (_dbReadyState !== null && _dbReadyState !== 1) {
+    // Stale value; re-check.
+    _dbReadyState = null;
+  }
+  if (_dbReadyState === 1) return true;
+  const { default: mongoose } = await import("../../seedReality/dbConfig.js");
+  _dbReadyState = mongoose.connection.readyState;
+  return _dbReadyState === 1;
+}
+
+let _dbDownNotedAt = 0;
+function _noteDbDownOnce() {
+  const now = Date.now();
+  if (now - _dbDownNotedAt > 30000) {
+    _dbDownNotedAt = now;
+    log.warn(
+      "Scheduler",
+      "Mongoose readyState !== 1; pausing inbox pickup until the connection recovers. Wakes still enqueue.",
+    );
+  }
+}
+
 /**
  * Abort the currently-running Act for this being. The AbortSignal
  * propagates into the being's summon() call. Returns true when an
@@ -230,6 +262,19 @@ export function _resetAll() {
 async function runLoop(beingId) {
   const state = _state.get(beingId);
   if (!state) return;
+
+  // DB-health gate. When Mongoose's readyState !== 1, every query
+  // will throw. Picking inbox rows under those conditions guarantees
+  // each runLoop pass crashes immediately; with a wake storm (the
+  // dance-floor schedules ticks that fan to N dancer wakes), N runLoops
+  // crash in parallel and the next tick refires them all. The cascade
+  // saturates logs faster than the terminal can flush. Pause picking
+  // until the connection comes back; wakes still enqueue, and the next
+  // wake after recovery drains them.
+  if (!(await _isDbHealthy())) {
+    _noteDbDownOnce();
+    return;  // run finally: clears running/controller, leaves wakeQueue
+  }
 
   try {
     // Process every space that has wake-queued pending work. The loop

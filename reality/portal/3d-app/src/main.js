@@ -45,6 +45,7 @@ import {
   closeFlatPanel,
   toggleFlatPanel,
   isFlatPanelOpen,
+  mountFlatPanelButton,
 } from "./flat-panel.js";
 
 const SESSION_KEY = "treeos-portal-3d-session";
@@ -312,6 +313,13 @@ async function main() {
     client:  state.client,
     reality: state.discovery?.reality || "treeos.ai",
   });
+
+  // Standalone letters-mode toggle, below the 🌿 button. The address
+  // bar previously hid this as a 4-letter "text" button at the far
+  // right edge; making it a fixed-position button gives it air and
+  // a clearer label. Both buttons share the same left column; flat-
+  // panel.js hides them while the panel is up.
+  mountFlatPanelButton(L);
 
   // Rewind / return / branch-here events flow back through navigate().
   // Rewinding means re-SEEing the current position with an at:
@@ -1043,10 +1051,21 @@ async function navigate(address, { fromHistory = false } = {}) {
     _lastEmittedCoord = null;
     _startSelfPositionLoop();
 
-    // Push to history unless we're navigating via back/forward.
+    // Push to history unless we're navigating via back/forward. Store
+    // the FULL IBP-form address (reality + branch qualifier + path) so
+    // back/forward restores the exact view we were on. The earlier
+    // pathByNames-only shape lost the branch and let _withActiveBranch
+    // re-inject whatever branch the user is CURRENTLY on, which moved
+    // back-navigation to the wrong branch when the user had hopped
+    // branches in between.
     if (!fromHistory) {
-      const canonical = desc?.address?.pathByNames || address;
-      // If the same as current, do not duplicate.
+      const reality = desc?.address?.place || state.discovery?.reality || "";
+      const branch = desc?.address?.branch || "0";
+      const path = desc?.address?.pathByNames || "/";
+      const bq = branch === "0" ? "" : `#${branch}`;
+      const canonical = reality
+        ? `${reality}${bq}${path === "/" ? "/" : path}`
+        : (desc?.address?.pathByNames || address);
       if (state.history[state.historyIndex] !== canonical) {
         // Drop any "forward" history beyond the current index.
         state.history = state.history.slice(0, state.historyIndex + 1);

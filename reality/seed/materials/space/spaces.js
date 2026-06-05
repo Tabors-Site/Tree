@@ -20,8 +20,8 @@
 // Everything else is rejected. The rule keeps every space
 // addressable in a URL path without encoding — no slashes, no
 // spaces, no HTML, no @ / ~ / ? / # prefixes that the IBP address
-// grammar reserves for stance qualifiers. Place seed spaces
-// (dot-prefixed) bypass the rule via `createRealitySeedSpace` because
+// grammar reserves for stance qualifiers. Place heaven spaces
+// (dot-prefixed) bypass the rule via `createRealityHeavenSpace` because
 // I plant them at boot and the validator's job is to keep every
 // OTHER being out of the dot-namespace.
 
@@ -50,7 +50,7 @@ import { getSpaceRootId } from "../../sprout.js";
 import { getRealityConfigValue, CONFIG_DEFAULTS } from "../../realityConfig.js";
 import log from "../../seedReality/log.js";
 import { IBP_ERR, IbpError } from "../../ibp/protocol.js";
-import { DELETED, SEED_SPACE } from "./seedSpaces.js";
+import { DELETED, HEAVEN_SPACE } from "./heavenSpaces.js";
 import { I_AM } from "../being/seedBeings.js";
 import { MATTER_ORIGIN } from "../matter/origins.js";
 
@@ -235,7 +235,7 @@ export async function assertNameAvailableAt(
  *   - `isRoot: true` plants a new tree under the place root, with the
  *     caller as `rootOwner`.
  *   - `isRoot: false` requires `parentId` and creates a child of that
- *     space (which must not be a place seed space).
+ *     space (which must not be a place heaven space).
  *
  * Initial matter content can be planted via `note` (creates one
  * IBP-origin Matter on the new space).
@@ -393,7 +393,7 @@ export async function createSpace({
     } else if (parentId) {
       const { loadOrFold: _lP3 } = await import("../projections.js");
       const _pSlot3 = await _lP3("space", parentId, branch);
-      const parentSpace = _pSlot3 ? { seedSpace: _pSlot3.state?.seedSpace } : null;
+      const parentSpace = _pSlot3 ? { heavenSpace: _pSlot3.state?.heavenSpace } : null;
       // The parent may be pending earlier in this batch (atomic-batch
       // forward reference) — accept either a materialized row or a
       // pending fact in the boot moment's ΔF.
@@ -407,8 +407,8 @@ export async function createSpace({
         );
         if (!pendingInBatch) throw new Error("Parent space not found");
       } else if (
-        parentSpace.seedSpace &&
-        parentSpace.seedSpace !== SEED_SPACE.SPACE_ROOT &&
+        parentSpace.heavenSpace &&
+        parentSpace.heavenSpace !== HEAVEN_SPACE.SPACE_ROOT &&
         !scaffold
       ) {
         // User-being protection: extension code / operators may not
@@ -418,11 +418,11 @@ export async function createSpace({
         // and owns the dot-namespace — scaffold bypasses the check.
         //
         // SPACE_ROOT is exempt: the place root carries
-        // seedSpace=SPACE_ROOT for ancestor-chain identity, but it
+        // heavenSpace=SPACE_ROOT for ancestor-chain identity, but it
         // IS the operator-visible root where every plant, every
         // user tree, every dance-floor lives. Treating it as
         // protected breaks the plant verb itself.
-        throw new Error("Cannot create spaces under seed spaces");
+        throw new Error("Cannot create spaces under heaven spaces");
       }
       const childCount = await _Proj.countDocuments({
         branch, type: "space",
@@ -479,7 +479,7 @@ export async function createSpace({
       _pending: true,
       name,
       parent: resolvedParentId,
-      seedSpace: null,
+      heavenSpace: null,
     };
   }
   const { loadProjection: _lPnew } = await import("../projections.js");
@@ -518,16 +518,16 @@ export async function createSpace({
 }
 
 /**
- * Create a place seed space. Owner: I_AM. Stamps a Fact via logFact.
+ * Create a place heaven space. Owner: I_AM. Stamps a Fact via logFact.
  *
  * Two kinds of Space exist; this function makes the second kind.
  * Normal space (createSpace) is made BY beings FOR beings to live
- * in — addressable by stance, gated by auth. Place seed space (this
+ * in — addressable by stance, gated by auth. Place heaven space (this
  * function) is made by I_AM at boot: the fixed (.identity, .config,
  * .peers, .extensions, .tools, .roles, .operations, .source,
  * .threads) that hold I_AM's own working memory, surfaced as spaces
  * so SEE reads them through the same protocol everything else does.
- * See point 5 of THE PHILOSOPHY OF THE SEED in seed/materials/space/seedSpaces.js.
+ * See point 5 of THE PHILOSOPHY OF THE SEED in seed/materials/space/heavenSpaces.js.
  *
  * Skips `createSpace`'s name validator (I_AM owns the dot-namespace
  * — the validator's job is to keep every OTHER being out) and the
@@ -536,10 +536,10 @@ export async function createSpace({
  * its own precondition — point 9). Everything else is the same
  * write that `createSpace` performs.
  */
-export async function createRealitySeedSpace({
+export async function createRealityHeavenSpace({
   name,
   parentId,
-  seedSpace,
+  heavenSpace,
   qualities = null,
   summonCtx = null,
 }) {
@@ -548,7 +548,7 @@ export async function createRealitySeedSpace({
   if (!parentId) throw new Error("Seed space requires a parent");
   if (!summonCtx) {
     throw new Error(
-      "createRealitySeedSpace requires summonCtx (the boot moment's ctx). Reachable only from inside withBootMoment(...).",
+      "createRealityHeavenSpace requires summonCtx (the boot moment's ctx). Reachable only from inside withBootMoment(...).",
     );
   }
 
@@ -571,7 +571,7 @@ export async function createRealitySeedSpace({
         type:      null,
         parent:    parentId ? String(parentId) : null,
         rootOwner: I_AM,
-        seedSpace: seedSpace || null,
+        heavenSpace: heavenSpace || null,
         qualities: specQualities,
       },
     },
@@ -583,7 +583,7 @@ export async function createRealitySeedSpace({
 
   // Row materializes at boot seal. Return a pending shape so the
   // caller (sprout.js ensureSpaceRoot) can keep operating on the id.
-  return { _id: id, _pending: true, name, parent: parentId, seedSpace };
+  return { _id: id, _pending: true, name, parent: parentId, heavenSpace };
 }
 
 /**
@@ -733,8 +733,8 @@ export async function updateParentRelationship(
   const newParent = null;
 
   if (!newParent) throw new Error("New parent space not found");
-  if (newParent.seedSpace)
-    throw new Error("Cannot move into a seed space");
+  if (newParent.heavenSpace)
+    throw new Error("Cannot move into a heaven space");
   if (await isDescendant(childId, newParentId)) {
     throw new Error("Cannot move a space into its own descendant");
   }
@@ -942,7 +942,7 @@ export async function buildPathString(spaceId, branch) {
   if (!chain || chain.length === 0) return "";
   const segments = [];
   for (const ancestor of chain) {
-    if (ancestor.seedSpace) break;
+    if (ancestor.heavenSpace) break;
     if (ancestor.name) segments.push(ancestor.name);
   }
   // Chain is ordered space-to-root. Path is root-to-space.
@@ -963,21 +963,21 @@ export async function resolveRootSpace(spaceId) {
     parent:       s.state?.parent || null,
     rootOwner:    s.state?.rootOwner || null,
     contributors: (s.state?.contributors || []).map(String),
-    seedSpace:    s.state?.seedSpace || null,
+    heavenSpace:    s.state?.heavenSpace || null,
     name:         s.state?.name,
   } : null;
 
   let space = slotToObj(await loadProjection("space", spaceId, "0"));
   if (!space) throw new Error("Space not found");
-  if (space.seedSpace === "source") return space;
+  if (space.heavenSpace === "source") return space;
 
   while (!space.rootOwner || space.rootOwner === I_AM) {
     if (!space.parent) throw new Error("Invalid tree: no rootOwner found");
     space = slotToObj(await loadProjection("space", space.parent, "0"));
     if (!space) throw new Error("Broken tree");
-    if (space.seedSpace) {
-      if (space.seedSpace === "source") return space;
-      throw new Error("Invalid tree: reached seed space boundary");
+    if (space.heavenSpace) {
+      if (space.heavenSpace === "source") return space;
+      throw new Error("Invalid tree: reached heaven space boundary");
     }
   }
   return space;
@@ -1036,7 +1036,7 @@ export async function resolveSpaceAccess(spaceId, beingId, branch) {
 }
 
 /**
- * List the immediate children of a space. Skips seed spaces (so the
+ * List the immediate children of a space. Skips heaven spaces (so the
  * place root yields user-created tree roots, not .config / .tools /
  * etc.). Returns at most `limit` rows, newest-creation first.
  */
@@ -1056,8 +1056,8 @@ export async function listSpaceChildren(parentId, { exclude = null, limit = 500,
       branch: b, type: "space",
       "state.parent": parentId,
       $or: [
-        { "state.seedSpace": null },
-        { "state.seedSpace": { $exists: false } },
+        { "state.heavenSpace": null },
+        { "state.heavenSpace": { $exists: false } },
       ],
       tombstoned: { $ne: true },
     };
@@ -1122,8 +1122,8 @@ export async function listBeingSpaces(beingId, { limit = 500 } = {}) {
     "state.parent": spaceRootId,
     "state.rootOwner": beingId,
     $or: [
-      { "state.seedSpace": null },
-      { "state.seedSpace": { $exists: false } },
+      { "state.heavenSpace": null },
+      { "state.heavenSpace": { $exists: false } },
     ],
     tombstoned: { $ne: true },
   })

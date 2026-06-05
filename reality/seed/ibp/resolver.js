@@ -37,7 +37,7 @@ import Being from "../materials/being/being.js";
 import Space from "../materials/space/space.js";
 import { getSpaceRootId } from "../sprout.js";
 import { resolveRootSpace } from "../materials/space/spaces.js";
-import { SEED_SPACE } from "../materials/space/seedSpaces.js";
+import { HEAVEN_SPACE } from "../materials/space/heavenSpaces.js";
 
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -78,7 +78,7 @@ export async function resolveStance(stance, opts = {}) {
   // layer reads this to thread into summonCtx + emitFact.
   const branch = stance.branch || "0";
 
-  // reality root: path is "/". The reality root IS a Space (the seedSpace:
+  // reality root: path is "/". The reality root IS a Space (the heavenSpace:
   // SPACE_ROOT row created by ensureSpaceRoot), so we surface its id as
   // spaceId. That makes beings whose home is the reality root —
   // reality-manager, llm-assigner, auth — summonable: the inbox sits on
@@ -299,11 +299,11 @@ async function walkSpacePath({
   let leafSpace = startAt;
 
   // Track whether we're currently inside the heaven region. Heaven (".",
-  // SEED_SPACE.HEAVEN) sits directly under the reality root and parents
-  // every Tier-3 seed space (identity, config, tools, roles,
+  // HEAVEN_SPACE.HEAVEN) sits directly under the reality root and parents
+  // every Tier-3 heaven space (identity, config, tools, roles,
   // operations, extensions, source, peers, threads). Descending into
   // heaven or one of its Tier-3 children requires letting the
-  // seedSpace filter off. Once we pass through a Tier-3 child into
+  // heavenSpace filter off. Once we pass through a Tier-3 child into
   // a normal sub-row (e.g. `./roles/<role-name>`), seed-space children
   // are no longer expected . the filter goes back on.
   let parentSeedSpace = null;
@@ -311,18 +311,18 @@ async function walkSpacePath({
     const seg = segments[i];
     const isFirst = i === 0;
     // Heaven's name at depth 0. The bare "." is the door into the
-    // I-Am's room; we let the seedSpace filter off so the heaven row
-    // (seedSpace: "heaven") resolves. No other dot-prefixed segment
+    // I-Am's room; we let the heavenSpace filter off so the heaven row
+    // (heavenSpace: "heaven") resolves. No other dot-prefixed segment
     // lives directly under the reality root anymore . the legacy
     // ".config" / ".tools" etc shape retired 2026-06-01; all Tier-3
-    // seed spaces now live under heaven.
+    // heaven spaces now live under heaven.
     const isHeavenDoor = isFirst && seg === ".";
     // Heaven children: when the parent we just descended into is
-    // heaven itself, drop the seedSpace:null filter so its Tier-3
+    // heaven itself, drop the heavenSpace:null filter so its Tier-3
     // seed-space children (config, tools, roles, ...) resolve.
     // Without this, paths like `/./roles` SPACE_NOT_FOUND at depth 1
-    // because `roles` IS a seedSpace and would get filtered out.
-    const parentIsHeaven = parentSeedSpace === SEED_SPACE.HEAVEN;
+    // because `roles` IS a heavenSpace and would get filtered out.
+    const parentIsHeaven = parentSeedSpace === HEAVEN_SPACE.HEAVEN;
     const allowSeedSpaceChildren = isHeavenDoor || parentIsHeaven;
     // Branch-aware segment lookup. The walker checks the current
     // branch's slot first; on miss (and only on a non-main branch),
@@ -338,8 +338,8 @@ async function walkSpacePath({
         ? {}
         : {
             $or: [
-              { "state.seedSpace": null },
-              { "state.seedSpace": { $exists: false } },
+              { "state.heavenSpace": null },
+              { "state.heavenSpace": { $exists: false } },
             ],
           }),
     };
@@ -399,7 +399,7 @@ async function walkSpacePath({
     chain.push({ name: space.name, id: space._id });
     currentParent = space._id;
     leafSpace = space;
-    parentSeedSpace = space.seedSpace || null;
+    parentSeedSpace = space.heavenSpace || null;
   }
 
   // The enclosing tree root. Walk up to the nearest space with rootOwner;

@@ -90,7 +90,7 @@ async function deleteChildByFact(childId, summonCtx) {
 }
 
 export async function manifestItems({
-  seedSpace,
+  heavenSpace,
   items,
   itemType = "resource",
   summonCtx,
@@ -100,15 +100,15 @@ export async function manifestItems({
       "manifestItems requires summonCtx. Wrap the call in withIAmAct(...).",
     );
   }
-  if (!seedSpace) throw new Error("manifestItems requires seedSpace");
+  if (!heavenSpace) throw new Error("manifestItems requires heavenSpace");
   if (!Array.isArray(items)) items = [];
 
-  const { findBySeedSpace } = await import("../materials/projections.js");
-  const parentSlot = await findBySeedSpace(seedSpace, "0");
+  const { findByHeavenSpace } = await import("../materials/projections.js");
+  const parentSlot = await findByHeavenSpace(heavenSpace, "0");
   if (!parentSlot) {
     log.warn(
       "Manifest",
-      `place seed space for ${seedSpace} not found; skipping sync`,
+      `place heaven space for ${heavenSpace} not found; skipping sync`,
     );
     return { created: 0, removed: 0, kept: 0 };
   }
@@ -165,7 +165,7 @@ export async function manifestItems({
 
 // Idempotent single-child add/refresh for runtime registrations.
 export async function addManifestChild({
-  seedSpace,
+  heavenSpace,
   name,
   qualities = null,
   itemType = "resource",
@@ -177,8 +177,8 @@ export async function addManifestChild({
     );
   }
   if (!name) return null;
-  const { findBySeedSpace } = await import("../materials/projections.js");
-  const parentSlot = await findBySeedSpace(seedSpace, "0");
+  const { findByHeavenSpace } = await import("../materials/projections.js");
+  const parentSlot = await findByHeavenSpace(heavenSpace, "0");
   if (!parentSlot) return null;
   const parent = { _id: parentSlot.id };
   const { default: Projection } = await import("../materials/branch/projection.js");
@@ -205,7 +205,7 @@ export async function addManifestChild({
 }
 
 export async function removeManifestChild({
-  seedSpace,
+  heavenSpace,
   name,
   itemType = "resource",
   summonCtx,
@@ -216,8 +216,8 @@ export async function removeManifestChild({
     );
   }
   if (!name) return false;
-  const { findBySeedSpace } = await import("../materials/projections.js");
-  const parentSlot = await findBySeedSpace(seedSpace, "0");
+  const { findByHeavenSpace } = await import("../materials/projections.js");
+  const parentSlot = await findByHeavenSpace(heavenSpace, "0");
   if (!parentSlot) return false;
   const { default: Projection } = await import("../materials/branch/projection.js");
   const child = await Projection.findOne({

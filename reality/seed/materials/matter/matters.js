@@ -46,7 +46,7 @@ import { getRealityConfigValue } from "../../realityConfig.js";
 import { resolveRootSpace } from "../space/spaces.js";
 import { hooks } from "../../hooks.js";
 import { MATTER_ORIGIN } from "./origins.js";
-import { DELETED } from "../space/seedSpaces.js";
+import { DELETED } from "../space/heavenSpaces.js";
 import { IBP_ERR, IbpError } from "../../ibp/protocol.js";
 
 // `__dirname` resolves to seed/materials/matter/. Three ups reach the
@@ -135,12 +135,12 @@ async function createMatter({
   const spaceIdBare = String(spaceId);
   const _spaceSlot = await loadOrFold("space", spaceIdBare, branch);
   const targetSpace = _spaceSlot ? {
-    seedSpace: _spaceSlot.state?.seedSpace,
+    heavenSpace: _spaceSlot.state?.heavenSpace,
     parent:    _spaceSlot.state?.parent,
   } : null;
   if (!targetSpace) throw new Error("Space not found or deleted");
   if (!targetSpace.parent) throw new Error("Space not found or deleted");
-  if (targetSpace.seedSpace) throw new Error("Cannot modify seed spaces");
+  if (targetSpace.heavenSpace) throw new Error("Cannot modify heaven spaces");
 
   const max = maxMatterPerSpace();
   const count = await Projection.countDocuments({

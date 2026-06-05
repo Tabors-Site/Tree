@@ -36,7 +36,7 @@
 
 import { registerOperation } from "../../../ibp/operations.js";
 import { addManifestChild, removeManifestChild } from "../../manifest.js";
-import { SEED_SPACE } from "../../../materials/space/seedSpaces.js";
+import { HEAVEN_SPACE } from "../../../materials/space/heavenSpaces.js";
 import { IbpError, IBP_ERR } from "../../../ibp/protocol.js";
 import { registerRole, unregisterRole, getRole } from "../registry.js";
 import Being from "../../../materials/being/being.js";
@@ -130,7 +130,7 @@ registerOperation("set-role", {
     };
 
     await addManifestChild({
-      seedSpace: SEED_SPACE.ROLES,
+      heavenSpace: HEAVEN_SPACE.ROLES,
       name,
       qualities: new Map([["role", roleQualities]]),
       itemType:  "resource",
@@ -222,7 +222,7 @@ registerOperation("delete-role", {
     }
 
     await removeManifestChild({
-      seedSpace: SEED_SPACE.ROLES,
+      heavenSpace: HEAVEN_SPACE.ROLES,
       name,
       itemType:  "resource",
       summonCtx,

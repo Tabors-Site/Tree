@@ -30,7 +30,7 @@
 //
 // Every act in the world has a being behind it; genesis is no
 // exception. At boot the I_AM acts alone: it plants the space root,
-// the nine place seed spaces, its own Being row, and the first place
+// the nine place heaven spaces, its own Being row, and the first place
 // beings. That sequence is the I_AM turning seed-as-potential into
 // world-as-fact for the first time.
 //

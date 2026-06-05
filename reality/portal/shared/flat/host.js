@@ -97,6 +97,7 @@ const FLAT_DOM = `
     </nav>
     <div id="branch-chip" title="active branch"></div>
     <div id="identity-chip" title="signed-in identity"></div>
+    <button id="flat-timeline-btn" type="button" title="branches and timeline">🌿 timeline</button>
     <button id="flat-close-btn" type="button" title="close text mode (Esc)">close</button>
   </header>
   <main id="middle">
@@ -223,6 +224,7 @@ export function mountFlatView(rootContainer, ctx) {
   wireAddressForm(root);
   wireQuickNav(root, ctx);
   wireCloseButton(root, ctx);
+  wireTimelineButton(root);
   const detachKeys = wireKeyboardShortcuts(ctx);
 
   // Refresh operations once so the inspector has its DO surface.
@@ -307,6 +309,21 @@ function wireCloseButton(root, ctx) {
   if (!btn) return;
   btn.addEventListener("click", () => {
     if (typeof ctx.onClose === "function") ctx.onClose();
+  });
+}
+
+// Timeline access from inside the flat panel. The 3D portal's
+// floating 🌿 button is hidden while the flat panel is open (its
+// position covered the address bar), so we surface the same toggle
+// inside the top-bar here. Dispatches a click on the floating
+// button's element so the branch-bar module stays the single source
+// of truth for what the toggle does (open / close the branch panel).
+function wireTimelineButton(root) {
+  const btn = root.querySelector("#flat-timeline-btn");
+  if (!btn) return;
+  btn.addEventListener("click", () => {
+    const target = document.getElementById("branch-tree-button");
+    if (target) target.click();
   });
 }
 

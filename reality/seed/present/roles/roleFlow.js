@@ -54,7 +54,7 @@
 //   space.id             — the moment's space id
 //   space.name           — the moment's space name
 //   space.type           — the moment's space type
-//   space.seedSpace      — non-null when the moment opens at a seed space
+//   space.heavenSpace      — non-null when the moment opens at a heaven space
 //   space.quality.<ns>.<k>  — read a quality on the moment's space row
 //   coords.x / coords.y  — the being's current coord, if any
 //   inHomeSpace          — true when space.id === me.homeSpace
@@ -257,7 +257,7 @@ function buildCtx({
     id:        spaceId,
     name:      space?.name      || null,
     type:      space?.type      || null,
-    seedSpace: space?.seedSpace || null,
+    heavenSpace: space?.heavenSpace || null,
     // Qualities map → plain object so dot-paths land.
     quality:   serializeQualitiesShallow(space?.qualities),
   };

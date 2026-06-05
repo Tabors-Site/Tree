@@ -87,7 +87,7 @@ export function getRealityIdentity() {
  * The public info payload other realities and clients can read about
  * this place: name, domain, public key, protocol version, loaded
  * extensions. Does not include the private key. Surfaced today by
- * IBP discovery (the `.identity` seed space) and the
+ * IBP discovery (the `.identity` heaven space) and the
  * `/.well-known/treeos-portal` bootstrap route.
  */
 // Lazy reference to avoid circular import at module load time.

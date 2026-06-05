@@ -173,7 +173,7 @@ The expressive surface of the RoleFlow is determined by what conditions can be e
 
 **Where:**
 
-- `space.name`, `space.id`, `space.type`, `space.seedSpace` — space identity
+- `space.name`, `space.id`, `space.type`, `space.heavenSpace` — space identity
 - `coords.x`, `coords.y` — current position
 - `inHomeSpace` — am I at my homeSpace
 - `inTreeOf(beingId)` — am I in another being's tree
@@ -643,7 +643,7 @@ Condition vocabulary the evaluator understands today:
 Bucket Paths
 Who connectedFrom, caller.beingId, caller.name, caller.role, caller.cognition, caller.isSelf, caller.isAncestor, caller.isDescendant
 What verb, action, operation, intent
-Where space.id, space.name, space.type, space.seedSpace, space.quality.<ns>.<k>, coords.x/y, inHomeSpace
+Where space.id, space.name, space.type, space.heavenSpace, space.quality.<ns>.<k>, coords.x/y, inHomeSpace
 Me me.beingId, me.name, me.role, me.previousRole, me.cognition, me.position, me.homeSpace, me.quality.<ns>.<k>
 Time time.hour, time.dayOfWeek, time.iso, time.sinceLastMoment
 World world.<namespace>.<key>

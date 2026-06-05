@@ -388,7 +388,7 @@ export async function auditToolDescriptions() {
 // reflects current state. Idempotent; subsequent calls reconcile
 // (add new tools, remove gone ones).
 export async function syncToolsToSubstrate(summonCtx) {
-  const { SEED_SPACE } = await import("../../../materials/space/seedSpaces.js");
+  const { HEAVEN_SPACE } = await import("../../../materials/space/heavenSpaces.js");
   const { manifestItems } = await import("../../manifest.js");
   const items = Object.entries(toolDefs).map(([name, def]) => ({
     name,
@@ -403,7 +403,7 @@ export async function syncToolsToSubstrate(summonCtx) {
       ],
     ]),
   }));
-  return manifestItems({ seedSpace: SEED_SPACE.TOOLS, items, summonCtx });
+  return manifestItems({ heavenSpace: HEAVEN_SPACE.TOOLS, items, summonCtx });
 }
 
 // ─────────────────────────────────────────────────────────────────────────
@@ -450,11 +450,11 @@ export async function resolveToolsForPosition(
 
       if (ancestors && ancestors.length > 0) {
         // Position-scoped tool allow/block. Walks closest-to-farthest;
-        // any space can contribute, place-seed spaces terminate.
+        // any space can contribute, place-heaven spaces terminate.
         const allowed = new Set();
         const blocked = new Set();
         for (const space of ancestors) {
-          if (space.seedSpace) break;
+          if (space.heavenSpace) break;
           const meta = space.qualities || {};
           if (meta.tools?.allowed)
             for (const t of meta.tools.allowed) allowed.add(t);

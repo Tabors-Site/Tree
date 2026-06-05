@@ -46,17 +46,46 @@ body {
 
 #top-bar {
   display: grid;
-  grid-template-columns: auto auto 1fr auto auto;
+  grid-template-columns: auto auto 1fr auto auto auto auto;
   grid-template-rows: auto auto;
   grid-template-areas:
-    "brand connpill breadcrumb brchip idchip"
-    "addr  addr     addr       qnav   qnav";
+    "brand connpill breadcrumb brchip idchip timeline close"
+    "addr  addr     addr       qnav   qnav   qnav     qnav";
   gap: 8px 14px;
   padding: 10px 16px 12px;
   border-bottom: 1px solid var(--border);
   background: var(--bg-2);
   align-items: center;
 }
+
+#flat-timeline-btn {
+  grid-area: timeline;
+  justify-self: end;
+  background: var(--bg-3);
+  color: var(--fg-dim);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  padding: 4px 10px;
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+#flat-timeline-btn:hover { border-color: var(--accent); color: var(--accent); }
+
+#flat-close-btn {
+  grid-area: close;
+  justify-self: end;
+  background: var(--bg-3);
+  color: var(--fg-dim);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  padding: 4px 10px;
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+#flat-close-btn:hover { border-color: var(--accent); color: var(--accent); }
 
 /* Brand: small dot + name + tag. */
 #brand {

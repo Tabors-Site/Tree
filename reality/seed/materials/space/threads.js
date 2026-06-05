@@ -34,7 +34,7 @@
 import Act from "../../past/act/act.js";
 import { attachActFacts } from "../../past/act/actChain.js";
 import Space from "./space.js";
-import { SEED_SPACE } from "./seedSpaces.js";
+import { HEAVEN_SPACE } from "./heavenSpaces.js";
 import { I_AM } from "../being/seedBeings.js";
 import { IbpError, IBP_ERR } from "../../ibp/protocol.js";
 
@@ -149,7 +149,7 @@ export function threadIdFromPath(path) {
 }
 
 /**
- * The space _id of the threads place seed space on this reality. Cached
+ * The space _id of the threads place heaven space on this reality. Cached
  * after first lookup. Used by the resolver to return a stance whose
  * spaceId points at threads even though the thread itself has no
  * persistent space row.
@@ -157,8 +157,8 @@ export function threadIdFromPath(path) {
 let _threadsSpaceIdCache = null;
 export async function getThreadsSpaceId() {
   if (_threadsSpaceIdCache) return _threadsSpaceIdCache;
-  const { findBySeedSpace } = await import("../projections.js");
-  const space = await findBySeedSpace(SEED_SPACE.THREADS, "0");
+  const { findByHeavenSpace } = await import("../projections.js");
+  const space = await findByHeavenSpace(HEAVEN_SPACE.THREADS, "0");
   if (!space) return null;
   _threadsSpaceIdCache = String(space.id);
   return _threadsSpaceIdCache;

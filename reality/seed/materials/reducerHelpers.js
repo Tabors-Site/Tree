@@ -382,7 +382,7 @@ export function applyCreateSpace(state, fact) {
     // findByPosition / parent-queries. The reducer doesn't write it.
     rootOwner:    spec.rootOwner ?? null,
     contributors: [],
-    seedSpace:    spec.seedSpace ?? null,
+    heavenSpace:    spec.heavenSpace ?? null,
     llmDefault:   spec.llmDefault ?? null,
     size:         spec.size ?? null,
     // Space's own coord within its parent. The createSpace handler

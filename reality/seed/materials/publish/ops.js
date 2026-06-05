@@ -48,31 +48,9 @@ async function replicateSubtreeHandler({ target, params, identity, summonCtx }) 
     operatorBeingId: String(identity.beingId),
   });
 
-  // Stamp a provenance fact on the scope root's reel. The act records
-  // "this subtree was replicated by <operator> at <time>"; the bundle
-  // returns separately as the wire payload so its bytes don't blow up
-  // the fact. Without this, the moment seals with no facts and sealAct
-  // refuses (see beats/4-stamped.js "SEE moment, not an act" guard).
-  const { emitFact } = await import("../../past/fact/facts.js");
-  await emitFact({
-    verb:    "do",
-    action:  "replicate-stamped",
-    beingId: String(identity.beingId),
-    target:  { kind: "space", id: scopeSpaceId },
-    params:  {
-      scopeName:  (params || {}).name || null,
-      sourceReality: (params || {}).sourceReality || null,
-      counts: {
-        spaces: bundle.content.spaces.length,
-        beings: bundle.content.beings.length,
-        matter: bundle.content.matter.length,
-      },
-      createdAt: bundle.meta.createdAt,
-    },
-    actId:   summonCtx?.actId || null,
-    branch,
-  }, summonCtx);
-
+  // No fact emitted. Replicate is a pure read; the moment closes as
+  // SEE (see momentum.js's no-facts-no-act guard). The wire-caller
+  // receives the bundle through the response handoff.
   return { bundle, _skipAudit: true };
 }
 
@@ -80,10 +58,7 @@ registerOperation("replicate-subtree", {
   targets: ["space"],
   ownerExtension: "seed",
   factAction: "replicate-subtree",
-  // The handler stamps its own provenance fact (`replicate-stamped`);
-  // the dispatcher's auto-audit would only duplicate that — and would
-  // also embed the bundle bytes into the fact's `result`, which is
-  // exactly what we want to avoid.
+  // Pure read: no audit fact, no Act row. The moment seals as a SEE.
   skipAudit: true,
   handler: replicateSubtreeHandler,
 });

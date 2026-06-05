@@ -56,7 +56,7 @@ import log from "../../seedReality/log.js";
 import { getInternalConfigValue } from "../../internalConfig.js";
 import { v4 as uuidv4 } from "uuid";
 import Being from "../../materials/being/being.js";
-import { loadProjection, assertBranchOrThrow } from "../../materials/projections.js";
+import { loadProjection, loadOrFold, assertBranchOrThrow } from "../../materials/projections.js";
 import Act from "../../past/act/act.js";
 import { getRealityConfigValue } from "../../realityConfig.js";
 import { resolveActiveStack } from "../roles/roleFlow.js";
@@ -103,7 +103,14 @@ export async function assign({ beingId, spaceId, entry, handoff = null, signal =
     entry?.branch || entry?.act?.branch,
     "assign(entry)",
   );
-  const slot = await loadProjection("being", beingId, branch);
+  // loadOrFold (not loadProjection): on a fresh branch, the receiving
+  // being's slot hasn't been cold-folded into this branch's projection
+  // table yet. Bare loadProjection returns null, assign returns
+  // skipped:"being-not-found", and the moment closes silently without
+  // calling handoff.onError or onResponse — the wire's awaitResult
+  // times out at 60s. loadOrFold walks lineage so an inherited being
+  // resolves on first access without manual rebuild.
+  const slot = await loadOrFold("being", beingId, branch);
   if (!slot) {
     log.warn("Assign", `being ${String(beingId).slice(0, 8)} not found on branch ${branch}`);
     return { skipped: "being-not-found" };
@@ -132,7 +139,11 @@ export async function assign({ beingId, spaceId, entry, handoff = null, signal =
   // role-shaped spec the rest of the moment runner reads uniformly.
   let spaceRow = null;
   if (spaceId) {
-    const _sSlot = await loadProjection("space", spaceId, branch);
+    // loadOrFold: same lineage-cold-fold rationale as the being load
+    // above. A position space inherited from the parent branch needs
+    // its slot materialized so resolveActiveStack reads the right
+    // qualities (per-stance permissions, descriptor derivers, etc.).
+    const _sSlot = await loadOrFold("space", spaceId, branch);
     spaceRow = _sSlot ? { _id: _sSlot.id, ...(_sSlot.state || {}) } : null;
   }
 
@@ -525,7 +536,12 @@ async function enrichCallerForFlow({ toBeing, handoff, entry, branch = "0" }) {
     return { cognition: null, isAncestor: false, isDescendant: false };
   }
   const [callerSlot, callerIsAncestor, meIsAncestorOfCaller] = await Promise.all([
-    loadProjection("being", callerBeingId, branch),
+    // loadOrFold: the caller might be a being inherited from main on a
+    // sub-branch. Bare loadProjection would return null, callerRow
+    // stays null, the enriched-caller fields drop out of role
+    // evaluation — a non-obvious behavioral change on non-main
+    // branches.
+    loadOrFold("being", callerBeingId, branch),
     isAncestorOf(callerBeingId, String(toBeing._id), branch),
     isAncestorOf(String(toBeing._id), callerBeingId, branch),
   ]);

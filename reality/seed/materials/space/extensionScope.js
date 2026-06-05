@@ -20,7 +20,7 @@
 //     further down).
 //
 // The manifest declares scope: "confined" for dangerous or
-// specialized extensions. The `./extensions` Tier-3 seed space stores
+// specialized extensions. The `./extensions` Tier-3 heaven space stores
 // scope on each extension's registry space; loadConfinedExtensions
 // reads it at boot.
 //
@@ -36,7 +36,7 @@
 import log from "../../seedReality/log.js";
 import { getInternalConfigValue } from "../../internalConfig.js";
 import Space from "./space.js";
-import { SEED_SPACE } from "./seedSpaces.js";
+import { HEAVEN_SPACE } from "./heavenSpaces.js";
 import {
   getAncestorChain,
   resolveExtensionScopeFromChain,
@@ -69,13 +69,13 @@ export function setExtensionInstanceLookup(fn) {
 }
 
 /**
- * Load confined extension names from `./extensions` seed space.
+ * Load confined extension names from `./extensions` heaven space.
  * Called once during extension loading, after syncExtensionsToTree.
  */
 export async function loadConfinedExtensions() {
   try {
-    const { findBySeedSpace } = await import("../projections.js");
-    const extSpace = await findBySeedSpace(SEED_SPACE.EXTENSIONS, "0");
+    const { findByHeavenSpace } = await import("../projections.js");
+    const extSpace = await findByHeavenSpace(HEAVEN_SPACE.EXTENSIONS, "0");
     if (!extSpace) return;
 
     // Query by parent. Direct projection query because we need state.qualities.

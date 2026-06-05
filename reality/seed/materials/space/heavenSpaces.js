@@ -31,7 +31,7 @@
 //
 //  5. Two kinds of space. Normal space is made by beings, where
 //     beings live, addressable by stance, governed by auth. Place
-//     seed space is made by I_AM at boot: the fixed nine
+//     heaven space is made by I_AM at boot: the fixed nine
 //     (identity, config, peers, extensions, tools, roles, operations,
 //     source, threads) living inside heaven ("."). These are I_AM's
 //     own working memory, surfaced as spaces so SEE reads them
@@ -97,21 +97,21 @@
 // The leading "./" is heaven's door; the inner names carry no
 // reserved sigil because heaven is the namespace.
 //
-// The Space schema field `seedSpace` carries one of these values;
-// beings' own spaces have `seedSpace: null`.
+// The Space schema field `heavenSpace` carries one of these values;
+// beings' own spaces have `heavenSpace: null`.
 
-export const SEED_SPACE = Object.freeze({
+export const HEAVEN_SPACE = Object.freeze({
   SPACE_ROOT: "space-root",
   // The I-Am's home; the heaven space. Sits directly under SPACE_ROOT.
   // Named "." . the bare presence-marker, "here, where I stand".
-  // Parents every Tier-3 seed space, so the I-Am's working memory
+  // Parents every Tier-3 heaven space, so the I-Am's working memory
   // gathers into one room instead of cluttering the place root.
   HEAVEN: "heaven",
   IDENTITY: "identity",
   CONFIG: "config",
   PEERS: "peers",
   EXTENSIONS: "extensions",
-  // Registry-mirror place seed spaces. Each runtime registry (tool defs,
+  // Registry-mirror place heaven spaces. Each runtime registry (tool defs,
   // role specs, DO operations) syncs its contents into a child Space
   // here so SEE on `<reality>/./tools` (etc.) returns the current registry
   // through the standard descriptor pipeline.

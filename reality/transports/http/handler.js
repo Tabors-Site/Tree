@@ -33,7 +33,7 @@
 // CLI bootstrap endpoint is `GET /.well-known/treeos-portal`
 // (mounted separately by IBP's bootstrap-route.js). Beyond that
 // initial discovery, clients read the rest of the protocol surface
-// via `ibp:see` on place seed spaces:
+// via `ibp:see` on place heaven spaces:
 //
 //   GET /ibp/see/<reality>/./extensions   — extensions + capabilities
 //   GET /ibp/see/<reality>/./tools        — registered tools
@@ -54,7 +54,7 @@ import rateLimit from "express-rate-limit";
 import { sendError, IBP_ERR } from "../../seed/ibp/protocol.js";
 import log from "../../seed/seedReality/log.js";
 
-import { DELETED } from "../../seed/materials/space/seedSpaces.js";
+import { DELETED } from "../../seed/materials/space/heavenSpaces.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 

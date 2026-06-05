@@ -2,8 +2,8 @@
 //
 // Seed-known being constants.
 //
-// Mirrors seedSpaces.js but for beings. seedSpaces.js holds the
-// SEED_SPACE enum (the nine seed spaces); this file holds the
+// Mirrors heavenSpaces.js but for beings. heavenSpaces.js holds the
+// HEAVEN_SPACE enum (the nine heaven spaces); this file holds the
 // constants that name seed-shipped beings.
 //
 // I_AM. The first being's name AND id. Used as:

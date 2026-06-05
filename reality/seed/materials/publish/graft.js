@@ -60,8 +60,8 @@ export async function graftReplicate(bundle, targetParentSpaceId, opts = {}) {
   if (!targetParentSlot) {
     throw new Error(`graftReplicate: target parent space "${targetParentSpaceId}" not found in branch "${branch}"`);
   }
-  if (targetParentSlot.state?.seedSpace) {
-    throw new Error(`graftReplicate: cannot graft under seed space "${targetParentSlot.state.seedSpace}"`);
+  if (targetParentSlot.state?.heavenSpace) {
+    throw new Error(`graftReplicate: cannot graft under heaven space "${targetParentSlot.state.heavenSpace}"`);
   }
 
   // ── 2. Conflict check: name collision at the insertion point. ──

@@ -39,7 +39,7 @@
 // `sendCaughtError` consults it; explicit `sendError(res, status,
 // ...)` callers still pass a status if they want to.
 //
-// Domain-specific enums (SEED_SPACE, MATTER_ORIGIN, DELETED, I_AM)
+// Domain-specific enums (HEAVEN_SPACE, MATTER_ORIGIN, DELETED, I_AM)
 // live with their domain modules — not here.
 
 import log from "../seedReality/log.js";
@@ -173,7 +173,7 @@ export function isIbpError(e) {
  * wire-shape errors instead of opaque internal messages.
  *
  *   throw mapPatternsToIbpError(err, [
- *     [/reality seed spaces|reserved/i, IBP_ERR.FORBIDDEN],
+ *     [/reality heaven spaces|reserved/i, IBP_ERR.FORBIDDEN],
  *     [/not found/i,                 IBP_ERR.SPACE_NOT_FOUND],
  *   ], IBP_ERR.INTERNAL);
  */

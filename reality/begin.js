@@ -41,7 +41,7 @@
 //   Beginning. First boot ever. No reality root in Mongo, no seed
 //     spaces, no place beings, no Facts. The gathering act produces
 //     an inside from nothing. ensureSpaceRoot plants the root, the
-//     nine seed spaces appear, the first beings are born. Creation
+//     nine heaven spaces appear, the first beings are born. Creation
 //     ex nihilo.
 //
 //   Awakening. Every later boot. The spaces, matter, and beings of

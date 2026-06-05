@@ -10,7 +10,7 @@
 //
 // I plant the place root at boot; everything else descends from it.
 // Being-created spaces fill out the tree underneath; the nine place
-// seed spaces (`.identity`, `.config`, and the rest) sit as my own
+// heaven spaces (`.identity`, `.config`, and the rest) sit as my own
 // working memory exposed as substrate. The schema below is closed.
 // Anything an extension wants to attach to a space lives in
 // `qualities`, written through qualities.space.setQuality.
@@ -25,7 +25,7 @@
 
 import mongoose from "mongoose";
 import { v4 as uuidv4 } from "uuid";
-import { SEED_SPACE } from "./seedSpaces.js";
+import { HEAVEN_SPACE } from "./heavenSpaces.js";
 
 const SpaceSchema = new mongoose.Schema({
   _id: { type: String, default: uuidv4 },
@@ -54,10 +54,10 @@ const SpaceSchema = new mongoose.Schema({
   contributors: [{ type: String, ref: "Being" }],
 
   // Non-null marks one of the spaces I plant at boot. The enum
-  // values are in seed/materials/space/seedSpaces.js.
-  seedSpace: {
+  // values are in seed/materials/space/heavenSpaces.js.
+  heavenSpace: {
     type: String,
-    enum: [null, ...Object.values(SEED_SPACE)],
+    enum: [null, ...Object.values(HEAVEN_SPACE)],
     default: null,
   },
 
@@ -113,7 +113,7 @@ const SpaceSchema = new mongoose.Schema({
 
 SpaceSchema.index({ parent: 1 });
 SpaceSchema.index({ rootOwner: 1 });
-SpaceSchema.index({ seedSpace: 1 }, { sparse: true });
+SpaceSchema.index({ heavenSpace: 1 }, { sparse: true });
 
 // Public-Space listing. A Space is public when authorize finds a
 // wildcard SEE rule on it. Sparse so private Spaces don't bloat the

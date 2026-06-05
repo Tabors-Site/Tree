@@ -59,7 +59,7 @@ const FIELDS = [
   { path: "space.id",             label: "this space's id",            type: "text"   },
   { path: "space.name",           label: "this space's name",          type: "text"   },
   { path: "space.type",           label: "this space's type",          type: "text"   },
-  { path: "space.seedSpace",      label: "this space's seedSpace tag", type: "text"   },
+  { path: "space.heavenSpace",      label: "this space's heavenSpace tag", type: "text"   },
   { path: "coords.x",             label: "my X coord",                 type: "number" },
   { path: "coords.y",             label: "my Y coord",                 type: "number" },
   { path: "inHomeSpace",          label: "I am at home",               type: "bool"   },

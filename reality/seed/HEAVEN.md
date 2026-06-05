@@ -45,7 +45,7 @@ A branch pointer mapping is structure (heaven).
 | Subscriptions (`seed/present/wakes/subscriptions.js`) | In-memory, extension-reloaded | ✅ True heaven |
 | `.beings` catalog SEE handler | Cross-reality short-circuit, no branch query | ✅ Heaven-aware |
 | `findByName(type, name, branch)` | Branch is required parameter | ✅ Pattern correct |
-| `findBySeedSpace(kind, branch)` | Branch is required; heaven callers pass `"0"` | ✅ Pattern correct |
+| `findByHeavenSpace(kind, branch)` | Branch is required; heaven callers pass `"0"` | ✅ Pattern correct |
 | Reality config (`.config` space qualities) | Stored on space row; reads hardcoded to MAIN at `realityConfig.js:108` | 🟡 Heaven-semantic reads; substrate-level heaven classifier will route writes correctly |
 | Branch pointers (`@branch-registry` qualities) | Stored on a Being row; reads hardcoded to MAIN | 🟡 Heaven-semantic but branch-shaped storage; should move to `.branches` space qualities |
 | Role registry persistence (`.roles` children) | Live roles persisted as Space children with `qualities.role` (branch-scoped facts) | 🔴 Branch-scoped storage; needs substrate-level heaven routing |
@@ -74,11 +74,11 @@ export async function findInHeaven(type, name) {
 }
 
 /**
- * Read a heaven seed-space entry. Same as findBySeedSpace but locked
+ * Read a heaven seed-space entry. Same as findByHeavenSpace but locked
  * to MAIN.
  */
 export async function findHeavenSpace(seedSpaceKind) {
-  return await findBySeedSpace(seedSpaceKind, "0");
+  return await findByHeavenSpace(seedSpaceKind, "0");
 }
 ```
 
@@ -98,7 +98,7 @@ land via `set-space` on the `.branches` space.
 
 Touched files:
 - `seed/materials/branch/branchRegistry.js` — `_readPointerMap()`
-  switches to `findHeavenSpace(SEED_SPACE.BRANCHES)`.
+  switches to `findHeavenSpace(HEAVEN_SPACE.BRANCHES)`.
 - `seed/present/roles/branch-registry/ops.js` — `set-pointer` /
   `delete-pointer` handlers switch from `doVerb(@branch-registry,
   set-being)` to `doVerb(.branches space, set-space)`.
@@ -235,7 +235,7 @@ The substrate exposes two clearly-named lookup primitives:
 ```js
 // Branch-scoped: walks reel-lineage; per-branch projection.
 findByName(type, name, branch)
-findBySeedSpace(kind, branch)
+findByHeavenSpace(kind, branch)
 loadProjection(type, id, branch)
 loadOrFold(type, id, branch)
 
@@ -247,7 +247,7 @@ loadHeavenProjection(type, id)
 
 Callers pick by what they're reading. A role lookup: `findInHeaven`.
 A being's position: `loadOrFold`. A space's world signals:
-`loadOrFold`. A branch pointer: `findHeavenSpace(SEED_SPACE.BRANCHES)`
+`loadOrFold`. A branch pointer: `findHeavenSpace(HEAVEN_SPACE.BRANCHES)`
 then read the qualities.
 
 The lineage walk in `readReelBetween` / `loadOrFold` ignores heaven

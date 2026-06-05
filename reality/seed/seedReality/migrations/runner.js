@@ -5,7 +5,7 @@
  * On boot, checks the seed version stored in .config against the current
  * SEED_VERSION. If they differ, runs every migration between the two versions
  * in order. Migrations can add config defaults, rename metadata keys,
- * restructure place seed spaces, update indexes.
+ * restructure place heaven spaces, update indexes.
  *
  * Same pattern as extension schema migrations in the loader.
  *
@@ -184,12 +184,12 @@ export async function runSeedMigrations(summonCtx) {
   // version bump commits atomically with whatever the migrations did.
   // scaffold:true bypasses stance auth (this is the I-Am acting on
   // its own .config space); summonCtx carries the actId.
-  const { findBySeedSpace } = await import("../../materials/projections.js");
-  const { SEED_SPACE } = await import("../../materials/space/seedSpaces.js");
+  const { findByHeavenSpace } = await import("../../materials/projections.js");
+  const { HEAVEN_SPACE } = await import("../../materials/space/heavenSpaces.js");
   const { doVerb } = await import("../../ibp/verbs/do.js");
-  const configNode = await findBySeedSpace(SEED_SPACE.CONFIG, "0");
+  const configNode = await findByHeavenSpace(HEAVEN_SPACE.CONFIG, "0");
   if (!configNode) {
-    throw new Error("Cannot persist seedVersion: .config seed space not found");
+    throw new Error("Cannot persist seedVersion: .config heaven space not found");
   }
   await doVerb(
     { kind: "space", id: String(configNode.id) },

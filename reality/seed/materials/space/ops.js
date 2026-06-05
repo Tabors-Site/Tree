@@ -170,8 +170,8 @@ async function setOnSpaceHandler({ target, params, identity, summonCtx }) {
       if (!row) {
         throw new IbpError(IBP_ERR.SPACE_NOT_FOUND, "Space not found");
       }
-      if (row.seedSpace) {
-        throw new Error("set-space: cannot rename seed spaces");
+      if (row.heavenSpace) {
+        throw new Error("set-space: cannot rename heaven spaces");
       }
       if (row.name !== normalized) {
         await assertNameAvailableAt(row.parent, normalized, {
@@ -182,8 +182,8 @@ async function setOnSpaceHandler({ target, params, identity, summonCtx }) {
     }
     // Typed-space path. Identical validation; reducer writes.
     const row = await loadTargetRow(target, "space", { summonCtx });
-    if (row.seedSpace) {
-      throw new Error("set-space: cannot rename seed spaces");
+    if (row.heavenSpace) {
+      throw new Error("set-space: cannot rename heaven spaces");
     }
     if (row.name !== normalized) {
       await assertNameAvailableAt(row.parent, normalized, {
@@ -196,8 +196,8 @@ async function setOnSpaceHandler({ target, params, identity, summonCtx }) {
   if (field === "type") {
     const spaceId = targetIdOf(target);
     const normalized = assertValidSpaceType(value);
-    if (kind === "space" && target.seedSpace) {
-      throw new Error("set-space: cannot change type on seed spaces");
+    if (kind === "space" && target.heavenSpace) {
+      throw new Error("set-space: cannot change type on heaven spaces");
     }
     if (kind === "stance") {
       // Single-writer: no direct Space.type write here. The op handler
@@ -206,12 +206,12 @@ async function setOnSpaceHandler({ target, params, identity, summonCtx }) {
       // the space reducer's applySetField writes Space.type.
       const { loadOrFold } = await import("../projections.js");
       const _slot2 = await loadOrFold("space", spaceId, summonCtx?.branch || "0");
-      const row = _slot2 ? { seedSpace: _slot2.state?.seedSpace } : null;
+      const row = _slot2 ? { heavenSpace: _slot2.state?.heavenSpace } : null;
       if (!row) {
         throw new IbpError(IBP_ERR.SPACE_NOT_FOUND, "Space not found");
       }
-      if (row.seedSpace) {
-        throw new Error("set-space: cannot change type on seed spaces");
+      if (row.heavenSpace) {
+        throw new Error("set-space: cannot change type on heaven spaces");
       }
     }
     return { spaceId, type: normalized };
@@ -220,7 +220,7 @@ async function setOnSpaceHandler({ target, params, identity, summonCtx }) {
   if (field === "parent") {
     // Bare space-id, null, or the DELETED sentinel string. Soft-delete
     // marks parent = "deleted" so the space drops out of listings.
-    const { DELETED } = await import("./seedSpaces.js");
+    const { DELETED } = await import("./heavenSpaces.js");
     const spaceId = targetIdOf(target);
     if (value === null || value === undefined) {
       return { spaceId, parent: null };
@@ -405,11 +405,11 @@ registerOperation("end-space", {
 const KERNEL_ERROR_PATTERNS = {
   createChild: [
     [/cancelled by extension/i, IBP_ERR.FORBIDDEN],
-    [/place seed spaces|reserved|invalid/i, IBP_ERR.INVALID_INPUT],
+    [/place heaven spaces|reserved|invalid/i, IBP_ERR.INVALID_INPUT],
     [/not found/i, IBP_ERR.SPACE_NOT_FOUND],
   ],
   rename: [
-    [/place seed spaces/i, IBP_ERR.FORBIDDEN],
+    [/place heaven spaces/i, IBP_ERR.FORBIDDEN],
     [/not found/i, IBP_ERR.SPACE_NOT_FOUND],
     [/cannot|reserved|invalid|characters|empty/i, IBP_ERR.INVALID_INPUT],
   ],
