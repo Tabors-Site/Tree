@@ -67,7 +67,7 @@ const RESERVED_SET_META_NS = new Set([
 // create-matter
 // ─────────────────────────────────────────────────────────────────────
 //
-// params: { spec: { ... } }
+// params: flat object — see comment above createSpaceHandler in space/ops.js
 //
 // skipAudit because the handler stamps the do:create-matter Fact
 // directly on the new matter's reel; eager-fold inside logFact runs
@@ -75,7 +75,7 @@ const RESERVED_SET_META_NS = new Set([
 
 async function createMatterHandler(ctx) {
   const { target, params, identity, summonCtx, scaffold } = ctx;
-  const { spec = {} } = params || {};
+  const spec = params || {};
   const targetKind = detectTargetKind(target);
 
   const matterId = uuidv4();
@@ -111,7 +111,7 @@ async function createMatterHandler(ctx) {
       action: "create-matter",
       beingId: String(actorBeingId),
       target: { kind: "matter", id: matterId },
-      params: { spec: enrichedSpec },
+      params: enrichedSpec,
       actId: summonCtx?.actId || null,
       // Branch this matter is created on — sourced from the moment ctx
       // so a plant under #1 lands matter on #1's reel, not main's.

@@ -35,7 +35,12 @@ const RESERVED_SET_META_NS = new Set([
 // create-space
 // ─────────────────────────────────────────────────────────────────────
 //
-// params: { spec: { name, type? } }
+// params: { name, type?, size?, ... } — flat
+//
+// The fact stamped is `{ params: { ...flat fields } }` — no `spec:`
+// wrapper anywhere in the substrate. Reducers, walkers, and replicate
+// paths all read flat. See seed/Chain-Rebuild.md "How symmetrical are
+// the fact shapes" for the rationale.
 //
 // skipAudit because the branch stamps its own birth Fact directly
 // (the handler owns the actId + target + spec). One Fact per birth on
@@ -44,7 +49,7 @@ const RESERVED_SET_META_NS = new Set([
 
 async function createSpaceHandler(ctx) {
   const { target, params, identity, summonCtx, scaffold } = ctx;
-  const { spec = {} } = params || {};
+  const spec = params || {};
   const targetKind = detectTargetKind(target);
   return createSpaceChild({
     target,

@@ -98,7 +98,7 @@ const SCALAR_SET_FIELDS = new Set([
 ]);
 
 // Per-kind birth shapes. The reducer's job on `do:birth`: produce the
-// full initial row state from `fact.params.spec` (which the verb
+// full initial row state from `fact.params` (which the verb
 // handler enriched with derived fields like spaceId, parentMatterId,
 // beingId before the fact was stamped). Different aggregate kinds
 // produce different shapes; the helper dispatches on the fact's
@@ -225,7 +225,7 @@ export function applySetField(state, fact) {
 
 /**
  * Apply a `be:register` fact targeting a being. Produces the initial
- * being row state from `fact.params.spec`.
+ * being row state from `fact.params`.
  *
  * Important safety: when the fact's params don't carry `spec` (the
  * legacy slim shape: `{name, role, witnessedBy}` from the pre-conversion
@@ -304,8 +304,8 @@ export function applyConnectionState(state, fact) {
 export function applyCreateBeing(state, fact) {
   if (fact?.verb !== "be" || fact?.action !== "birth") return state;
   if (fact?.target?.kind !== "being") return state;
-  const spec = fact?.params?.spec;
-  if (!spec || typeof spec !== "object") return state; // legacy slim params
+  const spec = fact?.params;
+  if (!spec || typeof spec !== "object") return state;
 
   // Resolve defaultRole. The carry list (`roles: [String]`) retired
   // 2026-06-01 with the RoleFlow build; the be:birth fact's spec may
@@ -351,9 +351,9 @@ export function applyCreateBeing(state, fact) {
 
 /**
  * Apply a `do:birth` fact targeting a space. Produces the initial
- * space row state from `fact.params.spec`.
+ * space row state from `fact.params`.
  *
- * Same safety pattern as applyCreateBeing: when `fact.params.spec` is
+ * Same safety pattern as applyCreateBeing: when `fact.params` is
  * absent (the legacy createSpaceChild → createSpace path doesn't emit
  * a spec on the fact today), this returns state unchanged. The
  * reducer becomes load-bearing only when the space-birth handler
@@ -370,8 +370,8 @@ export function applyCreateBeing(state, fact) {
 export function applyCreateSpace(state, fact) {
   if (fact?.verb !== "do" || !CREATE_ACTIONS.has(fact?.action)) return state;
   if (fact?.target?.kind !== "space") return state;
-  const spec = fact?.params?.spec;
-  if (!spec || typeof spec !== "object") return state; // legacy birth fact
+  const spec = fact?.params;
+  if (!spec || typeof spec !== "object") return state;
 
   return {
     ...state,
@@ -397,7 +397,7 @@ export function applyCreateSpace(state, fact) {
 
 /**
  * Apply a `do:birth` fact targeting a matter. Produces the initial
- * matter row state from `fact.params.spec`.
+ * matter row state from `fact.params`.
  *
  * The verb handler is responsible for enriching the spec with derived
  * fields BEFORE the fact is stamped (parent target → spaceId or
@@ -456,7 +456,7 @@ export function applyMove(state, fact) {
 export function applyCreateMatter(state, fact) {
   if (fact?.verb !== "do" || !CREATE_ACTIONS.has(fact?.action)) return state;
   if (fact?.target?.kind !== "matter") return state;
-  const spec = fact?.params?.spec || {};
+  const spec = fact?.params || {};
   return {
     ...state,
     spaceId:        spec.spaceId ?? null,

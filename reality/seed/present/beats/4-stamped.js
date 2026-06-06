@@ -360,13 +360,13 @@ export async function sealAct(plannedAct, { content = null, deltaF = [], afterSe
       // would miss it. The protocols/ibp/index.js handler reads
       // `space.parent` off the payload to invalidate the parent's
       // descriptor — the spec carries it, so we don't need the slot.
-      if (action === "create-space" && f?.params?.spec) {
+      if (action === "create-space" && f?.params) {
         try {
           await hooks.run("afterSpaceCreate", {
             space: {
               _id:    String(target.id),
-              parent: f.params.spec.parent ?? null,
-              name:   f.params.spec.name ?? null,
+              parent: f.params.parent ?? null,
+              name:   f.params.name ?? null,
             },
             beingId: baseBeing,
             // Branch the create happened on. Live-SEE filters by branch

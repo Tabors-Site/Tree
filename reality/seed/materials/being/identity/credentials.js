@@ -54,16 +54,16 @@ const CREDENTIAL_KEY = Buffer.from(
 // ─────────────────────────────────────────────────────────────────────
 // CREDENTIAL ENCRYPTION
 //
-// When a being's password is auto-generated (the creator did not pick
-// one), we store the plaintext alongside the bcrypt hash so the being
-// and its creator can retrieve it later. The plaintext is encrypted
-// at rest with a key derived from JWT_SECRET; a stolen DB dump does
-// not leak credentials.
+// When a being's password is auto-generated (the being parent did not
+// pick one), we store the plaintext alongside the bcrypt hash so the
+// being and its being parent can retrieve it later. The plaintext is
+// encrypted at rest with a key derived from JWT_SECRET; a stolen DB
+// dump does not leak credentials.
 //
-// "Creator" here means the being that performed the birth act (the
-// parentBeingId recorded inside the be:birth Fact's spec). It is NOT
-// the SUMMON sense (anyone calling anyone) and NOT the live
-// parentBeingId on the being row. See lineage.js findCreatorOf.
+// "Being parent" here means the being that performed the birth act
+// (the parentBeingId recorded inside the be:birth Fact's spec). It is
+// NOT the SUMMON sense (anyone calling anyone) and NOT the live
+// parentBeingId on the being row. See lineage.js findBeingParent.
 //
 // Wire format: base64( iv(12) || tag(16) || ciphertext ).
 // ─────────────────────────────────────────────────────────────────────
@@ -95,8 +95,8 @@ export function decryptCredential(blob) {
 }
 
 // Mint a credential pair from an optional plaintext. When the caller
-// passes plaintext (a human typed it, a creator chose it), the plain
-// stays null and only the bcrypt hash is stored. When the caller passes
+// passes plaintext (a human typed it, a being parent chose it), the
+// plain stays null and only the bcrypt hash is stored. When the caller passes
 // null, we generate a 32-byte random plaintext, bcrypt it for the
 // password field, and encrypt the plaintext for retrievable storage in
 // qualities.auth.credentialPlain.

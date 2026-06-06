@@ -162,7 +162,7 @@ registerOperation("credential-reset", {
 // Self-only: the asker must equal the target. SINGLE-WRITER is
 // naturally satisfied (asker = target, so the asker's reel IS the
 // target's reel). The Fact lands on the being's own reel;
-// isDetachedFromCreator walks it forward in seq order.
+// isDetachedFromBeingParent walks it forward in seq order.
 registerOperation("credential-detach", {
   targets: ["being"],
   ownerExtension: "seed",
@@ -186,17 +186,17 @@ registerOperation("credential-detach", {
   },
 });
 
-// credential-attach. The creator re-asserts authority over a being
-// that previously detached. The act of release belongs to the child;
-// the act of re-binding belongs to the creator. SINGLE-WRITER: the
-// Fact lands on the CREATOR's reel (the asker's reel — the asker IS
-// the creator, enforced below) with the child's beingId carried in
-// `result.targetBeingId` so isDetachedFromCreator can recover it on
-// the lookup side.
+// credential-attach. The being parent re-asserts authority over a
+// being that previously detached. The act of release belongs to the
+// child; the act of re-binding belongs to the being parent.
+// SINGLE-WRITER: the Fact lands on the BEING PARENT's reel (the
+// asker's reel — the asker IS the being parent, enforced below) with
+// the child's beingId carried in `result.targetBeingId` so
+// isDetachedFromBeingParent can recover it on the lookup side.
 //
-// isDetachedFromCreator walks both reels (child's reel for the
-// detach, creator's reel for the attach) and compares by date to
-// decide the current state.
+// isDetachedFromBeingParent walks both reels (child's reel for the
+// detach, being parent's reel for the attach) and compares by date
+// to decide the current state.
 registerOperation("credential-attach", {
   targets: ["being"],
   ownerExtension: "seed",
@@ -205,13 +205,13 @@ registerOperation("credential-attach", {
     const targetBeingId = targetBeingIdOf(target);
     const askerBeingId = askerBeingIdOf(identity, scaffold);
     if (!scaffold) {
-      const { findSummonerOf } = await import("./identity/lineage.js");
-      const summonerId = await findSummonerOf(targetBeingId);
-      if (!summonerId || String(summonerId) !== askerBeingId) {
+      const { findBeingParent } = await import("./identity/lineage.js");
+      const parentBeingId = await findBeingParent(targetBeingId);
+      if (!parentBeingId || String(parentBeingId) !== askerBeingId) {
         throw new IbpError(
           IBP_ERR.FORBIDDEN,
-          "credential-attach is creator-only",
-          { askerBeingId, summonerId, targetBeingId },
+          "credential-attach is being-parent-only",
+          { askerBeingId, parentBeingId, targetBeingId },
         );
       }
     }

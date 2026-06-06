@@ -73,15 +73,20 @@ export const danceFloorSeed = {
   description: "Plant a dance-floor: grid space + drum + drummer + dancers + scheduled tick.",
 
   async scaffold(ctx) {
-    const { rootSpaceId, identity, reality, plantedSeedId, summonCtx } = ctx;
+    const { rootSpaceId, reality, plantedSeedId, summonCtx } = ctx;
 
-    // Every reality.do / reality.be in this scaffold threads summonCtx so
-    // every Fact pushes onto the SAME moment's deltaF and rides the
-    // SAME actId. sealAct commits the whole scaffold together — or
-    // none of it. A mid-scaffold rejection (auth, validation, etc.)
-    // discards every Fact stamped so far, leaving no orphan rows on
-    // the place root or anywhere else.
-    const opOpts = { identity, summonCtx };
+    // All ctx.do / ctx.be calls below pre-bind the planter's identity
+    // and summonCtx, so every Fact pushes onto the SAME moment's
+    // deltaF and rides the SAME actId. sealAct commits the whole
+    // scaffold together — or none of it. A mid-scaffold rejection
+    // (auth, validation, etc.) discards every Fact stamped so far,
+    // leaving no orphan rows on the place root or anywhere else.
+    //
+    // reality.declare.X calls (subscribe, schedule) below pass
+    // summonCtx explicitly because declare-namespace APIs aren't
+    // mirrored on ctx — they straddle load-time / moment-time and
+    // need the moment ctx threaded by hand for the few moment-time
+    // call sites.
 
     // 1. dance-floor space. create-space returns
     // `{spaceId, name, position, _factTarget}` (shapeNewSpace).
@@ -89,13 +94,11 @@ export const danceFloorSeed = {
     // one fact instead of create-then-set. The seed clamps every
     // dancer's `coord` write to this size at set-being time, so a
     // being can't be outside the space it's in.
-    const grid = await reality.do(rootSpaceId, "create-space", {
-      spec: {
-        name: "dance-floor",
-        type: "domain",
-        size: { x: GRID_W, y: GRID_H },
-      },
-    }, opOpts);
+    const grid = await ctx.do(rootSpaceId, "create-space", {
+      name: "dance-floor",
+      type: "domain",
+      size: { x: GRID_W, y: GRID_H },
+    });
     const gridSpaceId = String(grid?.spaceId || grid?._id || grid?.id || "");
     if (!gridSpaceId) {
       throw new Error("create-space did not return a spaceId; cannot continue scaffold");
@@ -114,9 +117,11 @@ export const danceFloorSeed = {
     // (afterQualityWrite resolves payload.spaceId from matter.spaceId,
     // which would be null). That's how the dance can tick without
     // ever waking a dancer.
-    const drum = await reality.do({ kind: "space", id: gridSpaceId }, "create-matter", {
-      spec: { name: "drum", content: null, origin: "ibp" },
-    }, opOpts);
+    const drum = await ctx.do({ kind: "space", id: gridSpaceId }, "create-matter", {
+      name: "drum",
+      content: null,
+      origin: "ibp",
+    });
     const drumMatterId = String(drum?.matterId || drum?._id || drum?.id || "");
     if (!drumMatterId) {
       throw new Error("create-matter did not return a matterId; cannot continue scaffold");
@@ -130,10 +135,10 @@ export const danceFloorSeed = {
     // starting target; operators can then move it with the Move
     // tool and watch the drummer follow.
     const drumStart = { x: Math.floor(GRID_W / 2), y: Math.floor(GRID_H / 2) };
-    await reality.do({ kind: "matter", id: drumMatterId }, "set-matter", {
+    await ctx.do({ kind: "matter", id: drumMatterId }, "set-matter", {
       field: "coord",
       value: drumStart,
-    }, opOpts);
+    });
     log.info("Harmony", `placed drum at (${drumStart.x},${drumStart.y})`);
 
     // 2b. Render the drum. set-render writes qualities.render . the
@@ -142,7 +147,7 @@ export const danceFloorSeed = {
     // portal won't play them until rung 3 wires fact-arrival push;
     // capturing them now means the substrate is ready and rung 3 is
     // a portal-side addition only.
-    await reality.do({ kind: "matter", id: drumMatterId }, "set-render", {
+    await ctx.do({ kind: "matter", id: drumMatterId }, "set-render", {
       model: "harmony:drum",
       // The drum exported from Mixamo / Sketchfab at FBX cm-units too;
       // 56-unit-tall drum gets the same 0.015 correction down to ~84cm,
@@ -154,7 +159,7 @@ export const danceFloorSeed = {
       // the namespaced `<ext>:<asset-name>` form so the audio
       // resolver can split it.
       sounds: { "harmony:tick": "harmony:drum-hit" },
-    }, opOpts);
+    });
 
     // 3. drummer being. ctx.be is the substrate-public BE-verb wrapper:
     // identity, summonCtx, and the parent-being inheritance from the
@@ -174,7 +179,7 @@ export const danceFloorSeed = {
     // stance resolution by name works at this position. beingId is
     // a bare being-id string; the substrate's schema knows what kind
     // of ID this is.
-    await reality.do(gridSpaceId, "set-space", {
+    await ctx.do(gridSpaceId, "set-space", {
       field: "qualities.beings",
       value: {
         [`drummer-${plantedSeedId.slice(0, 6)}`]: {
@@ -185,7 +190,7 @@ export const danceFloorSeed = {
         },
       },
       merge: true,
-    }, opOpts);
+    });
     log.info("Harmony", `summoned drummer being ${drummerBeingId.slice(0, 8)}`);
 
     // 3a. Place the drummer at a starting cell adjacent to the drum
@@ -193,17 +198,17 @@ export const danceFloorSeed = {
     // drum moves force him to walk back. Without a coord, his
     // approach logic has nothing to work with.
     const drummerStart = { x: drumStart.x, y: drumStart.y };
-    await reality.do({ kind: "being", id: drummerBeingId }, "set-being", {
+    await ctx.do({ kind: "being", id: drummerBeingId }, "set-being", {
       field: "coord",
       value: drummerStart,
-    }, opOpts);
+    });
     log.info("Harmony", `placed drummer at (${drummerStart.x},${drummerStart.y})`);
 
     // 4. drummer role-config (knows what to tick, where to dance)
-    await reality.do(drummerBeingId, "set-being", {
+    await ctx.do(drummerBeingId, "set-being", {
       field: "qualities.harmony.role",
       value: { drumMatterId, gridSpaceId, gridW: GRID_W, gridH: GRID_H, tickMs: TICK_MS },
-    }, opOpts);
+    });
 
     // 4a. Render the drummer. Rung-3 sensory block: the drummer's
     // own reel carries two fact actions . harmony:tick (when he strikes
@@ -216,7 +221,7 @@ export const danceFloorSeed = {
     // which reads correctly for the demo. No sound on the drummer
     // himself . the drum-hit sound rides on the drum matter's render
     // block (harmony:tick on the drum).
-    await reality.do({ kind: "being", id: drummerBeingId }, "set-render", {
+    await ctx.do({ kind: "being", id: drummerBeingId }, "set-render", {
       model: "harmony:drummer",
       // Mixamo characters export at FBX cm-units; converters that
       // don't auto-rescale land in three.js as 100x the intended
@@ -228,7 +233,7 @@ export const danceFloorSeed = {
         "harmony:tick": "Playing Drums_1",
         "harmony:walk": "Walking_2",
       },
-    }, opOpts);
+    });
 
     // 5. dancers — same birthBeing pattern. cognition is "llm" so
     //    each wake routes through runTurn; the LLM connection
@@ -249,7 +254,7 @@ export const danceFloorSeed = {
       }
       // Register on the dance-floor's qualities.beings. beingId is a
       // bare being-id string per substrate doctrine.
-      await reality.do(gridSpaceId, "set-space", {
+      await ctx.do(gridSpaceId, "set-space", {
         field: "qualities.beings",
         value: {
           [`${spec.suffix}-${plantedSeedId.slice(0, 6)}`]: {
@@ -260,7 +265,7 @@ export const danceFloorSeed = {
           },
         },
         merge: true,
-      }, opOpts);
+      });
       log.info("Harmony", `summoned dancer ${spec.suffix} ${dancerBeingId.slice(0, 8)} (${isLlm ? "llm" : "scripted"})`);
 
       // 5a. persona on qualities. The dancer-llm role's
@@ -269,19 +274,19 @@ export const danceFloorSeed = {
       //     dancer a distinct character at runtime without N role
       //     templates. Skipped for scripted roles (no prompt).
       if (isLlm && spec.persona) {
-        await reality.do(dancerBeingId, "set-being", {
+        await ctx.do(dancerBeingId, "set-being", {
           field: "qualities.harmony.persona",
           value: spec.persona,
-        }, opOpts);
+        });
       }
 
       // 5b. place at starting coords. set-being:coord . the seed
       //     writes Being.coord and the factory's PositionProjection
       //     fold caches the position row.
-      await reality.do({ kind: "being", id: dancerBeingId }, "set-being", {
+      await ctx.do({ kind: "being", id: dancerBeingId }, "set-being", {
         field: "coord",
         value: { x: spec.start.x, y: spec.start.y },
-      }, opOpts);
+      });
 
       // 5b'. Render the dancer. The 3D portal dispatches facts
       // population-level: every loaded entity whose render block
@@ -295,7 +300,7 @@ export const danceFloorSeed = {
       // is the dance-shuffle that doubles as the looping idle (it's
       // also the on-beat pulse here . restarts from frame 0 on each
       // tick fact, which reads as a rhythmic shuffle pulse).
-      await reality.do({ kind: "being", id: dancerBeingId }, "set-render", {
+      await ctx.do({ kind: "being", id: dancerBeingId }, "set-render", {
         model: "harmony:dancer",
         // Same Mixamo cm→m correction the drummer needs.
         scale: 0.015,
@@ -307,7 +312,7 @@ export const danceFloorSeed = {
         // form per assets.md . the audio resolver splits on `:` to
         // look the file up in harmony's asset manifest.
         sounds: { "harmony:step": "harmony:footstep" },
-      }, opOpts);
+      });
 
       // 5c. subscribe the dancer to drum ticks. The drummer no longer
       //     fans SUMMONs (stigmergic refactor): it just stamps the

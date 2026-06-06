@@ -208,7 +208,7 @@ export async function loadTargetRow(target, expectedKind, { summonCtx = null } =
         )
       : null;
     if (pending) {
-      const spec = pending.params?.spec || {};
+      const spec = pending.params || {};
       return { _id: id, _pending: true, ...spec };
     }
   }

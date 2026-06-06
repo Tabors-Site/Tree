@@ -202,7 +202,7 @@ export async function ensureSeedDelegates(spaceRootId, summonCtx, opts = {}) {
           f?.target?.kind === "space" &&
           String(f?.target?.id) === String(spaceRootId),
       );
-      size = pendingCreate?.params?.spec?.size || null;
+      size = pendingCreate?.params?.size || null;
     }
     if (size && Number.isFinite(size.x) && Number.isFinite(size.y) &&
         size.x > 0 && size.y > 0) {
@@ -259,18 +259,17 @@ export async function ensureSeedDelegates(spaceRootId, summonCtx, opts = {}) {
         continue;
       }
 
-      // I summon the new being forth. SUMMON is the verb of one
-      // being calling another, and the act of calling a not-yet-
-      // being into being is the same act. The seed-internal helper
-      // writes the Being row + audits the act as my own. homeSpace
-      // = place root because seed delegates live at the place root
-      // itself; parent = me, so the being-tree chain delegate → me
-      // → null is intact.
-      // Build the I-Am identity from the planted id without a Mongo
-      // lookup (the row is still pending inside the boot moment).
-      // birthBeing stamps a be:birth Fact on the new delegate's reel
-      // carrying parentBeingId=I-Am inside the spec; lineage walks
-      // that pointer when findCreatorOf is called.
+      // I bring the new being into existence through BE:birth . the
+      // self-act in the closed three-op BE set (birth/connect/release).
+      // BE:birth is the verb that opens an identity; SUMMON is for one
+      // being calling another and never makes a being. birthBeing
+      // stamps a be:birth Fact on the new delegate's reel carrying
+      // parentBeingId=I-Am inside the spec; lineage walks that pointer
+      // when findBeingParent is called. homeSpace = place root because
+      // seed delegates live at the place root itself; parent = me, so
+      // the being-tree chain delegate → me → null is intact. The I-Am
+      // identity is built from the planted id without a Mongo lookup
+      // (the row is still pending inside the boot moment).
       const iAmIdent = iAm._pending
         ? { beingId: rootBeingId, name: I_AM }
         : await iAmIdentity();

@@ -277,7 +277,7 @@ export async function birthBeing({ spec, identity, summonCtx = null, scaffold = 
           `Create the home space first (do:create-space) before birthing the being.`,
       );
     }
-    pendingHomeSize = homePending?.params?.spec?.size || null;
+    pendingHomeSize = homePending?.params?.size ?? null;
   }
 
   // ── Name uniqueness (branch-aware) ──
@@ -331,7 +331,7 @@ export async function birthBeing({ spec, identity, summonCtx = null, scaffold = 
               f?.target?.kind === "space" &&
               String(f?.target?.id) === positionId,
           );
-          size = posPending?.params?.spec?.size || null;
+          size = posPending?.params?.size || null;
         }
       }
       if (size && Number.isFinite(size.x) && Number.isFinite(size.y) &&
@@ -364,7 +364,7 @@ export async function birthBeing({ spec, identity, summonCtx = null, scaffold = 
   // ── Stamp the be:birth Fact ──
   // SINGLE-WRITER: the Fact lands on the new being's reel with the
   // new being as its own actor. The lineage record (parentBeingId)
-  // lives inside this fact's spec; findCreatorOf walks the pointer
+  // lives inside this fact's spec; findBeingParent walks the pointer
   // (no separate creator-side audit fact).
   //
   // parentBeingId in the stamped fact is the Ref (typed identity
@@ -389,7 +389,7 @@ export async function birthBeing({ spec, identity, summonCtx = null, scaffold = 
       action:  "birth",
       beingId: id,
       target:  { kind: "being", id },
-      params:  { spec: factSpec },
+      params:  factSpec,
       actId:   summonCtx?.actId || null,
       branch,
     }, summonCtx);

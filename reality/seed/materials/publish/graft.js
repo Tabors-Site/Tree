@@ -152,7 +152,7 @@ export async function graftReplicate(bundle, targetParentSpaceId, opts = {}) {
       action:  "create-space",
       beingId: opts.operatorBeingId,
       target:  { kind: "space", id: newId },
-      params:  { spec },
+      params:  spec,
       actId:   opts.summonCtx?.actId || null,
       branch,
     }, opts.summonCtx);
@@ -182,7 +182,7 @@ export async function graftReplicate(bundle, targetParentSpaceId, opts = {}) {
       action:  "birth",
       beingId: newId,  // self-stamping — the new being is its own actor at birth
       target:  { kind: "being", id: newId },
-      params:  { spec },
+      params:  spec,
       actId:   opts.summonCtx?.actId || null,
       branch,
     }, opts.summonCtx);
@@ -232,7 +232,7 @@ export async function graftReplicate(bundle, targetParentSpaceId, opts = {}) {
       action:  "create-matter",
       beingId: opts.operatorBeingId,
       target:  { kind: "matter", id: newId },
-      params:  { spec },
+      params:  spec,
       actId:   opts.summonCtx?.actId || null,
       branch,
     }, opts.summonCtx);

@@ -248,7 +248,7 @@ export async function beVerb(operation, payload = {}, opts = {}) {
     // ONE fact per birth. birthBeing already stamped `be:birth` on the
     // new being's reel with parentBeingId=<caller> in the spec. No
     // separate caller-side audit fact . the parent pointer lives on
-    // the birth fact already, and findCreatorOf walks it. Mirrors the
+    // the birth fact already, and findBeingParent walks it. Mirrors the
     // be:summon-create collapse from 2026-06-03.
     return {
       beingId:      result.beingId,

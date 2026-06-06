@@ -135,8 +135,8 @@ export async function init(reality) {
   //
   // reality.seeds.register("my-seed", {
   //   description: "Sets up a tracking position with the my-extension role.",
-  //   plant: async ({ target, identity }) => {
-  //     await reality.do(target, "create-space", { spec: { name: "tracking" } }, { identity });
+  //   scaffold: async (ctx) => {
+  //     await ctx.do(ctx.rootSpaceId, "create-space", { name: "tracking" });
   //   },
   // });
 

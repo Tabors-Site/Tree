@@ -525,7 +525,7 @@ async function walkAncestorsWithDeltaF(spaceId, summonCtx) {
         String(f?.target?.id) === cursor,
     );
     if (!pending) break;
-    cursor = pending.params?.spec?.parent || null;
+    cursor = pending.params?.parent || null;
   }
   return path;
 }
