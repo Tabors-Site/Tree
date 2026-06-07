@@ -3,10 +3,16 @@
 // _shared.js — caller-shape gates the four verb files share.
 //
 // Every public verb runs through assertVerbCaller as its first line:
-// it refuses calls that have no identity and no scaffold flag,
-// pointing the caller back at how to call the verb properly. The
-// stack-walk picks the actual offending site, not assertVerbCaller
-// or the verb itself, so log lines tell the truth.
+// it refuses calls that have no identity, pointing the caller back at
+// how to call the verb properly. The stack-walk picks the actual
+// offending site, not assertVerbCaller or the verb itself, so log
+// lines tell the truth.
+//
+// Doctrine: everything acts through a being. There is no "scaffold"
+// path that acts without one. Seed-internal calls that used to pass
+// `scaffold: true` now pass `identity: I_AM` (the I-Am acting as
+// itself); authorize() short-circuits on I_AM without a DB read, so
+// genesis and runtime use the same one-path entry.
 //
 // Kept private to verbs/. External callers don't reach in here.
 
@@ -14,31 +20,42 @@ import log from "../../seedReality/log.js";
 import { IbpError, IBP_ERR } from "../protocol.js";
 
 /**
- * Caller-shape gate. Throws if the call shape isn't one of:
- *   - an identified being (opts.identity present), OR
- *   - a seed-scaffold call (opts.scaffold === true), OR
- *   - the unauthenticated SEE path (assertVerbCaller is not called there).
+ * Normalize an identity input. Callers may pass a bare string (a
+ * beingId — typically `I_AM` for seed-internal calls) OR a full
+ * `{ beingId, name }` object. This returns the object form so
+ * downstream code can read `identity.beingId` / `identity.name`
+ * uniformly without branching on input shape.
  *
- * The two refusal cases get distinct error codes so the caller knows
- * whether the right-stance plant path or the left-stance identity
- * gate fired.
+ * Idempotent: passing an object back through returns the same object.
+ * Null / undefined / empty string returns null.
+ *
+ * Public so internal entry points beyond the four verbs
+ * (summonByResolved, birthBeing, etc.) can call it too.
+ */
+export function normalizeIdentity(identity) {
+  if (typeof identity === "string") {
+    return identity.length > 0 ? { beingId: identity, name: identity } : null;
+  }
+  return identity || null;
+}
+
+/**
+ * Caller-shape gate. Throws if the call has no identity.
+ *
+ * Every verb call rides a being. Seed-internal flows that used to
+ * pass `scaffold: true` now thread `identity: I_AM`; the
+ * unauthenticated SEE path does not call this function. So a missing
+ * identity here is always a perimeter threading bug.
+ *
+ * Normalizes the bare-string identity shorthand in place on `opts`.
  */
 export function assertVerbCaller(verb, opts) {
+  if (typeof opts.identity === "string") {
+    opts.identity = normalizeIdentity(opts.identity);
+  }
   if (opts.identity) return;
-  if (opts.scaffold === true) return;
 
   const frame = captureCallerFrame();
-
-  // Caller claimed the right-stance plant path but `scaffold` is not true.
-  if ("scaffold" in opts) {
-    log.warn("Verbs",
-      `place.${verb}: not a seed verb (right stance requires scaffold: true) (caller: ${frame})`);
-    throw new IbpError(
-      IBP_ERR.NOT_A_SEED,
-      `place.${verb}: not a seed verb (right stance requires scaffold: true for seed planting / first-boot bootstrap)`,
-    );
-  }
-
   log.warn("Verbs",
     `place.${verb}: not a being verb (left stance requires identity) (caller: ${frame})`);
   throw new IbpError(

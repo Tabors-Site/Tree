@@ -15,11 +15,10 @@ export default {
     "Scripted-being dance on a 2D grid. The hello-world for many-beings synchronization.",
 
   needs: {
-    // Verbs the seed scaffold reaches for:
-    //   do      — registerOperation + do() in the seed scaffold
-    //   be      — be("create-being", ...) in the seed scaffold
-    //   declare — registerRole, schedule (drummer wake)
-    services: ["do", "be", "declare"],
+    // Verbs the extension reaches for:
+    //   do      — registerOperation (tick/step/walk runtime ops)
+    //   declare — registerRole, registerSeeResolver
+    services: ["do", "declare"],
   },
 
   optional: {
@@ -27,10 +26,11 @@ export default {
   },
 
   provides: {
-    seeds: {
-      // harmony:dance-floor — registered via init() return value.
-      // Operators plant from the seed hotbar in the portal.
-    },
+    // Future: a `clones` block listing this extension's shippable
+    // setup bundles (per Chain-Rebuild doctrine — replaces the
+    // retired scaffold(ctx) pattern). The harmony dance-floor will
+    // migrate to a clone bundle when the producer-side authoring
+    // tooling lands.
     hooks: { fires: [], listens: [] },
 
     // Sensory assets the extension ships. The loader mounts

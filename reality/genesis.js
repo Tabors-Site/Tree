@@ -147,14 +147,76 @@ export async function genesis(app, opts = {}) {
   const { ensureIndexes } = await import("./seed/seedReality/indexes.js");
   await ensureIndexes();
 
+  // ── PLANT MODE ──
+  //
+  // If PLANT_FROM_SEED env var points at a seed JSON file, boot by
+  // replaying that seed's chains into the (assumed-empty) DB instead
+  // of running default genesis. The reality comes up with the seed's
+  // original IDs, original biography, original I-Am — a continuation
+  // of the source reality on this substrate.
+  //
+  // Plant is destructive (the existing DB must be empty). The deployer
+  // is responsible for wiping first. plantSeed itself refuses to plant
+  // into a non-empty DB as a guard against misconfigured boots.
+  //
+  // Plant is continuation, not duplication. Two simultaneously-live
+  // substrates with the same reality identity is undefined behavior;
+  // the deployer ensures only one is canonical (see Chain-Rebuild.md).
+  let plantedFromSeed = false;
+  if (process.env.PLANT_FROM_SEED) {
+    const path = await import("path");
+    const { SEEDS_FOLDER, plantSeed } = await import("./seed/materials/publish/seed.js");
+    const raw = process.env.PLANT_FROM_SEED;
+    // Filename-only (no separator, not absolute) → resolve against
+    // reality/seeds/. Anything with a separator or absolute → use
+    // as-is. This lets operators say PLANT_FROM_SEED=alice.seed.json
+    // and have it Just Work from the canonical folder.
+    const seedPath = (raw.includes("/") || path.isAbsolute(raw))
+      ? raw
+      : path.join(SEEDS_FOLDER, raw);
+    log.info("Genesis", `Plant mode: replaying seed from ${seedPath}`);
+    const { readFile } = await import("fs/promises");
+    const seedJson = await readFile(seedPath, "utf8");
+    const bundle = JSON.parse(seedJson);
+    const result = await plantSeed(bundle);
+    log.info(
+      "Genesis",
+      `Plant complete: ${result.counts.facts} facts, ${result.counts.acts} acts, ` +
+      `${result.counts.branches} branches, ${result.counts.reelHeads} reel heads. ` +
+      `Cold-folding to materialize projections...`,
+    );
+    // Materialize projections by walking every reelHead and folding.
+    // The substrate's read paths use loadOrFold, but downstream
+    // scaffolding (sprout's place-root cache, seed-delegate lookups)
+    // expects materialized projection rows. Without this pass, those
+    // would see an empty world and try to recreate it on top of the
+    // planted facts.
+    const ReelHead = (await import("./seed/past/reel/reelHead.js")).default;
+    const { loadOrFold } = await import("./seed/materials/projections.js");
+    const heads = await ReelHead.find({}).lean();
+    for (const head of heads) {
+      try { await loadOrFold(head.type, head.id, head.branch); } catch {}
+    }
+    log.info("Genesis", `Cold-fold complete (${heads.length} aggregates).`);
+    plantedFromSeed = true;
+  }
+
   // Probe for an existing place root before ensureSpaceRoot creates
   // anything. If one already exists (and the spaces, matter, and
   // beings of the place with it), this is an Awakening. If not, it
-  // is the Beginning.
+  // is the Beginning. A planted seed lands as a special case of
+  // Awakening: "I am restored" — the seed's biography is now mine.
   const Space = (await import("./seed/materials/space/space.js")).default;
   const existingRoot = await Space.findOne({ parent: null }).lean();
-  bootMode = existingRoot ? "Awakening" : "Beginning";
-  log.info("Genesis", bootMode === "Beginning" ? "I am that I am." : "I awake.");
+  bootMode = plantedFromSeed
+    ? "Restored"
+    : existingRoot ? "Awakening" : "Beginning";
+  log.info(
+    "Genesis",
+    bootMode === "Beginning" ? "I am that I am." :
+    bootMode === "Awakening" ? "I awake." :
+    "I am restored — the seed's biography is now mine.",
+  );
 
   // ── THE BOOT MOMENT ──
   //
@@ -171,56 +233,86 @@ export async function genesis(app, opts = {}) {
     await import("./seed/materials/being/seedDelegates.js");
   const { getSpaceRootId, getIAmBeingId } = await import("./seed/sprout.js");
 
-  await withBootMoment(async (bootCtx) => {
-    await ensureSpaceRoot(bootCtx);
-    if (bootMode === "Beginning") {
-      log.info("Genesis", "I plant the space root.");
-      log.info("Genesis", "I plant my nine heaven spaces.");
-    }
-    // Pass the planted I-Am beingId (resolved via sprout's cache)
-    // so seedDelegates can skip the live Mongo lookup — the row is
-    // pending inside this same moment. getIAmBeingId() returns the
-    // I_AM constant on fresh installs and a uuid on awakening from
-    // a pre-2026-05-29 DB.
-    await ensureSeedDelegates(getSpaceRootId(), bootCtx, {
-      iAmBeingId: getIAmBeingId(),
+  // Scaffolding skip-list when plantedFromSeed:
+  //   The seed already brought the I-Am, the place root, the nine
+  //   heaven spaces, every seed delegate, every quality, every default
+  //   permission rule, and every prior migration. Re-running the
+  //   scaffold here would emit redundant idempotent re-writes and
+  //   inflate the chain unnecessarily. The seed is the genesis when
+  //   plant mode is active.
+  if (!plantedFromSeed) {
+    await withBootMoment(async (bootCtx) => {
+      await ensureSpaceRoot(bootCtx);
+      if (bootMode === "Beginning") {
+        log.info("Genesis", "I plant the space root.");
+        log.info("Genesis", "I plant my nine heaven spaces.");
+      }
+      // Pass the planted I-Am beingId (resolved via sprout's cache)
+      // so seedDelegates can skip the live Mongo lookup — the row is
+      // pending inside this same moment. getIAmBeingId() returns the
+      // I_AM constant on fresh installs and a uuid on awakening from
+      // a pre-2026-05-29 DB.
+      await ensureSeedDelegates(getSpaceRootId(), bootCtx, {
+        iAmBeingId: getIAmBeingId(),
+      });
     });
-  });
+  } else {
+    // After plant, sprout's caches need priming from the planted state
+    // (place root id, I-Am being id). Call ensureSpaceRoot with a
+    // no-op context to walk its detect-existing path — it'll find the
+    // planted place root, populate caches, and skip creation.
+    await withIAmAct("prime caches after plant", async (ctx) => {
+      await ensureSpaceRoot(ctx);
+    });
+  }
 
   // ── POST-GENESIS RECONCILIATIONS ──
   // The I-Am exists now. Each subsequent scaffold step is its own
   // moment of the I-Am — opens an Act, accumulates ΔF, seals. Zero
   // facts → no seal (idempotent reconciliations cost nothing).
+  //
+  // Skipped when plantedFromSeed — the seed brought the config,
+  // the source-tree mirror, the default stance permissions, and the
+  // heaven-contributors list.
 
-  // I read my own remembered settings out of ./config.
-  await initRealityConfig();
-  log.info("Genesis", "I remember my settings.");
+  if (!plantedFromSeed) {
+    // I read my own remembered settings out of ./config.
+    await initRealityConfig();
+    log.info("Genesis", "I remember my settings.");
 
-  // I mirror the reality/ directory into space and matter under
-  // `.source`. The source-space id cache primes for the read-only
-  // DO gate, then the disk walk runs detached.
-  const { ensureSourceTree } = await import("./seed/materials/space/source.js");
-  await ensureSourceTree();
-  log.info("Genesis", "I see my own body.");
+    // I mirror the reality/ directory into space and matter under
+    // `.source`. The source-space id cache primes for the read-only
+    // DO gate, then the disk walk runs detached.
+    const { ensureSourceTree } = await import("./seed/materials/space/source.js");
+    await ensureSourceTree();
+    log.info("Genesis", "I see my own body.");
 
-  // Default stance permissions. I-Am acts to write the permission
-  // qualities on the space root.
-  await withIAmAct("seed default stance permissions", async (ctx) => {
-    const { seedDefaultStancePermissions } =
-      await import("./seed/ibp/authorize.js");
-    await seedDefaultStancePermissions(ctx);
-  });
-  if (bootMode === "Beginning") {
-    log.info("Genesis", "I set my stance defaults.");
+    // Default stance permissions. I-Am acts to write the permission
+    // qualities on the space root.
+    await withIAmAct("seed default stance permissions", async (ctx) => {
+      const { seedDefaultStancePermissions } =
+        await import("./seed/ibp/authorize.js");
+      await seedDefaultStancePermissions(ctx);
+    });
+    if (bootMode === "Beginning") {
+      log.info("Genesis", "I set my stance defaults.");
+    }
+  } else {
+    // Prime runtime caches that didn't get filled by the boot moment
+    // because we skipped it. initRealityConfig is still needed —
+    // reading config from .env / process.env shouldn't change the
+    // planted state, just hydrate runtime cache.
+    await initRealityConfig();
+    log.info("Genesis", "I remember my settings.");
   }
 
   // Heaven contributors. The seed delegates (cherub, birther, llm-
-  // assigner, reality-manager, arrival, etc.) need canWrite on
+  // assigner, reality-manager, arrival, etc.) need hasAccess on
   // heaven so they can act inside the Tier-3 heaven spaces (./roles,
   // ./operations, ./tools, ...). Mechanism: add them as contributors
   // on heaven. I_AM is heaven's rootOwner already; the new
   // contributors list grows from boot scaffold (seed delegates) and
-  // later cherub.register (rootOperator).
+  // later cherub.register (first human heaven contributor).
   //
   // Earlier this slot ran ensureReignMatter / loadReigningBeings /
   // ensureSeedDelegatesReign / ensureIAmChildrenReign . a parallel
@@ -231,22 +323,28 @@ export async function genesis(app, opts = {}) {
   // (read-modify-write on contributors[] would clobber inside one
   // shared moment — every iteration would see the empty list and
   // write a singleton). One withIAmAct per delegate inside the call.
-  {
+  //
+  // Skip when plantedFromSeed — the seed carries heaven contributors.
+  if (!plantedFromSeed) {
     const { ensureSeedDelegatesOnHeaven } =
       await import("./seed/materials/being/seedDelegates.js");
     await ensureSeedDelegatesOnHeaven();
-  }
-  if (bootMode === "Beginning") {
-    log.info("Genesis", "I admit my delegates into heaven.");
-  }
+    if (bootMode === "Beginning") {
+      log.info("Genesis", "I admit my delegates into heaven.");
+    }
 
-  // Seed migrations. Each migration's writes ride one I-Am act.
-  await withIAmAct("seed migrations", async (ctx) => {
-    const { runSeedMigrations } =
-      await import("./seed/seedReality/migrations/runner.js");
-    const migrationsRan = await runSeedMigrations(ctx);
-    if (migrationsRan) log.info("Genesis", "I update my form.");
-  });
+    // Seed migrations. Each migration's writes ride one I-Am act.
+    await withIAmAct("seed migrations", async (ctx) => {
+      const { runSeedMigrations } =
+        await import("./seed/seedReality/migrations/runner.js");
+      const migrationsRan = await runSeedMigrations(ctx);
+      if (migrationsRan) log.info("Genesis", "I update my form.");
+    });
+  }
+  // Note: plantedFromSeed skips seed migrations because the seed's
+  // schema version should match the substrate's. A future cross-version
+  // plant would need to run migrations on the planted data; for now,
+  // same-version seeds only.
 
   // Prime the severed-roots cache. Read-only — no moment needed.
   const { primeSeveredRootsCache } =

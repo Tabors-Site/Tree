@@ -47,14 +47,21 @@ export async function iAmIdentity() {
 }
 
 // Seed system beings, minted at genesis. The "operator" is the
-// first being that ISN'T one of these — i.e. the first being the
-// cherub admitted via register/claim, regardless of cognition mode.
+// first being that ISN'T one of these. Kept for back-compat with the
+// remaining findRootOperator caller (just isFirstBeing today, which is
+// being migrated to a cognition-based test below). When updating, mirror
+// seedDelegates.js's SEED_DELEGATES roster.
 const SEED_SYSTEM_BEING_NAMES = [
   "i-am",
   "arrival",
   "cherub",
+  "birther",
+  "role-manager",
+  "role-finder",
+  "roleflow-composer",
   "llm-assigner",
   "reality-manager",
+  "branch-manager",
 ];
 
 /**
@@ -136,15 +143,29 @@ export async function findRootOperator(branch = "0") {
 }
 
 /**
- * Check if no operator-being has yet been minted by the cherub.
- * Used by the first-boot path (and by cherub.register) to decide
- * whether to take the first-being bootstrap branch.
+ * Check if no human-cognition being has yet been registered through
+ * the cherub. Used by the first-boot path (and by cherub.birth) to
+ * decide whether to take the first-being bootstrap branch — which
+ * sets the new human as a direct child of I_AM and queues the heaven
+ * anoint via summonCtx.afterSeal.
+ *
+ * Uses a cognition-based query rather than a name-list exclusion so
+ * the answer doesn't drift when the seed delegate roster changes
+ * (the prior implementation relied on a SEED_SYSTEM_BEING_NAMES list
+ * that fell out of sync with seedDelegates.js, causing a delegate to
+ * be misclassified as the operator and the bootstrap branch to skip
+ * for the real first human).
  */
 export async function isFirstBeing(branch = "0") {
-  // A "first being" check is: are there any non-system beings yet?
-  // Reuse findRootOperator's lookup; null means no operator exists yet.
-  const op = await findRootOperator(branch);
-  return op == null;
+  const { default: Projection } = await import("../../branch/projection.js");
+  const row = await Projection.findOne({
+    branch, type: "being",
+    "state.qualities.cognition.defaultKind": "human",
+    tombstoned: { $ne: true },
+  })
+    .select("id")
+    .lean();
+  return row == null;
 }
 
 /**

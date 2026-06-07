@@ -399,7 +399,7 @@ export async function ensureSpaceRoot(summonCtx) {
       { kind: "space", id: String(heavenSpace._id) },
       "set-space",
       { field: "parent", value: String(spaceRoot._id) },
-      { scaffold: true, summonCtx },
+      { identity: I_AM, summonCtx },
     );
   }
 
@@ -450,7 +450,7 @@ export async function ensureSpaceRoot(summonCtx) {
         { kind: "space", id: String(space._id) },
         "set-space",
         { field: "parent", value: String(heavenSpaceParentId) },
-        { scaffold: true, summonCtx },
+        { identity: I_AM, summonCtx },
       );
     }
   }
@@ -475,7 +475,7 @@ export async function ensureSpaceRoot(summonCtx) {
           { kind: "space", id: String(root._id) },
           "set-space",
           { field: "parent", value: String(spaceRoot._id) },
-          { scaffold: true, summonCtx },
+          { identity: I_AM, summonCtx },
         );
       } catch (err) {
         log.error(
@@ -674,10 +674,15 @@ export async function syncExtensionsToTree(manifests, summonCtx) {
     branch: "0", type: "space",
     "state.parent": extSpace._id,
     tombstoned: { $ne: true },
-  }).lean()).map((s) => ({ _id: s.id, name: s.state?.name }));
+  }).lean()).map((s) => ({
+    _id: s.id,
+    name: s.state?.name,
+    type: s.state?.type,
+    extensionQuality: s.state?.qualities?.extension ?? null,
+  }));
 
   const existingByName = new Map();
-  for (const c of existingChildren) existingByName.set(c.name, c._id);
+  for (const c of existingChildren) existingByName.set(c.name, c);
 
   const currentNames = new Set();
 
@@ -703,28 +708,45 @@ export async function syncExtensionsToTree(manifests, summonCtx) {
     const qualities = new Map([["extension", extensionQuality]]);
 
     if (existingByName.has(manifest.name)) {
-      // Refresh existing extension space. type + qualities-namespace
-      // each emit do:set-space facts that join the wrapping I-Am moment.
-      const extChildId = existingByName.get(manifest.name);
+      // Refresh existing extension space — but only emit set-space facts
+      // when the existing state actually differs. Without this guard,
+      // every reboot stamped redundant set-space facts (type +
+      // qualities.extension) per loaded extension, inflating the chain.
+      const existing = existingByName.get(manifest.name);
+      const extChildId = existing?._id;
       if (extChildId) {
         const extChildTarget = { kind: "space", id: String(extChildId) };
         const { doVerb } = await import("./ibp/verbs/do.js");
-        await doVerb(
-          extChildTarget,
-          "set-space",
-          { field: "type", value: "resource" },
-          { scaffold: true, summonCtx },
-        );
-        await doVerb(
-          extChildTarget,
-          "set-space",
-          {
-            field: "qualities.extension",
-            value: extensionQuality,
-            merge: false,
-          },
-          { scaffold: true, summonCtx },
-        );
+        if (existing.type !== "resource") {
+          await doVerb(
+            extChildTarget,
+            "set-space",
+            { field: "type", value: "resource" },
+            { identity: I_AM, summonCtx },
+          );
+        }
+        // Canonical JSON compare with sorted keys so insertion-order
+        // differences don't trigger false-positive rewrites. A simple
+        // recursive sort handles nested objects (provides, needs).
+        const canon = (v) => {
+          if (v === null || typeof v !== "object") return v;
+          if (Array.isArray(v)) return v.map(canon);
+          return Object.keys(v).sort().reduce((acc, k) => { acc[k] = canon(v[k]); return acc; }, {});
+        };
+        const existingJson = JSON.stringify(canon(existing.extensionQuality || null));
+        const desiredJson  = JSON.stringify(canon(extensionQuality));
+        if (existingJson !== desiredJson) {
+          await doVerb(
+            extChildTarget,
+            "set-space",
+            {
+              field: "qualities.extension",
+              value: extensionQuality,
+              merge: false,
+            },
+            { identity: I_AM, summonCtx },
+          );
+        }
       }
     } else {
       try {
@@ -742,7 +764,7 @@ export async function syncExtensionsToTree(manifests, summonCtx) {
             rootOwner: null,
             qualities: Object.fromEntries(qualities),
           },
-          { scaffold: true, summonCtx },
+          { identity: I_AM, summonCtx },
         );
       } catch (err) {
         log.error(
@@ -763,7 +785,7 @@ export async function syncExtensionsToTree(manifests, summonCtx) {
         { kind: "space", id: String(spaceId) },
         "set-space",
         { field: "qualities.extension.loaded", value: false },
-        { scaffold: true, summonCtx },
+        { identity: I_AM, summonCtx },
       );
     }
   }

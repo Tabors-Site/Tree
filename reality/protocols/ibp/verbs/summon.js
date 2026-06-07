@@ -21,6 +21,7 @@
 
 import log from "../../../seed/seedReality/log.js";
 import { IbpError, IBP_ERR, isIbpError } from "../../../seed/ibp/protocol.js";
+import { assertNoImpersonation } from "./_shared.js";
 import { ackOk, ackError } from "../envelope.js";
 import { summonVerb } from "../../../seed/ibp/verbs/summon.js";
 import { emitToBeingRoom } from "../../../seed/ibp/pushChannel.js";
@@ -91,19 +92,8 @@ export async function handleSummon(socket, env, ack) {
         expand(parsed, expandCtx), expandCtx);
       const expanded = await resolveBeingIds(expandedWithPointers, expandCtx);
 
-      // Impersonation refusal . see do.js for the doctrine.
-      if (
-        expanded.left?.beingId &&
-        socket?.beingId &&
-        expanded.left.beingId !== socket.beingId
-      ) {
-        throw new IbpError(
-          IBP_ERR.FORBIDDEN,
-          `Address actor (@${expanded.left.being}) does not match ` +
-          `authenticated being. Caller cannot impersonate.`,
-          { addressBeingId: expanded.left.beingId, socketBeingId: socket.beingId },
-        );
-      }
+      // Impersonation refusal — see _shared.js for the doctrine.
+      assertNoImpersonation(expanded, socket);
 
       const targetBranch = expanded?.right?.branch || "0";
       if (callerBranch !== targetBranch) {

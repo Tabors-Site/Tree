@@ -18,6 +18,8 @@ import { renderRoleManagerPanel } from "../role-manager-panel.js";
 import { renderBeingFlowPanel } from "../being-flow-panel.js";
 import { renderTimelineSection } from "./being-timeline.js";
 import { setPortalStatus } from "../portal-status.js";
+import { renderOpForm } from "../op-form.js";
+import { renderTaskBar } from "./task-bar.js";
 
 // ────────────────────────────────────────────────────────────────
 // Public surface
@@ -41,6 +43,9 @@ export function clearDetail() {
 export function renderDescriptor(desc, { session, discovery }) {
   if (!desc) return;
   renderTopBar(desc, { session, discovery });
+  // The task menubar sits at the top of every view (Reality / Branch /
+  // Place) so its actions are always reachable, like a window menu bar.
+  renderTaskBar(document.getElementById("task-menubar"), { descriptor: desc, session, discovery });
   // Explorer dispatch — .reel/<kind>/<id>, .acts/<beingId>, .beings,
   // .threads/<id> return synthetic descriptors with is{Reel,ActChain,
   // BeingsCatalog,Thread} flags. Take over the middle area and render
@@ -271,6 +276,7 @@ function renderCounts(desc) {
   if (b) b.textContent = desc.beings?.length ? `${desc.beings.length}` : "";
   if (m) m.textContent = desc.matters?.length ? `${desc.matters.length}` : "";
 }
+
 
 // Update the connection-status pill in the top bar. Called from main.js
 // via flat.setConnection() whenever the socket state changes.
@@ -1494,6 +1500,9 @@ function renderActBlock(a, discovery) {
   if (Array.isArray(a.facts) && a.facts.length) {
     detail.appendChild(jsonKv(`facts (${a.facts.length})`, a.facts));
   }
+  // The face this moment ran under — what the being saw and could do.
+  // Stamped on every act; renders a faint marker when absent (legacy).
+  detail.appendChild(renderFace(a.facadeSnapshot, discovery));
   if (a.severedAt)       detail.appendChild(kvBlock("severed at", String(a.severedAt)));
   if (a.receivedAt)      detail.appendChild(kvBlock("received at", String(a.receivedAt)));
   if (a.stampedAt)       detail.appendChild(kvBlock("stamped at", String(a.stampedAt)));
@@ -1668,6 +1677,81 @@ function jsonKv(label, obj) {
   pre.textContent = JSON.stringify(obj, null, 2);
   row.appendChild(pre);
   return row;
+}
+
+// Render one capability/occupant list to a single comma-joined string,
+// folding the clampList sentinel ({kind:"truncated", count:N}) into a
+// trailing "+N more". Plain strings pass through; only the sentinel is
+// an object. Returns { text, shown, more } so the caller can label it.
+function joinFaceList(list) {
+  const names = [];
+  let more = 0;
+  for (const item of list || []) {
+    if (item && typeof item === "object" && item.kind === "truncated") {
+      more += Number(item.count) || 0;
+      continue;
+    }
+    names.push(item?.name || item?.id || String(item));
+  }
+  let text = names.join(", ");
+  if (more) text += (text ? ", " : "") + `+${more} more`;
+  return { text: text || "(none)", shown: names.length, more };
+}
+
+// Render an act's "face" — the bounded snapshot of orientation, role,
+// space, occupants, and capabilities the being had on hand when this
+// moment stamped. Stamped on every act regardless of cognition; null on
+// legacy acts predating the field (render a faint marker rather than
+// breaking the block). Returns a stacked kv container for the detail.
+function renderFace(snapshot, discovery) {
+  const wrap = document.createElement("div");
+  wrap.className = "kv-block kv-block-stack block-face";
+  const l = document.createElement("span");
+  l.className = "kv-block-label";
+  l.textContent = "face";
+  wrap.appendChild(l);
+
+  if (!snapshot) {
+    const none = document.createElement("span");
+    none.className = "kv-block-value dim";
+    none.textContent = "(no face recorded)";
+    wrap.appendChild(none);
+    return wrap;
+  }
+
+  const body = document.createElement("div");
+  body.className = "face-body";
+
+  if (snapshot.orientation) body.appendChild(kvBlock("orientation", snapshot.orientation));
+  if (snapshot.role)        body.appendChild(kvBlock("role", snapshot.role));
+
+  if (snapshot.space) {
+    const spaceName = snapshot.space.name || snapshot.space.id || "(space)";
+    const link = (snapshot.space.id && discovery?.reality)
+      ? `#${discovery.reality}/.reel/space/${snapshot.space.id}`
+      : null;
+    body.appendChild(kvBlock("space", spaceName, { link }));
+  }
+
+  if (Array.isArray(snapshot.occupants) && snapshot.occupants.length) {
+    const { text, shown, more } = joinFaceList(snapshot.occupants);
+    body.appendChild(kvBlock(`occupants (${shown}${more ? "+" : ""})`, text));
+  }
+
+  // Capabilities: one row per present capability key (canDo / canSummon /
+  // canBe today), iterated generically so a later-added key like canSee
+  // surfaces automatically. Skip empty lists.
+  const caps = snapshot.capabilities;
+  if (caps && typeof caps === "object") {
+    for (const key of Object.keys(caps)) {
+      if (!Array.isArray(caps[key]) || !caps[key].length) continue;
+      const { text } = joinFaceList(caps[key]);
+      body.appendChild(kvBlock(key, text));
+    }
+  }
+
+  wrap.appendChild(body);
+  return wrap;
 }
 
 function renderChildren(desc, { discovery }) {
@@ -1994,57 +2078,18 @@ function beButton(op, stance, payload) {
   return wrap;
 }
 
+// One DO operation as a directed form. Delegates to the shared schema
+// renderer (op-form.js): ops that declare an `args` schema render clean
+// labeled fields; schema-less ops fall back to a single JSON box. Any
+// `baseArgs` (e.g. { matterId }) are context, not fields — they're merged
+// into the call at submit, not shown.
 function doInlineForm(op, address, baseArgs = {}) {
   const wrap = document.createElement("div");
   wrap.className = "action-row";
-
-  const opLabel = document.createElement("code");
-  opLabel.className = "op-label";
-  opLabel.textContent = op.name;
-  opLabel.title = `targets: ${op.targets.join(", ") || "?"} • from ${op.ownerExtension}`;
-  wrap.appendChild(opLabel);
-
-  const form = document.createElement("form");
-  form.className = "action-form";
-
-  const args = document.createElement("input");
-  args.type = "text";
-  args.placeholder = Object.keys(baseArgs).length
-    ? `args JSON (defaults: ${JSON.stringify(baseArgs)})`
-    : "args JSON (or empty for {})";
-  args.className = "action-input";
-  form.appendChild(args);
-
-  const btn = document.createElement("button");
-  btn.type = "submit";
-  btn.className = "btn-sm btn-primary";
-  btn.textContent = "do";
-  form.appendChild(btn);
-
-  const result = document.createElement("div");
-  result.className = "action-result hidden";
-
-  form.onsubmit = async (ev) => {
-    ev.preventDefault();
-    let extra = {};
-    if (args.value.trim()) {
-      try { extra = JSON.parse(args.value); }
-      catch (e) { showResult(result, `parse error: ${e.message}`, "err"); return; }
-    }
-    showResult(result, "…", "pending");
-    btn.disabled = true;
-    try {
-      const r = await flat.doOp(address, op.name, { ...baseArgs, ...extra });
-      showResult(result, JSON.stringify(r, null, 2), "ok");
-    } catch (err) {
-      showResult(result, `${err.code || "error"}: ${err.message || String(err)}`, "err");
-    } finally {
-      btn.disabled = false;
-    }
-  };
-
-  wrap.appendChild(form);
-  wrap.appendChild(result);
+  const doOp = Object.keys(baseArgs).length
+    ? (addr, name, args) => flat.doOp(addr, name, { ...baseArgs, ...args })
+    : flat.doOp;
+  renderOpForm(wrap, { op, address, doOp, submitLabel: "do" });
   return wrap;
 }
 

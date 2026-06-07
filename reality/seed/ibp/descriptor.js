@@ -27,7 +27,7 @@
 //
 // I also produce the place's discovery payload (buildDiscovery) — the
 // bootstrap-time wire shape that names protocol version, descriptor
-// version, registered roles, and plantable seeds. It lives here
+// version, registered roles, and graftable clones. It lives here
 // because both descriptor and discovery are wire payloads my SEE
 // verb returns, and they share types and version constants.
 
@@ -37,7 +37,6 @@ import { getRealityConfigValue, getRealityUrl } from "../realityConfig.js";
 import Being from "../materials/being/being.js";
 import Fact from "../past/fact/fact.js";
 import { getSpaceRootId } from "../sprout.js";
-import { listSeeds } from "../materials/seeds.js";
 import { listMattersAt } from "../materials/matter/matters.js";
 import { HEAVEN_SPACE } from "../materials/space/heavenSpaces.js";
 import { listLiveThreads } from "../materials/space/threads.js";
@@ -53,6 +52,7 @@ import { findOpenForBeing, findLastSealedForBeing } from "../present/beats/2-fol
 import { fold } from "../present/beats/2-fold/foldEngine.js";
 import { foldAt, NoSuchHistoricalState } from "../present/beats/2-fold/foldAt.js";
 import { loadProjection } from "../materials/projections.js";
+import { redactSecrets } from "../materials/redact.js";
 import { BE_OPS } from "./beOps.js";
 
 // Fold an aggregate before reading its qualities. Per FOLD.md: the
@@ -99,7 +99,7 @@ export const IBP_PROTOCOL_VERSION = "1.0";
 // Returned by `ibp:see <reality>/.discovery` once a socket is open. The
 // pre-identity surface every client reads to learn what I speak:
 // protocol version, descriptor versions supported, WS URL, role
-// names registered, verb set, plantable seeds.
+// names registered, verb set, graftable clones.
 
 // My BE-only beings — addressable through BE but not in the SUMMON
 // role registry, so they need an explicit listing for the discovery
@@ -125,8 +125,6 @@ export function buildDiscovery() {
     ws: wsUrl,
     auth: { method: "bearer" },
     roles,
-    // Plantable scaffolds an operator can plant via DO `plant-seed`.
-    seeds: listSeeds(),
     supportedVerbs: ["see", "do", "summon", "be"],
     capabilities: [],
   };
@@ -1246,6 +1244,10 @@ function meta(renderHints = []) {
 // `descriptor.qualities.<extName>` is safe to read either way.
 function serializeQualities(quals) {
   if (!quals) return {};
-  if (quals instanceof Map) return Object.fromEntries(quals);
-  return { ...quals };
+  const obj = quals instanceof Map ? Object.fromEntries(quals) : { ...quals };
+  // Every qualities surface (space / being / matter, on SEE and on live
+  // patches) flows through here — redact secrets so api keys and
+  // credentials never ride a descriptor to a client. The stored qualities
+  // (read server-side for decryption) are untouched.
+  return redactSecrets(obj);
 }

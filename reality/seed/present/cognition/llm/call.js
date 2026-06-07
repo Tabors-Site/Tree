@@ -47,8 +47,9 @@ import { cognitionFailureError } from "../cognitionResult.js";
 // Note: the shared-pool LLM throttling (LLM_PRIORITY enum,
 // acquireLlmSlot / releaseLlmSlot, _llmWaiters queue, LLM_MAX_CONCURRENT
 // cap) retired with the monolithic-orchestrator world. Each being
-// now carries its own LlmConnection; there is no shared pool to
-// throttle and no cross-being override behavior to honor. If a
+// now carries its own LLM connection (a qualities.llmConnections
+// entry); there is no shared pool to throttle and no cross-being
+// override behavior to honor. If a
 // place-level concurrency cap is reintroduced later it will sit at
 // the right layer (max simultaneous runTurns or similar), not as a
 // global LLM-call semaphore.

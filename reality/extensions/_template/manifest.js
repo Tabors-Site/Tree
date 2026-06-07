@@ -59,13 +59,13 @@ export default {
     // after init() and stop() on shutdown.
     jobs: false,                    // or "./jobs.js"
 
-    // Plantable seeds. An operator plants a seed at a position with
-    // `reality.do(space, "plant", { seed: "<ext>:<seed>" })`.
-    // Each recipe file exports { plant(ctx) } and the loader auto-
-    // namespaces the seed name with the extension.
-    seeds: {
-      // "example-seed": "./seeds/example.js",
-    },
+    // Shippable structure — clone bundles the operator can graft at
+    // a position. Replaces the retired scaffold(ctx) seed pattern.
+    // Each bundle is a static JSON file under ./clones/ with the
+    // shape documented in seed/Chain-Rebuild.md.
+    // clones: {
+    //   "example-setup": "./clones/example.clone.json",
+    // },
 
     // Required env vars. Loader validates on boot and can auto-
     // generate secrets.

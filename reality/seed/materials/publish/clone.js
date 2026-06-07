@@ -1,12 +1,29 @@
 // TreeOS Seed . AGPL-3.0 . https://treeos.ai . Tabor Holly
 //
-// Replicate. Walk a subtree's current projection state and produce a
-// portable bundle that another reality (or another part of this one)
-// can graft.
+// Clone. Capture a subtree's SETUP — beings, roles, qualities,
+// configurations, current shape — into a portable artifact that another
+// reality (or another part of this one) can graft.
 //
-// Replicate is a projection-walker, not a chain-walker. It captures
-// the subtree's CURRENT shape: what would appear in a SEE descriptor
-// at the scope root, recursively. History does not transfer.
+// **A clone is a hollow face by design.** It's setup-transfer: "here's
+// my dance-floor / lab template / blog skeleton — install it elsewhere."
+// The receiver gets the configuration installable, not the history.
+// No acts, no biography, no original IDs preserved. The grafted content
+// lands as fresh facts on the receiver's branch under the grafter's
+// identity; the destination has the shape but no rings, no scars, no
+// history of how it came to be — exactly as intended.
+//
+// Clones are intentionally lossy. If you want full biography transfer
+// (acts preserved, identity continuation, original IDs intact), that's
+// `seed.js` — the seed artifact is the genome, and is only valid at
+// boot via plant. See `seed/Chain-Rebuild.md` for the vocabulary
+// doctrine pinning that clone and seed are two distinct artifacts with
+// two distinct purposes, not one artifact at two fidelity levels.
+//
+// Implementation: projection-walker. Captures the subtree's CURRENT
+// shape (what would appear in a SEE descriptor at the scope root,
+// recursively); the graft side synthesizes a chain of create-X facts
+// at apply time. History stays out of clones, period — if you want
+// history, you want a seed.
 //
 // Inside the bundle:
 //
@@ -24,10 +41,11 @@
 //
 // Skip rules (v1):
 //
-//   - Beings with `password` set (human-cognition) are skipped. Passwords
-//     don't replicate; humans can't be portable. A future "ghost being"
-//     mechanism might mint a placeholder identity on graft, but v1 stays
-//     conservative.
+//   - Beings with `password` set (human-cognition) are skipped.
+//     Identity-bearing beings can't graft as anonymous facts; a
+//     future "ghost being" mechanism might mint a placeholder identity
+//     on graft, but v1 stays conservative. (Seeds preserve identity
+//     correctly because plant runs in a fresh reality.)
 //   - Seed spaces (dot-namespace) are skipped — they're substrate
 //     furniture, not user content.
 //
@@ -36,10 +54,11 @@
 
 import { ref, REF_INSERTION_POINT, REF_GRAFT_INITIATOR } from "../ref.js";
 import { remapRefs } from "../refWalker.js";
+import { redactSecrets } from "../redact.js";
 import { emptyBundle } from "./bundle.js";
 
 /**
- * Replicate the subtree rooted at `scopeSpaceId` into a bundle.
+ * Clone the subtree rooted at `scopeSpaceId` into a portable bundle.
  *
  * @param {string} scopeSpaceId       bare space-id of the subtree root
  * @param {object} opts
@@ -47,14 +66,14 @@ import { emptyBundle } from "./bundle.js";
  * @param {string} [opts.scopeName]   human-friendly label for the bundle meta
  * @param {string} [opts.sourceReality] reality domain (for meta)
  * @param {string} [opts.operatorBeingId] who initiated (for audit meta)
- * @returns {Promise<object>} the bundle
+ * @returns {Promise<object>} the clone bundle
  */
-export async function replicateSubtree(scopeSpaceId, opts = {}) {
+export async function cloneSubtree(scopeSpaceId, opts = {}) {
   if (!scopeSpaceId || typeof scopeSpaceId !== "string") {
-    throw new Error("replicateSubtree: scopeSpaceId is required");
+    throw new Error("cloneSubtree: scopeSpaceId is required");
   }
   const branch = opts.branch || "0";
-  // loadOrFold throughout this file: replicate walks aggregates on the
+  // loadOrFold throughout this file: clone walks aggregates on the
   // source branch and captures their state for bundling. An aggregate
   // inherited from main onto the source branch lives only on main's
   // table until lineage cold-fold materializes it here; bare
@@ -77,7 +96,7 @@ export async function replicateSubtree(scopeSpaceId, opts = {}) {
 
   const rootSlot = await loadOrFold("space", scopeSpaceId, branch);
   if (!rootSlot) {
-    throw new Error(`replicateSubtree: space "${scopeSpaceId}" not found in branch "${branch}"`);
+    throw new Error(`cloneSubtree: space "${scopeSpaceId}" not found in branch "${branch}"`);
   }
 
   const bundle = emptyBundle({
@@ -106,12 +125,12 @@ export async function replicateSubtree(scopeSpaceId, opts = {}) {
     if (!slot) continue;
     // Skip heaven spaces (dot-namespace) UNLESS this is the scope root
     // the operator explicitly chose. Two cases:
-    //   - User replicates the place root (`.` / SPACE_ROOT heavenSpace):
+    //   - User clones the place root (`.` / SPACE_ROOT heavenSpace):
     //     include the root itself but skip its heavenSpace children
     //     (`.identity`, `.config`, `.tools`, etc. — substrate furniture
-    //     that doesn't replicate). The user's planted content under the
+    //     that doesn't clone). The user's planted content under the
     //     root still travels.
-    //   - User replicates a regular space deep in the tree: no heavenSpace
+    //   - User clones a regular space deep in the tree: no heavenSpace
     //     children to filter, just walk normally.
     const isScopeRoot = id === scopeSpaceId;
     if (!isScopeRoot && slot.state?.heavenSpace) continue;
@@ -270,7 +289,7 @@ export async function replicateSubtree(scopeSpaceId, opts = {}) {
         : [],
       size:         state.size || null,
       coord:        state.coord || null,
-      qualities:    filterQualities(state.qualities),
+      qualities:    redactSecrets(filterQualities(state.qualities)),
     });
   }
 
@@ -287,7 +306,9 @@ export async function replicateSubtree(scopeSpaceId, opts = {}) {
       homeSpace:     tagId("space", state.homeSpace, { uncapturedSentinel: REF_INSERTION_POINT }),
       position:      tagId("space", state.position, { uncapturedSentinel: REF_INSERTION_POINT }),
       coord:         state.coord || null,
-      qualities:     state.qualities || {},
+      // A clone travels over the wire / to disk for sharing — redact api
+      // keys + credentials from being qualities (llmConnections, auth).
+      qualities:     redactSecrets(state.qualities || {}),
     });
   }
 
@@ -304,7 +325,7 @@ export async function replicateSubtree(scopeSpaceId, opts = {}) {
       parentMatterId: tagId("matter", state.parentMatterId, { uncapturedSentinel: null }),
       origin:         state.origin || "ibp",
       content:        state.content || null,
-      qualities:      state.qualities || {},
+      qualities:      redactSecrets(state.qualities || {}),
     });
   }
 

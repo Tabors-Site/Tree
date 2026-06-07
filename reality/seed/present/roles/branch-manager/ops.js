@@ -8,7 +8,7 @@
 // does the heavy lifting (path arithmetic, branchPoint snapshot,
 // Branch row, child space).
 //
-// Auth: any heaven contributor (canWrite on heaven) can mint a branch off any branch they can
+// Auth: any heaven contributor (hasAccess on heaven) can mint a branch off any branch they can
 // SEE. Promotion to live / pause / delete (Pass 6.5 + 10) require
 // tighter permissions; for branch creation, the principle is "anyone
 // who can read can fork" — branches are isolated worlds, the parent

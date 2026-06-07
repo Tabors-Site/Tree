@@ -708,6 +708,27 @@ kbd {
   gap: 8px;
   align-items: start;
 }
+.space-action-btn {
+  background: var(--bg-3);
+  color: var(--accent);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  padding: 5px 10px;
+  font-family: inherit;
+  font-size: 11px;
+  cursor: pointer;
+}
+.space-action-btn:hover:not(:disabled) {
+  background: var(--bg-2);
+}
+.space-action-btn:disabled {
+  opacity: 0.6;
+  cursor: progress;
+}
+.space-action-status {
+  font-size: 11px;
+  word-break: break-all;
+}
 .op-label {
   background: var(--bg-3);
   padding: 3px 6px;
@@ -756,6 +777,122 @@ kbd {
 .action-pending { background: var(--bg-3); color: var(--fg-dim); }
 .action-ok      { background: #0f201a; color: var(--accent); border: 1px solid #2f6b48; }
 .action-err     { background: #2a1414; color: var(--err);    border: 1px solid var(--err); }
+
+/* ────────────────────────────────────────────────────────────── */
+/* Task bar — position-aware Place / Branch / Reality tabs        */
+/* ────────────────────────────────────────────────────────────── */
+
+/* The bar is a full-width menu strip under the top bar. Its dropdowns
+   overlay the content below (absolute), anchored under the clicked tab —
+   like a desktop window's menu bar. */
+#task-menubar { position: relative; z-index: 40; }
+.task-bar {
+  position: relative;
+  background: var(--bg-2);
+  border-bottom: 1px solid var(--border);
+  padding: 0 8px;
+}
+.task-tabs {
+  display: flex;
+  gap: 2px;
+}
+.task-tab {
+  background: transparent;
+  color: var(--fg-dim);
+  border: none;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+  padding: 6px 14px;
+  font-family: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+.task-tab:hover  { color: var(--accent); }
+.task-tab.active {
+  color: var(--accent);
+  background: var(--bg-3);
+  border-bottom-color: var(--accent);
+}
+
+.task-dropdown {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  z-index: 50;
+  min-width: 230px;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  border: 1px solid var(--border);
+  border-radius: 0 0 4px 4px;
+  background: var(--bg-2);
+  padding: 4px;
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.5);
+}
+.task-action {
+  text-align: left;
+  background: transparent;
+  color: var(--fg);
+  border: none;
+  border-radius: 3px;
+  padding: 5px 8px;
+  font-family: inherit;
+  font-size: 11px;
+  cursor: pointer;
+}
+.task-action:hover        { background: var(--bg-2); color: var(--accent); }
+.task-action-danger       { color: var(--err); }
+.task-action-danger:hover { background: #2a1414; color: var(--err); }
+.task-empty { padding: 5px 8px; font-size: 11px; }
+
+/* ────────────────────────────────────────────────────────────── */
+/* op-form — schema-driven DO forms (shared/op-form.js)          */
+/* ────────────────────────────────────────────────────────────── */
+
+.panel-header {
+  font-size: 12px;
+  color: var(--accent);
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 6px;
+  margin-bottom: 8px;
+  word-break: break-word;
+}
+.op-form { display: flex; flex-direction: column; gap: 8px; }
+.op-form-head { display: none; }
+.op-form-name {
+  background: var(--bg-3);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  padding: 2px 6px;
+  color: var(--fg-dim);
+  font-size: 10px;
+}
+.op-field { display: flex; flex-direction: column; gap: 3px; }
+.op-field label {
+  font-size: 10px;
+  color: var(--fg-faint);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.op-required { color: var(--accent); }
+.op-input {
+  width: 100%;
+  box-sizing: border-box;
+  background: var(--bg);
+  color: var(--fg);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  padding: 5px 8px;
+  font-family: inherit;
+  font-size: 12px;
+}
+.op-input:focus { outline: none; border-color: var(--accent); }
+textarea.op-input { resize: vertical; }
+.op-input-json { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px; }
+.op-input-bool { width: auto; }
+.op-field-hint { font-size: 10px; }
+.op-form-note  { font-size: 11px; margin: 0; }
+.op-form-actions { margin-top: 2px; }
 
 /* ────────────────────────────────────────────────────────────── */
 /* Explorer entry-point links (in rows + address bar)            */
@@ -951,6 +1088,19 @@ kbd {
   font-size: 11px;
 }
 a.kv-block-value:hover { color: var(--accent); text-decoration: underline; }
+
+/* The act "face" — the bounded snapshot of what the being saw and could
+   do when a moment stamped. A subtle divider sets it apart from the raw
+   act fields above it; its rows nest under the "face" label. */
+.block-face {
+  margin-top: 6px;
+  padding-top: 8px;
+  border-top: 1px dotted var(--border);
+}
+.face-body {
+  padding-left: 10px;
+  border-left: 2px solid var(--border);
+}
 
 /* Verb-capability lists used in the role/extension detail panes. */
 .verb-list {

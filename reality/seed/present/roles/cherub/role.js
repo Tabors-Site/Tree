@@ -15,7 +15,7 @@
 //   birth    . admit a new being into the reality. The arrival has no
 //              identity yet; I summon their being-to-be forth via
 //              SUMMON.create-being internally and bind their session
-//              to it. The first ever caller becomes the rootOperator.
+//              to it. The first ever caller becomes the first heaven contributor.
 //   use      . bind an existing identity (credentials or token) to
 //              a session.
 //   release  . drop a session's binding.
@@ -85,7 +85,7 @@ async function birthHandler({ payload, ctx }) {
   // first human registration is admitted through me like every other
   // one . I summon them forth via SUMMON.create-being. Two things
   // differ from the subsequent path: their being-tree parent is the
-  // I_AM directly (so they become the rootOperator), and
+  // I_AM directly (so they become the first heaven contributor), and
   // beforeRegister is bypassed because hook listeners are not yet
   // loaded on a fresh reality. The cherub at the gate admits the
   // first arrival the same way as every later one.
@@ -93,10 +93,13 @@ async function birthHandler({ payload, ctx }) {
   if (first) {
     const { findIAm } = await import("../../../materials/being/identity.js");
     const iAm = await findIAm();
-    const cherubBeingRow = await Being
-      .findOne({ name: "cherub" })
-      .select("_id").lean();
-    const cherubBeingId = cherubBeingRow ? String(cherubBeingRow._id) : null;
+    // Beings live in the unified projections collection; the legacy
+    // `beings` Mongoose collection is empty. findByName walks the
+    // projections by (type, name, branch) — the same path every other
+    // by-name lookup uses post-projection-unification.
+    const { findByName } = await import("../../../materials/projections.js");
+    const cherubSlot = await findByName("being", "cherub", "0");
+    const cherubBeingId = cherubSlot ? String(cherubSlot.id) : null;
 
     let being;
     try {
@@ -106,42 +109,53 @@ async function birthHandler({ payload, ctx }) {
         parentBeingId: iAm ? String(iAm._id) : null,
         cherubIdentity: { name: "cherub", beingId: cherubBeingId },
         summonCtx: ctx?.summonCtx || null,
-        scaffold: ctx?.scaffold === true,
       });
     } catch (err) {
       throw mapSeedError(err);
     }
     hooks.run("afterRegister", { user: being, req: ctx?.req }).catch(() => {});
 
-    // Anoint the rootOperator. The first human is admitted into
-    // heaven from the moment they materialize so they can immediately
-    // SEE/DO/SUMMON the seed-internal spaces (config, extensions,
-    // tools, etc.). Mechanism: add them as a contributor to heaven.
-    // Heaven's default permissions gate on `canWrite` (owner OR
-    // contributor), so contributor status admits them. Subsequent
-    // humans default to non-contributors on heaven; an existing
-    // heaven contributor (or the rootOperator) promotes them via
-    // the standard add-contributor DO op against heaven. Best-effort:
-    // failures here don't deny the registration.
-    try {
-      const { withIAmAct } = await import("../../../sprout.js");
-      const { findByHeavenSpace } = await import("../../../materials/projections.js");
-      const { HEAVEN_SPACE } = await import("../../../materials/space/heavenSpaces.js");
-      const { addContributor } = await import("../../../materials/space/ownership.js");
-      const { I_AM } = await import("../../../materials/being/seedBeings.js");
-      const heaven = await findByHeavenSpace(HEAVEN_SPACE.HEAVEN, "0");
-      if (heaven) {
-        await withIAmAct(`anoint rootOperator @${being.name}`, async (anointCtx) => {
-          await addContributor(String(heaven.id), String(being._id), I_AM, anointCtx?.branch || "0", anointCtx);
-        });
-      }
-    } catch (err) {
-      // Log only; the cherub's job is admission, not coronation.
-      const { default: log } = await import("../../../seedReality/log.js");
-      log.error(
-        "Cherub",
-        `failed to anoint rootOperator @${being.name}: ${err.message}. Add them later with: do(<reality>/., "add-contributor", { contributorId: "<beingId>" }) as an existing heaven contributor.`,
-      );
+    // Anoint the first heaven contributor. The first human is
+    // admitted into heaven from the moment they materialize so they
+    // can immediately SEE/DO/SUMMON the seed-internal spaces (config,
+    // extensions, tools, etc.). Mechanism: add them as a contributor
+    // to heaven. Heaven's default permissions gate on `hasAccess`
+    // (owner OR contributor), so contributor status admits them.
+    // Subsequent humans default to non-contributors on heaven; an
+    // existing heaven contributor promotes them via the standard
+    // add-contributor DO op against heaven.
+    //
+    // Timing: this anoint must run AFTER cherub's compound act seals.
+    // The new being's `be:birth` fact is still pending in cherub's
+    // summonCtx.deltaF; if we open a separate `withIAmAct` here, its
+    // own moment can't see the not-yet-sealed being and
+    // addContributor's `assertBeingExists` walk-from-projection
+    // would throw. summonCtx.afterSeal queues the work for
+    // post-commit, when the being's row has materialized.
+    const beingName = being.name;
+    const newBeingId = String(being._id);
+    if (ctx?.summonCtx?.afterSeal) {
+      ctx.summonCtx.afterSeal.push(async () => {
+        try {
+          const { withIAmAct } = await import("../../../sprout.js");
+          const { findByHeavenSpace } = await import("../../../materials/projections.js");
+          const { HEAVEN_SPACE } = await import("../../../materials/space/heavenSpaces.js");
+          const { addContributor } = await import("../../../materials/space/ownership.js");
+          const { I_AM } = await import("../../../materials/being/seedBeings.js");
+          const heaven = await findByHeavenSpace(HEAVEN_SPACE.HEAVEN, "0");
+          if (heaven) {
+            await withIAmAct(`anoint heaven contributor @${beingName}`, async (anointCtx) => {
+              await addContributor(String(heaven.id), newBeingId, I_AM, anointCtx?.branch || "0", anointCtx);
+            });
+          }
+        } catch (err) {
+          const { default: log } = await import("../../../seedReality/log.js");
+          log.error(
+            "Cherub",
+            `failed to anoint heaven contributor @${beingName}: ${err.message}. Add them later with: do(<reality>/., "add-contributor", { contributorId: "<beingId>" }) as an existing heaven contributor.`,
+          );
+        }
+      });
     }
 
     const identityToken = generateToken(being);
@@ -175,7 +189,6 @@ async function birthHandler({ payload, ctx }) {
       parentBeingId,
       cherubIdentity: { name: "cherub", beingId: parentBeingId },
       summonCtx: ctx?.summonCtx || null,
-      scaffold: false,
     });
   } catch (err) {
     throw mapSeedError(err);
@@ -389,7 +402,6 @@ async function _registerHumanWithFreshHome({
   parentBeingId,
   cherubIdentity,
   summonCtx,
-  scaffold,
 }) {
   const { v4: uuidv4 } = await import("uuid");
   const { emitFact } = await import("../../../past/fact/facts.js");
@@ -433,20 +445,19 @@ async function _registerHumanWithFreshHome({
     },
     identity:  cherubIdentity,
     summonCtx,
-    scaffold,
   });
 
   // ── 3. Set the new being as rootOwner on the home ──
-  // The home is a tree root they own. Stamped as scaffold because
-  // cherub already authorized the whole compound act; doing it under
-  // the new being's identity faces a chicken-and-egg with stance auth
-  // (they're becoming the owner; auth needs them to already be one).
+  // The home is a tree root they own. Stamped as I_AM because cherub
+  // already authorized the whole compound act; doing it under the new
+  // being's identity faces a chicken-and-egg with stance auth (they're
+  // becoming the owner; auth needs them to already be one).
   const { doVerb } = await import("../../../ibp/verbs/do.js");
   await doVerb(
     { kind: "space", id: homeId },
     "set-space",
     { field: "rootOwner", value: String(result.beingId) },
-    { scaffold: true, summonCtx },
+    { identity: I_AM, summonCtx },
   );
 
   return result.being;

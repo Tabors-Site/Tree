@@ -20,14 +20,29 @@
 // the split is conceptual — readers reach the right surface at
 // import-site.
 
+// Module-state declarations FIRST (before imports that may chain
+// back into this module during their own top-level). `var` is used
+// deliberately: a circular import that lands a callback into
+// getRealityConfigValue mid-load would hit a TDZ ReferenceError on
+// `let` here. var has no TDZ; same semantics, immune to that race.
+// The chain in question:
+//   ancestorCache.js (top-level scheduleCleanup) → getTTL →
+//   getInternalConfigValue → getRealityConfigValue → reads cache.
+// If realityConfig is mid-import when that fires, cache must be
+// readable as `undefined` (treated as null), not throw.
+var configCache = null;
+var initialized = false;
+var cachedRealityUrl = null;
+
 import log from "./seedReality/log.js";
 import Space from "./materials/space/space.js";
 import { HEAVEN_SPACE } from "./materials/space/heavenSpaces.js";
+import { I_AM } from "./materials/being/seedBeings.js";
 import { registerOperation } from "./ibp/operations.js";
-
-let configCache = null;
-let initialized = false;
-let cachedRealityUrl = null;
+// NOTE: protocol.js + identity.js are pulled in lazily inside the
+// close-reality handler (dynamic import), not at the top level — this
+// module loads very early (see the circular-import note above) and a
+// static import of the being/identity chain here risks a load-order TDZ.
 
 // The reality's public connection URL. Other realities, browsers, and the
 // IBP discovery endpoint all reach me at this URL. Derived from
@@ -87,7 +102,12 @@ function validateValue(value) {
 }
 
 // Keys allowed to fall back to process.env before initRealityConfig() runs.
-const BOOT_ENV_KEYS = new Set([
+// `var` (not `const`): getRealityConfigValue reads this set, and the
+// circular-import callback (see top-of-file note) may fire it before
+// the const initializer runs. var hoists and accepts `undefined` on
+// early reads; the `BOOT_ENV_KEYS.has` call below short-circuits via
+// optional chaining for that case.
+var BOOT_ENV_KEYS = new Set([
   "socketMaxBufferSize", "socketPingTimeout", "socketPingInterval", "socketConnectTimeout",
   "maxConnectionsPerIp", "REALITY_NAME", "realityUrl", "HORIZON_URL",
 ]);
@@ -144,7 +164,12 @@ export function getRealityConfigValue(key) {
   if (configCache && key in configCache && configCache[key] != null) {
     return deepCopy(configCache[key]);
   }
-  if (!initialized && BOOT_ENV_KEYS.has(key)) {
+  // Guard BOOT_ENV_KEYS access — if this runs during the circular-import
+  // window noted at top-of-file, the var declaration may not have
+  // executed yet (var hoists but BOOT_ENV_KEYS is undefined until its
+  // initializer line). Optional-chain so a callback that fires too
+  // early returns null cleanly instead of throwing.
+  if (!initialized && BOOT_ENV_KEYS?.has(key)) {
     return process.env[key] || null;
   }
   return null;
@@ -194,7 +219,7 @@ export async function setRealityConfigValue(key, value, { internal, identity, su
   const { doVerb } = await import("./ibp/verbs/do.js");
   const opts = identity
     ? { identity, summonCtx }
-    : { scaffold: true, summonCtx };
+    : { identity: I_AM, summonCtx };
   await doVerb(
     { kind: "space", id: String(configSpace._id) },
     "set-space",
@@ -227,7 +252,7 @@ export async function deleteRealityConfigValue(key, { internal, identity, summon
   const { doVerb } = await import("./ibp/verbs/do.js");
   const opts = identity
     ? { identity, summonCtx }
-    : { scaffold: true, summonCtx };
+    : { identity: I_AM, summonCtx };
   await doVerb(
     { kind: "space", id: String(configSpace._id) },
     "set-space",
@@ -348,7 +373,11 @@ registerOperation("set-config", {
   targets: ["space"],
   ownerExtension: "seed",
   skipAudit: true,
-  handler: async ({ params, scaffold, identity, summonCtx }) => {
+  args: {
+    key: { type: "text", label: "Config key", required: true },
+    value: { type: "json", label: "Value (JSON)", required: true },
+  },
+  handler: async ({ params, identity, summonCtx }) => {
     const { key, value } = params || {};
     if (!key || typeof key !== "string") {
       throw new Error("set-config: `key` is required");
@@ -358,12 +387,14 @@ registerOperation("set-config", {
         "set-config: `value` is required (use delete-config to remove)",
       );
     }
-    // Scaffold flows (migrations, first-boot bootstrap) are permitted
-    // to write PROTECTED_KEYS (seedVersion, disabledExtensions). Being
-    // calls never carry scaffold and stay subject to the protected-key
-    // gate above.
+    // I_AM-internal flows (migrations, first-boot bootstrap, manifest
+    // sync) may write PROTECTED_KEYS (seedVersion, disabledExtensions).
+    // Other beings stay subject to the protected-key gate inside
+    // setRealityConfigValue. `internal` used to be derived from a
+    // `scaffold` ctx field; `identity.beingId === I_AM` is the same
+    // signal post-retirement.
     await setRealityConfigValue(key, value, {
-      internal: scaffold === true,
+      internal: identity?.beingId === I_AM,
       identity,
       summonCtx,
     });
@@ -375,16 +406,62 @@ registerOperation("delete-config", {
   targets: ["space"],
   ownerExtension: "seed",
   skipAudit: true,
-  handler: async ({ params, scaffold, identity, summonCtx }) => {
+  args: {
+    key: { type: "text", label: "Config key", required: true },
+  },
+  handler: async ({ params, identity, summonCtx }) => {
     const { key } = params || {};
     if (!key || typeof key !== "string") {
       throw new Error("delete-config: `key` is required");
     }
     await deleteRealityConfigValue(key, {
-      internal: scaffold === true,
+      internal: identity?.beingId === I_AM,
       identity,
       summonCtx,
     });
     return { deleted: true, key };
+  },
+});
+
+// ─────────────────────────────────────────────────────────────────────
+// close-reality — exit the running server (graceful shutdown).
+// ─────────────────────────────────────────────────────────────────────
+//
+// Reality-wide control: stops the Node process. Restricted to the root
+// operator (the first registered human). Rather than wiring a new
+// shutdown path, the handler re-raises SIGTERM to itself on a short
+// delay — long enough for the DO ack to flush over the wire before
+// begin.js's existing SIGTERM handler closes WS / Mongo / HTTP and calls
+// process.exit. skipAudit: there's nothing to fold once the world stops,
+// and the act-chain can't observe its own server's death.
+
+registerOperation("close-reality", {
+  targets: ["space"],
+  ownerExtension: "seed",
+  skipAudit: true,
+  args: {},
+  handler: async ({ identity }) => {
+    const { IbpError, IBP_ERR } = await import("./ibp/protocol.js");
+    const { isHeavenContributor } = await import("./materials/space/heavenLineage.js");
+    if (!identity?.beingId) {
+      throw new IbpError(IBP_ERR.UNAUTHORIZED, "close-reality requires an authenticated being.");
+    }
+    if (!(await isHeavenContributor(identity.beingId))) {
+      throw new IbpError(
+        IBP_ERR.FORBIDDEN,
+        "Only heaven contributors can close the reality.",
+      );
+    }
+    log.warn("Seed", `close-reality requested by heaven contributor ${identity.beingId}. Shutting down.`);
+    // Let the ack return first; then trigger the graceful shutdown wired
+    // in begin.js (SIGTERM handler closes senses + process.exit).
+    setTimeout(() => {
+      try {
+        process.kill(process.pid, "SIGTERM");
+      } catch {
+        process.exit(0);
+      }
+    }, 250);
+    return { closing: true };
   },
 });

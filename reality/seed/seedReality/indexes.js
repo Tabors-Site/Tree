@@ -47,9 +47,8 @@ const REQUIRED_INDEXES = [
  * Seed collection names. Extensions cannot create indexes on these.
  * Must match the third arg of each `mongoose.model(Name, Schema, COLL)`
  * call (schemas live colocated with the code that owns them: Being in
- * materials/being/, Fact in past/fact/, SubscriptionRecord in
- * present/wakes/, etc.), or the default Mongoose pluralization where
- * the third arg is omitted.
+ * materials/being/, Fact in past/fact/, etc.), or the default
+ * Mongoose pluralization where the third arg is omitted.
  */
 const KERNEL_COLLECTIONS = new Set([
   "spaces",                // Space (default pluralization of "Space")

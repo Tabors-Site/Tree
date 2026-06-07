@@ -54,7 +54,7 @@ import {
 } from "../../materials/space/threads.js";
 import { getRole } from "../../present/roles/registry.js";
 import { attachHandoff, wake } from "../../present/intake/scheduler.js";
-import { assertVerbCaller, refuseHistoricalWrite, resolveBranchForFact } from "./_shared.js";
+import { assertVerbCaller, refuseHistoricalWrite, resolveBranchForFact, normalizeIdentity } from "./_shared.js";
 
 // Legacy numeric priority (used by inbox queue ordering and the
 // older wake APIs) mapped to the SUMMON envelope's enum. The Act
@@ -301,8 +301,12 @@ export async function summonVerb(stance, message, opts = {}) {
 export async function summonByResolved(args) {
   const {
     toBeingId, inboxSpaceId, message, activeRole: roleOverride,
-    identity, onResponse, onError, summonCtx = null, branch: argsBranch = null,
+    identity: rawIdentity,
+    onResponse, onError, summonCtx = null, branch: argsBranch = null,
   } = args || {};
+  // Accept bare-string identity shorthand (typically `I_AM` for seed-
+  // internal summons) alongside the regular `{beingId, name}` shape.
+  const identity = normalizeIdentity(rawIdentity);
   if (!toBeingId)    throw new IbpError(IBP_ERR.INVALID_INPUT, "summonByResolved requires toBeingId");
   if (!inboxSpaceId) throw new IbpError(IBP_ERR.INVALID_INPUT, "summonByResolved requires inboxSpaceId");
 

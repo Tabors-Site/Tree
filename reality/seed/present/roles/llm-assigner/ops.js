@@ -24,7 +24,8 @@ import Space from "../../../materials/space/space.js";
 import { registerOperation } from "../../../ibp/operations.js";
 import { doVerb } from "../../../ibp/verbs/do.js";
 import { IbpError, IBP_ERR } from "../../../ibp/protocol.js";
-import { findBeingByName, findRootOperator } from "../../../materials/being/identity.js";
+import { findBeingByName } from "../../../materials/being/identity.js";
+import { I_AM } from "../../../materials/being/seedBeings.js";
 import { getMatter } from "../../../materials/matter/matters.js";
 import {
   LLM_ASSIGNER_TUTORIAL_MARK,
@@ -197,7 +198,7 @@ export function registerLlmAssignerOps() {
       );
 
       const value = { ...tutorialMeta, playbackSeconds: currentTime };
-      const opts = identity ? { identity, summonCtx } : { scaffold: true, summonCtx };
+      const opts = identity ? { identity, summonCtx } : { identity: I_AM, summonCtx };
       await doVerb(
         { kind: "matter", id: String(matter._id) },
         "set-matter",
@@ -390,17 +391,11 @@ export function registerLlmAssignerOps() {
           "llm-assigner:set-reality-llm requires an authenticated being.",
         );
       }
-      const operator = await findRootOperator();
-      if (!operator) {
+      const { isHeavenContributor } = await import("../../../materials/space/heavenLineage.js");
+      if (!(await isHeavenContributor(identity.beingId))) {
         throw new IbpError(
           IBP_ERR.FORBIDDEN,
-          "No root operator exists on this reality yet. Register the first human via @cherub.",
-        );
-      }
-      if (String(operator._id) !== String(identity.beingId)) {
-        throw new IbpError(
-          IBP_ERR.FORBIDDEN,
-          "Only the reality's root operator can change reality-level LLM configuration.",
+          "Only heaven contributors can change reality-level LLM configuration.",
         );
       }
       const { connectionId } = params || {};

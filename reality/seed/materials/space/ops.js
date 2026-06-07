@@ -25,6 +25,12 @@ import { getRealityDomain } from "../../ibp/address.js";
 import { IbpError, IBP_ERR, mapPatternsToIbpError } from "../../ibp/protocol.js";
 import { I_AM } from "../being/seedBeings.js";
 import { detectTargetKind, targetIdOf, loadTargetRow } from "../_targetShape.js";
+import {
+  addContributor,
+  removeContributor,
+  setOwner,
+  removeOwner,
+} from "./ownership.js";
 
 // Namespaces NOT writable through set-space qualities (each has its own verb).
 const RESERVED_SET_META_NS = new Set([
@@ -48,7 +54,7 @@ const RESERVED_SET_META_NS = new Set([
 // reducer's applyCreateSpace.
 
 async function createSpaceHandler(ctx) {
-  const { target, params, identity, summonCtx, scaffold } = ctx;
+  const { target, params, identity, summonCtx } = ctx;
   const spec = params || {};
   const targetKind = detectTargetKind(target);
   return createSpaceChild({
@@ -56,7 +62,6 @@ async function createSpaceHandler(ctx) {
     params: spec,
     identity,
     summonCtx,
-    scaffold,
     kind: targetKind,
   });
 }
@@ -356,18 +361,15 @@ async function setOnSpaceHandler({ target, params, identity, summonCtx }) {
 // end-space
 // ─────────────────────────────────────────────────────────────────────
 
-async function endSpaceHandler({ target, identity, scaffold, summonCtx }) {
+async function endSpaceHandler({ target, identity, summonCtx }) {
   const spaceId = targetIdOf(target);
-  // Scaffold-mode acts as I_AM. The registry mirror sync (genesis +
-  // boot) calls end-space against stale registry entries under
-  // I_AM authority; without this fall-through, deleteSpaceBranch's
-  // owner check rejects a null beingId and the sync warns.
-  const actorBeingId = identity?.beingId || (scaffold ? I_AM : null);
+  // The actor is whoever called. I_AM-internal flows (registry mirror
+  // sync at genesis + boot) pass `identity: I_AM` and the beingId
+  // falls out naturally; previously this branch had a scaffold-flag
+  // fallback to I_AM, which retired with the flag.
+  const actorBeingId = identity?.beingId || null;
   // Forward the open moment's actId so deleteSpaceBranch's internal
-  // do.set-space writes ride the same Act. Without this, the inner
-  // doVerb calls fall into the `summonCtx: null, scaffold: true`
-  // branch and trip the "scaffold requires summonCtx" guard in
-  // verbs/do.js — exactly the RegistryMirror sync failure.
+  // do.set-space writes ride the same Act.
   const deleted = await deleteSpaceBranch(spaceId, actorBeingId, summonCtx?.actId || null);
   return { deathSpaceId: String(deleted?._id || spaceId) };
 }
@@ -381,6 +383,11 @@ registerOperation("create-space", {
   ownerExtension: "seed",
   factAction: "create-space",
   skipAudit: true,
+  args: {
+    name: { type: "text", label: "Name (kebab-case)", required: true },
+    type: { type: "text", label: "Type (optional, e.g. 2d / 3d)", required: false },
+    size: { type: "json", label: "Size (optional)", required: false, placeholder: '{"x":50,"y":50}' },
+  },
   handler: createSpaceHandler,
 });
 
@@ -388,6 +395,11 @@ registerOperation("set-space", {
   targets: ["space", "stance"],
   ownerExtension: "seed",
   factAction: "set-space",
+  args: {
+    field: { type: "text", label: "Field (e.g. name, status, qualities.<ns>.<key>)", required: true },
+    value: { type: "json", label: "Value (JSON; null to clear)", required: false },
+    merge: { type: "bool", label: "Merge (for qualities objects)", default: true, required: false },
+  },
   handler: setOnSpaceHandler,
 });
 
@@ -395,7 +407,129 @@ registerOperation("end-space", {
   targets: ["space"],
   ownerExtension: "seed",
   factAction: "end-space",
+  args: {},
   handler: endSpaceHandler,
+});
+
+// ─────────────────────────────────────────────────────────────────────
+// Permissions — owner + contributor roster on a place.
+// ─────────────────────────────────────────────────────────────────────
+//
+// Thin DO wrappers over the ownership.js functions. Each self-enforces
+// authority (assertOwner / self-removal rules) and stamps its change as
+// an inner set-space fact, so these wrappers carry skipAudit:true — one
+// logical write, one fact. The actor is the caller's being; the place is
+// the resolved target (a space target's id, or a stance's spaceId).
+
+// Resolve the space id from a DO target that may be a space row/envelope
+// or a resolved stance (which carries `.spaceId`).
+function spaceIdFromTarget(target) {
+  const kind = detectTargetKind(target);
+  if (kind === "stance") {
+    if (!target?.spaceId) {
+      throw new IbpError(IBP_ERR.SPACE_NOT_FOUND, "Resolved position has no spaceId");
+    }
+    return String(target.spaceId);
+  }
+  const id = targetIdOf(target);
+  if (!id) throw new IbpError(IBP_ERR.SPACE_NOT_FOUND, "Target does not resolve to a space");
+  return String(id);
+}
+
+function requireActor(identity) {
+  if (!identity?.beingId) {
+    throw new IbpError(IBP_ERR.UNAUTHORIZED, "An authenticated being is required");
+  }
+  return String(identity.beingId);
+}
+
+// ownership.js throws plain Errors; map their messages to IBP codes so
+// the portal shows FORBIDDEN / NOT_FOUND rather than a generic 500.
+const PERMISSION_ERROR_PATTERNS = [
+  [/only the .*owner|cannot add the owner|already the owner|cannot modify heaven|cannot set ownership|stance authorization/i, IBP_ERR.FORBIDDEN],
+  [/not found/i, IBP_ERR.SPACE_NOT_FOUND],
+  [/being is being modified|concurrently/i, IBP_ERR.RESOURCE_CONFLICT],
+  [/maximum|required|cannot/i, IBP_ERR.INVALID_INPUT],
+];
+
+registerOperation("add-contributor", {
+  targets: ["space", "stance"],
+  ownerExtension: "seed",
+  skipAudit: true,
+  args: {
+    contributorId: { type: "text", label: "Contributor being id", required: true },
+  },
+  handler: async ({ target, params, identity, summonCtx }) => {
+    const spaceId = spaceIdFromTarget(target);
+    const actor = requireActor(identity);
+    const contributorId = String(params?.contributorId || "").trim();
+    if (!contributorId) throw new IbpError(IBP_ERR.INVALID_INPUT, "`contributorId` is required");
+    try {
+      await addContributor(spaceId, contributorId, actor, summonCtx?.branch || "0", summonCtx);
+    } catch (err) {
+      throw mapPatternsToIbpError(err, PERMISSION_ERROR_PATTERNS);
+    }
+    return { added: true, spaceId, contributorId };
+  },
+});
+
+registerOperation("remove-contributor", {
+  targets: ["space", "stance"],
+  ownerExtension: "seed",
+  skipAudit: true,
+  args: {
+    contributorId: { type: "text", label: "Contributor being id", required: true },
+  },
+  handler: async ({ target, params, identity, summonCtx }) => {
+    const spaceId = spaceIdFromTarget(target);
+    const actor = requireActor(identity);
+    const contributorId = String(params?.contributorId || "").trim();
+    if (!contributorId) throw new IbpError(IBP_ERR.INVALID_INPUT, "`contributorId` is required");
+    try {
+      await removeContributor(spaceId, contributorId, actor, summonCtx?.branch || "0", summonCtx);
+    } catch (err) {
+      throw mapPatternsToIbpError(err, PERMISSION_ERROR_PATTERNS);
+    }
+    return { removed: true, spaceId, contributorId };
+  },
+});
+
+registerOperation("set-owner", {
+  targets: ["space", "stance"],
+  ownerExtension: "seed",
+  skipAudit: true,
+  args: {
+    newOwnerId: { type: "text", label: "New owner being id", required: true },
+  },
+  handler: async ({ target, params, identity, summonCtx }) => {
+    const spaceId = spaceIdFromTarget(target);
+    const actor = requireActor(identity);
+    const newOwnerId = String(params?.newOwnerId || "").trim();
+    if (!newOwnerId) throw new IbpError(IBP_ERR.INVALID_INPUT, "`newOwnerId` is required");
+    try {
+      await setOwner(spaceId, newOwnerId, actor, summonCtx?.branch || "0", summonCtx);
+    } catch (err) {
+      throw mapPatternsToIbpError(err, PERMISSION_ERROR_PATTERNS);
+    }
+    return { ownerSet: true, spaceId, newOwnerId };
+  },
+});
+
+registerOperation("remove-owner", {
+  targets: ["space", "stance"],
+  ownerExtension: "seed",
+  skipAudit: true,
+  args: {},
+  handler: async ({ target, identity, summonCtx }) => {
+    const spaceId = spaceIdFromTarget(target);
+    const actor = requireActor(identity);
+    try {
+      await removeOwner(spaceId, actor, summonCtx?.branch || "0");
+    } catch (err) {
+      throw mapPatternsToIbpError(err, PERMISSION_ERROR_PATTERNS);
+    }
+    return { ownerRemoved: true, spaceId };
+  },
 });
 
 // ─────────────────────────────────────────────────────────────────────
@@ -420,8 +554,8 @@ const KERNEL_ERROR_PATTERNS = {
   ],
 };
 
-async function createSpaceChild({ target, params, identity, summonCtx, scaffold, kind }) {
-  const beingId = identity?.beingId || (scaffold ? I_AM : null);
+async function createSpaceChild({ target, params, identity, summonCtx, kind }) {
+  const beingId = identity?.beingId || null;
   const actId = summonCtx?.actId || null;
   const { name, type = null, size = null } = params || {};
   if (!name || typeof name !== "string") {
@@ -441,7 +575,6 @@ async function createSpaceChild({ target, params, identity, summonCtx, scaffold,
         beingId,
         actId,
         summonCtx,
-        scaffold,
       });
       return shapeNewSpace(newSpace);
     } catch (err) {

@@ -30,7 +30,7 @@ export default {
     "Plants a greeter being whose role says hello world to you and to the world it sees.",
 
   needs: {
-    services: ["see", "do", "summon", "be", "qualities", "seeds", "models", "declare"],
+    services: ["see", "do", "summon", "be", "qualities", "models", "declare"],
     models:   ["Being", "Space"],
     extensions: [],
   },
@@ -40,13 +40,17 @@ export default {
   provides: {
     // The role is registered in init() rather than declared here so
     // it can close over `place` for the SEE call inside summon().
-    // Seeds are also registered in init() for the same reason
-    // (scaffold needs `reality.summon` to plant the being).
-    seeds: {},
     routes: false,
     jobs: false,
     env: [],
     cli: [],
+    // Shippable structure — clone bundles operators graft at a position.
+    // Replaces the retired seed-scaffold pattern. Each bundle's content
+    // is a static list of fact specs that replay at graft time. See
+    // seed/Chain-Rebuild.md for the bundle format + parameter system.
+    clones: {
+      greeter: "./clones/greeter.clone.json",
+    },
     hooks: { fires: [], listens: [] },
     defaultPermissions: {
       // Anyone can SUMMON the greeter — that's the whole point of a

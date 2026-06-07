@@ -146,7 +146,7 @@ function validateRenderBlock(input) {
 }
 
 async function setRenderHandler(ctx) {
-  const { target, params, identity, summonCtx, scaffold } = ctx;
+  const { target, params, identity, summonCtx } = ctx;
   const kind = detectTargetKind(target);
   if (kind !== "matter" && kind !== "space" && kind !== "being") {
     throw new IbpError(
@@ -170,7 +170,7 @@ async function setRenderHandler(ctx) {
     target,
     innerOp,
     { field: "qualities.render", value: block, merge },
-    { identity, summonCtx, scaffold },
+    { identity, summonCtx },
   );
 }
 

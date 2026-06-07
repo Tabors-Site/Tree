@@ -47,7 +47,6 @@ import { assertVerbCaller, refuseHistoricalWrite, resolveBranchForFact } from ".
  *   req          optional Express req for HTTP-arrival flows
  *   currentReality  defaults to the current reality domain (getRealityDomain)
  *   summonCtx    moment context (so the audit Fact joins ctx.deltaF)
- *   scaffold     boot/scaffold bypass
  */
 export async function beVerb(operation, payload = {}, opts = {}) {
   if (typeof operation !== "string" || !operation.length) {
@@ -241,7 +240,6 @@ export async function beVerb(operation, payload = {}, opts = {}) {
       spec: childSpec,
       identity,
       summonCtx,
-      scaffold: opts.scaffold === true,
     });
     // ONE fact per birth. birthBeing already stamped `be:birth` on the
     // new being's reel with parentBeingId=<caller> in the spec. No
@@ -299,7 +297,6 @@ export async function beVerb(operation, payload = {}, opts = {}) {
       actId: summonCtx?.actId || null,
       summonCtx,
       branch,
-      scaffold: opts.scaffold === true,
     });
     return result;
   }
@@ -353,7 +350,6 @@ export async function beVerb(operation, payload = {}, opts = {}) {
       actId: summonCtx?.actId || null,
       summonCtx,
       branch,
-      scaffold: opts.scaffold === true,
     });
     return result;
   }
@@ -399,17 +395,29 @@ export async function beVerb(operation, payload = {}, opts = {}) {
       ctx: { socket, address: { kind: addressKind, value: address }, identity, req, summonCtx },
       summonCtx,
     });
-    await writeBeFact({
-      operation,
-      identity,
-      authResult: result,
-      payload,
-      beingName,
-      actId: summonCtx?.actId || null,
-      summonCtx,
-      branch,
-      scaffold: opts.scaffold === true,
-    });
+    // ONE fact per birth. cherub's birth handler delegates to
+    // birthBeing, which already stamped `be:birth` on the new being's
+    // reel with the full spec (homeSpace, defaultRole, parentBeingId,
+    // qualities, …). A second writeBeFact("birth") here would emit a
+    // duplicate be:birth with only `{ name, from }` in params; the
+    // reducer reapplies the latest be:birth's params verbatim and
+    // would clobber the freshly-set state (homeSpace → null,
+    // defaultRole → null, parentBeingId → null), leaving the just-born
+    // being homeless. The birther path above carries the same
+    // discipline. Skip the audit fact for birth; connect / release
+    // still need it (no upstream fact carries their state otherwise).
+    if (operation !== "birth") {
+      await writeBeFact({
+        operation,
+        identity,
+        authResult: result,
+        payload,
+        beingName,
+        actId: summonCtx?.actId || null,
+        summonCtx,
+        branch,
+      });
+    }
     return result;
   }
 
@@ -439,20 +447,15 @@ export async function beVerb(operation, payload = {}, opts = {}) {
  * One Fact per BE op, same as DO. The actor is the calling identity;
  * birth/connect from arrival has none, so the row names the newly-
  * bound being from authResult. The wire layer routes BE through
- * cherub-as-actor so the actId is always present; the only escape
- * is boot scaffolding, which sets scaffold=true. The guard throws
+ * cherub-as-actor so the actId is always present. The guard throws
  * before emitFact runs — an act without a frame doesn't get a Fact,
  * and a BE without a Fact didn't happen.
  */
-async function writeBeFact({ operation, identity, authResult, payload, beingName = "cherub", actId = null, summonCtx = null, branch, scaffold = false }) {
-  // Post-refactor: scaffold:true no longer implies "commit as a
-  // singleton outside any moment." Callers must thread a summonCtx
-  // (boot moment from withBootMoment, or a runtime moment). Without
-  // an actId the Fact would orphan; throw rather than silently commit.
+async function writeBeFact({ operation, identity, authResult, payload, beingName = "cherub", actId = null, summonCtx = null, branch }) {
   if (!actId) {
     throw new IbpError(
       IBP_ERR.INTERNAL,
-      `BE ${operation} @${beingName}: missing ambient actId. Thread summonCtx from the caller's moment (runtime), or open a boot moment via withBootMoment(...) (genesis). scaffold:true alone is no longer sufficient.`,
+      `BE ${operation} @${beingName}: missing ambient actId. Thread summonCtx from the caller's moment (runtime), or open a boot moment via withBootMoment(...) (genesis).`,
       { operation, beingName },
     );
   }

@@ -170,5 +170,10 @@ registerOperation("move", {
   targets: ["space", "matter"],
   ownerExtension: "seed",
   factAction: "move",
+  args: {
+    target: { type: "json", label: "Subject { kind, id } (optional if implied by position)", required: false },
+    to: { type: "text", label: "Destination space id (container move)", required: false },
+    coord: { type: "json", label: "Coord { x, y } (in-space move)", required: false },
+  },
   handler: moveHandler,
 });

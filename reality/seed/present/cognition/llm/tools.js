@@ -44,6 +44,31 @@ let MAX_TOOLS = 500;
 const TOOL_NAME_RE = /^[a-z][a-z0-9_-]{0,63}$/;
 const VALID_VERBS = new Set(["see", "do", "summon", "be"]);
 
+// Walk a JSON-Schema-shaped object and remove any
+// `additionalProperties: {}` keys (the empty-object sentinel zod
+// emits for z.record(z.any())). Mongoose Mixed strips empty objects
+// on storage, so leaving the sentinel in causes the projection's
+// stored value to diverge from the registry's after a single write —
+// triggering redundant set-space facts every reboot. Stripping at
+// registration makes storage and registry agree.
+function stripEmptyAdditionalProperties(node) {
+  if (!node || typeof node !== "object") return;
+  if (Array.isArray(node)) {
+    for (const child of node) stripEmptyAdditionalProperties(child);
+    return;
+  }
+  if (
+    "additionalProperties" in node &&
+    node.additionalProperties &&
+    typeof node.additionalProperties === "object" &&
+    !Array.isArray(node.additionalProperties) &&
+    Object.keys(node.additionalProperties).length === 0
+  ) {
+    delete node.additionalProperties;
+  }
+  for (const key of Object.keys(node)) stripEmptyAdditionalProperties(node[key]);
+}
+
 export function setMaxTools(n) {
   MAX_TOOLS = Math.max(10, Number(n) || 500);
 }
@@ -200,6 +225,15 @@ export async function registerToolBundle(tools, { ownerExt }) {
       const zodObj = z.object(tool.schema);
       jsonSchema = zodToJsonSchema(zodObj);
       delete jsonSchema.$schema;
+      // zod renders `z.record(z.any())` as `{ type:"object",
+      // additionalProperties: {} }`. The empty object is JSON Schema's
+      // "no constraint" sentinel, semantically equivalent to omitting
+      // the key. But Mongoose Mixed strips empty objects on storage,
+      // so the projection drops it on every write and the next reboot
+      // sees a diff and re-emits a redundant set-space fact. Strip the
+      // empty sentinel recursively at registration so storage matches
+      // registry.
+      stripEmptyAdditionalProperties(jsonSchema);
     } catch {
       jsonSchema = tool.schema;
     }

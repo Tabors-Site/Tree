@@ -74,7 +74,7 @@ const RESERVED_SET_META_NS = new Set([
 // applyCreateMatter to materialize the row. One Fact per birth.
 
 async function createMatterHandler(ctx) {
-  const { target, params, identity, summonCtx, scaffold } = ctx;
+  const { target, params, identity, summonCtx } = ctx;
   const spec = params || {};
   const targetKind = detectTargetKind(target);
 
@@ -98,11 +98,11 @@ async function createMatterHandler(ctx) {
     beingId: beingIdValue,
     origin: spec.origin || "ibp",
   };
-  const actorBeingId = identity?.beingId || (scaffold ? I_AM : null);
+  const actorBeingId = identity?.beingId || null;
   if (!actorBeingId) {
     throw new IbpError(
       IBP_ERR.UNAUTHORIZED,
-      "create-matter requires identity or scaffold flow",
+      "create-matter requires an identified actor",
     );
   }
   await emitFact(
@@ -264,6 +264,17 @@ registerOperation("create-matter", {
   ownerExtension: "seed",
   factAction: "create-matter",
   skipAudit: true,
+  args: {
+    name: { type: "text", label: "Name", required: false },
+    origin: {
+      type: "select",
+      label: "Origin",
+      enum: ["ibp", "filesystem", "web", "cross-place"],
+      default: "ibp",
+      required: false,
+    },
+    content: { type: "multiline", label: "Content (optional)", required: false },
+  },
   handler: createMatterHandler,
 });
 
@@ -271,6 +282,11 @@ registerOperation("set-matter", {
   targets: ["matter"],
   ownerExtension: "seed",
   factAction: "set-matter",
+  args: {
+    field: { type: "text", label: "Field (e.g. name, content, qualities.<ns>.<key>)", required: true },
+    value: { type: "json", label: "Value (JSON; null to clear)", required: false },
+    merge: { type: "bool", label: "Merge (for qualities objects)", default: true, required: false },
+  },
   handler: setOnMatterHandler,
 });
 
@@ -278,5 +294,6 @@ registerOperation("end-matter", {
   targets: ["matter"],
   ownerExtension: "seed",
   factAction: "end-matter",
+  args: {},
   handler: endMatterHandler,
 });

@@ -24,6 +24,7 @@
 import log from "../log.js";
 import { SEED_VERSION } from "../version.js";
 import { getRealityConfigValue } from "../../realityConfig.js";
+import { I_AM } from "../../materials/being/seedBeings.js";
 import fs from "fs";
 import path from "path";
 import { fileURLToPath, pathToFileURL } from "url";
@@ -195,7 +196,7 @@ export async function runSeedMigrations(summonCtx) {
     { kind: "space", id: String(configNode.id) },
     "set-config",
     { key: "seedVersion", value: currentVersion },
-    { scaffold: true, summonCtx },
+    { identity: I_AM, summonCtx },
   );
 
   if (ran > 0) {

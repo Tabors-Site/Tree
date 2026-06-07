@@ -63,7 +63,7 @@ export async function addContributor(spaceId, contributorId, beingId, branch, su
   const space = _spaceSlot ? { heavenSpace: _spaceSlot.state?.heavenSpace } : null;
   if (!space) throw new Error("Space not found");
   // Heaven is the one heaven space whose contributors[] is documented to
-  // grow at runtime — cherub.register anoints the rootOperator, and
+  // grow at runtime — cherub.register anoints the first heaven contributor, and
   // seedDelegates join at boot. Every other heaven space (Tier-3 like
   // .roles, .config, etc.) stays immutable.
   if (space.heavenSpace && space.heavenSpace !== "heaven") {

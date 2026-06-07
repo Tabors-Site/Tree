@@ -30,6 +30,7 @@
 
 import { registerOperation } from "../../ibp/operations.js";
 import { IBP_ERR, IbpError } from "../../ibp/protocol.js";
+import { I_AM } from "./seedBeings.js";
 import {
   mintCredentialSpec,
   decryptCredential,
@@ -45,8 +46,7 @@ function targetBeingIdOf(target) {
   throw new IbpError(IBP_ERR.INVALID_INPUT, "credential op requires a being target");
 }
 
-function askerBeingIdOf(identity, scaffold) {
-  if (scaffold) return null;
+function askerBeingIdOf(identity) {
   if (!identity?.beingId)
     throw new IbpError(IBP_ERR.UNAUTHORIZED, "credential op requires an identified asker");
   return String(identity.beingId);
@@ -72,18 +72,16 @@ registerOperation("credential-read", {
   targets: ["being"],
   ownerExtension: "seed",
   factAction: "credential-read",
-  handler: async ({ target, identity, scaffold, summonCtx }) => {
+  handler: async ({ target, identity, summonCtx }) => {
     const targetBeingId = targetBeingIdOf(target);
-    const askerBeingId = askerBeingIdOf(identity, scaffold);
-    if (!scaffold) {
-      const ok = await hasCredentialAuthority(askerBeingId, targetBeingId);
-      if (!ok) {
-        throw new IbpError(
-          IBP_ERR.FORBIDDEN,
-          "Asker has no credential authority over target",
-          { askerBeingId, targetBeingId },
-        );
-      }
+    const askerBeingId = askerBeingIdOf(identity);
+    const ok = await hasCredentialAuthority(askerBeingId, targetBeingId);
+    if (!ok) {
+      throw new IbpError(
+        IBP_ERR.FORBIDDEN,
+        "Asker has no credential authority over target",
+        { askerBeingId, targetBeingId },
+      );
     }
     const { loadTargetRow } = await import("../_targetShape.js");
     const beingRow = await loadTargetRow(target, "being", { summonCtx });
@@ -113,21 +111,19 @@ registerOperation("credential-reset", {
   targets: ["being"],
   ownerExtension: "seed",
   factAction: "credential-reset",
-  handler: async ({ target, identity, scaffold, summonCtx }) => {
+  handler: async ({ target, identity, summonCtx }) => {
     const targetBeingId = targetBeingIdOf(target);
-    const askerBeingId = askerBeingIdOf(identity, scaffold);
-    if (!scaffold) {
-      const ok = await hasCredentialAuthority(askerBeingId, targetBeingId);
-      if (!ok) {
-        throw new IbpError(
-          IBP_ERR.FORBIDDEN,
-          "Asker has no credential authority over target",
-          { askerBeingId, targetBeingId },
-        );
-      }
+    const askerBeingId = askerBeingIdOf(identity);
+    const ok = await hasCredentialAuthority(askerBeingId, targetBeingId);
+    if (!ok) {
+      throw new IbpError(
+        IBP_ERR.FORBIDDEN,
+        "Asker has no credential authority over target",
+        { askerBeingId, targetBeingId },
+      );
     }
     const credential = await mintCredentialSpec(null);
-    const opts = identity ? { identity, summonCtx } : { scaffold: true, summonCtx };
+    const opts = identity ? { identity, summonCtx } : { identity: I_AM, summonCtx };
     await doVerb(target, "set-being", { field: "password", value: credential.hash }, opts);
     await doVerb(
       target,
@@ -167,10 +163,12 @@ registerOperation("credential-detach", {
   targets: ["being"],
   ownerExtension: "seed",
   factAction: "credential-detach",
-  handler: async ({ target, identity, scaffold }) => {
+  handler: async ({ target, identity }) => {
     const targetBeingId = targetBeingIdOf(target);
-    const askerBeingId = askerBeingIdOf(identity, scaffold);
-    if (!scaffold && askerBeingId !== targetBeingId) {
+    const askerBeingId = askerBeingIdOf(identity);
+    // Self-only EXCEPT I_AM which has universal authority on its own
+    // reality (parallels hasCredentialAuthority's I_AM short-circuit).
+    if (askerBeingId !== targetBeingId && askerBeingId !== I_AM) {
       throw new IbpError(
         IBP_ERR.FORBIDDEN,
         "credential-detach is self-only; only the being itself can declare independence",
@@ -201,10 +199,12 @@ registerOperation("credential-attach", {
   targets: ["being"],
   ownerExtension: "seed",
   factAction: "credential-attach",
-  handler: async ({ target, identity, scaffold }) => {
+  handler: async ({ target, identity }) => {
     const targetBeingId = targetBeingIdOf(target);
-    const askerBeingId = askerBeingIdOf(identity, scaffold);
-    if (!scaffold) {
+    const askerBeingId = askerBeingIdOf(identity);
+    // Being-parent-only EXCEPT I_AM (universal authority on its own
+    // reality).
+    if (askerBeingId !== I_AM) {
       const { findBeingParent } = await import("./identity/lineage.js");
       const parentBeingId = await findBeingParent(targetBeingId);
       if (!parentBeingId || String(parentBeingId) !== askerBeingId) {

@@ -9,21 +9,13 @@
 
 import log from "./seedReality/log.js";
 import { hooks as hooksModule } from "./hooks.js";
-import {
-  registerSeed,
-  unregisterSeed,
-  getSeed,
-  listSeeds,
-  plantSeed,
-  unplantSeed,
-  listPlantedAt,
-} from "./materials/seeds.js";
 import Being from "./materials/being/being.js";
 import Space from "./materials/space/space.js";
 import Fact from "./past/fact/fact.js";
 import Matter from "./materials/matter/matter.js";
 
 import { emitFact } from "./past/fact/facts.js";
+import { captureSeed } from "./materials/publish/seed.js";
 import { resolveSpaceAccess } from "./materials/space/spaces.js";
 import {
   birthBeing,
@@ -167,7 +159,6 @@ import "./materials/matter/ops.js";
 import "./materials/moveOp.js";
 import "./materials/being/ops.js";
 import "./materials/being/credentialOps.js";
-import "./materials/seeds.js";
 // Side-effect import. Registers the publish layer: replicate-subtree
 // (extract a subtree's current shape into a portable bundle) and
 // graft-replicate (apply a bundle into a target). The walker primitive
@@ -222,10 +213,9 @@ const _allowedStrategyExtensions = new Set();
  * @returns {object} the reality services bundle
  */
 
-// I stash the last-built bundle so seed-internal callers (e.g. the
-// plant-seed DO operation handing `reality` to a seed's scaffold) don't
-// have to thread it through every signature. buildRealityServices runs
-// once at boot; the bundle stays stable for the process lifetime.
+// I stash the last-built bundle so seed-internal callers don't have to
+// thread it through every signature. buildRealityServices runs once at
+// boot; the bundle stays stable for the process lifetime.
 let _lastBuiltReality = null;
 export function getRealityServices() {
   return _lastBuiltReality;
@@ -244,6 +234,30 @@ export function buildRealityServices({
     do: doVerb,
     summon: summonVerb,
     be: beVerb,
+
+    // Branch-cloning / reality-seeding portable artifacts.
+    // - clone (clone.js + graft.js): the SETUP — current shape of a
+    //   subtree, hollow face. Used via the wire DO ops `clone-subtree`
+    //   and `graft-clone` (legacy aliases `replicate-subtree` /
+    //   `graft-replicate` also registered).
+    // - captureSeed: the WHOLE REALITY — full chains (facts + acts +
+    //   branches + reelHeads), original IDs preserved. Plant-only on
+    //   the receive side (boot mode in genesis.js). See
+    //   `seed/Chain-Rebuild.md` for the doctrine.
+    captureSeed,
+
+    // Plant is boot-only — exposing it here as a runtime verb refuses.
+    // The shape exists so future live-plant (when a clean wipe-and-
+    // replay-in-place path is designed) can land without breaking the
+    // public API. For now: use PLANT_FROM_SEED env var on boot.
+    plant: () => {
+      throw new Error(
+        "reality.plant: plant is currently boot-only. Wipe the DB, set " +
+        "PLANT_FROM_SEED=/path/to/seed.json, and restart the substrate. " +
+        "Runtime plant (live wipe-and-replay-in-place) is a future arc; " +
+        "see seed/Chain-Rebuild.md for the doctrine.",
+      );
+    },
 
     // --- Always-available services ---
     facts: { emitFact },
@@ -342,22 +356,6 @@ export function buildRealityServices({
 
     // --- Hook system ---
     hooks: hooksModule,
-
-    // --- Extension seeds (scaffolded shapes a reality can plant) ---
-    // Extensions declare seeds via init() return { seeds: [...] } or
-    // manifest.provides.seeds; the loader registers them. Operators plant
-    // a seed at a space to bootstrap the extension's structure (Ruler,
-    // beings, sub-domain spaces, starter matter). See memory
-    // `extension-seeds`.
-    seeds: {
-      register: registerSeed,
-      unregister: unregisterSeed,
-      get: getSeed,
-      list: listSeeds,
-      plant: plantSeed,
-      unplant: unplantSeed,
-      listPlantedAt,
-    },
 
     // --- Space infrastructure (cache, integrity, circuit breaker, CRUD) ---
     space: {

@@ -1,18 +1,19 @@
 // TreeOS Portal 3D — hotbar.
 //
 // Minecraft-style 9-slot inventory across the bottom of the screen.
-// Each slot holds a "plantable" item (currently: seeds the operator
-// can plant in the world). Selection is driven by the number keys
+// Each slot holds a "graftable" item (currently: clone bundles the
+// operator can graft into the world). Selection is driven by the number keys
 // 1..9 and the mouse wheel; the selected slot highlights and its
 // item is what `getSelected()` returns.
 //
 // The hotbar is a thin presentation layer over a flat array of slot
 // objects:
 //
-//   { kind: "seed", name: "<ext>:<seed-name>", label: "short-name",
-//     description: "what this seed does when planted..." }
+//   { kind: "clone", name: "<ext>:<clone-name>", label: "short-name",
+//     description: "what this clone grafts at the position...",
+//     parameters: [{ name, type, default, description }, ...] }
 //
-// Today only the "seed" kind exists; future kinds (matter templates,
+// Today only the "clone" kind exists; future kinds (matter templates,
 // summons, tools) drop into the same shape without touching the hotbar.
 
 const SLOT_COUNT = 9;
@@ -146,11 +147,11 @@ function _shortName(fullName) {
   return idx >= 0 ? fullName.slice(idx + 1) : fullName;
 }
 
-// Per-kind icon. A seed gets a stylized sapling; the move tool gets
-// an open hand; future kinds add their own glyphs. SVG is inline so
-// no asset loading.
+// Per-kind icon. A clone gets a stylized sapling (the substrate's
+// "graft this setup" glyph); the move tool gets an open hand; future
+// kinds add their own glyphs. SVG is inline so no asset loading.
 function _iconSvg(item) {
-  if (item.kind === "seed") {
+  if (item.kind === "clone") {
     return `<svg viewBox="0 0 24 24" width="28" height="28">
       <path d="M12 21 V11" stroke="#7fb38d" stroke-width="1.6" fill="none"/>
       <path d="M12 13 C8 12, 6 9, 7 6 C10 7, 12 9, 12 13 Z" fill="#4f8a5f"/>

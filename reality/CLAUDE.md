@@ -30,8 +30,11 @@ seed/              The seed. Four folders, four roles. NEVER modify.
                        indexes, version, retention, migrations/, utils.
                        Knows nothing of space/matter/being/verb by name.
 
-  models/            Mongoose schemas for all 6 primitives:
-                     being, space, matter, did, summon, llmConnection.
+  models/            Mongoose schemas for the primitives:
+                     being, space, matter, fact, summon. (LLM connections
+                     are NOT a schema — they live as a qualities.llmConnections
+                     entry on Being, folded from set-being facts like any
+                     other quality.)
   services.js        Assembles `reality` from the four folders above.
   spaceRoot.js        This reality's space root + the nine heaven spaces.
   realityConfig.js      This reality's config.
@@ -149,9 +152,9 @@ treeos?.exports?.registerSlot?.(
 
 **scope: "confined"** for dangerous extensions. Inactive everywhere by default. Operators allow at specific positions with `ext-allow`.
 
-## The six primitives
+## The five primitives
 
-Everything in the seed serves one of six primitives (one per Mongoose schema):
+Everything in the seed serves one of five primitives (one per Mongoose schema):
 
 | Primitive         | What it is                                                                                                                                                                                                                                                    |
 | ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -160,7 +163,8 @@ Everything in the seed serves one of six primitives (one per Mongoose schema):
 | **Matter**        | Stuff inside a space. `origin` field names where it actually lives (ibp, filesystem, web, cross-place).                                                                                                                                                        |
 | **Fact**          | A thing a being stamps in the Factory. One recorded change to matter, space, or being. `factum`, a thing done. A single fact is small but settled; a chain of facts, folded, is Truth.                                                                          |
 | **Summon**        | One being-to-being call. The record of one wake-and-act, whatever cognition the receiving being has — LLM, scripted code, human reply, future composite. The seed doesn't care which; the protocol is the same.                                             |
-| **LlmConnection** | Per-being LLM client config (URL, key, model).                                                                                                                                                                                                                |
+
+An **LLM connection** (URL, key, model) is **not** a primitive/schema of its own. It lives as an entry under `Being.qualities.llmConnections`, written through `set-being` facts and folded onto the being's reel like any other quality — so it clones, branches, and time-travels with the being. The `encryptedApiKey` (and credential fields) stay in the DB fact-chain and on-disk seeds, but are redacted whenever a fact/act/descriptor/clone is serialized over a transport (see `materials/redact.js`).
 
 ## Security
 

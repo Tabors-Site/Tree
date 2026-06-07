@@ -437,14 +437,24 @@ async function main() {
 async function refreshSeedCatalog() {
   if (!state.client || !state.discovery?.reality) return;
   try {
+    // The discovery payload still hydrates state.discovery (protocol
+    // version, roles, etc.); the hotbar now lists CLONE BUNDLES (not
+    // the retired seed-scaffold list). The list-clones DO op returns
+    // every extension-registered clone the operator can graft.
     const full = await state.client.see(`${state.discovery.reality}/.discovery`);
-    // Merge into state.discovery so other consumers see the rich form too.
     state.discovery = { ...state.discovery, ...full };
-    const seeds = Array.isArray(full?.seeds) ? full.seeds : [];
-    console.log(`[3D] discovery: ${seeds.length} seed(s)`, seeds.map((s) => s.name));
-    // Slot 0 is always the built-in Move tool. Seeds populate after.
-    // The tool is intrinsic to the portal — not provided by the
-    // place — so it doesn't ride on discovery.
+
+    let clones = [];
+    try {
+      const reply = await state.client.do(state.discovery.reality + "/", "list-clones", {});
+      clones = Array.isArray(reply?.clones) ? reply.clones : [];
+    } catch (err) {
+      console.warn("[3D] list-clones failed:", err?.message || err);
+    }
+    console.log(`[3D] ${clones.length} clone bundle(s) available:`, clones.map((c) => c.name));
+
+    // Slot 0 is always the built-in Move tool — intrinsic to the
+    // portal, not provided by the place. Clones populate after.
     const slots = [
       {
         kind: "tool",
@@ -452,16 +462,19 @@ async function refreshSeedCatalog() {
         label: "Move",
         description: "Click an object to pick it up. Click a destination to put it down. Esc to cancel.",
       },
-      ...seeds.map((s) => ({
-        kind:        "seed",
-        name:        s.name,
-        label:       s.name.split(":").pop(),
-        description: s.description,
+      ...clones.map((c) => ({
+        kind:        "clone",
+        name:        c.name,
+        label:       c.name.split(":").pop(),
+        description: c.sourceScopeName
+          ? `Graft "${c.sourceScopeName}" from ${c.ownerExtension} (${c.counts.spaces}s/${c.counts.beings}b/${c.counts.matter}m).`
+          : `Graft a clone from ${c.ownerExtension}.`,
+        parameters:  c.parameters || [],
       })),
     ];
     state.hotbar?.setSlots(slots);
-    if (seeds.length === 0) {
-      setHud("no plantable seeds registered on this place");
+    if (clones.length === 0) {
+      setHud("no graftable clones registered on this place");
     }
   } catch (err) {
     console.warn("[3D] discovery fetch failed:", err?.message || err);
@@ -1268,7 +1281,16 @@ function onBeingActivate(b) {
 function openBeingActionMenu(b) {
   const reality = state.discovery?.reality;
   const path = state.descriptor?.address?.pathByNames || "/";
-  const address = `${reality}${path}@${b.being}`.replace(/\/+@/, "/@");
+  // Branch qualifier matters: when the operator is on a non-main
+  // branch and clicks a being, the dispatched address must carry
+  // `#<branch>` so the server's cross-branch gate matches the socket's
+  // currentBranch. Without it, expand() defaults to the `#main`
+  // pointer (typed-reality rule) and the BE/DO/SUMMON wire-layer
+  // refuses with CROSS_BRANCH_FORBIDDEN even though the caller is
+  // acting on the being from its own branch's view.
+  const branch = state.descriptor?.address?.branch || "0";
+  const bq = branch === "0" ? "" : `#${branch}`;
+  const address = `${reality}${bq}${path}@${b.being}`.replace(/\/+@/, "/@");
   const fullBeing = state.descriptor?.beings?.find((bb) => bb.being === b.being) || b;
   const roleActions = Array.isArray(fullBeing.actions) ? fullBeing.actions.slice() : [];
 
@@ -1368,6 +1390,10 @@ async function doInhabit(b, address) {
 function openActionMenu(b) {
   const reality = state.discovery?.reality;
   const path = state.descriptor?.address?.pathByNames || "/";
+  // Branch qualifier matters: see openBeingActionMenu for the cross-
+  // branch gate doctrine. Same fix.
+  const branch = state.descriptor?.address?.branch || "0";
+  const bq = branch === "0" ? "" : `#${branch}`;
   // Reality-root identity delegates address as <reality>/@<name>
   // (bare-place stance). Other beings address against the current path.
   // role-manager is also a root delegate but has its own panel and
@@ -1375,8 +1401,8 @@ function openActionMenu(b) {
   const isRootDelegate =
     b.being === "cherub" || b.being === "birther";
   const address = isRootDelegate
-    ? `${reality}/@${b.being}`
-    : `${reality}${path}@${b.being}`.replace(/\/+@/, "/@");
+    ? `${reality}${bq}/@${b.being}`
+    : `${reality}${bq}${path}@${b.being}`.replace(/\/+@/, "/@");
   // The scene's mesh.userData carries a trimmed being shape (no actions).
   // Pull the full descriptor entry so the renderer sees actions[].
   const fullBeing = state.descriptor?.beings?.find((bb) => bb.being === b.being) || b;
@@ -1527,13 +1553,20 @@ async function sendSummon(b, text) {
   state.currentSummonBeing = null;
   const reality = state.discovery.reality;
   const path = state.descriptor.address?.pathByNames || "/";
-  // Stance form: `<reality>/<path>@<being>`. When path is "/" the slash
-  // is already present, so `${reality}${path}@...` collapses to
-  // `<reality>/@...` (the canonical form for reality/home-root beings).
-  const stance = `${reality}${path}@${b.being}`.replace(/\/+@/, "/@");
+  // Branch qualifier matters: same cross-branch gate doctrine as
+  // openBeingActionMenu. Summoning a being from branch #1 requires the
+  // address to carry `#1`; otherwise the server expand() defaults to
+  // `#main` and the wire layer refuses with CROSS_BRANCH_FORBIDDEN.
+  const branch = state.descriptor.address?.branch || "0";
+  const bq = branch === "0" ? "" : `#${branch}`;
+  // Stance form: `<reality>[#<branch>]/<path>@<being>`. When path is
+  // "/" the slash is already present, so `${reality}${bq}${path}@...`
+  // collapses to `<reality>[#<branch>]/@...` (the canonical form for
+  // reality/home-root beings).
+  const stance = `${reality}${bq}${path}@${b.being}`.replace(/\/+@/, "/@");
   const fromStance = state.session?.username
-    ? `${reality}/@${state.session.username}`
-    : `${reality}/@arrival`;
+    ? `${reality}${bq}/@${state.session.username}`
+    : `${reality}${bq}/@arrival`;
   const correlation = `c-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
   const message = {
     from: fromStance,
@@ -1598,17 +1631,20 @@ addEventListener("keydown", (e) => {
   if (e.code === "KeyE") { e.preventDefault(); attemptPlant();   return; }
 });
 
-// Try to plant whatever's in the selected hotbar slot at the current
-// position. Bounces the user to auth if unauthenticated (the seed
-// would reject anyway; better to ask before the round-trip).
+// Try to graft the selected hotbar clone at the current position.
+// Bounces the user to auth first if unauthenticated.
 async function attemptPlant() {
   const item = state.hotbar?.getSelected();
   if (!item) {
-    setHud("hotbar slot is empty. select a seed (1-9).");
+    setHud("hotbar slot is empty. select a clone (1-9).");
+    return;
+  }
+  if (item.kind !== "clone") {
+    setHud("selected slot is not graftable.");
     return;
   }
   if (!state.session?.token) {
-    setHud("sign in first to plant.");
+    setHud("sign in first to graft.");
     openAuthPanel();
     return;
   }
@@ -1616,38 +1652,34 @@ async function attemptPlant() {
 
   const reality = state.discovery.reality;
   const path = state.descriptor.address?.pathByNames || "/";
-  // Include the active branch qualifier so the plant lands on the
-  // branch the user is viewing. Without this, planting on `#1` silently
-  // resolves to main (the parser's typed-reality doctrine: bare
-  // reality = main), and the new tree appears in the wrong branch.
   const branch = state.descriptor.address?.branch || "0";
   const bq = branch === "0" ? "" : `#${branch}`;
   const parentAddress =
     `${reality}${bq}${path}`.replace(/\/+$/, "") || `${reality}${bq}`;
 
-  let answer;
-  try {
-    answer = await promptForName({
-      item,
-      parentLabel: parentAddress,
-    });
-  } catch {
-    return; // user cancelled
+  // If the clone declares parameters, prompt for values (defaults
+  // pre-filled). Otherwise graft directly.
+  let params = {};
+  if (Array.isArray(item.parameters) && item.parameters.length > 0) {
+    try {
+      params = await promptForName({ item, parentLabel: parentAddress });
+    } catch {
+      return; // user cancelled
+    }
   }
 
-  setHud(`planting ${item.name}...`);
+  setHud(`grafting ${item.name}...`);
   try {
     const result = await runPlantSeed({
       client:        state.client,
       parentAddress,
-      seedName:      item.name,
-      newNodeName:   answer.name,
+      cloneName:     item.name,
+      params,
     });
-    setHud(`planted ${item.name} at ${result.newNodeAddress}`);
-    // Navigate into the new tree so the operator sees what grew.
-    await navigate(result.newNodeAddress);
+    setHud(`grafted ${item.name}`);
+    if (result.newRootAddress) await navigate(result.newRootAddress);
   } catch (err) {
-    setHud(`plant failed: ${err.code || ""} ${err.message || ""}`);
+    setHud(`graft failed: ${err.code || ""} ${err.message || ""}`);
   }
 }
 

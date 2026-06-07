@@ -299,26 +299,42 @@ async function _isSpaceWithinScope(targetSpaceId, scopeSpaceId, branchPath) {
 }
 
 /**
- * Reality-root permission = heaven owner (I_AM sentinel) OR heaven
- * contributor. Heaven's contributors[] is the substrate's canonical
- * "anointed by the root operator" roster.
+ * Reality-root permission = hasAccess on heaven (owner OR contributor).
+ * Heaven's contributors[] is the substrate's canonical "anointed by the
+ * root operator" roster; I_AM is heaven's rootOwner.
+ *
+ * Routes through `authorize()` against heaven so the substrate's
+ * "one gate" doctrine holds: the same rule that gates `do:*` at
+ * heaven (`requires: { hasAccess: true }`) gates branch-scope
+ * widening here. Operators who tighten heaven permissions
+ * automatically tighten who can widen branch scope; one place to
+ * change, two semantics covered. The earlier inline contributors[]
+ * walk was a parallel implementation of the same check and could
+ * drift from heaven's actual rule.
  *
  * Returns false when beingId is null (createdBy not threaded) so
  * scope-widening from anonymous callers refuses by default.
  */
 async function _hasRealityRootPermission(beingId) {
   if (!beingId) return false;
-  const { I_AM } = await import("../being/seedBeings.js");
-  if (String(beingId) === String(I_AM)) return true;
-
   try {
-    const { findByHeavenSpace, loadProjection } = await import("../projections.js");
+    const { findByHeavenSpace } = await import("../projections.js");
     const { HEAVEN_SPACE } = await import("../space/heavenSpaces.js");
+    const { authorize } = await import("../../ibp/authorize.js");
     const heavenSlot = await findByHeavenSpace(HEAVEN_SPACE.HEAVEN, "0");
     if (!heavenSlot) return false;
-    const heaven = await loadProjection("space", heavenSlot.id, "0");
-    const contributors = heaven?.state?.contributors || [];
-    return contributors.some((c) => String(c) === String(beingId));
+    // The action name is arbitrary — heaven has no `do:create-branch`
+    // rule, so the lookup falls through to heaven's `do:*` wildcard
+    // (`requires: { hasAccess: true }`). Any other action name would
+    // produce the same answer; "create-branch" is named for audit
+    // clarity in case authorize() ever logs decisions.
+    const decision = await authorize({
+      identity: { beingId: String(beingId) },
+      verb:     "do",
+      target:   { kind: "position", spaceId: String(heavenSlot.id) },
+      action:   "create-branch",
+    });
+    return decision.ok === true;
   } catch {
     return false;
   }

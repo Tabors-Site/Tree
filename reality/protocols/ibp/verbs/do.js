@@ -47,6 +47,7 @@ import log from "../../../seed/seedReality/log.js";
 import { parseFromSocket, expand, resolveBeingIds, resolveBranchPointers, getRealityDomain } from "../../../seed/ibp/address.js";
 import { resolveStance } from "../../../seed/ibp/resolver.js";
 import { IbpError, IBP_ERR, isIbpError } from "../../../seed/ibp/protocol.js";
+import { assertNoImpersonation } from "./_shared.js";
 import { ackOk, ackError, stripBeingQualifier, extractBeingQualifier } from "../envelope.js";
 import { getOperation, listOperations } from "../../../seed/ibp/operations.js";
 import { dispatchTransportAct } from "../../../seed/present/intake/transportAct.js";
@@ -105,24 +106,8 @@ export async function handleDo(socket, env, ack) {
       expand(parsed, expandCtx), expandCtx);
     const expanded = await resolveBeingIds(expandedWithPointers, expandCtx);
 
-    // Impersonation refusal. The address IS the identity. When the
-    // caller types an explicit left stance with an @being qualifier,
-    // its resolved beingId must match the authenticated socket. No
-    // current caller types left stances, so this gate is a no-op
-    // today . it's the wire-side enforcement that becomes load-bearing
-    // when cross-reality addressing lands (see FEDERATION.md, Diff B).
-    if (
-      expanded.left?.beingId &&
-      socket?.beingId &&
-      expanded.left.beingId !== socket.beingId
-    ) {
-      throw new IbpError(
-        IBP_ERR.FORBIDDEN,
-        `Address actor (@${expanded.left.being}) does not match ` +
-        `authenticated being. Caller cannot impersonate.`,
-        { addressBeingId: expanded.left.beingId, socketBeingId: socket.beingId },
-      );
-    }
+    // Impersonation refusal — see _shared.js for the doctrine.
+    assertNoImpersonation(expanded, socket);
 
     // Cross-branch gate at the wire boundary. The caller's first-person
     // frame is the socket's tracked branch; the target's branch is the

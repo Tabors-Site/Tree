@@ -157,20 +157,20 @@ const REALITY_ROOT_DEFAULT_PERMISSIONS = Object.freeze({
 //   SEE: any being whose home is this reality may read the catalogs
 //     (./beings, ./operations, ./roles, ./threads, ./extensions, ...).
 //     Reading is how operators and ordinary beings introspect what
-//     the reality has — gating SEE on canWrite hid the catalogs
+//     the reality has — gating SEE on hasAccess hid the catalogs
 //     entirely from anyone who hadn't yet been added as a heaven
-//     contributor (including the rootOperator before their cherub
+//     contributor (including the first human before their cherub
 //     registration completes). `homeOnThisReality: true` matches the
 //     same admission rule the reality root uses for SEE.
 //
-//   DO / SUMMON: `requires: { canWrite: true }` admits the I-Am
+//   DO / SUMMON: `requires: { hasAccess: true }` admits the I-Am
 //     (heaven's rootOwner) and every being added as a contributor to
 //     heaven. Seed delegates (cherub, birther, llm-assigner, reality-
 //     manager, arrival, etc.) are contributors by boot scaffold; the
-//     rootOperator becomes a heaven contributor when they register
+//     first human becomes a heaven contributor when they register
 //     through cherub. Later operators added the same way:
 //     addContributor on heaven. Beings of the land lacking heaven
-//     canWrite can SEE but cannot mutate.
+//     hasAccess can SEE but cannot mutate.
 //
 // The earlier `reigning` stance was retired 2026-06-04 . it was a
 // parallel roster duplicating the existing rootOwner + contributors
@@ -189,8 +189,8 @@ const REALITY_ROOT_DEFAULT_PERMISSIONS = Object.freeze({
 
 const HEAVEN_DEFAULT_PERMISSIONS = Object.freeze({
   see: { "*": { requires: { homeOnThisReality: true } } },
-  do: { "*": { requires: { canWrite: true } } },
-  summon: { "*": { requires: { canWrite: true } } },
+  do: { "*": { requires: { hasAccess: true } } },
+  summon: { "*": { requires: { hasAccess: true } } },
 });
 
 // Historic heaven seed defaults — past values of HEAVEN_DEFAULT_PERMISSIONS
@@ -209,8 +209,18 @@ const _HISTORIC_HEAVEN_SEED_DEFAULTS = {
     // completed cherub registration.
     { "*": { requires: { canWrite: true } } },
   ],
-  do: [],
-  summon: [],
+  // 2026-06-07 — `canWrite` renamed to `hasAccess` (owner OR contributor,
+  // unchanged semantics; the name was misleading because the property
+  // doesn't actually answer a verb-level question, it answers a
+  // membership question — owner-or-contributor). The pre-rename shape
+  // is migrated here so existing realities don't see their heaven
+  // do/summon rules treated as operator customizations.
+  do: [
+    { "*": { requires: { canWrite: true } } },
+  ],
+  summon: [
+    { "*": { requires: { canWrite: true } } },
+  ],
 };
 function _isHistoricHeavenSeedDefault(verb, bucket) {
   const olds = _HISTORIC_HEAVEN_SEED_DEFAULTS[verb] || [];
@@ -724,7 +734,7 @@ export async function seedDefaultStancePermissions(summonCtx) {
       { kind: "space", id: spaceRootId },
       "set-space",
       { field, value, merge: false },
-      { scaffold: true, summonCtx },
+      { identity: I_AM, summonCtx },
     );
     seededFields.push(`spaceRoot.${field}`);
   }
@@ -766,7 +776,7 @@ export async function seedDefaultStancePermissions(summonCtx) {
         { kind: "space", id: String(heaven._id) },
         "set-space",
         { field, value, merge: false },
-        { scaffold: true, summonCtx },
+        { identity: I_AM, summonCtx },
       );
       seededFields.push(`heaven.${field}`);
     }

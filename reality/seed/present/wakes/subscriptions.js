@@ -51,11 +51,21 @@
 //                                         // content.events: [...]
 //   }
 //
-// Storage. I keep the registry in memory; each extension that
-// wires subscriptions re-registers at boot. A qualities-backed
-// version on each being's home space (so boot rebuilds without
-// re-running extension code) is on the roadmap; for now memory +
-// extension-init re-registration is sufficient.
+// Storage. The chain is the truth, even for liveness.
+//
+// Every subscribe() stamps a `subscription-registered` fact on the
+// subscriber's reel; every unsubscribe() stamps `subscription-cancelled`.
+// The in-memory `_byBeing` / `_byEvent` / `_index` maps are a runtime
+// projection — they make event-time dispatch O(1) — but the fact chain
+// is the authoritative record of "what is this being attending to."
+// Boot rehydrate folds the chain to rebuild the registry.
+//
+// Same doctrine as wakes-as-facts (wakeSchedule.js): per-being liveness
+// rides on the being's own reel, not on a side-table. Branches inherit
+// subscription state through reel-lineage automatically (a #1 branch
+// sees parent's subscriptions until a cancel-on-#1 lands). Clones can
+// capture per-being subscriptions because they live on the being's
+// chain — not in a separate persistence layer.
 
 import { randomUUID } from "crypto";
 import log from "../../seedReality/log.js";
@@ -63,6 +73,7 @@ import { getAncestorChain } from "../../materials/space/ancestorCache.js";
 import { summonByResolved } from "../../ibp/verbs/summon.js";
 import { getRealityDomain } from "../../ibp/address.js";
 import { getSpaceRootId } from "../../sprout.js";
+import { emitFact } from "../../past/fact/facts.js";
 
 // beingId -> Map<subscriptionId, subscription>
 const _byBeing = new Map();
@@ -92,14 +103,26 @@ const _pendingCoalesce = new Map();
 // ────────────────────────────────────────────────────────────────
 
 /**
- * Register a subscription. Returns the subscription id (used for
- * unsubscribe). Validates the shape; throws on malformed input.
+ * Register a subscription. Validates input, updates the in-memory
+ * registry synchronously (so dispatch sees it on the next event), and
+ * stamps a `subscription-registered` fact on the subscriber's reel
+ * (the durable, branch-aware record).
+ *
+ * The fact emit is awaited so callers inside a moment ride the same
+ * ΔF and seal atomically with the surrounding act. Callers outside a
+ * moment still await — the fact lands via sealFacts singleton.
  *
  * @param {string} beingId
- * @param {object} sub  shape per file header
- * @returns {string} subscription id
+ * @param {object} sub   shape per file header (event/scope/filter/priority/coalesceMs/id)
+ * @param {object} opts
+ * @param {string} opts.branch         REQUIRED. Which branch this subscription lives on.
+ *                                     No silent default; pass "0" explicitly from
+ *                                     genesis / seed-plant paths.
+ * @param {object} [opts.summonCtx]    in-flight act ctx; fact rides this ΔF
+ * @param {string} [opts.actorBeingId] actor on the fact; defaults to the subscriber (self-subscribe)
+ * @returns {Promise<string>} subscription id
  */
-export function subscribe(beingId, sub) {
+export async function subscribe(beingId, sub, opts = {}) {
   if (!beingId || typeof beingId !== "string") {
     throw new Error("subscribe requires beingId");
   }
@@ -117,11 +140,18 @@ export function subscribe(beingId, sub) {
       "subscription.scope must specify everywhere|spaceId|ancestor",
     );
   }
+  if (typeof opts.branch !== "string" || !opts.branch.length) {
+    throw new Error(
+      `subscribe requires opts.branch (got ${JSON.stringify(opts.branch)}). ` +
+      `No silent default to main — pass "0" explicitly for genesis / seed paths.`,
+    );
+  }
 
   const id = sub.id || randomUUID();
+  const beingIdStr = String(beingId);
   const entry = {
     id,
-    beingId: String(beingId),
+    beingId: beingIdStr,
     event: sub.event,
     scope: sub.scope,
     filter: sub.filter || null,
@@ -132,92 +162,142 @@ export function subscribe(beingId, sub) {
         : 0,
   };
 
-  let beingMap = _byBeing.get(entry.beingId);
-  if (!beingMap) {
-    beingMap = new Map();
-    _byBeing.set(entry.beingId, beingMap);
+  // Idempotent re-subscribe: drop the prior runtime entry (if any).
+  // The subscription-registered fact we emit below is the new truth.
+  if (_index.has(id)) {
+    _dropRegistryEntry(id);
   }
-  beingMap.set(id, entry);
 
-  let eventSet = _byEvent.get(entry.event);
-  if (!eventSet) {
-    eventSet = new Set();
-    _byEvent.set(entry.event, eventSet);
-  }
-  eventSet.add(id);
+  // Stamp the fact. Per-reel append-lock serializes against any
+  // concurrent unsubscribe of the same id.
+  await emitFact({
+    beingId: String(opts.actorBeingId || beingIdStr),
+    branch:  opts.branch,
+    verb:    "do",
+    action:  "subscription-registered",
+    target:  { kind: "being", id: beingIdStr },
+    params:  {
+      subscriptionId: id,
+      event:          entry.event,
+      scope:          entry.scope,
+      filter:         entry.filter,
+      priority:       entry.priority,
+      coalesceMs:     entry.coalesceMs,
+    },
+  }, opts.summonCtx || null);
 
-  _index.set(id, entry);
-
-  // Durability shadow. The in-memory registry is the runtime
-  // source of truth (hot-path, no-DB lookups in emitToSubscribers);
-  // this write-through to SubscriptionRecord is what survives a
-  // server restart, so a dance-floor planted before the restart
-  // keeps its dancers attending after. The collection write is
-  // fire-and-forget — failures are logged, the in-memory entry is
-  // already live, the boot rehydrate is what would notice a
-  // missing record (and re-register is idempotent on id).
-  _persistSubscription(entry).catch((err) => {
-    log.warn(
-      "Subscriptions",
-      `persistence write failed for ${id.slice(0, 8)}: ${err.message}`,
-    );
-  });
+  _addRegistryEntry(entry);
 
   log.verbose(
     "Subscriptions",
     `subscribed ${entry.event} for being ${entry.beingId.slice(0, 8)} ` +
-      `(scope=${_scopeLabel(entry.scope)}, id=${id.slice(0, 8)})`,
+      `on #${opts.branch} (scope=${_scopeLabel(entry.scope)}, id=${id.slice(0, 8)})`,
   );
   return id;
 }
 
 /**
- * Remove one subscription. Returns true when something was removed.
+ * Cancel a subscription on a branch. Stamps a `subscription-cancelled`
+ * fact on the subscriber's reel and drops the runtime entry.
+ * Cancellations are per-branch by design: cancelling on main does not
+ * stop the inherited entry on #1, and cancelling on #1 does not stop
+ * main. Returns true when something was removed from the runtime
+ * registry (false if no live entry by that id).
+ *
+ * @param {string} subscriptionId
+ * @param {object} opts
+ * @param {string} opts.branch         REQUIRED
+ * @param {object} [opts.summonCtx]    in-flight act ctx
+ * @param {string} [opts.actorBeingId] defaults to the subscription's being
+ * @returns {Promise<boolean>}
  */
-export function unsubscribe(subscriptionId) {
+export async function unsubscribe(subscriptionId, opts = {}) {
+  if (typeof opts.branch !== "string" || !opts.branch.length) {
+    throw new Error("unsubscribe requires opts.branch");
+  }
   const entry = _index.get(subscriptionId);
   if (!entry) return false;
-  _index.delete(subscriptionId);
-  const beingMap = _byBeing.get(entry.beingId);
-  if (beingMap) {
-    beingMap.delete(subscriptionId);
-    if (beingMap.size === 0) _byBeing.delete(entry.beingId);
-  }
-  const eventSet = _byEvent.get(entry.event);
-  if (eventSet) {
-    eventSet.delete(subscriptionId);
-    if (eventSet.size === 0) _byEvent.delete(entry.event);
-  }
-  // Clear any in-flight coalesce window. The batched events are
-  // dropped — there's no inbox to deliver them to once the subscription
-  // is gone.
-  const pending = _pendingCoalesce.get(subscriptionId);
-  if (pending) {
-    clearTimeout(pending.timer);
-    _pendingCoalesce.delete(subscriptionId);
-  }
-  // Durability: drop the persisted shadow so this subscription
-  // doesn't rehydrate on next boot. Fire-and-forget.
-  _removePersistedSubscription(subscriptionId).catch((err) => {
-    log.warn(
-      "Subscriptions",
-      `persistence delete failed for ${subscriptionId.slice(0, 8)}: ${err.message}`,
-    );
-  });
+
+  await emitFact({
+    beingId: String(opts.actorBeingId || entry.beingId),
+    branch:  opts.branch,
+    verb:    "do",
+    action:  "subscription-cancelled",
+    target:  { kind: "being", id: entry.beingId },
+    params:  { subscriptionId },
+  }, opts.summonCtx || null);
+
+  _dropRegistryEntry(subscriptionId);
   return true;
 }
 
 /**
- * Drop every subscription for a being. Used when a being is deleted
- * so the registry doesn't keep delivering to a phantom inbox.
+ * Drop every subscription for a being. Used when a being is released
+ * so the registry doesn't keep delivering to a phantom inbox. The
+ * being's release fact is the substrate's record of "this being is
+ * gone"; we don't emit per-subscription cancel facts because there's
+ * no being-of-record left to attribute them to.
+ *
+ * Runtime-only cleanup.
+ *
+ * @param {string} beingId
+ * @returns {number} count dropped
  */
 export function unsubscribeAllForBeing(beingId) {
   if (!beingId) return 0;
   const beingMap = _byBeing.get(String(beingId));
   if (!beingMap) return 0;
   const ids = Array.from(beingMap.keys());
-  for (const id of ids) unsubscribe(id);
+  for (const id of ids) _dropRegistryEntry(id);
   return ids.length;
+}
+
+// ────────────────────────────────────────────────────────────────
+// Runtime registry helpers — used by subscribe / unsubscribe /
+// rehydrateFromFacts. The registry is a projection of the fact
+// chain; these helpers are how the projection updates.
+// ────────────────────────────────────────────────────────────────
+
+function _addRegistryEntry(entry) {
+  let beingMap = _byBeing.get(entry.beingId);
+  if (!beingMap) {
+    beingMap = new Map();
+    _byBeing.set(entry.beingId, beingMap);
+  }
+  beingMap.set(entry.id, entry);
+
+  let eventSet = _byEvent.get(entry.event);
+  if (!eventSet) {
+    eventSet = new Set();
+    _byEvent.set(entry.event, eventSet);
+  }
+  eventSet.add(entry.id);
+
+  _index.set(entry.id, entry);
+}
+
+function _dropRegistryEntry(id) {
+  const entry = _index.get(id);
+  if (!entry) return false;
+  _index.delete(id);
+  const beingMap = _byBeing.get(entry.beingId);
+  if (beingMap) {
+    beingMap.delete(id);
+    if (beingMap.size === 0) _byBeing.delete(entry.beingId);
+  }
+  const eventSet = _byEvent.get(entry.event);
+  if (eventSet) {
+    eventSet.delete(id);
+    if (eventSet.size === 0) _byEvent.delete(entry.event);
+  }
+  // Clear any in-flight coalesce window. Batched events are dropped —
+  // there's no inbox to deliver them to once the subscription is gone.
+  const pending = _pendingCoalesce.get(id);
+  if (pending) {
+    try { clearTimeout(pending.timer); } catch {}
+    _pendingCoalesce.delete(id);
+  }
+  return true;
 }
 
 /**
@@ -236,102 +316,125 @@ export function _resetAll() {
 }
 
 /**
- * Rehydrate the in-memory registry from the SubscriptionRecord
- * collection. Called once at boot (see genesis.js). The collection
- * is the durable shadow of every subscription that was ever
- * registered and not explicitly unsubscribed; walking it lets a
- * server come up with every being's prior attention restored.
+ * Rehydrate the in-memory registry from the fact chain.
  *
- * Returns the count rehydrated. Errors per-row are logged and
- * swallowed — one malformed record shouldn't strand the rest of
- * the dance.
+ * For every live branch (main + every non-deleted Branch row), walks
+ * the subscription-registered / subscription-cancelled facts inherited
+ * through reel-lineage and materializes one runtime entry per live
+ * (subscriptionId, branch) pair. Same shape as wakeSchedule's
+ * rehydrateFromFacts.
+ *
+ * The chain is the truth. This function is its projector for the
+ * dispatcher's runtime state. Boot calls it once; tests call it to
+ * prove fold-from-genesis recovers attention identically to the live
+ * registry.
+ *
+ * @returns {Promise<number>} count of subscriptions restored across all branches
  */
-export async function rehydrateFromDb() {
-  let SubscriptionRecord;
+export async function rehydrateFromFacts() {
+  let Fact, Branch;
   try {
-    SubscriptionRecord = (await import("./subscriptionRecord.js")).default;
+    Fact = (await import("../../past/fact/fact.js")).default;
+    Branch = (await import("../../materials/branch/branch.js")).default;
   } catch (err) {
     log.warn("Subscriptions", `rehydrate skipped: model load failed (${err.message})`);
     return 0;
   }
-  let restored = 0;
+
+  // Enumerate live branches: main + every non-deleted Branch row.
+  const MAIN = "0";
+  const branches = [MAIN];
   try {
-    const rows = await SubscriptionRecord.find({}).lean();
-    for (const row of rows) {
-      try {
-        // Direct in-memory write — bypass subscribe() so we don't
-        // re-persist what we just read. The shape matches what
-        // subscribe() would have produced; the boot rehydrate is
-        // a registry restore, not a new declaration.
-        const entry = {
-          id: row._id,
-          beingId: String(row.beingId),
-          event: row.event,
-          scope: row.scope,
-          filter: row.filter || null,
-          priority: Number.isFinite(row.priority) ? Number(row.priority) : 4,
-          coalesceMs: Number.isFinite(row.coalesceMs) && row.coalesceMs > 0
-            ? Number(row.coalesceMs)
-            : 0,
-        };
-        let beingMap = _byBeing.get(entry.beingId);
-        if (!beingMap) {
-          beingMap = new Map();
-          _byBeing.set(entry.beingId, beingMap);
-        }
-        beingMap.set(entry.id, entry);
-        let eventSet = _byEvent.get(entry.event);
-        if (!eventSet) {
-          eventSet = new Set();
-          _byEvent.set(entry.event, eventSet);
-        }
-        eventSet.add(entry.id);
-        _index.set(entry.id, entry);
-        restored++;
-      } catch (rowErr) {
-        log.warn(
-          "Subscriptions",
-          `skipping malformed record ${String(row?._id || "?").slice(0, 8)}: ${rowErr.message}`,
-        );
-      }
+    const branchRows = await Branch.find({ deleted: { $ne: true } }, "_id").lean();
+    for (const row of branchRows) {
+      if (row._id !== MAIN) branches.push(row._id);
     }
   } catch (err) {
-    log.warn("Subscriptions", `rehydrate query failed: ${err.message}`);
+    log.warn("Subscriptions", `rehydrate branch enumeration failed: ${err.message}`);
   }
+
+  // One query pulls every subscription fact across every branch.
+  // Sorted by (date, seq) so cancellations within a branch's lineage
+  // take effect after the matching registration.
+  const subFacts = await Fact.find({
+    verb: "do",
+    action: { $in: ["subscription-registered", "subscription-cancelled"] },
+  }).sort({ date: 1, seq: 1 }).lean();
+
+  // Lazy-load lineage walker only when we actually have facts.
+  let isInLineage = null;
+  if (subFacts.length > 0) {
+    isInLineage = (await import("./wakeSchedule.js")).__isInBranchLineageForTests
+      || null;
+  }
+
+  let restored = 0;
+  for (const branch of branches) {
+    const live = new Map();
+    for (const fact of subFacts) {
+      // Subscription facts target the being's own reel; we need the
+      // branch-lineage filter same as wakes use. Inline-check via
+      // Fact.branch matching the target branch or any ancestor.
+      if (!await _factInBranchLineage(fact, branch, Branch)) continue;
+      const id = fact.params?.subscriptionId;
+      if (!id) continue;
+      if (fact.action === "subscription-registered") {
+        live.set(id, _entryFromFact(fact));
+      } else if (fact.action === "subscription-cancelled") {
+        live.delete(id);
+      }
+    }
+    for (const entry of live.values()) {
+      if (entry) {
+        _addRegistryEntry(entry);
+        restored++;
+      }
+    }
+  }
+
   if (restored > 0) {
-    log.info("Subscriptions", `rehydrated ${restored} subscription(s) from durable store`);
+    log.info(
+      "Subscriptions",
+      `rehydrated ${restored} subscription(s) from fact chain across ${branches.length} branch(es)`,
+    );
   }
   return restored;
 }
 
-// ────────────────────────────────────────────────────────────────
-// Persistence helpers. Write-through to SubscriptionRecord. The
-// in-memory registry is authoritative at runtime; this collection
-// is the boot-rehydration source.
-// ────────────────────────────────────────────────────────────────
-
-async function _persistSubscription(entry) {
-  const SubscriptionRecord = (await import("./subscriptionRecord.js")).default;
-  await SubscriptionRecord.updateOne(
-    { _id: entry.id },
-    {
-      $set: {
-        beingId:    entry.beingId,
-        event:      entry.event,
-        scope:      entry.scope,
-        filter:     entry.filter,
-        priority:   entry.priority,
-        coalesceMs: entry.coalesceMs,
-      },
-      $setOnInsert: { _id: entry.id, createdAt: new Date() },
-    },
-    { upsert: true },
-  );
+// Lightweight per-branch lineage check. A fact lives in branch B's
+// view if it was stamped on B itself or on any ancestor up to genesis.
+// Wakes use a more careful seq-aware walk that respects per-reel
+// branchPoints; for subscriptions we don't need that level of
+// precision at boot — subscription liveness is event-driven, not
+// seq-replayed. Plain "stamped on this branch or one of its
+// ancestors" matches what `subscribe(branch: "1a")` callers expect.
+async function _factInBranchLineage(fact, viewerBranch, Branch) {
+  if (!fact.branch || fact.branch === viewerBranch) return true;
+  if (viewerBranch === "0") return fact.branch === "0";
+  // Walk viewerBranch's parent chain.
+  let cursor = viewerBranch;
+  const visited = new Set();
+  while (cursor && !visited.has(cursor)) {
+    visited.add(cursor);
+    if (cursor === fact.branch) return true;
+    const row = await Branch.findById(cursor, "parent").lean();
+    cursor = row?.parent || null;
+  }
+  return false;
 }
 
-async function _removePersistedSubscription(id) {
-  const SubscriptionRecord = (await import("./subscriptionRecord.js")).default;
-  await SubscriptionRecord.deleteOne({ _id: id });
+function _entryFromFact(fact) {
+  const p = fact.params || {};
+  return {
+    id:         p.subscriptionId,
+    beingId:    String(fact.target?.id || fact.beingId),
+    event:      p.event,
+    scope:      p.scope,
+    filter:     p.filter || null,
+    priority:   Number.isFinite(p.priority) ? Number(p.priority) : 4,
+    coalesceMs: Number.isFinite(p.coalesceMs) && p.coalesceMs > 0
+                  ? Number(p.coalesceMs) : 0,
+  };
 }
 
 /**

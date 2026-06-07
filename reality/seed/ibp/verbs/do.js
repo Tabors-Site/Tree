@@ -31,7 +31,6 @@ import {
 import { emitFact } from "../../past/fact/facts.js";
 import { IbpError, IBP_ERR } from "../protocol.js";
 import { MATTER_ORIGIN } from "../../materials/matter/origins.js";
-import { I_AM } from "../../materials/being/seedBeings.js";
 import { isSourceSpaceId } from "../../materials/space/source.js";
 import { authorize } from "../authorize.js";
 import { assertVerbCaller, refuseHistoricalWrite, resolveBranchForFact } from "./_shared.js";
@@ -46,15 +45,12 @@ import { assertVerbCaller, refuseHistoricalWrite, resolveBranchForFact } from ".
  * @param {object} [params]   operation-specific payload
  * @param {object} [opts]
  * @param {object} [opts.identity]   { beingId, name } — the being acting.
- *                                   Required unless opts.scaffold is true
- *                                   and no being yet exists.
+ *                                   Required. Seed-internal flows that
+ *                                   used to pass `scaffold: true` now
+ *                                   pass `identity: I_AM_IDENTITY`;
+ *                                   authorize() short-circuits on I_AM.
  * @param {object} [opts.summonCtx]  for summon correlation on the Fact
  * @param {boolean}[opts.skipAudit]  skip the Fact stamp (seed-internal only)
- * @param {boolean}[opts.scaffold]   marks a seed-plant / boot-scaffold flow.
- *                                   With NO identity, I_AM is the actor (pre-
- *                                   being bootstrap); with identity, the
- *                                   being is the actor and scaffold is
- *                                   just the planting flag.
  * @returns the handler's return value
  */
 export async function doVerb(target, operation, params = {}, opts = {}) {
@@ -83,28 +79,24 @@ export async function doVerb(target, operation, params = {}, opts = {}) {
     throw new IbpError(IBP_ERR.ORIGIN_READ_ONLY, denial);
   }
 
-  // scaffold:true semantics, narrowed (post-boot-moment refactor):
-  //   - bypass stance auth + implicit I-Am actor when no identity
-  //   - DOES NOT imply commit-as-singleton. The caller MUST pass a
-  //     summonCtx (a real moment's ctx, typically the boot moment from
-  //     withBootMoment or a runtime moment). Without summonCtx, the
-  //     fact would be orphaned from any Act — there is no second seal
-  //     path. The check below throws loudly on misconfiguration.
-  if (opts.scaffold === true && !opts.summonCtx?.actId) {
+  // Every DO act rides an open Act. assertVerbCaller above already
+  // required `identity`; this requires the actId. The same guard used
+  // to be split between a scaffold-specific check and the universal
+  // check below; the scaffold version retired with the flag because
+  // it's the same invariant.
+  if (!opts.summonCtx?.actId) {
     throw new IbpError(
       IBP_ERR.INTERNAL,
-      `DO ${operation}: scaffold:true requires summonCtx (the boot moment's ctx from withBootMoment, or an open runtime moment). Commit-strategy is no longer implied by the flag.`,
+      `DO ${operation}: missing ambient actId. Every act rides an open Act. Thread opts.summonCtx from the caller's moment, or open a boot moment via withBootMoment(...).`,
       { operation },
     );
   }
-  // Stance auth. The only call that legitimately skips the gate is the
-  // pre-being scaffold path: scaffold:true AND no identity (boot,
-  // migrations, first-time spaceRoot creation). A being who passes
-  // scaffold (planting an extension seed) still gets their stance
-  // evaluated normally.
-  const isPreBeingScaffold = opts.scaffold === true && !opts.identity;
-  if (!isPreBeingScaffold) {
-    const identity = opts.identity || null;
+  // Stance auth runs for every call. authorize() short-circuits on
+  // `identity?.name === I_AM` without a DB read, so seed-internal
+  // flows (I_AM acting on its own reality) pass through identically
+  // to how `scaffold: true` used to bypass — one path, one doctrine.
+  {
+    const identity = opts.identity;
     // Auth target ≠ audit target. The Fact lands on whatever reel the
     // op declares (being's reel, matter's reel, space's reel — that's
     // `resolveAuditTarget`). But the permission rules live in
@@ -142,7 +134,7 @@ export async function doVerb(target, operation, params = {}, opts = {}) {
     });
     if (!decision.ok) {
       throw new IbpError(
-        identity ? IBP_ERR.FORBIDDEN : IBP_ERR.UNAUTHORIZED,
+        IBP_ERR.FORBIDDEN,
         `DO denied for stance "${decision.stance}": ${decision.reason}`,
         { stance: decision.stance, action: operation },
       );
@@ -152,9 +144,8 @@ export async function doVerb(target, operation, params = {}, opts = {}) {
   const ctx = {
     target,
     params: params || {},
-    identity: opts.identity || null,
+    identity: opts.identity,
     summonCtx: opts.summonCtx || null,
-    scaffold: opts.scaffold === true,
   };
 
   const result = await op.handler(ctx);
@@ -163,32 +154,16 @@ export async function doVerb(target, operation, params = {}, opts = {}) {
   // opts.skipAudit (seed-trusted batches only).
   //
   // Presentism: every act lives in a moment. assign opens the Act;
-  // momentum threads actId through summonCtx. The only legitimate
-  // path with a null actId is boot scaffolding (opts.scaffold ===
-  // true), the I_AM's pre-genesis materialization. The guard throws
-  // outside the audit try so a missing frame fails the act, not just
-  // its Fact — per STAMPER.md, the fact insert IS the commit; an act
-  // without a fact didn't happen.
+  // momentum threads actId through summonCtx. The entry-point guard
+  // above already required summonCtx.actId, so by the time we get
+  // here the act has a frame.
   const shouldAudit = !op.skipAudit && !opts.skipAudit;
   if (shouldAudit) {
-    const actId = opts.summonCtx?.actId || null;
-    if (!actId) {
-      // Post-refactor invariant: every DO Fact rides an Act. The
-      // scaffold:true gate above already required summonCtx, so if
-      // we get here without an actId, the caller didn't thread one.
-      throw new IbpError(
-        IBP_ERR.INTERNAL,
-        `DO ${operation}: missing ambient actId. Every act must ride an open Act. Thread opts.summonCtx from the caller's moment, or open a boot moment via withBootMoment(...).`,
-        { operation },
-      );
-    }
-    const actorBeingId = opts.identity?.beingId
-      || (opts.scaffold === true ? I_AM : null);
+    const actId = opts.summonCtx.actId;
+    const actorBeingId = opts.identity.beingId;
     // Phase 2: contribute to ctx.deltaF (if inside a moment) instead
     // of committing eagerly. sealAct will commit this Fact + the Act
     // row + any other Facts the moment produced in one transaction.
-    // Outside a moment (boot/scaffold), emitFact falls back to
-    // sealFacts singleton — same as the pre-Phase-2 behavior.
     await emitFact({
       verb:    "do",
       action:  op.factAction,

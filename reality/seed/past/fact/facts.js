@@ -38,6 +38,7 @@ import { hooks } from "../../hooks.js";
 import { IBP_ERR, IbpError } from "../../ibp/protocol.js";
 import { getRealityConfigValue } from "../../realityConfig.js";
 import { resolveSpaceAccess } from "../../materials/space/spaces.js";
+import { redactSecrets } from "../../materials/redact.js";
 import { allocSeq } from "../reel/reelHeads.js";
 import { withReelLock } from "../reel/appendLock.js";
 
@@ -900,7 +901,10 @@ export async function describeReel(targetKind, targetId, opts = {}) {
   } catch { /* name lookup is best-effort */ }
   return {
     target: { kind: targetKind, id: String(targetId), name: targetName },
-    facts: facts.map(serializeFactForReel),
+    // Redact secrets on the way over the wire — the fact-chain in the DB
+    // keeps them, but a reel surfaced to a client must not carry api keys
+    // or credentials (they ride in set-being facts' params.value).
+    facts: facts.map((f) => redactSecrets(serializeFactForReel(f))),
     count: facts.length,
   };
 }

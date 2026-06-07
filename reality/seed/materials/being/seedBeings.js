@@ -24,3 +24,14 @@
 // like `<reality>/@i-am` parse cleanly without special-casing.
 
 export const I_AM = "i-am";
+
+// Identity shorthand. Verbs accept `identity: I_AM` (bare string) AND
+// `identity: { beingId, name }` (the regular shape). assertVerbCaller
+// normalizes the string form to `{ beingId: I_AM, name: I_AM }` at
+// each verb entry, so internal code can keep reading `identity.beingId`
+// / `identity.name` uniformly. Seed-internal calls that used to pass
+// the retired `scaffold: true` flag now pass `identity: I_AM`. This
+// is safe during genesis (when the I-Am Being row is still pending in
+// summonCtx.deltaF): authorize() short-circuits on
+// `identity?.name === I_AM` without a DB read, and fact attribution
+// just stamps the string. No lookup, no chicken-and-egg.

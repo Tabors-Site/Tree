@@ -57,6 +57,7 @@
 import log from "../../../seed/seedReality/log.js";
 import Being from "../../../seed/materials/being/being.js";
 import { IbpError, IBP_ERR, isIbpError } from "../../../seed/ibp/protocol.js";
+import { assertNoImpersonation } from "./_shared.js";
 import { ackOk, ackError } from "../envelope.js";
 import { dispatchTransportAct } from "../../../seed/present/intake/transportAct.js";
 import { emitToBeingRoom, emitToBeing } from "../../../seed/ibp/pushChannel.js";
@@ -119,23 +120,11 @@ export async function handleBe(socket, env, ack) {
         expand(parsed, expandCtx), expandCtx);
       const expanded = await resolveBeingIds(expandedWithPointers, expandCtx);
 
-      // Impersonation refusal . see do.js for the doctrine. BE is the
-      // narrow exception case: arrival flows (birth, connect from no
-      // identity) legitimately have socket.beingId === null. The check
-      // only fires when BOTH sides are set, so arrival-cherub flows are
-      // unaffected.
-      if (
-        expanded.left?.beingId &&
-        socket?.beingId &&
-        expanded.left.beingId !== socket.beingId
-      ) {
-        throw new IbpError(
-          IBP_ERR.FORBIDDEN,
-          `Address actor (@${expanded.left.being}) does not match ` +
-          `authenticated being. Caller cannot impersonate.`,
-          { addressBeingId: expanded.left.beingId, socketBeingId: socket.beingId },
-        );
-      }
+      // Impersonation refusal — see _shared.js for the doctrine. BE
+      // arrival flows (birth, connect from no identity) legitimately
+      // have socket.beingId === null; the helper's both-sides-set
+      // guard lets those pass through.
+      assertNoImpersonation(expanded, socket);
 
       const targetBranch = expanded?.right?.branch || "0";
       if (callerBranch !== targetBranch) {

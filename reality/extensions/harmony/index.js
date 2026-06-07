@@ -23,7 +23,6 @@ import walkOp from "./ops/walk.js";
 import { drummerRole } from "./roles/drummer.js";
 import { dancerTowardRole } from "./roles/dancerToward.js";
 import { dancerLlmRole, neighborsSeeResolver } from "./roles/dancerLlm.js";
-import { danceFloorSeed } from "./seeds/danceFloor.js";
 
 export async function init(reality) {
   // 1. DO operations (loader auto-namespaces each to harmony:<name>).
@@ -43,9 +42,9 @@ export async function init(reality) {
   // ctx.X = moment-time, reality.declare.X = load-time.
   reality.declare.registerSeeResolver("neighbors", neighborsSeeResolver);
 
-  return {
-    seeds: [
-      { name: "dance-floor", ...danceFloorSeed },
-    ],
-  };
+  // Extension seed-scaffolds retired 2026-06-07. When harmony ships
+  // a dance-floor clone bundle, it goes in manifest.provides.clones
+  // (declarative, no JS plant code). For now the loader expects an
+  // object — empty is fine.
+  return {};
 }

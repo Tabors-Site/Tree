@@ -860,47 +860,36 @@ export async function loadExtensions(app, mcpServer, opts = {}) {
         }
       }
 
-      // Register extension seeds (plantable scaffolds). Two intake paths:
-      //   1. instance.seeds: returned from init() — array of recipe objects
-      //      with local `name` (e.g. "rulership"); seed namespaces it
-      //      as "<ext>:<name>".
-      //   2. manifest.provides.seeds: { "<local-name>": "./relative/path.js" }
-      // Either form accepted; both register under the extension owner so
-      // unload cleans them up. See seed/seeds.js for recipe shape.
-      if (instance.seeds || manifest.provides?.seeds) {
-        const { registerSeed } = await import("../seed/materials/seeds.js");
+      // Extension-shipped clone bundles. Each entry in
+      // manifest.provides.clones is a relative path to a static JSON
+      // bundle (the shape lives in seed/materials/publish/bundle.js).
+      // The loader reads + validates each and registers it as
+      // `<ext>:<localName>` so the portal's graft UI surfaces it
+      // alongside other extensions' bundles. Operators graft via
+      // `reality.do(<position>, "graft-clone", { bundle, params })`.
+      // Replaces the retired seed-scaffold pattern. See
+      // seed/Chain-Rebuild.md for the bundle format + parameter
+      // substitution doctrine.
+      if (manifest.provides?.clones && typeof manifest.provides.clones === "object") {
+        const { registerClone } = await import("../seed/materials/publish/cloneRegistry.js");
+        const { readFile } = await import("fs/promises");
         const namespace = (localName) => `${manifest.name}:${localName}`;
-        // Path 1: returned from init
-        if (Array.isArray(instance.seeds)) {
-          for (const recipe of instance.seeds) {
-            if (recipe?.name) {
-              registerSeed(namespace(recipe.name), recipe, manifest.name);
-            }
-          }
-        }
-        // Path 2: declared in manifest with relative module paths
-        if (
-          manifest.provides?.seeds &&
-          typeof manifest.provides.seeds === "object"
-        ) {
-          for (const [localName, relPath] of Object.entries(
-            manifest.provides.seeds,
-          )) {
-            try {
-              const resolved = path.resolve(dir, relPath);
-              const mod = await import(toImportURL(resolved));
-              const recipe = mod.default || mod;
-              if (recipe)
-                registerSeed(namespace(localName), recipe, manifest.name);
-            } catch (err) {
-              log.warn(
-                "Loader",
-                `Failed to load seed "${localName}" from "${relPath}" in ${manifest.name}: ${err.message}`,
-              );
-            }
+        for (const [localName, relPath] of Object.entries(manifest.provides.clones)) {
+          try {
+            const resolved = path.resolve(dir, relPath);
+            const json = await readFile(resolved, "utf8");
+            const bundle = JSON.parse(json);
+            registerClone(namespace(localName), bundle, manifest.name);
+            log.info("Loader", `${manifest.name}: registered clone "${namespace(localName)}"`);
+          } catch (err) {
+            log.warn(
+              "Loader",
+              `Failed to load clone "${localName}" from "${relPath}" in ${manifest.name}: ${err.message}`,
+            );
           }
         }
       }
+
 
       // Register jobs (extensions can provide startable/stoppable jobs)
       if (instance.jobs) {
@@ -1629,9 +1618,9 @@ export async function uninstallExtension(name) {
       unregisterToolsForExtension(name, getToolOwner);
     } catch {}
     try {
-      const { unregisterSeedsFromExtension } =
-        await import("../seed/materials/seeds.js");
-      unregisterSeedsFromExtension(name);
+      const { unregisterClonesFromExtension } =
+        await import("../seed/materials/publish/cloneRegistry.js");
+      unregisterClonesFromExtension(name);
     } catch {}
     try {
       const { clearToolOwnersForExtension } =

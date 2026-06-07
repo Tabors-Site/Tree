@@ -100,6 +100,7 @@ const FLAT_DOM = `
     <button id="flat-timeline-btn" type="button" title="branches and timeline">🌿 timeline</button>
     <button id="flat-close-btn" type="button" title="close text mode (Esc)">close</button>
   </header>
+  <div id="task-menubar"></div>
   <main id="middle">
     <section id="position-pane">
       <div class="pane-head">
@@ -119,7 +120,6 @@ const FLAT_DOM = `
         </div>
         <ul id="lineage-list" class="list"></ul>
       </div>
-      <div id="space-actions" class="pane-section"></div>
     </section>
     <section id="detail-pane">
       <div id="empty-detail" class="empty">
@@ -227,16 +227,27 @@ export function mountFlatView(rootContainer, ctx) {
   wireTimelineButton(root);
   const detachKeys = wireKeyboardShortcuts(ctx);
 
-  // Refresh operations once so the inspector has its DO surface.
-  refreshOperations(ctx);
-
-  // Initial render.
+  // Initial render. Operations load async (a SEE on .operations); the
+  // first paint may run before that resolves, so the task bar + inspector
+  // DO surfaces re-render once the catalog arrives (below).
   if (_state.descriptor) {
     renderDescriptor(_state.descriptor, {
       session:   _state.session,
       discovery: _state.discovery,
     });
   }
+
+  // Load operations, then re-render so every DO surface (task bar tabs,
+  // being inspector) populates with the full set rather than the few
+  // entries that don't depend on the catalog.
+  refreshOperations(ctx).then(() => {
+    if (_state.descriptor) {
+      renderDescriptor(_state.descriptor, {
+        session:   _state.session,
+        discovery: _state.discovery,
+      });
+    }
+  });
 
   return {
     update(descriptor) {
@@ -388,6 +399,9 @@ async function refreshOperations(ctx) {
         factAction:     op.factAction || null,
         ownerExtension: op.ownerExtension || "seed",
         skipAudit:      !!op.skipAudit,
+        // The field schema (when the op declares one) drives the
+        // directed forms the task bar + being inspector render.
+        args:           op.args || null,
       };
     });
   } catch (err) {

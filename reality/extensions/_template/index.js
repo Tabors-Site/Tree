@@ -127,18 +127,14 @@ export async function init(reality) {
   // explicit "clone schedules to child branch" step is needed.
 
   // ───────────────────────────────────────────────────────────────
+  // CLONES — shippable structure. Declare bundles in
+  // `manifest.provides.clones`; operators graft them with
+  // `reality.do(space, "graft-clone", { bundle })`. A clone is a
+  // static list of fact specs (create-space, be:birth, etc.) — no
+  // JS plant code, no scaffold(ctx). The retired seed-scaffold
+  // pattern lived here previously. See seed/Chain-Rebuild.md for
+  // the bundle shape + parameter system.
   // ───────────────────────────────────────────────────────────────
-  // SEEDS — plantable scaffolds. Register a recipe here (or via
-  // the manifest's provides.seeds path) and the operator plants
-  // it with `reality.do(space, "plant", { seed: "my-ext:my-seed" })`.
-  // ───────────────────────────────────────────────────────────────
-  //
-  // reality.seeds.register("my-seed", {
-  //   description: "Sets up a tracking position with the my-extension role.",
-  //   scaffold: async (ctx) => {
-  //     await ctx.do(ctx.rootSpaceId, "create-space", { name: "tracking" });
-  //   },
-  // });
 
   // ───────────────────────────────────────────────────────────────
   // RETURN — what the loader wires after init() resolves.

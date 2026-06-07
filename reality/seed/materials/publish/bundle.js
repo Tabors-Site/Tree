@@ -1,6 +1,9 @@
 // TreeOS Seed . AGPL-3.0 . https://treeos.ai . Tabor Holly
 //
-// Replicate bundle. Portable snapshot of a subtree's current state.
+// Clone bundle. Portable representation of a subtree's current state.
+// A clone is one of two portable artifacts (the other is a seed, which
+// preserves acts and is plant-only). See `seed/Chain-Rebuild.md` for
+// the vocabulary doctrine.
 //
 // Shape:
 //   {
@@ -11,21 +14,34 @@
 //       sourceScopeName,      human label for what was extracted
 //       sourceScopeSpaceId,   the root space's source-namespace id
 //       createdAt,            ISO string
-//       operatorBeingId,      who replicated (audit, not used at graft time)
+//       operatorBeingId,      who cloned (audit, not used at graft time)
 //     },
 //     manifest: {
 //       extensions,           array of extension names the receiver must have loaded
 //       roles,                array of role names the receiver must have registered
 //     },
-//     content: {
-//       // Aggregates in dependency order: spaces (depth-ascending), beings, matter.
-//       // Each entry carries a sourceId; Refs in fields point at sourceIds within
-//       // this bundle OR at the two sentinels (INSERTION_POINT, GRAFT_INITIATOR).
-//       spaces:  [ { sourceId, name, type, parent, rootOwner, contributors, size, coord, qualities } ],
-//       beings:  [ { sourceId, name, defaultRole, parentBeingId, homeSpace, position, coord, qualities } ],
-//       matter:  [ { sourceId, name, spaceId, beingId, parentMatterId, origin, content, qualities } ],
-//     },
+//     parameters: [           // declared parameter holes (may be empty)
+//       { name, type, default?, description? }
+//     ],
+//     content: { spaces, beings, matter }
 //   }
+//
+// PARAMETERS. Authored clones can declare named parameter holes the
+// grafter fills at apply time. Any string field value of the form
+// `"$paramName"` is substituted with `opts.params[paramName]` (or the
+// parameter's default) by the graft walker. Missing required parameters
+// refuse the graft up front; unknown `$names` refuse the graft loudly
+// so silent misroutes don't survive.
+//
+// `$placeholder` strings that match a bundle sourceId pattern (the ID
+// remap from spaces/beings/matter entries) continue to flow through
+// the existing Refs system. Parameters are the operator-supplied
+// counterpart: ID-substitution for the clone's internal refs,
+// parameter-substitution for the clone's operator-controlled knobs.
+//
+// `type` is informational (no runtime coercion) but reserved for a
+// future "validate parameter shape" pass. Documented types: "string",
+// "number", "boolean", "json".
 //
 // The walker (`findRefs` / `remapRefs` in seed/materials/refWalker.js)
 // reads + remaps Refs in this format. Outside the bundle, the substrate
@@ -75,6 +91,22 @@ export function assertValidBundle(bundle) {
       }
     }
   }
+  // parameters: array (possibly empty) of declarations. Each entry has a
+  // name string; `type` and `default` are free-form. Duplicate names are
+  // rejected so substitution is unambiguous.
+  if (!Array.isArray(bundle.parameters)) {
+    throw new Error("bundle.parameters: required array (use [] when none)");
+  }
+  const seen = new Set();
+  for (const p of bundle.parameters) {
+    if (!p || typeof p !== "object" || typeof p.name !== "string" || !p.name) {
+      throw new Error("bundle.parameters: every entry needs a name string");
+    }
+    if (seen.has(p.name)) {
+      throw new Error(`bundle.parameters: duplicate name "${p.name}"`);
+    }
+    seen.add(p.name);
+  }
   return true;
 }
 
@@ -90,13 +122,18 @@ export function emptyBundle({ sourceReality, sourceBranch, sourceScopeName, sour
       sourceBranch:      sourceBranch || "0",
       sourceScopeName:   sourceScopeName || null,
       sourceScopeSpaceId: sourceScopeSpaceId || null,
-      createdAt:         null,  // stamped by replicateSubtree at completion
+      createdAt:         null,  // stamped by cloneSubtree at completion
       operatorBeingId:   operatorBeingId || null,
     },
     manifest: {
       extensions: [],
       roles:      [],
     },
+    // Captured clones don't author parameters — operators add them by
+    // hand if they want to turn a captured snapshot into a template.
+    // Statically-authored clones (extension manifest scaffolds) emit
+    // their own bundle with parameters declared.
+    parameters: [],
     content: {
       spaces: [],
       beings: [],

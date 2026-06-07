@@ -82,3 +82,33 @@ export async function isHeavenSpace(spaceId) {
 export function _resetHeavenCache() {
   _heavenIdCache = null;
 }
+
+/**
+ * True when `beingId` has authority over the reality as a whole.
+ *
+ * Heaven is the I-Am's room. Anyone added to heaven's contributors[]
+ * is anointed as a substrate operator for this reality — they can
+ * mutate the dot-namespaced heaven spaces (.config, .roles, .tools,
+ * etc.) and act on reality-wide write ops (capture-seed, close-reality,
+ * set-reality-llm). The earlier "rootOperator" doctrine collapsed
+ * into this single test: `beingId` is a heaven contributor iff they
+ * appear in heaven's contributors[] or are heaven's rootOwner (the
+ * I-Am). One roster, one truth, no parallel state.
+ *
+ * I_AM short-circuits true (universal authority on its own reality —
+ * the same doctrine as authorize.js's I_AM bypass).
+ */
+export async function isHeavenContributor(beingId) {
+  if (!beingId) return false;
+  const { I_AM } = await import("../being/seedBeings.js");
+  if (String(beingId) === String(I_AM)) return true;
+
+  const heavenId = await findHeavenRootId();
+  if (!heavenId) return false;
+  const { loadProjection } = await import("../projections.js");
+  const heaven = await loadProjection("space", heavenId, "0");
+  if (!heaven) return false;
+  if (String(heaven.state?.rootOwner) === String(beingId)) return true;
+  const contributors = heaven.state?.contributors || [];
+  return contributors.some((c) => String(c) === String(beingId));
+}

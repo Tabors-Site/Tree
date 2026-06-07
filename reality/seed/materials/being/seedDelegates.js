@@ -233,7 +233,7 @@ export async function ensureSeedDelegates(spaceRootId, summonCtx, opts = {}) {
         // in sync via do.set facts. The legacy direct save() retired
         // 2026-05-23; fact-driven keeps the genesis exception list short.
         const { doVerb } = await import("../../ibp/verbs/do.js");
-        const setOpts = { scaffold: true, summonCtx };
+        const setOpts = { identity: I_AM, summonCtx };
         const beingTarget = { kind: "being", id: String(existingSlot.id) };
         const setField = (field, value) =>
           doVerb(beingTarget, "set-being", { field, value }, setOpts);
@@ -286,7 +286,6 @@ export async function ensureSeedDelegates(spaceRootId, summonCtx, opts = {}) {
           ...(circleCoord ? { coord: circleCoord(i) } : {}),
         },
         identity: iAmIdent,
-        scaffold: true,
         summonCtx,
       });
 
@@ -311,7 +310,7 @@ export async function ensureSeedDelegates(spaceRootId, summonCtx, opts = {}) {
           },
           merge: true,
         },
-        { scaffold: true, summonCtx },
+        { identity: I_AM, summonCtx },
       );
       created++;
       log.info("Genesis", `I create ${spec.name}.`);
@@ -339,7 +338,7 @@ export async function ensureSeedDelegates(spaceRootId, summonCtx, opts = {}) {
 /**
  * Add every seed delegate to heaven's `contributors` so they can
  * SEE/DO/SUMMON inside heaven's Tier-3 spaces. Heaven's default
- * permissions gate on `canWrite` (owner OR contributor) so I_AM
+ * permissions gate on `hasAccess` (owner OR contributor) so I_AM
  * (heaven's rootOwner) plus the contributors-on-heaven list all
  * pass. Idempotent: addContributor short-circuits when the being
  * is already a contributor.

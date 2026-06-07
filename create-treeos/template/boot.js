@@ -15,11 +15,11 @@ if (!fs.existsSync(path.join(__dirname, "node_modules"))) {
 
 // Global error handlers
 process.on("unhandledRejection", (err) => {
-  console.error("[KERNEL] Unhandled rejection:", err?.message || err);
+  console.error("[SEED] Unhandled rejection:", err?.message || err);
   if (err?.stack) console.error(err.stack);
 });
 process.on("uncaughtException", (err) => {
-  console.error("[KERNEL] Uncaught exception:", err?.message || err);
+  console.error("[SEED] Uncaught exception:", err?.message || err);
   if (err?.stack) console.error(err.stack);
   process.exit(1);
 });

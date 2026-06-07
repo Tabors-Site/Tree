@@ -386,6 +386,11 @@ registerOperation("set-being", {
   targets: ["being"],
   ownerExtension: "seed",
   factAction: "set-being",
+  args: {
+    field: { type: "text", label: "Field (e.g. coord, qualities.<ns>.<key>)", required: true },
+    value: { type: "json", label: "Value (JSON; null to clear)", required: false },
+    merge: { type: "bool", label: "Merge (for qualities objects)", default: true, required: false },
+  },
   handler: setOnBeingHandler,
 });
 
@@ -393,6 +398,7 @@ registerOperation("end-being", {
   targets: ["being"],
   ownerExtension: "seed",
   factAction: "end-being",
+  args: {},
   handler: endBeingHandler,
 });
 

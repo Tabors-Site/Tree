@@ -1793,7 +1793,7 @@ codebase.
 | Config key / value validation | Key regex `^[a-zA-Z][a-zA-Z0-9_]{0,63}$`; dangerous keys rejected; 64KB per value cap.                                                                                                                                                                                                                                                                                                                                                                |
 | SSRF protection               | Federation peer registration and LLM connection baseUrls validate hostname against private-IP patterns.                                                                                                                                                                                                                                                                                                                                               |
 | Boot recovery                 | Every boot verifies the nine heaven spaces and the I-Am Being row exist. Missing ones recreated. Partial first-boot crashes leave a recoverable state.                                                                                                                                                                                                                                                                                                  |
-| Genesis exception             | Boot scaffolding stamps all facts with `actId: null` via `{ scaffold: true }` on the verb-caller gate. The I-Am self-stamps its own first `be:register` (target = the not-yet-existing row). Seed-delegate births (cherub, arrival, llm-assigner, reality-manager) and seed-space creations follow the same pattern. The first being summoned by a real moment (typically the operator-being via cherub) is the first fact stamped under an open Act. |
+| Genesis exception             | Boot opens ONE moment via `withBootMoment(...)`; every genesis fact rides that Act. The I-Am acts as itself (`identity: I_AM`); authorize() short-circuits on I_AM without a DB read, so the not-yet-existing I-Am row is no obstacle. The boot moment plants the heaven children, the I-Am's own be:birth, and the seed-delegate births in one ΔF. After seal: one genesis Act, ~30 facts, all riding it. The earlier `{ scaffold: true }` flag retired 2026-06-07 in favor of the identity contract. |
 | Cross-cutting handler safety  | A failing handler is logged and skipped; the projection self-heals on the next fold pass touching the same fact.                                                                                                                                                                                                                                                                                                                                      |
 | Graceful shutdown             | All interval timers `.unref()`; SIGTERM closes WS, then HTTP, then DB.                                                                                                                                                                                                                                                                                                                                                                                |
 
@@ -1808,27 +1808,31 @@ first act issues its own first fact, "I am that I am." After that one
 moment the rules close and never open again. Every Fact is the
 deposit of a sealed Act; every Act is a being in a moment.
 
-**Scaffold path: facts without Act frames.** Genesis-era writes use
-`{ scaffold: true }` on every verb call (the I-Am's self-stamp,
-seedDelegates planting cherub/arrival/llm-assigner/reality-manager,
-sprout's nine seed-spaces, seedDefaultStancePermissions, the
-manifest sync mirroring extensions into `./extensions`). The scaffold
-flag bypasses the moment machinery entirely — no scheduler, no
-assign, no Act row opens. Every fact stamped under scaffold carries
-`actId: null`. This is by design: there's no being to act yet, no
-moment to frame the act in. A freshly-booted reality therefore has
-ZERO Acts and ~30 facts (the seed-space births + I-Am +
-seed-delegate births + permission seeding) all with `actId: null`.
+**Genesis-era writes act as the I-Am.** Every verb call rides a being
+— there is no scaffold path that acts without one. Seed-internal
+flows (the I-Am's self-stamp, seedDelegates planting cherub /
+arrival / llm-assigner / reality-manager, sprout's heaven children,
+seedDefaultStancePermissions, the manifest sync mirroring extensions
+into `./extensions`) pass `identity: I_AM` to the verbs.
+authorize() short-circuits on `identity?.name === I_AM` without a DB
+read — safe even mid-genesis when the I-Am Being row is still
+pending in summonCtx.deltaF. The earlier `{ scaffold: true }` flag
+retired 2026-06-07 because it expressed exactly this — "the I-Am is
+acting" — with a side channel that drifted from the identity contract.
 
-The first real Act appears the moment a real being acts. Typically:
-the operator's registration, when plant.js handed cherub the
-operator's name/password and cherub.register opens an Act
-(`scaffold: true` on the verb-caller gate, but cherub's call still
-runs through the normal seal — opening one Act with a multi-fact ΔF:
-`do:create` on the operator's home space + `do:set` on rootOwner +
-`be:register` on the operator + `be:summon-create` on cherub's reel).
-Every Fact after that, except for transport-acts which queue an
-inbox row outside any moment, rides a real Act.
+The boot moment is a real moment. `withBootMoment(...)` opens one
+Act with the I-Am as actor; every Fact stamped during genesis rides
+that Act's id. A freshly-booted reality has ONE Act (the genesis
+moment) and the chain of be:birth / do:create-space / do:set-space
+facts that built the heaven children + I-Am + seed delegates.
+
+Subsequent real Acts open when other beings act. Typically the
+operator's registration: plant.js hands cherub the operator's
+name/password and cherub.register opens an Act with a multi-fact ΔF
+(`do:create-space` on the operator's home + `do:set-space` on
+rootOwner + `be:birth` on the operator). Every Fact after that,
+except for transport-acts which queue an inbox row outside any
+moment, rides a real Act.
 
 A seventh, doctrinal rule rides on this: **every state change is a
 Fact.** Direct writes to Space, Being, or Matter bypass the fold and

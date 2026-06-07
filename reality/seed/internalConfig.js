@@ -99,7 +99,16 @@ export const INTERNAL_CONFIG_DEFAULTS = {
 
   // Scheduler backpressure
   summonInboxDepth:    100,
-  summonsPerSecond:    10,
+  // Per-being summons-per-second cap. Raised from 10 to 60 once
+  // set-being:coord landed as a first-class fact stream . a walking
+  // human emits one transport-act per cell crossing, which floors at
+  // "rate-limited; deferring" the moment they sustain movement at the
+  // old 10/sec cap and blocks higher-priority work (like create-branch)
+  // behind the coord backlog until awaitResult times out. The
+  // CFG_SUMMONS_PER_SECOND accessor in present/intake/scheduler.js
+  // carries the same doctrine in its fallback; this is the live default
+  // that callers actually read.
+  summonsPerSecond:    60,
   summonMaxAgeSeconds: 3600,
 
   // Tree circuit breaker
@@ -133,7 +142,16 @@ export const INTERNAL_CONFIG_DEFAULTS = {
 export function getInternalConfigValue(key) {
   const stored = getRealityConfigValue(key);
   if (stored != null) return stored;
-  return key in INTERNAL_CONFIG_DEFAULTS ? INTERNAL_CONFIG_DEFAULTS[key] : null;
+  // Defensive: during the top-of-module circular-import window
+  // (ancestorCache.js scheduleCleanup → getTTL → here), the defaults
+  // may not have initialized yet. try/catch handles the TDZ
+  // ReferenceError; the caller treats null as "use the hardcoded
+  // safety value." The race only happens on cold boot before init.
+  try {
+    return key in INTERNAL_CONFIG_DEFAULTS ? INTERNAL_CONFIG_DEFAULTS[key] : null;
+  } catch {
+    return null;
+  }
 }
 
 /**

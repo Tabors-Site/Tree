@@ -1,19 +1,17 @@
 // TreeOS extension: hello-world.
 //
-// init(reality) registers two things:
-//   1. The "greeter" role — when summoned, the being SEEs its
-//      position + the children around it and returns a greeting
-//      addressed to both the asker AND the world it just saw.
-//   2. The "greeter" seed — when planted at a target space, spawns
-//      one being there with the greeter role. The plant calls
-//      birthBeing (the authorized BE-side entry in
-//      seed/materials/being/identity/birth.js); we don't invent a
-//      new creation path.
+// init(reality) registers the "greeter" role — when summoned, the
+// being SEEs its position + the children around it and returns a
+// greeting addressed to both the asker AND the world it just saw.
 //
 // The role is scripted today. Flipping to LLM cognition is a one-
-// line change in the seed (cognition: "scripted" → "llm" +
-// configuring an llm connection on the being). The greeting logic
-// stays the same; the cognition just changes shape.
+// line change in the spec (cognition: "scripted" → "llm" + an
+// llm connection on the being). The greeting logic stays the same.
+//
+// The greeter being itself was previously planted via an extension
+// seed-scaffold (reality.seeds.register / plant-seed). That system
+// retired 2026-06-07 in favor of the clone+graft primitive. A future
+// rev ships the greeter as a clone bundle in provides.clones.
 
 import log from "../../seed/seedReality/log.js";
 
@@ -29,10 +27,10 @@ export async function init(reality) {
   // failure (e.g., the position can't be resolved), returns
   // cognitionFailure — the moment then releases with no Act,
   // structurally clean.
-  // Full namespaced name. The seed-side registries don't auto-prefix
-  // for roles or seeds (only DO operations + push-channel events get
+  // Full namespaced name. The substrate's role registry doesn't
+  // auto-prefix (only DO operations + push-channel events get
   // loader-wrapped today), so extensions write the full "<ext>:<name>"
-  // form and the registries accept it as-is.
+  // form and the registry accepts it as-is.
   reality.declare.registerRole("hello-world:greeter", {
     permissions: ["see"],
     respondMode: "async",
@@ -81,50 +79,12 @@ export async function init(reality) {
     },
   });
 
-  // ── Seed: greeter ──────────────────────────────────────────────
-  // The plant routes through birthBeing (the authorized BE-side
-  // entry) so the canonical birth shape applies: a single be:birth
-  // Fact on the new greeter's reel carrying the full spec
-  // (including parentBeingId=planter) — committed in the planter's
-  // moment ΔF and sealed atomically with the rest of the plant.
-  //
-  // Idempotent on re-plant: if a being with this name already exists,
-  // birthBeing throws RESOURCE_CONFLICT and we surface it.
-  reality.seeds.register("hello-world:greeter", {
-    description:
-      "Spawns one greeter being at the target space. SUMMON it to receive a hello-world greeting.",
-    scaffold: async ({ rootSpaceId, identity, summonCtx }) => {
-      const beingName = `hello-${String(rootSpaceId).slice(0, 8)}`;
-      const password = `seed-${Math.random().toString(36).slice(2)}-${Math.random().toString(36).slice(2)}`;
-
-      const { birthBeing } = await import(
-        "../../seed/materials/being/identity/birth.js"
-      );
-      const result = await birthBeing({
-        spec: {
-          name:          beingName,
-          password,
-          cognition:     "scripted",
-          defaultRole:   "hello-world:greeter",
-          homeId:        String(rootSpaceId),
-          parentBeingId: identity?.beingId || null,
-        },
-        identity,
-        summonCtx,
-      });
-
-      log.info(
-        "HelloWorld",
-        `🌱 planted greeter "${beingName}" at ${String(rootSpaceId).slice(0, 8)}`,
-      );
-      return {
-        being: {
-          id:   String(result.beingId),
-          name: beingName,
-        },
-      };
-    },
-  });
+  // Extension seed-scaffolds retired 2026-06-07. The hello-world
+  // greeter previously planted via reality.seeds.register(...) — that
+  // surface is gone. To ship the greeter as installable structure,
+  // future work declares a clone bundle in manifest.provides.clones
+  // (per Chain-Rebuild doctrine: a static bundle of facts an operator
+  // grafts at a position).
 
   return {};
 }

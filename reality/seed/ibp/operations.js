@@ -142,6 +142,10 @@ export function registerOperation(name, spec) {
     targets: [...spec.targets],
     handler: spec.handler,
     schema: spec.schema || null,
+    // Field schema for the op's params (type + label per field). Drives
+    // the portal's "directing" forms; null for ops that take no input or
+    // declare none (callers fall back to a freeform JSON box).
+    args: spec.args || null,
     factAction:
       typeof spec.factAction === "string" && spec.factAction.length > 0
         ? spec.factAction
@@ -209,6 +213,7 @@ export function listOperations(filter = {}) {
     factAction: op.factAction,
     skipAudit: op.skipAudit,
     ownerExtension: op.ownerExtension,
+    args: op.args || null,
   }));
 }
 
@@ -233,6 +238,9 @@ export async function syncOperationsToSubstrate(summonCtx) {
             factAction: op.factAction,
             skipAudit: op.skipAudit,
             ownerExtension: op.ownerExtension,
+            // The field schema rides along so portal clients can build
+            // directed forms from `.operations` without a second fetch.
+            args: op.args || null,
           },
         ],
       ]),

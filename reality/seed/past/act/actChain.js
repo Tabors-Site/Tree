@@ -13,6 +13,7 @@
 
 import Act from "./act.js";
 import Fact from "../fact/fact.js";
+import { redactSecrets } from "../../materials/redact.js";
 
 // Cap is high so per-being scrubbable history reaches back to the
 // being's first act even after long sessions of fine-grained
@@ -53,7 +54,11 @@ export async function describeActChain(beingId, opts = {}) {
 
   return {
     being: { id: String(beingId), name: beingName },
-    acts: serialized,
+    // Redact secrets before the chain leaves over the wire — attached
+    // fact params (set-being credential / llm-connection writes) and any
+    // message payload pass through the redactor; the DB act-chain is
+    // untouched.
+    acts: serialized.map((a) => redactSecrets(a)),
     count: acts.length,
   };
 }
@@ -174,5 +179,10 @@ function serializeAct(a) {
     stampedAt:       a.stampedAt || null,
     severedAt:       a.severedAt || null,
     answers:         a.answers || null,
+    // The bounded face this act ran under — orientation + role + space +
+    // occupants + capabilities, stamped on every act regardless of the
+    // being's cognition. Null on legacy acts predating the field. Clients
+    // render it as the act's "what I saw and could do" record.
+    facadeSnapshot:  a.facadeSnapshot || null,
   };
 }

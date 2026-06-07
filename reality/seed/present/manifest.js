@@ -23,6 +23,21 @@ import { emitFact } from "../past/fact/facts.js";
 import { I_AM } from "../materials/being/seedBeings.js";
 import { assertBranchOrThrow } from "../materials/projections.js";
 
+// Normalize a qualities container (Map or plain object) into a
+// recursively-key-sorted JSON string for stable equality comparison.
+// Used by manifestItems to skip redundant set-space facts on reboot.
+// Recursive sort handles nested namespaces (qualities.role.permissions etc.).
+function canonJson(v) {
+  if (v === null || typeof v !== "object") return v;
+  if (v instanceof Map) v = Object.fromEntries(v);
+  if (Array.isArray(v)) return v.map(canonJson);
+  return Object.keys(v).sort().reduce((acc, k) => { acc[k] = canonJson(v[k]); return acc; }, {});
+}
+
+function qualitiesDiffer(existingQuals, desiredQuals) {
+  return JSON.stringify(canonJson(existingQuals)) !== JSON.stringify(canonJson(desiredQuals));
+}
+
 // Stamp a do:birth Fact for a new manifest child Space. Slice C
 // (2026-05-23): the legacy Space.create bypass is gone; eager-fold
 // inside logFact runs applyCreateSpace + initProjection to
@@ -76,7 +91,7 @@ async function refreshQualitiesByFact(spaceId, qualities, summonCtx) {
       { kind: "space", id: String(refreshed.id) },
       "set-space",
       { field: `qualities.${ns}`, value, merge: false },
-      { scaffold: true, summonCtx },
+      { identity: I_AM, summonCtx },
     );
   }
 }
@@ -88,7 +103,7 @@ async function deleteChildByFact(childId, summonCtx) {
     { kind: "space", id: String(childId) },
     "end-space",
     {},
-    { scaffold: true, summonCtx },
+    { identity: I_AM, summonCtx },
   );
 }
 
@@ -141,7 +156,18 @@ export async function manifestItems({
   for (const item of items) {
     const existing = existingByName.get(item.name);
     if (existing) {
-      if (item.qualities) {
+      // Idempotent skip: if the existing qualities already match the
+      // desired ones, don't emit a redundant set-space fact. Without
+      // this guard, every reboot re-stamped the full sync state for
+      // every tool/role/operation, inflating the chain by ~one fact
+      // per registered item per boot.
+      //
+      // The valid emission cases stay covered: an extension was added
+      // (existing miss → create-space below), an extension was removed
+      // (existing kept but not desired → delete loop below), or an
+      // extension's quality data actually changed (deep-unequal here
+      // → fall through to refresh).
+      if (item.qualities && qualitiesDiffer(existing.qualities, item.qualities)) {
         await refreshQualitiesByFact(existing._id, item.qualities, summonCtx);
       }
       kept++;

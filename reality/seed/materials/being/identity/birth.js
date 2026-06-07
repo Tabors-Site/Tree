@@ -149,18 +149,21 @@ function validatePassword(password) {
  *                                   the boot ctx; standalone tools
  *                                   (migrations) pass null and accept
  *                                   immediate-commit semantics.
- * @param {boolean} [args.scaffold]  seed-internal scaffold attribution.
- *                                   Passes through to authorize's
- *                                   scaffold short-circuit.
  *
  * @returns {Promise<{status, beingId, name, being}>} where `being` is
  *   either the pending-view (in-moment) or the materialized row
  *   (standalone).
  */
-export async function birthBeing({ spec, identity, summonCtx = null, scaffold = false }) {
+export async function birthBeing({ spec, identity, summonCtx = null }) {
   if (!spec || typeof spec !== "object") {
     throw new IbpError(IBP_ERR.INVALID_INPUT, "birthBeing requires spec object");
   }
+
+  // Accept bare-string identity shorthand (typically `I_AM` for
+  // seed-internal births). normalizeIdentity returns the object shape
+  // downstream code expects to read identity.beingId / identity.name.
+  const { normalizeIdentity } = await import("../../../ibp/verbs/_shared.js");
+  identity = normalizeIdentity(identity);
 
   // ── Required fields ──
   const name = validateName(spec.name);

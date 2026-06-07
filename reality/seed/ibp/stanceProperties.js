@@ -28,7 +28,7 @@
 //     // ownership-tier markers (relative to targetSpace)
 //     owner,                    // is rootOwner along the chain
 //     contributor,              // is in contributors[] along the chain
-//     canWrite,                 // owner OR contributor anywhere on the chain
+//     hasAccess,                 // owner OR contributor anywhere on the chain
 //
 //     // home relations
 //     homeAtPosition,           // home === target
@@ -44,8 +44,8 @@
 // membership in heaven's reign matter; it was redundant with the
 // already-existing rootOwner + contributors model. Collapsed
 // 2026-06-04: heaven is owned by I_AM, seed delegates and the
-// rootOperator are contributors on heaven, and the heaven default
-// permission rule gates on `canWrite` (owner OR contributor) so all
+// seed delegates are heaven contributors, and the heaven default
+// permission rule gates on `hasAccess` (owner OR contributor) so all
 // of them pass. One ownership model, no separate roster.
 //
 // Pure: no side effects, no throws on missing data. Defensive against
@@ -62,7 +62,7 @@ const ARRIVAL_PROPS = Object.freeze({
   arrival: true,
   owner: false,
   contributor: false,
-  canWrite: false,
+  hasAccess: false,
   homeAtPosition: false,
   homeInDomain: false,
   positionInHomeDomain: false,
@@ -111,7 +111,7 @@ export async function deriveStanceProperties({
     arrival: false,
     owner: false,
     contributor: false,
-    canWrite: false,
+    hasAccess: false,
     homeAtPosition: false,
     homeInDomain: false,
     positionInHomeDomain: false,
@@ -139,7 +139,7 @@ export async function deriveStanceProperties({
   if (!targetSpace) return props;
 
   // Ownership relations via the existing tree-access walker.
-  // canWrite is owner OR contributor anywhere on the chain — the
+  // hasAccess is owner OR contributor anywhere on the chain — the
   // single condition heaven's default permissions gate on (replaces
   // the legacy `reigning` prop). owner / contributor stay as the
   // narrower labels for rules that need to distinguish.
@@ -147,11 +147,11 @@ export async function deriveStanceProperties({
     const access = await resolveSpaceAccess(targetSpace, beingId, branch);
     if (access?.ok) {
       if (access.isOwner) props.owner = true;
-      // The access walker reports canWrite when the user owns OR is a
+      // The access walker reports hasAccess when the user owns OR is a
       // contributor anywhere on the chain. Mark contributor only when
       // not also the owner — owner subsumes it.
-      if (access.canWrite && !access.isOwner) props.contributor = true;
-      if (access.canWrite) props.canWrite = true;
+      if (access.hasAccess && !access.isOwner) props.contributor = true;
+      if (access.hasAccess) props.hasAccess = true;
     }
   } catch {
     /* defensive — leave as false */

@@ -18,10 +18,12 @@
 //                     resolution chain. Sanitized inputs against
 //                     prototype pollution + path injection.
 //
-//   CONNECTIONS CRUD  Per-being LlmConnection rows: name + base
-//                     URL + encrypted API key + model. Add,
-//                     update, delete, assign-to-slot, assign-to-
-//                     space-slot. AES-256-CBC at rest.
+//   CONNECTIONS CRUD  Per-being LLM connections (entries under
+//                     `Being.qualities.llmConnections`, NOT a separate
+//                     schema): name + base URL + encrypted API key +
+//                     model. Written through set-being facts and folded
+//                     like any quality. Add, update, delete, assign-to-
+//                     slot, assign-to-space-slot. AES-256-CBC at rest.
 //
 //   SSRF GATE         Every base URL validated against blocked
 //                     hosts and private-IP patterns. Local-LLM
@@ -488,7 +490,7 @@ export async function addLlmConnection(
     { kind: "being", id: String(being._id) },
     "set-being",
     { field: `qualities.llmConnections.${connectionId}`, value: conn },
-    identity ? { identity, summonCtx } : { scaffold: true, summonCtx },
+    identity ? { identity, summonCtx } : { identity: I_AM, summonCtx },
   );
 
   return {
@@ -561,7 +563,7 @@ export async function updateLlmConnection(
     { kind: "being", id: String(being._id) },
     "set-being",
     { field: `qualities.llmConnections.${safeConnId}`, value: merged },
-    identity ? { identity, summonCtx } : { scaffold: true, summonCtx },
+    identity ? { identity, summonCtx } : { identity: I_AM, summonCtx },
   );
 
   // Bust cache if this connection is currently assigned
@@ -602,7 +604,7 @@ export async function deleteLlmConnection(beingId, connectionId, { identity, sum
   const { doVerb } = await import("../../../ibp/verbs/do.js");
   const opts = identity
     ? { identity, summonCtx }
-    : { scaffold: true, summonCtx };
+    : { identity: I_AM, summonCtx };
 
   // Unset the connection entry on this being's qualities (do.set with
   // value=null on a 2-deep path unsets via Mongo $unset).
@@ -702,7 +704,7 @@ export async function assignConnection(beingId, slot, connectionId, { identity, 
   const { doVerb } = await import("../../../ibp/verbs/do.js");
   const opts = identity
     ? { identity, summonCtx }
-    : { scaffold: true, summonCtx };
+    : { identity: I_AM, summonCtx };
 
   // "main" slot goes to llmDefault (scalar field); other slots go to
   // qualities.beingLlm.slots.<slot> (qualities-path). Both routes
@@ -767,7 +769,7 @@ export async function assignSpaceConnection(
   const { doVerb } = await import("../../../ibp/verbs/do.js");
   const opts = identity
     ? { identity, summonCtx }
-    : { scaffold: true, summonCtx };
+    : { identity: I_AM, summonCtx };
 
   // "main" slot writes the Space's scalar llmDefault; other slots write
   // the qualities path. Both flow through do.set; null clears.
@@ -877,7 +879,7 @@ export async function resolveConnection(beingId, connectionId, cacheKey, { summo
             field: `qualities.llmConnections.${connectionId}.lastUsedAt`,
             value: new Date().toISOString(),
           },
-          { scaffold: true, summonCtx },
+          { identity: I_AM, summonCtx },
         );
       }
     } catch (err) {

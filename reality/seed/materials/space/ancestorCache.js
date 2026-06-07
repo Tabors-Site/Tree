@@ -340,7 +340,7 @@ export function resolveSpaceAccessFromChain(startNodeId, beingId, ancestors) {
   // rootOwner (immutable; this is what lets assertOwner pass for
   // seed-internal anointing flows), and the contributors[] roster on
   // heaven is the write-access set for everyone else. cherub.register
-  // anoints the rootOperator into contributors; subsequent humans get
+  // anoints the first heaven contributor into contributors; subsequent humans get
   // added by an existing contributor via add-contributor on heaven.
   // No tree-owner walk applies — heaven IS the system tree.
   const heavenSpace = ancestors.find((s) => s.heavenSpace === "heaven");
@@ -358,7 +358,7 @@ export function resolveSpaceAccessFromChain(startNodeId, beingId, ancestors) {
       isOwner: isHeavenOwner,
       isContributor: isHeavenContributor,
       isTripped: false,
-      canWrite: isHeavenOwner || isHeavenContributor,
+      hasAccess: isHeavenOwner || isHeavenContributor,
     };
   }
 
@@ -371,7 +371,7 @@ export function resolveSpaceAccessFromChain(startNodeId, beingId, ancestors) {
       // SOURCE is a traversable system tree (live mirror of
       // reality/extensions + reality/seed, see code-workspace/source.js).
       // Treat .source itself as the root of its subtree so everything
-      // beneath it is navigable. Read-only by default — canWrite is
+      // beneath it is navigable. Read-only by default — hasAccess is
       // gated on the code-workspace writeMode quality at the tool
       // handler level, not here.
       if (space.heavenSpace === "source") {
@@ -421,7 +421,7 @@ export function resolveSpaceAccessFromChain(startNodeId, beingId, ancestors) {
       isOwner: false,
       isContributor: false,
       isTripped: false,
-      canWrite: false,
+      hasAccess: false,
     };
   }
 
@@ -438,7 +438,7 @@ export function resolveSpaceAccessFromChain(startNodeId, beingId, ancestors) {
     isOwner,
     isContributor,
     isTripped,
-    canWrite: (isOwner || isContributor) && !isTripped,
+    hasAccess: (isOwner || isContributor) && !isTripped,
   };
 }
 

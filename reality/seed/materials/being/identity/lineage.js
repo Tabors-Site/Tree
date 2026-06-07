@@ -117,17 +117,22 @@ export async function isDetachedFromBeingParent(beingId) {
  * Does `askerBeingId` have credential authority over `targetBeingId`?
  *
  *   self          → yes, always
+ *   I_AM          → yes, always (universal authority on its own reality)
  *   being parent  → yes, unless target has detached and not re-attached
  *   anyone else   → no
  *
- * Authority is direct-lineage only, not transitive. The I-Am has no
- * special override; cherub's children answer to cherub, not the I-Am.
- * "Becoming independent" must mean something, and that only works if
- * there is exactly one authority above me, not a chain of them.
+ * Authority is direct-lineage only between regular beings — not
+ * transitive. Cherub's children answer to cherub, not their
+ * grandparent. The I-Am has a separate universal override because
+ * it's the source of all authority on its own reality (parallel to
+ * authorize.js's I_AM short-circuit); seed-internal credential ops
+ * that act through `identity: I_AM` go through this path.
  */
 export async function hasCredentialAuthority(askerBeingId, targetBeingId) {
   if (!askerBeingId || !targetBeingId) return false;
   if (String(askerBeingId) === String(targetBeingId)) return true;
+  const { I_AM } = await import("../seedBeings.js");
+  if (String(askerBeingId) === String(I_AM)) return true;
   const parentBeingId = await findBeingParent(targetBeingId);
   if (!parentBeingId || String(parentBeingId) !== String(askerBeingId)) return false;
   const detached = await isDetachedFromBeingParent(targetBeingId);

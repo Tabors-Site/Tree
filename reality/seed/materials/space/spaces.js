@@ -258,7 +258,6 @@ export async function createSpace({
   actId = null,
   sessionId = null,
   summonCtx = null,
-  scaffold = false,
 } = {}) {
   name = assertValidSpaceName(name);
   type = assertValidSpaceType(type);
@@ -409,13 +408,13 @@ export async function createSpace({
       } else if (
         parentSpace.heavenSpace &&
         parentSpace.heavenSpace !== HEAVEN_SPACE.SPACE_ROOT &&
-        !scaffold
+        beingId !== I_AM
       ) {
         // User-being protection: extension code / operators may not
         // create children directly under a seed dot-namespace
-        // (.config, .tools, .extensions, …). The I-Am acts in
-        // scaffold mode (genesis, manifest sync, registry mirrors)
-        // and owns the dot-namespace — scaffold bypasses the check.
+        // (.config, .tools, .extensions, …). The I-Am acts as itself
+        // (genesis, manifest sync, registry mirrors) and owns the dot-
+        // namespace — `beingId === I_AM` bypasses the check.
         //
         // SPACE_ROOT is exempt: the place root carries
         // heavenSpace=SPACE_ROOT for ancestor-chain identity, but it
@@ -740,7 +739,7 @@ export async function updateParentRelationship(
   const newParentAccess = await resolveSpaceAccess(newParentId, beingId);
 
   if (childAccess.rootId === newParentAccess.rootId) {
-    if (!childAccess.canWrite) throw new Error("Must be owner or contributor");
+    if (!childAccess.hasAccess) throw new Error("Must be owner or contributor");
   } else {
     if (!childAccess.isOwner || !newParentAccess.isOwner) {
       throw new Error(
@@ -884,9 +883,10 @@ export async function deleteSpaceBranch(
     // (rootOwner, parent) pair keeps them visible-together to a
     // concurrent fold.
     const { doVerb } = await import("../../ibp/verbs/do.js");
-    const opts = beingId
-      ? { identity: { beingId: String(beingId) }, summonCtx: actId ? { actId } : null, scaffold: !actId }
-      : { scaffold: true, summonCtx: actId ? { actId } : null };
+    const opts = {
+      identity: beingId ? { beingId: String(beingId) } : I_AM,
+      summonCtx: actId ? { actId } : null,
+    };
     const target = { kind: "space", id: String(spaceId) };
     await doVerb(
       target,

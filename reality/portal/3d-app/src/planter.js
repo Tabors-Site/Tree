@@ -1,71 +1,90 @@
-// TreeOS Portal 3D — seed planter.
+// TreeOS Portal 3D — clone grafter.
 //
-// Orchestrates the two-step flow that turns a held seed into a planted
-// scaffold: (1) DO create at the current position to spawn a fresh
-// space — when that position is the place root, the creator is stamped
-// as `rootOwner` by the seed — and (2) DO plant at the newly-created
-// space id, which runs the registered seed's plant recipe (whatever
-// the extension that registered the seed defined).
+// Replaces the retired seed-planter flow. The hotbar holds CLONE
+// BUNDLES (registered via extension manifest provides.clones). On
+// graft-attempt, this module:
 //
-// Why two DOs and not one: planting INTO an existing position would
-// mean the seed scaffolds over the operator's existing children.
-// Planting AT a NEW position lets the operator place many independent
-// scaffolds across the place. The first DO declares where; the second
-// declares what grows there.
+//   1. If the clone declares parameters, prompts the user with a form
+//      pre-filled with the declared defaults. Submission resolves to
+//      a `params` dict the substrate's graft engine substitutes into
+//      `"$paramName"` references in the bundle's content fields.
+//
+//   2. Calls one DO: `graft-clone-by-name` at the current position
+//      with `{ name, params }`. The substrate looks the bundle up in
+//      the clone registry and replays its facts under the operator's
+//      identity. The clone's wrapper space (or first new aggregate)
+//      becomes the visible root.
+//
+// One DO, not the old two-step (create + plant). Clone bundles bring
+// their own root space; the operator picks WHERE, the bundle picks
+// WHAT.
 
 let _modal = null;
 
 /**
- * Open a "name this seedling" prompt. Returns a Promise that resolves
- * with { name } on submit, or rejects on cancel.
+ * Prompt for clone parameter values. Returns a Promise that resolves
+ * with a params dict (key per declared parameter), or rejects on
+ * cancel.
  *
  * @param {object} args
- * @param {object} args.item        the hotbar slot (seed qualities)
- * @param {string} args.parentLabel human label of the place we're planting at ("treeos.ai/")
+ * @param {object} args.item        the hotbar clone slot
+ * @param {string} args.parentLabel where we're grafting
  */
 export function promptForName({ item, parentLabel }) {
   return new Promise((resolve, reject) => {
     closePrompt();
+
+    const params = Array.isArray(item.parameters) ? item.parameters : [];
+    const fields = params.map((p, i) => `
+      <div class="field">
+        <label for="grafter-param-${i}">${escapeHtml(p.name)}${p.description ? ` <span class="dim">— ${escapeHtml(p.description)}</span>` : ""}</label>
+        <input id="grafter-param-${i}" type="text" autocomplete="off" spellcheck="false" value="${escapeHtml(p.default ?? "")}" data-param="${escapeHtml(p.name)}" />
+      </div>
+    `).join("");
+
     _modal = document.createElement("div");
     _modal.className = "overlay";
     _modal.innerHTML = `
       <div class="overlay-card">
-        <h2>plant ${escapeHtml(shortLabel(item))}</h2>
+        <h2>graft ${escapeHtml(shortLabel(item))}</h2>
         <div class="sub">at <code>${escapeHtml(parentLabel)}</code></div>
         <div class="planter-desc">${escapeHtml(item.description || "")}</div>
-        <div class="field">
-          <label for="planter-name">name the new tree</label>
-          <input id="planter-name" type="text" autocomplete="off" spellcheck="false" />
-        </div>
-        <button class="btn" id="planter-submit">plant</button>
-        <button class="btn-link" id="planter-cancel">cancel</button>
-        <div class="error" id="planter-error" style="display:none"></div>
+        ${fields}
+        <button class="btn" id="grafter-submit">graft</button>
+        <button class="btn-link" id="grafter-cancel">cancel</button>
+        <div class="error" id="grafter-error" style="display:none"></div>
       </div>
     `;
     document.body.appendChild(_modal);
 
-    const input  = _modal.querySelector("#planter-name");
-    const submit = _modal.querySelector("#planter-submit");
-    const cancel = _modal.querySelector("#planter-cancel");
+    const submit = _modal.querySelector("#grafter-submit");
+    const cancel = _modal.querySelector("#grafter-cancel");
+    const inputs = Array.from(_modal.querySelectorAll("input[data-param]"));
 
-    const finish = (val) => { closePrompt(); resolve({ name: val }); };
-    const abort  = () => { closePrompt(); reject(new Error("cancelled")); };
-
-    submit.addEventListener("click", () => {
-      const v = (input.value || "").trim();
-      if (!v) {
-        _showError("name is required");
-        return;
+    const finish = () => {
+      const collected = {};
+      for (const input of inputs) {
+        const k = input.getAttribute("data-param");
+        const v = (input.value || "").trim();
+        if (v.length === 0) continue;  // empty → fall through to bundle default
+        collected[k] = v;
       }
-      finish(v);
-    });
-    cancel.addEventListener("click", abort);
-    input.addEventListener("keydown", (e) => {
-      if (e.key === "Enter")  { e.preventDefault(); submit.click(); }
-      if (e.key === "Escape") { e.preventDefault(); abort(); }
-    });
+      closePrompt();
+      resolve(collected);
+    };
+    const abort = () => { closePrompt(); reject(new Error("cancelled")); };
 
-    setTimeout(() => input.focus(), 0);
+    submit.addEventListener("click", finish);
+    cancel.addEventListener("click", abort);
+    for (const input of inputs) {
+      input.addEventListener("keydown", (e) => {
+        if (e.key === "Enter")  { e.preventDefault(); finish(); }
+        if (e.key === "Escape") { e.preventDefault(); abort(); }
+      });
+    }
+
+    if (inputs.length > 0) setTimeout(() => inputs[0].focus(), 0);
+    else                   setTimeout(() => submit.focus(),   0);
   });
 }
 
@@ -79,50 +98,37 @@ export function isPlanterOpen() {
 }
 
 /**
- * Plant a seed end-to-end. Two DOs over the IBP socket:
+ * Graft a clone bundle at the operator's current position. ONE DO:
+ * graft-clone-by-name. The substrate looks the bundle up in the
+ * registry and replays it; the bundle's wrapper space (or first
+ * aggregate) becomes the new root.
  *
- *   1. place.do(parentAddress, "create-space", { spec: { name, type } })
- *      → returns the new space. At the place root this stamps `rootOwner`.
- *   2. place.do(newSpaceAddress, "plant", { seed: seedName })
- *      → runs the seed's scaffold; returns plantedSeedId + plantedThings.
- *
- * Resolves with `{ newNodeAddress, plantedSeedId, plantedThings }`.
+ * Resolves with `{ rootSpaceId, newRootAddress, counts }`.
  *
  * @param {object} args
  * @param {object} args.client          PortalClient
- * @param {string} args.parentAddress   parent position ("treeos.ai/" for place root)
- * @param {string} args.seedName        registered seed name (e.g. "<ext>:<seed>")
- * @param {string} args.newNodeName     name for the new space
- * @param {string} [args.newNodeType]   defaults to "branch"
+ * @param {string} args.parentAddress   parent position
+ * @param {string} args.cloneName       registered clone name ("<ext>:<localName>")
+ * @param {object} [args.params]        parameter values for the bundle
  */
-export async function plantSeed({ client, parentAddress, seedName, newNodeName, newNodeType = "branch" }) {
-  // Step 1 — create the new space. The seed's create-space op returns
-  // the created space (full doc). At the place root, isRoot=true and
-  // rootOwner gets stamped with the creator's beingId.
-  const created = await client.do(parentAddress, "create-space", {
-    spec: {
-      name: newNodeName,
-      type: newNodeType,
-    },
+export async function plantSeed({ client, parentAddress, cloneName, params = {} }) {
+  const result = await client.do(parentAddress, "graft-clone-by-name", {
+    name: cloneName,
+    params,
   });
-
-  const newNodeId   = created?._id || created?.id || created?.spaceId;
-  const newNodePath = derivePath(parentAddress, newNodeName);
-  if (!newNodeId) {
-    throw new Error("create-space returned no space id");
-  }
-
-  // Step 2 — plant the seed at the new space. Address by path (the
-  // resolver will place on the same space we just created).
-  const planted = await client.do(newNodePath, "plant", {
-    seed: seedName,
-  });
-
+  const rootSpaceId = result?.rootSpaceId || null;
+  // Construct an address for navigation: we don't know the wrapper
+  // space's user-facing name from here; use the bare-id form if the
+  // substrate exposes it, else fall back to the parent (the operator
+  // can navigate manually). The bare-id path `/<spaceId>` is a valid
+  // IBP address.
+  const newRootAddress = rootSpaceId
+    ? `${parentAddress.replace(/\/+$/, "")}/${rootSpaceId}`
+    : null;
   return {
-    newNodeId,
-    newNodeAddress: newNodePath,
-    plantedSeedId:  planted?.plantedSeedId || null,
-    plantedThings:  planted?.plantedThings || null,
+    rootSpaceId,
+    newRootAddress,
+    counts: result?.counts || null,
   };
 }
 
@@ -131,21 +137,7 @@ export async function plantSeed({ client, parentAddress, seedName, newNodeName, 
 // ────────────────────────────────────────────────────────────────
 
 function shortLabel(item) {
-  return item.label || (item.name && item.name.split(":").pop()) || "seed";
-}
-
-function derivePath(parentAddress, name) {
-  // parentAddress shapes: "<place>", "<place>/", "<place>/foo/bar"
-  // We want "<place>/foo/bar/<name>" with single slashes.
-  const trimmed = String(parentAddress || "").replace(/\/+$/, "");
-  return `${trimmed}/${name}`;
-}
-
-function _showError(msg) {
-  if (!_modal) return;
-  const el = _modal.querySelector("#planter-error");
-  el.textContent = msg;
-  el.style.display = "block";
+  return item.label || (item.name && item.name.split(":").pop()) || "clone";
 }
 
 function escapeHtml(s) {

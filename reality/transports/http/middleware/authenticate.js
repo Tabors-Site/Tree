@@ -136,7 +136,7 @@ async function attachSpaceAccess(req, res) {
     sendError(res, mapped.http, mapped.code, access.message);
     return false;
   }
-  if (!access.canWrite) {
+  if (!access.hasAccess) {
     sendError(res, 403, IBP_ERR.FORBIDDEN, "You do not have write access to this space");
     return false;
   }
