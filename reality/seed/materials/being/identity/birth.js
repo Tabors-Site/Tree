@@ -115,7 +115,7 @@ function validatePassword(password) {
  *                                 you rather than at their home)
  *   spec.password       Plaintext. Null/undefined → auto-generated and
  *                       stored encrypted at qualities.auth.credentialPlain
- *                       so the being / its creator can retrieve later.
+ *                       so the being / its being parent can retrieve later.
  *                       Explicit → bcrypt-hashed only; the chooser
  *                       carries the plaintext.
  *   spec.cognition      "llm" (default) | "human" | "scripted".
@@ -365,7 +365,7 @@ export async function birthBeing({ spec, identity, summonCtx = null, scaffold = 
   // SINGLE-WRITER: the Fact lands on the new being's reel with the
   // new being as its own actor. The lineage record (parentBeingId)
   // lives inside this fact's spec; findBeingParent walks the pointer
-  // (no separate creator-side audit fact).
+  // (no separate being-parent-side audit fact).
   //
   // parentBeingId in the stamped fact is the Ref (typed identity
   const id = uuidv4();

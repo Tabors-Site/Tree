@@ -348,15 +348,13 @@ export async function ensureSpaceRoot(summonCtx) {
       beingId: I_AM,
       target: { kind: "space", id: rootId },
       params: {
-        spec: {
-          name: realityName,
-          type: null,
-          parent: null,
-          rootOwner: I_AM,
-          heavenSpace: HEAVEN_SPACE.SPACE_ROOT,
-          size: assertValidSpaceSize(null, { applyDefault: true }),
-          qualities: {},
-        },
+        name: realityName,
+        type: null,
+        parent: null,
+        rootOwner: I_AM,
+        heavenSpace: HEAVEN_SPACE.SPACE_ROOT,
+        size: assertValidSpaceSize(null, { applyDefault: true }),
+        qualities: {},
       },
       actId: summonCtx.actId,
       // Genesis runs on main by definition — there are no other branches
@@ -582,20 +580,18 @@ async function ensureIAm(homeSpaceId, summonCtx) {
     beingId: id, // self-stamping — the not-yet-existing being is its own actor
     target: { kind: "being", id },
     params: {
-      spec: {
-        name: I_AM,
-        password: credential.hash,
-        roles: [],
-        defaultRole: null,
-        // parentBeingId is null . the I-Am is the root of the being-tree.
-        parentBeingId: null,
-        homeSpace: homeSpaceBare,
-        position: homeSpaceBare,
-        llmDefault: null,
-        isRemote: false,
-        homeReality: null,
-        qualities,
-      },
+      name: I_AM,
+      password: credential.hash,
+      roles: [],
+      defaultRole: null,
+      // parentBeingId is null . the I-Am is the root of the being-tree.
+      parentBeingId: null,
+      homeSpace: homeSpaceBare,
+      position: homeSpaceBare,
+      llmDefault: null,
+      isRemote: false,
+      homeReality: null,
+      qualities,
     },
     actId: summonCtx.actId,
     // Genesis is main-only — I_AM births before any branch exists.
@@ -740,13 +736,11 @@ export async function syncExtensionsToTree(manifests, summonCtx) {
           { kind: "space", id: String(extSpace._id) },
           "create-space",
           {
-            spec: {
-              name: manifest.name,
-              type: "resource",
-              parent: String(extSpace._id),
-              rootOwner: null,
-              qualities: Object.fromEntries(qualities),
-            },
+            name: manifest.name,
+            type: "resource",
+            parent: String(extSpace._id),
+            rootOwner: null,
+            qualities: Object.fromEntries(qualities),
           },
           { scaffold: true, summonCtx },
         );

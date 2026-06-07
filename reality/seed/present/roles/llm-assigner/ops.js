@@ -141,18 +141,16 @@ export function registerLlmAssignerOps() {
         { kind: "space", id: spaceId },
         "create-matter",
         {
-          spec: {
-            name:    "Setting up an LLM connection",
-            origin:  "web",
-            content: {
-              contentType: "video/youtube",
-              url:         LLM_ASSIGNER_TUTORIAL_URL,
-              videoId:     LLM_ASSIGNER_TUTORIAL_VIDEO_ID,
-              title:       "Setting up an LLM connection",
-            },
-            qualities: {
-              tutorial: { purpose: LLM_ASSIGNER_TUTORIAL_MARK },
-            },
+          name:    "Setting up an LLM connection",
+          origin:  "web",
+          content: {
+            contentType: "video/youtube",
+            url:         LLM_ASSIGNER_TUTORIAL_URL,
+            videoId:     LLM_ASSIGNER_TUTORIAL_VIDEO_ID,
+            title:       "Setting up an LLM connection",
+          },
+          qualities: {
+            tutorial: { purpose: LLM_ASSIGNER_TUTORIAL_MARK },
           },
         },
         { identity: llmAssignerIdentity },

@@ -195,13 +195,11 @@ async function createMatter({
     beingId: String(beingId),
     target:  { kind: "matter", id: matterId },
     params:  {
-      spec: {
-        origin,
-        content:   finalContent,
-        spaceId:   spaceIdBare,
-        beingId:   String(beingId),
-        qualities: hookData.qualities || {},
-      },
+      origin,
+      content:   finalContent,
+      spaceId:   spaceIdBare,
+      beingId:   String(beingId),
+      qualities: hookData.qualities || {},
     },
     actId,
     sessionId,

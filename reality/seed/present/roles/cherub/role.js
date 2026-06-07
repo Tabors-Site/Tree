@@ -408,14 +408,12 @@ async function _registerHumanWithFreshHome({
     beingId: String(actorId),
     target: { kind: "space", id: homeId },
     params: {
-      spec: {
-        name,                           // home space is named for the user
-        type: "home-territory",
-        parent: String(placeRootId),
-        rootOwner: null,                 // becomes the new being after step 3
-        size: { x: 100, y: 100 },
-        qualities: {},
-      },
+      name,                           // home space is named for the user
+      type: "home-territory",
+      parent: String(placeRootId),
+      rootOwner: null,                 // becomes the new being after step 3
+      size: { x: 100, y: 100 },
+      qualities: {},
     },
     actId:  summonCtx?.actId || null,
     branch: summonCtx?.branch || "0",

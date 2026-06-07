@@ -40,13 +40,11 @@ async function createChildByFact({ parentId, name, type, qualities, summonCtx })
     beingId: I_AM,
     target:  { kind: "space", id },
     params:  {
-      spec: {
-        name,
-        type:      type ?? null,
-        parent:    String(parentId),
-        rootOwner: null,
-        qualities: specQualities,
-      },
+      name,
+      type:      type ?? null,
+      parent:    String(parentId),
+      rootOwner: null,
+      qualities: specQualities,
     },
     actId: summonCtx.actId,
     branch: assertBranchOrThrow(summonCtx?.branch, "manifest(createSpace)"),

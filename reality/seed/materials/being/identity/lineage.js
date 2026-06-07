@@ -134,8 +134,3 @@ export async function hasCredentialAuthority(askerBeingId, targetBeingId) {
   return !detached;
 }
 
-// Back-compat aliases. materials/being/credentialOps.js (written by a
-// parallel rename pass) still imports the older names; keep them
-// resolving until the rename consolidates. Remove on next sweep.
-export const findSummonerOf = findBeingParent;
-export const isDetachedFromSummoner = isDetachedFromBeingParent;
