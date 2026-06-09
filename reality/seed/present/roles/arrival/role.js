@@ -34,9 +34,17 @@ export const arrivalRole = Object.freeze({
   // authenticating, regardless of position.
   scope: "global",
   requiredCognition: "scripted",
-  permissions: ["see"],
   respondMode: "async",
   triggerOn: [], // never auto-processes anything
+
+  // SEE permitted on positions (descriptor reads). canSee:["*"] means
+  // any SEE op or position descriptor that reaches arrival's stance.
+  canSee: ["*"],
+
+  // The bootstrap exception (seed/RolesAreAuth.md "Implicit arrival"):
+  // arrival can BE birth/connect so anonymous visitors can register
+  // with cherub. release is permitted too — log out, return to floor.
+  canBe: ["birth", "connect", "release"],
   /**
    * No-op. Arrival doesn't receive SUMMONs (no "message" in triggerOn);
    * this handler exists only so the role has a callable summon when

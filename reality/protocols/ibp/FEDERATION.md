@@ -1,244 +1,201 @@
-# IBP Federation (Diff B — deferred)
+# IBP Federation — current state
 
-This document captures the cross-reality work that Diff A explicitly does
-NOT include. Diff A retired the legacy `envelope.identity` field and made
-the address's left stance the canonical identity carrier for LOCAL calls.
-Cross-reality calls need additional architectural surface, captured here
-so the next pass has a clean starting point.
+> Canonical doctrine: [seed/CROSS-WORLD.md](../../seed/CROSS-WORLD.md). Auth: [seed/RolesAreAuth.md](../../seed/RolesAreAuth.md). This doc is the protocol-layer current state — what's built, what's not, where the wire boundary sits.
 
-## Doctrinal landing
+## What federation is
 
-IBP is the inter-being protocol. The "inter" crosses realities. A being
-in `treeos.ai` can SEE / DO / SUMMON / BE against a being in
-`othersite.ai` directly via the same four verbs. The portal (visual
-rendering convention) signals "this being you see is not co-located",
-but the protocol underneath is just IBP routing envelopes to the
-foreign substrate.
+IBP is the inter-being protocol. The "inter" crosses realities. A being on `tabors.site` can SEE / DO / SUMMON / BE against a being or space on `bing.com` directly via the same four verbs, with the same envelope shape. The dispatcher routes; canopy authenticates and transports.
 
-A BE:birth through a cross-reality call mints the being in the
-destination reality. Beings live in exactly one reality at a time;
-they never "enter" another.
+There is no separate "federation protocol" — federation IS IBP, with one extra hop. The local verb path and the cross-reality verb path go through the same `dispatchIbp` function in [protocol.js](protocol.js). When the dispatcher sees a foreign target reality on the envelope's address, it forwards via canopy; when it sees a verified inbound from canopy, it runs the verb locally as a foreign actor. No verb-specific federation code in `verbs/`; no `/canopy/*` HTTP endpoints; no parallel envelope shape.
 
-## Three-layer auth (cross-reality)
+The canopy is the wire+auth layer between realities. Pure auth + transport. No routing logic, no protocol semantics — those live in IBP proper.
 
-| Layer       | Where     | Proves                                                                |
-|-------------|-----------|-----------------------------------------------------------------------|
-| Local auth  | Sender    | "I am tabor on treeos.ai" — socket token / session                    |
-| Federation  | Envelope  | "This envelope genuinely originates from treeos.ai" — canopy sig      |
-| Authorize   | Receiver  | "tabor on treeos.ai may SEE this space" — foreign substrate's rules   |
+## Architecture at a glance
 
-Each check at the right place. The signature on the envelope is provenance,
-NOT identity. Identity lives in `address.left`. The signature only
-verifies that the named reality actually authorized the call.
+```
+┌─────────────────────────────────┐         ┌─────────────────────────────────┐
+│  tabors.site                    │         │  bing.com                       │
+│                                 │         │                                 │
+│  ┌───────────────────────────┐  │         │  ┌───────────────────────────┐  │
+│  │  dispatchIbp              │  │         │  │  dispatchIbp              │  │
+│  │   ├ detects foreign       │  │         │  │   ├ verified inbound      │  │
+│  │   ├ crossRealityDispatch  │──┼─canopy──┼─▶│   ├ runVerbAsForeignActor │  │
+│  │   ├ opens local Act       │  │         │  │   ├ synthetic summonCtx   │  │
+│  │   ├ forwardToPeer         │  │         │  │   ├ run verb              │  │
+│  │   │                       │  │         │  │   ├ emitFact attaches     │  │
+│  │   ├ peerAck arrives       │◀─┼─canopy──┼──│   │   crossOrigin         │  │
+│  │   └ handleCrossWorld      │  │         │  │   └ return descriptor     │  │
+│  │       Response            │  │         │  │       as inner face       │  │
+│  │     (status + innerFace)  │  │         │  │                           │  │
+│  └───────────────────────────┘  │         │  └───────────────────────────┘  │
+└─────────────────────────────────┘         └─────────────────────────────────┘
+```
 
-## Envelope shape (after Diff B)
+Same dispatcher, two branches (outbound to peer / inbound from peer), both running through the same machinery a local call uses.
+
+## What's built
+
+### Transport + auth (canopy)
+
+[canopy.js](canopy.js):
+
+- **`forwardToPeer(envelope)`** — outbound. Signs the raw body bytes with this reality's private key, sets `X-Canopy-Sender` + `X-Canopy-Signature` headers, POSTs to `https://<peer>/ibp/<verb>/<address>`. Same URL shape any local HTTP IBP call uses.
+- **`verifyIncoming(req, res, next)`** — Express middleware. Reads the canopy headers, verifies against the sender's published public key (cached as a RealityPeer), stamps `req.canopySender = "<domain>"` on success. 401 on missing or invalid signature.
+- **`actorTupleFromRequest(req)`** — builds the validated foreign actor identity tuple `{ reality, branch, beingId, actId }` from the canopy sender (trusted, cryptographically vouched) + envelope-claimed fields (beingId, actorBranch, actorActId).
+
+**Identity-forgery defense:** the actor's `reality` is always derived from `req.canopySender`, never trusted from the envelope. If an envelope claims an explicit `actorReality` that doesn't match canopySender, the request is refused. bing.com cannot sign for tabors.site because it doesn't hold tabors.site's private key.
+
+**Replay protection:** today relies on canopy signature freshness; explicit timestamp-window enforcement is not yet implemented (see "remaining work" below).
+
+### Envelope shape
+
+The IBP envelope on the wire — same shape local + cross-reality, with cross-world fields populated only when they apply:
 
 ```js
 {
-  id, verb, address, payload,
-  signature?: {
-    sig:      string,  // detached signature over the canonical envelope bytes
-    signedAt: string,  // iso8601
-  }
-  // signature absent  → local call, socket auth covers it
-  // signature present → cross-reality call, verified against
-  //                     <address.left.reality>'s published key
+  id,                          // correlation id
+  verb,                        // "see" | "do" | "summon" | "be"
+  address,                     // IBP address string (target reality + branch + position + being)
+  payload,                     // verb-specific payload
+  identity?: { beingId, name },
+  actorBranch?:  "<branchPath>",  // home branch of the actor (cross-world only)
+  actorActId?:   "<uuid>",        // home-side Act id (cross-world only)
 }
 ```
 
-After Diff A landed, the envelope is:
-```js
-{ id, verb, address, payload }
-```
+`actorReality` is NOT carried in the body — it's derived from `X-Canopy-Sender` on the receiving side. Less data on the wire, no forgery surface.
 
-Diff B adds the optional `signature` block. NO `identity` field returns —
-identity is in `address.left` regardless of whether the call is local or
-cross-reality.
+### Dispatcher integration
 
-### IDs in the cross-reality envelope
+[protocol.js](protocol.js)'s `dispatchIbp`:
 
-The envelope payload carries bare-string IDs (`params.value` on
-`set-being:position`, `params.spec.parent` on `create-space`,
-`params.to` on `move`, etc.). The substrate's schemas know which
-fields hold which kind of aggregate; the wire doesn't tag them.
+1. **Outbound cross-reality** — when `getForeignTargetDomain(env.address)` returns a peer domain AND the call didn't already arrive verified from canopy: route to `crossRealityDispatch` (in [seed/ibp/crossWorld.js](../../seed/ibp/crossWorld.js)). This opens a local Act for the actor's attempt, calls `forwardToPeer` with the actor's identity tuple, and applies the peer's response back to the Act via `handleCrossWorldResponse`.
 
-Federation propagates **facts**, not bundles of state — and a fact
-carries its target kind in the envelope (`target: { kind, id }`).
-The receiver's reducer knows what each `params` field means from the
-fact's `(verb, action, target.kind)` triple. No type-tagging in the
-payload is needed.
+2. **Inbound cross-reality** — when `carrier.crossWorldActor` is set (the HTTP adapter populates it via `actorTupleFromRequest` after `verifyIncoming`): route to `runVerbAsForeignActor`. Builds a synthetic `summonCtx` whose `actorAct` IS the foreign tuple (no local Act row on this side), runs the substrate verb, commits any Facts via `sealFacts`. emitFact's `deriveCrossOrigin` automatically attaches `crossOrigin` to those Facts because the actor's world differs from the target's world.
 
-The case where ID-tagging earns its place is **replicate** (and the
-future clone): a foreign-reality export bundle of beings/spaces/matter
-arriving at a fresh local namespace needs a walker to find every
-aggregate reference in the bundle and remap to new local IDs. That
-walker reads tagged `{ __ref, id }` values out of bundle content
-where the receiving substrate doesn't have schema knowledge for the
-foreign data shapes. See `seed/REFS.md` for the walker primitive
-and `seed/publishing.md` for the export/replicate flow.
+3. **Local** — same path as today. No change.
 
-Federation itself (fact propagation) does not bundle this kind of
-content. It rides the substrate's existing structural typing.
+The dispatch fork is six lines of structural code, plus the two helpers.
 
-## What Diff B needs to build
+### Cross-world doctrine in the substrate
 
-### 1. Cross-reality router
+The seed already carries everything federation needs. Per [seed/CROSS-WORLD.md](../../seed/CROSS-WORLD.md):
 
-Today's wire dispatcher in `protocols/ibp/verbs/*.js` assumes the address
-is local. After Diff A, the verb dispatcher refuses foreign addresses
-explicitly. Diff B adds the routing decision:
+- **Act schema** carries `{ reality, branch, beingIn, _id, status }` — the actor's identity tuple plus a lifecycle status (`attempted` → `landed` / `denied` / `timeout` / `unreachable` / `malformed`).
+- **`summonCtx.actorAct`** seats the identity tuple at moment-open; downstream consumers (emitFact, foldEngine, the Stamper, verb handlers) read identity from it.
+- **`emitFact` auto-attaches `crossOrigin`** when target world ≠ actor world. The block carries `{ reality, branch, beingId, actId }` of the foreign actor.
+- **Stamper foreign-origin idempotency** — duplicate cross-world deliveries (canopy retries, replays) dedup by `crossOrigin.actId` + `crossOrigin.beingId` + target. Receiving reel never grows duplicates.
+- **`updateActStatus(actId, status, meta)`** — the single sanctioned post-seal write to an Act. Atomic monotonic transition. Called by the canopy-response handler.
+- **`attachInnerFace(actId, descriptor)`** — captures the foreign world's descriptor as a hashed observation at `Act.qualities.innerFace`. The hash is canonical (sorted-key serialization, sha256) for tamper-detection and future content-addressed storage.
+- **`handleCrossWorldResponse(actId, response)`** — composite: status transition + inner face attach. The single point the canopy receive path calls when the foreign substrate replies.
+- **`pullBackForeignPositions()`** — boot-time scan that resets any locally-positioned being whose `position` names a foreign world. A being's identity is never hostage to a foreign reality being available.
+- **Position address parse/format** — `Being.position` accepts `<reality>#<branch>/<spaceId>` for cross-world positions. Bare spaceId is same-world (the default).
+- **Pointers vs actual branches** — every persisted record (Act, Fact, crossOrigin) stores the ACTUAL branch path, never a pointer name. Pointers are top-level convenience labels resolved at the perimeter; records stay canonical.
 
-```js
-const targetReality = expanded.left.reality;
-if (targetReality === getRealityDomain()) {
-  // Local dispatch (current behavior).
-} else {
-  // Foreign dispatch: forward via canopy with signed envelope.
-  return await canopy.forwardSigned(envelope, targetReality);
-}
-```
+### Auth under federation: roles ARE auth
 
-Canopy already has a `forwardToPeer` function in
-[protocols/ibp/canopy.js](canopy.js); Diff B extends it to carry IBP
-envelopes (not just discovery/canopy frames) and to apply/verify
-signatures.
+Per [seed/RolesAreAuth.md](../../seed/RolesAreAuth.md), authorization is unified: a being's `rolesGranted[]` is the single source of truth for what they can do. The role's `canSee / canDo / canSummon / canBe` IS the gate; the role registry is authoritative. There is no parallel "permissions" namespace, no stance-property gating.
 
-### 2. Signature mechanism
+This unification — substrate gaining coherence, not shedding capability — covers federation cleanly with no special-case rules.
 
-Each reality holds a long-lived signing keypair. The public key is
-published at `<reality>/.well-known/treeos-portal` (already exists for
-discovery; extend the response shape).
+**Federation auth under this model:**
 
-Sender: serializes the canonical envelope bytes, signs with the
-reality's private key, attaches `signature = { sig, signedAt }` to the
-envelope.
+- A foreign actor's reality is cryptographically vouched via canopy (`req.canopySender`). Their beingId is what their home reality told us.
+- The foreign actor carries ZERO grants on this reality. Cross-world role propagation is out of scope; a being's home-side roles don't transfer.
+- The receiving substrate's `authorize` evaluates the foreign actor against THIS reality's role registry. The foreign actor doesn't get the local **`global` role** (the role name; granted to every being THIS reality births at birth). They aren't a fresh local being.
+- What they DO get: any role registered with **`scope: "global"`** whose `reach` admits them. Plus any explicit per-being grants this reality has stamped for that specific foreign actor.
+- For anything beyond that floor, an existing role on this reality has to issue `grant-role` to the foreign being (or the operator authors a more permissive global-reach role).
 
-Receiver: fetches `<address.left.reality>/.well-known/treeos-portal`,
-extracts the public key, verifies the signature against canonical
-envelope bytes. Reject `INVALID_SIGNATURE` if verification fails.
+The two concepts share the word "global" but are distinct:
 
-`signedAt` provides replay protection: reject envelopes whose
-`signedAt` is more than N seconds old (configurable; suggest 60s).
+| | The `global` role (a role NAME) | `scope: "global"` (a SCOPE on roles) |
+|---|---|---|
+| What | The role granted to every being birthed on this reality | A scope value on the role spec |
+| Scope value | `"anchored"` (anchored at place root, reaches via descendants) | `"global"` (intrinsic reality-wide reach) |
+| Granted to foreigners | No (only local-birthed beings) | Whatever `reach` admits |
+| Purpose | Customizable per-reality baseline for local beings | Reality-wide roles like `angel`; deliberately-public roles for federation |
 
-### 3. Foreign-stance authorization
+So: federation policy is expressed as `scope: "global"` roles in the registry. The operator chooses what foreign actors can do by configuring those roles' `canX` lists and `reach`. No separate federation-permissions sublanguage; same registry, same authorize walk.
 
-The current `authorize.js` evaluates rules against stance properties
-derived from local data (Being row, ownership chain, role registry,
-home relations). A foreign asker has none of these locally.
+### Cross-reality branch semantics
 
-Foreign-stance properties must be derivable from:
-- `address.left.reality` — the home reality (string)
-- `address.left.beingId` — the canonical uuid in their reality
-- `address.left.branch` — their branch at time of call
-- The verified signature — proof the call genuinely originates
+Resolved: option (c) from the old plan — each reality owns its branch namespace; the caller addresses a specific branch on the foreign reality. The branch qualifier in cross-reality addresses is independent of the caller's current branch. Default if branch omitted in a foreign address: main (`#0`).
 
-Proposed foreign-stance properties for `requires` matching:
-```js
-{
-  arrival:            false,      // foreign callers are not arrival
-  homeOnThisReality:  false,      // by definition
-  foreign:            true,       // marks this stance as cross-reality
-  homeReality:        "<dns>",    // their reality
-  signedBy:           "<dns>",    // verified signer (same as homeReality)
-}
-```
+This drops out for free because the cross-world envelope carries the target address verbatim (including its `#branch`), and `actorBranch` is sent as a separate field — they're independent fields on the wire, independently routed.
 
-Per-position permission rules can opt in to foreign askers explicitly:
-```js
-qualities.permissions.see["*"] = {
-  requires: { foreign: true, homeReality: "trusted-peer.ai" },
-};
-```
+## What's NOT built / remaining work
 
-Default: foreign askers refused at every position unless a rule
-explicitly admits them. Existing `arrival: false` rules continue to
-reject foreign askers (since `arrival: false` requires not-arrival,
-and foreign-but-not-arrival evaluates true only if a foreign-aware
-rule admits it explicitly).
+### 1. Public id-to-name directory
 
-### 4. Public id-to-name directory
+For foreign beings appearing in local faces (descriptor renderings, act-chain inspectors), names need to be resolvable. Two SEE-callable endpoints on every reality:
 
-Foreign beings appearing in local faces must have their names
-resolvable for the portal to render them.
+- `<reality>/.beings/<beingId>` — `{ id, name, role?, public-safe qualities }`
+- `<reality>/.spaces/<spaceId>` — `{ id, name, path, public-safe qualities }`
 
-Add two SEE-callable endpoints on every reality:
-- `<reality>/.beings/<beingId>` — `{ id, name, role?, publicly-safe metadata }`
-- `<reality>/.spaces/<spaceId>` — `{ id, name, path, publicly-safe metadata }`
+Must be callable WITHOUT local auth (unauth foreign callers should be able to resolve display info for ids appearing in their inner-face descriptors). Privacy controls: realities choose what to expose; defaults expose just `id` + `name`. A being can be marked private — endpoint returns 404 even if the id exists.
 
-These must be callable WITHOUT local auth (so any peer can resolve
-display info for ids that appear in their faces). Privacy controls:
-realities choose what to expose; defaults expose just `id` + `name`.
-A being can be marked private — endpoint returns 404 even if the id
-exists.
+Local cache: when receiving a SEE descriptor that contains foreign ids, the local wire kicks off a background fetch against the foreign reality's directory and caches the (id → name) mapping. TTL ~5 minutes.
 
-Local cache: when receiving a SEE descriptor that contains foreign
-ids, the local wire kicks off a background fetch against the foreign
-reality's directory and caches the (id → name) mapping. TTL ~5
-minutes; refresh on cache miss.
+Not yet built. Add as a SEE op (`see-foreign-name`) on the unauth surface plus a small cache module on the receive side.
 
-### 5. Fact attribution for cross-reality calls
+### 2. Replay-protection window on canopy signature
 
-The Fact schema already has `homeReality` and `wasRemote` fields.
-Diff B wires them properly:
+Canopy verifies signatures but doesn't enforce a freshness window on `signedAt`. A captured envelope could in theory be replayed indefinitely. Suggest 60s acceptable skew; reject anything older. Small addition in `verifyIncoming` plus a `signedAt` field added to the signed body.
 
-- A fact stamped on the FOREIGN reality's reels in response to an
-  IBP call from local-reality carries `homeReality: <our-reality>`,
-  `wasRemote: true` on the foreign side.
-- A fact stamped on OUR reels (because a foreign reality's call
-  caused work to happen here) carries `homeReality: <foreign-reality>`,
-  `wasRemote: true`.
+### 3. Real cross-reality round-trip validation
 
-Provenance survives the fact chain. Replay-from-genesis reconstructs
-who-acted-from-where.
+Structurally complete, never exercised end-to-end against a real peered reality. Pieces to validate when a second reality is brought up:
 
-### 6. Cross-reality branch semantics
+- `crossRealityDispatch` → `forwardToPeer` → foreign substrate's `verifyIncoming` → `actorTupleFromRequest` → `runVerbAsForeignActor` → response → `handleCrossWorldResponse`
+- Status transition fires correctly (`attempted` → `landed`)
+- Inner face attaches to the actor's local Act with a valid hash
+- Foreign Fact carries `crossOrigin` pointing back at the source Act
+- Receiving Stamper dedups on retry (idempotency check)
 
-Open question: when a being on `treeos.ai#1` calls a verb against
-`othersite.ai`, what branch does the foreign reality's substrate use?
+A new verifier `verify-federation.js` should be authored that stands up two in-process realities (different `REALITY_DOMAIN`) and runs the loop. The pieces are there; this is wiring + assertions.
 
-Options:
-- **(a)** Always main: foreign reality always processes on `#0` regardless
-  of caller's branch. Branches stay reality-local.
-- **(b)** Mirror: foreign reality processes on the SAME branch path
-  the caller is on. Requires branches to mean the same thing across
-  realities (probably not).
-- **(c)** Address-typed: caller types the foreign branch explicitly
-  in the address (`othersite.ai#3/...`). Default if branch omitted in
-  cross-reality address: main.
+### 4. Cross-world walking-through (`do:set-being:position`)
 
-Recommendation: **(c)**. Each reality owns its branch namespace; the
-caller addresses a specific branch on the foreign reality. Branch
-qualifier in cross-reality addresses is independent of the caller's
-current branch.
+A being walks through a portal by emitting `do:set-being:position` with value = foreign IBPA. The substrate primitive (`Being.position` as String + `parsePositionAddress`) is in place. What's not yet validated:
 
-## What Diff A delivered (already done)
+- The `do:set-being:position` op accepts the cross-world value shape and runs through canopy to the foreign reality (which stamps the arrival fact on its reels with `crossOrigin`).
+- The 3D portal extension's "walk through" UX dispatches this op when the player crosses the portal mesh.
+- The bidirectional back-portal — when an actor's position becomes foreign, the foreign side renders a back-portal at the actor's spot. Mechanism: the foreign reality's descriptor of the space the actor arrives at includes the actor's `crossOrigin` info, and the portal extension renders a portal Matter for any occupant whose position references a foreign reality. Auto-cleanup on departure (position changes back) just means the descriptor no longer reflects the foreign occupant.
 
-For reference, Diff A retired:
-- `envelope.identity` field (now part of `address.left`)
-- Wire-side findByName lookups during verb dispatch
-- Two separate sources of truth for "who is acting" (socket + identity field)
+Substrate has what it needs; the UX layer needs the wiring.
 
-Diff A added:
-- `beingId` field on the expanded stance, resolved at the wire boundary
-- Impersonation refusal: `socket.beingId === expanded.left.beingId`
-- The doctrine that the address IS the actor
+### 5. Foreign-position default-target routing
 
-Diff A did NOT touch:
-- Foreign-reality addresses (still refused with INVALID_INPUT for now)
-- Federation signature machinery (`signature` field reserved but not added)
-- Cross-reality canopy routing for IBP envelopes (only the existing
-  discovery/peer-list canopy works today)
-- Public directory slices
+When a being acts (SEE/DO/SUMMON) without an explicit target, the substrate uses their current position as default. Today most verb handlers route through the address-parser which uses `socket.currentPath`. The portal-walking case wants `socket.currentPosition` to come from the being's `position` quality — when that quality names a foreign world, the actor's defaults route there.
 
-## Suggested implementation order for Diff B
+Small audit at the wire layer (`protocols/ibp/verbs/*.js`) to confirm foreign positions route correctly when a being acts from a foreign world.
 
-1. **Signature mechanism + key publishing** — the easiest piece; everything else assumes this works.
-2. **Cross-reality router** in wire verbs — the dispatch fork that decides local vs forward.
-3. **Public directory slices** — small additive endpoints, no breaking change.
-4. **Foreign-stance authorization** — needs design round on default rules.
-5. **Fact attribution wiring** — small change to fact emission paths.
-6. **Cross-reality branch semantics** — decision needed before any of this ships, but the implementation is small.
+### 6. Real camera-through portal rendering
 
-Probably two diffs within B: a "federation transport" diff (signature,
-router, directory) and a "federation authorization" diff (foreign-stance
-rules, default permissions, fact attribution).
+The 3D portal renderer ([portal/3d-app/src/scene.js](../../portal/3d-app/src/scene.js) `_makePortalMesh`) paints a canvas summary of the foreign descriptor onto the portal opening today. The doctrinal endgame is render-to-texture: the foreign world's 3D scene rendered live as a texture on the portal plane, so the viewer literally looks through into a parallel world.
+
+Would need the foreign substrate to expose a render-target stream (a SEE op returning rasterized frames? a WebRTC video channel from a headless render?). Big lift, deferred. The canvas-summary version gets the loop visible end-to-end today.
+
+## Summary
+
+| Layer | Status |
+|---|---|
+| Canopy outbound (`forwardToPeer`) | ✓ Built, carries cross-world envelope |
+| Canopy inbound (`verifyIncoming`, `actorTupleFromRequest`) | ✓ Built, forgery defense holds |
+| Dispatcher integration (`dispatchIbp` fork) | ✓ Built |
+| `crossRealityDispatch` (outbound helper) | ✓ Built |
+| `runVerbAsForeignActor` (inbound helper) | ✓ Built |
+| Act lifecycle (status, inner face, idempotency) | ✓ Built |
+| Pull-back safety | ✓ Built, wired into boot |
+| Auth via roles (RolesAreAuth) | ✓ Built; federation auth uses `scope: "global"` roles |
+| Cross-reality branch semantics | ✓ Resolved: caller addresses foreign reality's branch explicitly |
+| `do:form-portal` op | ✓ Built |
+| 3D portal renderer (canvas summary) | ✓ Built |
+| Replay-window enforcement | Not built — small addition |
+| Public id-to-name directory | Not built — small addition |
+| End-to-end live round-trip test | Not built — needs `verify-federation.js` |
+| Cross-world walking-through UX | Substrate ready; UX wiring pending |
+| Foreign-position default-target audit | Pending |
+| Real camera-through render-to-texture | Deferred (big lift) |
+
+**Where this leaves federation:** the protocol is structurally complete. Two realities with peer keys can theoretically run the four verbs across each other today, with the actor's local Act recording the attempt + receiving the inner face + the foreign Stamper landing the consequence with provenance. What's left is polish (replay window, directory), validation (live test), and the UX layer for walk-through portals.

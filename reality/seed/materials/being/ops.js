@@ -437,7 +437,10 @@ async function grantRoleHandler({ target, params, identity, summonCtx }) {
       "grant-role: identity required (the grantor's beingId)",
     );
   }
-  const { role, anchorSpaceId = null, anchorBeingId = null, expiresAt = null } = params || {};
+  if (!params || typeof params !== "object") {
+    throw new IbpError(IBP_ERR.INVALID_INPUT, "grant-role: params required");
+  }
+  const { role, anchorSpaceId = null, anchorBeingId = null, expiresAt = null } = params;
   if (typeof role !== "string" || !role.length) {
     throw new IbpError(IBP_ERR.INVALID_INPUT, "grant-role: `role` is required");
   }
@@ -459,29 +462,24 @@ async function grantRoleHandler({ target, params, identity, summonCtx }) {
   if (!roleSpec) {
     throw new IbpError(IBP_ERR.INVALID_INPUT, `grant-role: role "${role}" is not registered`);
   }
-  // Returns the grant record; the auto-emitted Fact carries the same
-  // shape as params. The reducer reads the fact and appends to
-  // qualities.rolesGranted on the target being.
-  const granteeBeingId = String(targetIdOf(target));
+  // Enrich params in-place so the auto-emitted Fact carries the full
+  // grant record (grantedBy + grantedAt + expiresAt). The being
+  // reducer reads these from fact.params and appends to
+  // qualities.rolesGranted.
+  const grantedBy = String(identity.beingId);
   const grantedAt = new Date().toISOString();
+  params.grantedBy = grantedBy;
+  params.grantedAt = grantedAt;
+  params.expiresAt = expiresAt;
   return {
-    granted:       true,
+    granted: true,
     role,
-    granteeBeingId,
+    granteeBeingId: String(targetIdOf(target)),
     anchorSpaceId,
     anchorBeingId,
-    grantedBy: String(identity.beingId),
+    grantedBy,
     grantedAt,
     expiresAt,
-    // Pass through to the fact's params (the audit IS the grant record).
-    _factParams: {
-      role,
-      anchorSpaceId,
-      anchorBeingId,
-      grantedBy: String(identity.beingId),
-      grantedAt,
-      expiresAt,
-    },
   };
 }
 
@@ -492,7 +490,10 @@ async function revokeRoleHandler({ target, params, identity, summonCtx }) {
       "revoke-role: identity required (the revoker's beingId)",
     );
   }
-  const { role, anchorSpaceId = null, anchorBeingId = null, grantedBy = null } = params || {};
+  if (!params || typeof params !== "object") {
+    throw new IbpError(IBP_ERR.INVALID_INPUT, "revoke-role: params required");
+  }
+  const { role, anchorSpaceId = null, anchorBeingId = null, grantedBy = null } = params;
   if (typeof role !== "string" || !role.length) {
     throw new IbpError(IBP_ERR.INVALID_INPUT, "revoke-role: `role` is required");
   }
@@ -502,23 +503,18 @@ async function revokeRoleHandler({ target, params, identity, summonCtx }) {
       "revoke-role: one of `anchorSpaceId` or `anchorBeingId` is required",
     );
   }
-  // The grantedBy identifies the SPECIFIC grant to revoke. Defaults
-  // to the caller's own beingId (revoking my own grant).
+  // Enrich grantedBy in-place. grantedBy identifies the SPECIFIC grant
+  // to revoke (defaults to the caller's own beingId — revoking my own
+  // grant). The being reducer matches on (role, anchor, grantedBy).
   const targetGrantedBy = grantedBy ? String(grantedBy) : String(identity.beingId);
-  const granteeBeingId = String(targetIdOf(target));
+  params.grantedBy = targetGrantedBy;
   return {
     revoked: true,
     role,
-    granteeBeingId,
+    granteeBeingId: String(targetIdOf(target)),
     anchorSpaceId,
     anchorBeingId,
     grantedBy: targetGrantedBy,
-    _factParams: {
-      role,
-      anchorSpaceId,
-      anchorBeingId,
-      grantedBy: targetGrantedBy,
-    },
   };
 }
 

@@ -536,6 +536,7 @@ async function connectAnonymous(placeUrl, useProxy) {
     onSummon: handleSummon,
     onDescriptorEvent: handleDescriptorEvent,
   }));
+  state.scene?.setClient?.(state.client);
   state.client.connect();
   await waitForConnect(state.client);
   // Point the branch bar at the live socket (it may have been mounted
@@ -609,6 +610,7 @@ async function connectAndPlace(session) {
     onSummon: handleSummon,
     onDescriptorEvent: handleDescriptorEvent,
   }));
+  state.scene?.setClient?.(state.client);
   state.client.connect();
   await waitForConnect(state.client);
   // Point the branch bar at the freshly-authenticated socket. Without

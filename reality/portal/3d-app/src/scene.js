@@ -115,6 +115,12 @@ export class Scene {
     this.onMatterEnded = onMatterEnded || (() => {});
     this.onMatterPlaybackTick = onMatterPlaybackTick || (() => {});
     this.isInputBlocked = isInputBlocked || isTypingInUI;
+    // PortalClient for live SEE/DO calls — set after construction via
+    // setClient(). Currently used by portal-matter rendering to issue
+    // live SEE into the foreign target; the descriptor returned paints
+    // onto the portal's canvas texture. Cross-world dispatch happens
+    // through the standard client — no portal-specific transport.
+    this._client = null;
     // Every being mesh by being. Proximity fires per-being; speech
     // bubbles anchor to the mesh for that being.
     this._beingMeshes = new Map();
@@ -1252,6 +1258,14 @@ export class Scene {
     if (this._skyMode === "default") this._updateTimeOfDay();
   }
 
+  // Wire the PortalClient into the scene for cross-world SEE calls.
+  // Portal matters need to issue live SEE into their foreign target
+  // address; cross-reality routes through canopy automatically. Call
+  // once after construction.
+  setClient(client) {
+    this._client = client || null;
+  }
+
   // Pin the sky/sun to a specific past instant. Used by the rewind
   // path so the dome reflects what the world LOOKED like at that
   // moment — noon yesterday paints a noon sky, not the current 4am.
@@ -1836,6 +1850,15 @@ export class Scene {
   // back to the default glowing cube. Gaze hover shows the matter's
   // preview / label.
   _makeMatterMesh(matter) {
+    // Portal matter — qualities.portal.target names a foreign IBPA.
+    // Render as a free-standing doorway with a live SEE into the
+    // target world painted on the opening. Each viewer's experience
+    // is emergent: SEE refused → black opening, SEE accepted → live
+    // descriptor rendered on the surface. See seed/CROSS-WORLD.md +
+    // materials/portalOp.js for the substrate side.
+    if (matter?.qualities?.portal?.target) {
+      return this._makePortalMesh(matter);
+    }
     const contentType = matter?.content?.contentType || null;
     if (contentType === "video/youtube" && matter?.content?.videoId) {
       return this._makeVideoScreenMesh(matter);
@@ -1849,6 +1872,191 @@ export class Scene {
     );
     cube.position.y = 0.9;
     return cube;
+  }
+
+  // Portal mesh — a doorway whose opening reflects what the viewer
+  // can see at the foreign address. First cut: a black plane that
+  // gets painted with a canvas texture summarizing the target's
+  // descriptor on live SEE response. Fully refused = solid black.
+  // Camera-through render-to-texture is a follow-up; this gets the
+  // "portal looks like a portal" loop running end-to-end.
+  _makePortalMesh(matter) {
+    const target = matter.qualities.portal.target;
+    const W = 3.2;
+    const H = 4.8;
+    const group = new THREE.Group();
+
+    // Stone-arch frame around the opening.
+    const frameMat = new THREE.MeshStandardMaterial({
+      color: 0x4a5e51,
+      emissive: 0x1a2a20,
+      emissiveIntensity: 0.15,
+      roughness: 0.85,
+    });
+    // Two vertical posts + a lintel.
+    const postGeom = new THREE.BoxGeometry(0.32, H + 0.4, 0.4);
+    const lintelGeom = new THREE.BoxGeometry(W + 0.64, 0.32, 0.4);
+    const leftPost = new THREE.Mesh(postGeom, frameMat);
+    leftPost.position.set(-W / 2 - 0.16, (H + 0.4) / 2, 0);
+    group.add(leftPost);
+    const rightPost = new THREE.Mesh(postGeom, frameMat);
+    rightPost.position.set(W / 2 + 0.16, (H + 0.4) / 2, 0);
+    group.add(rightPost);
+    const lintel = new THREE.Mesh(lintelGeom, frameMat);
+    lintel.position.set(0, H + 0.4 - 0.16, 0);
+    group.add(lintel);
+
+    // Opening — the surface that gets painted with the foreign
+    // descriptor. Backed by a canvas texture so we can repaint it as
+    // the SEE response arrives.
+    const canvas = document.createElement("canvas");
+    canvas.width = 512;
+    canvas.height = 768;
+    const ctx = canvas.getContext("2d");
+    this._paintPortalCanvas(ctx, canvas, { state: "loading", target });
+    const tex = new THREE.CanvasTexture(canvas);
+    tex.minFilter = THREE.LinearFilter;
+    const openingMat = new THREE.MeshBasicMaterial({
+      map: tex,
+      side: THREE.DoubleSide,
+    });
+    const opening = new THREE.Mesh(
+      new THREE.PlaneGeometry(W, H),
+      openingMat,
+    );
+    opening.position.set(0, H / 2, 0);
+    group.add(opening);
+
+    // Stash for the live updater. main.js may re-paint when descriptor
+    // arrives (see refreshPortalDescriptor below).
+    group.userData = {
+      ...(group.userData || {}),
+      portal: { target, canvas, ctx, texture: tex },
+    };
+
+    // Kick the SEE in the background so the canvas updates the moment
+    // the foreign side responds. If unauthenticated or the foreign
+    // side refuses, paint the black-window state. The SEE call goes
+    // through the same canopy dispatch path as any other cross-world
+    // verb — no portal-specific transport.
+    this._fetchPortalDescriptor(target, group);
+
+    return group;
+  }
+
+  _paintPortalCanvas(ctx, canvas, { state, target, descriptor, errorMessage }) {
+    const W = canvas.width;
+    const H = canvas.height;
+    if (state === "loading") {
+      // Deep blue gradient while we wait for the SEE response.
+      const g = ctx.createLinearGradient(0, 0, 0, H);
+      g.addColorStop(0, "#0a0d2c");
+      g.addColorStop(1, "#000010");
+      ctx.fillStyle = g;
+      ctx.fillRect(0, 0, W, H);
+      ctx.fillStyle = "#6a8aff";
+      ctx.font = "20px monospace";
+      ctx.textAlign = "center";
+      ctx.fillText("opening…", W / 2, H / 2);
+      ctx.font = "14px monospace";
+      ctx.fillStyle = "#8aa8dd";
+      ctx.fillText(target, W / 2, H / 2 + 28);
+    } else if (state === "refused" || state === "error") {
+      // Black window — viewer doesn't have SEE permission, or the
+      // foreign side is unreachable. Same visual either way; the
+      // tooltip (label) names which.
+      ctx.fillStyle = "#000000";
+      ctx.fillRect(0, 0, W, H);
+      ctx.strokeStyle = "#1a1a1a";
+      ctx.lineWidth = 4;
+      ctx.strokeRect(2, 2, W - 4, H - 4);
+      ctx.fillStyle = "#4a4a4a";
+      ctx.font = "14px monospace";
+      ctx.textAlign = "center";
+      ctx.fillText(state === "refused" ? "no access" : "unreachable", W / 2, H / 2);
+      if (errorMessage) {
+        ctx.fillText(errorMessage.slice(0, 60), W / 2, H / 2 + 24);
+      }
+    } else if (state === "open") {
+      // Open portal — paint a summary of the foreign descriptor.
+      // Future: render-to-texture from a foreign 3D scene; for now,
+      // a textual snapshot showing what's in the target space.
+      const g = ctx.createLinearGradient(0, 0, 0, H);
+      g.addColorStop(0, "#1a3424");
+      g.addColorStop(1, "#0a1a14");
+      ctx.fillStyle = g;
+      ctx.fillRect(0, 0, W, H);
+      ctx.fillStyle = "#8fbf9f";
+      ctx.font = "20px monospace";
+      ctx.textAlign = "center";
+      const name = descriptor?.address?.leafName || descriptor?.address?.pathByNames || target;
+      ctx.fillText(name, W / 2, 50);
+      ctx.font = "13px monospace";
+      ctx.fillStyle = "#c8d3cb";
+      ctx.fillText(target, W / 2, 78);
+
+      const children = Array.isArray(descriptor?.children) ? descriptor.children : [];
+      const matters  = Array.isArray(descriptor?.matters)  ? descriptor.matters  : [];
+      ctx.textAlign = "left";
+      let y = 130;
+      if (children.length > 0) {
+        ctx.fillStyle = "#c8d3cb";
+        ctx.font = "15px monospace";
+        ctx.fillText("children:", 32, y);
+        y += 22;
+        ctx.fillStyle = "#9ab0a3";
+        ctx.font = "13px monospace";
+        for (const c of children.slice(0, 8)) {
+          ctx.fillText(`  • ${c.name || c.id || ""}`.slice(0, 40), 32, y);
+          y += 18;
+        }
+        y += 8;
+      }
+      if (matters.length > 0) {
+        ctx.fillStyle = "#c8d3cb";
+        ctx.font = "15px monospace";
+        ctx.fillText(`matter (${matters.length}):`, 32, y);
+        y += 22;
+        ctx.fillStyle = "#9ab0a3";
+        ctx.font = "13px monospace";
+        for (const m of matters.slice(0, 10)) {
+          const label = m.name || m.id || m.matterId || "";
+          ctx.fillText(`  • ${label}`.slice(0, 40), 32, y);
+          y += 18;
+        }
+      }
+      if (children.length === 0 && matters.length === 0) {
+        ctx.fillStyle = "#8aa898";
+        ctx.font = "14px monospace";
+        ctx.textAlign = "center";
+        ctx.fillText("(empty)", W / 2, H / 2);
+      }
+    }
+  }
+
+  // Async fetch of the foreign descriptor. Issues a live SEE through
+  // the standard client — canopy detects the foreign reality and
+  // forwards automatically. Result paints onto the portal's canvas
+  // texture. Errors paint the refused / unreachable state.
+  async _fetchPortalDescriptor(target, group) {
+    if (!this._client?.see) return;
+    try {
+      const descriptor = await this._client.see(target);
+      const u = group.userData?.portal;
+      if (!u) return;
+      this._paintPortalCanvas(u.ctx, u.canvas, { state: "open", target, descriptor });
+      u.texture.needsUpdate = true;
+    } catch (err) {
+      const u = group.userData?.portal;
+      if (!u) return;
+      const isAuth = err?.code === "FORBIDDEN" || err?.code === "UNAUTHORIZED";
+      this._paintPortalCanvas(u.ctx, u.canvas, {
+        state: isAuth ? "refused" : "error",
+        target,
+        errorMessage: err?.message || "",
+      });
+      u.texture.needsUpdate = true;
+    }
   }
 
   // A free-standing video screen — flat WebGL backing + a CSS3D iframe

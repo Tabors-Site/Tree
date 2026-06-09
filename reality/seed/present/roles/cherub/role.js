@@ -470,6 +470,36 @@ async function _registerHumanWithFreshHome({
     { identity: I_AM, summonCtx },
   );
 
+  // ── 4. Anoint the new human with global + human roles ──
+  // Roles-Are-Auth bootstrap (seed/RolesAreAuth.md). Cherub grants the
+  // two foundational roles at the place root:
+  //   - global: the baseline canX every authenticated being carries
+  //   - human:  the "root founder" canX (do whatever you want here)
+  // Both anchor at the place root with reality-wide reach via
+  // descendants. Cherub holds canDo:grant-role:global + grant-role:human
+  // (declared in cherub/role.js cherubRole.canDo) so authorize permits
+  // these emits. The grantedBy is recorded as cherub for forensics.
+  await doVerb(
+    { kind: "being", id: String(result.beingId) },
+    "grant-role",
+    {
+      role:          "global",
+      anchorSpaceId: String(placeRootId),
+      anchorBeingId: null,
+    },
+    { identity: cherubIdentity, summonCtx },
+  );
+  await doVerb(
+    { kind: "being", id: String(result.beingId) },
+    "grant-role",
+    {
+      role:          "human",
+      anchorSpaceId: String(placeRootId),
+      anchorBeingId: null,
+    },
+    { identity: cherubIdentity, summonCtx },
+  );
+
   return result.being;
 }
 
