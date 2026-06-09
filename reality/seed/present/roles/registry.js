@@ -322,7 +322,13 @@ export async function syncRolesToSubstrate() {
       qualities: new Map([
         ["role", {
           requiredCognition: role.requiredCognition || null,
-          permissions: role.permissions || [],
+          // NOTE: the verb-summary `permissions: ["see","do",...]` field
+          // retired with the roles-are-auth doctrine (RolesAreAuth.md).
+          // The canX entries below ARE the auth gate; a separate verb
+          // summary is redundant. Consumers that need "does this role
+          // permit verb X" check `role.canX?.length > 0` directly.
+          scope:       role.scope        || "anchored",
+          reach:       Array.isArray(role.reach) ? role.reach : null,
           respondMode: role.respondMode  || null,
           triggerOn:   role.triggerOn    || [],
           canSee:      role.canSee       || [],

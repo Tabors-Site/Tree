@@ -451,14 +451,32 @@ async function refreshSeedCatalog() {
     const clones = Array.isArray(full?.clones) ? full.clones : [];
     console.log(`[3D] ${clones.length} clone bundle(s) available:`, clones.map((c) => c.name));
 
-    // Slot 0 is always the built-in Move tool — intrinsic to the
-    // portal, not provided by the place. Clones populate after.
+    // Slot 0 is the built-in Move tool — intrinsic to the portal.
+    // Slot 1 is the built-in Portal tool — forms a portal Matter at
+    // the current position pointing at a foreign IBPA (cross-reality
+    // OR cross-branch). The viewer's experience through the portal is
+    // emergent per-being from foreign-side stance auth: SEE → render
+    // through, +DO → reach through, +BE → walk through. Black window
+    // if SEE refused. See seed/CROSS-WORLD.md + materials/portalOp.js.
+    // Slot 2+ are clones registered by extensions.
     const slots = [
       {
         kind: "tool",
         name: "move",
         label: "Move",
         description: "Click an object to pick it up. Click a destination to put it down. Esc to cancel.",
+      },
+      {
+        kind: "op",
+        name: "form-portal",
+        label: "Portal",
+        action: "form-portal",
+        description: "Form a portal at the current position. Prompts for a foreign IBPA target (e.g. \"localhost#1a/<spaceId>\" or \"bing.com/library\").",
+        parameters: [
+          { name: "target",    description: "Foreign IBPA (e.g. \"bing.com#0/library\")" },
+          { name: "name",      description: "Portal name (optional)" },
+          { name: "expiresAt", description: "ISO timestamp for auto-removal (optional)" },
+        ],
       },
       ...clones.map((c) => ({
         kind:        "clone",
@@ -1678,7 +1696,10 @@ addEventListener("keydown", (e) => {
   if (e.code === "KeyE") { e.preventDefault(); attemptPlant();   return; }
 });
 
-// Try to graft the selected hotbar clone at the current position.
+// Try to use the selected hotbar item at the current position.
+// Branches on item.kind:
+//   "clone" — graft the clone bundle (the original behavior)
+//   "op"    — dispatch the named DO op (form-portal, ...)
 // Bounces the user to auth first if unauthenticated.
 async function attemptPlant() {
   const item = state.hotbar?.getSelected();
@@ -1686,12 +1707,12 @@ async function attemptPlant() {
     setHud("hotbar slot is empty. select a clone (1-9).");
     return;
   }
-  if (item.kind !== "clone") {
-    setHud("selected slot is not graftable.");
+  if (item.kind !== "clone" && item.kind !== "op") {
+    setHud("selected slot is not usable here.");
     return;
   }
   if (!state.session?.token) {
-    setHud("sign in first to graft.");
+    setHud("sign in first.");
     openAuthPanel();
     return;
   }
@@ -1704,8 +1725,8 @@ async function attemptPlant() {
   const parentAddress =
     `${reality}${bq}${path}`.replace(/\/+$/, "") || `${reality}${bq}`;
 
-  // If the clone declares parameters, prompt for values (defaults
-  // pre-filled). Otherwise graft directly.
+  // Prompt for parameters when declared (both clones and ops use the
+  // same shape: an array of { name, description, default? }).
   let params = {};
   if (Array.isArray(item.parameters) && item.parameters.length > 0) {
     try {
@@ -1713,6 +1734,23 @@ async function attemptPlant() {
     } catch {
       return; // user cancelled
     }
+  }
+
+  if (item.kind === "op") {
+    setHud(`${item.action} at ${parentAddress}...`);
+    try {
+      const result = await state.client.do(parentAddress, item.action, params);
+      setHud(`${item.action} ok`);
+      if (result?.matterId) {
+        // form-portal returns a matterId; the new matter materializes
+        // on the next live-SEE patch. Trigger a navigate-refresh so
+        // the user sees the portal appear immediately.
+        await navigate(parentAddress);
+      }
+    } catch (err) {
+      setHud(`${item.action} failed: ${err.code || ""} ${err.message || ""}`);
+    }
+    return;
   }
 
   setHud(`grafting ${item.name}...`);

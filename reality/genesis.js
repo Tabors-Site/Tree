@@ -505,6 +505,35 @@ export async function genesis(app, opts = {}) {
   const { arrivalRole } = await import("./seed/present/roles/arrival/role.js");
   registerRole("arrival", arrivalRole, "seed");
 
+  // The foundational roles of the roles-are-auth doctrine
+  // (seed/RolesAreAuth.md):
+  //   - angel: super-sudo, scope:global with no reach (true-global).
+  //     I-Am holds it implicitly; seed delegates get it granted at
+  //     genesis below. Carries grant-role:* + revoke-role:* so angels
+  //     can promote others (recursively).
+  //   - global: the baseline anchored role every authenticated being
+  //     carries (granted by cherub on registration; by parents to
+  //     children). canX defines what "every being can do here."
+  const { angelRole } = await import("./seed/present/roles/angel/role.js");
+  registerRole("angel", angelRole, "seed");
+  const { globalRole } = await import("./seed/present/roles/global/role.js");
+  registerRole("global", globalRole, "seed");
+
+  // Roles-Are-Auth bootstrap (seed/RolesAreAuth.md). With the angel
+  // role now registered, the I-Am grants it at the place root to
+  // every seed delegate. The grant chain back to I-Am is the proof
+  // of authority for everything each delegate does for the rest of
+  // the reality's life. Idempotent on reboot — the being reducer
+  // dedupes by (role, anchor, grantor) so a second emit is a no-op.
+  if (!plantedFromSeed) {
+    const { grantAngelToSeedDelegates } =
+      await import("./seed/materials/being/seedDelegates.js");
+    await grantAngelToSeedDelegates();
+    if (bootMode === "Beginning") {
+      log.info("Genesis", "I grant angel to my delegates.");
+    }
+  }
+
   // Cherub and llm-assigner are delegates: real work happens through
   // their verb handlers (cherub owns the BE_OPS table; llm-assigner
   // ships DO ops under the llm-assigner:* prefix), not through

@@ -501,13 +501,23 @@ export const cherubRole = Object.freeze({
   description:
     "The gate. Processes the three BE ops (birth/connect/release). Identity territory; no summon dispatch.",
   // Seed delegate role — anchored at the place root. The cherub being
-  // gets this role granted at boot. canDo includes grant-role:human
-  // so cherub can register new humans (the only grantor of human).
+  // gets this role granted at boot by the I-Am. canDo includes
+  // grant-role:human + grant-role:global so cherub can anoint new
+  // humans on registration. Cherub is the only grantor of the human
+  // and global roles in a default reality.
   scope: "anchored",
   requiredCognition: "scripted",
-  permissions: ["be"],
   respondMode: "async",
   triggerOn: [],
+
+  // DO actions cherub can perform. The registration flow needs to
+  // emit grant-role facts on the freshly-birthed human (giving them
+  // global + human at the place root). canDo:["grant-role:<role>"]
+  // is the canX entry that lets authorize permit those grants.
+  canDo: [
+    { action: "grant-role:human",  description: "anoint a new human at the place root" },
+    { action: "grant-role:global", description: "give the baseline role to a new human" },
+  ],
 
   // License declaration. The descriptor's enrichBeings reads this list,
   // cross-references the seed's static BE_OPS table for each name, and

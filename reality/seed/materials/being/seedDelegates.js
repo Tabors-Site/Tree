@@ -411,3 +411,62 @@ export async function ensureSeedDelegatesOnHeaven() {
   }
   return { added };
 }
+
+/**
+ * Roles-Are-Auth bootstrap (seed/RolesAreAuth.md). For each seed
+ * delegate, the I-Am emits a `do:grant-role` fact giving them the
+ * `angel` role anchored at the place root. The being reducer
+ * (applyRoleGrants in reducerHelpers.js) folds these facts into the
+ * delegate's `qualities.rolesGranted`, and from that moment the new
+ * role-walk authorize (roleAuth.js) finds the grant on every action.
+ *
+ * Doctrine: all authority chains back to I-Am. Cherub/birther/etc.
+ * can do their work because the I-Am granted them angel at genesis.
+ * The grant chain back to I-Am is the proof of authority.
+ *
+ * One moment per delegate (per the one-DO-per-moment doctrine).
+ * Idempotent: the reducer dedupes by (role, anchor, grantor) so a
+ * re-emit on reboot is a no-op.
+ */
+export async function grantAngelToSeedDelegates() {
+  const { findByName } = await import("../projections.js");
+  const { getSpaceRootId } = await import("../../sprout.js");
+  const { withIAmAct } = await import("../../sprout.js");
+  const { doVerb } = await import("../../ibp/verbs/do.js");
+
+  const placeRootId = await getSpaceRootId();
+  if (!placeRootId) {
+    log.warn(
+      "SeedDelegates",
+      "grantAngelToSeedDelegates: place root not yet materialized; skipping",
+    );
+    return { granted: 0 };
+  }
+
+  let granted = 0;
+  for (const spec of SEED_DELEGATES) {
+    const slot = await findByName("being", spec.name, "0");
+    if (!slot) continue;
+    try {
+      await withIAmAct(`I grant angel to @${spec.name}`, async (ctx) => {
+        await doVerb(
+          { kind: "being", id: String(slot.id) },
+          "grant-role",
+          {
+            role:          "angel",
+            anchorSpaceId: String(placeRootId),
+            anchorBeingId: null,
+          },
+          { identity: I_AM, summonCtx: ctx },
+        );
+      });
+      granted++;
+    } catch (err) {
+      log.warn(
+        "SeedDelegates",
+        `failed to grant angel to @${spec.name}: ${err?.message || err}`,
+      );
+    }
+  }
+  return { granted };
+}
