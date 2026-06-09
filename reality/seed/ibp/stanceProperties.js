@@ -20,15 +20,27 @@
 // simple equality / membership checks without undefined sniffing):
 //
 //   {
-//     beingId, username, role,
+//     beingId, name, role,
 //
 //     // identity-tier markers
 //     arrival,                  // true when no beingId resolves
 //
-//     // ownership-tier markers (relative to targetSpace)
-//     owner,                    // is rootOwner along the chain
-//     contributor,              // is in contributors[] along the chain
-//     hasAccess,                 // owner OR contributor anywhere on the chain
+//     // membership-class markers (relative to targetSpace, walked up
+//     // the ancestor chain)
+//     owner,                    // is in `owner` class on the closest
+//                                  ancestor that has one
+//     contributor,              // is in `contributor` class anywhere
+//                                  on the chain between target and
+//                                  the ownership boundary
+//     hasAccess,                 // owner OR any trust class — convenience
+//                                  shorthand for "in any trust class"
+//     memberClasses,            // [string] every class this being is in
+//                                  across the walked chain (owner +
+//                                  contributor + custom: auditor / editor
+//                                  / angel / etc.). The rule comparator
+//                                  uses `requires: { memberClasses:
+//                                  { includes: "<className>" } }` to gate
+//                                  on custom classes.
 //
 //     // home relations
 //     homeAtPosition,           // home === target
@@ -40,13 +52,13 @@
 //     federatedFrom,            // being.homeReality if remote, else null
 //   }
 //
-// The earlier `reigning` stance was a separate property tracking
-// membership in heaven's reign matter; it was redundant with the
-// already-existing rootOwner + contributors model. Collapsed
-// 2026-06-04: heaven is owned by I_AM, seed delegates and the
-// seed delegates are heaven contributors, and the heaven default
-// permission rule gates on `hasAccess` (owner OR contributor) so all
-// of them pass. One ownership model, no separate roster.
+// History. The earlier `reigning` stance tracked heaven's roster as a
+// separate quality; it was redundant with the ownership model and
+// retired 2026-06-04. The earlier `rootOwner` / `contributors[]`
+// schema fields were unnamed two-class storage; they retired 2026-06-07
+// in favor of the membership-class primitive (members map). Heaven's
+// authority class is now named `angel`, accessible via memberClasses
+// includes-comparator instead of an unnamed flag. See PERMISSIONS.md.
 //
 // Pure: no side effects, no throws on missing data. Defensive against
 // stale beingIds (returns arrival shape).
@@ -63,6 +75,7 @@ const ARRIVAL_PROPS = Object.freeze({
   owner: false,
   contributor: false,
   hasAccess: false,
+  memberClasses: Object.freeze([]),
   homeAtPosition: false,
   homeInDomain: false,
   positionInHomeDomain: false,
@@ -112,6 +125,7 @@ export async function deriveStanceProperties({
     owner: false,
     contributor: false,
     hasAccess: false,
+    memberClasses: [],
     homeAtPosition: false,
     homeInDomain: false,
     positionInHomeDomain: false,
@@ -138,20 +152,23 @@ export async function deriveStanceProperties({
 
   if (!targetSpace) return props;
 
-  // Ownership relations via the existing tree-access walker.
-  // hasAccess is owner OR contributor anywhere on the chain — the
-  // single condition heaven's default permissions gate on (replaces
-  // the legacy `reigning` prop). owner / contributor stay as the
-  // narrower labels for rules that need to distinguish.
+  // Membership-class relations via the chain walker. The walker
+  // collects every class this being is in across the walked ancestor
+  // chain (including the canonical `owner` and `contributor`); the
+  // property bag exposes that set as `memberClasses`. The convenience
+  // flags `owner` / `contributor` / `hasAccess` mirror the canonical
+  // classes for the common-case rule shapes
+  // (`requires: { isOwner: true }`, `requires: { hasAccess: true }`).
+  // Custom classes go through the `includes` comparator.
   try {
     const access = await resolveSpaceAccess(targetSpace, beingId, branch);
     if (access?.ok) {
       if (access.isOwner) props.owner = true;
-      // The access walker reports hasAccess when the user owns OR is a
-      // contributor anywhere on the chain. Mark contributor only when
-      // not also the owner — owner subsumes it.
       if (access.hasAccess && !access.isOwner) props.contributor = true;
       if (access.hasAccess) props.hasAccess = true;
+      if (Array.isArray(access.memberClasses)) {
+        props.memberClasses = access.memberClasses;
+      }
     }
   } catch {
     /* defensive — leave as false */

@@ -44,80 +44,92 @@ function qualitiesDiffer(existingQuals, desiredQuals) {
 // materialize the row. scaffold-style attribution (I_AM as actor)
 // because manifest sync is seed-internal scaffolding — extension
 // load runs after I_AM is planted, so the Being row exists.
-async function createChildByFact({ parentId, name, type, qualities, summonCtx }) {
+async function createChildByFact({ parentId, name, type, qualities }) {
   const id = uuidv4();
   const specQualities = qualities instanceof Map
     ? Object.fromEntries(qualities)
     : (qualities || {});
-  await emitFact({
-    verb:    "do",
-    action:  "create-space",
-    beingId: I_AM,
-    target:  { kind: "space", id },
-    params:  {
-      name,
-      type:      type ?? null,
-      parent:    String(parentId),
-      rootOwner: null,
-      qualities: specQualities,
-    },
-    actId: summonCtx.actId,
-    branch: assertBranchOrThrow(summonCtx?.branch, "manifest(createSpace)"),
-  }, summonCtx);
+  // One-DO-per-moment doctrine: each create-space is its own act.
+  // The wrapping withIAmAct opens a fresh summonCtx so emitFact's
+  // counter sees an isolated op, sealAct gets opCount=1.
+  const { withIAmAct } = await import("../sprout.js");
+  await withIAmAct(`manifest:create ${name}`, async (ctx) => {
+    await emitFact({
+      verb:    "do",
+      action:  "create-space",
+      beingId: I_AM,
+      target:  { kind: "space", id },
+      params:  {
+        name,
+        type:      type ?? null,
+        parent:    String(parentId),
+        // No initial owner class — heaven-tier spaces inherit access
+        // through the walker.
+        qualities: specQualities,
+      },
+      actId: ctx.actId,
+      branch: assertBranchOrThrow(ctx.branch, "manifest(createSpace)"),
+    }, ctx);
+  });
   return id;
 }
 
 // Iterate over a qualities Map / Object and emit one do:set fact per
 // namespace key. The reducer derives the per-namespace state from each
 // fact; per-reel append lock serializes them.
-async function refreshQualitiesByFact(spaceId, qualities, summonCtx) {
+async function refreshQualitiesByFact(spaceId, qualities) {
   if (!qualities) return;
   const entries = qualities instanceof Map
     ? [...qualities.entries()]
     : Object.entries(qualities);
   if (entries.length === 0) return;
   const { doVerb } = await import("../ibp/verbs/do.js");
-  // loadOrFold: a space inherited from the parent branch needs its
-  // slot materialized before we issue a qualities write against it.
-  // Bare loadProjection returned null and the refresh silently dropped
-  // (return) on sub-branches — qualities writes against inherited
-  // spaces never persisted.
   const { loadOrFold } = await import("../materials/projections.js");
-  const branch = assertBranchOrThrow(summonCtx?.branch, "manifest(refreshQualitiesByFact)");
+  const { withIAmAct } = await import("../sprout.js");
+  // One-DO-per-moment doctrine: each namespace write rides its own
+  // moment. Setting 3 namespaces on one item = 3 acts on the same
+  // reel across 3 moments. Cleaner than one moment with 3 facts —
+  // matches the doctrine "each one is a DO, not a group of DOs."
   for (const [ns, value] of entries) {
-    const refreshed = await loadOrFold("space", spaceId, branch);
-    if (!refreshed) return;
-    await doVerb(
-      { kind: "space", id: String(refreshed.id) },
-      "set-space",
-      { field: `qualities.${ns}`, value, merge: false },
-      { identity: I_AM, summonCtx },
-    );
+    await withIAmAct(`manifest:refresh-${ns}`, async (ctx) => {
+      const refreshed = await loadOrFold("space", spaceId, ctx.branch);
+      if (!refreshed) return;
+      await doVerb(
+        { kind: "space", id: String(refreshed.id) },
+        "set-space",
+        { field: `qualities.${ns}`, value, merge: false },
+        { identity: I_AM, summonCtx: ctx },
+      );
+    });
   }
 }
 
-// do:end-space fact for the child Space. I-Am is the actor.
-async function deleteChildByFact(childId, summonCtx) {
+// do:end-space fact for the child Space. I-Am is the actor. Each
+// delete is its own moment so the chain reads cleanly as "I removed
+// this", not "I removed N things at once."
+async function deleteChildByFact(childId) {
   const { doVerb } = await import("../ibp/verbs/do.js");
-  await doVerb(
-    { kind: "space", id: String(childId) },
-    "end-space",
-    {},
-    { identity: I_AM, summonCtx },
-  );
+  const { withIAmAct } = await import("../sprout.js");
+  await withIAmAct(`manifest:delete ${String(childId).slice(0, 8)}`, async (ctx) => {
+    await doVerb(
+      { kind: "space", id: String(childId) },
+      "end-space",
+      {},
+      { identity: I_AM, summonCtx: ctx },
+    );
+  });
 }
 
 export async function manifestItems({
   heavenSpace,
   items,
   itemType = "resource",
-  summonCtx,
 }) {
-  if (!summonCtx) {
-    throw new Error(
-      "manifestItems requires summonCtx. Wrap the call in withIAmAct(...).",
-    );
-  }
+  // No summonCtx parameter — each per-item write opens its own
+  // moment via withIAmAct inside createChildByFact /
+  // refreshQualitiesByFact / deleteChildByFact. Callers don't need
+  // to wrap (per the one-DO-per-moment doctrine: each item-sync is
+  // its own act).
   if (!heavenSpace) throw new Error("manifestItems requires heavenSpace");
   if (!Array.isArray(items)) items = [];
 
@@ -168,7 +180,7 @@ export async function manifestItems({
       // extension's quality data actually changed (deep-unequal here
       // → fall through to refresh).
       if (item.qualities && qualitiesDiffer(existing.qualities, item.qualities)) {
-        await refreshQualitiesByFact(existing._id, item.qualities, summonCtx);
+        await refreshQualitiesByFact(existing._id, item.qualities);
       }
       kept++;
       continue;
@@ -178,14 +190,13 @@ export async function manifestItems({
       name:      item.name,
       type:      itemType,
       qualities: item.qualities,
-      summonCtx,
     });
     created++;
   }
 
   for (const [name, c] of existingByName) {
     if (desiredByName.has(name)) continue;
-    await deleteChildByFact(c._id, summonCtx);
+    await deleteChildByFact(c._id);
     removed++;
   }
 

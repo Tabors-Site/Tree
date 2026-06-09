@@ -77,7 +77,7 @@
 
 import mongoose from "./seed/seedReality/dbConfig.js";
 import { getRealityIdentity, getRealityUrl } from "./seed/realityIdentity.js";
-import { ensureSpaceRoot, withBootMoment, withIAmAct } from "./seed/sprout.js";
+import { ensureSpaceRoot, withGenesisGuard, withIAmAct } from "./seed/sprout.js";
 import { initRealityConfig, getRealityConfigValue } from "./seed/realityConfig.js";
 import { getInternalConfigValue } from "./seed/internalConfig.js";
 import {
@@ -211,27 +211,37 @@ export async function genesis(app, opts = {}) {
   bootMode = plantedFromSeed
     ? "Restored"
     : existingRoot ? "Awakening" : "Beginning";
-  log.info(
-    "Genesis",
-    bootMode === "Beginning" ? "I am that I am." :
-    bootMode === "Awakening" ? "I awake." :
-    "I am restored — the seed's biography is now mine.",
-  );
+  // No pre-announcement here — the I-Am's first act ("I am that I am",
+  // stamped inside ensureIAm) IS the birth statement, and it lives on
+  // the chain rather than the console. ensureIAm logs the matching
+  // "I am born" line after the act seals.
 
-  // ── THE BOOT MOMENT ──
+  // ── THE GENESIS SEQUENCE ──
   //
-  // Genesis is ONE moment of the I-Am. ONE act ("I am that I am; let
-  // there be world") deposits ΔF across many reels: I-Am be:birth,
-  // ten do:create-space (root + nine heaven spaces), and one be:birth
-  // per delegate (with parentBeingId=I-Am in each spec) + their home
-  // setups. sealAct commits the whole ΔF + the genesis Act row in
-  // one Mongo transaction. A kill -9 mid-genesis leaves zero trace.
+  // Genesis is a SEQUENCE of moments, not one big batched moment.
+  // Each step opens its own withIAmAct, seals its own act, lands on
+  // the I-Am's reel as one entry in the I-Am's autobiography of
+  // self-creation. Per philosophy/MOMENT.md "Moment, act, batch" and
+  // seed/IamToActs.md "The Genesis Sequence."
   //
-  // On Awakening (existing world) the moment produces zero facts and
-  // skips the seal — nothing to commit.
+  // Order (chicken-and-egg unlock: I-Am born with homeSpace=null,
+  // home set later once heaven exists):
+  //   1. ensureIAm()              — "I am that I am" — births I-Am alone
+  //   2. ensureSpaceRoot()        — creates place root, heaven, tier-3 heaven spaces
+  //   3. setIAmHomeSpace(heaven)  — "I take heaven as my home"
+  //   4. ensureSeedDelegates()    — births 9 delegates, each its own moment
+  //   5. register roster          — stamps qualities.beings on the place root
+  //
+  // A kill -9 between any two steps leaves a recoverable state — each
+  // step is idempotent on the next boot.
   const { ensureSeedDelegates } =
     await import("./seed/materials/being/seedDelegates.js");
-  const { getSpaceRootId, getIAmBeingId } = await import("./seed/sprout.js");
+  const { getSpaceRootId, getIAmBeingId, ensureIAm, setIAmHomeSpace } =
+    await import("./seed/sprout.js");
+  const { findByHeavenSpace } =
+    await import("./seed/materials/projections.js");
+  const { HEAVEN_SPACE } =
+    await import("./seed/materials/space/heavenSpaces.js");
 
   // Scaffolding skip-list when plantedFromSeed:
   //   The seed already brought the I-Am, the place root, the nine
@@ -241,29 +251,51 @@ export async function genesis(app, opts = {}) {
   //   inflate the chain unnecessarily. The seed is the genesis when
   //   plant mode is active.
   if (!plantedFromSeed) {
-    await withBootMoment(async (bootCtx) => {
-      await ensureSpaceRoot(bootCtx);
+    await withGenesisGuard(async () => {
+      // Step 1: "I am that I am" — birth I-Am alone, homeSpace=null.
+      await ensureIAm();
+
+      // Step 2: place root + heaven + tier-3 heaven spaces.
+      // ensureSpaceRoot self-manages per-step moments (one withIAmAct
+      // per create-space / repair / orphan-adoption).
+      await ensureSpaceRoot();
       if (bootMode === "Beginning") {
         log.info("Genesis", "I plant the space root.");
         log.info("Genesis", "I plant my nine heaven spaces.");
       }
-      // Pass the planted I-Am beingId (resolved via sprout's cache)
-      // so seedDelegates can skip the live Mongo lookup — the row is
-      // pending inside this same moment. getIAmBeingId() returns the
-      // I_AM constant on fresh installs and a uuid on awakening from
-      // a pre-2026-05-29 DB.
-      await ensureSeedDelegates(getSpaceRootId(), bootCtx, {
-        iAmBeingId: getIAmBeingId(),
-      });
+
+      // Step 3: "I take heaven as my home" — point I-Am's homeSpace at
+      // the heaven space that now exists. Idempotent.
+      const heavenSlot = await findByHeavenSpace(HEAVEN_SPACE.HEAVEN, "0");
+      if (heavenSlot) await setIAmHomeSpace(heavenSlot.id);
+
+      // Step 4: birth the 9 seed delegates, each in its own moment.
+      // ensureSeedDelegates self-manages a withIAmAct per delegate.
+      const delegateResult = await ensureSeedDelegates(getSpaceRootId());
+      const seedDelegateRoster = delegateResult?.rosterUpdate || null;
+
+      // Step 5: register the delegates on the place root's
+      // qualities.beings. Its own moment.
+      if (seedDelegateRoster && Object.keys(seedDelegateRoster).length > 0) {
+        await withIAmAct("I register my delegates on the place root", async (ctx) => {
+          const { doVerb } = await import("./seed/ibp/verbs/do.js");
+          const { I_AM } = await import("./seed/materials/being/seedBeings.js");
+          await doVerb(
+            { kind: "space", id: String(getSpaceRootId()) },
+            "set-space",
+            { field: "qualities.beings", value: seedDelegateRoster, merge: true },
+            { identity: I_AM, summonCtx: ctx },
+          );
+        });
+      }
     });
   } else {
     // After plant, sprout's caches need priming from the planted state
-    // (place root id, I-Am being id). Call ensureSpaceRoot with a
-    // no-op context to walk its detect-existing path — it'll find the
-    // planted place root, populate caches, and skip creation.
-    await withIAmAct("prime caches after plant", async (ctx) => {
-      await ensureSpaceRoot(ctx);
-    });
+    // (place root id, I-Am being id). Call ensureSpaceRoot to walk
+    // its detect-existing path — it finds the planted place root,
+    // populates caches, and skips creation (no fact emitted, no
+    // moment opened on this branch).
+    await ensureSpaceRoot();
   }
 
   // ── POST-GENESIS RECONCILIATIONS ──
@@ -298,10 +330,10 @@ export async function genesis(app, opts = {}) {
       log.info("Genesis", "I set my stance defaults.");
     }
   } else {
-    // Prime runtime caches that didn't get filled by the boot moment
-    // because we skipped it. initRealityConfig is still needed —
-    // reading config from .env / process.env shouldn't change the
-    // planted state, just hydrate runtime cache.
+    // Prime runtime caches that didn't get filled by the genesis
+    // sequence because we skipped it. initRealityConfig is still
+    // needed — reading config from .env / process.env shouldn't
+    // change the planted state, just hydrate runtime cache.
     await initRealityConfig();
     log.info("Genesis", "I remember my settings.");
   }
@@ -632,9 +664,10 @@ export async function genesis(app, opts = {}) {
     }
   }
 
-  await withIAmAct("sync extensions to ./extensions tree", async (ctx) => {
-    await syncExtensionsToTree(getLoadedManifests(), ctx);
-  });
+  // syncExtensionsToTree self-manages per-extension moments now —
+  // one DO per extension, one moment each. No outer withIAmAct
+  // wrapper (per the one-DO-per-moment doctrine).
+  await syncExtensionsToTree(getLoadedManifests());
 
   // Load operator-authored live roles from ./roles. Runs after seed +
   // extension role registration (so live entries can override either
@@ -713,10 +746,13 @@ export async function genesis(app, opts = {}) {
         await import("./seed/present/roles/registry.js");
       const { syncOperationsToSubstrate } =
         await import("./seed/ibp/operations.js");
+      // Each sync function self-manages per-item moments now.
+      // No outer withIAmAct wrappers — per the one-DO-per-moment
+      // doctrine, each per-item create/refresh/delete is its own act.
       const [t, r, o] = await Promise.all([
-        withIAmAct("sync tools to ./tools", (ctx) => syncToolsToSubstrate(ctx)),
-        withIAmAct("sync roles to ./roles", (ctx) => syncRolesToSubstrate(ctx)),
-        withIAmAct("sync ops to ./operations", (ctx) => syncOperationsToSubstrate(ctx)),
+        syncToolsToSubstrate(),
+        syncRolesToSubstrate(),
+        syncOperationsToSubstrate(),
       ]);
       log.verbose(
         "RegistryMirror",

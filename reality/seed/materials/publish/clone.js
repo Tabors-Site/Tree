@@ -198,6 +198,26 @@ export async function cloneSubtree(scopeSpaceId, opts = {}) {
   const isCapturedBeing  = (id) => capturedBeingIds.has(id);
   const isCapturedMatter = (id) => capturedMatterIds.has(id);
 
+  // Remap a space's members map for bundle export. Each class's list
+  // of bare being-ids becomes a list of tagged refs (bundle-internal
+  // → Ref preserved, out-of-bundle → GRAFT_INITIATOR sentinel). Empty
+  // classes drop. Always returns a plain object (Map serializes as
+  // one on the wire).
+  const remapMembersForBundle = (members) => {
+    if (!members) return {};
+    const src = members instanceof Map
+      ? Object.fromEntries(members)
+      : (typeof members === "object" ? members : {});
+    const out = {};
+    for (const [className, list] of Object.entries(src)) {
+      if (!Array.isArray(list) || list.length === 0) continue;
+      out[className] = list.map((id) =>
+        tagId("being", id, { uncapturedSentinel: REF_GRAFT_INITIATOR })
+      );
+    }
+    return out;
+  };
+
   // Build a tagging function: turns a bare-string id (or null) into a
   // Ref (or sentinel, or null). Kind is given by the field's known type.
   const tagId = (kind, id, { uncapturedSentinel }) => {
@@ -280,13 +300,11 @@ export async function cloneSubtree(scopeSpaceId, opts = {}) {
       parent:       spaceId === scopeSpaceId
         ? REF_INSERTION_POINT
         : tagId("space", state.parent, { uncapturedSentinel: REF_INSERTION_POINT }),
-      // rootOwner → GRAFT_INITIATOR if the original owner was outside
-      // the bundle (or was the I_AM); a being inside the bundle keeps
-      // the Ref so the graft remap table preserves the relationship.
-      rootOwner:    tagId("being", state.rootOwner, { uncapturedSentinel: REF_GRAFT_INITIATOR }),
-      contributors: Array.isArray(state.contributors)
-        ? state.contributors.map((c) => tagId("being", c, { uncapturedSentinel: REF_GRAFT_INITIATOR }))
-        : [],
+      // members → tagged per-class. Each class's being-id list is
+      // remapped via the ref walker; bundle-internal beings keep their
+      // Refs so the graft remap table preserves the relationship, and
+      // out-of-bundle owners (or the I_AM) collapse to GRAFT_INITIATOR.
+      members:      remapMembersForBundle(state.members),
       size:         state.size || null,
       coord:        state.coord || null,
       qualities:    redactSecrets(filterQualities(state.qualities)),

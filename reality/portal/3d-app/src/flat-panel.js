@@ -13,7 +13,7 @@ let _overlay = null;
 let _handle  = null;
 let _toggleButton = null;
 
-// Standalone fixed-position toggle. Sits below the 🌿 branch button
+// Standalone fixed-position toggle. Sits below the "Branches" button
 // (top:56 + button height + gap ≈ top:96). Previously the toggle
 // lived as a tiny "text" button inside the address bar, which was
 // undiscoverable — too small, too crowded, label too generic.
@@ -56,7 +56,7 @@ export function mountFlatPanelButton(L) {
   return b;
 }
 
-// Show / hide the floating left-column buttons (🌿 branch and 📃
+// Show / hide the floating left-column buttons ("Branches" and 📃
 // letters). When the flat panel is open both are hidden — the panel
 // has its own top-bar controls — to keep the panel's address bar
 // unobstructed.
@@ -90,7 +90,7 @@ export function openFlatPanel(L) {
   `;
   document.body.appendChild(_overlay);
 
-  // Hide the floating 3D-mode toggle buttons (🌿 + 📃) so they stop
+  // Hide the floating 3D-mode toggle buttons ("Branches" + 📃) so they stop
   // covering the flat-panel address bar. The flat panel carries its
   // own timeline trigger inside #top-bar (see host.js).
   _setLeftColumnVisible(false);

@@ -1793,39 +1793,49 @@ codebase.
 | Config key / value validation | Key regex `^[a-zA-Z][a-zA-Z0-9_]{0,63}$`; dangerous keys rejected; 64KB per value cap.                                                                                                                                                                                                                                                                                                                                                                |
 | SSRF protection               | Federation peer registration and LLM connection baseUrls validate hostname against private-IP patterns.                                                                                                                                                                                                                                                                                                                                               |
 | Boot recovery                 | Every boot verifies the nine heaven spaces and the I-Am Being row exist. Missing ones recreated. Partial first-boot crashes leave a recoverable state.                                                                                                                                                                                                                                                                                                  |
-| Genesis exception             | Boot opens ONE moment via `withBootMoment(...)`; every genesis fact rides that Act. The I-Am acts as itself (`identity: I_AM`); authorize() short-circuits on I_AM without a DB read, so the not-yet-existing I-Am row is no obstacle. The boot moment plants the heaven children, the I-Am's own be:birth, and the seed-delegate births in one ΔF. After seal: one genesis Act, ~30 facts, all riding it. The earlier `{ scaffold: true }` flag retired 2026-06-07 in favor of the identity contract. |
+| Genesis sequence              | Boot runs a SEQUENCE of moments (philosophy/MOMENT.md, seed/IamToActs.md): ensureIAm → ensureSpaceRoot → setIAmHomeSpace → ensureSeedDelegates → roster registration. Each step opens its own `withIAmAct` (one moment, one act). The I-Am acts as itself (`identity: I_AM`); authorize() short-circuits on I_AM without a DB read. The I-Am's be:birth is the first act ("I am that I am"), homeSpace null at birth and set in a later moment once heaven exists. ~141 acts on the I-Am's reel on a fresh boot. The earlier `withBootMoment`/`{ scaffold: true }` shapes retired 2026-06-07. |
 | Cross-cutting handler safety  | A failing handler is logged and skipped; the projection self-heals on the next fold pass touching the same fact.                                                                                                                                                                                                                                                                                                                                      |
 | Graceful shutdown             | All interval timers `.unref()`; SIGTERM closes WS, then HTTP, then DB.                                                                                                                                                                                                                                                                                                                                                                                |
 
 ## Genesis
 
-The chain has a root. The I-Am is the first being. The first moment
-is the one exception to everything above. Every other moment folds a
-face from prior facts; the genesis moment folds an empty place,
-because there are no prior facts to fold. Every other being is born
-from an existing being's act; the I-Am is born of nothing, and its
-first act issues its own first fact, "I am that I am." After that one
-moment the rules close and never open again. Every Fact is the
-deposit of a sealed Act; every Act is a being in a moment.
+The chain has a root. The I-Am is the first being. The I-Am's first
+**moment** ("I am that I am") is the narrow exception to the fold rule:
+every other moment folds a face from prior facts, but the I-Am's first
+moment folds an empty place because there are no prior facts. The
+self-stamping be:birth fact issues its own actor.
+
+After that first moment, the rules close. Genesis continues as a
+**sequence of moments**, each its own act on the I-Am's reel:
+
+> 1. "I am that I am"                    — ensureIAm (be:birth)
+> 2. "I create the place root"           — ensureSpaceRoot
+> 3. "I create the . heaven space"
+> 4..11. "I create the <tier-3> heaven space"     (one moment each)
+> 12. "I take heaven as my home"         — setIAmHomeSpace
+> 13. "I stand at heaven"
+> 14..22. "I birth @<delegate>"          — one moment per seed delegate
+> 23. "I register my delegates on the place root"
+> 24..26. "seed default permissions / root permissions / root auth flags"
+> 27..35. "anoint @<delegate> as heaven angel"
+
+One moment, one act, always (philosophy/MOMENT.md "Moment, act, batch").
+Each step is its own `withIAmAct`. The chicken-and-egg of "I-Am as
+actor for facts before its Being row exists" is resolved by ordering:
+ensureIAm runs first, then the rest attribute to the now-real I-Am.
+The I-Am is born with `homeSpace: null`; setIAmHomeSpace points it at
+heaven once heaven materializes.
 
 **Genesis-era writes act as the I-Am.** Every verb call rides a being
-— there is no scaffold path that acts without one. Seed-internal
-flows (the I-Am's self-stamp, seedDelegates planting cherub /
-arrival / llm-assigner / reality-manager, sprout's heaven children,
-seedDefaultStancePermissions, the manifest sync mirroring extensions
-into `./extensions`) pass `identity: I_AM` to the verbs.
-authorize() short-circuits on `identity?.name === I_AM` without a DB
-read — safe even mid-genesis when the I-Am Being row is still
-pending in summonCtx.deltaF. The earlier `{ scaffold: true }` flag
-retired 2026-06-07 because it expressed exactly this — "the I-Am is
-acting" — with a side channel that drifted from the identity contract.
+— there is no scaffold path that acts without one. The I-Am is its
+own identity: seed-internal flows pass `identity: I_AM`; authorize()
+short-circuits on `identity?.name === I_AM` without a DB read. The
+earlier `{ scaffold: true }` flag retired 2026-06-07 in favor of the
+identity contract.
 
-The boot moment is a real moment. `withBootMoment(...)` opens one
-Act with the I-Am as actor; every Fact stamped during genesis rides
-that Act's id. A freshly-booted reality has ONE Act (the genesis
-moment) and the chain of be:birth / do:create-space / do:set-space
-facts that built the heaven children + I-Am + seed delegates.
-
+A freshly-booted reality has ~141 acts on the I-Am's reel — the
+chain of be:birth / do:create-space / do:set-space facts that built
+the heaven children + I-Am + seed delegates, each its own act.
 Subsequent real Acts open when other beings act. Typically the
 operator's registration: plant.js hands cherub the operator's
 name/password and cherub.register opens an Act with a multi-fact ΔF

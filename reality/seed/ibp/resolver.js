@@ -37,6 +37,7 @@ import Being from "../materials/being/being.js";
 import Space from "../materials/space/space.js";
 import { getSpaceRootId } from "../sprout.js";
 import { resolveRootSpace } from "../materials/space/spaces.js";
+import { getSpaceOwner } from "../materials/space/members.js";
 import { HEAVEN_SPACE } from "../materials/space/heavenSpaces.js";
 
 const UUID_RE =
@@ -195,7 +196,7 @@ export async function resolveStance(stance, opts = {}) {
         const treeRoot = await resolveRootSpace(homeSpace._id);
         rootId = treeRoot?._id || null;
       } catch {
-        rootId = homeSpace.rootOwner ? homeSpace._id : null;
+        rootId = getSpaceOwner(homeSpace) ? homeSpace._id : null;
       }
       return base({
         beingId: targetBeing._id,
@@ -402,14 +403,14 @@ async function walkSpacePath({
     parentSeedSpace = space.heavenSpace || null;
   }
 
-  // The enclosing tree root. Walk up to the nearest space with rootOwner;
-  // a space may itself be a root.
+  // The enclosing tree root. Walk up to the nearest space with an
+  // owner class; a space may itself be a root.
   let rootId = null;
   try {
     const treeRoot = await resolveRootSpace(leafSpace._id);
     rootId = treeRoot?._id || null;
   } catch {
-    rootId = leafSpace.rootOwner ? leafSpace._id : null;
+    rootId = getSpaceOwner(leafSpace) ? leafSpace._id : null;
   }
 
   return base({

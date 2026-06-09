@@ -13,6 +13,7 @@ import { authenticateOptional } from "../middleware/authenticate.js";
 import { sendOk, sendError, IBP_ERR } from "../../../seed/ibp/protocol.js";
 import Space from "../../../seed/materials/space/space.js";
 import { getSpaceRoot } from "../../../seed/sprout.js";
+import { getSpaceOwner, getSpaceContributors } from "../../../seed/materials/space/members.js";
 
 const router = express.Router();
 
@@ -61,8 +62,10 @@ router.get("/reality/root", authenticateOptional, async (req, res) => {
       const pub = isPublicSpace(c);
       if (isAnon) return pub;
       if (c.heavenSpace) return true;
-      if (c.rootOwner && String(c.rootOwner) === String(beingId)) return true;
-      if (c.contributors && c.contributors.map(String).includes(String(beingId))) return true;
+      const ownerId = getSpaceOwner(c);
+      if (ownerId && String(ownerId) === String(beingId)) return true;
+      const contribs = getSpaceContributors(c);
+      if (contribs.includes(String(beingId))) return true;
       return pub;
     });
 
@@ -71,12 +74,13 @@ router.get("/reality/root", authenticateOptional, async (req, res) => {
       name: spaceRoot.name,
       children: visible.map((c) => {
         const pub = isPublicSpace(c);
+        const ownerId = getSpaceOwner(c);
         return {
           _id: c._id,
           name: c.name,
           heavenSpace: isAnon ? null : (c.heavenSpace || null),
-          rootOwner: c.rootOwner || null,
-          isOwned: !isAnon && c.rootOwner && String(c.rootOwner) === String(beingId),
+          owner: ownerId || null,
+          isOwned: !isAnon && ownerId && String(ownerId) === String(beingId),
           isPublic: pub,
           queryAvailable: pub && !!(c.llmDefault && c.llmDefault !== "none"),
           qualities: c.qualities || null,

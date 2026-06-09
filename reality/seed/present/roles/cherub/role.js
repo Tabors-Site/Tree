@@ -115,21 +115,21 @@ async function birthHandler({ payload, ctx }) {
     }
     hooks.run("afterRegister", { user: being, req: ctx?.req }).catch(() => {});
 
-    // Anoint the first heaven contributor. The first human is
-    // admitted into heaven from the moment they materialize so they
-    // can immediately SEE/DO/SUMMON the seed-internal spaces (config,
-    // extensions, tools, etc.). Mechanism: add them as a contributor
-    // to heaven. Heaven's default permissions gate on `hasAccess`
-    // (owner OR contributor), so contributor status admits them.
-    // Subsequent humans default to non-contributors on heaven; an
-    // existing heaven contributor promotes them via the standard
-    // add-contributor DO op against heaven.
+    // Anoint as a heaven angel. The first human is admitted into
+    // heaven's `angel` membership class from the moment they
+    // materialize so they can immediately SEE/DO/SUMMON the
+    // seed-internal spaces (config, extensions, tools, etc.). Heaven's
+    // default permissions gate on
+    // `memberClasses: { includes: "angel" }`, so angel-class admits
+    // them. Subsequent humans default to non-angels on heaven; an
+    // existing angel promotes them via the generic add-member DO op
+    // at heaven with className="angel".
     //
     // Timing: this anoint must run AFTER cherub's compound act seals.
     // The new being's `be:birth` fact is still pending in cherub's
     // summonCtx.deltaF; if we open a separate `withIAmAct` here, its
     // own moment can't see the not-yet-sealed being and
-    // addContributor's `assertBeingExists` walk-from-projection
+    // addSpaceMember's `assertBeingExists` walk-from-projection
     // would throw. summonCtx.afterSeal queues the work for
     // post-commit, when the being's row has materialized.
     const beingName = being.name;
@@ -140,19 +140,19 @@ async function birthHandler({ payload, ctx }) {
           const { withIAmAct } = await import("../../../sprout.js");
           const { findByHeavenSpace } = await import("../../../materials/projections.js");
           const { HEAVEN_SPACE } = await import("../../../materials/space/heavenSpaces.js");
-          const { addContributor } = await import("../../../materials/space/ownership.js");
+          const { addSpaceMember } = await import("../../../materials/space/members.js");
           const { I_AM } = await import("../../../materials/being/seedBeings.js");
           const heaven = await findByHeavenSpace(HEAVEN_SPACE.HEAVEN, "0");
           if (heaven) {
-            await withIAmAct(`anoint heaven contributor @${beingName}`, async (anointCtx) => {
-              await addContributor(String(heaven.id), newBeingId, I_AM, anointCtx?.branch || "0", anointCtx);
+            await withIAmAct(`anoint @${beingName} as heaven angel`, async (anointCtx) => {
+              await addSpaceMember(String(heaven.id), "angel", newBeingId, I_AM, anointCtx?.branch || "0", anointCtx);
             });
           }
         } catch (err) {
           const { default: log } = await import("../../../seedReality/log.js");
           log.error(
             "Cherub",
-            `failed to anoint heaven contributor @${beingName}: ${err.message}. Add them later with: do(<reality>/., "add-contributor", { contributorId: "<beingId>" }) as an existing heaven contributor.`,
+            `failed to anoint @${beingName} as heaven angel: ${err.message}. Add them later with: do(<reality>/., "add-member", { className: "angel", beingId: "<beingId>" }) as an existing angel.`,
           );
         }
       });
@@ -162,6 +162,12 @@ async function birthHandler({ payload, ctx }) {
     return {
       identityToken,
       beingAddress: `${getRealityDomain()}/@${being.name}`,
+      // The new being is placed inside this home space (with a coord).
+      // Surface it so the portal can land the camera at home directly,
+      // without waiting for the post-seal projection fold to expose
+      // identity.position/homeSpace (that race is why a freshly-
+      // registered being used to spawn at the reality root).
+      homeSpaceId:  being.homeSpace ? String(being.homeSpace) : null,
       beingId:      String(being._id),
       name:         being.name,
       firstUser:    true,
@@ -205,6 +211,9 @@ async function birthHandler({ payload, ctx }) {
   return {
     identityToken,
     beingAddress: `${getRealityDomain()}/@${being.name}`,
+    // See first-user branch above: lets the portal land at home directly
+    // and dodge the post-seal projection-fold race.
+    homeSpaceId:  being.homeSpace ? String(being.homeSpace) : null,
     beingId:      String(being._id),
     name:         being.name,
     firstUser:    false,
@@ -386,7 +395,7 @@ export const cherubBeOps = Object.freeze({
 /**
  * Register a human: create their fresh home space under the place
  * root, birth the being into it, set the new being as the home's
- * rootOwner. Three facts (do:create-space, be:birth, do:set-space)
+ * owner. Three facts (do:create-space, be:birth, do:set-space)
  * all ride the same `summonCtx.deltaF` so they seal atomically.
  *
  * Inlined from the retired `createBeingWithHome` orchestrator —
@@ -409,8 +418,8 @@ async function _registerHumanWithFreshHome({
 
   // ── 1. Create the home space ──
   // Human homes are 100×100 grid bounded territories under the place
-  // root. The home's `rootOwner` lands in step 3 (after the being
-  // exists to reference); step 1 stamps the space with rootOwner=null.
+  // root. The home's owner class lands in step 3 (after the being
+  // exists to reference); step 1 stamps the space with no owner.
   const homeId = uuidv4();
   const placeRootId = getSpaceRootId();
   const actorId = cherubIdentity?.beingId || I_AM;
@@ -423,7 +432,8 @@ async function _registerHumanWithFreshHome({
       name,                           // home space is named for the user
       type: "home-territory",
       parent: String(placeRootId),
-      rootOwner: null,                 // becomes the new being after step 3
+      // members.owner gets set in step 3 (the new being doesn't
+      // exist yet; can't reference them here).
       size: { x: 100, y: 100 },
       qualities: {},
     },
@@ -447,7 +457,7 @@ async function _registerHumanWithFreshHome({
     summonCtx,
   });
 
-  // ── 3. Set the new being as rootOwner on the home ──
+  // ── 3. Set the new being as owner of the home ──
   // The home is a tree root they own. Stamped as I_AM because cherub
   // already authorized the whole compound act; doing it under the new
   // being's identity faces a chicken-and-egg with stance auth (they're
@@ -456,7 +466,7 @@ async function _registerHumanWithFreshHome({
   await doVerb(
     { kind: "space", id: homeId },
     "set-space",
-    { field: "rootOwner", value: String(result.beingId) },
+    { field: "members.owner", value: [String(result.beingId)] },
     { identity: I_AM, summonCtx },
   );
 

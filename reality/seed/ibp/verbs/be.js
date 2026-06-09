@@ -127,8 +127,8 @@ export async function beVerb(operation, payload = {}, opts = {}) {
     if (!decision.ok) {
       throw new IbpError(
         IBP_ERR.FORBIDDEN,
-        `BE:birth denied for stance "${decision.stance}": ${decision.reason}`,
-        { stance: decision.stance },
+        `BE:birth denied for actor "${decision.actor}": ${decision.reason}`,
+        { actor: decision.actor },
       );
     }
 
@@ -215,7 +215,8 @@ export async function beVerb(operation, payload = {}, opts = {}) {
           name: childName,
           type: "child-home",
           parent: String(childHomeParent),
-          rootOwner: null,
+          // No initial owner class — set after the child being is
+          // birthed (the child becomes their own home's owner).
           size: { x: 100, y: 100 },
           qualities: {},
         },
@@ -278,8 +279,8 @@ export async function beVerb(operation, payload = {}, opts = {}) {
     if (!decision.ok) {
       throw new IbpError(
         IBP_ERR.FORBIDDEN,
-        `BE:release denied for stance "${decision.stance}": ${decision.reason}`,
-        { stance: decision.stance },
+        `BE:release denied for actor "${decision.actor}": ${decision.reason}`,
+        { actor: decision.actor },
       );
     }
     const cherubReleaseOp = getBeOp("release");
@@ -325,8 +326,8 @@ export async function beVerb(operation, payload = {}, opts = {}) {
     if (!decision.ok) {
       throw new IbpError(
         IBP_ERR.FORBIDDEN,
-        `BE:connect denied for stance "${decision.stance}": ${decision.reason}`,
-        { stance: decision.stance },
+        `BE:connect denied for actor "${decision.actor}": ${decision.reason}`,
+        { actor: decision.actor },
       );
     }
     const cherubConnectOp = getBeOp("connect");
@@ -382,19 +383,32 @@ export async function beVerb(operation, payload = {}, opts = {}) {
     if (!decision.ok) {
       throw new IbpError(
         IBP_ERR.FORBIDDEN,
-        `BE denied for stance "${decision.stance}": ${decision.reason}`,
-        { stance: decision.stance, operation },
+        `BE denied for actor "${decision.actor}": ${decision.reason}`,
+        { actor: decision.actor, operation },
       );
     }
 
-    const result = await beOp.handler({
-      address,
-      addressKind,
-      payload,
-      identity,
-      ctx: { socket, address: { kind: addressKind, value: address }, identity, req, summonCtx },
-      summonCtx,
-    });
+    // Top-level operation count (one-moment-one-act doctrine; sealAct
+    // throws if it would seal >1 op from this summonCtx).
+    const _bCtx = summonCtx;
+    const _bWasInOp = !!(_bCtx && _bCtx._inOp);
+    if (_bCtx && !_bWasInOp) {
+      _bCtx._inOp = true;
+      _bCtx._opCount = (_bCtx._opCount || 0) + 1;
+    }
+    let result;
+    try {
+      result = await beOp.handler({
+        address,
+        addressKind,
+        payload,
+        identity,
+        ctx: { socket, address: { kind: addressKind, value: address }, identity, req, summonCtx },
+        summonCtx,
+      });
+    } finally {
+      if (_bCtx && !_bWasInOp) _bCtx._inOp = false;
+    }
     // ONE fact per birth. cherub's birth handler delegates to
     // birthBeing, which already stamped `be:birth` on the new being's
     // reel with the full spec (homeSpace, defaultRole, parentBeingId,
@@ -455,7 +469,7 @@ async function writeBeFact({ operation, identity, authResult, payload, beingName
   if (!actId) {
     throw new IbpError(
       IBP_ERR.INTERNAL,
-      `BE ${operation} @${beingName}: missing ambient actId. Thread summonCtx from the caller's moment (runtime), or open a boot moment via withBootMoment(...) (genesis).`,
+      `BE ${operation} @${beingName}: missing ambient actId. Thread summonCtx from the caller's moment (runtime), or open one via withIAmAct(...) / withBeingAct(...).`,
       { operation, beingName },
     );
   }

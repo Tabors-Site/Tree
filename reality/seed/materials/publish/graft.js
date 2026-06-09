@@ -32,6 +32,7 @@ import { isSentinelRef, isAggregateRef, refKind, refId } from "../ref.js";
 import { remapRefs } from "../refWalker.js";
 import { assertValidBundle } from "./bundle.js";
 import { emitFact } from "../../past/fact/facts.js";
+import { withBeingAct } from "../../sprout.js";
 
 /**
  * Graft a clone bundle into the target.
@@ -95,8 +96,14 @@ export async function graftClone(bundle, targetParentSpaceId, opts = {}) {
   if (!targetParentSlot) {
     throw new Error(`graftClone: target parent space "${targetParentSpaceId}" not found in branch "${branch}"`);
   }
-  if (targetParentSlot.state?.heavenSpace) {
-    throw new Error(`graftClone: cannot graft under heaven space "${targetParentSlot.state.heavenSpace}"`);
+  // Heaven space refuse — but allow the place root ("space-root").
+  // Tier-3 heaven spaces (identity, config, tools, etc.) are substrate
+  // furniture; grafting user content under them mixes operator state
+  // into kernel territory. The place root is the natural target for
+  // top-level grafts (where the old seed system planted).
+  const targetHeaven = targetParentSlot.state?.heavenSpace;
+  if (targetHeaven && targetHeaven !== "space-root") {
+    throw new Error(`graftClone: cannot graft under heaven space "${targetHeaven}"`);
   }
 
   // ── 2. Conflict check: name collision at the insertion point. ──
@@ -194,8 +201,20 @@ export async function graftClone(bundle, targetParentSpaceId, opts = {}) {
   // bundle.content.spaces is already depth-ordered by cloneSubtree;
   // we trust that. Each space's parent is either INSERTION_POINT (→
   // targetParentSpaceId) or another bundle space (→ remapTable lookup).
+  //
+  // ROLLBACK doctrine: the substrate is append-only — we can't UN-stamp
+  // facts. But on graft failure, we CAN stamp the reversal facts
+  // (end-space, end-being, end-matter) for every aggregate we already
+  // created, restoring the destination's current state to pre-graft.
+  // The chain remembers BOTH the creates AND the reversals (a graft-
+  // failed audit fact ties them together). This matches doctrine:
+  // chain = truth, current state = fold of chain. We track committed
+  // aggregates in `committed` and walk it in reverse on catch.
   const counts = { spaces: 0, beings: 0, matter: 0 };
   let rootSpaceId = null;
+  const committed = [];  // { kind, id } in commit order; reversed on rollback
+
+  try {
 
   for (const s of bundle.content.spaces) {
     const newId = remapTable.get(s.sourceId);
@@ -203,32 +222,47 @@ export async function graftClone(bundle, targetParentSpaceId, opts = {}) {
 
     // Every field flows through remapInBundleField so parameter holes
     // (`"$name"` strings) resolve uniformly across scalar fields (name,
-    // type, size, coord) and Ref-bearing fields (parent, rootOwner,
-    // qualities, contributors). Refs and sentinels in scalar fields are
-    // a noop; parameter substitution in Ref fields is also a noop because
-    // Ref `id` values are not parameter names.
+    // type, size, coord) and Ref-bearing fields (parent, qualities,
+    // members). Refs and sentinels in scalar fields are a noop;
+    // parameter substitution in Ref fields is also a noop because Ref
+    // `id` values are not parameter names.
     const spec = {
       name:         remapInBundleField(s.name),
       type:         remapInBundleField(s.type),
       parent:       remapInBundleField(s.parent),
-      rootOwner:    remapInBundleField(s.rootOwner),
       qualities:    remapInBundleField(s.qualities),
       ...(s.size  !== undefined ? { size:  remapInBundleField(s.size)  } : {}),
       ...(s.coord !== undefined ? { coord: remapInBundleField(s.coord) } : {}),
     };
-    // contributors: array; remap entry-by-entry.
-    if (Array.isArray(s.contributors) && s.contributors.length > 0) {
-      spec.contributors = s.contributors.map(remapInBundleField);
+    // members: per-class array of refs; remap entry-by-entry, drop
+    // empty classes.
+    if (s.members && typeof s.members === "object") {
+      const remappedMembers = {};
+      for (const [className, list] of Object.entries(s.members)) {
+        if (!Array.isArray(list) || list.length === 0) continue;
+        remappedMembers[className] = list.map(remapInBundleField);
+      }
+      if (Object.keys(remappedMembers).length > 0) {
+        spec.members = remappedMembers;
+      }
     }
-    await emitFact({
-      verb:    "do",
-      action:  "create-space",
-      beingId: opts.operatorBeingId,
-      target:  { kind: "space", id: newId },
-      params:  spec,
-      actId:   opts.summonCtx?.actId || null,
-      branch,
-    }, opts.summonCtx);
+    // Doctrine: each grafted fact is the grafter doing one logical
+    // thing on their reel. One act, one fact. Batching many facts into
+    // a single ΔF triggers nonlinear fold/append-lock back-pressure
+    // (40 qualities writes inside one moment serialize on the same
+    // per-reel lock and choke); per-fact small acts fold independently.
+    await withBeingAct(opts.operatorBeingId, `graft:create-space ${s.name}`, branch, async (ctx) => {
+      await emitFact({
+        verb:    "do",
+        action:  "create-space",
+        beingId: opts.operatorBeingId,
+        target:  { kind: "space", id: newId },
+        params:  spec,
+        actId:   ctx.actId,
+        branch,
+      }, ctx);
+    });
+    committed.push({ kind: "space", id: newId });
     counts.spaces++;
   }
 
@@ -250,15 +284,21 @@ export async function graftClone(bundle, targetParentSpaceId, opts = {}) {
       qualities:     remapInBundleField(b.qualities),
       ...(b.coord !== undefined ? { coord: remapInBundleField(b.coord) } : {}),
     };
-    await emitFact({
-      verb:    "be",
-      action:  "birth",
-      beingId: newId,  // self-stamping — the new being is its own actor at birth
-      target:  { kind: "being", id: newId },
-      params:  spec,
-      actId:   opts.summonCtx?.actId || null,
-      branch,
-    }, opts.summonCtx);
+    // be:birth is special — the new being self-stamps (beingIn=newId).
+    // Open the act under the NEW being so the birth lands as their
+    // first act on their own reel. Same one-fact-per-act discipline.
+    await withBeingAct(newId, `graft:birth ${spec.name}`, branch, async (ctx) => {
+      await emitFact({
+        verb:    "be",
+        action:  "birth",
+        beingId: newId,
+        target:  { kind: "being", id: newId },
+        params:  spec,
+        actId:   ctx.actId,
+        branch,
+      }, ctx);
+    });
+    committed.push({ kind: "being", id: newId });
     counts.beings++;
   }
 
@@ -300,37 +340,168 @@ export async function graftClone(bundle, targetParentSpaceId, opts = {}) {
       parentMatterId: remapInBundleField(m.parentMatterId),
       qualities:      remapInBundleField(m.qualities),
     };
-    await emitFact({
-      verb:    "do",
-      action:  "create-matter",
-      beingId: opts.operatorBeingId,
-      target:  { kind: "matter", id: newId },
-      params:  spec,
-      actId:   opts.summonCtx?.actId || null,
-      branch,
-    }, opts.summonCtx);
+    await withBeingAct(opts.operatorBeingId, `graft:create-matter ${spec.name}`, branch, async (ctx) => {
+      await emitFact({
+        verb:    "do",
+        action:  "create-matter",
+        beingId: opts.operatorBeingId,
+        target:  { kind: "matter", id: newId },
+        params:  spec,
+        actId:   ctx.actId,
+        branch,
+      }, ctx);
+    });
+    committed.push({ kind: "matter", id: newId });
     counts.matter++;
   }
 
-  // ── 7. Stamp a graft-completed meta-fact on the new root's reel. ──
+  // ── 7. Stamp `content.facts[]` in order. ──
+  // The spaces/beings/matter arrays handle CREATE (one fact each).
+  // content.facts[] handles everything else — set-X, subscription-
+  // registered, wake-scheduled, qualities writes. Each entry's target
+  // and params flow through the substitution + remap walker so $params
+  // and Refs to bundle sourceIds resolve correctly. Per the same
+  // one-fact-per-act doctrine: each entry rides its own moment under
+  // the actor named by its f.beingId field (or the grafter by default).
+  const factsBlock = Array.isArray(bundle.content.facts) ? bundle.content.facts : [];
+  counts.facts = 0;
+  for (const f of factsBlock) {
+    const target = f.target ? {
+      kind: f.target.kind,
+      id:   remapInBundleField(f.target.id),  // bundle sourceId → new local id
+    } : null;
+    const actorBeingId = f.beingId
+      ? remapInBundleField(f.beingId)
+      : opts.operatorBeingId;
+    await withBeingAct(actorBeingId, `graft:${f.action}`, branch, async (ctx) => {
+      await emitFact({
+        verb:    f.verb,
+        action:  f.action,
+        beingId: actorBeingId,
+        target,
+        params:  remapInBundleField(f.params || {}),
+        actId:   ctx.actId,
+        branch,
+      }, ctx);
+    });
+    counts.facts++;
+  }
+
+  // ── 8. Stamp a graft-completed meta-fact on the new root's reel. ──
   // Records provenance: where this came from, who applied it, what
-  // counts landed. Read-side audit only; doesn't drive any reducer.
-  await emitFact({
-    verb:    "do",
-    action:  "graft-completed",
-    beingId: opts.operatorBeingId,
-    target:  { kind: "space", id: rootSpaceId },
-    params:  {
-      sourceReality:      bundle.meta.sourceReality || null,
-      sourceBranch:       bundle.meta.sourceBranch || null,
-      sourceScopeSpaceId: bundle.meta.sourceScopeSpaceId || null,
-      sourceScopeName:    bundle.meta.sourceScopeName || null,
-      bundleCreatedAt:    bundle.meta.createdAt || null,
-      counts,
-    },
-    actId:  opts.summonCtx?.actId || null,
-    branch,
-  }, opts.summonCtx);
+  // counts landed. Rides the OUTER wire moment (opts.summonCtx) when
+  // present so the operator's transport act records "I grafted X."
+  // When called standalone, opens its own act under the grafter.
+  if (opts.summonCtx) {
+    await emitFact({
+      verb:    "do",
+      action:  "graft-completed",
+      beingId: opts.operatorBeingId,
+      target:  { kind: "space", id: rootSpaceId },
+      params:  {
+        sourceReality:      bundle.meta.sourceReality || null,
+        sourceBranch:       bundle.meta.sourceBranch || null,
+        sourceScopeSpaceId: bundle.meta.sourceScopeSpaceId || null,
+        sourceScopeName:    bundle.meta.sourceScopeName || null,
+        bundleCreatedAt:    bundle.meta.createdAt || null,
+        counts,
+      },
+      actId:  opts.summonCtx.actId,
+      branch,
+    }, opts.summonCtx);
+  } else {
+    await withBeingAct(opts.operatorBeingId, "graft:completed", branch, async (ctx) => {
+      await emitFact({
+        verb:    "do",
+        action:  "graft-completed",
+        beingId: opts.operatorBeingId,
+        target:  { kind: "space", id: rootSpaceId },
+        params:  {
+          sourceReality:      bundle.meta.sourceReality || null,
+          sourceBranch:       bundle.meta.sourceBranch || null,
+          sourceScopeSpaceId: bundle.meta.sourceScopeSpaceId || null,
+          sourceScopeName:    bundle.meta.sourceScopeName || null,
+          bundleCreatedAt:    bundle.meta.createdAt || null,
+          counts,
+        },
+        actId: ctx.actId,
+        branch,
+      }, ctx);
+    });
+  }
+  } catch (err) {
+    // ── ROLLBACK ──
+    // Per-fact acts already committed; we can't UN-stamp them. Append
+    // the reversal: end-X fact for every aggregate we created, in
+    // REVERSE order (children before parents), so the current state
+    // restores to pre-graft. Each reversal is its own act under the
+    // grafter. The chain remembers both the creates AND the reversals
+    // — fold sees create then end-X, the projection ends tombstoned.
+    // A graft-failed audit fact ties them together.
+    //
+    // If a reversal itself throws (e.g., the aggregate is already
+    // tombstoned by something else, or the substrate is unhealthy),
+    // we log and continue — partial-rollback is still better than
+    // none. The original error is re-thrown at the end so the caller
+    // sees what actually broke.
+    const endAction = { space: "end-space", being: "end-being", matter: "end-matter" };
+    for (let i = committed.length - 1; i >= 0; i--) {
+      const { kind, id } = committed[i];
+      try {
+        await withBeingAct(opts.operatorBeingId, `graft:rollback ${endAction[kind]}`, branch, async (ctx) => {
+          await emitFact({
+            verb:    "do",
+            action:  endAction[kind],
+            beingId: opts.operatorBeingId,
+            target:  { kind, id },
+            params:  { reason: "graft rollback" },
+            actId:   ctx.actId,
+            branch,
+          }, ctx);
+        });
+      } catch (rollbackErr) {
+        // Best-effort. Log via console — log import would be circular.
+        // eslint-disable-next-line no-console
+        console.error(`graftClone rollback: ${endAction[kind]} on ${id.slice(0,8)} failed: ${rollbackErr.message}`);
+      }
+    }
+    // Audit: the graft failed. Stamps even when rollback is partial
+    // so the operator's reel records "I tried to graft X and it failed."
+    try {
+      if (opts.summonCtx) {
+        await emitFact({
+          verb:    "do",
+          action:  "graft-failed",
+          beingId: opts.operatorBeingId,
+          target:  null,
+          params: {
+            sourceScopeName: bundle.meta.sourceScopeName || null,
+            error:           String(err?.message || err),
+            committedCount:  committed.length,
+          },
+          actId:  opts.summonCtx.actId,
+          branch,
+        }, opts.summonCtx);
+      } else {
+        await withBeingAct(opts.operatorBeingId, "graft:failed", branch, async (ctx) => {
+          await emitFact({
+            verb:    "do",
+            action:  "graft-failed",
+            beingId: opts.operatorBeingId,
+            target:  null,
+            params: {
+              sourceScopeName: bundle.meta.sourceScopeName || null,
+              error:           String(err?.message || err),
+              committedCount:  committed.length,
+            },
+            actId: ctx.actId,
+            branch,
+          }, ctx);
+        });
+      }
+    } catch {}
+    throw err;
+  }
 
   return {
     rootSpaceId,

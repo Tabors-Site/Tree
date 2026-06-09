@@ -39,6 +39,7 @@
 // DB lookup on the hot path.
 
 import Branch from "./branch.js";
+import { IbpError, IBP_ERR } from "../../ibp/protocol.js";
 
 export const MAIN = "0";
 
@@ -117,7 +118,15 @@ export async function resolveBranchLineage(path) {
     seen.add(cursor);
     const row = await loadBranch(cursor);
     if (!row) {
-      throw new Error(`resolveBranchLineage: branch "${cursor}" not found (resolving path="${path}")`);
+      // Coded so the wire classifies it as 404 and clients (the portal)
+      // can fall back to main / clear a stale branch hash, rather than
+      // letting a plain Error surface as INTERNAL — which left a client
+      // pinned to a gone branch storming retries.
+      throw new IbpError(
+        IBP_ERR.BRANCH_NOT_FOUND,
+        `branch "${cursor}" not found (resolving path="${path}")`,
+        { branch: cursor, path },
+      );
     }
     chain.unshift(cursor);
     cursor = row.parent;
@@ -143,7 +152,11 @@ export async function getBranchPoint(branch, type, id) {
   if (isMain(branch)) return null;
   const row = await loadBranch(branch);
   if (!row) {
-    throw new Error(`getBranchPoint: branch "${branch}" not found`);
+    throw new IbpError(
+      IBP_ERR.BRANCH_NOT_FOUND,
+      `branch "${branch}" not found`,
+      { branch },
+    );
   }
   const key = `${type}:${id}`;
   const bp = row.branchPoint;

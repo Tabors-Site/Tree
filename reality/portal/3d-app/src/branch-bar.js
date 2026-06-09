@@ -2,7 +2,7 @@
 //
 // Three pieces of UI:
 //
-//   1. Top-left "🌿 branches" button. Always visible. Click opens the
+//   1. Top-left "Branches" button. Always visible. Click opens the
 //      branch tree panel.
 //
 //   2. Branch tree panel. Centered overlay. Shows every branch (main +
@@ -115,6 +115,16 @@ export function mountBranchBar({ client, reality }) {
   });
   return {
     update: (desc) => _update(desc),
+    // The portal swaps its PortalClient on sign-in / register / sign-out
+    // (a new authenticated or anonymous socket). The bar captured the
+    // boot-time client; without this, after a first registration it
+    // keeps querying the dead pre-auth socket and the branch tree comes
+    // back empty until a full page reload. Call this whenever the live
+    // client changes so the bar's SEEs ride the current socket.
+    setClient: (client, reality) => {
+      _state.client = client;
+      if (reality) _state.reality = reality;
+    },
   };
 }
 
@@ -127,7 +137,7 @@ function _createBranchButton() {
   b.id = "branch-tree-button";
   b.type = "button";
   b.title = "branches & timeline";
-  b.textContent = "🌿";
+  b.textContent = "Branches";
   // Z-index 200 sits above the flat-panel overlay (z=100), so the
   // button + its popups stay reachable from text mode too. Without
   // this the user can't open the timeline when the flat-panel is up.
@@ -198,14 +208,17 @@ async function _openPanel() {
     </div>
     <div class="bp-tree" style="font-size:12px;line-height:1.7;"></div>
     <div class="bp-actions" style="margin-top:12px;padding-top:10px;border-top:1px solid #2c3a32;display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
-      <button type="button" class="bp-merge" style="background:#13201b;color:#8fbf9f;border:1px solid #3d7a52;border-radius:3px;padding:4px 10px;font-family:inherit;font-size:11px;cursor:pointer;">
-        ⇄ merge two branches…
+      <button type="button" class="bp-new" title="Create a new branch — fork a parent branch at a fact seq or a moment in time, scoped to the whole reality or just a subtree" style="background:#13201b;color:#8fbf9f;border:1px solid #3d7a52;border-radius:3px;padding:4px 10px;font-family:inherit;font-size:11px;cursor:pointer;">
+        ✚ New
       </button>
-      <button type="button" class="bp-replicate" title="Download a portable snapshot of the current place's subtree" style="background:#13201b;color:#8fbf9f;border:1px solid #3d7a52;border-radius:3px;padding:4px 10px;font-family:inherit;font-size:11px;cursor:pointer;">
-        ⬇ replicate this place
+      <button type="button" class="bp-merge" title="Merge two branches" style="background:#13201b;color:#8fbf9f;border:1px solid #3d7a52;border-radius:3px;padding:4px 10px;font-family:inherit;font-size:11px;cursor:pointer;">
+        ⇄ Merge
       </button>
-      <button type="button" class="bp-graft" title="Upload a .replicate.json bundle and graft it under the current place" style="background:#13201b;color:#8fbf9f;border:1px solid #3d7a52;border-radius:3px;padding:4px 10px;font-family:inherit;font-size:11px;cursor:pointer;">
-        ⬆ graft a bundle…
+      <button type="button" class="bp-copy" title="Copy this place as a portable clone (facts only — its shape, no history). Downloads a .clone.json you can Graft elsewhere." style="background:#13201b;color:#8fbf9f;border:1px solid #3d7a52;border-radius:3px;padding:4px 10px;font-family:inherit;font-size:11px;cursor:pointer;">
+        ⬇ Copy
+      </button>
+      <button type="button" class="bp-graft" title="Graft a .clone.json under the current place — replays its facts as fresh local spaces/beings/matter" style="background:#13201b;color:#8fbf9f;border:1px solid #3d7a52;border-radius:3px;padding:4px 10px;font-family:inherit;font-size:11px;cursor:pointer;">
+        ⬆ Graft
       </button>
       <input type="file" class="bp-graft-file" accept=".json,application/json" style="display:none;">
       <span style="color:#6b7d72;font-size:10px;margin-left:auto;">click a branch to open its timeline · esc to close</span>
@@ -214,14 +227,18 @@ async function _openPanel() {
   document.body.appendChild(el);
   _state.panelEl = el;
   el.querySelector(".bp-close").addEventListener("click", _closePanel);
+  el.querySelector(".bp-new").addEventListener("click", (ev) => {
+    ev.stopPropagation();
+    _openNewBranchDialog();
+  });
   el.querySelector(".bp-merge").addEventListener("click", (ev) => {
     ev.stopPropagation();
     _openMergeDialog();
   });
-  el.querySelector(".bp-replicate").addEventListener("click", (ev) => {
+  el.querySelector(".bp-copy").addEventListener("click", (ev) => {
     ev.stopPropagation();
-    _downloadReplicate().catch((err) => {
-      _showBranchEvent(`replicate failed: ${err?.message || err}`);
+    _downloadClone().catch((err) => {
+      _showBranchEvent(`copy failed: ${err?.message || err}`);
     });
   });
   el.querySelector(".bp-graft").addEventListener("click", (ev) => {
@@ -357,6 +374,30 @@ function _renderTree(container, tree) {
         await _togglePauseBranch(branch);
       });
       row.appendChild(action);
+    }
+    // "see branch" — full info for this branch (seq / branchPoint,
+    // pointers aimed here, scope, lineage, children, who/when).
+    {
+      const info = document.createElement("button");
+      info.type = "button";
+      info.textContent = "ⓘ info";
+      info.title = "see full branch info (branch-point seqs, pointers, scope, lineage)";
+      info.style.cssText = [
+        "background: #13201b",
+        "color: #8fbf9f",
+        "border: 1px solid #3d7a52",
+        "border-radius: 3px",
+        "padding: 2px 8px",
+        "margin-left: 6px",
+        "font-family: inherit",
+        "font-size: 10px",
+        "cursor: pointer",
+      ].join(";");
+      info.addEventListener("click", (ev) => {
+        ev.stopPropagation();
+        _openBranchInfoDialog(branch.path);
+      });
+      row.appendChild(info);
     }
     container.appendChild(row);
     const kids = childrenOf.get(branch.path) || [];
@@ -1295,6 +1336,355 @@ async function _branchHere() {
 }
 
 // ─────────────────────────────────────────────────────────────────────
+// BRANCH INFO ("see branch")
+// ─────────────────────────────────────────────────────────────────────
+//
+// SEEs `<reality>/.branches/<path>` — the synthetic branch surface,
+// readable by any logged-in being — and renders the organized JSON it
+// returns: branch-point seqs, pointers aimed here, scope, lineage,
+// children, paused/deleted detail, who/when. A "raw" toggle dumps the
+// full payload for anyone who wants every field.
+
+let _branchInfoDialogEl = null;
+
+async function _openBranchInfoDialog(branchPath) {
+  if (_branchInfoDialogEl) _closeBranchInfoDialog();
+  let graph = null;
+  let err = null;
+  try {
+    const desc = await _state.client.see(`${_state.reality}/.branches/${branchPath}`);
+    graph = desc?.branches || null;
+  } catch (e) {
+    err = e?.message || String(e);
+  }
+
+  const el = document.createElement("div");
+  el.id = "branch-info-dialog";
+  el.style.cssText = [
+    "position: fixed",
+    "top: 50%", "left: 50%",
+    "transform: translate(-50%, -50%)",
+    "width: min(560px, 92vw)",
+    "max-height: 82vh",
+    "overflow: auto",
+    "background: rgba(10, 13, 12, 0.97)",
+    "backdrop-filter: blur(6px)",
+    "border: 1px solid #3d7a52",
+    "border-radius: 8px",
+    "color: #c8d3cb",
+    "font-family: ui-monospace, monospace",
+    "font-size: 12px",
+    "z-index: 220",
+    "padding: 16px 18px",
+    "pointer-events: auto",
+    "box-shadow: 0 10px 40px rgba(0,0,0,0.55)",
+  ].join(";");
+
+  const cur = graph?.current || null;
+  const pointers = graph?.pointers || {};
+  const aimedHere = Object.keys(pointers)
+    .filter((name) => pointers[name] === branchPath)
+    .sort();
+  const lineage = Array.isArray(graph?.lineage) ? graph.lineage : [];
+  const children = Array.isArray(graph?.children) ? graph.children : [];
+
+  const rows = [];
+  const kv = (k, v) => rows.push(
+    `<div style="display:grid;grid-template-columns:130px 1fr;gap:8px;padding:3px 0;">
+       <span style="color:#9ab2a3;font-size:10px;text-transform:uppercase;letter-spacing:0.5px;">${_escape(k)}</span>
+       <span style="color:#c8d3cb;word-break:break-word;">${v}</span>
+     </div>`,
+  );
+
+  if (err || !cur) {
+    rows.push(`<div style="color:#d97a7a;">${_escape(err || `branch "${branchPath}" not found`)}</div>`);
+  } else {
+    kv("path", `#${_escape(cur.path)}`);
+    if (cur.label) kv("label", _escape(cur.label));
+    kv("live", cur.isLive ? "yes" : "no");
+    kv("parent", cur.parent ? `#${_escape(cur.parent)}` : "main (root)");
+    kv("lineage", lineage.map((p) => `#${_escape(p)}`).join(" → ") || "—");
+    kv("children", children.length ? children.map((c) => `#${_escape(c.path)}`).join(", ") : "—");
+    kv("pointers here", aimedHere.length ? aimedHere.map(_escape).join(", ") : "—");
+    const anchor = cur.anchor && typeof cur.anchor === "object" ? cur.anchor : {};
+    const anchorKeys = Object.keys(anchor);
+    kv(
+      "branch-point",
+      anchorKeys.length
+        ? anchorKeys.map((k) => `${_escape(k)} @ seq ${anchor[k]}`).join("<br>")
+        : "(forked at genesis / no reels)",
+    );
+    kv("scope", cur.scope?.path ? `subtree ${_escape(cur.scope.path)}` : "whole reality");
+    kv("created", `${cur.createdAt ? _shortStamp(cur.createdAt) : "?"}${cur.createdBy ? ` by ${_escape(String(cur.createdBy).slice(0, 8))}` : ""}`);
+    if (cur.mergeSources?.length) kv("merged from", cur.mergeSources.map((s) => `#${_escape(s)}`).join(" + "));
+    if (cur.paused) kv("paused", `yes${cur.pausedAt ? ` (${_shortStamp(cur.pausedAt)})` : ""}`);
+    if (cur.deleted) kv("deleted", `yes${cur.deletedAt ? ` (${_shortStamp(cur.deletedAt)})` : ""}`);
+    if (cur.archivedBecause) kv("archived", _escape(cur.archivedBecause));
+  }
+
+  el.innerHTML = `
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
+      <span style="color:#8fbf9f;font-size:13px;">branch #${_escape(branchPath)} · info</span>
+      <button type="button" class="bi-close" style="background:transparent;color:#6b7d72;border:none;font-size:18px;cursor:pointer;padding:0 4px;">×</button>
+    </div>
+    <div class="bi-body">${rows.join("")}</div>
+    <div style="margin-top:12px;padding-top:10px;border-top:1px solid #2c3a32;">
+      <button type="button" class="bi-raw" style="background:#13201b;color:#8fbf9f;border:1px solid #3d7a52;border-radius:3px;padding:4px 10px;font-family:inherit;font-size:11px;cursor:pointer;">show raw JSON</button>
+      <pre class="bi-json" style="display:none;margin-top:8px;background:#0a0d0c;border:1px solid #2c3a32;border-radius:3px;padding:8px;max-height:40vh;overflow:auto;white-space:pre-wrap;word-break:break-word;font-size:11px;color:#9ab0a3;"></pre>
+    </div>
+  `;
+  document.body.appendChild(el);
+  _branchInfoDialogEl = el;
+
+  el.querySelector(".bi-close").addEventListener("click", _closeBranchInfoDialog);
+  const rawBtn = el.querySelector(".bi-raw");
+  const rawPre = el.querySelector(".bi-json");
+  rawBtn.addEventListener("click", () => {
+    if (rawPre.style.display === "none") {
+      rawPre.textContent = JSON.stringify(graph, null, 2);
+      rawPre.style.display = "block";
+      rawBtn.textContent = "hide raw JSON";
+    } else {
+      rawPre.style.display = "none";
+      rawBtn.textContent = "show raw JSON";
+    }
+  });
+
+  function escClose(ev) {
+    if (ev.key === "Escape") {
+      ev.stopPropagation();
+      _closeBranchInfoDialog();
+      window.removeEventListener("keydown", escClose, true);
+    }
+  }
+  window.addEventListener("keydown", escClose, true);
+}
+
+function _closeBranchInfoDialog() {
+  if (_branchInfoDialogEl) {
+    _branchInfoDialogEl.remove();
+    _branchInfoDialogEl = null;
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// NEW-BRANCH DIALOG
+// ─────────────────────────────────────────────────────────────────────
+//
+// One modal over the tree panel. Maps directly to the create-branch op:
+//   parent  — which branch to fork (defaults to the one you're on)
+//   anchor  — a fact seq (substrate-native) OR a moment in time (human
+//             helper); exactly one is required
+//   scope   — omit for a whole-reality branch, or a subtree path for a
+//             scoped branch (defaults to the position you're standing at;
+//             "/" collapses to whole-reality)
+// The branch-manager being carries the doctrine; this is a thin form.
+
+let _newBranchDialogEl = null;
+
+function _openNewBranchDialog() {
+  if (_newBranchDialogEl) return;
+  if (!_state.graphAll) {
+    _showBranchEvent("tree not loaded yet", { error: true });
+    return;
+  }
+  const branches = Array.from(_state.graphAll.byPath.values())
+    .filter((b) => !b.deleted)
+    .sort((a, b) => a.path.localeCompare(b.path));
+
+  const curBranch = window.__state?.descriptor?.address?.branch || "0";
+  const curPath = window.__state?.descriptor?.address?.pathByNames || "/";
+  const atRoot = curPath === "/" || curPath === "";
+
+  const opt = (b) => {
+    const label = b.path === "0" ? "main (#0)" : `#${b.path}${b.label ? ` — ${_escape(b.label)}` : ""}`;
+    const sel = b.path === curBranch ? " selected" : "";
+    return `<option value="${b.path}"${sel}>${label}</option>`;
+  };
+
+  // datetime-local wants local "YYYY-MM-DDTHH:mm"; prefill with now.
+  const now = new Date();
+  const pad = (n) => String(n).padStart(2, "0");
+  const localNow = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}T${pad(now.getHours())}:${pad(now.getMinutes())}`;
+
+  const el = document.createElement("div");
+  el.id = "new-branch-dialog";
+  el.style.cssText = [
+    "position: fixed",
+    "top: 50%", "left: 50%",
+    "transform: translate(-50%, -50%)",
+    "width: min(520px, 92vw)",
+    "max-height: 80vh",
+    "overflow: auto",
+    "background: rgba(10, 13, 12, 0.97)",
+    "backdrop-filter: blur(6px)",
+    "border: 1px solid #3d7a52",
+    "border-radius: 8px",
+    "color: #c8d3cb",
+    "font-family: ui-monospace, monospace",
+    "font-size: 12px",
+    "z-index: 220",
+    "padding: 16px 18px",
+    "pointer-events: auto",
+    "box-shadow: 0 10px 40px rgba(0,0,0,0.55)",
+  ].join(";");
+  const labelCss = "color:#9ab2a3;font-size:10px;text-transform:uppercase;letter-spacing:0.5px;";
+  const inputCss = "background:#0a0d0c;color:#c8d3cb;border:1px solid #2c3a32;border-radius:3px;padding:5px 7px;font-family:inherit;font-size:12px;";
+  el.innerHTML = `
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
+      <span style="color:#8fbf9f;font-size:13px;">new branch</span>
+      <button type="button" class="nb-close" style="background:transparent;color:#6b7d72;border:none;font-size:18px;cursor:pointer;padding:0 4px;">×</button>
+    </div>
+    <form class="nb-form" style="display:grid;gap:12px;">
+      <label style="display:grid;gap:4px;">
+        <span style="${labelCss}">parent branch (fork from)</span>
+        <select name="parent" style="${inputCss}">${branches.map(opt).join("")}</select>
+      </label>
+
+      <fieldset style="border:1px solid #2c3a32;border-radius:4px;padding:8px 10px;display:grid;gap:8px;">
+        <legend style="${labelCss}padding:0 4px;">branch point</legend>
+        <label style="display:flex;gap:6px;align-items:center;cursor:pointer;">
+          <input type="radio" name="anchorType" value="time" checked /> at a moment in time
+        </label>
+        <input name="atTimestamp" type="datetime-local" value="${localNow}" style="${inputCss}" />
+        <label style="display:flex;gap:6px;align-items:center;cursor:pointer;">
+          <input type="radio" name="anchorType" value="seq" /> at a fact seq (advanced)
+        </label>
+        <input name="atSeq" type="number" min="0" placeholder="e.g. 42" style="${inputCss}" />
+      </fieldset>
+
+      <fieldset style="border:1px solid #2c3a32;border-radius:4px;padding:8px 10px;display:grid;gap:8px;">
+        <legend style="${labelCss}padding:0 4px;">scope</legend>
+        <label style="display:flex;gap:6px;align-items:center;cursor:pointer;">
+          <input type="radio" name="scopeType" value="whole" ${atRoot ? "checked" : ""} /> the whole reality
+        </label>
+        <label style="display:flex;gap:6px;align-items:center;cursor:pointer;">
+          <input type="radio" name="scopeType" value="subtree" ${atRoot ? "" : "checked"} /> just this subtree
+        </label>
+        <input name="scopePath" type="text" value="${_escape(atRoot ? "" : curPath)}" placeholder="/path (writes outside refuse; reads inherit from parent)" style="${inputCss}" />
+      </fieldset>
+
+      <label style="display:grid;gap:4px;">
+        <span style="${labelCss}">pointer (optional)</span>
+        <input name="pointer" type="text" placeholder="e.g. feature-x" style="${inputCss}" />
+        <span style="color:#6b7d72;font-size:10px;">a movable name that addresses this branch. if it's already taken you'll be asked whether to move it here.</span>
+      </label>
+
+      <div class="nb-error" style="display:none;color:#d97a7a;font-size:11px;padding:4px 6px;background:rgba(217,122,122,0.08);border:1px solid #5c2323;border-radius:3px;"></div>
+      <div style="display:flex;gap:8px;align-items:center;margin-top:4px;">
+        <button type="submit" class="nb-submit" style="background:#1a3424;color:#c8d3cb;border:1px solid #3d7a52;border-radius:3px;padding:6px 12px;font-family:inherit;font-size:12px;cursor:pointer;flex:1;">✚ create branch</button>
+        <button type="button" class="nb-cancel" style="background:transparent;color:#6b7d72;border:1px solid #2c3a32;border-radius:3px;padding:6px 12px;font-family:inherit;font-size:12px;cursor:pointer;">cancel</button>
+      </div>
+    </form>
+  `;
+  document.body.appendChild(el);
+  _newBranchDialogEl = el;
+
+  const close = () => _closeNewBranchDialog();
+  el.querySelector(".nb-close").addEventListener("click", close);
+  el.querySelector(".nb-cancel").addEventListener("click", close);
+
+  const form = el.querySelector(".nb-form");
+  form.addEventListener("submit", async (ev) => {
+    ev.preventDefault();
+    const errEl = el.querySelector(".nb-error");
+    const fail = (msg) => { errEl.textContent = msg; errEl.style.display = "block"; };
+    errEl.style.display = "none";
+    errEl.textContent = "";
+
+    const fd = new FormData(form);
+    const args = { parent: String(fd.get("parent") || "0").trim() || "0" };
+
+    if (String(fd.get("anchorType")) === "seq") {
+      const raw = String(fd.get("atSeq") || "").trim();
+      if (raw === "") return fail("enter a fact seq, or anchor by time");
+      const n = Number(raw);
+      if (!Number.isInteger(n) || n < 0) return fail("fact seq must be a non-negative integer");
+      args.atSeq = n;
+    } else {
+      const raw = String(fd.get("atTimestamp") || "").trim();
+      if (!raw) return fail("pick a moment in time, or anchor by seq");
+      const d = new Date(raw);
+      if (Number.isNaN(d.getTime())) return fail("invalid time");
+      args.atTimestamp = d.toISOString();
+    }
+
+    if (String(fd.get("scopeType")) === "subtree") {
+      let p = String(fd.get("scopePath") || "").trim();
+      if (p && p !== "/") {
+        if (!p.startsWith("/")) p = "/" + p;
+        args.scope = p;
+      }
+      // empty or "/" → whole reality (omit scope)
+    }
+
+    const pointer = String(fd.get("pointer") || "").trim().toLowerCase();
+    if (pointer) args.pointer = pointer;
+
+    const submitBtn = el.querySelector(".nb-submit");
+    const prev = submitBtn.textContent;
+    submitBtn.disabled = true;
+    submitBtn.textContent = "creating…";
+    try {
+      let result;
+      try {
+        result = await _state.client.do("/@branch-manager", "create-branch", args);
+      } catch (err) {
+        // Pointer already taken — ask whether to move it here, leaving the
+        // old branch on its canonical path without the pointer.
+        const conflict = err?.code === "RESOURCE_CONFLICT" || /already on branch|reassignPointer/i.test(err?.message || "");
+        if (conflict && pointer) {
+          const heldBy = err?.data?.heldBy || err?.heldBy || null;
+          const where = heldBy ? ` (currently on #${heldBy})` : "";
+          const move = window.confirm(
+            `The pointer "${pointer}" is already taken${where}.\n\n` +
+            `Move it to this new branch? The old branch keeps its canonical path` +
+            `${heldBy ? ` (#${heldBy})` : ""} but loses the "${pointer}" pointer.`,
+          );
+          if (!move) throw new Error(`cancelled — "${pointer}" left where it was`);
+          result = await _state.client.do(
+            "/@branch-manager",
+            "create-branch",
+            { ...args, reassignPointer: true },
+          );
+        } else {
+          throw err;
+        }
+      }
+      const r = result?.result || result;
+      if (!r?.path) throw new Error(r?.error?.message || "create-branch returned no path");
+      _closeNewBranchDialog();
+      _closePanel();
+      const scopeNote = args.scope ? ` (subtree ${args.scope})` : "";
+      const ptrNote = (r.pointerAttached || (pointer && !r.pointerWarning)) ? ` · pointer "${pointer}"` : "";
+      _showBranchEvent(`✨ branched! now on #${r.path}${scopeNote}${ptrNote}`, { sticky: 2500 });
+      location.hash = `#${_state.reality}#${r.path}/`;
+    } catch (err) {
+      console.warn("[branch-bar] create-branch failed:", err);
+      fail(err?.message || String(err));
+      submitBtn.disabled = false;
+      submitBtn.textContent = prev;
+    }
+  });
+
+  function escClose(ev) {
+    if (ev.key === "Escape") {
+      ev.stopPropagation();
+      close();
+      window.removeEventListener("keydown", escClose, true);
+    }
+  }
+  window.addEventListener("keydown", escClose, true);
+}
+
+function _closeNewBranchDialog() {
+  if (_newBranchDialogEl) {
+    _newBranchDialogEl.remove();
+    _newBranchDialogEl = null;
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────
 // MERGE DIALOG
 // ─────────────────────────────────────────────────────────────────────
 //
@@ -1311,38 +1701,39 @@ async function _branchHere() {
 // truth for both UI re-renders and the next mediator pickup point.
 
 // ────────────────────────────────────────────────────────────────
-// Replicate + graft
+// Copy (clone) + graft
 // ────────────────────────────────────────────────────────────────
 //
-// `replicate this place`: calls do(currentPath, "replicate-subtree",
-// {name}) and downloads the returned bundle as a .replicate.json file.
-// The subtree is rooted at the user's current position; the seed's
-// replicateSubtree primitive walks descendants + their beings + matter.
+// `Copy`: calls do(currentPath, "clone-subtree", {name}) and downloads
+// the returned bundle as a .clone.json file. The subtree is rooted at
+// the user's current position; the seed's cloneSubtree primitive walks
+// descendants + their beings + matter, capturing facts only (the shape,
+// no history) — per Chain-Rebuild.md, a clone is a cutting.
 //
-// `graft a bundle…`: file-picker → reads JSON → calls do(currentPath,
-// "graft-replicate", {bundle}). The bundle's content lands as fresh
-// spaces / beings / matter under the user's current position. Refs
-// inside the bundle remap to bare-string ids in the target's namespace
-// (the substrate everywhere stores bare; the bundle is the only place
-// Refs live).
+// `Graft`: file-picker → reads JSON → calls do(currentPath,
+// "graft-clone", {bundle}). The bundle's content lands as fresh spaces /
+// beings / matter under the user's current position. Refs inside the
+// bundle remap to bare-string ids in the target's namespace (the
+// substrate everywhere stores bare; the bundle is the only place Refs
+// live).
 
 function _currentAddressPath() {
   return window.__state?.descriptor?.address?.pathByNames || null;
 }
 
-async function _downloadReplicate() {
+async function _downloadClone() {
   const addr = _currentAddressPath();
   if (!addr) {
-    throw new Error("no current address to replicate from");
+    throw new Error("no current address to copy from");
   }
   const placeName = window.__state?.descriptor?.address?.spaceName || "place";
-  _showBranchEvent(`replicating ${placeName}…`);
-  const result = await _state.client.do(addr, "replicate-subtree", {
+  _showBranchEvent(`copying ${placeName}…`);
+  const result = await _state.client.do(addr, "clone-subtree", {
     name: placeName,
   });
   const bundle = result?.bundle;
   if (!bundle) {
-    throw new Error("replicate returned no bundle");
+    throw new Error("copy returned no bundle");
   }
   // Pretty-print + JSON download.
   const blob = new Blob([JSON.stringify(bundle, null, 2)], { type: "application/json" });
@@ -1350,13 +1741,13 @@ async function _downloadReplicate() {
   const stamp = bundle.meta?.createdAt?.replace(/[:.]/g, "-").slice(0, 19) || "snapshot";
   const a = document.createElement("a");
   a.href = url;
-  a.download = `${placeName}-${stamp}.replicate.json`;
+  a.download = `${placeName}-${stamp}.clone.json`;
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);
   URL.revokeObjectURL(url);
   const counts = `${bundle.content?.spaces?.length || 0} spaces, ${bundle.content?.beings?.length || 0} beings, ${bundle.content?.matter?.length || 0} matter`;
-  _showBranchEvent(`✓ replicated ${placeName} (${counts})`);
+  _showBranchEvent(`✓ copied ${placeName} (${counts})`);
 }
 
 async function _graftFromFile(file) {
@@ -1373,10 +1764,10 @@ async function _graftFromFile(file) {
   }
   const srcName = bundle?.meta?.sourceScopeName || "bundle";
   _showBranchEvent(`grafting ${srcName} under ${addr}…`);
-  const result = await _state.client.do(addr, "graft-replicate", { bundle });
+  const result = await _state.client.do(addr, "graft-clone", { bundle });
   const counts = `${result?.counts?.spaces || 0} spaces, ${result?.counts?.beings || 0} beings, ${result?.counts?.matter || 0} matter`;
   _showBranchEvent(`✓ grafted ${srcName} (${counts})`);
-  // Refetch the tree so any newly created branches surface (replicates
+  // Refetch the tree so any newly created branches surface (clones
   // don't make branches, but operators may follow up with a branch).
   await _loadBranchTree();
   if (_state.panelEl) {

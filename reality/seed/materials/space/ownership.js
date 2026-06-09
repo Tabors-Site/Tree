@@ -1,409 +1,68 @@
 // TreeOS Seed . AGPL-3.0 . https://treeos.ai . Tabor Holly
 //
-// Ownership and contributors. Who can act here.
+// Ownership and contributors — thin compatibility shims over the
+// membership-class primitive.
 //
-// Every Space carries two access fields: rootOwner (one being who
-// owns this position and everything beneath it) and contributors[]
-// (beings invited to write here without taking ownership). Both
-// resolve up the parent chain — a Space without its own rootOwner
-// inherits the nearest ancestor's. resolveSpaceAccess does the walk;
-// this file is the write side that mutates the fields.
+// Doctrine. There is exactly one membership-class storage primitive
+// (`space.members`, see materials/space/members.js). Owner and
+// contributor are NOT separate concepts; they are two named classes
+// in the members map (owner is a singleton class by invariant).
+// Generic add-member / remove-member ops mutate any class; the four
+// named functions here exist purely as named convenience for
+// addContributor / removeContributor / setOwner / removeOwner /
+// transferOwnership callers, all of which now delegate to the generic
+// primitive in materials/space/members.js.
 //
-// rootOwner means "owner from this point down." Setting it on a
-// branch delegates the whole sub-tree to a new being. The owner
-// above can revoke the delegation; the delegate cannot revoke the
-// owner above.
-//
-// Every mutation here gates on resolveSpaceAccess: only the resolved
-// owner at the position can change ownership or contributors.
-// Self-removal is the one exception — a contributor can step out
-// without owner permission. Stance authorization will eventually
-// express these rules uniformly; until then each method checks
-// inline.
-//
-// Fact-driven (slice F-ownership, 2026-05-23). Every write here
-// emits a `do:set` Fact on the Space's reel — rootOwner as a scalar
-// field, contributors[] as a whole-array replace. The space lock
-// serializes the read-modify-write window so concurrent contributor
-// changes on the same Space don't race.
-//
-// Branch behaviour. Ownership reads here go through loadOrFold like
-// every other behavioural read in the seed: each branch sees its
-// effective view (inherited from main where nothing diverged, branch-
-// local where a divergent set-space rootOwner / contributors fact
-// landed). Writes stamp on the calling branch's reel, so a branch can
-// have different rootOwner / contributors than main without affecting
-// main's view. Cross-branch isolation (v1 design) keeps the graph
-// coherent within each branch . there's no "shared" ownership graph
-// across branches to make incoherent. Callers thread branch through
-// to every helper here; no internal default to "0" so missing-branch
-// calls fail loud rather than silently fold on main.
+// New code should call the members.js primitives directly. These
+// shims are kept while peripheral readers migrate to the new shape.
 
-import Space from "./space.js";
-import { getInternalConfigValue } from "../../internalConfig.js";
-import Being from "../being/being.js";
-import { resolveSpaceAccess } from "./spaces.js";
-import { invalidateSpace } from "./ancestorCache.js";
-import { hooks } from "../../hooks.js";
-import { getRealityConfigValue } from "../../realityConfig.js";
-import { IBP_ERR, IbpError } from "../../ibp/protocol.js";
-import { I_AM } from "../being/seedBeings.js";
-import { acquireSpaceLock, releaseSpaceLock } from "./spaceLocks.js";
+import {
+  addSpaceMember,
+  removeSpaceMember,
+  setSpaceOwner,
+  removeSpaceOwner,
+} from "./members.js";
 
 /**
- * Add a contributor to a space. Only the resolved owner can do this.
- * Read-modify-write under the space lock; whole-array fact replace.
+ * Add a contributor to a space. Thin shim over addSpaceMember(
+ *   ..., "contributor", ...).
  */
 export async function addContributor(spaceId, contributorId, beingId, branch, summonCtx = null) {
-  if (typeof branch !== "string" || !branch) {
-    throw new Error("addContributor: branch is required (thread from summonCtx; no silent main-bias).");
-  }
-  const { loadOrFold } = await import("../projections.js");
-  const _spaceSlot = await loadOrFold("space", spaceId, branch);
-  const space = _spaceSlot ? { heavenSpace: _spaceSlot.state?.heavenSpace } : null;
-  if (!space) throw new Error("Space not found");
-  // Heaven is the one heaven space whose contributors[] is documented to
-  // grow at runtime — cherub.register anoints the first heaven contributor, and
-  // seedDelegates join at boot. Every other heaven space (Tier-3 like
-  // .roles, .config, etc.) stays immutable.
-  if (space.heavenSpace && space.heavenSpace !== "heaven") {
-    throw new Error("Cannot modify heaven spaces");
-  }
-
-  await assertBeingExists(contributorId, branch);
-  await assertOwner(spaceId, beingId, branch);
-
-  // Prevent adding the resolved owner as a contributor (redundant, logically wrong)
-  const targetAccess = await resolveSpaceAccess(spaceId, contributorId, branch);
-  if (targetAccess.ok && targetAccess.isOwner) {
-    throw new Error("Cannot add the owner as a contributor");
-  }
-
-  const MAX_CONTRIBUTORS = Number(getInternalConfigValue("maxContributorsPerSpace")) || 500;
-
-  const locked = await acquireSpaceLock(spaceId, beingId);
-  if (!locked) {
-    throw new IbpError(IBP_ERR.RESOURCE_CONFLICT, "Space is being modified");
-  }
-  try {
-    const { loadOrFold: _lOF } = await import("../projections.js");
-    const _curSlot = await _lOF("space", spaceId, branch);
-    const current = _curSlot ? { contributors: _curSlot.state?.contributors } : null;
-    const list = current?.contributors || [];
-    if (list.length >= MAX_CONTRIBUTORS) {
-      throw new Error(`Space has reached the maximum of ${MAX_CONTRIBUTORS} contributors`);
-    }
-    const alreadyMember = list.some((e) => String(e) === contributorId);
-    if (alreadyMember) return;
-    const next = [...list, String(contributorId)];
-
-    const target = { kind: "space", id: String(spaceId) };
-    const { doVerb } = await import("../../ibp/verbs/do.js");
-    await doVerb(
-      target,
-      "set-space",
-      { field: "contributors", value: next },
-      { identity: { beingId }, currentBranch: branch, summonCtx },
-    );
-  } finally {
-    releaseSpaceLock(spaceId, beingId);
-  }
-
-  invalidateSpace(spaceId);
-  hooks.run("afterOwnershipChange", { spaceId, action: "addContributor", targetUserId: contributorId }).catch(() => {});
+  return addSpaceMember(spaceId, "contributor", contributorId, beingId, branch, summonCtx);
 }
 
 /**
- * Remove a contributor from a space.
- * The resolved owner or the contributor themselves can remove.
+ * Remove a contributor from a space. Thin shim over removeSpaceMember(
+ *   ..., "contributor", ...). Self-removal is allowed (the underlying
+ * primitive handles it).
  */
 export async function removeContributor(spaceId, contributorId, beingId, branch, summonCtx = null) {
-  if (typeof branch !== "string" || !branch) {
-    throw new Error("removeContributor: branch is required (thread from summonCtx).");
-  }
-  const { loadOrFold } = await import("../projections.js");
-  const _spaceSlot = await loadOrFold("space", spaceId, branch);
-  const space = _spaceSlot ? { heavenSpace: _spaceSlot.state?.heavenSpace } : null;
-  if (!space) throw new Error("Space not found");
-  // Same heaven carve-out as addContributor — heaven's contributors[]
-  // is a live roster, not an immutable seed-space field.
-  if (space.heavenSpace && space.heavenSpace !== "heaven") {
-    throw new Error("Cannot modify heaven spaces");
-  }
-
-  await assertBeingExists(contributorId, branch);
-
-  // Self-removal is always allowed
-  if (contributorId !== beingId) {
-    await assertOwner(spaceId, beingId, branch);
-  }
-
-  const locked = await acquireSpaceLock(spaceId, beingId);
-  if (!locked) {
-    throw new IbpError(IBP_ERR.RESOURCE_CONFLICT, "Space is being modified");
-  }
-  try {
-    const { loadOrFold: _lOF } = await import("../projections.js");
-    const _curSlot = await _lOF("space", spaceId, branch);
-    const current = _curSlot ? { contributors: _curSlot.state?.contributors } : null;
-    const list = current?.contributors || [];
-    const present = list.some((e) => String(e) === contributorId);
-    if (!present) return;
-    const next = list.filter((e) => String(e) !== contributorId);
-
-    const target = { kind: "space", id: String(spaceId) };
-    const { doVerb } = await import("../../ibp/verbs/do.js");
-    await doVerb(
-      target,
-      "set-space",
-      { field: "contributors", value: next },
-      { identity: { beingId }, currentBranch: branch, summonCtx },
-    );
-  } finally {
-    releaseSpaceLock(spaceId, beingId);
-  }
-
-  invalidateSpace(spaceId);
-  hooks.run("afterOwnershipChange", { spaceId, action: "removeContributor", targetUserId: contributorId }).catch(() => {});
+  return removeSpaceMember(spaceId, "contributor", contributorId, beingId, branch, summonCtx);
 }
 
 /**
- * Set rootOwner on a space (delegate ownership of a sub-tree).
- * Only the resolved owner above this position can delegate.
- * Cannot set rootOwner on place heaven spaces.
- *
- * Two facts in sequence: the rootOwner write, then a contributors
- * prune (the new owner is removed from contributors[] if they were
- * one). Both under the space lock so the projection's contributors
- * list is consistent with the new ownership at the moment the second
- * fact lands.
+ * Set the resolved owner at a space. Replaces the singleton owner
+ * class. The previous owner (if any) is demoted to contributor so
+ * they retain write access to their former subtree.
  */
 export async function setOwner(spaceId, newOwnerId, beingId, branch, summonCtx = null) {
-  if (typeof branch !== "string" || !branch) {
-    throw new Error("setOwner: branch is required (thread from summonCtx).");
-  }
-  const { loadOrFold: _lOF1 } = await import("../projections.js");
-  const ownerIdFrom = (v) => v ? String(v) : null;
-  const _ownerSlot = await _lOF1("space", spaceId, branch);
-  const space = _ownerSlot ? {
-    heavenSpace: _ownerSlot.state?.heavenSpace,
-    rootOwner: _ownerSlot.state?.rootOwner,
-    parent:    _ownerSlot.state?.parent,
-  } : null;
-  if (!space) throw new Error("Space not found");
-  if (space.heavenSpace) throw new Error("Cannot set ownership on heaven spaces");
-
-  await assertBeingExists(newOwnerId, branch);
-
-  const currentRootOwnerId = ownerIdFrom(space.rootOwner);
-  if (currentRootOwnerId === newOwnerId) {
-    throw new Error("Being is already the owner at this space");
-  }
-
-  // If this space already has rootOwner, only that owner can change it.
-  // If it doesn't, resolve the owner above.
-  if (currentRootOwnerId && currentRootOwnerId !== I_AM) {
-    if (currentRootOwnerId !== beingId) {
-      throw new Error("Only the current owner can reassign rootOwner");
-    }
-  } else if (space.parent) {
-    // No rootOwner here. Check the owner above. space.parent is a Ref.
-    await assertOwner(space.parent, beingId, branch);
-  } else {
-    // Orphaned space with no parent and no owner. No path forward
-    // without stance authorization rules; refuse for now.
-    throw new Error("Cannot set owner on a top-level space with no current owner (stance authorization pending)");
-  }
-
-  const previousOwnerId = currentRootOwnerId;
-
-  const locked = await acquireSpaceLock(spaceId, beingId);
-  if (!locked) throw new IbpError(IBP_ERR.RESOURCE_CONFLICT, "Space ownership is being modified");
-  try {
-    // CAS check on rootOwner inside the lock: if a concurrent writer
-    // changed ownership between our initial read and lock acquire, the
-    // previousOwnerId we computed above is stale — abort.
-    const { loadOrFold: _lOF2 } = await import("../projections.js");
-    const _curSlot2 = await _lOF2("space", spaceId, branch);
-    const current = _curSlot2 ? {
-      rootOwner:    _curSlot2.state?.rootOwner,
-      contributors: _curSlot2.state?.contributors,
-    } : null;
-    const currentOwner = ownerIdFrom(current?.rootOwner);
-    if (currentOwner !== previousOwnerId) {
-      throw new Error("Ownership changed concurrently. Retry the operation.");
-    }
-
-    const target = { kind: "space", id: String(spaceId) };
-    const { doVerb } = await import("../../ibp/verbs/do.js");
-    await doVerb(
-      target,
-      "set-space",
-      { field: "rootOwner", value: newOwnerId },
-      { identity: { beingId }, currentBranch: branch, summonCtx },
-    );
-
-    const list = current?.contributors || [];
-    const isMember = list.some((e) => String(e) === newOwnerId);
-    if (isMember) {
-      const next = list.filter((e) => String(e) !== newOwnerId);
-      // (no row load; typed target above already names this space)
-      await doVerb(
-        target,
-        "set-space",
-        { field: "contributors", value: next },
-        { identity: { beingId }, currentBranch: branch, summonCtx },
-      );
-    }
-
-    invalidateSpace(spaceId);
-    hooks.run("afterOwnershipChange", { spaceId, action: "setOwner", targetUserId: newOwnerId, previousOwnerId }).catch(() => {});
-  } finally {
-    releaseSpaceLock(spaceId, beingId);
-  }
+  return setSpaceOwner(spaceId, newOwnerId, beingId, branch, summonCtx);
 }
 
 /**
- * Remove rootOwner from a space (revoke delegation).
- * Only the owner ABOVE this space in the chain can revoke.
- * The delegate cannot revoke themselves (that would orphan the sub-tree
- * from their own authority, which makes no sense).
+ * Clear the resolved owner at a space (revoke a delegation). The
+ * parent's owner authorizes; the walker inherits ownership from above
+ * after the clear.
  */
 export async function removeOwner(spaceId, beingId, branch) {
-  if (typeof branch !== "string" || !branch) {
-    throw new Error("removeOwner: branch is required (thread from summonCtx).");
-  }
-  const { loadOrFold: _lOF3 } = await import("../projections.js");
-  const _rmSlot = await _lOF3("space", spaceId, branch);
-  const space = _rmSlot ? {
-    heavenSpace: _rmSlot.state?.heavenSpace,
-    rootOwner: _rmSlot.state?.rootOwner,
-    parent:    _rmSlot.state?.parent,
-  } : null;
-  if (!space) throw new Error("Space not found");
-  if (space.heavenSpace) throw new Error("Cannot modify heaven spaces");
-  const ownerId = space.rootOwner || null;
-  if (!ownerId || ownerId === I_AM) throw new Error("Space has no owner to remove");
-
-  // Only the owner ABOVE this space can revoke. Top-level roots can't
-  // have their owner removed under the current rules; stance
-  // authorization will eventually grant exceptions per place policy.
-  if (space.parent) {
-    await assertOwner(space.parent, beingId, branch);
-  } else {
-    throw new Error("Cannot remove owner on a top-level root (stance authorization pending)");
-  }
-
-  const removedOwnerId = ownerId;
-
-  const locked = await acquireSpaceLock(spaceId, beingId);
-  if (!locked) throw new IbpError(IBP_ERR.RESOURCE_CONFLICT, "Space ownership is being modified");
-  try {
-    const target = { kind: "space", id: String(spaceId) };
-    const { doVerb } = await import("../../ibp/verbs/do.js");
-    await doVerb(
-      target,
-      "set-space",
-      { field: "rootOwner", value: null },
-      { identity: { beingId }, currentBranch: branch, summonCtx },
-    );
-    invalidateSpace(spaceId);
-    hooks.run("afterOwnershipChange", { spaceId, action: "removeOwner", targetUserId: removedOwnerId }).catch(() => {});
-  } finally {
-    releaseSpaceLock(spaceId, beingId);
-  }
+  return removeSpaceOwner(spaceId, beingId, branch, null);
 }
 
 /**
- * Transfer ownership: set a new rootOwner on a space that already has one.
- * Only the current rootOwner on this space can transfer.
- *
- * Two facts under the lock: rootOwner flips to the new owner; the
- * previous owner is added as a contributor so they don't lose write
- * access to their former tree. The new owner is also pruned from
- * contributors if they had been one.
+ * Transfer ownership at a space. Reuses setSpaceOwner — the
+ * underlying primitive already adds the previous owner as a
+ * contributor in the same moment.
  */
 export async function transferOwnership(spaceId, newOwnerId, beingId, branch, summonCtx = null) {
-  if (typeof branch !== "string" || !branch) {
-    throw new Error("transferOwnership: branch is required (thread from summonCtx).");
-  }
-  const { loadOrFold: _lOF4 } = await import("../projections.js");
-  const _txSlot = await _lOF4("space", spaceId, branch);
-  const space = _txSlot ? {
-    heavenSpace: _txSlot.state?.heavenSpace,
-    rootOwner: _txSlot.state?.rootOwner,
-  } : null;
-  if (!space) throw new Error("Space not found");
-  if (space.heavenSpace) throw new Error("Cannot modify heaven spaces");
-  const oldOwnerId = space.rootOwner || null;
-  if (!oldOwnerId || oldOwnerId === I_AM) throw new Error("Space has no owner to transfer from");
-
-  await assertBeingExists(newOwnerId, branch);
-
-  if (oldOwnerId === newOwnerId) {
-    throw new Error("User is already the owner at this space");
-  }
-
-  if (oldOwnerId !== beingId) {
-    throw new Error("Only the current owner can transfer ownership");
-  }
-
-  const locked = await acquireSpaceLock(spaceId, beingId);
-  if (!locked) throw new IbpError(IBP_ERR.RESOURCE_CONFLICT, "Space ownership is being modified");
-  try {
-    const { loadOrFold: _lOFt } = await import("../projections.js");
-    const _curSlot = await _lOFt("space", spaceId, branch);
-    const current = _curSlot ? { contributors: _curSlot.state?.contributors } : null;
-    const list = current?.contributors || [];
-    const filtered = list.some((e) => String(e) === newOwnerId)
-      ? list.filter((e) => String(e) !== newOwnerId)
-      : list;
-    const next = filtered.some((e) => String(e) === oldOwnerId)
-      ? filtered
-      : [...filtered, String(oldOwnerId)];
-
-    const target = { kind: "space", id: String(spaceId) };
-    const { doVerb } = await import("../../ibp/verbs/do.js");
-    await doVerb(
-      target,
-      "set-space",
-      { field: "rootOwner", value: newOwnerId },
-      { identity: { beingId }, currentBranch: branch, summonCtx },
-    );
-    // (no row load; typed target above already names this space)
-    await doVerb(
-        target,
-      "set-space",
-      { field: "contributors", value: next },
-      { identity: { beingId }, currentBranch: branch, summonCtx },
-    );
-
-    invalidateSpace(spaceId);
-    hooks.run("afterOwnershipChange", { spaceId, action: "transferOwnership", targetUserId: newOwnerId, previousOwnerId: oldOwnerId }).catch(() => {});
-  } finally {
-    releaseSpaceLock(spaceId, beingId);
-  }
-}
-
-// ── Helpers ──
-
-// Owner-only gate. Only the tree's owner passes; stance authorization
-// will eventually grant per-stance exceptions, but not yet.
-async function assertOwner(spaceId, beingId, branch) {
-  if (typeof branch !== "string" || !branch) {
-    throw new Error("assertOwner: branch is required.");
-  }
-  const access = await resolveSpaceAccess(spaceId, beingId, branch);
-  if (access.ok && access.isOwner) return;
-  throw new Error("Only the tree owner can perform this action");
-}
-
-async function assertBeingExists(beingId, branch) {
-  if (!beingId) throw new Error("Being id is required");
-  if (typeof branch !== "string" || !branch) {
-    throw new Error("assertBeingExists: branch is required.");
-  }
-  const { loadOrFold } = await import("../projections.js");
-  const slot = await loadOrFold("being", beingId, branch);
-  if (!slot) throw new Error("Being not found");
+  return setSpaceOwner(spaceId, newOwnerId, beingId, branch, summonCtx);
 }

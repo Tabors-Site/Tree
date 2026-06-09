@@ -151,33 +151,25 @@ export const SEED_DELEGATES = [
  * place). ensureSpaceRoot() creates my row first and then calls
  * this. Subsequent boots re-run idempotently to backfill any drift.
  */
-export async function ensureSeedDelegates(spaceRootId, summonCtx, opts = {}) {
+export async function ensureSeedDelegates(spaceRootId) {
+  // Each delegate birth + each drift-correction set-being rides its
+  // OWN withIAmAct moment (one moment, one act). Genesis is a sequence
+  // by then: ensureIAm → ensureSpaceRoot → setIAmHomeSpace →
+  // ensureSeedDelegates. The I-Am Being row exists by the time this
+  // runs.
   if (!spaceRootId) {
     log.warn("SeedDelegates", "ensureSeedDelegates called without a spaceRootId");
     return { created: 0, existing: 0, deferred: false };
   }
-  if (!summonCtx) {
-    throw new Error(
-      "ensureSeedDelegates requires summonCtx. Reachable only from inside withBootMoment(...).",
-    );
-  }
+  const { withIAmAct } = await import("../../sprout.js");
 
-  // Inside the boot moment the spaceRoot and I-Am Being rows haven't
-  // materialized yet (they're pending facts in summonCtx.deltaF).
-  // sprout.js passes the planted I-Am id (`opts.iAmBeingId`); without
-  // it we fall back to the live lookup for the Awakening path.
-  let iAm = null;
-  if (opts.iAmBeingId) {
-    iAm = { _id: opts.iAmBeingId, _pending: true };
-  } else {
-    iAm = await findIAm();
-    if (!iAm) {
-      log.info(
-        "SeedDelegates",
-        "no I_AM yet; deferring seed-delegate setup until ensureSpaceRoot() runs",
-      );
-      return { created: 0, existing: 0, deferred: true };
-    }
+  const iAm = await findIAm();
+  if (!iAm) {
+    log.info(
+      "SeedDelegates",
+      "no I_AM yet; deferring seed-delegate setup until ensureIAm() runs",
+    );
+    return { created: 0, existing: 0, deferred: true };
   }
   const rootBeingId = String(iAm._id);
 
@@ -223,20 +215,30 @@ export async function ensureSeedDelegates(spaceRootId, summonCtx, opts = {}) {
     }
   } catch { /* defensive: leave circleCoord null */ }
 
+  // Accumulator for the place root's qualities.beings entries. The
+  // doctrine (one moment = one act, an act stamps each reel at most
+  // once): registering N delegates with N set-space facts on the SAME
+  // place root reel from ONE moment is a multi-act-dressed-as-one-act
+  // violation. Instead we collect each delegate's roster entry as
+  // we go and emit ONE set-space at the end carrying the whole batch.
+  const rosterUpdate = {};
+
   for (let i = 0; i < SEED_DELEGATES.length; i++) {
     const spec = SEED_DELEGATES[i];
     try {
       // Look up by name on main (seed delegates are main-branch).
       const existingSlot = await findByName("being", spec.name, "0");
       if (existingSlot) {
-        // Idempotent drift correction: keep cognition/role/home/parent
-        // in sync via do.set facts. The legacy direct save() retired
-        // 2026-05-23; fact-driven keeps the genesis exception list short.
+        // Idempotent drift correction: each drift-correction set-being
+        // is its own withIAmAct moment per the one-DO-per-moment
+        // doctrine. On a clean reboot of an unchanged reality, the
+        // checks all match and no moments open — idempotent.
         const { doVerb } = await import("../../ibp/verbs/do.js");
-        const setOpts = { identity: I_AM, summonCtx };
         const beingTarget = { kind: "being", id: String(existingSlot.id) };
-        const setField = (field, value) =>
-          doVerb(beingTarget, "set-being", { field, value }, setOpts);
+        const setFieldInOwnMoment = (label, field, value) =>
+          withIAmAct(label, async (ctx) =>
+            doVerb(beingTarget, "set-being", { field, value },
+              { identity: I_AM, summonCtx: ctx }));
 
         const st = existingSlot.state || {};
         const quals = st.qualities;
@@ -244,74 +246,81 @@ export async function ensureSeedDelegates(spaceRootId, summonCtx, opts = {}) {
           ? quals.get("cognition")?.defaultKind
           : quals?.cognition?.defaultKind;
         if (existingCognition !== spec.cognition) {
-          await setField("qualities.cognition", { defaultKind: spec.cognition });
+          await setFieldInOwnMoment(
+            `I correct ${spec.name}'s cognition`,
+            "qualities.cognition",
+            { defaultKind: spec.cognition },
+          );
         }
         if (st.defaultRole !== spec.role) {
-          await setField("defaultRole", spec.role);
+          await setFieldInOwnMoment(
+            `I correct ${spec.name}'s role`,
+            "defaultRole",
+            spec.role,
+          );
         }
         if (st.homeSpace !== String(spaceRootId)) {
-          await setField("homeSpace", String(spaceRootId));
+          await setFieldInOwnMoment(
+            `I correct ${spec.name}'s home`,
+            "homeSpace",
+            String(spaceRootId),
+          );
         }
         if (st.parentBeingId !== rootBeingId) {
-          await setField("parentBeingId", String(rootBeingId));
+          await setFieldInOwnMoment(
+            `I correct ${spec.name}'s parent`,
+            "parentBeingId",
+            String(rootBeingId),
+          );
         }
+        // Roster entry on the place root: include existing delegates
+        // too so a reboot re-emits the merge map. set-space with merge
+        // makes this idempotent — re-writing the same map doesn't
+        // re-emit a fact (the caller's qualitiesDiffer guard catches
+        // identical state).
+        rosterUpdate[spec.name] = {
+          beingId: String(existingSlot.id),
+          role: spec.role,
+          installedAt: new Date().toISOString(),
+          installedBy: "seedDelegates",
+        };
         existing++;
         continue;
       }
 
-      // I bring the new being into existence through BE:birth . the
+      // I bring the new being into existence through BE:birth — the
       // self-act in the closed three-op BE set (birth/connect/release).
-      // BE:birth is the verb that opens an identity; SUMMON is for one
-      // being calling another and never makes a being. birthBeing
-      // stamps a be:birth Fact on the new delegate's reel carrying
-      // parentBeingId=I-Am inside the spec; lineage walks that pointer
-      // when findBeingParent is called. homeSpace = place root because
-      // seed delegates live at the place root itself; parent = me, so
-      // the being-tree chain delegate → me → null is intact. The I-Am
-      // identity is built from the planted id without a Mongo lookup
-      // (the row is still pending inside the boot moment).
-      const iAmIdent = iAm._pending
-        ? { beingId: rootBeingId, name: I_AM }
-        : await iAmIdentity();
-      const result = await birthBeing({
-        spec: {
-          name: spec.name,
-          role: spec.role,
-          cognition: spec.cognition,
-          homeId: String(spaceRootId),
-          parentBeingId: String(rootBeingId),
-          // Deterministic ring position when the place root has a
-          // size. Falls through to birthBeing's random-in-bounds
-          // default when circleCoord couldn't be computed.
-          ...(circleCoord ? { coord: circleCoord(i) } : {}),
-        },
-        identity: iAmIdent,
-        summonCtx,
+      // Each birth opens its OWN withIAmAct moment so the I-Am's reel
+      // shows "I birth <name>" as a distinct entry.
+      const iAmIdent = await iAmIdentity();
+      let result;
+      await withIAmAct(`I birth @${spec.name}`, async (ctx) => {
+        result = await birthBeing({
+          spec: {
+            name: spec.name,
+            role: spec.role,
+            cognition: spec.cognition,
+            homeId: String(spaceRootId),
+            parentBeingId: String(rootBeingId),
+            // Deterministic ring position when the place root has a
+            // size. Falls through to birthBeing's random-in-bounds
+            // default when circleCoord couldn't be computed.
+            ...(circleCoord ? { coord: circleCoord(i) } : {}),
+          },
+          identity: iAmIdent,
+          summonCtx: ctx,
+        });
       });
 
-      // Register the delegate on the place root's qualities.beings
-      // so stance resolution by name (`<reality>/@cherub`, etc.) finds
-      // it. Inlined from the retired createBeingWithHome helper —
-      // delegates share the place root as their home, so the registry
-      // entry is what makes them addressable.
-      const { doVerb } = await import("../../ibp/verbs/do.js");
-      await doVerb(
-        { kind: "space", id: String(spaceRootId) },
-        "set-space",
-        {
-          field: "qualities.beings",
-          value: {
-            [spec.name]: {
-              beingId: String(result.beingId),
-              role: spec.role,
-              installedAt: new Date().toISOString(),
-              installedBy: "seedDelegates",
-            },
-          },
-          merge: true,
-        },
-        { identity: I_AM, summonCtx },
-      );
+      // Stage the delegate's roster entry. Emitted by the caller as
+      // its own moment (one set-space on qualities.beings with all
+      // entries).
+      rosterUpdate[spec.name] = {
+        beingId: String(result.beingId),
+        role: spec.role,
+        installedAt: new Date().toISOString(),
+        installedBy: "seedDelegates",
+      };
       created++;
       log.info("Genesis", `I create ${spec.name}.`);
     } catch (err) {
@@ -322,42 +331,50 @@ export async function ensureSeedDelegates(spaceRootId, summonCtx, opts = {}) {
     }
   }
 
+  // NOTE: roster set-space DOES NOT happen here. The caller
+  // (genesis.js) emits it as its own withIAmAct moment after this
+  // function returns — keeping the one-moment-one-act doctrine clean.
+  // Return the rosterUpdate dict; the caller writes it.
+
   if (created > 0 || existing > 0) {
     log.verbose(
       "SeedDelegates",
       `seed delegates ensured: ${created} created, ${existing} already present (parent=${rootBeingId.slice(0, 8)})`,
     );
   }
-  return { created, existing, deferred: false };
+  return { created, existing, deferred: false, rosterUpdate };
 }
 
 // ───────────────────────────────────────────────────────────────────
-// Heaven contributors
+// Heaven angels (the seed delegates)
 // ───────────────────────────────────────────────────────────────────
 
 /**
- * Add every seed delegate to heaven's `contributors` so they can
- * SEE/DO/SUMMON inside heaven's Tier-3 spaces. Heaven's default
- * permissions gate on `hasAccess` (owner OR contributor) so I_AM
- * (heaven's rootOwner) plus the contributors-on-heaven list all
- * pass. Idempotent: addContributor short-circuits when the being
- * is already a contributor.
+ * Anoint every seed delegate into heaven's `angel` membership class
+ * so they can SEE/DO/SUMMON inside heaven's Tier-3 spaces. Heaven's
+ * default permissions gate on `memberClasses: { includes: "angel" }`
+ * (the heaven-named authority class) so the I-Am (heaven's owner)
+ * plus the angels-on-heaven list all pass. Idempotent:
+ * addSpaceMember short-circuits when the being is already in the
+ * class.
  *
- * One moment per delegate. addContributor does read-modify-write on
- * the contributors array; a single shared moment would have every
- * iteration read the pre-moment state (empty), push one delegate, and
- * write a singleton replacement — last-write-wins on seal, only one
- * delegate landed. Each delegate gets its own withIAmAct so the prior
- * write seals + folds before the next loadOrFold reads.
+ * One moment per delegate. The underlying primitive does
+ * read-modify-write on the class list; a single shared moment would
+ * have every iteration read the pre-moment state, push one
+ * delegate, and write a singleton replacement — last-write-wins on
+ * seal, only one delegate would land. Each delegate gets its own
+ * withIAmAct so the prior write seals + folds before the next
+ * loadOrFold reads.
  *
- * Replaces the older `ensureSeedDelegatesReign` (and the parallel
- * reigning roster machinery as a whole). Retired 2026-06-04 — one
- * ownership model now serves heaven and every other space.
+ * Replaces the older `ensureSeedDelegatesReign` (reigning collapse
+ * 2026-06-04) and the unnamed `ensureSeedDelegatesOnHeaven` adding
+ * to contributors[] (membership-class collapse 2026-06-07). The
+ * angel name makes the heaven authority class explicit.
  */
 export async function ensureSeedDelegatesOnHeaven() {
   const { findByName, findByHeavenSpace } = await import("../projections.js");
   const { HEAVEN_SPACE } = await import("../space/heavenSpaces.js");
-  const { addContributor } = await import("../space/ownership.js");
+  const { addSpaceMember } = await import("../space/members.js");
   const { withIAmAct } = await import("../../sprout.js");
   const heaven = await findByHeavenSpace(HEAVEN_SPACE.HEAVEN, "0");
   if (!heaven) {
@@ -372,23 +389,23 @@ export async function ensureSeedDelegatesOnHeaven() {
     const slot = await findByName("being", spec.name, "0");
     if (!slot) continue;
     try {
-      await withIAmAct(`anoint @${spec.name} on heaven`, async (ctx) => {
-        await addContributor(
-          String(heaven.id), String(slot.id), I_AM,
+      await withIAmAct(`anoint @${spec.name} as heaven angel`, async (ctx) => {
+        await addSpaceMember(
+          String(heaven.id), "angel", String(slot.id), I_AM,
           ctx?.branch || "0", ctx,
         );
       });
       added++;
     } catch (err) {
-      // Already-a-contributor and already-the-owner cases throw; both
-      // are benign here — they mean the desired state already holds.
+      // Already-a-member and already-the-owner cases are benign —
+      // they mean the desired state already holds.
       const msg = err?.message || String(err);
       if (
-        /already a contributor|Cannot add the owner|cannot add yourself/i.test(msg)
+        /already in this class|Cannot add the owner|cannot add yourself/i.test(msg)
       ) continue;
       log.warn(
         "SeedDelegates",
-        `failed to add @${spec.name} as heaven contributor: ${msg}`,
+        `failed to anoint @${spec.name} as heaven angel: ${msg}`,
       );
     }
   }

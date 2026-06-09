@@ -371,9 +371,21 @@ export async function logFact(input, opts = {}) {
       // Carry the underlying message + code through so callers see the
       // actual cause (E11000 duplicate, missing index, schema validation)
       // instead of the bare "Failed to stamp Fact" wrapper.
+      //
+      // IMPORTANT: preserve errorLabels so withTransaction sees
+      // TransientTransactionError / UnknownTransactionCommitResult and
+      // can retry. Without this, the first write to facts/beings/etc.
+      // on a fresh DB hits "Unable to write... due to catalog changes"
+      // (a collection-creation race that Mongo asks us to retry), and
+      // the retry never happens because the wrapped error lost its
+      // labels — boot fails on the first write of genesis.
       const wrapped = new Error(`Failed to stamp Fact (${branch}:${finalTarget.kind}:${finalTarget.id} ${action}): ${err.message}`);
       wrapped.cause = err;
       if (err?.code) wrapped.code = err.code;
+      if (err?.errorLabels) wrapped.errorLabels = err.errorLabels;
+      if (typeof err?.hasErrorLabel === "function") {
+        wrapped.hasErrorLabel = (label) => err.hasErrorLabel(label);
+      }
       throw wrapped;
     }
 

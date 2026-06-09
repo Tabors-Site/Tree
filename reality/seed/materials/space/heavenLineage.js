@@ -84,19 +84,25 @@ export function _resetHeavenCache() {
 }
 
 /**
- * True when `beingId` has authority over the reality as a whole.
+ * True when `beingId` has reality-wide authority via heaven.
  *
- * Heaven is the I-Am's room. Anyone added to heaven's contributors[]
- * is anointed as a substrate operator for this reality — they can
- * mutate the dot-namespaced heaven spaces (.config, .roles, .tools,
- * etc.) and act on reality-wide write ops (capture-seed, close-reality,
- * set-reality-llm). The earlier "rootOperator" doctrine collapsed
- * into this single test: `beingId` is a heaven contributor iff they
- * appear in heaven's contributors[] or are heaven's rootOwner (the
- * I-Am). One roster, one truth, no parallel state.
+ * Heaven is the I-Am's room. The `angel` membership class is heaven's
+ * authority roster — every operator added by cherub.birth or by an
+ * existing angel through add-member at heaven is anointed there.
+ * Angels can mutate the heaven Tier-3 spaces (.config, .roles, .tools)
+ * and act on reality-wide write ops (capture-seed, close-reality,
+ * set-reality-llm).
+ *
+ * The test: `beingId` IS the I-Am, OR appears in heaven's owner
+ * class, OR appears in heaven's angel class. One roster, named
+ * explicitly (angel), no parallel state.
  *
  * I_AM short-circuits true (universal authority on its own reality —
- * the same doctrine as authorize.js's I_AM bypass).
+ * same doctrine as authorize.js's I_AM bypass).
+ *
+ * The name `isHeavenContributor` is kept because callers across the
+ * codebase already use it; semantically it answers "has heaven
+ * authority," which is now the angel class plus the owner.
  */
 export async function isHeavenContributor(beingId) {
   if (!beingId) return false;
@@ -108,7 +114,11 @@ export async function isHeavenContributor(beingId) {
   const { loadProjection } = await import("../projections.js");
   const heaven = await loadProjection("space", heavenId, "0");
   if (!heaven) return false;
-  if (String(heaven.state?.rootOwner) === String(beingId)) return true;
-  const contributors = heaven.state?.contributors || [];
-  return contributors.some((c) => String(c) === String(beingId));
+
+  const { spaceHasMember } = await import("./members.js");
+  const heavenState = heaven.state || {};
+  if (spaceHasMember(heavenState, "owner", beingId)) return true;
+  if (spaceHasMember(heavenState, "angel", beingId)) return true;
+  if (spaceHasMember(heavenState, "contributor", beingId)) return true;
+  return false;
 }

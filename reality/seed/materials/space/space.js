@@ -48,10 +48,32 @@ const SpaceSchema = new mongoose.Schema({
   // index. The position index ({position: 1}, sparse) below is what
   // foldPlace uses for the cross-reel weave at a space.
 
-  // rootOwner non-null marks a tree root. Contributors gain write
-  // access at any depth, capped per space by `maxContributorsPerSpace`.
-  rootOwner: { type: String, ref: "Being", default: null },
-  contributors: [{ type: String, ref: "Being" }],
+  // Membership classes. Each class is a named list of beings with
+  // authority at this position (and inherited downward via the
+  // ancestor walk). Canonical classes the seed ships with:
+  //
+  //   owner       singleton class, the position's structural owner
+  //   contributor default trust class, peers of the owner
+  //   angel       heaven-specific authority class (added at heaven only)
+  //
+  // Operators can author additional classes per-position (auditor,
+  // editor, etc.) by stamping `do:set-space` facts with
+  // field="members.<className>". Rules gate on class membership via
+  // `memberClasses: { includes: "<className>" }` in qualities.permissions.
+  //
+  // Class-specific invariants live in handlers: the owner class is
+  // singleton (max length 1); the seed enforces this in the
+  // add-member / remove-member ops at materials/space/members.js.
+  //
+  // Retired 2026-06-07: the separate `rootOwner` and `contributors[]`
+  // fields. Owner became `members.owner` (singleton), contributor
+  // became `members.contributor`, and new classes are first-class.
+  // See seed/PERMISSIONS.md for the full doctrine.
+  members: {
+    type: Map,
+    of: [{ type: String, ref: "Being" }],
+    default: () => new Map(),
+  },
 
   // Non-null marks one of the spaces I plant at boot. The enum
   // values are in seed/materials/space/heavenSpaces.js.
@@ -112,7 +134,10 @@ const SpaceSchema = new mongoose.Schema({
 // (see seed/materials/space/spaces.js). I never hard-delete.
 
 SpaceSchema.index({ parent: 1 });
-SpaceSchema.index({ rootOwner: 1 });
+// owner-by-class index. members.owner is a singleton list, so
+// indexing it lets reverse lookups ("which spaces does this being
+// own?") run as a constant-time index hit instead of a tree scan.
+SpaceSchema.index({ "members.owner": 1 }, { sparse: true });
 SpaceSchema.index({ heavenSpace: 1 }, { sparse: true });
 
 // Public-Space listing. A Space is public when authorize finds a

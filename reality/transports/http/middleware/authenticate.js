@@ -12,7 +12,6 @@
 
 import log from "../../../seed/seedReality/log.js";
 import { verifyTokenStrict } from "../../../seed/materials/being/identity.js";
-import { resolveSpaceAccess } from "../../../seed/materials/space/spaces.js";
 import { authStrategies } from "../../../seed/services.js";
 import { sendError, IBP_ERR } from "../../../seed/ibp/protocol.js";
 
@@ -36,7 +35,6 @@ export default async function authenticate(req, res, next) {
       req.beingId  = result.beingId;
       req.name     = result.name;
       req.authType = "jwt";
-      if (!await attachSpaceAccess(req, res)) return;
       return next();
     }
 
@@ -54,7 +52,6 @@ export default async function authenticate(req, res, next) {
           if (result.extra && typeof result.extra === "object") {
             req.strategyExtra = Object.freeze({ ...result.extra });
           }
-          if (!await attachSpaceAccess(req, res)) return;
           return next();
         }
       } catch (strategyErr) {
@@ -113,34 +110,12 @@ export async function authenticateOptional(req, res, next) {
   }
 }
 
-// ── Space-access helper ──
-
-const SPACE_ACCESS_ERRORS = {
-  [IBP_ERR.SPACE_NOT_FOUND]: { http: 404, code: IBP_ERR.SPACE_NOT_FOUND },
-  [IBP_ERR.INVALID_INPUT]:  { http: 400, code: IBP_ERR.INVALID_INPUT },
-  [IBP_ERR.INVALID_SPACE]:  { http: 400, code: IBP_ERR.INVALID_SPACE },
-};
-
-/**
- * Resolve space access for the request. Sends error response and returns
- * `false` if access is denied or the space doesn't exist. Returns `true`
- * on success or when no spaceId is present (nothing to check).
- */
-async function attachSpaceAccess(req, res) {
-  const spaceId = req.body?.spaceId || req.params?.spaceId || req.query?.spaceId;
-  if (!spaceId) return true;
-
-  const access = await resolveSpaceAccess(spaceId, req.beingId);
-  if (!access.ok) {
-    const mapped = SPACE_ACCESS_ERRORS[access.error] || { http: 500, code: IBP_ERR.INTERNAL };
-    sendError(res, mapped.http, mapped.code, access.message);
-    return false;
-  }
-  if (!access.hasAccess) {
-    sendError(res, 403, IBP_ERR.FORBIDDEN, "You do not have write access to this space");
-    return false;
-  }
-  req.rootId      = access.rootId;
-  req.spaceAccess = access;
-  return true;
-}
+// Note: a legacy `attachSpaceAccess(req, res)` helper used to live here.
+// It called `resolveSpaceAccess` directly and pre-filtered HTTP requests
+// on `hasAccess`. That bypassed the substrate's single gate (the seed's
+// `authorize()`) and the attached `req.spaceAccess` / `req.rootId` had no
+// downstream readers. Retired 2026-06-07 — every verb call now flows
+// through the seed's authorize, which gates per-verb against
+// qualities.permissions on the target position. The HTTP middleware's
+// job is just to identify the caller; access decisions belong to the
+// substrate.

@@ -26,11 +26,15 @@ export default {
   },
 
   provides: {
-    // Future: a `clones` block listing this extension's shippable
-    // setup bundles (per Chain-Rebuild doctrine — replaces the
-    // retired scaffold(ctx) pattern). The harmony dance-floor will
-    // migrate to a clone bundle when the producer-side authoring
-    // tooling lands.
+    // Shippable structure — clone bundles operators graft at a
+    // position. Replaces the retired scaffold(ctx) seed pattern.
+    // dance-floor encodes the full grid + drum + drummer + 5 LLM
+    // dancers + per-dancer drum-tick subscription + drummer wake
+    // schedule, all as static facts (~30 entries). See
+    // seed/Chain-Rebuild.md for the bundle format.
+    clones: {
+      "dance-floor": "./clones/dance-floor.clone.json",
+    },
     hooks: { fires: [], listens: [] },
 
     // Sensory assets the extension ships. The loader mounts

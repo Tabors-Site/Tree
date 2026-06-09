@@ -256,7 +256,7 @@ function makeLazyDefaultSummon(role) {
  * per role; qualities mirror the role's surface. Called at boot end
  * after extensions register; idempotent.
  */
-export async function syncRolesToSubstrate(summonCtx) {
+export async function syncRolesToSubstrate() {
   const { HEAVEN_SPACE } = await import("../../materials/space/heavenSpaces.js");
   const { manifestItems } = await import("../manifest.js");
   const items = [];
@@ -283,7 +283,7 @@ export async function syncRolesToSubstrate(summonCtx) {
       ]),
     });
   }
-  return manifestItems({ heavenSpace: HEAVEN_SPACE.ROLES, items, summonCtx });
+  return manifestItems({ heavenSpace: HEAVEN_SPACE.ROLES, items });
 }
 
 /**

@@ -87,7 +87,7 @@ export async function doVerb(target, operation, params = {}, opts = {}) {
   if (!opts.summonCtx?.actId) {
     throw new IbpError(
       IBP_ERR.INTERNAL,
-      `DO ${operation}: missing ambient actId. Every act rides an open Act. Thread opts.summonCtx from the caller's moment, or open a boot moment via withBootMoment(...).`,
+      `DO ${operation}: missing ambient actId. Every act rides an open Act. Thread opts.summonCtx from the caller's moment, or open one via withIAmAct(...) / withBeingAct(...).`,
       { operation },
     );
   }
@@ -135,8 +135,8 @@ export async function doVerb(target, operation, params = {}, opts = {}) {
     if (!decision.ok) {
       throw new IbpError(
         IBP_ERR.FORBIDDEN,
-        `DO denied for stance "${decision.stance}": ${decision.reason}`,
-        { stance: decision.stance, action: operation },
+        `DO denied for actor "${decision.actor}": ${decision.reason}`,
+        { actor: decision.actor, action: operation },
       );
     }
   }
@@ -148,7 +148,25 @@ export async function doVerb(target, operation, params = {}, opts = {}) {
     summonCtx: opts.summonCtx || null,
   };
 
-  const result = await op.handler(ctx);
+  // Top-level operation count for the moment (one-moment-one-act
+  // doctrine; sealAct reads opCount from summonCtx and throws if it
+  // would seal more than one op). Increments only at the OUTERMOST
+  // doVerb on this summonCtx. Recursive dispatches (set-render →
+  // set-being / set-matter / set-space) see `_inOp:true` and skip
+  // the increment so a single sugared call still counts as one op.
+  const _ctx = opts.summonCtx;
+  const _wasInOp = !!(_ctx && _ctx._inOp);
+  if (_ctx && !_wasInOp) {
+    _ctx._inOp = true;
+    _ctx._opCount = (_ctx._opCount || 0) + 1;
+  }
+
+  let result;
+  try {
+    result = await op.handler(ctx);
+  } finally {
+    if (_ctx && !_wasInOp) _ctx._inOp = false;
+  }
 
   // Auto-Fact. Operations opt out via spec.skipAudit; callers via
   // opts.skipAudit (seed-trusted batches only).

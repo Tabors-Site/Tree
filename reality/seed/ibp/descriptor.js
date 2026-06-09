@@ -46,6 +46,7 @@ import {
 } from "../materials/space/spaces.js";
 import { getInboxSummary } from "../present/intake/inbox.js";
 import { getRole, listRoles } from "../present/roles/registry.js";
+import { listClones } from "../materials/publish/cloneRegistry.js";
 import { listOperations } from "./operations.js";
 import { listBeOpNames, getBeOp } from "./beOps.js";
 import { findOpenForBeing, findLastSealedForBeing } from "../present/beats/2-fold/reelChains.js";
@@ -125,6 +126,11 @@ export function buildDiscovery() {
     ws: wsUrl,
     auth: { method: "bearer" },
     roles,
+    // Graftable clone bundles registered by extensions. Surfaced in the
+    // discovery payload (unauthenticated) so the portal's hotbar can
+    // populate before the operator signs in. The list-clones DO op
+    // returns the same data for callers who want a live refresh.
+    clones: listClones(),
     supportedVerbs: ["see", "do", "summon", "be"],
     capabilities: [],
   };
@@ -671,6 +677,11 @@ async function placeAtSpace(resolved, { identity, payload, until = null, branch 
     siblings,
     size: space.size || null,
     qualities: serializeQualities(space.qualities),
+    // Membership classes at this position. Plain object on the wire
+    // (Mongoose Map serializes to one anyway). Operator surfaces like
+    // the portal's Permissions panel read this to render "who's in
+    // which class here" without a second SEE.
+    members: serializeMembers(space.members),
     identity: await identityBlock(identity, { authorizedHere, writeAllowed, until, branch }),
     ...(until ? { isHistorical: true, asOf: serializeAsOf(until) } : {}),
     _meta: meta(writeAllowed ? [] : ["read-only"]),
@@ -1250,4 +1261,18 @@ function serializeQualities(quals) {
   // credentials never ride a descriptor to a client. The stored qualities
   // (read server-side for decryption) are untouched.
   return redactSecrets(obj);
+}
+
+// Serialize the Space.members Map (or already-plain object) for the
+// wire. Always returns an object so client code can read
+// `descriptor.members.<className>` without undefined-sniffing. Each
+// class's beingId list is normalized to strings.
+function serializeMembers(members) {
+  if (!members) return {};
+  const src = members instanceof Map ? Object.fromEntries(members) : members;
+  const out = {};
+  for (const [className, list] of Object.entries(src)) {
+    if (Array.isArray(list)) out[className] = list.map(String);
+  }
+  return out;
 }

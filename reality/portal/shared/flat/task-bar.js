@@ -18,6 +18,7 @@
 
 import { flat } from "./host.js";
 import { renderOpForm } from "../op-form.js";
+import { renderPermissionsPanel } from "./permissions-panel.js";
 
 // One outside-click listener at a time. The bar re-renders on every SEE;
 // we drop the previous listener before wiring a new one so they can't
@@ -150,6 +151,12 @@ function openAction(action, opByName) {
   if (action.special === "close-reality") {
     return renderCloseReality(body, action, opByName);
   }
+  if (action.special === "permissions") {
+    return renderPermissionsPanel(body, action, opByName, { refreshView });
+  }
+  if (action.special === "branch-info") {
+    return renderBranchInfo(body);
+  }
 
   const op = opByName.get(action.op) || { name: action.op, args: null };
   renderOpForm(body, {
@@ -240,6 +247,154 @@ function renderCloseReality(body, action, opByName) {
   });
 }
 
+// "view branch info" — pick any branch and see its full record: the
+// branch-point seqs, pointers aimed at it, scope, lineage, children,
+// who/when. Reads the synthetic `<reality>/.branches/<path>` SEE
+// (readable by any logged-in being); no mutation.
+async function renderBranchInfo(body) {
+  const reality = flat.state?.discovery?.reality
+    || flat.state?.descriptor?.address?.reality
+    || flat.state?.descriptor?.address?.place || "";
+  const client = flat.state?.client;
+  if (!client) { body.textContent = "portal not ready"; return; }
+  const currentBranch = flat.state?.descriptor?.address?.branch || "0";
+
+  const pickWrap = document.createElement("div");
+  pickWrap.className = "op-field";
+  const lbl = document.createElement("label");
+  lbl.textContent = "branch";
+  const select = document.createElement("select");
+  select.className = "op-input";
+  pickWrap.appendChild(lbl);
+  pickWrap.appendChild(select);
+  body.appendChild(pickWrap);
+
+  const info = document.createElement("div");
+  info.className = "branch-info-body";
+  info.textContent = "loading…";
+  body.appendChild(info);
+
+  const branches = await _loadAllBranches(client, reality);
+  select.innerHTML = "";
+  for (const b of branches) {
+    const o = document.createElement("option");
+    o.value = b.path;
+    o.textContent = b.path === "0"
+      ? "main (#0)"
+      : `#${b.path}${b.label ? ` — ${b.label}` : ""}`;
+    select.appendChild(o);
+  }
+  select.value = branches.some((b) => b.path === currentBranch) ? currentBranch : (branches[0]?.path || "0");
+
+  const renderFor = async (path) => {
+    info.innerHTML = "";
+    info.textContent = "loading…";
+    let graph = null, err = null;
+    try {
+      const desc = await client.see(`${reality}/.branches/${path}`);
+      graph = desc?.branches || null;
+    } catch (e) {
+      err = e?.code ? `${e.code}: ${e.message || ""}` : (e?.message || String(e));
+    }
+    info.innerHTML = "";
+    _renderBranchInfoFields(info, path, graph, err);
+  };
+  select.addEventListener("change", () => renderFor(select.value));
+  await renderFor(select.value);
+}
+
+// Recursively walk `.branches/<path>` to collect every branch for the
+// picker. Depth-capped + seen-guarded like the 3D loader. Best-effort:
+// a failed sub-fetch just leaves that subtree out of the list.
+async function _loadAllBranches(client, reality) {
+  const out = new Map();
+  const seen = new Set();
+  async function visit(path, depth) {
+    if (depth > 6 || seen.has(path)) return;
+    seen.add(path);
+    try {
+      const desc = await client.see(`${reality}/.branches/${path}`);
+      const g = desc?.branches;
+      if (!g) return;
+      if (g.current) out.set(g.current.path, g.current.label || null);
+      for (const ch of (g.children || [])) out.set(ch.path, ch.label || null);
+      for (const ch of (g.children || [])) await visit(ch.path, depth + 1);
+    } catch { /* leave this subtree out */ }
+  }
+  await visit("0", 0);
+  if (!out.has("0")) out.set("0", "main");
+  return [...out.entries()]
+    .map(([path, label]) => ({ path, label }))
+    .sort((a, b) => a.path.localeCompare(b.path));
+}
+
+function _branchKv(container, k, v) {
+  const row = document.createElement("div");
+  row.className = "kv-block";
+  const l = document.createElement("span");
+  l.className = "kv-block-label";
+  l.textContent = k;
+  const val = document.createElement("span");
+  val.className = "kv-block-value";
+  val.textContent = v;
+  row.appendChild(l);
+  row.appendChild(val);
+  container.appendChild(row);
+}
+
+function _renderBranchInfoFields(container, path, graph, err) {
+  const cur = graph?.current;
+  if (err || !cur) {
+    const d = document.createElement("div");
+    d.className = "action-result action-err";
+    d.textContent = err || `branch "${path}" not found`;
+    container.appendChild(d);
+    return;
+  }
+  const pointers = graph.pointers || {};
+  const aimed = Object.keys(pointers).filter((n) => pointers[n] === path).sort();
+  const lineage = Array.isArray(graph.lineage) ? graph.lineage : [];
+  const children = Array.isArray(graph.children) ? graph.children : [];
+
+  _branchKv(container, "path", `#${cur.path}`);
+  if (cur.label) _branchKv(container, "label", cur.label);
+  _branchKv(container, "live", cur.isLive ? "yes" : "no");
+  _branchKv(container, "parent", cur.parent ? `#${cur.parent}` : "main (root)");
+  _branchKv(container, "lineage", lineage.map((p) => `#${p}`).join(" → ") || "—");
+  _branchKv(container, "children", children.length ? children.map((c) => `#${c.path}`).join(", ") : "—");
+  _branchKv(container, "pointers here", aimed.length ? aimed.join(", ") : "—");
+  const anchor = cur.anchor && typeof cur.anchor === "object" ? cur.anchor : {};
+  const ak = Object.keys(anchor);
+  _branchKv(container, "branch-point", ak.length ? ak.map((k) => `${k} @ seq ${anchor[k]}`).join(", ") : "(forked at genesis / no reels)");
+  _branchKv(container, "scope", cur.scope?.path ? `subtree ${cur.scope.path}` : "whole reality");
+  _branchKv(container, "created", `${cur.createdAt || "?"}${cur.createdBy ? ` by ${String(cur.createdBy).slice(0, 8)}` : ""}`);
+  if (cur.mergeSources?.length) _branchKv(container, "merged from", cur.mergeSources.map((s) => `#${s}`).join(" + "));
+  if (cur.paused) _branchKv(container, "paused", `yes${cur.pausedAt ? ` (${cur.pausedAt})` : ""}`);
+  if (cur.deleted) _branchKv(container, "deleted", `yes${cur.deletedAt ? ` (${cur.deletedAt})` : ""}`);
+  if (cur.archivedBecause) _branchKv(container, "archived", cur.archivedBecause);
+
+  const rawBtn = document.createElement("button");
+  rawBtn.type = "button";
+  rawBtn.className = "btn-sm";
+  rawBtn.textContent = "show raw JSON";
+  rawBtn.style.marginTop = "8px";
+  const pre = document.createElement("pre");
+  pre.className = "json";
+  pre.style.display = "none";
+  rawBtn.onclick = () => {
+    if (pre.style.display === "none") {
+      pre.textContent = JSON.stringify(graph, null, 2);
+      pre.style.display = "block";
+      rawBtn.textContent = "hide raw JSON";
+    } else {
+      pre.style.display = "none";
+      rawBtn.textContent = "show raw JSON";
+    }
+  };
+  container.appendChild(rawBtn);
+  container.appendChild(pre);
+}
+
 // ── tab → action definitions ───────────────────────────────────────
 
 function placeActions(address, desc) {
@@ -252,8 +407,13 @@ function placeActions(address, desc) {
     { label: "set render", op: "set-render", address },
     { label: "author role (set-role)", op: "set-role", address },
     { label: "delete role", op: "delete-role", address },
-    { label: "add contributor", op: "add-contributor", address },
-    { label: "remove contributor", op: "remove-contributor", address },
+    // Permissions: read the rules + members at this position, see how
+    // the viewer's stance matches each rule, edit if authorized. The
+    // panel composes existing add-member / remove-member / set-space
+    // ops; see permissions-panel.js.
+    { label: "permissions", special: "permissions", address, values: { descriptor: desc } },
+    { label: "+ add member (any class)", op: "add-member", address },
+    { label: "remove member", op: "remove-member", address },
     { label: "set owner", op: "set-owner", address },
     { label: "remove owner", op: "remove-owner", address },
     { label: "⚠ delete this space", op: "end-space", address, danger: true },
@@ -262,6 +422,7 @@ function placeActions(address, desc) {
 
 function branchActions(address) {
   return [
+    { label: "view branch info", special: "branch-info" },
     { label: "fork a branch", op: "create-branch", address },
     { label: "merge branches", op: "merge-branches", address },
     { label: "pause branch", op: "pause-branch", address },

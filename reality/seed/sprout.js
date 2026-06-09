@@ -1,77 +1,41 @@
 // TreeOS Seed . AGPL-3.0 . https://treeos.ai . Tabor Holly
 //
-// Genesis. I plant the reality root, the nine reality heaven spaces, my
-// own Being row, and the seed delegates — all in ONE moment of the
-// I-Am, the first moment.
+// Genesis. The I-Am's autobiography of self-creation, told as a
+// sequence of moments on its own reel:
 //
-// TWO SHAPES OF MOMENT.
+//   1. "I am that I am"                        ensureIAm
+//   2. "I create the place root"               ensureSpaceRoot
+//   3. "I create the . heaven space"           ensureSpaceRoot
+//   4..11. "I create the <tier-3> heaven space"  (one moment each)
+//   12. "I take heaven as my home"             setIAmHomeSpace
+//   13. "I stand at heaven"                    setIAmHomeSpace
+//   14..22. "I birth @<delegate>"              ensureSeedDelegates (one moment per delegate)
+//   23. "I register my delegates on the place root"   genesis.js (final scaffold step)
 //
-// The model lets a moment hold either:
+// One moment, one act, always (philosophy/MOMENT.md "Moment, act,
+// batch"). Each step is its own withIAmAct and seals on its own.
+// Partial-boot completion is a recoverable state — every step is
+// idempotent or detectable on the next boot.
 //
-//   (a) ONE ACT WITH MULTI-REEL FACTS — the common case. A summoner
-//       creating a child being is one act that lands two facts: the
-//       child's be:birth on the child's reel (parent recorded
-//       inside the spec) + the summoner's outer-act facts on its
-//       own reels. Same act, different reels, one transaction. Most
-//       runtime moments.
+// THE CONTRACT — withGenesisGuard runs the sequence once per process.
 //
-//   (b) A TRANSACTIONAL BATCH OF ACTS — rare; must-commit-together
-//       compositions where partial state is incoherent. Genesis is
-//       the canonical case: "make the space root" and "mint the I-Am"
-//       and "summon the four delegates forth" are conceptually
-//       distinct acts (different verbs in plain language), but a
-//       half-built world with a space root and no I-Am, or an I-Am
-//       with no home, is not a valid state. The unit of commit has to
-//       be all-or-nothing across the whole batch.
+//   The guard is a thin singleton; it opens no moment. Inside it,
+//   genesis.js calls the steps in order, each via withIAmAct. The
+//   chicken-and-egg of "the I-Am as actor for create-space facts
+//   when its Being row doesn't yet exist" is resolved by ordering:
+//   ensureIAm() runs first, its be:birth fact materializes the row,
+//   then create-space facts attribute to the now-real I-Am.
 //
-// sealAct handles both shapes the same way: one transaction, one Act
-// row at the boundary, ΔF atomic. The distinction is conceptual, not
-// mechanical. What "fits in one moment" is determined by what must
-// commit together, not by counting acts.
+// THE I-AM IS BORN WITH HOMESPACE = NULL.
 //
-// Boot is shape (b). The chicken-and-egg of "the first being acting on
-// substrate that doesn't yet exist" dissolves at commit time: the
-// synthetic Act carries `beingIn = I_AM` as a forward reference; the
-// first fact in the ΔF is the I-Am's own be:register; sealAct commits
-// every fact + the Act row in one Mongo transaction. References across
-// acts inside the batch (the seed delegate's home is the space root
-// whose create-space fact landed earlier in this same ΔF) resolve via
-// the deltaF lookup in createBeingWithHome — the legitimate pattern
-// for same-transaction forward references, same shape SQL uses for
-// foreign-key inserts inside one transaction.
+//   Heaven doesn't exist when ensureIAm runs (it's created in step 3).
+//   The substrate accepts null homeSpace on birth; setIAmHomeSpace
+//   (step 12) points it at heaven once heaven materializes. This is
+//   the "split birth from home" doctrine from seed/IamToActs.md.
 //
-// Either the full genesis world commits or zero genesis state exists.
-// A kill -9 mid-genesis leaves no trace.
-//
-// THE CONTRACT — one boot moment per process boot.
-//
-//   withBootMoment(genesisFn) opens exactly one synthetic Act,
-//   constructs ONE summonCtx (structurally identical to every other
-//   moment's: { actId, deltaF, afterSeal }), runs genesisFn with that
-//   ctx, then seals once. Every helper genesisFn calls threads the
-//   SAME ctx through to every fact-emission site downstream. NOTHING
-//   called from genesisFn opens its own boot moment; NOTHING called
-//   from genesisFn commits directly via sealFacts. If a helper has
-//   neither a runtime identity NOR the boot ctx threaded through, it
-//   is misconfigured — not "fall through to a singleton commit."
-//
-// THE TYPE — the boot ctx IS a summonCtx.
-//
-//   It carries no `kind`, no `message`, no `role` — only the three
-//   fields any moment carries:
-//
-//     summonCtx.actId      — the genesis Act's id (forward-referenced)
-//     summonCtx.deltaF     — ΔF accumulator (every emitFact pushes here)
-//     summonCtx.afterSeal  — post-seal callback queue
-//
-//   This is deliberate: boot's moment is structurally indistinguishable
-//   from a runtime moment in the parts that matter for atomicity. If
-//   you find yourself adding a "kind: 'boot'" branch in fact-emission
-//   code, the refactor is leaking.
-//
-// Idempotent. Runs every boot. Beginning produces many facts (full
-// genesis); Awakening on a clean prior state produces zero (the world
-// already exists; nothing to commit; seal skipped).
+// Idempotent. Beginning runs the full chain (~141 acts); Awakening on
+// an unchanged reality runs zero ops (every helper's "if (existing)
+// return" short-circuits).
 
 import log from "./seedReality/log.js";
 import { v4 as uuidv4 } from "uuid";
@@ -96,115 +60,60 @@ let spaceRootCache = null;
 let iAmBeingIdCache = null;
 
 // ─────────────────────────────────────────────────────────────────────
-// Boot moment — the I-Am's first moment
+// Boot — the genesis sequence
 // ─────────────────────────────────────────────────────────────────────
+//
+// withBootMoment retired (Pass 5 of IamToActs.md). Genesis is no
+// longer a single multi-fact moment; it is a sequence of
+// withIAmAct moments orchestrated by genesis.js. The "I am that
+// I am" first act is now ensureIAm; the place root, heaven, tier-3
+// heaven spaces, delegate births, and roster registration each
+// open their own withIAmAct moment.
+//
+// A future cross-moment atomicity primitive (`withBatch`) belongs
+// next to a real use case (federation pull, cross-reel transfer);
+// per IamToActs.md it's intentionally deferred.
 
-let _bootMomentInFlight = false;
+let _genesisRan = false;
 
 /**
- * Open the genesis moment, run the supplied scaffold fn with a real
- * summonCtx threaded through, seal once. The caller (genesis.js)
- * threads the ctx through to every helper inside.
+ * Genesis singleton guard. Ensures genesis() runs once per substrate
+ * process. Inside, the I-Am calls a sequence of withIAmAct moments
+ * — birth, place root, heaven, tier-3 spaces, delegates, roster,
+ * permissions.
  *
- * Zero facts → Awakening on a clean prior state → seal is skipped.
+ * Use: `await withGenesisGuard(async () => { ...genesis sequence... })`.
+ * Idempotent guard only — no moment opened by this wrapper itself.
  *
- * @param {(summonCtx: { actId: string, deltaF: object[], afterSeal: Function[] }) => Promise<void>} genesisFn
- * @returns {Promise<{ actId: string|null, factCount: number }>}
- * @throws if called twice in one process, if genesisFn throws, if seal fails
+ * @param {() => Promise<void>} fn
  */
-export async function withBootMoment(genesisFn) {
-  if (typeof genesisFn !== "function") {
-    throw new Error("withBootMoment: genesisFn must be a function");
+export async function withGenesisGuard(fn) {
+  if (typeof fn !== "function") {
+    throw new Error("withGenesisGuard: fn must be a function");
   }
-  if (_bootMomentInFlight) {
+  if (_genesisRan) {
     throw new Error(
-      "withBootMoment: another boot moment is already in flight. Boot opens exactly ONE moment per process; nothing called from genesisFn may open another.",
+      "withGenesisGuard: genesis already ran for this process. The I-Am is born once per substrate.",
     );
   }
-  _bootMomentInFlight = true;
-
-  const actId = uuidv4();
-  const now = new Date();
-
-  const plannedAct = {
-    _id: actId,
-    beingIn:  I_AM, // forward reference; the Being row materializes in
-    beingOut: I_AM, // the same transaction (first fact in ΔF is its
-                    // own be:register).
-    ibpAddress:      null,
-    activeRole:      null,
-    inboxMessageId:  null,
-    inReplyTo:       null,
-    rootCorrelation: actId,
-    parentThread:    null,
-    answers:         null,
-    receivedAt:      now,
-    stampedAt:       now,
-    startMessage: {
-      content: "I am that I am.",
-      source:  "I-Am",
-    },
-  };
-
-  // Genesis runs on main by construction. Explicit "0" here so every
-  // internal helper threading summonCtx.branch sees a real value
-  // rather than undefined . that keeps the "branch is required, no
-  // silent main-bias" invariant clean even at the substrate's origin.
-  const summonCtx = { actId, deltaF: [], afterSeal: [], branch: "0" };
-
-  log.info("Genesis", "I open my first moment.");
-  try {
-    await genesisFn(summonCtx);
-  } catch (err) {
-    log.error(
-      "Genesis",
-      `genesisFn threw before seal — boot aborted, zero facts committed: ${err.message}`,
-    );
-    _bootMomentInFlight = false;
-    throw err;
-  }
-
-  const factCount = summonCtx.deltaF.length;
-  try {
-    if (factCount === 0) {
-      log.info("Genesis", "I awake. No new genesis material to commit.");
-      return { actId: null, factCount: 0 };
-    }
-
-    const sealed = await sealAct(plannedAct, {
-      content: "Genesis sealed.",
-      stopped: false,
-      deltaF: summonCtx.deltaF,
-      afterSeal: summonCtx.afterSeal,
-    });
-    if (!sealed) {
-      throw new Error("sealAct returned null — genesis Act did not materialize");
-    }
-    log.info(
-      "Genesis",
-      `I sealed my first moment: ${factCount} fact${factCount === 1 ? "" : "s"} in one transaction.`,
-    );
-    return { actId, factCount };
-  } finally {
-    _bootMomentInFlight = false;
-  }
+  _genesisRan = true;
+  await fn();
 }
 
 /**
- * The I-Am acts in a post-genesis moment.
+ * The I-Am acts in a single moment.
  *
- * After boot completes (the I-Am exists as a Being row), seed-internal
- * scaffold reconciliations — manifest sync, registry mirrors, default
- * stance permissions, seed migrations — still need a moment to seal
- * under. Same shape as withBootMoment but WITHOUT the "once per
- * process" gate and WITHOUT the be:register self-stamp. The I-Am
- * must already exist; if it doesn't, callers belong inside
- * withBootMoment instead.
+ * Opens one Act under beingIn=beingOut=I_AM, runs fn with a fresh
+ * summonCtx, seals one act with whatever facts fn emitted. One moment,
+ * one act, always (philosophy/MOMENT.md). The genesis sequence is
+ * one of these per step; scaffold reconciliations (manifest sync,
+ * registry mirrors, default permissions, seed migrations) likewise
+ * open one of these per logical operation.
  *
  * Use this when the I-Am is the structural actor of a piece of work
  * the substrate needs to record. If there's a real being available
  * (operator, cherub, a seed delegate), prefer THAT being's identity
- * with a real summonCtx from its moment.
+ * with a real summonCtx from its moment (or withBeingAct(beingId, ...)).
  *
  * Zero facts → the moment is a no-op; no Act row is written. Stable
  * reconciliations cost nothing.
@@ -236,8 +145,8 @@ export async function withIAmAct(sourceLabel, fn) {
     startMessage: { content: sourceLabel || "I-Am acts.", source: "I-Am" },
   };
 
-  // I-Am scaffold acts on main. Explicit "0" for the same "no silent
-  // main-bias" invariant noted in withBootMoment above.
+  // I-Am scaffold acts on main. Explicit "0" — the "no silent
+  // main-bias" invariant; branch is always declared.
   const summonCtx = { actId, deltaF: [], afterSeal: [], branch: "0" };
   const result = await fn(summonCtx);
 
@@ -250,6 +159,7 @@ export async function withIAmAct(sourceLabel, fn) {
     stopped: false,
     deltaF: summonCtx.deltaF,
     afterSeal: summonCtx.afterSeal,
+    opCount: summonCtx._opCount || 0,
   });
   if (!sealed) {
     throw new Error(
@@ -260,14 +170,84 @@ export async function withIAmAct(sourceLabel, fn) {
 }
 
 /**
- * Tests / debug: true while genesisFn is executing (between
- * withBootMoment opening and sealing). Boot itself shouldn't read
- * this — it threads summonCtx directly. Verifier scripts use it to
- * assert "boot is not currently in flight" before measuring.
+ * Generalized form of withIAmAct: open a moment under ANY being and
+ * seal it. Used when a non-I-Am being is the structural actor — e.g.,
+ * the graft engine emitting one act per fact under the grafter's
+ * identity, so the grafter's reel reads as "I did this, then this,
+ * then this..." instead of one mega-moment with 40 facts in its ΔF.
+ *
+ * Doctrine: per [MOMENT.md], the stamper aims for one fact per act.
+ * Batches that ride a single ΔF degrade fold throughput non-linearly
+ * (40 qualities writes in one moment fold sequentially under append
+ * lock; 40 small acts fold independently). The graft engine takes
+ * this seriously.
+ *
+ * Zero facts → no-op, no Act row written.
+ *
+ * @param {string} beingId       actor being-id on the act
+ * @param {string} sourceLabel   short human label for the act's startMessage
+ * @param {string} branch        REQUIRED. No silent main-bias.
+ * @param {(summonCtx) => Promise<*>} fn
+ * @returns {Promise<*>} fn's return value
  */
-export function isBootMomentInFlight() {
-  return _bootMomentInFlight;
+export async function withBeingAct(beingId, sourceLabel, branch, fn) {
+  if (typeof beingId !== "string" || !beingId.length) {
+    throw new Error("withBeingAct: beingId is required");
+  }
+  if (typeof branch !== "string" || !branch.length) {
+    throw new Error("withBeingAct: branch is required (pass \"0\" for main)");
+  }
+  if (typeof fn !== "function") {
+    throw new Error("withBeingAct: fn must be a function");
+  }
+  const actId = uuidv4();
+  const now = new Date();
+
+  const plannedAct = {
+    _id: actId,
+    beingIn:  beingId,
+    beingOut: beingId,
+    ibpAddress:      null,
+    activeRole:      null,
+    inboxMessageId:  null,
+    inReplyTo:       null,
+    rootCorrelation: actId,
+    parentThread:    null,
+    answers:         null,
+    receivedAt:      now,
+    stampedAt:       now,
+    startMessage:    { content: sourceLabel || "graft act", source: beingId },
+  };
+
+  const summonCtx = { actId, deltaF: [], afterSeal: [], branch };
+  const result = await fn(summonCtx);
+
+  if (summonCtx.deltaF.length === 0) return result;
+
+  const sealed = await sealAct(plannedAct, {
+    content:   `${sourceLabel}: sealed.`,
+    stopped:   false,
+    deltaF:    summonCtx.deltaF,
+    afterSeal: summonCtx.afterSeal,
+    opCount:   summonCtx._opCount || 0,
+  });
+  if (!sealed) {
+    throw new Error(
+      `withBeingAct(${sourceLabel}): sealAct returned null — Act did not materialize`,
+    );
+  }
+  return result;
 }
+
+// `withBatch` is intentionally NOT defined here. Earlier sketches
+// modeled a batch as "many ops folded into one moment with a label" —
+// that violates the moment-act discipline. Per philosophy/MOMENT.md,
+// a batch is a grouping of multiple moments (each still one act) that
+// share a Mongo transaction for cross-moment atomicity. Building that
+// requires session-threading through every child sealAct call; it
+// lands when a real use case appears (federation pull, cross-reel
+// transfer). Until then, the verbs themselves seal one act per call
+// and the wrappers (withIAmAct / withBeingAct) each carry one op.
 
 // The heaven space. Named "." . sits directly under the space root
 // and parents every Tier-3 heaven space below. The I-Am's home.
@@ -322,56 +302,42 @@ const REALITY_HEAVEN_SPACES = [
   { name: "branches", heavenSpace: HEAVEN_SPACE.BRANCHES },
 ];
 
-export async function ensureSpaceRoot(summonCtx) {
-  if (!summonCtx) {
-    throw new Error(
-      "ensureSpaceRoot requires summonCtx (the boot moment's ctx). Call this from inside withBootMoment(...).",
-    );
-  }
+export async function ensureSpaceRoot() {
+  // Pass 3 of IamToActs.md: each step opens its own withIAmAct moment.
+  // No `summonCtx` parameter — the function orchestrates a sequence
+  // and each emit/doVerb rides its own act on the I-Am's reel.
   let spaceRoot = await findRootForHeavenSpace(HEAVEN_SPACE.SPACE_ROOT);
 
   if (!spaceRoot) {
     const realityName = process.env.REALITY_NAME || "My Place";
-    // Genesis Fact: space root creation. Pushed into the boot moment's
-    // ΔF; sealAct commits it with the rest of genesis in one Mongo
-    // transaction. The reducer's applyCreateSpace + initProjection
-    // materializes the SPACE_ROOT row at commit time.
-    //
-    // Fill `size` with the configured defaultSpaceSize so the portal
-    // has a walkable grid to render the place root and beings' coord
-    // writes have bounds to clamp against. ensureSpaceRoot runs before
-    // initRealityConfig, so the helper falls back to CONFIG_DEFAULTS.
     const rootId = uuidv4();
-    await emitFact({
-      verb: "do",
-      action: "create-space",
-      beingId: I_AM,
-      target: { kind: "space", id: rootId },
-      params: {
-        name: realityName,
-        type: null,
-        parent: null,
-        rootOwner: I_AM,
-        heavenSpace: HEAVEN_SPACE.SPACE_ROOT,
-        size: assertValidSpaceSize(null, { applyDefault: true }),
-        qualities: {},
-      },
-      actId: summonCtx.actId,
-      // Genesis runs on main by definition — there are no other branches
-      // at this point in time. Explicit value, not a default.
-      branch: "0",
-    }, summonCtx);
-    // Row doesn't exist yet (the moment hasn't sealed). The boot
-    // moment's subsequent steps read the planned id, not the row.
-    spaceRoot = { _id: rootId, _pending: true };
-    log.verbose("Reality", `Planned space root: ${rootId.slice(0, 8)} (materializes at seal)`);
+    // "I create the place root" — its own moment on the I-Am's reel.
+    await withIAmAct("I create the place root", async (ctx) => {
+      await emitFact({
+        verb: "do",
+        action: "create-space",
+        beingId: I_AM,
+        target: { kind: "space", id: rootId },
+        params: {
+          name: realityName,
+          type: null,
+          parent: null,
+          // The I-Am is the structural owner of the reality.
+          members: { owner: [I_AM] },
+          heavenSpace: HEAVEN_SPACE.SPACE_ROOT,
+          size: assertValidSpaceSize(null, { applyDefault: true }),
+          qualities: {},
+        },
+        actId: ctx.actId,
+        branch: "0",
+      }, ctx);
+    });
+    spaceRoot = { _id: rootId };
+    log.verbose("Reality", `Created place root: ${rootId.slice(0, 8)}`);
   }
 
-  // Plant heaven first . the "." space under the space root. Its id
-  // is then the parent of every Tier-3 heaven space, so they gather in
-  // the heaven room instead of cluttering the place root. Repair: a
-  // pre-existing heaven row found at the wrong parent gets moved back
-  // under spaceRoot. The repair Fact joins genesis's ΔF.
+  // Heaven — the "." space under the place root. Each step is its own
+  // moment via createRealityHeavenSpace's per-call withIAmAct.
   let heavenSpace = await findRootForHeavenSpace(HEAVEN_SPACE.HEAVEN);
   if (!heavenSpace) {
     try {
@@ -380,9 +346,9 @@ export async function ensureSpaceRoot(summonCtx) {
         parentId: spaceRoot._id,
         heavenSpace: REALITY_HEAVEN_SPACE.heavenSpace,
         qualities: null,
-        summonCtx,
+        // No summonCtx — createRealityHeavenSpace opens its own.
       });
-      log.verbose("Reality", `Planned heaven space: ${REALITY_HEAVEN_SPACE.name}`);
+      log.verbose("Reality", `Created heaven space: ${REALITY_HEAVEN_SPACE.name}`);
     } catch (err) {
       log.error(
         "Place",
@@ -395,17 +361,19 @@ export async function ensureSpaceRoot(summonCtx) {
   ) {
     log.warn("Place", `Heaven space has wrong parent. Repairing.`);
     const { doVerb } = await import("./ibp/verbs/do.js");
-    await doVerb(
-      { kind: "space", id: String(heavenSpace._id) },
-      "set-space",
-      { field: "parent", value: String(spaceRoot._id) },
-      { identity: I_AM, summonCtx },
-    );
+    await withIAmAct("I repair heaven's parent", async (ctx) => {
+      await doVerb(
+        { kind: "space", id: String(heavenSpace._id) },
+        "set-space",
+        { field: "parent", value: String(spaceRoot._id) },
+        { identity: I_AM, summonCtx: ctx },
+      );
+    });
   }
 
   // Heaven is the parent of every Tier-3 heaven space. Fall back to
   // spaceRoot only if heaven failed to plant above (degraded boot);
-  // the repair pass on next boot will adopt these spaces back under
+  // the repair pass on next boot adopts these spaces back under
   // heaven once it materializes.
   const heavenSpaceParentId = heavenSpace ? heavenSpace._id : spaceRoot._id;
 
@@ -419,9 +387,9 @@ export async function ensureSpaceRoot(summonCtx) {
           parentId: heavenSpaceParentId,
           heavenSpace: def.heavenSpace,
           qualities: def.buildQualities ? def.buildQualities() : null,
-          summonCtx,
+          // No summonCtx — own moment.
         });
-        log.verbose("Reality", `Planned heaven space: ${def.name}`);
+        log.verbose("Reality", `Created heaven space: ${def.name}`);
       } catch (err) {
         log.error(
           "Place",
@@ -434,8 +402,7 @@ export async function ensureSpaceRoot(summonCtx) {
     // Repair: a Tier-3 heaven space found at the wrong parent (manual
     // DB edit, corruption, or migration from an older layout where
     // they parented directly under the place root) gets moved back
-    // under heaven. Routes through do.set-space inside the boot
-    // moment so the repair Fact joins genesis's ΔF.
+    // under heaven. Each repair is its own moment.
     if (
       space.parent &&
       !space._pending &&
@@ -446,37 +413,41 @@ export async function ensureSpaceRoot(summonCtx) {
         `Seed space ${def.name} has wrong parent. Repairing.`,
       );
       const { doVerb } = await import("./ibp/verbs/do.js");
-      await doVerb(
-        { kind: "space", id: String(space._id) },
-        "set-space",
-        { field: "parent", value: String(heavenSpaceParentId) },
-        { identity: I_AM, summonCtx },
-      );
+      await withIAmAct(`I repair ${def.name}'s parent`, async (ctx) => {
+        await doVerb(
+          { kind: "space", id: String(space._id) },
+          "set-space",
+          { field: "parent", value: String(heavenSpaceParentId) },
+          { identity: I_AM, summonCtx: ctx },
+        );
+      });
     }
   }
 
-  // Adopt orphan tree roots (rootOwner is not me, parent is null).
-  // These exist when a tree was created before the space root, or
-  // when a prior boot crashed mid-creation. Bring them home by
-  // stamping a do:set-space parent Fact inside the boot moment.
+  // Adopt orphan tree roots (owner is not me, parent is null). These
+  // exist when a tree was created before the space root, or when a
+  // prior boot crashed mid-creation. Each adoption is its own moment.
   try {
     const { findRoot } = await import("./materials/projections.js");
+    const { getSpaceOwner } = await import("./materials/space/members.js");
     const allRoots = await findRoot("space", "0");
     const orphanRoots = [];
     for (const r of allRoots) {
       const slot = await loadProjection("space", r.id, "0");
-      const ownerId = slot?.state?.rootOwner || null;
+      const ownerId = getSpaceOwner(slot?.state) || null;
       if (ownerId != null && ownerId !== I_AM) orphanRoots.push({ _id: r.id });
     }
     const { doVerb } = await import("./ibp/verbs/do.js");
     for (const root of orphanRoots) {
       try {
-        await doVerb(
-          { kind: "space", id: String(root._id) },
-          "set-space",
-          { field: "parent", value: String(spaceRoot._id) },
-          { identity: I_AM, summonCtx },
-        );
+        await withIAmAct(`I adopt orphan ${String(root._id).slice(0,8)}`, async (ctx) => {
+          await doVerb(
+            { kind: "space", id: String(root._id) },
+            "set-space",
+            { field: "parent", value: String(spaceRoot._id) },
+            { identity: I_AM, summonCtx: ctx },
+          );
+        });
       } catch (err) {
         log.error(
           "Place",
@@ -499,15 +470,10 @@ export async function ensureSpaceRoot(summonCtx) {
 
   spaceRootCache = spaceRoot;
 
-  // Plant my own Being row. Every later being parents under it;
-  // every Fact written during this genesis joins the same moment's ΔF
-  // and seals atomically with the be:register that names me.
-  //
-  // Home is heaven ("."). It's the I-Am's room. Beings of the land
-  // see the door but cannot enter without heaven stance. Falls back
-  // to the place root only if heaven failed to plant (degraded boot).
-  const iAmHomeSpaceId = heavenSpace ? heavenSpace._id : spaceRoot._id;
-  await ensureIAm(iAmHomeSpaceId, summonCtx);
+  // I-Am is NO LONGER birthed here. Per IamToActs.md the genesis
+  // sequence has ensureIAm() run BEFORE ensureSpaceRoot (so I-Am is a
+  // real actor by the time these create-space facts emit), and a
+  // separate setIAmHomeSpace(heaven) step runs AFTER heaven exists.
 
   // childCount read only meaningful on Awakening (rows exist).
   if (!spaceRoot._pending) {
@@ -532,18 +498,19 @@ export async function ensureSpaceRoot(summonCtx) {
 // cognition only). The random password is never used; I cannot be
 // claimed or summoned interactively.
 //
-// The be:register Fact self-stamps: beingId points at the
-// not-yet-existing Being row whose materialization the same Fact
-// triggers. Per MOMENT.md: "the I-Am's first act issues its own first
-// fact." The Being row IS the fold-so-far of that one fact, sealed
-// inside the boot moment's transaction alongside every other genesis
-// Fact.
-async function ensureIAm(homeSpaceId, summonCtx) {
-  if (!summonCtx) {
-    throw new Error(
-      "ensureIAm requires summonCtx (the boot moment's ctx). Reachable only from inside withBootMoment(...).",
-    );
-  }
+// The be:birth Fact self-stamps: beingId points at the not-yet-
+// existing Being row whose materialization the same Fact triggers.
+// Per MOMENT.md "Genesis": "the I-Am's first moment is one act: 'I am
+// that I am' — the be:birth fact that issues its own actor." Inside
+// the withIAmAct moment opened here, the seal + reduce path
+// atomically writes the be:birth fact AND materializes the Being row.
+//
+// Standalone: opens its own moment, no caller-supplied summonCtx.
+// Idempotent. homeSpace stays null at birth; a separate moment later
+// in the genesis sequence (setIAmHomeSpace) takes heaven as home once
+// it exists. Splitting birth from home-setting is the
+// chicken-and-egg unlock from IamToActs.md.
+export async function ensureIAm() {
   const { findByName } = await import("./materials/projections.js");
   const existing = await findByName("being", I_AM, "0");
   if (existing) {
@@ -551,18 +518,11 @@ async function ensureIAm(homeSpaceId, summonCtx) {
     return { _id: existing.id, ...existing.state };
   }
 
-  // The I-Am's _id IS the I_AM string constant. This is the
-  // doctrinal shape. when other code says `beingId: I_AM` (in
-  // facts, in parent references, in audit attribution), it names
-  // the actual being row whose _id is the I_AM constant. No
-  // indirection, no string-vs-uuid mismatch. The string serves as
-  // both name AND id because the I-Am is exactly one being per
-  // reality and the constant identifies it unambiguously. The
-  // value is lowercase kebab ("i-am") to keep the wire stance
-  // valid under the address grammar. Every other being mints a
-  // uuid as its _id. I-Am is the one exception, and it's the one
-  // exception in every other respect too (null parent, scripted
-  // mode, planted by self-stamping fact at genesis).
+  // The I-Am's _id IS the I_AM string constant. This is the doctrinal
+  // shape. When other code says `beingId: I_AM` (in facts, in parent
+  // references, in audit attribution), it names the actual being row
+  // whose _id is the I_AM constant. No indirection, no string-vs-uuid
+  // mismatch.
   const id = I_AM;
   const { mintCredentialSpec } = await import(
     "./materials/being/identity/credentials.js"
@@ -573,37 +533,87 @@ async function ensureIAm(homeSpaceId, summonCtx) {
     cognition: { defaultKind: "scripted" },
   };
 
-  const homeSpaceBare = String(homeSpaceId);
-  await emitFact({
-    verb: "be",
-    action: "birth",
-    beingId: id, // self-stamping — the not-yet-existing being is its own actor
-    target: { kind: "being", id },
-    params: {
-      name: I_AM,
-      password: credential.hash,
-      roles: [],
-      defaultRole: null,
-      // parentBeingId is null . the I-Am is the root of the being-tree.
-      parentBeingId: null,
-      homeSpace: homeSpaceBare,
-      position: homeSpaceBare,
-      llmDefault: null,
-      isRemote: false,
-      homeReality: null,
-      qualities,
-    },
-    actId: summonCtx.actId,
-    // Genesis is main-only — I_AM births before any branch exists.
-    branch: "0",
-  }, summonCtx);
+  await withIAmAct("I am that I am", async (ctx) => {
+    await emitFact({
+      verb: "be",
+      action: "birth",
+      beingId: id, // self-stamping — the not-yet-existing being is its own actor
+      target: { kind: "being", id },
+      params: {
+        name: I_AM,
+        password: credential.hash,
+        roles: [],
+        defaultRole: null,
+        // Root of the being-tree.
+        parentBeingId: null,
+        // homeSpace is null at birth. A later step in the genesis
+        // sequence (setIAmHomeSpace) sets it to heaven once heaven
+        // exists. The reducer accepts a null homeSpace; downstream
+        // consumers that read homeSpace handle null by falling back
+        // to the place root (or treating the being as unhomed).
+        homeSpace: null,
+        position: null,
+        llmDefault: null,
+        isRemote: false,
+        homeReality: null,
+        qualities,
+      },
+      actId: ctx.actId,
+      // Genesis is main-only — I_AM births before any branch exists.
+      branch: "0",
+      // Op count: this be:birth is emitted directly (not through
+      // beVerb), so it doesn't bump opCount. The moment seals with
+      // opCount=0 — no warn, as intended (the act is one logical
+      // birth).
+    }, ctx);
+  });
 
-  // The Being row materializes when the boot moment seals. Return a
-  // pending view so callers that need the id can use it; the row
-  // exists post-seal.
   iAmBeingIdCache = id;
-  log.verbose("Reality", `Planned I_AM Being (id=${id}); materializes at seal`);
-  return { _id: id, _pending: true };
+  // Birth announcement on the console; "I am that I am" lives on the
+  // chain as the I-Am's first act-startMessage. Order: act seals
+  // first (the chain truth), then this line (the substrate noting it).
+  log.info("Reality", `I am born.`);
+  return { _id: id };
+}
+
+// `setIAmHomeSpace` — step 4 of the genesis sequence. Takes the
+// heaven space id and stamps a do:set-being fact on the I-Am's reel
+// putting heaven as its homeSpace + position. Idempotent: if the
+// I-Am already has the same homeSpace, no fact is emitted.
+//
+// Why this is a separate moment: the I-Am is born with homeSpace=null
+// because heaven doesn't exist yet at birth. Once ensureSpaceRoot has
+// run and heaven materializes, this fixes the home pointer. Per
+// IamToActs.md "the chicken-and-egg unlock."
+export async function setIAmHomeSpace(heavenSpaceId) {
+  if (!heavenSpaceId) {
+    throw new Error("setIAmHomeSpace: heavenSpaceId is required");
+  }
+  const { loadProjection } = await import("./materials/projections.js");
+  const iAmSlot = await loadProjection("being", I_AM, "0");
+  const currentHome = iAmSlot?.state?.homeSpace || null;
+  if (currentHome === String(heavenSpaceId)) {
+    return { _id: I_AM, _alreadyHome: true };
+  }
+  const { doVerb } = await import("./ibp/verbs/do.js");
+  await withIAmAct("I take heaven as my home", async (ctx) => {
+    await doVerb(
+      { kind: "being", id: I_AM },
+      "set-being",
+      { field: "homeSpace", value: String(heavenSpaceId) },
+      { identity: I_AM, summonCtx: ctx },
+    );
+  });
+  // The position field follows the same value: I-Am stands at heaven.
+  await withIAmAct("I stand at heaven", async (ctx) => {
+    await doVerb(
+      { kind: "being", id: I_AM },
+      "set-being",
+      { field: "position", value: String(heavenSpaceId) },
+      { identity: I_AM, summonCtx: ctx },
+    );
+  });
+  return { _id: I_AM };
 }
 
 export async function getSpaceRoot() {
@@ -620,24 +630,32 @@ export function getSpaceRootId() {
 /**
  * The I-Am Being's actual _id. After 2026-05-29 this is the I_AM
  * string constant ("i-am") on fresh installs. sprout's ensureIAm
- * mints the I-Am with _id = I_AM, so the constant IS the id. Pre.
+ * mints the I-Am with _id = I_AM, so the constant IS the id. Pre-
  * existing realities whose I-Am row was minted with a UUID before
  * the change retain that UUID; the cache reflects whichever shape
  * the row has. Sync accessor — only valid after ensureIAm() has run
- * (which ensureSpaceRoot calls internally inside withBootMoment).
+ * (the first step of the genesis sequence in genesis.js).
  */
 export function getIAmBeingId() {
   return iAmBeingIdCache;
 }
 
-// A tree root is a child of the space root with a non-seed rootOwner
-// and no heavenSpace. Single source of truth; use everywhere.
+// A tree root is a child of the space root with a non-I-Am owner and
+// no heavenSpace. Single source of truth; use everywhere.
 export function isBeingRoot(space) {
   if (!space) return false;
   if (space.heavenSpace) return false;
-  // rootOwner is a bare being-id, or the I_AM sentinel for system-owned
-  // spaces. A real being-root has a non-I_AM owner.
-  const ownerId = space.rootOwner === I_AM ? I_AM : (space.rootOwner ? String(space.rootOwner) : null);
+  // Owner lives in members.owner (singleton). Read via the helper so
+  // both Map and plain-object serialized shapes resolve.
+  const m = space.members;
+  let ownerId = null;
+  if (m instanceof Map) {
+    const list = m.get("owner");
+    if (Array.isArray(list) && list.length > 0) ownerId = String(list[0]);
+  } else if (m && typeof m === "object") {
+    const list = m.owner;
+    if (Array.isArray(list) && list.length > 0) ownerId = String(list[0]);
+  }
   if (!ownerId || ownerId === I_AM) return false;
   const spaceRootId = getSpaceRootId();
   const parentId = space.parent ? String(space.parent) : null;
@@ -654,17 +672,12 @@ export function isBeingRoot(space) {
 // on `<reality>/./extensions/<name>` returns the extension's surface
 // (capabilities, deps, scope) via the standard descriptor pipeline.
 //
-// Runs OUTSIDE the boot moment (after sealAct has materialized the
-// I-Am Being row). The reconciliation is the I-Am's own runtime act
-// post-genesis: caller wraps in withIAmAct so every fact this emits
-// joins one Act and commits atomically. Idempotent — when nothing
-// changed, zero facts are produced and no Act materializes.
-export async function syncExtensionsToTree(manifests, summonCtx) {
-  if (!summonCtx) {
-    throw new Error(
-      "syncExtensionsToTree requires summonCtx. Wrap the call in withIAmAct(...).",
-    );
-  }
+// Runs as part of post-genesis reconciliation (after the genesis
+// sequence has materialized the I-Am Being row). Per the
+// one-moment-one-act doctrine: each per-extension write opens its own
+// withIAmAct internally — "I sync this one extension" is one act.
+// Caller doesn't wrap. Idempotent — when nothing changed, zero facts.
+export async function syncExtensionsToTree(manifests) {
   const extSpace = await findRootForHeavenSpace(HEAVEN_SPACE.EXTENSIONS);
   if (!extSpace) return;
 
@@ -708,26 +721,26 @@ export async function syncExtensionsToTree(manifests, summonCtx) {
     const qualities = new Map([["extension", extensionQuality]]);
 
     if (existingByName.has(manifest.name)) {
-      // Refresh existing extension space — but only emit set-space facts
-      // when the existing state actually differs. Without this guard,
-      // every reboot stamped redundant set-space facts (type +
-      // qualities.extension) per loaded extension, inflating the chain.
+      // Refresh existing extension space — emit each set-space in its
+      // own moment per the one-DO-per-moment doctrine. Idempotent
+      // guards still apply: skip when the existing state already matches.
       const existing = existingByName.get(manifest.name);
       const extChildId = existing?._id;
       if (extChildId) {
         const extChildTarget = { kind: "space", id: String(extChildId) };
         const { doVerb } = await import("./ibp/verbs/do.js");
         if (existing.type !== "resource") {
-          await doVerb(
-            extChildTarget,
-            "set-space",
-            { field: "type", value: "resource" },
-            { identity: I_AM, summonCtx },
-          );
+          await withIAmAct(`sync-ext:type ${manifest.name}`, async (ctx) => {
+            await doVerb(
+              extChildTarget,
+              "set-space",
+              { field: "type", value: "resource" },
+              { identity: I_AM, summonCtx: ctx },
+            );
+          });
         }
         // Canonical JSON compare with sorted keys so insertion-order
-        // differences don't trigger false-positive rewrites. A simple
-        // recursive sort handles nested objects (provides, needs).
+        // differences don't trigger false-positive rewrites.
         const canon = (v) => {
           if (v === null || typeof v !== "object") return v;
           if (Array.isArray(v)) return v.map(canon);
@@ -736,36 +749,34 @@ export async function syncExtensionsToTree(manifests, summonCtx) {
         const existingJson = JSON.stringify(canon(existing.extensionQuality || null));
         const desiredJson  = JSON.stringify(canon(extensionQuality));
         if (existingJson !== desiredJson) {
-          await doVerb(
-            extChildTarget,
-            "set-space",
-            {
-              field: "qualities.extension",
-              value: extensionQuality,
-              merge: false,
-            },
-            { identity: I_AM, summonCtx },
-          );
+          await withIAmAct(`sync-ext:qualities ${manifest.name}`, async (ctx) => {
+            await doVerb(
+              extChildTarget,
+              "set-space",
+              { field: "qualities.extension", value: extensionQuality, merge: false },
+              { identity: I_AM, summonCtx: ctx },
+            );
+          });
         }
       }
     } else {
       try {
-        // Extension-space birth. do:create-space fact joins the
-        // wrapping I-Am moment's ΔF; reducer's applyCreateSpace
-        // materializes the row at seal.
+        // Extension-space birth. One create-space per extension, each
+        // in its own moment.
         const { doVerb } = await import("./ibp/verbs/do.js");
-        await doVerb(
-          { kind: "space", id: String(extSpace._id) },
-          "create-space",
-          {
-            name: manifest.name,
-            type: "resource",
-            parent: String(extSpace._id),
-            rootOwner: null,
-            qualities: Object.fromEntries(qualities),
-          },
-          { identity: I_AM, summonCtx },
-        );
+        await withIAmAct(`sync-ext:create ${manifest.name}`, async (ctx) => {
+          await doVerb(
+            { kind: "space", id: String(extSpace._id) },
+            "create-space",
+            {
+              name: manifest.name,
+              type: "resource",
+              parent: String(extSpace._id),
+              qualities: Object.fromEntries(qualities),
+            },
+            { identity: I_AM, summonCtx: ctx },
+          );
+        });
       } catch (err) {
         log.error(
           "Place",
@@ -775,18 +786,19 @@ export async function syncExtensionsToTree(manifests, summonCtx) {
     }
   }
 
-  // Mark unloaded extensions in their own namespace; the seed doesn't
-  // carry a universal "trimmed" status. Fact-driven: do.set on the
-  // qualities.extension.loaded leaf.
+  // Mark unloaded extensions in their own namespace. One moment per
+  // unloaded entry.
   for (const [name, spaceId] of existingByName) {
     if (!currentNames.has(name)) {
       const { doVerb } = await import("./ibp/verbs/do.js");
-      await doVerb(
-        { kind: "space", id: String(spaceId) },
-        "set-space",
-        { field: "qualities.extension.loaded", value: false },
-        { identity: I_AM, summonCtx },
-      );
+      await withIAmAct(`sync-ext:unload ${name}`, async (ctx) => {
+        await doVerb(
+          { kind: "space", id: String(spaceId) },
+          "set-space",
+          { field: "qualities.extension.loaded", value: false },
+          { identity: I_AM, summonCtx: ctx },
+        );
+      });
     }
   }
 }

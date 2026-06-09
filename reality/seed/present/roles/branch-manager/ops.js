@@ -79,6 +79,12 @@ registerOperation("create-branch", {
       label:    "Optional named pointer to attach to the new branch in the same call (e.g. \"feature-x\"). Equivalent to following create-branch with set-pointer.",
       required: false,
     },
+    reassignPointer: {
+      type:     "bool",
+      label:    "If the pointer is already taken, move it to the new branch (the old branch keeps its canonical path but loses the pointer). Without this, a taken pointer is refused.",
+      required: false,
+      default:  false,
+    },
     scope: {
       type:     "text",
       label:    "Optional space path (e.g. \"/library\") to scope this branch to a subtree. Writes outside the subtree refuse with SCOPE_VIOLATION; reads outside inherit from parent. Use when experimenting on one feature without contaminating the rest of the reality.",
@@ -126,6 +132,24 @@ registerOperation("create-branch", {
     if (scopePath && !scopePath.startsWith("/")) {
       throw new IbpError(IBP_ERR.INVALID_INPUT,
         `create-branch: scope must be a path starting with "/" (e.g. "/library"); got "${scopePath}"`);
+    }
+
+    // Pointer-collision check BEFORE we create the branch, so a taken
+    // pointer refuses cleanly instead of leaving a branch behind. A
+    // pointer maps name → exactly one branch path; reassigning moves it
+    // (the old branch keeps its canonical path, just loses the pointer).
+    const reassignPointer = params?.reassignPointer === true;
+    if (pointerName) {
+      const existingPointers = await readPointers();
+      const heldBy = existingPointers?.[pointerName];
+      if (heldBy && !reassignPointer) {
+        throw new IbpError(
+          IBP_ERR.RESOURCE_CONFLICT,
+          `Pointer "${pointerName}" is already on branch #${heldBy}. ` +
+          `Pass reassignPointer:true to move it to the new branch.`,
+          { pointer: pointerName, heldBy, reassignable: true },
+        );
+      }
     }
 
     let result;

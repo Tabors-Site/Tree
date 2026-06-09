@@ -15,7 +15,7 @@
 // The root space has `position: null`. This lets `findByPosition(P)`
 // return every child space of P alongside beings and matter at P.
 
-import { applySetQualities, applySetField, applyCreateSpace, applyMove } from "../reducerHelpers.js";
+import { applySetQualities, applySetField, applySetMembers, applyCreateSpace, applyMove } from "../reducerHelpers.js";
 
 /**
  * Empty initial state. Today: empty — the fold derives qualities +
@@ -44,9 +44,13 @@ export function reduce(state, fact) {
   // legacy birth facts that lack .spec; safe to compose now.
   next = applyCreateSpace(next, fact);
 
-  // do:set — scalar fields and qualities paths.
+  // do:set — scalar fields, qualities paths, and members.<className>
+  // per-class lists. The three appliers gate themselves on their own
+  // field-shape prefixes, so they're safe to compose; only one will
+  // mutate state for any given fact.
   next = applySetField(next, fact);
   next = applySetQualities(next, fact);
+  next = applySetMembers(next, fact);
 
   // do:move — picks up a space and puts it under a new parent.
   // Updates both parent and position; one fact, one intent recorded.

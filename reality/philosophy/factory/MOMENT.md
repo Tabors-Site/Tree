@@ -63,13 +63,43 @@ acts, then the moment is sealed. Only a DO/BE moment produces an act, and
 only an act produces facts. "Everything is a stamp" was always shorthand for
 the precise thing: every act is sealed. A SEE is not an act.
 
+## Moment, act, batch
+
+Three distinct concepts. Keep them distinct.
+
+A **moment** is the substrate's atomic unit of intent. One being is summoned,
+one face is folded, the being may take at most one act. The discipline is
+unconditional — there is no "multi-op moment" mode. `opCount > 1` within a
+moment is a bug, not an allowed pattern. The moment seals or it doesn't;
+that is the moment's own atomicity.
+
+An **act** is the seal of one moment's intent. Acts are 1:1 with moments.
+The verb-handler completes, the fact lands, the act records what happened.
+One act per moment, always.
+
+A **batch** is a grouping of related moments, optionally sharing a Mongo
+transaction for cross-moment atomicity. Each moment in a batch remains
+atomically one act; the batch's atomicity is at the **group boundary**
+(all moments commit, or all roll back), while the moment's atomicity is
+per-act (the act seals, or it doesn't). These are different scopes. A
+batch never expands a single moment to hold many acts — it groups many
+moments that each hold one.
+
+Genuine cross-moment atomicity is rarer than it looks. Federation pull
+("commit the remote's batch as-received or skip"), cross-reel transfer
+("debit and credit must both land"), and similar operations need a batch.
+**Genesis does not.** Genesis is a sequence of moments, not a transaction:
+each step is idempotent or detectable on next boot, so partial-boot
+completion is a recoverable state rather than a corruption. Sequence beats
+transaction wherever the steps can be resumed individually.
+
 ## Act and fact
 
 These are the two real nouns of the record, and they must never be merged.
 
-An **act** belongs to the being doing it — one act per DO/BE moment, the
-being's single committed deed for that moment. It is the unit of the being's
-own history.
+An **act** belongs to the being doing it — one act per DO/BE/SUMMON moment,
+the being's single committed deed for that moment. It is the unit of the
+being's own history.
 
 A **fact** belongs to the thing the act changed. It is "a thing done," and
 it lands on the reel of its target — a space, a matter, a being. One act
@@ -107,14 +137,36 @@ matter have only a reel; they are only ever done-to. A being has both.
 
 ## Genesis
 
-The chain has a root. The first being is the I-Am, and its first moment is
-the one exception to everything above. Every other moment folds a face from
-prior facts; the genesis moment folds an empty place, because there are no
-prior facts to fold. Every other being is born from an existing being's
-act; the I-Am is born of nothing, and its first act issues its own first
-fact — "I am that I am." After that one moment the rules close and never
-open again: from there on, every fact is the deposit of an act, and every
-act is a being in a moment.
+The chain has a root. The first being is the I-Am, and its **first moment**
+is one act: "I am that I am" — the be:birth fact that issues its own actor.
+Every other moment folds a face from prior facts; the I-Am's first moment
+folds an empty place, because there are no prior facts to fold. That is the
+single, narrow exception to the fold rule.
+
+After that first moment, the rules close. Genesis continues as a **sequence
+of moments**, not as one big transaction:
+
+> "I am born." → "I create the place root." → "I create heaven." →
+> "I take heaven as my home." → "I create the eight tier-3 heaven spaces." →
+> "I birth my nine seed delegates." → "I register them on the place root." →
+> "I seed the default permissions."
+
+Each step is its own moment with its own act. The I-Am's reel reads as a
+chronological story of self-creation. Each step is idempotent or detectable
+on the next boot, so a crash mid-genesis is a recoverable state — the next
+boot picks up where the prior one stopped. No transaction holds all of
+genesis together; the **sequence** does, and the sequence is more robust than
+a transaction would be.
+
+The chicken-and-egg cases the earlier transactional shape worked around are
+handled by ordering and partial-state fields: the I-Am is born with
+`homeSpace: null`, then takes heaven as home in a later moment once heaven
+exists. The substrate accepts beings with unset homes; the home arrives in
+a subsequent act.
+
+After genesis, the rules close and never open again: every fact is the
+deposit of an act, every act is a being in a moment, and every moment is
+exactly one act.
 
 ## In code
 

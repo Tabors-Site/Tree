@@ -18,6 +18,7 @@ import {
   commonAncestor,
   divergentFactsSince,
 } from "./branches.js";
+import { readPointers } from "./branchRegistry.js";
 
 export async function describeBranchesCatalog(branchPath = MAIN) {
   const path =
@@ -85,10 +86,16 @@ export async function describeBranchesCatalog(branchPath = MAIN) {
     .lean();
   const children = childRows.map(_serializeBranch);
 
+  // The named-pointer map ({ main: "0", prod: "7", ... }). One read; the
+  // client filters names whose value === a branch path to show "pointers
+  // aimed here." Surfaced for the full "see branch" info view.
+  const pointers = await readPointers().catch(() => ({}));
+
   return {
     current,
     lineage,
     children,
+    pointers,
   };
 }
 
@@ -109,6 +116,14 @@ function _serializeBranch(row) {
     createdAt: row.createdAt ? new Date(row.createdAt).toISOString() : null,
     createdBy: row.createdBy || null,
     mergeSources: Array.isArray(row.mergeSources) ? [...row.mergeSources] : [],
+    // Full-info fields for the "see branch" view. Cheap to surface (all
+    // on the row); a thin chip-row renderer just ignores them.
+    scope: row.scope || null,
+    pausedBy: row.pausedBy || null,
+    pausedAt: row.pausedAt ? new Date(row.pausedAt).toISOString() : null,
+    deletedBy: row.deletedBy || null,
+    deletedAt: row.deletedAt ? new Date(row.deletedAt).toISOString() : null,
+    archivedBecause: row.archivedBecause || null,
   };
 }
 

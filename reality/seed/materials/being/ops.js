@@ -386,6 +386,9 @@ registerOperation("set-being", {
   targets: ["being"],
   ownerExtension: "seed",
   factAction: "set-being",
+  // authorize keys this as do:set-being:<namespace> when the field is
+  // qualities.<namespace>... See operations.js isNamespaceKeyedAction.
+  useNamespaceKey: true,
   args: {
     field: { type: "text", label: "Field (e.g. coord, qualities.<ns>.<key>)", required: true },
     value: { type: "json", label: "Value (JSON; null to clear)", required: false },

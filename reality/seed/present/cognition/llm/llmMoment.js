@@ -215,8 +215,13 @@ async function runLlmMomentInner({ being, envelope, role, signal, summonCtx }) {
     : [];
 
   // Tree circuit breaker. If the owning root is tripped, return a
-  // brief act explaining the dormancy.
-  const rootAncestor = ancestorSnapshot.find((a) => a.rootOwner);
+  // brief act explaining the dormancy. The walker normalizes each
+  // ancestor's members map onto the row; `members.owner` non-empty
+  // marks the ownership boundary.
+  const rootAncestor = ancestorSnapshot.find((a) => {
+    const list = a.members?.owner;
+    return Array.isArray(list) && list.length > 0;
+  });
   if (rootAncestor?.qualities?.circuit?.tripped) {
     return cognitionSuccess(
       "This tree is dormant. It exceeded health thresholds and its circuit breaker tripped.",

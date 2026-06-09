@@ -203,6 +203,10 @@ async function _flatSignIn(op, name, password) {
     token:          result.identityToken,
     username:       result.name || name,
     beingAddress:   result.beingAddress,
+    // Home space the new being was placed in. Used to land the camera at
+    // home right after register, before identity.position/homeSpace fold
+    // into the descriptor (the race that stranded new beings at root).
+    homeSpaceId:    result.homeSpaceId || null,
   };
   saveSession(session);
   state.session = session;
@@ -314,7 +318,7 @@ async function main() {
     reality: state.discovery?.reality || "treeos.ai",
   });
 
-  // Standalone letters-mode toggle, below the 🌿 button. The address
+  // Standalone letters-mode toggle, below the "Branches" button. The address
   // bar previously hid this as a 4-letter "text" button at the far
   // right edge; making it a fixed-position button gives it air and
   // a clearer label. Both buttons share the same left column; flat-
@@ -437,20 +441,14 @@ async function main() {
 async function refreshSeedCatalog() {
   if (!state.client || !state.discovery?.reality) return;
   try {
-    // The discovery payload still hydrates state.discovery (protocol
-    // version, roles, etc.); the hotbar now lists CLONE BUNDLES (not
-    // the retired seed-scaffold list). The list-clones DO op returns
-    // every extension-registered clone the operator can graft.
+    // The discovery payload (unauthenticated SEE on .discovery) carries
+    // the list of clone bundles registered by extensions. Reading from
+    // discovery (not the list-clones DO op) lets the hotbar populate
+    // before the operator signs in — DO requires auth, SEE doesn't.
     const full = await state.client.see(`${state.discovery.reality}/.discovery`);
     state.discovery = { ...state.discovery, ...full };
 
-    let clones = [];
-    try {
-      const reply = await state.client.do(state.discovery.reality + "/", "list-clones", {});
-      clones = Array.isArray(reply?.clones) ? reply.clones : [];
-    } catch (err) {
-      console.warn("[3D] list-clones failed:", err?.message || err);
-    }
+    const clones = Array.isArray(full?.clones) ? full.clones : [];
     console.log(`[3D] ${clones.length} clone bundle(s) available:`, clones.map((c) => c.name));
 
     // Slot 0 is always the built-in Move tool — intrinsic to the
@@ -522,6 +520,10 @@ async function connectAnonymous(placeUrl, useProxy) {
   }));
   state.client.connect();
   await waitForConnect(state.client);
+  // Point the branch bar at the live socket (it may have been mounted
+  // with a previous client). No-op at first boot — the bar mounts after
+  // this connect — but load-bearing on sign-out's reconnect.
+  state.branchBar?.setClient(state.client, state.discovery?.reality);
   // Restore last view from URL hash if present; else land at "/".
   // Anonymous SEE on a non-existent space still throws SPACE_NOT_FOUND,
   // so wrap the navigate and fall back to "/" on substrate-gone errors.
@@ -554,6 +556,17 @@ const STALE_SESSION_CODES = new Set([
   "NODE_NOT_FOUND",
   "BEING_NOT_FOUND",
   "SPACE_NOT_FOUND",
+  // A hash/session pinned to a branch that no longer exists (e.g. the DB
+  // was reset, or the branch was deleted). Treat like a stale pointer:
+  // clear the bad address and fall back to main instead of looping SEEs
+  // and storming set-being:position retries against the gone branch.
+  "BRANCH_NOT_FOUND",
+  // A stale branch qualifier in the hash can surface as cross-branch
+  // (the freshly-connected socket is on #0 while the address still
+  // carries #N) BEFORE existence is even checked. Same recovery: clear
+  // the address and drop to main rather than leaving the user wedged on
+  // a branch they can't act on (register/DO bounce with this code).
+  "CROSS_BRANCH_FORBIDDEN",
 ]);
 
 async function _dropStaleSessionAndReconnect(session) {
@@ -580,6 +593,11 @@ async function connectAndPlace(session) {
   }));
   state.client.connect();
   await waitForConnect(state.client);
+  // Point the branch bar at the freshly-authenticated socket. Without
+  // this, a first-time register (anonymous boot → mount bar → register →
+  // new auth client) leaves the bar querying the dead pre-auth socket,
+  // so the branch tree is empty until a page reload.
+  state.branchBar?.setClient(state.client, state.discovery?.reality);
 
   // The token may be stale (expired, signed under a previous JWT_SECRET,
   // or for a being that no longer exists — the common case being the
@@ -634,7 +652,11 @@ async function connectAndPlace(session) {
         //      if neither position nor homeSpace is known.
         const pos = desc?.identity?.position || null;
         const home = desc?.identity?.homeSpace || null;
-        const targetSpace = pos || home;
+        // session.homeSpaceId is the race-proof fallback for a being who
+        // JUST registered: cherub returns it synchronously, so even if the
+        // be:birth projection hasn't folded into identity.position/homeSpace
+        // yet, we still land at the home grid instead of the reality root.
+        const targetSpace = pos || home || session.homeSpaceId || null;
         if (targetSpace && state.discovery?.reality) {
           // Space id is a UUID — the resolver accepts UUID paths.
           landingAddress = `${state.discovery.reality}/${targetSpace}`;
@@ -693,6 +715,8 @@ let _selfPositionTimer = null;
 let _lastEmittedCoord = null;
 let _selfEmitInflight = false;
 const SELF_EMIT_TICK_MS = 100;
+// Guard against re-entrant branch-gone recovery in navigate()'s catch.
+let _recoveringBranch = false;
 
 function _startSelfPositionLoop() {
   if (_selfPositionTimer) return;
@@ -1101,6 +1125,25 @@ async function navigate(address, { fromHistory = false } = {}) {
     state.branchBar?.update(desc);
   } catch (err) {
     setHud(`see failed: ${err.code || ""} ${err.message || ""}`);
+    // A navigate to a branch that no longer exists (DB reset, deleted
+    // branch, stale hash) self-heals to main rather than stranding the
+    // client on the previous descriptor — where the self-position loop
+    // keeps firing set-being against the gone branch (the snapshot
+    // storm). Clear the bad hash and drop to main once; the re-entry
+    // guard stops a loop if main itself somehow fails.
+    if ((err?.code === "BRANCH_NOT_FOUND" || err?.code === "CROSS_BRANCH_FORBIDDEN") && !_recoveringBranch) {
+      _recoveringBranch = true;
+      _lastEmittedCoord = null;
+      try { history.replaceState(null, "", location.pathname); } catch {}
+      try {
+        await navigate(`${state.discovery?.reality || ""}/`);
+        return;
+      } catch (err2) {
+        console.warn("[3D] branch-gone recovery to main failed:", err2?.message || err2);
+      } finally {
+        _recoveringBranch = false;
+      }
+    }
     // Re-throw so connect-time handlers (connectAndPlace,
     // connectAnonymous) can fall back when the landing address points
     // at substrate that no longer exists (DB reset, tombstone, etc.).
@@ -1438,6 +1481,10 @@ function openActionForm(b, action, address, { error = null } = {}) {
               token:           result.identityToken,
               username:        result.name || values.name,
               beingAddress:    result.beingAddress,
+              // Land at home post-register without waiting for the fold
+              // (see _flatSignIn / connectAndPlace). Only register returns
+              // this; connect (existing being) relies on identity.position.
+              homeSpaceId:     result.homeSpaceId || null,
             };
             saveSession(newSession);
             state.session = newSession;

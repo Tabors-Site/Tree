@@ -23,8 +23,23 @@
 //     parameters: [           // declared parameter holes (may be empty)
 //       { name, type, default?, description? }
 //     ],
-//     content: { spaces, beings, matter }
+//     content: {
+//       spaces, beings, matter,
+//       facts: [              // optional — arbitrary post-create facts
+//         { verb, action, target: { kind, id }, params }
+//       ],
+//     }
 //   }
+//
+// FACTS BLOCK. The spaces/beings/matter arrays each emit ONE create-X
+// fact per entry (the create-space / be:birth / create-matter the
+// graft engine synthesizes from the entry's fields). For anything
+// MORE than creation — set-being:coord, set-matter:qualities.render,
+// subscription-registered, wake-scheduled, the qualities.beings
+// register-on-space writes that hook a being into a space's roster —
+// add entries to `content.facts`. Each entry is a fact spec the graft
+// engine dispatches verbatim (after parameter substitution and Ref
+// remap). They run AFTER all create-X facts, in array order.
 //
 // PARAMETERS. Authored clones can declare named parameter holes the
 // grafter fills at apply time. Any string field value of the form
@@ -88,6 +103,26 @@ export function assertValidBundle(bundle) {
     for (const entry of bundle.content[kind]) {
       if (!entry || typeof entry !== "object" || typeof entry.sourceId !== "string") {
         throw new Error(`bundle.content.${kind}: every entry needs a sourceId string`);
+      }
+    }
+  }
+  // content.facts is optional. When present, each entry needs verb,
+  // action, and (for reel-bearing facts) a target { kind, id }. Refs
+  // and $params inside fields are validated structurally at graft time
+  // when the substitution / remap actually runs.
+  if (bundle.content.facts !== undefined) {
+    if (!Array.isArray(bundle.content.facts)) {
+      throw new Error("bundle.content.facts: must be an array when present");
+    }
+    for (const f of bundle.content.facts) {
+      if (!f || typeof f !== "object") {
+        throw new Error("bundle.content.facts: every entry must be an object");
+      }
+      if (typeof f.verb !== "string" || !f.verb) {
+        throw new Error("bundle.content.facts: every entry needs a verb string");
+      }
+      if (typeof f.action !== "string" || !f.action) {
+        throw new Error("bundle.content.facts: every entry needs an action string");
       }
     }
   }

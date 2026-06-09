@@ -282,6 +282,9 @@ registerOperation("set-matter", {
   targets: ["matter"],
   ownerExtension: "seed",
   factAction: "set-matter",
+  // authorize keys this as do:set-matter:<namespace> when the field is
+  // qualities.<namespace>... See operations.js isNamespaceKeyedAction.
+  useNamespaceKey: true,
   args: {
     field: { type: "text", label: "Field (e.g. name, content, qualities.<ns>.<key>)", required: true },
     value: { type: "json", label: "Value (JSON; null to clear)", required: false },

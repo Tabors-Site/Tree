@@ -201,8 +201,7 @@ async function walkFromDb(spaceId, ttl, branch) {
       qualities: _slot.state?.qualities,
       parent: _slot.state?.parent || null,
       heavenSpace: _slot.state?.heavenSpace,
-      rootOwner: _slot.state?.rootOwner,
-      contributors: _slot.state?.contributors,
+      members: _slot.state?.members,
     } : null;
     if (!n) {
       // Space not found. Return what we have if any, null if starting space.
@@ -214,14 +213,33 @@ async function walkFromDb(spaceId, ttl, branch) {
       n.qualities instanceof Map
         ? Object.fromEntries(n.qualities)
         : n.qualities || {};
+    // Normalize the members map for the access walker. Mongoose Maps
+    // serialize to plain objects in lean reads, but hydrated docs
+    // hand back actual Maps; the walker reads plain objects.
+    const mem = (() => {
+      const m = n.members;
+      if (!m) return {};
+      if (m instanceof Map) {
+        const out = {};
+        for (const [k, v] of m.entries()) out[k] = Array.isArray(v) ? v.map(String) : [];
+        return out;
+      }
+      if (typeof m === "object") {
+        const out = {};
+        for (const k of Object.keys(m)) {
+          if (Array.isArray(m[k])) out[k] = m[k].map(String);
+        }
+        return out;
+      }
+      return {};
+    })();
     ancestors.push({
       _id: String(n._id),
       name: n.name || null,
       qualities: quals,
       parent: n.parent,
       heavenSpace: n.heavenSpace || null,
-      rootOwner: n.rootOwner || null,
-      contributors: (n.contributors || []).map(String),
+      members: mem,
     });
 
     // Continue past any intermediate heaven space. The loop ends
@@ -319,7 +337,22 @@ export function resolveExtensionScopeFromChain(ancestors, confinedExtensions) {
 
 /**
  * Resolve tree access from a cached ancestor chain.
- * Returns the same shape as resolveSpaceAccess().
+ *
+ * Reads each space's `members` map (the canonical membership-class
+ * storage). Returns:
+ *
+ *   ok, rootId, isRoot
+ *   isOwner            singleton owner class match on the closest
+ *                      space that has one (the ownership boundary)
+ *   isContributor      `contributor` class match anywhere on the
+ *                      chain between target and ownership boundary
+ *   memberClasses      [string] union of every class the being is in
+ *                      across the walked chain, INCLUDING owner and
+ *                      contributor; the property bag the comparator
+ *                      reads for `requires: { memberClasses: { includes: "X" } }`
+ *   hasAccess          owner OR any non-system class membership;
+ *                      convenience shorthand for "in any trust class"
+ *   isTripped          circuit-breaker on the ownership boundary
  *
  * @param {string} startNodeId - the space being accessed
  * @param {string} beingId - the being requesting access
@@ -334,39 +367,56 @@ export function resolveSpaceAccessFromChain(startNodeId, beingId, ancestors) {
     };
   }
 
+  const memberClasses = new Set();
+  const idStr = beingId ? String(beingId) : null;
+
+  // Each `space.members` is normalized to a plain { className: [ids] }
+  // object during the chain snapshot (snapshotAncestors / loadOrFold
+  // produces lean rows; Mongoose Maps serialize to plain objects).
+  // Collect every class this being belongs to as we walk.
+  const accumulateMemberships = (space) => {
+    if (!idStr) return;
+    const m = readMembers(space);
+    for (const [className, list] of Object.entries(m)) {
+      if (Array.isArray(list) && list.some((id) => String(id) === idStr)) {
+        memberClasses.add(className);
+      }
+    }
+  };
+
   // ── Heaven path ────────────────────────────────────────────────
   // Any space whose chain passes through heaven (heaven itself or any
-  // Tier-3 heaven space beneath it) uses two simple rules: I_AM is the
-  // rootOwner (immutable; this is what lets assertOwner pass for
-  // seed-internal anointing flows), and the contributors[] roster on
-  // heaven is the write-access set for everyone else. cherub.register
-  // anoints the first heaven contributor into contributors; subsequent humans get
-  // added by an existing contributor via add-contributor on heaven.
+  // Tier-3 heaven space beneath it) uses heaven's members map: I_AM
+  // is the singleton owner (immutable; the system-internal anoint
+  // flows assert against this), the `angel` class is the operator
+  // roster (cherub.birth anoints into it; existing angels add via
+  // add-member), and `contributor` is available for ad-hoc trust.
   // No tree-owner walk applies — heaven IS the system tree.
   const heavenSpace = ancestors.find((s) => s.heavenSpace === "heaven");
   if (heavenSpace) {
-    const isHeavenOwner = !!(
-      beingId && heavenSpace.rootOwner && heavenSpace.rootOwner === beingId
-    );
-    const isHeavenContributor = !isHeavenOwner && !!(
-      beingId && heavenSpace.contributors?.some((id) => id === beingId)
-    );
+    accumulateMemberships(heavenSpace);
+    const ownerId = getOwnerId(heavenSpace);
+    const isHeavenOwner = !!(idStr && ownerId && String(ownerId) === idStr);
+    const isAngel = memberClasses.has("angel");
+    const isContributor = memberClasses.has("contributor");
     return {
       ok: true,
       rootId: heavenSpace._id,
       isRoot: heavenSpace._id === startNodeId,
       isOwner: isHeavenOwner,
-      isContributor: isHeavenContributor,
+      isContributor: !isHeavenOwner && isContributor,
+      memberClasses: Array.from(memberClasses),
       isTripped: false,
-      hasAccess: isHeavenOwner || isHeavenContributor,
+      hasAccess: isHeavenOwner || isAngel || isContributor,
     };
   }
 
   // ── User-tree path (everything else) ───────────────────────────
-  let isContributor = false;
   let ownerNode = null;
 
   for (const space of ancestors) {
+    accumulateMemberships(space);
+
     if (space.heavenSpace) {
       // SOURCE is a traversable system tree (live mirror of
       // reality/extensions + reality/seed, see code-workspace/source.js).
@@ -387,17 +437,9 @@ export function resolveSpaceAccessFromChain(startNodeId, beingId, ancestors) {
       };
     }
 
-    // Accumulate contributors
-    if (
-      !isContributor &&
-      beingId &&
-      space.contributors?.some((id) => id === beingId)
-    ) {
-      isContributor = true;
-    }
-
-    // First rootOwner found is the ownership boundary
-    if (space.rootOwner && space.rootOwner !== I_AM) {
+    // First space with a non-I_AM owner is the ownership boundary
+    const ownerId = getOwnerId(space);
+    if (ownerId && ownerId !== I_AM) {
       ownerNode = space;
       break;
     }
@@ -407,12 +449,12 @@ export function resolveSpaceAccessFromChain(startNodeId, beingId, ancestors) {
     return {
       ok: false,
       error: IBP_ERR.INVALID_TREE,
-      message: "Invalid tree: no rootOwner found",
+      message: "Invalid tree: no owner found",
     };
   }
 
-  // .source is a reality-wide system tree. Everyone on the reality can read it.
-  // Writes are gated elsewhere (code-workspace write-mode check).
+  // .source is a reality-wide system tree. Everyone on the reality
+  // can read it; writes are gated elsewhere.
   if (ownerNode.heavenSpace === "source") {
     return {
       ok: true,
@@ -420,12 +462,15 @@ export function resolveSpaceAccessFromChain(startNodeId, beingId, ancestors) {
       isRoot: ownerNode._id === startNodeId,
       isOwner: false,
       isContributor: false,
+      memberClasses: Array.from(memberClasses),
       isTripped: false,
       hasAccess: false,
     };
   }
 
-  const isOwner = !!(beingId && ownerNode.rootOwner === beingId);
+  const ownerId = getOwnerId(ownerNode);
+  const isOwner = !!(idStr && ownerId && String(ownerId) === idStr);
+  const isContributor = !isOwner && memberClasses.has("contributor");
 
   // Circuit breaker: tripped trees deny write access
   const circuit = ownerNode.qualities?.circuit;
@@ -437,9 +482,31 @@ export function resolveSpaceAccessFromChain(startNodeId, beingId, ancestors) {
     isRoot: ownerNode._id === startNodeId,
     isOwner,
     isContributor,
+    memberClasses: Array.from(memberClasses),
     isTripped,
     hasAccess: (isOwner || isContributor) && !isTripped,
   };
+}
+
+// Normalize the members map off a lean ancestor row. Mongoose Maps
+// serialize to plain objects on lean reads but we defend against
+// raw-Map shapes in case a caller passes a hydrated doc.
+function readMembers(space) {
+  const m = space?.members;
+  if (!m) return {};
+  if (m instanceof Map) {
+    const out = {};
+    for (const [k, v] of m.entries()) out[k] = Array.isArray(v) ? v : [];
+    return out;
+  }
+  if (typeof m === "object") return m;
+  return {};
+}
+
+function getOwnerId(space) {
+  const m = readMembers(space);
+  const list = m.owner;
+  return Array.isArray(list) && list.length > 0 ? list[0] : null;
 }
 
 // ── Invalidation ──

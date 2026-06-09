@@ -421,7 +421,7 @@ export async function auditToolDescriptions() {
 // extensions have registered their tools) so SEE on `<reality>/./tools`
 // reflects current state. Idempotent; subsequent calls reconcile
 // (add new tools, remove gone ones).
-export async function syncToolsToSubstrate(summonCtx) {
+export async function syncToolsToSubstrate() {
   const { HEAVEN_SPACE } = await import("../../../materials/space/heavenSpaces.js");
   const { manifestItems } = await import("../../manifest.js");
   const items = Object.entries(toolDefs).map(([name, def]) => ({
@@ -437,7 +437,7 @@ export async function syncToolsToSubstrate(summonCtx) {
       ],
     ]),
   }));
-  return manifestItems({ heavenSpace: HEAVEN_SPACE.TOOLS, items, summonCtx });
+  return manifestItems({ heavenSpace: HEAVEN_SPACE.TOOLS, items });
 }
 
 // ─────────────────────────────────────────────────────────────────────────

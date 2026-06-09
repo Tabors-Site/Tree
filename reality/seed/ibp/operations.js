@@ -151,6 +151,12 @@ export function registerOperation(name, spec) {
         ? spec.factAction
         : name,
     skipAudit: spec.skipAudit === true,
+    // True when the op's authorize key includes a `namespace` part —
+    // e.g. `do:set-space:my-extension`. The seed's set-<kind> ops use
+    // this so operators can author per-namespace rules at qualities.
+    // permissions.do.set-space:<ns>. authorize.js's buildKeyParts
+    // reads it via isNamespaceKeyedAction().
+    useNamespaceKey: spec.useNamespaceKey === true,
     ownerExtension,
   });
   log.verbose("Operations", `Registered: ${name} (${ownerExtension})`);
@@ -192,6 +198,26 @@ export function getOperation(name) {
   return REGISTRY.get(name) || null;
 }
 
+// Legacy unregistered actions the wire dispatcher still routes by
+// name (do.js extracts params.namespace for them). They share the
+// namespace-keyed lookup behavior with the registered set-<kind> ops
+// even though they don't appear in the registry. Add new entries here
+// only when retiring the registration-less pattern can't be done.
+const _LEGACY_NAMESPACE_KEYED = new Set(["set-qualities", "clear-qualities"]);
+
+/**
+ * True when the named action's authorize key includes a namespace
+ * part. Used by authorize.js's buildKeyParts to add a per-namespace
+ * key segment, and by do.js to extract the namespace from params.
+ * Source of truth: the op's `useNamespaceKey` flag, plus the legacy
+ * set above for unregistered names.
+ */
+export function isNamespaceKeyedAction(name) {
+  if (_LEGACY_NAMESPACE_KEYED.has(name)) return true;
+  const op = REGISTRY.get(name);
+  return op?.useNamespaceKey === true;
+}
+
 /**
  * List registered operations. Optional filters:
  *   { ownerExtension: "food" }      -> only that extension's ops
@@ -223,7 +249,7 @@ export function listOperations(filter = {}) {
  * declaration (targets, owner extension, factAction, skipAudit). Called
  * at boot end after extensions register; idempotent.
  */
-export async function syncOperationsToSubstrate(summonCtx) {
+export async function syncOperationsToSubstrate() {
   const { HEAVEN_SPACE } = await import("../materials/space/heavenSpaces.js");
   const { manifestItems } = await import("../present/manifest.js");
   const items = [];
@@ -246,5 +272,5 @@ export async function syncOperationsToSubstrate(summonCtx) {
       ]),
     });
   }
-  return manifestItems({ heavenSpace: HEAVEN_SPACE.OPERATIONS, items, summonCtx });
+  return manifestItems({ heavenSpace: HEAVEN_SPACE.OPERATIONS, items });
 }

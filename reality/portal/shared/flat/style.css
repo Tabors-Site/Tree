@@ -1444,3 +1444,183 @@ a.kv-block-value:hover { color: var(--accent); text-decoration: underline; }
   word-break: break-word;
 }
 
+/* ─────────────────────────────────────────────────────────────── */
+/* Permissions panel (Place > Permissions tab)                     */
+/* ─────────────────────────────────────────────────────────────── */
+
+.perm-panel { display: flex; flex-direction: column; gap: 10px; }
+.perm-loading { padding: 8px 0; font-size: 11px; }
+.perm-error {
+  color: var(--err);
+  background: #2a1414;
+  border: 1px solid var(--err);
+  border-radius: 3px;
+  padding: 6px 8px;
+  font-size: 11px;
+}
+
+.perm-card {
+  background: var(--bg-2);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.perm-card-title {
+  font-size: 11px;
+  color: var(--accent);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  border-bottom: 1px dotted var(--border);
+  padding-bottom: 4px;
+}
+.perm-sub {
+  font-family: ui-monospace, monospace;
+  font-size: 10px;
+  font-weight: normal;
+  text-transform: none;
+  letter-spacing: 0;
+  margin-left: 4px;
+}
+
+.perm-row {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  font-size: 11px;
+  flex-wrap: wrap;
+}
+.perm-label {
+  display: inline-block;
+  min-width: 80px;
+  color: var(--fg-faint);
+  text-transform: uppercase;
+  font-size: 10px;
+  letter-spacing: 0.04em;
+}
+.perm-value {
+  color: var(--fg);
+  word-break: break-all;
+  flex: 1;
+}
+.perm-id {
+  font-family: ui-monospace, monospace;
+  font-size: 10px;
+  color: var(--fg-faint);
+}
+
+.perm-chip {
+  display: inline-block;
+  background: var(--bg-3);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  padding: 1px 5px;
+  font-family: ui-monospace, monospace;
+  font-size: 10px;
+  color: var(--fg);
+}
+
+.perm-flag {
+  display: inline-block;
+  padding: 1px 5px;
+  border-radius: 3px;
+  font-family: ui-monospace, monospace;
+  font-size: 10px;
+  margin-right: 4px;
+  border: 1px solid var(--border);
+}
+.perm-flag.on  { background: #14291a; border-color: #2a8a3e; color: #6ad17a; }
+.perm-flag.off { background: var(--bg-3); color: var(--fg-faint); }
+
+.perm-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 11px;
+}
+.perm-table th,
+.perm-table td {
+  text-align: left;
+  padding: 4px 6px;
+  border-bottom: 1px dotted var(--border);
+  vertical-align: top;
+}
+.perm-table th {
+  color: var(--fg-faint);
+  text-transform: uppercase;
+  font-size: 10px;
+  font-weight: normal;
+  letter-spacing: 0.04em;
+}
+.perm-table code {
+  font-family: ui-monospace, monospace;
+  font-size: 10px;
+}
+.perm-requires {
+  font-family: ui-monospace, monospace;
+  font-size: 10px;
+  color: var(--fg);
+  word-break: break-all;
+}
+.perm-verdict {
+  font-weight: bold;
+  text-align: center;
+  width: 32px;
+}
+.perm-verdict.ok { color: #6ad17a; }
+.perm-verdict.no { color: var(--err); }
+.perm-row-action { width: 60px; text-align: right; }
+
+.perm-empty { padding: 6px 0; font-size: 11px; }
+.perm-help {
+  font-size: 10px;
+  padding: 6px 0;
+  border-top: 1px dotted var(--border);
+}
+.perm-help code {
+  font-family: ui-monospace, monospace;
+  background: var(--bg-3);
+  padding: 1px 4px;
+  border-radius: 2px;
+}
+
+.perm-btn {
+  align-self: flex-start;
+  background: var(--bg-3);
+  color: var(--accent);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  padding: 4px 8px;
+  font-size: 11px;
+  cursor: pointer;
+}
+.perm-btn:hover { background: var(--bg-2); border-color: var(--accent); }
+.perm-btn-secondary { color: var(--fg-faint); }
+.perm-btn-mini {
+  background: var(--bg-3);
+  color: var(--fg);
+  border: 1px solid var(--border);
+  border-radius: 2px;
+  padding: 1px 5px;
+  font-size: 10px;
+  cursor: pointer;
+}
+.perm-btn-mini:hover { border-color: var(--accent); color: var(--accent); }
+.perm-btn-danger { color: var(--err); }
+.perm-btn-danger:hover { border-color: var(--err); }
+
+.perm-author-form .perm-input {
+  flex: 1;
+  background: var(--bg);
+  color: var(--fg);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  padding: 3px 6px;
+  font-family: ui-monospace, monospace;
+  font-size: 11px;
+}
+.perm-author-form textarea.perm-input {
+  min-height: 60px;
+  resize: vertical;
+}

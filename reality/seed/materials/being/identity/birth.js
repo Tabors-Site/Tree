@@ -145,10 +145,12 @@ function validatePassword(password) {
  *                                   (must satisfy authorize against
  *                                   spec.homeId for verb=be op=create-being)
  * @param {object} [args.summonCtx]  the moment's context. Required for
- *                                   runtime calls; boot moments pass
- *                                   the boot ctx; standalone tools
- *                                   (migrations) pass null and accept
- *                                   immediate-commit semantics.
+ *                                   runtime calls; genesis-sequence
+ *                                   callers (ensureSeedDelegates) pass
+ *                                   their per-delegate withIAmAct ctx;
+ *                                   standalone tools (migrations) pass
+ *                                   null and accept immediate-commit
+ *                                   semantics.
  *
  * @returns {Promise<{status, beingId, name, being}>} where `being` is
  *   either the pending-view (in-moment) or the materialized row
@@ -214,25 +216,20 @@ export async function birthBeing({ spec, identity, summonCtx = null }) {
 
   const branch = summonCtx?.branch || "0";
 
-  // ── Authorize against the new being's home space ──
-  // I_AM short-circuits inherently; seed-shipped default permissions
-  // cover the registration paths (cherub/birther). Extensions can add
-  // Layer-3 rules to tighten or broaden.
-  const { authorize } = await import("../../../ibp/authorize.js");
-  const decision = await authorize({
-    identity,
-    verb:      "be",
-    operation: "create-being",
-    target:    { kind: "space", spaceId: homeId },
-    summonCtx,
-  });
-  if (!decision.ok) {
-    throw new IbpError(
-      IBP_ERR.FORBIDDEN,
-      `Stance "${decision.stance}" not authorized to birth beings: ${decision.reason || "no rule matched"}`,
-      { caller: identity?.name || null, stance: decision.stance },
-    );
-  }
+  // No inline authorize call. `birthBeing` is a substrate primitive
+  // called from already-authorized contexts:
+  //   - The wire BE handler (verbs/be.js) gates `be:birth` at the wire
+  //     and enforces the cherub-arrival vs birther-authenticated split
+  //     inline before reaching this function.
+  //   - Cherub's role.js calls this from within its authorized flow.
+  //   - seedDelegates calls this at boot under the I_AM identity (the
+  //     I_AM short-circuit covers it).
+  // Re-authorizing here with a synthetic `be:create-being` operation
+  // name was a defense-in-depth gate that polluted the BE namespace
+  // with a non-protocol operation (BE dispatches only birth / connect /
+  // release). The protections come from the authorized callers; this
+  // primitive enforces state-consistency invariants below, not auth.
+  // See seed/PERMISSIONS.md "Permissions vs invariants."
 
   // ── Parent exists (or is pending in this moment) ──
   // The being-tree's chain of causation needs every link to resolve.

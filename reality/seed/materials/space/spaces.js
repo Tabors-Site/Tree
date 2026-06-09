@@ -393,9 +393,9 @@ export async function createSpace({
       const { loadOrFold: _lP3 } = await import("../projections.js");
       const _pSlot3 = await _lP3("space", parentId, branch);
       const parentSpace = _pSlot3 ? { heavenSpace: _pSlot3.state?.heavenSpace } : null;
-      // The parent may be pending earlier in this batch (atomic-batch
-      // forward reference) — accept either a materialized row or a
-      // pending fact in the boot moment's ΔF.
+      // The parent may be pending earlier in this same moment's ΔF
+      // (forward reference within one act) — accept either a
+      // materialized row or a pending fact in summonCtx.deltaF.
       if (!parentSpace) {
         const pendingInBatch = summonCtx?.deltaF?.find(
           (f) =>
@@ -451,7 +451,9 @@ export async function createSpace({
         name,
         type:      type ?? null,
         parent:    resolvedParentId ? String(resolvedParentId) : null,
-        rootOwner: isRoot ? String(being._id) : null,
+        // Tree roots get their creator as owner; sub-spaces inherit
+        // ownership through the walker and start with no owner class.
+        ...(isRoot ? { members: { owner: [String(being._id)] } } : {}),
         qualities: specQualities,
         ...(size  ? { size }  : {}),
         ...(coord ? { coord } : {}),
@@ -538,47 +540,37 @@ export async function createRealityHeavenSpace({
   parentId,
   heavenSpace,
   qualities = null,
-  summonCtx = null,
 }) {
   if (!name || typeof name !== "string")
     throw new Error("Seed space name is required");
   if (!parentId) throw new Error("Seed space requires a parent");
-  if (!summonCtx) {
-    throw new Error(
-      "createRealityHeavenSpace requires summonCtx (the boot moment's ctx). Reachable only from inside withBootMoment(...).",
-    );
-  }
 
-  // do:create-space joins the boot moment's ΔF. sealAct commits it
-  // with the rest of genesis in one transaction; reducer's
-  // applyCreateSpace + initProjection materializes the row at seal.
   const id = uuidv4();
   const specQualities = qualities instanceof Map
     ? Object.fromEntries(qualities)
     : (qualities || {});
 
-  await emitFact({
-    verb:    "do",
-    action:  "create-space",
-    beingId: I_AM,
-    target:  { kind: "space", id },
-    params:  {
-      name,
-      type:      null,
-      parent:    parentId ? String(parentId) : null,
-      rootOwner: I_AM,
-      heavenSpace: heavenSpace || null,
-      qualities: specQualities,
-    },
-    actId: summonCtx.actId,
-    // Boot-seed helper — runs inside the genesis moment. Genesis is
-    // main-only; explicit value, not a silent default.
-    branch: summonCtx?.branch || "0",
-  }, summonCtx);
-
-  // Row materializes at boot seal. Return a pending shape so the
-  // caller (sprout.js ensureSpaceRoot) can keep operating on the id.
-  return { _id: id, _pending: true, name, parent: parentId, heavenSpace };
+  const { withIAmAct } = await import("../../sprout.js");
+  await withIAmAct(`I create the ${name} heaven space`, async (ctx) => {
+    await emitFact({
+      verb:    "do",
+      action:  "create-space",
+      beingId: I_AM,
+      target:  { kind: "space", id },
+      params:  {
+        name,
+        type:      null,
+        parent:    parentId ? String(parentId) : null,
+        members: { owner: [I_AM] },
+        heavenSpace: heavenSpace || null,
+        qualities: specQualities,
+      },
+      actId: ctx.actId,
+      branch: "0",
+    }, ctx);
+  });
+  // Row materializes at the per-moment seal (returned by now).
+  return { _id: id, name, parent: parentId, heavenSpace };
 }
 
 /**
@@ -705,118 +697,13 @@ export async function updateParentRelationship(
   sessionId = null,
   opts = {},
 ) {
-  // Legacy direct-mutation path. Route through do:set-space {field:"parent"}
-  // for the fact-driven version. This stub throws so callers surface
-  // clearly during the migration.
+  // Retired. Direct space-parent mutation now flows through
+  // do:set-space field="parent" so the move is fact-driven. This stub
+  // alerts any straggling caller.
   throw new Error(
     "updateParentRelationship is retired. Use do:set-space with field=\"parent\" via doVerb instead. " +
     "args: " + JSON.stringify({ childId, newParentId, beingId })
   );
-  // (unreachable; preserves the original structure for future restoration)
-  // eslint-disable-next-line no-unreachable
-  const child = null;
-  if (!child) throw new Error("Child space not found");
-  if (child.rootOwner && child.rootOwner !== I_AM) {
-    throw new Error("Cannot change a tree root's parent");
-  }
-  if (child.parent.toString() === newParentId.toString()) {
-    throw new Error("Space already has this parent");
-  }
-
-  const oldParentId = child.parent;
-  const oldParent = oldParentId ? null : null;
-  const newParent = null;
-
-  if (!newParent) throw new Error("New parent space not found");
-  if (newParent.heavenSpace)
-    throw new Error("Cannot move into a heaven space");
-  if (await isDescendant(childId, newParentId)) {
-    throw new Error("Cannot move a space into its own descendant");
-  }
-
-  // Authorization. Same tree → write access. Cross-tree → both-roots ownership.
-  const childAccess = await resolveSpaceAccess(childId, beingId);
-  const newParentAccess = await resolveSpaceAccess(newParentId, beingId);
-
-  if (childAccess.rootId === newParentAccess.rootId) {
-    if (!childAccess.hasAccess) throw new Error("Must be owner or contributor");
-  } else {
-    if (!childAccess.isOwner || !newParentAccess.isOwner) {
-      throw new Error(
-        "Cannot move spaces across trees unless you own both roots",
-      );
-    }
-  }
-
-  // Lock all three spaces in sorted order (deadlock prevention).
-  const lockIds = [childId, oldParentId, newParentId]
-    .filter(Boolean)
-    .map(String);
-  const locked = await acquireMultiple(lockIds, sessionId);
-  if (!locked)
-    throw new IbpError(IBP_ERR.RESOURCE_CONFLICT,
-      "Spaces are being modified by another operation",
-    );
-
-  // Try a transaction (replica set). Fall back to sequential on standalone.
-  let session = null;
-  try {
-    session = await mongoose.startSession();
-    session.startTransaction();
-    await Space.findOne({}).limit(1).session(session).lean(); // probe
-  } catch {
-    if (session) {
-      try {
-        await session.abortTransaction();
-      } catch {}
-      try {
-        session.endSession();
-      } catch {}
-    }
-    session = null;
-    log.verbose(
-      "Space",
-      "MongoDB transactions unavailable; move runs without atomicity guarantees",
-    );
-  }
-  const txOpts = session ? { session } : {};
-
-  try {
-    // Single-aggregate write: set the child's parent. Old-parent and
-    // new-parent children[] caches are retired — listSpaceChildren
-    // queries by parent, so this one update is the whole reparent.
-    await Space.findByIdAndUpdate(
-      childId,
-      { $set: { parent: newParentId ? String(newParentId) : null } },
-      txOpts,
-    );
-
-    if (session) await session.commitTransaction();
-  } catch (err) {
-    if (session) {
-      try {
-        await session.abortTransaction();
-      } catch {}
-    }
-    releaseMultiple(lockIds, sessionId);
-    throw err;
-  } finally {
-    if (session) session.endSession();
-  }
-
-  if (!opts.skipCacheInvalidation) invalidateAll();
-  releaseMultiple(lockIds, sessionId);
-
-  hooks
-    .run("afterSpaceMove", {
-      spaceId: childId.toString(),
-      oldParentId: oldParentId.toString(),
-      newParentId: newParentId.toString(),
-      beingId,
-    })
-    .catch(() => {});
-
-  return { child, newParent };
 }
 
 // ─────────────────────────────────────────────────────────────────────────
@@ -825,8 +712,9 @@ export async function updateParentRelationship(
 
 /**
  * Soft-delete a space. Sets the space's `parent` to DELETED and stamps
- * its `rootOwner` so the deleted-revive extension can restore it later.
- * Root spaces (tree anchors) can only be retired from root view.
+ * its owner class to the deleter so the deleted-revive extension can
+ * restore it later. Root spaces (tree anchors) can only be retired by
+ * the resolved owner.
  */
 export async function deleteSpaceBranch(
   spaceId,
@@ -835,16 +723,19 @@ export async function deleteSpaceBranch(
   sessionId = null,
 ) {
   const { loadProjection: _lPdel } = await import("../projections.js");
+  const { getSpaceOwner } = await import("./members.js");
   const _delSlot = await _lPdel("space", spaceId, "0");
   const spaceToDelete = _delSlot ? { _id: _delSlot.id, ...(_delSlot.state || {}) } : null;
   if (!spaceToDelete) throw new Error("Space not found");
 
+  const ownerIdAtSpace = getSpaceOwner(spaceToDelete);
+
   if (beingId !== I_AM) {
     const access = await resolveSpaceAccess(spaceId, beingId);
-    if (!access.isOwner || (!access.isRoot && !!spaceToDelete.rootOwner)) {
+    if (!access.isOwner || (!access.isRoot && !!ownerIdAtSpace)) {
       throw new Error("Must be owner and not root");
     }
-    if (spaceToDelete.rootOwner && spaceToDelete.rootOwner !== I_AM) {
+    if (ownerIdAtSpace && ownerIdAtSpace !== I_AM) {
       throw new Error("Root spaces can only be retired from root view");
     }
   }
@@ -876,12 +767,12 @@ export async function deleteSpaceBranch(
     );
 
   try {
-    // Fact-driven soft-delete (2026-05-23). Two do:set facts on the
-    // space's reel: rootOwner becomes the deleter (revival audit),
-    // parent flips to DELETED (the sentinel that hides the space
-    // from parent-query readers). The per-reel lock around the
-    // (rootOwner, parent) pair keeps them visible-together to a
-    // concurrent fold.
+    // Fact-driven soft-delete (2026-05-23, refit 2026-06-07). Two
+    // do:set facts on the space's reel: members.owner becomes the
+    // deleter (revival audit), parent flips to DELETED (the sentinel
+    // that hides the space from parent-query readers). The per-reel
+    // lock around the pair keeps them visible-together to a concurrent
+    // fold.
     const { doVerb } = await import("../../ibp/verbs/do.js");
     const opts = {
       identity: beingId ? { beingId: String(beingId) } : I_AM,
@@ -891,7 +782,7 @@ export async function deleteSpaceBranch(
     await doVerb(
       target,
       "set-space",
-      { field: "rootOwner", value: String(beingId) },
+      { field: "members.owner", value: [String(beingId)] },
       opts,
     );
     await doVerb(
@@ -900,7 +791,7 @@ export async function deleteSpaceBranch(
       { field: "parent", value: DELETED },
       opts,
     );
-    spaceToDelete.rootOwner = beingId;
+    spaceToDelete.members = { ...(spaceToDelete.members || {}), owner: [String(beingId)] };
     spaceToDelete.parent = DELETED;
   } finally {
     releaseMultiple(lockIds, sessionId);
@@ -947,34 +838,36 @@ export async function buildPathString(spaceId, branch) {
 }
 
 /**
- * Walk up the parent chain to the rootOwner-bearing tree root. The
+ * Walk up the parent chain to the owner-bearing tree root. The
  * .source self-tree counts as its own root (everything beneath it is
  * navigable but the tree-ownership boundary is .source itself).
  */
 export async function resolveRootSpace(spaceId) {
   if (!spaceId) throw new Error("spaceId is required");
   const { loadProjection } = await import("../projections.js");
+  const { getSpaceOwner } = await import("./members.js");
   const slotToObj = (s) => s ? {
     _id: s.id,
-    parent:       s.state?.parent || null,
-    rootOwner:    s.state?.rootOwner || null,
-    contributors: (s.state?.contributors || []).map(String),
-    heavenSpace:    s.state?.heavenSpace || null,
-    name:         s.state?.name,
+    parent:     s.state?.parent || null,
+    members:    s.state?.members || null,
+    heavenSpace: s.state?.heavenSpace || null,
+    name:       s.state?.name,
   } : null;
 
   let space = slotToObj(await loadProjection("space", spaceId, "0"));
   if (!space) throw new Error("Space not found");
   if (space.heavenSpace === "source") return space;
 
-  while (!space.rootOwner || space.rootOwner === I_AM) {
-    if (!space.parent) throw new Error("Invalid tree: no rootOwner found");
+  let ownerId = getSpaceOwner(space);
+  while (!ownerId || ownerId === I_AM) {
+    if (!space.parent) throw new Error("Invalid tree: no owner found");
     space = slotToObj(await loadProjection("space", space.parent, "0"));
     if (!space) throw new Error("Broken tree");
     if (space.heavenSpace) {
       if (space.heavenSpace === "source") return space;
       throw new Error("Invalid tree: reached heaven space boundary");
     }
+    ownerId = getSpaceOwner(space);
   }
   return space;
 }
@@ -1106,7 +999,7 @@ export async function listSpaceChildren(parentId, { exclude = null, limit = 500,
 
 /**
  * List every space-tree root a being owns. A space-tree root sits
- * directly under the place root with rootOwner === beingId.
+ * directly under the place root with members.owner === [beingId].
  */
 export async function listBeingSpaces(beingId, { limit = 500 } = {}) {
   if (!beingId) return [];
@@ -1116,7 +1009,7 @@ export async function listBeingSpaces(beingId, { limit = 500 } = {}) {
   const rows = await Projection.find({
     branch: "0", type: "space",
     "state.parent": spaceRootId,
-    "state.rootOwner": beingId,
+    "state.members.owner": String(beingId),
     $or: [
       { "state.heavenSpace": null },
       { "state.heavenSpace": { $exists: false } },

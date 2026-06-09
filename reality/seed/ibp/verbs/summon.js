@@ -89,6 +89,16 @@ export async function summonVerb(stance, message, opts = {}) {
   const validatedMessage = validateSummonMessage(message);
 
   const { identity = null, currentUser = null, currentReality = null, currentBranch = null, onResponse = null, onError = null, summonCtx = null } = opts;
+
+  // Top-level operation count (one-DO/BE/SUMMON-per-moment doctrine;
+  // sealAct reads opCount + batched from summonCtx). Each summon is
+  // one unit of intent — the actor decides to call another being.
+  // Unlike DO's set-render → set-being recursion, recursive summons
+  // (a role handler that summons another role) are genuinely distinct
+  // intents and should count, so no `_inOp` gate here.
+  if (summonCtx) {
+    summonCtx._opCount = (summonCtx._opCount || 0) + 1;
+  }
   const realityDomain = currentReality || getRealityDomain();
 
   const parseCtx = {
@@ -359,8 +369,8 @@ async function _dispatchSummon({
   if (!decision.ok) {
     throw new IbpError(
       identity ? IBP_ERR.FORBIDDEN : IBP_ERR.UNAUTHORIZED,
-      `SUMMON denied for stance "${decision.stance}": ${decision.reason}`,
-      { stance: decision.stance },
+      `SUMMON denied for actor "${decision.actor}": ${decision.reason}`,
+      { actor: decision.actor },
     );
   }
 

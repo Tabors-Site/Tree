@@ -136,7 +136,7 @@ export function capContent(s) {
  * @returns {Promise<object|null>}   the inserted row, or null on
  *   collision/failure.
  */
-export async function sealAct(plannedAct, { content = null, deltaF = [], afterSeal = [] } = {}) {
+export async function sealAct(plannedAct, { content = null, deltaF = [], afterSeal = [], opCount = null } = {}) {
   if (!plannedAct?._id) {
     log.warn("Stamped", "sealAct called without plannedAct._id; nothing sealed");
     return null;
@@ -156,6 +156,41 @@ export async function sealAct(plannedAct, { content = null, deltaF = [], afterSe
       `with no endMessage content and no Facts — that's a SEE moment, ` +
       `not an act. Caller (likely moment.js or a tool path) should ` +
       `return cognitionSee() instead of invoking sealAct.`,
+    );
+  }
+
+  // One-moment-one-act invariant (philosophy/MOMENT.md "Moment, act,
+  // batch"). The discipline is unconditional: a moment seals exactly
+  // one top-level operation (one DO, one BE, one SUMMON). An op's
+  // handler is free to emit as many facts as it needs — multi-reel,
+  // even multiple writes to the same reel — but you don't pack
+  // multiple unrelated ops into one moment.
+  //
+  // How counting works: doVerb / beVerb / summonVerb at the entry
+  // layer bumps `summonCtx._opCount` once per top-level call.
+  // Recursive DO dispatches (set-render → set-being) are gated by
+  // `summonCtx._inOp` and don't re-count. At seal time, opCount > 1
+  // means the moment ran multiple top-level operations — that's a
+  // bug, not a configuration.
+  //
+  // Cross-moment atomicity (federation pull, cross-reel transfer)
+  // belongs in a future `withBatch` primitive (a grouping of moments
+  // that share a Mongo session); it never expands a single moment to
+  // hold many ops. Genesis is a SEQUENCE of moments, not a batch —
+  // see seed/IamToActs.md.
+  //
+  // Structural: this is a hard throw, not a warn. The discipline is
+  // unconditional.
+  if (
+    hasFacts &&
+    typeof opCount === "number" &&
+    opCount > 1
+  ) {
+    throw new Error(
+      `sealAct: Act ${String(plannedAct._id).slice(0, 8)} (${plannedAct.beingOut?.slice?.(0, 8) || "?"}) ` +
+      `would seal ${opCount} top-level operations (${deltaF.length} facts). ` +
+      `Doctrine (philosophy/MOMENT.md): one moment = one DO/BE/SUMMON. ` +
+      `Split into separate moments — open each in its own withIAmAct / withBeingAct.`,
     );
   }
 

@@ -44,6 +44,7 @@ import { emitFact, sealFacts } from "../../past/fact/facts.js";
 import { escapeRegex } from "../../utils.js";
 import { getRealityConfigValue } from "../../realityConfig.js";
 import { resolveRootSpace } from "../space/spaces.js";
+import { getSpaceOwner } from "../space/members.js";
 import { hooks } from "../../hooks.js";
 import { MATTER_ORIGIN } from "./origins.js";
 import { DELETED } from "../space/heavenSpaces.js";
@@ -387,7 +388,7 @@ async function deleteMatterAndFile({
 
   const rootSpace = await resolveRootSpace(matter.spaceId);
   const isAuthor = String(matter.beingId) === String(beingId);
-  const isRootOwner = rootSpace.rootOwner?.toString() === beingId.toString();
+  const isRootOwner = String(getSpaceOwner(rootSpace) || "") === String(beingId);
 
   if (!isAuthor && !isRootOwner) {
     throw new Error("Only the matter author or the tree owner can delete this matter");
@@ -477,7 +478,7 @@ async function transferMatter({
 
   const rootSpace = await resolveRootSpace(matter.spaceId);
   const isAuthor = String(matter.beingId) === String(beingId);
-  const isRootOwner = rootSpace.rootOwner?.toString() === beingId.toString();
+  const isRootOwner = String(getSpaceOwner(rootSpace) || "") === String(beingId);
   if (!isAuthor && !isRootOwner) {
     throw new Error("Only the matter author or the tree owner can transfer this matter");
   }

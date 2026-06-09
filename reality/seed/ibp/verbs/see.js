@@ -197,8 +197,8 @@ export async function seeVerb(target, opts = {}) {
     if (!decision.ok) {
       throw new IbpError(
         identity ? IBP_ERR.FORBIDDEN : IBP_ERR.UNAUTHORIZED,
-        `SEE denied for stance "${decision.stance}": ${decision.reason}`,
-        { stance: decision.stance },
+        `SEE denied for actor "${decision.actor}": ${decision.reason}`,
+        { actor: decision.actor },
       );
     }
     const desc = await describeThread(targetThreadId);
@@ -413,8 +413,8 @@ export async function seeVerb(target, opts = {}) {
   if (!decision.ok) {
     throw new IbpError(
       identity ? IBP_ERR.FORBIDDEN : IBP_ERR.UNAUTHORIZED,
-      `SEE denied for stance "${decision.stance}": ${decision.reason}`,
-      { stance: decision.stance },
+      `SEE denied for actor "${decision.actor}": ${decision.reason}`,
+      { actor: decision.actor },
     );
   }
 
@@ -626,8 +626,8 @@ async function seeAtTime({
   if (!decision.ok) {
     throw new IbpError(
       identity ? IBP_ERR.FORBIDDEN : IBP_ERR.UNAUTHORIZED,
-      `SEE denied for stance "${decision.stance}": ${decision.reason}`,
-      { stance: decision.stance },
+      `SEE denied for actor "${decision.actor}": ${decision.reason}`,
+      { actor: decision.actor },
     );
   }
 
