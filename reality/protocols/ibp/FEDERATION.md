@@ -101,21 +101,22 @@ This unification — substrate gaining coherence, not shedding capability — co
 **Federation auth under this model:**
 
 - A foreign actor's reality is cryptographically vouched via canopy (`req.canopySender`). Their beingId is what their home reality told us.
-- The foreign actor carries ZERO grants on this reality. Cross-world role propagation is out of scope; a being's home-side roles don't transfer.
+- The foreign actor carries ZERO grants on this reality. Cross-world role propagation is out of scope per RolesAreAuth — a being's home-side roles don't transfer.
 - The receiving substrate's `authorize` evaluates the foreign actor against THIS reality's role registry. The foreign actor doesn't get the local **`global` role** (the role name; granted to every being THIS reality births at birth). They aren't a fresh local being.
-- What they DO get: any role registered with **`scope: "global"`** whose `reach` admits them. Plus any explicit per-being grants this reality has stamped for that specific foreign actor.
-- For anything beyond that floor, an existing role on this reality has to issue `grant-role` to the foreign being (or the operator authors a more permissive global-reach role).
+- The foreign actor doesn't get the implicit `arrival` floor either — that floor is for callers with no `beingId` at all (true anonymous), not for identified-but-not-locally-granted actors.
 
-The two concepts share the word "global" but are distinct:
+Two concepts in RolesAreAuth share the word "global"; they're distinct:
 
 | | The `global` role (a role NAME) | `scope: "global"` (a SCOPE on roles) |
 |---|---|---|
 | What | The role granted to every being birthed on this reality | A scope value on the role spec |
-| Scope value | `"anchored"` (anchored at place root, reaches via descendants) | `"global"` (intrinsic reality-wide reach) |
-| Granted to foreigners | No (only local-birthed beings) | Whatever `reach` admits |
-| Purpose | Customizable per-reality baseline for local beings | Reality-wide roles like `angel`; deliberately-public roles for federation |
+| Scope value | `"anchored"` (anchored at place root, reaches via descendants) | `"global"` (intrinsic reality-wide reach via the role's `reach` field) |
+| Granted automatically | At birth, to local beings | Never automatic — every grant is explicit, including for scope:"global" roles |
+| Purpose | Customizable per-reality baseline for local beings | Reality-wide roles like `angel`; the `reach` field controls WHERE the role can act, not WHO can hold it |
 
-So: federation policy is expressed as `scope: "global"` roles in the registry. The operator chooses what foreign actors can do by configuring those roles' `canX` lists and `reach`. No separate federation-permissions sublanguage; same registry, same authorize walk.
+Roles are auth — and grants are explicit. `scope: "global"` doesn't auto-grant to anyone; it just means once granted, the role reaches everywhere (or wherever `reach` allows). For a foreign actor to have ANY access beyond pure refusal, the receiving reality must `grant-role` explicitly to that foreign beingId. The grant chain back to I-Am still applies — whoever grants the foreign-being role must hold `grant-role:<rolename>` themselves.
+
+What this means in practice: federation works on the same role machinery, but **a "default surface for arriving foreign actors" is an operator-decided convention, not a substrate-built feature.** Today there's no `arrival-foreign` role auto-granted to every foreign beingId on first contact. See the "remaining work" section for the open architectural piece this leaves.
 
 ### Cross-reality branch semantics
 
