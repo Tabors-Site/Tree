@@ -383,6 +383,22 @@ export async function genesis(app, opts = {}) {
     await import("./seed/materials/space/threads.js");
   await primeSeveredRootsCache();
 
+  // Cross-world pull-back. Per CROSS-WORLD.md "Pull-back safety": a
+  // being whose position is foreign must not stay stuck there across
+  // a substrate restart. Scan for beings whose position names a
+  // foreign world and reset them home. The scan is cheap when no
+  // beings are cross-world (the common case until canopy lands).
+  try {
+    const { pullBackForeignPositions } =
+      await import("./seed/materials/being/pullBack.js");
+    const result = await pullBackForeignPositions();
+    if (result.pulledBack > 0) {
+      log.info("Genesis", `I called ${result.pulledBack} being(s) home from foreign worlds.`);
+    }
+  } catch (err) {
+    log.warn("Genesis", `pull-back scan failed: ${err.message}. Foreign-positioned beings remain pending; their canopy round-trip will reconcile on first use.`);
+  }
+
   // Register seed-shipped role specs into the role registry so
   // SUMMON can dispatch to them. Auth and llm-assigner are BE only,
   // routed via seed delegates planted by ensureSeedDelegates, and need no role

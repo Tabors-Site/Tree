@@ -95,14 +95,19 @@ export async function assign({ beingId, spaceId, entry, handoff = null, signal =
   const kind = entry?.kind || "summon";
   // ── assign: load the being ───────────────────────────────────────
   // Branch-aware via the intake entry. The moment runs in the caller's
-  // branch — the intake row's `branch` was populated at fact-fold time
-  // from the be:summon Fact, which carries the perimeter-attached
-  // branch. assertBranchOrThrow surfaces any threading gap loudly here
-  // rather than silently letting the moment run on heaven.
+  // Two branches per the cross-world doctrine. `branch` is the
+  // ACTOR's branch (where the moment runs and where the Act seals).
+  // `targetBranch` is where the Fact lands; for same-world calls it
+  // matches `branch`, for cross-world it differs. Both attach to
+  // summonCtx so verbs invoked inside the moment route correctly.
+  // See seed/CROSS-WORLD.md.
   const branch = assertBranchOrThrow(
     entry?.branch || entry?.act?.branch,
     "assign(entry)",
   );
+  const targetBranch = (typeof entry?.targetBranch === "string" && entry.targetBranch.length > 0)
+    ? entry.targetBranch
+    : branch;
   // loadOrFold (not loadProjection): on a fresh branch, the receiving
   // being's slot hasn't been cold-folded into this branch's projection
   // table yet. Bare loadProjection returns null, assign returns
@@ -247,6 +252,9 @@ export async function assign({ beingId, spaceId, entry, handoff = null, signal =
     rootCorrelation:   entry.rootCorrelation || entry.correlation || null,
     receivedAt:        entry.sentAt || null,
     priority:          entry.priority || null,
+    // Branch this moment runs on; stamped onto the Act so the act-chain
+    // respects lineage on cross-branch reads (mirrors the Fact schema).
+    branch,
     // Bucket 3 Option D: this moment answers the InboxProjection
     // row keyed by entry.correlation; stamped.js fires
     // closeInboxOnAnswer when the Act row materializes on seal.
@@ -268,6 +276,16 @@ export async function assign({ beingId, spaceId, entry, handoff = null, signal =
   // the cross-branch dispatch gate at verb entry rejects targets
   // pointing at a different branch.
 
+  // The actor's Act is the single carrier of the identity tuple
+  // (reality, branch, beingIn, _id). summonCtx.actorAct points to it;
+  // every downstream consumer (emitFact, foldEngine, the Stamper,
+  // verb handlers) reads identity from the Act, never from
+  // independently-threaded fields.
+  //
+  // targetBranch rides alongside as the Fact's destination branch.
+  // For same-world calls this equals actorAct.branch; for cross-world
+  // it differs. resolveBranchForFact consults it as the second
+  // precedence (after opts.currentBranch). See CROSS-WORLD.md.
   const baseCtx = {
     kind,
     spaceId,
@@ -276,7 +294,8 @@ export async function assign({ beingId, spaceId, entry, handoff = null, signal =
     orientation,
     toBeing,
     actId,
-    branch,
+    actorAct: plannedAct,
+    targetBranch,
     // Branch-aware aggregate reader. Extensions and roles call
     // `await ctx.read("being"|"space"|"matter", id)` and get the
     // row-shaped object back (or null). Internally walks lineage via
@@ -514,11 +533,15 @@ async function planActRow(opts = {}) {
     rootCorrelation = null,
     receivedAt = null,
     priority = null,
+    branch,
     // Bucket 3 Option D: the correlation of the InboxProjection row
     // this moment is consuming. Stored on the Act as `answers`; on
     // seal, the cross-cutting fold evicts the matching row.
     answers = null,
   } = opts;
+  if (typeof branch !== "string" || !branch.length) {
+    throw new Error("planActRow: branch is required (no silent main-bias)");
+  }
 
   if (!beingIn) {
     log.warn("Assign", "planActRow called without beingIn");
@@ -578,6 +601,11 @@ async function planActRow(opts = {}) {
   // time only when cognition returns ok:true. The `_id` is minted
   // here so Facts emitted during the moment can carry actId; the
   // Act row doesn't exist until seal materializes it.
+  //
+  // Identity tuple (reality, branch, beingIn, _id) lives on this row.
+  // Everything downstream (Facts in deltaF, inner face attachment,
+  // crossOrigin derivation) reads from here. See CROSS-WORLD.md.
+  const { getRealityDomain } = await import("../../ibp/address.js");
   return {
     _id: actId,
     beingIn,
@@ -592,6 +620,10 @@ async function planActRow(opts = {}) {
     receivedAt: receivedAt || now,
     stampedAt: now,
     startMessage: { content: safeMessage, source },
+    reality: getRealityDomain(),
+    branch,
+    // status is seated by the Stamper at insert time — openers
+    // don't carry it. See sealAct in 4-stamped.js.
     ...(priority ? { priority } : {}),
   };
 }

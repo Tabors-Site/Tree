@@ -96,6 +96,32 @@ async function ibpHttpHandler(req, res) {
     req.beingId = identity.beingId;
     req.name    = identity.name;
   }
+  // Cross-world actor tuple. When the request arrived from a peer
+  // reality via canopy (req.canopySender is set), construct the
+  // actor's identity tuple — { reality, branch, beingId, actId } —
+  // from the trusted canopy sender + envelope fields. The receiving
+  // verb handler uses this to seat summonCtx.actorAct so emitFact
+  // attaches crossOrigin correctly when stamping facts on local
+  // reels. Local calls (no canopySender) get null and the carrier
+  // path opens a local Act as normal.
+  //
+  // Throws on identity-forgery attempts (envelope claims a different
+  // actorReality than canopySender) or on incomplete tuples (cross-
+  // world envelopes must carry beingId + branch + actId). Both surface
+  // as 401 UNAUTHORIZED.
+  let crossWorldActor = null;
+  if (req.canopySender) {
+    try {
+      const { actorTupleFromRequest } = await import("../../../protocols/ibp/canopy.js");
+      crossWorldActor = actorTupleFromRequest(req);
+    } catch (err) {
+      return res.status(401).json({
+        status: "error",
+        error: { code: "UNAUTHORIZED", message: err.message },
+      });
+    }
+  }
+
   const carrier = makeHttpCarrier(req, {
     jwt: identity?.jwt || null,
     // Set by the verifyIncoming canopy middleware when a verified
@@ -103,6 +129,13 @@ async function ibpHttpHandler(req, res) {
     // reads this to skip re-forwarding an already-verified inbound
     // envelope back to its sender.
     canopyVerifiedSender: req.canopySender || null,
+    // The foreign actor's identity tuple — populated only on cross-
+    // reality inbound. Receiving verb handlers consume this to build
+    // a synthetic summonCtx.actorAct (the actor's local Act lives on
+    // the SENDER's substrate, not here, so we don't open a local Act
+    // row; we seat actorAct as a JS object representing the foreign
+    // actor and let emitFact stamp crossOrigin from it).
+    crossWorldActor,
   });
 
   // Build the unified envelope and dispatch through the shared handler.

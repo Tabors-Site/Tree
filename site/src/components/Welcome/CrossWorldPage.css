@@ -1,0 +1,171 @@
+/* CrossWorldPage. Page-specific pieces only. The prose system
+   (.ns-doc, .ns-code, .ns-list, .ns-addr, .ns-grammar, .ns-small) is
+   shared from IbpPage.css; this file adds the sovereignty diagram, the
+   invariant cards, and the verb / status tables. */
+
+/* Two-worlds sovereignty diagram. Actor's chain on the left, receiving
+   world's reels on the right, bridge between. */
+
+.ns-cw-sovereign {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  gap: 10px;
+  align-items: stretch;
+  margin: 24px 0 8px;
+}
+
+.ns-cw-world {
+  padding: 16px 18px;
+  background: #0f0f0f;
+  border: 1px solid #1f1f1f;
+  border-radius: 10px;
+}
+
+.ns-cw-world:first-child {
+  border-top: 2px solid #6fb1ff;
+}
+
+.ns-cw-world:last-child {
+  border-top: 2px solid #c084fc;
+}
+
+.ns-cw-world-head {
+  font-size: 0.82rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #6fb1ff;
+  margin-bottom: 10px;
+}
+
+.ns-cw-world:last-child .ns-cw-world-head {
+  color: #c084fc;
+}
+
+.ns-cw-world-line {
+  font-size: 0.95rem;
+  line-height: 1.6;
+  color: #c2c2c2;
+  margin: 0 0 10px;
+}
+
+.ns-cw-world-foot {
+  color: #8f8f8f;
+  font-style: italic;
+  margin-bottom: 0;
+}
+
+.ns-cw-bridge-col {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas,
+    "Liberation Mono", monospace;
+  font-size: 1.4rem;
+  color: #666;
+  padding: 0 2px;
+}
+
+/* The four invariant cards. */
+
+.ns-cw-cards {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+  margin: 8px 0;
+}
+
+.ns-cw-card {
+  position: relative;
+  padding: 18px 20px 18px 20px;
+  background: #0f0f0f;
+  border: 1px solid #1f1f1f;
+  border-radius: 10px;
+}
+
+.ns-cw-card-num {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: #161616;
+  border: 1px solid #2a2a2a;
+  color: #6fb1ff;
+  font-size: 0.85rem;
+  font-weight: 600;
+  margin-bottom: 10px;
+}
+
+.ns-cw-card-title {
+  font-size: 1.02rem;
+  font-weight: 600;
+  color: #e5e5e5;
+  margin-bottom: 6px;
+}
+
+.ns-cw-card-body {
+  font-size: 0.92rem;
+  line-height: 1.6;
+  color: #b0b0b0;
+  margin: 0;
+}
+
+/* Verb and status tables. Simple grid rows, monospace verb column. */
+
+.ns-cw-table {
+  margin: 14px 0 8px;
+  border: 1px solid #1f1f1f;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.ns-cw-trow {
+  display: grid;
+  grid-template-columns: 0.7fr 1.3fr 1.6fr;
+  gap: 14px;
+  padding: 12px 16px;
+  background: #0f0f0f;
+  border-top: 1px solid #1a1a1a;
+  align-items: baseline;
+  font-size: 0.93rem;
+  line-height: 1.55;
+  color: #c2c2c2;
+}
+
+/* Status table is two columns, not three. */
+.ns-cw-status-row {
+  grid-template-columns: 0.7fr 2.6fr;
+}
+
+.ns-cw-trow:first-child {
+  border-top: none;
+}
+
+.ns-cw-thead {
+  background: #131313;
+  color: #6fb1ff;
+  font-size: 0.78rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+@media (max-width: 640px) {
+  .ns-cw-sovereign {
+    grid-template-columns: 1fr;
+  }
+  .ns-cw-bridge-col {
+    padding: 4px 0;
+  }
+  .ns-cw-cards {
+    grid-template-columns: 1fr;
+  }
+  .ns-cw-trow,
+  .ns-cw-status-row {
+    grid-template-columns: 1fr;
+    gap: 4px;
+  }
+  .ns-cw-thead {
+    display: none;
+  }
+}

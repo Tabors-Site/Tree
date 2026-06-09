@@ -115,8 +115,8 @@ import {
 import {
   getClientForBeing,
   getLlmTimeout,
-  resolveRootLlmForRole,
 } from "./connect.js";
+import { resolveLlmConnectionChain } from "./resolution.js";
 import { callWithFailover } from "./call.js";
 import { presenceKeyFor } from "../../beats/2-fold/reel.js";
 import { computeIbpStampAddress } from "../../../ibp/address.js";
@@ -228,9 +228,34 @@ async function runLlmMomentInner({ being, envelope, role, signal, summonCtx }) {
     );
   }
 
-  // 3. LLM client resolution.
-  const roleConnectionId = rootId
-    ? await resolveRootLlmForRole(rootId, role)
+  // 3. LLM client resolution — the 7-step chain (auth.jpg).
+  //
+  // Receiver = this being. Actor = the being who summoned this moment
+  // (from the planned act). The role name carried by `activeRole`
+  // drives per-role slot lookups at every level (steps 0/1/2/3/4/5/6).
+  //
+  // The chain returns an ordered list; chain[0].connectionId is the
+  // primary, the rest feed the failover loop in call.js. Empty chain
+  // means no connection is available — surface noLlm.
+  const askerBeingId =
+    summonCtx?.plannedAct?.beingIn ||
+    envelope.fromBeingId ||
+    envelope.askerBeingId ||
+    null;
+  const askerSpaceId =
+    summonCtx?.plannedAct?.askerPosition ||
+    envelope.askerSpaceId ||
+    null;
+  const chainResult = await resolveLlmConnectionChain({
+    receiver: { beingId, spaceId: currentSpace || rootId || null, realityDomain: null },
+    actor: askerBeingId
+      ? { beingId: askerBeingId, spaceId: askerSpaceId, realityDomain: null }
+      : null,
+    role: role?.llmSlot || role?.name || "main",
+    branch,
+  });
+  const roleConnectionId = chainResult.chain.length > 0
+    ? chainResult.chain[0].connectionId
     : null;
   const clientEntry = await getClientForBeing(beingId, null, roleConnectionId);
   if (clientEntry.noLlm) {
@@ -459,6 +484,10 @@ async function runLlmMomentInner({ being, envelope, role, signal, summonCtx }) {
       clientEntry,
       beingId,
       rootId,
+      // Pass the 7-step chain so failover walks our resolver's
+      // candidates (with force flags + per-role slots already
+      // applied) instead of falling back to the legacy resolver.
+      { chain: chainResult.chain },
     );
     let winner;
     try {

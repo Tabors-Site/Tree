@@ -124,12 +124,11 @@ export async function logFact(input, opts = {}) {
     wasRemote = false,
     foldSeq = null,
   } = input;
-  // Branch this fact lives on. REQUIRED — no silent default. The
-  // cross-branch dispatch gate (Pass 4) settled the branch before the
-  // fact ever reaches logFact; if it's missing here, a caller forgot
-  // to thread summonCtx.branch and the fact would silently land on
-  // main. Throw loudly so the offender shows up in stacks instead
-  // of producing a "ghost" main-branch write nobody asked for.
+  // Branch this fact lives on (target reel's branch). REQUIRED.
+  // Callers derive it from the target address (where the Fact lands)
+  // — not from the actor's branch. For same-world Facts the two
+  // happen to match; for cross-world Facts they differ. See
+  // CROSS-WORLD.md.
   branch = input.branch;
 
   if (!beingId || !action) {
@@ -138,8 +137,8 @@ export async function logFact(input, opts = {}) {
   if (typeof branch !== "string" || !branch.length) {
     throw new Error(
       `logFact: branch is required (got ${JSON.stringify(branch)}). ` +
-      `Thread it from summonCtx.branch (in-moment), the wire layer (entry-point), ` +
-      `or pass "0" explicitly for genesis/scaffold paths.`,
+      `Derive it from the target's address (the reel where this Fact lands), ` +
+      `not from the actor's branch.`,
     );
   }
   if (typeof action !== "string" || action.length > MAX_ACTION_LENGTH) {
@@ -280,6 +279,31 @@ export async function logFact(input, opts = {}) {
   const truncated = cappedParams.truncated || cappedResult.truncated;
 
   const finalTarget = hookData.target || normalizedTarget;
+
+  // Foreign-origin idempotency. Per CROSS-WORLD.md "Idempotency on
+  // the foreign side": when a Fact arrives carrying a crossOrigin
+  // block, it's a cross-world act being stamped on this substrate.
+  // Network retries, double-canopy deliveries, and replays produce
+  // the same Fact more than once with the same crossOrigin.actId; the
+  // receiving Stamper must dedup so the foreign reel doesn't grow
+  // duplicates. The dedup key is {originReality, originBranch,
+  // originBeingId, originActId} (full provenance tuple); we check by
+  // crossOrigin.actId first since actId is unique enough in practice,
+  // and the broader tuple guards against pathological reuse.
+  const incomingCrossOrigin = hookData.params?.crossOrigin || cappedParams.value?.crossOrigin;
+  if (incomingCrossOrigin?.actId && finalTarget) {
+    const existing = await Fact.findOne({
+      "target.kind": finalTarget.kind,
+      "target.id":   finalTarget.id,
+      "params.crossOrigin.actId":   incomingCrossOrigin.actId,
+      "params.crossOrigin.beingId": incomingCrossOrigin.beingId,
+    }).select("_id seq").lean();
+    if (existing) {
+      // Duplicate delivery — return without writing. Caller treats
+      // this as success (the fact already landed on a prior delivery).
+      return { _id: existing._id, seq: existing.seq, deduped: true };
+    }
+  }
 
   const baseDoc = {
     beingId,
@@ -690,6 +714,20 @@ export async function emitFact(spec, summonCtx = null) {
     spec.foldSeq = summonCtx.foldedSeqs.get(key) ?? null;
   }
 
+  // Cross-world provenance. When the actor's Act seats on summonCtx
+  // and the target's world differs from the actor's world, derive the
+  // crossOrigin block and attach it to params. Same-world facts get
+  // null and nothing is attached. The Stamper enforces the contract
+  // at insert time. See seed/past/act/crossOrigin.js + CROSS-WORLD.md.
+  if (summonCtx?.actorAct && spec?.target) {
+    const { deriveCrossOrigin } = await import("../act/crossOrigin.js");
+    const target = inferTargetWorld(spec, summonCtx);
+    const crossOrigin = deriveCrossOrigin(summonCtx.actorAct, target);
+    if (crossOrigin) {
+      spec.params = { ...(spec.params || {}), crossOrigin };
+    }
+  }
+
   if (summonCtx && Array.isArray(summonCtx.deltaF)) {
     summonCtx.deltaF.push(spec);
     return;
@@ -697,6 +735,23 @@ export async function emitFact(spec, summonCtx = null) {
   // No moment to accumulate into — boot, migration, scaffold, or a
   // standalone tool. Commit as a singleton ΔF (delegates to logFact).
   await sealFacts([spec]);
+}
+
+// Resolve the target's world (reality + branch) from a fact spec.
+// Today: the spec carries `branch` (where the fact lands) and the
+// reality is implicit-this-substrate. When cross-world dispatch lands,
+// callers will pass `target.world` explicitly with foreign reality.
+// Always operates on ACTUAL branch paths, never pointers — pointer
+// resolution happens at the address-parsing perimeter before any
+// emit. See CROSS-WORLD.md "pointers vs actual branches."
+function inferTargetWorld(spec, summonCtx) {
+  if (spec?.target?.world?.reality && spec?.target?.world?.branch) {
+    return { world: spec.target.world };
+  }
+  const branch = spec?.branch || summonCtx?.actorAct?.branch || null;
+  const reality = summonCtx?.actorAct?.reality || null;
+  if (!branch || !reality) return null;
+  return { world: { reality, branch } };
 }
 
 export async function sealFacts(deltaF, opts = {}) {

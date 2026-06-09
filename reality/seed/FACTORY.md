@@ -290,7 +290,8 @@ present/
 │   ├── assemble.js         system prompt + tool surface builder
 │   ├── compress.js         history compression for long conversations
 │   ├── defaultSummon.js    default scripted-role summon handler
-│   └── seeResolvers.js     prompt-context SEE resolvers
+│   ├── seedSeeOps.js       foundational seed SEE ops (place, roles, ...)
+│   └── canSeeResolver.js   resolves a role's canSee list into face blocks
 ├── roles/               summonable being templates, each co-located
 │   ├── arrival/role.js     unauthenticated visitor stance
 │   ├── cherub/role.js      BE-honoring identity-binding handler (register/claim/release/switch)
@@ -1393,7 +1394,7 @@ write what the role IS; I fill in everything derivable.
 | Field                | Optional? | What it does                                                                                                                                                                                                                                                                                                                                                                                                                         |
 | -------------------- | --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `name`               | required  | Kebab-case identifier (`harmony:dancer-llm`). The activeRole on a SUMMON resolves through it.                                                                                                                                                                                                                                                                                                                                        |
-| `canSee`             | optional  | Preloaded perceptions. Each entry is either an IBP address (preloaded via `seeVerb` — the position descriptor becomes a face block) or a registered see name (preloaded via the seeResolver registry — the structured return becomes a face block). Both render as `[<label>]\n<JSON>` in the system prompt. NOT a tool; the being does not pick from a menu. Non-empty → permission `see` is added (verb-layer auth still applies). |
+| `canSee`             | optional  | Preloaded perceptions. Each entry is either an IBP address (preloaded via `seeVerb` — the position descriptor becomes a face block) or a registered SEE op name (preloaded via the seeOps registry — the structured return becomes a face block). Both render as `[<label>]\n<JSON>` in the system prompt. NOT a tool; the being does not pick from a menu. Non-empty → permission `see` is added (verb-layer auth still applies). |
 | `canDo`              | optional  | DO action entries the LLM may invoke via the seed's generic `do` tool. Non-empty → `do` tool exposed, permission `do` added.                                                                                                                                                                                                                                                                                                         |
 | `canSummon`          | optional  | Stance/being targets the LLM may summon. Non-empty → `summon` tool exposed. Entries may be literal stances OR relationship tokens (`{rel:"parent"}`, `{pattern:"fitness/@coach"}`).                                                                                                                                                                                                                                                  |
 | `canBe`              | optional  | BE operations the LLM may perform on its own identity (`claim`, `release`, `switch`). Non-empty → `be` tool exposed.                                                                                                                                                                                                                                                                                                                 |
@@ -1456,26 +1457,46 @@ address. The content is identical to the legacy `./X` address form;
 the name swap is doctrinal . roles declare perceptions by name, not
 by walking the address grammar.
 
-#### Authoring a see (registerSeeResolver)
+#### Authoring a see (registerSeeOperation)
 
-Extensions register their own sees through `core.declare.registerSeeResolver`:
+SEE ops are read-only perceptions — the parallel of DO ops, registered through the same surface shape (handler, args schema, owner-extension tracking). Extensions register through `reality.declare.registerSeeOperation`:
 
 ```js
-core.declare.registerSeeResolver("library", async (ctx) => {
-  const librarySpace = await findLibrarySpace(ctx);
-  if (!librarySpace) return null;
-  return {
-    books: await listBooksAt(librarySpace.id, ctx.summonCtx?.branch),
-    staff: await findStaffAt(librarySpace.id),
-    hours: await readHours(librarySpace.id),
-  };
+reality.declare.registerSeeOperation("library", {
+  description: "The library's books, staff, and hours",
+  handler: async ({ identity, args, ctx }) => {
+    const librarySpace = await findLibrarySpace(ctx);
+    if (!librarySpace) return null;
+    return {
+      books: await listBooksAt(librarySpace.id, ctx?.summonCtx?.branch),
+      staff: await findStaffAt(librarySpace.id),
+      hours: await readHours(librarySpace.id),
+    };
+  },
 });
 ```
 
-- `ctx` carries `{ being, role, currentSpace, rootId, summonCtx, ... }` so the resolver can branch-thread reads.
-- Return any JSON-serializable shape (or a string the resolver framed itself, or `null` to skip).
+- The handler receives `{ identity, args, ctx, branch }`:
+  - `identity` — the caller's identity (or null when anonymous).
+  - `args` — validated against the optional `args` schema. Used by parameterized SEE ops (e.g. `llm-chain` takes `{ receiverBeingId, role }`).
+  - `ctx` — when called from inside a cognition frame, the moment ctx (carries `being`, `currentSpace`, `rootId`, `summonCtx`). Null otherwise.
+  - `branch` — the branch the SEE runs on.
+- Return any JSON-serializable shape. The cognition consumption path JSON-stringifies it under a `[<label>]` header; direct callers receive it verbatim.
 - Bare names are auto-namespaced `<ext>:<name>`; roles inside the same extension can reference the bare suffix (`canSee: ["library"]` resolves to `harmony:library` when no seed name collides).
 - Pure function of (chain, branch, ctx). No random, no wall-clock. Replay safety.
+
+Two consumption paths:
+
+```js
+// 1. Listed in a role's canSee — preloaded as a face block at moment-open.
+canSee: ["place", "library", "llm-connections"]
+
+// 2. Called directly from anywhere (DO handlers, portal, extensions).
+const conns = await reality.see("llm-connections");
+const chain = await reality.see("llm-chain", { args: { receiverBeingId, role } });
+```
+
+Same registry, same handlers — only the consumption site differs.
 
 The four `can*` lists ARE the body. Adding a capability is editing
 one list. Tool exposure follows from the body; there is no second

@@ -23,6 +23,7 @@
 // for the vocabulary doctrine that drove this rename.
 
 import { registerOperation } from "../../ibp/operations.js";
+import { registerSeeOperation } from "../../ibp/seeOps.js";
 import { IbpError, IBP_ERR } from "../../ibp/protocol.js";
 import { detectTargetKind, targetIdOf } from "../_targetShape.js";
 import { loadOrFold } from "../projections.js";
@@ -37,57 +38,38 @@ import { listClones, getClone } from "./cloneRegistry.js";
 //
 // Returns: { bundle }  (the bundle is the substrate's wire payload)
 
-async function cloneSubtreeHandler({ target, params, identity, summonCtx }) {
-  const kind = detectTargetKind(target);
-  if (kind !== "space") {
-    throw new IbpError(
-      IBP_ERR.INVALID_INPUT,
-      `clone-subtree: target must be a space (got ${kind})`,
-    );
-  }
-  if (!identity?.beingId) {
-    throw new IbpError(
-      IBP_ERR.UNAUTHORIZED,
-      "clone-subtree: identity required (the operator's beingId)",
-    );
-  }
-  const scopeSpaceId = targetIdOf(target);
-  const branch = summonCtx?.branch || "0";
+// clone-subtree is a pure READ — extracts the subtree's current shape
+// into a portable clone bundle. No state changes; no Fact emitted.
+// SEE op (doctrinal shape).
 
-  const { cloneSubtree } = await import("./clone.js");
-  const bundle = await cloneSubtree(scopeSpaceId, {
-    branch,
-    scopeName:       (params || {}).name || null,
-    sourceReality:   (params || {}).sourceReality || null,
-    operatorBeingId: String(identity.beingId),
-  });
-
-  // No fact emitted. Clone is a pure read; the moment closes as SEE
-  // (see momentum.js's no-facts-no-act guard). The wire-caller receives
-  // the bundle through the response handoff.
-  return { bundle, _skipAudit: true };
-}
-
-registerOperation("clone-subtree", {
-  targets: ["space"],
+registerSeeOperation("clone-subtree", {
   ownerExtension: "seed",
-  factAction: "clone-subtree",
-  // Pure read: no audit fact, no Act row. The moment seals as a SEE.
-  skipAudit: true,
+  description: "Extract a subtree's current shape into a portable clone bundle",
   args: {
-    name: { type: "text", label: "Clone name (optional)", required: false },
+    spaceId:       { type: "text", label: "Scope root space id", required: true },
+    name:          { type: "text", label: "Clone name (optional)", required: false },
+    sourceReality: { type: "text", label: "Source reality (optional)", required: false },
   },
-  handler: cloneSubtreeHandler,
-});
-
-// Wire-compat alias: portal calls reality.do(addr, "replicate-subtree", ...).
-// Same handler; remove after portal updates to clone-subtree.
-registerOperation("replicate-subtree", {
-  targets: ["space"],
-  ownerExtension: "seed",
-  factAction: "replicate-subtree",
-  skipAudit: true,
-  handler: cloneSubtreeHandler,
+  handler: async ({ identity, args, branch }) => {
+    if (!identity?.beingId) {
+      throw new IbpError(
+        IBP_ERR.UNAUTHORIZED,
+        "clone-subtree: identity required (the operator's beingId)",
+      );
+    }
+    const scopeSpaceId = args?.spaceId;
+    if (!scopeSpaceId) {
+      throw new IbpError(IBP_ERR.INVALID_INPUT, "clone-subtree: `spaceId` is required");
+    }
+    const { cloneSubtree } = await import("./clone.js");
+    const bundle = await cloneSubtree(scopeSpaceId, {
+      branch: branch || "0",
+      scopeName:       args?.name || null,
+      sourceReality:   args?.sourceReality || null,
+      operatorBeingId: String(identity.beingId),
+    });
+    return { bundle };
+  },
 });
 
 // ─────────────────────────────────────────────────────────────────────
@@ -222,35 +204,18 @@ registerOperation("capture-seed", {
 });
 
 // ─────────────────────────────────────────────────────────────────────
-// list-clones — discovery surface for extension-shipped clone bundles
+// clones — discovery surface for extension-shipped clone bundles
 // ─────────────────────────────────────────────────────────────────────
 //
-// target: { kind: "space", id } — any space; the op is a pure read
-// params: none
+// SEE op. Pure read: returns the registered clone catalog.
+// Used by the portal's graft UI to populate the picker.
 //
-// Returns: { clones: [{ name, ownerExtension, sourceScopeName,
-//                       parameters, counts }, ...] }
-//
-// Used by the portal's graft UI to populate the picker. Replaces the
-// retired `seeds: listSeeds()` field on the discovery payload.
+// Replaces the retired `list-clones` DO+skipAudit op (DO-as-read smell).
 
-async function listClonesHandler({ target }) {
-  const kind = detectTargetKind(target);
-  if (kind !== "space") {
-    throw new IbpError(
-      IBP_ERR.INVALID_INPUT,
-      `list-clones: target must be a space (got ${kind})`,
-    );
-  }
-  return { clones: listClones(), _skipAudit: true };
-}
-
-registerOperation("list-clones", {
-  targets: ["space"],
+registerSeeOperation("clones", {
   ownerExtension: "seed",
-  factAction: "list-clones",
-  skipAudit: true,
-  handler: listClonesHandler,
+  description: "Catalog of registered clone bundles (extension-shipped + operator-captured)",
+  handler: () => ({ clones: listClones() }),
 });
 
 // ─────────────────────────────────────────────────────────────────────

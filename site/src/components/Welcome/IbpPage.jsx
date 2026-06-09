@@ -278,9 +278,14 @@ const IbpPage = () => {
           <p className="ns-small">
             An address is always two of these joined by{" "}
             <code>::</code>. Examples on this page write both sides in
-            full. When both sides carry an explicit branch qualifier
-            they must match. A bridge across branches is rejected at
-            parse time.
+            full. Most calls keep both sides on the same branch and
+            reality. When the two sides name different branches or
+            realities, the call acts across worlds, detected from the
+            address itself. See{" "}
+            <Link to="/ibp/crossworld" className="ns-inline-link">
+              Cross-World
+            </Link>{" "}
+            for how a being reaches across the gap.
           </p>
         </section>
 

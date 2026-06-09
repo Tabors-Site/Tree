@@ -236,7 +236,7 @@ Same shape in every handler context:
 |---------|-----------------|
 | `role.summon(message, ctx)` | `await ctx.read("being", id)` |
 | DO op `handler({ summonCtx, ... })` | `await summonCtx.read("being", id)` |
-| `registerSeeResolver(name, async (ctx) => ...)` | `await ctx.read("being", id)` |
+| SEE op `handler({ ctx, ... })` (registered via `registerSeeOperation`) | `await ctx.read("being", id)` |
 
 Same null-on-miss semantics. Same row shape — fields flatten onto the returned object so `me.coord` works (not `me.state.coord`). For richer reads — descriptors with computed fields, walked children, derived qualities — use `reality.see(address)` instead; `ctx.read` is the bare-row primitive.
 
@@ -292,7 +292,7 @@ await ctx.do(target, action, args);
 | Verb | Signature | What it does |
 |------|-----------|--------------|
 | `ctx.do(target, action, args)` | act on a target with a registered DO operation | Mutate matter, beings, spaces. Returns the operation's result. The fact rides this moment's ΔF. |
-| `ctx.see(address, opts?)` | read a descriptor at an IBP address | Bare-string addresses (`<reality>/<path>@<being>`) resolve to a full SEE descriptor with computed fields. For raw row reads, use `ctx.read` instead. |
+| `ctx.see(targetOrOpName, opts?)` | read a descriptor at an IBP address OR run a registered SEE op | Bare-string addresses (`<reality>/<path>@<being>`) resolve to a full SEE descriptor with computed fields. A bare op name (`place`, `llm-chain`, `<ext>:<name>`) dispatches through the SEE ops registry — pass `{ args: {...} }` for parameterized SEE ops. For raw row reads, use `ctx.read` instead. |
 | `ctx.summon(address, message)` | call another being | Wakes the target being's inbox with `message`. Returns the SUMMON envelope. |
 | `ctx.be(operation, payload)` | act on the caller's own identity | Birth, connect, release — the canonical BE operations. |
 

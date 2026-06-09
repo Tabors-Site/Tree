@@ -17,7 +17,7 @@ export default {
   needs: {
     // Verbs the extension reaches for:
     //   do      — registerOperation (tick/step/walk runtime ops)
-    //   declare — registerRole, registerSeeResolver
+    //   declare — registerRole, registerSeeOperation
     services: ["do", "declare"],
   },
 

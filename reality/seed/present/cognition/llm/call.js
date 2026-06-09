@@ -151,10 +151,19 @@ export function registerFailoverResolver(resolver) {
 /**
  * Try the primary connection. On a retryable failure, walk the
  * failover stack until one answers or the cumulative budget closes.
+ *
+ * The fallback stack is sourced in this order:
+ *   1. `opts.chain` — pre-built chain from `resolveLlmConnectionChain`
+ *      in the new 7-step resolver. When provided, the chain's tail
+ *      (after the primary) is the failover stack.
+ *   2. The legacy `_failoverResolver` registered via
+ *      `registerFailoverResolver(...)`. Kept for back-compat with any
+ *      extension that registers its own resolver.
+ *
  * Returns { response, usedClient } so the caller can update its
  * tracking when failover was used.
  */
-export async function callWithFailover(callFn, primaryClient, beingId, rootId) {
+export async function callWithFailover(callFn, primaryClient, beingId, rootId, opts = {}) {
   try {
     const response = await callFn(primaryClient.client, primaryClient.model);
     return { response, usedClient: primaryClient };
@@ -172,15 +181,24 @@ export async function callWithFailover(callFn, primaryClient, beingId, rootId) {
       await new Promise((r) => setTimeout(r, baseMs + jitter));
     }
 
-    if (!_failoverResolver) throw err;
-
     log.warn(
       "LLM",
       `Primary failed (${status}): ${primaryClient.model}. Trying failover.`,
     );
   }
 
-  const stack = await _failoverResolver(beingId, rootId);
+  // Source the fallback stack. Prefer the pre-built chain when present
+  // (the receiver/actor/role context lives there and the 7-step walker
+  // already de-duplicated). Fall back to the legacy resolver for
+  // extensions that wired their own.
+  let stack = null;
+  if (Array.isArray(opts.chain) && opts.chain.length > 0) {
+    stack = opts.chain
+      .map((entry) => (typeof entry === "string" ? entry : entry?.connectionId))
+      .filter(Boolean);
+  } else if (_failoverResolver) {
+    stack = await _failoverResolver(beingId, rootId);
+  }
   if (!stack || stack.length === 0) {
     throw new Error(
       "Primary LLM connection failed and no failover connections configured.",

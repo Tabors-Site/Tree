@@ -37,10 +37,14 @@ export async function init(reality) {
   reality.declare.registerRole("dancer-llm",    dancerLlmRole);
   log.verbose("Harmony", "registered roles: drummer, dancer-toward, dancer-llm");
 
-  // 2b. SEE-resolver for dancer-llm's `neighbors` preloaded face.
+  // 2b. SEE operation for dancer-llm's `neighbors` preloaded face.
   // Load-time registration routes through declare, matching the rule:
-  // ctx.X = moment-time, reality.declare.X = load-time.
-  reality.declare.registerSeeResolver("neighbors", neighborsSeeResolver);
+  // ctx.X = moment-time, reality.declare.X = load-time. The op
+  // auto-namespaces to `harmony:neighbors`.
+  reality.declare.registerSeeOperation("neighbors", {
+    description: "The dancer's local neighborhood — beings + obstacles",
+    handler: ({ ctx }) => neighborsSeeResolver(ctx),
+  });
 
   // Extension seed-scaffolds retired 2026-06-07. When harmony ships
   // a dance-floor clone bundle, it goes in manifest.provides.clones

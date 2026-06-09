@@ -1159,6 +1159,61 @@ a.kv-block-value:hover { color: var(--accent); text-decoration: underline; }
 }
 
 /* ────────────────────────────────────────────────────────────── */
+/* LLM chain — preview rendered on being inspector + chat bar     */
+/* ────────────────────────────────────────────────────────────── */
+
+.llm-flow {
+  margin: 6px 0 8px 0;
+}
+.llm-config {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
+}
+.llm-chain {
+  list-style: none;
+  margin: 4px 0 6px 0;
+  padding: 0;
+  font-family: var(--mono, monospace);
+  font-size: 11px;
+}
+.llm-chain-entry {
+  display: grid;
+  grid-template-columns: 14px 56px 1fr auto;
+  gap: 8px;
+  padding: 2px 0;
+  align-items: center;
+}
+.llm-chain-marker {
+  color: var(--accent, #4caf50);
+  text-align: center;
+}
+.llm-chain-step {
+  color: var(--fg-faint);
+  font-size: 10px;
+}
+.llm-chain-source {
+  color: var(--fg);
+  font-size: 11px;
+}
+.llm-chain-model {
+  color: var(--fg-strong, var(--fg));
+  text-align: right;
+  font-weight: 500;
+}
+.chat-llm-bar {
+  padding: 6px 10px;
+  margin-bottom: 8px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  font-size: 12px;
+  background: var(--bg-soft, transparent);
+}
+.chat-llm-bar:hover { border-color: var(--accent, #4caf50); }
+.chat-llm-bar .llm-chain { margin-top: 6px; }
+.muted { color: var(--fg-faint); }
+
+/* ────────────────────────────────────────────────────────────── */
 /* Chat                                                          */
 /* ────────────────────────────────────────────────────────────── */
 

@@ -194,10 +194,15 @@ function renderEditSpace(body, action) {
   });
 }
 
-// clone-subtree returns a bundle; the portal downloads it as JSON rather
-// than printing it. Custom doOp wraps the download and returns a summary.
-function renderClone(body, action, opByName) {
-  const op = opByName.get("clone-subtree") || {
+// clone-subtree is a SEE op (pure read; no Fact stamped). The portal
+// downloads the returned bundle as JSON rather than printing it.
+// Custom dispatcher wraps the download and returns a summary.
+function renderClone(body, action, _opByName) {
+  // Synthetic op-form spec — clone-subtree is a SEE op, so it's not in
+  // the DO opByName map. We render a one-field form for the optional
+  // clone name, then dispatch via flat.state.client.see with the
+  // current spaceId.
+  const op = {
     name: "clone-subtree",
     args: { name: { type: "text", label: "Clone name (optional)", required: false } },
   };
@@ -205,8 +210,14 @@ function renderClone(body, action, opByName) {
     op,
     address: action.address,
     submitLabel: "download clone",
-    doOp: async (addr, _name, payload) => {
-      const r = await flat.doOp(addr, "clone-subtree", payload);
+    doOp: async (_addr, _name, payload) => {
+      const spaceId = flat.state.descriptor?.address?.spaceId
+        || flat.state.descriptor?.position?.spaceId
+        || null;
+      if (!spaceId) throw new Error("no spaceId on current descriptor to clone from");
+      const r = await flat.state.client.see("clone-subtree", {
+        args: { spaceId, name: payload.name || null },
+      });
       const bundle = r?.bundle;
       if (!bundle) throw new Error("clone returned no bundle");
       const label = payload.name || "place";

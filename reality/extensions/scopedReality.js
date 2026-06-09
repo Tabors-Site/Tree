@@ -210,14 +210,17 @@ export function buildScopedReality(manifest, fullReality, availableServices) {
     scoped.declare = {
       ...origDeclare,
       registerRole: (name, def) => origDeclare.registerRole(prefixRoleName(name), rewriteRoleDef(def), extName),
-      // SEE-resolvers auto-namespace under the registering extension —
-      // same shape as registerRole's wrap. Without this, an extension
-      // calling reality.declare.registerSeeResolver("neighbors", fn)
-      // would register under bare "neighbors" instead of
-      // "<ext>:neighbors", colliding with other extensions and missing
-      // the canSee bare-name suffix-match the role engine performs.
-      registerSeeResolver: origDeclare.registerSeeResolver
-        ? (name, fn) => origDeclare.registerSeeResolver(name, fn, extName)
+      // SEE operations auto-namespace under the registering extension —
+      // same shape as registerRole's wrap. An extension calling
+      //   reality.declare.registerSeeOperation("neighbors", {handler})
+      // is rewritten to register under "<ext>:neighbors" with
+      // ownerExtension set, so roles can refer to it as either
+      // "<ext>:neighbors" or the bare suffix "neighbors".
+      registerSeeOperation: origDeclare.registerSeeOperation
+        ? (name, spec) => origDeclare.registerSeeOperation(
+            name.includes(":") ? name : `${extName}:${name}`,
+            { ...spec, ownerExtension: extName },
+          )
         : undefined,
     };
   }

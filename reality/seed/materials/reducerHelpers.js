@@ -342,6 +342,97 @@ export function applyConnectionState(state, fact) {
   };
 }
 
+/**
+ * Apply do:grant-role / do:revoke-role facts to the being's
+ * qualities.rolesGranted projection (seed/RolesAreAuth.md).
+ *
+ * Grant facts append a new entry; revoke facts remove the matching
+ * tuple. Uniqueness is on (role, anchorSpaceId|anchorBeingId, grantedBy);
+ * duplicate grants from different grantors live as separate entries
+ * and survive each other's revocations independently.
+ *
+ * Fact shape for both:
+ *   {
+ *     verb:   "do",
+ *     action: "grant-role" | "revoke-role",
+ *     target: { kind: "being", id: <granteeBeingId> },
+ *     params: {
+ *       role:          <roleName>,
+ *       anchorSpaceId: <spaceId | null>,
+ *       anchorBeingId: <beingId | null>,
+ *       grantedBy:     <grantorBeingId>,
+ *       grantedAt:     <iso timestamp>,
+ *     }
+ *   }
+ *
+ * Grants: at most one anchor field populated; the other null.
+ * Revocations match by (role, both-anchor-keys, grantedBy) — caller
+ * must identify the specific grant to revoke (mirrors subscriptions).
+ */
+export function applyRoleGrants(state, fact) {
+  if (fact?.verb !== "do") return state;
+  const isGrant  = fact.action === "grant-role";
+  const isRevoke = fact.action === "revoke-role";
+  if (!isGrant && !isRevoke) return state;
+  if (fact?.target?.kind !== "being") return state;
+  const params = fact?.params;
+  if (!params || typeof params !== "object") return state;
+  const role = params.role;
+  if (typeof role !== "string" || !role.length) return state;
+  const anchorSpaceId = params.anchorSpaceId || null;
+  const anchorBeingId = params.anchorBeingId || null;
+  if (!anchorSpaceId && !anchorBeingId) return state;
+  const grantedBy = params.grantedBy || null;
+  if (!grantedBy) return state;
+
+  const existingQualities = state.qualities || {};
+  const existing = Array.isArray(existingQualities.rolesGranted)
+    ? existingQualities.rolesGranted
+    : [];
+
+  if (isGrant) {
+    const grantedAt = params.grantedAt || fact.date?.toISOString?.() || null;
+    // Dedupe by the uniqueness tuple — re-emit is idempotent.
+    const alreadyHas = existing.some(
+      (e) => e.role === role
+        && (e.anchorSpaceId || null) === anchorSpaceId
+        && (e.anchorBeingId || null) === anchorBeingId
+        && (e.grantedBy || null) === grantedBy,
+    );
+    if (alreadyHas) return state;
+    const next = [
+      ...existing,
+      {
+        role,
+        anchorSpaceId,
+        anchorBeingId,
+        grantedBy,
+        grantedAt,
+        expiresAt: params.expiresAt || null,
+      },
+    ];
+    return {
+      ...state,
+      qualities: { ...existingQualities, rolesGranted: next },
+    };
+  }
+
+  // Revoke: drop the matching entry. If none matches, no-op.
+  const filtered = existing.filter(
+    (e) => !(
+      e.role === role
+      && (e.anchorSpaceId || null) === anchorSpaceId
+      && (e.anchorBeingId || null) === anchorBeingId
+      && (e.grantedBy || null) === grantedBy
+    ),
+  );
+  if (filtered.length === existing.length) return state;
+  return {
+    ...state,
+    qualities: { ...existingQualities, rolesGranted: filtered },
+  };
+}
+
 export function applyCreateBeing(state, fact) {
   if (fact?.verb !== "be" || fact?.action !== "birth") return state;
   if (fact?.target?.kind !== "being") return state;

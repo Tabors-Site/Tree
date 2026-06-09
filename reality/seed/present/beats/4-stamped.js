@@ -196,9 +196,18 @@ export async function sealAct(plannedAct, { content = null, deltaF = [], afterSe
 
   const endTime = new Date();
   const safeContent = content != null ? capContent(content) : null;
+  // Stamper seats the Act's initial status. Cross-world doctrine: an
+  // Act starts at "attempted" when the actor's local chain seals;
+  // transitions exactly once to a terminal state when the target's
+  // world confirms. For same-world moments where the Stamper IS the
+  // target, the post-commit transition happens inline below; for
+  // cross-reality moments awaiting a canopy round-trip, the Act stays
+  // at "attempted" until the response arrives via updateActStatus.
+  // See CROSS-WORLD.md "Act lifecycle and status."
   const actDoc = {
     ...plannedAct,
     endMessage: { content: safeContent, time: endTime, stopped: false },
+    status: "attempted",
   };
 
   let inserted = null;
@@ -258,6 +267,31 @@ export async function sealAct(plannedAct, { content = null, deltaF = [], afterSe
   }
 
   if (!inserted) return null;
+
+  // Status transition: attempted → landed. For same-world and
+  // same-reality-cross-branch moments the local Stamper IS the
+  // target — by the time the transaction committed, the facts
+  // landed and the Act can move to "landed". For cross-reality
+  // (when the canopy gateway lands) the actor's Act stays at
+  // "attempted" because no foreign confirmation has arrived; the
+  // canopy response handler will update it later via updateActStatus.
+  // We detect cross-reality by whether the moment dispatched
+  // any fact that targets a foreign reality — today none do, so
+  // every Act moves to "landed" here. See CROSS-WORLD.md.
+  const hasForeignRealityFact = Array.isArray(deltaF) && deltaF.some(
+    (f) => f?.params?.crossOrigin?.reality
+  );
+  if (!hasForeignRealityFact) {
+    try {
+      await Act.updateOne(
+        { _id: inserted._id, status: "attempted" },
+        { $set: { status: "landed" } },
+      );
+      inserted.status = "landed";
+    } catch (err) {
+      log.warn("Stamped", `sealAct: status→landed update failed (actId=${String(inserted._id).slice(0, 8)}): ${err.message}`);
+    }
+  }
 
   // Side effects fire AFTER the Act lands. The Act's existence is
   // the source of truth for "this moment sealed"; the projections

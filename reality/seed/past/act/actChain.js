@@ -14,6 +14,12 @@
 import Act from "./act.js";
 import Fact from "../fact/fact.js";
 import { redactSecrets } from "../../materials/redact.js";
+import {
+  resolveBranchLineage,
+  loadBranch,
+  MAIN,
+  isMain,
+} from "../../materials/branch/branches.js";
 
 // Cap is high so per-being scrubbable history reaches back to the
 // being's first act even after long sessions of fine-grained
@@ -23,26 +29,34 @@ const MAX_LIMIT = 10000;
 const MAX_FACT_PARAM_BYTES = 512;
 
 /**
- * Build the act-chain descriptor for one being. Newest-first.
+ * Build the act-chain descriptor for one being on a given branch.
+ * Newest-first. Walks branch lineage: a being's acts on branch #4
+ * include the acts they stamped on every ancestor branch BEFORE the
+ * fork point, plus their own divergent acts on #4 afterward.
  *
  * @param {string} beingId
  * @param {object} [opts]
+ * @param {string} [opts.branch="0"]  branch path to read on
  * @param {number} [opts.limit=100]
  * @returns {Promise<{ being: {id, name}, acts: object[], count: number }>}
  */
 export async function describeActChain(beingId, opts = {}) {
   if (!beingId) throw new Error("describeActChain: beingId required");
+  const branch = typeof opts.branch === "string" && opts.branch.length
+    ? opts.branch
+    : MAIN;
   const limit = Math.min(Math.max(Number(opts.limit) || 100, 1), MAX_LIMIT);
 
-  const acts = await Act.find({ beingIn: String(beingId) })
-    .sort({ stampedAt: -1, _id: -1 })
-    .limit(limit)
-    .lean();
+  const acts = await readActChainLineage({
+    beingId: String(beingId),
+    branch,
+    limit,
+  });
 
   let beingName = null;
   try {
     const { loadProjection } = await import("../../materials/projections.js");
-    const slot = await loadProjection("being", beingId, "0");
+    const slot = await loadProjection("being", beingId, branch);
     beingName = slot?.state?.name || null;
   } catch { /* best-effort */ }
 
@@ -142,6 +156,65 @@ export async function attachActFacts(serializedActs, opts = {}) {
   return serializedActs;
 }
 
+/**
+ * Read a being's act-chain across a branch lineage. Mirrors the fact
+ * reel's branch-lineage walk in foldEngine, but bounded by timestamp
+ * (acts have no per-aggregate seq) — each ancestor owns acts stamped
+ * before the next-down branch was created; the leaf owns everything
+ * after its own creation.
+ *
+ * Returns newest-first, capped at limit. Acts with no branch field
+ * (legacy, pre-Act-branching) are treated as main acts to stay
+ * compatible with old data.
+ */
+async function readActChainLineage({ beingId, branch, limit }) {
+  if (isMain(branch)) {
+    return Act.find({
+      beingIn: beingId,
+      $or: [{ branch: MAIN }, { branch: { $exists: false } }],
+    })
+      .sort({ stampedAt: -1, _id: -1 })
+      .limit(limit)
+      .lean();
+  }
+
+  const lineage = await resolveBranchLineage(branch);
+  // For each ancestor, compute its owned [from, before) time range.
+  // Main owns everything before #firstChild.createdAt.
+  // Each intermediate X owns acts from X.createdAt to nextChild.createdAt.
+  // The leaf owns acts from its own createdAt onward (no upper bound).
+  const ranges = [];
+  for (let i = 0; i < lineage.length; i++) {
+    const here = lineage[i];
+    const next = lineage[i + 1] || null;
+    const hereDoc = isMain(here) ? null : await loadBranch(here);
+    const lower = hereDoc?.createdAt ?? null;
+    const upper = next ? (await loadBranch(next))?.createdAt ?? null : null;
+    if (upper && lower && upper <= lower) continue;
+    ranges.push({ branch: here, lower, upper });
+  }
+  if (ranges.length === 0) return [];
+
+  const orClauses = ranges.map(({ branch: b, lower, upper }) => {
+    const branchClause = isMain(b)
+      ? { $or: [{ branch: MAIN }, { branch: { $exists: false } }] }
+      : { branch: b };
+    const timeFilter = {};
+    if (lower) timeFilter.$gte = lower;
+    if (upper) timeFilter.$lt  = upper;
+    return {
+      beingIn: beingId,
+      ...branchClause,
+      ...(Object.keys(timeFilter).length > 0 ? { stampedAt: timeFilter } : {}),
+    };
+  });
+
+  return Act.find({ $or: orClauses })
+    .sort({ stampedAt: -1, _id: -1 })
+    .limit(limit)
+    .lean();
+}
+
 function compactFact(f) {
   let params = f.params ?? null;
   try {
@@ -179,6 +252,9 @@ function serializeAct(a) {
     stampedAt:       a.stampedAt || null,
     severedAt:       a.severedAt || null,
     answers:         a.answers || null,
+    // Branch this Act was stamped on. Null on legacy acts predating
+    // the field; clients should treat that as main.
+    branch:          a.branch || null,
     // The bounded face this act ran under — orientation + role + space +
     // occupants + capabilities, stamped on every act regardless of the
     // being's cognition. Null on legacy acts predating the field. Clients

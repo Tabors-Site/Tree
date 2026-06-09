@@ -37,6 +37,13 @@ import { describeBeingsCatalog } from "../../materials/being/beingsCatalog.js";
 import { describeBranchesCatalog, describeMergeConflicts } from "../../materials/branch/branchesCatalog.js";
 import { assertVerbCaller } from "./_shared.js";
 import {
+  registerSeeOperation,
+  unregisterSeeOperation,
+  unregisterSeeOperationsFromExtension,
+  getSeeOperation,
+  listSeeOperations,
+} from "../seeOps.js";
+import {
   foldAt,
   NoSuchHistoricalState,
 } from "../../present/beats/2-fold/foldAt.js";
@@ -121,6 +128,38 @@ export async function seeVerb(target, opts = {}) {
       : target.value || target.address || null;
   if (typeof addrString === "string" && /\/\.discovery$/i.test(addrString)) {
     return buildDiscovery();
+  }
+
+  // Registered SEE op dispatch. The target is a bare op name (no
+  // address sigils) AND it matches a registry entry → run the op's
+  // handler instead of building a position descriptor. Same shape as
+  // DO op dispatch; the difference is no Fact gets stamped.
+  //
+  // Op names: "place", "llm-chain", "<ext>:<name>". Addresses always
+  // contain "/", "<", or "@" so the two surfaces don't collide.
+  //
+  // Args sourcing (in priority order):
+  //   1. opts.args — in-process callers pass args directly
+  //   2. opts.payload.args — wire callers pass args nested in payload
+  //      (so existing payload fields like at/live/limit stay distinct)
+  //   3. opts.payload — fallback: treat full payload as args
+  //      (back-compat for wire callers that don't nest under .args)
+  if (typeof addrString === "string" && /^[a-z][a-z0-9-]*(:[a-z][a-z0-9-]*)?$/i.test(addrString)) {
+    const { getSeeOperation } = await import("../seeOps.js");
+    const op = getSeeOperation(addrString);
+    if (op) {
+      assertVerbCaller("see", opts);
+      const dispatchArgs = opts.args
+        || (opts.payload && typeof opts.payload === "object" && opts.payload.args)
+        || opts.payload
+        || {};
+      return await op.handler({
+        identity: opts.identity || null,
+        args: dispatchArgs,
+        ctx: opts.ctx || null,
+        branch: opts.currentBranch || "0",
+      });
+    }
   }
 
   assertVerbCaller("see", opts);
@@ -361,8 +400,9 @@ export async function seeVerb(target, opts = {}) {
   }
 
   // Act-chain explorer short-circuit. SEE on `<reality>/.acts/<beingId>`
-  // returns the being's chain of moments (newest-first). Same auth
-  // posture as .reel for the first cut.
+  // returns the being's chain of moments on the address's branch
+  // (newest-first), with branch lineage so a fresh branch sees its
+  // parent's acts up to fork point.
   const actChainBeingId = actChainTargetFromPath(expanded.right?.path);
   if (actChainBeingId) {
     const realityDomain = getRealityDomain();
@@ -370,10 +410,11 @@ export async function seeVerb(target, opts = {}) {
     // long session of fine-grained acts doesn't truncate the visible
     // history window. describeActChain still caps at its MAX_LIMIT.
     const requestedLimit = Number(payload?.limit) || undefined;
-    const chain = await describeActChain(
-      actChainBeingId,
-      requestedLimit ? { limit: requestedLimit } : {},
-    );
+    const chainBranch = expanded.right?.branch || parseCtx.currentBranch || "0";
+    const chain = await describeActChain(actChainBeingId, {
+      branch: chainBranch,
+      ...(requestedLimit ? { limit: requestedLimit } : {}),
+    });
     return {
       address: {
         reality: realityDomain,
@@ -484,6 +525,15 @@ function normalizeAtQualifier(optsAt, target) {
  * disable action UIs; the shape is otherwise live-compatible so they
  * can reuse all existing render code.
  */
+// Attach the SEE op registry methods to seeVerb so `reality.see` is
+// both callable and carries the registry surface — mirrors the
+// pattern doVerb uses for DO ops (do.js:206-210).
+seeVerb.registerOperation = registerSeeOperation;
+seeVerb.unregisterOperation = unregisterSeeOperation;
+seeVerb.unregisterOperationsFromExtension = unregisterSeeOperationsFromExtension;
+seeVerb.getOperation = getSeeOperation;
+seeVerb.listOperations = listSeeOperations;
+
 async function seeAtTime({
   addrString,
   at,

@@ -1704,11 +1704,12 @@ function _closeNewBranchDialog() {
 // Copy (clone) + graft
 // ────────────────────────────────────────────────────────────────
 //
-// `Copy`: calls do(currentPath, "clone-subtree", {name}) and downloads
-// the returned bundle as a .clone.json file. The subtree is rooted at
-// the user's current position; the seed's cloneSubtree primitive walks
-// descendants + their beings + matter, capturing facts only (the shape,
-// no history) — per Chain-Rebuild.md, a clone is a cutting.
+// `Copy`: calls reality.see("clone-subtree", { args: { spaceId, name } })
+// — the chain rebuild is a pure read — and downloads the returned bundle
+// as a .clone.json file. The subtree is rooted at the user's current
+// position; the seed's cloneSubtree primitive walks descendants + their
+// beings + matter, capturing facts only (the shape, no history) — per
+// Chain-Rebuild.md, a clone is a cutting.
 //
 // `Graft`: file-picker → reads JSON → calls do(currentPath,
 // "graft-clone", {bundle}). The bundle's content lands as fresh spaces /
@@ -1726,10 +1727,16 @@ async function _downloadClone() {
   if (!addr) {
     throw new Error("no current address to copy from");
   }
+  const spaceId = window.__state?.descriptor?.address?.spaceId
+    || window.__state?.descriptor?.position?.spaceId
+    || null;
+  if (!spaceId) {
+    throw new Error("no spaceId on current descriptor to clone from");
+  }
   const placeName = window.__state?.descriptor?.address?.spaceName || "place";
   _showBranchEvent(`copying ${placeName}…`);
-  const result = await _state.client.do(addr, "clone-subtree", {
-    name: placeName,
+  const result = await _state.client.see("clone-subtree", {
+    args: { spaceId, name: placeName },
   });
   const bundle = result?.bundle;
   if (!bundle) {

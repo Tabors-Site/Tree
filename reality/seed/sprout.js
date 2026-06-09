@@ -129,6 +129,7 @@ export async function withIAmAct(sourceLabel, fn) {
   const actId = uuidv4();
   const now = new Date();
 
+  const { getRealityDomain } = await import("./ibp/address.js");
   const plannedAct = {
     _id: actId,
     beingIn:  I_AM,
@@ -143,11 +144,16 @@ export async function withIAmAct(sourceLabel, fn) {
     receivedAt:      now,
     stampedAt:       now,
     startMessage: { content: sourceLabel || "I-Am acts.", source: "I-Am" },
+    reality: getRealityDomain(),
+    // I-Am scaffold acts on main.
+    branch: "0",
   };
 
   // I-Am scaffold acts on main. Explicit "0" — the "no silent
-  // main-bias" invariant; branch is always declared.
-  const summonCtx = { actId, deltaF: [], afterSeal: [], branch: "0" };
+  // main-bias" invariant; branch is always declared. actorAct
+  // points to the Act being built; downstream consumers read
+  // identity (reality, branch, beingIn, _id) from there.
+  const summonCtx = { actId, deltaF: [], afterSeal: [], actorAct: plannedAct };
   const result = await fn(summonCtx);
 
   if (summonCtx.deltaF.length === 0) {
@@ -203,6 +209,7 @@ export async function withBeingAct(beingId, sourceLabel, branch, fn) {
   const actId = uuidv4();
   const now = new Date();
 
+  const { getRealityDomain } = await import("./ibp/address.js");
   const plannedAct = {
     _id: actId,
     beingIn:  beingId,
@@ -217,9 +224,11 @@ export async function withBeingAct(beingId, sourceLabel, branch, fn) {
     receivedAt:      now,
     stampedAt:       now,
     startMessage:    { content: sourceLabel || "graft act", source: beingId },
+    reality: getRealityDomain(),
+    branch,
   };
 
-  const summonCtx = { actId, deltaF: [], afterSeal: [], branch };
+  const summonCtx = { actId, deltaF: [], afterSeal: [], actorAct: plannedAct };
   const result = await fn(summonCtx);
 
   if (summonCtx.deltaF.length === 0) return result;

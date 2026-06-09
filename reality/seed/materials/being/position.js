@@ -142,9 +142,9 @@ async function deriveSpaceRootId(spaceId, branch) {
  */
 export async function setCurrentSpace(beingId, spaceId, summonCtx) {
   if (!beingId) return;
-  const branch = summonCtx?.branch;
+  const branch = summonCtx?.actorAct?.branch;
   if (typeof branch !== "string" || !branch) {
-    throw new Error("setCurrentSpace: summonCtx.branch is required; planting a being at a position needs the branch to derive the right tree-root.");
+    throw new Error("setCurrentSpace: summonCtx.actorAct.branch is required; planting a being at a position needs the actor's branch to derive the right tree-root.");
   }
   const p = getBeingPositionRecord(beingId);
   p.position = spaceId || null;

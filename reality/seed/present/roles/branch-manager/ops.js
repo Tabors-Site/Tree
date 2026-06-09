@@ -196,6 +196,35 @@ registerOperation("create-branch", {
       }
     }
 
+    // Auto-spawn a portal Matter at the reality root on main pointing
+    // at the new branch's root. Lets viewers on main peek into every
+    // branch as a portal-window without manually issuing form-portal
+    // for each one. Best-effort; branch creation succeeds even if the
+    // portal spawn fails. See CROSS-WORLD.md + portalOp.js.
+    let portalSpawned = null;
+    try {
+      const { findRoot } = await import("../../../materials/projections.js");
+      const { getRealityDomain } = await import("../../../ibp/address.js");
+      const rootSpaces = await findRoot("space", "0");
+      const rootSpace = rootSpaces?.[0] || null;
+      if (rootSpace) {
+        const foreignAddress = `${getRealityDomain()}#${result.path}/${rootSpace.id}`;
+        await doVerb(
+          { kind: "space", id: String(rootSpace.id) },
+          "form-portal",
+          { target: foreignAddress, name: `Branch #${result.path}` },
+          { identity, summonCtx, currentBranch: "0" },
+        );
+        portalSpawned = foreignAddress;
+      }
+    } catch (err) {
+      // Auto-portal is convenience, not correctness — leave a soft
+      // warning on the response so the caller can re-run form-portal
+      // manually if they care.
+      // eslint-disable-next-line no-console
+      console.warn(`branch-manager: auto-portal for #${result.path} failed: ${err.message}`);
+    }
+
     const response = {
       created:     true,
       path:        result.path,
@@ -207,6 +236,7 @@ registerOperation("create-branch", {
     if (pointerAttached) response.pointerAttached = pointerAttached;
     if (pointerWarning) response.pointerWarning = pointerWarning;
     if (scopePath) response.scope = { path: scopePath };
+    if (portalSpawned) response.portalSpawned = portalSpawned;
     return response;
   },
 });

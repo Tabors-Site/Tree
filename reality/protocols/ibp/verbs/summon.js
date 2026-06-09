@@ -76,8 +76,8 @@ export async function handleSummon(socket, env, ack) {
     // Cross-branch gate at the wire boundary. The caller's first-person
     // frame is the socket's tracked branch; the target stance's branch
     // is what the address carries. Mismatch is forbidden until
-    // cross-branch portals exist.
     const callerBranch = socket.currentBranch || "0";
+    let _targetBranchResolved = null;
     try {
       const { parseFromSocket, expand, resolveBeingIds, resolveBranchPointers, getRealityDomain } =
         await import("../../../seed/ibp/address.js");
@@ -95,18 +95,15 @@ export async function handleSummon(socket, env, ack) {
       // Impersonation refusal — see _shared.js for the doctrine.
       assertNoImpersonation(expanded, socket);
 
-      const targetBranch = expanded?.right?.branch || "0";
-      if (callerBranch !== targetBranch) {
-        throw new IbpError(IBP_ERR.CROSS_BRANCH_FORBIDDEN,
-          `SUMMON across branches forbidden: caller is on #${callerBranch}, ` +
-          `target is on #${targetBranch}. Navigate to the target's branch first.`,
-          { callerBranch, targetBranch });
-      }
+      // Cross-branch dispatch: the summon record lands on the target
+      // being's inbox-reel on the TARGET'S branch; crossOrigin marks
+      // the caller's branch. emitFact attaches it. CROSS-WORLD.md.
+      _targetBranchResolved = expanded?.right?.branch || "0";
     } catch (err) {
-      if (err && (err.code === IBP_ERR.CROSS_BRANCH_FORBIDDEN
-                || err.code === IBP_ERR.FORBIDDEN)) throw err;
+      if (err && err.code === IBP_ERR.FORBIDDEN) throw err;
       // Parse failures fall through; summonVerb owns address validation.
     }
+    const targetBranch = _targetBranchResolved || callerBranch;
 
     // Pause / delete gate. SUMMON ALWAYS produces a summon Fact
     // (writes the recipient's inbox); paused or deleted branches
@@ -129,7 +126,11 @@ export async function handleSummon(socket, env, ack) {
     const result = await summonVerb(address, message, {
       identity,
       currentUser:   socket.name,
-      currentBranch: callerBranch,
+      // currentBranch is the FACT's branch (where the summon record
+      // lands on the recipient's inbox-reel) — that's the target's
+      // branch. emitFact attaches crossOrigin when actor.branch
+      // (callerBranch) differs. See seed/CROSS-WORLD.md.
+      currentBranch: targetBranch,
       currentPath:   socket.currentPath || null,
       onResponse:    emitUpdateForSocket(socket),
     });

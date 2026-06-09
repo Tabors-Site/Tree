@@ -405,6 +405,149 @@ registerOperation("end-being", {
   handler: endBeingHandler,
 });
 
+// ────────────────────────────────────────────────────────────────────
+// grant-role / revoke-role
+// ────────────────────────────────────────────────────────────────────
+//
+// Roles are auth (seed/RolesAreAuth.md). A being holds a role by
+// being granted it; authorize walks rolesGranted and matches the
+// role's canX against the verb+action.
+//
+// Both ops emit one Fact each on the target being's reel. The being
+// reducer (applyRoleGrants in reducerHelpers.js) folds them into
+// qualities.rolesGranted:
+//   grant-role  → append { role, anchorSpaceId|anchorBeingId, grantedBy, grantedAt }
+//   revoke-role → remove the matching tuple (role, anchor*, grantedBy)
+//
+// Duplicate grants from different grantors live as separate entries,
+// each separately revocable. The being holds the role until ALL
+// grants of (role, anchor) are revoked.
+//
+// Auth: the caller's right to grant role X is encoded in their own
+// granted roles' canDo: a role with canDo entry `grant-role:X` (or
+// `grant-role:*` for super-grantors like angel) permits granting X.
+// Same shape for revoke-role:X. This means anyone who has been
+// authored as a grantor for X via the canDo declaration on their
+// role can hand X out. The chain back to I-Am is structural.
+
+async function grantRoleHandler({ target, params, identity, summonCtx }) {
+  if (!identity?.beingId) {
+    throw new IbpError(
+      IBP_ERR.UNAUTHORIZED,
+      "grant-role: identity required (the grantor's beingId)",
+    );
+  }
+  const { role, anchorSpaceId = null, anchorBeingId = null, expiresAt = null } = params || {};
+  if (typeof role !== "string" || !role.length) {
+    throw new IbpError(IBP_ERR.INVALID_INPUT, "grant-role: `role` is required");
+  }
+  if (!anchorSpaceId && !anchorBeingId) {
+    throw new IbpError(
+      IBP_ERR.INVALID_INPUT,
+      "grant-role: one of `anchorSpaceId` or `anchorBeingId` is required",
+    );
+  }
+  if (anchorSpaceId && anchorBeingId) {
+    throw new IbpError(
+      IBP_ERR.INVALID_INPUT,
+      "grant-role: only one of `anchorSpaceId` or `anchorBeingId` may be set",
+    );
+  }
+  // Validate the role exists in the registry — can't grant a non-role.
+  const { getRole } = await import("../../present/roles/registry.js");
+  const roleSpec = getRole(role);
+  if (!roleSpec) {
+    throw new IbpError(IBP_ERR.INVALID_INPUT, `grant-role: role "${role}" is not registered`);
+  }
+  // Returns the grant record; the auto-emitted Fact carries the same
+  // shape as params. The reducer reads the fact and appends to
+  // qualities.rolesGranted on the target being.
+  const granteeBeingId = String(targetIdOf(target));
+  const grantedAt = new Date().toISOString();
+  return {
+    granted:       true,
+    role,
+    granteeBeingId,
+    anchorSpaceId,
+    anchorBeingId,
+    grantedBy: String(identity.beingId),
+    grantedAt,
+    expiresAt,
+    // Pass through to the fact's params (the audit IS the grant record).
+    _factParams: {
+      role,
+      anchorSpaceId,
+      anchorBeingId,
+      grantedBy: String(identity.beingId),
+      grantedAt,
+      expiresAt,
+    },
+  };
+}
+
+async function revokeRoleHandler({ target, params, identity, summonCtx }) {
+  if (!identity?.beingId) {
+    throw new IbpError(
+      IBP_ERR.UNAUTHORIZED,
+      "revoke-role: identity required (the revoker's beingId)",
+    );
+  }
+  const { role, anchorSpaceId = null, anchorBeingId = null, grantedBy = null } = params || {};
+  if (typeof role !== "string" || !role.length) {
+    throw new IbpError(IBP_ERR.INVALID_INPUT, "revoke-role: `role` is required");
+  }
+  if (!anchorSpaceId && !anchorBeingId) {
+    throw new IbpError(
+      IBP_ERR.INVALID_INPUT,
+      "revoke-role: one of `anchorSpaceId` or `anchorBeingId` is required",
+    );
+  }
+  // The grantedBy identifies the SPECIFIC grant to revoke. Defaults
+  // to the caller's own beingId (revoking my own grant).
+  const targetGrantedBy = grantedBy ? String(grantedBy) : String(identity.beingId);
+  const granteeBeingId = String(targetIdOf(target));
+  return {
+    revoked: true,
+    role,
+    granteeBeingId,
+    anchorSpaceId,
+    anchorBeingId,
+    grantedBy: targetGrantedBy,
+    _factParams: {
+      role,
+      anchorSpaceId,
+      anchorBeingId,
+      grantedBy: targetGrantedBy,
+    },
+  };
+}
+
+registerOperation("grant-role", {
+  targets: ["being"],
+  ownerExtension: "seed",
+  factAction: "grant-role",
+  args: {
+    role:          { type: "text", label: "Role to grant",       required: true },
+    anchorSpaceId: { type: "text", label: "Anchor space id",     required: false },
+    anchorBeingId: { type: "text", label: "Anchor being id",     required: false },
+    expiresAt:     { type: "text", label: "Expires at (ISO)",    required: false },
+  },
+  handler: grantRoleHandler,
+});
+
+registerOperation("revoke-role", {
+  targets: ["being"],
+  ownerExtension: "seed",
+  factAction: "revoke-role",
+  args: {
+    role:          { type: "text", label: "Role to revoke",       required: true },
+    anchorSpaceId: { type: "text", label: "Anchor space id",      required: false },
+    anchorBeingId: { type: "text", label: "Anchor being id",      required: false },
+    grantedBy:     { type: "text", label: "Grantor whose grant to revoke (defaults to self)", required: false },
+  },
+  handler: revokeRoleHandler,
+});
+
 registerOperation("add-llm-connection", {
   targets: ["being"],
   ownerExtension: "seed",

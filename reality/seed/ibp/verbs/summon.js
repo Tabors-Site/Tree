@@ -293,7 +293,7 @@ export async function summonVerb(stance, message, opts = {}) {
  * wake calls bypass the envelope contract and are forbidden.
  *
  * Branch precedence (no silent default to "0"):
- *   1. summonCtx.branch — inside-moment caller; inherits the moment's branch
+ *   1. summonCtx.actorAct.branch — inside-moment caller; inherits the moment's branch
  *   2. args.branch — explicit attachment from callers without a moment
  *      (subscriptions firing from a hook, scheduler boot paths, internal
  *      bootstraps). Required when summonCtx is null.

@@ -132,6 +132,7 @@ export async function dispatchTransportAct({
   identity = null,
   priority,
   branch = "0",
+  targetBranch = null,
   timeoutMs = DEFAULT_TIMEOUT_MS,
 } = {}) {
   if (!beingId) throw new Error("dispatchTransportAct requires beingId");
@@ -144,6 +145,14 @@ export async function dispatchTransportAct({
   if (typeof branch !== "string" || branch.length === 0) {
     throw new Error(`dispatchTransportAct: branch must be a non-empty string (got ${JSON.stringify(branch)})`);
   }
+  // targetBranch defaults to branch when not specified — same-world
+  // call. When set explicitly different from branch, this is a
+  // cross-world dispatch: the moment opens on the actor's branch but
+  // the Fact lands on the target's branch with crossOrigin marking
+  // the actor's. See CROSS-WORLD.md.
+  const resolvedTargetBranch = (typeof targetBranch === "string" && targetBranch.length > 0)
+    ? targetBranch
+    : branch;
 
   const finalCorrelation = correlation || randomUUID();
 
@@ -174,10 +183,16 @@ export async function dispatchTransportAct({
     act,
     identity,
     priority,
-    // Branch the moment will run in. Inherited from the wire layer
-    // (resolved.branch off the parsed `#` qualifier on the target
-    // address). assign.js reads entry.branch when shaping summonCtx.
+    // Two branches carried per the cross-world doctrine:
+    //   branch       — the ACTOR's branch; where the moment runs and
+    //                  where the Act seals. assign.js reads this when
+    //                  shaping summonCtx and seating the actorAct.
+    //   targetBranch — where the Fact lands (the TARGET'S branch).
+    //                  Defaults to branch (same-world). When different,
+    //                  emitFact's deriveCrossOrigin attaches a
+    //                  provenance block automatically.
     branch,
+    targetBranch: resolvedTargetBranch,
   });
 
   const awaitResult = new Promise((resolve, reject) => {

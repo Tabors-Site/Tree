@@ -16,6 +16,7 @@ const PORT = 4829;
 const NEW_ROUTES = [
   "/",                      // NewLandingPage
   "/ibp",                   // IbpPage
+  "/ibp/crossworld",        // CrossWorldPage
   "/start",                 // GetStartedPage
   "/license",               // LicensePage
   "/factory",               // FactoryOverview (in FactoryLayout)
@@ -97,6 +98,10 @@ const PAGE_META = {
   "/ibp": {
     title: "IBP . The Inter-Being Protocol",
     description: "Four verbs (SEE, DO, SUMMON, BE) over a single envelope, carried by any transport. The public surface of TreeOS.",
+  },
+  "/ibp/crossworld": {
+    title: "Cross-World . Acting across branch and reality",
+    description: "One being, one position, one act. How a being reaches across branches and realities through portals: detected from the address, with the actor's act-chain and the receiving world's reels both staying sovereign.",
   },
   "/start": {
     title: "Get started . TreeOS",

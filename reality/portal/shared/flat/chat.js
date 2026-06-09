@@ -78,6 +78,112 @@ export function openChatFor(beingEntry, { refresh = false } = {}) {
 
   panel.appendChild(header);
 
+  // ── LLM indicator ─────────────────────────────────────────────
+  // Shows the LLM that WILL be used to respond, with provenance
+  // (which step of the 7-step chain it came from). Click to expand
+  // and see the full chain. The preview is fetched once when chat
+  // opens — re-fetched only when the user explicitly clicks refresh.
+  const llmBar = document.createElement("div");
+  llmBar.className = "chat-llm-bar";
+  llmBar.textContent = "LLM: (loading…)";
+  llmBar.style.cursor = "pointer";
+  llmBar.title = "click to see full chain";
+  panel.appendChild(llmBar);
+
+  let chainCache = null;
+  let expanded = false;
+  function renderBarSummary() {
+    llmBar.innerHTML = "";
+    const chain = (chainCache && Array.isArray(chainCache.chain)) ? chainCache.chain : [];
+    const chosen = chainCache?.chosen || null;
+    if (chosen) {
+      const label = document.createElement("span");
+      label.textContent = "LLM: ";
+      label.className = "muted";
+      const model = document.createElement("strong");
+      model.textContent = chosen.model || chosen.name || chosen.connectionId.slice(0, 12);
+      const via = document.createElement("span");
+      via.className = "muted";
+      via.textContent = ` ← step ${chosen.step} · ${chosen.source}`;
+      llmBar.appendChild(label);
+      llmBar.appendChild(model);
+      llmBar.appendChild(via);
+    } else if (chain.length === 0 && chainCache?.reason) {
+      llmBar.textContent = `LLM: (none — ${chainCache.reason})`;
+    } else {
+      llmBar.textContent = "LLM: (no candidate resolved)";
+    }
+    const more = document.createElement("span");
+    more.className = "muted";
+    more.style.marginLeft = "0.5em";
+    more.textContent = expanded ? " ▾" : " ▸";
+    llmBar.appendChild(more);
+  }
+  function renderBarExpanded() {
+    renderBarSummary();
+    const chain = (chainCache && Array.isArray(chainCache.chain)) ? chainCache.chain : [];
+    if (chain.length === 0) return;
+    const ul = document.createElement("ul");
+    ul.className = "llm-chain";
+    for (const entry of chain) {
+      const li = document.createElement("li");
+      li.className = "llm-chain-entry";
+      const isChosen = chainCache?.chosen && entry.connectionId === chainCache.chosen.connectionId
+        && entry.step === chainCache.chosen.step && entry.source === chainCache.chosen.source;
+      const marker = document.createElement("span");
+      marker.className = "llm-chain-marker";
+      marker.textContent = isChosen ? "✓" : " ";
+      const step = document.createElement("span");
+      step.className = "llm-chain-step";
+      step.textContent = `step ${entry.step}`;
+      const src = document.createElement("span");
+      src.className = "llm-chain-source";
+      src.textContent = entry.source;
+      const model = document.createElement("span");
+      model.className = "llm-chain-model";
+      model.textContent = entry.model || entry.name || entry.connectionId.slice(0, 8);
+      if (isChosen) li.style.fontWeight = "bold";
+      li.appendChild(marker);
+      li.appendChild(step);
+      li.appendChild(src);
+      li.appendChild(model);
+      ul.appendChild(li);
+    }
+    llmBar.appendChild(ul);
+    if (chainCache?.reason) {
+      const rDiv = document.createElement("div");
+      rDiv.className = "sub muted";
+      rDiv.textContent = `reason: ${chainCache.reason}`;
+      llmBar.appendChild(rDiv);
+    }
+  }
+  llmBar.onclick = () => {
+    expanded = !expanded;
+    if (expanded) renderBarExpanded();
+    else renderBarSummary();
+  };
+
+  // Kick the preview fetch. The receiver is this being; the actor is
+  // the signed-in user. SEE op — no Fact stamped, no chain pollution.
+  // `client.see("llm-chain", { args })` dispatches through the unified
+  // SEE ops registry; the wire returns the handler's value verbatim.
+  const role = beingEntry.defaultRole || "main";
+  Promise.resolve(fl.client.see("llm-chain", {
+    args: {
+      receiverBeingId: beingEntry.beingId || null,
+      receiverBeingName: beingEntry.beingId ? null : beingEntry.being,
+      receiverSpaceId: fl.descriptor?.position?.spaceId || null,
+      actorBeingName: fl.session?.username || null,
+      role,
+    },
+  })).then((res) => {
+    chainCache = (res && res.result) || res || { chain: [], reason: null, chosen: null };
+    if (expanded) renderBarExpanded();
+    else renderBarSummary();
+  }).catch((err) => {
+    llmBar.textContent = `LLM: (preview failed — ${err?.message || err})`;
+  });
+
   // Inbox (past summons with this being, from descriptor).
   const inboxSec = document.createElement("div");
   inboxSec.id = "chat-inbox";

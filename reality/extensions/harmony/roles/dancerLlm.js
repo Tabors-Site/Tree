@@ -33,7 +33,7 @@ const DIRS = [
 // assemble.js stringifies it under [neighbors] in the system prompt.
 // Source of truth: the seed's PositionProjection (factory-owned).
 //
-// Registered from harmony/index.js via reality.declare.registerSeeResolver
+// Registered from harmony/index.js via reality.declare.registerSeeOperation
 // (load-time registration goes through the declare namespace, never
 // through a seed-internal import).
 export const neighborsSeeResolver = async (ctx) => {

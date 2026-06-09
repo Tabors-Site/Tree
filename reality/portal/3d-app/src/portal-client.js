@@ -153,7 +153,7 @@ export class PortalClient {
    * @param {string} address  position or stance ("<place>/<path>", "<place>/<path>@<being>", "<place>")
    * @param {object} [options] { live?: boolean, at?: { atSeq?: number, atTimestamp?: string } }
    */
-  async see(address, { live = false, at = null, limit = null } = {}) {
+  async see(address, { live = false, at = null, limit = null, args = null } = {}) {
     const payload = {};
     if (live) payload.live = true;
     // Historical SEE qualifier. Returns the substrate's state as of a
@@ -169,6 +169,10 @@ export class PortalClient {
     // wire-layer reads payload.limit and threads to describeActChain /
     // describeBeingsCatalog. Ignored on regular position SEEs.
     if (Number.isInteger(limit) && limit > 0) payload.limit = limit;
+    // Registered SEE op args. When the address is a bare op name
+    // ("llm-chain", "place"), the seed-side SEE verb dispatches to the
+    // op's handler with these args. Ignored for address-shaped SEEs.
+    if (args && typeof args === "object") payload.args = args;
     return this._call("see", normalize(address), payload);
   }
 

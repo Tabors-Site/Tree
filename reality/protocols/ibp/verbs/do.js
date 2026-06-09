@@ -109,18 +109,14 @@ export async function handleDo(socket, env, ack) {
     // Impersonation refusal — see _shared.js for the doctrine.
     assertNoImpersonation(expanded, socket);
 
-    // Cross-branch gate at the wire boundary. The caller's first-person
-    // frame is the socket's tracked branch; the target's branch is the
-    // expanded right stance. Mismatch is a cross-reality call (different
-    // fold-chains), refused until cross-branch portals exist.
+    // Cross-branch dispatch. The caller is on socket.currentBranch
+    // (their world); the target is on expanded.right.branch (the
+    // target's world). When they differ, this is a cross-world call:
+    // the Fact lands on the target's branch with a crossOrigin block
+    // pointing at the caller's branch. emitFact's deriveCrossOrigin
+    // attaches the provenance automatically. See CROSS-WORLD.md.
     const callerBranch = socket.currentBranch || "0";
     const targetBranch = expanded.right?.branch || "0";
-    if (callerBranch !== targetBranch) {
-      throw new IbpError(IBP_ERR.CROSS_BRANCH_FORBIDDEN,
-        `DO across branches forbidden: caller is on #${callerBranch}, ` +
-        `target is on #${targetBranch}. Navigate to the target's branch first.`,
-        { callerBranch, targetBranch });
-    }
 
     // Pause / delete gate. While the target branch is paused or
     // deleted, DO refuses every op EXCEPT the branch-lifecycle ops
@@ -233,11 +229,12 @@ export async function handleDo(socket, env, ack) {
       },
       correlation,
       identity,
-      // Branch the moment lives in. Sourced from the socket's
-      // first-person stance (the caller's frame). The cross-branch
-      // gate above already enforced that this equals the target's
-      // branch, so they're guaranteed consistent here.
+      // branch — actor's world; where the moment opens and the Act seals.
+      // targetBranch — target's world; where the Fact lands. Differs from
+      // branch on cross-world calls; emitFact attaches crossOrigin
+      // automatically. See seed/CROSS-WORLD.md.
       branch: callerBranch,
+      targetBranch,
     });
 
     // Fire-and-forget: when the moment seals, push the result to

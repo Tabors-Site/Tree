@@ -3,6 +3,7 @@ import { Routes, Route } from "react-router-dom";
 // New site (post-rebuild 2026)
 import NewLandingPage from "./NewLandingPage.jsx";
 import IbpPage from "./IbpPage.jsx";
+import CrossWorldPage from "./CrossWorldPage.jsx";
 import PortalPage from "./PortalPage.jsx";
 import GetStartedPage from "./GetStartedPage.jsx";
 import LicensePage from "./LicensePage.jsx";
@@ -33,6 +34,7 @@ import NotFound from "./old/NotFound.jsx";
  *
  *   /                       NEW landing (two buttons plus "What is this?")
  *   /ibp                    NEW IBP page (transport plus four verbs)
+ *   /ibp/crossworld         NEW Cross-World page (acting across branch / reality)
  *   /portal                 NEW Portal page (renderer / client surface)
  *   /license                NEW License page (dual license, links to seed/LICENSE)
  *   /factory                NEW factory overview plus chapter walk
@@ -51,6 +53,7 @@ const WelcomeRoutes = () => {
       {/* New site */}
       <Route path="/" element={<NewLandingPage />} />
       <Route path="/ibp" element={<IbpPage />} />
+      <Route path="/ibp/crossworld" element={<CrossWorldPage />} />
       <Route path="/portal" element={<PortalPage />} />
       <Route path="/start" element={<GetStartedPage />} />
       <Route path="/license" element={<LicensePage />} />

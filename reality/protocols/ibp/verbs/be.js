@@ -106,6 +106,7 @@ export async function handleBe(socket, env, ack) {
     // the target address explicitly carries a different branch
     // qualifier, refuse before opening the moment.
     const callerBranch = socket.currentBranch || "0";
+    let _targetBranchResolved = null;
     try {
       const { parseFromSocket, expand, resolveBeingIds, resolveBranchPointers, getRealityDomain } =
         await import("../../../seed/ibp/address.js");
@@ -126,20 +127,21 @@ export async function handleBe(socket, env, ack) {
       // guard lets those pass through.
       assertNoImpersonation(expanded, socket);
 
-      const targetBranch = expanded?.right?.branch || "0";
-      if (callerBranch !== targetBranch) {
-        throw new IbpError(IBP_ERR.CROSS_BRANCH_FORBIDDEN,
-          `BE across branches forbidden: caller is on #${callerBranch}, ` +
-          `target is on #${targetBranch}. Navigate to the target's branch first.`,
-          { callerBranch, targetBranch });
-      }
+      _targetBranchResolved = expanded?.right?.branch || "0";
+      // Cross-branch dispatch: the caller's BE acts on the target's
+      // branch with a crossOrigin block pointing at the caller's
+      // branch. emitFact attaches the provenance automatically. See
+      // CROSS-WORLD.md.
     } catch (err) {
       // Re-throw structured IBP errors; swallow parse failures so the
       // downstream beVerb owns address validation.
-      if (err && (err.code === IBP_ERR.CROSS_BRANCH_FORBIDDEN
-                || err.code === IBP_ERR.FORBIDDEN)) throw err;
+      if (err && err.code === IBP_ERR.FORBIDDEN) throw err;
     }
+    // Fact lands on the target's branch (parsed from the address by
+    // beVerb); the actor's Act lives on callerBranch. Same-world calls
+    // have caller==target and produce no crossOrigin.
     const branch = callerBranch;
+    const targetBranch = _targetBranchResolved || callerBranch;
 
     // Pause / delete gate. BE is a write surface (birth/connect/
     // release); paused or deleted branches refuse every BE op so a
@@ -176,6 +178,7 @@ export async function handleBe(socket, env, ack) {
       },
       identity: callerIdentity || { beingId: cherubBeingId, name: "cherub" },
       branch,
+      targetBranch,
     });
 
     // Push the result back. If the caller had an authed beingId we

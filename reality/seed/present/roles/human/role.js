@@ -43,6 +43,13 @@ export const humanRole = Object.freeze({
   name: "human",
   description:
     "The receptive role every human being carries. Lets a human be SUMMONed; the SUMMON sits in their inbox as a notification until they respond from their own transport.",
+  // ANCHORED — granted at the place root by cherub on registration.
+  // The "root founder" role: do-whatever-you-want in this reality
+  // because you registered here. Expected to be retired over time as
+  // operators author their own narrower roles for downstream beings.
+  // Only cherub holds canDo:["grant-role"] for the human role — no
+  // other being can hand it out.
+  scope: "anchored",
   permissions: ["see", "do", "summon", "be"],
   respondMode: "async",
   // No "message" trigger: humans don't auto-process incoming SUMMONs.

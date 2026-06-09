@@ -57,6 +57,8 @@ A Position requires the Place followed by `/`. The Path after the slash may be e
 left-stance :: right-stance
 ```
 
+The left stance is the **actor** (who is addressing); the right stance is the **receiver** (who is addressed). Action runs left → right.
+
 **Both sides are stances and use the exact same grammar.** A Stance is always `place/path@being`. There is no special "identity carrier" on the left — the human user is just another being, addressed by their username at their place's root.
 
 Canonical form:

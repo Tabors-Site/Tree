@@ -1,148 +1,77 @@
 // TreeOS Seed . AGPL-3.0 . https://treeos.ai . Tabor Holly
 //
-// resolution.js — the LLM connection chain walk.
+// resolution.js — the LLM connection resolver entry point.
 //
-// Resolution philosophy: position-first, identity-last. *Where* you
-// are shapes your tools more than *who* you are — until you say
-// otherwise.
+// At the end of the day, this just chooses what LLM connection id to
+// use when the receiving being is about to stamp via cognition. The
+// stamper passes that id into the LLM client; the client calls; the
+// result becomes the act's content.
 //
-// Four layers of authority, evaluated top-down:
+// The chain walker lives in `chain.js`. This file is the public entry
+// point that wraps it and the back-compat shims for existing callers.
 //
-//   Layer 1 — Lockout (sovereign over everything):
-//     ANY ancestor in the space walk has `llmDefault === "none"`, OR
-//     ANY ancestor in the being walk has `beingLlm.locked === true`
-//     → returns null. "No LLM under this scope, period."
+// THE 7-STEP CHAIN (auth.jpg, plan: graceful-jingling-garden.md)
 //
-//   Layer 2 — Enforcement (sovereign over preferOwn):
-//     ANY ancestor in the space walk has `qualities.llm.enforced === true`
-//     → use that space's connection. Position locks the LLM in.
+// Walks right-to-left across the IBPA `actor :: receiver`:
 //
-//     ANY ancestor in the being walk has `beingLlm.enforced === true`
-//     → use that being's connection. Parent being locks descendants in.
+//   0  receiver being   role-slot list
+//   1  receiver being   default list
+//   2  receiver space   role-slot + default, walking ancestors
+//   3  receiver reality role-slot + default
+//   3.5 cross-boundary  opens only if forceActor fired upstream
+//   4  actor being      role-slot + default
+//   5  actor space      role-slot + default, walking ancestors
+//   6  actor reality    role-slot + default
 //
-//     When both apply, space enforcement wins (position > identity).
+// Each container's `qualities.llm` shape (unified across being, space,
+// reality):
 //
-//   Layer 3 — Default chain (substrate model; the common case):
-//     1. space.qualities.llm.slots[slot]  ← role-LLM at this exact position
-//     2. space.llmDefault                 ← default LLM at this position
-//     3. walk to parent, repeat 1+2
-//     4. ... up to place root ...
-//     5. place config: realityLlmConnection  ← operator fallback for the place
-//     6. being.qualities.beingLlm.slots[slot] ← being's role-specific LLM
-//     7. being.llmDefault                 ← being's "personal" default
+//   qualities.llm = {
+//     default:       string[],    // independent ordered list
+//     slots:         { role: string[] },  // each role's own list
+//     preferOwn:     bool,
+//     forceActor:    bool,        // skip remaining receiver-side
+//     forceReceiver: bool,        // cap chain at this container's step
+//   }
 //
-//   Layer 3′ — Being-preferred chain (user opts in):
-//     When `being.qualities.beingLlm.preferOwn === true` AND no
-//     enforcement was found, the order inverts: being's LLM ranks
-//     above position. Lockout still applies; enforcement still wins
-//     over preferOwn.
+// Independent lists: a being with 5 connections under slots["coder"]
+// and 3 under default produces 5+3=8 candidates for role=coder. Each
+// list exhausts independently.
 //
-//   Layer 4 — Per-call override (programmatic):
-//     Caller passes a connectionId directly into `getClientForBeing`
-//     instead of letting it resolve. Tests, special-case dispatch.
-//
-// This file owns the walk + the four-layer logic. The slot-rule
-// readers (`getSpaceLlmAssignments`, `getBeingLlmAssignments`) live
-// in connect.js because they're the projection from the qualities
-// shape; resolution imports them.
+// Force flags: closest-to-step-0 wins. forceReceiver caps the chain;
+// forceActor crosses the 3.5 boundary.
 
-import Being from "../../../materials/being/being.js";
-import Space from "../../../materials/space/space.js";
-import { getAncestorChain } from "../../../materials/space/ancestorCache.js";
-import { getRealityConfigValue } from "../../../realityConfig.js";
-import {
-  getSpaceLlmAssignments,
-  getBeingLlmAssignments,
-} from "./connect.js";
-
-const BEING_CHAIN_MAX_DEPTH = 20;
-const LOCKDOWN = Symbol("LOCKDOWN");
+import { buildLlmChain } from "./chain.js";
 
 /**
- * Walk `being.parentBeingId` up to root, collecting beings as we go.
- * Cycle-guarded + depth-capped. Returns an array starting with the
- * passed-in being and ending at the chain root.
+ * Build the LLM connection chain for a receiver+actor+role triple.
+ * Returns the ordered candidate list; the stamper's failover loop
+ * drains it.
+ *
+ * @param {object} opts
+ * @param {object} opts.receiver  { beingId, spaceId, realityDomain }
+ * @param {object} [opts.actor]   { beingId, spaceId, realityDomain }
+ *                                (null/missing — no actor side walked)
+ * @param {string} [opts.role]    role name for per-role slot lookups
+ * @param {string} [opts.branch]  branch id (default "0")
+ * @returns {Promise<{ chain, tried, reason }>}
  */
-async function walkBeingChain(rootBeing, branch = "0") {
-  if (!rootBeing) return [];
-  const chain = [rootBeing];
-  const seen = new Set([String(rootBeing._id)]);
-  let curId = rootBeing.parentBeingId || null;
-  let depth = 0;
-  while (curId && depth < BEING_CHAIN_MAX_DEPTH) {
-    const id = String(curId);
-    if (seen.has(id)) break;
-    seen.add(id);
-    const { loadOrFold } = await import("../../../materials/projections.js");
-    const slot = await loadOrFold("being", id, branch).catch(() => null);
-    if (!slot) break;
-    const parent = { _id: slot.id, ...slot.state };
-    chain.push(parent);
-    curId = parent.parentBeingId || null;
-    depth++;
-  }
-  return chain;
+export async function resolveLlmConnectionChain({
+  actor = null,
+  receiver = null,
+  role = null,
+  branch = "0",
+} = {}) {
+  return buildLlmChain({ actor, receiver, role, branch });
 }
 
 /**
- * Walk the space ancestor chain looking for: a lockout, an enforced
- * connection, or a normal hit. Returns LOCKDOWN sentinel on lock,
- * { connectionId, enforced } on hit, null when no candidate found.
- */
-async function spaceChainResolve(spaceId, slot, branch) {
-  if (!spaceId) return null;
-  let chain;
-  try {
-    chain = await getAncestorChain(spaceId, branch);
-  } catch {
-    const { loadOrFold } = await import("../../../materials/projections.js");
-    const slotProj = await loadOrFold("space", spaceId, branch);
-    const single = slotProj ? { _id: slotProj.id, ...slotProj.state } : null;
-    chain = single ? [single] : [];
-  }
-  let firstHit = null;
-  for (const space of chain) {
-    const a = getSpaceLlmAssignments(space);
-    if (a.default === "none") return LOCKDOWN;
-    if (a.enforced) {
-      const hit = a[slot] || a.default;
-      if (hit) return { connectionId: hit, enforced: true };
-    }
-    if (!firstHit) {
-      const hit = a[slot] || a.default;
-      if (hit) firstHit = { connectionId: hit, enforced: false };
-    }
-  }
-  return firstHit;
-}
-
-/**
- * Walk the being ancestor chain (pre-loaded) looking for lockout,
- * enforcement, or a normal hit.
- */
-function beingChainResolve(beingChain, slot) {
-  if (!beingChain.length) return null;
-  let firstHit = null;
-  for (const being of beingChain) {
-    const a = getBeingLlmAssignments(being);
-    if (a.locked) return LOCKDOWN;
-    if (a.enforced) {
-      const hit = a[slot] || a.main;
-      if (hit) return { connectionId: hit, enforced: true };
-    }
-    if (!firstHit) {
-      const hit = a[slot] || a.main;
-      if (hit) firstHit = { connectionId: hit, enforced: false };
-    }
-  }
-  return firstHit;
-}
-
-/**
- * Resolve the LLM connectionId for a call at a specific position by
- * a specific being. Walks the four-layer chain above. Returns the
- * resolved connectionId string, or null when no connection applies
- * (lockout, or no candidate anywhere on the chain).
+ * Back-compat shim. Old callers asked for a single connection id at a
+ * (being, space, slot) triple — no actor context. The new chain
+ * accepts the same inputs as a "receiver-only" call and returns the
+ * first candidate.
+ *
+ * Returns the chosen connection id or null.
  */
 export async function resolveLlmConnection({
   beingId = null,
@@ -150,46 +79,27 @@ export async function resolveLlmConnection({
   slot = "main",
   branch = "0",
 } = {}) {
-  let being = null;
-  if (beingId) {
-    const { loadOrFold } = await import("../../../materials/projections.js");
-    const slotProj = await loadOrFold("being", beingId, branch).catch(() => null);
-    being = slotProj ? { _id: slotProj.id, ...slotProj.state } : null;
-  }
-  const beingChain = await walkBeingChain(being, branch);
-
-  const spaceHit = await spaceChainResolve(spaceId, slot, branch);
-  const beingHit = beingChainResolve(beingChain, slot);
-
-  // Layer 1: Lockout wins over everything.
-  if (spaceHit === LOCKDOWN || beingHit === LOCKDOWN) return null;
-
-  // Layer 2: Enforcement wins over preferOwn. Space enforcement beats
-  // being enforcement when both apply (position-first philosophy).
-  if (spaceHit?.enforced) return spaceHit.connectionId;
-  if (beingHit?.enforced) return beingHit.connectionId;
-
-  // Layer 3 / 3′: normal chain. preferOwn (set on the calling being's
-  // own qualities) inverts the order.
-  const preferOwn = being?.qualities?.beingLlm?.preferOwn === true;
-  const realityConnId = getRealityConfigValue("realityLlmConnection") || null;
-  const candidates = preferOwn
-    ? [beingHit?.connectionId, spaceHit?.connectionId, realityConnId]
-    : [spaceHit?.connectionId, realityConnId, beingHit?.connectionId];
-
-  for (const c of candidates) if (c) return c;
-  return null;
+  const { chain } = await buildLlmChain({
+    receiver: { beingId, spaceId, realityDomain: null },
+    actor: null,
+    role: slot,
+    branch,
+  });
+  return chain.length > 0 ? chain[0].connectionId : null;
 }
 
 /**
- * @deprecated Use `resolveLlmConnection({ beingId, spaceId, slot })` instead.
- * Kept as a thin shim for legacy callers that pass a `role` spec and only
- * have the tree root.
+ * Back-compat shim. `resolveRootLlmForRole` was the LLM-assigner's
+ * thin wrapper over `resolveLlmConnection` taking a root id + role
+ * spec. The new chain walks the same inputs and returns the first
+ * candidate.
+ *
+ * @deprecated Use `resolveLlmConnectionChain` directly.
  */
 export async function resolveRootLlmForRole(rootId, role) {
   if (!rootId) return null;
   return resolveLlmConnection({
     spaceId: rootId,
-    slot: role?.llmSlot || "main",
+    slot: role?.llmSlot || role?.name || "main",
   });
 }

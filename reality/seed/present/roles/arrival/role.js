@@ -29,6 +29,10 @@ export const arrivalRole = Object.freeze({
   name: "arrival",
   description:
     "The shared stance every unauthenticated visitor carries. SEE-only; one being row, many concurrent users.",
+  // The implicit floor for stateless callers. Reality-wide reach by
+  // definition — arrival is what every visitor carries before
+  // authenticating, regardless of position.
+  scope: "global",
   requiredCognition: "scripted",
   permissions: ["see"],
   respondMode: "async",

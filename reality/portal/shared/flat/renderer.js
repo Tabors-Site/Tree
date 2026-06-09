@@ -1928,6 +1928,15 @@ function renderBeingInspector(insp, b) {
   // ─── Timeline (recent acts on this being's reel; click to fold to past)
   renderTimelineSection(insp, b, { reality });
 
+  // ─── LLM at this space (7-step chain preview + per-being config)
+  // Calls the llm-assigner:preview-llm-chain DO op to show which LLM
+  // would be picked if this being were summoned RIGHT NOW from this
+  // position. The session user is the actor; this being is the
+  // receiver. Below the chain, the user's own qualities.llm config
+  // surfaces (default list, slots per role, force flags) with
+  // affordances to edit via the set-being-llm form.
+  renderLlmSection(insp, b, { reality, stance });
+
   // ─── DO actions (ops whose targets include being or stance)
   const ops = [
     ...flat.operationsForTarget("being"),
@@ -2091,6 +2100,155 @@ function doInlineForm(op, address, baseArgs = {}) {
     : flat.doOp;
   renderOpForm(wrap, { op, address, doOp, submitLabel: "do" });
   return wrap;
+}
+
+// ── LLM section ────────────────────────────────────────────────────
+//
+// Renders below the being inspector. Two halves:
+//
+//   1. CHAIN PREVIEW — calls llm-assigner:preview-llm-chain to fetch
+//      the 7-step ordered candidate list for (receiver=this being,
+//      actor=session user, role=main). Renders as a vertical flow:
+//        ✓ step 1  receiver-being:default  gpt-4o-mini  (CHOSEN)
+//          step 3  receiver-reality:slot   claude-3-5-sonnet
+//          ...
+//      and a `reason:` line at the bottom showing why the chain
+//      stopped (cap, no candidates, etc.).
+//
+//   2. PER-BEING CONFIG — shows the being's current qualities.llm
+//      (default fallback list count, slots per role, force flags).
+//      Affordances expand to the set-being-llm DO form.
+//
+// Self-only edit: the form fields show for every viewer but
+// authorize() rejects the write unless the caller is the being.
+function renderLlmSection(insp, b, { reality, stance } = {}) {
+  const fl = flat.state;
+  const sec = section("LLM at this space");
+  insp.appendChild(sec);
+
+  // Live state — repopulated by the preview call below.
+  const flowDiv = document.createElement("div");
+  flowDiv.className = "llm-flow";
+  flowDiv.textContent = "(loading chain…)";
+  sec.appendChild(flowDiv);
+
+  // Per-being qualities.llm summary.
+  const cfg = (b.qualities?.llm) || {};
+  const configDiv = document.createElement("div");
+  configDiv.className = "llm-config";
+  const cfgTitle = document.createElement("div");
+  cfgTitle.className = "kv-label";
+  cfgTitle.textContent = `${b.being}'s LLM config`;
+  configDiv.appendChild(cfgTitle);
+  const defaultLen = Array.isArray(cfg.default) ? cfg.default.length : (cfg.default ? 1 : 0);
+  configDiv.appendChild(kv("default fallback", `${defaultLen} connection${defaultLen === 1 ? "" : "s"}`));
+  const slots = (cfg.slots && typeof cfg.slots === "object") ? cfg.slots : {};
+  const slotKeys = Object.keys(slots);
+  if (slotKeys.length) {
+    for (const r of slotKeys) {
+      const list = Array.isArray(slots[r]) ? slots[r] : (slots[r] ? [slots[r]] : []);
+      configDiv.appendChild(kv(`slot: ${r}`, `${list.length} connection${list.length === 1 ? "" : "s"}`));
+    }
+  } else {
+    configDiv.appendChild(kv("role slots", "(none)"));
+  }
+  if (cfg.forceReceiver === true) configDiv.appendChild(kv("forceReceiver", "yes — chain caps here"));
+  if (cfg.forceActor === true)    configDiv.appendChild(kv("forceActor",    "yes — chain jumps to actor side"));
+  if (cfg.preferOwn === true)     configDiv.appendChild(kv("preferOwn",     "yes"));
+  sec.appendChild(configDiv);
+
+  // Edit affordance — link out to the set-being-llm DO form. Already
+  // rendered below in the "DO actions" section; here we just nudge the
+  // user to find it.
+  const editHint = document.createElement("div");
+  editHint.className = "sub muted";
+  editHint.textContent = "Edit via set-being-llm in DO actions below.";
+  sec.appendChild(editHint);
+
+  // Fire the preview op. The receiver is this being's beingId (from
+  // the descriptor). The actor is the signed-in user (by name; the op
+  // resolves names). Role defaults to "main" — a future enhancement
+  // can let the user pick a different role here.
+  const receiverBeingId = b.beingId || null;
+  const actorBeingName  = fl.session?.username || null;
+  const role = b.defaultRole || "main";
+
+  if (!receiverBeingId) {
+    flowDiv.textContent = "(receiver beingId unavailable — descriptor missing)";
+    return;
+  }
+
+  // SEE op call. The 7-step chain is a read-only perception — no Fact
+  // stamped. `reality.see("llm-chain", args)` dispatches through the
+  // unified SEE ops registry (parallel to reality.do).
+  Promise.resolve(fl.client.see("llm-chain", {
+    args: {
+      receiverBeingId,
+      receiverSpaceId: fl.descriptor?.position?.spaceId || null,
+      actorBeingName,
+      role,
+    },
+  })).then((res) => {
+    flowDiv.innerHTML = "";
+    const r = (res && res.result) || res || {};
+    const chain = Array.isArray(r.chain) ? r.chain : [];
+    const reason = r.reason || null;
+    const chosen = r.chosen || null;
+
+    if (chain.length === 0) {
+      const p = document.createElement("div");
+      p.className = "sub";
+      p.textContent = reason || "(no candidates in chain)";
+      flowDiv.appendChild(p);
+      return;
+    }
+
+    const head = document.createElement("div");
+    head.className = "kv-label";
+    head.textContent = `chain preview — role: ${role}`;
+    flowDiv.appendChild(head);
+
+    const ul = document.createElement("ul");
+    ul.className = "llm-chain";
+    for (const entry of chain) {
+      const li = document.createElement("li");
+      li.className = "llm-chain-entry";
+      const isChosen = chosen && entry.connectionId === chosen.connectionId
+        && entry.step === chosen.step && entry.source === chosen.source;
+      const marker = document.createElement("span");
+      marker.className = "llm-chain-marker";
+      marker.textContent = isChosen ? "✓" : " ";
+      const step = document.createElement("span");
+      step.className = "llm-chain-step";
+      step.textContent = `step ${entry.step}`;
+      const src = document.createElement("span");
+      src.className = "llm-chain-source";
+      src.textContent = entry.source;
+      const model = document.createElement("span");
+      model.className = "llm-chain-model";
+      model.textContent = entry.model || entry.name || entry.connectionId.slice(0, 8);
+      if (isChosen) li.style.fontWeight = "bold";
+      li.appendChild(marker);
+      li.appendChild(step);
+      li.appendChild(src);
+      li.appendChild(model);
+      ul.appendChild(li);
+    }
+    flowDiv.appendChild(ul);
+
+    if (reason) {
+      const rDiv = document.createElement("div");
+      rDiv.className = "sub muted";
+      rDiv.textContent = `reason: ${reason}`;
+      flowDiv.appendChild(rDiv);
+    }
+  }).catch((err) => {
+    flowDiv.innerHTML = "";
+    const p = document.createElement("div");
+    p.className = "sub muted";
+    p.textContent = `(preview failed: ${err?.message || err})`;
+    flowDiv.appendChild(p);
+  });
 }
 
 function showResult(el, text, kind) {

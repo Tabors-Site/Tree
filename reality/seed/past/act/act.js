@@ -122,13 +122,57 @@ const ActSchema = new mongoose.Schema({
   // chain is the truth; this is a bounded record of the face;
   // full face reconstruction goes through the chain, not here.
   facadeSnapshot: { type: mongoose.Schema.Types.Mixed, default: null },
+
+  // Reality the actor was acting from when this Act was stamped.
+  // For local Acts on this substrate, this is the substrate's own
+  // domain (process.env.REALITY_DOMAIN). For cross-reality Acts, this
+  // is the foreign actor's home reality. Required — every Act knows
+  // its actor's home reality, no silent assumption that "this is the
+  // only reality." See seed/CROSS-WORLD.md.
+  reality: { type: String, required: true, index: true },
+
+  // Branch the actor was acting from when this Act was stamped.
+  // Required — no schema default, no silent main-bias. Every Act
+  // emitter (planActRow, withIAmAct, withBeingAct, test fixtures)
+  // must thread the branch explicitly. See seed/CROSS-WORLD.md for
+  // why act-chain lineage matters.
+  branch: { type: String, required: true, index: true },
+
+  // Cross-world act lifecycle status. Starts at "attempted" when the
+  // Act seals locally on the actor's home reel; transitions exactly
+  // ONCE to a terminal state as feedback arrives from the target's
+  // world. Same-world acts (target.world === actor.world) transition
+  // to "landed" inline at seal time since the foreign side IS the
+  // local Stamper. Cross-world acts wait for the foreign Stamper
+  // (cross-branch: in-process; cross-reality: over canopy) and
+  // update later.
+  //
+  // Terminal states:
+  //   landed       — foreign side confirmed the fact stamped
+  //   denied       — foreign side refused (auth / permissions / policy)
+  //   timeout      — no response within the configured window
+  //   unreachable  — canopy could not deliver (DNS / network down)
+  //   malformed    — foreign side received but couldn't parse
+  //
+  // This is the SINGLE exception to fact immutability — see
+  // seed/CROSS-WORLD.md "Status is the one exception to fact
+  // immutability." The Act itself is sealed and immutable; the status
+  // field is a derived correlation of "what happened to this attempt"
+  // that the substrate updates exactly once after seal. No other
+  // field on an Act ever mutates after seal.
+  status: {
+    type: String,
+    required: true,
+    enum: ["attempted", "landed", "denied", "timeout", "unreachable", "malformed"],
+    index: true,
+  },
 });
 
 // All Acts under one chain (rootCorrelation walk).
 ActSchema.index({ rootCorrelation: 1, stampedAt: 1 }, { sparse: true });
-// Per-Being newest-first activity.
-ActSchema.index({ beingIn: 1, stampedAt: -1 });
-ActSchema.index({ beingOut: 1, stampedAt: -1 });
+// Per-Being newest-first activity, scoped by branch.
+ActSchema.index({ beingIn: 1, branch: 1, stampedAt: -1 });
+ActSchema.index({ beingOut: 1, branch: 1, stampedAt: -1 });
 // Conversation between two Beings.
 ActSchema.index({ beingIn: 1, beingOut: 1, stampedAt: -1 }, { sparse: true });
 // "Every time beingOut acted in activeRole" — audit query.

@@ -22,6 +22,7 @@ import log from "../../../seedReality/log.js";
 import Matter from "../../../materials/matter/matter.js";
 import Space from "../../../materials/space/space.js";
 import { registerOperation } from "../../../ibp/operations.js";
+import { registerSeeOperation } from "../../../ibp/seeOps.js";
 import { doVerb } from "../../../ibp/verbs/do.js";
 import { IbpError, IBP_ERR } from "../../../ibp/protocol.js";
 import { findBeingByName } from "../../../materials/being/identity.js";
@@ -34,6 +35,101 @@ import {
 } from "./role.js";
 
 const OWNER = "llm-assigner";
+
+// ────────────────────────────────────────────────────────────────────
+// 7-step chain helpers (auth.jpg)
+// ────────────────────────────────────────────────────────────────────
+//
+// The new ops accept `{slot, connections, forceActor, forceReceiver,
+// preferOwn}` in addition to the legacy `{slot, connectionId}` shape.
+// `connections` may be a string or string[] — both normalize to an
+// ordered list under `qualities.llm.slots[slot]` (per role) or
+// `qualities.llm.default` (when slot is "main" or absent).
+//
+// Mutual exclusion on the force flags is enforced here: any op write
+// that asserts both `forceActor=true` and `forceReceiver=true` is
+// rejected with `INVALID_INPUT`. Setting one true automatically clears
+// the other on the same container.
+
+const VALID_SLOT_RE = /^[a-zA-Z][a-zA-Z0-9_-]*$/;
+
+function normalizeConnectionList(raw) {
+  if (raw === null || raw === undefined) return null;
+  const arr = Array.isArray(raw) ? raw : [raw];
+  const out = [];
+  for (const item of arr) {
+    if (typeof item !== "string" || !item.length || item.length > 100) continue;
+    out.push(item);
+  }
+  return out;
+}
+
+function assertFlagMutex(params) {
+  if (params.forceActor === true && params.forceReceiver === true) {
+    throw new IbpError(
+      IBP_ERR.INVALID_INPUT,
+      "forceActor and forceReceiver cannot both be true on the same container. " +
+      "Pick one — the chain caps at this container (forceReceiver) or jumps to the actor side (forceActor).",
+    );
+  }
+}
+
+// Write the 7-step chain fields onto a container (being or space) by
+// dispatching set-being / set-space DOs through doVerb. Each field
+// write is its own DO call so the one-moment-one-act doctrine holds.
+// Returns a summary of what was written.
+async function writeLlmFields(targetKind, targetId, params, identity, summonCtx) {
+  const verb = targetKind === "being" ? "set-being" : "set-space";
+  const written = {};
+
+  // Slot list write — qualities.llm.slots[slot] or qualities.llm.default.
+  const slot = params.slot || null;
+  const connections = normalizeConnectionList(params.connections);
+  if (slot && connections !== null) {
+    if (!VALID_SLOT_RE.test(slot)) {
+      throw new IbpError(IBP_ERR.INVALID_INPUT, `invalid slot name "${slot}"`);
+    }
+    const field = slot === "main" || slot === "default"
+      ? "qualities.llm.default"
+      : `qualities.llm.slots.${slot}`;
+    await doVerb(
+      { kind: targetKind, id: String(targetId) },
+      verb,
+      { field, value: connections, merge: false },
+      { identity, summonCtx },
+    );
+    written[field] = connections;
+  }
+
+  // Mutex on force flags. If one flag is being set true, clear the
+  // other implicitly so the container is always in a valid posture.
+  const flagWrites = [];
+  if (params.forceReceiver === true) {
+    flagWrites.push(["qualities.llm.forceReceiver", true]);
+    flagWrites.push(["qualities.llm.forceActor", false]);
+  } else if (params.forceActor === true) {
+    flagWrites.push(["qualities.llm.forceActor", true]);
+    flagWrites.push(["qualities.llm.forceReceiver", false]);
+  } else if (params.forceActor === false) {
+    flagWrites.push(["qualities.llm.forceActor", false]);
+  } else if (params.forceReceiver === false) {
+    flagWrites.push(["qualities.llm.forceReceiver", false]);
+  }
+  if (typeof params.preferOwn === "boolean") {
+    flagWrites.push(["qualities.llm.preferOwn", params.preferOwn]);
+  }
+  for (const [field, value] of flagWrites) {
+    await doVerb(
+      { kind: targetKind, id: String(targetId) },
+      verb,
+      { field, value, merge: false },
+      { identity, summonCtx },
+    );
+    written[field] = value;
+  }
+
+  return written;
+}
 
 // ────────────────────────────────────────────────────────────────────
 // Helpers
@@ -320,38 +416,9 @@ export function registerLlmAssignerOps() {
   });
 
   // List the caller's connections + current slot assignments.
-  registerOperation("llm-assigner:list-llms", {
-    targets: ["space"],
-    ownerExtension: OWNER,
-    skipAudit: true,
-    handler: async ({ identity }) => {
-      if (!identity?.beingId) {
-        throw new IbpError(
-          IBP_ERR.UNAUTHORIZED,
-          "llm-assigner:list-llms requires an authenticated being.",
-        );
-      }
-      const beingId = String(identity.beingId);
-      const { getBeingLlmAssignments } = await import("../../cognition/llm/connect.js");
-      const { loadProjection } = await import("../../../materials/projections.js");
-      const slot = await loadProjection("being", beingId, "0");
-      const being = slot ? { _id: slot.id, ...slot.state } : null;
-      const conns = (being?.qualities instanceof Map
-        ? being.qualities.get("llmConnections")
-        : being?.qualities?.llmConnections) || {};
-      const connections = Object.entries(conns).map(([id, c]) => ({
-        connectionId: id,
-        name:         c.name,
-        baseUrl:      c.baseUrl,
-        model:        c.model,
-        lastUsedAt:   c.lastUsedAt,
-      }));
-      return {
-        connections,
-        slots: getBeingLlmAssignments(being || {}),
-      };
-    },
-  });
+  // list-llms retired as a DO op. The caller's connections are a
+  // read-only perception → registered below as `llm-connections` SEE
+  // op (see registerSeeOperation block at the bottom of this file).
 
   // Delete one of the caller's connections. The seed cascades the
   // removal across Being.llmDefault, qualities.beingLlm slots, and
@@ -378,9 +445,13 @@ export function registerLlmAssignerOps() {
     },
   });
 
-  // Set (or clear) the reality-level default LLM connection. Restricted
-  // to the root operator. The set-config DO op writes the canonical
-  // realityLlmConnection key under the .config heaven space.
+  // Set the reality-level LLM configuration on the place root's
+  // `qualities.llm`. Writes the 7-step chain fields (slot list, force
+  // flags, preferOwn). Restricted to heaven contributors.
+  //
+  // Back-compat: when `connectionId` (legacy scalar) is the only
+  // payload field, it is converted to a single-element `connections`
+  // list under `qualities.llm.default` (so existing UIs keep working).
   registerOperation("llm-assigner:set-reality-llm", {
     targets: ["space"],
     ownerExtension: OWNER,
@@ -398,29 +469,33 @@ export function registerLlmAssignerOps() {
           "Only heaven contributors can change reality-level LLM configuration.",
         );
       }
-      const { connectionId } = params || {};
-      if (connectionId === undefined) {
-        throw new IbpError(IBP_ERR.INVALID_INPUT, "`connectionId` is required (pass null to clear)");
+      assertFlagMutex(params || {});
+      const { findRoot } = await import("../../../materials/projections.js");
+      const roots = await findRoot("space", "0");
+      const rootRow = roots && roots[0] ? roots[0] : null;
+      if (!rootRow) {
+        throw new IbpError(IBP_ERR.INTERNAL, "Reality place root not found");
       }
-      const { HEAVEN_SPACE } = await import("../../../materials/space/heavenSpaces.js");
-      const { findByHeavenSpace } = await import("../../../materials/projections.js");
-      const configNode = await findByHeavenSpace(HEAVEN_SPACE.CONFIG, "0");
-      if (!configNode) {
-        throw new IbpError(IBP_ERR.INTERNAL, "Reality .config heaven space not found");
+      // Legacy scalar → list conversion. If the caller passed only
+      // `connectionId` (the pre-rewire shape), map it onto `connections`
+      // under the default slot.
+      const normalized = { ...(params || {}) };
+      if (normalized.connections === undefined && normalized.connectionId !== undefined) {
+        normalized.connections = normalized.connectionId === null ? [] : [normalized.connectionId];
+        normalized.slot = normalized.slot || "default";
+        delete normalized.connectionId;
       }
-      await doVerb(
-        { kind: "space", id: String(configNode.id) },
-        "set-config",
-        { key: "realityLlmConnection", value: connectionId || null },
-        { identity, summonCtx },
-      );
-      return { realityLlmConnection: connectionId || null };
+      const written = await writeLlmFields("space", rootRow.id, normalized, identity, summonCtx);
+      log.verbose("llm-assigner",
+        `reality root LLM updated by ${identity.beingId}: ${Object.keys(written).join(", ") || "(no fields)"}`);
+      return { spaceId: String(rootRow.id), written };
     },
   });
 
-  // Set an LLM slot on a space the caller owns. Writes
-  // qualities.llm.slots[slot] via the assign-llm-slot DO op so the
-  // stance-authorization gate runs uniformly.
+  // Set an LLM configuration on a space the caller owns. Writes the
+  // 7-step chain fields (slot list, force flags, preferOwn) to
+  // `<space>.qualities.llm`. Back-compat: legacy `{slot, connectionId}`
+  // payload is mapped to `{slot, connections: [connectionId]}`.
   registerOperation("llm-assigner:set-space-llm", {
     targets: ["space"],
     ownerExtension: OWNER,
@@ -431,22 +506,173 @@ export function registerLlmAssignerOps() {
           "llm-assigner:set-space-llm requires an authenticated being.",
         );
       }
-      const { spaceId, slot, connectionId } = params || {};
+      const { spaceId } = params || {};
       if (!spaceId) throw new IbpError(IBP_ERR.INVALID_INPUT, "`spaceId` is required");
-      if (!slot)    throw new IbpError(IBP_ERR.INVALID_INPUT, "`slot` is required");
       const exists = await Space.exists({ _id: spaceId });
       if (!exists) throw new IbpError(IBP_ERR.SPACE_NOT_FOUND, `Space ${spaceId} not found`);
-      const result = await doVerb(
-        { kind: "space", id: String(spaceId) },
-        "assign-llm-slot",
-        { slot, connectionId: connectionId || null },
-        { identity, summonCtx },
-      );
+      assertFlagMutex(params);
+      // Legacy scalar → list conversion.
+      const normalized = { ...params };
+      if (normalized.connections === undefined && normalized.connectionId !== undefined) {
+        normalized.connections = normalized.connectionId === null ? [] : [normalized.connectionId];
+        normalized.slot = normalized.slot || "default";
+        delete normalized.connectionId;
+      }
+      const written = await writeLlmFields("space", spaceId, normalized, identity, summonCtx);
       log.verbose("llm-assigner",
-        `space ${spaceId} slot "${slot}" → ${connectionId || "(cleared)"} by being ${identity.beingId}`);
-      return result;
+        `space ${spaceId} LLM updated by ${identity.beingId}: ${Object.keys(written).join(", ") || "(no fields)"}`);
+      return { spaceId: String(spaceId), written };
     },
   });
 
-  log.verbose("llm-assigner", "registered 9 DO ops (3 tutorial + 6 connection-management)");
+  // Set the calling being's own LLM configuration. Writes the 7-step
+  // chain fields to `<being>.qualities.llm`. The caller can configure
+  // per-role slots, fallback list, and force flags for their being.
+  registerOperation("llm-assigner:set-being-llm", {
+    targets: ["space"],
+    ownerExtension: OWNER,
+    handler: async ({ params, identity, summonCtx }) => {
+      if (!identity?.beingId) {
+        throw new IbpError(
+          IBP_ERR.UNAUTHORIZED,
+          "llm-assigner:set-being-llm requires an authenticated being.",
+        );
+      }
+      assertFlagMutex(params || {});
+      const normalized = { ...(params || {}) };
+      if (normalized.connections === undefined && normalized.connectionId !== undefined) {
+        normalized.connections = normalized.connectionId === null ? [] : [normalized.connectionId];
+        normalized.slot = normalized.slot || "default";
+        delete normalized.connectionId;
+      }
+      const written = await writeLlmFields("being", String(identity.beingId), normalized, identity, summonCtx);
+      log.verbose("llm-assigner",
+        `being ${identity.beingId} LLM updated: ${Object.keys(written).join(", ") || "(no fields)"}`);
+      return { beingId: String(identity.beingId), written };
+    },
+  });
+
+  // preview-llm-chain retired as a DO op — it's a pure read of the
+  // 7-step resolution chain. Registered below as `llm-chain` SEE op.
+
+  // ── SEE ops (read-only perceptions, no Fact stamped) ──
+  //
+  // `llm-connections` — the caller's LLM connections + slot assignments.
+  // `llm-chain`       — the 7-step resolution chain preview.
+  //
+  // Both are seed-owned (bare names, no prefix). Roles can declare
+  // canSee: ["llm-connections"] to preload the connections list as a
+  // face block. Direct callers (the portal) invoke reality.see("llm-chain", {...}).
+  registerSeeOperation("llm-connections", {
+    ownerExtension: "seed",
+    description: "The caller's LLM connections and slot assignments",
+    handler: async ({ identity }) => {
+      if (!identity?.beingId) return { connections: [], slots: null };
+      const beingId = String(identity.beingId);
+      const { getBeingLlmAssignments } = await import("../../cognition/llm/connect.js");
+      const { loadProjection } = await import("../../../materials/projections.js");
+      const slot = await loadProjection("being", beingId, "0");
+      const being = slot ? { _id: slot.id, ...slot.state } : null;
+      const conns = (being?.qualities instanceof Map
+        ? being.qualities.get("llmConnections")
+        : being?.qualities?.llmConnections) || {};
+      const connections = Object.entries(conns).map(([id, c]) => ({
+        connectionId: id,
+        name:         c.name,
+        baseUrl:      c.baseUrl,
+        model:        c.model,
+        lastUsedAt:   c.lastUsedAt,
+      }));
+      return {
+        connections,
+        slots: getBeingLlmAssignments(being || {}),
+      };
+    },
+  });
+
+  registerSeeOperation("llm-chain", {
+    ownerExtension: "seed",
+    description: "The 7-step LLM resolution chain preview for a (receiver, actor, role) triple",
+    args: {
+      receiverBeingId:   { type: "text", label: "Receiver being id",   required: false },
+      receiverBeingName: { type: "text", label: "Receiver being name", required: false },
+      receiverSpaceId:   { type: "text", label: "Receiver space id",   required: false },
+      actorBeingId:      { type: "text", label: "Actor being id",      required: false },
+      actorBeingName:    { type: "text", label: "Actor being name",    required: false },
+      actorSpaceId:      { type: "text", label: "Actor space id",      required: false },
+      role:              { type: "text", label: "Role",                required: false },
+      branch:            { type: "text", label: "Branch",              required: false },
+    },
+    handler: async ({ identity, args, branch }) => {
+      let {
+        receiverBeingId = null,
+        receiverBeingName = null,
+        receiverSpaceId = null,
+        actorBeingId = null,
+        actorBeingName = null,
+        actorSpaceId = null,
+        role = "main",
+      } = args || {};
+      const effectiveBranch = args?.branch || branch || "0";
+      // Default the actor to the SEE caller when not specified.
+      if (!actorBeingId && !actorBeingName && identity?.beingId) {
+        actorBeingId = String(identity.beingId);
+      }
+      // Name → id resolution.
+      if (!receiverBeingId && receiverBeingName) {
+        const row = await findBeingByName(String(receiverBeingName));
+        if (row) receiverBeingId = String(row._id);
+      }
+      if (!actorBeingId && actorBeingName) {
+        const row = await findBeingByName(String(actorBeingName));
+        if (row) actorBeingId = String(row._id);
+      }
+      if (actorBeingId && !actorSpaceId) {
+        const { loadProjection: _lp } = await import("../../../materials/projections.js");
+        const actorSlot = await _lp("being", actorBeingId, effectiveBranch);
+        actorSpaceId = actorSlot?.state?.position || actorSlot?.state?.homeSpace || null;
+      }
+      if (!receiverBeingId) {
+        throw new IbpError(IBP_ERR.INVALID_INPUT, "`receiverBeingId` or `receiverBeingName` is required");
+      }
+      const { resolveLlmConnectionChain } = await import("../../cognition/llm/resolution.js");
+      const { chain, reason } = await resolveLlmConnectionChain({
+        receiver: { beingId: receiverBeingId, spaceId: receiverSpaceId, realityDomain: null },
+        actor: actorBeingId ? { beingId: actorBeingId, spaceId: actorSpaceId, realityDomain: null } : null,
+        role,
+        branch: effectiveBranch,
+      });
+      const { loadProjection } = await import("../../../materials/projections.js");
+      const beingsToLookup = new Map();
+      if (receiverBeingId) beingsToLookup.set("receiver", String(receiverBeingId));
+      if (actorBeingId) beingsToLookup.set("actor", String(actorBeingId));
+      const connsBySide = {};
+      for (const [side, beingId] of beingsToLookup) {
+        const slot = await loadProjection("being", beingId, "0");
+        const conns = (slot?.state?.qualities instanceof Map
+          ? slot.state.qualities.get("llmConnections")
+          : slot?.state?.qualities?.llmConnections) || {};
+        connsBySide[side] = conns;
+      }
+      const enriched = chain.map((entry) => {
+        const isActor = entry.source.startsWith("actor-");
+        const conns = connsBySide[isActor ? "actor" : "receiver"] || {};
+        const conn = conns[entry.connectionId] || null;
+        return {
+          step: entry.step,
+          source: entry.source,
+          connectionId: entry.connectionId,
+          name: conn?.name || null,
+          model: conn?.model || null,
+        };
+      });
+      return {
+        chain: enriched,
+        reason,
+        chosen: enriched.length > 0 ? enriched[0] : null,
+      };
+    },
+  });
+
+  log.verbose("llm-assigner", "registered 9 DO ops + 2 SEE ops (3 tutorial + 6 DO connection-management + 2 SEE reads)");
 }

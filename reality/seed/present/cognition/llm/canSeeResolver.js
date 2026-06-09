@@ -30,7 +30,7 @@
 // being just does not see that block.
 
 import log from "../../../seedReality/log.js";
-import { getSeeResolver } from "./seeResolvers.js";
+import { getSeeOperation } from "../../../ibp/seeOps.js";
 import { seeVerb } from "../../../ibp/verbs/see.js";
 import { getRealityDomain } from "../../../ibp/address.js";
 
@@ -103,13 +103,17 @@ function labelForAddress(entry) {
 }
 
 async function resolveNamedSee(name, ctx) {
-  const fn = getSeeResolver(name);
-  if (!fn) {
+  const op = getSeeOperation(name);
+  if (!op) {
     log.warn("CanSeeResolver", `unknown see "${name}"; skipping`);
     return null;
   }
   try {
-    const out = await fn(ctx);
+    const beingId = ctx?.being?._id ? String(ctx.being._id) : null;
+    const identity = beingId
+      ? { beingId, name: ctx?.being?.name || null }
+      : null;
+    const out = await op.handler({ identity, args: {}, ctx, branch: ctx?.branch || "0" });
     return renderNamedOutput(name, out);
   } catch (err) {
     log.warn("CanSeeResolver", `see "${name}" failed: ${err.message}`);

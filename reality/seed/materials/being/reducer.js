@@ -24,6 +24,7 @@ import {
   applySetField,
   applyCreateBeing,
   applyConnectionState,
+  applyRoleGrants,
 } from "../reducerHelpers.js";
 
 /**
@@ -64,6 +65,11 @@ export function reduce(state, fact) {
   // do:set — scalar fields (name/type) and qualities paths.
   next = applySetField(next, fact);
   next = applySetQualities(next, fact);
+
+  // do:grant-role / do:revoke-role — append/remove entries on
+  // qualities.rolesGranted. Per seed/RolesAreAuth.md, grants are
+  // facts; revocations are facts; the projection is the fold.
+  next = applyRoleGrants(next, fact);
 
   // Position change. Writes `position` — the universal projection-
   // index field. Legacy `currentSpace` retired 2026-05-29; readers

@@ -222,7 +222,8 @@ export async function fold(type, id, opts = {}) {
   if (typeof opts.branch !== "string" || !opts.branch.length) {
     throw new Error(
       `fold: opts.branch is required (got ${JSON.stringify(opts.branch)}). ` +
-      `Pass it from the fact's branch, summonCtx.branch, or the wire layer.`,
+      `Pass it from the fact's branch or the wire layer; in-moment callers ` +
+      `derive it from summonCtx.actorAct.branch or the target's address.`,
     );
   }
   const branch = opts.branch;
@@ -289,7 +290,8 @@ export async function rebuild(type, id, opts = {}) {
   if (typeof opts.branch !== "string" || !opts.branch.length) {
     throw new Error(
       `rebuild: opts.branch is required (got ${JSON.stringify(opts.branch)}). ` +
-      `Pass it from the fact's branch, summonCtx.branch, or the wire layer.`,
+      `Pass it from the fact's branch or the wire layer; in-moment callers ` +
+      `derive it from summonCtx.actorAct.branch or the target's address.`,
     );
   }
   const branch = opts.branch;

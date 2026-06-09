@@ -68,20 +68,77 @@ export async function dispatchIbp(carrier, msg, ack) {
     return ackError(ack, id, IBP_ERR.INTERNAL, err.message || "Internal IBP error");
   }
 
-  // 2. Cross-domain check. If the target lives on another reality AND this
-  //    call didn't already arrive verified from canopy (which would mean
-  //    we're the receiving place, not the sender), canopy-sign and forward
-  //    to the peer. The local verb handler is skipped.
+  // 2. Cross-reality OUTBOUND. If the target lives on another reality
+  //    AND this call didn't already arrive verified from canopy, route
+  //    through crossRealityDispatch: opens a local Act for the actor's
+  //    attempt, forwards via canopy with the actor's identity tuple,
+  //    applies the peer's response back to the Act (status transition +
+  //    inner face attachment). See seed/CROSS-WORLD.md.
   if (!carrier?.canopyVerifiedSender) {
     const foreign = getForeignTargetDomain(env.address);
     if (foreign) {
+      // Caller's home identity. beingId from the carrier; branch from
+      // the carrier's currentBranch (the actor's home world). Without
+      // a beingId we can't open a local Act, so we fall back to a
+      // bare forward (anonymous SEE etc.) which doesn't attach to any
+      // Act on this side.
+      const actorBeingId = carrier?.beingId || null;
+      const actorBranch = carrier?.currentBranch || "0";
+      if (actorBeingId) {
+        try {
+          const { crossRealityDispatch } = await import(
+            "../../seed/ibp/crossWorld.js"
+          );
+          const { peerAck } = await crossRealityDispatch({
+            envelope: env,
+            actor: { beingId: actorBeingId, branch: actorBranch },
+            identity: { beingId: actorBeingId, name: carrier?.name || null },
+          });
+          if (typeof ack === "function") ack(peerAck);
+          return;
+        } catch (err) {
+          log.error("IBP", `crossRealityDispatch failed: ${err.message}`);
+          return ackError(ack, id, IBP_ERR.INTERNAL,
+            `cross-reality dispatch failed: ${err.message}`);
+        }
+      }
+      // Anonymous / no-identity caller: forward without opening an Act.
       const peerAck = await forwardToPeer(env);
       if (typeof ack === "function") ack(peerAck);
       return;
     }
   }
 
-  // 3. Local verb handler. Calls into seed primitives (resolver,
+  // 3. Cross-reality INBOUND. A verified canopy request carries the
+  //    foreign actor's identity tuple on the carrier. Run the verb
+  //    under a synthetic summonCtx that represents the foreign actor;
+  //    emitFact stamps any local facts with crossOrigin pointing back
+  //    at the home substrate. The response embeds the local
+  //    descriptor as the actor's inner face. See seed/CROSS-WORLD.md.
+  if (carrier?.crossWorldActor) {
+    try {
+      const { runVerbAsForeignActor } = await import(
+        "../../seed/ibp/crossWorld.js"
+      );
+      const { descriptor } = await runVerbAsForeignActor({
+        verb: env.verb,
+        address: env.address,
+        payload: env.payload,
+        actor: carrier.crossWorldActor,
+        carrier,
+      });
+      if (typeof ack === "function") {
+        ack({ id, status: "ok", data: { descriptor } });
+      }
+      return;
+    } catch (err) {
+      log.error("IBP", `runVerbAsForeignActor failed: ${err.message}`);
+      return ackError(ack, id, IBP_ERR.INTERNAL,
+        `cross-reality inbound failed: ${err.message}`);
+    }
+  }
+
+  // 4. Local verb handler. Calls into seed primitives (resolver,
   //    descriptor, authorize, scheduler, operations registry) and acks.
   const handler = VERB_HANDLERS[env.verb];
   return handler(carrier, env, ack);

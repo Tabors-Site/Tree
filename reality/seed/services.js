@@ -136,10 +136,12 @@ import {
   unregisterRole as ibpUnregisterRole,
 } from "./present/roles/registry.js";
 import {
-  registerSeeResolver as ibpRegisterSeeResolver,
-  unregisterSeeResolver as ibpUnregisterSeeResolver,
-  unregisterResolversForExtension as ibpUnregisterSeesForExtension,
-} from "./present/cognition/llm/seeResolvers.js";
+  registerSeeOperation as ibpRegisterSeeOperation,
+  unregisterSeeOperation as ibpUnregisterSeeOperation,
+  unregisterSeeOperationsFromExtension as ibpUnregisterSeesForExtension,
+  listSeeOperations as ibpListSeeOperations,
+  getSeeOperation as ibpGetSeeOperation,
+} from "./ibp/seeOps.js";
 
 // The four-verb dispatcher. The whole of my public surface for
 // operations on space, matter, and beings.
@@ -157,6 +159,11 @@ import "./materials/matter/ops.js";
 // shape doesn't belong in any single material's ops file; it lives
 // at materials/ root for that reason. See materials/moveOp.js.
 import "./materials/moveOp.js";
+// Side-effect import. Registers `do form-portal` — creates a Matter
+// pointing at a foreign IBPA. The portal's experience (window /
+// portal / walk-through) is emergent per-viewer from foreign-side
+// stance auth; see materials/portalOp.js + seed/CROSS-WORLD.md.
+import "./materials/portalOp.js";
 import "./materials/being/ops.js";
 import "./materials/being/credentialOps.js";
 // Side-effect import. Registers the publish layer: replicate-subtree
@@ -441,16 +448,24 @@ export function buildRealityServices({
       registerRole: ibpRegisterRole,
       unregisterRole: ibpUnregisterRole,
 
-      // Register a named see. A see is a perception in a moment's
-      // face. The fn receives the moment ctx and returns a
-      // projection (any JSON shape); the assembler inlines it under
-      // a [<name>] header when a role's canSee references it by
-      // name. Bare names from extensions are auto-namespaced
-      // `<ext>:<name>`; roles can resolve them by either form.
-      // Slice this into a role's canSee like canSee: ["my-ext:my-see"].
-      registerSeeResolver: ibpRegisterSeeResolver,
-      unregisterSeeResolver: ibpUnregisterSeeResolver,
+      // Register a named SEE operation. A SEE op is a named
+      // perception — the substrate's read-side parallel to DO ops.
+      // Two consumption paths:
+      //   1. canSee on roles: `canSee: ["place", "<ext>:<name>"]`
+      //      — the role frame preloads each name's result as a face
+      //      block in the LLM prompt.
+      //   2. Direct call: `reality.see("<ext>:<name>", args)` —
+      //      any caller (portal, DO handler, extension code) gets
+      //      the structured return verbatim.
+      // Bare names are reserved for the seed; extension names are
+      // auto-prefixed `<ext>:<name>`. The verb (reality.see) and the
+      // registry methods (reality.see.registerOperation, .list, etc.)
+      // are attached to the same callable — mirrors reality.do.
+      registerSeeOperation: ibpRegisterSeeOperation,
+      unregisterSeeOperation: ibpUnregisterSeeOperation,
       unregisterSeesForExtension: ibpUnregisterSeesForExtension,
+      listSeeOperations: ibpListSeeOperations,
+      getSeeOperation: ibpGetSeeOperation,
 
       // DO-trigger subscriptions. A being registers interest in
       // some class of DO events; when a matching event fires, the

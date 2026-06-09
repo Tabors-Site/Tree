@@ -68,7 +68,7 @@ async function createChildByFact({ parentId, name, type, qualities }) {
         qualities: specQualities,
       },
       actId: ctx.actId,
-      branch: assertBranchOrThrow(ctx.branch, "manifest(createSpace)"),
+      branch: assertBranchOrThrow(ctx.actorAct?.branch, "manifest(createSpace)"),
     }, ctx);
   });
   return id;
@@ -92,7 +92,7 @@ async function refreshQualitiesByFact(spaceId, qualities) {
   // matches the doctrine "each one is a DO, not a group of DOs."
   for (const [ns, value] of entries) {
     await withIAmAct(`manifest:refresh-${ns}`, async (ctx) => {
-      const refreshed = await loadOrFold("space", spaceId, ctx.branch);
+      const refreshed = await loadOrFold("space", spaceId, ctx.actorAct.branch);
       if (!refreshed) return;
       await doVerb(
         { kind: "space", id: String(refreshed.id) },

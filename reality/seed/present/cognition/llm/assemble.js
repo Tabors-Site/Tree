@@ -149,11 +149,11 @@ import { getToolDescription, resolveTools } from "./tools.js";
 import { resolveCanStar } from "../../roles/canStarResolver.js";
 import { resolveCanSee } from "./canSeeResolver.js";
 import { getSpaceName } from "../../../materials/space/spaces.js";
-// Side-effect import: registers the foundational seed sees (place,
-// roles, tools, operations, identity, config, peers, extensions).
-// Roles can then declare `canSee: ["place"]` etc. and the moment
-// face preloads that view.
-import "./seedSeeResolvers.js";
+// Side-effect import: registers the foundational seed SEE ops (place,
+// roles, tools, operations, identity, config, peers, extensions) in
+// the unified seeOps registry. Roles can then declare
+// `canSee: ["place"]` etc. and the moment face preloads that view.
+import "./seedSeeOps.js";
 
 // ────────────────────────────────────────────────────────────────────
 // The assembler

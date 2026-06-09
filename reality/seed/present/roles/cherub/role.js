@@ -500,6 +500,10 @@ export const cherubRole = Object.freeze({
   name: "cherub",
   description:
     "The gate. Processes the three BE ops (birth/connect/release). Identity territory; no summon dispatch.",
+  // Seed delegate role — anchored at the place root. The cherub being
+  // gets this role granted at boot. canDo includes grant-role:human
+  // so cherub can register new humans (the only grantor of human).
+  scope: "anchored",
   requiredCognition: "scripted",
   permissions: ["be"],
   respondMode: "async",
