@@ -54,7 +54,7 @@ function isEnabled() {
  * Is the tree alive (not tripped)? Fast check: reads the anchor
  * space's qualities.circuit.tripped field.
  *
- * @param {string} treeId - id of the tree's anchor space (rootOwner-bearing)
+ * @param {string} treeId - id of the tree's anchor space (owner-bearing)
  * @returns {Promise<boolean>} true if alive, false if tripped
  */
 export async function isTreeAlive(treeId) {
@@ -163,15 +163,30 @@ export async function checkTreeHealth(treeId) {
 }
 
 /**
- * Trip a tree's circuit breaker.
+ * Trip a tree's circuit breaker on a specific branch.
+ *
+ * Each branch has its own circuit state — a tree that goes haywire
+ * on a branch trips ONLY that branch's view, leaving other branches
+ * untouched. Callers MUST pass the branch they're operating in;
+ * there's no silent main-bias.
  *
  * @param {string} treeId
  * @param {string} reason
- * @param {object} [scores] - health scores at time of trip
+ * @param {object} [opts]
+ * @param {string} opts.branch - branch the trip lands on (required)
+ * @param {object} [opts.scores] - health scores at time of trip
  */
-export async function tripTree(treeId, reason, scores = {}) {
+export async function tripTree(treeId, reason, opts = {}) {
   if (!reason || typeof reason !== "string") reason = "Unknown";
   if (reason.length > 500) reason = reason.slice(0, 500);
+
+  const branch = opts.branch;
+  if (typeof branch !== "string" || !branch.length) {
+    throw new Error(
+      "tripTree: opts.branch is required. Each branch tracks its own circuit; no silent main-bias.",
+    );
+  }
+  const scores = opts.scores || {};
 
   const circuit = {
     tripped:   true,
@@ -180,21 +195,30 @@ export async function tripTree(treeId, reason, scores = {}) {
     scores,
   };
 
-  await emitFact({
-    verb:    "do",
-    action:  "set-space",
-    beingId: I_AM,
-    target:  { kind: "space", id: String(treeId) },
-    params:  { field: "qualities.circuit", value: circuit, merge: false },
-    // Circuit-trip job runs on main; tree-level health is a place-wide
-    // concern, not a branch-divergent one.
-    branch:  "0",
-  }, null);
-  invalidateSpace(treeId);
+  // Wrap in withIAmAct so the trip Fact rides an Act on the I-Am's
+  // chain. "Every fact comes from an act" (MOMENT.md) — even
+  // substrate-internal health-monitor writes. The I-Am is the
+  // structural actor for background substrate housekeeping.
+  const { withIAmAct } = await import("../../sprout.js");
+  await withIAmAct(`Circuit: trip tree ${String(treeId).slice(0, 8)} on #${branch}`, async (ctx) => {
+    await emitFact({
+      verb:    "do",
+      action:  "set-space",
+      beingId: I_AM,
+      target:  { kind: "space", id: String(treeId) },
+      params:  { field: "qualities.circuit", value: circuit, merge: false },
+      // Each branch carries its own circuit state. A tree that goes
+      // haywire on branch #4 stays alive on main; operators see the
+      // circuit on the branch they're inhabiting. Cross-branch
+      // contamination would defeat the whole point of branching.
+      branch,
+    }, ctx);
+  });
+  invalidateSpace(treeId, branch);
 
-  log.warn("Circuit", `Tree ${treeId} tripped: ${reason}`);
+  log.warn("Circuit", `Tree ${treeId} tripped on #${branch}: ${reason}`);
 
-  hooks.run("onTreeTripped", { treeId, reason, scores, timestamp: circuit.timestamp })
+  hooks.run("onTreeTripped", { treeId, branch, reason, scores, timestamp: circuit.timestamp })
     .catch(err => log.debug("Circuit", `onTreeTripped hook error: ${err.message}`));
 }
 
@@ -224,18 +248,27 @@ export async function reviveTree(treeId, beingId, branch) {
   const circuit = _q2 instanceof Map ? _q2.get("circuit") : _q2?.circuit;
   if (!circuit?.tripped) return; // already alive, no-op
 
-  await emitFact({
-    verb:    "do",
-    action:  "set-space",
-    beingId: String(beingId),
-    target:  { kind: "space", id: String(treeId) },
-    params:  { field: "qualities.circuit", value: { tripped: false }, merge: false },
-    // Same place-wide concern as the trip emit above.
-    branch:  "0",
-  }, null);
-  invalidateSpace(treeId);
+  // Wrap the revive Fact in the operator's own moment via
+  // withBeingAct so it rides their Act-chain. "Every fact comes from
+  // an act" (MOMENT.md) — the operator's intentional revive is a
+  // moment in their biography. The revive lands on the SAME branch
+  // the trip was on (the operator only sees the tripped state for
+  // the branch they're inhabiting); cross-branch revives would
+  // accidentally clear other branches' circuits.
+  const { withBeingAct } = await import("../../sprout.js");
+  await withBeingAct(String(beingId), `Circuit: revive tree ${String(treeId).slice(0, 8)} on #${branch}`, branch, async (ctx) => {
+    await emitFact({
+      verb:    "do",
+      action:  "set-space",
+      beingId: String(beingId),
+      target:  { kind: "space", id: String(treeId) },
+      params:  { field: "qualities.circuit", value: { tripped: false }, merge: false },
+      branch,
+    }, ctx);
+  });
+  invalidateSpace(treeId, branch);
 
-  log.info("Circuit", `Tree ${treeId} revived by ${beingId}`);
+  log.info("Circuit", `Tree ${treeId} revived by ${beingId} on #${branch}`);
 
   hooks.run("onTreeRevived", { treeId, timestamp: new Date().toISOString() })
     .catch(err => log.debug("Circuit", `onTreeRevived hook error: ${err.message}`));

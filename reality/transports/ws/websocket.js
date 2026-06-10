@@ -159,7 +159,7 @@ export function initWebSocketServer(httpServer, originPolicy) {
   // or handshake.auth.token (CLI / programmatic); cookie wins when
   // both are present. The handshake also carries client identity
   // tags so multiple sockets from the same being coexist cleanly.
-  io.use((socket, next) => {
+  io.use(async (socket, next) => {
     const ip = socket.handshake.address || "unknown";
     const count = (ipCounts.get(ip) || 0) + 1;
     if (count > MAX_PER_IP)
@@ -185,6 +185,26 @@ export function initWebSocketServer(httpServer, originPolicy) {
       } else {
         log.debug("WS", `Invalid token from ${ip}`);
       }
+    }
+    // Anonymous binding (seed/RolesAreAuth.md "Anonymous arrival floor").
+    // Connections without a valid token bind to the @arrival seed
+    // delegate's identity. Arrival's role.canSee = ["arrival-view"]
+    // gates raw SEE; canBe = ["birth","connect","release"] permits the
+    // registration flow on @cherub. Verbs need identity to dispatch;
+    // routing through arrival's beingId means the role-walk authorize
+    // fires the same way for anon as for authenticated callers — same
+    // gate, same shape.
+    if (!socket.beingId) {
+      try {
+        const { findByName } = await import(
+          "../../seed/materials/projections.js"
+        );
+        const arrivalSlot = await findByName("being", "arrival", "0");
+        if (arrivalSlot?.id) {
+          socket.beingId = String(arrivalSlot.id);
+          socket.name    = "arrival";
+        }
+      } catch { /* arrival not yet materialized; verbs will refuse */ }
     }
 
     // First-person stance tracking. The wire layer reads these to know

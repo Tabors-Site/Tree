@@ -12,7 +12,7 @@
 // I cache the walk once and let every chain read from it. Shared
 // ancestors are shared entries; one snapshot serves a whole
 // conversation turn. The cache holds only what changes rarely —
-// qualities, heavenSpace, rootOwner, contributors, parent. It does
+// qualities, heavenSpace, members, parent. It does
 // NOT hold Matter content or per-caller permission decisions. Those
 // belong to the call.
 //
@@ -77,7 +77,7 @@ function getTTL() {
  * Returns cached chain if fresh, otherwise walks from DB and caches.
  *
  * Each ancestor is a lean object with: _id, qualities, parent,
- * heavenSpace, rootOwner, contributors. The array is ordered from the
+ * heavenSpace, members. The array is ordered from the
  * space itself to root (or the last non-place heaven space).
  *
  * Branch-aware: each branch holds its own cached view of every chain.

@@ -24,8 +24,8 @@ export function mountFlatPanelButton(L) {
   const b = document.createElement("button");
   b.id = "flat-mode-button";
   b.type = "button";
-  b.title = "letters mode . text view of this place (\\)";
-  b.textContent = "📃 letters";
+  b.title = "menu — text view of this place (Esc or \\)";
+  b.textContent = "menu";
   // Z-index 200 sits above the flat-panel overlay so the button stays
   // reachable when the panel is up — though openFlatPanel hides it
   // anyway since the flat panel's own top-bar carries the inverse

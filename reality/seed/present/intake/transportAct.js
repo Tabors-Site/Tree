@@ -131,7 +131,7 @@ export async function dispatchTransportAct({
   spaceId,
   identity = null,
   priority,
-  branch = "0",
+  branch,
   targetBranch = null,
   timeoutMs = DEFAULT_TIMEOUT_MS,
 } = {}) {
@@ -142,8 +142,14 @@ export async function dispatchTransportAct({
   if (act.verb !== "do" && act.verb !== "be" && act.verb !== "summon") {
     throw new Error(`dispatchTransportAct: act.verb must be "do", "be", or "summon" (got "${act.verb}")`);
   }
+  // Branch is REQUIRED — no main-bias default. The wire layer parses
+  // the address and attaches the branch to every transport-act; this
+  // throw catches a caller that forgot to thread it.
   if (typeof branch !== "string" || branch.length === 0) {
-    throw new Error(`dispatchTransportAct: branch must be a non-empty string (got ${JSON.stringify(branch)})`);
+    throw new Error(
+      `dispatchTransportAct: branch is required (got ${JSON.stringify(branch)}). ` +
+      `Thread the wire-parsed branch through; no main-bias default.`,
+    );
   }
   // targetBranch defaults to branch when not specified — same-world
   // call. When set explicitly different from branch, this is a

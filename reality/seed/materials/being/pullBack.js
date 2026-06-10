@@ -45,19 +45,31 @@ import { withIAmAct } from "../../sprout.js";
  * @returns {Promise<{ pulledBack: number, scanned: number }>}
  */
 export async function pullBackForeignPositions() {
-  const { default: Being } = await import("./being.js");
+  // Query the projection collection — the canonical source of
+  // current being state (per the projection-cache doctrine).
+  // The legacy Being Mongoose collection isn't kept in sync with
+  // qualities/position; projections is the truth.
+  const { default: Projection } = await import("../branch/projection.js");
   const homeReality = getRealityDomain();
   const homeRealm   = { reality: homeReality, branch: "0" };
 
   // Cross-world positions encode reality + branch as a "/" segment;
   // bare spaceIds never contain "#" or "/". Use a coarse regex
   // pre-filter then validate in JS to avoid scanning every being.
-  const candidates = await Being.find({
-    position: { $regex: /^[^#/]+#?[^/]*\// },
-  }).select("_id position homeSpace").lean();
+  const candidates = await Projection.find({
+    branch: "0",
+    type: "being",
+    "state.position": { $regex: /^[^#/]+#?[^/]*\// },
+    tombstoned: { $ne: true },
+  }).select("id state.position state.homeSpace").lean();
 
   let pulled = 0;
-  for (const being of candidates) {
+  for (const row of candidates) {
+    const being = {
+      _id: row.id,
+      position: row.state?.position,
+      homeSpace: row.state?.homeSpace,
+    };
     if (!isPositionCrossWorld(being.position, homeRealm)) continue;
     const parts = parsePositionAddress(being.position);
     if (!parts) continue;

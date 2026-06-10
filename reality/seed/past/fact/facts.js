@@ -625,10 +625,13 @@ export async function foldAfterCommit(sortedReels) {
     }
     for (const reel of sortedReels) {
       try {
-        // Branch-aware: each reel carries its branch from groupByReel.
-        // The post-commit fold lands the new state on the branch's
-        // projection slot, never on main's slot for a non-main reel.
-        await fold(reel.kind, reel.id, { branch: reel.branch || "0" });
+        // Branch-aware: each reel carries its branch from groupByReel
+        // (which throws if any spec is missing branch). The post-commit
+        // fold lands the new state on the branch's projection slot,
+        // never on main's slot for a non-main reel. No `|| "0"` here —
+        // a missing branch means upstream broke the invariant and we
+        // want it loud, not silently folded onto main.
+        await fold(reel.kind, reel.id, { branch: reel.branch });
       } catch (err) {
         // Warn (not debug): the projection slot for this reel did NOT
         // materialize. Anyone who SEEs the aggregate next will hit
@@ -638,7 +641,7 @@ export async function foldAfterCommit(sortedReels) {
         // "newly registered being lands off-grid" class of bugs.
         log.warn(
           "Fold",
-          `post-seal fold failed for ${reel.branch || "0"}:${reel.kind}:${String(reel.id).slice(0, 8)}: ${err.message}`,
+          `post-seal fold failed for ${reel.branch}:${reel.kind}:${String(reel.id).slice(0, 8)}: ${err.message}`,
         );
       }
     }

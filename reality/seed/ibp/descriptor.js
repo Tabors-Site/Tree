@@ -250,7 +250,8 @@ function truncate(s, n) {
 // endMessage as "what they last said" so the speech bubble can
 // persist between moments.
 async function summonToActivity(summon, opts = {}) {
-  const branch = opts.branch || "0";
+  const { getDefaultBranch } = await import("../materials/branch/branchRegistry.js");
+  const branch = opts.branch || await getDefaultBranch();
   if (!summon) return null;
 
   if (opts.sealed) {
@@ -408,10 +409,14 @@ async function inferActivityTarget(summon) {
 export async function buildPlaceDescriptor(resolved, opts = {}) {
   // Branch flows from the resolved stance (Pass 4 substrate). Threaded
   // through every descriptor helper alongside `until` so each fold lands
-  // on the right branch's projection slot.
+  // on the right branch's projection slot. resolveBranchPointers
+  // upstream canonicalizes resolved.branch for both #explicit and
+  // #main-implicit addresses. The defensive fallback resolves the
+  // operator's `#main` pointer through the registry — never literal "0".
+  const { getDefaultBranch } = await import("../materials/branch/branchRegistry.js");
   const branchedOpts = {
     ...opts,
-    branch: resolved.branch || opts.branch || "0",
+    branch: resolved.branch || opts.branch || await getDefaultBranch(),
   };
   if (resolved.isSpaceRoot) return placeAtSpaceRoot(resolved, branchedOpts);
   return placeAtSpace(resolved, branchedOpts);
@@ -515,10 +520,12 @@ async function placeAtSpaceRoot(resolved, { identity, until = null, branch = "0"
       pathByIds: "/",
       leafName: null,
       leafId: null,
-      // Branch this descriptor was folded for. Default "0" (main).
-      // The portal's branch chip reads this to decide whether to
-      // surface the `#<branch>` qualifier in the address bar.
-      branch: resolved.branch || "0",
+      // Branch this descriptor was folded for. The portal's branch
+      // chip reads this to decide whether to surface the `#<branch>`
+      // qualifier in the address bar. `branch` was already resolved
+      // upstream through the `#main` pointer registry; the fallback
+      // reads `resolved.branch` (post-resolveBranchPointers).
+      branch: resolved.branch || branch,
     },
     isSpaceRoot: true,
     isHomeRoot: false,
@@ -658,8 +665,10 @@ async function placeAtSpace(resolved, { identity, payload, until = null, branch 
       pathByIds,
       leafName: resolved.leafName,
       leafId: resolved.leafId,
-      // Branch this descriptor was folded for. Default "0" (main).
-      branch: resolved.branch || "0",
+      // Branch this descriptor was folded for. `branch` was resolved
+      // upstream through the `#main` pointer registry; resolved.branch
+      // is the post-canonicalization value from resolveBranchPointers.
+      branch: resolved.branch || branch,
     },
     isSpaceRoot: false,
     isHomeRoot: false,
@@ -874,7 +883,12 @@ function buildActions(beingName, def, identity) {
   if (!def?.canBe || !Array.isArray(def.canBe) || def.canBe.length === 0) {
     return [];
   }
-  const isAuthenticated = !!identity?.beingId;
+  // Anonymous = no identity at all, OR the wire bound this socket to
+  // the shared @arrival being (the new wire doctrine binds anon
+  // sockets to arrival's beingId so verb dispatch has an identity to
+  // ride; the descriptor still has to treat them as "not signed in
+  // yet" for UI purposes).
+  const isAnonymous = !identity?.beingId || identity?.name === "arrival";
   const out = [];
   for (const entry of def.canBe) {
     const opName = typeof entry === "string"
@@ -883,14 +897,14 @@ function buildActions(beingName, def, identity) {
     if (!opName) continue;
     const op = BE_OPS[opName];
     if (!op) continue;
-    // Identity-state filter (cherub): hide birth/connect when already
-    // bound; hide release when not bound. Other beings' canBe lists
-    // pass through unfiltered.
+    // Cherub is the identity gate — its action surface depends on who's
+    // at the gate. Anonymous (arrival) sees register + login; signed-in
+    // users see logout. Other beings' canBe lists pass through unfiltered.
     if (beingName === "cherub") {
       const isAcquireOp = opName === "birth" || opName === "connect";
       const isHeldOp    = opName === "release";
-      if (isAcquireOp && isAuthenticated) continue;
-      if (isHeldOp && !isAuthenticated)   continue;
+      if (isAcquireOp && !isAnonymous) continue;
+      if (isHeldOp    &&  isAnonymous) continue;
     }
     // Reshape per-being. Cherub's BE_OPS labels are arrival-flow-
     // centric ("Register", "Log in"); for other beings the same op
@@ -953,7 +967,11 @@ function buildActions(beingName, def, identity) {
 // active Act's activity, and the being's own qualities to each
 // entry produced by beingsAtSpace.
 async function enrichBeings(spaceId, entries, opts = {}) {
-  const branch = opts.branch || "0";
+  // Defensive fallback: callers from buildPlaceDescriptor pass
+  // the resolved branch. When called directly without one, resolve
+  // the operator's `#main` pointer rather than literal "0".
+  const { getDefaultBranch } = await import("../materials/branch/branchRegistry.js");
+  const branch = opts.branch || await getDefaultBranch();
   const identity = opts.identity || null;
   const until    = opts.until    || null;
   // The inbox + open/sealed-Act helpers are live-only projections

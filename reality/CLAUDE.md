@@ -16,7 +16,7 @@ seed/              The seed. Four folders, four roles. NEVER modify.
                        define the actual (what occurred).
   ibp/          ACTS  — the world as acted-upon. SEE/DO/SUMMON/BE, address,
                        authorize, operations, descriptor, discovery,
-                       pushChannel, resolver, stanceProperties.
+                       pushChannel, resolver, roleAuth.
   factory/      THINKS — the world as thought, for LLM beings. The thinking
                        apparatus LLM beings use. Humans cognize on their own
                        (out-of-band, in their own heads) and route through
@@ -88,7 +88,7 @@ genesis.js The unfolding. Indexes, config, migrations, beings, extensions, jobs.
 
 **before hooks intercept. after hooks react.** Before hooks run sequentially because they can cancel. After hooks run in parallel because they react independently. `enrichContext` is the sequential override because its handlers build cumulative output. Don't make a hook sequential without articulating why handlers depend on each other's output.
 
-**The `qualities` Map is the real invention.** The schema fields are the bones — seed-defined, closed, constitutive. The Map is the flesh — extension-defined, open, characterizing. Every extension writes to its own namespace: `qualities.values`, `qualities.prestige`, `qualities.permissions`. The schemas never change. The Map grows anything. Two concurrent writes to different namespaces on the same primitive do not clobber each other because `qualities.{being,space,matter}.setQuality` uses atomic `$set` on the specific namespace key. Full rationale (why "qualities" not "metadata", the test for where new properties belong) lives in [seed/philosophy/MATERIALS.md](seed/philosophy/MATERIALS.md) "Qualities".
+**The `qualities` Map is the real invention.** The schema fields are the bones — seed-defined, closed, constitutive. The Map is the flesh — extension-defined, open, characterizing. Every extension writes to its own namespace: `qualities.values`, `qualities.prestige`, etc. The schemas never change. The Map grows anything. Two concurrent writes to different namespaces on the same primitive do not clobber each other because `qualities.{being,space,matter}.setQuality` uses atomic `$set` on the specific namespace key. Full rationale (why "qualities" not "metadata", the test for where new properties belong) lives in [seed/philosophy/MATERIALS.md](seed/philosophy/MATERIALS.md) "Qualities". Auth-relevant namespaces (`qualities.roles` on spaces, `qualities.rolesGranted` on beings) are documented in [seed/FACTORY.md](seed/FACTORY.md) under "Resolution chains".
 
 **The tree is not a filesystem.** Spaces aren't files. They're concepts. Parent-child isn't a directory structure. It's how meaning relates to other meaning. When you navigate, you don't change directories. You change what the mind is attending to. The AI at each position thinks from that position's perspective, with that position's tools, roles, and context.
 
@@ -116,7 +116,7 @@ Full reference: `extensions/EXTENSION_FORMAT.md`
 - **DO-trigger subscriptions** (wake a being when matching substrate writes happen)
 - **Scheduled wakes** (fire a SUMMON on a being's inbox at a cadence)
 - **Descriptor derivers** (contribute derived fields to the Position Description clients render)
-- **Default permissions** (stance-auth Layer 3 contributions; rules the seed walks during authorize)
+- **Roles** (the auth gate — extensions ship roles whose `canSee/canDo/canSummon/canBe` are the permission contract; granted to beings via `grant-role`)
 - **Routes** (HTTP endpoints, mostly for legacy callers; the protocol is IBP first)
 - **Jobs** (background workers with start/stop)
 - **Models** (Mongoose schemas registered into `place.models`)

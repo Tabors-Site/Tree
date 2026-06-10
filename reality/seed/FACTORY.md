@@ -400,13 +400,14 @@ ibp/
 │   └── _shared.js           assertVerbCaller + caller-frame walker
 ├── address.js            parse/expand/canonicalize IBP Addresses
 ├── resolver.js           resolve a stance to a Space
-├── authorize.js          stance authorization (layers 1-4)
+├── authorize.js          verb-dispatch gate; delegates to roleAuth
+├── roleAuth.js           the role-walk: ownership → role-walk → public-commons
+├── seeOps.js             registered SEE op surface (parallel to DO ops)
 ├── descriptor.js         buildPlaceDescriptor (the SEE face)
 ├── discovery.js          buildDiscovery (pre-identity surface)
 ├── operations.js         the DO operation registry
 ├── protocol.js           IBP_ERR, IbpError, ok/error helpers
-├── pushChannel.js        emitToBeing / emitToBeingRoom (transport indirection)
-└── stanceProperties.js   the property bag the authorize layer evaluates
+└── pushChannel.js        emitToBeing / emitToBeingRoom (transport indirection)
 ```
 
 ## seedReality/ — the host floor
@@ -1171,8 +1172,29 @@ determines capability. All chains walk the ancestor cache from the
 current position up to the reality root, sharing one snapshot per
 message.
 
-1. **Stance authorization**, the gate the verb dispatcher passes
-   through.
+1. **Role-walk authorization** — the gate the verb dispatcher passes
+   through. Layered evaluation (first match wins):
+     - **I-Am bypass** — the bootstrap axiom.
+     - **Anonymous arrival floor** — stateless callers run under
+       arrival's canX (canSee: `["arrival-view"]`, canBe: birth/connect
+       for registration).
+     - **Nearest-claim ownership** — walk the target's ancestor chain
+       for the first non-empty `members.owner`. If the actor is in
+       that claim's owner list → ALLOW. If `@public` is on the claim
+       → public-commons branch fires (visitor floor; canX-gated).
+       Private sub-spaces inside a public-owned commons take
+       precedence over the inherited commons — nearest-claim-wins.
+     - **Role-walk** — for each entry in the caller's
+       `qualities.rolesGranted`, look up the spec at the grant's
+       anchor (walking up `qualities.roles[name]`), check reach,
+       then check the role's canSee/canDo/canSummon/canBe.
+     - **Public-commons** — fires only when nearest-claim is @public.
+       Applies the seed-shipped `public-commons` role canX as the
+       visitor floor.
+     - **Default deny.**
+   The role's canX is the gate; there's no parallel `qualities.permissions`
+   namespace. Authority chains back to I-Am via the grant chain on
+   each being's reel.
 2. **Extension scope**, `qualities.extensions.blocked[]` /
    `restricted[]` / `allowed[]` accumulate up the parent chain. Blocked
    extensions get no tools, hooks, roles, or quality writes at that
@@ -1501,7 +1523,7 @@ Same registry, same handlers — only the consumption site differs.
 The four `can*` lists ARE the body. Adding a capability is editing
 one list. Tool exposure follows from the body; there is no second
 declaration to keep in sync. Off-list calls that pass prompt
-discipline still refuse at the verb's stance-auth gate — the prompt
+discipline still refuse at the verb's role-walk gate — the prompt
 list is what the LLM SEES, the verb is the truth.
 
 ## My extension APIs (the `reality` services bundle)

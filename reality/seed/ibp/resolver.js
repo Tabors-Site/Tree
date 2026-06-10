@@ -74,10 +74,13 @@ export async function resolveStance(stance, opts = {}) {
   const path = stance.path || "/";
   const being = stance.being || null;
   // Branch flows from the parsed stance. Null in the address means
-  // "default to main"; once we're inside the resolver we treat null as
-  // "0" so every return shape carries an explicit branch field. The verb
-  // layer reads this to thread into summonCtx + emitFact.
-  const branch = stance.branch || "0";
+  // "default to main" — resolve the operator's `#main` pointer through
+  // the registry (which may have been re-pointed away from "0" via
+  // set-pointer). Every return shape carries an explicit canonical
+  // branch field; the verb layer reads this to thread into summonCtx
+  // + emitFact.
+  const { getDefaultBranch } = await import("../materials/branch/branchRegistry.js");
+  const branch = stance.branch || await getDefaultBranch();
 
   // reality root: path is "/". The reality root IS a Space (the heavenSpace:
   // SPACE_ROOT row created by ensureSpaceRoot), so we surface its id as

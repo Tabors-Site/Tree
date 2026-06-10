@@ -34,6 +34,7 @@ import { getRealityDomain } from "../address.js";
 import { authorize, getAuthConfig } from "../authorize.js";
 import { BE_OPS, getBeOp } from "../beOps.js";
 import { assertVerbCaller, refuseHistoricalWrite, resolveBranchForFact } from "./_shared.js";
+import { actorBranchFrom } from "../../past/act/crossOrigin.js";
 
 /**
  * BE. Run an identity operation. Returns the operation's result
@@ -299,7 +300,7 @@ export async function beVerb(operation, payload = {}, opts = {}) {
           qualities: {},
         },
         actId:  summonCtx?.actId || null,
-        branch: summonCtx?.actorAct?.branch || "0",
+        branch: actorBranchFrom(summonCtx, "be.js:birth(create-space)"),
       }, summonCtx);
       childHomeId = newHomeId;
     }

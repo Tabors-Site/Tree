@@ -269,15 +269,17 @@ export async function sealAct(plannedAct, { content = null, deltaF = [], afterSe
   if (!inserted) return null;
 
   // Status transition: attempted → landed. For same-world and
-  // same-reality-cross-branch moments the local Stamper IS the
+  // same-reality cross-branch moments the local Stamper IS the
   // target — by the time the transaction committed, the facts
-  // landed and the Act can move to "landed". For cross-reality
-  // (when the canopy gateway lands) the actor's Act stays at
-  // "attempted" because no foreign confirmation has arrived; the
-  // canopy response handler will update it later via updateActStatus.
-  // We detect cross-reality by whether the moment dispatched
-  // any fact that targets a foreign reality — today none do, so
-  // every Act moves to "landed" here. See CROSS-WORLD.md.
+  // landed and the Act can move to "landed" inline here. For
+  // cross-reality moments the Act is created directly by
+  // crossRealityDispatch (not sealAct) with no deltaF, and its
+  // status transitions when the canopy reply arrives via
+  // handleCrossWorldResponse → updateActStatus. So the only path
+  // through here is same-reality; the foreign-reality check is a
+  // belt-and-suspenders guard against a future caller routing a
+  // cross-reality moment through sealAct. See CROSS-WORLD.md +
+  // crossWorld.js.
   const hasForeignRealityFact = Array.isArray(deltaF) && deltaF.some(
     (f) => f?.params?.crossOrigin?.reality
   );

@@ -294,9 +294,11 @@ export async function removeSpaceMember(spaceId, className, beingId, actor, bran
  * canonical owner-transfer + initial-owner-set entrypoint.
  *
  * Authority: an existing owner can transfer; an unowned space with a
- * parent can be claimed by the parent's owner. The previous owner is
- * added to members.contributor so they retain write access to their
- * former subtree (matching the legacy transferOwnership semantic).
+ * parent can be claimed by the parent's owner. The previous owner
+ * keeps NO implicit write access on transfer — under RolesAreAuth,
+ * any continued authority requires a granted role. The earlier
+ * auto-demote-to-contributor side effect retired with the contributor
+ * class.
  */
 export async function setSpaceOwner(spaceId, newOwnerId, actor, branch, summonCtx = null) {
   if (typeof branch !== "string" || !branch) {

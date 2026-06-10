@@ -99,30 +99,72 @@ registerSeeOperation("arrival-view", {
   ownerExtension: "seed",
   description: "The public landing face: reality root layout + cherub only",
   handler: async ({ identity }) => {
-    const { getSpaceRootId } = await import("../../../sprout.js");
-    const rootId = getSpaceRootId();
-    if (!rootId) return null;
-    const address = `${getRealityDomain()}/${rootId}`;
+    // The reality root resolves from the bare `<reality>/` address.
+    // (An earlier shape was `<reality>/<rootId>` — that doesn't parse,
+    // since path segments are space NAMES, not IDs, and the root's id
+    // never appears as a named child of itself.)
+    const address = `${getRealityDomain()}/`;
+    // The arrival-view op IS the seed's curated anonymous-safe surface.
+    // We read the full place descriptor under I_AM identity (which has
+    // universal SEE) and then filter to cherub-only. The wire-level
+    // authorize already admitted the CALLER for the arrival-view op
+    // itself via the role-walk; this inner SEE is a server-internal
+    // descriptor fetch, not a delegation of the caller's authority.
+    const { I_AM } = await import("../../../materials/being/seedBeings.js");
+    const iAmIdentity = { beingId: I_AM, name: "I-Am" };
+    void identity;  // caller identity is unused; the surface is uniform for all anon visitors
     try {
-      const full = await seeVerb(address, { identity: identity || null });
+      const full = await seeVerb(address, { identity: iAmIdentity });
       if (!full) return null;
-      // Keep only the cherub being; drop every other being and all matter.
-      const beings = Array.isArray(full.beings)
+
+      // Filter beings → cherub only. Rebuild cherub's actions[] for
+      // the ANONYMOUS perspective: arrival sees register + login. The
+      // descriptor's enrichBeings ran under I_AM and filtered to only
+      // release (because I_AM looks "authenticated" to its check); we
+      // override here so the public face surfaces the right actions.
+      const { BE_OPS } = await import("../../../ibp/beOps.js");
+      const beings = (Array.isArray(full.beings)
         ? full.beings.filter((b) => b?.being === "cherub" || b?.name === "cherub")
-        : [];
+        : []
+      ).map((cherub) => {
+        const actions = [];
+        if (BE_OPS.birth) {
+          actions.push({
+            verb:        "be",
+            action:      "birth",
+            label:       BE_OPS.birth.label || "Register",
+            description: BE_OPS.birth.description || "Create a new account",
+            args:        BE_OPS.birth.args || {},
+          });
+        }
+        if (BE_OPS.connect) {
+          actions.push({
+            verb:        "be",
+            action:      "connect",
+            label:       BE_OPS.connect.label || "Log in",
+            description: BE_OPS.connect.description || "Sign in to your account",
+            args:        BE_OPS.connect.args || {},
+          });
+        }
+        return { ...cherub, actions };
+      });
+
       return {
-        kind: full.kind || "place",
+        kind:    full.kind || "place",
         address: full.address,
+        size:    full.size  || null,
+        coord:   full.coord || null,
         space: full.space ? {
-          name: full.space.name,
-          size: full.space.size || null,
+          name:  full.space.name,
+          size:  full.space.size  || null,
           coord: full.space.coord || null,
         } : null,
         beings,
-        matter: [],
-        // Drop children, qualities namespaces, etc. Anonymous callers
-        // see only what they need to find cherub and start the
-        // registration flow.
+        matter:   [],
+        children: [],
+        // qualities intentionally dropped — anonymous callers don't see
+        // operator-side state. The arrival role's reach is the public
+        // surface; everything else is private until they register.
       };
     } catch (err) {
       log.warn("SeedSees", `see "arrival-view" failed: ${err.message}`);

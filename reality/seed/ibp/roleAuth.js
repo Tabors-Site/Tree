@@ -99,10 +99,11 @@ export async function authorizeViaRoles(args) {
   // rule, commons inheritance would leak through any sub-space, and
   // staking a private claim inside a commons would be impossible.
   //
-  // Contributor classes (members.contributor, members.<custom>) are
-  // bookkeeping only under roles-are-auth — they do NOT gate authorize.
-  // Operators model "secondary owners" as roles with the right canDo
-  // (set-role, grant-role, create-space, etc.).
+  // Owner is the ONE base-axiom membership class. All other authority
+  // shapes live in the role registry (per seed/RolesAreAuth.md) —
+  // operators model "secondary owners" as roles with the right canDo
+  // (set-role, grant-role, create-space, etc.). Custom members.<class>
+  // entries are operator-authored bookkeeping and do NOT gate authorize.
   const targetSpaceForOwner = deriveSpaceId(target);
   let claimedByPublic = false;
   let claimSpaceId = null;

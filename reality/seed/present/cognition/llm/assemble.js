@@ -154,6 +154,11 @@ import { getSpaceName } from "../../../materials/space/spaces.js";
 // the unified seeOps registry. Roles can then declare
 // `canSee: ["place"]` etc. and the moment face preloads that view.
 import "./seedSeeOps.js";
+// Side-effect import: registers the foundational can* resolvers
+// (rel: parent/mother/father, patternKind: glob) so roles can declare
+// relational capabilities and have them expand to concrete entries at
+// frame-time per being.
+import "../../roles/seedResolvers.js";
 
 // ────────────────────────────────────────────────────────────────────
 // The assembler
@@ -301,9 +306,20 @@ async function renderCapabilities(role, ctx) {
   // canSee is preloaded into the face by renderCanSeeBlocks; it is
   // not a capability menu. The remaining three verbs (do / summon /
   // be) stay as menus . the LLM picks one to act through.
+  //
+  // canSummon's `as: "receiver"` entries are receiver-side declarations
+  // (what this role accepts when targeted), not menu items. Only
+  // actor-side entries (default `as: "actor"`) belong in the LLM's
+  // "what I can call" menu. See seed/RolesAreAuth.md "canSummon: one
+  // field, two surfaces."
+  const actorSummonEntries = Array.isArray(role.canSummon)
+    ? role.canSummon.filter(
+        (e) => typeof e !== "object" || (e?.as ?? "actor") === "actor",
+      )
+    : null;
   const [doEntries, summonEntries, beEntries] = await Promise.all([
     resolveCanStar(role.canDo, beingCtx),
-    resolveCanStar(role.canSummon, beingCtx),
+    resolveCanStar(actorSummonEntries, beingCtx),
     resolveCanStar(role.canBe, beingCtx),
   ]);
 
@@ -357,7 +373,7 @@ function renderExit(role) {
  * The LLM dispatches through ONE generic verb-tool per verb
  * (`see`, `do`, `summon`, `be`) registered by the seed. The can*
  * entries are descriptors the LLM reads to know what's allowed; the
- * substrate stance-auth at the verb is the actual gate.
+ * substrate role-walk at the verb is the actual gate.
  *
  * Entry shapes accepted (in either pattern):
  *

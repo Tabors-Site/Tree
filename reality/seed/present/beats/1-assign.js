@@ -282,10 +282,12 @@ export async function assign({ beingId, spaceId, entry, handoff = null, signal =
   // may carry half or inward. Default is forward.
   const orientation = validateOrientation(entry?.orientation, DEFAULT_ORIENTATION);
 
-  // `branch` was extracted up top alongside the projection load; reuse
-  // it. summonCtx.actorAct?.branch is what every Fact this moment emits inherits;
-  // the cross-branch dispatch gate at verb entry rejects targets
-  // pointing at a different branch.
+  // `branch` was extracted up top alongside the projection load; it
+  // becomes the actorAct.branch seated on summonCtx, which every Fact
+  // this moment emits inherits as its actor-side branch. The cross-
+  // branch dispatch path routes targets via summonCtx.targetBranch
+  // (set just below); same-world moments have actorAct.branch ===
+  // targetBranch.
 
   // The actor's Act is the single carrier of the identity tuple
   // (reality, branch, beingIn, _id). summonCtx.actorAct points to it;
@@ -299,13 +301,12 @@ export async function assign({ beingId, spaceId, entry, handoff = null, signal =
   // precedence (after opts.currentBranch). See CROSS-WORLD.md.
   // Asker's identity — exposed on the ctx so the receiver's role
   // handler can attribute the summoner without digging through
-  // handoff plumbing. For cross-world summons (canopy-verified
-  // foreign senders), askerReality differs from the receiver's home
-  // reality and the handler can populate the child's
-  // qualities.father tuple. See FEDERATION.md "mate + vessel".
-  const askerReality = handoff?.identity?.reality
-    || handoff?.canopySender
-    || null;
+  // handoff plumbing. For cross-world summons via canopy,
+  // crossWorld.js's runVerbAsForeignActor stamps identity.reality
+  // with the cryptographically vouched canopySender; that flows here.
+  // For same-reality summons, askerReality is null (the local
+  // domain is implicit). See FEDERATION.md "mate + vessel".
+  const askerReality = handoff?.identity?.reality || null;
   const baseCtx = {
     kind,
     spaceId,

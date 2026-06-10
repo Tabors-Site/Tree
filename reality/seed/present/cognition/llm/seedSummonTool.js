@@ -11,7 +11,7 @@
 // function call.
 //
 // A role that should be able to speak to other beings adds "summon"
-// to its toolNames. The summon verb's stance authorization gates who
+// to its toolNames. The summon verb's role-walk gates who
 // can summon whom; this tool runs the verb with the calling being's
 // identity, so anything the role isn't authorized to summon will
 // refuse at the substrate layer.

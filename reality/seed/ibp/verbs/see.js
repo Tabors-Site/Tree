@@ -35,7 +35,6 @@ import { describeReel } from "../../past/fact/facts.js";
 import { describeActChain } from "../../past/act/actChain.js";
 import { describeBeingsCatalog } from "../../materials/being/beingsCatalog.js";
 import { describeBranchesCatalog, describeMergeConflicts } from "../../materials/branch/branchesCatalog.js";
-import { assertVerbCaller } from "./_shared.js";
 import {
   registerSeeOperation,
   unregisterSeeOperation,
@@ -122,7 +121,7 @@ function branchesTargetFromPath(path) {
  * pre-parsed `{ kind, value }` envelope.
  *
  * opts:
- *   identity         { beingId, name } | null — for stance-auth gating
+ *   identity         { beingId, name } | null — for role-walk gating
  *   addressKind      explicit "stance" | "position" | "place" (else inferred)
  *   currentUser      name for pronoun resolution (default identity.name)
  *   currentReality   place domain for relative addresses (default ours)
@@ -161,21 +160,48 @@ export async function seeVerb(target, opts = {}) {
     const { getSeeOperation } = await import("../seeOps.js");
     const op = getSeeOperation(addrString);
     if (op) {
-      assertVerbCaller("see", opts);
+      // Authorize the SEE op via the role-walk. Anonymous callers hit
+      // the arrival floor (canSee: ["arrival-view"] only); authenticated
+      // callers walk their granted roles. Op-handlers don't re-authorize
+      // — the role-walk here is the gate. See seed/RolesAreAuth.md.
+      const decision = await authorize({
+        identity: opts.identity || null,
+        verb: "see",
+        target: { kind: "see-op", value: addrString },
+        seeOp: addrString,
+        summonCtx: opts.summonCtx || null,
+      });
+      if (!decision.ok) {
+        throw new IbpError(
+          opts.identity ? IBP_ERR.FORBIDDEN : IBP_ERR.UNAUTHORIZED,
+          `SEE op "${addrString}" denied for actor "${decision.actor}": ${decision.reason}`,
+          { actor: decision.actor, seeOp: addrString },
+        );
+      }
       const dispatchArgs = opts.args
         || (opts.payload && typeof opts.payload === "object" && opts.payload.args)
         || opts.payload
         || {};
+      // Op handlers receive the resolved branch: either the caller's
+      // currentBranch context, or the operator's `#main` pointer when
+      // unset. Never literal "0" — the pointer is the source of truth.
+      const { getDefaultBranch } = await import("../../materials/branch/branchRegistry.js");
+      const handlerBranch = opts.currentBranch || await getDefaultBranch();
       return await op.handler({
         identity: opts.identity || null,
         args: dispatchArgs,
         ctx: opts.ctx || null,
-        branch: opts.currentBranch || "0",
+        branch: handlerBranch,
       });
     }
   }
 
-  assertVerbCaller("see", opts);
+  // Raw-position SEE. Authorize is run downstream by buildPlaceDescriptor
+  // (or the historical/follow-being/etc. branches below) which all
+  // call authorize() before reading. For anonymous callers, the role-
+  // walk's arrival floor (canSee: ["arrival-view"]) refuses raw-position
+  // SEE because it lacks "*". No assertVerbCaller perimeter gate —
+  // authorize is the single source of truth.
 
   const {
     identity = null,
@@ -225,7 +251,11 @@ export async function seeVerb(target, opts = {}) {
   const parseCtx = {
     currentReality: currentReality || getRealityDomain(),
     currentUser: currentUser || identity?.name || null,
-    currentBranch: currentBranch || "0",
+    // No "0" hardcode — leave null when the caller didn't pass one.
+    // parseStance falls through to branchPointer="main" which
+    // resolveBranchPointers canonicalizes via the operator-controlled
+    // registry (set-pointer can re-point main away from "0").
+    currentBranch: currentBranch || null,
   };
   const parsed = parseWithContext(addrString, parseCtx);
   const { resolveBranchPointers } = await import("../address.js");
@@ -360,7 +390,8 @@ export async function seeVerb(target, opts = {}) {
   if (publicTarget) {
     const { loadOrFold } = await import("../../materials/projections.js");
     const realityDomain = getRealityDomain();
-    const branch = expanded.right?.branch || parseCtx.currentBranch || "0";
+    const { getDefaultBranch: _gDB } = await import("../../materials/branch/branchRegistry.js");
+    const branch = expanded.right?.branch || parseCtx.currentBranch || await _gDB();
     const slot = await loadOrFold(publicTarget.kind, publicTarget.id, branch);
     const notFoundCode = publicTarget.kind === "being"
       ? IBP_ERR.BEING_NOT_FOUND
@@ -488,7 +519,8 @@ export async function seeVerb(target, opts = {}) {
     // long session of fine-grained acts doesn't truncate the visible
     // history window. describeActChain still caps at its MAX_LIMIT.
     const requestedLimit = Number(payload?.limit) || undefined;
-    const chainBranch = expanded.right?.branch || parseCtx.currentBranch || "0";
+    const { getDefaultBranch: _gDB } = await import("../../materials/branch/branchRegistry.js");
+    const chainBranch = expanded.right?.branch || parseCtx.currentBranch || await _gDB();
     const chain = await describeActChain(actChainBeingId, {
       branch: chainBranch,
       ...(requestedLimit ? { limit: requestedLimit } : {}),
@@ -518,13 +550,27 @@ export async function seeVerb(target, opts = {}) {
 
   const resolved = await resolveStance(expanded.right, { identity });
 
-  // Stance auth.
+  // Stance auth. Branch threads via target.branch so authorize.js's
+  // role-walk can fold the target's qualities at the right point. For
+  // the wire-level SEE, branch comes from the parsed address or the
+  // socket's tracked currentBranch.
+  // resolveBranchPointers above canonicalizes expanded.right.branch
+  // for both explicit-#branch and implicit-#main addresses. The
+  // fallback chain below covers legacy callers that bypass parse;
+  // the final fallback resolves the operator's `#main` pointer
+  // through the registry — never literal "0".
+  const { getDefaultBranch: _gDB } = await import("../../materials/branch/branchRegistry.js");
+  const seeBranch =
+    expanded.right?.branch ||
+    currentBranch ||
+    await _gDB();
   const decision = await authorize({
     identity,
     verb: "see",
     target: {
       kind: addressKind === "stance" ? "stance" : "position",
       spaceId: resolved.spaceId,
+      branch:  seeBranch,
       isDiscovery: false,
     },
     summonCtx,
@@ -537,15 +583,30 @@ export async function seeVerb(target, opts = {}) {
     // SEE op. Visitors see the filtered root + cherub regardless of
     // which address they tried — the same view, accessible from any
     // entry point. Authenticated callers get the normal FORBIDDEN.
-    if (!identity?.beingId) {
+    //
+    // The redirect fires for BOTH truly-anonymous identity (null
+    // beingId) AND the @arrival being's identity (the wire binds
+    // anonymous sockets to @arrival's beingId so verb dispatch has
+    // an identity to ride; arrival's canSee = ["arrival-view"] then
+    // refuses raw SEE and we land here to swap in the filtered view).
+    const isAnonymous = !identity?.beingId || identity?.name === "arrival";
+    if (isAnonymous) {
       const { getSeeOperation } = await import("../seeOps.js");
       const arrivalOp = getSeeOperation("arrival-view");
       if (arrivalOp) {
+        // Resolve branch: prefer the moment's actorAct.branch, then
+        // the wire-parsed currentBranch, then fall through to the
+        // operator's `#main` pointer (never literal "0").
+        const { getDefaultBranch } = await import("../../materials/branch/branchRegistry.js");
+        const arrivalBranch =
+          summonCtx?.actorAct?.branch ||
+          currentBranch ||
+          await getDefaultBranch();
         return await arrivalOp.handler({
-          identity: null,
+          identity: identity || null,
           args: {},
           ctx: null,
-          branch: summonCtx?.branch || "0",
+          branch: arrivalBranch,
         });
       }
     }
@@ -561,7 +622,7 @@ export async function seeVerb(target, opts = {}) {
 
 /**
  * Infer the address shape when the caller doesn't say. `@` → stance;
- * `/` → position; otherwise → place. The verb's stance-auth gate
+ * `/` → position; otherwise → place. The verb's role-walk gate
  * relies on this to choose between stance-targeted and position-
  * targeted authorization rules.
  */
@@ -657,7 +718,11 @@ async function seeAtTime({
   const parseCtx = {
     currentReality: currentReality || getRealityDomain(),
     currentUser: currentUser || identity?.name || null,
-    currentBranch: currentBranch || "0",
+    // No "0" hardcode — leave null when the caller didn't pass one.
+    // parseStance falls through to branchPointer="main" which
+    // resolveBranchPointers canonicalizes via the operator-controlled
+    // registry (set-pointer can re-point main away from "0").
+    currentBranch: currentBranch || null,
   };
   const parsed = parseWithContext(addrString, parseCtx);
   const { resolveBranchPointers } = await import("../address.js");
@@ -732,10 +797,11 @@ async function seeAtTime({
       if (histPosition && histPosition !== String(resolved.spaceId)) {
         const { loadProjection } =
           await import("../../materials/projections.js");
+        const { getDefaultBranch: _gDB } = await import("../../materials/branch/branchRegistry.js");
         const _pSlot = await loadProjection(
           "space",
           histPosition,
-          resolved.branch || "0",
+          resolved.branch || await _gDB(),
         );
         const positionRow = _pSlot
           ? {

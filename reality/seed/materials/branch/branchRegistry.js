@@ -111,6 +111,19 @@ export async function readPointers() {
 }
 
 /**
+ * The default branch for wire calls that omit a `#branch` segment.
+ * Resolves the `#main` pointer through the registry — operators may
+ * have re-pointed `main` away from canonical "0" via set-pointer.
+ * Falls back to "0" only when the pointer registry is uninitialized
+ * (pre-bootstrap). Never hardcode "0" at call sites; route through
+ * here so operator overrides take effect everywhere uniformly.
+ */
+export async function getDefaultBranch() {
+  const target = await resolvePointer("main");
+  return target || "0";
+}
+
+/**
  * Reverse lookup: given a canonical branch path, return every pointer
  * name currently resolving to it. Used by the merge dialog to surface
  * "this source branch had #feature-x attached . want to keep it?"

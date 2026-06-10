@@ -233,7 +233,7 @@ export async function assertNameAvailableAt(
  * Create a space.
  *
  *   - `isRoot: true` plants a new tree under the place root, with the
- *     caller as `rootOwner`.
+ *     caller as members.owner.
  *   - `isRoot: false` requires `parentId` and creates a child of that
  *     space (which must not be a place heaven space).
  *
@@ -893,7 +893,7 @@ export async function isDescendant(ancestorId, spaceId) {
 
 /**
  * Resolve a being's access at a space. Ownership resolves at the first
- * ancestor with rootOwner set ("the owner from this point down").
+ * ancestor with an owner set ("the owner from this point down").
  * Contributors accumulate along the walk: write access if the being is
  * in contributors[] at ANY ancestor between the position and the
  * ownership boundary.

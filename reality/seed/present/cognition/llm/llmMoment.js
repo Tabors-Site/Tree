@@ -257,7 +257,7 @@ async function runLlmMomentInner({ being, envelope, role, signal, summonCtx }) {
   const roleConnectionId = chainResult.chain.length > 0
     ? chainResult.chain[0].connectionId
     : null;
-  const clientEntry = await getClientForBeing(beingId, null, roleConnectionId);
+  const clientEntry = await getClientForBeing(beingId, null, roleConnectionId, branch);
   if (clientEntry.noLlm) {
     return cognitionSuccess(
       "No LLM connection configured. Set one up at /setup to use AI features.",
@@ -487,7 +487,9 @@ async function runLlmMomentInner({ being, envelope, role, signal, summonCtx }) {
       // Pass the 7-step chain so failover walks our resolver's
       // candidates (with force flags + per-role slots already
       // applied) instead of falling back to the legacy resolver.
-      { chain: chainResult.chain },
+      // Branch threads through so failover reads see the moment's
+      // effective view (sub-branch deletions, etc.).
+      { chain: chainResult.chain, branch },
     );
     let winner;
     try {

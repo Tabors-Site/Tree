@@ -66,6 +66,7 @@ import Space from "../../../materials/space/space.js";
 import { I_AM } from "../../../materials/being/seedBeings.js";
 import { getRealityConfigValue } from "../../../realityConfig.js";
 import { getAncestorChain } from "../../../materials/space/ancestorCache.js";
+import { actorBranchFrom } from "../../../past/act/crossOrigin.js";
 import {
   resolveAndValidateHost,
   hostInAllowedLlmDomains,
@@ -98,17 +99,35 @@ function readConnectionsFrom(state) {
   return conns || {};
 }
 
-async function readConnection(beingId, connectionId) {
+// Both readers REQUIRE an explicit `branch` argument. No silent
+// main-bias — a missing branch is a perimeter threading bug and
+// must surface loud. loadOrFold walks lineage so sub-branches that
+// diverged (e.g. deleted a connection on this branch) see the
+// branch's effective view, not main's.
+function _requireBranch(branch, hint) {
+  if (typeof branch !== "string" || !branch.length) {
+    throw new Error(
+      `LLM connection read missing branch (${hint}). ` +
+      `Pass summonCtx?.actorAct?.branch or actorBranchFrom(summonCtx) — ` +
+      `no main-bias default. Every read names its branch.`,
+    );
+  }
+  return branch;
+}
+
+async function readConnection(beingId, connectionId, branch) {
   if (!beingId || !connectionId) return null;
-  const { loadProjection } = await import("../../../materials/projections.js");
-  const slot = await loadProjection("being", beingId, "0");
+  _requireBranch(branch, "readConnection");
+  const { loadOrFold } = await import("../../../materials/projections.js");
+  const slot = await loadOrFold("being", beingId, branch);
   return readConnectionsFrom(slot?.state)[connectionId] || null;
 }
 
-async function readAllConnections(beingId) {
+async function readAllConnections(beingId, branch) {
   if (!beingId) return {};
-  const { loadProjection } = await import("../../../materials/projections.js");
-  const slot = await loadProjection("being", beingId, "0");
+  _requireBranch(branch, "readAllConnections");
+  const { loadOrFold } = await import("../../../materials/projections.js");
+  const slot = await loadOrFold("being", beingId, branch);
   return readConnectionsFrom(slot?.state);
 }
 
@@ -393,10 +412,6 @@ export function isValidRootLlmSlot(slot) {
   );
 }
 
-export function getAllRootLlmSlots() {
-  return [...CORE_ROOT_SLOTS, ..._extRootSlots];
-}
-
 // ─────────────────────────────────────────────────────────────────────────
 // CLIENT CACHE
 // ─────────────────────────────────────────────────────────────────────────
@@ -451,7 +466,7 @@ export async function addLlmConnection(
   // and threw "Being not found" for LLM-config writes against
   // inherited beings.
   const { loadOrFold } = await import("../../../materials/projections.js");
-  const slot = await loadOrFold("being", beingId, summonCtx?.actorAct?.branch || "0");
+  const slot = await loadOrFold("being", beingId, actorBranchFrom(summonCtx));
   if (!slot) throw new Error("Being not found");
   const being = { _id: slot.id, ...slot.state };
 
@@ -512,7 +527,7 @@ export async function updateLlmConnection(
   // and threw "Being not found" for LLM-config writes against
   // inherited beings.
   const { loadOrFold } = await import("../../../materials/projections.js");
-  const slot = await loadOrFold("being", beingId, summonCtx?.actorAct?.branch || "0");
+  const slot = await loadOrFold("being", beingId, actorBranchFrom(summonCtx));
   if (!slot) throw new Error("Being not found");
   const being = { _id: slot.id, ...slot.state };
 
@@ -594,7 +609,7 @@ export async function deleteLlmConnection(beingId, connectionId, { identity, sum
   // and threw "Being not found" for LLM-config writes against
   // inherited beings.
   const { loadOrFold } = await import("../../../materials/projections.js");
-  const slot = await loadOrFold("being", beingId, summonCtx?.actorAct?.branch || "0");
+  const slot = await loadOrFold("being", beingId, actorBranchFrom(summonCtx));
   if (!slot) throw new Error("Being not found");
   const being = { _id: slot.id, ...slot.state };
 
@@ -644,41 +659,17 @@ export async function deleteLlmConnection(beingId, connectionId, { identity, sum
 
   clearBeingClientCache(beingId);
 
-  // Cascade: every space whose llmDefault points here gets cleared.
-  // Per-space do.set so each clear is its own Fact (the projection
-  // records the chain of cleanups, not a silent bulk update).
-  const { default: Projection } = await import("../../../materials/branch/projection.js");
-  const matchingMain = await Projection.find({
-    branch: "0", type: "space",
-    "state.llmDefault": connectionId,
-    tombstoned: { $ne: true },
-  }).select("id").lean();
-  for (const s of matchingMain) {
-    await doVerb(
-      { kind: "space", id: String(s.id) },
-      "set-space",
-      { field: "llmDefault", value: null },
-      opts,
-    );
-  }
-
-  // Extension-slot cascades on spaces, per slot.
-  const extSlots = getAllRootLlmSlots().filter((s) => s !== "default");
-  for (const slot of extSlots) {
-    const matchingSlot = await Projection.find({
-      branch: "0", type: "space",
-      [`state.qualities.llm.slots.${slot}`]: connectionId,
-      tombstoned: { $ne: true },
-    }).select("id").lean();
-    for (const s of matchingSlot) {
-      await doVerb(
-        { kind: "space", id: String(s.id) },
-        "set-space",
-        { field: `qualities.llm.slots.${slot}`, value: null },
-        opts,
-      );
-    }
-  }
+  // No reference cascade. The deletion places one fact on this
+  // being's chain; the LLM-resolution chain (chain.js) walks beings
+  // + spaces + slots on every read and falls through gracefully when
+  // a connectionId no longer resolves. Eager cleanup of every
+  // reference would: (a) duplicate state the chain already handles,
+  // (b) write a flurry of facts on the wrong branch and the wrong
+  // moment, and (c) miss inherited references on sub-branches that
+  // never diverged. The right pattern is what we already have for
+  // everything else in TreeOS — facts are the truth, readers fold
+  // on demand. See seed/CLAUDE.md "LLM connection lives on Being.
+  // qualities.llmConnections."
 
   return { removed: true };
 }
@@ -689,15 +680,16 @@ export async function assignConnection(beingId, slot, connectionId, { identity, 
   }
 
   const safeConnId = validateConnectionId(connectionId);
+  const branch = actorBranchFrom(summonCtx);
 
   if (safeConnId) {
-    const conn = await readConnection(beingId, safeConnId);
+    const conn = await readConnection(beingId, safeConnId, branch);
     if (!conn) throw new Error("Connection not found");
   }
 
   // loadOrFold: same inherited-being lineage-cold-fold rationale.
   const { loadOrFold } = await import("../../../materials/projections.js");
-  const beingSlot = await loadOrFold("being", beingId, summonCtx?.actorAct?.branch || "0");
+  const beingSlot = await loadOrFold("being", beingId, branch);
   if (!beingSlot) throw new Error("Being not found");
   const being = { _id: beingSlot.id, ...beingSlot.state };
 
@@ -748,6 +740,7 @@ export async function assignSpaceConnection(
     throw new Error("Invalid assignment slot: " + slot);
   }
   const safeConnId = validateConnectionId(connectionId);
+  const branch = actorBranchFrom(summonCtx, "assignSpaceConnection");
 
   if (safeConnId) {
     // With qualities-based storage, connections are scoped to a being —
@@ -756,7 +749,7 @@ export async function assignSpaceConnection(
     // upstream); operator callers supply ownerBeingId from their
     // identity so the check runs.
     if (ownerBeingId) {
-      const conn = await readConnection(ownerBeingId, safeConnId);
+      const conn = await readConnection(ownerBeingId, safeConnId, branch);
       if (!conn) throw new Error("Connection not found");
     }
   }
@@ -802,12 +795,20 @@ export async function assignSpaceConnection(
  * being. Returns the entry on success, null if the connection is
  * missing / invalid or its baseUrl fails the SSRF gate.
  *
+ * Branch is REQUIRED — either via summonCtx.actorAct.branch (the
+ * normal moment path) or an explicit opts.branch (cache-warming
+ * call sites). No silent main-bias.
+ *
  * @param {string} beingId       owner of the connection
  * @param {string} connectionId  uuid key within being.qualities.llmConnections
  * @param {string} [cacheKey]    optional cache key to memoize the entry
+ * @param {object} opts
+ * @param {object} [opts.summonCtx]  moment's ctx (branch read off actorAct)
+ * @param {string} [opts.branch]     explicit override for non-moment callers
  */
-export async function resolveConnection(beingId, connectionId, cacheKey, { summonCtx } = {}) {
-  const conn = await readConnection(beingId, connectionId);
+export async function resolveConnection(beingId, connectionId, cacheKey, { summonCtx, branch } = {}) {
+  const resolvedBranch = branch || actorBranchFrom(summonCtx, "resolveConnection");
+  const conn = await readConnection(beingId, connectionId, resolvedBranch);
   // baseUrl is required; encryptedApiKey is optional (local LLMs like
   // Ollama / llama.cpp commonly need no auth).
   if (!conn || !conn.baseUrl) return null;
@@ -869,7 +870,7 @@ export async function resolveConnection(beingId, connectionId, cacheKey, { summo
     try {
       // loadOrFold: same inherited-being lineage-cold-fold rationale.
       const { loadOrFold } = await import("../../../materials/projections.js");
-      const slot = await loadOrFold("being", beingId, summonCtx?.actorAct?.branch || "0");
+      const slot = await loadOrFold("being", beingId, actorBranchFrom(summonCtx));
       if (slot) {
         const { doVerb } = await import("../../../ibp/verbs/do.js");
         await doVerb(
@@ -891,16 +892,19 @@ export async function resolveConnection(beingId, connectionId, cacheKey, { summo
 }
 
 /**
- * Resolve the LLM client for a being. Chain:
+ * Resolve the LLM client for a being on a specific branch. Chain:
  *   1. overrideConnectionId (from a tree's role-slot resolution)
  *   2. being slot assignment (qualities.beingLlm.slots[slot])
  *   3. being default (Being.llmDefault), if slot wasn't "main"
  *   4. place-level default (realityLlmConnection)
  *   5. noLlm sentinel
  *
+ * Branch is REQUIRED — every read walks the being's effective view
+ * on that branch via loadOrFold. No silent main-bias.
+ *
  * Returns `{ client, model, isCustom, connectionId, noLlm?, fetchedAt }`.
  */
-export async function getClientForBeing(beingId, slot, overrideConnectionId) {
+export async function getClientForBeing(beingId, slot, overrideConnectionId, branch) {
   if (!beingId) {
     return {
       client: null,
@@ -911,12 +915,18 @@ export async function getClientForBeing(beingId, slot, overrideConnectionId) {
       fetchedAt: Date.now(),
     };
   }
+  if (typeof branch !== "string" || !branch.length) {
+    throw new Error(
+      "getClientForBeing: branch is required. Pass actorBranchFrom(summonCtx) " +
+      "or the explicit branch the read is happening on — no main-bias default."
+    );
+  }
 
   slot = slot || "main";
 
   // 1. Override (e.g. from a root's role-slot resolution). Highest priority.
   if (overrideConnectionId) {
-    const overrideCacheKey = "conn:" + overrideConnectionId;
+    const overrideCacheKey = "conn:" + overrideConnectionId + ":" + branch;
     const overrideCached = beingClientCache.get(overrideCacheKey);
     if (
       overrideCached &&
@@ -929,6 +939,7 @@ export async function getClientForBeing(beingId, slot, overrideConnectionId) {
         beingId,
         overrideConnectionId,
         overrideCacheKey,
+        { branch },
       );
       if (overrideEntry) return overrideEntry;
     } catch (err) {
@@ -940,15 +951,16 @@ export async function getClientForBeing(beingId, slot, overrideConnectionId) {
   }
 
   // 2 + 3. Slot-based resolution from being's llmDefault + qualities.beingLlm.
-  const cacheKey = beingId + ":" + slot;
+  // Cache key includes branch so divergent views don't share entries.
+  const cacheKey = beingId + ":" + slot + ":" + branch;
   const cached = beingClientCache.get(cacheKey);
   if (cached && Date.now() - cached.fetchedAt < CLIENT_CACHE_TTL) {
     return cached;
   }
 
   try {
-    const { loadProjection } = await import("../../../materials/projections.js");
-    const slotProj = await loadProjection("being", beingId, "0");
+    const { loadOrFold } = await import("../../../materials/projections.js");
+    const slotProj = await loadOrFold("being", beingId, branch);
     const being = slotProj ? { _id: slotProj.id, ...slotProj.state } : null;
     const quals = being?.qualities || {};
     const extSlots = quals?.beingLlm?.slots || {};
@@ -961,7 +973,7 @@ export async function getClientForBeing(beingId, slot, overrideConnectionId) {
     }
 
     if (connectionId) {
-      const entry = await resolveConnection(beingId, connectionId, cacheKey);
+      const entry = await resolveConnection(beingId, connectionId, cacheKey, { branch });
       if (entry) return entry;
     }
   } catch (err) {
@@ -985,7 +997,7 @@ export async function getClientForBeing(beingId, slot, overrideConnectionId) {
       const { findRootOperator } = await import("../../../materials/being/identity.js");
       const operator = await findRootOperator();
       if (operator?._id) {
-        const realityCacheKey = "place:" + slot;
+        const realityCacheKey = "place:" + slot + ":" + branch;
         const realityCached = beingClientCache.get(realityCacheKey);
         if (realityCached && Date.now() - realityCached.fetchedAt < CLIENT_CACHE_TTL) {
           return realityCached;
@@ -994,6 +1006,7 @@ export async function getClientForBeing(beingId, slot, overrideConnectionId) {
           String(operator._id),
           realityLlmId,
           realityCacheKey,
+          { branch },
         );
         if (realityEntry) return realityEntry;
       }

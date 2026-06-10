@@ -299,18 +299,16 @@ async function _isSpaceWithinScope(targetSpaceId, scopeSpaceId, branchPath) {
 }
 
 /**
- * Reality-root permission = hasAccess on heaven (owner OR contributor).
- * Heaven's contributors[] is the substrate's canonical "anointed by the
- * root operator" roster; I_AM is heaven's rootOwner.
+ * Reality-root permission = heaven authority (owner of heaven OR
+ * angel role granted at heaven). I_AM owns heaven (members.owner);
+ * other beings are admitted via the angel role grant chain that
+ * traces back to I_AM (per RolesAreAuth).
  *
  * Routes through `authorize()` against heaven so the substrate's
- * "one gate" doctrine holds: the same rule that gates `do:*` at
- * heaven (`requires: { hasAccess: true }`) gates branch-scope
- * widening here. Operators who tighten heaven permissions
- * automatically tighten who can widen branch scope; one place to
- * change, two semantics covered. The earlier inline contributors[]
- * walk was a parallel implementation of the same check and could
- * drift from heaven's actual rule.
+ * "one gate" doctrine holds: the same role-walk that gates any
+ * heaven write also gates branch-scope widening here. Operators
+ * who tighten heaven roles automatically tighten who can widen
+ * branch scope; one place to change, two semantics covered.
  *
  * Returns false when beingId is null (createdBy not threaded) so
  * scope-widening from anonymous callers refuses by default.

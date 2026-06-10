@@ -153,10 +153,13 @@ async function expandEntry(entry, beingCtx) {
     return Array.isArray(result) ? result : [];
   }
   if (typeof entry.pattern === "string") {
-    const key = entry.patternKind || "default";
-    const fn = patternResolvers.get(key);
+    // No patternKind → the entry is a self-describing literal target
+    // (e.g. {pattern: "@cherub", intent: "mate"}). Pass through; no
+    // resolver lookup needed.
+    if (!entry.patternKind) return [entry];
+    const fn = patternResolvers.get(entry.patternKind);
     if (!fn) {
-      log.debug("CanStarResolver", `no pattern resolver for "${key}"; dropping entry`);
+      log.debug("CanStarResolver", `no resolver for patternKind "${entry.patternKind}"; dropping entry`);
       return [];
     }
     const result = await fn(entry, beingCtx);

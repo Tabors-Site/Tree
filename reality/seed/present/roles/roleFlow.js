@@ -156,11 +156,31 @@ export function resolveActiveStack({
   // / boot paths before grants are folded). Each clause's role must
   // appear here or the clause is skipped — same shape as a failed
   // when-condition. No silent fallback to ungranted roles.
+  // Role-spec lookup at moment-time. Priority:
+  //   1. The being's granted roles (availableRoles map) — the explicit
+  //      grant chain back to I-Am.
+  //   2. Registry-resident SEED roles — seed delegates carry their
+  //      delegate role as their defaultRole (cherub → "cherub",
+  //      birther → "birther", etc.) without an explicit grant. The
+  //      "grant" is structural: their being-as-seed-delegate IS the
+  //      mandate. User-authored and extension roles still require
+  //      explicit grants.
+  //
+  // Doctrinally: roles at moment-time (frame composition) ≠ roles at
+  // authorize-time (the gate). The auth gate strictly walks
+  // rolesGranted; this lookup is for which voice the being SPEAKS in,
+  // and seed delegates speak in their delegate voice by default.
   const lookup = (roleName) => {
     if (availableRoles && availableRoles instanceof Map) {
-      return availableRoles.get(roleName) || null;
+      const fromGrants = availableRoles.get(roleName);
+      if (fromGrants) return fromGrants;
     }
-    return getRole(roleName);
+    const fromRegistry = getRole(roleName);
+    if (!fromRegistry) return null;
+    // Allow seed roles unconditionally; require grants for non-seed.
+    if (fromRegistry.origin === "seed") return fromRegistry;
+    if (!availableRoles || !(availableRoles instanceof Map)) return fromRegistry;
+    return null;
   };
 
   const quals = toBeing.qualities;

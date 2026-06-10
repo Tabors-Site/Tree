@@ -33,6 +33,7 @@
 
 import InboxProjection from "./inboxProjection.js";
 import { registerCrossCuttingHandler } from "../../../present/beats/2-fold/foldEngine.js";
+import { assertBranchOrThrow } from "../../../materials/projections.js";
 
 async function handleSummon(fact /*, type, id*/) {
   if (fact?.verb !== "summon") return;
@@ -62,8 +63,10 @@ async function handleSummon(fact /*, type, id*/) {
         inboxSpaceId:    params.inboxSpaceId || null,
         sentAt:          params.sentAt ? new Date(params.sentAt) : (fact.date || new Date()),
         // Branch the summon was stamped on. Single-branch by parse-time
-        // gate, so the row's branch IS the fact's branch.
-        branch:          fact.branch || "0",
+        // gate, so the row's branch IS the fact's branch. logFact
+        // refuses any fact without branch; if this read returns
+        // undefined the upstream invariant broke and we want it loud.
+        branch:          assertBranchOrThrow(fact.branch, "inboxProjectionFold(do:summon)"),
       },
       $setOnInsert: { _id: params.correlation },
     },

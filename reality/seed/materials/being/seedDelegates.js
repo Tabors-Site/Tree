@@ -410,6 +410,13 @@ export async function grantAngelToSeedDelegates() {
     // angel grant — public never acts, never uses canX, and granting
     // it angel would noise up the audit chain without effect.
     if (spec.name === "public") continue;
+    // @arrival is the SHARED anonymous-visitor stance. Every anon WS
+    // socket binds to its identity. Granting it angel would give every
+    // visitor angel's canSee:["*"] — raw SEE on everything — which
+    // breaks the filtered arrival-view doctrine. Arrival gets ONLY its
+    // own role granted below (canSee:["arrival-view"] + canBe:
+    // ["birth","connect","release"] + canSummon:@cherub:mate).
+    if (spec.name === "arrival") continue;
     const slot = await findByName("being", spec.name, "0");
     if (!slot) continue;
     try {
@@ -433,5 +440,39 @@ export async function grantAngelToSeedDelegates() {
       );
     }
   }
+
+  // Arrival is the shared-stance being every anonymous WS socket binds
+  // to. It needs its OWN role granted (in addition to angel) so the
+  // role-walk authorize finds arrival's canX (canSee:["arrival-view"],
+  // canBe:["birth","connect","release"], canSummon @cherub:mate) when
+  // an anonymous visitor acts. Arrival role is installed on the
+  // reality root; anchor the grant there. Reach is reality-wide via
+  // arrival's role.reach = ["/**"].
+  const { getSpaceRootId } = await import("../../sprout.js");
+  const rootId = getSpaceRootId();
+  const arrivalSlot = await findByName("being", "arrival", "0");
+  if (rootId && arrivalSlot) {
+    try {
+      await withIAmAct("I grant arrival to @arrival", async (ctx) => {
+        await doVerb(
+          { kind: "being", id: String(arrivalSlot.id) },
+          "grant-role",
+          {
+            role:          "arrival",
+            anchorSpaceId: String(rootId),
+            anchorBeingId: null,
+          },
+          { identity: I_AM, summonCtx: ctx },
+        );
+      });
+      granted++;
+    } catch (err) {
+      log.warn(
+        "SeedDelegates",
+        `failed to grant arrival to @arrival: ${err?.message || err}`,
+      );
+    }
+  }
+
   return { granted };
 }

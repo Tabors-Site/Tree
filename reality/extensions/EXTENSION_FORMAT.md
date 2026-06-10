@@ -70,15 +70,12 @@ export default {
         "gateway:beforeDispatch",        // Another extension's hook
       ],
     },
-    defaultPermissions: {               // Stance-auth Layer 3 contributions.
-      // Default permission rules the extension contributes to the
-      // authorize walk. The seed checks these AFTER per-position
-      // rules (Layer 2) and BEFORE default-deny. Keys are the same
-      // shape as metadata.permissions entries.
-      "do:my-ext:run":      { requires: { owner: true } },
-      "do:my-ext:read-only":{ requires: {} },                 // anyone
-      "summon:@my-coach":   { requires: { homeInDomain: true } },
-    },
+    // Roles-are-auth (seed/FACTORY.md "Resolution chains"). Ship roles
+    // whose canSee/canDo/canSummon/canBe IS the permission contract.
+    // Grant them to beings via the grant-role DO op; gates are enforced
+    // by roleAuth.js's role-walk, not by a separate defaultPermissions
+    // namespace. Roles can be reach-restricted (path filters with !
+    // carve-outs) and host on space qualities for inheritance.
 
     assets: {                            // Sensory-asset registry.
       // Files in <ext-dir>/assets/ that the seed serves at
@@ -1497,74 +1494,66 @@ setRunChat(async (opts) => {
 
 **Missing LLM_PRIORITY on background calls.** Every LLM call needs a priority. BACKGROUND for hooks and jobs. INTERACTIVE for user-triggered tools. GATEWAY for external channels. Without priority, background extensions compete with human chat.
 
-## Stance Authorization Defaults (Layer 3)
+## Authorization — Roles ARE the Gate
 
-The seed gates every verb (`see` / `do` / `summon` / `be`) through stance
-authorization. The walk has three layers:
+The seed gates every verb (`see` / `do` / `summon` / `be`) through a
+role-walk. There is **no `qualities.permissions` namespace** and **no
+`defaultPermissions` extension surface** — roles are the only auth
+mechanism. Extensions ship roles; operators grant them. Full doctrine
+is in [seed/FACTORY.md](../seed/FACTORY.md) under "Resolution chains";
+the brief:
 
-| Layer | Source | When it matches |
-|---|---|---|
-| **Layer 2** | `qualities.permissions.<verb>.<keyParts>` on the target or any ancestor | First match on the parent walk wins |
-| **Layer 3** | `provides.defaultPermissions` on installed extensions | When no Layer 2 rule matches |
-| **Layer 5** | default deny | When nothing else matched |
+| Step | Decision |
+|---|---|
+| 1. I-Am bypass | Bootstrap axiom — I-Am always passes |
+| 2. Anonymous arrival floor | Stateless callers run under arrival's canX (canSee: `["arrival-view"]`, canBe: `["birth","connect","release"]`) |
+| 3. Nearest-claim ownership | First non-empty `members.owner` on the target's ancestor chain. Actor in the claim's owner list → ALLOW. `@public` in the list → public-commons branch fires below. |
+| 4. Role-walk | For each entry in caller's `qualities.rolesGranted`, look up the role spec by walking the grant's anchor up `qualities.roles[name]`, check reach, then check the role's canSee/canDo/canSummon/canBe. |
+| 5. Public-commons | Fires only when step 3 found `@public` as the nearest claim. Seed-shipped `public-commons` role's canX is the visitor floor at public-owned spaces. |
+| 6. Default deny | |
 
-**Why Layer 3 matters.** Per-position rules (Layer 2) require operators
-to write a `set-qualities` on every space that needs the rule. Layer 3 lets
-an extension ship sensible defaults that apply everywhere the extension
-is installed, with no per-position write. The place operator can still
-override at any specific position via Layer 2.
+### How extensions contribute to authorization
 
-### How to contribute defaults
-
-Declare them in your manifest:
+Ship **roles** through your manifest's `provides.roles` (see the role
+authoring section above). Each role declares:
 
 ```js
-provides: {
-  defaultPermissions: {
-    // DO actions. Key shape matches metadata.permissions.do.<action>
-    // (or .<action>:<namespace> for set-qualities/clear-qualities).
-    "do:my-ext:run":          { requires: { owner: true } },
-    "do:my-ext:read-only":    { requires: {} },          // anyone
-    "do:set-qualities:my-ext":     { requires: { contributor: true } },
-
-    // SUMMON. Key shape matches metadata.permissions.summon.@<role>.
-    // Use prefix wildcards for role families.
-    "summon:@my-coach":       { requires: { homeInDomain: true } },
-    "summon:@my-worker*":     { requires: { contributor: true } },
-  },
-},
+{
+  name: "my-ext-operator",
+  description: "...",
+  canSee:    ["place", "my-ext:dashboard"],        // SEE op names
+  canDo:     [{ action: "my-ext:run" }],            // DO action names
+  canSummon: [{ pattern: "@my-coach" }],            // @being patterns
+  canBe:     [{ operation: "release" }],            // BE operation names
+  reach: ["/some/subtree/**", "!/some/subtree/sandbox/**"],  // optional path filter
+}
 ```
 
-The loader picks these up at boot and feeds them into the seed's
-default-permission registry. Uninstalling the extension removes its
-defaults automatically; reinstalling re-registers them.
+The role's canX entries are the permission contract — match the role
+walker's verb against them. Grant the role to specific beings via the
+`grant-role` DO op; the grant is anchored at a space and recorded
+on the grantee's `qualities.rolesGranted`. Beings without the relevant
+grant get a `FORBIDDEN` at the verb gate.
 
-### `requires` shape
+**Reach** is a path filter that adjusts the role's natural coverage
+(host space + descendants). Bash-style `!`-prefix carves out subtrees;
+bare patterns add lateral extensions. Examples:
+- `["!/coders/legacy/**"]` — exclude the legacy team
+- `["/docs/coding/**"]` — also apply in the docs subtree
+- `["!**", "/specific/space"]` — strict whitelist (strip default descent, then add specific)
 
-Each rule has a `requires` object whose entries are checked against
-the caller's stance properties (derived from their Being + relation
-to the target):
+### The role registry is a template shelf
 
-| Property | Meaning |
-|---|---|
-| `owner: true` | Caller is the target tree's rootOwner |
-| `contributor: true` | Caller is in target tree's `contributors[]` |
-| `arrival: false` | Caller has identity (not anonymous arrival) |
-| `homeAtPosition: true` | Caller's `homeSpace` is the target |
-| `homeInDomain: "<spaceId>"` | The named space is in the caller's home ancestry |
-| `positionInHomeDomain: true` | The target is inside the caller's home subtree |
-| `role: "<role-name>"` | Caller's active role matches |
-| `homeOnThisReality: true` | Caller is not federated from another reality |
+Extensions register roles into the in-memory registry as TEMPLATES. The
+actual gate is the role spec on a Space's `qualities.roles` — install
+the template onto a space (genesis does this for the seed roles like
+`angel` on heaven; operators do it via the `set-role` DO op for custom
+roles). The role-walk authorize reads from space qualities, falling
+back to the registry for code-cognition roles not yet installed.
 
-`requires: {}` admits every stance (used for "anyone can do this"
-rules). All entries must pass for the rule to allow.
-
-### Picking specificity
-
-If multiple extensions ship a rule for the same key, the first installed
-wins (seed doesn't merge). Use namespaced action prefixes
-(`do:my-ext:*`) so your rules don't collide with another extension's
-defaults.
+This means: extension-shipped roles are available reality-wide as
+templates; operators decide WHICH spaces to install them at, which
+beings to grant them to, and what their reach should be.
 
 ## Security Model
 

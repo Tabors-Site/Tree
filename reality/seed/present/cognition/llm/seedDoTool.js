@@ -6,7 +6,7 @@
 // seedSummonTool and seedBeTool: ONE generic do tool the seed ships;
 // the role's `canDo` list declares which action names the role is
 // licensed to invoke and tool exposure is derived from canDo being
-// non-empty. Substrate stance-auth at the verb gates whether the
+// non-empty. Substrate role-walk at the verb gates whether the
 // actor is actually allowed.
 //
 // Targets and actions. DO is `do(target, action, args)` at the verb

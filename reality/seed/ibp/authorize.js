@@ -28,9 +28,9 @@
 //
 // What this file NO LONGER does (retired with the hard cut):
 //   - qualities.permissions.<verb>.<keyParts> rule lookups
-//   - stance-properties-as-gate (arrival/owner/contributor/memberClasses
-//     can still be derived for descriptor enrichment but they no longer
-//     gate authorize — granted roles do)
+//   - stance-properties-as-gate (memberClasses can still be derived for
+//     descriptor enrichment but they no longer gate authorize — granted
+//     roles do; the contributor class is fully retired)
 //   - registerDefaultPermissions extension contributions
 //   - REALITY_ROOT_DEFAULT_PERMISSIONS / HEAVEN_DEFAULT_PERMISSIONS seeding
 //
@@ -102,6 +102,26 @@ export async function authorize(args) {
 
   // 4. The role-walk. Anonymous callers → implicit arrival floor.
   // Authenticated callers → walk qualities.rolesGranted.
+  //
+  // Branch resolution. In a moment, summonCtx.actorAct.branch is the
+  // ground truth. For pre-moment auth (entry-gate calls before a
+  // summonCtx exists — wire-level SEE on .discovery / arrival-view,
+  // descriptor enrichment), the target carries `branch` parsed off
+  // the address. Anonymous-direct SEE with no target branch is the
+  // only case that falls to "0" — the arrival floor's grant-walk
+  // reads main's heaven role registry and that's correct (no per-
+  // branch arrival role today). Anywhere else, branch must surface.
+  const authBranch =
+    summonCtx?.actorAct?.branch ||
+    target?.branch ||
+    (identity ? null : "0");
+  if (!authBranch) {
+    throw new Error(
+      `authorize: branch could not be resolved for ${verb}:${args.action || args.seeOp || args.operation || args.intent || "?"} ` +
+      `(identity=${identity?.name || identity?.beingId || "anonymous"}). ` +
+      `Pass summonCtx with actorAct, or include branch on the parsed target.`,
+    );
+  }
   const result = await authorizeViaRoles({
     identity,
     verb,
@@ -110,7 +130,7 @@ export async function authorize(args) {
     intent:    args.intent || null,
     operation: args.operation || null,
     seeOp:     args.seeOp || null,
-    branch:    summonCtx?.actorAct?.branch || "0",
+    branch:    authBranch,
   });
 
   // Adapt to the verb-dispatch return shape. roleAuth returns

@@ -1669,17 +1669,26 @@ async function sendSummon(b, text) {
 // whole gameplay input surface turns off together while interacting.
 addEventListener("keydown", (e) => {
   if (e.key === "Escape") {
-    // Esc closes whichever surface is up. The flat panel handles
-    // its own Esc internally (closes itself), so we ignore Esc when
-    // it's open.
+    // Esc is the universal panel switch. The flat panel handles its
+    // own Esc internally (closes itself); we ignore Esc when it's
+    // open and let the panel close it.
     if (isFlatPanelOpen()) return;
+    // Capture which secondary surfaces were open before we close them
+    // — if NONE were open, this Esc press is "open the menu" instead
+    // of "close popup."
+    const wasSummonOpen  = !!state.currentSummonBeing;
+    const wasPlanterOpen = isPlanterOpen();
     hideAuthActions();
     hideAuthSignInPanel();
-    if (state.currentSummonBeing) {
+    if (wasSummonOpen) {
       hideSummonPanel();
       state.currentSummonBeing = null;
     }
-    if (isPlanterOpen()) closePrompt();
+    if (wasPlanterOpen) closePrompt();
+    // Nothing was open → open the menu (the flat panel).
+    if (!wasSummonOpen && !wasPlanterOpen) {
+      toggleFlatPanel(L);
+    }
     return;
   }
   // Text-mode toggle. Backslash (\) sits next to Enter and reads as

@@ -164,6 +164,13 @@ export function registerFailoverResolver(resolver) {
  * tracking when failover was used.
  */
 export async function callWithFailover(callFn, primaryClient, beingId, rootId, opts = {}) {
+  const branch = opts.branch;
+  if (typeof branch !== "string" || !branch.length) {
+    throw new Error(
+      "callWithFailover: opts.branch is required (the moment's actorAct.branch). " +
+      "No main-bias default — failover reads must name their branch.",
+    );
+  }
   try {
     const response = await callFn(primaryClient.client, primaryClient.model);
     return { response, usedClient: primaryClient };
@@ -218,9 +225,18 @@ export async function callWithFailover(callFn, primaryClient, beingId, rootId, o
     }
     if (connId === primaryClient.connectionId) continue;
     try {
+      // beingId is the owner of the chain's connections (the receiver/
+      // actor being whose qualities.llmConnections the chain was
+      // resolved from). connId is the connection id within that being's
+      // namespace. Earlier shape passed connId as beingId — a
+      // positional shift that meant the failover read was probing a
+      // non-existent being and returning null, silently skipping every
+      // fallback.
       const fallbackClient = await resolveConnection(
+        beingId,
         connId,
-        "failover:" + connId,
+        "failover:" + connId + ":" + branch,
+        { branch },
       );
       if (!fallbackClient) continue;
       log.verbose(

@@ -38,9 +38,3 @@ export async function removeOwner(spaceId, beingId, branch) {
   return removeSpaceOwner(spaceId, beingId, branch, null);
 }
 
-/**
- * Transfer ownership at a space. setSpaceOwner replaces atomically.
- */
-export async function transferOwnership(spaceId, newOwnerId, beingId, branch, summonCtx = null) {
-  return setSpaceOwner(spaceId, newOwnerId, beingId, branch, summonCtx);
-}

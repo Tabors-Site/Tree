@@ -133,8 +133,13 @@ export function parse(input, ctx = {}) {
   // Cross-branch bridge gate. Different branches are different worlds —
   // their fact-chains never converge, so a bridge across them has no
   // shared fold to authorize against. Reject at parse time before any
-  // verb-level dispatch tries to resolve the call. Both sides default to
-  // "0" when omitted, so absent-vs-absent never trips this.
+  // verb-level dispatch tries to resolve the call. This check runs
+  // BEFORE the async `#main` pointer resolution; the literal "0"
+  // fallback below collapses both-omitted to a match (both sides
+  // get "0", check passes — they later canonicalize to the same
+  // pointer-resolved branch). Cross-side mix (one explicit, one
+  // implicit) does a raw compare; that's a known limitation. A
+  // future pass could defer this check to post-resolveBranchPointers.
   if (left && right) {
     const lb = left.branch || "0";
     const rb = right.branch || "0";
@@ -230,7 +235,11 @@ async function _resolveStanceBeingId(stance, ctx) {
   if (stance.reality && stance.reality !== localReality) return stance;
   try {
     const { findByName } = await import("../materials/projections.js");
-    const branch = stance.branch || "0";
+    // No literal "0" fallback — resolve the operator's `#main` pointer
+    // when the stance carries no explicit branch (the resolver should
+    // have canonicalized this earlier, but defensive coverage here).
+    const { getDefaultBranch } = await import("../materials/branch/branchRegistry.js");
+    const branch = stance.branch || await getDefaultBranch();
     const slot = await findByName("being", stance.being, branch);
     if (slot?.id) {
       return { ...stance, beingId: String(slot.id) };
@@ -928,7 +937,12 @@ export function parseFromSocket(socket, input, extraCtx = {}) {
     // The socket's first-person stance. The address parser fills
     // omitted fields from this ctx, so a client typing `/~` while on
     // `#1/some-place` correctly resolves to `treeos.ai#1/~`, not main.
-    currentBranch:  socket?.currentBranch || "0",
+    // When the socket has no tracked branch (initial connect, before
+    // any address has been resolved), leave currentBranch unset so
+    // parseStance falls through to the `#main` pointer — which the
+    // operator may have re-pointed away from canonical "0". Never
+    // hardcode "0" here; the pointer registry is the source of truth.
+    currentBranch:  socket?.currentBranch || null,
     currentPath:    socket?.currentPath   || null,
     ...extraCtx,
   };

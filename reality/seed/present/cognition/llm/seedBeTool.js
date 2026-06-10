@@ -15,7 +15,7 @@
 // Parallel structure to the other three:
 //   ONE generic tool. The role's `canBe` list is the body of what
 //   it's licensed to perform; tool exposure is derived from canBe
-//   being non-empty. Substrate stance-auth at the verb is the
+//   being non-empty. Substrate role-walk at the verb is the
 //   actual gate.
 
 import { z } from "zod";

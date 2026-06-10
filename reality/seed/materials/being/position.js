@@ -90,19 +90,30 @@ function persistBeingPosition(beingId, spaceId, summonCtx = null) {
     actId:   summonCtx?.actId || null,
     branch:  summonCtx?.actorAct?.branch || "0",
   };
-  // Phase 2: when inside a moment, push synchronously to ctx.deltaF.
-  // Outside a moment (boot, no summonCtx), keep fire-and-forget for
-  // hot-path latency — sealFacts singleton commits in the background.
+  // Inside a moment: push synchronously to ctx.deltaF (rides the
+  // existing Act). Outside a moment (boot, system housekeeping):
+  // wrap in withIAmAct so the Fact still rides an Act on the I-Am's
+  // chain. "Every fact comes from an act" (MOMENT.md) — no orphan
+  // facts.
   if (summonCtx && Array.isArray(summonCtx.deltaF)) {
     summonCtx.deltaF.push(spec);
     return;
   }
-  emitFact(spec, null).catch((err) => {
-    log.debug(
-      "Position",
-      `persistBeingPosition(${String(beingId).slice(0, 8)}) failed: ${err.message}`,
-    );
-  });
+  (async () => {
+    try {
+      const { withIAmAct } = await import("../../sprout.js");
+      await withIAmAct(`Position: persist @${String(beingId).slice(0, 8)}`, async (ctx) => {
+        // Re-stamp the spec with the I-Am's act context so the Fact
+        // carries actId pointing at this moment.
+        await emitFact({ ...spec, actId: ctx.actId }, ctx);
+      });
+    } catch (err) {
+      log.debug(
+        "Position",
+        `persistBeingPosition(${String(beingId).slice(0, 8)}) failed: ${err.message}`,
+      );
+    }
+  })();
 }
 
 /**
