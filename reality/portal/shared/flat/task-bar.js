@@ -19,6 +19,7 @@
 import { flat } from "./host.js";
 import { renderOpForm } from "../op-form.js";
 import { renderRolesPanel } from "./roles-panel.js";
+import { renderLlmPanel } from "./llm-panel.js";
 
 // One outside-click listener at a time. The bar re-renders on every SEE;
 // we drop the previous listener before wiring a new one so they can't
@@ -153,6 +154,12 @@ function openAction(action, opByName) {
   }
   if (action.special === "roles") {
     return renderRolesPanel(body, action, opByName, { refreshView });
+  }
+  if (action.special === "llm") {
+    return renderLlmPanel(body, action, opByName, { refreshView, mode: "place" });
+  }
+  if (action.special === "llm-reality") {
+    return renderLlmPanel(body, action, opByName, { refreshView, mode: "reality" });
   }
   if (action.special === "branch-info") {
     return renderBranchInfo(body);
@@ -471,6 +478,11 @@ function placeActions(address, desc) {
     // and an author-role form for owners. Replaces the retired
     // qualities.permissions panel. See roles-panel.js.
     { label: "roles", special: "roles", address, values: { descriptor: desc } },
+    // LLM panel: the 7-step chain preview + connection management +
+    // per-being / per-space slot assignments + force flags. Anyone can
+    // configure their own being; the space + reality writes are
+    // owner/angel-gated by the substrate. See llm-panel.js.
+    { label: "llm", special: "llm", address, values: { descriptor: desc } },
     { label: "set owner", op: "set-owner", address },
     { label: "remove owner", op: "remove-owner", address },
     { label: "⚠ delete this space", op: "end-space", address, danger: true },
@@ -504,6 +516,10 @@ function realityActions(address) {
     // Owners of the reality root (the I-Am + anointed angels) get the
     // author-role form for system-wide roles.
     { label: "roles (reality-wide)", special: "roles", address },
+    // Reality-level LLM. Angels can configure the floor every chain
+    // falls through to at step 4 (qualities.llm on the reality root):
+    // default fallback list, per-role slots, force flags.
+    { label: "llm (reality defaults)", special: "llm-reality", address },
     { label: "⚠ close reality (exit server)", op: "close-reality", special: "close-reality", address, danger: true },
   ];
 }

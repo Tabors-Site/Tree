@@ -46,6 +46,17 @@ async function handleSummon(fact /*, type, id*/) {
     : null;
   if (!params.correlation || !recipient) return;
 
+  // Answered-guard. If an Act already answers this correlation, the
+  // summon was consumed — re-upserting would resurrect the row and
+  // the scheduler would re-execute it. The live-arrival path never
+  // hits this (the answering Act can't exist before the summon fact
+  // commits); it protects replay paths (a lagging slot catching up,
+  // a deliberate recovery rebuild) from double execution. One
+  // indexed exists-check on Act.answers.
+  const { default: Act } = await import("../../act/act.js");
+  const answered = await Act.exists({ answers: String(params.correlation) });
+  if (answered) return;
+
   await InboxProjection.updateOne(
     { _id: params.correlation },
     {

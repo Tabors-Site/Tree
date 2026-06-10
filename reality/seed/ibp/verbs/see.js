@@ -170,10 +170,10 @@ export async function seeVerb(target, opts = {}) {
         target: { kind: "see-op", value: addrString },
         seeOp: addrString,
         summonCtx: opts.summonCtx || null,
-        // actorBranch = the caller's home frame (their session
-        // currentBranch). Lets a being on #0 SEE op-dispatch onto
-        // any branch without needing to exist there. See authorize.js
-        // "actorBranch vs targetBranch."
+        // actorBranch = the caller's branch (their session's
+        // currentBranch). Lets a being seated on #0 SEE op-dispatch
+        // onto any branch without needing to exist there. See
+        // authorize.js "actorBranch vs targetBranch."
         actorBranch: opts.currentBranch || null,
       });
       if (!decision.ok) {
@@ -889,6 +889,12 @@ async function seeAtTime({
     target: {
       kind: addressKind === "stance" ? "stance" : "position",
       spaceId: resolved.spaceId,
+      // Same attachment the live SEE path makes: the branch this
+      // historical view folds on. Without it, a wire historical SEE
+      // (no summonCtx) had no target branch and authorize failed loud
+      // for every authenticated caller — the timeline strip's scrub
+      // path.
+      branch: resolved.branch || currentBranch || null,
       isDiscovery: false,
     },
     summonCtx,

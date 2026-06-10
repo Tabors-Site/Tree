@@ -10,7 +10,8 @@
 // === null. The impersonation gate only fires when BOTH sides are
 // set, so arrival-cherub flows are unaffected.
 //
-// `payload.op` is one of "birth" | "connect" | "release".
+// `payload.op` is one of "birth" | "connect" | "release" | "switch"
+// | "death".
 // Remaining payload fields carry operation-specific credentials/state.
 // `payload.correlation` is the client-generated idempotency key —
 // retries with the same correlation collapse to one moment.
@@ -100,7 +101,7 @@ export async function handleBe(socket, env, ack) {
     // payload + the address-bearing ctx; we pack everything into
     // the act's args so runTransportAct can hand them back to
     // beVerb identically.
-    // Branch the moment runs in = the socket's first-person frame.
+    // Branch the moment runs in = the socket's first-person branch.
     // BE on an arrival socket (no prior SEE) defaults to main, which
     // is what unauthenticated visitors expect. Cross-branch gate: if
     // the target address explicitly carries a different branch
@@ -140,16 +141,46 @@ export async function handleBe(socket, env, ack) {
     // Fact lands on the target's branch (parsed from the address by
     // beVerb); the actor's Act lives on callerBranch. Same-world calls
     // have caller==target and produce no crossOrigin.
-    const branch = callerBranch;
-    const targetBranch = _targetBranchResolved || callerBranch;
+    //
+    // BE:switch rides the DESTINATION branch: its audit fact lands on
+    // the new branch (the switch-in is part of that branch's
+    // biography), so the moment opens there too. That points the
+    // pause/delete gate below at the destination — switching INTO a
+    // frozen world refuses, switching AWAY from one never writes to
+    // it (a session seated on a paused branch stays escapable). The
+    // pre-switch branch rides the payload for the audit fact, because
+    // inside the moment actorAct.branch is the destination, not the
+    // old branch.
+    const switchDest =
+      operation === "switch" &&
+      typeof opPayload?.branch === "string" &&
+      opPayload.branch.trim()
+        ? opPayload.branch.trim()
+        : null;
+    if (switchDest) opPayload.fromBranch = callerBranch;
+    const branch = switchDest || callerBranch;
+    const targetBranch = switchDest || _targetBranchResolved || callerBranch;
 
     // Pause / delete gate. BE is a write surface (birth/connect/
     // release); paused or deleted branches refuse every BE op so a
     // frozen or hidden world stays structurally that way. SEE remains
     // open at its own layer so historians can still walk the chain.
     {
-      const { isBranchPaused, isBranchDeleted } =
+      const { isBranchPaused, isBranchDeleted, isMain, loadBranch } =
         await import("../../../seed/materials/branch/branches.js");
+      // Switch destination must exist before the moment opens — the
+      // moment itself rides the destination, so a bogus path would
+      // otherwise surface as an internal intake error instead of a
+      // clean refusal. (Deleted/paused destinations fall through to
+      // the shared gate below, which now checks the destination
+      // because `branch` IS the destination for switch.)
+      if (switchDest && !isMain(switchDest) && !(await loadBranch(switchDest))) {
+        throw new IbpError(
+          IBP_ERR.INVALID_INPUT,
+          `be:switch: branch "${switchDest}" not found`,
+          { branch: switchDest },
+        );
+      }
       if (await isBranchPaused(branch)) {
         throw new IbpError(IBP_ERR.REALITY_PAUSED,
           `BE refused: branch #${branch} is paused.`,
@@ -195,6 +226,18 @@ export async function handleBe(socket, env, ack) {
 
     awaitResult
       .then(({ result, actId }) => {
+        // Branch seating. BE results are the only writers of
+        // socket.currentBranch: a handler that changes which branch
+        // this session rides returns `seatBranch`, and the transport
+        // — the only layer that owns the socket — applies it here,
+        // after the moment sealed. Stamp-then-seat: a refused moment
+        // rejects into the catch below and the session's branch stays
+        // where it was. The moment path cannot carry the socket
+        // itself (acts are records), which is why the handlers return
+        // the branch instead of seating it.
+        if (typeof result?.seatBranch === "string" && result.seatBranch.length > 0) {
+          socket.currentBranch = result.seatBranch;
+        }
         pushReply(buildTransportActReply({
           correlation: momentCorrelation,
           actId,

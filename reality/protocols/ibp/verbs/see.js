@@ -44,8 +44,8 @@ export async function handleSee(socket, env, ack) {
       addressKind,
       currentUser: socket.name || "arrival",
       // First-person stance hint: the socket's tracked branch + path
-      // form the implicit "where am I" frame the parser fills relative
-      // addresses against.
+      // are the implicit "where am I" context the parser fills
+      // relative addresses against.
       currentBranch: socket.currentBranch || "0",
       currentPath:   socket.currentPath   || "/",
       payload,
@@ -72,15 +72,15 @@ export async function handleSee(socket, env, ack) {
     }
 
     // Track first-person stance from the resolved descriptor. Every
-    // Successful live SEE updates the socket's currentPath so
+    // successful live SEE updates the socket's currentPath so
     // subsequent DO/SUMMON/BE calls inherit the caller's left-stance
     // path (e.g. `~` and relative addresses resolve correctly).
-    // currentBranch is intentionally NOT updated here — branch frame
-    // is the BE ops' concern (birth/connect/release/switch). The
-    // discipline is structural: navigating a SEE does not switch the
-    // being's act-reel; only an explicit be:switch does. See cherub's
-    // switchHandler and seed/done/DualBeingParents — the per-session
-    // frame model.
+    // currentBranch is intentionally NOT updated here — the session's
+    // branch is the BE ops' concern (birth/connect/release/switch
+    // return seatBranch; handleBe seats it). The discipline is
+    // structural: navigating a SEE does not switch the being's
+    // act-reel; only an explicit be:switch does. See cherub's
+    // switchHandler.
     if (descriptor?.address && !descriptor.isHistorical) {
       const p = descriptor.address.pathByNames || descriptor.address.path;
       if (typeof p === "string") socket.currentPath = p;

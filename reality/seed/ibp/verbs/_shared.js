@@ -95,26 +95,25 @@ export function refuseHistoricalWrite(verb, target, opts) {
  * When they differ, the call is cross-world and emitFact attaches a
  * crossOrigin block automatically. See CROSS-WORLD.md.
  *
- * Precedence:
+ * Precedence — the moment is ground truth:
  *
- *   1. opts.currentBranch — explicit per-call attachment from the
- *      wire layer (parsed from the target's address). Wins when
- *      present.
- *   2. summonCtx.targetBranch — the moment-wide target branch
+ *   1. summonCtx.targetBranch — the moment-wide target branch
  *      seated by assign.js from the inbox entry's targetBranch.
  *      For same-world moments this equals actorAct.branch.
- *   3. summonCtx.actorAct.branch — the actor's branch. Used as a
+ *   2. summonCtx.actorAct.branch — the actor's branch. The
  *      same-world fallback for in-moment continuations without an
  *      explicit target attachment (scaffolds, manifest sync, etc.,
  *      which operate on the actor's own world by construction).
+ *   3. opts.currentBranch — explicit per-call attachment for
+ *      PRE-MOMENT callers (the wire layer before a moment opens,
+ *      schedulers, bootstraps). Inside a moment the seated branches
+ *      above win; an opts side-channel must not re-point a moment
+ *      that was opened against a specific world.
  *
  * None present is a perimeter bug — throws so the missing-attachment
  * surfaces immediately at the offending call site. No silent "0".
  */
 export function resolveBranchForFact(summonCtx, currentBranch, verb) {
-  if (typeof currentBranch === "string" && currentBranch.length > 0) {
-    return currentBranch;
-  }
   const targetBranch = summonCtx?.targetBranch;
   if (typeof targetBranch === "string" && targetBranch.length > 0) {
     return targetBranch;
@@ -122,6 +121,9 @@ export function resolveBranchForFact(summonCtx, currentBranch, verb) {
   const actorBranch = summonCtx?.actorAct?.branch;
   if (typeof actorBranch === "string" && actorBranch.length > 0) {
     return actorBranch;
+  }
+  if (typeof currentBranch === "string" && currentBranch.length > 0) {
+    return currentBranch;
   }
   const frame = captureCallerFrame();
   throw new IbpError(

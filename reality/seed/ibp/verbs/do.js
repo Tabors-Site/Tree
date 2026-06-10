@@ -125,11 +125,14 @@ export async function doVerb(target, operation, params = {}, opts = {}) {
     const decision = await authorize({
       identity,
       verb:   "do",
-      target: { kind: "position", spaceId: spaceIdForAuth },
+      // target.branch = the branch this DO's Fact lands on (resolved
+      // once at the verb entry). Auth evaluates the same world the
+      // stamp rides.
+      target: { kind: "position", spaceId: spaceIdForAuth, branch },
       action: operation,
       namespace,
       summonCtx: opts.summonCtx,
-      // The caller's home frame (session.currentBranch). Their grants
+      // The caller's branch (session.currentBranch). Their grants
       // live there; target may be on a different branch. See
       // authorize.js "actorBranch vs targetBranch."
       actorBranch: opts.currentBranch || null,

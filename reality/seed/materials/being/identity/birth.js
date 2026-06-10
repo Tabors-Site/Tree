@@ -161,12 +161,21 @@ function validatePassword(password) {
  *                                   standalone tools (migrations) pass
  *                                   null and accept immediate-commit
  *                                   semantics.
+ * @param {string} [args.branch]     the branch this birth lands on, as
+ *                                   resolved by the calling verb at its
+ *                                   perimeter (resolveBranchForFact).
+ *                                   One law, one resolution: verbs
+ *                                   resolve, primitives receive. When
+ *                                   absent, falls back to the moment's
+ *                                   actorAct.branch (in-moment
+ *                                   primitive callers), then main
+ *                                   (standalone scaffold callers).
  *
  * @returns {Promise<{status, beingId, name, being}>} where `being` is
  *   either the pending-view (in-moment) or the materialized row
  *   (standalone).
  */
-export async function birthBeing({ spec, identity, summonCtx = null }) {
+export async function birthBeing({ spec, identity, summonCtx = null, branch = null }) {
   if (!spec || typeof spec !== "object") {
     throw new IbpError(IBP_ERR.INVALID_INPUT, "birthBeing requires spec object");
   }
@@ -224,7 +233,14 @@ export async function birthBeing({ spec, identity, summonCtx = null }) {
     );
   }
 
-  const branch = summonCtx?.actorAct?.branch || "0";
+  // Branch resolution. The calling verb resolves the branch once at
+  // its perimeter and passes it down; re-deriving here would be a
+  // second resolution law that can disagree with the verb's (it did:
+  // a branch-qualified birth address resolved one way in beVerb and
+  // another way here). actorAct covers in-moment primitive callers
+  // (cherub's handlers, withIAmAct delegates); the main tail covers
+  // standalone scaffold callers only.
+  branch = branch || summonCtx?.actorAct?.branch || "0";
 
   // No inline authorize call. `birthBeing` is a substrate primitive
   // called from already-authorized contexts:
@@ -246,7 +262,7 @@ export async function birthBeing({ spec, identity, summonCtx = null }) {
   // loadOrFold walks the parent's lineage so a branch-side birth finds
   // a parent who lives in main; the deltaF check covers atomic births
   // where the parent's be:birth is earlier in the same ΔF.
-  const { loadOrFold, findByNamePattern } = await import("../../projections.js");
+  const { loadOrFold, findByName, findByNamePattern } = await import("../../projections.js");
   const parentSlot = await loadOrFold("being", parentBeingId, branch);
   if (!parentSlot) {
     const parentPending = summonCtx?.deltaF?.find(
@@ -290,13 +306,25 @@ export async function birthBeing({ spec, identity, summonCtx = null }) {
     pendingHomeSize = homePending?.params?.size ?? null;
   }
 
-  // ── Name uniqueness (branch-aware) ──
+  // ── Name uniqueness (branch-view aware) ──
+  // Two checks. The pattern query catches case-variant collisions on
+  // the birth branch's own slots. findByName then catches inherited
+  // collisions: the branch's VIEW includes lineage aggregates whose
+  // slots were never lazily folded here, and a name that resolves in
+  // the view is taken even though no branch-local slot carries it.
+  // (findByName is exact-case; an inherited case-variant can slip
+  // through — acceptable until the name index is materialized
+  // per-branch.)
   const existingByName = await findByNamePattern(
     "being",
     new RegExp(`^${escapeRegex(name)}$`, "i"),
     branch,
   );
   if (existingByName.length > 0) {
+    throw new IbpError(IBP_ERR.RESOURCE_CONFLICT, "Name already taken");
+  }
+  const inheritedByName = await findByName("being", name, branch);
+  if (inheritedByName) {
     throw new IbpError(IBP_ERR.RESOURCE_CONFLICT, "Name already taken");
   }
 

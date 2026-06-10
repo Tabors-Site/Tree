@@ -75,12 +75,15 @@ export function extractTargetReality(address) {
   //   `@birther`            — local being summon
   //   `/path`               — local position
   //   `/path@being`         — local stance
+  //   `~` / `~/inner`       — caller's home shorthand
+  //   `.` / `./branches`    — heaven addresses
+  //   `#1/path`             — branch-qualified local position
   // Without this guard `extractTargetReality("@birther")` would return
   // `"@birther"`, the dispatcher would compare it against the local
   // domain (mismatch), and route the call through crossRealityDispatch.
   // A reality domain in the address ALWAYS comes before the first `/`
-  // or `@`; anything starting with one of those is locally rooted.
-  if (rhs.startsWith("@") || rhs.startsWith("/")) return null;
+  // or `@`; anything starting with a local sigil is locally rooted.
+  if (/^[@/~.#]/.test(rhs)) return null;
   // Place is everything up to the first slash or `@` (or the whole
   // string), then strip any `#<branchPath>` qualifier. Branches are a
   // property of the same reality — without the strip, `localhost#1/`
@@ -89,7 +92,18 @@ export function extractTargetReality(address) {
   let realityDomain = rhs.split(/[/@]/)[0].trim();
   const hashIdx = realityDomain.indexOf("#");
   if (hashIdx >= 0) realityDomain = realityDomain.slice(0, hashIdx);
-  return realityDomain || null;
+  if (!realityDomain) return null;
+  // Bare relative paths (`lab/x`) put a plain segment where a domain
+  // would sit. A foreign reality is host-shaped — it carries a dot
+  // (treeos.ai) or a port colon (localhost:3000) — or it IS the local
+  // domain. A single undotted, unported segment that isn't the local
+  // domain is a relative path root, not a peer. (Trade-off: a foreign
+  // peer addressed as bare undotted `localhost` with no port won't
+  // route — register peers with host:port or a real domain.)
+  if (realityDomain !== getRealityDomain() && !/[.:]/.test(realityDomain)) {
+    return null;
+  }
+  return realityDomain;
 }
 
 /**

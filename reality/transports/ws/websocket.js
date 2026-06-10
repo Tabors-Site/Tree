@@ -209,11 +209,32 @@ export function initWebSocketServer(httpServer, originPolicy) {
 
     // First-person stance tracking. The wire layer reads these to know
     // which branch + position the caller is in (the left side of every
-    // IBP bridge); SEE handlers update them after each successful read.
-    // Default: main branch, reality root. Once authed, the caller's
-    // being identity is socket.beingId / socket.name.
-    socket.currentBranch = "0";
-    socket.currentPath   = "/";
+    // IBP bridge). SEE handlers update currentPath after each
+    // successful live read; currentBranch is BE's alone — handlers
+    // return seatBranch and handleBe seats it after the moment seals
+    // (birth/connect/release/switch). Token-bound reconnects seat the
+    // being's homeBranch right here, so a being born on #7a lands back
+    // on #7a without re-running BE:connect. Anonymous sockets ride the
+    // operator's default branch (the pointer registry — never literal
+    // "0"; set-pointer can re-point main).
+    socket.currentPath = "/";
+    try {
+      if (socket.jwt && socket.beingId) {
+        const { findHomeBranchOfBeing } = await import(
+          "../../seed/materials/being/identity/lookups.js"
+        );
+        socket.currentBranch = await findHomeBranchOfBeing(socket.beingId);
+      } else {
+        const { getDefaultBranch } = await import(
+          "../../seed/materials/branch/branchRegistry.js"
+        );
+        socket.currentBranch = await getDefaultBranch();
+      }
+    } catch {
+      // Registry not readable this early only on a half-bootstrapped
+      // reality; main is the honest floor there.
+      socket.currentBranch = "0";
+    }
 
     // Client identity tags. Names like `socket.client` / `socket.conn`
     // are taken by Socket.IO internal getters — overwriting them

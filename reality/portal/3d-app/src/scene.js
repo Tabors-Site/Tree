@@ -322,6 +322,22 @@ export class Scene {
       // localOffset.x = left/right of frame, .y = up/down of frame,
       //  .z = in front of frame (positive in the player's direction).
 
+      // Walk-through attempt. When the player's body is inside the
+      // doorway volume (within the width, within the height, within a
+      // thin slab of the portal plane), fire a DO to set their position
+      // to the portal's foreign target IBPA. The substrate's role-walk
+      // decides if the walk-through is permitted; FORBIDDEN just no-ops
+      // (soft barrier — no physical wall, the player just doesn't
+      // transit). Per-portal cooldown prevents firing every frame while
+      // the player stands inside.
+      //
+      // Doorway volume:
+      //   |localOffset.x| < doorway half-width  (~1.6 for W=3.2 portals)
+      //   localOffset.y in [-1, doorway height) (player feet at ground,
+      //     camera ~1.7 up; clamp generously to include either)
+      //   |localOffset.z| < 0.5  (thin slab on the portal plane)
+      this._tryWalkThroughPortal(p, localOffset);
+
       const baseDepth = p.cameraRadius || 12;
       // Mini-camera: x/y mirror the player's offset (so motion creates
       // parallax); z is the natural viewing depth, slightly increased
@@ -340,6 +356,47 @@ export class Scene {
       rendered = true;
     }
     if (rendered) this.renderer.setRenderTarget(null);
+  }
+
+  // Walk-through trigger. Called per-frame by _renderActivePortals
+  // with the player's offset in the portal's local frame. When the
+  // player's body is inside the doorway volume, fire a DO to set
+  // their position to the portal's foreign target IBPA. The substrate
+  // role-walk decides if the walk-through is permitted; FORBIDDEN
+  // just no-ops (soft barrier).
+  //
+  // Cooldown: 3s per portal so we don't fire repeatedly while the
+  // player stands inside. Reset when the player leaves the volume,
+  // so re-entering counts as a fresh attempt.
+  _tryWalkThroughPortal(p, localOffset) {
+    if (!this._client || !this._selfName) return;
+    if (!p?.target) return;
+    const inside =
+      Math.abs(localOffset.x) < 1.6 &&
+      localOffset.y > -1 && localOffset.y < 4.8 &&
+      Math.abs(localOffset.z) < 0.5;
+    if (!this._walkPortalState) this._walkPortalState = new Map();
+    const prev = this._walkPortalState.get(p.matterId) || { inside: false, lastFire: 0 };
+    const now = performance.now();
+    if (inside && !prev.inside && now - prev.lastFire > 3000) {
+      // Fresh entry into the doorway volume — attempt the walk.
+      const selfStance = "@" + this._selfName;
+      const target = p.target;
+      this._client.do(selfStance, "set-being:position", { field: "position", value: target })
+        .then(() => {
+          // Successful transit . the next descriptor SEE will reposition
+          // the player at the foreign side; no further action here.
+        })
+        .catch((err) => {
+          // FORBIDDEN or other refusal . soft barrier, just log so
+          // dev console shows what happened. No visual feedback yet.
+          // eslint-disable-next-line no-console
+          console.warn("[portal-walk] denied:", err?.message || err);
+        });
+      prev.lastFire = now;
+    }
+    prev.inside = inside;
+    this._walkPortalState.set(p.matterId, prev);
   }
 
   // Stop the render loop without disposing scene graph + GPU assets.
@@ -504,6 +561,12 @@ export class Scene {
     this._selfBeing = this._selfBeingId
       ? beingsToRender.find((b) => b.beingId === this._selfBeingId) || null
       : null;
+    // Self stance address for portal walk-through DO calls. Bare
+    // `@<name>` resolves to this being's own stance regardless of
+    // the current SEE branch, so the DO targets the actor's home reel.
+    this._selfName = desc?.identity?.name
+      || this._selfBeing?.name
+      || null;
 
     // Place beings: in arrival mode, cherub stands directly ahead.
     // In default mode, beings spread in an arc.
@@ -2097,6 +2160,9 @@ export class Scene {
       ...(group.userData || {}),
       portal: {
         target,
+        // Matter id keys the per-portal walk-through cooldown so two
+        // portals at different positions track independent timers.
+        matterId: matter?.id || matter?._id || target,
         state: "loading",
         // Status-text canvas (loading / refused / unreachable).
         canvas, ctx, canvasTexture: canvasTex,

@@ -34,7 +34,6 @@ import { getRealityDomain } from "../address.js";
 import { authorize, getAuthConfig } from "../authorize.js";
 import { BE_OPS, getBeOp } from "../beOps.js";
 import { assertVerbCaller, refuseHistoricalWrite, resolveBranchForFact } from "./_shared.js";
-import { actorBranchFrom } from "../../past/act/crossOrigin.js";
 
 /**
  * BE. Run an identity operation. Returns the operation's result
@@ -66,13 +65,14 @@ export async function beVerb(operation, payload = {}, opts = {}) {
     summonCtx   = null,
   } = opts;
 
-  // Resolve branch ONCE at the entry. summonCtx.actorAct?.branch wins when we're
-  // inside an existing moment (continuation); otherwise the wire-
-  // attached opts.currentBranch carries it. resolveBranchForFact throws
-  // MISSING_BRANCH if both are absent — surfaces a perimeter threading
-  // gap loud instead of silently defaulting to heaven. All downstream
-  // sites (loadProjection lookups, writeBeFact emissions) use this
-  // value rather than re-resolving from scope.
+  // Resolve branch ONCE at the entry. Inside a moment the seated
+  // branches win (summonCtx.targetBranch, then actorAct.branch);
+  // opts.currentBranch covers pre-moment callers only.
+  // resolveBranchForFact throws MISSING_BRANCH if all are absent —
+  // surfaces a perimeter threading gap loud instead of silently
+  // defaulting to heaven. All downstream sites (loadProjection
+  // lookups, writeBeFact emissions, birthBeing) use this value rather
+  // than re-resolving from scope.
   const branch = resolveBranchForFact(summonCtx, currentBranch, "be");
 
   const realityDomain = currentReality || getRealityDomain();
@@ -90,11 +90,11 @@ export async function beVerb(operation, payload = {}, opts = {}) {
   // Bare-place address defaults to @cherub, the welcome character.
   const beingName = extractBeingFromAddress(address, addressKind) || "cherub";
 
-  // Static-table dispatch. BE_OPS holds the canonical three ops
-  // (birth/connect/release); if the operation name is in the table AND
-  // cherub is the resolved being, dispatch through it. Future seed
-  // change could license other beings for these ops, but cherub is the
-  // only one today.
+  // Static-table dispatch. BE_OPS holds the canonical five ops
+  // (birth/connect/release/switch/death); if the operation name is in
+  // the table AND cherub is the resolved being, dispatch through it.
+  // Future seed change could license other beings for these ops, but
+  // cherub is the only one today.
   const beOp = getBeOp(operation);
 
   // ── Self-birth path (BE:birth on your own stance). ──────────────
@@ -144,8 +144,11 @@ export async function beVerb(operation, payload = {}, opts = {}) {
     const childRoleField = payload?.role || payload?.defaultRole || null;
     let childHomeId = payload?.homeId || payload?.homeSpace || null;
     if (!childHomeId) {
+      // Caller's own data reads from the caller's branch; see the
+      // birther path below for the doctrine.
       const { loadOrFold } = await import("../../materials/projections.js");
-      const callerSlot = await loadOrFold("being", identity.beingId, branch);
+      const callerBranch = summonCtx?.actorAct?.branch || branch;
+      const callerSlot = await loadOrFold("being", identity.beingId, callerBranch);
       childHomeId = callerSlot?.state?.homeSpace || null;
     }
     if (!childHomeId) {
@@ -167,6 +170,10 @@ export async function beVerb(operation, payload = {}, opts = {}) {
       spec: childSpec,
       identity,
       summonCtx,
+      // The branch this verb resolved at the perimeter. One law: the
+      // verb resolves, the primitive receives. birthBeing must not
+      // re-derive the branch from scope.
+      branch,
     });
     return {
       beingId:      result.beingId,
@@ -267,8 +274,14 @@ export async function beVerb(operation, payload = {}, opts = {}) {
       // here would return null and the inheritance-fallback would
       // silently fail, making BE:birth refuse on sub-branches whenever
       // the caller hasn't explicitly diverged.
+      //
+      // The caller's OWN data reads from the caller's branch
+      // (actorAct.branch), not the resolved target branch — a
+      // branch-qualified birth address says where the child lands,
+      // not where the mother lives.
       const { loadOrFold } = await import("../../materials/projections.js");
-      const callerSlot = await loadOrFold("being", identity.beingId, branch);
+      const callerBranch = summonCtx?.actorAct?.branch || branch;
+      const callerSlot = await loadOrFold("being", identity.beingId, callerBranch);
       childHomeId = callerSlot?.state?.homeSpace || null;
     }
     if (!childHomeId && !childHomeParent) {
@@ -302,7 +315,9 @@ export async function beVerb(operation, payload = {}, opts = {}) {
           qualities: {},
         },
         actId:  summonCtx?.actId || null,
-        branch: actorBranchFrom(summonCtx, "be.js:birth(create-space)"),
+        // The child's home space lands on the same branch as the
+        // child's be:birth — the branch this verb resolved.
+        branch,
       }, summonCtx);
       childHomeId = newHomeId;
     }
@@ -322,6 +337,9 @@ export async function beVerb(operation, payload = {}, opts = {}) {
       spec: childSpec,
       identity,
       summonCtx,
+      // Same law as the self-birth path: the verb resolves the
+      // branch once; the primitive receives it.
+      branch,
     });
     // ONE fact per birth. birthBeing already stamped `be:birth` on the
     // new being's reel with parentBeingId=<caller> in the spec. No
@@ -386,13 +404,18 @@ export async function beVerb(operation, payload = {}, opts = {}) {
 
   // ── Death path. ─────────────────────────────────────────────────
   // ── Switch path. ────────────────────────────────────────────────
-  // BE:switch is a per-session frame change on the caller's own being.
-  // Self-targeted (the actor is the target). Authorize trivially —
-  // a being switching their own session frame; no role gate beyond
-  // assertVerbCaller. Handler mutates ctx.socket.currentBranch and
-  // returns the from/to summary. writeBeFact stamps a be:switch
-  // audit fact on the actor's reel on the NEW branch (so the new
-  // branch's view of this being's biography records the switch-in).
+  // BE:switch is a per-session branch change on the caller's own
+  // being. Self-targeted (the actor is the target). Authorize
+  // trivially — a being switching their own session's branch; no role
+  // gate beyond assertVerbCaller. The handler validates the
+  // destination (branch exists, live, and the caller folds to a
+  // birthed state there) and returns the from/to summary; it never
+  // touches the socket. writeBeFact stamps the be:switch audit fact
+  // on the actor's reel on the NEW branch (so the new branch's view
+  // of this being's biography records the switch-in). Stamp-then-
+  // seat: the transport seats socket.currentBranch from
+  // result.seatBranch only after the moment seals, so a refused
+  // stamp leaves the session's branch untouched.
   if (operation === "switch") {
     assertVerbCaller("be", opts);
     if (!identity?.beingId) {
@@ -633,14 +656,14 @@ export async function beVerb(operation, payload = {}, opts = {}) {
     return result;
   }
 
-  // No dispatch matched. BE is the closed birth/connect/release set;
-  // unknown ops throw ACTION_NOT_SUPPORTED. Known ops against a being
-  // that's neither cherub nor birther (and so didn't hit the branches
-  // above) throw ROLE_UNAVAILABLE.
+  // No dispatch matched. BE is the closed birth/connect/release/
+  // switch/death set; unknown ops throw ACTION_NOT_SUPPORTED. Known
+  // ops against a being that's neither cherub nor birther (and so
+  // didn't hit the branches above) throw ROLE_UNAVAILABLE.
   if (!beOp) {
     throw new IbpError(
       IBP_ERR.ACTION_NOT_SUPPORTED,
-      `BE op "${operation}" is not in the closed set (birth, connect, release, death)`,
+      `BE op "${operation}" is not in the closed set (${Object.keys(BE_OPS).join(", ")})`,
       { operation, available: Object.keys(BE_OPS) },
     );
   }
@@ -736,7 +759,7 @@ async function writeBeFact({ operation, identity, authResult, payload, beingName
     target = { kind: "being", id: String(targetBeingId) };
     connectionParams = { byActor: String(actorBeingId) };
   } else if (operation === "switch") {
-    // Per-session frame change on the caller's own being. Target =
+    // Per-session branch change on the caller's own being. Target =
     // the caller's being; params record from/to so the audit fact
     // surfaces the transition. The fact lands on the NEW branch
     // (beVerb passed result.toBranch as `branch`).

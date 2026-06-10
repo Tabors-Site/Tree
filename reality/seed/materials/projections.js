@@ -372,8 +372,11 @@ export async function findByPosition(spaceId, branch) {
  * Find an aggregate by name in the given branch. Name uniqueness is
  * per-branch (unique partial index excludes tombstoned slots).
  *
- * Lazy inheritance: if no branch slot matches by name, walks to main —
- * but skips main's row if the branch has tombstoned that aggregate.
+ * Lazy inheritance: if no branch slot matches by name, walks the
+ * parent chain (recursively, so nested branches see their full
+ * lineage). An inherited match is visible only when the aggregate
+ * predates this branch's fork AND this branch has no divergent slot
+ * for it (a rename or tombstone here shadows the inherited name).
  *
  * @param {"being"|"space"|"matter"} type
  * @param {string} name
@@ -399,19 +402,29 @@ export async function findByName(type, name, branch) {
     };
   }
   if (branch === MAIN) return null;
-  // Lazy fall-through to main, gated by branchPoint. The aggregate
-  // must have existed at branch creation; otherwise it was named in
-  // main AFTER the branch and is invisible to this branch.
-  const mainSlot = await findByName(type, name, MAIN);
-  if (!mainSlot) return null;
-  const tomb = await Projection.findOne({
-    branch, type, id: mainSlot.id, tombstoned: true,
-  }).select("_id").lean();
-  if (tomb) return null;
-  const { getBranchPoint } = await import("./branch/branches.js");
-  const bp = await getBranchPoint(branch, type, mainSlot.id);
+  // Lazy fall-through to the PARENT branch, recursing to main —
+  // nested branches (#1a1) inherit names through their full lineage,
+  // not by jumping straight to main. Each unwind step gates
+  // visibility:
+  //   • branchPoint: the aggregate must have existed when THIS branch
+  //     forked; named on the ancestor after the fork → invisible here.
+  //   • divergence shadow: ANY branch-local slot for that id means
+  //     this branch's own view of the aggregate is authoritative
+  //     (rename, tombstone, divergent fold) — and since the
+  //     branch-local name query above didn't match it, the inherited
+  //     name doesn't resolve here.
+  const { getBranchPoint, loadBranch } = await import("./branch/branches.js");
+  const branchRow = await loadBranch(branch);
+  const parentPath = branchRow?.parent || MAIN;
+  const inherited = await findByName(type, name, parentPath);
+  if (!inherited) return null;
+  const bp = await getBranchPoint(branch, type, inherited.id);
   if (!bp || bp <= 0) return null;
-  return mainSlot;
+  const touched = await Projection.findOne({
+    branch, type, id: inherited.id,
+  }).select("_id").lean();
+  if (touched) return null;
+  return inherited;
 }
 
 /**

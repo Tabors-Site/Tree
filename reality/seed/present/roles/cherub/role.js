@@ -18,12 +18,20 @@
 //              caller becomes the first heaven authority.
 //   connect  . bind an existing identity (credentials or token) to
 //              a session.
-//   release  . drop a session's binding. Resets session.currentBranch
-//              to the being's homeBranch before unbinding.
-//   switch   . change THIS session's branch frame on the same being.
+//   release  . drop a session's binding. The result carries the
+//              being's homeBranch as seatBranch so the transport
+//              resets the session's currentBranch.
+//   switch   . change THIS session's branch on the same being.
 //              Per-session — does not touch other sockets of the
 //              same being. Stamps an audit fact on the new branch.
 //   death    . close a being's lifecycle (I_AM-only today).
+//
+// Branch seating: handlers never touch the socket (the moment path
+// can't carry one — acts are records). Handlers that change which
+// branch the session rides return `seatBranch`; the WS transport,
+// the only layer that owns the socket, applies it after the moment
+// seals. Stamp-then-seat: a refused stamp leaves the session's
+// branch untouched.
 //
 // I am a scripted-cognition being. The factory does not assemble
 // a frame for me . I AM my code. When a BE arrives for me, the
@@ -40,7 +48,8 @@ import { hooks } from "../../../hooks.js";
 import Being from "../../../materials/being/being.js";
 import {
   isFirstBeing,
-  findBeingByName,
+  findBeingCandidatesByName,
+  findHomeBranchOfBeing,
   verifyPassword,
   generateToken,
 } from "../../../materials/being/identity.js";
@@ -171,14 +180,13 @@ async function birthHandler({ payload, ctx }) {
     }
 
     const identityToken = generateToken(being);
-    // First-being birth — seat the session frame to the new being's
-    // homeBranch (which the birth fact set to this moment's branch).
-    if (ctx?.socket && ctx.summonCtx?.actorAct?.branch) {
-      ctx.socket.currentBranch = ctx.summonCtx.actorAct.branch;
-    }
     return {
       identityToken,
       beingAddress: `${getRealityDomain()}/@${being.name}`,
+      // First-being birth: the transport seats the session's
+      // currentBranch to the new being's homeBranch (which the birth
+      // fact set to this moment's branch).
+      seatBranch:   ctx?.summonCtx?.actorAct?.branch || null,
       // The new being is placed inside this home space (with a coord).
       // Surface it so the portal can land the camera at home directly,
       // without waiting for the post-seal projection fold to expose
@@ -225,15 +233,13 @@ async function birthHandler({ payload, ctx }) {
   hooks.run("afterRegister", { user: being, req: ctx?.req }).catch(() => {});
 
   const identityToken = generateToken(being);
-  // Subsequent-user birth — seat the session frame to the new being's
-  // homeBranch (the moment's branch). Same shape as the first-user
-  // branch above.
-  if (ctx?.socket && ctx.summonCtx?.actorAct?.branch) {
-    ctx.socket.currentBranch = ctx.summonCtx.actorAct.branch;
-  }
   return {
     identityToken,
     beingAddress: `${getRealityDomain()}/@${being.name}`,
+    // Subsequent-user birth: the transport seats the session's
+    // currentBranch to the new being's homeBranch (the moment's
+    // branch). Same shape as the first-user return above.
+    seatBranch:   ctx?.summonCtx?.actorAct?.branch || null,
     // See first-user branch above: lets the portal land at home directly
     // and dodge the post-seal projection-fold race.
     homeSpaceId:  being.homeSpace ? String(being.homeSpace) : null,
@@ -265,29 +271,37 @@ async function connectHandler({ address, addressKind, payload, identity, ctx }) 
     if (!password || typeof password !== "string") {
       throw new IbpError(IBP_ERR.INVALID_INPUT, "`password` is required");
     }
-    const user = await findBeingByName(name);
-    // Constant-time rejection: always run bcrypt even when the user
-    // doesn't exist or is remote, so timing doesn't disclose existence.
-    const DUMMY_HASH = "$2b$12$0000000000000000000000000000000000000000000000000000";
-    const ok = await verifyPassword(
-      user && !user.isRemote ? user : { password: DUMMY_HASH },
-      password,
-    );
-    if (!user || user.isRemote || !ok) {
+    // Connect runs before the session has a branch seated, so the
+    // lookup is a cross-branch identity sweep: a being born on branch
+    // #7a must be findable from a fresh socket. Name uniqueness is per-branch, so
+    // the same name can be different beings on different branches; the
+    // password disambiguates. Candidate count is capped to bound the
+    // bcrypt cost per attempt.
+    const candidates = (await findBeingCandidatesByName(name)).slice(0, 5);
+    let user = null;
+    for (const candidate of candidates) {
+      if (candidate.isRemote) continue;
+      if (await verifyPassword(candidate, password)) { user = candidate; break; }
+    }
+    if (!user) {
+      // Constant-time rejection: when nothing matched, still run one
+      // bcrypt so timing doesn't disclose existence.
+      const DUMMY_HASH = "$2b$12$0000000000000000000000000000000000000000000000000000";
+      await verifyPassword({ password: DUMMY_HASH }, password);
       throw new IbpError(IBP_ERR.UNAUTHORIZED, "Invalid credentials");
     }
     const identityToken = generateToken(user);
-    // Seat the session frame to this being's homeBranch — the branch
-    // they own as their present. Same model for birth/connect/release/
-    // switch: BE ops are the only paths that touch socket.currentBranch.
-    if (ctx?.socket) {
-      ctx.socket.currentBranch = await _readBeingHomeBranch(String(user._id));
-    }
     return {
       identityToken,
       beingAddress: `${getRealityDomain()}/@${user.name}`,
       beingId:      String(user._id),
       name:         user.name,
+      // The branch this being owns as their present. The transport
+      // (the only layer that holds the socket) seats
+      // socket.currentBranch from this after the moment seals. Same
+      // model for birth/connect/release/switch: BE results are the
+      // only writers of socket.currentBranch.
+      seatBranch:   user.homeBranch || null,
     };
   }
 
@@ -326,16 +340,20 @@ async function connectHandler({ address, addressKind, payload, identity, ctx }) 
         { address },
       );
     }
-    const targetBeing = await findBeingByName(targetName);
-    if (!targetBeing || targetBeing.isRemote) {
+    // Cross-branch candidate sweep, same reasoning as Mode 1: the
+    // target being may be born on any branch, and per-branch name
+    // uniqueness means one name can be several beings. The lineage
+    // (or father) relationship is the credential, so eligibility
+    // picks the candidate: the first being of that name the caller
+    // is actually allowed to inhabit.
+    const targetCandidates = (await findBeingCandidatesByName(targetName))
+      .filter((c) => !c.isRemote)
+      .slice(0, 5);
+    if (targetCandidates.length === 0) {
       throw new IbpError(IBP_ERR.UNAUTHORIZED, "No such being on this reality");
     }
     const { isAncestorOf } = await import(
       "../../../materials/being/identity/lookups.js"
-    );
-    const canInhabit = await isAncestorOf(
-      String(identity.beingId),
-      String(targetBeing._id),
     );
 
     // Father-admit (cross-world citizenship). When the target is a
@@ -350,19 +368,34 @@ async function connectHandler({ address, addressKind, payload, identity, ctx }) 
     // fathers: identity.reality comes from req.canopySender via the
     // wire layer's actorTupleFromRequest — same trusted ground truth
     // that lives in the wire-side carrier.crossWorldActor.
+    let targetBeing = null;
+    let canInhabit = false;
     let canInhabitAsFather = false;
-    const targetFather = targetBeing.qualities?.father || null;
-    if (targetFather?.beingId && targetFather?.reality) {
-      const requesterReality = identity?.reality || getRealityDomain();
-      if (
-        String(targetFather.beingId) === String(identity.beingId) &&
-        String(targetFather.reality) === String(requesterReality)
-      ) {
-        canInhabitAsFather = true;
+    for (const candidate of targetCandidates) {
+      const asAncestor = await isAncestorOf(
+        String(identity.beingId),
+        String(candidate._id),
+      );
+      let asFather = false;
+      const candidateFather = candidate.qualities?.father || null;
+      if (candidateFather?.beingId && candidateFather?.reality) {
+        const requesterReality = identity?.reality || getRealityDomain();
+        if (
+          String(candidateFather.beingId) === String(identity.beingId) &&
+          String(candidateFather.reality) === String(requesterReality)
+        ) {
+          asFather = true;
+        }
+      }
+      if (asAncestor || asFather) {
+        targetBeing = candidate;
+        canInhabit = asAncestor;
+        canInhabitAsFather = asFather;
+        break;
       }
     }
 
-    if (!canInhabit && !canInhabitAsFather) {
+    if (!targetBeing) {
       throw new IbpError(
         IBP_ERR.FORBIDDEN,
         `@${identity.name} can only inhabit beings they birthed (or descendants). ` +
@@ -420,11 +453,6 @@ async function connectHandler({ address, addressKind, payload, identity, ctx }) 
     }
 
     const identityToken = generateToken(targetBeing);
-    // Inherit-connect (or father-admit): seat the session frame to the
-    // target being's homeBranch — same model as credentials connect.
-    if (ctx?.socket) {
-      ctx.socket.currentBranch = await _readBeingHomeBranch(String(targetBeing._id));
-    }
     return {
       identityToken,
       beingAddress: `${getRealityDomain()}/@${targetBeing.name}`,
@@ -434,6 +462,10 @@ async function connectHandler({ address, addressKind, payload, identity, ctx }) 
       // Surface father-admit on the response so the wire layer / UX
       // can render the connect lifecycle correctly (vessel-mode).
       asFather:     canInhabitAsFather,
+      // Inherit-connect (or father-admit): the transport seats the
+      // session's currentBranch to the target being's homeBranch,
+      // same model as credentials connect.
+      seatBranch:   targetBeing.homeBranch || null,
     };
   }
 
@@ -458,64 +490,101 @@ function extractTargetName(address) {
 // list keyed by jti is on the roadmap.
 // ────────────────────────────────────────────────────────────────────
 
-async function releaseHandler({ ctx, identity }) {
-  // Frame reset. Session unbinds the being; before doing so reset the
-  // socket's currentBranch to the being's homeBranch (the branch they
-  // were birthed on — what they own as their present). Falls back to
-  // "0" only when the being row has no homeBranch (legacy data).
-  if (ctx?.socket) {
-    const home = await _readBeingHomeBranch(identity?.beingId);
-    ctx.socket.currentBranch = home;
-  }
-  return { released: true };
-}
-
-async function _readBeingHomeBranch(beingId) {
-  if (!beingId) return "0";
-  const { loadOrFold } = await import("../../../materials/projections.js");
-  const slot = await loadOrFold("being", String(beingId), "0");
-  return slot?.state?.homeBranch || "0";
+async function releaseHandler({ identity }) {
+  // Frame reset. The session unbinds the being; the transport seats
+  // the socket's currentBranch back to the being's homeBranch (the
+  // branch they were birthed on, what they own as their present).
+  // findHomeBranchOfBeing falls back to the default branch for
+  // unknown ids and legacy rows.
+  const seatBranch = await findHomeBranchOfBeing(identity?.beingId);
+  return { released: true, seatBranch };
 }
 
 // ────────────────────────────────────────────────────────────────────
-// switch . Change this session's branch frame on the same being.
+// switch . Change this session's branch on the same being.
 // The fifth BE op — branch-switch is identity-binding-state (which
 // reel my acts ride), so it lives in BE alongside connect/release/
 // birth/death.
 //
-// Per-session isolation: mutates ONLY this socket's currentBranch.
+// Per-session isolation: only THIS socket's currentBranch changes.
 // The same being can have N concurrent sockets, each with its own
-// frame; switching one doesn't touch the others. The same Being row
-// is shared (identity is invariant across branches); only the
-// per-session "which branch am I acting from" view differs.
+// branch; switching one doesn't touch the others. Identity is
+// invariant across branches; only the per-session "which branch am
+// I acting from" view differs.
 //
-// Audit fact: stamped on the actor's reel on the NEW branch (so
-// that branch's view of this being's biography records the switch-in
-// event at T). The old branch's reel naturally shows "no more acts
+// The handler validates and returns; it never touches the socket.
+// Stamp-then-seat: beVerb stamps the be:switch audit fact on the
+// NEW branch (so that branch's view of this being's biography
+// records the switch-in event at T), and only after the moment
+// seals does the transport seat socket.currentBranch from
+// result.seatBranch. A refused stamp leaves the session's branch
+// untouched. The old branch's reel naturally shows "no more acts
 // after T" without an explicit terminator.
 // ────────────────────────────────────────────────────────────────────
 
-async function switchHandler({ payload, identity, ctx }) {
+async function switchHandler({ payload, identity, summonCtx }) {
   const targetBranch = String(payload?.branch || "").trim();
   if (!targetBranch) {
     throw new IbpError(IBP_ERR.INVALID_INPUT, "be:switch requires `branch`");
   }
-  // Validate the target branch exists. "0" (main) is always valid;
-  // other paths must have a Branch row.
-  if (targetBranch !== "0") {
-    const { default: Branch } = await import("../../../materials/branch/branch.js");
-    const exists = await Branch.findById(targetBranch).select("_id").lean();
-    if (!exists) {
+
+  const { isMain, loadBranch } = await import("../../../materials/branch/branches.js");
+  if (!isMain(targetBranch)) {
+    // The destination must exist and be live. The wire's pause/delete
+    // gate checks the moment's branch (which handleBe points at the
+    // destination for switch); these checks are the seed-level
+    // authority for callers that don't come through the wire.
+    const row = await loadBranch(targetBranch);
+    if (!row) {
       throw new IbpError(IBP_ERR.INVALID_INPUT, `be:switch: branch "${targetBranch}" not found`);
     }
+    if (row.deleted) {
+      throw new IbpError(IBP_ERR.INVALID_INPUT, `be:switch: branch "${targetBranch}" is deleted`);
+    }
+    if (row.paused) {
+      throw new IbpError(IBP_ERR.REALITY_PAUSED, `be:switch: branch "${targetBranch}" is paused`);
+    }
   }
-  const fromBranch = ctx?.socket?.currentBranch || "0";
-  if (ctx?.socket) ctx.socket.currentBranch = targetBranch;
+
+  // The caller must exist on the destination: their reel must fold to
+  // a birthed state in that branch's lineage view. Without this gate
+  // a being born on #1 switching to a sibling (or to a branch forked
+  // before their birth) would stamp be:switch as the first fact of an
+  // orphan reel — a biography with no be:birth, folding to a nameless,
+  // grantless state.
+  const { loadOrFold } = await import("../../../materials/projections.js");
+  const destSlot = await loadOrFold("being", String(identity.beingId), targetBranch);
+  if (!destSlot?.state?.name) {
+    throw new IbpError(
+      IBP_ERR.FORBIDDEN,
+      `be:switch: @${identity?.name || identity?.beingId} does not exist on branch ` +
+        `"${targetBranch}" (born after the fork, or on a different lineage). ` +
+        `A session can only be seated on a branch where the being's reel folds to a birth.`,
+    );
+  }
+  if (destSlot.state?.qualities?.death?.time) {
+    throw new IbpError(
+      IBP_ERR.FORBIDDEN,
+      `be:switch: @${identity?.name || identity?.beingId} is dead on branch "${targetBranch}"`,
+    );
+  }
+
+  // The pre-switch branch. On the wire path handleBe threads it in
+  // the payload (the moment itself rides the DESTINATION branch, so
+  // actorAct.branch is not the old branch there). In-moment
+  // self-switches have no wire hint; the actor's act branch IS the
+  // branch they were seated on.
+  const fromBranch =
+    (typeof payload?.fromBranch === "string" && payload.fromBranch) ||
+    summonCtx?.actorAct?.branch ||
+    null;
+
   return {
-    switched: true,
+    switched:   true,
     fromBranch,
-    toBranch:  targetBranch,
-    beingId:   identity?.beingId || null,
+    toBranch:   targetBranch,
+    seatBranch: targetBranch,
+    beingId:    identity?.beingId || null,
   };
 }
 
@@ -581,8 +650,8 @@ export const cherubBeOps = Object.freeze({
     handler: releaseHandler,
   },
   switch: {
-    description: "Change this session's branch frame on the same being. " +
-                 "Per-session — switching one socket's frame doesn't touch other sockets.",
+    description: "Change this session's branch on the same being. " +
+                 "Per-session — switching one socket's branch doesn't touch other sockets.",
     label: "Switch branch",
     args: {
       branch: { type: "text", label: "Target branch path", required: true },

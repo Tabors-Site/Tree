@@ -108,34 +108,55 @@ export async function authorize(args) {
   //   • targetBranch — where the target lives. Used to look up role
   //     specs on the target's qualities chain, and to evaluate reach
   //     (which space's projection should the reach pattern walk).
-  //     Sourced from summonCtx (a moment's ground truth) or target.branch
-  //     (pre-moment parsed address).
+  //     Precedence: the parsed target's own branch is the most
+  //     specific statement and wins; then the moment's seated
+  //     targetBranch (where this moment's facts land — auth must
+  //     evaluate the same world the stamp rides); then the actor's
+  //     act branch (same-world acts); then the caller's session
+  //     branch as the last resort (SEE ops and other targets that
+  //     have no world of their own are evaluated from where the
+  //     caller stands).
   //
-  //   • actorBranch — the actor's HOME frame, where their grants live.
-  //     Caller passes args.actorBranch from socket.currentBranch (the
-  //     session frame, set by BE:birth/connect/release/switch). When
-  //     a being is on frame #0 and SEEs onto branch #1, their grants
-  //     are read from #0 (where they actually exist), not from #1
-  //     (where they may not exist if their reel was created post-fork).
-  //     This is the "look through the portal" semantic — you remain
-  //     yourself when navigating across branches.
+  //   • actorBranch — the actor's branch, where their grants live.
+  //     Caller passes args.actorBranch from socket.currentBranch
+  //     (seated by BE:birth/connect/release/switch). When a being is
+  //     seated on #0 and SEEs onto branch #1, their grants are read
+  //     from #0 (where they actually exist), not from #1 (where they
+  //     may not exist if their reel was created post-fork). This is
+  //     the "look through the portal" semantic — you remain yourself
+  //     when navigating across branches.
   //
-  // Anonymous-direct SEE with no target branch falls to "0".
-  const targetBranch =
-    summonCtx?.actorAct?.branch ||
+  // Anonymous callers (no being bound, or the arrival floor's
+  // identity) with no branch anywhere fall to the operator's default
+  // branch via the pointer registry — never literal "0"; set-pointer
+  // can re-point main. Authenticated callers with no branch anywhere
+  // are a perimeter threading bug: fail loud.
+  let targetBranch =
     target?.branch ||
-    (identity ? null : "0");
+    summonCtx?.targetBranch ||
+    summonCtx?.actorAct?.branch ||
+    args.actorBranch ||
+    null;
   if (!targetBranch) {
-    throw new Error(
-      `authorize: branch could not be resolved for ${verb}:${args.action || args.seeOp || args.operation || args.intent || "?"} ` +
-      `(identity=${identity?.name || identity?.beingId || "anonymous"}). ` +
-      `Pass summonCtx with actorAct, or include branch on the parsed target.`,
-    );
+    const isAnonymous = !identity?.beingId || identity?.name === "arrival";
+    if (isAnonymous) {
+      const { getDefaultBranch } = await import("../materials/branch/branchRegistry.js");
+      targetBranch = await getDefaultBranch();
+    } else {
+      throw new Error(
+        `authorize: branch could not be resolved for ${verb}:${args.action || args.seeOp || args.operation || args.intent || "?"} ` +
+        `(identity=${identity?.name || identity?.beingId || "anonymous"}). ` +
+        `Pass summonCtx, include branch on the parsed target, or thread actorBranch.`,
+      );
+    }
   }
-  // actorBranch defaults to targetBranch when the caller didn't pass
-  // one (genesis/scaffold paths where there's no separate session
-  // frame). Same-branch acts collapse to one value naturally.
-  const actorBranch = args.actorBranch || targetBranch;
+  // actorBranch falls back to the moment's actor branch, then to
+  // targetBranch (genesis/scaffold paths where there's no separate
+  // session branch). Same-branch acts collapse to one value naturally.
+  const actorBranch =
+    args.actorBranch ||
+    summonCtx?.actorAct?.branch ||
+    targetBranch;
   const result = await authorizeViaRoles({
     identity,
     verb,

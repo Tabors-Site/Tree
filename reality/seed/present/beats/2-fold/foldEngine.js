@@ -232,6 +232,8 @@ export async function fold(type, id, opts = {}) {
   if (!slot) {
     // No slot in this branch yet. Cold-fold via lineage-aware
     // readReelBetween (Pass 2 substrate) and land via initProjection.
+    // rebuild defaults cross-cutting OFF: this walk is a replay of
+    // committed history into a fresh cache slot, not fact arrival.
     return await rebuild(type, id, opts);
   }
   if (slot.tombstoned) {
@@ -273,6 +275,18 @@ export async function fold(type, id, opts = {}) {
  * `initial()`, writes the result. No CAS — the row is being built up
  * for the first time (or recovered).
  *
+ * Cross-cutting handlers default OFF here, the opposite of `fold`.
+ * A rebuild is a REPLAY of long-committed facts (a branch slot
+ * cold-folding its inherited lineage, a cache recovery), not fact
+ * arrival — every fact in the walk already fired its handlers when
+ * it committed. Re-firing them resurrects consumed state: an
+ * already-answered summon re-upserts its InboxProjection row and the
+ * scheduler re-executes the transport act ("Name already taken"
+ * retries after a be:switch cold-folded cherub onto a new branch),
+ * and the portal fact-push handler re-streams history to clients.
+ * Pass skipCrossCutting:false only for a deliberate projection
+ * recovery that intends to rebuild the cross-cutting projections too.
+ *
  * Snapshots ({state, seq} every N facts) would bound rebuild cost on
  * very long reels; FOLD.md declares this as a "scale knob added later."
  * For now, rebuild walks the whole reel.
@@ -280,13 +294,13 @@ export async function fold(type, id, opts = {}) {
  * @param {"being"|"space"|"matter"} type
  * @param {string} id
  * @param {object} [opts]
- * @param {boolean} [opts.skipCrossCutting=false]  see `fold` docstring above.
+ * @param {boolean} [opts.skipCrossCutting=true]  see above — replay, not arrival.
  * @returns {Promise<{ state: object, foldedSeq: number }>}
  */
 export async function rebuild(type, id, opts = {}) {
   assertType(type);
   if (!id) throw new Error("rebuild: id is required");
-  const skipCrossCutting = opts.skipCrossCutting === true;
+  const skipCrossCutting = opts.skipCrossCutting !== false;
   if (typeof opts.branch !== "string" || !opts.branch.length) {
     throw new Error(
       `rebuild: opts.branch is required (got ${JSON.stringify(opts.branch)}). ` +

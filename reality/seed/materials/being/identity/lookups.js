@@ -184,3 +184,100 @@ export async function findBeingByName(name, branch = "0") {
   const slot = matches[0];
   return { _id: slot.id, position: slot.position, ...slot.state };
 }
+
+/**
+ * Find every being that answers to `name`, across ALL branches.
+ *
+ * The identity surface (BE:connect) runs before a session has a
+ * branch seated, so a being born on branch #7a must be findable from
+ * a fresh socket sitting on the default branch. Lineage walks don't cover this (a
+ * sibling or child branch is not in the default branch's lineage), so
+ * this is a deliberate cross-branch sweep of the projections
+ * collection.
+ *
+ * Dedupes by being id. For each being, the returned doc is the HOME
+ * slot view: the slot whose branch equals state.homeBranch (where the
+ * be:birth fact landed). Divergent copies of the same being on other
+ * branches (lazy cold-folds, renames) don't get to redefine who the
+ * being is for authentication. Beings predating homeBranch fall back
+ * to whichever slot was found.
+ *
+ * Candidates are ordered default-branch-first so the common case (one
+ * being, born on main) costs one comparison. Callers that authenticate
+ * should verify credentials per candidate; the password disambiguates
+ * same-name beings born on different branches.
+ *
+ * @param {string} name
+ * @returns {Promise<Array<{_id, homeBranch, position, ...state}>>}
+ */
+export async function findBeingCandidatesByName(name) {
+  if (!name || typeof name !== "string") return [];
+  const escaped = name.trim().replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const { default: Projection } = await import("../../branch/projection.js");
+  const rows = await Projection.find({
+    type: "being",
+    "state.name": { $regex: `^${escaped}$`, $options: "i" },
+    tombstoned: { $ne: true },
+  }).lean();
+  if (rows.length === 0) return [];
+
+  const { getDefaultBranch } = await import("../../branch/branchRegistry.js");
+  const defaultBranch = await getDefaultBranch();
+
+  // Group slots per being id, then pick each being's home slot.
+  const byId = new Map();
+  for (const row of rows) {
+    const list = byId.get(row.id) || [];
+    list.push(row);
+    byId.set(row.id, list);
+  }
+  const candidates = [];
+  for (const [id, slots] of byId) {
+    const home =
+      slots.find((s) => s.state?.homeBranch && s.branch === s.state.homeBranch) ||
+      slots.find((s) => s.branch === defaultBranch) ||
+      slots[0];
+    candidates.push({
+      _id:        id,
+      homeBranch: home.state?.homeBranch || defaultBranch,
+      position:   home.position ?? null,
+      ...(home.state || {}),
+    });
+  }
+  candidates.sort((a, b) => {
+    const aHome = a.homeBranch === defaultBranch ? 0 : 1;
+    const bHome = b.homeBranch === defaultBranch ? 0 : 1;
+    return aHome - bHome;
+  });
+  return candidates;
+}
+
+/**
+ * The branch a being owns as their present: state.homeBranch from
+ * their home slot (the slot on the branch they were birthed on).
+ *
+ * Cross-branch by necessity, same reasoning as
+ * findBeingCandidatesByName: BE:connect / BE:release / the WS
+ * handshake seat the session's currentBranch from this, and at those
+ * moments the session has no branch to scope the lookup by.
+ *
+ * Falls back to the default branch for legacy rows without
+ * homeBranch and for unknown ids.
+ *
+ * @param {string} beingId
+ * @returns {Promise<string>}
+ */
+export async function findHomeBranchOfBeing(beingId) {
+  const { getDefaultBranch } = await import("../../branch/branchRegistry.js");
+  const defaultBranch = await getDefaultBranch();
+  if (!beingId) return defaultBranch;
+  const { default: Projection } = await import("../../branch/projection.js");
+  const slots = await Projection.find({
+    type: "being", id: String(beingId), tombstoned: { $ne: true },
+  }).select("branch state.homeBranch").lean();
+  if (slots.length === 0) return defaultBranch;
+  const home =
+    slots.find((s) => s.state?.homeBranch && s.branch === s.state.homeBranch) ||
+    slots[0];
+  return home.state?.homeBranch || defaultBranch;
+}

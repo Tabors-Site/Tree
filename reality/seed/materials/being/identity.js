@@ -6,7 +6,8 @@
 //
 //   identity/lookups.js      read-side: findIAm, iAmIdentity,
 //                            findRootOperator, isFirstBeing,
-//                            findBeingByName
+//                            findBeingByName, findBeingCandidatesByName,
+//                            findHomeBranchOfBeing
 //   identity/credentials.js  password + JWT: verifyPassword,
 //                            generateToken, signInternalToken,
 //                            decodeToken, verifyTokenStrict
@@ -33,6 +34,8 @@ export {
   findRootOperator,
   isFirstBeing,
   findBeingByName,
+  findBeingCandidatesByName,
+  findHomeBranchOfBeing,
 } from "./identity/lookups.js";
 
 export {
