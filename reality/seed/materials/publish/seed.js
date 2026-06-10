@@ -32,15 +32,30 @@
 // fine; beyond that, future versions should stream with cursor batching.
 // Per the doctrine — make it work, chisel later.
 
+import mongoose from "mongoose";
 import Fact from "../../past/fact/fact.js";
 import Act from "../../past/act/act.js";
 import Branch from "../branch/branch.js";
 import ReelHead from "../../past/reel/reelHead.js";
 import log from "../../seedReality/log.js";
 import { getRealityDomain } from "../../ibp/address.js";
-import { writeFile, mkdir } from "fs/promises";
+import { writeFile, mkdir, readdir } from "fs/promises";
 import path from "path";
 import { fileURLToPath } from "url";
+
+// Collections the seed handles explicitly or that are pure caches
+// re-derived from the chain at plant time. Everything ELSE in the
+// database is "the rest of the reality's data" — extension-owned
+// collections, the peer registry, whatever future modules store — and
+// the genome captures it verbatim (a seed is the WHOLE reality; an
+// extension's collection is as much its body as its facts are).
+const SEED_CORE_COLLECTIONS = new Set(["facts", "acts", "branches", "reelHeads"]);
+const REGENERABLE_COLLECTIONS = new Set([
+  // fold caches — plant cold-folds these back from the chain
+  "projections", "inbox_projection", "threads_projection", "position_projection",
+  // legacy row caches of the fold (and the empty pre-rename stamps)
+  "spaces", "beings", "matters", "stamps",
+]);
 
 export const SEED_BUNDLE_VERSION = "1.0";
 
@@ -103,7 +118,52 @@ export async function captureSeed(opts = {}) {
   const reelHeads = await ReelHead.find({}).lean();
   log.info("Seed", `captured ${reelHeads.length} reel heads`);
 
-  // ── 5. Assemble the bundle ──
+  // ── 5. Collect everything else — extension collections et al ──
+  // The genome is the WHOLE reality. Extensions may keep their own
+  // Mongo collections (declared via their manifests); the peer
+  // registry lives in its own collection; future modules will add
+  // more. None of that is derivable from the chain, so the seed
+  // captures every collection that isn't core (handled above) or a
+  // regenerable cache (re-derived by plant's cold-fold). Keyed by
+  // collection name; plant re-inserts verbatim.
+  const extensionData = {};
+  try {
+    const db = mongoose.connection.db;
+    const cols = await db.listCollections().toArray();
+    for (const c of cols) {
+      const name = c.name;
+      if (name.startsWith("system.")) continue;
+      if (SEED_CORE_COLLECTIONS.has(name)) continue;
+      if (REGENERABLE_COLLECTIONS.has(name)) continue;
+      const docs = await db.collection(name).find({}).toArray();
+      if (docs.length > 0) {
+        extensionData[name] = docs;
+        log.info("Seed", `captured ${docs.length} docs from "${name}"`);
+      }
+    }
+  } catch (err) {
+    log.warn("Seed", `extension-collection sweep failed: ${err.message}. Core chain still captured.`);
+  }
+
+  // ── 6. Record the loaded extensions ──
+  // The reality's behavior depends on which extensions are awake
+  // (their roles, ops, schedules, collections). The receiving
+  // deployer needs the same set for the planted reality to BE the
+  // same reality; plant warns loudly about any that are missing.
+  let extensions = [];
+  try {
+    const { getLoadedExtensionNames, getExtensionManifest } =
+      await import("../../../extensions/loader.js");
+    extensions = getLoadedExtensionNames().map((name) => ({
+      name,
+      version: getExtensionManifest(name)?.version || null,
+    }));
+  } catch {
+    // Headless capture (no loader in this process). The extension
+    // collections above still travel; only the declared list is empty.
+  }
+
+  // ── 7. Assemble the bundle ──
   const bundle = {
     kind: "seed",
     bundleVersion: SEED_BUNDLE_VERSION,
@@ -113,11 +173,13 @@ export async function captureSeed(opts = {}) {
 
     meta: {
       realityName: opts.realityName || null,
+      extensions,
       counts: {
         facts:     facts.length,
         acts:      acts.length,
         branches:  branches.length,
         reelHeads: reelHeads.length,
+        extensionCollections: Object.keys(extensionData).length,
       },
     },
 
@@ -125,6 +187,7 @@ export async function captureSeed(opts = {}) {
     acts,
     branches,
     reelHeads,
+    extensionData,
   };
 
   const elapsedMs = Date.now() - startedAt;
@@ -165,6 +228,11 @@ export function assertValidSeed(bundle) {
     if (!Array.isArray(bundle[collection])) {
       throw new Error(`seed: bundle.${collection} must be an array`);
     }
+  }
+  // Optional sections (older bundles predate them): extensionData is a
+  // name → docs[] map; meta.extensions is [{name, version}].
+  if (bundle.extensionData != null && typeof bundle.extensionData !== "object") {
+    throw new Error("seed: bundle.extensionData must be an object when present");
   }
   return true;
 }
@@ -255,6 +323,54 @@ export async function plantSeed(bundle) {
     log.info("Seed", `planted ${bundle.acts.length} acts`);
   }
 
+  // ── 6. Extension collections et al ──
+  // Everything the capture swept beyond the chain (extension-owned
+  // collections, the peer registry). Re-inserted verbatim; the DB was
+  // verified empty above, so there is nothing to collide with.
+  let extensionCollections = 0;
+  if (bundle.extensionData && typeof bundle.extensionData === "object") {
+    const db = mongoose.connection.db;
+    for (const [name, docs] of Object.entries(bundle.extensionData)) {
+      if (!Array.isArray(docs) || docs.length === 0) continue;
+      if (name.startsWith("system.")) continue;
+      try {
+        await db.collection(name).insertMany(docs, { ordered: false });
+        extensionCollections++;
+        log.info("Seed", `planted ${docs.length} docs into "${name}"`);
+      } catch (err) {
+        log.warn("Seed", `planting collection "${name}" failed: ${err.message}`);
+      }
+    }
+  }
+
+  // ── 7. Extension presence check ──
+  // The bundle names the extensions the source reality ran with. The
+  // planted reality needs the same set to behave the same (roles, ops,
+  // schedules, collection consumers). Warn LOUDLY for any not present
+  // on this substrate's disk — the operator fixes the extension folder
+  // or the .treeos-profile before beings start acting.
+  const declared = Array.isArray(bundle.meta?.extensions) ? bundle.meta.extensions : [];
+  if (declared.length > 0) {
+    let onDisk = new Set();
+    try {
+      const extensionsDir = path.resolve(__dirname, "..", "..", "..", "extensions");
+      const entries = await readdir(extensionsDir, { withFileTypes: true });
+      onDisk = new Set(entries.filter((e) => e.isDirectory()).map((e) => e.name));
+    } catch { /* no extensions dir at all — everything below warns */ }
+    for (const ext of declared) {
+      const name = typeof ext === "string" ? ext : ext?.name;
+      if (!name) continue;
+      if (!onDisk.has(name)) {
+        log.warn(
+          "Seed",
+          `planted reality expects extension "${name}"${ext?.version ? ` (v${ext.version})` : ""} ` +
+          `but it is not present in extensions/. Its beings, roles, ops, and data ` +
+          `will be inert until it's installed.`,
+        );
+      }
+    }
+  }
+
   const elapsedMs = Date.now() - startedAt;
   log.info("Seed", `genome planted in ${elapsedMs}ms`);
 
@@ -264,6 +380,7 @@ export async function plantSeed(bundle) {
       acts:      bundle.acts.length,
       branches:  bundle.branches.length,
       reelHeads: bundle.reelHeads.length,
+      extensionCollections,
     },
   };
 }

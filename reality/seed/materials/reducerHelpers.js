@@ -422,7 +422,6 @@ export function applyRoleGrants(state, fact) {
         anchorBeingId,
         grantedBy,
         grantedAt,
-        expiresAt: params.expiresAt || null,
       },
     ];
     return {

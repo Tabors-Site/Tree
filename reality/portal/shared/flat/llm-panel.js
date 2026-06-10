@@ -1,12 +1,13 @@
 // llm-panel.js — the Place > LLM (and Reality > LLM) tab.
 //
 // Surfaces LLM connection management + the 7-step resolution chain
-// preview without routing through @llm-manager. Per the chain rebuild
-// (philosophy/CROSS-WORLD/auth.jpg), every being can configure their
-// own LLM, every space owner can configure their space's defaults,
-// and angels can configure the reality root. The substrate side
-// (qualities.llm + qualities.llmConnections) is the same whether the
-// caller goes through @llm-manager or comes here directly.
+// preview. Per the chain rebuild (philosophy/CROSS-WORLD/auth.jpg),
+// every being can configure their own LLM via the SEED-OWNED ops
+// (add-llm / delete-llm / assign-slot / set-being-llm), every space
+// owner can configure their space's defaults via set-space-llm, and
+// angels can configure the reality root via set-reality-llm. The
+// panel dispatches these bare op names directly — no @llm-assigner
+// routing.
 //
 // Two surfaces share this code:
 //
@@ -83,7 +84,7 @@ export async function renderLlmPanel(body, action, opByName, { refreshView, mode
   renderSlotsAssigner(beingSlotsBox.body, {
     label: "your being",
     onAssign: async ({ slot, connectionId }) => {
-      await flat.doOp(positionAddress, "llm-assigner:assign-slot", { slot, connectionId });
+      await flat.doOp(positionAddress, "assign-slot", { slot, connectionId });
     },
     afterChange: () => refreshChainBlock(body, reality, viewerBeingId, positionSpaceId),
   });
@@ -254,7 +255,7 @@ async function renderConnections(body, { refreshSelf, refreshChain } = {}) {
       if (!confirm(`Delete connection "${c.model || c.name}"?`)) return;
       del.disabled = true;
       try {
-        await flat.doOp(flat.state?.discovery?.reality + "/", "llm-assigner:delete-llm", {
+        await flat.doOp(flat.state?.discovery?.reality + "/", "delete-llm", {
           connectionId: c.connectionId,
         });
         refreshSelf?.();
@@ -300,7 +301,7 @@ function renderAddConnection(body, { onResult }) {
       return;
     }
     try {
-      await flat.doOp(flat.state?.discovery?.reality + "/", "llm-assigner:add-llm", {
+      await flat.doOp(flat.state?.discovery?.reality + "/", "add-llm", {
         name: nameF.input.value.trim() || null,
         baseUrl, model,
         apiKey: keyF.input.value || null,
@@ -450,7 +451,7 @@ function renderSpaceOrRealityForm(body, { isReality, address, afterChange }) {
     if (forceActorF.input.checked) params.forceActor = true;
     if (forceReceiverF.input.checked) params.forceReceiver = true;
     try {
-      const op = isReality ? "llm-assigner:set-reality-llm" : "llm-assigner:set-space-llm";
+      const op = isReality ? "set-reality-llm" : "set-space-llm";
       await flat.doOp(address, op, params);
       result.className = "action-result action-ok";
       result.textContent = "Saved.";

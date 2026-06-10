@@ -677,7 +677,6 @@ async function _anointGlobal({ childId, branch, summonCtx }) {
       anchorBeingId: null,
       grantedBy:     I_AM,
       grantedAt:     new Date().toISOString(),
-      expiresAt:     null,
     },
     actId:   summonCtx?.actId || null,
     branch,

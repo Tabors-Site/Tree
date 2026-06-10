@@ -33,7 +33,7 @@ import { registerOperation } from "../../ibp/operations.js";
 import { IbpError, IBP_ERR } from "../../ibp/protocol.js";
 import { getRoleSpecForGrant } from "./spaceLookup.js";
 import { normalizeAcquisition, alreadyHoldsRole } from "./acquisition.js";
-import { loadProjection } from "../../materials/projections.js";
+import { loadOrFold } from "../../materials/projections.js";
 import { I_AM } from "../../materials/being/seedBeings.js";
 
 // ──────────────────────────────────────────────────────────────────
@@ -80,8 +80,10 @@ registerOperation("ask-role", {
       );
     }
 
-    // Idempotent: skip if the caller already holds the role at this host.
-    const callerSlot = await loadProjection("being", String(identity.beingId), branch);
+    // Idempotent: skip if the caller already holds the role at this
+    // host. loadOrFold: the caller's grants may live on an inherited
+    // (not yet folded) slot on this branch.
+    const callerSlot = await loadOrFold("being", String(identity.beingId), branch);
     const existing   = callerSlot?.state?.qualities?.rolesGranted || [];
     if (alreadyHoldsRole(existing, roleName, foundHost)) {
       return {
@@ -98,6 +100,7 @@ registerOperation("ask-role", {
         anchorSpaceId:  foundHost,
         grantedBy:      String(identity.beingId), // self-grant via the role's auto policy
         summonCtx,
+        branch,
       });
       return {
         granted: true,
@@ -108,15 +111,75 @@ registerOperation("ask-role", {
     }
 
     // policy.asked === "queue" — summon the host's owner with intent
-    // "role-request". For now, return a structured response so the
-    // portal can surface the message; the summon plumbing lands when
-    // there's a UI to consume it.
+    // "role-request". The owner sees the request in their inbox and
+    // approves/denies via the portal's inbox panel. Approve →
+    // owner emits grant-role for the asker. Deny → reply summon with
+    // {result:"denied"} clears the inbox row, no grant emitted.
+    const hostSlot = await loadOrFold("space", foundHost, branch);
+    const ownerId = hostSlot?.state?.owner;
+    if (!ownerId) {
+      return {
+        granted: false,
+        path: "queue",
+        role: roleName,
+        anchorSpaceId: foundHost,
+        message: `Role "${roleName}" needs manual approval but the host space has no owner to ask.`,
+      };
+    }
+    const ownerSlot = await loadOrFold("being", String(ownerId), branch);
+    const ownerName = ownerSlot?.state?.name;
+    if (!ownerName) {
+      return {
+        granted: false,
+        path: "queue",
+        role: roleName,
+        anchorSpaceId: foundHost,
+        message: `Role "${roleName}" needs manual approval but the owner couldn't be addressed.`,
+      };
+    }
+
+    const { summonVerb } = await import("../../ibp/verbs/summon.js");
+    const { getRealityDomain } = await import("../../ibp/address.js");
+    const reality = getRealityDomain();
+    const ownerStance = `${reality}/@${ownerName}`;
+    const askerStance = `${reality}/@${identity.name}`;
+    try {
+      await summonVerb(
+        ownerStance,
+        {
+          from:    askerStance,
+          // Generic envelope `content` shape:
+          //   { intent, ...intentSpecificFields }
+          // The inbox panel renders different action surfaces per
+          // intent. "role-request" gets approve/deny buttons that
+          // resolve via grant-role + reply-summon.
+          content: {
+            intent:        "role-request",
+            role:          roleName,
+            anchorSpaceId: foundHost,
+            askerBeingId:  String(identity.beingId),
+            askerName:     identity.name,
+            reason:        target?.reason || null,
+          },
+        },
+        { identity, summonCtx },
+      );
+    } catch (err) {
+      return {
+        granted: false,
+        path: "queue",
+        role: roleName,
+        anchorSpaceId: foundHost,
+        message: `Failed to send request to @${ownerName}: ${err?.message || err}`,
+      };
+    }
+
     return {
       granted: false,
-      path: "queue",
-      role: roleName,
+      path:    "queue",
+      role:    roleName,
       anchorSpaceId: foundHost,
-      message: `Role "${roleName}" requires manual approval. Notify the host's owner directly.`,
+      message: `Requested. @${ownerName} will see this in their inbox.`,
     };
   },
 });
@@ -165,7 +228,7 @@ registerOperation("take-role", {
       );
     }
 
-    const callerSlot = await loadProjection("being", String(identity.beingId), branch);
+    const callerSlot = await loadOrFold("being", String(identity.beingId), branch);
     const existing   = callerSlot?.state?.qualities?.rolesGranted || [];
     if (alreadyHoldsRole(existing, roleName, foundHost)) {
       return {
@@ -181,6 +244,7 @@ registerOperation("take-role", {
       anchorSpaceId:  foundHost,
       grantedBy:      String(identity.beingId),
       summonCtx,
+      branch,
     });
     return {
       granted: true,
@@ -206,6 +270,7 @@ export async function emitInternalGrant({
   anchorSpaceId,
   grantedBy,
   summonCtx,
+  branch = null,
 }) {
   const { emitFact } = await import("../../past/fact/facts.js");
   await emitFact({
@@ -219,9 +284,15 @@ export async function emitInternalGrant({
       anchorBeingId: null,
       grantedBy:     grantedBy ? String(grantedBy) : I_AM,
       grantedAt:     new Date().toISOString(),
-      expiresAt:     null,
     },
-    branch: summonCtx?.actorAct?.branch || "0",
+    // The world this acquisition happened in. Callers pass it
+    // explicitly (the op's moment branch, the SEE's branch for
+    // auto-on-entry). The actorAct fallback covers in-moment ops; SEE
+    // has no moment, and its old fallback stamped every branch-side
+    // auto-grant onto main — invisible on the branch where the
+    // commons lives (the fork predates the grant), and a
+    // foreign-world write onto main's reel.
+    branch: branch || summonCtx?.actorAct?.branch || "0",
     actId:  summonCtx?.actId || null,
   }, summonCtx);
 }

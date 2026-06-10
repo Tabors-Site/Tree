@@ -363,14 +363,14 @@ export function registerLlmAssignerOps() {
   // Add an LLM connection to the caller's own being. Auto-binds to
   // "main" if this is the being's first connection (handled by the
   // seed add-llm-connection DO op).
-  registerOperation("llm-assigner:add-llm", {
+  registerOperation("add-llm", {
     targets: ["space"],
-    ownerExtension: OWNER,
+    ownerExtension: "seed",
     handler: async ({ params, identity, summonCtx }) => {
       if (!identity?.beingId) {
         throw new IbpError(
           IBP_ERR.UNAUTHORIZED,
-          "llm-assigner:add-llm requires an authenticated being. Claim or register through @cherub first.",
+          "add-llm requires an authenticated being. Claim or register through @cherub first.",
         );
       }
       const { name = null, baseUrl, model, apiKey = null } = params || {};
@@ -394,14 +394,14 @@ export function registerLlmAssignerOps() {
   // Bind one of the caller's connections to a slot on their own being.
   // Slot "main" updates Being.llmDefault; named slots write into
   // Being.qualities.beingLlm.slots.
-  registerOperation("llm-assigner:assign-slot", {
+  registerOperation("assign-slot", {
     targets: ["space"],
-    ownerExtension: OWNER,
+    ownerExtension: "seed",
     handler: async ({ params, identity, summonCtx }) => {
       if (!identity?.beingId) {
         throw new IbpError(
           IBP_ERR.UNAUTHORIZED,
-          "llm-assigner:assign-slot requires an authenticated being.",
+          "assign-slot requires an authenticated being.",
         );
       }
       const { slot, connectionId } = params || {};
@@ -423,14 +423,14 @@ export function registerLlmAssignerOps() {
   // Delete one of the caller's connections. The seed cascades the
   // removal across Being.llmDefault, qualities.beingLlm slots, and
   // Space.qualities.llm.slots references.
-  registerOperation("llm-assigner:delete-llm", {
+  registerOperation("delete-llm", {
     targets: ["space"],
-    ownerExtension: OWNER,
+    ownerExtension: "seed",
     handler: async ({ params, identity, summonCtx }) => {
       if (!identity?.beingId) {
         throw new IbpError(
           IBP_ERR.UNAUTHORIZED,
-          "llm-assigner:delete-llm requires an authenticated being.",
+          "delete-llm requires an authenticated being.",
         );
       }
       const { connectionId } = params || {};
@@ -453,14 +453,14 @@ export function registerLlmAssignerOps() {
   // Back-compat: when `connectionId` (legacy scalar) is the only
   // payload field, it is converted to a single-element `connections`
   // list under `qualities.llm.default` (so existing UIs keep working).
-  registerOperation("llm-assigner:set-reality-llm", {
+  registerOperation("set-reality-llm", {
     targets: ["space"],
-    ownerExtension: OWNER,
+    ownerExtension: "seed",
     handler: async ({ params, identity, summonCtx }) => {
       if (!identity?.beingId) {
         throw new IbpError(
           IBP_ERR.UNAUTHORIZED,
-          "llm-assigner:set-reality-llm requires an authenticated being.",
+          "set-reality-llm requires an authenticated being.",
         );
       }
       const { hasHeavenAuthority } = await import("../../../materials/space/heavenLineage.js");
@@ -497,14 +497,14 @@ export function registerLlmAssignerOps() {
   // 7-step chain fields (slot list, force flags, preferOwn) to
   // `<space>.qualities.llm`. Back-compat: legacy `{slot, connectionId}`
   // payload is mapped to `{slot, connections: [connectionId]}`.
-  registerOperation("llm-assigner:set-space-llm", {
+  registerOperation("set-space-llm", {
     targets: ["space"],
-    ownerExtension: OWNER,
+    ownerExtension: "seed",
     handler: async ({ params, identity, summonCtx }) => {
       if (!identity?.beingId) {
         throw new IbpError(
           IBP_ERR.UNAUTHORIZED,
-          "llm-assigner:set-space-llm requires an authenticated being.",
+          "set-space-llm requires an authenticated being.",
         );
       }
       const { spaceId } = params || {};
@@ -529,14 +529,14 @@ export function registerLlmAssignerOps() {
   // Set the calling being's own LLM configuration. Writes the 7-step
   // chain fields to `<being>.qualities.llm`. The caller can configure
   // per-role slots, fallback list, and force flags for their being.
-  registerOperation("llm-assigner:set-being-llm", {
+  registerOperation("set-being-llm", {
     targets: ["space"],
-    ownerExtension: OWNER,
+    ownerExtension: "seed",
     handler: async ({ params, identity, summonCtx }) => {
       if (!identity?.beingId) {
         throw new IbpError(
           IBP_ERR.UNAUTHORIZED,
-          "llm-assigner:set-being-llm requires an authenticated being.",
+          "set-being-llm requires an authenticated being.",
         );
       }
       assertFlagMutex(params || {});
@@ -675,5 +675,5 @@ export function registerLlmAssignerOps() {
     },
   });
 
-  log.verbose("llm-assigner", "registered 9 DO ops + 2 SEE ops (3 tutorial + 6 DO connection-management + 2 SEE reads)");
+  log.verbose("llm-assigner", "registered 9 DO ops + 2 SEE ops (3 llm-assigner:tutorial-* + 6 seed: add-llm/delete-llm/assign-slot/set-being-llm/set-space-llm/set-reality-llm + 2 SEE: llm-connections/llm-chain)");
 }

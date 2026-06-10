@@ -171,6 +171,12 @@ import "./materials/being/credentialOps.js";
 // present/roles/ because that's where the policy schema and the
 // in-effect role-walk live; these ops just front the policy.
 import "./present/roles/acquisitionOps.js";
+// Side-effect import. Registers the inbox SEE op (my-inbox) and the
+// respond-to-summon DO op. The 2D portal's inbox panel reads my-inbox
+// to surface pending summons and dispatches respond-to-summon for
+// approve/deny/reply actions. Intent-specific side effects (e.g.
+// role-request approve → grant-role) live in the handler.
+import "./present/intake/inboxOps.js";
 // Side-effect import. Registers the publish layer: replicate-subtree
 // (extract a subtree's current shape into a portable bundle) and
 // graft-replicate (apply a bundle into a target). The walker primitive

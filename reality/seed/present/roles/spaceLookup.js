@@ -22,7 +22,6 @@
 // answer.
 
 import { getRole } from "./registry.js";
-import { loadProjection } from "../../materials/projections.js";
 import { getAncestorChain } from "../../materials/space/ancestorCache.js";
 import { getSpaceRootId } from "../../sprout.js";
 
@@ -32,6 +31,24 @@ import { getSpaceRootId } from "../../sprout.js";
  * the first ancestor that has it IS the host. Falls back to the
  * in-memory REGISTRY when no space in the anchor chain has the role
  * (code-cognition roles not yet installed; boot-order edge).
+ *
+ * The walk reads off the ancestor chain's own nodes: getAncestorChain
+ * is loadOrFold-backed (lineage-aware, branch-keyed) and each node
+ * already carries normalized qualities, so the chain IS the read.
+ * The per-node loadProjection this used to do was both redundant and
+ * branch-blind — on a branch where a host space hadn't been lazily
+ * folded yet, the installed role was invisible and the lookup fell
+ * through to the registry, silently serving the template instead of
+ * the space-installed override.
+ *
+ * Registry fallback host: the GRANT's anchor, not the reality root.
+ * The grant names where the role lives for this being; an uninstalled
+ * role defaulting its host to the root silently widened every
+ * anchored grant to reality-wide coverage. Seed roles that need
+ * reality-wide reach declare it (`reach: ["/**"]` on angel/arrival)
+ * or are anchored at the root (global). Being-anchored grants (no
+ * anchorSpaceId) keep the root host: their coverage comes from the
+ * spec's reach, with the root as the neutral base.
  *
  * @param {object} grant   { role, anchorSpaceId, anchorBeingId?, ... }
  * @param {string} branch  required
@@ -46,16 +63,13 @@ export async function getRoleSpecForGrant(grant, branch) {
 
   const anchor = grant?.anchorSpaceId;
   if (anchor) {
-    const start = await loadProjection("space", String(anchor), branch);
-    const startSpec = readRoleFromSpaceState(start, name);
-    if (startSpec) return { spec: startSpec, hostSpaceId: String(anchor) };
-
     let chain = null;
     try { chain = await getAncestorChain(String(anchor), branch); } catch { chain = null; }
     if (Array.isArray(chain)) {
+      // chain[0] is the anchor itself; the walk covers self + ancestors.
       for (const node of chain) {
-        const ancestor = await loadProjection("space", String(node._id), branch);
-        const found = readRoleFromSpaceState(ancestor, name);
+        const roles = node?.qualities?.roles;
+        const found = roles && typeof roles === "object" ? roles[name] : null;
         if (found) return { spec: found, hostSpaceId: String(node._id) };
       }
     }
@@ -65,18 +79,10 @@ export async function getRoleSpecForGrant(grant, branch) {
   const registryRole = getRole(name);
   if (registryRole) {
     const rootId = getSpaceRootId();
-    return { spec: registryRole, hostSpaceId: rootId ? String(rootId) : null };
+    const host = anchor ? String(anchor) : (rootId ? String(rootId) : null);
+    return { spec: registryRole, hostSpaceId: host };
   }
   return { spec: null, hostSpaceId: null };
-}
-
-function readRoleFromSpaceState(slot, name) {
-  if (!slot) return null;
-  const q = slot.state?.qualities;
-  const qualities = q instanceof Map ? Object.fromEntries(q.entries()) : q;
-  const roles = qualities?.roles;
-  if (!roles || typeof roles !== "object") return null;
-  return roles[name] || null;
 }
 
 /**
@@ -115,15 +121,49 @@ export async function roleReachesTarget(spec, hostSpaceId, target, branch) {
   const reach = Array.isArray(spec?.reach) ? spec.reach : null;
   if (!reach || reach.length === 0) return covered;
 
+  // Reach patterns are path-shaped ("prefix/**"). Verbs that
+  // authorize by spaceId alone (DO, BE, in-moment SUMMON) carry no
+  // path, so derive it from the ancestor chain. Without this, path
+  // patterns only ever matched on SEE (whose parse supplies the
+  // path): a role reaching /garden via an ADD pattern could see it
+  // but not act there, and an EXCLUDE like `!/vault/**` failed OPEN
+  // for DO — base coverage stood and the carve-out never applied.
+  let path = targetPath;
+  if (!path && targetSpace) {
+    path = await pathOfSpace(targetSpace, branch);
+  }
+
   for (const pat of reach) {
     if (typeof pat !== "string" || !pat.length) continue;
     if (pat.startsWith("!")) {
-      if (matchPattern(pat.slice(1), { targetSpace, targetPath })) covered = false;
+      if (matchPattern(pat.slice(1), { targetSpace, targetPath: path })) covered = false;
     } else {
-      if (matchPattern(pat, { targetSpace, targetPath })) covered = true;
+      if (matchPattern(pat, { targetSpace, targetPath: path })) covered = true;
     }
   }
   return covered;
+}
+
+/**
+ * Path-by-names of a space, derived from the (cached, lineage-aware)
+ * ancestor chain. Matches the resolver's display form: "/" + segment
+ * names below the reality root, so "/garden/shed" — the same shape
+ * role authors write reach patterns in. Null when any segment lacks
+ * a name (the pattern then simply doesn't match; spaceId patterns
+ * still can).
+ */
+async function pathOfSpace(spaceId, branch) {
+  try {
+    const chain = await getAncestorChain(String(spaceId), branch);
+    if (!Array.isArray(chain) || chain.length === 0) return null;
+    // chain is [self, ..., realityRoot]; drop the root, reverse to
+    // top-down, join names.
+    const names = chain.slice(0, -1).map((n) => n?.name).reverse();
+    if (names.some((n) => typeof n !== "string" || !n.length)) return null;
+    return "/" + names.join("/");
+  } catch {
+    return null;
+  }
 }
 
 async function spaceIsAtOrBelow(targetSpaceId, hostSpaceId, branch) {

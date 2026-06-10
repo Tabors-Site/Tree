@@ -510,7 +510,7 @@ export async function genesis(app, opts = {}) {
   // and grantAngelToSeedDelegates) so the install loop has access to
   // their specs and the self-role grants land cleanly. Real work
   // happens through their verb handlers (cherub owns the BE_OPS table;
-  // llm-assigner ships DO ops under the llm-assigner:* prefix); the
+  // llm-assigner is registered before the host/grant loop); the
   // registry entries are stubs that surface canX for the role-walk.
   const { cherubRole } = await import("./seed/present/roles/cherub/role.js");
   const { llmAssignerRole } = await import("./seed/present/roles/llm-assigner/role.js");
@@ -663,10 +663,13 @@ export async function genesis(app, opts = {}) {
     }
   }
 
-  // llm-assigner ships its own DO ops (`llm-assigner:start-tutorial`
-  // and `llm-assigner:complete-tutorial`). They live with the role,
-  // not in the seed ops registry. Same shape an extension would
-  // use, just shipped in seed.
+  // LLM-management ops. Six bare seed ops (add-llm / delete-llm /
+  // assign-slot / set-being-llm / set-space-llm / set-reality-llm)
+  // plus three llm-assigner-prefixed tutorial ops (start-tutorial /
+  // save-playback / complete-tutorial) that drive the welcome flow.
+  // The substrate ops are callable by any being with the appropriate
+  // canDo (or owner-check on the target space) — no llm-assigner
+  // delegate routing required.
   const { registerLlmAssignerOps } =
     await import("./seed/present/roles/llm-assigner/ops.js");
   registerLlmAssignerOps();

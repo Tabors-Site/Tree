@@ -10,8 +10,8 @@
 //   asked       → "auto" | "queue" | false   — how `ask-role` resolves
 //                 "auto"  : grant immediately on ask
 //                 "queue" : summon the host owner with intent "role-request"
-//                           (default; safe baseline for undeclared roles)
-//                 false   : the ask op refuses; only direct grant-role works
+//                 false   : the ask op refuses; only direct grant-role
+//                           works (default; closed baseline)
 //
 //   grabbed     → bool                       — `take-role` walk-in flag
 //                 true : anyone can take the role at will
@@ -44,8 +44,8 @@ export const DEFAULT_ACQUISITION = Object.freeze({
 
 /**
  * Normalize a role spec's acquisition block into the canonical shape.
- * Roles without an `acquisition` field get the safe default (queue +
- * no grabs + no auto-on-entry).
+ * Roles without an `acquisition` field get the safe default: closed
+ * on every axis (no asks, no grabs, no auto-on-entry).
  */
 export function normalizeAcquisition(spec) {
   const a = (spec && typeof spec === "object" && spec.acquisition) || null;
@@ -59,6 +59,15 @@ export function normalizeAcquisition(spec) {
     autoOnEntry: !!a.autoOnEntry,
   };
 }
+
+// Time-bound grants: NOT a wall-clock concept. There is no expiry
+// field on grants. Beings have no clocks, calendars, or shared "now"
+// — wall-clock time is the human world's, and an `expiresAt` ISO
+// timestamp would smuggle it into the reality's auth core. When
+// time-bound grants land they will be REALITY-time: measured in the
+// world's own units (a being's moments, reel seq, harmony beats),
+// enforced the same way everything else is — at the role-walk.
+// Until that unit exists, a grant lasts until revoked.
 
 /**
  * Walk a being's existing grants and return true if they already hold

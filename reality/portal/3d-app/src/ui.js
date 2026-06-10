@@ -509,7 +509,7 @@ export function showLlmAssignerPanel({ client, place, currentSpaceId, onClose, o
     bodyEl.querySelectorAll("button[data-act=del]").forEach(b => {
       b.addEventListener("click", async () => {
         try {
-          await client.do("/", "llm-assigner:delete-llm", { connectionId: b.dataset.id });
+          await client.do("/", "delete-llm", { connectionId: b.dataset.id });
           await refreshConnections(); renderActiveTab();
         } catch (err) { showError(fmtErr(err, "delete failed")); }
       });
@@ -517,7 +517,7 @@ export function showLlmAssignerPanel({ client, place, currentSpaceId, onClose, o
     bodyEl.querySelectorAll("button[data-act=main]").forEach(b => {
       b.addEventListener("click", async () => {
         try {
-          await client.do("/", "llm-assigner:assign-slot",
+          await client.do("/", "assign-slot",
             { slot: "main", connectionId: b.dataset.id });
           await refreshConnections(); renderActiveTab();
         } catch (err) { showError(fmtErr(err, "set-main failed")); }
@@ -535,7 +535,7 @@ export function showLlmAssignerPanel({ client, place, currentSpaceId, onClose, o
       // apiKey is optional — local LLMs (Ollama, llama.cpp) need none.
       addBt.disabled = true; addBt.textContent = "adding...";
       try {
-        await client.do("/", "llm-assigner:add-llm", {
+        await client.do("/", "add-llm", {
           name: nameI.value.trim() || null, baseUrl, model, apiKey,
         });
         _llmPanelState.add = { name: "", baseUrl: "", model: "", apiKey: "" };
@@ -592,7 +592,7 @@ export function showLlmAssignerPanel({ client, place, currentSpaceId, onClose, o
       e.preventDefault();
       clearError();
       try {
-        await client.do("/", "llm-assigner:set-space-llm", {
+        await client.do("/", "set-space-llm", {
           spaceId:      currentSpaceId,
           slot:         slotI.value.trim() || "main",
           connectionId: connI.value || null,
@@ -604,7 +604,7 @@ export function showLlmAssignerPanel({ client, place, currentSpaceId, onClose, o
     form.querySelector("button[data-act=clear]").addEventListener("click", async () => {
       clearError();
       try {
-        await client.do("/", "llm-assigner:set-space-llm", {
+        await client.do("/", "set-space-llm", {
           spaceId: currentSpaceId, slot: slotI.value.trim() || "main", connectionId: null,
         });
       } catch (err) { showError(fmtErr(err, "clear failed")); }
@@ -643,7 +643,7 @@ export function showLlmAssignerPanel({ client, place, currentSpaceId, onClose, o
       e.preventDefault();
       clearError();
       try {
-        await client.do("/", "llm-assigner:set-reality-llm", {
+        await client.do("/", "set-reality-llm", {
           connectionId: connI.value || null,
         });
       } catch (err) { showError(fmtErr(err, "set-reality-llm failed")); }
@@ -651,7 +651,7 @@ export function showLlmAssignerPanel({ client, place, currentSpaceId, onClose, o
     form.querySelector("button[data-act=clear]").addEventListener("click", async () => {
       clearError();
       try {
-        await client.do("/", "llm-assigner:set-reality-llm", { connectionId: null });
+        await client.do("/", "set-reality-llm", { connectionId: null });
       } catch (err) { showError(fmtErr(err, "clear failed")); }
     });
   }
@@ -668,7 +668,7 @@ export function showLlmAssignerPanel({ client, place, currentSpaceId, onClose, o
 
   async function refreshConnections() {
     try {
-      const data = await client.do("/", "llm-assigner:list-llms", {});
+      const data = await client.do("/", "llm-connections", {});
       connections = data?.connections || [];
       mainConnId  = data?.slots?.main || null;
     } catch (err) {

@@ -109,7 +109,10 @@ const FactoryRoles = () => {
           </li>
           <li>
             <code>canBe</code> — identity operations (birth, connect,
-            release). Most roles leave this empty.
+            release, switch, death). Most roles leave this empty;
+            global ships <code>release</code> so every being can log
+            out and <code>switch</code> so every being can change
+            their branch frame.
           </li>
         </ul>
 
@@ -459,6 +462,116 @@ const FactoryRoles = () => {
             structure; inhabit is how a human reaches inside it.
           </p>
         </aside>
+      </section>
+
+      {/* ───────────────────────────────────────────────────────── */}
+      <section>
+        <h2>Permissions are earned by exploring</h2>
+
+        <p>
+          A being doesn't arrive with all their permissions handed to
+          them. They arrive with a floor — the <code>global</code>{" "}
+          role, which every authenticated being carries — and grow
+          their reach by encountering spaces, petitioning roles, and
+          accumulating grants. The floor is on purpose minimal: see
+          where you are, move yourself, ask for more.
+        </p>
+
+        <p>
+          The two verbs that grow you live on the floor itself, so
+          every being has the tools to climb without anyone giving
+          them special access first.
+        </p>
+
+        <pre className="ns-code">{`// seed/present/roles/global/role.js
+canDo: [
+  { action: "move",               description: "move yourself in space" },
+  { action: "set-being:position", description: "walk to another space" },
+  { action: "ask-role",           description: "petition for a role from its host" },
+  { action: "take-role",          description: "self-grant a role that admits it" },
+]`}</pre>
+
+        <h3>Three ways a role admits a newcomer</h3>
+
+        <p>
+          The role itself declares how it's acquired. The operator
+          who authored the role decides the gate, not the visitor.
+        </p>
+
+        <ul className="ns-list">
+          <li>
+            <strong>Auto on entry.</strong>{" "}
+            <code>acquisition.autoOnEntry: true</code> — the role
+            grants silently on the visitor's first SEE inside its
+            reach. This is the <code>@public</code> visitor pattern.
+            Walking in IS the petition.
+          </li>
+          <li>
+            <strong>Grabbable.</strong>{" "}
+            <code>acquisition.grabbed: true</code> — anyone may{" "}
+            <code>take-role</code> on it without asking. Useful for
+            "anyone who shows up can wear this hat" roles (factory
+            worker, library reader, dance-floor dancer).
+          </li>
+          <li>
+            <strong>Asked.</strong> Neither flag set — the visitor
+            runs <code>ask-role</code>; a being whose own role
+            licenses <code>grant-role:&lt;X&gt;</code> decides
+            whether to grant. This is the only path that requires
+            another being's consent.
+          </li>
+        </ul>
+
+        <h3>Foreign beings climb the same ladder</h3>
+
+        <p>
+          A foreign being — one arriving from another reality.branch
+          through a portal, through canopy dispatch, or through the
+          mate-vessel path — is not architecturally distinct from a
+          local newcomer. Both walk in with their home identity
+          intact. Both carry their home grants. Both encounter the
+          same role-acquisition surface here and earn their way up
+          through the same verbs.
+        </p>
+
+        <p>
+          Each grant they earn lands in <em>this</em> reality.branch's
+          projection of their being row, in{" "}
+          <code>qualities.rolesGranted</code>. Their home reality
+          doesn't know or care; their home identity is unchanged.
+          They've become a local citizen by doing local things, while
+          remaining sovereign in their origin world.
+        </p>
+
+        <aside className="ns-doc-aside">
+          <p>
+            <strong>The only structural privilege a local being holds
+            is what the operator put in <code>global</code>.</strong>{" "}
+            Past that floor, locals and foreigners are on the same
+            ladder. Federation citizenship isn't a separate concept
+            in the substrate — it's just a sufficiently-progressed
+            visit. The substrate distinguishes "what grants you've
+            accumulated here," not "where you came from."
+          </p>
+        </aside>
+
+        <h3>Growth compounds</h3>
+
+        <p>
+          Once a being holds a role, that role's <code>canDo</code>{" "}
+          may itself include <code>grant-role:&lt;X&gt;</code> for
+          further roles, or unlock spaces whose own roles are then
+          petitionable. Early grants are the rungs to later grants.
+          The operator authors the climb by deciding which roles are
+          auto-on-entry, which are grabbable, which are gated, and
+          which can grant which others.
+        </p>
+
+        <p>
+          The substrate provides the verbs; the reality's role graph
+          defines the shape of progression. A being grows by doing,
+          and doing makes more doing possible.
+        </p>
       </section>
 
       {/* ───────────────────────────────────────────────────────── */}

@@ -33,6 +33,7 @@ import { remapRefs } from "../refWalker.js";
 import { assertValidBundle } from "./bundle.js";
 import { emitFact } from "../../past/fact/facts.js";
 import { withBeingAct } from "../../sprout.js";
+import log from "../../seedReality/log.js";
 
 /**
  * Graft a clone bundle into the target.
@@ -55,6 +56,54 @@ export async function graftClone(bundle, targetParentSpaceId, opts = {}) {
     throw new Error("graftClone: opts.operatorBeingId is required (identifies the grafter for GRAFT_INITIATOR + audit)");
   }
   const branch = opts.branch || "0";
+
+  // ── Manifest gate ──
+  // The bundle declares what it needs to FUNCTION here: the
+  // extensions whose roles/ops/data the captured content references,
+  // and the role names its beings wear (cloneSubtree derives both at
+  // capture). Grafting without the extensions produces beings that
+  // can't wake and qualities nothing consumes — refuse loud. Roles
+  // are softer: a missing role may arrive via the bundle's own
+  // content.facts (set-role) or be authored after, so they warn.
+  {
+    const required = Array.isArray(bundle.manifest?.extensions)
+      ? bundle.manifest.extensions
+      : [];
+    if (required.length > 0) {
+      let loadedExt = new Set();
+      try {
+        const { getLoadedExtensionNames } = await import("../../../extensions/loader.js");
+        loadedExt = new Set(getLoadedExtensionNames());
+      } catch { /* loader absent — every required extension reads as missing below */ }
+      const missing = required.filter((name) => !loadedExt.has(name));
+      if (missing.length > 0) {
+        throw new Error(
+          `graftClone: bundle requires extension(s) not loaded here: ` +
+          `${missing.join(", ")}. Install/enable them (extension profile) ` +
+          `and re-graft, or edit bundle.manifest.extensions if you know ` +
+          `the content doesn't need them.`,
+        );
+      }
+    }
+    const requiredRoles = Array.isArray(bundle.manifest?.roles)
+      ? bundle.manifest.roles
+      : [];
+    if (requiredRoles.length > 0) {
+      try {
+        const { getRole } = await import("../../present/roles/registry.js");
+        const missingRoles = requiredRoles.filter((name) => !getRole(name));
+        if (missingRoles.length > 0) {
+          log.warn(
+            "Graft",
+            `bundle references role(s) not registered here: ` +
+            `${missingRoles.join(", ")}. Beings wearing them won't wake ` +
+            `until the roles exist (the bundle's facts may install them, ` +
+            `or author via set-role).`,
+          );
+        }
+      } catch { /* registry unavailable; the warn is best-effort */ }
+    }
+  }
 
   // ── Parameter resolution. ──
   // Build the substitution table from declared parameters + operator-

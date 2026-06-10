@@ -157,6 +157,13 @@ export function registerOperation(name, spec) {
     // permissions.do.set-space:<ns>. authorize.js's buildKeyParts
     // reads it via isNamespaceKeyedAction().
     useNamespaceKey: spec.useNamespaceKey === true,
+    // Optional auth-action refinement. doVerb calls
+    // `authAction({ params, target })` to derive the action string the
+    // role-walk matches against canDo — grant-role authorizes as
+    // `grant-role:<roleName>` so canDo entries can scope grantors
+    // per-role. Open to extension ops the same way. Falls back to the
+    // op name when absent or when the function returns nothing.
+    authAction: typeof spec.authAction === "function" ? spec.authAction : null,
     ownerExtension,
   });
   log.verbose("Operations", `Registered: ${name} (${ownerExtension})`);

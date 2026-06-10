@@ -446,7 +446,10 @@ Being.qualities.rolesGranted = [
     anchorSpaceId: "<spaceId>",   // where this grant takes effect (and below)
     grantedBy:     "<grantorBeingId>",
     grantedAt:     "<iso timestamp>",
-    expiresAt:     null,           // future: time-bound grants
+    // No expiry field. Wall-clock expiry is a human-time concept the
+    // reality has no clock for; a grant lasts until revoked. Time-bound
+    // grants arrive with REALITY-time (a being's moments / reel seq /
+    // harmony beats), enforced at the role-walk like everything else.
   },
   { role: "human", anchorSpaceId: "<placeRootId>", grantedBy: "i-am", grantedAt: "..." },
   ...
@@ -744,7 +747,7 @@ The `matchAny` helper does the wildcard + prefix matching from today's `scoreKey
 
 ### Being
 
-- **Add:** `qualities.rolesGranted: Array<{role, anchorSpaceId, grantedBy, grantedAt, expiresAt?}>`
+- **Add:** `qualities.rolesGranted: Array<{role, anchorSpaceId, grantedBy, grantedAt}>`
 - **Retire:** `defaultRole` field stays for now (still drives roleFlow's fallback clause) but doesn't gate auth. Future cleanup: replace with first granted role.
 - **Retire:** `qualities.roleFlow` keeps its current shape; the active-role pick at moment-time still walks the flow. The flow's chosen role must appear in `rolesGranted` or it falls back.
 
@@ -771,7 +774,7 @@ The `qualities.permissions.<verb>.<keyParts> = { requires: ... }` namespace reti
 ### `grant-role`
 
 ```js
-do(targetBeing, "grant-role", { role: "coder", anchorSpaceId: "<id>", expiresAt? })
+do(targetBeing, "grant-role", { role: "coder", anchorSpaceId: "<id>" })
 ```
 
 - Caller must hold a role at `anchorSpaceId` (or above) that includes `canDo: [{action: "grant-role", description: "..."}]`.
@@ -900,7 +903,7 @@ Already shows the LLM that'll respond. After this lands, it can also show:
 ## Out of scope
 
 - **Cross-world role propagation** — a granted role doesn't automatically transfer when the being walks into a foreign reality. Deferred to the cross-world doctrine.
-- **Time-bound grants** — `expiresAt` is on the schema but not enforced yet; a future pass adds the expiry check.
+- **Time-bound grants** — no wall-clock expiry; the reality has no clock. When a reality-time unit exists (moments / reel seq / harmony beats), grants can carry a bound in that unit, enforced at the role-walk.
 - **Composite roles via stacking** — `roleComposer.composeStack` keeps working for cognition-frame composition. The authorize walk treats stacked roles as a union (any role in the stack permits → allow). No new primitive.
 - **Role versioning** — when a role's canDo changes after being granted, the granted role uses the LATEST definition. Future versioned grants would freeze the canDo at grant-time. Out of scope.
 - **Permissions on Space/Matter directly** — auth3 is explicit: *"Never controlling space/matter access. Those are through Acts."* — so this stays. The space/matter doesn't have its own permission gate; the only gate is "did the actor's role permit this action."

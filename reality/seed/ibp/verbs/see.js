@@ -654,15 +654,18 @@ export async function seeVerb(target, opts = {}) {
 async function maybeAutoGrantOnEntry({ identity, spaceId, branch, summonCtx }) {
   if (!spaceId) return;
   try {
-    const { loadProjection } = await import("../../materials/projections.js");
-    const spaceSlot = await loadProjection("space", String(spaceId), branch);
+    // loadOrFold both reads: the seen space may be inherited on this
+    // branch (its qualities.roles live on a not-yet-folded lineage
+    // slot), and the actor's grants likewise.
+    const { loadOrFold } = await import("../../materials/projections.js");
+    const spaceSlot = await loadOrFold("space", String(spaceId), branch);
     const roles = spaceSlot?.state?.qualities?.roles;
     if (!roles || typeof roles !== "object") return;
 
     const { normalizeAcquisition, alreadyHoldsRole } =
       await import("../../present/roles/acquisition.js");
 
-    const actorSlot = await loadProjection("being", String(identity.beingId), branch);
+    const actorSlot = await loadOrFold("being", String(identity.beingId), branch);
     const heldGrants = actorSlot?.state?.qualities?.rolesGranted || [];
 
     for (const [roleName, spec] of Object.entries(roles)) {
@@ -677,6 +680,11 @@ async function maybeAutoGrantOnEntry({ identity, spaceId, branch, summonCtx }) {
         anchorSpaceId:  String(spaceId),
         grantedBy:      "auto-on-entry",
         summonCtx,
+        // The SEE's branch — the world where the commons admitted the
+        // visitor. A wire SEE has no moment, and emitInternalGrant's
+        // actorAct fallback would land the grant on main, where this
+        // branch's view can't inherit it (the fork predates it).
+        branch,
       });
     }
   } catch (_err) {

@@ -122,6 +122,20 @@ export async function doVerb(target, operation, params = {}, opts = {}) {
     ) {
       namespace = params.field.slice("qualities.".length).split(".")[0];
     }
+    // The action the role-walk matches against canDo. By default the
+    // operation name; an op may declare `authAction(ctx)` to refine
+    // it with parameter context — grant-role authorizes as
+    // `grant-role:<roleName>` so a role's canDo can name WHICH roles
+    // it may grant (`grant-role:human`) instead of all-or-nothing.
+    // Open to extension ops the same way.
+    let authAction = operation;
+    if (typeof op.authAction === "function") {
+      try {
+        authAction = op.authAction({ params, target }) || operation;
+      } catch {
+        authAction = operation;
+      }
+    }
     const decision = await authorize({
       identity,
       verb:   "do",
@@ -129,7 +143,7 @@ export async function doVerb(target, operation, params = {}, opts = {}) {
       // once at the verb entry). Auth evaluates the same world the
       // stamp rides.
       target: { kind: "position", spaceId: spaceIdForAuth, branch },
-      action: operation,
+      action: authAction,
       namespace,
       summonCtx: opts.summonCtx,
       // The caller's branch (session.currentBranch). Their grants

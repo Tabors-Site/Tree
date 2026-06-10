@@ -20,6 +20,7 @@ import { flat } from "./host.js";
 import { renderOpForm } from "../op-form.js";
 import { renderRolesPanel } from "./roles-panel.js";
 import { renderLlmPanel } from "./llm-panel.js";
+import { renderInboxPanel } from "./inbox-panel.js";
 
 // One outside-click listener at a time. The bar re-renders on every SEE;
 // we drop the previous listener before wiring a new one so they can't
@@ -161,6 +162,9 @@ function openAction(action, opByName) {
   if (action.special === "llm-reality") {
     return renderLlmPanel(body, action, opByName, { refreshView, mode: "reality" });
   }
+  if (action.special === "inbox") {
+    return renderInboxPanel(body, action, opByName, { refreshView });
+  }
   if (action.special === "branch-info") {
     return renderBranchInfo(body);
   }
@@ -176,6 +180,17 @@ function openAction(action, opByName) {
     submitLabel: action.submitLabel || "run",
     doOp: flat.doOp,
     onResult: (err) => { if (!err) refreshView(); },
+  });
+}
+
+// External opener for the inbox panel. The inbox is per-being and the
+// identity chip mounts it directly rather than burying it in
+// placeActions. Host code calls this when the user clicks the inbox
+// chip in the header.
+export function openInboxAction() {
+  const body = openInspectorPanel("your inbox");
+  return renderInboxPanel(body, { label: "your inbox" }, new Map(), {
+    refreshView: () => {},
   });
 }
 
@@ -483,6 +498,8 @@ function placeActions(address, desc) {
     // configure their own being; the space + reality writes are
     // owner/angel-gated by the substrate. See llm-panel.js.
     { label: "llm", special: "llm", address, values: { descriptor: desc } },
+    // (Inbox is per-being, not per-place — surfaced as a chip in the
+    // identity bar, not in placeActions. See openInboxAction below.)
     { label: "set owner", op: "set-owner", address },
     { label: "remove owner", op: "remove-owner", address },
     { label: "⚠ delete this space", op: "end-space", address, danger: true },

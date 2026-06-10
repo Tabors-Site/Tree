@@ -380,7 +380,20 @@ async function _dispatchSummon({
   const decision = await authorize({
     identity,
     verb:   "summon",
-    target: { kind: "stance", spaceId: resolved.spaceId, being: activeRole, activeRole, branch },
+    // `being` is the TARGET BEING'S NAME — canSummon patterns
+    // ("@cherub", "@food-*") match being names, and beings are
+    // addressed individually even when several share a role. Passing
+    // activeRole here made the role-walk match patterns against the
+    // ROLE name: "@cherub" failed for any being whose name differs
+    // from their active role, and a pattern like "@human" admitted
+    // summoning EVERY human-roled being.
+    target: {
+      kind: "stance",
+      spaceId: resolved.spaceId,
+      being: toBeing?.name || activeRole,
+      activeRole,
+      branch,
+    },
     summonCtx,
     // The actor's branch, where their grants live. In-moment summons
     // ride summonCtx.actorAct.branch; wire summons thread the

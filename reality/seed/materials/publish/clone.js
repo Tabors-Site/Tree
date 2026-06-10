@@ -335,7 +335,60 @@ export async function cloneSubtree(scopeSpaceId, opts = {}) {
     });
   }
 
-  // ── 8. Stamp completion meta ──
+  // ── 8. Manifest — what the receiver must have for this clone to
+  // function. Two derivations:
+  //
+  //   roles      — every role the captured beings reference
+  //                (defaultRole, roleFlow clauses, granted roles).
+  //                The graft side verifies they resolve.
+  //   extensions — the owning extension of each referenced role
+  //                (registry `origin`), plus any qualities namespace
+  //                on captured aggregates that matches a loaded
+  //                extension's name (extension-owned data riding the
+  //                aggregates). Grafting without these loaded leaves
+  //                beings that can't wake and data nothing consumes,
+  //                so graft refuses when they're missing.
+  const roleNames = new Set();
+  for (const b of bundle.content.beings) {
+    if (b.defaultRole) roleNames.add(String(b.defaultRole));
+    const flow = b.qualities?.roleFlow;
+    if (Array.isArray(flow)) {
+      for (const clause of flow) {
+        if (clause?.role) roleNames.add(String(clause.role));
+      }
+    }
+    const granted = b.qualities?.rolesGranted;
+    if (Array.isArray(granted)) {
+      for (const g of granted) {
+        if (g?.role) roleNames.add(String(g.role));
+      }
+    }
+  }
+  const extNames = new Set();
+  try {
+    const { getRole } = await import("../../present/roles/registry.js");
+    for (const name of roleNames) {
+      const origin = getRole(name)?.origin;
+      if (origin && origin !== "seed" && origin !== "live") extNames.add(origin);
+    }
+  } catch { /* registry unavailable in standalone tools; roles list still travels */ }
+  try {
+    const { getLoadedExtensionNames } = await import("../../../extensions/loader.js");
+    const loadedExt = new Set(getLoadedExtensionNames());
+    const sweep = (qualities) => {
+      if (!qualities || typeof qualities !== "object") return;
+      for (const ns of Object.keys(qualities)) {
+        if (loadedExt.has(ns)) extNames.add(ns);
+      }
+    };
+    for (const s of bundle.content.spaces) sweep(s.qualities);
+    for (const b of bundle.content.beings) sweep(b.qualities);
+    for (const m of bundle.content.matter) sweep(m.qualities);
+  } catch { /* loader absent (headless capture); role-origin derivation above still ran */ }
+  bundle.manifest.roles = [...roleNames].sort();
+  bundle.manifest.extensions = [...extNames].sort();
+
+  // ── 9. Stamp completion meta ──
   bundle.meta.createdAt = new Date().toISOString();
 
   return bundle;

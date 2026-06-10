@@ -440,7 +440,7 @@ async function grantRoleHandler({ target, params, identity, summonCtx }) {
   if (!params || typeof params !== "object") {
     throw new IbpError(IBP_ERR.INVALID_INPUT, "grant-role: params required");
   }
-  const { role, anchorSpaceId = null, anchorBeingId = null, expiresAt = null } = params;
+  const { role, anchorSpaceId = null, anchorBeingId = null } = params;
   if (typeof role !== "string" || !role.length) {
     throw new IbpError(IBP_ERR.INVALID_INPUT, "grant-role: `role` is required");
   }
@@ -463,14 +463,16 @@ async function grantRoleHandler({ target, params, identity, summonCtx }) {
     throw new IbpError(IBP_ERR.INVALID_INPUT, `grant-role: role "${role}" is not registered`);
   }
   // Enrich params in-place so the auto-emitted Fact carries the full
-  // grant record (grantedBy + grantedAt + expiresAt). The being
-  // reducer reads these from fact.params and appends to
-  // qualities.rolesGranted.
+  // grant record (grantedBy + grantedAt). The being reducer reads
+  // these from fact.params and appends to qualities.rolesGranted.
+  // No expiry: wall-clock expiry is a human-time concept the reality
+  // has no clock for; a grant lasts until revoked. Time-bound grants
+  // arrive with reality-time (moments), not ISO timestamps — see
+  // present/roles/acquisition.js.
   const grantedBy = String(identity.beingId);
   const grantedAt = new Date().toISOString();
   params.grantedBy = grantedBy;
   params.grantedAt = grantedAt;
-  params.expiresAt = expiresAt;
   return {
     granted: true,
     role,
@@ -479,7 +481,6 @@ async function grantRoleHandler({ target, params, identity, summonCtx }) {
     anchorBeingId,
     grantedBy,
     grantedAt,
-    expiresAt,
   };
 }
 
@@ -526,8 +527,18 @@ registerOperation("grant-role", {
     role:          { type: "text", label: "Role to grant",       required: true },
     anchorSpaceId: { type: "text", label: "Anchor space id",     required: false },
     anchorBeingId: { type: "text", label: "Anchor being id",     required: false },
-    expiresAt:     { type: "text", label: "Expires at (ISO)",    required: false },
   },
+  // The role-walk authorizes the FULL action `grant-role:<role>` so
+  // canDo entries can scope grantors per-role: `grant-role:human`
+  // grants only human; `grant-role:*` (or bare `grant-role`, the
+  // namespace match) is the super-grantor shape. Without this, the
+  // per-role contract documented above was never enforced — the walk
+  // only ever saw the bare op name, so any grantor could grant ANY
+  // role and `grant-role:X` entries matched nothing.
+  authAction: ({ params }) =>
+    typeof params?.role === "string" && params.role.length
+      ? `grant-role:${params.role}`
+      : "grant-role",
   handler: grantRoleHandler,
 });
 
@@ -541,6 +552,11 @@ registerOperation("revoke-role", {
     anchorBeingId: { type: "text", label: "Anchor being id",      required: false },
     grantedBy:     { type: "text", label: "Grantor whose grant to revoke (defaults to self)", required: false },
   },
+  // Same per-role scoping as grant-role.
+  authAction: ({ params }) =>
+    typeof params?.role === "string" && params.role.length
+      ? `revoke-role:${params.role}`
+      : "revoke-role",
   handler: revokeRoleHandler,
 });
 

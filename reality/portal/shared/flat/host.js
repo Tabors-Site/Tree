@@ -96,6 +96,7 @@ const FLAT_DOM = `
       <a class="qn-chip" data-tag="extensions" title="./extensions . installed extensions">ext</a>
     </nav>
     <div id="branch-chip" title="active branch"></div>
+    <button id="inbox-chip" type="button" title="your inbox — pending summons addressed to you" style="display:none;background:transparent;color:#c8d3cb;border:1px solid #2c3a32;border-radius:4px;padding:3px 8px;font-family:inherit;font-size:11px;cursor:pointer;margin-left:4px;">inbox <span id="inbox-count" class="dim">·</span></button>
     <div id="identity-chip" title="signed-in identity"></div>
     <button id="flat-timeline-btn" type="button" title="branches and timeline">🌿 timeline</button>
     <button id="flat-close-btn" type="button" title="close text mode (Esc)">close</button>
@@ -225,6 +226,7 @@ export function mountFlatView(rootContainer, ctx) {
   wireQuickNav(root, ctx);
   wireCloseButton(root, ctx);
   wireTimelineButton(root);
+  wireInboxChip(root);
   const detachKeys = wireKeyboardShortcuts(ctx);
 
   // Initial render. Operations load async (a SEE on .operations); the
@@ -313,6 +315,56 @@ function wireQuickNav(root, _ctx) {
       flat.navigate(`${reality}${bq}${path}`);
     });
   });
+}
+
+// Inbox chip in the header — visible only when signed in. Click opens
+// the inbox panel; a periodic SEE on `my-inbox` keeps the pending
+// count fresh. Polled rather than push-driven because the inbox state
+// is per-being and we don't subscribe to it via the descriptor.
+let _inboxPollHandle = null;
+function wireInboxChip(root) {
+  const chip = root.querySelector("#inbox-chip");
+  if (!chip) return;
+  // Render visibility based on session state.
+  const updateVisibility = () => {
+    const signedIn = !!_state.session?.token;
+    chip.style.display = signedIn ? "" : "none";
+  };
+  updateVisibility();
+  chip.addEventListener("click", async (ev) => {
+    ev.preventDefault();
+    // Lazy-import to keep the host bundle lean.
+    const { openInboxAction } = await import("./task-bar.js");
+    openInboxAction();
+  });
+  // Update count periodically. The chip stays visible the whole time;
+  // the badge just changes.
+  if (_inboxPollHandle) clearInterval(_inboxPollHandle);
+  _inboxPollHandle = setInterval(refreshInboxCount, 15000);
+  refreshInboxCount();
+}
+
+async function refreshInboxCount() {
+  const root = document;
+  const chip = root.querySelector("#inbox-chip");
+  const badge = root.querySelector("#inbox-count");
+  if (!chip || !badge) return;
+  if (!_state.session?.token || !_state.client?.see) {
+    chip.style.display = "none";
+    return;
+  }
+  chip.style.display = "";
+  try {
+    const result = await _state.client.see("my-inbox");
+    const n = Array.isArray(result?.pending) ? result.pending.length : 0;
+    badge.textContent = n === 0 ? "·" : String(n);
+    badge.style.color = n > 0 ? "#e8b762" : "#6b7d72";
+    chip.style.borderColor = n > 0 ? "#6b5320" : "#2c3a32";
+  } catch (err) {
+    // Surface to console so we notice if inbox SEE breaks; chip stays
+    // visible with no count rather than vanishing silently.
+    console.warn("[inbox-chip] count fetch failed:", err?.message || err);
+  }
 }
 
 function wireCloseButton(root, ctx) {
