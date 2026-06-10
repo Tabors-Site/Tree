@@ -88,7 +88,11 @@ export async function summonVerb(stance, message, opts = {}) {
   refuseHistoricalWrite("summon", stance, opts);
   const validatedMessage = validateSummonMessage(message);
 
-  const { identity = null, currentUser = null, currentReality = null, currentBranch = null, onResponse = null, onError = null, summonCtx = null } = opts;
+  const {
+    identity = null, currentUser = null, currentReality = null,
+    currentBranch = null, currentPath = null, actorBranch = null,
+    onResponse = null, onError = null, summonCtx = null,
+  } = opts;
 
   // Top-level operation count (one-DO/BE/SUMMON-per-moment doctrine;
   // sealAct reads opCount + batched from summonCtx). Each summon is
@@ -104,6 +108,13 @@ export async function summonVerb(stance, message, opts = {}) {
   const parseCtx = {
     currentReality: realityDomain,
     currentUser: currentUser || identity?.name || null,
+    // Ambient world for relative shapes (`~`, bare paths, implicit
+    // branch): the moment's own branch when inside one, else the
+    // wire-threaded value. Without this the seed-side expand fell
+    // through to the `#main` pointer for every relative summon and
+    // resolveStance walked the wrong branch for off-main callers.
+    currentBranch: summonCtx?.actorAct?.branch || currentBranch || null,
+    currentPath:   currentPath || null,
   };
   const parsed = parseWithContext(stance, parseCtx);
   const expanded = await resolveBranchPointers(expand(parsed, parseCtx), parseCtx);
@@ -129,7 +140,10 @@ export async function summonVerb(stance, message, opts = {}) {
       verb:   "summon",
       target: { kind: "thread", id: targetThreadId, spaceId: threadsSpaceId },
       summonCtx,
-      actorBranch: opts.currentBranch || null,
+      // The caller's session branch (their grants live there). The
+      // wire threads it separately from currentBranch, which carries
+      // the FACT's destination branch for this verb.
+      actorBranch: actorBranch || null,
     });
     if (!decision.ok) {
       throw new IbpError(IBP_ERR.FORBIDDEN, decision.reason || "Not allowed to address .threads");
@@ -346,6 +360,10 @@ export async function summonByResolved(args) {
     identity, onResponse, onError, summonCtx, branch,
   });
 }
+
+/* summonByResolved passes no actorBranch: its callers are seed-internal
+ * (scheduler wakes, subscriptions, transport dispatch) where the actor
+ * either rides a moment (actorAct covers it) or IS the substrate. */
 
 // ─────────────────────────────────────────────────────────────────────
 // PRIVATE

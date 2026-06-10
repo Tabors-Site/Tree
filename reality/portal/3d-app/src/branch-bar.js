@@ -662,14 +662,32 @@ async function _openTimeline(branchPath) {
     if (!_state.firstTs || !_state.nowTs) return;
     const rect = ev.currentTarget.getBoundingClientRect();
     const frac = Math.max(0, Math.min(1, (ev.clientX - rect.left - 10) / (rect.width - 20)));
+    // Clicking the strip is an explicit scrub — kill any active
+    // playback so the user's click position sticks until they press
+    // play again.
+    _stopPlayback();
+    // Mode-aware: in reality mode the strip is a discrete act-index
+    // ruler — snap the click to the nearest act. In human mode it's
+    // a continuous wall-clock ruler.
+    if (_state.playbackMode === "reality") {
+      const total = _state.marks.length;
+      if (total === 0) return;
+      // frac near the right edge → return to live; else pick the
+      // nearest mark by index.
+      if (frac >= 0.995) {
+        _state.cursorMs = null;
+        _returnToNow();
+        return;
+      }
+      const idx = total === 1 ? 0 : Math.round(frac * (total - 1));
+      const mark = _state.marks[Math.max(0, Math.min(total - 1, idx))];
+      _state.cursorMs = new Date(mark.ts).getTime();
+      _rewindTo(mark.ts);
+      return;
+    }
     const start = new Date(_state.firstTs).getTime();
     const end = new Date(_state.nowTs).getTime();
     const t = new Date(start + frac * (end - start));
-    // Clicking the strip is an explicit scrub — kill any active
-    // playback so the user's click position sticks until they press
-    // play again. Sync cursorMs to the click so a subsequent play
-    // resumes from where they pointed.
-    _stopPlayback();
     _state.cursorMs = t.getTime();
     if (frac >= 0.995) {
       _state.cursorMs = null;
@@ -938,23 +956,44 @@ function _renderTimeline() {
     }
   }
 
-  labelL.textContent = _shortStamp(_state.firstTs);
-  labelR.textContent = "now";
+  // Two layout modes for the strip:
+  //   - "human": dots positioned by wall-clock fraction in [firstTs, nowTs]
+  //   - "reality": dots positioned by act-index, evenly spaced. Each
+  //     mark gets 1/N of the strip regardless of when it happened, so
+  //     a quiet hour reads the same as a busy second — "reality time"
+  //     is being-time, where each act is exactly one tick.
+  const realityMode = _state.playbackMode === "reality";
+  const total = _state.marks.length;
+  if (realityMode) {
+    labelL.textContent = total > 0 ? `act 1` : "no acts yet";
+    labelR.textContent = total > 0 ? `act ${total}` : "";
+  } else {
+    labelL.textContent = _shortStamp(_state.firstTs);
+    labelR.textContent = "now";
+  }
 
   const start = new Date(_state.firstTs).getTime();
   const end = new Date(_state.nowTs).getTime();
   const span = Math.max(1, end - start);
-  for (const m of _state.marks) {
+
+  // Compute frac per mark — wall-clock for human, index for reality.
+  const fracOf = (m, i) => {
+    if (realityMode) {
+      return total === 1 ? 0.5 : i / (total - 1);
+    }
     const t = new Date(m.ts).getTime();
-    const frac = Math.max(0, Math.min(1, (t - start) / span));
+    return Math.max(0, Math.min(1, (t - start) / span));
+  };
+
+  for (let i = 0; i < _state.marks.length; i++) {
+    const m = _state.marks[i];
+    const frac = fracOf(m, i);
     const isSelected = _state.selectedMarkTs === m.ts;
     const dot = document.createElement("div");
     dot.style.cssText = [
       "position: absolute",
       `left: ${(frac * 100).toFixed(2)}%`,
       "top: 50%",
-      // Selected marks render bigger + amber so the user sees exactly
-      // which act their detail row is describing.
       `width: ${isSelected ? 10 : 6}px`,
       `height: ${isSelected ? 10 : 6}px`,
       `background: ${isSelected ? "#e8b762" : "#6b7d72"}`,
@@ -976,9 +1015,21 @@ function _renderTimeline() {
     : `#${_state.timelineBranch}`;
   if (_state.atTimestamp) {
     const t = new Date(_state.atTimestamp).getTime();
-    const frac = Math.max(0, Math.min(1, (t - start) / span));
+    let cursorFrac;
+    if (realityMode) {
+      // Position cursor at the mark we're "on" — i.e., the most-recent
+      // mark at or before _state.atTimestamp. Uses the same act-index
+      // spacing the dots use so the cursor lines up exactly.
+      const activeMark = _findMarkAtCursor(t);
+      const idx = activeMark ? _state.marks.indexOf(activeMark) : -1;
+      cursorFrac = idx >= 0
+        ? (total === 1 ? 0.5 : idx / (total - 1))
+        : 0;
+    } else {
+      cursorFrac = Math.max(0, Math.min(1, (t - start) / span));
+    }
     cursor.style.display = "block";
-    cursor.style.left = `${(frac * 100).toFixed(2)}%`;
+    cursor.style.left = `${(cursorFrac * 100).toFixed(2)}%`;
     cursor.style.right = "auto";
     // Status label is mode-aware: "human" shows the ISO wall-clock
     // timestamp the rewind landed at; "reality" shows the seq of the
