@@ -762,7 +762,8 @@ export async function emitFact(spec, summonCtx = null) {
   // at insert time. See seed/past/act/crossOrigin.js + CROSS-WORLD.md.
   if (summonCtx?.actorAct && spec?.target) {
     const { deriveCrossOrigin } = await import("../act/crossOrigin.js");
-    const target = inferTargetWorld(spec, summonCtx);
+    const { getRealityDomain } = await import("../../ibp/address.js");
+    const target = inferTargetWorld(spec, summonCtx, getRealityDomain());
     const crossOrigin = deriveCrossOrigin(summonCtx.actorAct, target);
     if (crossOrigin) {
       spec.params = { ...(spec.params || {}), crossOrigin };
@@ -779,20 +780,30 @@ export async function emitFact(spec, summonCtx = null) {
 }
 
 // Resolve the target's world (reality + branch) from a fact spec.
-// Today: the spec carries `branch` (where the fact lands) and the
-// reality is implicit-this-substrate. When cross-world dispatch lands,
-// callers will pass `target.world` explicitly with foreign reality.
+// The spec carries `branch` (where the fact lands); the reality is
+// ALWAYS this substrate — the local stamper only ever writes local
+// reels (cross-reality writes travel over canopy and are stamped by
+// the receiving substrate). The explicit `target.world` override
+// remains for future forwarding shapes.
+//
+// The reality must NOT fall back to actorAct.reality: for an inbound
+// foreign actor the act's reality is the FOREIGN domain, and using it
+// here made the target world look foreign too — deriveCrossOrigin
+// then compared foreign === foreign and dropped `reality` from the
+// crossOrigin block (or dropped the whole block when the foreign
+// branch string matched the local one, e.g. both "0"), losing
+// provenance AND the crossOrigin.actId retry-dedupe.
+//
 // Always operates on ACTUAL branch paths, never pointers — pointer
 // resolution happens at the address-parsing perimeter before any
 // emit. See CROSS-WORLD.md "pointers vs actual branches."
-function inferTargetWorld(spec, summonCtx) {
+function inferTargetWorld(spec, summonCtx, localReality) {
   if (spec?.target?.world?.reality && spec?.target?.world?.branch) {
     return { world: spec.target.world };
   }
   const branch = spec?.branch || summonCtx?.actorAct?.branch || null;
-  const reality = summonCtx?.actorAct?.reality || null;
-  if (!branch || !reality) return null;
-  return { world: { reality, branch } };
+  if (!branch || !localReality) return null;
+  return { world: { reality: localReality, branch } };
 }
 
 export async function sealFacts(deltaF, opts = {}) {

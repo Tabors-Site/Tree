@@ -628,7 +628,7 @@ async function _openTimeline(branchPath) {
     <div class="bt-strip" style="position:relative;height:22px;border-radius:11px;background:#131a17;border:1px solid #2c3a32;cursor:crosshair;">
       <div class="bt-track" style="position:absolute;left:10px;right:10px;top:50%;height:2px;background:#2c3a32;transform:translateY(-50%);"></div>
       <div class="bt-marks" style="position:absolute;left:10px;right:10px;top:0;bottom:0;"></div>
-      <div class="bt-cursor" style="position:absolute;width:12px;height:12px;border-radius:50%;background:#e8b762;top:50%;transform:translate(-50%,-50%);right:10px;display:none;box-shadow:0 0 6px rgba(232,183,98,0.6);"></div>
+      <div class="bt-cursor" style="position:absolute;width:14px;height:14px;border-radius:50%;background:#ffffff;border:2px solid #5cc8ff;top:50%;transform:translate(-50%,-50%);right:10px;display:none;box-shadow:0 0 8px rgba(92,200,255,0.8);z-index:2;"></div>
       <span class="bt-label-left" style="position:absolute;left:10px;top:-14px;font-size:9px;color:#6b7d72;">genesis</span>
       <span class="bt-label-right" style="position:absolute;right:10px;top:-14px;font-size:9px;color:#6b7d72;">now</span>
     </div>
@@ -639,7 +639,7 @@ async function _openTimeline(branchPath) {
         <button class="bt-playpause" type="button" title="play / pause" style="background:#131a17;color:#c8d3cb;border:1px solid #2c3a32;border-radius:3px;padding:3px 8px;font-family:inherit;font-size:12px;cursor:pointer;">▶</button>
         <button class="bt-ff" type="button" title="fast-forward (each click doubles forward speed)" style="background:#131a17;color:#c8d3cb;border:1px solid #2c3a32;border-radius:3px;padding:3px 8px;font-family:inherit;font-size:12px;cursor:pointer;">⏩</button>
         <span class="bt-speed" style="color:#8fbf9f;font-size:11px;min-width:48px;text-align:center;">paused</span>
-        <button class="bt-mode" type="button" title="time mode . human steps by wall clock; reality steps mark-to-mark so quiet stretches collapse" style="background:#131a17;color:#8fbf9f;border:1px solid #2c3a32;border-radius:3px;padding:3px 8px;font-family:inherit;font-size:11px;cursor:pointer;min-width:56px;">human</button>
+        <button class="bt-mode" type="button" title="time mode . 'human' = wall-clock seconds; 'reality' = mark-to-mark (each act counts as one step; gaps between acts collapse)" style="background:#131a17;color:#8fbf9f;border:1px solid #2c3a32;border-radius:3px;padding:3px 8px;font-family:inherit;font-size:11px;cursor:pointer;min-width:96px;">time: human</button>
       </span>
       <span class="bt-buttons" style="display:flex;gap:6px;">
         <button class="bt-now" type="button" style="display:none;background:#131a17;color:#c8d3cb;border:1px solid #2c3a32;border-radius:3px;padding:3px 10px;font-family:inherit;font-size:11px;cursor:pointer;">return to now</button>
@@ -980,13 +980,28 @@ function _renderTimeline() {
     cursor.style.display = "block";
     cursor.style.left = `${(frac * 100).toFixed(2)}%`;
     cursor.style.right = "auto";
-    status.textContent = `rewound to ${_humanStamp(_state.atTimestamp)} on ${branchLabel}`;
+    // Status label is mode-aware: "human" shows the ISO wall-clock
+    // timestamp the rewind landed at; "reality" shows the seq of the
+    // act we're "on" so each step reads as 1 reality-tick.
+    if (_state.playbackMode === "reality") {
+      const m = _findMarkAtCursor(t);
+      const seq = m?.seq ?? "?";
+      const total = _state.marks.length;
+      const idx = m ? _state.marks.findIndex((x) => x.ts === m.ts) + 1 : 0;
+      status.textContent = `seq ${seq} · act ${idx}/${total} on ${branchLabel}`;
+    } else {
+      status.textContent = `rewound to ${_humanStamp(_state.atTimestamp)} on ${branchLabel}`;
+    }
     status.style.color = "#e8b762";
     nowBtn.style.display = "inline-block";
     branchBtn.style.display = "inline-block";
   } else {
     cursor.style.display = "none";
-    status.textContent = `live on ${branchLabel}`;
+    if (_state.playbackMode === "reality") {
+      status.textContent = `live · ${_state.marks.length} acts on ${branchLabel}`;
+    } else {
+      status.textContent = `live on ${branchLabel}`;
+    }
     status.style.color = "#6b7d72";
     nowBtn.style.display = "none";
     branchBtn.style.display = "none";
@@ -1260,12 +1275,15 @@ function _toggleMode() {
   // stale fractional progress across modes.
   _state.markAccumulator = 0;
   _renderModeDisplay();
+  // Also repaint the strip so status text reflects the new mode
+  // (human shows ISO timestamp; reality shows seq + act count).
+  _renderTimeline();
 }
 
 function _renderModeDisplay() {
   if (!_state.timelineEl) return;
   const modeEl = _state.timelineEl.querySelector(".bt-mode");
-  if (modeEl) modeEl.textContent = _state.playbackMode;
+  if (modeEl) modeEl.textContent = `time: ${_state.playbackMode}`;
 }
 
 function _renderSpeedDisplay() {

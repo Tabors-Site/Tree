@@ -176,9 +176,17 @@ async function runLlmMomentInner({ being, envelope, role, signal, summonCtx }) {
   const beingId = String(being._id);
   const username = being.name || null;
 
+  // The branch this moment runs on. The wire layer attaches it to the
+  // envelope from the parsed address; summonCtx carries it forward
+  // through every internal call. No default . if branch is missing,
+  // assertBranch in the projection layer will throw and the moment
+  // fails loud rather than silently folding on main.
+  const branch = summonCtx?.actorAct?.branch || envelope?.branch;
+
   // The conversation lane. IBPA when both stances are resolvable; else
   // an ephemeral pipeline key. The reel fold reads this; the system
-  // prompt's "presenceKey" lookup writes through it.
+  // prompt's "presenceKey" lookup writes through it. Branch-scoped:
+  // the same pair on a different branch is a different lane.
   const beingOut = envelope.beingOut || envelope.toBeingId || null;
   const isPresentist = role?.presentist === true;
   const _ibpAddress = (isPresentist || !beingOut)
@@ -187,18 +195,12 @@ async function runLlmMomentInner({ being, envelope, role, signal, summonCtx }) {
         askerBeingId: beingId,
         askerPosition: getCurrentSpace(beingId) || null,
         addresseeBeingId: beingOut,
+        ...(branch ? { branch } : {}),
       });
   const presenceKey = _ibpAddress
     || envelope.ibpAddress
     || summonCtx?.ibpAddress
     || `pipeline:ephemeral:${crypto.randomUUID()}`;
-
-  // The branch this moment runs on. The wire layer attaches it to the
-  // envelope from the parsed address; summonCtx carries it forward
-  // through every internal call. No default . if branch is missing,
-  // assertBranch in the projection layer will throw and the moment
-  // fails loud rather than silently folding on main.
-  const branch = summonCtx?.actorAct?.branch || envelope?.branch;
 
   // 1. Plant the being at its space. rootId derives from setCurrentSpace.
   const spaceId =

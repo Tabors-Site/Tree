@@ -616,6 +616,9 @@ async function planActRow(opts = {}) {
     askerPosition,
     addresseeBeingId: beingOut,
     addresseePosition,
+    // The moment's branch: scopes the being lookups (branch-born
+    // beings compose) and renders into the lane identity.
+    branch,
   });
 
   const now = new Date();

@@ -130,30 +130,31 @@ export function parse(input, ctx = {}) {
   const right = parseStance(rightStr, ctx);
   const left = leftStr ? parseStance(leftStr, ctx, { isLeftSide: true }) : null;
 
-  // Cross-branch bridge gate. Different branches are different worlds —
-  // their fact-chains never converge, so a bridge across them has no
-  // shared fold to authorize against. Reject at parse time before any
-  // verb-level dispatch tries to resolve the call. This check runs
-  // BEFORE the async `#main` pointer resolution; the literal "0"
-  // fallback below collapses both-omitted to a match (both sides
-  // get "0", check passes — they later canonicalize to the same
-  // pointer-resolved branch). Cross-side mix (one explicit, one
-  // implicit) does a raw compare; that's a known limitation. A
-  // future pass could defer this check to post-resolveBranchPointers.
-  if (left && right) {
-    const lb = left.branch || "0";
-    const rb = right.branch || "0";
-    if (lb !== rb) {
-      throw paError(
-        "cross-branch-bridge",
-        input,
-        `Cross-branch bridge forbidden: left is on #${lb}, right is on #${rb}. ` +
-          `Bridges must keep both stances on the same branch.`,
-      );
-    }
+  // Cross-branch bridge gate, early half. Different branches are
+  // different worlds — their fact-chains never converge, so a bridge
+  // across them has no shared fold to authorize against. At parse
+  // time only TYPED canonical branches can be compared honestly: an
+  // implicit side inherits the caller's ambient branch during expand,
+  // and a pointer side resolves asynchronously. The old `|| "0"`
+  // fallback compared an implicit side as literal main and refused
+  // valid bridges from sessions seated off-main (implicit-left vs
+  // explicit `#1`-right from a #1 session). Mixed/implicit/pointer
+  // shapes are checked by the full gate in resolveBranchPointers,
+  // after expansion and pointer resolution have filled real values.
+  if (left?.branch && right?.branch && left.branch !== right.branch) {
+    throw crossBranchBridgeError(input, left.branch, right.branch);
   }
 
   return { left, right };
+}
+
+function crossBranchBridgeError(input, lb, rb) {
+  return paError(
+    "cross-branch-bridge",
+    input,
+    `Cross-branch bridge forbidden: left is on #${lb}, right is on #${rb}. ` +
+      `Bridges must keep both stances on the same branch.`,
+  );
 }
 
 /**
@@ -281,10 +282,29 @@ async function _resolveStanceBeingId(stance, ctx) {
  */
 export async function resolveBranchPointers(pa, ctx = {}) {
   if (!pa || typeof pa !== "object") return pa;
-  return {
+  const resolved = {
     left: pa.left ? await _resolveStancePointer(pa.left, ctx) : null,
     right: await _resolveStancePointer(pa.right, ctx),
   };
+  // Cross-branch bridge gate, full half (the parse-time half only
+  // compares typed canonical branches). By this point expansion has
+  // filled implicit sides from the caller's ambient branch and the
+  // pointer lookup above has canonicalized `#main`-style references,
+  // so the comparison is honest for every address shape. Only gate
+  // same-reality pairs: branch paths are per-reality namespaces, so
+  // comparing them across realities is meaningless (the foreign
+  // substrate gates its own side).
+  if (
+    resolved.left?.branch &&
+    resolved.right?.branch &&
+    (resolved.left.reality || null) === (resolved.right.reality || null) &&
+    resolved.left.branch !== resolved.right.branch
+  ) {
+    let addr = null;
+    try { addr = format(resolved); } catch { /* error context only */ }
+    throw crossBranchBridgeError(addr, resolved.left.branch, resolved.right.branch);
+  }
+  return resolved;
 }
 
 async function _resolveStancePointer(stance, ctx) {
@@ -1010,18 +1030,22 @@ const STANCE_PAIR_SEPARATOR = " :: ";
  * Compose a stance into its canonical storage string.
  * Accepts:
  *   - string         — pass-through (assumed already formatted)
- *   - { place?, spaceId, name }
+ *   - { place?, branch?, spaceId, name }
  *
- * Output: `<reality>/<spaceId>@<name>` (spaceId-rooted path form).
+ * Output: `<reality>#<branch>/<spaceId>@<name>` (spaceId-rooted path
+ * form, full IBPA grammar). The branch qualifier is part of the lane
+ * identity: the same two beings talking on #1 and on #0 are in
+ * different worlds, so they are different lanes.
  * Returns null when spaceId or name is missing.
  */
 function stanceString(input) {
   if (input == null) return null;
   if (typeof input === "string") return input.length > 0 ? input : null;
-  const { reality, spaceId, name } = input;
+  const { place, branch, spaceId, name } = input;
   if (!spaceId || !name) return null;
-  const realityPart = reality || getRealityDomain();
-  return `${realityPart}/${spaceId}@${name}`;
+  const realityPart = place || getRealityDomain();
+  const branchPart = branch ? `#${branch}` : "";
+  return `${realityPart}${branchPart}/${spaceId}@${name}`;
 }
 
 /**
@@ -1087,10 +1111,18 @@ async function loadBeingStanceFields(beingId, branch = "0") {
 /**
  * Invalidate a being's cached stance fields. Call after rename or
  * home change so the next composition picks up the new values.
+ *
+ * Cache keys are `<branch>:<beingId>` (per-branch state), so the
+ * invalidation sweeps every branch's entry for the being — the old
+ * delete-by-bare-id never matched a key and renames served stale
+ * stance fields until LRU eviction.
  */
 export function invalidateStanceCache(beingId) {
   if (!beingId) return;
-  stanceCache.delete(String(beingId));
+  const suffix = `:${String(beingId)}`;
+  for (const key of stanceCache.keys()) {
+    if (key.endsWith(suffix)) stanceCache.delete(key);
+  }
 }
 
 async function composeStanceForBeing(
@@ -1104,6 +1136,7 @@ async function composeStanceForBeing(
   if (!spaceId || !fields.name) return null;
   return {
     place: place || getRealityDomain(),
+    branch,
     spaceId: String(spaceId),
     name: fields.name,
   };
@@ -1115,6 +1148,15 @@ async function composeStanceForBeing(
  * resolved. Called by assign when opening the Act row so each row
  * carries its lane identity for presenceKey lookup, replay, and
  * grouping.
+ *
+ * `branch` is the moment's branch — the world both stances stand in
+ * (a bridge never crosses branches; the gate in address parsing
+ * enforces it). It scopes the being lookups (loadOrFold walks the
+ * branch's lineage, so branch-born beings compose correctly) and
+ * renders into the stance strings, making lane identity per-world.
+ * Without it, moments off main composed from main's view: null for
+ * branch-born beings (no lane identity at all) and stale names for
+ * diverged ones.
  */
 export async function computeIbpStampAddress({
   askerBeingId,
@@ -1122,15 +1164,18 @@ export async function computeIbpStampAddress({
   addresseeBeingId,
   addresseePosition = null,
   place = null,
+  branch = "0",
 }) {
   try {
     const askerStance = await composeStanceForBeing(askerBeingId, {
       currentPosition: askerPosition,
       place,
+      branch,
     });
     const addresseeStance = await composeStanceForBeing(addresseeBeingId, {
       currentPosition: addresseePosition,
       place,
+      branch,
     });
     return canonicalStancePair(askerStance, addresseeStance);
   } catch {

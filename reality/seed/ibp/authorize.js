@@ -45,6 +45,7 @@ import { getOperation } from "./operations.js";
 import { isExtensionBlockedAtSpace } from "../materials/space/extensionScope.js";
 import { authorizeViaRoles } from "./roleAuth.js";
 import { getSpaceRootId } from "../sprout.js";
+import { getRealityDomain } from "./address.js";
 
 /**
  * Authorize a verb request.
@@ -153,9 +154,20 @@ export async function authorize(args) {
   // actorBranch falls back to the moment's actor branch, then to
   // targetBranch (genesis/scaffold paths where there's no separate
   // session branch). Same-branch acts collapse to one value naturally.
+  //
+  // Foreign-actor guard: an inbound cross-reality actor's act carries
+  // THEIR home branch — a path in another substrate's namespace.
+  // Looking their grants up on that path locally is meaningless at
+  // best (no such branch row → noisy cold-fold failure) and wrong at
+  // worst (a coincidentally same-named local branch). Any roles a
+  // foreign actor holds HERE were granted here, on local branches, so
+  // their grants read from the target's branch instead.
+  const actorActIsLocal =
+    !summonCtx?.actorAct?.reality ||
+    summonCtx.actorAct.reality === getRealityDomain();
   const actorBranch =
     args.actorBranch ||
-    summonCtx?.actorAct?.branch ||
+    (actorActIsLocal ? summonCtx?.actorAct?.branch : null) ||
     targetBranch;
   const result = await authorizeViaRoles({
     identity,
