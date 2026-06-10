@@ -92,9 +92,9 @@ function assertType(type) {
  * Reading a reel in branch B is "main's facts up to main's branchPoint
  * for this reel, plus #X's facts up to #X's branchPoint for this reel
  * (for every X in lineage main→B), plus B's own divergent facts." For
- * branch "0" (main) the body short-circuits to the legacy single-
- * branch query (no branch filter — accommodates pre-Pass-2 rows that
- * lack the `branch` field).
+ * branch "0" (main) the body short-circuits to a single-branch query
+ * filtered to main's own facts (pre-Pass-2 rows without a `branch`
+ * field count as main).
  *
  * For non-main branches the body walks `resolveBranchLineage(branch)`
  * once, then runs a single OR-of-ranges query against the Fact
@@ -124,8 +124,16 @@ export async function readReelBetween(type, id, afterSeq, untilSeq, branch) {
     const { isHeavenSpace } = await import("../../../materials/space/heavenLineage.js");
     if (await isHeavenSpace(id)) branch = "0";
   }
-  // Main short-circuit: legacy data has no `branch` field on Fact.
-  // Skip the branch filter entirely so pre-Pass-2 rows participate.
+  // Main short-circuit: one branch, no lineage walk. The branch
+  // filter is REQUIRED here — branches share the seq number space
+  // (each seeded from its parent's branchPoint), so without it a
+  // main read swallows other branches' facts: main's state folds in
+  // foreign-branch events and main's foldedSeq jumps to the global
+  // max, leaving main's OWN later facts below the marker and
+  // invisible to every subsequent fold (acts on main silently stop
+  // materializing). Legacy pre-Pass-2 rows that lack the `branch`
+  // field participate via $exists:false — the same clause the
+  // lineage path below uses for its main segment.
   if (isMain(branch)) {
     const seqFilter = { $type: "number" };
     if (typeof afterSeq === "number") seqFilter.$gt  = afterSeq;
@@ -134,6 +142,7 @@ export async function readReelBetween(type, id, afterSeq, untilSeq, branch) {
       "target.kind": type,
       "target.id":   id,
       seq:           seqFilter,
+      $or: [{ branch: MAIN }, { branch: { $exists: false } }],
     }).sort({ seq: 1 }).lean();
   }
 

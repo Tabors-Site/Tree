@@ -838,35 +838,54 @@ function updateMoveHud(on, carrying) {
 let _refetchTimer = null;
 function handleDescriptorEvent(event) {
   if (!state.currentAddress) return;
-  // Diagnostic — keep on while the timeline live-refresh investigation
-  // is open. If the strip stops landing new marks the console here
-  // tells us whether events are even reaching the client.
   if (state.debugLiveEvents) {
     console.log("[3D] live event:", event?.kind, event?.spaceId?.slice(0, 8));
   }
-  if (event?.kind === "position") {
-    state.scene.applyPositionDelta(event.payload);
-    // A position fact (someone walked, including us) IS an act on a
-    // being reel — refresh the timeline strip so the user sees the
-    // mark land within a tick. Coalesced via the bar's own debouncer.
+  // Ghost-view guard: while the user is rewound (state.descriptor.
+  // isHistorical === true), live events MUST NOT touch the scene or
+  // replace the descriptor. The user is observing a frozen past
+  // moment; new facts coming in are present-time noise. Without this
+  // guard:
+  //   - position events animated avatars to their LIVE coords on top
+  //     of the historical scene
+  //   - fact events fired animations / sounds tied to facts that
+  //     hadn't yet happened at the rewound moment
+  //   - the generic refetch did `client.see(addr)` WITHOUT the `at:`
+  //     qualifier, replacing state.descriptor with the live one and
+  //     dropping the user out of ghost view entirely (the symptom:
+  //     "I pause, a new act comes in, and I'm back in the present")
+  //
+  // What we DO let through is the timeline strip refresh — the strip's
+  // "now" line should still slide forward as wall-clock advances and
+  // new marks should land on the right edge so the user sees the
+  // history accumulating beyond their cursor. The strip is metadata
+  // about acts, not the world; updating it doesn't disturb the
+  // historical view.
+  if (state.descriptor?.isHistorical) {
     _scheduleBranchBarRefresh();
     return;
   }
-  // Rung-3 fact-arrival push. Wraps the unwrapped portal-client event
-  // back into the {payload:{data}} shape the dispatcher expects . the
-  // dispatcher was authored against the raw envelope (so the same
-  // module could be reused over a different wire). Don't trigger a
-  // descriptor refetch . fact arrivals don't change descriptor shape,
-  // only fire animations / sounds on entities already loaded.
+  if (event?.kind === "position") {
+    state.scene.applyPositionDelta(event.payload);
+    _scheduleBranchBarRefresh();
+    return;
+  }
   if (event?.kind === "fact") {
     state.factDispatcher?.({ payload: { data: event.payload } });
-    // Every live fact is a candidate timeline mark — refresh.
     _scheduleBranchBarRefresh();
     return;
   }
   if (_refetchTimer) return; // already scheduled
   _refetchTimer = setTimeout(async () => {
     _refetchTimer = null;
+    // Re-check the guard at fire-time — the user could have started
+    // rewinding during the debounce window. If state.descriptor is
+    // now historical, drop the refetch silently; the rewind owns the
+    // descriptor.
+    if (state.descriptor?.isHistorical) {
+      _scheduleBranchBarRefresh();
+      return;
+    }
     try {
       const desc = await state.client.see(state.currentAddress);
       state.descriptor = desc;
@@ -876,13 +895,11 @@ function handleDescriptorEvent(event) {
         resetCamera: false,
       });
       refreshAddressBar();
-      // Push the fresh descriptor into the timeline strip too so its
-      // marks reflect the just-landed facts.
       state.branchBar?.update(desc);
     } catch (err) {
       console.warn("[3D] live refetch failed:", err);
     }
-  }, 100); // debounce a touch so a flurry of patches collapses into one render
+  }, 100);
 }
 
 // Timeline strip refresh — debounced so a flurry of fact-arrival

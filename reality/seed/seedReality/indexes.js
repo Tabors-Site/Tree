@@ -72,6 +72,51 @@ export async function ensureIndexes() {
     return report;
   }
 
+  // ── Catalog floor ──
+  // On a virgin database (operator dropped the whole DB rather than
+  // wiping documents) no collections or schema-declared indexes exist
+  // yet; Mongoose creates them lazily on first write. Genesis's first
+  // writes are multi-document TRANSACTIONS (sealFacts), and a
+  // transaction racing implicit collection/index creation aborts with
+  // WriteConflict 112 ("catalog changes; please retry") — the first
+  // be:birth fails and boot dies. Materialize the catalog before any
+  // write: register every seed model (imports are the registration),
+  // create its collection, and await its schema-declared index builds.
+  // Idempotent and cheap on an already-formed database.
+  await Promise.all([
+    import("../past/fact/fact.js"),
+    import("../past/act/act.js"),
+    import("../past/reel/reelHead.js"),
+    import("../past/projections/inbox/inboxProjection.js"),
+    import("../past/projections/position/positionProjection.js"),
+    import("../past/projections/threads/threadsProjection.js"),
+    import("../materials/branch/branch.js"),
+    import("../materials/branch/projection.js"),
+    import("../materials/being/being.js"),
+    import("../materials/space/space.js"),
+    import("../materials/matter/matter.js"),
+  ]);
+  for (const model of Object.values(mongoose.connection.models)) {
+    try {
+      await model.createCollection();
+    } catch (err) {
+      // An existing collection is the common case; only a real
+      // failure matters.
+      if (err?.codeName !== "NamespaceExists" && err?.code !== 48) {
+        const msg = `createCollection(${model.collection?.collectionName}) failed: ${err.message}`;
+        report.errors.push(msg);
+        log.warn("Indexes", msg);
+      }
+    }
+    try {
+      await model.init();
+    } catch (err) {
+      const msg = `schema index build (${model.collection?.collectionName}) failed: ${err.message}`;
+      report.errors.push(msg);
+      log.warn("Indexes", msg);
+    }
+  }
+
   // Group required indexes by collection so we list each collection once.
   const byCollection = new Map();
   for (const idx of REQUIRED_INDEXES) {

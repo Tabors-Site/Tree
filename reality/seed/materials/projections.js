@@ -431,6 +431,13 @@ export async function findByName(type, name, branch) {
  * Find children of a being (by parentBeingId) in the given branch.
  * Used by being-lineage queries (descriptor's being-children).
  *
+ * Lazy inheritance walks the parent chain recursively (same model as
+ * findByName), so nested branches (#1a1) see their full lineage. At
+ * each level: an inherited child is visible only when it predates
+ * this branch's fork (branchPoint gate) and this branch holds no
+ * divergent slot for it (a local slot of any kind shadows the
+ * inherited row — the branch's own view is authoritative).
+ *
  * @param {string} beingId
  * @param {string} [branch="0"]
  */
@@ -445,29 +452,35 @@ export async function findByParent(beingId, branch) {
     }).select("type id foldedSeq position").lean();
     return rows.map(toOccupant);
   }
-  const { getBranchPoint } = await import("./branch/branches.js");
-  const [branchChildren, mainChildren, branchTouched] = await Promise.all([
+  const { getBranchPoint, loadBranch } = await import("./branch/branches.js");
+  const branchRow = await loadBranch(branch);
+  const parentPath = branchRow?.parent || MAIN;
+  const [branchChildren, inheritedChildren, branchTouched] = await Promise.all([
     Projection.find({
       branch, type: "being",
       "state.parentBeingId": beingId,
       tombstoned: { $ne: true },
     }).select("type id foldedSeq position").lean(),
-    findByParent(beingId, MAIN),
+    findByParent(beingId, parentPath),
     Projection.find({ branch, type: "being" }).select("id").lean(),
   ]);
   const shadowed = new Set(branchTouched.map((s) => s.id));
-  const mainVisible = [];
-  for (const o of mainChildren) {
+  const inheritedVisible = [];
+  for (const o of inheritedChildren) {
     if (shadowed.has(o.id)) continue;
     const bp = await getBranchPoint(branch, "being", o.id);
-    if (bp && bp > 0) mainVisible.push(o);
+    if (bp && bp > 0) inheritedVisible.push(o);
   }
-  return [...mainVisible, ...branchChildren.map(toOccupant)];
+  return [...inheritedVisible, ...branchChildren.map(toOccupant)];
 }
 
 /**
  * List every aggregate of a type in the given branch. Powers
  * .beings / .spaces / .matters catalog SEEs.
+ *
+ * Lazy inheritance walks the parent chain recursively (same model as
+ * findByName / findByParent), so nested branches see their full
+ * lineage with per-level branchPoint gating and divergence shadowing.
  *
  * @param {"being"|"space"|"matter"} type
  * @param {string} [branch="0"]
@@ -481,22 +494,24 @@ export async function listByType(type, branch) {
     }).select("type id foldedSeq position").lean();
     return rows.map(toOccupant);
   }
-  const { getBranchPoint } = await import("./branch/branches.js");
-  const [branchSlots, mainAll, branchTouched] = await Promise.all([
+  const { getBranchPoint, loadBranch } = await import("./branch/branches.js");
+  const branchRow = await loadBranch(branch);
+  const parentPath = branchRow?.parent || MAIN;
+  const [branchSlots, inheritedAll, branchTouched] = await Promise.all([
     Projection.find({
       branch, type, tombstoned: { $ne: true },
     }).select("type id foldedSeq position").lean(),
-    listByType(type, MAIN),
+    listByType(type, parentPath),
     Projection.find({ branch, type }).select("id").lean(),
   ]);
   const shadowed = new Set(branchTouched.map((s) => s.id));
-  const mainVisible = [];
-  for (const o of mainAll) {
+  const inheritedVisible = [];
+  for (const o of inheritedAll) {
     if (shadowed.has(o.id)) continue;
     const bp = await getBranchPoint(branch, type, o.id);
-    if (bp && bp > 0) mainVisible.push(o);
+    if (bp && bp > 0) inheritedVisible.push(o);
   }
-  return [...mainVisible, ...branchSlots.map(toOccupant)];
+  return [...inheritedVisible, ...branchSlots.map(toOccupant)];
 }
 
 /**

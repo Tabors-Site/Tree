@@ -64,13 +64,21 @@ ProjectionSchema.index(
 // filter so a being's name becomes available again after it's released
 // in that branch. Same-name beings in different branches are allowed by
 // construction (the index key includes branch).
+//
+// The tombstone exclusion is EQUALITY on false, not `$ne: true` —
+// Mongo partial indexes don't support $not/$ne and the index silently
+// never built with that spec (so per-branch name uniqueness was never
+// actually enforced). Equality is safe because every write path sets
+// the field explicitly: initProjection lands tombstoned:false on every
+// slot, tombstoneProjection flips it true (leaving the index, freeing
+// the name), and the schema defaults false.
 ProjectionSchema.index(
   { branch: 1, type: 1, "state.name": 1 },
   {
     unique: true,
     partialFilterExpression: {
       "state.name": { $exists: true, $type: "string" },
-      tombstoned:   { $ne: true },
+      tombstoned:   false,
     },
   },
 );

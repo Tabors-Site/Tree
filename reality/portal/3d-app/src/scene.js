@@ -7,7 +7,7 @@
 
 import * as THREE from "three";
 import { CSS3DRenderer, CSS3DObject } from "three/addons/renderers/CSS3DRenderer.js";
-import { showLabel, hideLabel, setSkyClock, hideSkyClock } from "./ui.js";
+import { showLabel, hideLabel, setSkyClock, hideSkyClock, setHud } from "./ui.js";
 import { loadModel, preloadModels, collectModelIds } from "./assetResolver.js";
 
 // Per-frame gaze raycast against the world's children walks every
@@ -388,15 +388,46 @@ export class Scene {
           // the player at the foreign side; no further action here.
         })
         .catch((err) => {
-          // FORBIDDEN or other refusal . soft barrier, just log so
-          // dev console shows what happened. No visual feedback yet.
+          // FORBIDDEN or other refusal. Two pieces of feedback so the
+          // player knows the portal didn't transit them (rather than
+          // wondering "did it work? did I just walk through nothing?"):
+          //   1. HUD toast with the substrate's reason string
+          //   2. Brief red tint on the portal frame as a visual cue
+          const reason = err?.message || String(err);
+          setHud(`portal denied: ${reason}`);
+          this._flashPortalDenied(p);
           // eslint-disable-next-line no-console
-          console.warn("[portal-walk] denied:", err?.message || err);
+          console.warn("[portal-walk] denied:", reason);
         });
       prev.lastFire = now;
     }
     prev.inside = inside;
     this._walkPortalState.set(p.matterId, prev);
+  }
+
+  // Brief red tint on the portal's frame as a visual "denied" cue.
+  // Restores the original emissive after ~700ms so the portal returns
+  // to its normal appearance for the next attempt.
+  _flashPortalDenied(p) {
+    if (!p || !p.openingMat) return;
+    if (p._flashTimer) return; // already flashing
+    const mat = p.openingMat;
+    const origColor    = mat.color?.getHex?.();
+    const origEmissive = mat.emissive?.getHex?.();
+    const origIntensity = mat.emissiveIntensity;
+    try {
+      mat.color?.setHex?.(0x8a2424);
+      mat.emissive?.setHex?.(0x8a2424);
+      mat.emissiveIntensity = 0.9;
+    } catch { /* material kind may not expose all props */ }
+    p._flashTimer = setTimeout(() => {
+      try {
+        if (origColor != null)    mat.color?.setHex?.(origColor);
+        if (origEmissive != null) mat.emissive?.setHex?.(origEmissive);
+        if (origIntensity != null) mat.emissiveIntensity = origIntensity;
+      } catch { /* same */ }
+      p._flashTimer = null;
+    }, 700);
   }
 
   // Stop the render loop without disposing scene graph + GPU assets.
