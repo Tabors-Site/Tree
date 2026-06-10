@@ -868,7 +868,7 @@ export async function loadExtensions(app, mcpServer, opts = {}) {
       // alongside other extensions' bundles. Operators graft via
       // `reality.do(<position>, "graft-clone", { bundle, params })`.
       // Replaces the retired seed-scaffold pattern. See
-      // seed/Chain-Rebuild.md for the bundle format + parameter
+      // seed/done/Chain-Rebuild.md for the bundle format + parameter
       // substitution doctrine.
       if (manifest.provides?.clones && typeof manifest.provides.clones === "object") {
         const { registerClone } = await import("../seed/materials/publish/cloneRegistry.js");

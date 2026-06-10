@@ -1,4 +1,24 @@
-# Permissions — TreeOS's membership-class access model
+# Permissions — RETIRED. Replaced by seed/RolesAreAuth.md.
+
+> **HISTORICAL.** This file documents the membership-class access model that ran TreeOS through ~2026-06-07. It was replaced by RolesAreAuth.md (the role-walk doctrine).
+>
+> **What the substrate uses now:**
+> - **One gate** — same. `authorize()` in `seed/ibp/authorize.js` is still the only function that says yes or no.
+> - **The rule format** — RETIRED. There is no `qualities.permissions.<verb>.<keyParts>` rule registry anymore. Roles are the unit of permission. A role's `canSee/canDo/canSummon/canBe` lists are the rules. See `seed/RolesAreAuth.md` "Final doctrine."
+> - **The property bag** — RETIRED. `deriveStanceProperties` and `stanceProperties.js` are gone. The role-walk reads `qualities.rolesGranted` directly against `qualities.roles[<name>]`.
+> - **`hasAccess` / `arrival` / `memberClasses` as gateable flags** — RETIRED. Owner is the one base-axiom (still gates directly). Every other auth is a role.
+> - **`members.contributor` class** — RETIRED. The contributor concept is no longer built in; operators author a `contributor` role themselves with whatever `canDo` fits.
+> - **`isHeavenContributor`** — RENAMED to `hasHeavenAuthority`. Checks owner + angel role grant (not the legacy class roster).
+> - **Reality-root + heaven default permissions** — RETIRED. No more `seedDefaultStancePermissions` or `REALITY_ROOT_DEFAULT_PERMISSIONS` / `HEAVEN_DEFAULT_PERMISSIONS`. Foundational roles (arrival, global, human, angel, cherub, birther, llm-assigner, etc.) live in the role registry instead.
+> - **`registerDefaultPermissions` extension contribution** — RETIRED. Extensions register roles via `reality.declare.registerRole`.
+> - **`requires:` rule comparator** — RETIRED. No comparator; the role's canX matches the verb + action/intent/operation/seeOp.
+> - **The owner / invariants distinction** — STILL TRUE. Owner is the foundational membership class. Handler-level invariants (singleton owner, etc.) stay distinct from authorize() decisions.
+>
+> The original text follows as historical record. **Do not rely on it for current architecture.**
+
+---
+
+# Permissions — TreeOS's membership-class access model (HISTORICAL)
 
 > _One gate. One rule format. One derivation. One storage primitive (membership classes). Hierarchical by ancestor-walk. Customizable by writing rules to qualities.permissions. Invariants live in handlers, distinct from permission checks._
 

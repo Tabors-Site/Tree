@@ -31,7 +31,7 @@ export default {
     // dance-floor encodes the full grid + drum + drummer + 5 LLM
     // dancers + per-dancer drum-tick subscription + drummer wake
     // schedule, all as static facts (~30 entries). See
-    // seed/Chain-Rebuild.md for the bundle format.
+    // seed/done/Chain-Rebuild.md for the bundle format.
     clones: {
       "dance-floor": "./clones/dance-floor.clone.json",
     },

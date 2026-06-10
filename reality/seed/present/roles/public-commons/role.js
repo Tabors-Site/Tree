@@ -1,36 +1,41 @@
 // TreeOS Seed . AGPL-3.0 . https://treeos.ai . Tabor Holly
 //
-// public-commons/role.js — the implicit role visitors carry at a
-// space whose owner is @public.
+// public-commons/role.js — a TEMPLATE role for "anyone can visit my
+// public-owned space and do basic things."
 //
-// Per seed/RolesAreAuth.md "@public being": when authorize encounters
-// a target inside a public-owned subtree, the visitor is treated as
-// if they hold THIS role. The spec is a narrower-than-human floor —
-// "basic things a visitor can do" — so public-owned spaces aren't
-// the wide-open authority that owner-bypass would give. Operators
-// wanting a richer commons surface author a real role on the
-// public-owned space's qualities.roles (and the role-walk above
-// public-commons picks that up first).
+// NOT a seed-special role. As of the acquisition-policy refactor
+// (seed/RolesAreAuth.md "Acquisition"), there's no hardcoded
+// "public-commons floor" in roleAuth.js anymore. @public is just a
+// regular being who happens to own spaces; the role-walk authorize
+// treats their spaces uniformly with everyone else's.
 //
-// This role lives in the registry like every other seed role.
-// roleAuth's public-commons step reads it by name; if it's not
-// registered (boot order edge), the public-commons branch refuses.
+// What makes "@public's space" feel different in practice is the
+// `acquisition.autoOnEntry: true` flag on this role — visitors who
+// SEE the space get auto-granted the role silently. The role-walk
+// then admits them via their normal qualities.rolesGranted entry,
+// not via any branch in the auth code.
 //
-// Customization path: this is the seed-shipped DEFAULT. Operators
-// who want their commons surface to look different just install a
-// role onto the public-owned space's qualities.roles — that role
-// goes through the normal role-walk (above the public-commons
-// fallback) and applies via the standard reach + canX gate.
+// Usage: operators (including @public itself) install this on their
+// owned spaces via `set-role` or `installRoleOnSpace`, OR they
+// author a different visitor role with the shape they want. The
+// commons surface is whatever the operator declares — this file is
+// just a sensible default for "open commons with read + move +
+// stake-claim + summon-the-gate."
 
 export const publicCommonsRole = Object.freeze({
   name: "public-commons",
   description:
-    "Implicit visitor floor at any space whose owner is @public. " +
-    "Lets visitors see, move, place matter, and stake new sub-spaces. " +
-    "Operators replace with a custom role on qualities.roles for a different surface.",
+    "Visitor role for an open commons. Auto-granted on first SEE " +
+    "via acquisition.autoOnEntry. Permits read + move + place matter " +
+    "+ stake new sub-spaces + summon @cherub.",
   requiredCognition: null,
   respondMode: "async",
   triggerOn: [],
+  acquisition: {
+    asked:       "auto",   // ask-role grants immediately
+    grabbed:     false,    // no take-role; SEE is the entry point
+    autoOnEntry: true,     // silent grant on first SEE of a space hosting this role
+  },
   canSee:    ["*"],
   canDo: [
     { action: "move",                description: "move in space" },

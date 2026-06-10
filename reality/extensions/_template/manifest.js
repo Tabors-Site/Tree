@@ -62,7 +62,7 @@ export default {
     // Shippable structure — clone bundles the operator can graft at
     // a position. Replaces the retired scaffold(ctx) seed pattern.
     // Each bundle is a static JSON file under ./clones/ with the
-    // shape documented in seed/Chain-Rebuild.md.
+    // shape documented in seed/done/Chain-Rebuild.md.
     // clones: {
     //   "example-setup": "./clones/example.clone.json",
     // },

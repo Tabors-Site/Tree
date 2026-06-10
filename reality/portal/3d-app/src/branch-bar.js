@@ -1709,7 +1709,7 @@ function _closeNewBranchDialog() {
 // as a .clone.json file. The subtree is rooted at the user's current
 // position; the seed's cloneSubtree primitive walks descendants + their
 // beings + matter, capturing facts only (the shape, no history) — per
-// Chain-Rebuild.md, a clone is a cutting.
+// done/Chain-Rebuild.md, a clone is a cutting.
 //
 // `Graft`: file-picker → reads JSON → calls do(currentPath,
 // "graft-clone", {bundle}). The bundle's content lands as fresh spaces /

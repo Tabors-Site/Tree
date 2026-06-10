@@ -43,6 +43,7 @@ import log from "../../../seedReality/log.js";
 import { emitFact } from "../../../past/fact/facts.js";
 import { mintCredentialSpec } from "./credentials.js";
 import { I_AM } from "../seedBeings.js";
+import { getRealityDomain } from "../../../ibp/address.js";
 
 // ─────────────────────────────────────────────────────────────────────
 // VALIDATION
@@ -238,7 +239,7 @@ export async function birthBeing({ spec, identity, summonCtx = null }) {
   // with a non-protocol operation (BE dispatches only birth / connect /
   // release). The protections come from the authorized callers; this
   // primitive enforces state-consistency invariants below, not auth.
-  // See seed/PERMISSIONS.md "Permissions vs invariants."
+  // See seed/RolesAreAuth.md "Permissions vs invariants."
 
   // ── Parent exists (or is pending in this moment) ──
   // The being-tree's chain of causation needs every link to resolve.
@@ -434,6 +435,31 @@ export async function birthBeing({ spec, identity, summonCtx = null }) {
     throw err;
   }
 
+  // ── Inherit role grants from both parents (dual-parent doctrine) ──
+  //
+  // The child auto-inherits every grant on the mother (parentBeingId
+  // = the actor of be:birth) AND every grant on a same-reality father
+  // (spec.father.reality === local). Each inherited grant is a fresh
+  // grant fact on the child's reel, anchored at the same
+  // anchorSpaceId / anchorBeingId as the parent's grant, with the
+  // parent recorded as the grantor.
+  //
+  // Cross-reality fathers do NOT contribute role inheritance — we
+  // can't read the foreign reality's projection synchronously. They
+  // still get the connect-eligibility marker via qualities.father
+  // (above). Same-reality fathers contribute roles AND get the marker.
+  //
+  // Self-birth (mother = self) and bootstrap births where the parent
+  // has no grants yet are no-ops on this pass — no grants to inherit.
+  // See seed/done/DualBeingParents for the doctrine.
+  await _inheritParentRoles({
+    childId: id,
+    motherBeingId: parentBeingId,
+    fatherBeingId: spec.father?.reality === getRealityDomain() ? spec.father?.beingId : null,
+    summonCtx,
+    branch,
+  });
+
   // In-moment: the row materializes at seal. Return the pending view
   // so callers can use the id + spec fields immediately.
   if (summonCtx) {
@@ -456,6 +482,104 @@ export async function birthBeing({ spec, identity, summonCtx = null }) {
     name,
     being:   slot ? { _id: slot.id, ...slot.state } : { _id: id, ...factSpec },
   };
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// PARENT ROLE INHERITANCE
+// ─────────────────────────────────────────────────────────────────────
+
+/**
+ * Stamp grant facts on a newly-born child that mirror both parents'
+ * granted roles. Each inherited grant rides the SAME moment as the
+ * be:birth (via summonCtx.deltaF) so birth + inheritance seal
+ * atomically — the child either exists with both their birth and
+ * their inheritance or neither.
+ *
+ * Same-reality only. Cross-reality fathers contribute the connect-
+ * eligibility marker (qualities.father) but not role grants — the
+ * foreign reality's projection isn't readable here.
+ *
+ * Dedup: when both parents have an identical grant
+ * (same role + same anchor), only one grant fact is stamped.
+ * Mother wins as grantor on ties.
+ *
+ * No-op when neither parent has any grants (the bootstrap case;
+ * I-Am's grants are implicit via the I_AM bypass and not stored on
+ * qualities.rolesGranted).
+ *
+ * @param {object} args
+ * @param {string} args.childId
+ * @param {string} args.motherBeingId       parentBeingId on the spec
+ * @param {string|null} args.fatherBeingId  local beingId of same-reality father, or null
+ * @param {object} args.summonCtx           in-flight moment ctx (required)
+ * @param {string} args.branch
+ */
+async function _inheritParentRoles({ childId, motherBeingId, fatherBeingId, summonCtx, branch }) {
+  // Read each parent's projection on the child's branch (loadOrFold
+  // walks lineage so a sub-branch sees its effective view).
+  const { loadOrFold } = await import("../../projections.js");
+  const reads = await Promise.all([
+    motherBeingId ? loadOrFold("being", String(motherBeingId), branch) : Promise.resolve(null),
+    fatherBeingId ? loadOrFold("being", String(fatherBeingId), branch) : Promise.resolve(null),
+  ]);
+  const motherSlot = reads[0];
+  const fatherSlot = reads[1];
+
+  const motherGrants = _grantsFromSlot(motherSlot);
+  const fatherGrants = _grantsFromSlot(fatherSlot);
+  if (motherGrants.length === 0 && fatherGrants.length === 0) return;
+
+  // Compose with mother-wins-on-tie. The dedup key includes role +
+  // anchorSpaceId + anchorBeingId so a grant anchored at the same
+  // place from both parents only stamps once.
+  const seen = new Set();
+  const composed = [];
+  for (const g of motherGrants) {
+    const key = _grantKey(g);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    composed.push({ grant: g, grantor: String(motherBeingId) });
+  }
+  for (const g of fatherGrants) {
+    const key = _grantKey(g);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    composed.push({ grant: g, grantor: String(fatherBeingId) });
+  }
+
+  // Stamp one do:grant-role fact per composed entry, all riding the
+  // child's reel within this same moment (no separate Acts; the
+  // birth's actor stamps them in the birth's moment).
+  for (const { grant, grantor } of composed) {
+    await emitFact({
+      verb:    "do",
+      action:  "grant-role",
+      beingId: grantor,
+      target:  { kind: "being", id: String(childId) },
+      params:  {
+        role:           grant.role,
+        anchorSpaceId:  grant.anchorSpaceId || null,
+        anchorBeingId:  grant.anchorBeingId || null,
+        grantedBy:      grantor,
+        inheritedFrom:  grantor,   // forensic marker — this came from parent inheritance
+      },
+      actId:   summonCtx?.actId || null,
+      branch,
+    }, summonCtx);
+  }
+}
+
+function _grantsFromSlot(slot) {
+  const grants = slot?.state?.qualities?.rolesGranted;
+  return Array.isArray(grants) ? grants : [];
+}
+
+function _grantKey(grant) {
+  return [
+    grant?.role || "",
+    grant?.anchorSpaceId || "",
+    grant?.anchorBeingId || "",
+  ].join("|");
 }
 
 // ─────────────────────────────────────────────────────────────────────

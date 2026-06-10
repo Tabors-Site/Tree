@@ -59,7 +59,7 @@
 // it reaches the handler. The class-specific invariants below
 // (owner-singleton, no-promote-owner-to-contributor, etc.) are
 // state-consistency checks that run after auth, refusing mutations
-// that would leave the post-state incoherent. See seed/PERMISSIONS.md.
+// that would leave the post-state incoherent. See seed/RolesAreAuth.md.
 
 import { hooks } from "../../hooks.js";
 import { IBP_ERR, IbpError } from "../../ibp/protocol.js";
@@ -424,7 +424,7 @@ async function emitMembersFact(spaceId, className, nextList, actor, branch, summ
 
 // Resolved-owner invariant — the in-handler state-consistency check
 // for membership ops. NOT a permission gate (authorize already
-// approved); see seed/PERMISSIONS.md "Permissions vs invariants."
+// approved); see seed/RolesAreAuth.md "Permissions vs invariants."
 async function assertResolvedOwner(spaceId, beingId, branch) {
   const { resolveSpaceAccess } = await import("./spaces.js");
   const access = await resolveSpaceAccess(spaceId, beingId, branch);

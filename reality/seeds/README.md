@@ -1,6 +1,6 @@
 # reality/seeds/
 
-This is the canonical folder for **reality seeds** — portable genomes of a TreeOS reality. See [seed/Chain-Rebuild.md](../seed/Chain-Rebuild.md) for the doctrine.
+This is the canonical folder for **reality seeds** — portable genomes of a TreeOS reality. See [seed/done/Chain-Rebuild.md](../seed/done/Chain-Rebuild.md) for the doctrine.
 
 Sibling to `reality/extensions/` because both are operator artifacts: extensions are code-level installs, seeds are reality-level genomes. The sovereign `seed/` substrate folder is reserved for the never-modify kernel.
 

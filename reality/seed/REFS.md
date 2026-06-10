@@ -19,7 +19,7 @@ Refs exist for the cases where code traverses content **without access to the or
 
 Three seams in the substrate, and only these:
 
-1. **Replicate** — `seed/publishing.md`. Snapshot a tree of content, hand it to a new substrate, recreate it with a fresh ID namespace. The replicator walks the content tree, finds every aggregate reference, remaps to the new substrate's IDs. Without Refs the walker can't tell "is this string an ID or just a name?"
+1. **Replicate** — `seed/done/Chain-Rebuild.md`. Snapshot a tree of content, hand it to a new substrate, recreate it with a fresh ID namespace. The replicator walks the content tree, finds every aggregate reference, remaps to the new substrate's IDs. Without Refs the walker can't tell "is this string an ID or just a name?"
 
 2. **Clone / mitosis** (future) — exact-copy a tree of content into another substrate, preserving full fact/act history. Same walker, different remap policy (identity vs new-namespace).
 
@@ -122,5 +122,5 @@ The completed schema-field migrations (handlers, queries, indexes flipped to `.i
 
 - `seed/materials/ref.js` — Ref type + helpers
 - `seed/materials/refWalker.js` — `findRefs`, `remapRefs`
-- `seed/publishing.md` — replicate/graft semantics where Refs are used
+- `seed/done/Chain-Rebuild.md` — replicate/graft semantics where Refs are used
 - `protocols/ibp/FEDERATION.md` — federation Diff B, where Refs cross substrates

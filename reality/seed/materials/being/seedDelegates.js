@@ -56,7 +56,7 @@ import { findByName, loadProjection } from "../projections.js";
 
 // `invocableBy` is a display label the portal shows next to the
 // delegate ("who is this for?"). It is NOT the auth gate . that's
-// stance authorization downstream. The only behavior the descriptor
+// role-walk downstream. The only behavior the descriptor
 // derives from this field today is `available`: "anyone" maps to
 // authorizedHere (the caller can SEE here at all), every other value
 // maps to writeAllowed (the caller can write here). The label values

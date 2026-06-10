@@ -251,6 +251,44 @@ export async function logFact(input, opts = {}) {
     }
   }
 
+  // Death gate (seed/done/DualBeingParents — "be:death freezes both
+  // chains"). Refuse to stamp any Fact whose actor or being-target is
+  // already dead. The lone exception is the be:death fact itself —
+  // without it the lock can never seal. Past acts + grants stay in
+  // the chain (this gate runs at stamp time, not at fold time).
+  //
+  // Reads via loadOrFold on the Fact's branch, so divergent sub-
+  // branches see their own view of liveness. The seed's I-Am and
+  // pre-bootstrap moments emit Facts before any Being row exists;
+  // isBeingDead returns false for a missing row so genesis isn't
+  // blocked. Death stamps land on actual beings only.
+  const { isBeingDead, isDeathFact } = await import(
+    "../../materials/being/closure.js"
+  );
+  if (!isDeathFact({ verb, action })) {
+    if (beingId && await isBeingDead(beingId, branch)) {
+      throw new IbpError(
+        IBP_ERR.FORBIDDEN,
+        `logFact: being ${String(beingId).slice(0, 8)} is closed (be:death). ` +
+        `The actor chain is frozen; no new facts can ride this being.`,
+        { beingId },
+      );
+    }
+    if (
+      normalizedTarget?.kind === "being" &&
+      normalizedTarget?.id &&
+      String(normalizedTarget.id) !== String(beingId) &&
+      await isBeingDead(normalizedTarget.id, branch)
+    ) {
+      throw new IbpError(
+        IBP_ERR.FORBIDDEN,
+        `logFact: target being ${String(normalizedTarget.id).slice(0, 8)} is closed (be:death). ` +
+        `The being chain is frozen; no new facts can land on this being's reel.`,
+        { targetBeingId: normalizedTarget.id },
+      );
+    }
+  }
+
   // beforeFact hook . extensions can modify or cancel. The hook sees a
   // mutable view; only `params` and `result` are conventionally mutated
   // for enrichment. Cancellations short-circuit the stamp.

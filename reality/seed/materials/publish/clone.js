@@ -15,7 +15,7 @@
 // Clones are intentionally lossy. If you want full biography transfer
 // (acts preserved, identity continuation, original IDs intact), that's
 // `seed.js` — the seed artifact is the genome, and is only valid at
-// boot via plant. See `seed/Chain-Rebuild.md` for the vocabulary
+// boot via plant. See `seed/done/Chain-Rebuild.md` for the vocabulary
 // doctrine pinning that clone and seed are two distinct artifacts with
 // two distinct purposes, not one artifact at two fidelity levels.
 //

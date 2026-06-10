@@ -2,9 +2,9 @@
 //
 // BE_OPS . the canonical BE operations.
 //
-// BE is a closed set: birth, connect, release. The substrate fixes
-// this list; no extension adds a fourth. So unlike DO (which is open
-// and needs a registry), BE just exports a static table.
+// BE is a closed set: birth, connect, release, death. The substrate
+// fixes this list; no extension adds a fifth. So unlike DO (which is
+// open and needs a registry), BE just exports a static table.
 //
 // Each op carries:
 //   description   . one-line summary (for the portal's action menu)
@@ -21,10 +21,10 @@
 // role.js); this file just imports them into the canonical table. The
 // BE verb in ibp/verbs/be.js dispatches `BE_OPS[operation]?.handler(...)`.
 //
-// Cherub is currently the only being that handles BE. The three ops
+// Cherub is currently the only being that handles BE. The four ops
 // are universal identity surface, not per-being behavior . if a
 // future reality wanted a different welcome-character, that being's
-// role would still license `canBe: ["birth", "connect", "release"]`
+// role would still license `canBe: ["birth", "connect", "release", "death"]`
 // and rely on the same static table.
 
 import { cherubBeOps } from "../present/roles/cherub/role.js";
@@ -33,6 +33,7 @@ export const BE_OPS = Object.freeze({
   birth:   cherubBeOps.birth,
   connect: cherubBeOps.connect,
   release: cherubBeOps.release,
+  death:   cherubBeOps.death,
 });
 
 /**

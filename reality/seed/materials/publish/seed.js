@@ -13,7 +13,7 @@
 //   - Seed captures the WHOLE REALITY (chains + biography). Plant-only.
 //     For continuation: "continue my computational life elsewhere."
 //
-// See `seed/Chain-Rebuild.md` for the doctrine: clone and seed are two
+// See `seed/done/Chain-Rebuild.md` for the doctrine: clone and seed are two
 // distinct artifacts with two distinct purposes, not one artifact at
 // two fidelity levels.
 //
@@ -182,7 +182,7 @@ export function assertValidSeed(bundle) {
  * land verbatim on the new substrate. From this substrate's perspective,
  * this IS the reality with those IDs. Two simultaneously-live
  * substrates with the same reality identity is undefined behavior and
- * is the deployer's responsibility to prevent (see Chain-Rebuild.md).
+ * is the deployer's responsibility to prevent (see done/Chain-Rebuild.md).
  *
  * Replaying steps:
  *   1. Validate bundle shape

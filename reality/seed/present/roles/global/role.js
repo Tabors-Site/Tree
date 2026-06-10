@@ -38,11 +38,18 @@ export const globalRole = Object.freeze({
   // the surface (e.g. `["place", "library", "directory"]`).
   canSee: ["place"],
   // Baseline mutations. Move yourself, update your own coord, walk
-  // to another space. Operators expand for their reality.
+  // to another space, petition for additional roles. The petition
+  // ops (ask-role / take-role) MUST live here because the role-walk
+  // is the single gate (seed/RolesAreAuth.md): the substrate has no
+  // bypass mechanism. Every being needs to be able to ask, so every
+  // being must hold a role permitting ask. global is that role.
+  // Operators expand the rest for their reality.
   canDo: [
     { action: "move",                description: "move yourself in space" },
     { action: "set-being:coord",     description: "update your own coord" },
     { action: "set-being:position",  description: "walk to another space" },
+    { action: "ask-role",            description: "request acquisition of a role from its host" },
+    { action: "take-role",           description: "walk in and take a role with acquisition.grabbed=true" },
   ],
   // Anyone can address the gate.
   canSummon: [

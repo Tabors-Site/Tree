@@ -321,11 +321,11 @@ async function _hasRealityRootPermission(beingId) {
     const { authorize } = await import("../../ibp/authorize.js");
     const heavenSlot = await findByHeavenSpace(HEAVEN_SPACE.HEAVEN, "0");
     if (!heavenSlot) return false;
-    // The action name is arbitrary — heaven has no `do:create-branch`
-    // rule, so the lookup falls through to heaven's `do:*` wildcard
-    // (`requires: { hasAccess: true }`). Any other action name would
-    // produce the same answer; "create-branch" is named for audit
-    // clarity in case authorize() ever logs decisions.
+    // The action name is "create-branch" for audit clarity. Under
+    // RolesAreAuth the role-walk admits whichever caller holds a role
+    // whose canDo covers this action at heaven — the angel role does;
+    // operators who tighten the angel role automatically tighten who
+    // can widen branch scope, satisfying the "one gate" doctrine.
     const decision = await authorize({
       identity: { beingId: String(beingId) },
       verb:     "do",

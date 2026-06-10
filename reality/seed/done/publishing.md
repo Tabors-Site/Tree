@@ -1,4 +1,23 @@
-# Publishable Units in TreeOS
+# Publishable Units in TreeOS — RETIRED. Replaced by `seed/done/Chain-Rebuild.md`.
+
+> **HISTORICAL.** This doc was the earlier publishing model (Layer 1: extensions / Layer 2: roleflows / Layer 3: replicates). The "replicate" vocabulary was superseded by `Chain-Rebuild.md`'s cleaner two-artifact split (clone vs seed). The substrate implements Chain-Rebuild.md's vocabulary; this doc is preserved as the design exploration that fed into it.
+>
+> **What still applies (carried forward into Chain-Rebuild.md):**
+> - **Snapshot-and-graft mechanism** (Section "The underlying mechanism"). Live — clones work exactly this way: walk projections, build manifest of dependencies, validate at graft, surface conflicts via mediator, build remap table via the Refs walker, stamp creation facts in dependency order. The flow is unchanged; only the artifact name changed (`replicate` → `clone`).
+> - **Three principles** ("Identity is local. Content is universal." / "Current state is the unit of portability. History stays local." / "The chain in each reality is the truth of what happened there."). All carried forward into Chain-Rebuild.md.
+> - **Layering of extension / roleflow / content** (the three publishable kinds). Extensions and roleflows are still distinct; clones are the third layer in the substrate too.
+>
+> **What was retired:**
+> - The name "replicate" — replaced by "clone" (a clone preserves no history; a seed preserves the full chain — those are the two artifacts).
+> - The `graft-replicate` DO op — was a wire-compat alias for `graft-clone`; retired 2026-06-09 when zero portal references remained.
+> - The "Clones + Plant" speculative future section — has since LANDED as the seed-and-plant primitive, with `captureSeed` + `plantSeed` at boot.
+> - The build-status table — every entry there now resolves through Chain-Rebuild.md's stages A–H, all of which are LANDED except Stage D (federation as wire-streamed clone fragments).
+>
+> The original text follows as historical record. **For current architecture, read `seed/done/Chain-Rebuild.md`.**
+
+---
+
+# Publishable Units in TreeOS (HISTORICAL)
 
 > *Replicates are projections of current state, packaged for portability. Grafting re-creates content as fresh facts in the target with new local IDs. History does not transfer; only current shape. The chain in each reality stays the truth of what happened there.*
 >

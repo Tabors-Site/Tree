@@ -86,53 +86,58 @@ export async function authorizeViaRoles(args) {
 
   // Ownership step (seed/RolesAreAuth.md "Nearest claim wins").
   // Walk target's ancestors looking for the NEAREST space with a
-  // non-empty members.owner — that's the space's "claim." Three cases:
+  // non-empty members.owner — that's the space's "claim." Two cases:
   //
   //   1. Actor in the claim's owners → ALLOW (private ownership).
-  //   2. @public in the claim's owners → public-commons branch fires
-  //      below (visitor floor; canX-gated).
-  //   3. Someone else's claim → fall through to the role-walk; actor
+  //   2. Someone else's claim → fall through to the role-walk; actor
   //      might still have a granted role reaching here.
   //
   // Nearest-claim-wins means a private sub-space inside a public-owned
   // commons IS private (the inner owner "takes over"). Without this
-  // rule, commons inheritance would leak through any sub-space, and
+  // rule, ownership inheritance would leak through any sub-space, and
   // staking a private claim inside a commons would be impossible.
   //
   // Owner is the ONE base-axiom membership class. All other authority
-  // shapes live in the role registry (per seed/RolesAreAuth.md) —
-  // operators model "secondary owners" as roles with the right canDo
-  // (set-role, grant-role, create-space, etc.). Custom members.<class>
-  // entries are operator-authored bookkeeping and do NOT gate authorize.
+  // shapes live in the role registry — operators model "secondary
+  // owners" as roles with the right canDo (set-role, grant-role,
+  // create-space, etc.). Custom members.<class> entries are
+  // operator-authored bookkeeping and do NOT gate authorize.
+  //
+  // @public's spaces are NOT special at this layer. A public-owned
+  // space is just a space whose owner happens to be @public. Visitors
+  // get admitted via the regular role-walk because public's roles use
+  // acquisition.autoOnEntry=true to silently grant on first SEE; the
+  // grant rides in qualities.rolesGranted and the role-walk picks it
+  // up uniformly. No "public-commons" branch lives in this file.
   const targetSpaceForOwner = deriveSpaceId(target);
-  let claimedByPublic = false;
-  let claimSpaceId = null;
   if (targetSpaceForOwner) {
     const claim = await findNearestOwnedAncestor(String(targetSpaceForOwner), branch);
     if (claim) {
-      claimSpaceId = claim.spaceId;
       const actorIdStr = String(identity.beingId);
       if (claim.ownerIds.some((id) => String(id) === actorIdStr)) {
         return { ok: true, role: "owner", anchor: claim.spaceId };
       }
-      const publicBeingId = await getPublicBeingId(branch);
-      if (publicBeingId && claim.ownerIds.some((id) => String(id) === publicBeingId)) {
-        claimedByPublic = true; // public-commons branch below handles canX gating
-      }
-      // Else: someone else's private claim. Fall through to role-walk.
+      // Else: someone else's claim. Fall through to role-walk.
     }
   }
 
-  // Load the caller's grants. An empty list is fine — the public-commons
-  // branch below can still admit them at public-owned spaces, even
-  // without explicit grants. Beings with zero grants AND no claim path
-  // fall through to the final deny.
+  // Load the caller's grants.
   const slot = await loadProjection("being", String(identity.beingId), branch);
   const grants = readGrantsFromSlot(slot);
 
   const targetPath  = derivePath(target);
-  const targetSpace = deriveSpaceId(target);
   const targetBeing = deriveBeingName(target);
+  let targetSpace = deriveSpaceId(target);
+  // Fallback: when target carries no spaceId (BE on self, SUMMON to a
+  // bare stance, DO on a being-target where the verb didn't resolve
+  // the auth space upstream), use the ACTOR's current position. This
+  // lets roles with no explicit reach (default = host + descendants)
+  // gate the action at the actor's standing space. Without this
+  // fallback, BE on self always denied because reachCovers needs a
+  // spaceId to evaluate "is target at or below the role's host."
+  if (!targetSpace) {
+    targetSpace = String(slot?.state?.position || slot?.state?.homeSpace || "") || null;
+  }
 
   for (const grant of grants) {
     const { spec, hostSpaceId } = await getRoleSpecForGrant(grant, branch);
@@ -151,24 +156,6 @@ export async function authorizeViaRoles(args) {
       role: grant.role,
       anchor: hostSpaceId || grant.anchorSpaceId || null,
     };
-  }
-
-  // Public-commons branch (seed/RolesAreAuth.md "@public being").
-  // Fires only when the NEAREST claim on the target's ancestor chain
-  // has @public in its owner list — set above as `claimedByPublic`.
-  // Private sub-spaces inside a public-owned subtree do NOT reach here
-  // because their nearest claim is the private owner, not @public.
-  //
-  // Read the spec directly from the role file — public-commons is a
-  // SEED-SHIPPED floor, not an operator-editable role hosted on a
-  // space. (Operators wanting per-space commons surfaces install a
-  // custom role on the public-owned space's qualities.roles, which
-  // the role-walk above picks up first.)
-  if (claimedByPublic) {
-    const { publicCommonsRole } = await import("../present/roles/public-commons/role.js");
-    if (permits(publicCommonsRole, verb, { action, intent, operation, seeOp, targetBeing })) {
-      return { ok: true, role: "public-commons", anchor: claimSpaceId };
-    }
   }
 
   return {
@@ -229,26 +216,6 @@ function readOwnersFromMembers(members) {
   const raw = members instanceof Map ? members.get("owner") : members.owner;
   if (!Array.isArray(raw)) return [];
   return raw.map(String);
-}
-
-/**
- * Resolve the @public seed delegate's beingId. Cached in a module-local
- * variable after the first lookup since public's id never changes
- * within a process. Returns null when public isn't yet birthed (boot
- * window before genesis seeds the delegates).
- */
-let _publicBeingIdCache = null;
-async function getPublicBeingId(branch) {
-  if (_publicBeingIdCache) return _publicBeingIdCache;
-  try {
-    const { findByName } = await import("../materials/projections.js");
-    const slot = await findByName("being", "public", branch);
-    if (slot?.id) {
-      _publicBeingIdCache = String(slot.id);
-      return _publicBeingIdCache;
-    }
-  } catch { /* not yet materialized */ }
-  return null;
 }
 
 // ────────────────────────────────────────────────────────────────────

@@ -336,20 +336,24 @@ export function resolveExtensionScopeFromChain(ancestors, confinedExtensions) {
 /**
  * Resolve tree access from a cached ancestor chain.
  *
- * Reads each space's `members` map (the canonical membership-class
- * storage). Returns:
+ * Reads each space's `members` map. Under RolesAreAuth (seed/RolesAreAuth.md)
+ * the role-walk gates verb calls; this helper surfaces only the
+ * baseline ownership + membership signals that descriptor enrichment
+ * and circuit-breaker code consult directly. Authorize itself does
+ * NOT consume this — it walks `qualities.rolesGranted` against
+ * `qualities.roles[<name>]` instead.
+ *
+ * Returns:
  *
  *   ok, rootId, isRoot
  *   isOwner            singleton owner class match on the closest
  *                      space that has one (the ownership boundary)
+ *   isAngel            (heaven path only) member of heaven's angel class
+ *                      — for the legacy bridge while role-grant
+ *                      migration finishes
  *   memberClasses      [string] union of every class the being is in
  *                      across the walked chain (owner + operator-
- *                      authored classes). Useful for display/enrichment;
- *                      authorize itself reads role grants, not classes.
- *   hasAccess          owner-only convenience shorthand (true when
- *                      the being owns the space or an ancestor).
- *                      Pre-RolesAreAuth this also lit up for
- *                      contributor-class membership; that path retired.
+ *                      authored classes). Useful for display/enrichment.
  *   isTripped          circuit-breaker on the ownership boundary
  *
  * @param {string} startNodeId - the space being accessed
@@ -400,9 +404,9 @@ export function resolveSpaceAccessFromChain(startNodeId, beingId, ancestors) {
       rootId: heavenSpace._id,
       isRoot: heavenSpace._id === startNodeId,
       isOwner: isHeavenOwner,
+      isAngel,
       memberClasses: Array.from(memberClasses),
       isTripped: false,
-      hasAccess: isHeavenOwner || isAngel,
     };
   }
 
@@ -458,7 +462,6 @@ export function resolveSpaceAccessFromChain(startNodeId, beingId, ancestors) {
       isOwner: false,
       memberClasses: Array.from(memberClasses),
       isTripped: false,
-      hasAccess: false,
     };
   }
 
@@ -476,7 +479,6 @@ export function resolveSpaceAccessFromChain(startNodeId, beingId, ancestors) {
     isOwner,
     memberClasses: Array.from(memberClasses),
     isTripped,
-    hasAccess: isOwner && !isTripped,
   };
 }
 

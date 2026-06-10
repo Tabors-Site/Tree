@@ -595,14 +595,21 @@ async function placeAtSpace(resolved, { identity, payload, until = null, branch 
     ? await childrenOf(space.parent, parentPath, { exclude: space._id, until, branch })
     : [];
 
-  // Access for the asker. Defensive: leave both false on any error so
-  // a broken read never silently grants writes.
+  // Access for the asker. Used for descriptor enrichment only —
+  // role-walk gating runs in authorize() upstream and downstream,
+  // not here. `writeAllowed` is the conservative "this caller clearly
+  // owns this place" signal (post-RolesAreAuth there's no single
+  // boolean for "can write anything"; specific writes pass through
+  // authorize per-action). UIs that want a per-action signal should
+  // ask "can I do X here?" rather than read this flag.
+  // Defensive: leave both false on any error so a broken read never
+  // silently grants writes.
   let writeAllowed   = false;
   let authorizedHere = false;
   if (identity?.beingId) {
     try {
       const access  = await resolveSpaceAccess(space._id, identity.beingId, branch);
-      writeAllowed   = !!(access?.ok && access?.write === true);
+      writeAllowed   = !!(access?.ok && access?.isOwner === true);
       authorizedHere = !!access?.ok;
     } catch { /* defensive */ }
   }

@@ -168,7 +168,7 @@ The Act on the actor's home chain always records what was attempted. Facts move 
 
 ### Portal-walking is `do:move`, not a new BE op
 
-BE is the closed three-op set: `birth` / `connect` / `release`. None of those is "walk through a portal." Position moves use the existing `do:set-being:position` (and, when the move includes container-change, `do:move`). Cross-world positioning is just a `do:set-being:position` whose value is a `<reality>#<branch>/<spaceId>` address instead of a bare spaceId.
+BE is the closed four-op set: `birth` / `connect` / `release` / `death`. None of those is "walk through a portal." Position moves use the existing `do:set-being:position` (and, when the move includes container-change, `do:move`). Cross-world positioning is just a `do:set-being:position` whose value is a `<reality>#<branch>/<spaceId>` address instead of a bare spaceId.
 
 The "BE position moves" line in the table above describes the SUBSTRATE effect of a position write (the being's row changes; arrival fact lands on the new world). The OP that produces that effect is a DO. No new BE verb is needed.
 
@@ -178,10 +178,10 @@ When a foreign being replies to a cross-world summon, the reply is its own cross
 
 ## Portal and window
 
-Portal and window are not separate primitives. They are stance-access perspectives on the same cross-world mechanism — what the foreign side's `qualities.permissions` admit for this actor's stance:
+Portal and window are not separate primitives. They are stance-access perspectives on the same cross-world mechanism — what role(s) the foreign-actor stance holds at the receiving side under RolesAreAuth (see `seed/RolesAreAuth.md`):
 
-- **Window** — stance admits only SEE. The actor observes; nothing changes state; only the inner face returns.
-- **Portal** — stance admits the verbs the foreign operator chose to open: typically SEE + DO + SUMMON, optionally BE.
+- **Window** — the role grant admits only SEE (`canSee` includes the position; `canDo` / `canSummon` / `canBe` don't). The actor observes; nothing changes state; only the inner face returns.
+- **Portal** — the role grant admits the verbs the foreign operator chose to open: typically SEE + DO + SUMMON, optionally BE. Authored via the role's canX lists.
 - **Full access** — every verb admitted, including BE for walking through.
 
 **Acting through a portal does not require walking through it.** Only BE moves the being's position. SEE / DO / SUMMON across a portal happen with the being's current position unchanged — they reach into the foreign world from wherever the actor is standing. The bridge pattern (stay home, manipulate matter or summon beings in another world) is exactly this case: portal access without BE.
@@ -246,7 +246,7 @@ This is the build target. The full three-way separation — identity local, posi
 1. Address: `tabors.site#0/home@tabor :: tabors.site#4/factory` (verb=be, position-changing op).
 2. Cross-world detected.
 3. Tabor's Act opens on #0's act-chain.
-4. Authorize against #4's substrate with crossOrigin in the stance bag.
+4. Authorize against #4's substrate via the role-walk (`authorizeViaRoles`), with the canopy-verified actor identity tuple riding through.
 5. If admitted:
    - Fact `set-being:position` on tabor's being-reel under #0 with new value `tabors.site#4/factory`. Records the departure.
    - Fact on #4's being-reel for tabor (arrival) with `crossOrigin: { branch: "0", beingId: "tabor", actId }`.
@@ -273,27 +273,27 @@ This is the build target. The full three-way separation — identity local, posi
 8. Hash + descriptor attach to tabor's Act. Act seals on tabors.site#0 with `status: "sealed"`.
 9. tabors.site's reels stay clean; the state change is purely on bing.com.
 
-## Build prerequisites
+## Build status — LANDED
 
-1. **Act-chain branch lineage.** A being's act-chain must respect branch lineage like fact reels do. Otherwise a cross-world Act stamped on the actor's branch won't surface correctly when the branch is read later. This is the foundational fix; everything else depends on it.
-2. **`crossOrigin` in the stance bag.** `deriveStanceProperties` must produce `crossOrigin.reality`, `crossOrigin.branch`, `crossOrigin.beingId` when evaluating foreign-actor calls so rules can gate ("don't let foreign actors set-config here," etc.).
-3. **Position quality accepts foreign address.** Generalize position from bare spaceId to a full address shape, or add a `position.foreign` quality alongside the local position.
-4. **Address resolver surfaces cross-world flag.** The resolver already parses reality+branch; needs to expose a clean `isCrossWorld` flag and the resolved foreign target shape so the dispatcher can branch on it.
-5. **Stamper boundary enforces crossOrigin.** Foreign-origin facts arriving at the Stamper without complete crossOrigin are refused. Local facts are written as today.
-6. **Canopy gateway carries the Act envelope.** For cross-reality. Cross-branch is same-process — handed directly to the foreign-branch's dispatcher.
+All eight prereq + build-order items below shipped. The doctrine is now structural in the substrate; this section stays as a forensic record of the build path.
 
-## Build order
+| # | Item | Status | Lives at |
+|---|------|--------|----------|
+| 1 | Act-chain branch lineage | LANDED | `seed/past/act/actChain.js`; verify-act-chain-lineage 12/12 |
+| 2 | crossOrigin block + Stamper enforcement | LANDED | `seed/past/act/crossOrigin.js` (`deriveCrossOrigin`), `seed/past/fact/facts.js` (lands the block at emit; dedup by `crossOrigin.actId`) |
+| 3 | Position accepts foreign address | LANDED | `seed/materials/being/positionAddress.js` (`parsePositionAddress`, `formatPositionAddress`, `isPositionCrossWorld`) |
+| 4 | Address-resolver cross-world flag | LANDED | `seed/ibp/address.js` + `seed/ibp/resolver.js`; cross-branch + cross-reality detection in parseBoth |
+| 5 | Cross-branch + cross-reality dispatch in DO/SEE/SUMMON/BE | LANDED | `seed/past/act/crossWorldResponse.js` + `runVerbAsForeignActor` |
+| 6 | Inner-face attachment on the Act | LANDED | `seed/past/act/innerFace.js` — `qualities.innerFace = { hash, descriptor }` |
+| 7 | Pull-back safety (boot scan) | LANDED | `seed/materials/being/pullBack.js` + wired into `genesis.js` startup |
+| 8 | Canopy transport (cross-reality) | LANDED | `protocols/ibp/canopy.js` (verifyIncoming + forwardToPeer + signedAt freshness window) |
 
-1. Act-chain branch lineage (the hole; foundation).
-2. Address-resolver cross-world flag and detection surface.
-3. `crossOrigin` block on the Fact schema's params; Stamper enforcement.
-4. `crossOrigin` in the stance bag; authorize evaluates foreign-actor properties.
-5. Cross-branch dispatch in the DO/SEE/SUMMON/BE verb handlers.
-6. Inner-face attachment on the Act.
-7. Pull-back safety (heartbeat + scan + reset).
-8. Cross-reality transport via canopy.
+Two prereq items from the original draft were subsumed by later doctrine:
 
-Each step is independently verifiable. Same-reality cross-branch lights up the whole architecture without federation; once it works, cross-reality is just the transport hop.
+- **`crossOrigin` in the stance bag via `deriveStanceProperties`** — RETIRED. The stance-bag derivation retired with PERMISSIONS.md (replaced by RolesAreAuth.md). The role-walk's `authorizeViaRoles` reads identity tuples from the moment's `actorAct` and the canopy's verified sender, not from a derived property bag. Same information, surfaced through the role-walk instead of the bag.
+- **"qualities.permissions admit what verbs" for portal vs window** — RETIRED. The same per-position permission is now expressed as the role's `canSee` / `canDo` / `canSummon` / `canBe` lists with optional `reach` filters. The portal-vs-window distinction is what role grants the foreign visitor holds, not a `qualities.permissions` rule. See RolesAreAuth.md.
+
+Test coverage: `verify-federation.js` exercises 18 properties of the mate-vessel + canopy + father-admit flow.
 
 ## What's NOT in this doctrine
 
@@ -304,40 +304,9 @@ Each step is independently verifiable. Same-reality cross-branch lights up the w
 
 ## See also
 
-- `seed/PERMISSIONS.md` — how the foreign-actor stance is gated at the receiving side
+- `seed/RolesAreAuth.md` — how the foreign-actor stance is gated at the receiving side (canSee / canDo / canSummon / canBe + reach)
+- `protocols/ibp/FEDERATION.md` — canopy verifyIncoming, signedAt freshness, mate-vessel pattern
+- `seed/done/DualBeingParents.md` — father-as-vessel doctrine; BE:connect father-admit
 - `seed/FACTORY.md` — Stamper / Act doctrine and per-aggregate reels
 - `philosophy/CROSS-WORLD/` — source material for this doctrine
 
-# Realization
-
-Yes — excellent questions. Here's how the design handles both scenarios cleanly.1. Acting Through a Portal Without Changing PositionYes, this is fully supported and intentional.In this design, Portal and Window are just permission levels on the foreign side, not tied to position change.A being can stay at its current position (e.g. in its home reality) but still open a portal to another world/branch.
-Through that portal, it can perform SEE, DO, SUMMON (and potentially limited other actions) into the foreign world without moving.
-Only the BE verb actually changes the being’s position quality.
-
-This is exactly what you want for “bridge-like” portals.How It Works PracticallyThe being keeps its current position.
-When it acts through the portal, the target address in the verb call points to the foreign reality/branch.
-The system detects this as cross-world because the target differs from the actor’s home, even though the being’s stored position hasn’t changed.
-The foreign side decides via permissions what is allowed:Window → Only SEE allowed
-Portal → SEE + DO + SUMMON (maybe limited BE)
-Full access → All verbs allowed (including BE to step through)
-
-So yes — a being can stand in its home reality and still actively work, summon beings, or manipulate matter in a completely different reality through an open portal/bridge.This is very powerful for collaboration, oversight, remote control, etc.
-
-2. What Happens If the Foreign Reality/Branch Shuts Down or Gets Deleted?The design has a strong safety guarantee here.Pull-Back Mechanism (Already in the doc)When a being’s position points to a foreign reality/branch:The home substrate periodically checks liveness (heartbeat / recent successful communication).
-   If the foreign side becomes unreachable (shutdown, deletion, network partition, etc.) for longer than the timeout:Home substrate automatically stamps a set-being:position fact on its own reel.
-   This pulls the being back to a safe home location (usually its last known home space).
-   The being’s identity and act history remain fully intact on home.
-
-Result: The being is never permanently trapped in a dead or deleted foreign reality. Worst case, it gets yanked home.What Happens to the Foreign Reality’s Reels?This depends on timing:If the foreign reality is still alive when the being leaves (voluntarily or via pull-back):A departure fact is stamped on the foreign side (with crossOrigin provenance).
-
-If the foreign reality is already dead/unreachable:No departure fact can be stamped (obviously).
-The foreign reality has no knowledge of the being’s removal.
-When (if) that foreign reality comes back online, it will have “ghost” records of beings that have already been pulled back home.
-These ghosts are harmless. The next time someone interacts with that space, the foreign substrate can clean up beings whose home reality says they no longer belong there (via crossOrigin check).
-
-This is similar to how distributed systems handle “eventual consistency” for presence.Summary of the Safety GuaranteesA being’s existence is always anchored to its home reality.
-Position in foreign worlds is a temporary lease, not permanent ownership.
-Home reality has final authority to revoke that lease (pull-back).
-Foreign realities only have temporary custody of the being’s presence.
-
-This matches the core doctrine: Identity is sovereign, position is portable.

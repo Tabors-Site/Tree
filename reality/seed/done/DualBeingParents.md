@@ -1,3 +1,15 @@
+# DualBeingParents — STATUS: LANDED
+
+All three primitives from this design exploration are now built:
+
+- **Father-as-vessel** (cross-world citizenship via summon:mate → be:birth with father tuple). Verified by `verify-federation.js` (18 properties).
+- **Auto-inheritance of both parents' acquiredRoles on be:birth**. The child inherits every `qualities.rolesGranted` entry from the mother (`parentBeingId`, the be:birth actor) AND from a same-reality father (`spec.father.beingId`). Each inherited grant rides the same moment as the be:birth Fact; they seal atomically. Cross-reality fathers contribute the connect-eligibility marker only — their foreign projection isn't readable here. Dedup on (role, anchorSpaceId, anchorBeingId) with mother-wins-on-tie. Lives in `_inheritParentRoles` at the bottom of `materials/being/identity/birth.js`.
+- **be:death** as the closing primitive. Stamps `be:death` on the dying being's reel; reducer's `applyDeath` lands `qualities.death = { time, byActor }` AND scrubs rendering data (`position = null`, `coord = null`, `qualities.connection.inhabitedBy = null`) so the dead being disappears from every SEE projection without a per-call alive-filter; the stamper's death gate (`past/fact/facts.js` logFact) then refuses any new Fact whose actor or being-target is closed (the be:death fact itself is the lone exception, so the lock can seal). Today: I_AM only — no role declares `canBe: ["death"]`, so the role-walk refuses every other actor. Wired through `BE_OPS` (now a closed four-op set: birth, connect, release, death).
+
+The original exploration text follows verbatim.
+
+---
+
 final idea
 Do mate and be birth. Be birth is the solo act.
 

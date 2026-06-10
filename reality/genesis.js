@@ -161,7 +161,7 @@ export async function genesis(app, opts = {}) {
   //
   // Plant is continuation, not duplication. Two simultaneously-live
   // substrates with the same reality identity is undefined behavior;
-  // the deployer ensures only one is canonical (see Chain-Rebuild.md).
+  // the deployer ensures only one is canonical (see done/Chain-Rebuild.md).
   let plantedFromSeed = false;
   if (process.env.PLANT_FROM_SEED) {
     const path = await import("path");
@@ -222,7 +222,7 @@ export async function genesis(app, opts = {}) {
   // Each step opens its own withIAmAct, seals its own act, lands on
   // the I-Am's reel as one entry in the I-Am's autobiography of
   // self-creation. Per philosophy/MOMENT.md "Moment, act, batch" and
-  // seed/IamToActs.md "The Genesis Sequence."
+  // seed/done/IamToActs.md "The Genesis Sequence."
   //
   // Order (chicken-and-egg unlock: I-Am born with homeSpace=null,
   // home set later once heaven exists):
@@ -505,13 +505,11 @@ export async function genesis(app, opts = {}) {
   const { publicRole } = await import("./seed/present/roles/public/role.js");
   registerRole("public", publicRole, "seed");
 
-  // public-commons — the implicit visitor floor at any public-owned
-  // space. roleAuth's public-commons branch reads this role's spec
-  // from the registry when a target sits in a public-owned subtree.
-  // Operators customize the per-space commons surface by installing a
-  // role onto that space's qualities.roles; this role is the default.
-  const { publicCommonsRole } = await import("./seed/present/roles/public-commons/role.js");
-  registerRole("public-commons", publicCommonsRole, "seed");
+  // (public-commons is no longer registered as a seed role. It's a
+  // regular operator-installable template that lives in
+  // seed/present/roles/public-commons/role.js — operators install it
+  // on their public-owned spaces via set-role / installRoleOnSpace
+  // when they want the open-commons surface with auto-grant on entry.)
 
   // The foundational roles of the roles-are-auth doctrine
   // (seed/RolesAreAuth.md):

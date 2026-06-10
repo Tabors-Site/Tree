@@ -617,7 +617,57 @@ export async function seeVerb(target, opts = {}) {
     );
   }
 
+  // Auto-on-entry role grants (seed/RolesAreAuth.md "Acquisition").
+  // After SEE passes authorize, scan the seen space's qualities.roles
+  // for entries with acquisition.autoOnEntry=true. For each such role,
+  // emit a silent grant for the actor (skipping if they already hold
+  // it). Public's owned spaces use this to admit visitors without a
+  // hardcoded floor — the role-walk authorize now handles them
+  // through the regular grants path, no special branch.
+  if (identity?.beingId && identity?.name !== "arrival") {
+    await maybeAutoGrantOnEntry({
+      identity,
+      spaceId: resolved.spaceId,
+      branch:  seeBranch,
+      summonCtx,
+    });
+  }
+
   return buildPlaceDescriptor(resolved, { identity, payload });
+}
+
+async function maybeAutoGrantOnEntry({ identity, spaceId, branch, summonCtx }) {
+  if (!spaceId) return;
+  try {
+    const { loadProjection } = await import("../../materials/projections.js");
+    const spaceSlot = await loadProjection("space", String(spaceId), branch);
+    const roles = spaceSlot?.state?.qualities?.roles;
+    if (!roles || typeof roles !== "object") return;
+
+    const { normalizeAcquisition, alreadyHoldsRole } =
+      await import("../../present/roles/acquisition.js");
+
+    const actorSlot = await loadProjection("being", String(identity.beingId), branch);
+    const heldGrants = actorSlot?.state?.qualities?.rolesGranted || [];
+
+    for (const [roleName, spec] of Object.entries(roles)) {
+      if (!spec || typeof spec !== "object") continue;
+      const policy = normalizeAcquisition(spec);
+      if (!policy.autoOnEntry) continue;
+      if (alreadyHoldsRole(heldGrants, roleName, spaceId)) continue;
+      const { emitInternalGrant } = await import("../../present/roles/acquisitionOps.js");
+      await emitInternalGrant({
+        granteeBeingId: String(identity.beingId),
+        role:           roleName,
+        anchorSpaceId:  String(spaceId),
+        grantedBy:      "auto-on-entry",
+        summonCtx,
+      });
+    }
+  } catch (_err) {
+    // Best-effort. SEE itself must not fail because the grant emit
+    // had a hiccup — the actor's view is already authorized.
+  }
 }
 
 /**

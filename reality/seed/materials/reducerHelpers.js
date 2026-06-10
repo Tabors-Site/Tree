@@ -343,6 +343,76 @@ export function applyConnectionState(state, fact) {
 }
 
 /**
+ * Apply be:death facts to the being's qualities.death projection.
+ *
+ * Death is the being's final lifecycle act (seed/done/DualBeingParents).
+ * One-way: once stamped, the being's act-chain is locked, no new BE
+ * ops are accepted, summons refuse, role grants refuse. Past acts and
+ * past grants remain valid (facts at the time stand; later closure
+ * doesn't retroactively invalidate them).
+ *
+ * Idempotent: re-applying a be:death to an already-dead being is a
+ * no-op (the FIRST death's timestamp is the canonical death moment).
+ *
+ * Fact shape:
+ *   verb:   "be"
+ *   action: "death"
+ *   target.kind: "being", target.id: <being whose death we're recording>
+ *   params.byActor: <beingId who closed this being> (today: always I_AM)
+ *
+ * The projection lands at `qualities.death = { time, byActor }`.
+ * Consumers test `being.qualities.death?.time != null` for the
+ * is-dead predicate.
+ *
+ * RENDERING SCRUB: death also nulls every field that descriptor
+ * builders consult to render the being at a position — `position`,
+ * `coord`, and `qualities.connection.inhabitedBy`. The dead being
+ * stops appearing in any place's beingsAtSpace lookup without a
+ * per-call filter; SEE just doesn't see them anywhere. Identity-
+ * level state (name, defaultRole, rolesGranted, homeSpace,
+ * parentBeingId) stays — the being remains queryable as history.
+ *
+ * @param {object} state
+ * @param {object} fact
+ * @returns {object} new state
+ */
+export function applyDeath(state, fact) {
+  if (fact?.verb !== "be") return state;
+  if (fact?.action !== "death") return state;
+  if (fact?.target?.kind !== "being") return state;
+
+  const qualities = state.qualities || {};
+
+  // Idempotent — first death wins. Re-folding the same fact (or a
+  // duplicate) preserves the original time/byActor and the cleared
+  // rendering state.
+  if (qualities.death?.time) return state;
+
+  const time = fact?.date || null;
+  const byActor = fact?.params?.byActor || fact?.beingId || null;
+
+  // Inhabit-state cleared so the "human" cognition flip-up doesn't
+  // fire for a dead being even on stale reads.
+  const connection = qualities.connection
+    ? { ...qualities.connection, inhabitedBy: null }
+    : { inhabitedBy: null };
+
+  return {
+    ...state,
+    // Rendering scrub: nulled at fold time so all SEE projections
+    // (beingsAtSpace, position lookups, coord readers) naturally
+    // exclude the dead being without a per-call alive-filter.
+    position: null,
+    coord: null,
+    qualities: {
+      ...qualities,
+      connection,
+      death: { time, byActor },
+    },
+  };
+}
+
+/**
  * Apply do:grant-role / do:revoke-role facts to the being's
  * qualities.rolesGranted projection (seed/RolesAreAuth.md).
  *

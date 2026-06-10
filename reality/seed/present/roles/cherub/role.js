@@ -437,7 +437,33 @@ async function releaseHandler(_args) {
 }
 
 // ────────────────────────────────────────────────────────────────────
-// Op definitions. Three handlers + their static schemas. The seed
+// death . The being's final act. Locks the act-chain; no new BE ops
+// will be accepted on this being, summons refuse, role grants refuse.
+// Past acts + past grants remain valid (facts at the time stand).
+// See seed/done/DualBeingParents — "WORRY ABOUT LAST."
+//
+// The handler returns the closing summary; beVerb's dispatch path
+// (death branch in be.js) stamps the be:death fact on the dying
+// being's reel. The reducer's applyDeath in reducerHelpers.js
+// projects qualities.death = { time, byActor }.
+//
+// Authority gate: today only I_AM may perform be:death. The authorize
+// step in beVerb's dispatch routes through the role-walk which
+// short-circuits true for I_AM and refuses everyone else (no role
+// today declares canBe:["death"]). Future doctrine may extend the
+// authority list (mother + governance roles); for now, I_AM only.
+// ────────────────────────────────────────────────────────────────────
+
+async function deathHandler({ address, identity }) {
+  return {
+    closed:  true,
+    address: address || null,
+    byActor: identity?.beingId || null,
+  };
+}
+
+// ────────────────────────────────────────────────────────────────────
+// Op definitions. Four handlers + their static schemas. The seed
 // imports these into the canonical BE_OPS table at ibp/beOps.js .
 // there is no registration call (BE is a closed set, fixed by the
 // substrate, so a registry would be the same anti-pattern as the
@@ -470,6 +496,13 @@ export const cherubBeOps = Object.freeze({
     label: "Log out",
     args: {},
     handler: releaseHandler,
+  },
+  death: {
+    description: "Close this being's lifecycle. One-way; the chain locks. " +
+                 "Past acts + grants remain valid. Today I_AM only.",
+    label: "Close being",
+    args: {},
+    handler: deathHandler,
   },
 });
 

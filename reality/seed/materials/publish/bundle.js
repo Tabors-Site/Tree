@@ -2,7 +2,7 @@
 //
 // Clone bundle. Portable representation of a subtree's current state.
 // A clone is one of two portable artifacts (the other is a seed, which
-// preserves acts and is plant-only). See `seed/Chain-Rebuild.md` for
+// preserves acts and is plant-only). See `seed/done/Chain-Rebuild.md` for
 // the vocabulary doctrine.
 //
 // Shape:

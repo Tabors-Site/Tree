@@ -228,7 +228,7 @@ doVerb.listOperations = listOperations;
  *   String id     → look up — first Space, then Being, then Matter
  *
  * Returns null when nothing resolves (rare; the auth chain falls
- * through to the reality root via getSpaceRootId in findMatchingRule).
+ * through to the reality root via getSpaceRootId in the role-walk).
  */
 async function resolveAuthSpaceId(target, auditTarget, branch) {
   // The audit target's kind tells us what to look up. When the

@@ -2,7 +2,7 @@
 //
 // be.js . the BE verb. Identity operations on a being.
 //
-// BE is the closed three-op set: birth, connect, release. The static
+// BE is the closed four-op set: birth, connect, release, death. The static
 // table BE_OPS in [ibp/beOps.js](../beOps.js) holds the schemas +
 // handlers; this verb's job is to authorize, dispatch, and stamp the
 // audit Fact. Cherub is the canonical handler.
@@ -381,6 +381,79 @@ export async function beVerb(operation, payload = {}, opts = {}) {
     return result;
   }
 
+  // ── Death path. ─────────────────────────────────────────────────
+  // BE:death targets the dying being directly (not cherub-on-itself).
+  // Authorize via the role-walk (I_AM bypass admits I_AM; no role
+  // today declares canBe:["death"], so every other actor refuses).
+  // The handler returns a closing summary; writeBeFact stamps a
+  // be:death fact on the target's reel. The reducer's applyDeath
+  // marks qualities.death — the stamper's death gate (logFact) then
+  // refuses any further facts riding this being.
+  if (operation === "death") {
+    assertVerbCaller("be", opts);
+    if (!identity?.beingId) {
+      throw new IbpError(IBP_ERR.UNAUTHORIZED, "death requires an authenticated caller");
+    }
+    if (!beingName) {
+      throw new IbpError(
+        IBP_ERR.INVALID_INPUT,
+        "be:death requires an explicit target being in the address (e.g. <reality>/@<being>)",
+      );
+    }
+    // Resolve beingName → beingId on the target's branch. The death
+    // fact lands on THAT being's reel; the resolution must come from
+    // the projection (the canonical source) on the operating branch.
+    const { findByName } = await import("../../materials/projections.js");
+    const targetSlot = await findByName("being", beingName, branch);
+    if (!targetSlot) {
+      throw new IbpError(
+        IBP_ERR.BEING_NOT_FOUND,
+        `be:death target @${beingName} not found on branch #${branch}`,
+        { beingName, branch },
+      );
+    }
+    const targetBeingId = String(targetSlot.id);
+    const decision = await authorize({
+      identity,
+      verb: "be",
+      target: { kind: addressKind, value: address },
+      operation,
+      summonCtx,
+    });
+    if (!decision.ok) {
+      throw new IbpError(
+        IBP_ERR.FORBIDDEN,
+        `BE:death denied for actor "${decision.actor}": ${decision.reason}`,
+        { actor: decision.actor },
+      );
+    }
+    const deathOp = getBeOp("death");
+    if (!deathOp) {
+      throw new IbpError(IBP_ERR.INTERNAL, "death op not registered");
+    }
+    const result = await deathOp.handler({
+      address,
+      addressKind,
+      payload,
+      identity,
+      ctx: { socket, address: { kind: addressKind, value: address }, identity, req, summonCtx },
+      summonCtx,
+    });
+    // Thread the resolved targetBeingId into writeBeFact so the
+    // be:death fact lands on the dying being's reel (not the actor's).
+    await writeBeFact({
+      operation,
+      identity,
+      authResult: { ...result, targetBeingId },
+      payload,
+      beingName,
+      actId: summonCtx?.actId || null,
+      summonCtx,
+      branch,
+    });
+    return { ...result, targetBeingId };
+  }
+
   // ── Inhabit-connect path. ───────────────────────────────────────
   // BE:connect on a non-cherub being. Cherub's handler implements the
   // inhabit auth path (Mode 3: caller is authenticated AND target is
@@ -521,7 +594,7 @@ export async function beVerb(operation, payload = {}, opts = {}) {
   if (!beOp) {
     throw new IbpError(
       IBP_ERR.ACTION_NOT_SUPPORTED,
-      `BE op "${operation}" is not in the closed set (birth, connect, release)`,
+      `BE op "${operation}" is not in the closed set (birth, connect, release, death)`,
       { operation, available: Object.keys(BE_OPS) },
     );
   }
@@ -599,6 +672,23 @@ async function writeBeFact({ operation, identity, authResult, payload, beingName
     const targetBeingId = identity?.beingId || actorBeingId;
     target = { kind: "being", id: String(targetBeingId) };
     connectionParams = { inhabitedBy: null };
+  } else if (operation === "death") {
+    // The dying being is resolved by the death dispatch path above
+    // (findByName on the address's beingName) and threaded here via
+    // authResult.targetBeingId. The fact lands on THAT being's reel
+    // — its final fact. The actor (caller) is recorded as
+    // params.byActor so audit can see who performed the close. Today
+    // only I_AM passes authorize, but the structural shape supports
+    // future authority models.
+    const targetBeingId = authResult?.targetBeingId;
+    if (!targetBeingId) {
+      throw new IbpError(
+        IBP_ERR.INTERNAL,
+        "be:death requires a resolved target being id (set by beVerb's death dispatch path).",
+      );
+    }
+    target = { kind: "being", id: String(targetBeingId) };
+    connectionParams = { byActor: String(actorBeingId) };
   } else {
     // birth and any future BE op: identity-on-self. The actor's own
     // being is the target.

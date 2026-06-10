@@ -166,6 +166,12 @@ import "./materials/moveOp.js";
 import "./materials/portalOp.js";
 import "./materials/being/ops.js";
 import "./materials/being/credentialOps.js";
+// Side-effect import. Registers the role-acquisition ops: ask-role
+// (host policy decides: auto, queue, or refuse) and take-role
+// (walk-in for grabbed:true roles). The acquisition module lives in
+// present/roles/ because that's where the policy schema and the
+// in-effect role-walk live; these ops just front the policy.
+import "./present/roles/acquisitionOps.js";
 // Side-effect import. Registers the publish layer: replicate-subtree
 // (extract a subtree's current shape into a portable bundle) and
 // graft-replicate (apply a bundle into a target). The walker primitive
@@ -250,7 +256,7 @@ export function buildRealityServices({
     // - captureSeed: the WHOLE REALITY — full chains (facts + acts +
     //   branches + reelHeads), original IDs preserved. Plant-only on
     //   the receive side (boot mode in genesis.js). See
-    //   `seed/Chain-Rebuild.md` for the doctrine.
+    //   `seed/done/Chain-Rebuild.md` for the doctrine.
     captureSeed,
 
     // Plant is boot-only — exposing it here as a runtime verb refuses.
@@ -262,7 +268,7 @@ export function buildRealityServices({
         "reality.plant: plant is currently boot-only. Wipe the DB, set " +
         "PLANT_FROM_SEED=/path/to/seed.json, and restart the substrate. " +
         "Runtime plant (live wipe-and-replay-in-place) is a future arc; " +
-        "see seed/Chain-Rebuild.md for the doctrine.",
+        "see seed/done/Chain-Rebuild.md for the doctrine.",
       );
     },
 

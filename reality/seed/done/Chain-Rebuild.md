@@ -1,3 +1,28 @@
+# Clone & Seed — STATUS: LANDED (the substrate's doctrine + implementation)
+
+> **STATUS: LANDED.** This doc is the live doctrine. The substrate implements its full design.
+>
+> **Built (stages A–C, C.5, E, F, G, H):**
+> - **Stage A — graft engine.** `graftClone(bundle, targetParentSpaceId, opts)` in `materials/publish/graft.js` applies clones onto a target subtree. Parameter substitution + `$placeholder` resolution + remap-table threading + dependency-order fact stamping all wired.
+> - **Stage B — parameter holes + placeholders.** `$placeholder` references resolved against the substitution table; forward references resolve at dispatch time.
+> - **Stage C — capture engine.** `cloneSubtree(scopeSpaceId, opts)` in `materials/publish/clone.js` walks a subtree's projections (NOT the chain) and emits a portable bundle. The walker (`findRefs` / `remapRefs` in `seed/materials/refWalker.js`) tags aggregate references as Refs on the way out.
+> - **Stage C.5 — subscription-as-fact.** Subscriptions migrated to fact-stamped registration. Wakes-as-facts shipped earlier. Both ride with clones now.
+> - **Stage E — captureSeed.** `captureSeed(opts)` in `materials/publish/seed.js` walks all branches, captures fact chains + act chains + branch metadata + reelHeads. The full genome.
+> - **Stage F — plant at boot.** `plantSeed(bundle)` in `materials/publish/seed.js` replays into a fresh DB; refuses non-empty DB (deployer enforces the wipe). Wired into `genesis.js` via the `plantedFromSeed` flag.
+> - **Stage G — `provides.clones` extension manifest field.** `cloneRegistry.js` registers extension-shipped clones; the loader reads `manifest.provides.clones` at load time. The "seeds (colloquial)" name is reserved for the genome-level artifact.
+> - **Stage H — vocabulary collapse.** DO ops surfaced: `clone-subtree` (SEE), `graft-clone`, `graft-clone-by-name`, `capture-seed`. The wire-compat `graft-replicate` alias was retired 2026-06-09 (zero portal references remained).
+>
+> **Tests:** `verify-clone-graft.js` and `verify-seed-plant.js` in `.test/scripts/`.
+>
+> **Not yet built (stage D):**
+> - **Stage D — federation as wire-streamed clone fragments.** Cross-reality clone propagation. Federation exists today (canopy + cross-world summons) but doesn't yet stream clone fragments over the wire as a unified primitive. Mate-vessel + cross-reality summon cover most cross-reality interaction needs; clone-fragment streaming is a future arc.
+>
+> The three doctrinal commitments (single-rooted substrate / plant is continuation, not duplication / history is load-bearing) are all structurally enforced in the substrate. The vocabulary (clone vs seed; graft vs plant; reality vs branch) is consistent across the code.
+>
+> The original working-sketch text follows verbatim.
+
+---
+
 # Clone & Seed — the two portable artifacts
 
 maybe to make a seed the command would be something like reality be birth lol and it makes a seed

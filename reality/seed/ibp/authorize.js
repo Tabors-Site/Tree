@@ -28,9 +28,9 @@
 //
 // What this file NO LONGER does (retired with the hard cut):
 //   - qualities.permissions.<verb>.<keyParts> rule lookups
-//   - stance-properties-as-gate (memberClasses can still be derived for
-//     descriptor enrichment but they no longer gate authorize — granted
-//     roles do; the contributor class is fully retired)
+//   - stance properties as gates (memberClasses can still be derived
+//     for descriptor enrichment but they no longer gate authorize —
+//     granted roles do; the contributor class is fully retired)
 //   - registerDefaultPermissions extension contributions
 //   - REALITY_ROOT_DEFAULT_PERMISSIONS / HEAVEN_DEFAULT_PERMISSIONS seeding
 //

@@ -68,7 +68,7 @@ const SpaceSchema = new mongoose.Schema({
   // Retired 2026-06-07: the separate `rootOwner` and `contributors[]`
   // fields. Owner became `members.owner` (singleton), contributor
   // became `members.contributor`, and new classes are first-class.
-  // See seed/PERMISSIONS.md for the full doctrine.
+  // See seed/RolesAreAuth.md for the full doctrine.
   members: {
     type: Map,
     of: [{ type: String, ref: "Being" }],

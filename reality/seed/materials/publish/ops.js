@@ -1,26 +1,24 @@
 // TreeOS Seed . AGPL-3.0 . https://treeos.ai . Tabor Holly
 //
-// publish/ops.js — DO operations for clone + graft.
+// publish/ops.js — DO + SEE operations for clone + graft + seed.
 //
-//   clone-subtree      — extract a subtree's current shape into a portable
-//                        clone bundle (facts-only, no acts)
-//   graft-clone        — apply a clone bundle into a target subtree
+//   clone-subtree      — SEE op: extract a subtree's current shape into
+//                        a portable clone bundle (facts-only, no acts)
+//   graft-clone        — DO op: apply a clone bundle into a target subtree
+//   graft-clone-by-name — DO op: apply an extension-registered clone by name
+//   capture-seed       — DO op: capture the FULL reality (facts + acts +
+//                        branches + reelHeads) as a portable seed
+//   clones             — SEE op: discovery of registered extension clones
 //
-// Both ops run inside the wrapping moment and emit substrate facts via
-// the create-space / be:birth / create-matter handlers' fact-emission
-// path. The ops themselves do not seal; they piggyback on the caller's
-// summon moment (or sealFacts singleton when called standalone).
+// Graft ops run inside the wrapping moment and emit substrate facts
+// via the create-space / be:birth / create-matter handlers' fact-emission
+// path. They do not seal; they piggyback on the caller's summon moment
+// (or sealFacts singleton when called standalone).
 //
-// Wire compatibility aliases (kept until the portal / client surface
-// migrates to clone-* naming):
-//
-//   replicate-subtree → clone-subtree
-//   graft-replicate   → graft-clone
-//
-// Both alias names dispatch to the same handlers; they're registered
-// here so existing portal calls don't break during the rename arc.
-// Remove after the portal UI updates land. See seed/Chain-Rebuild.md
-// for the vocabulary doctrine that drove this rename.
+// The earlier `replicate-subtree` / `graft-replicate` wire-compat aliases
+// were retired 2026-06-09 when zero portal references remained. See
+// seed/done/Chain-Rebuild.md for the vocabulary doctrine (clone vs seed
+// as the two-artifact split).
 
 import { registerOperation } from "../../ibp/operations.js";
 import { registerSeeOperation } from "../../ibp/seeOps.js";
@@ -126,16 +124,6 @@ registerOperation("graft-clone", {
   args: {
     bundle: { type: "json", label: "Clone bundle (paste JSON)", required: true },
   },
-  handler: graftCloneHandler,
-});
-
-// Wire-compat alias: portal calls reality.do(addr, "graft-replicate", ...).
-// Same handler; remove after portal updates to graft-clone.
-registerOperation("graft-replicate", {
-  targets: ["space"],
-  ownerExtension: "seed",
-  factAction: "graft-replicate",
-  skipAudit: true,
   handler: graftCloneHandler,
 });
 

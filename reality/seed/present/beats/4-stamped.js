@@ -177,7 +177,7 @@ export async function sealAct(plannedAct, { content = null, deltaF = [], afterSe
   // belongs in a future `withBatch` primitive (a grouping of moments
   // that share a Mongo session); it never expands a single moment to
   // hold many ops. Genesis is a SEQUENCE of moments, not a batch —
-  // see seed/IamToActs.md.
+  // see seed/done/IamToActs.md.
   //
   // Structural: this is a hard throw, not a warn. The discipline is
   // unconditional.

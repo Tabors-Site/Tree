@@ -24,6 +24,7 @@ import {
   applySetField,
   applyCreateBeing,
   applyConnectionState,
+  applyDeath,
   applyRoleGrants,
 } from "../reducerHelpers.js";
 
@@ -61,6 +62,13 @@ export function reduce(state, fact) {
   // in identity/lookups.js reads this projection to flip effective
   // cognition to "human" when an inhabitor is present.
   next = applyConnectionState(next, fact);
+
+  // be:death — locks the being's lifecycle. Writes qualities.death =
+  // { time, byActor }. Idempotent (first death wins). Consumers test
+  // `qualities.death?.time != null` for is-dead. Past acts + grants
+  // remain valid; new acts targeting this being refuse upstream
+  // (beVerb + summonVerb gate on isDead).
+  next = applyDeath(next, fact);
 
   // do:set — scalar fields (name/type) and qualities paths.
   next = applySetField(next, fact);

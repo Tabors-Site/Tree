@@ -46,7 +46,7 @@ const RESERVED_SET_META_NS = new Set([
 //
 // The fact stamped is `{ params: { ...flat fields } }` — no `spec:`
 // wrapper anywhere in the substrate. Reducers, walkers, and replicate
-// paths all read flat. See seed/Chain-Rebuild.md "How symmetrical are
+// paths all read flat. See seed/done/Chain-Rebuild.md "How symmetrical are
 // the fact shapes" for the rationale.
 //
 // skipAudit because the branch stamps its own birth Fact directly
@@ -517,7 +517,7 @@ registerOperation("remove-owner", {
 // members map (owner is the singleton; angel is the heaven-anointed
 // foundational class; operator-authored classes are first-class).
 // Class-specific invariants live in materials/space/members.js (owner
-// singleton). See PERMISSIONS.md for the full doctrine.
+// singleton). See RolesAreAuth.md for the full doctrine.
 registerOperation("add-member", {
   targets: ["space", "stance"],
   ownerExtension: "seed",

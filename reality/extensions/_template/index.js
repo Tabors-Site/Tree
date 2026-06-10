@@ -132,7 +132,7 @@ export async function init(reality) {
   // `reality.do(space, "graft-clone", { bundle })`. A clone is a
   // static list of fact specs (create-space, be:birth, etc.) — no
   // JS plant code, no scaffold(ctx). The retired seed-scaffold
-  // pattern lived here previously. See seed/Chain-Rebuild.md for
+  // pattern lived here previously. See seed/done/Chain-Rebuild.md for
   // the bundle shape + parameter system.
   // ───────────────────────────────────────────────────────────────
 

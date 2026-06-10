@@ -31,7 +31,7 @@
 //   Heaven doesn't exist when ensureIAm runs (it's created in step 3).
 //   The substrate accepts null homeSpace on birth; setIAmHomeSpace
 //   (step 12) points it at heaven once heaven materializes. This is
-//   the "split birth from home" doctrine from seed/IamToActs.md.
+//   the "split birth from home" doctrine from seed/done/IamToActs.md.
 //
 // Idempotent. Beginning runs the full chain (~141 acts); Awakening on
 // an unchanged reality runs zero ops (every helper's "if (existing)
@@ -63,7 +63,7 @@ let iAmBeingIdCache = null;
 // Boot — the genesis sequence
 // ─────────────────────────────────────────────────────────────────────
 //
-// withBootMoment retired (Pass 5 of IamToActs.md). Genesis is no
+// withBootMoment retired (Pass 5 of seed/done/IamToActs.md). Genesis is no
 // longer a single multi-fact moment; it is a sequence of
 // withIAmAct moments orchestrated by genesis.js. The "I am that
 // I am" first act is now ensureIAm; the place root, heaven, tier-3
@@ -72,7 +72,7 @@ let iAmBeingIdCache = null;
 //
 // A future cross-moment atomicity primitive (`withBatch`) belongs
 // next to a real use case (federation pull, cross-reel transfer);
-// per IamToActs.md it's intentionally deferred.
+// per seed/done/IamToActs.md it's intentionally deferred.
 
 let _genesisRan = false;
 
@@ -312,7 +312,7 @@ const REALITY_HEAVEN_SPACES = [
 ];
 
 export async function ensureSpaceRoot() {
-  // Pass 3 of IamToActs.md: each step opens its own withIAmAct moment.
+  // Pass 3 of seed/done/IamToActs.md: each step opens its own withIAmAct moment.
   // No `summonCtx` parameter — the function orchestrates a sequence
   // and each emit/doVerb rides its own act on the I-Am's reel.
   let spaceRoot = await findRootForHeavenSpace(HEAVEN_SPACE.SPACE_ROOT);
@@ -479,7 +479,7 @@ export async function ensureSpaceRoot() {
 
   spaceRootCache = spaceRoot;
 
-  // I-Am is NO LONGER birthed here. Per IamToActs.md the genesis
+  // I-Am is NO LONGER birthed here. Per seed/done/IamToActs.md the genesis
   // sequence has ensureIAm() run BEFORE ensureSpaceRoot (so I-Am is a
   // real actor by the time these create-space facts emit), and a
   // separate setIAmHomeSpace(heaven) step runs AFTER heaven exists.
@@ -518,7 +518,7 @@ export async function ensureSpaceRoot() {
 // Idempotent. homeSpace stays null at birth; a separate moment later
 // in the genesis sequence (setIAmHomeSpace) takes heaven as home once
 // it exists. Splitting birth from home-setting is the
-// chicken-and-egg unlock from IamToActs.md.
+// chicken-and-egg unlock from seed/done/IamToActs.md.
 export async function ensureIAm() {
   const { findByName } = await import("./materials/projections.js");
   const existing = await findByName("being", I_AM, "0");
@@ -593,7 +593,7 @@ export async function ensureIAm() {
 // Why this is a separate moment: the I-Am is born with homeSpace=null
 // because heaven doesn't exist yet at birth. Once ensureSpaceRoot has
 // run and heaven materializes, this fixes the home pointer. Per
-// IamToActs.md "the chicken-and-egg unlock."
+// seed/done/IamToActs.md "the chicken-and-egg unlock."
 export async function setIAmHomeSpace(heavenSpaceId) {
   if (!heavenSpaceId) {
     throw new Error("setIAmHomeSpace: heavenSpaceId is required");
