@@ -460,6 +460,28 @@ export async function birthBeing({ spec, identity, summonCtx = null }) {
     branch,
   });
 
+  // ── Anoint with the global role ──
+  //
+  // Per seed/RolesAreAuth.md "Single gate doctrine": the role-walk is
+  // the only gate. For a being to do ANYTHING — including petition for
+  // additional roles via ask-role / take-role — they must hold a role
+  // that permits it. `global` is the universal baseline: every being
+  // born into this reality gets it at the reality root with default
+  // reach (host + descendants = reality-wide). Parent-inheritance above
+  // already covers most paths; this stamps an UNCONDITIONAL global
+  // grant so even bootstrap-case beings (parent = I-Am, no grants to
+  // inherit) hold their petition surface.
+  //
+  // Idempotent at the reducer: a second global grant with the same
+  // anchor + grantor folds as a duplicate and doesn't bloat
+  // rolesGranted. Cherub's explicit registration-time grant of global
+  // becomes the redundant-but-harmless case after this line.
+  await _anointGlobal({
+    childId: id,
+    branch,
+    summonCtx,
+  });
+
   // In-moment: the row materializes at seal. Return the pending view
   // so callers can use the id + spec fields immediately.
   if (summonCtx) {
@@ -580,6 +602,39 @@ function _grantKey(grant) {
     grant?.anchorSpaceId || "",
     grant?.anchorBeingId || "",
   ].join("|");
+}
+
+/**
+ * Anoint a freshly-birthed being with the `global` role anchored at
+ * the reality root. Every being gets this so the petition surface
+ * (ask-role + take-role + the rest of global.canDo) is reachable
+ * without parent-inheritance dependencies.
+ *
+ * Single-gate doctrine (seed/RolesAreAuth.md): the role-walk is the
+ * only gate, so universal capabilities MUST live on a role every
+ * being holds.
+ */
+async function _anointGlobal({ childId, branch, summonCtx }) {
+  const { getSpaceRootId } = await import("../../../sprout.js");
+  const { I_AM } = await import("../seedBeings.js");
+  const rootId = getSpaceRootId();
+  if (!rootId) return; // boot-window edge; the I-Am birth itself runs before root materializes
+  await emitFact({
+    verb:    "do",
+    action:  "grant-role",
+    beingId: I_AM,
+    target:  { kind: "being", id: String(childId) },
+    params:  {
+      role:          "global",
+      anchorSpaceId: String(rootId),
+      anchorBeingId: null,
+      grantedBy:     I_AM,
+      grantedAt:     new Date().toISOString(),
+      expiresAt:     null,
+    },
+    actId:   summonCtx?.actId || null,
+    branch,
+  }, summonCtx);
 }
 
 // ─────────────────────────────────────────────────────────────────────

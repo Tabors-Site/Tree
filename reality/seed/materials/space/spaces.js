@@ -821,23 +821,6 @@ export async function getSpaceName(spaceId) {
 }
 
 /**
- * Build the display path "Root > Branch > Leaf" for a space. Walks the
- * ancestor cache once; sub-paths share entries across calls.
- */
-export async function buildPathString(spaceId, branch) {
-  const chain = await getAncestorChain(spaceId, branch);
-  if (!chain || chain.length === 0) return "";
-  const segments = [];
-  for (const ancestor of chain) {
-    if (ancestor.heavenSpace) break;
-    if (ancestor.name) segments.push(ancestor.name);
-  }
-  // Chain is ordered space-to-root. Path is root-to-space.
-  segments.reverse();
-  return segments.join(" > ");
-}
-
-/**
  * Walk up the parent chain to the owner-bearing tree root. The
  * .source self-tree counts as its own root (everything beneath it is
  * navigable but the tree-ownership boundary is .source itself).
@@ -997,27 +980,3 @@ export async function listSpaceChildren(parentId, { exclude = null, limit = 500,
   return all.slice(0, limit);
 }
 
-/**
- * List every space-tree root a being owns. A space-tree root sits
- * directly under the place root with members.owner === [beingId].
- */
-export async function listBeingSpaces(beingId, { limit = 500 } = {}) {
-  if (!beingId) return [];
-  const spaceRootId = getSpaceRootId();
-  if (!spaceRootId) return [];
-  const { default: Projection } = await import("../branch/projection.js");
-  const rows = await Projection.find({
-    branch: "0", type: "space",
-    "state.parent": spaceRootId,
-    "state.members.owner": String(beingId),
-    $or: [
-      { "state.heavenSpace": null },
-      { "state.heavenSpace": { $exists: false } },
-    ],
-    tombstoned: { $ne: true },
-  })
-    .sort({ "state.dateCreated": -1 })
-    .limit(limit)
-    .lean();
-  return rows.map((s) => ({ _id: s.id, ...(s.state || {}) }));
-}

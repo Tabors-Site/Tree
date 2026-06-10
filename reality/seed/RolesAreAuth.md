@@ -12,6 +12,22 @@
 
 **Roles are auth. Every role-in-effect lives on a space's `qualities.roles[<name>]`; grants on beings reference the role by name + the space it's anchored at; authorize walks the grant's anchor up the qualities ancestor chain to find the spec, then applies the role's canX after a reach check.**
 
+### Single-gate doctrine (pinned)
+
+**The role-walk is THE gate. Every action is gated by the caller's granted roles. There is no bypass mechanism.**
+
+When an action needs to be universally available — like "every being can request acquisition" — the substrate expresses that as a `canDo` entry on an open role that every being holds (today: `global`, granted to every being at birth). The substrate's gating IS the role system; they are not separate.
+
+Any field or flag that bypasses the role-walk introduces parallel gating and erodes the single-gate property. Past examples we explicitly retired:
+
+| Bypass | Why we retired it | What replaced it |
+|---|---|---|
+| `qualities.permissions` namespace | Parallel gate growing alongside roles | Roles host on `qualities.roles`; canX is the contract |
+| `claimedByPublic` branch in `roleAuth.js` | Hardcoded special-case for one being | `acquisition.autoOnEntry` on roles; visitors get a grant via the regular path |
+| `op.skipAuthorize` field (briefly added 2026-06-10, retired same-day) | Generic bypass for "ops that don't fit the gate" | Universal capabilities live on `global.canDo`; every being holds `global` |
+
+**Recognition criterion**: if an op's authorization story reads "the verb gate is skipped because…" — that's parallel gating. The right answer is always "what role expresses this capability, and which beings hold it." If everyone needs the capability, it goes on `global`. If a specific class needs it, it goes on a role granted to that class.
+
 ### Four orthogonal pieces
 
 | Lives on | Field | What it carries |

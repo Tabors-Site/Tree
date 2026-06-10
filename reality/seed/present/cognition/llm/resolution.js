@@ -8,7 +8,7 @@
 // result becomes the act's content.
 //
 // The chain walker lives in `chain.js`. This file is the public entry
-// point that wraps it and the back-compat shims for existing callers.
+// point that wraps it.
 //
 // THE 7-STEP CHAIN (auth.jpg, plan: graceful-jingling-garden.md)
 //
@@ -65,41 +65,3 @@ export async function resolveLlmConnectionChain({
   return buildLlmChain({ actor, receiver, role, branch });
 }
 
-/**
- * Back-compat shim. Old callers asked for a single connection id at a
- * (being, space, slot) triple — no actor context. The new chain
- * accepts the same inputs as a "receiver-only" call and returns the
- * first candidate.
- *
- * Returns the chosen connection id or null.
- */
-export async function resolveLlmConnection({
-  beingId = null,
-  spaceId = null,
-  slot = "main",
-  branch = "0",
-} = {}) {
-  const { chain } = await buildLlmChain({
-    receiver: { beingId, spaceId, realityDomain: null },
-    actor: null,
-    role: slot,
-    branch,
-  });
-  return chain.length > 0 ? chain[0].connectionId : null;
-}
-
-/**
- * Back-compat shim. `resolveRootLlmForRole` was the LLM-assigner's
- * thin wrapper over `resolveLlmConnection` taking a root id + role
- * spec. The new chain walks the same inputs and returns the first
- * candidate.
- *
- * @deprecated Use `resolveLlmConnectionChain` directly.
- */
-export async function resolveRootLlmForRole(rootId, role) {
-  if (!rootId) return null;
-  return resolveLlmConnection({
-    spaceId: rootId,
-    slot: role?.llmSlot || role?.name || "main",
-  });
-}

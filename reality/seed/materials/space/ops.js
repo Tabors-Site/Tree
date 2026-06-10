@@ -356,9 +356,7 @@ async function setOnSpaceHandler({ target, params, identity, summonCtx }) {
 async function endSpaceHandler({ target, identity, summonCtx }) {
   const spaceId = targetIdOf(target);
   // The actor is whoever called. I_AM-internal flows (registry mirror
-  // sync at genesis + boot) pass `identity: I_AM` and the beingId
-  // falls out naturally; previously this branch had a scaffold-flag
-  // fallback to I_AM, which retired with the flag.
+  // sync at genesis + boot) pass `identity: I_AM`.
   const actorBeingId = identity?.beingId || null;
   // Forward the open moment's actId so deleteSpaceBranch's internal
   // do.set-space writes ride the same Act.
@@ -469,11 +467,7 @@ const PERMISSION_ERROR_PATTERNS = [
 //                                            grantedBy: <originalGrantor> })
 //
 // Operators define their own contributor role via the role-manager UI
-// (set-role) with whatever canDo entries fit their reality. The
-// `addContributor` / `removeContributor` helpers in materials/space/
-// members.js stay for legacy callers but are no longer reachable
-// through DO ops; future cleanup deletes them when the seed has no
-// remaining non-op writers.
+// (set-role) with whatever canDo entries fit their reality.
 
 registerOperation("set-owner", {
   targets: ["space", "stance"],

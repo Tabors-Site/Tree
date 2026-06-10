@@ -49,26 +49,22 @@ const SpaceSchema = new mongoose.Schema({
   // foldPlace uses for the cross-reel weave at a space.
 
   // Membership classes. Each class is a named list of beings with
-  // authority at this position (and inherited downward via the
-  // ancestor walk). Canonical classes the seed ships with:
+  // authority at this position. The seed ships exactly one canonical
+  // class:
   //
-  //   owner       singleton class, the position's structural owner
-  //   contributor default trust class, peers of the owner
+  //   owner    singleton class, the position's structural owner.
+  //            The ONE base-axiom — owner of a space implicitly has
+  //            authority over it + descendants without any role grant.
   //
-  // Operators can author additional classes per-position (auditor,
-  // editor, etc.) by stamping `do:set-space` facts with
-  // field="members.<className>". Member classes survive for ownership
-  // bookkeeping; the AUTH gate is now the role-walk against
-  // qualities.roles (seed/RolesAreAuth.md), not member-class checks.
+  // All other authority shapes (editor, contributor, auditor, ...)
+  // are operator-authored ROLES under RolesAreAuth — defined in
+  // qualities.roles and granted via do:grant-role. Operators may
+  // still write additional member classes to space.members for
+  // display / bookkeeping, but the AUTH gate doesn't read them; the
+  // role-walk against qualities.rolesGranted is the gate.
   //
-  // Class-specific invariants live in handlers: the owner class is
-  // singleton (max length 1); the seed enforces this in the
-  // add-member / remove-member ops at materials/space/members.js.
-  //
-  // Retired 2026-06-07: the separate `rootOwner` and `contributors[]`
-  // fields. Owner became `members.owner` (singleton), contributor
-  // became `members.contributor`, and new classes are first-class.
-  // See seed/RolesAreAuth.md for the full doctrine.
+  // Class-specific invariants live in materials/space/members.js:
+  // the owner class is singleton (max length 1).
   members: {
     type: Map,
     of: [{ type: String, ref: "Being" }],

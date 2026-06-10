@@ -47,7 +47,6 @@ import { runLlmMoment } from "./present/cognition/llm/llmMoment.js";
 import { registerFailoverResolver } from "./present/cognition/llm/call.js";
 import {
   getClientForBeing,
-  resolveRootLlmForRole,
   beingHasLlm,
 } from "./present/cognition/llm/connect.js";
 import {
@@ -318,7 +317,6 @@ export function buildRealityServices({
 
     llm: {
       getClientForBeing,
-      resolveRootLlmForRole,
       beingHasLlm,
       runLlmMoment,
       getRootIdFor,

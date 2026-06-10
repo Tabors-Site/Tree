@@ -1028,12 +1028,11 @@ export async function getClientForBeing(beingId, slot, overrideConnectionId, bra
   return noLlmEntry;
 }
 
-// Resolution chain (the 4-layer walk + resolveLlmConnection +
-// resolveRootLlmForRole) moved to resolution.js. The slot-rule
-// readers (getSpaceLlmAssignments / getBeingLlmAssignments) stay
-// here because they 're projections of the qualities shape;
+// Resolution chain (the 7-step walk) lives in resolution.js. The
+// slot-rule readers (getSpaceLlmAssignments / getBeingLlmAssignments)
+// stay here because they're projections of the qualities shape;
 // resolution.js imports them.
-export { resolveLlmConnection, resolveRootLlmForRole } from "./resolution.js";
+export { resolveLlmConnectionChain } from "./resolution.js";
 
 // ─────────────────────────────────────────────────────────────────────────
 // CAPABILITY CHECK

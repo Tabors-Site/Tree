@@ -143,13 +143,9 @@ async function deriveSpaceRootId(spaceId, branch) {
 
 /**
  * Set the being's current position. Async because deriving rootId
- * walks the ancestor chain. The DB write to Being.position remains
- * fire-and-forget for hot-path latency; the ancestor walk is served
- * by the in-memory ancestor cache on the warm path.
- *
- * Exported as `setCurrentSpace` for legacy API compatibility — the
- * concept name "where the being currently is" hasn't changed; only
- * the underlying schema field did (`currentSpace` → `position`).
+ * walks the ancestor chain. The fact emission is fire-and-forget for
+ * hot-path latency (wrapped in withIAmAct when no summonCtx); the
+ * ancestor walk is served by the in-memory cache on the warm path.
  */
 export async function setCurrentSpace(beingId, spaceId, summonCtx) {
   if (!beingId) return;

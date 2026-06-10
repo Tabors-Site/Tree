@@ -10,11 +10,10 @@
 // memory leads; the manifest follows. A manifest miss is
 // cosmetic, not a functional break.
 //
-// Fact-driven (slice F-manifest, 2026-05-23) for the refresh and
-// delete paths. The Space.create path (new child) still flows
-// through legacy until Slice C-space-full converts the birth
-// handler's space branch — at which point the manifest opts
-// entirely into the fact stream.
+// Fully fact-driven. Refresh, delete, and new-child paths all stamp
+// through emitFact (no direct Space.create / Space.findByIdAndUpdate
+// bypasses remain). Each write is its own withIAmAct moment so the
+// one-DO-per-moment doctrine holds.
 
 import { v4 as uuidv4 } from "uuid";
 import Space from "../materials/space/space.js";
@@ -38,12 +37,11 @@ function qualitiesDiffer(existingQuals, desiredQuals) {
   return JSON.stringify(canonJson(existingQuals)) !== JSON.stringify(canonJson(desiredQuals));
 }
 
-// Stamp a do:birth Fact for a new manifest child Space. Slice C
-// (2026-05-23): the legacy Space.create bypass is gone; eager-fold
-// inside logFact runs applyCreateSpace + initProjection to
-// materialize the row. scaffold-style attribution (I_AM as actor)
-// because manifest sync is seed-internal scaffolding — extension
-// load runs after I_AM is planted, so the Being row exists.
+// Stamp a do:create-space Fact for a new manifest child Space.
+// Eager-fold inside logFact runs applyCreateSpace + initProjection
+// to materialize the row. I_AM is the actor because manifest sync
+// is seed-internal scaffolding — extension load runs after I_AM is
+// planted, so the Being row exists.
 async function createChildByFact({ parentId, name, type, qualities }) {
   const id = uuidv4();
   const specQualities = qualities instanceof Map

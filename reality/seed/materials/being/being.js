@@ -91,13 +91,10 @@ const BeingSchema = new mongoose.Schema({
   // back to defaultKind. See seed/present/roles/registry.js header
   // for the doctrine.
 
-  // Bcrypt-hashed. Stored on the row as a $set written by the fold
-  // engine (applyProjection), pre-hashed by the verb handler before
-  // the be:register Fact stamps. The schema is a cache shape now,
-  // not an authority: `required` is dropped because the source of
-  // truth is the fact chain, not the validator. The pre-save bcrypt
-  // hook is also retired (no .save() site needs it after Slice E,
-  // 2026-05-23) — see the file's commented-out hook block below.
+  // Bcrypt-hashed. Pre-hashed by the verb handler before the
+  // be:birth Fact stamps; the fold engine writes the row via $set.
+  // The schema is a cache shape, not an authority — the source of
+  // truth is the fact chain.
   password: { type: String, select: false },
 
   // The being's unconditional fallback role. `qualities.roleFlow` is

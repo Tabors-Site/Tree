@@ -39,9 +39,7 @@ import { v4 as uuidv4 } from "uuid";
 import Matter from "./matter.js";
 import Space from "../space/space.js";
 import { loadProjection, loadOrFold, assertBranchOrThrow } from "../projections.js";
-import Fact from "../../past/fact/fact.js";
 import { emitFact, sealFacts } from "../../past/fact/facts.js";
-import { escapeRegex } from "../../utils.js";
 import { getRealityConfigValue } from "../../realityConfig.js";
 import { resolveRootSpace } from "../space/spaces.js";
 import { getSpaceOwner } from "../space/members.js";
@@ -65,7 +63,6 @@ if (!fs.existsSync(uploadsFolder)) {
 function matterMaxChars()    { return Math.max(100, Number(getInternalConfigValue("matterMaxChars"))    || 5000); }
 function maxMatterPerSpace() { return Math.max(1,   Number(getInternalConfigValue("maxMatterPerSpace")) || 1000); }
 function matterQueryLimit()  { return Math.max(1,   Math.min(Number(getInternalConfigValue("matterQueryLimit"))  || 5000, 50000)); }
-function searchQueryLimit()  { return Math.max(1,   Math.min(Number(getInternalConfigValue("matterSearchLimit")) || 500, 10000)); }
 
 function isIbpOrigin(origin) {
   return origin === MATTER_ORIGIN.IBP;
@@ -509,129 +506,6 @@ async function transferMatter({
   return { message: "Matter transferred successfully", matterId: matterId.toString(), from: { spaceId: sourceSpaceId }, to: { spaceId: targetSpaceBare } };
 }
 
-//
-// Read primitives keyed by being rather than by space. Substrate surface
-// for "my matter" / "search my matter" / "edit history of this matter."
-// Wire these through IBP DO operations or extension tools when a UI
-// needs them.
-
-/**
- * Every matter authored by a being, newest first.
- *
- * @param {object} opts
- * @param {string} opts.beingId   author id (required)
- * @param {number} [opts.limit]
- * @param {Date|string} [opts.startDate]
- * @param {Date|string} [opts.endDate]
- * @returns {Promise<{ matters }>}
- */
-async function getAllMatterByBeing({ beingId, limit, startDate, endDate } = {}) {
-  if (!beingId) throw new Error("getAllMatterByBeing: `beingId` is required");
-  const safeLimit = Math.min(Math.max(Number(limit) || 100, 1), matterQueryLimit());
-  const matters = await Matter
-    .find({ beingId, ...validateDateRange(startDate, endDate) })
-    .sort({ createdAt: -1 })
-    .limit(safeLimit)
-    .lean();
-  return { matters };
-}
-
-/**
- * Full-text search across a being's ibp-origin matter. Phrases in
- * "double quotes" match as substrings; bare words match whole-word.
- * Other origins (filesystem, web) carry structured content and need
- * origin-specific search through the bridging extension.
- *
- * @param {object} opts
- * @param {string} opts.beingId   author id (required)
- * @param {string} opts.query     search expression (required)
- * @param {number} [opts.limit]
- * @param {Date|string} [opts.startDate]
- * @param {Date|string} [opts.endDate]
- * @returns {Promise<{ matters }>}
- */
-async function searchMatterByBeing({ beingId, query, limit, startDate, endDate } = {}) {
-  if (!beingId) throw new Error("searchMatterByBeing: `beingId` is required");
-  if (!query || typeof query !== "string") {
-    throw new Error("searchMatterByBeing: `query` must be a non-empty string");
-  }
-
-  const conditions = buildSearchConditions(query);
-  if (conditions.length === 0) return { matters: [] };
-
-  const safeLimit = Math.min(Math.max(Number(limit) || 50, 1), searchQueryLimit());
-  const matters = await Matter
-    .find({
-      beingId,
-      origin: MATTER_ORIGIN.IBP,
-      $and: conditions,
-      ...validateDateRange(startDate, endDate),
-    })
-    .sort({ createdAt: -1 })
-    .limit(safeLimit)
-    .lean();
-  return { matters };
-}
-
-// Parse a search expression into a list of mongo content-regex
-// conditions. Quoted phrase = substring match; bare words = whole-word
-// match; literal hyphen = substring match against the whole query.
-function buildSearchConditions(expression) {
-  const conditions = [];
-  const phrase = expression.match(/"(.*?)"/)?.[1];
-  if (phrase) {
-    conditions.push({ content: new RegExp(escapeRegex(phrase), "i") });
-  }
-  const bare = expression.replace(/"(.*?)"/, "")
-    .replace(/-/g, " ")
-    .replace(/[^\w\s]/g, "")
-    .trim();
-  for (const w of bare.split(/\s+/).filter(Boolean)) {
-    conditions.push({ content: new RegExp(`\\b${escapeRegex(w)}\\b`, "i") });
-  }
-  if (expression.includes("-")) {
-    conditions.push({ content: new RegExp(escapeRegex(expression), "i") });
-  }
-  return conditions;
-}
-
-/**
- * Lifecycle history for matter, derived from the Fact reel.
- * Returns create / edit / remove Facts oldest-first. Edit and create
- * rows carry content; remove rows carry null content.
- *
- * @param {object} opts
- * @param {string} opts.matterId  required
- * @param {number} [opts.limit]
- * @param {number} [opts.offset]
- */
-async function getMatterHistory({ matterId, limit = 100, offset = 0 } = {}) {
-  if (!matterId) throw new Error("getMatterHistory: `matterId` is required");
-  const safeLimit = Math.min(Math.max(1, Number(limit) || 100), 1000);
-  const safeOffset = Math.max(0, Number(offset) || 0);
-
-  const facts = await Fact
-    .find({
-      "target.kind": "matter",
-      "target.id":   String(matterId),
-      action:        { $in: ["create-matter", "set-matter"] },
-    })
-    .populate("beingId", "name")
-    .sort({ date: 1 })
-    .skip(safeOffset)
-    .limit(safeLimit)
-    .lean();
-
-  return facts.map((f) => ({
-    _id:        f._id,
-    authorName: f.beingId?.name ?? null,
-    beingId:    f.beingId?._id ? String(f.beingId._id) : null,
-    date:       f.date,
-    content:    f.params?.content ?? null,
-    action:     f.action,
-  }));
-}
-
 /**
  * List matter rows at a space, slim shape (matterId, name, beingId,
  * origin, content, qualities). Hits Matter directly so the returned
@@ -719,6 +593,5 @@ async function getMatter(matterId, opts = {}) {
 export {
   createMatter, editMatter, getMatter, getMatters, deleteMatterAndFile,
   transferMatter,
-  getAllMatterByBeing, searchMatterByBeing, getMatterHistory,
   listMattersAt,
 };

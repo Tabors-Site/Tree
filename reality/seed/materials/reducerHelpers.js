@@ -265,15 +265,8 @@ export function applySetMembers(state, fact) {
 }
 
 /**
- * Apply a `be:register` fact targeting a being. Produces the initial
+ * Apply a `be:birth` fact targeting a being. Produces the initial
  * being row state from `fact.params`.
- *
- * Important safety: when the fact's params don't carry `spec` (the
- * legacy slim shape: `{name, role, witnessedBy}` from the pre-conversion
- * birthBeing path), this returns state unchanged. That keeps
- * the reducer harmless while the legacy `new Being(...).save()` flow
- * still runs in parallel. Once birthBeing landed to emit a
- * full spec, the reducer becomes the source.
  *
  * The verb handler is responsible for input normalization BEFORE the
  * fact is stamped: bcrypt-hash the password, resolve home space,
@@ -509,14 +502,7 @@ export function applyCreateBeing(state, fact) {
   const spec = fact?.params;
   if (!spec || typeof spec !== "object") return state;
 
-  // Resolve defaultRole. The carry list (`roles: [String]`) retired
-  // 2026-06-01 with the RoleFlow build; the be:birth fact's spec may
-  // still carry `roles` for back-compat (legacy chains) but we only
-  // honor the first entry as a fallback for defaultRole.
-  let defaultRole = spec.defaultRole || spec.role || null;
-  if (!defaultRole && Array.isArray(spec.roles) && spec.roles.length > 0) {
-    defaultRole = spec.roles[0];
-  }
+  const defaultRole = spec.defaultRole || spec.role || null;
 
   return {
     ...state,

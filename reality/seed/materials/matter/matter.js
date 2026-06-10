@@ -49,8 +49,8 @@ const MatterSchema = new mongoose.Schema({
   // spaceId is a bare space-id, OR the DELETED sentinel ("deleted")
   // for soft-deleted matter (the set-matter handler validates which).
   spaceId: { type: String, required: true },
-  // beingId is the creator's bare being-id (I_AM for genesis / scaffold
-  // attribution) OR the DELETED sentinel for soft-deleted matter.
+  // beingId is the creator's bare being-id (I_AM for genesis-time
+  // creations) OR the DELETED sentinel for soft-deleted matter.
   beingId: { type: String, required: true },
 
   // Optional human-readable label. Used by set-name and by
