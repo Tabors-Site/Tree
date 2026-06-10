@@ -332,7 +332,7 @@ export async function ensureSpaceRoot() {
           type: null,
           parent: null,
           // The I-Am is the structural owner of the reality.
-          members: { owner: [I_AM] },
+          owner: I_AM,
           heavenSpace: HEAVEN_SPACE.SPACE_ROOT,
           size: assertValidSpaceSize(null, { applyDefault: true }),
           qualities: {},
@@ -654,17 +654,7 @@ export function getIAmBeingId() {
 export function isBeingRoot(space) {
   if (!space) return false;
   if (space.heavenSpace) return false;
-  // Owner lives in members.owner (singleton). Read via the helper so
-  // both Map and plain-object serialized shapes resolve.
-  const m = space.members;
-  let ownerId = null;
-  if (m instanceof Map) {
-    const list = m.get("owner");
-    if (Array.isArray(list) && list.length > 0) ownerId = String(list[0]);
-  } else if (m && typeof m === "object") {
-    const list = m.owner;
-    if (Array.isArray(list) && list.length > 0) ownerId = String(list[0]);
-  }
+  const ownerId = space.owner ? String(space.owner) : null;
   if (!ownerId || ownerId === I_AM) return false;
   const spaceRootId = getSpaceRootId();
   const parentId = space.parent ? String(space.parent) : null;

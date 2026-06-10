@@ -28,10 +28,6 @@ import {
   setOwner,
   removeOwner,
 } from "./ownership.js";
-import {
-  addSpaceMember,
-  removeSpaceMember,
-} from "./members.js";
 
 // Namespaces NOT writable through set-space qualities (each has its own verb).
 const RESERVED_SET_META_NS = new Set([
@@ -247,33 +243,17 @@ async function setOnSpaceHandler({ target, params, identity, summonCtx }) {
     return { spaceId, llmDefault: value || null };
   }
 
-  // members.<className> — the canonical per-class membership write.
-  // Value is an array of being ids; the empty array clears the class.
-  // The reducer (applySetMembers) writes this into space.members[
-  // className] without touching other classes. Handler-level
-  // invariants (owner singleton) live in materials/space/members.js;
-  // this validator enforces only the wire shape.
-  if (typeof field === "string" && field.startsWith("members.")) {
-    const className = field.slice("members.".length);
-    if (!/^[a-z][a-z0-9-]*$/.test(className)) {
-      throw new Error(
-        `set-space: invalid members class name "${className}" (must be kebab-case, start with a letter)`,
-      );
-    }
-    if (!Array.isArray(value)) {
-      throw new Error(
-        `set-space: members.${className} value must be an array of being ids`,
-      );
-    }
-    for (const entry of value) {
-      if (typeof entry !== "string" || !entry.length) {
-        throw new Error(
-          `set-space: members.${className} entries must be being id strings . got ${typeof entry}`,
-        );
-      }
+  // owner — the position's structural owner. Value is a beingId
+  // string or null. Handler-level authorization (current owner
+  // authorizes transfer; parent owner claims unowned position) lives
+  // in materials/space/members.js; this validator enforces only the
+  // wire shape.
+  if (field === "owner") {
+    if (value !== null && value !== undefined && (typeof value !== "string" || !value.length)) {
+      throw new Error("set-space: `owner` value must be a beingId string or null");
     }
     const spaceId = targetIdOf(target);
-    return { spaceId, members: { [className]: value } };
+    return { spaceId, owner: value || null };
   }
 
   // coord: this space's position INSIDE its parent. Sibling of `size`
@@ -345,7 +325,7 @@ async function setOnSpaceHandler({ target, params, identity, summonCtx }) {
   }
 
   throw new Error(
-    `set-space: unknown field "${field}". Supported: name, type, parent, llmDefault, members.<className>, size, coord, qualities.<namespace>[.<innerKey>]`,
+    `set-space: unknown field "${field}". Supported: name, type, parent, owner, llmDefault, size, coord, qualities.<namespace>[.<innerKey>]`,
   );
 }
 
@@ -507,58 +487,6 @@ registerOperation("remove-owner", {
   },
 });
 
-// Generic membership-class write ops. Mutate any class in a space's
-// members map (owner is the singleton; angel is the heaven-anointed
-// foundational class; operator-authored classes are first-class).
-// Class-specific invariants live in materials/space/members.js (owner
-// singleton). See RolesAreAuth.md for the full doctrine.
-registerOperation("add-member", {
-  targets: ["space", "stance"],
-  ownerExtension: "seed",
-  skipAudit: true,
-  args: {
-    className: { type: "text", label: "Membership class name", required: true },
-    beingId:   { type: "text", label: "Being id to add", required: true },
-  },
-  handler: async ({ target, params, identity, summonCtx }) => {
-    const spaceId = spaceIdFromTarget(target);
-    const actor = requireActor(identity);
-    const className = String(params?.className || "").trim();
-    const beingId = String(params?.beingId || "").trim();
-    if (!className) throw new IbpError(IBP_ERR.INVALID_INPUT, "`className` is required");
-    if (!beingId) throw new IbpError(IBP_ERR.INVALID_INPUT, "`beingId` is required");
-    try {
-      await addSpaceMember(spaceId, className, beingId, actor, summonCtx?.actorAct?.branch || "0", summonCtx);
-    } catch (err) {
-      throw mapPatternsToIbpError(err, PERMISSION_ERROR_PATTERNS);
-    }
-    return { added: true, spaceId, className, beingId };
-  },
-});
-
-registerOperation("remove-member", {
-  targets: ["space", "stance"],
-  ownerExtension: "seed",
-  skipAudit: true,
-  args: {
-    className: { type: "text", label: "Membership class name", required: true },
-    beingId:   { type: "text", label: "Being id to remove", required: true },
-  },
-  handler: async ({ target, params, identity, summonCtx }) => {
-    const spaceId = spaceIdFromTarget(target);
-    const actor = requireActor(identity);
-    const className = String(params?.className || "").trim();
-    const beingId = String(params?.beingId || "").trim();
-    if (!className) throw new IbpError(IBP_ERR.INVALID_INPUT, "`className` is required");
-    if (!beingId) throw new IbpError(IBP_ERR.INVALID_INPUT, "`beingId` is required");
-    try {
-      await removeSpaceMember(spaceId, className, beingId, actor, summonCtx?.actorAct?.branch || "0", summonCtx);
-    } catch (err) {
-      throw mapPatternsToIbpError(err, PERMISSION_ERROR_PATTERNS);
-    }
-    return { removed: true, spaceId, className, beingId };
-  },
-});
 
 // ─────────────────────────────────────────────────────────────────────
 // PRIVATE HELPERS

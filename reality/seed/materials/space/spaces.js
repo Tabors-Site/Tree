@@ -233,7 +233,7 @@ export async function assertNameAvailableAt(
  * Create a space.
  *
  *   - `isRoot: true` plants a new tree under the place root, with the
- *     caller as members.owner.
+ *     caller as owner.
  *   - `isRoot: false` requires `parentId` and creates a child of that
  *     space (which must not be a place heaven space).
  *
@@ -452,8 +452,8 @@ export async function createSpace({
         type:      type ?? null,
         parent:    resolvedParentId ? String(resolvedParentId) : null,
         // Tree roots get their creator as owner; sub-spaces inherit
-        // ownership through the walker and start with no owner class.
-        ...(isRoot ? { members: { owner: [String(being._id)] } } : {}),
+        // ownership through the walker and start with no owner.
+        ...(isRoot ? { owner: String(being._id) } : {}),
         qualities: specQualities,
         ...(size  ? { size }  : {}),
         ...(coord ? { coord } : {}),
@@ -561,7 +561,7 @@ export async function createRealityHeavenSpace({
         name,
         type:      null,
         parent:    parentId ? String(parentId) : null,
-        members: { owner: [I_AM] },
+        owner: I_AM,
         heavenSpace: heavenSpace || null,
         qualities: specQualities,
       },
@@ -782,7 +782,7 @@ export async function deleteSpaceBranch(
     await doVerb(
       target,
       "set-space",
-      { field: "members.owner", value: [String(beingId)] },
+      { field: "owner", value: String(beingId) },
       opts,
     );
     await doVerb(
@@ -791,7 +791,7 @@ export async function deleteSpaceBranch(
       { field: "parent", value: DELETED },
       opts,
     );
-    spaceToDelete.members = { ...(spaceToDelete.members || {}), owner: [String(beingId)] };
+    spaceToDelete.owner = String(beingId);
     spaceToDelete.parent = DELETED;
   } finally {
     releaseMultiple(lockIds, sessionId);
@@ -832,7 +832,7 @@ export async function resolveRootSpace(spaceId) {
   const slotToObj = (s) => s ? {
     _id: s.id,
     parent:     s.state?.parent || null,
-    members:    s.state?.members || null,
+    owner:      s.state?.owner || null,
     heavenSpace: s.state?.heavenSpace || null,
     name:       s.state?.name,
   } : null;

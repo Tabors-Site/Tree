@@ -471,8 +471,6 @@ function placeActions(address, desc) {
     // and an author-role form for owners. Replaces the retired
     // qualities.permissions panel. See roles-panel.js.
     { label: "roles", special: "roles", address, values: { descriptor: desc } },
-    { label: "+ add member (any class)", op: "add-member", address },
-    { label: "remove member", op: "remove-member", address },
     { label: "set owner", op: "set-owner", address },
     { label: "remove owner", op: "remove-owner", address },
     { label: "⚠ delete this space", op: "end-space", address, danger: true },

@@ -222,30 +222,19 @@ export async function graftClone(bundle, targetParentSpaceId, opts = {}) {
 
     // Every field flows through remapInBundleField so parameter holes
     // (`"$name"` strings) resolve uniformly across scalar fields (name,
-    // type, size, coord) and Ref-bearing fields (parent, qualities,
-    // members). Refs and sentinels in scalar fields are a noop;
+    // type, size, coord) and Ref-bearing fields (parent, owner,
+    // qualities). Refs and sentinels in scalar fields are a noop;
     // parameter substitution in Ref fields is also a noop because Ref
     // `id` values are not parameter names.
     const spec = {
       name:         remapInBundleField(s.name),
       type:         remapInBundleField(s.type),
       parent:       remapInBundleField(s.parent),
+      owner:        s.owner !== undefined ? remapInBundleField(s.owner) : null,
       qualities:    remapInBundleField(s.qualities),
       ...(s.size  !== undefined ? { size:  remapInBundleField(s.size)  } : {}),
       ...(s.coord !== undefined ? { coord: remapInBundleField(s.coord) } : {}),
     };
-    // members: per-class array of refs; remap entry-by-entry, drop
-    // empty classes.
-    if (s.members && typeof s.members === "object") {
-      const remappedMembers = {};
-      for (const [className, list] of Object.entries(s.members)) {
-        if (!Array.isArray(list) || list.length === 0) continue;
-        remappedMembers[className] = list.map(remapInBundleField);
-      }
-      if (Object.keys(remappedMembers).length > 0) {
-        spec.members = remappedMembers;
-      }
-    }
     // Doctrine: each grafted fact is the grafter doing one logical
     // thing on their reel. One act, one fact. Batching many facts into
     // a single ΔF triggers nonlinear fold/append-lock back-pressure

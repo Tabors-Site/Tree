@@ -476,11 +476,16 @@ export async function birthBeing({ spec, identity, summonCtx = null }) {
   // anchor + grantor folds as a duplicate and doesn't bloat
   // rolesGranted. Cherub's explicit registration-time grant of global
   // becomes the redundant-but-harmless case after this line.
-  await _anointGlobal({
-    childId: id,
-    branch,
-    summonCtx,
-  });
+  // @public is the structural placeholder being that never acts. Grants
+  // on it are noise; skip the anoint. Every other being (including
+  // seed delegates) gets global as their universal baseline.
+  if (name !== "public") {
+    await _anointGlobal({
+      childId: id,
+      branch,
+      summonCtx,
+    });
+  }
 
   // In-moment: the row materializes at seal. Return the pending view
   // so callers can use the id + spec fields immediately.

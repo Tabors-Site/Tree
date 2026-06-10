@@ -89,7 +89,7 @@ export async function checkTreeHealth(treeId) {
   const errorWeight   = parseFloat(getInternalConfigValue("circuitErrorWeight")   || "0.3");
 
   // 1. Space count in this tree.
-  const spaceCount = await Space.countDocuments({ "members.owner": treeId });
+  const spaceCount = await Space.countDocuments({ owner: treeId });
 
   // 2. Quality density (estimate total qualities-map size). Sample up to
   //    100 spaces, average, multiply. Random sample — sequential
@@ -98,7 +98,7 @@ export async function checkTreeHealth(treeId) {
   let qualitiesDensity = 0;
   if (sampleSize > 0) {
     const sample = await Space.aggregate([
-      { $match: { "members.owner": treeId } },
+      { $match: { owner: treeId } },
       { $sample: { size: sampleSize } },
       { $project: { qualities: 1 } },
     ]);
@@ -133,7 +133,7 @@ export async function checkTreeHealth(treeId) {
       },
       { $lookup: { from: "spaces", localField: "target.id", foreignField: "_id", as: "_space" } },
       { $unwind: "$_space" },
-      { $match: { "_space.members.owner": treeId } },
+      { $match: { "_space.owner": treeId } },
       { $count: "total" },
     ]);
     factErrors = errResult[0]?.total || 0;
@@ -286,11 +286,11 @@ export function startCircuitJob() {
   const timer = setInterval(async () => {
     try {
       const { default: Projection } = await import("../branch/projection.js");
-      // Filter to non-system owners: members.owner present AND not the
-      // I_AM sentinel string (system-owned spaces).
+      // Filter to non-system owners: owner set AND not the I_AM
+      // sentinel string (system-owned spaces).
       const rows = await Projection.find({
         branch: "0", type: "space",
-        "state.members.owner": { $exists: true, $ne: I_AM },
+        "state.owner": { $exists: true, $ne: I_AM, $nin: [null] },
         tombstoned: { $ne: true },
       }).lean();
       const anchors = rows.map((s) => ({ _id: s.id, ...(s.state || {}) }));

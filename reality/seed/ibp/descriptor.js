@@ -693,11 +693,10 @@ async function placeAtSpace(resolved, { identity, payload, until = null, branch 
     siblings,
     size: space.size || null,
     qualities: serializeQualities(space.qualities),
-    // Membership classes at this position. Plain object on the wire
-    // (Mongoose Map serializes to one anyway). Operator surfaces like
-    // the portal's Permissions panel read this to render "who's in
-    // which class here" without a second SEE.
-    members: serializeMembers(space.members),
+    // The structural owner at this position (null when unowned at this
+    // node and the ancestor walk inherits). Operator surfaces like the
+    // portal's Roles panel use this to label "this is the owner."
+    owner: space.owner ? String(space.owner) : null,
     identity: await identityBlock(identity, { authorizedHere, writeAllowed, until, branch }),
     ...(until ? { isHistorical: true, asOf: serializeAsOf(until) } : {}),
     _meta: meta(writeAllowed ? [] : ["read-only"]),
@@ -1295,16 +1294,3 @@ function serializeQualities(quals) {
   return redactSecrets(obj);
 }
 
-// Serialize the Space.members Map (or already-plain object) for the
-// wire. Always returns an object so client code can read
-// `descriptor.members.<className>` without undefined-sniffing. Each
-// class's beingId list is normalized to strings.
-function serializeMembers(members) {
-  if (!members) return {};
-  const src = members instanceof Map ? Object.fromEntries(members) : members;
-  const out = {};
-  for (const [className, list] of Object.entries(src)) {
-    if (Array.isArray(list)) out[className] = list.map(String);
-  }
-  return out;
-}

@@ -23,17 +23,21 @@
 //                 false: no silent grants (default)
 //
 // The default policy when the role spec has no `acquisition` block:
-// `asked: "queue"`, `grabbed: false`, `autoOnEntry: false`. Extensions
-// that don't declare an acquisition policy require explicit owner
-// approval via the summon-the-owner flow.
+// CLOSED on every axis. Extensions that don't declare a policy can't
+// be ask/take/auto-acquired — operators or grantors must explicitly
+// hand the role out via grant-role. This is the safest baseline: a
+// role without thought-out acquisition shouldn't accidentally
+// distribute itself.
 //
-// Public-commons in this model: public installs a role on their
-// owned space with `acquisition: { autoOnEntry: true }`. Visitors
-// entering the space get auto-granted; the role-walk authorize
-// admits them via the regular grant chain — no special-case branch.
+// To make a role openly askable: declare `acquisition: { asked: "auto" }`.
+// To make a role walk-in: declare `acquisition: { grabbed: true }`.
+// To auto-grant on entry: declare `acquisition: { autoOnEntry: true }`.
+//
+// The "queue" path is reserved for when the summon-the-owner flow
+// lands; until then, undeclared = closed.
 
 export const DEFAULT_ACQUISITION = Object.freeze({
-  asked:       "queue",
+  asked:       false,
   grabbed:     false,
   autoOnEntry: false,
 });

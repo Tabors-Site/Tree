@@ -300,9 +300,9 @@ async function _isSpaceWithinScope(targetSpaceId, scopeSpaceId, branchPath) {
 
 /**
  * Reality-root permission = heaven authority (owner of heaven OR
- * angel role granted at heaven). I_AM owns heaven (members.owner);
- * other beings are admitted via the angel role grant chain that
- * traces back to I_AM (per RolesAreAuth).
+ * angel role granted at heaven). I_AM owns heaven; other beings are
+ * admitted via the angel role grant chain that traces back to I_AM
+ * (per RolesAreAuth).
  *
  * Routes through `authorize()` against heaven so the substrate's
  * "one gate" doctrine holds: the same role-walk that gates any

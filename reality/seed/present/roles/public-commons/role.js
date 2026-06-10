@@ -16,7 +16,7 @@
 // not via any branch in the auth code.
 //
 // Usage: operators (including @public itself) install this on their
-// owned spaces via `set-role` or `installRoleOnSpace`, OR they
+// owned spaces via `set-role` or `hostRoleAt`, OR they
 // author a different visitor role with the shape they want. The
 // commons surface is whatever the operator declares — this file is
 // just a sensible default for "open commons with read + move +

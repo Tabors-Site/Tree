@@ -80,7 +80,7 @@ export const SEED_DELEGATES = [
     cognition: "scripted",
     invocableBy: "no-one",
     description:
-      "The commons delegate (seed/RolesAreAuth.md). Holds members.owner slots for spaces transferred to the public commons; their authorize.owner-check then admits any caller for any action. Never acts; never accepts SUMMONs. The silence IS the lock — Public-owned spaces can't be re-privatized except by I-Am (public's own owner) or by branching the timeline.",
+      "The commons delegate (seed/RolesAreAuth.md). Holds the owner slot on spaces transferred to the public commons. Visitors get the commons role via auto-on-entry on those spaces, admitted through the regular role-walk. Never acts; never accepts SUMMONs. The silence IS the lock — Public-owned spaces can't be re-privatized except by I-Am (public's own owner) or by branching the timeline.",
   },
   {
     name: "cherub",
@@ -136,7 +136,7 @@ export const SEED_DELEGATES = [
     cognition: "llm",
     invocableBy: "owner",
     description:
-      "Conversational interface for place-level administration (extensions, config, peers). Carries no authority of its own; its writes are gated by the caller's stance — typically owner or angel role on the place root, or a role with the relevant canDo granted there.",
+      "Conversational interface for place-level administration (extensions, config, peers). Carries the reality-manager role with canDo for set-config, install-extension, etc. — granted at the reality root with reality-wide reach.",
   },
   {
     name: "branch-manager",
@@ -369,14 +369,24 @@ export async function ensureSeedDelegates(spaceRootId) {
 /**
  * Roles-Are-Auth bootstrap (seed/RolesAreAuth.md). For each seed
  * delegate, the I-Am emits a `do:grant-role` fact giving them the
- * `angel` role anchored at the place root. The being reducer
+ * `angel` role anchored at heaven. The being reducer
  * (applyRoleGrants in reducerHelpers.js) folds these facts into the
- * delegate's `qualities.rolesGranted`, and from that moment the new
- * role-walk authorize (roleAuth.js) finds the grant on every action.
+ * delegate's `qualities.rolesGranted`.
  *
- * Doctrine: all authority chains back to I-Am. Cherub/birther/etc.
- * can do their work because the I-Am granted them angel at genesis.
- * The grant chain back to I-Am is the proof of authority.
+ * Doctrine: angel is about IDENTITY, not just canDo. Seed delegates
+ * ARE angels by birth — descendants of I-Am, with heaven access by
+ * structural right. The grant codifies that identity: "this being
+ * belongs to the heavenly hierarchy and the chain back to I-Am IS
+ * their authority." Each delegate's matching role (cherub holds
+ * cherub, birther holds birther, etc., granted separately) carries
+ * the specific canX they need for day-to-day work; angel is the
+ * identity layer, the membership badge, and the access path to
+ * heaven space when they later need to operate there.
+ *
+ * Exceptions: @public (never acts, no grants) and @arrival (shared
+ * anonymous-visitor stance — granting angel to arrival would give
+ * every anon visitor angel's canSee:["*"], leaking everything; arrival
+ * gets its own arrival role only).
  *
  * One moment per delegate (per the one-DO-per-moment doctrine).
  * Idempotent: the reducer dedupes by (role, anchor, grantor) so a
@@ -441,24 +451,32 @@ export async function grantAngelToSeedDelegates() {
     }
   }
 
-  // Arrival is the shared-stance being every anonymous WS socket binds
-  // to. It needs its OWN role granted (in addition to angel) so the
-  // role-walk authorize finds arrival's canX (canSee:["arrival-view"],
-  // canBe:["birth","connect","release"], canSummon @cherub:mate) when
-  // an anonymous visitor acts. Arrival role is installed on the
-  // reality root; anchor the grant there. Reach is reality-wide via
-  // arrival's role.reach = ["/**"].
+  // Every seed delegate gets its OWN matching role granted at the
+  // reality root (in addition to angel @ heaven). This means:
+  //   @cherub holds cherub role, @birther holds birther role,
+  //   @role-manager holds role-manager role, etc.
+  // The role-walk authorize finds each delegate's canX through their
+  // OWN role's grant (instead of the registry-fallback hack in
+  // roleFlow.js). Reach is reality-wide via host + descendants from
+  // the reality root.
+  //
+  // @public still gets no role grant (it never acts).
+  // @arrival's match: arrival role granted at root (covers anon visitors).
   const { getSpaceRootId } = await import("../../sprout.js");
   const rootId = getSpaceRootId();
-  const arrivalSlot = await findByName("being", "arrival", "0");
-  if (rootId && arrivalSlot) {
+  if (!rootId) return { granted };
+
+  for (const spec of SEED_DELEGATES) {
+    if (spec.name === "public") continue;
+    const slot = await findByName("being", spec.name, "0");
+    if (!slot) continue;
     try {
-      await withIAmAct("I grant arrival to @arrival", async (ctx) => {
+      await withIAmAct(`I grant ${spec.role} to @${spec.name}`, async (ctx) => {
         await doVerb(
-          { kind: "being", id: String(arrivalSlot.id) },
+          { kind: "being", id: String(slot.id) },
           "grant-role",
           {
-            role:          "arrival",
+            role:          spec.role,
             anchorSpaceId: String(rootId),
             anchorBeingId: null,
           },
@@ -469,7 +487,7 @@ export async function grantAngelToSeedDelegates() {
     } catch (err) {
       log.warn(
         "SeedDelegates",
-        `failed to grant arrival to @arrival: ${err?.message || err}`,
+        `failed to grant ${spec.role} to @${spec.name}: ${err?.message || err}`,
       );
     }
   }

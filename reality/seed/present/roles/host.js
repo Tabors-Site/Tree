@@ -1,18 +1,18 @@
 // TreeOS Seed . AGPL-3.0 . https://treeos.ai . Tabor Holly
 //
-// install.js — install a role's auth spec onto a Space's qualities.
+// host.js — make a space the HOST of a role.
 //
 // Per seed/RolesAreAuth.md "Final doctrine", every role-in-effect
 // lives on a space's `qualities.roles[<name>]`. That's the host. The
 // role naturally reaches the host + all descendants via qualities
 // inheritance; the optional `reach` field adjusts that.
 //
-// `installRoleOnSpace(spaceId, name, spec, identity, summonCtx)`
+// `hostRoleAt(spaceId, name, spec, identity, summonCtx)`
 // emits a `do:set-space` fact targeting the space with
 // field=`qualities.roles.<name>` and value=spec. The space reducer
 // folds into qualities.roles.<name>.
 //
-// What gets installed (data only — no function references):
+// What gets hosted (data only — no function references):
 //   - canSee, canDo, canSummon, canBe
 //   - reach (optional path filter)
 //   - description, requiredCognition, respondMode, triggerOn
@@ -30,25 +30,26 @@
 import { IbpError, IBP_ERR } from "../../ibp/protocol.js";
 
 /**
- * Install a role spec onto the target space's qualities.roles[name].
- * Emits one do:set-space fact; the space reducer folds it.
+ * Make `spaceId` the HOST of role `name`. Writes the role's data
+ * fields into the space's qualities.roles[name] via one do:set-space
+ * fact; the space reducer folds it.
  *
  * @param {string} spaceId   target space id (the host)
  * @param {string} name      role name
  * @param {object} spec      the role spec (data fields only — functions are stripped)
- * @param {object} identity  the actor stamping the install fact
+ * @param {object} identity  the actor stamping the host fact
  * @param {object} summonCtx the surrounding act ctx (ride this moment's ΔF)
  * @returns {Promise<object>} the do:set-space result
  */
-export async function installRoleOnSpace(spaceId, name, spec, identity, summonCtx) {
+export async function hostRoleAt(spaceId, name, spec, identity, summonCtx) {
   if (!spaceId || typeof spaceId !== "string") {
-    throw new IbpError(IBP_ERR.INVALID_INPUT, "installRoleOnSpace: `spaceId` is required");
+    throw new IbpError(IBP_ERR.INVALID_INPUT, "hostRoleAt: `spaceId` is required");
   }
   if (!name || typeof name !== "string") {
-    throw new IbpError(IBP_ERR.INVALID_INPUT, "installRoleOnSpace: `name` is required");
+    throw new IbpError(IBP_ERR.INVALID_INPUT, "hostRoleAt: `name` is required");
   }
   if (!spec || typeof spec !== "object") {
-    throw new IbpError(IBP_ERR.INVALID_INPUT, "installRoleOnSpace: `spec` is required");
+    throw new IbpError(IBP_ERR.INVALID_INPUT, "hostRoleAt: `spec` is required");
   }
 
   const data = stripFunctions(spec);

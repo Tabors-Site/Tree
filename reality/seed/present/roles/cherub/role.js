@@ -344,8 +344,8 @@ async function connectHandler({ address, addressKind, payload, identity }) {
     if (!canInhabit && !canInhabitAsFather) {
       throw new IbpError(
         IBP_ERR.FORBIDDEN,
-        `@${identity.name} can only inhabit beings they minted (or descendants), ` +
-          `or vessels for which they are recorded as father`,
+        `@${identity.name} can only inhabit beings they birthed (or descendants). ` +
+          `You must be the mother or father.`,
         { caller: identity.name, target: targetName },
       );
     }
@@ -585,29 +585,19 @@ async function _registerHumanWithFreshHome({
   await doVerb(
     { kind: "space", id: homeId },
     "set-space",
-    { field: "members.owner", value: [String(result.beingId)] },
+    { field: "owner", value: String(result.beingId) },
     { identity: I_AM, summonCtx },
   );
 
-  // ── 4. Anoint the new human with global + human roles ──
-  // Roles-Are-Auth bootstrap (seed/RolesAreAuth.md). Cherub grants the
-  // two foundational roles at the place root:
-  //   - global: the baseline canX every authenticated being carries
-  //   - human:  the "root founder" canX (do whatever you want here)
-  // Both anchor at the place root with reality-wide reach via
-  // descendants. Cherub holds canDo:grant-role:global + grant-role:human
-  // (declared in cherub/role.js cherubRole.canDo) so authorize permits
-  // these emits. The grantedBy is recorded as cherub for forensics.
-  await doVerb(
-    { kind: "being", id: String(result.beingId) },
-    "grant-role",
-    {
-      role:          "global",
-      anchorSpaceId: String(placeRootId),
-      anchorBeingId: null,
-    },
-    { identity: cherubIdentity, summonCtx },
-  );
+  // ── 4. Anoint the new human with the human role ──
+  // Roles-Are-Auth bootstrap (seed/RolesAreAuth.md). The new being
+  // already holds `global` via _anointGlobal in birth.js (every being
+  // gets global at the reality root, universal single-gate doctrine).
+  // Here cherub adds the registration-specific role:
+  //   - human: the "root founder" canX (do whatever you want here)
+  // Anchored at the place root with reality-wide reach via descendants.
+  // Cherub holds canDo:grant-role:human (declared in cherubRole.canDo)
+  // so authorize permits this emit. grantedBy is cherub for forensics.
   await doVerb(
     { kind: "being", id: String(result.beingId) },
     "grant-role",

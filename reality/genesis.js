@@ -229,7 +229,7 @@ export async function genesis(app, opts = {}) {
   //   1. ensureIAm()              — "I am that I am" — births I-Am alone
   //   2. ensureSpaceRoot()        — creates place root, heaven, tier-3 heaven spaces
   //   3. setIAmHomeSpace(heaven)  — "I take heaven as my home"
-  //   4. ensureSeedDelegates()    — births 9 delegates, each its own moment
+  //   4. ensureSeedDelegates()    — births 11 delegates, each its own moment
   //   5. register roster          — stamps qualities.beings on the place root
   //
   // A kill -9 between any two steps leaves a recoverable state — each
@@ -245,11 +245,11 @@ export async function genesis(app, opts = {}) {
 
   // Scaffolding skip-list when plantedFromSeed:
   //   The seed already brought the I-Am, the place root, the nine
-  //   heaven spaces, every seed delegate, every quality, every default
-  //   permission rule, and every prior migration. Re-running the
-  //   scaffold here would emit redundant idempotent re-writes and
-  //   inflate the chain unnecessarily. The seed is the genesis when
-  //   plant mode is active.
+  //   heaven spaces, every seed delegate, every quality, every role
+  //   hosted on qualities.roles, every grant in qualities.rolesGranted,
+  //   and every prior migration. Re-running the scaffold here would
+  //   emit redundant idempotent re-writes and inflate the chain
+  //   unnecessarily. The seed is the genesis when plant mode is active.
   if (!plantedFromSeed) {
     await withGenesisGuard(async () => {
       // Step 1: "I am that I am" — birth I-Am alone, homeSpace=null.
@@ -392,12 +392,13 @@ export async function genesis(app, opts = {}) {
     log.warn("Genesis", `pull-back scan failed: ${err.message}. Foreign-positioned beings remain pending; their canopy round-trip will reconcile on first use.`);
   }
 
-  // Register seed-shipped role specs into the role registry so
-  // SUMMON can dispatch to them. Auth and llm-assigner are BE only,
-  // routed via seed delegates planted by ensureSeedDelegates, and need no role
-  // registration. Place-manager is summonable (LLM-driven operator
-  // dialog), so its role spec enters the registry here along with
-  // its two generic tools (place-see, place-do).
+  // Register seed-shipped role specs into the role registry. The
+  // registry is the in-process map of role name → spec (with code
+  // handlers attached); SUMMON / role-walk authorize / canStarResolver
+  // all read it. The authoritative storage is the qualities.roles
+  // host below (data-only spec), but the registry is what holds the
+  // handler functions and prompt closures since Mongo can't serialize
+  // those.
   const { registerRole } = await import("./seed/present/roles/registry.js");
   const { realityManagerRole } =
     await import("./seed/present/roles/reality-manager/role.js");
@@ -505,39 +506,52 @@ export async function genesis(app, opts = {}) {
   const { publicRole } = await import("./seed/present/roles/public/role.js");
   registerRole("public", publicRole, "seed");
 
+  // Cherub + llm-assigner. Registered HERE (before hostRoleAt
+  // and grantAngelToSeedDelegates) so the install loop has access to
+  // their specs and the self-role grants land cleanly. Real work
+  // happens through their verb handlers (cherub owns the BE_OPS table;
+  // llm-assigner ships DO ops under the llm-assigner:* prefix); the
+  // registry entries are stubs that surface canX for the role-walk.
+  const { cherubRole } = await import("./seed/present/roles/cherub/role.js");
+  const { llmAssignerRole } = await import("./seed/present/roles/llm-assigner/role.js");
+  registerRole("cherub", cherubRole, "seed");
+  registerRole("llm-assigner", llmAssignerRole, "seed");
+
   // (public-commons is no longer registered as a seed role. It's a
   // regular operator-installable template that lives in
   // seed/present/roles/public-commons/role.js — operators install it
-  // on their public-owned spaces via set-role / installRoleOnSpace
+  // on their public-owned spaces via set-role / hostRoleAt
   // when they want the open-commons surface with auto-grant on entry.)
 
   // The foundational roles of the roles-are-auth doctrine
   // (seed/RolesAreAuth.md):
-  //   - angel: super-sudo, scope:global with no reach (true-global).
-  //     I-Am holds it implicitly; seed delegates get it granted at
-  //     genesis below. Carries grant-role:* + revoke-role:* so angels
-  //     can promote others (recursively).
-  //   - global: the baseline anchored role every authenticated being
-  //     carries (granted by cherub on registration; by parents to
-  //     children). canX defines what "every being can do here."
+  //   - angel: hosted at heaven, reach: ["/**"] (reality-wide). Carries
+  //     canDo: grant-role:* + revoke-role:* so angels can promote
+  //     others recursively. Granted to every seed delegate at genesis
+  //     and to the first human registrant. Also expresses IDENTITY:
+  //     descendants of I-Am with heaven access.
+  //   - global: hosted at the reality root, default reach (host +
+  //     descendants = whole reality). The baseline every being holds —
+  //     granted at birth via birth.js#_anointGlobal. canX defines what
+  //     "every being can do here."
   const { angelRole } = await import("./seed/present/roles/angel/role.js");
   registerRole("angel", angelRole, "seed");
   const { globalRole } = await import("./seed/present/roles/global/role.js");
   registerRole("global", globalRole, "seed");
 
-  // Install foundational role auth specs onto space qualities
-  // (seed/RolesAreAuth.md Final doctrine). Every role-in-effect lives
-  // on a space's qualities.roles[<name>]:
-  //   - angel  → heaven (system-internal scope)
-  //   - global → reality root (baseline for every being, reality-wide)
+  // Host role auth specs onto space qualities (seed/RolesAreAuth.md
+  // Final doctrine). Every role-in-effect lives on a space's
+  // qualities.roles[<name>]:
+  //   - angel  → heaven (the system root)
+  //   - everything else → the reality root
   //
-  // The REGISTRY map above keeps the role specs in code (with handlers)
-  // for cognition-frame use. These installs write the AUTH SPEC (data
-  // only — functions stripped) into qualities.roles so the role-walk
-  // gate can look up specs at runtime by walking grant.anchorSpaceId
-  // up the qualities ancestor chain.
+  // The REGISTRY above keeps the specs in code (with handlers) for
+  // cognition-frame use; these hostRoleAt calls write the AUTH SPEC
+  // (data only — functions stripped) into qualities.roles so the
+  // role-walk gate can look up specs at runtime by walking
+  // grant.anchorSpaceId up the qualities ancestor chain.
   if (!plantedFromSeed) {
-    const { installRoleOnSpace } = await import("./seed/present/roles/install.js");
+    const { hostRoleAt } = await import("./seed/present/roles/host.js");
     const { findByHeavenSpace } = await import("./seed/materials/projections.js");
     const { HEAVEN_SPACE } = await import("./seed/materials/space/heavenSpaces.js");
     const { I_AM } = await import("./seed/materials/being/seedBeings.js");
@@ -546,48 +560,74 @@ export async function genesis(app, opts = {}) {
 
     if (heaven) {
       await withIAmAct("I install angel on heaven", async (ctx) => {
-        await installRoleOnSpace(String(heaven.id), "angel", angelRole, I_AM, ctx);
+        await hostRoleAt(String(heaven.id), "angel", angelRole, I_AM, ctx);
       });
     }
     if (realityRootId) {
       await withIAmAct("I install global on the reality root", async (ctx) => {
-        await installRoleOnSpace(String(realityRootId), "global", globalRole, I_AM, ctx);
+        await hostRoleAt(String(realityRootId), "global", globalRole, I_AM, ctx);
       });
       await withIAmAct("I install arrival on the reality root", async (ctx) => {
-        await installRoleOnSpace(String(realityRootId), "arrival", arrivalRole, I_AM, ctx);
+        await hostRoleAt(String(realityRootId), "arrival", arrivalRole, I_AM, ctx);
       });
+      // Host every other seed delegate role on the reality root too.
+      // Per the single-gate doctrine, the role-walk authorize finds each
+      // delegate's canX through the qualities.roles host (not through a
+      // registry-fallback hack). Each one-op-per-moment.
+      const { humanRole } = await import("./seed/present/roles/human/role.js");
+      const { cherubRole } = await import("./seed/present/roles/cherub/role.js");
+      const { birtherRole } = await import("./seed/present/roles/birther/role.js");
+      const { realityManagerRole } = await import("./seed/present/roles/reality-manager/role.js");
+      const { roleManagerRole } = await import("./seed/present/roles/role-manager/role.js");
+      const { roleFinderRole } = await import("./seed/present/roles/role-finder/role.js");
+      const { roleflowComposerRole } = await import("./seed/present/roles/roleflow-composer/role.js");
+      const { branchManagerRole } = await import("./seed/present/roles/branch-manager/role.js");
+      const { mergeMediatorRole } = await import("./seed/present/roles/merge-mediator/role.js");
+      const { llmAssignerRole } = await import("./seed/present/roles/llm-assigner/role.js");
+      const { publicRole } = await import("./seed/present/roles/public/role.js");
+      const installs = [
+        ["human", humanRole],
+        ["cherub", cherubRole],
+        ["birther", birtherRole],
+        ["reality-manager", realityManagerRole],
+        ["role-manager", roleManagerRole],
+        ["role-finder", roleFinderRole],
+        ["roleflow-composer", roleflowComposerRole],
+        ["branch-manager", branchManagerRole],
+        ["merge-mediator", mergeMediatorRole],
+        ["llm-assigner", llmAssignerRole],
+        ["public", publicRole],
+      ];
+      for (const [name, spec] of installs) {
+        await withIAmAct(`I install ${name} on the reality root`, async (ctx) => {
+          await hostRoleAt(String(realityRootId), name, spec, I_AM, ctx);
+        });
+      }
     }
     if (bootMode === "Beginning") {
       log.info("Genesis", "I install foundational roles onto spaces.");
     }
   }
 
-  // Roles-Are-Auth bootstrap (seed/RolesAreAuth.md). With the angel
-  // role now installed on heaven, the I-Am grants it to every seed
-  // delegate (anchored at heaven). The grant chain back to I-Am is the
-  // proof of authority for everything each delegate does for the rest
-  // of the reality's life. Idempotent on reboot — the being reducer
-  // dedupes by (role, anchor, grantor) so a second emit is a no-op.
+  // Roles-Are-Auth bootstrap (seed/RolesAreAuth.md). With every role
+  // now hosted on its space, the I-Am grants each seed delegate:
+  //   (a) the `angel` role anchored at heaven (identity + heaven
+  //       access; seed/RolesAreAuth.md "Why angel for delegates")
+  //   (b) their matching role anchored at the reality root
+  //       (cherub→cherub, birther→birther, ...) — the day-to-day toolkit
+  // @public and @arrival are special-cased inside the function:
+  // @public gets no grants (never acts); @arrival gets arrival only
+  // (anonymous visitors must not inherit angel's canSee:["*"]).
+  // The being reducer dedupes by (role, anchor, grantor) so a reboot
+  // re-emit is a no-op.
   if (!plantedFromSeed) {
     const { grantAngelToSeedDelegates } =
       await import("./seed/materials/being/seedDelegates.js");
     await grantAngelToSeedDelegates();
     if (bootMode === "Beginning") {
-      log.info("Genesis", "I grant angel to my delegates.");
+      log.info("Genesis", "I grant my delegates their roles.");
     }
   }
-
-  // Cherub and llm-assigner are delegates: real work happens through
-  // their verb handlers (cherub owns the BE_OPS table; llm-assigner
-  // ships DO ops under the llm-assigner:* prefix), not through
-  // role.summon dispatch. They still need stub roles in the registry
-  // so the @cherub / @llm-assigner stances resolve and assign doesn't
-  // warn when an old inbox row gets drained. triggerOn: [] on each
-  // prevents new SUMMONs from queueing.
-  const { cherubRole } = await import("./seed/present/roles/cherub/role.js");
-  const { llmAssignerRole } = await import("./seed/present/roles/llm-assigner/role.js");
-  registerRole("cherub", cherubRole, "seed");
-  registerRole("llm-assigner", llmAssignerRole, "seed");
 
   // ── Operator being. The first human inhabitant. ──
   // plant.js gathered (name, password, consent) at first plant and

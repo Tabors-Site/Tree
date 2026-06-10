@@ -172,9 +172,9 @@ export async function authorizeViaRoles(args) {
 
 /**
  * Walk targetSpaceId up the ancestor chain looking for the NEAREST
- * ancestor (including target) whose members.owner is non-empty.
- * Returns { spaceId, ownerIds[] } for that ancestor, or null when no
- * ancestor on the chain has an owner.
+ * ancestor (including target) whose `owner` is set. Returns
+ * { spaceId, ownerIds[] } for that ancestor, or null when no ancestor
+ * on the chain has an owner.
  *
  * "Nearest claim wins" — a private sub-space inside a public-owned
  * commons claims itself, and that private claim takes precedence over
@@ -194,11 +194,10 @@ async function findNearestOwnedAncestor(targetSpaceId, branch) {
   try { chain = await getAncestorChain(targetSpaceId, branch); } catch { chain = null; }
   if (!Array.isArray(chain)) return null;
   for (const node of chain) {
-    let owners = node?.members ? readOwnersFromMembers(node.members) : null;
-    if (!owners || owners.length === 0) {
-      const slot = await loadProjection("space", String(node._id), branch);
-      owners = readOwners(slot?.state);
-    }
+    // Owner now lives at top-level state.owner (single value), not
+    // members.owner. Load the projection slot and read.
+    const slot = await loadProjection("space", String(node._id), branch);
+    const owners = readOwners(slot?.state);
     if (owners.length > 0) {
       return { spaceId: String(node._id), ownerIds: owners };
     }
@@ -208,14 +207,7 @@ async function findNearestOwnedAncestor(targetSpaceId, branch) {
 
 function readOwners(state) {
   if (!state) return [];
-  return readOwnersFromMembers(state.members);
-}
-
-function readOwnersFromMembers(members) {
-  if (!members) return [];
-  const raw = members instanceof Map ? members.get("owner") : members.owner;
-  if (!Array.isArray(raw)) return [];
-  return raw.map(String);
+  return state.owner ? [String(state.owner)] : [];
 }
 
 // ────────────────────────────────────────────────────────────────────

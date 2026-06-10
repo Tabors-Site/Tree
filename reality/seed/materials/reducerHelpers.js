@@ -12,9 +12,6 @@
 // I/O. Concurrent calls compute identical results.
 
 const QUALITIES_PREFIX = "qualities.";
-const MEMBERS_PREFIX = "members.";
-
-const MEMBER_CLASS_NAME = /^[a-z][a-z0-9-]*$/;
 
 // Fact actions emitted by the material-scoped DO ops.
 //
@@ -31,6 +28,11 @@ const CREATE_ACTIONS = new Set(["create-space", "create-matter"]);
 // happened in the verb handler (which threw on bad input before the
 // fact was stamped); the reducer just records what the fact says.
 //
+// `owner` is the one authority-bearing structural field on a Space —
+// setSpaceOwner / removeSpaceOwner stamp through here just like any
+// other scalar. Every other authority shape lives in qualities.roles
+// + qualities.rolesGranted per seed/RolesAreAuth.md.
+//
 // `llmDefault` lives here as of slice F-llm (2026-05-23). It writes
 // to the same scalar field on both Being and Space aggregates; the
 // reducer for each just records value. Slot-name validation + per-being
@@ -38,20 +40,6 @@ const CREATE_ACTIONS = new Set(["create-space", "create-matter"]);
 // stamps. Cache invalidation (clearBeingClientCache) is the
 // connection helper's responsibility, after doVerb returns.
 //
-// Ownership/contributorship retired from SCALAR_SET_FIELDS 2026-06-07.
-// Replaced by the membership-class primitive: writes carry
-// `field: "members.<className>"` and `value: [beingId,...]`.
-// applySetMembers (below) parses the dotted field, derives className,
-// and writes the class's list into `state.members[className]`.
-// Read-modify-write callers (addSpaceMember / removeSpaceMember) hold
-// the space lock around the read so the projection they recompute
-// doesn't race a concurrent fold. The cross-aggregate effects of a
-// membership change are propagation via the read-side walker
-// (resolveSpaceAccess) reading members up the chain, NOT writes to
-// other aggregates.
-//
-// `parent` (Space) + `parentBeingId` (Being) join the set in genesis
-// cleanup (2026-05-23) once the parent-side children[] caches retired.
 // A parent reassignment is one write on one aggregate now; downward
 // walks query by parent / parentBeingId, no cross-aggregate update
 // needed. The Space reducer also derives `position` from a parent
@@ -59,6 +47,7 @@ const CREATE_ACTIONS = new Set(["create-space", "create-matter"]);
 const SCALAR_SET_FIELDS = new Set([
   "name",
   "type",
+  "owner",
   "llmDefault",
   "parent",
   "parentBeingId",
@@ -223,45 +212,6 @@ export function applySetField(state, fact) {
     return next;
   }
   return { ...state, [field]: value };
-}
-
-/**
- * Apply a `do:set` fact whose field is `members.<className>`. The
- * value is the new list of beingIds in that class. Empty list clears
- * the class. The reducer enforces shape only — handler-level
- * invariants (owner singleton, beingId existence, etc.) ran before
- * the fact stamped.
- *
- * `state.members` is a plain object in the projection layer (the
- * Mongoose Map serializes to one). Per-class writes are non-destructive
- * across classes: setting members.contributor doesn't touch
- * members.owner.
- *
- * Returns state unchanged when the field doesn't address a member
- * class (lets applySetField / applySetQualities / etc. run).
- */
-export function applySetMembers(state, fact) {
-  if (fact?.action !== "set-space") return state;
-  if (fact?.target?.kind !== "space") return state;
-  const { field, value } = fact.params || {};
-  if (typeof field !== "string" || !field.startsWith(MEMBERS_PREFIX)) {
-    return state;
-  }
-  const className = field.slice(MEMBERS_PREFIX.length);
-  if (!MEMBER_CLASS_NAME.test(className)) return state;
-
-  const prevMembers = (state.members && typeof state.members === "object")
-    ? state.members
-    : {};
-
-  const nextList = Array.isArray(value) ? value.map((id) => String(id)) : [];
-  const nextMembers = { ...prevMembers };
-  if (nextList.length === 0) {
-    delete nextMembers[className];
-  } else {
-    nextMembers[className] = nextList;
-  }
-  return { ...state, members: nextMembers };
 }
 
 /**
@@ -561,31 +511,22 @@ export function applyCreateSpace(state, fact) {
   const spec = fact?.params;
   if (!spec || typeof spec !== "object") return state;
 
-  // Seed the members map from the spec. The verb handler chooses
-  // which classes a freshly-birthed space arrives populated with;
-  // genesis spaces (heaven + heaven children) seed `owner` to the
-  // I-Am, user trees seed `owner` to their creator. Spec accepts
-  // either an explicit `members` map or a shorthand `ownerId` that
-  // becomes `members.owner = [ownerId]`.
-  let initialMembers = {};
-  if (spec.members && typeof spec.members === "object") {
-    for (const [className, list] of Object.entries(spec.members)) {
-      if (!MEMBER_CLASS_NAME.test(className)) continue;
-      if (!Array.isArray(list) || list.length === 0) continue;
-      initialMembers[className] = list.map((id) => String(id));
-    }
-  } else if (spec.ownerId) {
-    initialMembers.owner = [String(spec.ownerId)];
-  }
+  // Owner of the new space. Genesis spaces (heaven + heaven children)
+  // seed owner to I-Am; user trees seed owner to their creator. The
+  // spec carries owner directly; ownerId is accepted as a shorthand
+  // alias.
+  const initialOwner = spec.owner
+    ? String(spec.owner)
+    : spec.ownerId
+      ? String(spec.ownerId)
+      : null;
 
   return {
     ...state,
     name:         spec.name,
     type:         spec.type ?? null,
     parent:       spec.parent ?? spec.parentId ?? null,
-    // Space.children retired 2026-05-23; parent-side cache replaced by
-    // findByPosition / parent-queries. The reducer doesn't write it.
-    members:      initialMembers,
+    owner:        initialOwner,
     heavenSpace:    spec.heavenSpace ?? null,
     llmDefault:   spec.llmDefault ?? null,
     size:         spec.size ?? null,

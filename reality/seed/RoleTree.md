@@ -33,7 +33,9 @@ Default acquisition = `{asked:"queue", grabbed:false, autoOnEntry:false}` — re
 
 ## The 11 seed beings (delegates) — what they hold at birth
 
-Every seed delegate is birthed by genesis at the reality root. `grantAngelToSeedDelegates()` then grants each one `angel` @ heaven (except `@public` and `@arrival` — both skipped explicitly). `@arrival` separately gets `arrival` @ reality root. **Every birthed being also gets `global` @ reality root via `_anointGlobal` (NEW, single-gate doctrine).**
+Every seed delegate is birthed by genesis at the reality root. `grantAngelToSeedDelegates()` then grants each one **two** things at heaven: `angel` (the identity-as-descendant-of-I-Am badge, gives heaven access) and their matching delegate role at the reality root (cherub→cherub, birther→birther, etc.). `@public` skipped from both (never acts). `@arrival` skipped from angel (anon visitors would inherit canSee:["*"]) but gets `arrival` role. **Every birthed being also gets `global` @ reality root via `_anointGlobal` (universal baseline).**
+
+**Why angel for delegates**: angel is about IDENTITY, not just canDo. Seed delegates ARE angels by birth — descendants of I-Am, with heaven-access by structural right. Their matching role carries the specific canX for day-to-day work; angel codifies their place in the heavenly hierarchy and the access path to heaven space when they later need to operate there. The chain back to I-Am IS their authority.
 
 | Being | Cognition | Default role | Grants at birth |
 |---|---|---|---|
@@ -139,8 +141,7 @@ Today `ask-role` with policy `"queue"` returns `{granted:false, path:"queue", me
 ### 5. **`human` has full wildcards (`canDo:[{action:"*"}]`)**
 Every registered human has `canDo:["*"]` via the `human` role. That's the "root founder" doctrine — first user can do anything. After multi-user systems land, the `human` role probably needs to narrow OR be granted only to the first user (not every registrant). **Action: confirm if every registrant should hold `human` or only the first. If only the first, cherub's registration flow should differentiate.**
 
-### 6. **`merge-mediator` role exists but isn't in the registry list**
-It's at `seed/present/roles/merge-mediator/role.js` but I don't see it imported by genesis. Either it's a stale file or the registration is missing. **Action: confirm if `merge-mediator` should be registered alongside `branch-manager`, or delete the file.**
+### 6. ~~merge-mediator~~ **REGISTERED.** It IS imported at genesis.js:487 — my earlier survey missed it. No action needed.
 
 ### 7. **`role-finder` and `roleflow-composer` are inspection-only roles**
 They have canSee for the registry/roleflow surfaces but no canDo (or minimal canDo). They make sense as "operator panels" but aren't granted to any being at boot. **Action: clarify who's supposed to hold these. Operators? First user? Document.**

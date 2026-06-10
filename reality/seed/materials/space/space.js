@@ -48,28 +48,13 @@ const SpaceSchema = new mongoose.Schema({
   // index. The position index ({position: 1}, sparse) below is what
   // foldPlace uses for the cross-reel weave at a space.
 
-  // Membership classes. Each class is a named list of beings with
-  // authority at this position. The seed ships exactly one canonical
-  // class:
-  //
-  //   owner    singleton class, the position's structural owner.
-  //            The ONE base-axiom — owner of a space implicitly has
-  //            authority over it + descendants without any role grant.
-  //
-  // All other authority shapes (editor, contributor, auditor, ...)
-  // are operator-authored ROLES under RolesAreAuth — defined in
-  // qualities.roles and granted via do:grant-role. Operators may
-  // still write additional member classes to space.members for
-  // display / bookkeeping, but the AUTH gate doesn't read them; the
-  // role-walk against qualities.rolesGranted is the gate.
-  //
-  // Class-specific invariants live in materials/space/members.js:
-  // the owner class is singleton (max length 1).
-  members: {
-    type: Map,
-    of: [{ type: String, ref: "Being" }],
-    default: () => new Map(),
-  },
+  // The position's structural owner — the ONE base-axiom authority
+  // class. Owner of a space implicitly has authority over it +
+  // descendants without any role grant. Every other authority shape
+  // (editor, auditor, ...) is an operator-authored ROLE under
+  // RolesAreAuth — defined in qualities.roles and granted via
+  // do:grant-role.
+  owner: { type: String, ref: "Being", default: null },
 
   // Non-null marks one of the spaces I plant at boot. The enum
   // values are in seed/materials/space/heavenSpaces.js.
@@ -133,7 +118,7 @@ SpaceSchema.index({ parent: 1 });
 // owner-by-class index. members.owner is a singleton list, so
 // indexing it lets reverse lookups ("which spaces does this being
 // own?") run as a constant-time index hit instead of a tree scan.
-SpaceSchema.index({ "members.owner": 1 }, { sparse: true });
+SpaceSchema.index({ owner: 1 }, { sparse: true });
 SpaceSchema.index({ heavenSpace: 1 }, { sparse: true });
 
 // Database-level invariant for any tree where at most one plan-type
