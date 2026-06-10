@@ -2849,13 +2849,28 @@ export class Scene {
     // no matter where they walk. Slow Y-axis rotation reads as wind
     // drift across the sky.
     this._clouds.position.copy(this.camera.position);
-    this._clouds.rotation.y += dt * 0.02;
+    // Time-scale multiplier from the timeline strip's playback state.
+    //   1   = live (default drift forward)
+    //   0   = paused (in past, no movement)
+    //   2/4/8 = fast-forward (matching playback tier)
+    //   -1/-2/-4/-8 = rewind (winds blow backward)
+    // Set via setCloudTimeScale from main.js on branchbar:cloud-scale.
+    const scale = (typeof this._cloudTimeScale === "number")
+      ? this._cloudTimeScale
+      : 1;
+    this._clouds.rotation.y += dt * 0.02 * scale;
     if (this._stars) {
       // Stars pin to the camera. Rotation is owned by _updateTimeOfDay
       // (locked to hour); here we only advance the twinkle clock.
       this._stars.position.copy(this.camera.position);
       if (this._starMat) this._starMat.uniforms.uTime.value += dt;
     }
+  }
+
+  // Set the cloud drift multiplier. See _driftClouds for the table of
+  // factors. Called from main.js on branchbar:cloud-scale events.
+  setCloudTimeScale(factor) {
+    this._cloudTimeScale = Number.isFinite(factor) ? factor : 1;
   }
 
   // Proximity check per being. Fires onBeingProximity when the in-range

@@ -353,10 +353,11 @@ async function main() {
       // canvas should desaturate so the user can never miss it.
       refreshAddressBar();
       _setHistoricalVisualCue(true);
-      // Pin the sky/sun to the rewound moment's clock so the dome
-      // paints the time of day the user is studying, not the live
-      // wall-clock. Cleared by the branchbar:now handler below.
-      state.scene.setFrozenTime?.(atTimestamp);
+      // Sun + moon stay pinned to wall-clock real time even during
+      // rewind (per user request). The cloud drift handles the
+      // "we're in the past" visual cue — winds flow backward when
+      // rewinding and stop when paused in past — via
+      // branchbar:cloud-scale below. So no setFrozenTime call here.
       setHud(`rewound to ${atTimestamp}`);
     } catch (err) {
       console.warn("[3D] rewind failed:", err?.message);
@@ -389,8 +390,21 @@ async function main() {
       }
     }
     _setHistoricalVisualCue(false);
-    // Lift the sky pin so wall-clock takes over the dome again.
-    state.scene?.setFrozenTime?.(null);
+    // (Sun + moon were never pinned — they already follow wall-clock.
+    // Clouds reset to forward 1× via branchbar:cloud-scale.)
+  });
+
+  // Cloud-drift scale follows playback. The branchbar dispatches
+  // branchbar:cloud-scale whenever playbackSpeed or atTimestamp
+  // changes; the scene reads the factor and applies it in
+  // _driftClouds. Mapping (from branch-bar.js _emitCloudFactor):
+  //   live, no playback       → 1   (normal forward drift)
+  //   paused in past          → 0   (frozen world, frozen clouds)
+  //   playing forward 2x/4x/8x → 2/4/8
+  //   rewinding 1x/2x/4x/8x   → -1/-2/-4/-8 (winds blow backward)
+  window.addEventListener("branchbar:cloud-scale", (ev) => {
+    const f = Number(ev?.detail?.factor);
+    state.scene?.setCloudTimeScale?.(Number.isFinite(f) ? f : 1);
   });
 
   // Optimistic pause-state sync. When the branch tree's pause button
@@ -1055,7 +1069,9 @@ async function navigate(address, { fromHistory = false } = {}) {
     // Same idea for the sky pin: a live navigate lifts the frozen
     // sun and resumes wall-clock; a historical SEE keeps any pin
     // the rewind handler set (it owns this state).
-    if (!desc?.isHistorical) state.scene?.setFrozenTime?.(null);
+    // (setFrozenTime call retired — sun + moon always follow wall-clock,
+    // even when viewing the past. The cloud factor handles the past-mode
+    // visual via branchbar:cloud-scale.)
     // Hand the current spaceId to the scene so the Move tool can
     // resolve "put down here in this space" without an extra
     // descriptor lookup.

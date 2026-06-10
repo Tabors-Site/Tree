@@ -128,9 +128,13 @@ export async function handleSummon(socket, env, ack) {
       currentUser:   socket.name,
       // currentBranch is the FACT's branch (where the summon record
       // lands on the recipient's inbox-reel) — that's the target's
-      // branch. emitFact attaches crossOrigin when actor.branch
-      // (callerBranch) differs. See seed/CROSS-WORLD.md.
+      // branch. actorBranch is the caller's session branch: the auth
+      // side (their grants live there) and the crossOrigin block on
+      // cross-branch summons both read it. A wire summon has no
+      // moment, so without the explicit thread the actor's branch
+      // never reached the seed at all.
       currentBranch: targetBranch,
+      actorBranch:   callerBranch,
       currentPath:   socket.currentPath || null,
       onResponse:    emitUpdateForSocket(socket),
     });

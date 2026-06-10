@@ -809,10 +809,17 @@ async function writeBeFact({ operation, identity, authResult, payload, beingName
 // `"treeos.ai"` and falsely report a cross-reality call.
 function extractRealityFromAddress(address, addressKind) {
   if (typeof address !== "string" || !address.length) return null;
+  // Stance pair: the TARGET is the right side. Without this split a
+  // bridge address (`left :: right`) would yield the LEFT stance's
+  // reality — the actor's, not the target's — and a cross-reality
+  // right side could slip past the "is it served here" gate. Same
+  // right-side rule canopy's extractTargetReality applies.
+  let head = address.includes("::")
+    ? address.split("::").pop().trim()
+    : address;
   // For "place" addresses there's no path-separator slash, but the
   // input may still carry a branch qualifier (e.g. "treeos.ai#1").
   // Fall through to the strip logic instead of returning whole.
-  let head = address;
   if (addressKind === "stance") {
     const slashIndex = head.indexOf("/");
     if (slashIndex !== -1) head = head.slice(0, slashIndex);
@@ -825,7 +832,8 @@ function extractRealityFromAddress(address, addressKind) {
 }
 
 // Pull the @qualifier off a stance address — the being-name beVerb
-// dispatches to.
+// dispatches to. The $-anchored match naturally reads the RIGHT
+// stance of a bridge pair (the target side).
 function extractBeingFromAddress(address, addressKind) {
   if (addressKind !== "stance" || typeof address !== "string") return null;
   const m = address.match(/@([a-z][a-z0-9-]*)$/i);

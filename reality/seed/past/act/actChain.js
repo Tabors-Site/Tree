@@ -38,6 +38,13 @@ const MAX_FACT_PARAM_BYTES = 512;
  * @param {object} [opts]
  * @param {string} [opts.branch="0"]  branch path to read on
  * @param {number} [opts.limit=100]
+ * @param {string} [opts.before]      ISO timestamp — when set, only
+ *                                    return acts strictly older than
+ *                                    this. Powers progressive loading:
+ *                                    the timeline keeps fetching older
+ *                                    batches as the user rewinds, each
+ *                                    one anchored by the previous
+ *                                    batch's earliest stamp.
  * @returns {Promise<{ being: {id, name}, acts: object[], count: number }>}
  */
 export async function describeActChain(beingId, opts = {}) {
@@ -46,11 +53,15 @@ export async function describeActChain(beingId, opts = {}) {
     ? opts.branch
     : MAIN;
   const limit = Math.min(Math.max(Number(opts.limit) || 100, 1), MAX_LIMIT);
+  const before = typeof opts.before === "string" && opts.before.length
+    ? opts.before
+    : null;
 
   const acts = await readActChainLineage({
     beingId: String(beingId),
     branch,
     limit,
+    before,
   });
 
   let beingName = null;
@@ -167,22 +178,27 @@ export async function attachActFacts(serializedActs, opts = {}) {
  * (legacy, pre-Act-branching) are treated as main acts to stay
  * compatible with old data.
  */
-async function readActChainLineage({ beingId, branch, limit }) {
+async function readActChainLineage({ beingId, branch, limit, before }) {
+  // `before` (ISO string) → progressive-loading cursor. Returns only
+  // acts strictly older than this timestamp. The timeline calls this
+  // with the previous batch's earliest stamp to fetch the next page
+  // of history without re-reading the acts it already has.
+  const beforeDate = before ? new Date(before) : null;
+  const beforeOK = beforeDate && !Number.isNaN(beforeDate.getTime());
+
   if (isMain(branch)) {
-    return Act.find({
+    const filter = {
       beingIn: beingId,
       $or: [{ branch: MAIN }, { branch: { $exists: false } }],
-    })
+    };
+    if (beforeOK) filter.stampedAt = { $lt: beforeDate };
+    return Act.find(filter)
       .sort({ stampedAt: -1, _id: -1 })
       .limit(limit)
       .lean();
   }
 
   const lineage = await resolveBranchLineage(branch);
-  // For each ancestor, compute its owned [from, before) time range.
-  // Main owns everything before #firstChild.createdAt.
-  // Each intermediate X owns acts from X.createdAt to nextChild.createdAt.
-  // The leaf owns acts from its own createdAt onward (no upper bound).
   const ranges = [];
   for (let i = 0; i < lineage.length; i++) {
     const here = lineage[i];
@@ -202,6 +218,16 @@ async function readActChainLineage({ beingId, branch, limit }) {
     const timeFilter = {};
     if (lower) timeFilter.$gte = lower;
     if (upper) timeFilter.$lt  = upper;
+    // Apply `before` cursor on top of any branch-range upper bound —
+    // shrink the window further so progressive-loading correctly
+    // honours both the branch lineage and the user's scroll cursor.
+    if (beforeOK) {
+      if (timeFilter.$lt && timeFilter.$lt < beforeDate) {
+        // keep existing tighter upper (lineage already bounded by next-branch start)
+      } else {
+        timeFilter.$lt = beforeDate;
+      }
+    }
     return {
       beingIn: beingId,
       ...branchClause,

@@ -287,6 +287,7 @@ export async function summonVerb(stance, message, opts = {}) {
   return _dispatchSummon({
     resolved, toBeing, activeRole, role, validatedMessage,
     identity, onResponse, onError, summonCtx, branch,
+    actorBranch,
   });
 }
 
@@ -361,10 +362,6 @@ export async function summonByResolved(args) {
   });
 }
 
-/* summonByResolved passes no actorBranch: its callers are seed-internal
- * (scheduler wakes, subscriptions, transport dispatch) where the actor
- * either rides a moment (actorAct covers it) or IS the substrate. */
-
 // ─────────────────────────────────────────────────────────────────────
 // PRIVATE
 // ─────────────────────────────────────────────────────────────────────
@@ -378,16 +375,21 @@ export async function summonByResolved(args) {
 async function _dispatchSummon({
   resolved, toBeing, activeRole, role, validatedMessage,
   identity, onResponse, onError, summonCtx = null, branch,
+  actorBranch = null,
 }) {
   const decision = await authorize({
     identity,
     verb:   "summon",
-    target: { kind: "stance", spaceId: resolved.spaceId, being: activeRole, activeRole },
+    target: { kind: "stance", spaceId: resolved.spaceId, being: activeRole, activeRole, branch },
     summonCtx,
-    // _dispatchSummon runs inside a moment; summonCtx.actorAct.branch
-    // covers actorBranch. The branch param falls through to summonCtx
-    // first; this explicit pass is the belt-and-suspenders fallback.
-    actorBranch: summonCtx?.actorAct?.branch || branch || null,
+    // The actor's branch, where their grants live. In-moment summons
+    // ride summonCtx.actorAct.branch; wire summons thread the
+    // caller's session branch as actorBranch (the `branch` param is
+    // the FACT's destination — the wrong side for grants). The final
+    // fallback keeps seed-internal callers (scheduler wakes,
+    // summonByResolved) working: their actor is the substrate and
+    // the destination branch is their world.
+    actorBranch: summonCtx?.actorAct?.branch || actorBranch || branch || null,
   });
   if (!decision.ok) {
     throw new IbpError(
@@ -467,6 +469,23 @@ async function _dispatchSummon({
       attachments:     validatedMessage.attachments,
       inboxSpaceId:    inboxNodeId,
       sentAt,
+      // Cross-branch provenance for MOMENT-LESS summons. In-moment
+      // summons get crossOrigin derived by emitFact from
+      // summonCtx.actorAct; a wire summon has no moment (the summon
+      // becomes the RECIPIENT's moment), so when the caller's session
+      // branch differs from the fact's destination branch the block
+      // is attached here. actId is null — there is no home-side act
+      // for a wire summon; the keystroke is not an act.
+      ...(!summonCtx?.actorAct && actorBranch && actorBranch !== branch
+        ? {
+            crossOrigin: {
+              reality: null,
+              branch:  actorBranch,
+              beingId: summonerBeingId,
+              actId:   null,
+            },
+          }
+        : {}),
     },
     actId: summonCtx?.actId || null,
     // Branch the summon fact lands on, pre-resolved at the entry point

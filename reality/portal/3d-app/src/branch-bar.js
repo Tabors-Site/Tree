@@ -72,6 +72,97 @@ let _state = {
 // smooth, long enough that the rewind round-trip can keep up. Each
 // tick advances cursorMs by speedFactor * PLAYBACK_TICK_MS.
 const PLAYBACK_TICK_MS = 250;
+
+// Progressive mark loading. Initial fetch gets the most recent N
+// acts; as the user rewinds toward the earliest loaded mark, the
+// next batch loads in the background, anchored by the earliest's
+// stampedAt (server returns acts strictly older). Repeats until
+// describeActChain returns fewer than the batch size (= we've
+// reached the being's birth on this branch lineage).
+const INITIAL_MARK_BATCH = 500;
+const NEXT_MARK_BATCH = 500;
+// Trigger threshold: when the cursor is within this fraction of the
+// earliest loaded mark (in [firstTs, cursor]) → fetch next batch.
+// 0.1 = "within the leftmost 10% of the strip."
+const PREFETCH_THRESHOLD = 0.10;
+
+function _actToMark(a) {
+  return {
+    ts:    a?.stampedAt || a?.receivedAt || null,
+    seq:   a?.lastFactSeq ?? null,
+    label: a?.facts?.[0]?.action
+      || (a?.endMessage?.content
+        ? String(a.endMessage.content).slice(0, 40)
+        : (a?.activeRole || null)),
+  };
+}
+
+// Fire-and-forget load of the next older batch. Runs only when:
+//   - the timeline strip is open
+//   - we have a being to query for
+//   - hasMoreMarks is still true (didn't reach birth yet)
+//   - no load is already in flight
+//   - the cursor is within PREFETCH_THRESHOLD of the earliest mark
+// Called from _rewindTo + _playbackTick so scrubbing OR playing
+// past the leftmost dot triggers more history.
+async function _maybeLoadOlderMarks(cursorMs) {
+  if (!_state.timelineEl) return;
+  if (!_state.hasMoreMarks) return;
+  if (_state.loadingMoreMarks) return;
+  if (!_state.timelineBeingId || !_state.client) return;
+  const total = _state.marks.length;
+  if (total === 0) return;
+  const earliest = _state.marks[0]; // sorted ascending by ts
+  const earliestMs = earliest?.ts ? new Date(earliest.ts).getTime() : null;
+  const firstTsMs  = _state.firstTs ? new Date(_state.firstTs).getTime() : null;
+  const nowMs      = _state.nowTs ? new Date(_state.nowTs).getTime() : null;
+  if (earliestMs == null || nowMs == null) return;
+  // Trigger when the cursor enters the leftmost PREFETCH_THRESHOLD
+  // of the strip, OR when the cursor is already at/before the earliest
+  // loaded mark (the user is asking for history we don't have yet).
+  const trigger = (() => {
+    if (cursorMs <= earliestMs) return true;
+    if (firstTsMs == null) return false;
+    const span = Math.max(1, nowMs - firstTsMs);
+    const frac = (cursorMs - firstTsMs) / span;
+    return frac <= PREFETCH_THRESHOLD;
+  })();
+  if (!trigger) return;
+
+  _state.loadingMoreMarks = true;
+  try {
+    const tlBranch = _state.timelineBranch || "0";
+    const bq = tlBranch === "0" ? "" : `#${tlBranch}`;
+    const actsDesc = await _state.client.see(
+      `${_state.reality}${bq}/.acts/${_state.timelineBeingId}`,
+      { limit: NEXT_MARK_BATCH, before: earliest.ts },
+    );
+    const acts = Array.isArray(actsDesc?.actChain?.acts)
+      ? actsDesc.actChain.acts.slice().reverse()
+      : [];
+    const older = acts.map(_actToMark).filter((m) => m.ts);
+    if (older.length === 0) {
+      _state.hasMoreMarks = false;
+    } else {
+      // Prepend (older first → earlier in the marks array). Skip any
+      // accidental duplicates of the current earliest in case of edge
+      // races.
+      const merged = [...older, ..._state.marks].filter(
+        (m, i, arr) => i === 0 || m.ts !== arr[i - 1].ts,
+      );
+      _state.marks = merged;
+      _state.firstTs = _computeFirstTs(_state.marks);
+      // If the page came back smaller than the batch, we've hit
+      // the bottom of history.
+      if (older.length < NEXT_MARK_BATCH) _state.hasMoreMarks = false;
+      _renderTimeline();
+    }
+  } catch (err) {
+    console.warn("[branch-bar] older marks fetch failed:", err?.message);
+  } finally {
+    _state.loadingMoreMarks = false;
+  }
+}
 // Speed factor labels keyed off the signed tier. Index by `speed`:
 // negative for reverse, positive for forward, 0 for paused.
 const PLAYBACK_SPEEDS = {
@@ -805,6 +896,9 @@ async function _update(desc) {
   } else {
     _state.atTimestamp = null;
   }
+  // Re-emit the cloud factor — atTimestamp changing affects the
+  // paused-in-past case (factor flips from 1 → 0 or vice versa).
+  _emitCloudFactor();
 
   // Address-branch is the source of truth (Tabor doctrine 2026-06-04):
   // both stances always match. If an open timeline strip is bound to a
@@ -826,43 +920,35 @@ async function _update(desc) {
   // If no timeline open, nothing more to do.
   if (!_state.timelineEl) return;
 
-  // Load marks for the timeline's bound branch (which may not equal
-  // the address's branch — usually they match but a future "open
-  // sibling branch timeline from main" would split them). Always
-  // qualify the SEE with the timeline's branch so the request doesn't
-  // race the socket's current-branch state.
+  // Load marks for the timeline's bound branch. First batch only —
+  // additional batches load progressively as the user rewinds toward
+  // the earliest loaded mark (see _maybeLoadOlderMarks).
   const tlBranch = _state.timelineBranch || branch;
   const myBeingId = desc?.identity?.beingId || null;
+  _state.timelineBeingId = myBeingId;
   if (myBeingId) {
     try {
       const bq = tlBranch === "0" ? "" : `#${tlBranch}`;
-      // Mark source: the signed-in being's own acts. Request the max
-      // limit explicitly so a long session with many coord-tick acts
-      // doesn't truncate the leftmost timestamp to "a few minutes ago"
-      // when the user has actually been around much longer.
       const actsDesc = await _state.client.see(
         `${_state.reality}${bq}/.acts/${myBeingId}`,
-        { limit: 10000 },
+        { limit: INITIAL_MARK_BATCH },
       );
       const acts = Array.isArray(actsDesc?.actChain?.acts)
         ? actsDesc.actChain.acts.slice().reverse()
         : [];
-      _state.marks = acts
-        .map((a) => ({
-          ts:    a?.stampedAt || a?.receivedAt || null,
-          seq:   a?.lastFactSeq ?? null,
-          label: a?.facts?.[0]?.action
-            || (a?.endMessage?.content
-              ? String(a.endMessage.content).slice(0, 40)
-              : (a?.activeRole || null)),
-        }))
-        .filter((m) => m.ts);
+      _state.marks = acts.map(_actToMark).filter((m) => m.ts);
+      // If we got fewer than the batch size, we've already reached
+      // the being's birth — no more pages exist on this branch.
+      _state.hasMoreMarks = acts.length >= INITIAL_MARK_BATCH;
+      _state.loadingMoreMarks = false;
     } catch (err) {
       console.warn("[branch-bar] acts fetch failed:", err?.message);
       _state.marks = [];
+      _state.hasMoreMarks = false;
     }
   } else {
     _state.marks = [];
+    _state.hasMoreMarks = false;
   }
 
   // Sliding-window time axis. nowTs is always wall-clock now (so the
@@ -1065,14 +1151,13 @@ function _renderTimeline() {
 
 function _rewindTo(atTimestamp) {
   if (!atTimestamp) return;
-  // Auto-select the act currently "active" at this position so the
-  // detail row shows the same sentence the user would see if they
-  // had clicked the mark directly. Used by both the free-form strip
-  // click and the playback tick — same surface area means scrubbing
-  // and playing through marks both surface their prose continuously.
-  // Convention: the "active" mark is the most-recent one at-or-before
-  // the cursor (the world reflects every act up to and including it).
   const cursorMs = new Date(atTimestamp).getTime();
+  // Progressive loading: if the cursor is approaching the earliest
+  // loaded mark, kick off a background fetch for the next batch.
+  // Fires from both scrubs (strip click → _rewindTo) and playback
+  // (_playbackTick → _rewindTo), so any path that moves the cursor
+  // backward triggers more history when needed.
+  _maybeLoadOlderMarks(cursorMs);
   const activeMark = _findMarkAtCursor(cursorMs);
   const nextSelectedTs = activeMark?.ts || null;
   if (nextSelectedTs !== _state.selectedMarkTs) {
@@ -1172,9 +1257,27 @@ function _togglePlayPause() {
   _setSpeed(_state.resumeSpeed || 1);
 }
 
+// Compute the current cloud-drift factor from the timeline state and
+// dispatch to main.js, which forwards it to the scene. The mapping:
+//   playing (any tier)        → matching speedFactor (signed)
+//   paused at present (live)  → 1 (clouds drift normally; nothing's rewound)
+//   paused in past (rewound)  → 0 (world is frozen → so are the clouds)
+function _emitCloudFactor() {
+  let factor = 1;
+  if (_state.playbackSpeed !== 0) {
+    factor = _speedFactor(_state.playbackSpeed);
+  } else if (_state.atTimestamp) {
+    factor = 0;
+  }
+  window.dispatchEvent(new CustomEvent("branchbar:cloud-scale", {
+    detail: { factor },
+  }));
+}
+
 function _setSpeed(tier) {
   _state.playbackSpeed = tier;
   _renderSpeedDisplay();
+  _emitCloudFactor();
   if (tier === 0) {
     _stopPlayback();
     return;

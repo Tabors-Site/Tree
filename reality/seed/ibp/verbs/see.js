@@ -525,11 +525,19 @@ export async function seeVerb(target, opts = {}) {
     // long session of fine-grained acts doesn't truncate the visible
     // history window. describeActChain still caps at its MAX_LIMIT.
     const requestedLimit = Number(payload?.limit) || undefined;
+    // Progressive-loading cursor — when set, returns acts strictly
+    // older than this timestamp. The 3D portal's timeline strip uses
+    // this to fetch the next batch as the user scrubs into older
+    // history.
+    const requestedBefore = typeof payload?.before === "string" && payload.before.length
+      ? payload.before
+      : undefined;
     const { getDefaultBranch: _gDB } = await import("../../materials/branch/branchRegistry.js");
     const chainBranch = expanded.right?.branch || parseCtx.currentBranch || await _gDB();
     const chain = await describeActChain(actChainBeingId, {
       branch: chainBranch,
       ...(requestedLimit ? { limit: requestedLimit } : {}),
+      ...(requestedBefore ? { before: requestedBefore } : {}),
     });
     return {
       address: {
