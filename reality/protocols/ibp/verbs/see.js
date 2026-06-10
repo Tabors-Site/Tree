@@ -72,14 +72,17 @@ export async function handleSee(socket, env, ack) {
     }
 
     // Track first-person stance from the resolved descriptor. Every
-    // successful live SEE updates the socket's currentBranch + path so
-    // subsequent DO/SUMMON/BE calls inherit the caller's frame (left
-    // stance) without the client having to send it. Historical SEEs
-    // don't change "where I am" — only live navigation does.
+    // Successful live SEE updates the socket's currentPath so
+    // subsequent DO/SUMMON/BE calls inherit the caller's left-stance
+    // path (e.g. `~` and relative addresses resolve correctly).
+    // currentBranch is intentionally NOT updated here — branch frame
+    // is the BE ops' concern (birth/connect/release/switch). The
+    // discipline is structural: navigating a SEE does not switch the
+    // being's act-reel; only an explicit be:switch does. See cherub's
+    // switchHandler and seed/done/DualBeingParents — the per-session
+    // frame model.
     if (descriptor?.address && !descriptor.isHistorical) {
-      const b = descriptor.address.branch;
       const p = descriptor.address.pathByNames || descriptor.address.path;
-      if (typeof b === "string") socket.currentBranch = b;
       if (typeof p === "string") socket.currentPath = p;
     }
 

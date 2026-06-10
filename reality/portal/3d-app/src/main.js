@@ -1669,26 +1669,18 @@ async function sendSummon(b, text) {
 // whole gameplay input surface turns off together while interacting.
 addEventListener("keydown", (e) => {
   if (e.key === "Escape") {
-    // Esc is the universal panel switch. The flat panel handles its
-    // own Esc internally (closes itself); we ignore Esc when it's
-    // open and let the panel close it.
+    // Esc closes whichever popup surface is up. The flat panel
+    // handles its own Esc internally (closes itself), so we ignore
+    // Esc when it's open. Menu OPEN uses M (below) so Esc stays
+    // available for its normal "close whatever is on top" role.
     if (isFlatPanelOpen()) return;
-    // Capture which secondary surfaces were open before we close them
-    // — if NONE were open, this Esc press is "open the menu" instead
-    // of "close popup."
-    const wasSummonOpen  = !!state.currentSummonBeing;
-    const wasPlanterOpen = isPlanterOpen();
     hideAuthActions();
     hideAuthSignInPanel();
-    if (wasSummonOpen) {
+    if (state.currentSummonBeing) {
       hideSummonPanel();
       state.currentSummonBeing = null;
     }
-    if (wasPlanterOpen) closePrompt();
-    // Nothing was open → open the menu (the flat panel).
-    if (!wasSummonOpen && !wasPlanterOpen) {
-      toggleFlatPanel(L);
-    }
+    if (isPlanterOpen()) closePrompt();
     return;
   }
   // Text-mode toggle. Backslash (\) sits next to Enter and reads as
@@ -1702,6 +1694,10 @@ addEventListener("keydown", (e) => {
     return;
   }
   if (isGameplayInputBlocked()) return;
+  // M opens the menu (the flat panel). Gated behind isGameplayInputBlocked
+  // so typing "m" in a text field doesn't trigger it. Backslash (above)
+  // is the bypass-the-gate alternative.
+  if (e.code === "KeyM") { e.preventDefault(); toggleFlatPanel(L);  return; }
   if (e.code === "KeyB") { e.preventDefault(); historyBack();    return; }
   if (e.code === "KeyN") { e.preventDefault(); historyForward(); return; }
   if (e.code === "KeyE") { e.preventDefault(); attemptPlant();   return; }

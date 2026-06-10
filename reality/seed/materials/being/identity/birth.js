@@ -410,6 +410,20 @@ export async function birthBeing({ spec, identity, summonCtx = null }) {
     defaultRole,
     parentBeingId,
     homeSpace: homeId,
+    // The being's home branch = the stamper's branch (the branch THIS
+    // be:birth fact is being stamped on). Everything is relative: a
+    // being birthed on #7a owns #7a as their present; BE:connect/
+    // release/birth all seat the session to this.
+    //
+    // Read from the stamper's `branch` directly, NOT derived from
+    // parentBeingId. The mother (parentBeingId, the actor of birth) is
+    // always on this branch — her moment IS this moment. But the
+    // father (qualities.father, when set) may live on a different
+    // branch or a different reality entirely (cross-world mate-vessel
+    // pattern). Deriving from "a parent" introduces ambiguity that
+    // doesn't exist when we read from the one source that's always
+    // authoritative — the branch this fact is landing on.
+    homeBranch: branch,
     position,
     ...(resolvedCoord ? { coord: resolvedCoord } : {}),
     llmDefault: spec.llmDefault || null,

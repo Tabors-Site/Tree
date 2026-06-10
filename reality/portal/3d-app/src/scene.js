@@ -34,6 +34,29 @@ function groupBoxRaycast(raycaster, intersects) {
   }
 }
 
+// Reusable temp vectors for the portal render pass. Hoisted so each
+// frame doesn't allocate — the parallax math touches several vec3s
+// per portal and N portals × 30fps × 5 vecs each is GC pressure we
+// don't need.
+const _portalTmpA = new THREE.Vector3();
+const _portalTmpB = new THREE.Vector3();
+const _portalTmpC = new THREE.Vector3();
+const _portalTmpV = new THREE.Vector3();
+const _portalTmpQ = new THREE.Quaternion();
+const _portalTmpQInv = new THREE.Quaternion();
+
+// Deterministic small hash for ground colors / portal accent — same
+// input always yields same hue so two viewers see the same branch as
+// the same color.
+function hashString(s) {
+  let h = 0;
+  const str = String(s || "");
+  for (let i = 0; i < str.length; i++) {
+    h = ((h << 5) - h + str.charCodeAt(i)) | 0;
+  }
+  return Math.abs(h);
+}
+
 const MOVE_SPEED = 6.0;       // units / second
 const SPRINT_MULT = 1.9;      // Shift multiplier
 const LOOK_SENSITIVITY = 0.0025;
@@ -196,6 +219,12 @@ export class Scene {
     this.world = new THREE.Group();
     this.scene.add(this.world);
 
+    // Active portal meshes — render-to-texture passes their mini-scenes
+    // to their FBOs before the main scene renders each frame, so the
+    // opening surface shows a live 3D view of the foreign side instead
+    // of static canvas text. See _makePortalMesh + _renderActivePortals.
+    this._activePortals = new Set();
+
     // Player state.
     this.keys = new Set();
     this.yaw = 0;
@@ -222,11 +251,95 @@ export class Scene {
       this._rafId = requestAnimationFrame(loop);
       if (this._paused) return;
       this._tick(this.clock.getDelta());
+      // Render each open portal's mini-scene into its render target so
+      // the opening surface shows a live 3D view of the foreign side.
+      // Must run BEFORE the main render or the textures will be one
+      // frame stale.
+      this._renderActivePortals();
       this.renderer.render(this.scene, this.camera);
       this.cssRenderer.render(this.scene, this.camera);
     };
     loop();
     window.addEventListener("resize", () => this._onResize());
+  }
+
+  // Render-to-texture pass for open portals. Each portal renders its
+  // foreign-side mini-scene from a parallax camera that mirrors the
+  // player's offset from the portal frame, so walking around the
+  // portal moves what's visible through the opening — true-window
+  // effect rather than a static TV.
+  //
+  // Efficiency knobs:
+  //   - 256×384 render target (down from 512×768) → 1/4 the fill cost
+  //   - throttle: render at half the main FPS (every other frame)
+  //   - distance cull: skip portals > ~25 units away
+  //   - direction cull: skip portals significantly behind the camera
+  // Together these keep N portals visible cheap; the next step
+  // (walk-through portals) reuses the same textures, no new cost.
+  _renderActivePortals() {
+    if (!this._activePortals || this._activePortals.size === 0) return;
+
+    // Throttle: render every other frame. Halves GPU cost; parallax
+    // still reads as smooth because the main view is 60fps and the
+    // portal texture updates at 30fps.
+    this._portalFrameCounter = (this._portalFrameCounter || 0) + 1;
+    if ((this._portalFrameCounter & 1) === 1) return;
+
+    const tmpA = _portalTmpA;
+    const tmpB = _portalTmpB;
+    const tmpC = _portalTmpC;
+    const tmpQ = _portalTmpQ;
+
+    const playerPos = this.camera.position;
+    const playerFwd = this.camera.getWorldDirection(tmpA);
+
+    let rendered = false;
+    for (const group of this._activePortals) {
+      const p = group.userData?.portal;
+      if (!p || p.state !== "open" || !p.renderTarget || !p.miniScene || !p.miniCamera) continue;
+
+      const portalPos = group.getWorldPosition(tmpB);
+
+      // Distance cull (25 units, squared = 625).
+      const distSq = portalPos.distanceToSquared(playerPos);
+      if (distSq > 625) continue;
+
+      // Direction cull: skip portals significantly behind us.
+      const toPortal = tmpC.subVectors(portalPos, playerPos);
+      if (toPortal.dot(playerFwd) < -3) continue;
+
+      // Parallax: place the mini-camera at the player's offset from
+      // the portal expressed in the portal's LOCAL frame. As you walk
+      // left, the camera in the mini-scene moves left, and the view
+      // through the opening shifts accordingly.
+      const portalQuat = group.getWorldQuaternion(tmpQ);
+      const offsetX = toPortal.x; // already computed
+      const offsetY = toPortal.y;
+      const offsetZ = toPortal.z;
+      // Project offset onto portal's local axes via inverse quaternion.
+      const inv = _portalTmpQInv.copy(portalQuat).invert();
+      const localOffset = _portalTmpV.set(-offsetX, -offsetY, -offsetZ).applyQuaternion(inv);
+      // localOffset.x = left/right of frame, .y = up/down of frame,
+      //  .z = in front of frame (positive in the player's direction).
+
+      const baseDepth = p.cameraRadius || 12;
+      // Mini-camera: x/y mirror the player's offset (so motion creates
+      // parallax); z is the natural viewing depth, slightly increased
+      // when the player is far away so the view feels like "looking
+      // into a window."
+      p.miniCamera.position.set(
+        localOffset.x,
+        Math.max(1, localOffset.y + 2.5),
+        baseDepth + Math.max(0, Math.min(8, localOffset.z * 0.5)),
+      );
+      p.miniCamera.lookAt(0, 1, 0);
+
+      this.renderer.setRenderTarget(p.renderTarget);
+      this.renderer.clear();
+      this.renderer.render(p.miniScene, p.miniCamera);
+      rendered = true;
+    }
+    if (rendered) this.renderer.setRenderTarget(null);
   }
 
   // Stop the render loop without disposing scene graph + GPU assets.
@@ -1449,6 +1562,10 @@ export class Scene {
     while (this.world.children.length) {
       const obj = this.world.children[0];
       this.world.remove(obj);
+      // Portal mesh — drop from the active-portal set + dispose the
+      // FBO and the mini-scene's owned resources so we don't leak GPU
+      // textures when the descriptor refreshes.
+      this._disposePortalGroup(obj);
       obj.geometry?.dispose?.();
       if (Array.isArray(obj.material)) obj.material.forEach((m) => m.dispose?.());
       else obj.material?.dispose?.();
@@ -1875,11 +1992,13 @@ export class Scene {
   }
 
   // Portal mesh — a doorway whose opening reflects what the viewer
-  // can see at the foreign address. First cut: a black plane that
-  // gets painted with a canvas texture summarizing the target's
-  // descriptor on live SEE response. Fully refused = solid black.
-  // Camera-through render-to-texture is a follow-up; this gets the
-  // "portal looks like a portal" loop running end-to-end.
+  // can see at the foreign address. Two display modes share one
+  // opening surface:
+  //   - canvas texture: loading / refused / unreachable status text
+  //   - render-target texture: live 3D view of a mini-scene built from
+  //     the foreign descriptor (the "open" state)
+  // The render-to-texture pass runs each frame for portals in the
+  // "open" state via _renderActivePortals in the main loop.
   _makePortalMesh(matter) {
     const target = matter.qualities.portal.target;
     const W = 3.2;
@@ -1893,7 +2012,6 @@ export class Scene {
       emissiveIntensity: 0.15,
       roughness: 0.85,
     });
-    // Two vertical posts + a lintel.
     const postGeom = new THREE.BoxGeometry(0.32, H + 0.4, 0.4);
     const lintelGeom = new THREE.BoxGeometry(W + 0.64, 0.32, 0.4);
     const leftPost = new THREE.Mesh(postGeom, frameMat);
@@ -1906,18 +2024,61 @@ export class Scene {
     lintel.position.set(0, H + 0.4 - 0.16, 0);
     group.add(lintel);
 
-    // Opening — the surface that gets painted with the foreign
-    // descriptor. Backed by a canvas texture so we can repaint it as
-    // the SEE response arrives.
+    // Canvas texture for status states (loading / refused / unreachable).
     const canvas = document.createElement("canvas");
     canvas.width = 512;
     canvas.height = 768;
     const ctx = canvas.getContext("2d");
     this._paintPortalCanvas(ctx, canvas, { state: "loading", target });
-    const tex = new THREE.CanvasTexture(canvas);
-    tex.minFilter = THREE.LinearFilter;
+    const canvasTex = new THREE.CanvasTexture(canvas);
+    canvasTex.minFilter = THREE.LinearFilter;
+
+    // Render target for the live 3D view. 512×768 is sharp enough to
+    // read as a real world; the heavy lifting on cost comes from the
+    // throttle (every other frame) + distance/direction culling, not
+    // from pixel count. So we don't actually save much by going lower.
+    const renderTarget = new THREE.WebGLRenderTarget(512, 768, {
+      minFilter: THREE.LinearFilter,
+      magFilter: THREE.LinearFilter,
+      depthBuffer: true,
+      stencilBuffer: false,
+    });
+
+    // Mini-scene that gets rendered into the FBO. Populated from the
+    // foreign descriptor in _populatePortalMiniScene.
+    const miniScene = new THREE.Scene();
+    // Twilight-blue sky matching the main scene's tone — once
+    // populated, the ground hue overrides nothing but sits against
+    // this color, giving the portal a "world under sky" feel.
+    miniScene.background = new THREE.Color(0x1a2a3a);
+    // Push the fog far back so the scene reads as open space, not a
+    // claustrophobic box. Fog still hides the horizon but doesn't eat
+    // the foreground content.
+    miniScene.fog = new THREE.Fog(0x1a2a3a, 25, 80);
+    // Brighter lighting so the objects pop — the main scene is dark,
+    // so the portal looking BRIGHTER reads as "another world."
+    miniScene.add(new THREE.AmbientLight(0xffffff, 0.85));
+    const sun = new THREE.DirectionalLight(0xffffff, 1.1);
+    sun.position.set(8, 14, 6);
+    miniScene.add(sun);
+    // Rim light from below to lift the bottoms of objects so they
+    // don't look pasted on the ground.
+    const fill = new THREE.DirectionalLight(0x88aacc, 0.35);
+    fill.position.set(-4, 2, -3);
+    miniScene.add(fill);
+
+    // Camera for the mini-scene. Position is updated each frame in
+    // _renderActivePortals for a gentle orbit until parallax-from-
+    // viewer-position lands.
+    const miniCamera = new THREE.PerspectiveCamera(60, 512 / 768, 0.1, 100);
+    miniCamera.position.set(0, 5, 12);
+    miniCamera.lookAt(0, 0, 0);
+
+    // Opening — starts on the canvas texture (loading state). When the
+    // descriptor arrives, we swap the map to renderTarget.texture and
+    // the render-to-texture pass takes over.
     const openingMat = new THREE.MeshBasicMaterial({
-      map: tex,
+      map: canvasTex,
       side: THREE.DoubleSide,
     });
     const opening = new THREE.Mesh(
@@ -1927,21 +2088,118 @@ export class Scene {
     opening.position.set(0, H / 2, 0);
     group.add(opening);
 
-    // Stash for the live updater. main.js may re-paint when descriptor
-    // arrives (see refreshPortalDescriptor below).
+    // Container for descriptor-driven mini-scene content (so we can
+    // clear and rebuild on refresh without disturbing lights).
+    const miniWorld = new THREE.Group();
+    miniScene.add(miniWorld);
+
     group.userData = {
       ...(group.userData || {}),
-      portal: { target, canvas, ctx, texture: tex },
+      portal: {
+        target,
+        state: "loading",
+        // Status-text canvas (loading / refused / unreachable).
+        canvas, ctx, canvasTexture: canvasTex,
+        // Live 3D view.
+        openingMat,
+        renderTarget,
+        miniScene,
+        miniCamera,
+        miniWorld,
+        cameraRadius: 12,
+      },
     };
 
-    // Kick the SEE in the background so the canvas updates the moment
-    // the foreign side responds. If unauthenticated or the foreign
-    // side refuses, paint the black-window state. The SEE call goes
-    // through the same canopy dispatch path as any other cross-world
-    // verb — no portal-specific transport.
+    this._activePortals.add(group);
     this._fetchPortalDescriptor(target, group);
 
     return group;
+  }
+
+  // Build the foreign-side mini-scene from a descriptor. Called once
+  // when the SEE response arrives (and again on each subsequent
+  // refresh). Renders:
+  //   - a ground plane sized by descriptor.space.size
+  //   - a marker cylinder for each child space (coord placement)
+  //   - a glowing sphere for each being
+  //   - a small cube for each matter
+  _populatePortalMiniScene(group, descriptor) {
+    const p = group.userData?.portal;
+    if (!p) return;
+
+    // Clear previous content (but keep lights).
+    while (p.miniWorld.children.length) {
+      const c = p.miniWorld.children.pop();
+      if (c.geometry) c.geometry.dispose?.();
+      if (c.material) {
+        const m = c.material;
+        if (Array.isArray(m)) m.forEach((mm) => mm.dispose?.());
+        else m.dispose?.();
+      }
+    }
+
+    const size = descriptor?.space?.size || descriptor?.size || { x: 20, y: 20 };
+    const sx = Math.max(4, Math.min(40, Number(size.x) || 20));
+    const sz = Math.max(4, Math.min(40, Number(size.y) || 20));
+
+    // Ground plane — color modulated by branch id so different
+    // branches read as visibly different worlds. Higher saturation
+    // + lightness than before so the world isn't dim soup.
+    const branchHash = hashString(p.target);
+    const groundColor = new THREE.Color().setHSL((branchHash % 360) / 360, 0.45, 0.42);
+    const ground = new THREE.Mesh(
+      new THREE.PlaneGeometry(sx, sz),
+      new THREE.MeshStandardMaterial({ color: groundColor, roughness: 0.85 }),
+    );
+    ground.rotation.x = -Math.PI / 2;
+    p.miniWorld.add(ground);
+    // Match the main scene's fog/sky color so the ground edge fades
+    // into the sky rather than ending in a hard line.
+    p.miniScene.background = new THREE.Color().setHSL((branchHash % 360) / 360, 0.3, 0.18);
+    p.miniScene.fog.color = p.miniScene.background;
+    p.cameraRadius = Math.max(sx, sz) * 0.7;
+
+    const placeAt = (coord, fallback = { x: 0, y: 0 }) => {
+      const c = coord || fallback;
+      const x = (Number(c.x) || 0) - sx / 2;
+      const z = (Number(c.y) || 0) - sz / 2;
+      return { x, z };
+    };
+
+    // Children — beige cylinders.
+    const childMat = new THREE.MeshStandardMaterial({ color: 0xc0b090, roughness: 0.7 });
+    for (const child of (descriptor.children || []).slice(0, 32)) {
+      const { x, z } = placeAt(child.coord);
+      const cy = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.5, 1.6, 12), childMat);
+      cy.position.set(x, 0.8, z);
+      p.miniWorld.add(cy);
+    }
+
+    // Beings — emissive spheres (light blue, glowing).
+    const beingMat = new THREE.MeshStandardMaterial({
+      color: 0xffe4a8, emissive: 0xffc060, emissiveIntensity: 0.5, roughness: 0.4,
+    });
+    for (const being of (descriptor.beings || []).slice(0, 32)) {
+      const { x, z } = placeAt(being.coord);
+      const sphere = new THREE.Mesh(new THREE.SphereGeometry(0.45, 12, 12), beingMat);
+      sphere.position.set(x, 1.2, z);
+      p.miniWorld.add(sphere);
+    }
+
+    // Matter — small purple cubes.
+    const matterMat = new THREE.MeshStandardMaterial({ color: 0x9070d0, roughness: 0.6 });
+    for (const m of (descriptor.matter || descriptor.matters || []).slice(0, 32)) {
+      const { x, z } = placeAt(m.coord);
+      const cube = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.4, 0.4), matterMat);
+      cube.position.set(x, 0.5, z);
+      p.miniWorld.add(cube);
+    }
+
+    // Swap the opening material to the render target texture so the
+    // live 3D view takes over from the canvas text.
+    p.openingMat.map = p.renderTarget.texture;
+    p.openingMat.needsUpdate = true;
+    p.state = "open";
   }
 
   _paintPortalCanvas(ctx, canvas, { state, target, descriptor, errorMessage }) {
@@ -2034,28 +2292,58 @@ export class Scene {
     }
   }
 
+  // Walk a removed object (and its descendants) for portal groups;
+  // when found, drop from the active set and dispose owned resources.
+  _disposePortalGroup(obj) {
+    const visit = (node) => {
+      const p = node.userData?.portal;
+      if (p && this._activePortals?.has(node)) {
+        this._activePortals.delete(node);
+        p.renderTarget?.dispose?.();
+        p.canvasTexture?.dispose?.();
+        // Dispose mini-scene meshes (the GroundPlane + child cylinders
+        // + being spheres + matter cubes).
+        if (p.miniWorld) {
+          for (const c of p.miniWorld.children) {
+            c.geometry?.dispose?.();
+            const mm = c.material;
+            if (Array.isArray(mm)) mm.forEach((x) => x.dispose?.());
+            else mm?.dispose?.();
+          }
+        }
+      }
+      for (const child of (node.children || [])) visit(child);
+    };
+    visit(obj);
+  }
+
   // Async fetch of the foreign descriptor. Issues a live SEE through
   // the standard client — canopy detects the foreign reality and
-  // forwards automatically. Result paints onto the portal's canvas
-  // texture. Errors paint the refused / unreachable state.
+  // forwards automatically. On success, populates the mini-scene and
+  // swaps the opening's material to the render target texture so the
+  // live 3D view takes over. On refused/error, the opening stays on
+  // the canvas texture and we paint the status text on it.
   async _fetchPortalDescriptor(target, group) {
     if (!this._client?.see) return;
     try {
       const descriptor = await this._client.see(target);
-      const u = group.userData?.portal;
-      if (!u) return;
-      this._paintPortalCanvas(u.ctx, u.canvas, { state: "open", target, descriptor });
-      u.texture.needsUpdate = true;
+      if (!group.userData?.portal) return;
+      this._populatePortalMiniScene(group, descriptor || {});
     } catch (err) {
       const u = group.userData?.portal;
       if (!u) return;
       const isAuth = err?.code === "FORBIDDEN" || err?.code === "UNAUTHORIZED";
+      u.state = isAuth ? "refused" : "error";
+      // Re-paint canvas with the status text and make sure the opening
+      // is showing the canvas texture (in case it was previously open).
       this._paintPortalCanvas(u.ctx, u.canvas, {
-        state: isAuth ? "refused" : "error",
+        state: u.state,
         target,
         errorMessage: err?.message || "",
       });
-      u.texture.needsUpdate = true;
+      u.canvasTexture.needsUpdate = true;
+      u.openingMat.map = u.canvasTexture;
+      u.openingMat.needsUpdate = true;
     }
   }
 

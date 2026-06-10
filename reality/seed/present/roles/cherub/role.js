@@ -10,16 +10,20 @@
 // at the gate there is no orderly passage. With one, the boundary
 // holds and the passage is witnessed.
 //
-// Four registered BE operations:
+// Five registered BE operations:
 //
 //   birth    . admit a new being into the reality. The arrival has no
-//              identity yet; I summon their being-to-be forth via
-//              SUMMON.create-being internally and bind their session
-//              to it. The first ever caller becomes the first heaven authority.
-//   use      . bind an existing identity (credentials or token) to
+//              identity yet; I mint their being-to-be via birthBeing
+//              internally and bind their session to it. The first ever
+//              caller becomes the first heaven authority.
+//   connect  . bind an existing identity (credentials or token) to
 //              a session.
-//   release  . drop a session's binding.
-//   switch   . change which being a session is bound to.
+//   release  . drop a session's binding. Resets session.currentBranch
+//              to the being's homeBranch before unbinding.
+//   switch   . change THIS session's branch frame on the same being.
+//              Per-session — does not touch other sockets of the
+//              same being. Stamps an audit fact on the new branch.
+//   death    . close a being's lifecycle (I_AM-only today).
 //
 // I am a scripted-cognition being. The factory does not assemble
 // a frame for me . I AM my code. When a BE arrives for me, the
@@ -167,6 +171,11 @@ async function birthHandler({ payload, ctx }) {
     }
 
     const identityToken = generateToken(being);
+    // First-being birth — seat the session frame to the new being's
+    // homeBranch (which the birth fact set to this moment's branch).
+    if (ctx?.socket && ctx.summonCtx?.actorAct?.branch) {
+      ctx.socket.currentBranch = ctx.summonCtx.actorAct.branch;
+    }
     return {
       identityToken,
       beingAddress: `${getRealityDomain()}/@${being.name}`,
@@ -216,6 +225,12 @@ async function birthHandler({ payload, ctx }) {
   hooks.run("afterRegister", { user: being, req: ctx?.req }).catch(() => {});
 
   const identityToken = generateToken(being);
+  // Subsequent-user birth — seat the session frame to the new being's
+  // homeBranch (the moment's branch). Same shape as the first-user
+  // branch above.
+  if (ctx?.socket && ctx.summonCtx?.actorAct?.branch) {
+    ctx.socket.currentBranch = ctx.summonCtx.actorAct.branch;
+  }
   return {
     identityToken,
     beingAddress: `${getRealityDomain()}/@${being.name}`,
@@ -235,7 +250,7 @@ async function birthHandler({ payload, ctx }) {
 // (address is a stance already held by the session).
 // ────────────────────────────────────────────────────────────────────
 
-async function connectHandler({ address, addressKind, payload, identity }) {
+async function connectHandler({ address, addressKind, payload, identity, ctx }) {
   const isCherubAddress =
     addressKind === "place" ||
     (addressKind === "stance" && /\/@cherub$/.test(address));
@@ -262,6 +277,12 @@ async function connectHandler({ address, addressKind, payload, identity }) {
       throw new IbpError(IBP_ERR.UNAUTHORIZED, "Invalid credentials");
     }
     const identityToken = generateToken(user);
+    // Seat the session frame to this being's homeBranch — the branch
+    // they own as their present. Same model for birth/connect/release/
+    // switch: BE ops are the only paths that touch socket.currentBranch.
+    if (ctx?.socket) {
+      ctx.socket.currentBranch = await _readBeingHomeBranch(String(user._id));
+    }
     return {
       identityToken,
       beingAddress: `${getRealityDomain()}/@${user.name}`,
@@ -399,6 +420,11 @@ async function connectHandler({ address, addressKind, payload, identity }) {
     }
 
     const identityToken = generateToken(targetBeing);
+    // Inherit-connect (or father-admit): seat the session frame to the
+    // target being's homeBranch — same model as credentials connect.
+    if (ctx?.socket) {
+      ctx.socket.currentBranch = await _readBeingHomeBranch(String(targetBeing._id));
+    }
     return {
       identityToken,
       beingAddress: `${getRealityDomain()}/@${targetBeing.name}`,
@@ -432,8 +458,65 @@ function extractTargetName(address) {
 // list keyed by jti is on the roadmap.
 // ────────────────────────────────────────────────────────────────────
 
-async function releaseHandler(_args) {
+async function releaseHandler({ ctx, identity }) {
+  // Frame reset. Session unbinds the being; before doing so reset the
+  // socket's currentBranch to the being's homeBranch (the branch they
+  // were birthed on — what they own as their present). Falls back to
+  // "0" only when the being row has no homeBranch (legacy data).
+  if (ctx?.socket) {
+    const home = await _readBeingHomeBranch(identity?.beingId);
+    ctx.socket.currentBranch = home;
+  }
   return { released: true };
+}
+
+async function _readBeingHomeBranch(beingId) {
+  if (!beingId) return "0";
+  const { loadOrFold } = await import("../../../materials/projections.js");
+  const slot = await loadOrFold("being", String(beingId), "0");
+  return slot?.state?.homeBranch || "0";
+}
+
+// ────────────────────────────────────────────────────────────────────
+// switch . Change this session's branch frame on the same being.
+// The fifth BE op — branch-switch is identity-binding-state (which
+// reel my acts ride), so it lives in BE alongside connect/release/
+// birth/death.
+//
+// Per-session isolation: mutates ONLY this socket's currentBranch.
+// The same being can have N concurrent sockets, each with its own
+// frame; switching one doesn't touch the others. The same Being row
+// is shared (identity is invariant across branches); only the
+// per-session "which branch am I acting from" view differs.
+//
+// Audit fact: stamped on the actor's reel on the NEW branch (so
+// that branch's view of this being's biography records the switch-in
+// event at T). The old branch's reel naturally shows "no more acts
+// after T" without an explicit terminator.
+// ────────────────────────────────────────────────────────────────────
+
+async function switchHandler({ payload, identity, ctx }) {
+  const targetBranch = String(payload?.branch || "").trim();
+  if (!targetBranch) {
+    throw new IbpError(IBP_ERR.INVALID_INPUT, "be:switch requires `branch`");
+  }
+  // Validate the target branch exists. "0" (main) is always valid;
+  // other paths must have a Branch row.
+  if (targetBranch !== "0") {
+    const { default: Branch } = await import("../../../materials/branch/branch.js");
+    const exists = await Branch.findById(targetBranch).select("_id").lean();
+    if (!exists) {
+      throw new IbpError(IBP_ERR.INVALID_INPUT, `be:switch: branch "${targetBranch}" not found`);
+    }
+  }
+  const fromBranch = ctx?.socket?.currentBranch || "0";
+  if (ctx?.socket) ctx.socket.currentBranch = targetBranch;
+  return {
+    switched: true,
+    fromBranch,
+    toBranch:  targetBranch,
+    beingId:   identity?.beingId || null,
+  };
 }
 
 // ────────────────────────────────────────────────────────────────────
@@ -463,7 +546,7 @@ async function deathHandler({ address, identity }) {
 }
 
 // ────────────────────────────────────────────────────────────────────
-// Op definitions. Four handlers + their static schemas. The seed
+// Op definitions. Five handlers + their static schemas. The seed
 // imports these into the canonical BE_OPS table at ibp/beOps.js .
 // there is no registration call (BE is a closed set, fixed by the
 // substrate, so a registry would be the same anti-pattern as the
@@ -496,6 +579,15 @@ export const cherubBeOps = Object.freeze({
     label: "Log out",
     args: {},
     handler: releaseHandler,
+  },
+  switch: {
+    description: "Change this session's branch frame on the same being. " +
+                 "Per-session — switching one socket's frame doesn't touch other sockets.",
+    label: "Switch branch",
+    args: {
+      branch: { type: "text", label: "Target branch path", required: true },
+    },
+    handler: switchHandler,
   },
   death: {
     description: "Close this being's lifecycle. One-way; the chain locks. " +

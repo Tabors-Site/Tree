@@ -60,6 +60,18 @@ function isSecretFieldPath(field) {
 export function redactSecrets(value, _seen = new WeakSet()) {
   if (value === null || typeof value !== "object") return value;
   if (_seen.has(value)) return value;
+  // Built-in object types that DON'T expose their state through
+  // Object.entries (Date, RegExp, ObjectId-likes with toJSON, …). Walking
+  // them via the generic Object.entries path destroyed their data —
+  // e.g. a Date stamp on an Act fact arrived at the portal as `{}` and
+  // every downstream `new Date(x)` produced Invalid Date, which is
+  // what broke the timeline strip. Return these as-is.
+  if (value instanceof Date) return value;
+  if (value instanceof RegExp) return value;
+  // BSON/Mongo wrappers (ObjectId, Binary, Decimal128, …) implement
+  // _bsontype + toJSON. Forward as-is so JSON serialization at the wire
+  // calls toJSON instead of receiving an empty `{}`.
+  if (typeof value._bsontype === "string" && typeof value.toJSON === "function") return value;
   _seen.add(value);
 
   if (Array.isArray(value)) {

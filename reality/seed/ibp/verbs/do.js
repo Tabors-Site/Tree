@@ -129,6 +129,10 @@ export async function doVerb(target, operation, params = {}, opts = {}) {
       action: operation,
       namespace,
       summonCtx: opts.summonCtx,
+      // The caller's home frame (session.currentBranch). Their grants
+      // live there; target may be on a different branch. See
+      // authorize.js "actorBranch vs targetBranch."
+      actorBranch: opts.currentBranch || null,
     });
     if (!decision.ok) {
       throw new IbpError(

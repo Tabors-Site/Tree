@@ -71,12 +71,22 @@ export function extractTargetReality(address) {
   if (typeof address !== "string" || !address) return null;
   // Stance pair: take the right side (the callee).
   const rhs = address.includes("::") ? address.split("::").pop().trim() : address;
-  // Place is everything up to the first slash (or the whole string),
-  // then strip any `#<branchPath>` qualifier. Branches are a property of
-  // the same reality, not a different reality — without this strip,
-  // `localhost#1/` would be misread as the foreign place `localhost#1`
-  // and federation would PEER_NOT_FOUND it.
-  let realityDomain = rhs.split("/")[0].trim();
+  // Bare local stances have NO reality prefix:
+  //   `@birther`            — local being summon
+  //   `/path`               — local position
+  //   `/path@being`         — local stance
+  // Without this guard `extractTargetReality("@birther")` would return
+  // `"@birther"`, the dispatcher would compare it against the local
+  // domain (mismatch), and route the call through crossRealityDispatch.
+  // A reality domain in the address ALWAYS comes before the first `/`
+  // or `@`; anything starting with one of those is locally rooted.
+  if (rhs.startsWith("@") || rhs.startsWith("/")) return null;
+  // Place is everything up to the first slash or `@` (or the whole
+  // string), then strip any `#<branchPath>` qualifier. Branches are a
+  // property of the same reality — without the strip, `localhost#1/`
+  // would be misread as the foreign place `localhost#1` and federation
+  // would PEER_NOT_FOUND it.
+  let realityDomain = rhs.split(/[/@]/)[0].trim();
   const hashIdx = realityDomain.indexOf("#");
   if (hashIdx >= 0) realityDomain = realityDomain.slice(0, hashIdx);
   return realityDomain || null;

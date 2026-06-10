@@ -129,6 +129,7 @@ export async function summonVerb(stance, message, opts = {}) {
       verb:   "summon",
       target: { kind: "thread", id: targetThreadId, spaceId: threadsSpaceId },
       summonCtx,
+      actorBranch: opts.currentBranch || null,
     });
     if (!decision.ok) {
       throw new IbpError(IBP_ERR.FORBIDDEN, decision.reason || "Not allowed to address .threads");
@@ -365,6 +366,10 @@ async function _dispatchSummon({
     verb:   "summon",
     target: { kind: "stance", spaceId: resolved.spaceId, being: activeRole, activeRole },
     summonCtx,
+    // _dispatchSummon runs inside a moment; summonCtx.actorAct.branch
+    // covers actorBranch. The branch param falls through to summonCtx
+    // first; this explicit pass is the belt-and-suspenders fallback.
+    actorBranch: summonCtx?.actorAct?.branch || branch || null,
   });
   if (!decision.ok) {
     throw new IbpError(

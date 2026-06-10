@@ -59,6 +59,7 @@ const SCALAR_SET_FIELDS = new Set([
   // path, not SCALAR_SET_FIELDS.
   "defaultRole",
   "homeSpace",
+  "homeBranch",
   // password: bcrypt hash. credential-reset (and any future flow that
   // re-mints credentials) stamps a do:set-being fact carrying the new
   // hash; the reducer records it exactly like any other Being scalar.
@@ -461,6 +462,7 @@ export function applyCreateBeing(state, fact) {
     defaultRole,
     parentBeingId: spec.parentBeingId ?? null,
     homeSpace:     spec.homeSpace ?? null,
+    homeBranch:    spec.homeBranch ?? null,
     llmDefault:    spec.llmDefault ?? null,
     isRemote:      Boolean(spec.isRemote),
     homeReality:   spec.homeReality ?? null,

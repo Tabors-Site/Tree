@@ -170,6 +170,11 @@ export async function seeVerb(target, opts = {}) {
         target: { kind: "see-op", value: addrString },
         seeOp: addrString,
         summonCtx: opts.summonCtx || null,
+        // actorBranch = the caller's home frame (their session
+        // currentBranch). Lets a being on #0 SEE op-dispatch onto
+        // any branch without needing to exist there. See authorize.js
+        // "actorBranch vs targetBranch."
+        actorBranch: opts.currentBranch || null,
       });
       if (!decision.ok) {
         throw new IbpError(
@@ -275,6 +280,7 @@ export async function seeVerb(target, opts = {}) {
       verb: "see",
       target: { kind: "position", spaceId: threadsSpaceId, isDiscovery: false },
       summonCtx,
+      actorBranch: currentBranch || null,
     });
     if (!decision.ok) {
       throw new IbpError(
@@ -574,6 +580,7 @@ export async function seeVerb(target, opts = {}) {
       isDiscovery: false,
     },
     summonCtx,
+    actorBranch: currentBranch || null,
   });
   if (!decision.ok) {
     // Anonymous redirect (seed/RolesAreAuth.md "canSee semantics").
@@ -885,6 +892,7 @@ async function seeAtTime({
       isDiscovery: false,
     },
     summonCtx,
+    actorBranch: currentBranch || null,
   });
   if (!decision.ok) {
     throw new IbpError(

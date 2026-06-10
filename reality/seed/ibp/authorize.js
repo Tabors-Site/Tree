@@ -103,34 +103,49 @@ export async function authorize(args) {
   // 4. The role-walk. Anonymous callers → implicit arrival floor.
   // Authenticated callers → walk qualities.rolesGranted.
   //
-  // Branch resolution. In a moment, summonCtx.actorAct.branch is the
-  // ground truth. For pre-moment auth (entry-gate calls before a
-  // summonCtx exists — wire-level SEE on .discovery / arrival-view,
-  // descriptor enrichment), the target carries `branch` parsed off
-  // the address. Anonymous-direct SEE with no target branch is the
-  // only case that falls to "0" — the arrival floor's grant-walk
-  // reads main's heaven role registry and that's correct (no per-
-  // branch arrival role today). Anywhere else, branch must surface.
-  const authBranch =
+  // Two branches surface here:
+  //
+  //   • targetBranch — where the target lives. Used to look up role
+  //     specs on the target's qualities chain, and to evaluate reach
+  //     (which space's projection should the reach pattern walk).
+  //     Sourced from summonCtx (a moment's ground truth) or target.branch
+  //     (pre-moment parsed address).
+  //
+  //   • actorBranch — the actor's HOME frame, where their grants live.
+  //     Caller passes args.actorBranch from socket.currentBranch (the
+  //     session frame, set by BE:birth/connect/release/switch). When
+  //     a being is on frame #0 and SEEs onto branch #1, their grants
+  //     are read from #0 (where they actually exist), not from #1
+  //     (where they may not exist if their reel was created post-fork).
+  //     This is the "look through the portal" semantic — you remain
+  //     yourself when navigating across branches.
+  //
+  // Anonymous-direct SEE with no target branch falls to "0".
+  const targetBranch =
     summonCtx?.actorAct?.branch ||
     target?.branch ||
     (identity ? null : "0");
-  if (!authBranch) {
+  if (!targetBranch) {
     throw new Error(
       `authorize: branch could not be resolved for ${verb}:${args.action || args.seeOp || args.operation || args.intent || "?"} ` +
       `(identity=${identity?.name || identity?.beingId || "anonymous"}). ` +
       `Pass summonCtx with actorAct, or include branch on the parsed target.`,
     );
   }
+  // actorBranch defaults to targetBranch when the caller didn't pass
+  // one (genesis/scaffold paths where there's no separate session
+  // frame). Same-branch acts collapse to one value naturally.
+  const actorBranch = args.actorBranch || targetBranch;
   const result = await authorizeViaRoles({
     identity,
     verb,
     target,
-    action:    args.action || null,
-    intent:    args.intent || null,
-    operation: args.operation || null,
-    seeOp:     args.seeOp || null,
-    branch:    authBranch,
+    action:      args.action || null,
+    intent:      args.intent || null,
+    operation:   args.operation || null,
+    seeOp:       args.seeOp || null,
+    branch:      targetBranch,
+    actorBranch,
   });
 
   // Adapt to the verb-dispatch return shape. roleAuth returns

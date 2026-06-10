@@ -2,7 +2,7 @@
 //
 // be.js . the BE verb. Identity operations on a being.
 //
-// BE is the closed four-op set: birth, connect, release, death. The static
+// BE is the closed five-op set: birth, connect, release, switch, death. The static
 // table BE_OPS in [ibp/beOps.js](../beOps.js) holds the schemas +
 // handlers; this verb's job is to authorize, dispatch, and stamp the
 // audit Fact. Cherub is the canonical handler.
@@ -126,6 +126,7 @@ export async function beVerb(operation, payload = {}, opts = {}) {
       target: { kind: addressKind, value: address },
       operation,
       summonCtx,
+      actorBranch: currentBranch || null,
     });
     if (!decision.ok) {
       throw new IbpError(
@@ -202,6 +203,7 @@ export async function beVerb(operation, payload = {}, opts = {}) {
       target: { kind: addressKind, value: address },
       operation,
       summonCtx,
+      actorBranch: currentBranch || null,
     });
     if (!decision.ok) {
       throw new IbpError(
@@ -354,6 +356,7 @@ export async function beVerb(operation, payload = {}, opts = {}) {
       target: { kind: addressKind, value: address },
       operation,
       summonCtx,
+      actorBranch: currentBranch || null,
     });
     if (!decision.ok) {
       throw new IbpError(
@@ -382,6 +385,46 @@ export async function beVerb(operation, payload = {}, opts = {}) {
   }
 
   // ── Death path. ─────────────────────────────────────────────────
+  // ── Switch path. ────────────────────────────────────────────────
+  // BE:switch is a per-session frame change on the caller's own being.
+  // Self-targeted (the actor is the target). Authorize trivially —
+  // a being switching their own session frame; no role gate beyond
+  // assertVerbCaller. Handler mutates ctx.socket.currentBranch and
+  // returns the from/to summary. writeBeFact stamps a be:switch
+  // audit fact on the actor's reel on the NEW branch (so the new
+  // branch's view of this being's biography records the switch-in).
+  if (operation === "switch") {
+    assertVerbCaller("be", opts);
+    if (!identity?.beingId) {
+      throw new IbpError(IBP_ERR.UNAUTHORIZED, "switch requires an authenticated caller");
+    }
+    const switchOp = getBeOp("switch");
+    if (!switchOp) {
+      throw new IbpError(IBP_ERR.INTERNAL, "switch op not registered");
+    }
+    const result = await switchOp.handler({
+      address,
+      addressKind,
+      payload,
+      identity,
+      ctx: { socket, address: { kind: addressKind, value: address }, identity, req, summonCtx },
+      summonCtx,
+    });
+    // Stamp the audit fact on the NEW branch (result.toBranch) — the
+    // post-switch branch's view of this being records the switch-in.
+    await writeBeFact({
+      operation,
+      identity,
+      authResult: result,
+      payload,
+      beingName,
+      actId: summonCtx?.actId || null,
+      summonCtx,
+      branch: result.toBranch,
+    });
+    return result;
+  }
+
   // BE:death targets the dying being directly (not cherub-on-itself).
   // Authorize via the role-walk (I_AM bypass admits I_AM; no role
   // today declares canBe:["death"], so every other actor refuses).
@@ -419,6 +462,7 @@ export async function beVerb(operation, payload = {}, opts = {}) {
       target: { kind: addressKind, value: address },
       operation,
       summonCtx,
+      actorBranch: currentBranch || null,
     });
     if (!decision.ok) {
       throw new IbpError(
@@ -474,6 +518,7 @@ export async function beVerb(operation, payload = {}, opts = {}) {
       target: { kind: addressKind, value: address },
       operation,
       summonCtx,
+      actorBranch: currentBranch || null,
     });
     if (!decision.ok) {
       throw new IbpError(
@@ -531,6 +576,7 @@ export async function beVerb(operation, payload = {}, opts = {}) {
       target: { kind: addressKind, value: address },
       operation,
       summonCtx,
+      actorBranch: currentBranch || null,
     });
     if (!decision.ok) {
       throw new IbpError(
@@ -689,6 +735,16 @@ async function writeBeFact({ operation, identity, authResult, payload, beingName
     }
     target = { kind: "being", id: String(targetBeingId) };
     connectionParams = { byActor: String(actorBeingId) };
+  } else if (operation === "switch") {
+    // Per-session frame change on the caller's own being. Target =
+    // the caller's being; params record from/to so the audit fact
+    // surfaces the transition. The fact lands on the NEW branch
+    // (beVerb passed result.toBranch as `branch`).
+    target = { kind: "being", id: String(actorBeingId) };
+    connectionParams = {
+      fromBranch: authResult?.fromBranch || null,
+      toBranch:   authResult?.toBranch   || null,
+    };
   } else {
     // birth and any future BE op: identity-on-self. The actor's own
     // being is the target.

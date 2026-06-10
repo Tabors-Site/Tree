@@ -37,7 +37,7 @@
 // win on conflict.
 
 import { I_AM } from "../materials/being/seedBeings.js";
-import { loadProjection } from "../materials/projections.js";
+import { loadOrFold } from "../materials/projections.js";
 import { getSpaceRootId } from "../sprout.js";
 import { getAncestorChain } from "../materials/space/ancestorCache.js";
 import {
@@ -71,6 +71,14 @@ export async function authorizeViaRoles(args) {
       "explicitly; no silent default.",
     );
   }
+  // actorBranch = the actor's home frame (their session.currentBranch
+  // or homeBranch). Where their grants actually live. branch (= target's
+  // branch) is used for role spec lookups and reach evaluation; actor's
+  // grants are loaded from actorBranch so a being on frame #0 can SEE
+  // onto branch #1 without needing to exist on #1 (the "look through
+  // the portal" semantic). Defaults to branch when caller didn't
+  // distinguish.
+  const actorBranch = args.actorBranch || branch;
 
   // Bootstrap axiom.
   if (identity?.beingId === I_AM || identity?.name === I_AM) {
@@ -121,8 +129,14 @@ export async function authorizeViaRoles(args) {
     }
   }
 
-  // Load the caller's grants.
-  const slot = await loadProjection("being", String(identity.beingId), branch);
+  // Load the caller's grants from their ACTOR frame (their home
+  // branch / session.currentBranch), NOT the target's branch. A being
+  // on frame #0 looking onto branch #1 reads their own grants from #0
+  // (where they exist), then we evaluate reach against the target on
+  // branch #1. This is the "stay yourself when navigating across
+  // branches" semantic — your identity travels with you; only an
+  // explicit be:switch flips your frame.
+  const slot = await loadOrFold("being", String(identity.beingId), actorBranch);
   const grants = readGrantsFromSlot(slot);
 
   const targetPath  = derivePath(target);
@@ -183,8 +197,10 @@ export async function authorizeViaRoles(args) {
  * See seed/RolesAreAuth.md "@public being".
  */
 async function findNearestOwnedAncestor(targetSpaceId, branch) {
-  // Self space first.
-  const self = await loadProjection("space", targetSpaceId, branch);
+  // Self space first. loadOrFold inherits from main for branches
+  // that haven't diverged this space — otherwise a branch read would
+  // miss the owner that was set on main.
+  const self = await loadOrFold("space", targetSpaceId, branch);
   const selfOwners = readOwners(self?.state);
   if (selfOwners.length > 0) {
     return { spaceId: String(targetSpaceId), ownerIds: selfOwners };
@@ -194,9 +210,7 @@ async function findNearestOwnedAncestor(targetSpaceId, branch) {
   try { chain = await getAncestorChain(targetSpaceId, branch); } catch { chain = null; }
   if (!Array.isArray(chain)) return null;
   for (const node of chain) {
-    // Owner now lives at top-level state.owner (single value), not
-    // members.owner. Load the projection slot and read.
-    const slot = await loadProjection("space", String(node._id), branch);
+    const slot = await loadOrFold("space", String(node._id), branch);
     const owners = readOwners(slot?.state);
     if (owners.length > 0) {
       return { spaceId: String(node._id), ownerIds: owners };
