@@ -2,6 +2,347 @@
 
 > *Source notes: `philosophy/CROSS-WORLD/auth3.jpg` + `auth4.jpg` — "All beings who are owner/contributor in heaven have angel role. I-AM is first, and from him all permissions strangle as needed down the Being Tree. Each parent assigns and delegates the permissions they have to their child."*
 
+> **The sections below this header trace the design's evolution. The doctrine the substrate actually implements is summarized in the "Final doctrine" section right after this. Read that section first — earlier sections preserve the thinking for context.**
+
+---
+
+## Final doctrine (the shape we build)
+
+### One sentence
+
+**Roles are auth. Every role-in-effect lives on a space's `qualities.roles[<name>]`; grants on beings reference the role by name + the space it's anchored at; authorize walks the grant's anchor up the qualities ancestor chain to find the spec, then applies the role's canX after a reach check.**
+
+### Four orthogonal pieces
+
+| Lives on | Field | What it carries |
+|---|---|---|
+| **Space** | `qualities.roles[name] = {canSee, canDo, canSummon, canBe, reach?, ...}` | The role's spec. Hosted at the space where it was authored. |
+| **Being** | `qualities.rolesGranted = [{role, anchorSpaceId, grantedBy, grantedAt}]` | The grants the being holds. Travel with the being. |
+| **Being** | `qualities.roleFlow = [{when, role}, ...]` | Which held role to PLAY at moment-time. |
+| **Role spec** | `role.reach: [path-pattern, ...]` | Optional. Path filter that adjusts the default "host + descendants" coverage. |
+
+Each piece does one job. Beings carry their grants everywhere; the grants become active only when their role's reach covers the current target. Movement never strips a grant — just makes it contextually applicable or not.
+
+### Hosting (where roles live)
+
+A role lives on the `qualities.roles` of the space where it was authored. That's the **host**. The role naturally reaches the host + all descendants via the qualities ancestor inheritance — no extra storage needed.
+
+Foundational seed roles:
+
+| Role | Hosted on | Implicit reach |
+|---|---|---|
+| `angel` | heaven (`<reality>/.`) | heaven + descendants (system spaces) |
+| `global` | reality root (`<reality>/`) | the whole reality |
+| `human` | reality root | the whole reality |
+| `arrival` | reality root (implicit floor) | the whole reality |
+| `cherub` | reality root | the whole reality |
+| `birther` / `llm-assigner` / `role-manager` / ... | reality root | the whole reality |
+| `coder` (operator-authored) | wherever they author it (e.g. `/coders/`) | host + descendants |
+
+There is **no `scope: "global" | "anchored"` distinction**. There's just "where it lives." A role hosted at the reality root reaches everywhere because the reality root is everyone's ancestor.
+
+### Reach — the add/remove knob
+
+By default a role reaches its host + all descendants. The optional `reach` field on the role spec adjusts this. Single ordered list, bash-style `!` prefix for exclusions:
+
+```js
+reach: [
+  "/docs/coding/**",      // ADD this subtree (lateral extension outside host's descendants)
+  "!/coders/legacy/**",   // REMOVE this subtree from default coverage
+  "!/coders/sandbox",     // REMOVE this specific space
+]
+```
+
+**Default base**: implicit `host/**` (host + all descendants). The reach list **adjusts** the base — additions extend, `!` entries carve out. Patterns are evaluated in order; later entries win on conflict.
+
+To strictly limit coverage to specific spaces (ignore default descent):
+
+```js
+reach: [
+  "!**",                       // strip the default base (no descent)
+  "/coders/widget-team",       // only this one space
+  "/coders/docs/**",           // and this subtree
+]
+```
+
+Pattern vocabulary (small):
+- `<exact-path>` — exact match (`"/town/bench"`)
+- `<spaceId>` — exact space-id match
+- `prefix/**` — subtree (any depth below)
+- `prefix/*` — direct children only
+- `**` — wildcard (everything; useful with `!` to strip default)
+- `!<pattern>` — exclude
+
+### Ownership is foundational; roles are delegated
+
+Two parallel authority mechanisms work together:
+
+- **`members.owner` of space S → implicit authority over S + descendants.** No role grant needed. You own the space, you can do anything in it: author roles, install/grant/revoke, edit qualities, manage members, etc.
+- **Granted roles → delegated authority.** Owners grant slices of their authority to others via `grant-role`; grantees can only do what the role's canX permits within the role's reach.
+
+The auth walk has an owner-check step BEFORE the role-walk:
+
+```
+authorize:
+  1. I-Am bypass                                (bootstrap axiom)
+  2. SEE on .discovery                          (pre-identity surface)
+  3. Anonymous → arrival floor                  (implicit arrival role)
+  4. Owner-check: actor in members.owner of      ← step 4
+     target's space or any ancestor → ALLOW
+  5. Role-walk (qualities.rolesGranted)         (delegated authority)
+  6. Deny
+```
+
+When a human is birthed, cherub sets `members.owner = [<newBeingId>]` on their home space — they own their home and everything under it. Outside their home they need granted roles (the `human` role gives broad access by default; operators narrow it as the reality matures).
+
+### The `@public` being — implicit commons-role for visitors
+
+Every reality ships a seed delegate named `public`. Public is structurally a being but never acts: empty `canSee`/`canDo`/`canSummon`/`canBe`, empty `triggerOn`, no-op summon handler. It exists for ONE purpose — to be the recipient of ownership transfers.
+
+When a space owner transfers `members.owner` to public:
+
+```js
+do(<spaceAddress>, "set-owner", { beingId: "<publicBeingId>" })
+```
+
+The space becomes a forever-public commons. **Every visitor walking into that subtree is treated as if they hold an implicit `public-commons` role.** Authorize's role-walk has a Public-commons step AFTER explicit grants:
+
+```
+authorize:
+  1. I-Am bypass
+  2. SEE on .discovery
+  3. Anonymous → arrival floor
+  4. Owner-check: actor ∈ members.owner of any ancestor → ALLOW (private)
+  5. Explicit role-walk over qualities.rolesGranted
+  6. Public-commons: target sits in a public-owned subtree → APPLY
+     the seed-shipped commons role's canX (see + move + create-space +
+     create-matter + summon @cherub + release). MATCH → ALLOW.
+  7. Deny
+```
+
+The commons role is **not granted as a fact** — it's a derived, implicit grant for every visitor at every public-owned space. Visible in the authorize decision (returned `role: "public-commons"`); not stored on the being.
+
+Seed-shipped `public-commons` canX (the "basic things" floor):
+
+```js
+{
+  canSee:    ["*"],
+  canDo: [
+    "move", "set-being:coord", "set-being:position",
+    "create-space", "create-matter",
+  ],
+  canSummon: [{ pattern: "@cherub" }],
+  canBe:     [{ operation: "release" }],
+}
+```
+
+Operators wanting a richer commons surface author a real role on the public-owned space's `qualities.roles` (those flow through the role-walk above; the public-commons step is the floor).
+
+**The permanence is structural, not policed**: public has no cognition, no canDo, no handler. There's no actor that could ever sign a `set-owner` removing itself. The silence IS the lock.
+
+**Recovery paths**:
+- **Branch the timeline** from before the transfer happened. Same shape as any substrate mistake recovery. The realistic path.
+- **I-Am owns public.** As an extremis safety hatch, I-Am holds public's own `members.owner` slot — so an I-Am-class operator could `remove-owner` on a public-owned space. Doctrinally available, but a high bar.
+
+Edge cases:
+- **Hybrid ownership** (Public + a real owner): the real owner's authority still works — they can revoke things, install roles, etc. Public's seat just adds the commons-role floor for visitors.
+- **Public-only ownership**: nobody can ever wrest it back without timeline branching or I-Am intervention.
+- **Custom commons surface**: an operator authors `qualities.roles.commons-visitor` on the public-owned space with their own canX. Granted visitors get its full reach; non-granted visitors fall back to the seed-shipped public-commons.
+- **Descendants inherit** the Public-commons rule via the owner-check ancestor walk — anything below a public-owned space is also commons.
+
+### Contributors retire as a gate
+
+Under roles-are-auth the `members.contributor` class (and any custom member class) is bookkeeping only — it does NOT gate authorize. Owners model "secondary owners" as roles with the appropriate canDo (set-role, grant-role:*, create-space, etc.). One mechanism — roles + ownership — covers everything the old member-class system did, and operators can author whatever shape they want without the substrate baking in second-class authorities.
+
+### be:birth doctrine — two paths to mint a being
+
+Per the seed/RolesAreAuth.md flow + the be:birth refactor: there are TWO ways a new being comes into existence.
+
+**Path A — Delegated mint via summon:mate (the registration flow).**
+
+```
+arrival → summon @cherub:mate → cherub mints the new being
+       (the summoner RECEIVES the new being as their own)
+```
+
+The arrival role's only outward capability is `summon @cherub:mate`. Cherub's `canSummon` declares `as: "receiver"` for `intent: "mate"` — that's the contract that says "this role accepts summon:mate from anonymous arrivals." Cherub's handler mints the new being with the human role + the visitor's chosen credentials, grants `global` + `human` at the place root, and binds the session.
+
+Mirror on `@birther`: any authenticated being can summon `@birther:mate` to commission a child being. Same shape, just from an authenticated caller instead of anonymous.
+
+**Path B — Direct be:birth (the operator flow).**
+
+```
+human or angel → be:birth (self) → child being is parented to them
+```
+
+A being with `canBe: ["*"]` or `canBe: ["birth"]` calls `be:birth` directly on their own identity. The target IS the actor — "I birth a being." Available only to humans and angels by default; other roles use Path A.
+
+The two paths produce the same outcome (a new being parented to the requester); they differ in WHO drives the mint. Delegated mint is the only path for anonymous visitors (they have no `canBe`); direct birth is available to humans/angels who don't need a delegate.
+
+### `canSee` semantics — `*` permits raw position SEE; everything else is op-only
+
+Per the doctrine, the role's canX is the gate. `canSee` is a list of SEE op names with an explicit "all-access" wildcard:
+
+| `canSee` | What it permits |
+|---|---|
+| `["*"]` | Can call any registered SEE op AND see raw position descriptors (`client.see(address)`) |
+| `["place"]` | Can call `see("place")` only. Raw position SEE REFUSES. |
+| `["arrival-view"]` | Can call `see("arrival-view")` only. |
+| `["place", "library"]` | Can call those two ops; raw position SEE refuses. |
+| `[]` | Cannot SEE anything |
+
+The seed-shipped `arrival` role hosts `canSee: ["arrival-view"]` — anonymous visitors get one filtered window into the reality (root layout + cherub only, via the `arrival-view` SEE op). They cannot enumerate beings, see matter, or descend into child spaces.
+
+`human` (the root-founder temporary role) and `angel` (super-sudo) carry `["*"]`. Other roles use named ops (the canonical `place` op covers most navigation needs).
+
+### Authorize lookup — walk the grant's anchor for the spec
+
+```js
+async function authorize({identity, verb, target, action, intent, operation, branch}):
+  if identity?.beingId === I_AM: return ok           // bootstrap axiom
+  if !identity?.beingId: apply implicit arrival floor // anonymous read
+
+  for each grant in identity.rolesGranted:
+    // Look up the role spec by walking the grant's anchor up the qualities chain.
+    spec = await getRoleSpec(grant.role, grant.anchorSpaceId, branch)
+    if !spec: continue                               // role doesn't exist where anchored
+
+    // Did the host find an ancestor that reaches target?
+    if !roleReachesTarget(spec, host, target, branch): continue
+
+    // canX gate (action-only; no patterns inside canX)
+    if matches(spec, verb, action, intent, operation): return ok
+
+  return deny
+
+async function getRoleSpec(name, anchorSpaceId, branch):
+  // Walk anchorSpaceId up; first ancestor with qualities.roles[name] is the host.
+  for ancestor in walkAncestors(anchorSpaceId, branch):
+    if ancestor.qualities.roles?.[name]:
+      return { spec: ancestor.qualities.roles[name], host: ancestor._id }
+  return null
+
+function roleReachesTarget(spec, host, target):
+  // Default coverage: host + descendants
+  let covered = isAtOrBelow(target, host)
+  if !spec.reach: return covered
+  // Apply patterns; later wins
+  for pat in spec.reach:
+    if pat.startsWith("!"):
+      if matchPattern(target, pat.slice(1)): covered = false
+    else:
+      if matchPattern(target, pat): covered = true
+  return covered
+```
+
+### Grants travel with the being
+
+A grant is a fact on the being's reel: `do:grant-role` with `{role, anchorSpaceId, grantedBy, grantedAt}`. The being's reducer folds these into `qualities.rolesGranted`. The grant persists across movement; it just becomes inert at positions outside its role's reach.
+
+Visit `/coders/`, get granted coder anchored there → walk away to `/marketing/` → coder grant is still on you but inert (no coverage) → walk back → active again.
+
+`revoke-role` emits `do:revoke-role`; the reducer drops the matching `(role, anchor, grantor)` tuple.
+
+### roleFlow integrates cleanly
+
+A `roleFlow` clause picks a held role given moment context. Each clause is now filtered by three checks:
+
+1. `when` condition matches (today's behavior)
+2. The being has a grant of that role (in `qualities.rolesGranted`)
+3. The grant's role spec reaches the being's current position
+
+Failing any of the three → skip the clause. Position changes naturally rotate the active role. No re-authoring needed.
+
+If no clause produces a held + reaching role, the moment fails loud (`no granted role applies at this position`). No silent fallback.
+
+### Authoring a role — `set-role` writes to a space
+
+`set-role(targetSpace, name, {canSee, canDo, canSummon, canBe, reach?, description?})` writes the spec into `targetSpace.qualities.roles[name]`. The targetSpace IS the host.
+
+Gate: caller must hold a role at targetSpace (or above) whose canDo includes `set-role` (or `*`). The "travel rule" of auth3 — can't author a role at a space you have no authority over.
+
+Effect:
+- The fact is `do:set-role` with target being the space (kind: "space", id: targetSpace) and params carrying the spec.
+- The space reducer folds this into `qualities.roles[name]`.
+- The author is auto-granted the new role at that space (separate `grant-role` fact emitted in the same moment).
+
+### The registry retires as an auth source
+
+Today's `REGISTRY` map in `seed/present/roles/registry.js` retires from the authorize path. It becomes a **template shelf** — a library of role specs operators or extensions can install onto spaces. Nothing about this registry gates anything by itself; it's just curated content.
+
+`getRole(name)` from the registry stays for cognition-frame use (the LLM prompt builder reads role specs by name). The authorize path uses `getRoleSpec(name, anchorSpaceId, branch)` which walks space qualities.
+
+For extension-shipped role TEMPLATES, the extension manifest declares `provides.roles[]` as today; the loader registers them as templates. Operators decide which spaces to install them at via `set-role` (or a new `install-role`) ops.
+
+### Foundational seed roles — genesis installs them onto spaces
+
+Genesis sequence change:
+
+```js
+// Today: roles live in REGISTRY only
+registerRole("angel", angelRole, "seed");
+registerRole("global", globalRole, "seed");
+// ...
+
+// Tomorrow: roles are templates + installed-on-spaces
+saveTemplate("angel", angelRole, "seed");        // template shelf
+saveTemplate("global", globalRole, "seed");
+// ...
+
+await installRoleOnSpace(heaven,        "angel",  angelRole, I_AM);
+await installRoleOnSpace(realityRoot,   "global", globalRole, I_AM);
+await installRoleOnSpace(realityRoot,   "human",  humanRole,  I_AM);
+await installRoleOnSpace(realityRoot,   "cherub", cherubRole, I_AM);
+// ... all the seed delegates' roles installed on reality root
+// (cherub & friends operate reality-wide)
+```
+
+`installRoleOnSpace(space, name, spec, identity)` emits `do:set-role` on the target space.
+
+The bootstrap grants (I-Am grants angel to seed delegates) stay the same — the grant references the role by name + anchorSpaceId (now heaven for angel-anchored grants).
+
+### Frontend — three panels fall out
+
+| Panel | What it shows |
+|---|---|
+| **Place panel** (current position) | Walks ancestors collecting all `qualities.roles[*]` → renders "roles in effect here" labeled by host space. Below: viewer's `qualities.rolesGranted` filtered to grants whose role reaches here, with canX they unlock. Below that (for space owners): "Author role here" — opens set-role form anchored at this space. |
+| **Reality tab** | SEE reality-root's `qualities.roles` — the foundational roles for this whole world. For angels: forms to author new global-reach roles, edit canX, etc. |
+| **Heaven tab** (or sub-section) | SEE heaven's `qualities.roles` (`angel` + any heaven-only system roles). |
+| **Template library** | SEE the registry — the shelf of available role specs to install on spaces. "Install at <space>" buttons. |
+
+### What retires
+
+- `scope: "global" | "anchored"` field on role spec → goes away. Every role just has a host.
+- Top-level `reach` validation in registry that demands scope=global → goes away. Any role can declare reach.
+- `qualities.permissions.<verb>.<keyParts>` namespace → already gone (Pass 2).
+- `Space.members.angel` derivation as an authorize gate → already gone (Pass 2).
+- `registerDefaultPermissions` / `seedDefaultStancePermissions` → already throw (Pass 2).
+
+### What stays
+
+- I-Am bypass (code-level bootstrap axiom).
+- Implicit arrival floor (anonymous callers run under arrival role's canX).
+- Extension scope gate (orthogonal: refuses ext:op at blocked positions).
+- `qualities.rolesGranted` on Being (the grant list, fact-folded).
+- `qualities.roleFlow` on Being (active-role pick at moment-time, now filtered by grants + reach).
+- The role registry/template shelf for cognition-frame use and operator-discovery of installable roles.
+
+### Pinned principles (for FACTORY.md / PERMISSIONS.md)
+
+> **Roles are auth.** A being acts under a role; the role's canX IS the permission gate. There is no parallel `qualities.permissions` namespace.
+>
+> **Roles live where they're authored.** Every role-in-effect is hosted on a space's `qualities.roles`. Inheritance flows down via the normal qualities ancestor walk.
+>
+> **Reach adjusts default coverage.** Default = host + descendants. The optional `reach` field on the role can ADD lateral extensions or EXCLUDE specific subtrees. One field, two directions.
+>
+> **Grants travel with the being.** A grant fact lives on the being's reel. Movement never strips a grant — just makes it contextually inert when the role's reach doesn't cover the current position.
+>
+> **The space tree IS the authority tree.** Author a role at the space whose subtree you want it to govern. Higher hosts override lower (a parent's role reaches all children); children can stack additions or local-shadow the same name, but can't erase ancestor authority.
+>
+> **The grant chain back to I-Am is the proof of authority.** Every grant records `grantedBy`. Replay can verify any being's authority by walking grant facts back to a chain rooted at the I-Am.
+
+---
+
 ## Context
 
 Today the substrate has **two systems that look related but aren't actually wired together**:
@@ -224,7 +565,24 @@ The canX entries stay simple: action names, op names, being-name patterns, opera
 Per field:
 - **canSee** — list of SEE-op names (e.g. `"place"`, `"llm-chain"`, `"<ext>:<name>"`) or `"*"`. No patterns.
 - **canDo** — list of `{action, description?}`. Action is the DO op name. No patterns.
-- **canSummon** — list of `{pattern, intent?, description?}`. `pattern` is the BEING-name pattern (`@coder*`), NOT a space path.
+- **canSummon** — list of `{pattern?, intent?, as?, description?}`. Each entry declares a summon edge this role participates in. The `as` field discriminates which side:
+  - `as: "actor"` (default if absent) — caller-side: this role can SEND a summon matching the entry's `pattern` + `intent`. Authorize consults these on the CALLER'S role at dispatch.
+  - `as: "receiver"` — receiver-side: this role ACCEPTS the summon when targeted. UI discovery + symmetric checks consult these on the TARGET'S role. `pattern` is irrelevant for receiver entries (the role IS the receiver); `intent` names what's accepted. The runtime gate is still the role's `summon(message, ctx)` function — `as: "receiver"` is a declaration, not a guard.
+  
+  `pattern` is the BEING-name pattern (`@coder*`), NOT a space path. One field, two surfaces — same shape as left-stance/right-stance everywhere else in the substrate. Example:
+  
+  ```js
+  // coder role
+  canSummon: [
+    { intent: "review", pattern: "@coder*", as: "actor" },   // I can ask peer coders for review
+    { intent: "review", as: "receiver" },                    // I accept review requests
+  ]
+  
+  // birther role
+  canSummon: [
+    { intent: "mate", as: "receiver" },                      // I accept mate requests
+  ]
+  ```
 - **canBe** — operation-only (`{operation, description?}` or bare string). BE acts on self; no positional gating inside canBe.
 - **reach** — new optional field. Only meaningful when `scope: "global"`. Empty/absent → applies everywhere. Present → constrained to those paths/IDs.
 

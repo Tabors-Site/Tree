@@ -28,9 +28,9 @@ export const globalRole = Object.freeze({
     "The baseline role every authenticated being carries in this reality. " +
     "Granted by cherub at registration (and by parents to children they birth). " +
     "Customize the canX entries to set the floor for what everyone can do here.",
-  // Anchored — granted at the place root by cherub on registration.
-  // Reach is place-root + descendants (i.e. whole reality).
-  scope: "anchored",
+  // Hosted on the reality root (installed at genesis). Default reach
+  // is reality-wide since reality-root + descendants = the whole tree.
+  // No `reach` field needed; the default covers everything.
   requiredCognition: null,
   respondMode: "async",
   triggerOn: ["message"],

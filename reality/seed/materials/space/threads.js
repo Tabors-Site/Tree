@@ -451,7 +451,7 @@ export async function cutThread({
       target:  { kind: "being", id: severerBeingId }, // severer's own reel
       params:  { rootCorrelation, reason, priority },
       actId:   summonCtx?.actId || null,
-      branch:  summonCtx?.branch || "0",
+      branch:  summonCtx?.actorAct?.branch || "0",
     }, summonCtx);
     // When summonCtx is present, the be:sever Fact lives in the
     // caller's ΔF and commits at sealAct; the cross-cutting fold runs

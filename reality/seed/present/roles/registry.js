@@ -166,44 +166,23 @@ export function registerRole(name, def, extName = "role-registry") {
   // seed/extension auto-synced ones.
   const origin = extName === "role-registry" ? "seed" : extName;
 
-  // Scope + reach (seed/RolesAreAuth.md). The role's reach — where it
-  // works — comes from one of two mechanisms depending on scope:
+  // Reach validation (seed/RolesAreAuth.md "Final doctrine"). The
+  // optional `reach` field is a path-filter list that adjusts the
+  // role's default coverage (host + descendants). Bash-style with
+  // `!` prefix for exclusions:
   //
-  //   scope: "anchored" — reach is the grant's anchorSpaceId (or
-  //     anchorBeingId) plus descendants. The grant carries the reach;
-  //     the role spec just declares actions. NO `reach` field on the
-  //     role itself. Default for user-authored roles.
+  //   reach: [
+  //     "/docs/coding/**",     // ADD this subtree (outside host)
+  //     "!/coders/legacy/**",  // REMOVE this subtree from default
+  //   ]
   //
-  //   scope: "global" — reach defaults to reality-wide. An optional
-  //     `reach` field on the role spec constrains it to specific
-  //     paths/IDs (e.g. ["/", "/public/**", "<spaceId>"]). Absent →
-  //     true global (the angel role). Present → constrained global.
+  // Patterns: exact paths, spaceIds, prefix/**, prefix/*, **, ! prefix.
+  // Empty / absent → host + descendants (the default base).
   //
-  // Authors set scope at registration; never inferred. Authoring a
-  // global role requires the author to hold a role with
-  // canDo:["set-role"] reachable from the place root.
-  const scope = def.scope || "anchored";
-  if (scope !== "global" && scope !== "anchored") {
-    throw new Error(
-      `registerRole("${name}") invalid scope "${scope}"; ` +
-      `must be one of "global" | "anchored".`,
-    );
-  }
-
-  // Reach validation. Only meaningful when scope === "global". Each
-  // entry is a string: exact path, exact spaceId, or `prefix/**` for
-  // a subtree. No regex, no per-name wildcards. Empty / absent →
-  // unconstrained (true-global). Anchored roles must NOT declare a
-  // reach — their reach comes from the grant's anchor.
+  // The `scope: "global" | "anchored"` field is RETIRED — every role
+  // just has a host (the space where it's installed via set-role).
   let reach = null;
   if (def.reach !== undefined && def.reach !== null) {
-    if (scope !== "global") {
-      throw new Error(
-        `registerRole("${name}") has a "reach" field but scope is "${scope}". ` +
-        `reach is only valid when scope is "global". For anchored roles, ` +
-        `the grant's anchor IS the reach.`,
-      );
-    }
     if (!Array.isArray(def.reach)) {
       throw new Error(
         `registerRole("${name}") invalid reach: must be an array of strings.`,
@@ -213,7 +192,8 @@ export function registerRole(name, def, extName = "role-registry") {
       if (typeof r !== "string" || !r.length) {
         throw new Error(
           `registerRole("${name}") invalid reach entry: ${JSON.stringify(r)}. ` +
-          `Each entry must be a non-empty string (exact path, spaceId, or prefix/**).`,
+          `Each entry must be a non-empty string (exact path, spaceId, prefix/**, ` +
+          `or '!' prefix for exclusion).`,
         );
       }
     }
@@ -227,10 +207,11 @@ export function registerRole(name, def, extName = "role-registry") {
     respondMode,
     triggerOn,
     requiredCognition: def.requiredCognition || null,
-    scope,
     reach,
     origin,
   };
+  // Drop any legacy `scope` field — retired with the host-on-space model.
+  delete spec.scope;
 
   // Auto-wrap with defaultSummon when the role brings no custom summon.
   // The custom summon is the SCRIPTED dispatch path; defaultSummon is
@@ -327,7 +308,7 @@ export async function syncRolesToSubstrate() {
           // The canX entries below ARE the auth gate; a separate verb
           // summary is redundant. Consumers that need "does this role
           // permit verb X" check `role.canX?.length > 0` directly.
-          scope:       role.scope        || "anchored",
+          // `scope` retired alongside it — every role just has a host.
           reach:       Array.isArray(role.reach) ? role.reach : null,
           respondMode: role.respondMode  || null,
           triggerOn:   role.triggerOn    || [],

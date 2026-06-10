@@ -13,7 +13,7 @@ import { authenticateOptional } from "../middleware/authenticate.js";
 import { sendOk, sendError, IBP_ERR } from "../../../seed/ibp/protocol.js";
 import Space from "../../../seed/materials/space/space.js";
 import { getSpaceRoot } from "../../../seed/sprout.js";
-import { getSpaceOwner, getSpaceContributors } from "../../../seed/materials/space/members.js";
+import { getSpaceOwner } from "../../../seed/materials/space/members.js";
 
 const router = express.Router();
 
@@ -43,8 +43,11 @@ router.get("/reality/root", authenticateOptional, async (req, res) => {
     const isAnon = !beingId;
 
     // Fetch all place-root children with the fields needed to filter.
+    // `rootOwner` and `contributors[]` schema fields retired 2026-06-07;
+    // ownership lives at `members.owner` instead. Owner comes off the
+    // members map via getSpaceOwner below.
     const children = await Space.find({ _id: { $in: spaceRoot.children } })
-      .select("_id name heavenSpace rootOwner contributors llmDefault qualities")
+      .select("_id name heavenSpace members llmDefault qualities")
       .lean();
 
     // A child is public if it carries a wildcard SEE permission rule
@@ -57,15 +60,16 @@ router.get("/reality/root", authenticateOptional, async (req, res) => {
     };
 
     // Filter: anonymous sees only public trees; authenticated sees
-    // heaven spaces + owned + contributing + public.
+    // heaven spaces + owned + public. The "contributing" filter
+    // retired with the contributor concept (RolesAreAuth: editing
+    // authority is delegated via grant-role against operator-authored
+    // roles, not via a built-in membership class).
     const visible = children.filter((c) => {
       const pub = isPublicSpace(c);
       if (isAnon) return pub;
       if (c.heavenSpace) return true;
       const ownerId = getSpaceOwner(c);
       if (ownerId && String(ownerId) === String(beingId)) return true;
-      const contribs = getSpaceContributors(c);
-      if (contribs.includes(String(beingId))) return true;
       return pub;
     });
 

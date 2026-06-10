@@ -2,42 +2,48 @@
 //
 // roleAuth.js — the role-walk authorize.
 //
-// Per seed/RolesAreAuth.md: roles ARE auth. A being acts under one or
-// more granted roles; each role's canSee / canDo / canSummon / canBe
-// IS the permission gate. There is no parallel "qualities.permissions"
-// namespace; the role registry is the single source of truth.
+// Per seed/RolesAreAuth.md "Final doctrine": every role-in-effect
+// lives on a space's `qualities.roles[<name>]`. A being's grants
+// (in qualities.rolesGranted) reference the role by name + the
+// anchor space where it was hosted. To check if a grant permits an
+// action at a target:
+//
+//   1. Walk the grant's anchorSpaceId UP the qualities chain
+//      looking for `qualities.roles[<name>]`. The first ancestor
+//      that has it IS the role's host.
+//   2. Compute the host's natural coverage (host + descendants) AND
+//      apply the role's `reach` filter (additions and !-prefix
+//      exclusions) to decide if the target is reachable.
+//   3. If reachable, check the role's canX against the verb +
+//      action/intent/operation. Match → allow.
 //
 // The walk:
-//   1. I-Am bypass — the bootstrap axiom. Always succeeds.
-//   2. Anonymous / arrival floor — anonymous callers run under an
-//      implicit `arrival` role at the place root. canSee = the
-//      public read surface; canBe = ["birth", "connect"] for
-//      registration. Not stored as a grant; a code-level floor.
-//   3. Reach + canX walk — for every grant in identity.rolesGranted:
-//      a. Reach gate. Anchored role: target's space must be
-//         at-or-below the grant's anchor (or target's being matches
-//         the anchor's being for relationship grants). Global role:
-//         either no `reach` declared (true-global, applies anywhere)
-//         OR target matches one of the reach entries.
-//      b. canX gate. Verb's canX field on the role must permit
-//         the specific (action / intent / operation / SEE op key).
-//      c. First (reach + canX) match → allow.
-//   4. No grant matched → deny.
+//   - I-Am bypass (bootstrap axiom; never walks the space chain).
+//   - Anonymous arrival floor (implicit arrival role on the reality
+//     root; canSee:* + canBe:["birth","connect","release"]).
+//   - For each grant in identity.rolesGranted: getRoleSpec → reach
+//     check → canX check → first match wins.
 //
-// Pattern matching in `reach` is small by design (RolesAreAuth.md):
-//   - exact path / spaceId / "/"
-//   - `prefix/**` for subtree inclusion
-//   No regex. No per-canX patterns. The role's reach is one mechanism;
-//   the canX entries are pure action lists.
+// Pattern matching: small grammar.
+//   - <exact-path>      — match by exact pathByNames (when known)
+//   - <spaceId>         — match by exact space id
+//   - prefix/**         — any descendant (any depth)
+//   - prefix/*          — direct children only
+//   - **                — wildcard (everything)
+//   - !<pattern>        — exclude (carve out from the default base)
 //
-// The output shape mirrors the legacy authorize:
-//   { ok: true,  role: "<role-name>", anchor: <id|null> }
-//   { ok: false, reason: "...", code?: <error code> }
-// Verb dispatchers convert ok:false into IbpError with code FORBIDDEN.
+// Default base coverage for a role hosted at H: every target at or
+// below H. The `reach` list adjusts the base in order; later entries
+// win on conflict.
 
 import { I_AM } from "../materials/being/seedBeings.js";
-import { getRole } from "../present/roles/registry.js";
 import { loadProjection } from "../materials/projections.js";
+import { getSpaceRootId } from "../sprout.js";
+import { getAncestorChain } from "../materials/space/ancestorCache.js";
+import {
+  getRoleSpecForGrant,
+  roleReachesTarget as reachCovers,
+} from "../present/roles/spaceLookup.js";
 
 const ARRIVAL_ROLE = "arrival";
 
@@ -57,54 +63,111 @@ const ARRIVAL_ROLE = "arrival";
  * @returns {Promise<{ok: boolean, role?: string, anchor?: string, reason?: string}>}
  */
 export async function authorizeViaRoles(args) {
-  const { identity, verb, target, action, intent, operation, seeOp, branch = "0" } = args || {};
+  const { identity, verb, target, action, intent, operation, seeOp, branch } = args || {};
+  if (typeof branch !== "string" || !branch.length) {
+    throw new Error(
+      "authorizeViaRoles requires `branch` as a non-empty string. " +
+      "Callers must pass summonCtx.actorAct?.branch (or '0' for genesis / pre-summon paths) " +
+      "explicitly; no silent default.",
+    );
+  }
 
-  // Bootstrap axiom. The I-Am has no granted roles — its authority IS
-  // the substrate. Code-level bypass.
+  // Bootstrap axiom.
   if (identity?.beingId === I_AM || identity?.name === I_AM) {
     return { ok: true, role: "i-am", anchor: null };
   }
 
-  // Anonymous arrival floor. Stateless callers (no beingId) run under
-  // the arrival role at the place root, without a grant entry.
+  // Anonymous arrival floor. Stateless callers run under the implicit
+  // arrival role (looked up at the reality root's qualities.roles or
+  // — if not yet installed there — the in-memory REGISTRY).
   if (!identity?.beingId) {
-    return checkArrivalFloor({ verb, target, action, intent, operation, seeOp });
+    return await checkArrivalFloor({ verb, target, action, intent, operation, seeOp, branch });
   }
 
-  // Load the caller's grants from their being projection. Cold-fold if
-  // the row isn't cached yet (boot, fresh fork, etc.).
+  // Ownership step (seed/RolesAreAuth.md "Nearest claim wins").
+  // Walk target's ancestors looking for the NEAREST space with a
+  // non-empty members.owner — that's the space's "claim." Three cases:
+  //
+  //   1. Actor in the claim's owners → ALLOW (private ownership).
+  //   2. @public in the claim's owners → public-commons branch fires
+  //      below (visitor floor; canX-gated).
+  //   3. Someone else's claim → fall through to the role-walk; actor
+  //      might still have a granted role reaching here.
+  //
+  // Nearest-claim-wins means a private sub-space inside a public-owned
+  // commons IS private (the inner owner "takes over"). Without this
+  // rule, commons inheritance would leak through any sub-space, and
+  // staking a private claim inside a commons would be impossible.
+  //
+  // Contributor classes (members.contributor, members.<custom>) are
+  // bookkeeping only under roles-are-auth — they do NOT gate authorize.
+  // Operators model "secondary owners" as roles with the right canDo
+  // (set-role, grant-role, create-space, etc.).
+  const targetSpaceForOwner = deriveSpaceId(target);
+  let claimedByPublic = false;
+  let claimSpaceId = null;
+  if (targetSpaceForOwner) {
+    const claim = await findNearestOwnedAncestor(String(targetSpaceForOwner), branch);
+    if (claim) {
+      claimSpaceId = claim.spaceId;
+      const actorIdStr = String(identity.beingId);
+      if (claim.ownerIds.some((id) => String(id) === actorIdStr)) {
+        return { ok: true, role: "owner", anchor: claim.spaceId };
+      }
+      const publicBeingId = await getPublicBeingId(branch);
+      if (publicBeingId && claim.ownerIds.some((id) => String(id) === publicBeingId)) {
+        claimedByPublic = true; // public-commons branch below handles canX gating
+      }
+      // Else: someone else's private claim. Fall through to role-walk.
+    }
+  }
+
+  // Load the caller's grants. An empty list is fine — the public-commons
+  // branch below can still admit them at public-owned spaces, even
+  // without explicit grants. Beings with zero grants AND no claim path
+  // fall through to the final deny.
   const slot = await loadProjection("being", String(identity.beingId), branch);
   const grants = readGrantsFromSlot(slot);
-  if (!grants.length) {
-    return {
-      ok: false,
-      reason: `being "${identity.beingId}" has no granted roles; ` +
-        `authority must be granted by another being before they can act.`,
-    };
-  }
 
-  // Walk each grant: reach gate, then canX gate.
   const targetPath  = derivePath(target);
   const targetSpace = deriveSpaceId(target);
   const targetBeing = deriveBeingName(target);
 
   for (const grant of grants) {
-    const role = getRole(grant.role);
-    if (!role) continue;
+    const { spec, hostSpaceId } = await getRoleSpecForGrant(grant, branch);
+    if (!spec) continue;
 
-    if (!await reachReaches(role, grant, { targetSpace, targetBeing, targetPath, branch })) {
+    if (!await reachCovers(spec, hostSpaceId, { spaceId: targetSpace, path: targetPath }, branch)) {
       continue;
     }
 
-    if (!permits(role, verb, { action, intent, operation, seeOp, targetBeing })) {
+    if (!permits(spec, verb, { action, intent, operation, seeOp, targetBeing })) {
       continue;
     }
 
     return {
       ok: true,
       role: grant.role,
-      anchor: grant.anchorSpaceId || grant.anchorBeingId || null,
+      anchor: hostSpaceId || grant.anchorSpaceId || null,
     };
+  }
+
+  // Public-commons branch (seed/RolesAreAuth.md "@public being").
+  // Fires only when the NEAREST claim on the target's ancestor chain
+  // has @public in its owner list — set above as `claimedByPublic`.
+  // Private sub-spaces inside a public-owned subtree do NOT reach here
+  // because their nearest claim is the private owner, not @public.
+  //
+  // Read the spec directly from the role file — public-commons is a
+  // SEED-SHIPPED floor, not an operator-editable role hosted on a
+  // space. (Operators wanting per-space commons surfaces install a
+  // custom role on the public-owned space's qualities.roles, which
+  // the role-walk above picks up first.)
+  if (claimedByPublic) {
+    const { publicCommonsRole } = await import("../present/roles/public-commons/role.js");
+    if (permits(publicCommonsRole, verb, { action, intent, operation, seeOp, targetBeing })) {
+      return { ok: true, role: "public-commons", anchor: claimSpaceId };
+    }
   }
 
   return {
@@ -116,108 +179,113 @@ export async function authorizeViaRoles(args) {
 }
 
 // ────────────────────────────────────────────────────────────────────
-// Reach
+// Ownership — nearest-claim-wins
 // ────────────────────────────────────────────────────────────────────
 
 /**
- * Does this grant's role reach the target?
+ * Walk targetSpaceId up the ancestor chain looking for the NEAREST
+ * ancestor (including target) whose members.owner is non-empty.
+ * Returns { spaceId, ownerIds[] } for that ancestor, or null when no
+ * ancestor on the chain has an owner.
  *
- * Anchored role: walk target's ancestor chain; true if anchor appears
- * OR target's being matches the anchorBeingId.
- *
- * Global role: if role.reach is null/empty, true (unconstrained).
- * Else check each pattern against the target's path / spaceId.
+ * "Nearest claim wins" — a private sub-space inside a public-owned
+ * commons claims itself, and that private claim takes precedence over
+ * the inherited public ownership above. Without this rule, commons
+ * inheritance would leak through into every private sub-space.
+ * See seed/RolesAreAuth.md "@public being".
  */
-async function reachReaches(role, grant, { targetSpace, targetBeing, targetPath, branch }) {
-  if (role.scope === "global") {
-    if (!Array.isArray(role.reach) || role.reach.length === 0) {
-      return true; // true-global
+async function findNearestOwnedAncestor(targetSpaceId, branch) {
+  // Self space first.
+  const self = await loadProjection("space", targetSpaceId, branch);
+  const selfOwners = readOwners(self?.state);
+  if (selfOwners.length > 0) {
+    return { spaceId: String(targetSpaceId), ownerIds: selfOwners };
+  }
+
+  let chain = null;
+  try { chain = await getAncestorChain(targetSpaceId, branch); } catch { chain = null; }
+  if (!Array.isArray(chain)) return null;
+  for (const node of chain) {
+    let owners = node?.members ? readOwnersFromMembers(node.members) : null;
+    if (!owners || owners.length === 0) {
+      const slot = await loadProjection("space", String(node._id), branch);
+      owners = readOwners(slot?.state);
     }
-    return reachMatchesAny(role.reach, { targetSpace, targetPath });
-  }
-
-  // Anchored
-  if (grant.anchorBeingId) {
-    return targetBeing && String(grant.anchorBeingId) === String(targetBeing);
-  }
-  if (grant.anchorSpaceId) {
-    if (!targetSpace) return false;
-    if (String(grant.anchorSpaceId) === String(targetSpace)) return true;
-    // Walk ancestors of target space; if any equals the anchor → reach.
-    return await spaceHasAncestor(targetSpace, grant.anchorSpaceId, branch);
-  }
-  return false;
-}
-
-function reachMatchesAny(reach, { targetSpace, targetPath }) {
-  for (const pat of reach) {
-    if (matchReachPattern(pat, { targetSpace, targetPath })) return true;
-  }
-  return false;
-}
-
-function matchReachPattern(pat, { targetSpace, targetPath }) {
-  if (pat === "/" && (targetPath === "/" || targetPath === "")) return true;
-  if (targetSpace && pat === targetSpace) return true;
-  if (targetPath && pat === targetPath)  return true;
-  // prefix/** form
-  const m = /^(.*?)\/\*\*$/.exec(pat);
-  if (m) {
-    const prefix = m[1] || "/";
-    if (targetPath && (targetPath === prefix || targetPath.startsWith(prefix + "/"))) {
-      return true;
+    if (owners.length > 0) {
+      return { spaceId: String(node._id), ownerIds: owners };
     }
   }
-  return false;
+  return null;
 }
 
-async function spaceHasAncestor(targetSpace, anchorSpaceId, branch) {
+function readOwners(state) {
+  if (!state) return [];
+  return readOwnersFromMembers(state.members);
+}
+
+function readOwnersFromMembers(members) {
+  if (!members) return [];
+  const raw = members instanceof Map ? members.get("owner") : members.owner;
+  if (!Array.isArray(raw)) return [];
+  return raw.map(String);
+}
+
+/**
+ * Resolve the @public seed delegate's beingId. Cached in a module-local
+ * variable after the first lookup since public's id never changes
+ * within a process. Returns null when public isn't yet birthed (boot
+ * window before genesis seeds the delegates).
+ */
+let _publicBeingIdCache = null;
+async function getPublicBeingId(branch) {
+  if (_publicBeingIdCache) return _publicBeingIdCache;
   try {
-    const { walkAncestorChain } = await import("../materials/space/ancestorCache.js");
-    const chain = await walkAncestorChain(String(targetSpace), branch);
-    for (const node of chain) {
-      if (String(node._id) === String(anchorSpaceId)) return true;
+    const { findByName } = await import("../materials/projections.js");
+    const slot = await findByName("being", "public", branch);
+    if (slot?.id) {
+      _publicBeingIdCache = String(slot.id);
+      return _publicBeingIdCache;
     }
-  } catch {
-    // Cache miss or transient; treat as not reachable. Surfaces as
-    // FORBIDDEN, which is the safe default for a borderline read.
-    return false;
-  }
-  return false;
+  } catch { /* not yet materialized */ }
+  return null;
 }
 
 // ────────────────────────────────────────────────────────────────────
-// canX matching
+// canX matching (action-only; no patterns inside canX)
 // ────────────────────────────────────────────────────────────────────
 
-function permits(role, verb, { action, intent, operation, seeOp, targetBeing }) {
-  if (verb === "see")    return permitsSee(role, seeOp);
-  if (verb === "do")     return permitsDo(role, action);
-  if (verb === "summon") return permitsSummon(role, targetBeing, intent);
-  if (verb === "be")     return permitsBe(role, operation);
+function permits(spec, verb, { action, intent, operation, seeOp, targetBeing }) {
+  if (verb === "see")    return permitsSee(spec, seeOp);
+  if (verb === "do")     return permitsDo(spec, action);
+  if (verb === "summon") return permitsSummon(spec, targetBeing, intent);
+  if (verb === "be")     return permitsBe(spec, operation);
   return false;
 }
 
-function permitsSee(role, seeOp) {
-  if (!Array.isArray(role.canSee)) return false;
-  for (const entry of role.canSee) {
+function permitsSee(spec, seeOp) {
+  if (!Array.isArray(spec.canSee) || spec.canSee.length === 0) return false;
+  // canSee enumerates the SEE ops a role can dispatch. Raw-address SEE
+  // requires "*" — roles with only named-op entries (arrival's
+  // ["arrival-view"], global's ["place"]) refuse raw position SEE.
+  // The see verb wraps this with an anonymous-redirect: when arrival
+  // gets refused on raw SEE, the verb dispatches arrival-view instead.
+  for (const entry of spec.canSee) {
     const name = typeof entry === "string" ? entry : entry?.name;
     if (!name) continue;
     if (name === "*") return true;
-    if (!seeOp) continue;
-    if (name === seeOp) return true;
+    if (seeOp && name === seeOp) return true;
   }
   return false;
 }
 
-function permitsDo(role, action) {
-  if (!action || !Array.isArray(role.canDo)) return false;
-  for (const entry of role.canDo) {
+function permitsDo(spec, action) {
+  if (!action || !Array.isArray(spec.canDo)) return false;
+  for (const entry of spec.canDo) {
     const a = typeof entry === "string" ? entry : entry?.action;
     if (!a) continue;
     if (a === "*") return true;
     if (a === action) return true;
-    // Namespace match: `set-being:position` matches a canDo of `set-being:*` or `set-being`.
+    // Namespace match: action `set-being:position` matches canDo `set-being:*` or `set-being`.
     const colonIdx = action.indexOf(":");
     if (colonIdx > 0) {
       const ns = action.slice(0, colonIdx);
@@ -234,9 +302,21 @@ function permitsDo(role, action) {
   return false;
 }
 
-function permitsSummon(role, targetBeing, intent) {
-  if (!Array.isArray(role.canSummon)) return false;
-  for (const entry of role.canSummon) {
+// canSummon's auth path. A role declares its summon participation —
+// some entries are caller-side ("I can summon these"), some are
+// receiver-side ("I accept these"). The discriminator is `as`:
+//   "actor"     — caller side; this role can SEND this summon (default)
+//   "receiver"  — receiver side; this role ACCEPTS this summon
+//
+// Authorization here checks the CALLER'S role, so only entries with
+// `as: "actor"` (or absent — the legacy/default sense) count.
+// Receiver-side acceptance is the role's own `summon()` cognition;
+// the `as: "receiver"` entries are pure declaration consumed by UI
+// discovery + symmetric auth checks elsewhere. See FEDERATION.md.
+function permitsSummon(spec, targetBeing, intent) {
+  if (!Array.isArray(spec.canSummon)) return false;
+  for (const entry of spec.canSummon) {
+    if (typeof entry === "object" && entry?.as === "receiver") continue;
     const pattern = typeof entry === "string" ? entry : entry?.pattern;
     if (!pattern) continue;
     if (matchBeingNamePattern(pattern, targetBeing)) {
@@ -248,9 +328,9 @@ function permitsSummon(role, targetBeing, intent) {
   return false;
 }
 
-function permitsBe(role, operation) {
-  if (!operation || !Array.isArray(role.canBe)) return false;
-  for (const entry of role.canBe) {
+function permitsBe(spec, operation) {
+  if (!operation || !Array.isArray(spec.canBe)) return false;
+  for (const entry of spec.canBe) {
     const op = typeof entry === "string" ? entry : entry?.operation;
     if (!op) continue;
     if (op === "*") return true;
@@ -274,24 +354,30 @@ function matchBeingNamePattern(pattern, targetBeing) {
 // Anonymous arrival floor
 // ────────────────────────────────────────────────────────────────────
 
-function checkArrivalFloor({ verb, target, action, intent, operation, seeOp }) {
-  const role = getRole(ARRIVAL_ROLE);
-  if (!role) {
-    return {
-      ok: false,
-      reason: "no arrival role registered; anonymous callers have no floor.",
-    };
+async function checkArrivalFloor({ verb, target, action, intent, operation, seeOp, branch }) {
+  // The arrival role's host IS the reality root. The shared lookup
+  // walks anchorSpaceId=realityRoot for qualities.roles.arrival; the
+  // registry fallback covers boot-order edges before install.
+  const realityRootId = getSpaceRootId();
+  const { spec, hostSpaceId } = await getRoleSpecForGrant(
+    { role: ARRIVAL_ROLE, anchorSpaceId: realityRootId },
+    branch,
+  );
+  if (!spec) {
+    return { ok: false, reason: "no arrival role registered; anonymous callers have no floor." };
   }
+
+  const targetPath  = derivePath(target);
+  const targetSpace = deriveSpaceId(target);
   const targetBeing = deriveBeingName(target);
-  if (permits(role, verb, {
-    action, intent, operation, seeOp, targetBeing,
-  })) {
-    return { ok: true, role: ARRIVAL_ROLE, anchor: null };
+
+  if (!await reachCovers(spec, hostSpaceId, { spaceId: targetSpace, path: targetPath }, branch)) {
+    return { ok: false, reason: "arrival floor does not reach this position." };
   }
-  return {
-    ok: false,
-    reason: "arrival floor does not permit this action; please authenticate.",
-  };
+  if (permits(spec, verb, { action, intent, operation, seeOp, targetBeing })) {
+    return { ok: true, role: ARRIVAL_ROLE, anchor: hostSpaceId };
+  }
+  return { ok: false, reason: "arrival floor does not permit this action; please authenticate." };
 }
 
 // ────────────────────────────────────────────────────────────────────

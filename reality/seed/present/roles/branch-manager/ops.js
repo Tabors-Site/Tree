@@ -8,7 +8,7 @@
 // does the heavy lifting (path arithmetic, branchPoint snapshot,
 // Branch row, child space).
 //
-// Auth: any heaven contributor (hasAccess on heaven) can mint a branch off any branch they can
+// Auth: any heaven authority (hasAccess on heaven) can mint a branch off any branch they can
 // SEE. Promotion to live / pause / delete (Pass 6.5 + 10) require
 // tighter permissions; for branch creation, the principle is "anyone
 // who can read can fork" — branches are isolated worlds, the parent
@@ -199,8 +199,12 @@ registerOperation("create-branch", {
     // Auto-spawn a portal Matter at the reality root on main pointing
     // at the new branch's root. Lets viewers on main peek into every
     // branch as a portal-window without manually issuing form-portal
-    // for each one. Best-effort; branch creation succeeds even if the
-    // portal spawn fails. See CROSS-WORLD.md + portalOp.js.
+    // for each one. Target uses the trailing-slash form
+    // `<reality>#<branch>/` meaning "the root of that world" — the
+    // resolver treats path segments as space NAMES, so passing a
+    // UUID here would throw "Segment X not found." Best-effort;
+    // branch creation succeeds even if the portal spawn fails. See
+    // CROSS-WORLD.md + portalOp.js.
     let portalSpawned = null;
     try {
       const { findRoot } = await import("../../../materials/projections.js");
@@ -208,7 +212,7 @@ registerOperation("create-branch", {
       const rootSpaces = await findRoot("space", "0");
       const rootSpace = rootSpaces?.[0] || null;
       if (rootSpace) {
-        const foreignAddress = `${getRealityDomain()}#${result.path}/${rootSpace.id}`;
+        const foreignAddress = `${getRealityDomain()}#${result.path}/`;
         await doVerb(
           { kind: "space", id: String(rootSpace.id) },
           "form-portal",

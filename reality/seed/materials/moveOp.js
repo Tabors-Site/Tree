@@ -103,7 +103,7 @@ async function moveHandler({ target, params, summonCtx }) {
   // post-fold query.
   let fromSpaceId = null;
   const { loadOrFold } = await import("./projections.js");
-  const branch = summonCtx?.branch || "0";
+  const branch = summonCtx?.actorAct?.branch || "0";
   if (kind === "space") {
     const slot = await loadOrFold("space", targetId, branch);
     if (!slot) {

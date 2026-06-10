@@ -115,7 +115,7 @@ async function createMatterHandler(ctx) {
       actId: summonCtx?.actId || null,
       // Branch this matter is created on — sourced from the moment ctx
       // so a plant under #1 lands matter on #1's reel, not main's.
-      branch: summonCtx?.branch || "0",
+      branch: summonCtx?.actorAct?.branch || "0",
     },
     summonCtx,
   );
@@ -221,7 +221,7 @@ async function setOnMatterHandler({ target, params, summonCtx }) {
     if (typeof value !== "object" || Array.isArray(value)) {
       throw new Error("set-matter: `coord` value must be an object {x,y,z?} or null");
     }
-    const clamped = await assertMatterCoordInBounds(target, value, summonCtx?.branch || "0");
+    const clamped = await assertMatterCoordInBounds(target, value, summonCtx?.actorAct?.branch || "0");
     return { matterId: String(target._id), coord: clamped };
   }
 
@@ -237,7 +237,7 @@ async function setOnMatterHandler({ target, params, summonCtx }) {
 async function endMatterHandler({ target, identity, summonCtx }) {
   const matterId = targetIdOf(target);
   if (!matterId) throw new Error("end-matter: matterId required");
-  const branch = summonCtx?.branch || "0";
+  const branch = summonCtx?.actorAct?.branch || "0";
   const { deleteMatterAndFile } = await import("./matters.js");
   let beingId = identity?.beingId;
   if (!beingId) {

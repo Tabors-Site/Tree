@@ -152,7 +152,7 @@ async function setOnBeingHandler({ target, params, summonCtx }) {
     if (!value || typeof value !== "string") {
       throw new Error("set-being: `value` must be a string for field=name");
     }
-    const branch = summonCtx?.branch || "0";
+    const branch = summonCtx?.actorAct?.branch || "0";
     const { findByName } = await import("../projections.js");
     const existing = await findByName("being", value, branch);
     if (existing && String(existing.id) !== String(target._id)) {
@@ -257,7 +257,7 @@ async function setOnBeingHandler({ target, params, summonCtx }) {
     if (typeof value !== "object" || Array.isArray(value)) {
       throw new Error("set-being: `coord` value must be an object {x,y,z?} or null");
     }
-    const validated = await assertCoordInBounds(target, value, summonCtx?.branch || "0");
+    const validated = await assertCoordInBounds(target, value, summonCtx?.actorAct?.branch || "0");
     return { beingId: String(target._id), coord: validated };
   }
 

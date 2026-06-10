@@ -65,7 +65,7 @@ export async function beVerb(operation, payload = {}, opts = {}) {
     summonCtx   = null,
   } = opts;
 
-  // Resolve branch ONCE at the entry. summonCtx.branch wins when we're
+  // Resolve branch ONCE at the entry. summonCtx.actorAct?.branch wins when we're
   // inside an existing moment (continuation); otherwise the wire-
   // attached opts.currentBranch carries it. resolveBranchForFact throws
   // MISSING_BRANCH if both are absent — surfaces a perimeter threading
@@ -95,6 +95,84 @@ export async function beVerb(operation, payload = {}, opts = {}) {
   // change could license other beings for these ops, but cherub is the
   // only one today.
   const beOp = getBeOp(operation);
+
+  // ── Self-birth path (BE:birth on your own stance). ──────────────
+  // Per the federation doctrine, be:birth is the only birth verb;
+  // the actor (left stance) becomes the mother. Solo birth — father
+  // stays null. Surfaced from the 2D portal place-tab's "+ birth a
+  // being" affordance. The doctrinal endgame is "BE:birth on self"
+  // having literal semantics: target is the caller's own stance,
+  // child has the caller as parent (mother). Same machinery as the
+  // @birther path; the only difference is the target stance is your
+  // own (no intermediary). See FEDERATION.md "be:birth is the only
+  // birth verb".
+  const isSelfTarget = !!(
+    operation === "birth"
+    && identity?.beingId
+    && identity?.name
+    && beingName
+    && String(beingName).toLowerCase() === String(identity.name).toLowerCase()
+  );
+  if (isSelfTarget) {
+    assertVerbCaller("be", opts);
+    const authConfig = await getAuthConfig();
+    if (!authConfig.birth_enabled) {
+      throw new IbpError(IBP_ERR.FORBIDDEN, "Birth is disabled on this reality");
+    }
+    const decision = await authorize({
+      identity,
+      verb: "be",
+      target: { kind: addressKind, value: address },
+      operation,
+      summonCtx,
+    });
+    if (!decision.ok) {
+      throw new IbpError(
+        IBP_ERR.FORBIDDEN,
+        `BE:birth (self) denied for actor "${decision.actor}": ${decision.reason}`,
+        { actor: decision.actor },
+      );
+    }
+    const childName = payload?.name;
+    if (!childName || typeof childName !== "string") {
+      throw new IbpError(IBP_ERR.INVALID_INPUT, "BE:birth requires payload.name");
+    }
+    const childCognition = payload?.cognition || "llm";
+    const childPassword  = payload?.password || null;
+    const childRoleField = payload?.role || payload?.defaultRole || null;
+    let childHomeId = payload?.homeId || payload?.homeSpace || null;
+    if (!childHomeId) {
+      const { loadOrFold } = await import("../../materials/projections.js");
+      const callerSlot = await loadOrFold("being", identity.beingId, branch);
+      childHomeId = callerSlot?.state?.homeSpace || null;
+    }
+    if (!childHomeId) {
+      throw new IbpError(
+        IBP_ERR.INVALID_INPUT,
+        "BE:birth (self) requires a homeId (caller has no homeSpace to inherit)",
+      );
+    }
+    const { birthBeing } = await import("../../materials/being/identity/birth.js");
+    const childSpec = {
+      name:          childName,
+      cognition:     childCognition,
+      password:      childPassword,
+      parentBeingId: String(identity.beingId),  // mother is the caller
+      homeId:        String(childHomeId),
+    };
+    if (childRoleField) childSpec.role = childRoleField;
+    const result = await birthBeing({
+      spec: childSpec,
+      identity,
+      summonCtx,
+    });
+    return {
+      beingId:      result.beingId,
+      name:         result.name,
+      beingAddress: `${getRealityDomain()}/@${result.name}`,
+      selfBirth:    true,
+    };
+  }
 
   // ── Birther path (BE:birth on @birther). ────────────────────────
   // Cherub serves unauthenticated arrival: someone with no identity
@@ -221,7 +299,7 @@ export async function beVerb(operation, payload = {}, opts = {}) {
           qualities: {},
         },
         actId:  summonCtx?.actId || null,
-        branch: summonCtx?.branch || "0",
+        branch: summonCtx?.actorAct?.branch || "0",
       }, summonCtx);
       childHomeId = newHomeId;
     }

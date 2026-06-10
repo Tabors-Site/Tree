@@ -59,7 +59,7 @@ import Being from "../../materials/being/being.js";
 import { loadProjection, loadOrFold, assertBranchOrThrow } from "../../materials/projections.js";
 import Act from "../../past/act/act.js";
 import { getRealityConfigValue } from "../../realityConfig.js";
-import { resolveActiveStack } from "../roles/roleFlow.js";
+import { resolveActiveStack, computeAvailableRoles } from "../roles/roleFlow.js";
 import { composeStack } from "../roles/roleComposer.js";
 import Space from "../../materials/space/space.js";
 import { computeIbpStampAddress } from "../../ibp/address.js";
@@ -172,6 +172,16 @@ export async function assign({ beingId, spaceId, entry, handoff = null, signal =
   // set-world-signal writes propagate at the next moment.
   const worldSignals = await loadWorldSignals();
 
+  // Pre-compute the roles this being can CURRENTLY play (held +
+  // reaching this position). Per seed/RolesAreAuth.md, every roleFlow
+  // clause filters through this map; a clause whose role isn't here
+  // is skipped same as a failed when-condition.
+  const availableRoles = await computeAvailableRoles({
+    toBeing,
+    positionSpaceId: toBeing?.position || null,
+    branch: branch || "0",
+  });
+
   const stack = resolveActiveStack({
     toBeing,
     entry,
@@ -181,6 +191,7 @@ export async function assign({ beingId, spaceId, entry, handoff = null, signal =
     previousMoment,
     now:              entry?.receivedAt ? new Date(entry.receivedAt) : null,
     worldSignals,
+    availableRoles,
   });
 
   if (!stack || stack.length === 0) {
@@ -272,7 +283,7 @@ export async function assign({ beingId, spaceId, entry, handoff = null, signal =
   const orientation = validateOrientation(entry?.orientation, DEFAULT_ORIENTATION);
 
   // `branch` was extracted up top alongside the projection load; reuse
-  // it. summonCtx.branch is what every Fact this moment emits inherits;
+  // it. summonCtx.actorAct?.branch is what every Fact this moment emits inherits;
   // the cross-branch dispatch gate at verb entry rejects targets
   // pointing at a different branch.
 
@@ -286,6 +297,15 @@ export async function assign({ beingId, spaceId, entry, handoff = null, signal =
   // For same-world calls this equals actorAct.branch; for cross-world
   // it differs. resolveBranchForFact consults it as the second
   // precedence (after opts.currentBranch). See CROSS-WORLD.md.
+  // Asker's identity — exposed on the ctx so the receiver's role
+  // handler can attribute the summoner without digging through
+  // handoff plumbing. For cross-world summons (canopy-verified
+  // foreign senders), askerReality differs from the receiver's home
+  // reality and the handler can populate the child's
+  // qualities.father tuple. See FEDERATION.md "mate + vessel".
+  const askerReality = handoff?.identity?.reality
+    || handoff?.canopySender
+    || null;
   const baseCtx = {
     kind,
     spaceId,
@@ -296,6 +316,9 @@ export async function assign({ beingId, spaceId, entry, handoff = null, signal =
     actId,
     actorAct: plannedAct,
     targetBranch,
+    askerBeingId,
+    askerName,
+    askerReality,
     // Branch-aware aggregate reader. Extensions and roles call
     // `await ctx.read("being"|"space"|"matter", id)` and get the
     // row-shaped object back (or null). Internally walks lineage via

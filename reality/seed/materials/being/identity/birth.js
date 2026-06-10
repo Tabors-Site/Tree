@@ -138,6 +138,15 @@ function validatePassword(password) {
  *   spec.homeReality    URL of the reality where this being's
  *                       authoritative row lives (default null).
  *   spec.llmDefault     Per-being LLM connection key (default null).
+ *   spec.father         { reality, beingId } | null. Recorded on the
+ *                       child as qualities.father. The verified
+ *                       identity tuple of a being from another world
+ *                       who commissioned this birth via summon:mate
+ *                       acceptance. Carries ONE structural right:
+ *                       BE:connect eligibility (vessel right). NOT
+ *                       in the identity chain; NOT authority over
+ *                       the child. Null for solo births. See
+ *                       seed/CROSS-WORLD.md + protocols/ibp/FEDERATION.md.
  *
  * @param {object} args
  * @param {object} args.spec         see fields above
@@ -214,7 +223,7 @@ export async function birthBeing({ spec, identity, summonCtx = null }) {
     );
   }
 
-  const branch = summonCtx?.branch || "0";
+  const branch = summonCtx?.actorAct?.branch || "0";
 
   // No inline authorize call. `birthBeing` is a substrate primitive
   // called from already-authorized contexts:
@@ -359,6 +368,31 @@ export async function birthBeing({ spec, identity, summonCtx = null }) {
   qualities.cognition = { ...(qualities.cognition || {}), defaultKind: cognition };
   if (Array.isArray(spec.roleFlow)) {
     qualities.roleFlow = spec.roleFlow;
+  }
+
+  // Cross-world citizenship: father tuple. Only when present (mate-
+  // accepted birth, recorded on the child's qualities for the
+  // BE:connect father-admit check downstream). Shape:
+  // { reality: <foreign domain>, beingId: <foreign being id> }.
+  // The mother (actor of be:birth) is the spec's parent; the father
+  // (the summoner of summon:mate) is recorded here as a separate
+  // tuple so it doesn't blur the identity chain. See FEDERATION.md.
+  if (spec.father && typeof spec.father === "object") {
+    if (
+      typeof spec.father.reality !== "string" ||
+      !spec.father.reality.length ||
+      typeof spec.father.beingId !== "string" ||
+      !spec.father.beingId.length
+    ) {
+      throw new IbpError(
+        IBP_ERR.INVALID_INPUT,
+        `birthBeing("${name}"): spec.father must be { reality: string, beingId: string }`,
+      );
+    }
+    qualities.father = {
+      reality: spec.father.reality,
+      beingId: spec.father.beingId,
+    };
   }
 
   // ── Stamp the be:birth Fact ──

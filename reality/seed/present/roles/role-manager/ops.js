@@ -113,7 +113,13 @@ registerOperation("set-role", {
 
     const canSee    = parseLines(params?.canSee);
     const canDo     = parseLines(params?.canDo);
-    const canSummon = parseLines(params?.canSummon);
+    // canSummon now accepts a pre-structured array (the role-manager
+    // panel sends one entry per picker selection with an `as` tag),
+    // OR a multiline string for legacy callers (parsed as strings,
+    // which default to `as: "actor"` semantics at consumption).
+    const canSummon = Array.isArray(params?.canSummon)
+      ? params.canSummon
+      : parseLines(params?.canSummon);
     const canBe     = parseLines(params?.canBe);
     const prompt    = typeof params?.prompt === "string" ? params.prompt : "";
 

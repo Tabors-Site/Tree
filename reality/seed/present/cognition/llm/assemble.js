@@ -604,7 +604,16 @@ export function resolveToolsForRole(
   // was a dead reference (no see-verb tool was registered for it).
   let toolNames = [];
   if (Array.isArray(role.canDo) && role.canDo.length > 0) toolNames.push("do");
-  if (Array.isArray(role.canSummon) && role.canSummon.length > 0) toolNames.push("summon");
+  // canSummon entries may be `as: "actor"` (default — caller side; this
+  // role can SEND) or `as: "receiver"` (receive side — this role
+  // accepts when targeted). The summon TOOL only makes sense for
+  // actor entries; a role whose only canSummon is receive-side has
+  // nothing to initiate. See seed/RolesAreAuth.md "canSummon: one
+  // field, two surfaces."
+  if (Array.isArray(role.canSummon)
+      && role.canSummon.some((e) => typeof e !== "object" || (e?.as ?? "actor") === "actor")) {
+    toolNames.push("summon");
+  }
   if (Array.isArray(role.canBe) && role.canBe.length > 0) toolNames.push("be");
 
   if (treeToolConfig) {

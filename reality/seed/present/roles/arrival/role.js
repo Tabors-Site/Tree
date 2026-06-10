@@ -15,10 +15,9 @@
 // stance-authorization layer that gates every other being applies.
 //
 // What arrival CANNOT do: DO, SUMMON, BE (except the bootstrap
-// register/claim exception inside the cherub being). The default
-// permissions still require `arrival: false` for DO/SUMMON/BE, and
-// arrival's stance carries the arrival flag (per
-// stanceProperties.js ARRIVAL_PROPS).
+// register/claim exception). Under roles-are-auth (seed/RolesAreAuth.md)
+// the arrival role's canX list IS the gate; canBe: ["birth", "connect",
+// "release"] is the only BE surface anonymous callers reach.
 //
 // Cognition: scripted, no-op. Arrival doesn't receive SUMMONs (no
 // triggerOn entry for "message"). The role exists as the receptive
@@ -29,21 +28,43 @@ export const arrivalRole = Object.freeze({
   name: "arrival",
   description:
     "The shared stance every unauthenticated visitor carries. SEE-only; one being row, many concurrent users.",
-  // The implicit floor for stateless callers. Reality-wide reach by
-  // definition — arrival is what every visitor carries before
-  // authenticating, regardless of position.
-  scope: "global",
+  // The implicit floor for stateless callers. Hosted on the reality
+  // root; reach extended reality-wide so anonymous visitors can SEE
+  // public spaces and BE birth/connect anywhere registration's
+  // exposed.
+  reach: ["/**"],
   requiredCognition: "scripted",
   respondMode: "async",
   triggerOn: [], // never auto-processes anything
 
-  // SEE permitted on positions (descriptor reads). canSee:["*"] means
-  // any SEE op or position descriptor that reaches arrival's stance.
-  canSee: ["*"],
+  // Anonymous visitors see ONLY the arrival-view SEE op — a filtered
+  // landing face that exposes the reality root's layout + cherub.
+  // Raw position SEE refuses (permitsSee requires "*" for bare
+  // addresses, which only the human/angel roles carry).
+  canSee: ["arrival-view"],
 
-  // The bootstrap exception (seed/RolesAreAuth.md "Implicit arrival"):
-  // arrival can BE birth/connect so anonymous visitors can register
-  // with cherub. release is permitted too — log out, return to floor.
+  // The doctrinal path for an anonymous visitor: summon @cherub:mate.
+  // Cherub mints the new being (with the human role + the visitor's
+  // chosen password) and binds the session. The visitor RECEIVES the
+  // new being as their own.
+  //
+  // The summon → mate path replaces the legacy be:birth-on-cherub
+  // flow. canBe stays for now because the existing cherub handlers
+  // still drive registration through BE ops; that handler work
+  // migrates to the summon:mate path (see birther's canSummon
+  // receiver entry for the symmetric shape).
+  canSummon: [
+    {
+      pattern: "@cherub",
+      intent: "mate",
+      as: "actor",
+      description: "Request cherub to mint a new being and bind it to the session",
+    },
+  ],
+
+  // Legacy direct-BE registration. Retires when cherub's summon:mate
+  // handler is wired and the portal calls summon @cherub:mate instead
+  // of be:birth.
   canBe: ["birth", "connect", "release"],
   /**
    * No-op. Arrival doesn't receive SUMMONs (no "message" in triggerOn);

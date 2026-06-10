@@ -898,25 +898,18 @@ export async function loadExtensions(app, mcpServer, opts = {}) {
         }
       }
 
-      // Register the extension's default permission rules (if any) on
-      // the protocol-layer permission defaults registry. Authorize
-      // consults this registry as the layer-3 fallback when no
-      // metadata.permissions rule matches at the target or any ancestor.
-      // Idempotent — re-registering replaces this extension's prior rules.
+      // The manifest's `provides.defaultPermissions` field retired with
+      // roles-are-auth (seed/RolesAreAuth.md). Extensions ship ROLES
+      // whose canSee/canDo/canSummon/canBe lists ARE the gate, and
+      // grants flow through the grant-role DO op. If an old manifest
+      // still declares this field, fail loud so we can audit.
       if (manifest.provides?.defaultPermissions) {
-        try {
-          const { registerDefaultPermissions } =
-            await import("../seed/ibp/authorize.js");
-          registerDefaultPermissions(
-            manifest.name,
-            manifest.provides.defaultPermissions,
-          );
-        } catch (err) {
-          log.warn(
-            "Extensions",
-            `default-permissions registration failed for "${manifest.name}": ${err.message}`,
-          );
-        }
+        const msg =
+          `Extension "${manifest.name}" declares the retired ` +
+          `provides.defaultPermissions field. Author roles + grant ` +
+          `them via grant-role instead. See seed/RolesAreAuth.md.`;
+        log.error("Extensions", msg);
+        throw new Error(msg);
       }
 
       // Mount the extension's sensory-asset directory.
@@ -1627,13 +1620,10 @@ export async function uninstallExtension(name) {
         await import("../seed/materials/space/extensionScope.js");
       clearToolOwnersForExtension(name);
     } catch {}
-    // Drop this extension's default permission rules from the registry
-    // so authorize stops consulting them post-uninstall.
-    try {
-      const { unregisterDefaultPermissions } =
-        await import("../seed/ibp/authorize.js");
-      unregisterDefaultPermissions(name);
-    } catch {}
+    // Default-permissions registry retired with roles-are-auth
+    // (seed/RolesAreAuth.md). On uninstall, the extension's roles
+    // remain in the role registry but are unregisterable via the
+    // role-registry's unregisterRole; ungranted roles are inert.
   }
 
   // Refresh confined extensions set. The removed extension might have been

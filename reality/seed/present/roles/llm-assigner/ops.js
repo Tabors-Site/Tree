@@ -447,7 +447,8 @@ export function registerLlmAssignerOps() {
 
   // Set the reality-level LLM configuration on the place root's
   // `qualities.llm`. Writes the 7-step chain fields (slot list, force
-  // flags, preferOwn). Restricted to heaven contributors.
+  // flags, preferOwn). Restricted to beings with heaven authority
+  // (owner or angel role on heaven).
   //
   // Back-compat: when `connectionId` (legacy scalar) is the only
   // payload field, it is converted to a single-element `connections`
@@ -462,11 +463,11 @@ export function registerLlmAssignerOps() {
           "llm-assigner:set-reality-llm requires an authenticated being.",
         );
       }
-      const { isHeavenContributor } = await import("../../../materials/space/heavenLineage.js");
-      if (!(await isHeavenContributor(identity.beingId))) {
+      const { hasHeavenAuthority } = await import("../../../materials/space/heavenLineage.js");
+      if (!(await hasHeavenAuthority(identity.beingId))) {
         throw new IbpError(
           IBP_ERR.FORBIDDEN,
-          "Only heaven contributors can change reality-level LLM configuration.",
+          "Only beings with heaven authority (owner or angel role) can change reality-level LLM configuration.",
         );
       }
       assertFlagMutex(params || {});

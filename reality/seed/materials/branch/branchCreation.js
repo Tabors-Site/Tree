@@ -66,7 +66,7 @@ export async function createBranch({ parent = MAIN, anchor, label = null, create
   //     disjoint (lives outside parent's subtree entirely) OR explicitly
   //     null/undefined on a scoped parent with the special `clearScope: true`
   //     flag, the operation is widening. Widening requires reality-root
-  //     permission (heaven owner OR contributor); otherwise refused.
+  //     permission (heaven owner OR angel role); otherwise refused.
   //
   // The scope is locked at creation: re-pointing the path later doesn't
   // widen or narrow the gate. Writes outside the resolved subtree refuse
@@ -274,7 +274,7 @@ async function _resolveBranchScope({ passed, parentScope, parentBranchPath, crea
     throw new Error(
       `createBranch: scope "${passed.path}" is not within parent branch's scope "${parentScope.path}". ` +
       `Widening or moving to a disjoint scope requires reality-root permission ` +
-      `(heaven owner or contributor). ` +
+      `(heaven owner or angel role). ` +
       `Sub-branches inherit parent's scope by default; declare a narrower scope to fork within.`,
     );
   }

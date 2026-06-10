@@ -54,12 +54,12 @@ const SpaceSchema = new mongoose.Schema({
   //
   //   owner       singleton class, the position's structural owner
   //   contributor default trust class, peers of the owner
-  //   angel       heaven-specific authority class (added at heaven only)
   //
   // Operators can author additional classes per-position (auditor,
   // editor, etc.) by stamping `do:set-space` facts with
-  // field="members.<className>". Rules gate on class membership via
-  // `memberClasses: { includes: "<className>" }` in qualities.permissions.
+  // field="members.<className>". Member classes survive for ownership
+  // bookkeeping; the AUTH gate is now the role-walk against
+  // qualities.roles (seed/RolesAreAuth.md), not member-class checks.
   //
   // Class-specific invariants live in handlers: the owner class is
   // singleton (max length 1); the seed enforces this in the
@@ -139,11 +139,6 @@ SpaceSchema.index({ parent: 1 });
 // own?") run as a constant-time index hit instead of a tree scan.
 SpaceSchema.index({ "members.owner": 1 }, { sparse: true });
 SpaceSchema.index({ heavenSpace: 1 }, { sparse: true });
-
-// Public-Space listing. A Space is public when authorize finds a
-// wildcard SEE rule on it. Sparse so private Spaces don't bloat the
-// index.
-SpaceSchema.index({ "qualities.permissions.see.*": 1 }, { sparse: true });
 
 // Database-level invariant for any tree where at most one plan-type
 // child is allowed per parent. partialFilterExpression limits the

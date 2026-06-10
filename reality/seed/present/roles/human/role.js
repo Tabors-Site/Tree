@@ -43,14 +43,24 @@ export const humanRole = Object.freeze({
   name: "human",
   description:
     "The receptive role every human being carries. Lets a human be SUMMONed; the SUMMON sits in their inbox as a notification until they respond from their own transport.",
-  // ANCHORED — granted at the place root by cherub on registration.
+  // Hosted on the reality root — granted at registration by cherub.
   // The "root founder" role: do-whatever-you-want in this reality
-  // because you registered here. Expected to be retired over time as
-  // operators author their own narrower roles for downstream beings.
-  // Only cherub holds canDo:["grant-role"] for the human role — no
-  // other being can hand it out.
-  scope: "anchored",
-  permissions: ["see", "do", "summon", "be"],
+  // because you registered here. Temporary by design — operators
+  // narrow it with custom roles as the reality matures. Only cherub
+  // holds canDo:["grant-role:human"]; no other being hands it out.
+  //
+  // Broad canX (seed/RolesAreAuth.md "human carries '*'"). Per the
+  // be:birth doctrine, humans can do be:birth directly on themselves
+  // (mint a child being parented to them) AND can summon @birther:mate
+  // or @cherub:mate as a delegated path.
+  canSee:    ["*"],
+  canDo:     [{ action: "*", description: "any action" }],
+  canSummon: [
+    { pattern: "@*", description: "summon any being" },
+  ],
+  canBe: [
+    { operation: "*", description: "any BE operation, including birth (mint a child being)" },
+  ],
   respondMode: "async",
   // No "message" trigger: humans don't auto-process incoming SUMMONs.
   // The SUMMON sits in the inbox until the human surfaces it through

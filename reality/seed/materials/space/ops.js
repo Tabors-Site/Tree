@@ -19,15 +19,12 @@ import {
   assertValidSpaceType,
   assertValidSpaceSize,
   assertNameAvailableAt,
-  resolveSpaceAccess,
 } from "./spaces.js";
 import { getRealityDomain } from "../../ibp/address.js";
 import { IbpError, IBP_ERR, mapPatternsToIbpError } from "../../ibp/protocol.js";
 import { I_AM } from "../being/seedBeings.js";
 import { detectTargetKind, targetIdOf, loadTargetRow } from "../_targetShape.js";
 import {
-  addContributor,
-  removeContributor,
   setOwner,
   removeOwner,
 } from "./ownership.js";
@@ -76,8 +73,8 @@ async function createSpaceHandler(ctx) {
 //
 // params: { field, value, merge=true }
 // field paths:
-//   "name" / "type" / "parent" / "llmDefault" / "rootOwner" /
-//   "contributors"                                  → schema-field writes
+//   "name" / "type" / "parent" / "llmDefault" / "rootOwner"
+//                                                    → schema-field writes
 //   "qualities.<namespace>"                          → set/merge that namespace
 //   "qualities.<namespace>.<innerKey>"               → merge one inner key
 //   value=null on a qualities path                   → unset
@@ -118,14 +115,11 @@ async function setOnSpaceHandler({ target, params, identity, summonCtx }) {
           "Resolved address has no spaceId",
         );
       }
-      const access = await resolveSpaceAccess(
-        target.spaceId,
-        identity?.beingId || null,
-        summonCtx?.branch || "0",
-      );
-      if (!access?.ok || !access.hasAccess) {
-        throw new IbpError(IBP_ERR.FORBIDDEN, "Not authorized to write qualities at this place");
-      }
+      // Authorization is handled by the verb dispatcher's role-walk
+      // before reaching this handler (RolesAreAuth). The earlier
+      // belt-and-suspenders hasAccess check via resolveSpaceAccess
+      // retired with the contributor class — the role's canDo +
+      // reach is the single source of truth.
       return {
         written: true,
         spaceId: String(target.spaceId),
@@ -170,13 +164,11 @@ async function setOnSpaceHandler({ target, params, identity, summonCtx }) {
       if (!spaceId) {
         throw new IbpError(IBP_ERR.SPACE_NOT_FOUND, "Resolved address has no spaceId");
       }
-      const beingId = identity?.beingId || null;
-      const access = await resolveSpaceAccess(spaceId, beingId, summonCtx?.branch || "0");
-      if (!access?.ok || !access.hasAccess) {
-        throw new IbpError(IBP_ERR.FORBIDDEN, "Not authorized to rename at this place");
-      }
+      // Authorization runs in the verb dispatcher's role-walk; this
+      // handler trusts that. The hasAccess gate via resolveSpaceAccess
+      // retired with the contributor class (RolesAreAuth).
       const { loadOrFold } = await import("../projections.js");
-      const _slot1 = await loadOrFold("space", spaceId, summonCtx?.branch || "0");
+      const _slot1 = await loadOrFold("space", spaceId, summonCtx?.actorAct?.branch || "0");
       const row = _slot1 ? { _id: _slot1.id, ...(_slot1.state || {}) } : null;
       if (!row) {
         throw new IbpError(IBP_ERR.SPACE_NOT_FOUND, "Space not found");
@@ -216,7 +208,7 @@ async function setOnSpaceHandler({ target, params, identity, summonCtx }) {
       // then returns the shape; doVerb auto-stamps do:set-space and
       // the space reducer's applySetField writes Space.type.
       const { loadOrFold } = await import("../projections.js");
-      const _slot2 = await loadOrFold("space", spaceId, summonCtx?.branch || "0");
+      const _slot2 = await loadOrFold("space", spaceId, summonCtx?.actorAct?.branch || "0");
       const row = _slot2 ? { heavenSpace: _slot2.state?.heavenSpace } : null;
       if (!row) {
         throw new IbpError(IBP_ERR.SPACE_NOT_FOUND, "Space not found");
@@ -259,9 +251,8 @@ async function setOnSpaceHandler({ target, params, identity, summonCtx }) {
   // Value is an array of being ids; the empty array clears the class.
   // The reducer (applySetMembers) writes this into space.members[
   // className] without touching other classes. Handler-level
-  // invariants (owner singleton, no-owner-as-contributor, etc.) live
-  // in materials/space/members.js; this validator enforces only the
-  // wire shape.
+  // invariants (owner singleton) live in materials/space/members.js;
+  // this validator enforces only the wire shape.
   if (typeof field === "string" && field.startsWith("members.")) {
     const className = field.slice("members.".length);
     if (!/^[a-z][a-z0-9-]*$/.test(className)) {
@@ -314,10 +305,10 @@ async function setOnSpaceHandler({ target, params, identity, summonCtx }) {
     // set-being:coord (assertCoordInBounds in being/ops.js): silent
     // clamping was a lie; throw and let cognition reface.
     const { loadOrFold } = await import("../projections.js");
-    const _selfSlot = await loadOrFold("space", spaceId, summonCtx?.branch || "0");
+    const _selfSlot = await loadOrFold("space", spaceId, summonCtx?.actorAct?.branch || "0");
     const parentId = _selfSlot?.state?.parent;
     if (parentId) {
-      const _parentSlot = await loadOrFold("space", parentId, summonCtx?.branch || "0");
+      const _parentSlot = await loadOrFold("space", parentId, summonCtx?.actorAct?.branch || "0");
       const parentRow = _parentSlot ? { size: _parentSlot.state?.size } : null;
       const parentSize = parentRow?.size || null;
       if (parentSize) {
@@ -417,14 +408,19 @@ registerOperation("end-space", {
 });
 
 // ─────────────────────────────────────────────────────────────────────
-// Permissions — owner + contributor roster on a place.
+// Ownership — the owner roster on a place.
 // ─────────────────────────────────────────────────────────────────────
 //
 // Thin DO wrappers over the ownership.js functions. Each self-enforces
-// authority (assertOwner / self-removal rules) and stamps its change as
-// an inner set-space fact, so these wrappers carry skipAudit:true — one
-// logical write, one fact. The actor is the caller's being; the place is
-// the resolved target (a space target's id, or a stance's spaceId).
+// authority and stamps its change as an inner set-space fact, so these
+// wrappers carry skipAudit:true — one logical write, one fact. The
+// actor is the caller's being; the place is the resolved target (a
+// space target's id, or a stance's spaceId).
+//
+// Owner is the ONE base-axiom membership class — implicit authority
+// over the space + descendants without any role grant. All other
+// authority shapes (including what was contributor) are roles
+// delegated via grant-role per seed/RolesAreAuth.md.
 
 // Resolve the space id from a DO target that may be a space row/envelope
 // or a resolved stance (which carries `.spaceId`).
@@ -457,47 +453,27 @@ const PERMISSION_ERROR_PATTERNS = [
   [/maximum|required|cannot/i, IBP_ERR.INVALID_INPUT],
 ];
 
-registerOperation("add-contributor", {
-  targets: ["space", "stance"],
-  ownerExtension: "seed",
-  skipAudit: true,
-  args: {
-    contributorId: { type: "text", label: "Contributor being id", required: true },
-  },
-  handler: async ({ target, params, identity, summonCtx }) => {
-    const spaceId = spaceIdFromTarget(target);
-    const actor = requireActor(identity);
-    const contributorId = String(params?.contributorId || "").trim();
-    if (!contributorId) throw new IbpError(IBP_ERR.INVALID_INPUT, "`contributorId` is required");
-    try {
-      await addContributor(spaceId, contributorId, actor, summonCtx?.branch || "0", summonCtx);
-    } catch (err) {
-      throw mapPatternsToIbpError(err, PERMISSION_ERROR_PATTERNS);
-    }
-    return { added: true, spaceId, contributorId };
-  },
-});
-
-registerOperation("remove-contributor", {
-  targets: ["space", "stance"],
-  ownerExtension: "seed",
-  skipAudit: true,
-  args: {
-    contributorId: { type: "text", label: "Contributor being id", required: true },
-  },
-  handler: async ({ target, params, identity, summonCtx }) => {
-    const spaceId = spaceIdFromTarget(target);
-    const actor = requireActor(identity);
-    const contributorId = String(params?.contributorId || "").trim();
-    if (!contributorId) throw new IbpError(IBP_ERR.INVALID_INPUT, "`contributorId` is required");
-    try {
-      await removeContributor(spaceId, contributorId, actor, summonCtx?.branch || "0", summonCtx);
-    } catch (err) {
-      throw mapPatternsToIbpError(err, PERMISSION_ERROR_PATTERNS);
-    }
-    return { removed: true, spaceId, contributorId };
-  },
-});
+// add-contributor / remove-contributor RETIRED 2026-06-09. Under
+// RolesAreAuth, "contributor" is just a role like any other. Granting
+// editing authority over a space is: grant-role to a being whose role
+// has the relevant canDo at this space.
+//
+// Migration:
+//   OLD: do(<space>, "add-contributor",    { contributorId })
+//   NEW: do(<being>, "grant-role",         { role: "contributor",
+//                                            anchorSpaceId: <space> })
+//
+//   OLD: do(<space>, "remove-contributor", { contributorId })
+//   NEW: do(<being>, "revoke-role",        { role: "contributor",
+//                                            anchorSpaceId: <space>,
+//                                            grantedBy: <originalGrantor> })
+//
+// Operators define their own contributor role via the role-manager UI
+// (set-role) with whatever canDo entries fit their reality. The
+// `addContributor` / `removeContributor` helpers in materials/space/
+// members.js stay for legacy callers but are no longer reachable
+// through DO ops; future cleanup deletes them when the seed has no
+// remaining non-op writers.
 
 registerOperation("set-owner", {
   targets: ["space", "stance"],
@@ -512,7 +488,7 @@ registerOperation("set-owner", {
     const newOwnerId = String(params?.newOwnerId || "").trim();
     if (!newOwnerId) throw new IbpError(IBP_ERR.INVALID_INPUT, "`newOwnerId` is required");
     try {
-      await setOwner(spaceId, newOwnerId, actor, summonCtx?.branch || "0", summonCtx);
+      await setOwner(spaceId, newOwnerId, actor, summonCtx?.actorAct?.branch || "0", summonCtx);
     } catch (err) {
       throw mapPatternsToIbpError(err, PERMISSION_ERROR_PATTERNS);
     }
@@ -529,7 +505,7 @@ registerOperation("remove-owner", {
     const spaceId = spaceIdFromTarget(target);
     const actor = requireActor(identity);
     try {
-      await removeOwner(spaceId, actor, summonCtx?.branch || "0");
+      await removeOwner(spaceId, actor, summonCtx?.actorAct?.branch || "0");
     } catch (err) {
       throw mapPatternsToIbpError(err, PERMISSION_ERROR_PATTERNS);
     }
@@ -538,10 +514,10 @@ registerOperation("remove-owner", {
 });
 
 // Generic membership-class write ops. Mutate any class in a space's
-// members map (owner, contributor, or operator-authored classes like
-// auditor / editor / angel). Class-specific invariants live in
-// materials/space/members.js (owner singleton, owner-not-as-contributor,
-// per-class size caps). See PERMISSIONS.md for the full doctrine.
+// members map (owner is the singleton; angel is the heaven-anointed
+// foundational class; operator-authored classes are first-class).
+// Class-specific invariants live in materials/space/members.js (owner
+// singleton). See PERMISSIONS.md for the full doctrine.
 registerOperation("add-member", {
   targets: ["space", "stance"],
   ownerExtension: "seed",
@@ -558,7 +534,7 @@ registerOperation("add-member", {
     if (!className) throw new IbpError(IBP_ERR.INVALID_INPUT, "`className` is required");
     if (!beingId) throw new IbpError(IBP_ERR.INVALID_INPUT, "`beingId` is required");
     try {
-      await addSpaceMember(spaceId, className, beingId, actor, summonCtx?.branch || "0", summonCtx);
+      await addSpaceMember(spaceId, className, beingId, actor, summonCtx?.actorAct?.branch || "0", summonCtx);
     } catch (err) {
       throw mapPatternsToIbpError(err, PERMISSION_ERROR_PATTERNS);
     }
@@ -582,7 +558,7 @@ registerOperation("remove-member", {
     if (!className) throw new IbpError(IBP_ERR.INVALID_INPUT, "`className` is required");
     if (!beingId) throw new IbpError(IBP_ERR.INVALID_INPUT, "`beingId` is required");
     try {
-      await removeSpaceMember(spaceId, className, beingId, actor, summonCtx?.branch || "0", summonCtx);
+      await removeSpaceMember(spaceId, className, beingId, actor, summonCtx?.actorAct?.branch || "0", summonCtx);
     } catch (err) {
       throw mapPatternsToIbpError(err, PERMISSION_ERROR_PATTERNS);
     }

@@ -52,10 +52,13 @@ export default {
       greeter: "./clones/greeter.clone.json",
     },
     hooks: { fires: [], listens: [] },
-    defaultPermissions: {
-      // Anyone can SUMMON the greeter — that's the whole point of a
-      // hello-world. No identity restriction at the place root.
-      "summon:@hello-greeter": { requires: {} },
-    },
+    // defaultPermissions retired (seed/RolesAreAuth.md). To make
+    // @hello-greeter summonable, this extension would either:
+    //   - ship a role whose canSummon includes "@hello-greeter" and
+    //     grant it to the operator (or have the operator self-author),
+    //   - OR have the operator extend the seed `global` role's
+    //     canSummon to include "@hello-greeter".
+    // For the demo, the operator can grant themselves a role with
+    // canSummon: ["@hello-greeter"] at the place root.
   },
 };

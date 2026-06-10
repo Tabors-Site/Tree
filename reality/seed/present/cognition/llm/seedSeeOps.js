@@ -84,3 +84,49 @@ registerSeeOperation("place", {
     }
   },
 });
+
+// "arrival-view" — the implicit floor for stateless visitors. Returns
+// a HAND-FILTERED descriptor of the reality root: physical layout
+// (name, size, coords) and the cherub being. Strips every other being
+// and all matter. The portal's landing page calls
+// `see("arrival-view")` to render the public face that lets a visitor
+// find and address cherub to register.
+//
+// Per seed/RolesAreAuth.md, arrival's canSee is ["arrival-view"] only
+// — anonymous callers cannot see raw positions or any other SEE op.
+// This op is the one window an anonymous caller has into the world.
+registerSeeOperation("arrival-view", {
+  ownerExtension: "seed",
+  description: "The public landing face: reality root layout + cherub only",
+  handler: async ({ identity }) => {
+    const { getSpaceRootId } = await import("../../../sprout.js");
+    const rootId = getSpaceRootId();
+    if (!rootId) return null;
+    const address = `${getRealityDomain()}/${rootId}`;
+    try {
+      const full = await seeVerb(address, { identity: identity || null });
+      if (!full) return null;
+      // Keep only the cherub being; drop every other being and all matter.
+      const beings = Array.isArray(full.beings)
+        ? full.beings.filter((b) => b?.being === "cherub" || b?.name === "cherub")
+        : [];
+      return {
+        kind: full.kind || "place",
+        address: full.address,
+        space: full.space ? {
+          name: full.space.name,
+          size: full.space.size || null,
+          coord: full.space.coord || null,
+        } : null,
+        beings,
+        matter: [],
+        // Drop children, qualities namespaces, etc. Anonymous callers
+        // see only what they need to find cherub and start the
+        // registration flow.
+      };
+    } catch (err) {
+      log.warn("SeedSees", `see "arrival-view" failed: ${err.message}`);
+      return null;
+    }
+  },
+});

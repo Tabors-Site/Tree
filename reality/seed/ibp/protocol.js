@@ -117,7 +117,7 @@ export const IBP_ERR = Object.freeze({
   // their fact-chains never converge. A bridge or verb dispatch that
   // crosses branches has no shared fold to authorize against. This code
   // throws when an address bridge mixes branches, or when a verb's
-  // ambient summonCtx.branch disagrees with the target stance's branch.
+  // ambient summonCtx.actorAct?.branch disagrees with the target stance's branch.
   CROSS_BRANCH_FORBIDDEN: "CROSS_BRANCH_FORBIDDEN",
 
   // Branch is paused. The Branch row carries `paused: true` (set via

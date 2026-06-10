@@ -46,9 +46,23 @@ export async function resolveBareCapabilities(role, ctx) {
     rootId: ctx?.rootId || null,
     name: ctx?.name || null,
   };
+  // canSummon entries are two-sided: `as: "actor"` (default) is
+  // caller-side (what this role can SEND); `as: "receiver"` is
+  // receive-side (what this role accepts when TARGETED). The
+  // resolved capabilities here drive the LLM frame's tool palette,
+  // act-chain face snapshots, and any other "what this role can
+  // INITIATE" surface — so only actor entries belong. Receiver
+  // entries surface elsewhere (UI discovery, the receiver's own
+  // cognition). See seed/RolesAreAuth.md "canSummon: one field, two
+  // surfaces."
+  const actorSummonEntries = Array.isArray(role.canSummon)
+    ? role.canSummon.filter(
+        (e) => typeof e !== "object" || (e?.as ?? "actor") === "actor",
+      )
+    : null;
   const [doEntries, summonEntries, beEntries] = await Promise.all([
     resolveCanStar(role.canDo, beingCtx),
-    resolveCanStar(role.canSummon, beingCtx),
+    resolveCanStar(actorSummonEntries, beingCtx),
     resolveCanStar(role.canBe, beingCtx),
   ]);
   const toNames = list =>

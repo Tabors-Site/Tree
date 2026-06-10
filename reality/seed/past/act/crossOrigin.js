@@ -10,8 +10,8 @@
 //
 // An Act records the actor's identity tuple { reality, branch,
 // beingIn, _id }. summonCtx.actorAct points to it. Every downstream
-// consumer reads identity through these helpers — no direct
-// summonCtx.branch reads (that's the legacy path; throw hard).
+// consumer reads identity through these helpers — no direct legacy
+// `summonCtx.branch` reads (the retired path; throw hard).
 //
 // A Fact targets a reel that lives in some world (reality+branch).
 // The Fact carries a `crossOrigin` block in its params iff the

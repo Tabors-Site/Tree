@@ -86,25 +86,24 @@ export function _resetHeavenCache() {
 /**
  * True when `beingId` has reality-wide authority via heaven.
  *
- * Heaven is the I-Am's room. The `angel` membership class is heaven's
- * authority roster — every operator added by cherub.birth or by an
- * existing angel through add-member at heaven is anointed there.
- * Angels can mutate the heaven Tier-3 spaces (.config, .roles, .tools)
- * and act on reality-wide write ops (capture-seed, close-reality,
- * set-reality-llm).
+ * Heaven is the I-Am's room. Heaven authority is granted in two
+ * shapes:
  *
- * The test: `beingId` IS the I-Am, OR appears in heaven's owner
- * class, OR appears in heaven's angel class. One roster, named
- * explicitly (angel), no parallel state.
+ *   - `members.owner` of heaven — the bootstrap-axiom ownership class.
+ *     I_AM owns heaven; rare other owners exist by transfer.
+ *   - `rolesGranted` entry of `{role: "angel", anchorSpaceId: <heavenId>}`
+ *     on the being — the delegated authority under RolesAreAuth.
+ *     Seed delegates and humans anointed by cherub.birth carry this.
  *
  * I_AM short-circuits true (universal authority on its own reality —
  * same doctrine as authorize.js's I_AM bypass).
  *
- * The name `isHeavenContributor` is kept because callers across the
- * codebase already use it; semantically it answers "has heaven
- * authority," which is now the angel class plus the owner.
+ * Returns true if EITHER check matches. The legacy `members.angel`
+ * class check is retired (replaced by the role grant); the
+ * `members.contributor` class is fully retired (no longer a heaven
+ * authority shape).
  */
-export async function isHeavenContributor(beingId) {
+export async function hasHeavenAuthority(beingId) {
   if (!beingId) return false;
   const { I_AM } = await import("../being/seedBeings.js");
   if (String(beingId) === String(I_AM)) return true;
@@ -115,10 +114,25 @@ export async function isHeavenContributor(beingId) {
   const heaven = await loadProjection("space", heavenId, "0");
   if (!heaven) return false;
 
+  // Owner check — the bootstrap-axiom ownership class.
   const { spaceHasMember } = await import("./members.js");
   const heavenState = heaven.state || {};
   if (spaceHasMember(heavenState, "owner", beingId)) return true;
-  if (spaceHasMember(heavenState, "angel", beingId)) return true;
-  if (spaceHasMember(heavenState, "contributor", beingId)) return true;
+
+  // Role-grant check — angel role anchored at heaven (the RolesAreAuth
+  // delegated-authority path). Walks the being's rolesGranted for a
+  // matching entry. Cherub.birth grants this to the first human; the
+  // I_AM grants it to every seed delegate at genesis.
+  const beingSlot = await loadProjection("being", String(beingId), "0");
+  const grants = beingSlot?.state?.qualities?.rolesGranted;
+  if (Array.isArray(grants)) {
+    for (const g of grants) {
+      if (g?.role === "angel" && String(g?.anchorSpaceId) === String(heavenId)) {
+        return true;
+      }
+    }
+  }
+
   return false;
 }
+

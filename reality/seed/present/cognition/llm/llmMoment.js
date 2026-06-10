@@ -198,7 +198,7 @@ async function runLlmMomentInner({ being, envelope, role, signal, summonCtx }) {
   // through every internal call. No default . if branch is missing,
   // assertBranch in the projection layer will throw and the moment
   // fails loud rather than silently folding on main.
-  const branch = summonCtx?.branch || envelope?.branch;
+  const branch = summonCtx?.actorAct?.branch || envelope?.branch;
 
   // 1. Plant the being at its space. rootId derives from setCurrentSpace.
   const spaceId =
@@ -346,7 +346,7 @@ async function runLlmMomentInner({ being, envelope, role, signal, summonCtx }) {
   // inside the prompt-build phase BEFORE the summon dispatch — they
   // don't get a summonCtx, only this promptCtx — so the reader has to
   // live here too.
-  const _summonBranch = summonCtx?.branch || "0";
+  const _summonBranch = summonCtx?.actorAct?.branch || "0";
   const promptCtx = {
     name: username,
     beingId,

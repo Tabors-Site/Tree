@@ -25,14 +25,16 @@
 export const angelRole = Object.freeze({
   name: "angel",
   description:
-    "Super-sudo. The I-Am's role; granted to seed delegates at genesis. " +
-    "Reality-wide unrestricted reach. Use sparingly.",
-  // Reality-wide. `reach` is omitted → true-global (the auth walk
-  // applies this role at every target, no constraint).
-  scope: "global",
-  // LLM-cognition by default (an angel can in principle hold any
-  // cognition; this is the default for live-anointed angels). I-Am
-  // doesn't run cognition — its bypass is code-level.
+    "Super-sudo. Hosted on heaven (system-internal). The I-Am holds it " +
+    "implicitly via code-level bypass; seed delegates get it granted at " +
+    "genesis. Reach is extended reality-wide so heaven-authority covers " +
+    "the whole reality. Use sparingly.",
+  // Hosted on heaven — default reach is heaven + descendants. The
+  // `reach` field extends to the whole reality (any path under root)
+  // so heaven-anchored grants of angel reach into the place root and
+  // everything else outside heaven's subtree. This is the role
+  // expressing "heaven-class authority is reality-wide authority."
+  reach: ["/**"],
   requiredCognition: null,
   respondMode: "async",
   triggerOn: ["message"],

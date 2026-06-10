@@ -8,6 +8,10 @@ The doctrine for how a being acts at a position whose reality or branch differs 
 
 If you're implementing federation, building a portal extension, or wondering how cross-branch acting should behave, the answer lives here.
 
+**Related doctrine:**
+- [RolesAreAuth.md](RolesAreAuth.md) — roles ARE auth. Cross-world citizenship and federation policy are expressed entirely through the role registry. The `canSummon` field is one field with two surfaces (`as: "actor"` for caller-side, `as: "receiver"` for receive-side accept); receive-side entries are what UI discovery reads to render per-being summon options (e.g. birther's "mate" button).
+- [protocols/ibp/FEDERATION.md](../protocols/ibp/FEDERATION.md) — federation protocol layer. The mate + vessel pattern for cross-world citizenship; canopy envelope contract; receive-side dispatch.
+
 ## Terminology
 
 Three nested concepts:

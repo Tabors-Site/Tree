@@ -52,6 +52,16 @@ import { getPeerByDomain, getPeerBaseUrl } from "./peers.js";
 
 const FORWARD_TIMEOUT_MS = 30 * 1000;
 
+// Replay-protection window. A canopy envelope older than this is
+// refused at the receiver. Captured-and-replayed envelopes (man-in-
+// the-middle, log scraping, etc.) lose their window quickly. The
+// value is large enough to absorb normal clock skew + slow links,
+// small enough to bound the attack surface. Operators with very
+// drifty clocks can widen via env var; defaults below.
+const REPLAY_WINDOW_MS = Number(
+  process.env.CANOPY_REPLAY_WINDOW_MS || 60_000,
+);
+
 /**
  * Extract the target place from a raw IBP address string. Stance-pair
  * addresses (left :: right) target the right side. Returns the place
@@ -139,6 +149,10 @@ export async function forwardToPeer(envelope) {
     identity:    envelope.identity || null,
     actorBranch: envelope.actorBranch || null,
     actorActId:  envelope.actorActId  || null,
+    // Replay-protection. The receiver enforces a freshness window
+    // against this timestamp (default 60s). Captured envelopes lose
+    // their window quickly. See verifyIncoming's freshness check.
+    signedAt:    new Date().toISOString(),
   });
 
   // Sign the raw body bytes. The peer verifies against our public key.
@@ -203,6 +217,36 @@ export async function verifyIncoming(req, res, next) {
     return res.status(401).json({
       status: "error",
       error: { code: "UNAUTHORIZED", message: "canopy signature verification failed" },
+    });
+  }
+
+  // Replay-protection. The signed body must include a `signedAt` ISO
+  // timestamp within REPLAY_WINDOW_MS of now (default 60s). A captured
+  // envelope replayed minutes later will have an aged signedAt and
+  // refuse here even though the signature is valid. The sender's
+  // forwardToPeer populates signedAt at send-time.
+  const signedAt = req.body?.signedAt;
+  if (typeof signedAt !== "string" || !signedAt.length) {
+    return res.status(401).json({
+      status: "error",
+      error: { code: "UNAUTHORIZED", message: "canopy envelope missing signedAt (replay-window check requires it)" },
+    });
+  }
+  const signedAtMs = Date.parse(signedAt);
+  if (Number.isNaN(signedAtMs)) {
+    return res.status(401).json({
+      status: "error",
+      error: { code: "UNAUTHORIZED", message: `canopy signedAt is not a valid ISO timestamp: "${signedAt}"` },
+    });
+  }
+  const ageMs = Math.abs(Date.now() - signedAtMs);
+  if (ageMs > REPLAY_WINDOW_MS) {
+    return res.status(401).json({
+      status: "error",
+      error: {
+        code: "UNAUTHORIZED",
+        message: `canopy envelope outside replay window (age=${Math.round(ageMs / 1000)}s, window=${Math.round(REPLAY_WINDOW_MS / 1000)}s)`,
+      },
     });
   }
 

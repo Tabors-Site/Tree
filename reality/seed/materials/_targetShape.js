@@ -127,7 +127,7 @@ export async function loadTargetRow(target, expectedKind, { summonCtx = null } =
   // Branch the lookup happens on. The moment carries the caller's
   // branch via summonCtx; handlers get a row-shaped view scoped to
   // that branch.
-  const branch = summonCtx?.branch || "0";
+  const branch = summonCtx?.actorAct?.branch || "0";
   // loadOrFold (not loadProjection): every DO/BE/SUMMON op flows through
   // loadTargetRow. On a fresh branch the target's slot hasn't been
   // cold-folded yet — bare loadProjection returns null, the handler

@@ -24,11 +24,13 @@
 //
 // Operators can author additional classes per-position (auditor,
 // editor, etc.) by writing `do:set-space` facts with
-// `field: "members.<className>"`. Rules gate on class membership via
-// `requires: { memberClasses: { includes: "<className>" } }` in
-// `qualities.permissions`. Convenience flags (`isOwner`,
-// `isContributor`) are auto-derived for the two canonical classes;
-// custom classes go through the includes-comparator.
+// `field: "members.<className>"`. Member classes survive for ownership
+// bookkeeping; under roles-are-auth (seed/RolesAreAuth.md) the AUTH
+// gate is the role-walk against qualities.roles, not member-class
+// checks. Owner-class entries still matter — set-role / install-role
+// authorization checks "is this caller an owner of the target space"
+// at the substrate level — but the heaven angel class retired with
+// the role-walk migration.
 //
 // Storage shape on a Space projection row:
 //
@@ -59,7 +61,6 @@
 // state-consistency checks that run after auth, refusing mutations
 // that would leave the post-state incoherent. See seed/PERMISSIONS.md.
 
-import { getInternalConfigValue } from "../../internalConfig.js";
 import { hooks } from "../../hooks.js";
 import { IBP_ERR, IbpError } from "../../ibp/protocol.js";
 import { I_AM } from "../being/seedBeings.js";
@@ -123,15 +124,6 @@ export function getSpaceOwner(spaceRow) {
 }
 
 /**
- * Get the contributor list at a space. Returns the `contributor`
- * class's members; empty when none. Owner is NOT in this list (owner
- * is the `owner` class).
- */
-export function getSpaceContributors(spaceRow) {
-  return getSpaceMembers(spaceRow, "contributor");
-}
-
-/**
  * List every class name a being belongs to at this space (just this
  * row, not the ancestor walk). Order is undefined; callers consume
  * as a set.
@@ -170,9 +162,6 @@ export function spaceHasMember(spaceRow, className, beingId) {
  *   - target being exists
  *   - singleton classes (owner) reject when the class is already
  *     occupied (use `setSpaceOwner` to replace)
- *   - the contributor class refuses to add the resolved owner (the
- *     resulting state would have them as both — incoherent)
- *   - per-class size caps (contributor caps at `maxContributorsPerSpace`)
  *
  * `actor` is the being making the call (for the space-lock owner).
  * `summonCtx` carries the moment so doVerb stamps on the right
@@ -202,12 +191,6 @@ export async function addSpaceMember(spaceId, className, beingId, actor, branch,
   await assertBeingExists(beingId, branch);
 
   // Class-specific invariants.
-  if (className === "contributor") {
-    const ownerId = getSpaceOwner(space);
-    if (ownerId && String(ownerId) === String(beingId)) {
-      throw new Error("Cannot add the owner as a contributor");
-    }
-  }
   if (SINGLETON_CLASSES.has(className)) {
     const existing = getSpaceMembers(space, className);
     if (existing.length > 0 && existing[0] !== String(beingId)) {
@@ -217,10 +200,6 @@ export async function addSpaceMember(spaceId, className, beingId, actor, branch,
     }
   }
 
-  const cap = className === "contributor"
-    ? (Number(getInternalConfigValue("maxContributorsPerSpace")) || 500)
-    : null;
-
   const locked = await acquireSpaceLock(spaceId, actor);
   if (!locked) {
     throw new IbpError(IBP_ERR.RESOURCE_CONFLICT, "Space is being modified");
@@ -229,9 +208,6 @@ export async function addSpaceMember(spaceId, className, beingId, actor, branch,
     const curSlot = await loadOrFold("space", spaceId, branch);
     const current = curSlot ? curSlot.state : space;
     const list = getSpaceMembers(current, className);
-    if (cap !== null && list.length >= cap) {
-      throw new Error(`Class "${className}" has reached the cap of ${cap}`);
-    }
     if (list.some((id) => String(id) === String(beingId))) return;
     const next = [...list, String(beingId)];
 
@@ -372,30 +348,13 @@ export async function setSpaceOwner(spaceId, newOwnerId, actor, branch, summonCt
       spaceId, "owner", [String(newOwnerId)], actor, branch, summonCtx
     );
 
-    // Prune new owner out of contributor class (no double-membership).
-    const contributors = getSpaceMembers(current, "contributor");
-    if (contributors.some((id) => String(id) === String(newOwnerId))) {
-      const pruned = contributors.filter((id) => String(id) !== String(newOwnerId));
-      await emitMembersFact(
-        spaceId, "contributor", pruned, actor, branch, summonCtx
-      );
-    }
-
-    // If this was a transfer (previous owner existed and was not I_AM),
-    // demote the previous owner to contributor so they keep write access
-    // to their former subtree. matches legacy transferOwnership.
-    if (previousOwnerId && previousOwnerId !== I_AM
-        && String(previousOwnerId) !== String(newOwnerId)) {
-      const after = currentOwnerNow === previousOwnerId
-        ? contributors
-        : getSpaceMembers(current, "contributor");
-      if (!after.some((id) => String(id) === String(previousOwnerId))) {
-        const withPrev = [...after.filter((id) => String(id) !== String(newOwnerId)), String(previousOwnerId)];
-        await emitMembersFact(
-          spaceId, "contributor", withPrev, actor, branch, summonCtx
-        );
-      }
-    }
+    // Auto-demote-to-contributor on owner transfer retired with the
+    // contributor concept (RolesAreAuth: every non-owner authority is
+    // a granted role). The previous owner keeps no implicit write
+    // access; if they should retain editing rights, an explicit
+    // `grant-role` against an operator-authored role grants them the
+    // canDo they need. The owner singleton invariant is the ONE base
+    // axiom; everything below it is roles.
 
     invalidateSpace(spaceId);
     hooks.run("afterMembersChange", {

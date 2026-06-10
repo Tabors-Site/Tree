@@ -113,6 +113,10 @@
 
 import { getRole } from "./registry.js";
 import { beingCognition } from "../../materials/being/identity/lookups.js";
+import {
+  getRoleSpecForGrant,
+  roleReachesTarget as reachCovers,
+} from "./spaceLookup.js";
 
 const OPERATORS = new Set(["eq", "ne", "in", "notIn", "gt", "gte", "lt", "lte", "present"]);
 const COMPOSITES = new Set(["and", "or", "not"]);
@@ -140,13 +144,25 @@ export function resolveActiveStack({
   previousMoment = null,
   now = null,
   worldSignals = null,
+  availableRoles = null,
 }) {
   if (!toBeing) return [];
 
-  // Highest priority: an explicit activeRole on the entry. The caller
-  // specifically requested this voice (e.g. `summon @being:role-name`);
-  // honor it as the primary without running the flow. Modifiers still
-  // evaluate from the flow on top of that primary.
+  // `availableRoles` is the pre-computed Map<roleName, spec> of roles
+  // the being HOLDS and that REACH the current position
+  // (seed/RolesAreAuth.md). The caller (assign.js) computes this once
+  // per moment-open via `computeAvailableRoles` so this evaluator
+  // stays sync. When null → fall back to the registry (covers genesis
+  // / boot paths before grants are folded). Each clause's role must
+  // appear here or the clause is skipped — same shape as a failed
+  // when-condition. No silent fallback to ungranted roles.
+  const lookup = (roleName) => {
+    if (availableRoles && availableRoles instanceof Map) {
+      return availableRoles.get(roleName) || null;
+    }
+    return getRole(roleName);
+  };
+
   const quals = toBeing.qualities;
   const roleFlow = Array.isArray(qGet(quals, "roleFlow")) ? qGet(quals, "roleFlow") : null;
 
@@ -162,16 +178,21 @@ export function resolveActiveStack({
   });
 
   let primary = null;
-  if (entry?.activeRole) primary = entry.activeRole;
+  if (entry?.activeRole) {
+    // Explicit activeRole on the entry — honor it ONLY if the being
+    // can actually play it (held + reaching). Otherwise skip and let
+    // the flow pick a real one.
+    if (lookup(entry.activeRole)) primary = entry.activeRole;
+  }
 
-  // No flow declared → defaultRole is the only voice; no modifiers.
   if (!roleFlow || roleFlow.length === 0) {
-    if (!primary) primary = toBeing.defaultRole || null;
+    if (!primary) {
+      const fallback = toBeing.defaultRole || null;
+      if (fallback && lookup(fallback)) primary = fallback;
+    }
     return primary ? [primary] : [];
   }
 
-  // Walk the flow once: collect primary (first non-stacked match that
-  // passes requiredCognition) and all stacked matches.
   const modifiers = [];
   for (const clause of roleFlow) {
     if (!clause || typeof clause !== "object") continue;
@@ -181,8 +202,8 @@ export function resolveActiveStack({
     const conditionPasses = whenClause == null ? true : evalWhen(whenClause, ctx);
     if (!conditionPasses) continue;
 
-    const role = getRole(roleName);
-    if (!role) continue;
+    const role = lookup(roleName);
+    if (!role) continue; // not held, doesn't reach, or unknown — skip
     if (role.requiredCognition && role.requiredCognition !== ctx.me.cognition) continue;
 
     if (isStacked) {
@@ -190,14 +211,57 @@ export function resolveActiveStack({
     } else if (!primary) {
       primary = roleName;
     }
-    // Non-stacked clauses past the first matching one are SKIPPED —
-    // first-match-wins for primary selection. Stacked clauses keep
-    // accumulating regardless.
   }
 
-  if (!primary) primary = toBeing.defaultRole || null;
+  if (!primary) {
+    const fallback = toBeing.defaultRole || null;
+    if (fallback && lookup(fallback)) primary = fallback;
+  }
   if (!primary) return modifiers; // pathological: only modifiers, no primary
   return [primary, ...modifiers];
+}
+
+/**
+ * Pre-compute the set of roles a being can currently play.
+ *
+ * Walks toBeing.qualities.rolesGranted; for each grant looks up the
+ * role spec at grant.anchorSpaceId (walking up qualities.roles[name])
+ * and keeps it iff the spec's reach covers the being's current
+ * position. The returned Map<roleName, spec> is what
+ * resolveActiveStack consults for both grant-held AND reaches-here.
+ *
+ * Called once per moment-open from assign.js; the result is passed
+ * into resolveActiveStack as `availableRoles`.
+ *
+ * @param {object} toBeing                — the being whose moment is opening
+ * @param {string} positionSpaceId         — toBeing.position
+ * @param {string} branch                  — the branch ("0" for main)
+ * @returns {Promise<Map<string, object>>}  role-name → spec
+ */
+export async function computeAvailableRoles({ toBeing, positionSpaceId, branch }) {
+  const out = new Map();
+  if (!toBeing) return out;
+  if (typeof branch !== "string" || !branch.length) {
+    throw new Error("computeAvailableRoles requires `branch` (no silent default)");
+  }
+
+  const grants = readGrantsFromBeing(toBeing);
+  if (grants.length === 0) return out;
+
+  for (const grant of grants) {
+    const { spec, hostSpaceId } = await getRoleSpecForGrant(grant, branch);
+    if (!spec) continue;
+    if (!await reachCovers(spec, hostSpaceId, { spaceId: positionSpaceId }, branch)) continue;
+    if (!out.has(grant.role)) out.set(grant.role, spec);
+  }
+  return out;
+}
+
+function readGrantsFromBeing(toBeing) {
+  const q = toBeing.qualities;
+  const qualities = q instanceof Map ? Object.fromEntries(q.entries()) : q;
+  const arr = qualities?.rolesGranted;
+  return Array.isArray(arr) ? arr : [];
 }
 
 

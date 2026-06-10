@@ -129,7 +129,7 @@ async function createMatter({
   if (!beingId || !spaceId) {
     throw new Error("Missing required fields: beingId, spaceId");
   }
-  const branch = assertBranchOrThrow(summonCtx?.branch, "matters(summonCtx)");
+  const branch = assertBranchOrThrow(summonCtx?.actorAct?.branch, "matters(summonCtx)");
 
   const { loadOrFold } = await import("../projections.js");
   const { default: Projection } = await import("../branch/projection.js");
@@ -251,7 +251,7 @@ async function editMatter({
 }) {
   if (!matterId || !beingId) throw new Error("Missing required fields");
 
-  const branch = assertBranchOrThrow(summonCtx?.branch, "matters(summonCtx)");
+  const branch = assertBranchOrThrow(summonCtx?.actorAct?.branch, "matters(summonCtx)");
   const _matterSlot = await loadOrFold("matter", matterId, branch);
   if (!_matterSlot) throw new Error("Matter not found");
   const matter = { _id: _matterSlot.id, ...(_matterSlot.state || {}) };
@@ -381,7 +381,7 @@ async function deleteMatterAndFile({
   actId = null, sessionId = null,
   summonCtx = null,
 }) {
-  const branch = assertBranchOrThrow(summonCtx?.branch, "matters(summonCtx)");
+  const branch = assertBranchOrThrow(summonCtx?.actorAct?.branch, "matters(summonCtx)");
   const _mSlot = await loadOrFold("matter", matterId, branch);
   if (!_mSlot) throw new Error("Matter not found");
   const matter = { _id: _mSlot.id, ...(_mSlot.state || {}) };
@@ -468,7 +468,7 @@ async function transferMatter({
     throw new Error("Missing required fields: matterId, targetSpace, beingId");
   }
 
-  const branch = assertBranchOrThrow(summonCtx?.branch, "matters(summonCtx)");
+  const branch = assertBranchOrThrow(summonCtx?.actorAct?.branch, "matters(summonCtx)");
   const _mSlot2 = await loadOrFold("matter", matterId, branch);
   if (!_mSlot2) throw new Error("Matter not found");
   const matter = { _id: _mSlot2.id, ...(_mSlot2.state || {}) };

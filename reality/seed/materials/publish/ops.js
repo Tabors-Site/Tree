@@ -103,7 +103,7 @@ async function graftCloneHandler({ target, params, identity, summonCtx }) {
     );
   }
   const targetParentSpaceId = targetIdOf(target);
-  const branch = summonCtx?.branch || "0";
+  const branch = summonCtx?.actorAct?.branch || "0";
 
   const { graftClone } = await import("./graft.js");
   const result = await graftClone(bundle, targetParentSpaceId, {
@@ -148,10 +148,11 @@ registerOperation("graft-replicate", {
 //
 // Captures the FULL reality (facts + acts + branches + reelHeads) as a
 // portable seed and saves it to reality/seeds/ on the server. Returns
-// { savedTo, counts }. Authority-only — the caller must be a contributor
-// of the place root (which is gate-equivalent to "I am authorized to
-// represent this reality"). Clone, by contrast, can be called by any
-// authenticated being because it downloads bytes to the client.
+// { savedTo, counts }. Authority-only — the caller must have heaven
+// authority (owner or angel role on heaven; gate-equivalent to "I am
+// authorized to represent this reality"). Clone, by contrast, can be
+// called by any authenticated being because it downloads bytes to
+// the client.
 
 async function captureSeedHandler({ target, params, identity, summonCtx }) {
   if (!identity?.beingId) {
@@ -161,18 +162,17 @@ async function captureSeedHandler({ target, params, identity, summonCtx }) {
     );
   }
 
-  // Authority gate: caller must be a heaven contributor. Heaven is
-  // the I-Am's room; heaven contributors are the beings the I-Am has
-  // admitted to act on the reality's behalf. Forming a seed bakes the
-  // full reality identity into a portable artifact saved on the
-  // server's disk; only heaven contributors should be able to. The
-  // earlier "rootOperator" terminology collapsed into "is heaven
-  // contributor" — one roster, no parallel state.
-  const { isHeavenContributor } = await import("../space/heavenLineage.js");
-  if (!(await isHeavenContributor(identity.beingId))) {
+  // Authority gate: caller must have heaven authority. Heaven is the
+  // I-Am's room; beings with heaven authority are those the I-Am (or
+  // an angel) has admitted via role grant or ownership transfer.
+  // Forming a seed bakes the full reality identity into a portable
+  // artifact saved on the server's disk; only authorized beings
+  // should be able to.
+  const { hasHeavenAuthority } = await import("../space/heavenLineage.js");
+  if (!(await hasHeavenAuthority(identity.beingId))) {
     throw new IbpError(
       IBP_ERR.FORBIDDEN,
-      "capture-seed: only heaven contributors may form a seed of the reality.",
+      "capture-seed: only beings with heaven authority (owner or angel role) may form a seed of the reality.",
     );
   }
 
@@ -260,7 +260,7 @@ async function graftCloneByNameHandler({ target, params, identity, summonCtx }) 
     );
   }
   const targetParentSpaceId = targetIdOf(target);
-  const branch = summonCtx?.branch || "0";
+  const branch = summonCtx?.actorAct?.branch || "0";
   const { graftClone } = await import("./graft.js");
   const result = await graftClone(entry.bundle, targetParentSpaceId, {
     branch,

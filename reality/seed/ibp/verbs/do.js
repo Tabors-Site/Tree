@@ -65,7 +65,7 @@ export async function doVerb(target, operation, params = {}, opts = {}) {
     throw new Error(`Unknown DO operation: "${operation}". Use reality.do.listOperations() to see available operations.`);
   }
 
-  // Resolve branch ONCE at the entry point. summonCtx.branch wins when
+  // Resolve branch ONCE at the entry point. summonCtx.actorAct?.branch wins when
   // inside an existing moment (continuation); otherwise opts.currentBranch
   // from the wire layer. resolveBranchForFact throws MISSING_BRANCH if
   // both are absent — silent default to "0" hid threading bugs.
@@ -99,13 +99,11 @@ export async function doVerb(target, operation, params = {}, opts = {}) {
     const identity = opts.identity;
     // Auth target ≠ audit target. The Fact lands on whatever reel the
     // op declares (being's reel, matter's reel, space's reel — that's
-    // `resolveAuditTarget`). But the permission rules live in
-    // `qualities.permissions` on Spaces, walked via the ancestor
-    // cache. So for non-space targets, resolve to the Space the
-    // entity lives at — Being.position / .homeSpace, Matter.spaceId.
-    // Then the ancestor walk finds the per-position rules (and the
-    // reality-root default `do.*` fallback) the same way it would for
-    // a direct space target.
+    // `resolveAuditTarget`). authorize() (the role-walk; see
+    // seed/RolesAreAuth.md) takes whatever target the caller passed.
+    // For non-space targets we still resolve to the Space the entity
+    // lives at so the role-walk has a coherent path/spaceId to match
+    // against role.reach + role host coverage.
     const auditTarget = resolveAuditTarget(target, null, op);
     const spaceIdForAuth = await resolveAuthSpaceId(target, auditTarget, branch);
     // Extract namespace for namespace-aware authorization. Three
@@ -218,12 +216,10 @@ doVerb.listOperations = listOperations;
  *
  * Audit and auth are different targets. The audit fact lands on the
  * op's reel (Being / Matter / Space — whichever the op writes). The
- * auth check looks for `qualities.permissions` rules, which live ONLY
- * on Spaces. So when the op writes a Being or Matter, the auth check
- * has to walk from the Space the entity lives at — otherwise the
- * ancestor walk runs on a being-id or matter-id, finds no space row,
- * and returns "no permission rule matched" even when the reality
- * root has a `do.*` default that would have applied.
+ * role-walk authorize (seed/RolesAreAuth.md) reaches a target via
+ * spaceId + path; for ops on Beings or Matter we map to the Space
+ * the entity lives at so the role's reach can be evaluated against a
+ * concrete position.
  *
  * Mapping:
  *   Space target  → its own id

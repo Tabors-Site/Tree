@@ -176,7 +176,7 @@ export async function summonVerb(stance, message, opts = {}) {
   // a specific instance uses its name.
   const { findByName, loadOrFold } = await import("../../materials/projections.js");
   // Branch resolution at the perimeter: inside-moment continuations
-  // ride summonCtx.branch; wire-originated calls ride opts.currentBranch.
+  // ride summonCtx.actorAct?.branch; wire-originated calls ride opts.currentBranch.
   // Throws MISSING_BRANCH if neither was attached (a threading bug at
   // the perimeter, surfaced loud per the branch-hardening doctrine).
   const branch = resolveBranchForFact(summonCtx, currentBranch, "summon");

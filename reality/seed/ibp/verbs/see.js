@@ -80,6 +80,19 @@ function isBeingsCatalogPath(path) {
   // branches, which the cross-branch being catalog isn't supposed to.
   return /^\/?\.\/beings\/?$/.test(path);
 }
+// Public id-to-name directory. `<reality>/.beings/<id>` and
+// `<reality>/.spaces/<id>` return the named being or space without
+// requiring auth — operator-controlled privacy filters (when added)
+// gate per-id. The point: foreign substrates seeing an id in a
+// cross-world descriptor can resolve the name without holding an
+// identity here. Federation foundation. See protocols/ibp/FEDERATION.md
+// "Public id-to-name directory."
+function publicDirectoryTargetFromPath(path) {
+  if (typeof path !== "string") return null;
+  const m = path.match(/^\/?\.(beings|spaces)\/([^/]+)\/?$/);
+  if (!m) return null;
+  return { kind: m[1] === "beings" ? "being" : "space", id: decodeURIComponent(m[2]) };
+}
 // `.branches` / `.branches/<branchPath>` — branch tree catalog. Bare
 // returns the root view (main + its children). With a path returns the
 // lineage for that branch + its direct children. Read-only synthetic
@@ -335,6 +348,71 @@ export async function seeVerb(target, opts = {}) {
     };
   }
 
+  // Public id-to-name directory short-circuit. SEE on
+  // `<reality>/.beings/<id>` or `<reality>/.spaces/<id>` returns the
+  // named entity's public-safe surface (id + name + a small set of
+  // qualities operators choose to expose). Unauth — foreign substrates
+  // can resolve display info for ids appearing in cross-world
+  // descriptors without holding an identity here. Private beings/spaces
+  // (when the privacy flag lands) return 404. See FEDERATION.md
+  // "Public id-to-name directory."
+  const publicTarget = publicDirectoryTargetFromPath(expanded.right?.path);
+  if (publicTarget) {
+    const { loadOrFold } = await import("../../materials/projections.js");
+    const realityDomain = getRealityDomain();
+    const branch = expanded.right?.branch || parseCtx.currentBranch || "0";
+    const slot = await loadOrFold(publicTarget.kind, publicTarget.id, branch);
+    const notFoundCode = publicTarget.kind === "being"
+      ? IBP_ERR.BEING_NOT_FOUND
+      : IBP_ERR.SPACE_NOT_FOUND;
+    if (!slot) {
+      throw new IbpError(
+        notFoundCode,
+        `${publicTarget.kind} "${publicTarget.id}" not found on this reality`,
+        { kind: publicTarget.kind, id: publicTarget.id },
+      );
+    }
+    // Privacy gate. A future qualities.public = false marks the entity
+    // as not surfacing through this directory; until that lands every
+    // existing entity is treated as public. Operators wanting tight
+    // federation can mark sensitive beings/spaces private now.
+    if (slot.state?.qualities?.public === false) {
+      throw new IbpError(
+        notFoundCode,
+        `${publicTarget.kind} "${publicTarget.id}" is private`,
+        { kind: publicTarget.kind, id: publicTarget.id, private: true },
+      );
+    }
+    return {
+      address: {
+        reality: realityDomain,
+        path: `/.${publicTarget.kind === "being" ? "beings" : "spaces"}/${publicTarget.id}`,
+        being: null,
+        spaceId: null,
+        beingId: publicTarget.kind === "being" ? publicTarget.id : null,
+        chain: [],
+        pathByNames: `/.${publicTarget.kind === "being" ? "beings" : "spaces"}/${publicTarget.id}`,
+        pathByIds: `/.${publicTarget.kind === "being" ? "beings" : "spaces"}/${publicTarget.id}`,
+        leafName: slot.state?.name || publicTarget.id,
+        leafId: publicTarget.id,
+      },
+      publicDirectoryEntry: {
+        kind: publicTarget.kind,
+        id: publicTarget.id,
+        name: slot.state?.name || null,
+        // A curated subset of qualities operators publish openly.
+        // Empty by default; extensions can opt in by writing to
+        // qualities.publicSurface = {...}.
+        public: slot.state?.qualities?.publicSurface || {},
+      },
+      isSpaceRoot: false,
+      isHomeRoot: false,
+      children: [],
+      matters: [],
+      qualities: {},
+    };
+  }
+
   // Branches catalog short-circuit. SEE on `<reality>/.branches` (or
   // `<reality>/.branches/<branchPath>`) returns the branch tree as a
   // read-only graph. No Act, no Fact, no scheduler — same posture as
@@ -452,6 +530,25 @@ export async function seeVerb(target, opts = {}) {
     summonCtx,
   });
   if (!decision.ok) {
+    // Anonymous redirect (seed/RolesAreAuth.md "canSee semantics").
+    // Arrival's canSee is ["arrival-view"] — raw position SEE refuses.
+    // Rather than throwing UNAUTHORIZED (which would lock anonymous
+    // visitors out of any landing surface), dispatch the arrival-view
+    // SEE op. Visitors see the filtered root + cherub regardless of
+    // which address they tried — the same view, accessible from any
+    // entry point. Authenticated callers get the normal FORBIDDEN.
+    if (!identity?.beingId) {
+      const { getSeeOperation } = await import("../seeOps.js");
+      const arrivalOp = getSeeOperation("arrival-view");
+      if (arrivalOp) {
+        return await arrivalOp.handler({
+          identity: null,
+          args: {},
+          ctx: null,
+          branch: summonCtx?.branch || "0",
+        });
+      }
+    }
     throw new IbpError(
       identity ? IBP_ERR.FORBIDDEN : IBP_ERR.UNAUTHORIZED,
       `SEE denied for actor "${decision.actor}": ${decision.reason}`,

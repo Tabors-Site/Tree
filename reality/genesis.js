@@ -319,16 +319,11 @@ export async function genesis(app, opts = {}) {
     await ensureSourceTree();
     log.info("Genesis", "I see my own body.");
 
-    // Default stance permissions. I-Am acts to write the permission
-    // qualities on the space root.
-    await withIAmAct("seed default stance permissions", async (ctx) => {
-      const { seedDefaultStancePermissions } =
-        await import("./seed/ibp/authorize.js");
-      await seedDefaultStancePermissions(ctx);
-    });
-    if (bootMode === "Beginning") {
-      log.info("Genesis", "I set my stance defaults.");
-    }
+    // Stance-permissions seeding retired (seed/RolesAreAuth.md). The
+    // role registry is the gate; the I-Am's bootstrap grants below
+    // (after role registration + grantAngelToSeedDelegates) hand the
+    // angel role to each seed delegate. No qualities.permissions rows
+    // are written; authorize.js no longer reads any such rows.
   } else {
     // Prime runtime caches that didn't get filled by the genesis
     // sequence because we skipped it. initRealityConfig is still
@@ -338,13 +333,13 @@ export async function genesis(app, opts = {}) {
     log.info("Genesis", "I remember my settings.");
   }
 
-  // Heaven contributors. The seed delegates (cherub, birther, llm-
+  // Beings with heaven authority. The seed delegates (cherub, birther, llm-
   // assigner, reality-manager, arrival, etc.) need hasAccess on
   // heaven so they can act inside the Tier-3 heaven spaces (./roles,
   // ./operations, ./tools, ...). Mechanism: add them as contributors
   // on heaven. I_AM is heaven's rootOwner already; the new
   // contributors list grows from boot scaffold (seed delegates) and
-  // later cherub.register (first human heaven contributor).
+  // later cherub.register (first human heaven authority).
   //
   // Earlier this slot ran ensureReignMatter / loadReigningBeings /
   // ensureSeedDelegatesReign / ensureIAmChildrenReign . a parallel
@@ -356,14 +351,12 @@ export async function genesis(app, opts = {}) {
   // shared moment — every iteration would see the empty list and
   // write a singleton). One withIAmAct per delegate inside the call.
   //
-  // Skip when plantedFromSeed — the seed carries heaven contributors.
+  // Skip when plantedFromSeed — the seed carries beings with heaven authority.
   if (!plantedFromSeed) {
-    const { ensureSeedDelegatesOnHeaven } =
-      await import("./seed/materials/being/seedDelegates.js");
-    await ensureSeedDelegatesOnHeaven();
-    if (bootMode === "Beginning") {
-      log.info("Genesis", "I admit my delegates into heaven.");
-    }
+    // ensureSeedDelegatesOnHeaven retired with roles-are-auth — the
+    // members.angel class is no longer the heaven gate. Delegates get
+    // angel role granted at heaven below; the role-walk authorize
+    // finds heaven.qualities.roles.angel by walking the grant anchor.
 
     // Seed migrations. Each migration's writes ride one I-Am act.
     await withIAmAct("seed migrations", async (ctx) => {
@@ -505,6 +498,21 @@ export async function genesis(app, opts = {}) {
   const { arrivalRole } = await import("./seed/present/roles/arrival/role.js");
   registerRole("arrival", arrivalRole, "seed");
 
+  // The commons delegate. public never acts; it holds members.owner
+  // slots for spaces transferred to the public commons (the
+  // owner-check in authorize admits any caller when public appears
+  // on the chain). See seed/RolesAreAuth.md "Public being".
+  const { publicRole } = await import("./seed/present/roles/public/role.js");
+  registerRole("public", publicRole, "seed");
+
+  // public-commons — the implicit visitor floor at any public-owned
+  // space. roleAuth's public-commons branch reads this role's spec
+  // from the registry when a target sits in a public-owned subtree.
+  // Operators customize the per-space commons surface by installing a
+  // role onto that space's qualities.roles; this role is the default.
+  const { publicCommonsRole } = await import("./seed/present/roles/public-commons/role.js");
+  registerRole("public-commons", publicCommonsRole, "seed");
+
   // The foundational roles of the roles-are-auth doctrine
   // (seed/RolesAreAuth.md):
   //   - angel: super-sudo, scope:global with no reach (true-global).
@@ -519,11 +527,48 @@ export async function genesis(app, opts = {}) {
   const { globalRole } = await import("./seed/present/roles/global/role.js");
   registerRole("global", globalRole, "seed");
 
+  // Install foundational role auth specs onto space qualities
+  // (seed/RolesAreAuth.md Final doctrine). Every role-in-effect lives
+  // on a space's qualities.roles[<name>]:
+  //   - angel  → heaven (system-internal scope)
+  //   - global → reality root (baseline for every being, reality-wide)
+  //
+  // The REGISTRY map above keeps the role specs in code (with handlers)
+  // for cognition-frame use. These installs write the AUTH SPEC (data
+  // only — functions stripped) into qualities.roles so the role-walk
+  // gate can look up specs at runtime by walking grant.anchorSpaceId
+  // up the qualities ancestor chain.
+  if (!plantedFromSeed) {
+    const { installRoleOnSpace } = await import("./seed/present/roles/install.js");
+    const { findByHeavenSpace } = await import("./seed/materials/projections.js");
+    const { HEAVEN_SPACE } = await import("./seed/materials/space/heavenSpaces.js");
+    const { I_AM } = await import("./seed/materials/being/seedBeings.js");
+    const heaven = await findByHeavenSpace(HEAVEN_SPACE.HEAVEN, "0");
+    const realityRootId = getSpaceRootId();
+
+    if (heaven) {
+      await withIAmAct("I install angel on heaven", async (ctx) => {
+        await installRoleOnSpace(String(heaven.id), "angel", angelRole, I_AM, ctx);
+      });
+    }
+    if (realityRootId) {
+      await withIAmAct("I install global on the reality root", async (ctx) => {
+        await installRoleOnSpace(String(realityRootId), "global", globalRole, I_AM, ctx);
+      });
+      await withIAmAct("I install arrival on the reality root", async (ctx) => {
+        await installRoleOnSpace(String(realityRootId), "arrival", arrivalRole, I_AM, ctx);
+      });
+    }
+    if (bootMode === "Beginning") {
+      log.info("Genesis", "I install foundational roles onto spaces.");
+    }
+  }
+
   // Roles-Are-Auth bootstrap (seed/RolesAreAuth.md). With the angel
-  // role now registered, the I-Am grants it at the place root to
-  // every seed delegate. The grant chain back to I-Am is the proof
-  // of authority for everything each delegate does for the rest of
-  // the reality's life. Idempotent on reboot — the being reducer
+  // role now installed on heaven, the I-Am grants it to every seed
+  // delegate (anchored at heaven). The grant chain back to I-Am is the
+  // proof of authority for everything each delegate does for the rest
+  // of the reality's life. Idempotent on reboot — the being reducer
   // dedupes by (role, anchor, grantor) so a second emit is a no-op.
   if (!plantedFromSeed) {
     const { grantAngelToSeedDelegates } =

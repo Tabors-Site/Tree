@@ -442,17 +442,17 @@ registerOperation("close-reality", {
   args: {},
   handler: async ({ identity }) => {
     const { IbpError, IBP_ERR } = await import("./ibp/protocol.js");
-    const { isHeavenContributor } = await import("./materials/space/heavenLineage.js");
+    const { hasHeavenAuthority } = await import("./materials/space/heavenLineage.js");
     if (!identity?.beingId) {
       throw new IbpError(IBP_ERR.UNAUTHORIZED, "close-reality requires an authenticated being.");
     }
-    if (!(await isHeavenContributor(identity.beingId))) {
+    if (!(await hasHeavenAuthority(identity.beingId))) {
       throw new IbpError(
         IBP_ERR.FORBIDDEN,
-        "Only heaven contributors can close the reality.",
+        "Only beings with heaven authority (owner or angel role) can close the reality.",
       );
     }
-    log.warn("Seed", `close-reality requested by heaven contributor ${identity.beingId}. Shutting down.`);
+    log.warn("Seed", `close-reality requested by ${identity.beingId} (heaven authority). Shutting down.`);
     // Let the ack return first; then trigger the graceful shutdown wired
     // in begin.js (SIGTERM handler closes senses + process.exit).
     setTimeout(() => {

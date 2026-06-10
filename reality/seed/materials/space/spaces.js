@@ -273,7 +273,7 @@ export async function createSpace({
   // Branch the create runs on. Threaded from the moment ctx so a
   // create under #1 reads parents from #1's lineage (with branchPoint
   // fall-through) and stamps its birth fact onto #1's reel.
-  const branch = summonCtx?.branch || "0";
+  const branch = summonCtx?.actorAct?.branch || "0";
 
   // Assign a default coord inside the parent's size when the caller
   // didn't pass one. Without this every child space falls back to the
@@ -462,7 +462,7 @@ export async function createSpace({
       sessionId,
       // Branch this space is created on — a plant under #1 must land
       // its child-space facts on #1's reel so reads on #1 see them.
-      branch: summonCtx?.branch || "0",
+      branch: summonCtx?.actorAct?.branch || "0",
     }, summonCtx);
   } finally {
     if (lockTarget) releaseSpaceLock(lockTarget, sessionId);

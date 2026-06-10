@@ -16,11 +16,10 @@
 // NOT hold Matter content or per-caller permission decisions. Those
 // belong to the call.
 //
-// Invalidation. Three patterns, scaled to how often each fires:
+// Invalidation. Two patterns, scaled to how often each fires:
 //   moveSpace / deleteSpace    → invalidateAll() (rare, full clear)
 //   setQuality / setOwner      → invalidateSpace(spaceId) plus every
 //                                cached chain that contains it
-//   addContributor             → invalidateSpace(spaceId) only
 //
 // Consistency within one turn. snapshotAncestors() returns a deep
 // copy. The conversation loop snapshots once at turn start; every
@@ -243,14 +242,13 @@ async function walkFromDb(spaceId, ttl, branch) {
     });
 
     // Continue past any intermediate heaven space. The loop ends
-    // naturally when we reach the place root (parent === null), so
-    // every chain walk reaches the place root's qualities.permissions
-    // — the system-wide defaults seeded at boot
-    // (REALITY_ROOT_DEFAULT_PERMISSIONS in authorize.js). Stopping
-    // the walk at a heaven space would silently strip those defaults
-    // whenever a write targets `.config`, `.tools`, etc., and the
-    // root operator's privileges (declared at the place root) would
-    // be invisible from inside any dot-namespace.
+    // naturally when we reach the place root (parent === null) so
+    // every chain walk reaches the place root's qualities. The
+    // role-walk authorize (seed/RolesAreAuth.md) uses this chain to
+    // find role specs (qualities.roles[name]) by walking up from a
+    // grant's anchor; stopping the walk at a heaven space would
+    // silently strip foundational roles hosted on the place root
+    // whenever a write targets `.config`, `.tools`, etc.
     //
     // Consumers that DO want a per-domain boundary (e.g.
     // resolveExtensionScopeFromChain for extension blocked/allowed
@@ -344,14 +342,14 @@ export function resolveExtensionScopeFromChain(ancestors, confinedExtensions) {
  *   ok, rootId, isRoot
  *   isOwner            singleton owner class match on the closest
  *                      space that has one (the ownership boundary)
- *   isContributor      `contributor` class match anywhere on the
- *                      chain between target and ownership boundary
  *   memberClasses      [string] union of every class the being is in
- *                      across the walked chain, INCLUDING owner and
- *                      contributor; the property bag the comparator
- *                      reads for `requires: { memberClasses: { includes: "X" } }`
- *   hasAccess          owner OR any non-system class membership;
- *                      convenience shorthand for "in any trust class"
+ *                      across the walked chain (owner + operator-
+ *                      authored classes). Useful for display/enrichment;
+ *                      authorize itself reads role grants, not classes.
+ *   hasAccess          owner-only convenience shorthand (true when
+ *                      the being owns the space or an ancestor).
+ *                      Pre-RolesAreAuth this also lit up for
+ *                      contributor-class membership; that path retired.
  *   isTripped          circuit-breaker on the ownership boundary
  *
  * @param {string} startNodeId - the space being accessed
@@ -387,27 +385,24 @@ export function resolveSpaceAccessFromChain(startNodeId, beingId, ancestors) {
   // ── Heaven path ────────────────────────────────────────────────
   // Any space whose chain passes through heaven (heaven itself or any
   // Tier-3 heaven space beneath it) uses heaven's members map: I_AM
-  // is the singleton owner (immutable; the system-internal anoint
-  // flows assert against this), the `angel` class is the operator
-  // roster (cherub.birth anoints into it; existing angels add via
-  // add-member), and `contributor` is available for ad-hoc trust.
-  // No tree-owner walk applies — heaven IS the system tree.
+  // is the singleton owner (immutable). The angel ROLE (granted at
+  // heaven, per RolesAreAuth) is the operator-authority shape; this
+  // chain function exposes legacy `angel` class membership for any
+  // remaining checks, but new code reads role grants directly.
   const heavenSpace = ancestors.find((s) => s.heavenSpace === "heaven");
   if (heavenSpace) {
     accumulateMemberships(heavenSpace);
     const ownerId = getOwnerId(heavenSpace);
     const isHeavenOwner = !!(idStr && ownerId && String(ownerId) === idStr);
     const isAngel = memberClasses.has("angel");
-    const isContributor = memberClasses.has("contributor");
     return {
       ok: true,
       rootId: heavenSpace._id,
       isRoot: heavenSpace._id === startNodeId,
       isOwner: isHeavenOwner,
-      isContributor: !isHeavenOwner && isContributor,
       memberClasses: Array.from(memberClasses),
       isTripped: false,
-      hasAccess: isHeavenOwner || isAngel || isContributor,
+      hasAccess: isHeavenOwner || isAngel,
     };
   }
 
@@ -461,7 +456,6 @@ export function resolveSpaceAccessFromChain(startNodeId, beingId, ancestors) {
       rootId: ownerNode._id,
       isRoot: ownerNode._id === startNodeId,
       isOwner: false,
-      isContributor: false,
       memberClasses: Array.from(memberClasses),
       isTripped: false,
       hasAccess: false,
@@ -470,7 +464,6 @@ export function resolveSpaceAccessFromChain(startNodeId, beingId, ancestors) {
 
   const ownerId = getOwnerId(ownerNode);
   const isOwner = !!(idStr && ownerId && String(ownerId) === idStr);
-  const isContributor = !isOwner && memberClasses.has("contributor");
 
   // Circuit breaker: tripped trees deny write access
   const circuit = ownerNode.qualities?.circuit;
@@ -481,10 +474,9 @@ export function resolveSpaceAccessFromChain(startNodeId, beingId, ancestors) {
     rootId: ownerNode._id,
     isRoot: ownerNode._id === startNodeId,
     isOwner,
-    isContributor,
     memberClasses: Array.from(memberClasses),
     isTripped,
-    hasAccess: (isOwner || isContributor) && !isTripped,
+    hasAccess: isOwner && !isTripped,
   };
 }
 

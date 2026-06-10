@@ -10,7 +10,7 @@
 // available path under the chosen parent. The substrate handles the
 // rest — the new branch is queryable through SEE on
 // `<reality>/./branches/<path>` and can accept its own facts via
-// summonCtx.branch threading (Pass 4 wires that).
+// summonCtx.actorAct?.branch threading (Pass 4 wires that).
 //
 // Pause / unpause / promote-to-live ship in later passes (6.5 and
 // 10 respectively). The role advertises the canDo entry but the

@@ -18,7 +18,7 @@
 
 import { flat } from "./host.js";
 import { renderOpForm } from "../op-form.js";
-import { renderPermissionsPanel } from "./permissions-panel.js";
+import { renderRolesPanel } from "./roles-panel.js";
 
 // One outside-click listener at a time. The bar re-renders on every SEE;
 // we drop the previous listener before wiring a new one so they can't
@@ -151,11 +151,14 @@ function openAction(action, opByName) {
   if (action.special === "close-reality") {
     return renderCloseReality(body, action, opByName);
   }
-  if (action.special === "permissions") {
-    return renderPermissionsPanel(body, action, opByName, { refreshView });
+  if (action.special === "roles") {
+    return renderRolesPanel(body, action, opByName, { refreshView });
   }
   if (action.special === "branch-info") {
     return renderBranchInfo(body);
+  }
+  if (action.special === "birth-self") {
+    return renderBirthSelf(body, action);
   }
 
   const op = opByName.get(action.op) || { name: action.op, args: null };
@@ -260,6 +263,45 @@ function renderCloseReality(body, action, opByName) {
 
 // "view branch info" — pick any branch and see its full record: the
 // branch-point seqs, pointers aimed at it, scope, lineage, children,
+// be:birth on self. Prompts for a name + password; dispatches BE:birth
+// against the caller's OWN stance. The current user becomes the new
+// being's parent (the mother, per the federation doctrine). Solo
+// birth — father stays null.
+//
+// Doctrinally: be:birth is the only birth verb. Target = own stance
+// means "I am the mother of a new being." The wire dispatcher
+// (verbs/be.js) detects target === caller's stance and routes through
+// birthBeing directly. No @birther intermediary.
+function renderBirthSelf(body, action) {
+  const op = {
+    name: "be:birth",
+    args: {
+      name:     { type: "text", label: "Name (kebab-case, unique on this reality)", required: true },
+      password: { type: "text", label: "Password (placeholder; substitute future credential)", required: true },
+    },
+  };
+  const reality = (flat.state?.discovery?.reality || "").replace(/\/+$/, "");
+  const myName = flat.state?.session?.username || null;
+  if (!myName) {
+    body.textContent = "sign in first to birth a being (your stance is the target — the caller becomes mother).";
+    return;
+  }
+  const selfStance = `${reality}/@${myName}`;
+  renderOpForm(body, {
+    op,
+    address:     selfStance,
+    values:      action.values || {},
+    submitLabel: "birth",
+    doOp: async (_addr, _opName, payload) => {
+      if (typeof flat.beOp !== "function") {
+        throw new Error("flat.beOp not available; refresh and try again");
+      }
+      return flat.beOp("birth", selfStance, payload);
+    },
+    onResult: (err) => { if (!err) { /* parent stays at current view */ } },
+  });
+}
+
 // who/when. Reads the synthetic `<reality>/.branches/<path>` SEE
 // (readable by any logged-in being); no mutation.
 async function renderBranchInfo(body) {
@@ -413,16 +455,22 @@ function placeActions(address, desc) {
     { label: "+ create child space", op: "create-space", address },
     { label: "edit this space", special: "edit-space", address, values: { name: desc.address?.leafName || "" } },
     { label: "+ create matter", op: "create-matter", address },
+    // be:birth on self. The actor becomes mother of a new child
+    // being on this reality. Solo birth — no father; child's identity
+    // chain traces only through the actor. The current path routes
+    // through @birther's BE:birth (existing mint flow; the new being's
+    // tree parent is the caller). See FEDERATION.md "be:birth is the
+    // only birth verb."
+    { label: "+ birth a being (you become mother)", special: "birth-self", address },
     { label: "move something", op: "move", address },
     { label: "plant a seed", op: "plant", address },
     { label: "set render", op: "set-render", address },
-    { label: "author role (set-role)", op: "set-role", address },
     { label: "delete role", op: "delete-role", address },
-    // Permissions: read the rules + members at this position, see how
-    // the viewer's stance matches each rule, edit if authorized. The
-    // panel composes existing add-member / remove-member / set-space
-    // ops; see permissions-panel.js.
-    { label: "permissions", special: "permissions", address, values: { descriptor: desc } },
+    // Roles panel: roles in effect at this position (walk ancestor
+    // qualities.roles), the viewer's held grants that reach here,
+    // and an author-role form for owners. Replaces the retired
+    // qualities.permissions panel. See roles-panel.js.
+    { label: "roles", special: "roles", address, values: { descriptor: desc } },
     { label: "+ add member (any class)", op: "add-member", address },
     { label: "remove member", op: "remove-member", address },
     { label: "set owner", op: "set-owner", address },
@@ -452,6 +500,12 @@ function realityActions(address) {
     { label: "form seed of reality", op: "capture-seed", address },
     { label: "set config", op: "set-config", address },
     { label: "delete config", op: "delete-config", address },
+    // Reality-level roles. The reality root hosts the foundational
+    // roles (global, human, arrival, cherub, ...) in qualities.roles.
+    // Same panel as the place-tab "roles" entry, just rooted at /.
+    // Owners of the reality root (the I-Am + anointed angels) get the
+    // author-role form for system-wide roles.
+    { label: "roles (reality-wide)", special: "roles", address },
     { label: "⚠ close reality (exit server)", op: "close-reality", special: "close-reality", address, danger: true },
   ];
 }

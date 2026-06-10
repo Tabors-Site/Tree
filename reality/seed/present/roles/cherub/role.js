@@ -15,7 +15,7 @@
 //   birth    . admit a new being into the reality. The arrival has no
 //              identity yet; I summon their being-to-be forth via
 //              SUMMON.create-being internally and bind their session
-//              to it. The first ever caller becomes the first heaven contributor.
+//              to it. The first ever caller becomes the first heaven authority.
 //   use      . bind an existing identity (credentials or token) to
 //              a session.
 //   release  . drop a session's binding.
@@ -85,7 +85,7 @@ async function birthHandler({ payload, ctx }) {
   // first human registration is admitted through me like every other
   // one . I summon them forth via SUMMON.create-being. Two things
   // differ from the subsequent path: their being-tree parent is the
-  // I_AM directly (so they become the first heaven contributor), and
+  // I_AM directly (so they become the first heaven authority), and
   // beforeRegister is bypassed because hook listeners are not yet
   // loaded on a fresh reality. The cherub at the gate admits the
   // first arrival the same way as every later one.
@@ -115,23 +115,21 @@ async function birthHandler({ payload, ctx }) {
     }
     hooks.run("afterRegister", { user: being, req: ctx?.req }).catch(() => {});
 
-    // Anoint as a heaven angel. The first human is admitted into
-    // heaven's `angel` membership class from the moment they
-    // materialize so they can immediately SEE/DO/SUMMON the
-    // seed-internal spaces (config, extensions, tools, etc.). Heaven's
-    // default permissions gate on
-    // `memberClasses: { includes: "angel" }`, so angel-class admits
-    // them. Subsequent humans default to non-angels on heaven; an
-    // existing angel promotes them via the generic add-member DO op
-    // at heaven with className="angel".
+    // Anoint as a heaven angel. The first human gets the angel ROLE
+    // granted at heaven, so they can immediately SEE/DO/SUMMON the
+    // seed-internal spaces (config, extensions, tools, etc.) under
+    // the angel role's canX. Under RolesAreAuth, authority is
+    // delegated via grant-role; the I-Am holds angel + can grant it
+    // (canDo: grant-role:*) so the grant chain is honest. Subsequent
+    // humans default to NOT-angels and an existing angel can grant
+    // them angel later via the same op.
     //
-    // Timing: this anoint must run AFTER cherub's compound act seals.
-    // The new being's `be:birth` fact is still pending in cherub's
-    // summonCtx.deltaF; if we open a separate `withIAmAct` here, its
-    // own moment can't see the not-yet-sealed being and
-    // addSpaceMember's `assertBeingExists` walk-from-projection
-    // would throw. summonCtx.afterSeal queues the work for
-    // post-commit, when the being's row has materialized.
+    // Timing: must run AFTER cherub's compound act seals. The new
+    // being's `be:birth` fact is still pending in cherub's
+    // summonCtx.deltaF; opening a separate `withIAmAct` here from a
+    // pre-seal moment can't see the not-yet-sealed being.
+    // summonCtx.afterSeal queues for post-commit when the being's
+    // projection has materialized.
     const beingName = being.name;
     const newBeingId = String(being._id);
     if (ctx?.summonCtx?.afterSeal) {
@@ -140,19 +138,29 @@ async function birthHandler({ payload, ctx }) {
           const { withIAmAct } = await import("../../../sprout.js");
           const { findByHeavenSpace } = await import("../../../materials/projections.js");
           const { HEAVEN_SPACE } = await import("../../../materials/space/heavenSpaces.js");
-          const { addSpaceMember } = await import("../../../materials/space/members.js");
+          const { doVerb } = await import("../../../ibp/verbs/do.js");
           const { I_AM } = await import("../../../materials/being/seedBeings.js");
           const heaven = await findByHeavenSpace(HEAVEN_SPACE.HEAVEN, "0");
           if (heaven) {
-            await withIAmAct(`anoint @${beingName} as heaven angel`, async (anointCtx) => {
-              await addSpaceMember(String(heaven.id), "angel", newBeingId, I_AM, anointCtx?.branch || "0", anointCtx);
+            await withIAmAct(`I grant angel to @${beingName} at heaven`, async (anointCtx) => {
+              await doVerb(
+                { kind: "being", id: newBeingId },
+                "grant-role",
+                {
+                  role:          "angel",
+                  anchorSpaceId: String(heaven.id),
+                  anchorBeingId: null,
+                },
+                { identity: { beingId: I_AM, name: "I-Am" }, summonCtx: anointCtx },
+              );
             });
           }
         } catch (err) {
           const { default: log } = await import("../../../seedReality/log.js");
           log.error(
             "Cherub",
-            `failed to anoint @${beingName} as heaven angel: ${err.message}. Add them later with: do(<reality>/., "add-member", { className: "angel", beingId: "<beingId>" }) as an existing angel.`,
+            `failed to grant angel to @${beingName} at heaven: ${err.message}. ` +
+            `Grant later as an existing angel: do(@<theBeing>, "grant-role", { role: "angel", anchorSpaceId: "<heavenId>" })`,
           );
         }
       });
@@ -184,7 +192,7 @@ async function birthHandler({ payload, ctx }) {
   }
 
   const { findByName } = await import("../../../materials/projections.js");
-  const cherubParent = await findByName("being", "cherub", ctx?.summonCtx?.branch || "0");
+  const cherubParent = await findByName("being", "cherub", ctx?.summonCtx?.actorAct?.branch || "0");
   const parentBeingId = cherubParent ? String(cherubParent.id) : null;
 
   let being;
@@ -308,12 +316,86 @@ async function connectHandler({ address, addressKind, payload, identity }) {
       String(identity.beingId),
       String(targetBeing._id),
     );
-    if (!canInhabit) {
+
+    // Father-admit (cross-world citizenship). When the target is a
+    // vessel-child commissioned via summon:mate, its qualities.father
+    // names the being that became father at birth. That being holds
+    // BE:connect eligibility into this vessel — the whole point of
+    // the mate-vessel pattern. Father-admit fires when the requester
+    // matches the stored father tuple.
+    //
+    // Local-reality fathers: identity.reality (if set) or the local
+    // domain must match qualities.father.reality. Cross-reality
+    // fathers: identity.reality comes from req.canopySender via the
+    // wire layer's actorTupleFromRequest — same trusted ground truth
+    // that lives in the wire-side carrier.crossWorldActor.
+    let canInhabitAsFather = false;
+    const targetFather = targetBeing.qualities?.father || null;
+    if (targetFather?.beingId && targetFather?.reality) {
+      const requesterReality = identity?.reality || getRealityDomain();
+      if (
+        String(targetFather.beingId) === String(identity.beingId) &&
+        String(targetFather.reality) === String(requesterReality)
+      ) {
+        canInhabitAsFather = true;
+      }
+    }
+
+    if (!canInhabit && !canInhabitAsFather) {
       throw new IbpError(
         IBP_ERR.FORBIDDEN,
-        `@${identity.name} can only inhabit beings they minted (or their descendants)`,
+        `@${identity.name} can only inhabit beings they minted (or descendants), ` +
+          `or vessels for which they are recorded as father`,
         { caller: identity.name, target: targetName },
       );
+    }
+
+    // Single-connector invariant with father-priority. When a vessel
+    // is already inhabited (qualities.connection.inhabitedBy set), the
+    // father connecting AS THE FATHER displaces the existing connector
+    // (typically the mother, but any current connector). This is the
+    // whole point of the mate-vessel pattern — the foreign actor takes
+    // over the vessel to act through it. The rule applies even when
+    // the father is locally homed; father-priority is the natural rule.
+    //
+    // Mother-side connects use the ancestor-descendant path and don't
+    // displace an existing father. The father-vs-mother arbitration
+    // is asymmetric: father always wins if eligible, regardless of
+    // who's currently connected.
+    //
+    // Displacement stamps a be:release fact on the vessel before the
+    // be:connect lands so the projection's inhabitedBy reflects the
+    // latest state cleanly. See seed/CROSS-WORLD.md + FEDERATION.md.
+    if (canInhabitAsFather) {
+      const currentInhabitor =
+        targetBeing.qualities?.connection?.inhabitedBy || null;
+      if (currentInhabitor && String(currentInhabitor) !== String(identity.beingId)) {
+        try {
+          const { emitFact } = await import("../../../past/fact/facts.js");
+          const summonCtx = ctx?.summonCtx || null;
+          await emitFact(
+            {
+              verb:    "be",
+              action:  "release",
+              beingId: String(currentInhabitor),
+              target:  { kind: "being", id: String(targetBeing._id) },
+              params:  {
+                releasedBy: "father-priority",
+                fatherBeingId: String(identity.beingId),
+                fatherReality: targetBeing.qualities.father?.reality || getRealityDomain(),
+              },
+              actId:   summonCtx?.actId || null,
+              branch:  summonCtx?.actorAct?.branch || "0",
+            },
+            summonCtx,
+          );
+        } catch (err) {
+          log.warn(
+            "Cherub",
+            `father-priority displacement release failed for vessel @${targetBeing.name}: ${err.message}. Proceeding with connect; the projection may briefly show both inhabitors until the next be:release lands.`,
+          );
+        }
+      }
     }
 
     const identityToken = generateToken(targetBeing);
@@ -323,6 +405,9 @@ async function connectHandler({ address, addressKind, payload, identity }) {
       beingId:      String(targetBeing._id),
       name:         targetBeing.name,
       inherited:    true,
+      // Surface father-admit on the response so the wire layer / UX
+      // can render the connect lifecycle correctly (vessel-mode).
+      asFather:     canInhabitAsFather,
     };
   }
 
@@ -411,6 +496,7 @@ async function _registerHumanWithFreshHome({
   parentBeingId,
   cherubIdentity,
   summonCtx,
+  fatherBeingId = null,   // who REQUESTED the mint (arrival for register, parent for sub-births)
 }) {
   const { v4: uuidv4 } = await import("uuid");
   const { emitFact } = await import("../../../past/fact/facts.js");
@@ -438,7 +524,7 @@ async function _registerHumanWithFreshHome({
       qualities: {},
     },
     actId:  summonCtx?.actId || null,
-    branch: summonCtx?.branch || "0",
+    branch: summonCtx?.actorAct?.branch || "0",
   }, summonCtx);
 
   // ── 2. Birth the being into the new home ──
@@ -500,6 +586,40 @@ async function _registerHumanWithFreshHome({
     { identity: cherubIdentity, summonCtx },
   );
 
+  // ── 5. Record lineage (mother + father). ──
+  // Cherub is the MOTHER — the being who did the minting work.
+  // The FATHER is whoever requested the mint:
+  //   - Anonymous registration → arrival (the shared visitor being)
+  //   - Authenticated be:birth via cherub → the requesting parent
+  // Recorded as qualities.lineage on the new being so the chain of
+  // who-birthed-who is forensic-traceable. Doesn't gate anything;
+  // pure record-keeping. The being-tree `parentBeingId` field stays
+  // for hierarchical lookups (descendants walks); lineage is the
+  // social-history shape.
+  const motherBeingId = cherubIdentity?.beingId
+    ? String(cherubIdentity.beingId)
+    : null;
+  let resolvedFatherId = fatherBeingId ? String(fatherBeingId) : null;
+  if (!resolvedFatherId) {
+    // Default to arrival when no explicit requester (the cherub register
+    // path with no parent context — first-being bootstrap, etc.).
+    try {
+      const { findByName } = await import("../../../materials/projections.js");
+      const arrivalSlot = await findByName("being", "arrival", "0");
+      resolvedFatherId = arrivalSlot ? String(arrivalSlot.id) : null;
+    } catch { resolvedFatherId = null; }
+  }
+  await doVerb(
+    { kind: "being", id: String(result.beingId) },
+    "set-being",
+    {
+      field: "qualities.lineage",
+      value: { mother: motherBeingId, father: resolvedFatherId },
+      merge: false,
+    },
+    { identity: I_AM, summonCtx },
+  );
+
   return result.being;
 }
 
@@ -530,12 +650,11 @@ export const cherubRole = Object.freeze({
   name: "cherub",
   description:
     "The gate. Processes the three BE ops (birth/connect/release). Identity territory; no summon dispatch.",
-  // Seed delegate role — anchored at the place root. The cherub being
+  // Seed delegate role — hosted on the reality root. The cherub being
   // gets this role granted at boot by the I-Am. canDo includes
   // grant-role:human + grant-role:global so cherub can anoint new
   // humans on registration. Cherub is the only grantor of the human
   // and global roles in a default reality.
-  scope: "anchored",
   requiredCognition: "scripted",
   respondMode: "async",
   triggerOn: [],
@@ -547,6 +666,21 @@ export const cherubRole = Object.freeze({
   canDo: [
     { action: "grant-role:human",  description: "anoint a new human at the place root" },
     { action: "grant-role:global", description: "give the baseline role to a new human" },
+  ],
+
+  // canSummon participation. `as: "receiver"` declares this role
+  // ACCEPTS summon:mate from anonymous arrivals (the registration
+  // flow): summon @cherub:mate → cherub mints a new being with the
+  // visitor's chosen credentials, grants global + human at the place
+  // root, and binds the session. The summoner RECEIVES the new being.
+  // Mirrors birther's same shape; FEDERATION.md for the federation
+  // counterpart.
+  canSummon: [
+    {
+      intent: "mate",
+      as: "receiver",
+      description: "Accepts arrival's registration request; mints a new human being and binds the session",
+    },
   ],
 
   // License declaration. The descriptor's enrichBeings reads this list,

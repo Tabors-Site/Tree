@@ -90,7 +90,7 @@ export async function foldPlace(beingId, orientation = ORIENTATION.FORWARD, opts
   // a missing branch here means a perimeter threading bug, surfaced
   // loud at the fold seam.
   const branch = assertBranchOrThrow(
-    opts.summonCtx?.branch || opts.branch,
+    opts.summonCtx?.actorAct?.branch || opts.branch,
     "foldPlace(opts)",
   );
 

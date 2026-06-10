@@ -91,17 +91,25 @@ export default {
       ],
     },
 
-    // Stance-auth Layer 3 contributions. Default permission rules
-    // the extension adds to the authorize() walk. Keys are
-    // `<verb>:<action-or-stance>`; values mirror metadata.permissions
-    // shape. The four resolution layers fire in order: facts → per
-    // position rules (Layer 2, metadata.permissions on the position)
-    // → these extension defaults (Layer 3) → default deny. Loader
-    // wires registration; authorize.js walks the registry every
-    // verb call.
-    defaultPermissions: {
-      // "do:my-ext:run":    { requires: { owner: true } },
-      // "summon:@my-being": { requires: { homeInPlace: true } },
-    },
+    // Permission model: roles-are-auth (seed/RolesAreAuth.md).
+    // Extensions ship ROLES; the role's canSee / canDo / canSummon /
+    // canBe lists ARE the permission gate. Grant the role to the
+    // beings who should be able to use the extension's surface.
+    //
+    // Example role with relevant canX:
+    //   reality.declare.registerRole("my-ext-operator", {
+    //     canDo:     [{ action: "my-ext:run" }],
+    //     canSummon: [{ pattern: "@my-being" }],
+    //     // Optional `reach: [...]` adjusts coverage (path filter).
+    //     // Default is host + descendants.
+    //   });
+    //
+    // Then grant it: reality.do(target, "grant-role", {
+    //   role: "<my-ext>:my-ext-operator",
+    //   anchorSpaceId: "<spaceId>"
+    // });
+    //
+    // The retired qualities.permissions / defaultPermissions namespace
+    // is gone. See seed/RolesAreAuth.md for the full doctrine.
   },
 };

@@ -1021,6 +1021,13 @@ async function enrichBeings(spaceId, entries, opts = {}) {
       permissions: def ? def.permissions : null,
       respondMode: def ? def.respondMode : null,
       triggerOn:   def ? def.triggerOn   : null,
+      // canSummon entries — both sides of the summon edge. Entries
+      // discriminate via `as: "actor"|"receiver"` (default "actor").
+      // UI discovery filters `as:"receiver"` to render per-being
+      // accept options (e.g. birther's "mate" button); auth filters
+      // `as:"actor"` on the caller's role. See seed/RolesAreAuth.md
+      // + protocols/ibp/FEDERATION.md.
+      canSummon: def?.canSummon || null,
       // Per-being action surface. The portal renders this generically
       // as a menu + arg-schema form; one entry per BE op the role is
       // licensed for, filtered by identity state (cherub-only today).

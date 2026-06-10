@@ -451,7 +451,7 @@ export async function addLlmConnection(
   // and threw "Being not found" for LLM-config writes against
   // inherited beings.
   const { loadOrFold } = await import("../../../materials/projections.js");
-  const slot = await loadOrFold("being", beingId, summonCtx?.branch || "0");
+  const slot = await loadOrFold("being", beingId, summonCtx?.actorAct?.branch || "0");
   if (!slot) throw new Error("Being not found");
   const being = { _id: slot.id, ...slot.state };
 
@@ -512,7 +512,7 @@ export async function updateLlmConnection(
   // and threw "Being not found" for LLM-config writes against
   // inherited beings.
   const { loadOrFold } = await import("../../../materials/projections.js");
-  const slot = await loadOrFold("being", beingId, summonCtx?.branch || "0");
+  const slot = await loadOrFold("being", beingId, summonCtx?.actorAct?.branch || "0");
   if (!slot) throw new Error("Being not found");
   const being = { _id: slot.id, ...slot.state };
 
@@ -594,7 +594,7 @@ export async function deleteLlmConnection(beingId, connectionId, { identity, sum
   // and threw "Being not found" for LLM-config writes against
   // inherited beings.
   const { loadOrFold } = await import("../../../materials/projections.js");
-  const slot = await loadOrFold("being", beingId, summonCtx?.branch || "0");
+  const slot = await loadOrFold("being", beingId, summonCtx?.actorAct?.branch || "0");
   if (!slot) throw new Error("Being not found");
   const being = { _id: slot.id, ...slot.state };
 
@@ -697,7 +697,7 @@ export async function assignConnection(beingId, slot, connectionId, { identity, 
 
   // loadOrFold: same inherited-being lineage-cold-fold rationale.
   const { loadOrFold } = await import("../../../materials/projections.js");
-  const beingSlot = await loadOrFold("being", beingId, summonCtx?.branch || "0");
+  const beingSlot = await loadOrFold("being", beingId, summonCtx?.actorAct?.branch || "0");
   if (!beingSlot) throw new Error("Being not found");
   const being = { _id: beingSlot.id, ...beingSlot.state };
 
@@ -869,7 +869,7 @@ export async function resolveConnection(beingId, connectionId, cacheKey, { summo
     try {
       // loadOrFold: same inherited-being lineage-cold-fold rationale.
       const { loadOrFold } = await import("../../../materials/projections.js");
-      const slot = await loadOrFold("being", beingId, summonCtx?.branch || "0");
+      const slot = await loadOrFold("being", beingId, summonCtx?.actorAct?.branch || "0");
       if (slot) {
         const { doVerb } = await import("../../../ibp/verbs/do.js");
         await doVerb(

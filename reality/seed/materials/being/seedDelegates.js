@@ -75,6 +75,14 @@ export const SEED_DELEGATES = [
       "Shared stance for unauthenticated visitors. SEE-only; one row, many concurrent users.",
   },
   {
+    name: "public",
+    role: "public",
+    cognition: "scripted",
+    invocableBy: "no-one",
+    description:
+      "The commons delegate (seed/RolesAreAuth.md). Holds members.owner slots for spaces transferred to the public commons; their authorize.owner-check then admits any caller for any action. Never acts; never accepts SUMMONs. The silence IS the lock — Public-owned spaces can't be re-privatized except by I-Am (public's own owner) or by branching the timeline.",
+  },
+  {
     name: "cherub",
     role: "cherub",
     cognition: "scripted",
@@ -128,7 +136,7 @@ export const SEED_DELEGATES = [
     cognition: "llm",
     invocableBy: "owner",
     description:
-      "Conversational interface for place-level administration (extensions, config, peers). Carries no authority of its own; its writes are gated by the caller's stance — root operator, or owner / contributor on the place root.",
+      "Conversational interface for place-level administration (extensions, config, peers). Carries no authority of its own; its writes are gated by the caller's stance — typically owner or angel role on the place root, or a role with the relevant canDo granted there.",
   },
   {
     name: "branch-manager",
@@ -348,69 +356,15 @@ export async function ensureSeedDelegates(spaceRootId) {
 // ───────────────────────────────────────────────────────────────────
 // Heaven angels (the seed delegates)
 // ───────────────────────────────────────────────────────────────────
-
-/**
- * Anoint every seed delegate into heaven's `angel` membership class
- * so they can SEE/DO/SUMMON inside heaven's Tier-3 spaces. Heaven's
- * default permissions gate on `memberClasses: { includes: "angel" }`
- * (the heaven-named authority class) so the I-Am (heaven's owner)
- * plus the angels-on-heaven list all pass. Idempotent:
- * addSpaceMember short-circuits when the being is already in the
- * class.
- *
- * One moment per delegate. The underlying primitive does
- * read-modify-write on the class list; a single shared moment would
- * have every iteration read the pre-moment state, push one
- * delegate, and write a singleton replacement — last-write-wins on
- * seal, only one delegate would land. Each delegate gets its own
- * withIAmAct so the prior write seals + folds before the next
- * loadOrFold reads.
- *
- * Replaces the older `ensureSeedDelegatesReign` (reigning collapse
- * 2026-06-04) and the unnamed `ensureSeedDelegatesOnHeaven` adding
- * to contributors[] (membership-class collapse 2026-06-07). The
- * angel name makes the heaven authority class explicit.
- */
-export async function ensureSeedDelegatesOnHeaven() {
-  const { findByName, findByHeavenSpace } = await import("../projections.js");
-  const { HEAVEN_SPACE } = await import("../space/heavenSpaces.js");
-  const { addSpaceMember } = await import("../space/members.js");
-  const { withIAmAct } = await import("../../sprout.js");
-  const heaven = await findByHeavenSpace(HEAVEN_SPACE.HEAVEN, "0");
-  if (!heaven) {
-    log.warn(
-      "SeedDelegates",
-      "ensureSeedDelegatesOnHeaven: heaven not yet materialized; skipping",
-    );
-    return { added: 0 };
-  }
-  let added = 0;
-  for (const spec of SEED_DELEGATES) {
-    const slot = await findByName("being", spec.name, "0");
-    if (!slot) continue;
-    try {
-      await withIAmAct(`anoint @${spec.name} as heaven angel`, async (ctx) => {
-        await addSpaceMember(
-          String(heaven.id), "angel", String(slot.id), I_AM,
-          ctx?.branch || "0", ctx,
-        );
-      });
-      added++;
-    } catch (err) {
-      // Already-a-member and already-the-owner cases are benign —
-      // they mean the desired state already holds.
-      const msg = err?.message || String(err);
-      if (
-        /already in this class|Cannot add the owner|cannot add yourself/i.test(msg)
-      ) continue;
-      log.warn(
-        "SeedDelegates",
-        `failed to anoint @${spec.name} as heaven angel: ${msg}`,
-      );
-    }
-  }
-  return { added };
-}
+//
+// The retired `ensureSeedDelegatesOnHeaven` added each delegate to
+// heaven's `members.angel` class — that was the gate under the old
+// stance-auth layered model. Under roles-are-auth (seed/RolesAreAuth.md),
+// the gate is `grantAngelToSeedDelegates` below: each delegate gets
+// the angel ROLE granted anchored at heaven, the role's spec lives in
+// heaven.qualities.roles.angel, and the role-walk authorize finds it
+// by walking the grant's anchor up the qualities chain. No member-class
+// dance needed.
 
 /**
  * Roles-Are-Auth bootstrap (seed/RolesAreAuth.md). For each seed
@@ -429,22 +383,33 @@ export async function ensureSeedDelegatesOnHeaven() {
  * re-emit on reboot is a no-op.
  */
 export async function grantAngelToSeedDelegates() {
-  const { findByName } = await import("../projections.js");
-  const { getSpaceRootId } = await import("../../sprout.js");
+  const { findByName, findByHeavenSpace } = await import("../projections.js");
+  const { HEAVEN_SPACE } = await import("../space/heavenSpaces.js");
   const { withIAmAct } = await import("../../sprout.js");
   const { doVerb } = await import("../../ibp/verbs/do.js");
 
-  const placeRootId = await getSpaceRootId();
-  if (!placeRootId) {
+  // angel is hosted on heaven (seed/RolesAreAuth.md). Anchor every
+  // delegate's grant there so the role-walk authorize finds the spec
+  // by walking the grant's anchor up the qualities chain. Reach via
+  // angel's qualities is the heaven subtree by default; the angel
+  // role's reach field can extend it reality-wide if seed needs it
+  // (default angel canX includes "*" so the gate passes once reach
+  // is met).
+  const heaven = await findByHeavenSpace(HEAVEN_SPACE.HEAVEN, "0");
+  if (!heaven) {
     log.warn(
       "SeedDelegates",
-      "grantAngelToSeedDelegates: place root not yet materialized; skipping",
+      "grantAngelToSeedDelegates: heaven not yet materialized; skipping",
     );
     return { granted: 0 };
   }
 
   let granted = 0;
   for (const spec of SEED_DELEGATES) {
+    // @public is a structural placeholder, not an actor. Skip the
+    // angel grant — public never acts, never uses canX, and granting
+    // it angel would noise up the audit chain without effect.
+    if (spec.name === "public") continue;
     const slot = await findByName("being", spec.name, "0");
     if (!slot) continue;
     try {
@@ -454,7 +419,7 @@ export async function grantAngelToSeedDelegates() {
           "grant-role",
           {
             role:          "angel",
-            anchorSpaceId: String(placeRootId),
+            anchorSpaceId: String(heaven.id),
             anchorBeingId: null,
           },
           { identity: I_AM, summonCtx: ctx },

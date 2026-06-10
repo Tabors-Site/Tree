@@ -374,9 +374,62 @@ function renderBeings(desc, { session, discovery }) {
     chatBtn.onclick = () => openChatFor(b);
     actions.appendChild(chatBtn);
 
+    // Per-intent summon buttons. Driven by the receiver's role
+    // canSummon entries where as === "receiver". A "mate" button
+    // appears next to chat for any being whose role declares
+    // { intent: "mate", as: "receiver" } in canSummon (birther
+    // ships this by default). Caller-side authorization happens at
+    // dispatch — the substrate checks the caller's role's canSummon
+    // entries with as === "actor" against this target. See
+    // seed/RolesAreAuth.md ("canSummon is one field, two surfaces,
+    // discriminated by as") + FEDERATION.md "mate + vessel".
+    if (Array.isArray(b.canSummon) && session?.token) {
+      for (const offer of b.canSummon) {
+        if (offer?.as !== "receiver" || !offer?.intent) continue;
+        const btn = document.createElement("button");
+        btn.textContent = offer.intent;
+        btn.className = "btn-sm";
+        btn.title = offer.description || `summon @${b.being} with intent="${offer.intent}"`;
+        btn.onclick = () => openIntentSummon(b, offer);
+        actions.appendChild(btn);
+      }
+    }
+
     li.appendChild(actions);
     ul.appendChild(li);
   }
+}
+
+// Open a focused summon prompt against a being with a specific intent.
+// Today: a minimal prompt for any user-supplied params + dispatches
+// the summon. The substrate-side role handler dispatches by
+// message.intent and interprets the rest of the message accordingly.
+//
+// For "mate" specifically: the message can include optional name,
+// homeSpaceId, password, cognition, defaultRole — all defaulted by
+// the birther's handler. The summoner (you) becomes the father of
+// the vessel-child; the target being becomes the mother.
+function openIntentSummon(beingEntry, offer) {
+  const promptText = offer.intent === "mate"
+    ? `Summon @${beingEntry.being} to mate. The new vessel-child will have @${beingEntry.being} as mother and you as father. Optional: vessel name. (Leave blank for auto-generated.)`
+    : `Summon @${beingEntry.being} with intent="${offer.intent}". Optional message:`;
+  const userInput = window.prompt(promptText, "");
+  if (userInput === null) return;
+  const stance = beingEntry.stance || `@${beingEntry.being}`;
+  const message = {
+    intent: offer.intent,
+    ...(userInput.trim().length > 0 ? { name: userInput.trim() } : {}),
+  };
+  flat.sendSummon(stance, message)
+    .then((res) => {
+      const summary = res?.reply?.from
+        ? `summoned @${beingEntry.being} (${offer.intent}); reply from ${res.reply.from}`
+        : `summoned @${beingEntry.being} (${offer.intent})`;
+      try { flat.setStatus?.(summary); } catch {}
+    })
+    .catch((err) => {
+      try { flat.setStatus?.(`summon failed: ${err?.message || err}`); } catch {}
+    });
 }
 
 // ────────────────────────────────────────────────────────────────
@@ -768,11 +821,24 @@ function renderRoleDetail(pane, role, name) {
   // content (named sees + IBP addresses, rendered at moment-open);
   // do/summon/be are menus the LLM picks via tool calls. The legacy
   // `role.see` field collapsed into canSee on 2026-06-03.
+  // Split canSummon by side so the role inspector reads cleanly:
+  // outbound entries (what this role CAN send) vs inbound entries
+  // (what this role ACCEPTS). Default `as: "actor"` preserves the
+  // legacy display. See seed/RolesAreAuth.md "canSummon: one field,
+  // two surfaces."
+  const summonAll = Array.isArray(role.canSummon) ? role.canSummon : [];
+  const summonActor = summonAll.filter(
+    (e) => typeof e !== "object" || (e?.as ?? "actor") === "actor",
+  );
+  const summonReceiver = summonAll.filter(
+    (e) => typeof e === "object" && e?.as === "receiver",
+  );
   const caps = [
-    ["canSee",    role.canSee],
-    ["canDo",     role.canDo],
-    ["canSummon", role.canSummon],
-    ["canBe",     role.canBe],
+    ["canSee",                            role.canSee],
+    ["canDo",                             role.canDo],
+    ["canSummon (initiates)",             summonActor],
+    ["canSummon (accepts as receiver)",   summonReceiver],
+    ["canBe",                             role.canBe],
   ];
   for (const [label, list] of caps) {
     if (!Array.isArray(list) || list.length === 0) continue;
@@ -781,7 +847,12 @@ function renderRoleDetail(pane, role, name) {
     ul.className = "verb-list";
     for (const entry of list) {
       const li = document.createElement("li");
-      li.innerHTML = `<code>${escapeHtml(String(entry))}</code>`;
+      const display = typeof entry === "object"
+        ? (entry.intent
+            ? `intent="${entry.intent}"${entry.pattern ? ` target=${entry.pattern}` : ""}${entry.description ? ` — ${entry.description}` : ""}`
+            : (entry.pattern || JSON.stringify(entry)))
+        : String(entry);
+      li.innerHTML = `<code>${escapeHtml(display)}</code>`;
       ul.appendChild(li);
     }
     sec.appendChild(ul);

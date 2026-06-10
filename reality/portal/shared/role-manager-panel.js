@@ -210,15 +210,29 @@ function renderCreateRoleSection(catalogs, ctx, onCreated) {
 
   // Working state for the four chip-picker fields. Pickers mutate
   // these in place; submit reads the arrays at the end.
-  const selected = { canSee: [], canDo: [], canSummon: [], canBe: [] };
+  //
+  // canSummon is split into two pickers in the UI: ACTOR-side (what
+  // this role can SEND — the legacy meaning) and RECEIVER-side (what
+  // intents this role ACCEPTS when targeted). Submit combines them
+  // into a single canSummon array with each entry tagged `as:"actor"`
+  // or `as:"receiver"`. See seed/RolesAreAuth.md "canSummon: one
+  // field, two surfaces" + FEDERATION.md "mate + vessel".
+  const selected = {
+    canSee: [],
+    canDo: [],
+    canSummonActor: [],
+    canSummonReceiver: [],
+    canBe: [],
+  };
 
   const nameInput        = field("name (kebab-case)",       "text");
   const cognitionSelect  = selectField("required cognition", ["", "llm", "human", "scripted"]);
 
-  const canSeePicker     = chipPicker({ label: "canSee — IBP addresses this role can read", source: catalogs.addresses, state: selected.canSee });
-  const canDoPicker      = chipPicker({ label: "canDo — DO action names",                    source: catalogs.doActions, state: selected.canDo  });
-  const canSummonPicker  = chipPicker({ label: "canSummon — role shorthands / stances",      source: catalogs.roles,     state: selected.canSummon });
-  const canBePicker      = chipPicker({ label: "canBe — BE op names",                        source: catalogs.beOps,     state: selected.canBe  });
+  const canSeePicker             = chipPicker({ label: "canSee — IBP addresses this role can read",                       source: catalogs.addresses, state: selected.canSee });
+  const canDoPicker              = chipPicker({ label: "canDo — DO action names",                                          source: catalogs.doActions, state: selected.canDo  });
+  const canSummonActorPicker     = chipPicker({ label: "canSummon (initiates) — beings this role can SEND summons to",     source: catalogs.roles,     state: selected.canSummonActor });
+  const canSummonReceiverPicker  = chipPicker({ label: "canSummon (accepts) — intents this role ACCEPTS when targeted",   source: [],                 state: selected.canSummonReceiver });
+  const canBePicker              = chipPicker({ label: "canBe — BE op names",                                              source: catalogs.beOps,     state: selected.canBe  });
 
   const promptInput      = field("system prompt", "multiline");
 
@@ -226,7 +240,8 @@ function renderCreateRoleSection(catalogs, ctx, onCreated) {
   form.appendChild(cognitionSelect.wrap);
   form.appendChild(canSeePicker.wrap);
   form.appendChild(canDoPicker.wrap);
-  form.appendChild(canSummonPicker.wrap);
+  form.appendChild(canSummonActorPicker.wrap);
+  form.appendChild(canSummonReceiverPicker.wrap);
   form.appendChild(canBePicker.wrap);
   form.appendChild(promptInput.wrap);
 
@@ -243,12 +258,27 @@ function renderCreateRoleSection(catalogs, ctx, onCreated) {
     try {
       const bq = ctx.branch && ctx.branch !== "0" ? `#${ctx.branch}` : "";
       const stance = `${ctx.reality}${bq}/@role-manager`;
+      // Combine the two canSummon pickers into one array with `as`
+      // tags. Existing entries that come back stringified default
+      // to as:"actor" semantics on the receiving side.
+      const canSummonCombined = [
+        ...selected.canSummonActor.map((entry) =>
+          typeof entry === "object"
+            ? { ...entry, as: "actor" }
+            : { pattern: String(entry), as: "actor" },
+        ),
+        ...selected.canSummonReceiver.map((entry) =>
+          typeof entry === "object"
+            ? { ...entry, as: "receiver" }
+            : { intent: String(entry), as: "receiver" },
+        ),
+      ];
       await ctx.doOp(stance, "set-role", {
         name:              nameInput.input.value.trim(),
         requiredCognition: cognitionSelect.input.value || "",
         canSee:            selected.canSee,
         canDo:             selected.canDo,
-        canSummon:         selected.canSummon,
+        canSummon:         canSummonCombined,
         canBe:             selected.canBe,
         prompt:            promptInput.input.value,
       });

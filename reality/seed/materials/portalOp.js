@@ -47,8 +47,12 @@ import { v4 as uuidv4 } from "uuid";
 // or a single-word host (localhost, etc.) — both are legitimate
 // substrate identities. Branch path follows the alternating-segment
 // grammar (BRANCH_RE in address.js).
+// Accept the trailing-slash form `<reality>#<branch>/` as "the root
+// of that world" — same convention the resolver uses for bare-reality
+// addresses. `.*` after the slash allows either a named path or an
+// empty path (root).
 const IBPA_RE =
-  /^(?:[a-zA-Z0-9.\-_]+(?:#[^/]+)?|#[^/]+)\/.+$/;
+  /^(?:[a-zA-Z0-9.\-_]+(?:#[^/]+)?|#[^/]+)\/.*$/;
 
 async function formPortalHandler({ target, params, summonCtx, identity }) {
   const { target: foreignAddress, name, expiresAt } = params || {};

@@ -196,6 +196,11 @@ export async function runVerbAsForeignActor({ verb, address, payload, actor, car
     // The verifyIncoming middleware will already have stamped
     // req.canopySender; authorize sees it via carrier.
     canopyVerifiedSender: actor.reality,
+    // `reality` is the canopy-verified home reality of the foreign
+    // actor. Downstream gates (e.g. cherub's BE:connect father-admit
+    // check) read this to match against the target vessel's
+    // qualities.father.reality. See FEDERATION.md "mate + vessel".
+    reality: actor.reality,
   };
 
   let result = null;
