@@ -342,6 +342,32 @@ const REALITY_HEAVEN_SPACES = [
   // SEE surface and child-discovery paths work the moment branches
   // start landing. See seed/materials/branch/.
   { name: "branches", heavenSpace: HEAVEN_SPACE.BRANCHES },
+  // host is the running machine, represented. Its children (below,
+  // NOT in this list — the tier-3 repair loop would re-parent them
+  // under heaven) hold the HTTP listener, WebSocket pool, and Mongo
+  // connection as beings + matter. See seed/materials/host/.
+  { name: "host", heavenSpace: HEAVEN_SPACE.HOST },
+  // factory is the stamping machinery, watched: read-side
+  // projections over Act + Fact rows (children below, same NOT-in-
+  // this-list rule). present = stampers, past = reels. See
+  // seed/materials/space/factory.js.
+  { name: "factory", heavenSpace: HEAVEN_SPACE.FACTORY },
+];
+
+// Children of ./host. Created/repaired by their own block in
+// ensureSpaceRoot, parented under the host space rather than heaven.
+const HOST_CHILD_SPACES = [
+  { name: "http",      heavenSpace: HEAVEN_SPACE.HOST_HTTP,      size: { x: 8, y: 8 } },
+  { name: "websocket", heavenSpace: HEAVEN_SPACE.HOST_WEBSOCKET, size: { x: 8, y: 8 } },
+  { name: "mongo",     heavenSpace: HEAVEN_SPACE.HOST_MONGO,     size: { x: 8, y: 8 } },
+];
+
+// Children of ./factory. Same create/repair shape as the host block.
+// Both are sized rooms: the grid render needs a size for occupants'
+// coords to mean anything.
+const FACTORY_CHILD_SPACES = [
+  { name: "present", heavenSpace: HEAVEN_SPACE.FACTORY_PRESENT, size: { x: 12, y: 12 } },
+  { name: "past",    heavenSpace: HEAVEN_SPACE.FACTORY_PAST,    size: { x: 12, y: 12 } },
 ];
 
 export async function ensureSpaceRoot() {
@@ -463,6 +489,75 @@ export async function ensureSpaceRoot() {
           { identity: I_AM, summonCtx: ctx },
         );
       });
+    }
+  }
+
+  // Heaven-region children: http/websocket/mongo under ./host,
+  // present/past under ./factory. Same create/repair shape as the
+  // tier-3 loop, but parented under their region space. Skipped when
+  // the region failed to plant (degraded boot); next boot heals.
+  const REGION_CHILDREN = [
+    { region: HEAVEN_SPACE.HOST,    label: "host",    defs: HOST_CHILD_SPACES },
+    { region: HEAVEN_SPACE.FACTORY, label: "factory", defs: FACTORY_CHILD_SPACES },
+  ];
+  for (const { region, label, defs } of REGION_CHILDREN) {
+    const regionSlot = await findRootForHeavenSpace(region);
+    if (!regionSlot) continue;
+    for (const def of defs) {
+      let space = await findRootForHeavenSpace(def.heavenSpace);
+      if (!space) {
+        try {
+          space = await createRealityHeavenSpace({
+            name: def.name,
+            parentId: regionSlot._id,
+            heavenSpace: def.heavenSpace,
+            qualities: null,
+            size: def.size || null,
+            // No summonCtx — own moment.
+          });
+          log.verbose("Reality", `Created ${label} space: ${def.name}`);
+        } catch (err) {
+          log.error(
+            "Place",
+            `Failed to create ${label} space ${def.name}: ${err.message}. Boot continues.`,
+          );
+          continue;
+        }
+      }
+      if (
+        space.parent &&
+        !space._pending &&
+        (space.parent.toString() !== regionSlot._id.toString())
+      ) {
+        log.warn("Place", `${label} space ${def.name} has wrong parent. Repairing.`);
+        const { doVerb } = await import("./ibp/verbs/do.js");
+        await withIAmAct(`I repair ${label}/${def.name}'s parent`, async (ctx) => {
+          await doVerb(
+            { kind: "space", id: String(space._id) },
+            "set-space",
+            { field: "parent", value: String(regionSlot._id) },
+            { identity: I_AM, summonCtx: ctx },
+          );
+        });
+      }
+      // Size drift-repair: an already-planted sizeless room whose
+      // definition now carries a size gets one (boot repair — the
+      // grid render and occupant coords need it).
+      if (def.size && !space._pending) {
+        const live = await loadProjection("space", String(space._id), "0");
+        const hasSize = live?.state?.size?.x > 0 && live?.state?.size?.y > 0;
+        if (live && !hasSize) {
+          const { doVerb } = await import("./ibp/verbs/do.js");
+          await withIAmAct(`I size ${label}/${def.name}`, async (ctx) => {
+            await doVerb(
+              { kind: "space", id: String(space._id) },
+              "set-space",
+              { field: "size", value: def.size },
+              { identity: I_AM, summonCtx: ctx },
+            );
+          });
+        }
+      }
     }
   }
 

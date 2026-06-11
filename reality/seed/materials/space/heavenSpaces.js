@@ -90,12 +90,13 @@
 // there but they cannot pass through.
 //
 // Tier 3 . the inner spaces (identity, config, peers, extensions,
-// tools, roles, operations, source, threads). These are I-Am's
-// working memory, surfaced as spaces so SEE reads them through the
-// same protocol as everything else. They are children of HEAVEN,
-// addressable as `<reality>/./config`, `<reality>/./tools`, etc.
-// The leading "./" is heaven's door; the inner names carry no
-// reserved sigil because heaven is the namespace.
+// tools, roles, operations, source, threads, branches, host). These
+// are I-Am's working memory, surfaced as spaces so SEE reads them
+// through the same protocol as everything else. They are children of
+// HEAVEN, addressable as `<reality>/./config`, `<reality>/./tools`,
+// etc. The leading "./" is heaven's door; the inner names carry no
+// reserved sigil because heaven is the namespace. One tier-3 space
+// (host) carries its own children (http, websocket, mongo).
 //
 // The Space schema field `heavenSpace` carries one of these values;
 // beings' own spaces have `heavenSpace: null`.
@@ -140,6 +141,30 @@ export const HEAVEN_SPACE = Object.freeze({
   // branch). See seed/materials/branch/branches.js for the read
   // helpers and seed/timeline.md for the doctrine.
   BRANCHES: "branches",
+  // The host tier: the running machine represented through the same
+  // protocol as everything else. `host` is tier-3 under heaven; its
+  // three children hold the HTTP listener, the WebSocket pool, and
+  // the Mongo connection as beings + matter, fully fact-backed (the
+  // opposite of ./source's disk-fold exception). One connection
+  // matter per live socket lives in host-websocket; the request
+  // stream lands on a request-log matter in host-http. See
+  // seed/materials/host/ and philosophy/OS/nodeServerTest.md.
+  HOST: "host",
+  HOST_HTTP: "host-http",
+  HOST_WEBSOCKET: "host-websocket",
+  HOST_MONGO: "host-mongo",
+  // The factory tier: the stamping machinery, watched. `factory` is
+  // tier-3 under heaven; its two children are read-side projections
+  // over Act + Fact rows — nothing new is stored. `present` shows
+  // one stamper lane per (being, branch): the stamped papers laid
+  // along the chain, the stamper figure at the head, forks splitting
+  // where branches were born. `past` lists the reels. For beings
+  // examining how the machinery works (why a packet stuck at the
+  // stamper, where a trail broke) — the host is the computer; the
+  // factory is the mechanism. See seed/materials/space/factory.js.
+  FACTORY: "factory",
+  FACTORY_PRESENT: "factory-present",
+  FACTORY_PAST: "factory-past",
 });
 
 // ============================================================================

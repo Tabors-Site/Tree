@@ -49,10 +49,19 @@ mongoose
 // so the operator can see DB-side disruption clearly.
 mongoose.connection.on("disconnected", () => {
   log.error("DB", "MongoDB disconnected. Queries will fail until reconnected.");
+  // Host observation: record the moment in memory only (no Mongo
+  // write is possible while down); the reconnect fact carries the
+  // whole gap. Lazy import — this module loads before everything.
+  import("../materials/host/host.js")
+    .then((m) => m.noteMongoDisconnected())
+    .catch(() => {});
 });
 
 mongoose.connection.on("reconnected", () => {
   log.info("DB", "MongoDB reconnected.");
+  import("../materials/host/host.js")
+    .then((m) => m.noteMongoReconnected())
+    .catch(() => {});
 });
 
 mongoose.connection.on("error", (err) => {

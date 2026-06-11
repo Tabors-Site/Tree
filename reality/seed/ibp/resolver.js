@@ -322,12 +322,17 @@ async function walkSpacePath({
     // heaven spaces now live under heaven.
     const isHeavenDoor = isFirst && seg === ".";
     // Heaven children: when the parent we just descended into is
-    // heaven itself, drop the heavenSpace:null filter so its Tier-3
-    // seed-space children (config, tools, roles, ...) resolve.
-    // Without this, paths like `/./roles` SPACE_NOT_FOUND at depth 1
-    // because `roles` IS a heavenSpace and would get filtered out.
-    const parentIsHeaven = parentSeedSpace === HEAVEN_SPACE.HEAVEN;
-    const allowSeedSpaceChildren = isHeavenDoor || parentIsHeaven;
+    // ANY heaven-marked space, drop the heavenSpace:null filter so
+    // its heaven-marked children resolve. Heaven itself parents the
+    // tier-3 spaces (config, tools, roles, ...); the region spaces
+    // (host, factory) parent their own marked children (http,
+    // websocket, mongo, present, past). Without this, `/./roles`
+    // SPACE_NOT_FOUND at depth 1 and `/./host/http` at depth 2 —
+    // marked rows get filtered out. Normal children under heaven
+    // spaces (e.g. `./roles/<name>`) carry heavenSpace: null and
+    // still match the unfiltered query, so relaxing is safe.
+    const parentIsHeavenRegion = parentSeedSpace !== null;
+    const allowSeedSpaceChildren = isHeavenDoor || parentIsHeavenRegion;
     // Branch-aware segment lookup. The walker checks the current
     // branch's slot first; on miss (and only on a non-main branch),
     // it falls through to main and validates the main slot existed

@@ -261,7 +261,7 @@ export async function genesis(app, opts = {}) {
       await ensureSpaceRoot();
       if (bootMode === "Beginning") {
         log.info("Genesis", "I plant the space root.");
-        log.info("Genesis", "I plant my nine heaven spaces.");
+        log.info("Genesis", "I plant my heaven spaces.");
       }
 
       // Step 3: "I take heaven as my home" — point I-Am's homeSpace at
@@ -477,6 +477,16 @@ export async function genesis(app, opts = {}) {
   const { federationManagerRole } = await import("./seed/present/roles/federation-manager/role.js");
   registerRole("federation-manager", federationManagerRole, "seed");
 
+  // The host tier (nodeServerTest Phase 1): the HTTP listener, the
+  // WebSocket pool, and the Mongo connection as beings. Scripted
+  // cognition; their lifecycle code lives in seed/materials/host/.
+  const { httpServerRole } = await import("./seed/present/roles/http-server/role.js");
+  registerRole("http-server", httpServerRole, "seed");
+  const { websocketPoolRole } = await import("./seed/present/roles/websocket-pool/role.js");
+  registerRole("websocket-pool", websocketPoolRole, "seed");
+  const { mongoRole } = await import("./seed/present/roles/mongo/role.js");
+  registerRole("mongo-connection", mongoRole, "seed");
+
   // role-finder: LLM helper that authors live roles from English.
   // Summon @role-finder, describe what a being should be able to do,
   // it surfaces matches in ./roles or drafts a new role via set-role.
@@ -594,6 +604,9 @@ export async function genesis(app, opts = {}) {
       const { mergeMediatorRole } = await import("./seed/present/roles/merge-mediator/role.js");
       const { llmAssignerRole } = await import("./seed/present/roles/llm-assigner/role.js");
       const { publicRole } = await import("./seed/present/roles/public/role.js");
+      const { httpServerRole: httpServerRoleSpec } = await import("./seed/present/roles/http-server/role.js");
+      const { websocketPoolRole: websocketPoolRoleSpec } = await import("./seed/present/roles/websocket-pool/role.js");
+      const { mongoRole: mongoRoleSpec } = await import("./seed/present/roles/mongo/role.js");
       const installs = [
         ["human", humanRole],
         ["cherub", cherubRole],
@@ -606,6 +619,9 @@ export async function genesis(app, opts = {}) {
         ["merge-mediator", mergeMediatorRole],
         ["llm-assigner", llmAssignerRole],
         ["public", publicRole],
+        ["http-server", httpServerRoleSpec],
+        ["websocket-pool", websocketPoolRoleSpec],
+        ["mongo-connection", mongoRoleSpec],
       ];
       for (const [name, spec] of installs) {
         await withIAmAct(`I install ${name} on the reality root`, async (ctx) => {
@@ -672,6 +688,19 @@ export async function genesis(app, opts = {}) {
     }
   }
 
+  // ── Host runtime (nodeServerTest Phase 1). ──
+  // Resolve the ./host spaces + beings, ensure the request-log
+  // matter, sweep stale connection matter from the previous process,
+  // stamp the mongo boot fact. Runs in plant-mode boots too (it only
+  // resolves and reconciles). Failure never blocks boot: the
+  // transport notifiers stay no-ops when not ready.
+  try {
+    const { initHostRuntime } = await import("./seed/materials/host/host.js");
+    await initHostRuntime();
+  } catch (err) {
+    log.warn("Genesis", `host runtime init failed: ${err.message}. Boot continues; host facts disabled.`);
+  }
+
   // LLM-management ops. Six bare seed ops (add-llm / delete-llm /
   // assign-slot / set-being-llm / set-space-llm / set-reality-llm)
   // plus three llm-assigner-prefixed tutorial ops (start-tutorial /
@@ -709,6 +738,18 @@ export async function genesis(app, opts = {}) {
   const { registerFederationManagerOps } =
     await import("./seed/present/roles/federation-manager/ops.js");
   registerFederationManagerOps();
+
+  // Host SEE ops: http-stats, connections, mongo-stats. Pure reads
+  // over the live process, gated by canSee on the infra roles + angel.
+  const { registerHttpServerOps } =
+    await import("./seed/present/roles/http-server/ops.js");
+  registerHttpServerOps();
+  const { registerWebsocketPoolOps } =
+    await import("./seed/present/roles/websocket-pool/ops.js");
+  registerWebsocketPoolOps();
+  const { registerMongoOps } =
+    await import("./seed/present/roles/mongo/ops.js");
+  registerMongoOps();
 
   // I hand my remembered settings (from ./config) down to the seed
   // modules that depend on them. Per-key failures are logged but

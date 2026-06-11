@@ -275,6 +275,12 @@ export const CONFIG_DEFAULTS = {
   timezone: null,
   realityLlmConnection: null,
 
+  // Host observation switches (seed/materials/host/). Facts stamped
+  // by the http-server / websocket-pool beings; flipping one to false
+  // stops stamping immediately (in-memory counters keep counting).
+  hostRequestFacts: true,
+  hostConnectionFacts: true,
+
   // Boundary security (what the reality accepts at its edge)
   allowedLlmDomains: [],
   allowedFrameDomains: [],

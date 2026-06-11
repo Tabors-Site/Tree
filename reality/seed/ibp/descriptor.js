@@ -509,13 +509,18 @@ async function placeAtSpaceRoot(resolved, { identity, until = null, branch = "0"
   // can't carry coord/inbox/activity until the row catches up.
   const { SEED_DELEGATES } = await import("../materials/being/seedDelegates.js");
   const { findByName } = await import("../materials/projections.js");
+  // Delegates homed in their own heaven rooms (the host tier) do NOT
+  // surface at the reality root — their position is truthful and the
+  // occupants query finds them in their rooms. Only root-homed
+  // delegates ride the hardcoded roster.
+  const rootDelegates = SEED_DELEGATES.filter((d) => !d.homeHeavenSpace);
   const delegateSlots = (await Promise.all(
-    SEED_DELEGATES.map((d) => findByName("being", d.name, branch)),
+    rootDelegates.map((d) => findByName("being", d.name, branch)),
   )).filter(Boolean);
   const delegateIdByName = new Map(
     delegateSlots.map((s) => [s.state?.name, String(s.id)]),
   );
-  const seedDelegateEntries = SEED_DELEGATES.map((d) => ({
+  const seedDelegateEntries = rootDelegates.map((d) => ({
     being:       d.name,
     invocableBy: d.invocableBy || "authenticated",
     available:   isRegistered(d.name),
@@ -614,7 +619,17 @@ async function placeAtSpace(resolved, { identity, payload, until = null, branch 
   // inbox + Act reconstruction, which is its own future slice.
   const children = space.heavenSpace === HEAVEN_SPACE.THREADS
     ? await synthesizeThreadChildren(space._id, pathByNames, payload)
-    : await childrenOf(space._id, pathByNames, { until, branch });
+    : space.heavenSpace === HEAVEN_SPACE.FACTORY_PRESENT
+      ? await synthesizeStamperChildren(pathByNames, payload)
+      : space.heavenSpace === HEAVEN_SPACE.FACTORY_PAST
+        ? await synthesizeReelChildren(payload)
+        : await childrenOf(space._id, pathByNames, {
+            until, branch,
+            // Heaven-region parents (host, factory) list their own
+            // heaven-marked children; ordinary listings keep
+            // filtering them out.
+            includeHeavenChildren: !!space.heavenSpace,
+          });
   const matters  = await mattersAt(space._id, {
     until, branch,
     // The containing space's render block — carries per-type model
@@ -771,6 +786,12 @@ async function childrenOf(parentId, parentPath, opts = {}) {
       name: f.name || s.name,
       spaceId: s._id,
       type: f.type ?? s.type ?? null,
+      // The child's own heavenSpace tag (null on user spaces; one of
+      // HEAVEN_SPACE.* on tier-3 + region children). The 3D scene
+      // dispatches doorway styling on this (heaven door, host/factory
+      // room, etc.) when nested deeper than one heaven level; without
+      // it those children render as default tree meshes.
+      heavenSpace: f.heavenSpace ?? s.heavenSpace ?? null,
       coord: f.coord ?? s.coord ?? null,
       path: parentPath === "/" ? `/${s.name}` : `${parentPath}/${s.name}`,
       // A child space's model is its body in THIS parent's scene —
@@ -815,6 +836,49 @@ async function synthesizeThreadChildren(parentId, parentPath, payload) {
     synthetic: true,
     path:      parentPath === "/" ? `/${t.id}` : `${parentPath}/${t.id}`,
     thread:    { id: t.id, lastAct: t.lastAct },
+    qualities: {},
+  }));
+}
+
+// ./factory/present children: one stamper per being with sealed
+// acts, recent actors first. Synthetic (the threads pattern):
+// computed from ActHead + Act rows, nothing stored. See
+// seed/materials/space/factory.js.
+async function synthesizeStamperChildren(parentPath, payload) {
+  const { listStamperChildren } = await import("../materials/space/factory.js");
+  const limit = payload?.limit != null ? Number(payload.limit) : undefined;
+  const list = await listStamperChildren({ limit });
+  return list.map((s) => ({
+    name:      s.name,
+    spaceId:   `stamper:${s.beingId}`,
+    type:      "stamper",
+    synthetic: true,
+    coord:     null,
+    model:     null,
+    path:      parentPath === "/" ? `/${encodeURIComponent(s.name)}` : `${parentPath}/${encodeURIComponent(s.name)}`,
+    stamper:   { beingId: s.beingId, lastAct: s.lastAct, actCount: s.actCount, branches: s.branches },
+    qualities: {},
+  }));
+}
+
+// ./factory/past children: recent reels, routing into the EXISTING
+// reel explorer (/.reel/<kind>/<id>). Thin by design.
+async function synthesizeReelChildren(payload) {
+  const { listReelChildren } = await import("../materials/space/factory.js");
+  const limit = payload?.limit != null ? Number(payload.limit) : undefined;
+  const list = await listReelChildren({ limit });
+  return list.map((r) => ({
+    name:      `${r.kind}:${r.id.slice(0, 8)}`,
+    spaceId:   `reel:${r.branch}:${r.kind}:${r.id}`,
+    type:      "reel",
+    synthetic: true,
+    path:      `/.reel/${r.kind}/${r.id}`,
+    reel: {
+      kind: r.kind, id: r.id, branch: r.branch,
+      headSeq: r.headSeq, headHash8: r.headHash8,
+      lastFactAt: r.lastFactAt ? new Date(r.lastFactAt).toISOString() : null,
+      ...(r.kind === "being" ? { actsPath: `/.acts/${r.id}` } : {}),
+    },
     qualities: {},
   }));
 }

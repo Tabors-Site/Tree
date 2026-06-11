@@ -214,10 +214,18 @@ body {
 #identity-chip .chip:hover { border-color: var(--accent); color: var(--accent); }
 #identity-chip .chip-authed { background: #0f201a; color: var(--accent); border-color: #2f6b48; }
 
-/* Address form spans row 2 left of quick-nav. */
-#address-form {
+/* The shared stance bar spans row 2 left of quick-nav. */
+#stance-slot-flat {
   grid-area: addr;
-  display: block;
+  display: flex;
+  min-width: 0;
+}
+#stance-slot-flat #stance-actor {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  padding: 7px 10px;
+  font-size: 12px;
 }
 #address-input {
   width: 100%;

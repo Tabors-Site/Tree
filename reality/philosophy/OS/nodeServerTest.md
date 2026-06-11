@@ -634,3 +634,6 @@ Both are genuinely novel. Both are achievable with the architecture you've built
 My honest recommendation: per-being grouping in the next arc, when you build the stamper infrastructure. Spatial fact-trails as a vision artifact for the 3D portal era. Don't lose the spatial idea — it's good — but don't try to build it before the foundations are ready.
 
 Worth pinning both. Build the first; remember the second.
+
+===========
+LANDED. Phase 1 (./host: http-server / websocket-pool / mongo as fact-backed beings, connection matter, per-request facts as the scale test) and Phase 2 (./factory: present = synthetic stamper spaces, past = reels) are built. The pinned doctrine that came out of building them lives at seed/materials/host/HOST.md (one being per boundary, config-gated honest batching, outage gap-facts on reconnect, the name/role-mirror collision rule, the factory watches and never stores).

@@ -13,7 +13,6 @@ import {
   setHud,
   initAddressBar,
   updateAddressBar,
-  toggleIdentityChip,
   showSummonPanel,
   hideSummonPanel,
   resetSummonState,
@@ -283,12 +282,14 @@ async function main() {
   // Wire the address bar.
   initAddressBar({
     onNavigate: (raw) => navigate(raw),
-    onIdentityClick: () => {
-      const full = state.session?.username
-        ? `${state.session.username}@${state.discovery.reality}`
-        : `arrival@${state.discovery.reality}`;
-      toggleIdentityChip(full);
-      refreshAddressBar();
+    // Left-stance branch edit = the BE switch (chrome jumps switch
+    // the being; only portals and typed right-side addresses act
+    // cross-branch). switchIntoBranch seats the socket then follows
+    // with the hash.
+    onSwitchBranch: (branchPath) => {
+      import("./branch-bar.js")
+        .then((m) => m.switchIntoBranch(branchPath))
+        .catch((err) => console.warn("[stance-bar] switch failed:", err?.message || err));
     },
     onBack: () => historyBack(),
     onForward: () => historyForward(),
@@ -1322,6 +1323,8 @@ function refreshAddressBar() {
     chain: state.descriptor?.address?.chain,
     isAuthenticated: !!state.session?.token,
     branch: state.descriptor?.address?.branch || "0",
+    actorBranch: state.client?.currentBranch || "0",
+    being: state.descriptor?.address?.being || null,
   });
 }
 

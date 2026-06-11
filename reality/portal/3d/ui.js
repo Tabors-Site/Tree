@@ -4,6 +4,7 @@
 // objects, and a small HUD line at the top of the screen.
 
 import { setPortalStatus } from "../shared/portal-status.js";
+import { initStanceBar, placeStanceBar, updateStanceBar } from "../shared/stance-bar.js";
 
 const overlayRoot = () => document.getElementById("overlays");
 const hudTop = () => document.getElementById("hud-top");
@@ -32,9 +33,7 @@ export function setHudBottom(text) {
 
 let _addressApi = null;
 
-export function initAddressBar({ onNavigate, onIdentityClick, onBack, onForward, onToggleFlatPanel }) {
-  const chip = document.getElementById("identity-chip");
-  const input = document.getElementById("address-input");
+export function initAddressBar({ onNavigate, onSwitchBranch, onBack, onForward, onToggleFlatPanel }) {
   const navBack = document.getElementById("nav-back");
   const navForward = document.getElementById("nav-forward");
   const navPlace = document.getElementById("nav-place");
@@ -42,11 +41,11 @@ export function initAddressBar({ onNavigate, onIdentityClick, onBack, onForward,
   const navRoot = document.getElementById("nav-root");
   const navText = document.getElementById("nav-text");
 
-  chip.addEventListener("click", () => onIdentityClick?.());
-  input.addEventListener("keydown", (e) => {
-    if (e.key === "Enter") onNavigate(input.value.trim());
-  });
-  input.addEventListener("focus", () => document.exitPointerLock?.());
+  // THE address bar: the shared stance bar (actor :: receiving),
+  // one node for both portals — the flat overlay re-parents the same
+  // element so the two views can never disagree.
+  initStanceBar({ onNavigate, onSwitchBranch });
+  placeStanceBar(document.getElementById("stance-slot"));
 
   navBack.addEventListener("click",    () => onBack?.());
   navForward.addEventListener("click", () => onForward?.());
@@ -63,7 +62,7 @@ export function initAddressBar({ onNavigate, onIdentityClick, onBack, onForward,
   }
 
   _addressApi = {
-    chip, input, navBack, navForward, navPlace, navHome, navRoot, navText,
+    navBack, navForward, navPlace, navHome, navRoot, navText,
     treeRootPath: null,
   };
   return _addressApi;
@@ -75,24 +74,20 @@ export function setHistoryButtonsEnabled({ back, forward }) {
   _addressApi.navForward.disabled = !forward;
 }
 
-export function updateAddressBar({ username, placeDomain, pathByNames, chain, isAuthenticated, branch }) {
+export function updateAddressBar({ username, placeDomain, pathByNames, chain, isAuthenticated, branch, actorBranch, being }) {
   if (!_addressApi) return;
-  const nameEl = document.getElementById("chip-name");
-  const placeEl = document.getElementById("chip-place");
-  if (nameEl) nameEl.textContent = isAuthenticated ? (username || "you") : "arrival";
-  // Identity chip now carries the branch suffix too — `@reality#1` reads
-  // at a glance as "I'm signed in on branch #1 of this reality." Main
-  // stays implicit (no suffix).
-  const branchSuffix = (branch && branch !== "0") ? `#${branch}` : "";
-  if (placeEl) placeEl.textContent = `@${placeDomain || "<reality>"}${branchSuffix}`;
-  const place = placeDomain || "";
-  const path = pathByNames || "/";
-  // Address-input mirrors the canonical IBP address shape:
-  // `<reality>[#<branch>]<path>`. URL hash is the source of truth; the
-  // input should always match.
-  _addressApi.input.value = place
-    ? `${place}${branchSuffix}${path === "/" ? "/" : path}`
-    : `${branchSuffix}${path}`;
+  // The shared stance bar renders both sides; this function just
+  // feeds it the view side (and whatever else the caller knows) and
+  // keeps the nav-button enablement logic.
+  updateStanceBar({
+    reality: placeDomain || "",
+    username: username || null,
+    signedIn: !!isAuthenticated,
+    viewBranch: branch || "0",
+    path: pathByNames || "/",
+    being: being || null,
+    ...(actorBranch ? { actorBranch } : {}),
+  });
 
   // Tree root computation: walk the chain past the optional ~user segment.
   let rootPath = null;
@@ -109,19 +104,8 @@ export function updateAddressBar({ username, placeDomain, pathByNames, chain, is
   _addressApi.navHome.disabled = !isAuthenticated;
 }
 
-let _chipExpanded = false;
-export function toggleIdentityChip(fullForm) {
-  _chipExpanded = !_chipExpanded;
-  const nameEl = document.getElementById("chip-name");
-  const placeEl = document.getElementById("chip-place");
-  if (_chipExpanded) {
-    if (nameEl) nameEl.textContent = fullForm;
-    if (placeEl) placeEl.textContent = "";
-  } else {
-    // Caller should call updateAddressBar to restore default.
-  }
-  return _chipExpanded;
-}
+// toggleIdentityChip retired with the identity chip: the actor stance
+// is now always fully visible on the left side of the stance bar.
 
 export function showLabel(text, x, y) {
   if (!labelEl) {

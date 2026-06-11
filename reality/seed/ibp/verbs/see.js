@@ -31,6 +31,13 @@ import {
   getThreadsSpaceId,
   describeThread,
 } from "../../materials/space/threads.js";
+import {
+  stamperRefFromPath,
+  isFactoryPresentChildPath,
+  getFactoryPresentSpaceId,
+  resolveStamperBeing,
+  describeStamperSpace,
+} from "../../materials/space/factory.js";
 import { describeReel } from "../../past/fact/facts.js";
 import { describeActChain } from "../../past/act/actChain.js";
 import { describeBeingsCatalog } from "../../materials/being/beingsCatalog.js";
@@ -317,6 +324,45 @@ export async function seeVerb(target, opts = {}) {
       matters: [],
       qualities: {},
     };
+  }
+
+  // Stamper descriptor short-circuit. SEE on
+  // `<reality>/./factory/present/<being>` returns the synthetic
+  // stamper space (the being's act-chain laid out spatially — one
+  // lane per branch, papers at coords, the stamper figure at the
+  // head) from describeStamperSpace. No persistent space row exists;
+  // address.spaceId carries "stamper:<beingId>", which is also the
+  // live-subscription key. SEE on `/./factory/present` itself routes
+  // normally — placeAtSpace injects the synthetic children. Window
+  // via payload {limit, before}. See materials/space/factory.js.
+  const stamperRef = stamperRefFromPath(expanded.right?.path);
+  if (stamperRef) {
+    const factoryPresentId = await getFactoryPresentSpaceId();
+    const decision = await authorize({
+      identity,
+      verb: "see",
+      target: { kind: "position", spaceId: factoryPresentId, isDiscovery: false },
+      summonCtx,
+      actorBranch: currentBranch || null,
+    });
+    if (!decision.ok) {
+      throw new IbpError(
+        identity ? IBP_ERR.FORBIDDEN : IBP_ERR.UNAUTHORIZED,
+        `SEE denied for actor "${decision.actor}": ${decision.reason}`,
+        { actor: decision.actor },
+      );
+    }
+    const being = await resolveStamperBeing(stamperRef);
+    if (!being) {
+      throw new IbpError(
+        IBP_ERR.BEING_NOT_FOUND,
+        `No stamper for "${stamperRef.beingId || stamperRef.name}" — no such being`,
+      );
+    }
+    return describeStamperSpace(being, {
+      limit:  payload?.limit != null ? Number(payload.limit) : undefined,
+      before: typeof payload?.before === "string" ? payload.before : undefined,
+    });
   }
 
   // Reel-explorer short-circuit. SEE on `<reality>/.reel/<kind>/<id>`
@@ -805,6 +851,12 @@ async function seeAtTime({
     throw new IbpError(
       IBP_ERR.INVALID_INPUT,
       "SEE `at` is not supported on threads (threads are a live projection; use .reel for historical facts)",
+    );
+  }
+  if (isFactoryPresentChildPath(expanded.right?.path)) {
+    throw new IbpError(
+      IBP_ERR.INVALID_INPUT,
+      "SEE `at` is not supported on stamper spaces (a live projection; use /.acts/<beingId> for the historical act-chain)",
     );
   }
   if (/^\/?\.reel\//.test(expanded.right?.path || "")) {

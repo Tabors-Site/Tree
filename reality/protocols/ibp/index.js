@@ -29,7 +29,7 @@ import { startTickLoop as startScheduleTick } from "../../seed/present/wakes/wak
 // First cut: invalidate. Patch-based diffs come later as an optimization.
 
 let _hooksWired = false;
-function wireLiveHooks() {
+export function wireLiveHooks() {
   if (_hooksWired) return;
   _hooksWired = true;
 
@@ -138,6 +138,28 @@ function wireLiveHooks() {
       if (sId) emitPositionInvalidate(String(sId), "act-sealed");
     } catch { /* descriptor refresh is best-effort */ }
   }, "ibp-live");
+
+  // Stamper live loop (./factory/present). Every sealed act nudges
+  // the actor's stamper-space subscribers — the synthetic space's
+  // address.spaceId IS the subscription key — plus the present
+  // listing (recent-actors order shifts). Cost with no subscribers:
+  // one Map lookup per seal. The protocols→seed direction holds:
+  // seed fires the hook, this side listens (the factPush inversion).
+  let _factoryPresentIdCache = null;
+  hooks.register("afterAct", async ({ beingIn }) => {
+    if (!beingIn) return;
+    try {
+      emitPositionInvalidate(`stamper:${beingIn}`, "act-sealed");
+      if (_factoryPresentIdCache === null) {
+        const { getFactoryPresentSpaceId } =
+          await import("../../seed/materials/space/factory.js");
+        _factoryPresentIdCache = (await getFactoryPresentSpaceId()) || false;
+      }
+      if (_factoryPresentIdCache) {
+        emitPositionInvalidate(_factoryPresentIdCache, "act-sealed");
+      }
+    } catch { /* stamper refresh is best-effort */ }
+  }, "ibp-live-stamper");
 
   // DO-trigger fan-out. The three substrate write events fan out
   // through the subscription registry: any being subscribed to one of

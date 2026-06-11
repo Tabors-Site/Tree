@@ -1,3 +1,4 @@
+import { updateStanceBar } from "../shared/stance-bar.js";
 // branch-bar.js — branch + time navigation for the 3D portal.
 //
 // Three pieces of UI:
@@ -217,7 +218,7 @@ function _speedLabel(tier) {
 // typing a different branch into the address yourself; then the
 // address line shows the split (@you#0 → reality#2/...) so you always
 // know exactly what's being sent on both sides.
-async function switchIntoBranch(branchPath) {
+export async function switchIntoBranch(branchPath) {
   const signedIn = !!window.__state?.session?.token;
   if (signedIn) {
     // BE switch at the gate: seats socket.currentBranch on the
@@ -229,7 +230,7 @@ async function switchIntoBranch(branchPath) {
   // bare `#<reality>/` form resolves through the #main POINTER, which
   // is reassignable and may not be "0"; explicit paths can't drift.
   location.hash = `#${_state.reality}#${branchPath}/`;
-  _updateAddressChip(window.__state?.descriptor || null);
+  _syncStanceBar();
 }
 
 // Pointer-truthful branch label: the canonical path, plus any named
@@ -266,47 +267,16 @@ function _offerSwitchAfterBranch(path, note = "") {
   }
 }
 
-// ── Full-address chip ───────────────────────────────────────────────
-// Always-visible truth of both stances: @being#branch (who you are,
-// where your acts land) → reality#branch/path (what you're looking
-// at). Amber when they differ — the cross-branch acting state.
-function _createAddressChip() {
-  const el = document.createElement("div");
-  el.id = "branch-address-chip";
-  el.style.cssText = [
-    "position: fixed",
-    "top: 92px",
-    "left: 12px",
-    "z-index: 200",
-    "pointer-events: none",
-    "background: rgba(10, 13, 12, 0.85)",
-    "color: #c8d3cb",
-    "border: 1px solid #2c3a32",
-    "border-radius: 6px",
-    "padding: 4px 10px",
-    "font: 11px/1.4 ui-monospace, monospace",
-    "max-width: 46vw",
-    "overflow: hidden",
-    "text-overflow: ellipsis",
-    "white-space: nowrap",
-  ].join("; ");
-  return el;
-}
-
-function _updateAddressChip(desc) {
-  if (!_state.addressEl) return;
-  const me = window.__state?.session?.username || "anon";
-  const myBranch = _state.client?.currentBranch || "0";
-  const viewBranch = desc?.address?.branch || "0";
-  const path = desc?.address?.pathByNames || "/";
-  _state.addressEl.textContent =
-    `@${me}${_branchLabel(myBranch)} → ${_state.reality}${_branchLabel(viewBranch)}${path}`;
-  const crossed = myBranch !== viewBranch;
-  _state.addressEl.style.borderColor = crossed ? "#8a6d2f" : "#2c3a32";
-  _state.addressEl.style.color = crossed ? "#e2c574" : "#c8d3cb";
-  _state.addressEl.title = crossed
-    ? `cross-branch: your being is seated on ${_branchLabel(myBranch)} while viewing ${_branchLabel(viewBranch)} — acts from here land cross-branch`
-    : "your being and the view are on the same branch";
+// ── Stance-bar sync ─────────────────────────────────────────────────
+// The full-address chip retired into the shared stance bar (the ONE
+// address bar). This side feeds it what the branch machinery knows:
+// the actor's seated branch and the live pointer map (for
+// pointer-truthful tooltips).
+function _syncStanceBar() {
+  updateStanceBar({
+    actorBranch: _state.client?.currentBranch || "0",
+    pointers: _state.graph?.pointers || {},
+  });
 }
 
 export function mountBranchBar({ client, reality }) {
@@ -314,9 +284,7 @@ export function mountBranchBar({ client, reality }) {
   _state.reality = reality;
   _state.buttonEl = _createBranchButton();
   document.body.appendChild(_state.buttonEl);
-  _state.addressEl = _createAddressChip();
-  document.body.appendChild(_state.addressEl);
-  _updateAddressChip(null);
+  _syncStanceBar();
   // Click outside the panel closes it. Bound once.
   document.addEventListener("click", (ev) => {
     if (!_state.panelOpen) return;
@@ -332,10 +300,10 @@ export function mountBranchBar({ client, reality }) {
   });
   return {
     update: (desc) => _update(desc),
-    // Repaint just the address chip (cheap) — main.js calls this on
-    // every server "branch" push so the left stance stays truthful
-    // without a full descriptor round-trip.
-    refreshAddress: () => _updateAddressChip(window.__state?.descriptor || null),
+    // Repaint the actor side of the stance bar (cheap) — main.js
+    // calls this on every server "branch" push so the left stance
+    // stays truthful without a full descriptor round-trip.
+    refreshAddress: () => _syncStanceBar(),
     // The portal swaps its PortalClient on sign-in / register / sign-out
     // (a new authenticated or anonymous socket). The bar captured the
     // boot-time client; without this, after a first registration it
@@ -345,7 +313,7 @@ export function mountBranchBar({ client, reality }) {
     setClient: (client, reality) => {
       _state.client = client;
       if (reality) _state.reality = reality;
-      _updateAddressChip(window.__state?.descriptor || null);
+      _syncStanceBar();
     },
   };
 }
@@ -983,10 +951,12 @@ async function _update(desc) {
   // panel/timeline isn't open, so opening either is instant.
   const branch = desc?.address?.branch || "0";
   _maybeSurfaceBranchSwitch(branch);
-  _updateAddressChip(desc);
+  _syncStanceBar();
   try {
     const r = await _state.client.see(`${_state.reality}/.branches/${branch}`);
     _state.graph = r?.branches || null;
+    // The pointer map just refreshed — repaint the bar tooltips.
+    _syncStanceBar();
     // Server-confirmed pause state of the branch the user is on. Push
     // it to the chrome layer (main.js listens for the same custom
     // event the optimistic pause-button flip uses, so both paths

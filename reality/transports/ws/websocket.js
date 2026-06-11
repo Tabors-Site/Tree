@@ -23,6 +23,7 @@ import { Server } from "socket.io";
 import { decodeToken } from "../../seed/materials/being/identity.js";
 import { getRealityConfigValue } from "../../seed/realityConfig.js";
 import { setPushChannel, IBP_EVENT } from "../../seed/ibp/pushChannel.js";
+import { noteSocketConnected, noteSocketDisconnected } from "../../seed/materials/host/host.js";
 
 // Transport-private events. Not protocol surface — socket.io
 // housekeeping. The IBP wire is a single event (`IBP_EVENT = "ibp"`);
@@ -287,6 +288,20 @@ export function initWebSocketServer(httpServer, originPolicy) {
       socket.emit(WS_REGISTERED, { success: false, error: "Unauthorized" });
     }
 
+    // Host observation (nodeServerTest Phase 1): this connection
+    // becomes matter in ./host/websocket, created by the
+    // websocket-pool being. The notifier is sync, never throws, and
+    // no-ops until the host runtime is ready — the transport stays
+    // dumb either way.
+    noteSocketConnected({
+      socketId: socket.id,
+      beingId: socket.beingId || null,
+      name: socket.name || null,
+      clientKind: socket.clientKind || null,
+      clientInstance: socket.clientInstance || null,
+      branch: socket.currentBranch || "0",
+    });
+
     // Extension-registered socket handlers
     for (const [event, handler] of _socketHandlers) {
       socket.on(event, async (data) => {
@@ -305,6 +320,8 @@ export function initWebSocketServer(httpServer, originPolicy) {
 
     socket.on("disconnect", (reason) => {
       log.debug("WS", `disconnected: ${socket.id} (${reason})`);
+      // Host observation: end this connection's matter.
+      noteSocketDisconnected({ socketId: socket.id, reason });
       if (beingId) removeAuthSession(beingId, socket.id);
       if (
         socket.clientSessionId &&

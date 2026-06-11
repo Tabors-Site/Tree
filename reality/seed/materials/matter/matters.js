@@ -480,9 +480,19 @@ async function deleteMatterAndFile({
   if (!_mSlot) throw new Error("Matter not found");
   const matter = { _id: _mSlot.id, ...(_mSlot.state || {}) };
 
-  const rootSpace = await resolveRootSpace(matter.spaceId);
+  // Author first — no tree walk needed when the actor made the
+  // matter. The walk only runs for non-authors, and heaven matter
+  // (e.g. connection rows in ./host/websocket) has no owned tree
+  // root by design: resolveRootSpace throws at the heaven boundary,
+  // which here just means "no root owner", not an error.
   const isAuthor = String(matter.beingId) === String(beingId);
-  const isRootOwner = String(getSpaceOwner(rootSpace) || "") === String(beingId);
+  let isRootOwner = false;
+  if (!isAuthor) {
+    try {
+      const rootSpace = await resolveRootSpace(matter.spaceId);
+      isRootOwner = String(getSpaceOwner(rootSpace) || "") === String(beingId);
+    } catch { /* heaven boundary or broken tree: author rule decides */ }
+  }
 
   if (!isAuthor && !isRootOwner) {
     throw new Error("Only the matter author or the tree owner can delete this matter");

@@ -12,6 +12,7 @@
 // Chat opens via chat.js#openChatFor.
 
 import { flat } from "./host.js";
+import { updateStanceBar } from "../shared/stance-bar.js";
 import { openChatFor, isChatOpen, getChatBeing } from "./chat.js";
 import { showAuthOverlay } from "./identity.js";
 import { renderRoleManagerPanel } from "../shared/role-manager-panel.js";
@@ -109,44 +110,22 @@ function restoreNormalLayout() {
 function renderTopBar(desc, { session, discovery }) {
   renderBreadcrumb(desc, discovery);
   renderQuickNav(desc, discovery);
-  renderBranchChip(desc, discovery);
   renderIdentityChip(session, discovery);
-  syncAddressInput(desc, discovery);
+  // The shared stance bar (one node, both portals) gets the view
+  // side; the actor side rides the "branch" socket push and the
+  // 3D chrome, merged inside the bar.
+  updateStanceBar({
+    reality: discovery?.reality || "",
+    username: session?.username || null,
+    signedIn: !!session?.token,
+    viewBranch: desc.address?.branch || "0",
+    path: desc.address?.pathByNames || "/",
+    being: desc.address?.being || null,
+  });
 }
 
-// Branch chip — the small indicator showing which divergent world the
-// portal is looking at. Main ("0") is implicit and the chip stays empty
-// to keep the top bar quiet for the common case. On any other branch
-// the chip lights up with `#<path>` and clicking it switches back to
-// main. The branch travels in the address itself (the `#` qualifier the
-// substrate parses); this chip just surfaces and toggles it.
-function renderBranchChip(desc, discovery) {
-  const el = document.getElementById("branch-chip");
-  if (!el) return;
-  el.innerHTML = "";
-  const branch = desc.address?.branch || "0";
-  if (branch === "0") {
-    // Main is implicit. Stay quiet.
-    el.classList.add("hidden");
-    return;
-  }
-  el.classList.remove("hidden");
-  const reality = discovery?.reality || "";
-  const path = desc.address?.pathByNames || "/";
-  const being = desc.address?.being ? `@${desc.address.being}` : "";
-  const chip = document.createElement("button");
-  chip.className = "chip chip-branch";
-  chip.textContent = `#${branch}`;
-  chip.title =
-    `on branch #${branch} (divergent world)\n` +
-    `click to return to main`;
-  chip.onclick = () => {
-    // Strip the # qualifier and navigate back to main at the same
-    // position. The substrate treats `treeos.ai/path` as `#0/path`.
-    location.hash = `#${reality}${path === "/" ? "/" : path}${being}`;
-  };
-  el.appendChild(chip);
-}
+// renderBranchChip retired: the branch travels in the stance bar's
+// receiving side (explicit #branch, pointer aliases in the tooltip).
 
 // Lineage breadcrumb — clickable trail from reality root → current
 // position. Replaces the single ↑ parent link. Each segment navigates.
@@ -255,19 +234,8 @@ function renderIdentityChip(session, discovery) {
   idEl.appendChild(chip);
 }
 
-// Reflect the current address in the input (unless the user is editing).
-function syncAddressInput(desc, discovery) {
-  const input = document.getElementById("address-input");
-  if (!input) return;
-  if (document.activeElement === input) return; // don't clobber typing
-  const reality = discovery?.reality || "";
-  const path = desc.address?.pathByNames || "/";
-  // Surface the branch in the address bar when non-main, the way it
-  // would appear if the user typed it. Main stays implicit.
-  const branch = desc.address?.branch || "0";
-  const branchPart = branch === "0" ? "" : `#${branch}`;
-  input.value = `${reality}${branchPart}${path === "/" ? "/" : path}`;
-}
+// syncAddressInput retired: the shared stance bar repaints itself
+// from updateStanceBar and never clobbers a focused input.
 
 // Render the count badge next to each section title.
 function renderCounts(desc) {

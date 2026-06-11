@@ -119,6 +119,20 @@ export async function crossRealityDispatch({ envelope, actor, identity } = {}) {
     status: "attempted",
   });
   await advanceActHead(actor.branch, actor.beingId, actId);
+  // Stamper live loop parity: this direct open is the one seal path
+  // that bypasses sealAct, so fire afterAct here too (cross-reality
+  // attempt acts push to stamper-space subscribers like any other).
+  try {
+    const { hooks } = await import("../hooks.js");
+    hooks.run("afterAct", {
+      actId,
+      beingIn: actor.beingId,
+      beingOut: actor.beingId,
+      activeRole: null,
+      endMessage: null,
+      stoppedAt: now,
+    }).catch(() => {});
+  } catch { /* observation only */ }
 
   // 2. Forward to peer with the actor's identity tuple. The
   // forwardToPeer import is lazy so this seed module doesn't pull

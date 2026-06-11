@@ -241,6 +241,11 @@ export async function handleBe(socket, env, ack) {
           // stays truthful (the handshake emitted the initial branch;
           // this keeps it current across switches).
           try { socket.emit("branch", { branch: result.seatBranch }); } catch { /* fake sockets */ }
+          // Host observation: keep this connection's matter truthful
+          // about which world the session rides.
+          import("../../../seed/materials/host/host.js")
+            .then((m) => m.noteSocketBranchRebound({ socketId: socket.id, branch: result.seatBranch }))
+            .catch(() => {});
         }
         pushReply(buildTransportActReply({
           correlation: momentCorrelation,

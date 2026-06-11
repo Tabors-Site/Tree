@@ -21,6 +21,7 @@
 // }
 
 import "./style.css";
+import { placeStanceBar } from "../shared/stance-bar.js";
 import {
   renderDescriptor,
   setStatus,
@@ -78,15 +79,7 @@ const FLAT_DOM = `
       <span class="conn-text">live</span>
     </div>
     <nav id="breadcrumb"></nav>
-    <form id="address-form">
-      <input
-        id="address-input"
-        type="text"
-        placeholder="address: <reality>/<path>@<being>  .  press / to focus"
-        autocomplete="off"
-        spellcheck="false"
-      />
-    </form>
+    <div id="stance-slot-flat" style="display:flex; flex:1; min-width:0;"></div>
     <nav id="quick-nav">
       <a class="qn-chip" data-tag="home" title="reality root">/</a>
       <a class="qn-chip" data-tag="beings" title=".beings . every being">. beings</a>
@@ -95,7 +88,6 @@ const FLAT_DOM = `
       <a class="qn-chip" data-tag="threads" title="./threads . live coordination chains">threads</a>
       <a class="qn-chip" data-tag="extensions" title="./extensions . installed extensions">ext</a>
     </nav>
-    <div id="branch-chip" title="active branch"></div>
     <button id="inbox-chip" type="button" title="your inbox — pending summons addressed to you" style="display:none;background:transparent;color:#c8d3cb;border:1px solid #2c3a32;border-radius:4px;padding:3px 8px;font-family:inherit;font-size:11px;cursor:pointer;margin-left:4px;">inbox <span id="inbox-count" class="dim">·</span></button>
     <div id="identity-chip" title="signed-in identity"></div>
     <button id="flat-timeline-btn" type="button" title="branches and timeline">🌿 timeline</button>
@@ -155,6 +147,11 @@ export function mountFlatView(rootContainer, ctx) {
   // Inject DOM.
   rootContainer.innerHTML = FLAT_DOM;
   const root = rootContainer.querySelector("#flat-app");
+
+  // THE address bar: re-parent the shared stance bar into the flat
+  // header. Same DOM node as the 3D top bar — the two views cannot
+  // disagree. dispose() hands it back.
+  placeStanceBar(root.querySelector("#stance-slot-flat"));
 
   // Populate singleton state.
   _state.client         = ctx.client;
@@ -232,7 +229,6 @@ export function mountFlatView(rootContainer, ctx) {
 
   // Wire local UI: address form, quick-nav chips, close button,
   // keyboard shortcuts.
-  wireAddressForm(root);
   wireQuickNav(root, ctx);
   wireCloseButton(root, ctx);
   wireTimelineButton(root);
@@ -275,6 +271,9 @@ export function mountFlatView(rootContainer, ctx) {
       detachKeys();
       closeChat?.();
       hideAuthOverlay?.();
+      // Hand the shared stance bar back to the 3D top bar BEFORE the
+      // flat DOM (its current parent) is torn down.
+      placeStanceBar(document.getElementById("stance-slot"));
       rootContainer.innerHTML = "";
       _state.client         = null;
       _state.descriptor     = null;
@@ -289,23 +288,8 @@ export function mountFlatView(rootContainer, ctx) {
 // Local wiring helpers
 // ──────────────────────────────────────────────────────────────────
 
-function wireAddressForm(root) {
-  const form  = root.querySelector("#address-form");
-  const input = root.querySelector("#address-input");
-  if (!form || !input) return;
-  form.addEventListener("submit", (ev) => {
-    ev.preventDefault();
-    const raw = input.value.trim();
-    if (!raw) return;
-    let target = raw;
-    const reality = _state.discovery?.reality;
-    if (reality && !raw.startsWith(reality) && (raw.startsWith("/") || raw.startsWith("~"))) {
-      target = `${reality}${raw === "/" ? "/" : raw}`;
-    }
-    flat.navigate(target);
-    input.blur();
-  });
-}
+// wireAddressForm retired: the shared stance bar (placed into
+// #stance-slot-flat above) owns address input + navigation.
 
 function wireQuickNav(root, _ctx) {
   const reality = _state.discovery?.reality;

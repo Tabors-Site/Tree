@@ -124,6 +124,7 @@ import { sendOk, sendError, IBP_ERR } from "./seed/ibp/protocol.js";
 import { getExtension } from "./extensions/loader.js";
 import securityHeaders from "./transports/http/middleware/securityHeaders.js";
 import { genesis, printReady } from "./genesis.js";
+import { noteHttpRequest, noteHttpListening, noteHttpShutdown } from "./seed/materials/host/requestLog.js";
 import { getRealityUrl } from "./seed/realityIdentity.js";
 import log from "./seed/seedReality/log.js";
 
@@ -234,6 +235,31 @@ app.use(
 );
 app.use(cookieParser());
 
+// Request observation (nodeServerTest Phase 1). Hot-path cost: one
+// hrtime read plus a queue push on finish. The fact pipeline
+// (seed/materials/host/requestLog.js) drains off the response path;
+// nothing here can delay or break a response. Pre-genesis the
+// pipeline is unbound and only counts in memory.
+app.use((req, res, next) => {
+  const t0 = process.hrtime.bigint();
+  res.on("finish", () => {
+    try {
+      noteHttpRequest({
+        method: req.method,
+        // No query string: it can carry tokens. Capped at 200 chars.
+        path: (req.path || "/").slice(0, 200),
+        status: res.statusCode,
+        durationMs: Number((process.hrtime.bigint() - t0) / 1000000n),
+        bytes: Number(res.getHeader("content-length")) || null,
+        // Decoded to a beingId at drain time; never enters a fact.
+        token: req.cookies?.token || null,
+        at: Date.now(),
+      });
+    } catch { /* observation must never break a response */ }
+  });
+  next();
+});
+
 // Raw-body webhook route. Must be before express.json. Handler registered by extension during boot.
 app.post(
   "/billing/webhook",
@@ -297,6 +323,12 @@ initIBPWS(wsServer);
 // fires the closing banner.
 const PORT = process.env.PORT || 80;
 server.listen(PORT, "0.0.0.0", () => {
+  try {
+    noteHttpListening({
+      port: Number(PORT),
+      routes: ["/health", "/api/v1", "/ibp", "/api/v1/content", "portal-static"],
+    });
+  } catch { /* observation only */ }
   printReady();
 });
 
@@ -306,6 +338,16 @@ server.listen(PORT, "0.0.0.0", () => {
 // tracked to me.
 async function shutdown(signal) {
   log.info("Seed", `${signal} received. Closing senses.`);
+
+  // Host observation: stop stamping the disconnect storm (the next
+  // boot's reconcile sweep owns those rows), record the shutdown,
+  // give in-flight lanes a bounded moment to seal.
+  try {
+    const host = await import("./seed/materials/host/host.js");
+    host.beginHostShutdown();
+    noteHttpShutdown(signal);
+    await host.flushHostLanes(1500);
+  } catch {}
 
   // Close the WebSocket server. Disconnects all clients.
   try {

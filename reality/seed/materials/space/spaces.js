@@ -538,6 +538,7 @@ export async function createRealityHeavenSpace({
   parentId,
   heavenSpace,
   qualities = null,
+  size = null,
 }) {
   if (!name || typeof name !== "string")
     throw new Error("Seed space name is required");
@@ -547,6 +548,9 @@ export async function createRealityHeavenSpace({
   const specQualities = qualities instanceof Map
     ? Object.fromEntries(qualities)
     : (qualities || {});
+  // Optional sized room (host/factory children): a size turns on the
+  // grid render and gives occupants' coords meaning.
+  const validatedSize = size ? assertValidSpaceSize(size) : null;
 
   const { withIAmAct } = await import("../../sprout.js");
   await withIAmAct(`I create the ${name} heaven space`, async (ctx) => {
@@ -561,6 +565,7 @@ export async function createRealityHeavenSpace({
         parent:    parentId ? String(parentId) : null,
         owner: I_AM,
         heavenSpace: heavenSpace || null,
+        ...(validatedSize ? { size: validatedSize } : {}),
         qualities: specQualities,
       },
       actId: ctx.actId,
@@ -910,7 +915,7 @@ export async function resolveSpaceAccess(spaceId, beingId, branch) {
  * place root yields user-created tree roots, not .config / .tools /
  * etc.). Returns at most `limit` rows, newest-creation first.
  */
-export async function listSpaceChildren(parentId, { exclude = null, limit = 500, branch = "0" } = {}) {
+export async function listSpaceChildren(parentId, { exclude = null, limit = 500, branch = "0", includeHeavenChildren = false } = {}) {
   if (!parentId) return [];
   // Heaven routing: children of a heaven parent are themselves
   // heaven; the parent-children query lives on MAIN regardless of
@@ -925,12 +930,18 @@ export async function listSpaceChildren(parentId, { exclude = null, limit = 500,
     const q = {
       branch: b, type: "space",
       "state.parent": parentId,
-      $or: [
-        { "state.heavenSpace": null },
-        { "state.heavenSpace": { $exists: false } },
-      ],
       tombstoned: { $ne: true },
     };
+    // Heaven-marked children (host/factory tiers) are filtered from
+    // ordinary listings; a heaven-region parent asks for them
+    // explicitly. Heaven-marked rows only ever live under
+    // heaven-marked parents, so the flag is collision-safe.
+    if (!includeHeavenChildren) {
+      q.$or = [
+        { "state.heavenSpace": null },
+        { "state.heavenSpace": { $exists: false } },
+      ];
+    }
     if (exclude) q._id = { $ne: `${b}:space:${exclude}` };
     return q;
   };

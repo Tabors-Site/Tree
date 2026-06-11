@@ -154,6 +154,37 @@ export const SEED_DELEGATES = [
     description:
       "Negotiates subtree exchange with peer realities. Operator triggers push-subtree (offer one of our subtrees to a peer) or pull-subtree (ask a peer for one of theirs); the role handles incoming offer-graft / request-subtree / deliver-bundle SUMMONs from peers. Clone and graft are the data primitives; push and pull are the social verbs on top.",
   },
+  // The host tier (nodeServerTest Phase 1): the running machine as
+  // beings. Each is homed at its ./host child space via
+  // homeHeavenSpace rather than the place root; the lifecycle code
+  // lives in seed/materials/host/.
+  {
+    name: "http-server",
+    role: "http-server",
+    cognition: "scripted",
+    invocableBy: "owner",
+    homeHeavenSpace: "host-http",
+    description:
+      "The HTTP listener as a being. Lives at ./host/http; stamps the request stream onto the request-log matter and lifecycle facts (listening, shutdown) onto the http space. Live counters via the http-stats SEE op.",
+  },
+  {
+    name: "websocket-pool",
+    role: "websocket-pool",
+    cognition: "scripted",
+    invocableBy: "owner",
+    homeHeavenSpace: "host-websocket",
+    description:
+      "The WebSocket pool as a being. Lives at ./host/websocket; one connection matter per live socket, created on connect and ended on disconnect. Its act-chain is the connection log; live view via the connections SEE op.",
+  },
+  {
+    name: "mongo",
+    role: "mongo-connection",
+    cognition: "scripted",
+    invocableBy: "owner",
+    homeHeavenSpace: "host-mongo",
+    description:
+      "The Mongo connection as a being. Lives at ./host/mongo; stamps boot and reconnect facts on the mongo space's reel; live stats via the mongo-stats SEE op.",
+  },
 ];
 
 /**
@@ -242,6 +273,17 @@ export async function ensureSeedDelegates(spaceRootId) {
   for (let i = 0; i < SEED_DELEGATES.length; i++) {
     const spec = SEED_DELEGATES[i];
     try {
+      // Per-delegate home. Most delegates live at the place root;
+      // host delegates name a heaven space via homeHeavenSpace and
+      // live there. Fallback to the place root when the space hasn't
+      // planted (degraded boot); the drift pass re-homes next boot.
+      let homeId = String(spaceRootId);
+      if (spec.homeHeavenSpace) {
+        const { findByHeavenSpace } = await import("../projections.js");
+        const slot = await findByHeavenSpace(spec.homeHeavenSpace, "0");
+        if (slot?.id) homeId = String(slot.id);
+      }
+
       // Look up by name on main (seed delegates are main-branch).
       const existingSlot = await findByName("being", spec.name, "0");
       if (existingSlot) {
@@ -275,11 +317,11 @@ export async function ensureSeedDelegates(spaceRootId) {
             spec.role,
           );
         }
-        if (st.homeSpace !== String(spaceRootId)) {
+        if (st.homeSpace !== homeId) {
           await setFieldInOwnMoment(
             `I correct ${spec.name}'s home`,
             "homeSpace",
-            String(spaceRootId),
+            homeId,
           );
         }
         if (st.parentBeingId !== rootBeingId) {
@@ -287,6 +329,15 @@ export async function ensureSeedDelegates(spaceRootId) {
             `I correct ${spec.name}'s parent`,
             "parentBeingId",
             String(rootBeingId),
+          );
+        }
+        // Room-homed delegates stand at the center of their room;
+        // earlier boots birthed them coordless.
+        if (spec.homeHeavenSpace && st.coord == null) {
+          await setFieldInOwnMoment(
+            `I place ${spec.name} in its room`,
+            "coord",
+            { x: 4, y: 4 },
           );
         }
         // Roster entry on the place root: include existing delegates
@@ -316,12 +367,16 @@ export async function ensureSeedDelegates(spaceRootId) {
             name: spec.name,
             role: spec.role,
             cognition: spec.cognition,
-            homeId: String(spaceRootId),
+            homeId,
             parentBeingId: String(rootBeingId),
             // Deterministic ring position when the place root has a
             // size. Falls through to birthBeing's random-in-bounds
-            // default when circleCoord couldn't be computed.
-            ...(circleCoord ? { coord: circleCoord(i) } : {}),
+            // default when circleCoord couldn't be computed. Host
+            // delegates skip the ring (it is sized for the place
+            // root) and stand at the center of their own 8x8 room.
+            ...(spec.homeHeavenSpace
+              ? { coord: { x: 4, y: 4 } }
+              : (circleCoord ? { coord: circleCoord(i) } : {})),
           },
           identity: iAmIdent,
           summonCtx: ctx,
