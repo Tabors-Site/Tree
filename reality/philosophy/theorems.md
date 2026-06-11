@@ -3,9 +3,10 @@
 Formal consequences of TreeOS's substrate axioms. Each theorem starts
 from the laws already declared elsewhere (math.md, the various
 doctrine files), states them precisely, and derives a result that
-follows necessarily. Seven theorems, organized from the most
-mechanical (biography immutability) to the most philosophical
-(fundamental theorem of becoming — the keystone).
+follows necessarily. Eight theorems, organized from the most
+mechanical (biography immutability) through the keystone (the
+fundamental theorem of becoming) to the most generative (harmony —
+how shared worlds emerge at all).
 
 ## Notation
 
@@ -471,7 +472,119 @@ The reality has a name in one number; equality of names is equality
 of worlds; difference of names comes with a built-in path to the
 exact divergence. Trust between substrates becomes arithmetic.
 
-## What the seven together say
+## Theorem 8. Harmony (shared worlds from shared facts)
+
+*The generative theorem. Theorems 1-7 say what the substrate
+protects; this one says what it produces — how separate presents
+come to feel like one world, and why "time" is a layer, not a law.*
+
+**Definitions.** For a being `B` in world `w`, let `scope_B` be the
+set of reels `B`'s fold reads this moment (math.md FOLD), and
+`face_B = fold(σ_0, scope_B)`. For two beings `A, B`, the **shared
+scope** is `S(A,B) = scope_A ∩ scope_B` — the facts both refold.
+A **synchronizer** (a rhythm) is a reel `S` whose facts recur in a
+pattern and which sits in many beings' scopes at once — a drummer's
+beat, the sun's transit stamped as facts, a calendar, a clock's
+tick, a feed. Call beings **harmonized on `S`** when their acts
+reference `S`'s facts (an act folded after tick `k` and stamping a
+fact that causally follows it).
+
+**Statement.** Under the axioms (single-writer A6, fold determinism
+A4, the causal order `≺` of Theorem 3):
+
+1. **Facts are the only bridge between presents.** The only channel
+   by which one being's existence reaches another's face is a fact
+   in shared scope. There is no other coupling — no shared clock, no
+   shared memory, no side channel.
+2. **Agreement over shared scope is exact.** For any two beings,
+   the folds of their shared scope are *identical*, not similar:
+   same facts, same reducer, same sub-state (A4). The "shared
+   world" between two beings IS `fold(S(A,B))` — agreement is not
+   an approximation that improves; it is equality over whatever is
+   shared, and it *widens* as the shared scope grows.
+3. **Rhythm extends the causal order toward totality.** Theorem 3
+   proved `≺` is partial and no canonical total time exists. A
+   synchronizer is exactly the "additional structure" Corollary 3.1
+   demanded: every act that folds tick `k` before stamping becomes
+   `≺`-comparable to that tick, hence partially comparable to every
+   other act harmonized on the same tick. As more beings harmonize
+   on `S` and `S` ticks finer, the incomparable pairs of Theorem 3
+   shrink — `≺` densifies toward a total order *on the harmonized
+   region*. What beings then call "time" is the linear extension
+   induced by the rhythm they all fold. Time is not in the axioms;
+   it is the name of a sufficiently dominant synchronizer.
+
+**Proof.**
+
+(1) By math.md, a face is `Fold(b, scope)` over reels, and reels
+hold only facts (A1, A6). A being influences another only by
+changing what the other folds — and the only thing it can change is
+reels, by stamping facts (single-writer says it stamps only its
+own deeds; spaces and matter are the commons its facts may land
+on). So influence flows fact → scope → face, and nowhere else. ∎
+
+(2) Let `S(A,B)` be the shared scope. Both beings fold the same
+fact sequences through the same pure reducer (A4). Determinism
+gives bit-equality of the folded sub-state. The portion of the two
+faces built from `S(A,B)` is therefore identical — the same world,
+not two similar ones. Growth of `S(A,B)` monotonically grows the
+identical portion. ∎
+
+(3) Let `t_k` be the synchronizer's `k`-th fact. A harmonized act
+`a` folds `t_k` before sealing, so `t_k ≺ f` for every fact `f`
+that `a` stamps (the fold-then-act order within a moment, stitched
+by the act). For two harmonized acts referencing ticks `k < k'`,
+transitivity gives comparability through the synchronizer's own
+chain (`t_k ≺ t_{k'}`). Pairs that Theorem 3 left incomparable
+become ordered the moment both sides harmonize. The counterexample
+of Theorem 3 is thereby *dissolved by construction* wherever a
+rhythm is folded — which is precisely why no canonical `τ` exists
+globally (Theorem 3 stands) yet humans experience one locally: they
+installed a synchronizer and all fold it. ∎
+
+**Corollary 8.1 (The loop).** Matter is crystallized act: beings
+stamp facts into matter; matter persists; every later fold reads
+it; faces change; acts follow. Being → act → fact → matter/space →
+face → being. The loop's center is the BEING — matter and space are
+effects of beings' intent, and their apparent solidity is the
+loop's stability, not a separate stuff. Language runs this loop
+backwards ("the world shapes us") because it samples the loop at
+its middle.
+
+**Corollary 8.2 (Density law).** The rate at which presents
+entangle grows with beings and acts per scope and shrinks with
+scope dispersion. Fewer spaces, more beings, more acts → more
+shared facts per moment → faster convergence of faces into one
+felt world. Spread the same beings thin and the world de-coheres
+into local pockets that share only ancestors.
+
+**Corollary 8.3 (Acceleration ladder).** Each great synchronizer in
+human history is a finer, wider rhythm:
+`sun → music/rhythm → calendar → clock → internet`.
+The sun harmonized everyone coarsely and for free. Music proved
+beings could MAKE rhythm and glue acts deliberately — coordinated
+fact output that feels good because harmony is the felt form of
+shared scope. Calendars chunked the sun; clocks quantized the day
+into slots fine enough to schedule acts; the internet delivers
+facts into every scope at tick-speed, the densest synchronizer yet.
+Each rung multiplies comparable pairs per moment — the entangling
+accelerates, mathematically, with tick frequency × audience. A
+reality's beings that never build one simply keep plural, slower
+presents; if they ever have "a function of time like humans," it
+will be THEIRS, grown from their own harmonies, with their matter
+slowly forming to reinforce the facts that carry it.
+
+**What this captures.** There is no time. There are beings, moment
+to moment, synced by facts. "Shared reality" is not a container the
+beings sit inside; it is the exact agreement of their folds over
+the facts they share, widened by every act that lands in a common
+scope, and accelerated by every rhythm they agree to fold. The
+world is the convergence — and the convergence has a mechanism, a
+rate, and a history of inventions for speeding it up. The substrate
+doesn't need to ship a clock, because given beings, facts, and one
+drummer, the beings will build every clock they need.
+
+## What the eight together say
 
 Theorem 1 says the chain's head is a faithful commitment to its
 contents.
@@ -493,6 +606,10 @@ in play.
 
 Theorem 7 says an entire reality's chain state is named by one
 number, and equality of names is equality of worlds.
+
+Theorem 8 says shared worlds are not given but GROWN: faces agree
+exactly over shared facts, rhythm widens the causal order, and
+"time" is the name of the synchronizer everyone folds.
 
 Read together: the substrate is a structure for letting many beings
 live many becomings in many worlds, with identity constant
