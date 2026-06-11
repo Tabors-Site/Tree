@@ -141,6 +141,12 @@ import {
   listSeeOperations as ibpListSeeOperations,
   getSeeOperation as ibpGetSeeOperation,
 } from "./ibp/seeOps.js";
+import {
+  registerMatterType as ibpRegisterMatterType,
+  unregisterMatterType as ibpUnregisterMatterType,
+  getMatterType as ibpGetMatterType,
+  listMatterTypes as ibpListMatterTypes,
+} from "./materials/matter/types.js";
 
 // The four-verb dispatcher. The whole of my public surface for
 // operations on space, matter, and beings.
@@ -153,11 +159,21 @@ import { beVerb }     from "./ibp/verbs/be.js";
 // reality-config ops live alongside their respective subjects.
 import "./materials/space/ops.js";
 import "./materials/matter/ops.js";
+// Side-effect import. Registers the `classify-matter` SEE op — the
+// registry-driven "what matter type would this become?" read the
+// place flow previews with. See materials/matter/classify.js.
+import "./materials/matter/classify.js";
 // Side-effect import. Registers the unified `do move` op (relocates
 // a space or a matter into a new destination space). The cross-kind
 // shape doesn't belong in any single material's ops file; it lives
 // at materials/ root for that reason. See materials/moveOp.js.
 import "./materials/moveOp.js";
+// Side-effect import. Registers `do set-model` — points a being /
+// space / matter at a model matter (type "model", bytes in the
+// content store) by writing qualities.render.model. Upload is plain
+// create-matter into the /skins catalog; this op is the SET half.
+// See materials/modelOp.js.
+import "./materials/modelOp.js";
 // Side-effect import. Registers `do form-portal` — creates a Matter
 // pointing at a foreign IBPA. The portal's experience (window /
 // portal / walk-through) is emergent per-viewer from foreign-side
@@ -171,11 +187,12 @@ import "./materials/being/credentialOps.js";
 // present/roles/ because that's where the policy schema and the
 // in-effect role-walk live; these ops just front the policy.
 import "./present/roles/acquisitionOps.js";
-// Side-effect import. Registers the inbox SEE op (my-inbox) and the
-// respond-to-summon DO op. The 2D portal's inbox panel reads my-inbox
-// to surface pending summons and dispatches respond-to-summon for
-// approve/deny/reply actions. Intent-specific side effects (e.g.
-// role-request approve → grant-role) live in the handler.
+// Side-effect import. Registers the my-inbox SEE op. The 2D portal's
+// inbox panel reads my-inbox to surface pending summons; responses are
+// just SUMMON-BACK with `inReplyTo: <correlation>` (the substrate's
+// fold handler closes the row by that key), so no separate respond-
+// to-summon op exists. Side effects on approve (e.g. role-request →
+// grant-role) are dispatched by the panel as separate substrate calls.
 import "./present/intake/inboxOps.js";
 // Side-effect import. Registers the publish layer: replicate-subtree
 // (extract a subtree's current shape into a portable bundle) and
@@ -501,6 +518,19 @@ export function buildRealityServices({
       // the role emits N child SUMMONs and needs to synthesize
       // their answers. Foreman is the canonical user.
       aggregate: ibpAggregate,
+
+      // Matter TYPES — the main extension point. A type declares
+      // what a piece of matter IS (content kinds) and what may be
+      // DONE with it (its DO ops, surfaced as the matter's actions
+      // and gated by the role-walk). Extensions absorb external
+      // systems into the reality by registering types; the verbs
+      // stay uniform. Seed ships only the basics (generic, file,
+      // web, model). See materials/matter/types.js +
+      // philosophy/OS/matter.md.
+      registerMatterType: ibpRegisterMatterType,
+      unregisterMatterType: ibpUnregisterMatterType,
+      getMatterType: ibpGetMatterType,
+      listMatterTypes: ibpListMatterTypes,
     },
 
     // --- Response protocol (shapes, error codes, event types) ---

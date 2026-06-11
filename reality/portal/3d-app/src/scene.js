@@ -72,6 +72,40 @@ const NOCLIP_VERT_SPEED = 6.0; // up/down speed in noclip mode
 // further away (gaze recognition); panels only open within this range.
 export const INTERACT_RANGE = 3.5;
 
+// ── Portal + sky tuning ─────────────────────────────────────────────
+// Render-to-texture portals + cloud drift. One block, one place to
+// tune. Anything magic-looking elsewhere in this file should land here.
+const PORTAL_CONFIG = Object.freeze({
+  // Render-target dimensions for portal mini-scene FBO. 512×768
+  // matches the portal opening aspect ratio (rotated PlaneGeometry).
+  RT_WIDTH:  512,
+  RT_HEIGHT: 768,
+  // Update cadence: render every Nth main-loop frame. 2 = effective
+  // 30Hz at a 60Hz main loop. Halves GPU cost; parallax still reads
+  // smooth because the camera + main scene update at full rate.
+  RENDER_EVERY_N_FRAMES: 2,
+  // Distance cull. Skip portals further than this many world units
+  // from the player. Stored as squared to skip a sqrt per check.
+  MAX_DISTANCE_SQ: 25 * 25,
+  // Direction cull. Skip portals significantly behind the camera.
+  // Player forward · (portal − player) must exceed this threshold.
+  // Negative because we still render portals slightly behind (the
+  // player can spin around quickly and we don't want pop-in).
+  BEHIND_CAMERA_DOT: -3,
+  // Parallax camera positioning inside the mini-scene.
+  DEFAULT_CAMERA_RADIUS: 12,           // depth when no descriptor size info yet
+  MIN_CAMERA_HEIGHT:    1,             // min Y for the mini-camera
+  CAMERA_HEIGHT_OFFSET: 2.5,           // additional height above offsetY
+  DEPTH_OFFSET_SCALE:   0.5,           // how much player distance contributes to depth
+  DEPTH_OFFSET_MAX:     8,             // clamp on depth contribution
+});
+
+// ── Cloud drift ─────────────────────────────────────────────────────
+// Base wind-rotation rate (radians per second). Multiplied by the
+// playback-aware cloudTimeScale in _driftClouds, so timeline rewind
+// flows winds backward and fast-forward speeds them up.
+const CLOUD_BASE_DRIFT_RAD_PER_SEC = 0.02;
+
 const COLOR_BG          = 0x0a0d0c;
 const COLOR_TREE        = 0x6fa982;
 const COLOR_HOME        = 0x8fbf9f;
@@ -130,11 +164,12 @@ const VISUAL_HEAVEN = {
 };
 
 export class Scene {
-  constructor({ onGaze, onEnter, onBeingProximity, onBeingActivate, onMatterEnded, onMatterPlaybackTick, isInputBlocked } = {}) {
+  constructor({ onGaze, onEnter, onBeingProximity, onBeingActivate, onMatterActivate, onMatterEnded, onMatterPlaybackTick, isInputBlocked } = {}) {
     this.onGaze = onGaze || (() => {});
     this.onEnter = onEnter || (() => {});
     this.onBeingProximity = onBeingProximity || (() => {});
     this.onBeingActivate = onBeingActivate || (() => {});
+    this.onMatterActivate = onMatterActivate || (() => {});
     this.onMatterEnded = onMatterEnded || (() => {});
     this.onMatterPlaybackTick = onMatterPlaybackTick || (() => {});
     this.isInputBlocked = isInputBlocked || isTypingInUI;
@@ -279,11 +314,9 @@ export class Scene {
   _renderActivePortals() {
     if (!this._activePortals || this._activePortals.size === 0) return;
 
-    // Throttle: render every other frame. Halves GPU cost; parallax
-    // still reads as smooth because the main view is 60fps and the
-    // portal texture updates at 30fps.
+    // Throttle to PORTAL_CONFIG.RENDER_EVERY_N_FRAMES (= 2 → 30Hz).
     this._portalFrameCounter = (this._portalFrameCounter || 0) + 1;
-    if ((this._portalFrameCounter & 1) === 1) return;
+    if ((this._portalFrameCounter % PORTAL_CONFIG.RENDER_EVERY_N_FRAMES) !== 0) return;
 
     const tmpA = _portalTmpA;
     const tmpB = _portalTmpB;
@@ -300,13 +333,11 @@ export class Scene {
 
       const portalPos = group.getWorldPosition(tmpB);
 
-      // Distance cull (25 units, squared = 625).
+      // Distance + direction culling per PORTAL_CONFIG.
       const distSq = portalPos.distanceToSquared(playerPos);
-      if (distSq > 625) continue;
-
-      // Direction cull: skip portals significantly behind us.
+      if (distSq > PORTAL_CONFIG.MAX_DISTANCE_SQ) continue;
       const toPortal = tmpC.subVectors(portalPos, playerPos);
-      if (toPortal.dot(playerFwd) < -3) continue;
+      if (toPortal.dot(playerFwd) < PORTAL_CONFIG.BEHIND_CAMERA_DOT) continue;
 
       // Parallax: place the mini-camera at the player's offset from
       // the portal expressed in the portal's LOCAL frame. As you walk
@@ -338,15 +369,17 @@ export class Scene {
       //   |localOffset.z| < 0.5  (thin slab on the portal plane)
       this._tryWalkThroughPortal(p, localOffset);
 
-      const baseDepth = p.cameraRadius || 12;
+      const baseDepth = p.cameraRadius || PORTAL_CONFIG.DEFAULT_CAMERA_RADIUS;
       // Mini-camera: x/y mirror the player's offset (so motion creates
       // parallax); z is the natural viewing depth, slightly increased
-      // when the player is far away so the view feels like "looking
-      // into a window."
+      // when the player is far away. Tuning lives in PORTAL_CONFIG.
       p.miniCamera.position.set(
         localOffset.x,
-        Math.max(1, localOffset.y + 2.5),
-        baseDepth + Math.max(0, Math.min(8, localOffset.z * 0.5)),
+        Math.max(PORTAL_CONFIG.MIN_CAMERA_HEIGHT,
+                 localOffset.y + PORTAL_CONFIG.CAMERA_HEIGHT_OFFSET),
+        baseDepth + Math.max(0,
+                             Math.min(PORTAL_CONFIG.DEPTH_OFFSET_MAX,
+                                      localOffset.z * PORTAL_CONFIG.DEPTH_OFFSET_SCALE)),
       );
       p.miniCamera.lookAt(0, 1, 0);
 
@@ -756,17 +789,21 @@ export class Scene {
       matters.forEach((mt, i) => {
         const id = mt.matterId || `mt-${i}`;
         const isVideo = mt?.content?.contentType === "video/youtube";
+        // Screens (video, web embeds, embeddable files) share the
+        // video mesh's placement + model-swap exemptions: the CSS3D
+        // iframe IS the presentation; a glTF would clobber it.
+        const isScreen = isVideo || !!this._embedUrlFor(mt);
         let x, z;
         const world = coordToWorld(mt.coord);
         if (world) {
           x = world.x;
           z = world.z;
-        } else if (isVideo) {
-          // Video screens get a stable, prominent spot in front of the
+        } else if (isScreen) {
+          // Screens get a stable, prominent spot in front of the
           // arrival camera — close enough to read, far enough to walk
           // around. Z is negative so the screen faces -Z (camera looks
-          // toward -Z at arrival).
-          x = 0;
+          // toward -Z at arrival). Multiple screens fan out along X.
+          x = (i % 5) * 7 - 14;
           z = -6;
         } else {
           const h = hashKey(id);
@@ -781,6 +818,7 @@ export class Scene {
         mesh.userData = Object.assign({
           kind: "matter",
           matterKind: isVideo ? "video" : (mt.kind || "ibp"),
+          matterType: mt.type || "generic",
           ref: id,
           matterId: id,
           label: matterLabel(mt),
@@ -789,14 +827,23 @@ export class Scene {
         }, mesh.userData || {});
         this.world.add(mesh);
         this._matterMeshes.set(id, mesh);
-        // Skip the model swap for the YouTube video matter . its
-        // CSS3DObject placement is intrinsic to the iframe wrapper and
-        // a glTF would clobber the live video surface. Other matter
-        // kinds receive their declared model normally.
-        if (!isVideo) {
+        // Skip the model swap for screen matter (video / web embed /
+        // embeddable file) . its CSS3DObject placement is intrinsic
+        // to the iframe wrapper and a glTF would clobber the live
+        // surface. Other matter kinds receive their declared model
+        // normally. The model ref is the SERVER-RESOLVED `mt.model`
+        // (per-matter override → space per-type default → matter-type
+        // extension default), with the raw render block's model as
+        // the legacy fallback; scale/rotation still ride the matter's
+        // own render block.
+        if (!isScreen) {
+          const renderBlock = {
+            ...(mt.qualities?.render || {}),
+            model: mt.model || mt.qualities?.render?.model || null,
+          };
           this._swapToModel(
             mesh,
-            mt.qualities?.render,
+            renderBlock.model ? renderBlock : mt.qualities?.render,
             id ? { kind: "matter", id } : null,
           );
         }
@@ -2060,19 +2107,83 @@ export class Scene {
   // 3D screen (CSS3DObject wrapping an iframe); everything else falls
   // back to the default glowing cube. Gaze hover shows the matter's
   // preview / label.
+  // Which served-from-the-content-store mimes a browser renders
+  // natively inside an iframe. Everything else presents as a cube /
+  // model with Open / Download in the click menu.
+  static EMBEDDABLE_MIME = [
+    "application/pdf",
+    "image/*",
+    "video/*",
+    "audio/*",
+    "text/plain",
+    "text/markdown",
+    "text/html",
+  ];
+
+  _isEmbeddableMime(mimeType) {
+    if (typeof mimeType !== "string" || !mimeType) return false;
+    const bare = mimeType.split(";")[0].trim().toLowerCase();
+    return Scene.EMBEDDABLE_MIME.some((p) =>
+      p === bare || (p.endsWith("/*") && bare.startsWith(p.slice(0, -1))));
+  }
+
+  // Resolve what URL (if any) this matter's walk-up screen shows.
+  // Returns { url, sandbox } or null (no screen — cube/model form).
+  _embedUrlFor(matter) {
+    // YouTube rides its own mesh (_makeVideoScreenMesh) for the
+    // Player API; not handled here.
+    const mime = matter?.mimeType || matter?.content?.mimeType || null;
+    const contentUrl = matter?.contentUrl || null;
+    const externalUrl = matter?.external?.url || null;
+    const mode = matter?.render?.mode || null;
+
+    // http matter (render mode embed): the screen shows the CURRENT
+    // page — navigation is a fact (qualities.http.currentUrl, written
+    // via set-matter), so every being sees the same page; the
+    // content's own url is the DEFAULT the reset action returns to.
+    if (mode === "embed" && (externalUrl || contentUrl)) {
+      const current = matter?.qualities?.http?.currentUrl;
+      const url = (typeof current === "string" && /^https?:\/\//i.test(current))
+        ? current
+        : (externalUrl || contentUrl);
+      return { url, sandbox: null };
+    }
+    // Files with browser-renderable bytes: the content store serves
+    // the right Content-Type; the screen shows the document itself.
+    if (contentUrl && this._isEmbeddableMime(mime)) {
+      const bare = mime.split(";")[0].trim().toLowerCase();
+      const isCasServed = contentUrl.startsWith("/api/");
+      return {
+        url: contentUrl,
+        // Stored HTML must not script against the portal origin.
+        sandbox: isCasServed && bare === "text/html" ? "allow-scripts" : null,
+      };
+    }
+    return null;
+  }
+
   _makeMatterMesh(matter) {
-    // Portal matter — qualities.portal.target names a foreign IBPA.
-    // Render as a free-standing doorway with a live SEE into the
-    // target world painted on the opening. Each viewer's experience
-    // is emergent: SEE refused → black opening, SEE accepted → live
-    // descriptor rendered on the surface. See seed/CROSS-WORLD.md +
+    // Portal matter — type "portal" with content { target } (the
+    // canonical shape; external surfaces it on descriptor entries),
+    // or the legacy qualities.portal.target mirror. Render as a
+    // free-standing doorway with a live SEE into the target world
+    // painted on the opening. Each viewer's experience is emergent:
+    // SEE refused → black opening, SEE accepted → live descriptor
+    // rendered on the surface. See seed/CROSS-WORLD.md +
     // materials/portalOp.js for the substrate side.
-    if (matter?.qualities?.portal?.target) {
+    if (this._portalTargetOf(matter)) {
       return this._makePortalMesh(matter);
     }
     const contentType = matter?.content?.contentType || null;
     if (contentType === "video/youtube" && matter?.content?.videoId) {
       return this._makeVideoScreenMesh(matter);
+    }
+    // Walk-up screens: web matter iframes its URL; embeddable files
+    // (pdf / image / video / audio / text) iframe their content-store
+    // bytes. See _embedUrlFor for the resolution + sandbox rules.
+    const embed = this._embedUrlFor(matter);
+    if (embed) {
+      return this._makeEmbedScreenMesh(matter, embed.url, { sandbox: embed.sandbox });
     }
     const color = 0xb0e0c0;
     const cube = new THREE.Mesh(
@@ -2093,8 +2204,19 @@ export class Scene {
   //     the foreign descriptor (the "open" state)
   // The render-to-texture pass runs each frame for portals in the
   // "open" state via _renderActivePortals in the main loop.
+  // Where this matter's doorway leads, from any of its shapes:
+  // type "portal" content {target} (canonical, surfaced as external),
+  // or the qualities.portal.target mirror (also what legacy portals
+  // carried). Null = not a portal.
+  _portalTargetOf(matter) {
+    return matter?.external?.target
+      || matter?.content?.target
+      || matter?.qualities?.portal?.target
+      || null;
+  }
+
   _makePortalMesh(matter) {
-    const target = matter.qualities.portal.target;
+    const target = this._portalTargetOf(matter);
     const W = 3.2;
     const H = 4.8;
     const group = new THREE.Group();
@@ -2127,16 +2249,20 @@ export class Scene {
     const canvasTex = new THREE.CanvasTexture(canvas);
     canvasTex.minFilter = THREE.LinearFilter;
 
-    // Render target for the live 3D view. 512×768 is sharp enough to
-    // read as a real world; the heavy lifting on cost comes from the
-    // throttle (every other frame) + distance/direction culling, not
-    // from pixel count. So we don't actually save much by going lower.
-    const renderTarget = new THREE.WebGLRenderTarget(512, 768, {
-      minFilter: THREE.LinearFilter,
-      magFilter: THREE.LinearFilter,
-      depthBuffer: true,
-      stencilBuffer: false,
-    });
+    // Render target for the live 3D view. Dimensions in PORTAL_CONFIG.
+    // The heavy lifting on cost comes from the throttle + distance/
+    // direction culling, not pixel count, so we use generous dims for
+    // sharpness.
+    const renderTarget = new THREE.WebGLRenderTarget(
+      PORTAL_CONFIG.RT_WIDTH,
+      PORTAL_CONFIG.RT_HEIGHT,
+      {
+        minFilter: THREE.LinearFilter,
+        magFilter: THREE.LinearFilter,
+        depthBuffer: true,
+        stencilBuffer: false,
+      },
+    );
 
     // Mini-scene that gets rendered into the FBO. Populated from the
     // foreign descriptor in _populatePortalMiniScene.
@@ -2164,7 +2290,12 @@ export class Scene {
     // Camera for the mini-scene. Position is updated each frame in
     // _renderActivePortals for a gentle orbit until parallax-from-
     // viewer-position lands.
-    const miniCamera = new THREE.PerspectiveCamera(60, 512 / 768, 0.1, 100);
+    const miniCamera = new THREE.PerspectiveCamera(
+      60,
+      PORTAL_CONFIG.RT_WIDTH / PORTAL_CONFIG.RT_HEIGHT,
+      0.1,
+      100,
+    );
     miniCamera.position.set(0, 5, 12);
     miniCamera.lookAt(0, 0, 0);
 
@@ -2447,7 +2578,23 @@ export class Scene {
   // A free-standing video screen — flat WebGL backing + a CSS3D iframe
   // running the YouTube IFrame Player API. Sized in world units; sits
   // on a thin frame so it reads as "a thing sitting on the ground".
-  _makeVideoScreenMesh(matter) {
+  // Generic walk-up screen — the shared shell every embedded surface
+  // uses: a grounded 16:9 panel whose face is a CSS3D iframe at
+  // 1920×1080 (crisp when the player walks close). Web matter shows
+  // its URL; embeddable FILES (pdf / image / video / audio / text)
+  // show their content-store bytes via contentUrl (the carrier serves
+  // the right Content-Type, browsers render natively); YouTube is one
+  // URL-derivation case that additionally wires the Player API.
+  //
+  // Security: bytes served from the content store share the portal's
+  // origin, so a stored text/html document gets sandbox="allow-scripts"
+  // WITHOUT allow-same-origin — uploaded markup must never script
+  // against the portal origin (JWT cookie). External sites get
+  // referrerpolicy=no-referrer and no sandbox (players need scripts;
+  // they're already a foreign origin). Frame-refusing sites
+  // (X-Frame-Options) show the browser's refusal page — undetectable
+  // cross-origin; the matter menu's "Open in new tab" is the fallback.
+  _makeEmbedScreenMesh(matter, url, { sandbox = null, allow = null, idPrefix = "embed" } = {}) {
     const W = 6.4; // ~16:9 at 6.4 × 3.6 world units
     const H = 3.6;
 
@@ -2469,23 +2616,19 @@ export class Scene {
     frame.position.y = 0.2;
     group.add(frame);
 
-    // The iframe wrapped in CSS3DObject. The Player API attaches to it
-    // after the API script loads — we mount the iframe with the right
-    // src (enablejsapi=1) so YT.Player(id) wraps it cleanly.
-    // Source resolution is 1920×1080 so the CSS3D rasterization stays
-    // crisp when the player walks up to the screen.
-    const iframeId = `yt-${matter.matterId || Math.random().toString(36).slice(2)}`;
+    const iframeId = `${idPrefix}-${matter.matterId || Math.random().toString(36).slice(2)}`;
     const iframe = document.createElement("iframe");
     iframe.id     = iframeId;
     iframe.width  = "1920";
     iframe.height = "1080";
-    iframe.allow  = "autoplay; encrypted-media";
+    if (allow) iframe.allow = allow;
+    if (sandbox != null) iframe.setAttribute("sandbox", sandbox);
+    if (/^https?:\/\//i.test(url)) iframe.referrerPolicy = "no-referrer";
     iframe.allowFullscreen = true;
     iframe.style.border        = "0";
     iframe.style.pointerEvents = "auto";
-    iframe.src =
-      `https://www.youtube.com/embed/${encodeURIComponent(matter.content.videoId)}` +
-      `?enablejsapi=1&autoplay=1&mute=1&modestbranding=1&rel=0`;
+    iframe.style.background    = "#fff";
+    iframe.src = url;
 
     const css = new CSS3DObject(iframe);
     const scale = W / 1920;
@@ -2494,10 +2637,27 @@ export class Scene {
     css.position.z = 0.01;
     group.add(css);
 
-    group.userData.iframe      = iframe;
-    group.userData.iframeId    = iframeId;
+    group.userData.iframe   = iframe;
+    group.userData.iframeId = iframeId;
+    group.userData.matterId = matter.matterId;
+    group.userData.isScreenMesh = true;
+
+    return group;
+  }
+
+  _makeVideoScreenMesh(matter) {
+    // The YouTube specialization: same screen shell, plus the Player
+    // API wiring (resume position, ENDED → onMatterEnded, playback
+    // ticks back to the substrate via save-playback).
+    const url =
+      `https://www.youtube.com/embed/${encodeURIComponent(matter.content.videoId)}` +
+      `?enablejsapi=1&autoplay=1&mute=1&modestbranding=1&rel=0`;
+    const group = this._makeEmbedScreenMesh(matter, url, {
+      allow: "autoplay; encrypted-media",
+      idPrefix: "yt",
+    });
+    const iframeId = group.userData.iframeId;
     group.userData.videoId     = matter.content.videoId;
-    group.userData.matterId    = matter.matterId;
     group.userData.isVideoMesh = true;
 
     // Resume position lives in the matter's qualities so it survives
@@ -2858,7 +3018,7 @@ export class Scene {
     const scale = (typeof this._cloudTimeScale === "number")
       ? this._cloudTimeScale
       : 1;
-    this._clouds.rotation.y += dt * 0.02 * scale;
+    this._clouds.rotation.y += dt * CLOUD_BASE_DRIFT_RAD_PER_SEC * scale;
     if (this._stars) {
       // Stars pin to the camera. Rotation is owned by _updateTimeOfDay
       // (locked to hour); here we only advance the twinkle clock.
@@ -3007,6 +3167,8 @@ export class Scene {
         }
       } else if (kind === "being" && withinInteract) {
         text += "  ·  click";
+      } else if (kind === "matter" && target.userData.matterId && withinInteract) {
+        text += "  ·  click";
       }
       const screen = worldToScreen(target.position, this.camera, this.renderer);
       showLabel(text, screen.x, screen.y);
@@ -3062,6 +3224,15 @@ export class Scene {
     // panel (sign-in/logout for cherub, summon panel for everyone else).
     if (data.kind === "being" && d <= INTERACT_RANGE) {
       this.onBeingActivate({ being: data.being, ...data });
+      return;
+    }
+    // Matter: a click opens its action menu (descriptor actions[],
+    // Copy id, Wear-this-model for type=model, Set model). Portal
+    // matter handles its own walk-through; video screens own their
+    // iframe clicks — both carry their own userData kinds, so only
+    // plain matter lands here.
+    if (data.kind === "matter" && data.matterId && d <= INTERACT_RANGE * 2) {
+      this.onMatterActivate({ ...data });
       return;
     }
     // Doorways (trees, home, etc): enter on click.

@@ -30,16 +30,20 @@
 import { io } from "socket.io-client";
 
 export class PortalClient {
-  constructor({ placeUrl, token, useProxy, onConnectionChange, onSummon, onDescriptorEvent }) {
+  constructor({ placeUrl, token, useProxy, onConnectionChange, onSummon, onDescriptorEvent, onBranchChange }) {
     this.placeUrl              = placeUrl;
     this.token                = token;
     this.useProxy             = !!useProxy;
     this.socket               = null;
     this.connected            = false;
+    // The session's branch (left stance) — mirrors the server's
+    // socket.currentBranch via the "branch" push.
+    this.currentBranch         = null;
     this._reqCounter          = 0;
     this._onConnectionChange  = onConnectionChange  || (() => {});
     this._onSummon            = onSummon            || (() => {});
     this._onDescriptorEvent   = onDescriptorEvent   || (() => {});
+    this._onBranchChange      = onBranchChange      || (() => {});
     // correlation → { resolve, reject, timer } for awaiting moment pushes (DO/BE)
     this._pendingMoments      = new Map();
   }
@@ -94,6 +98,18 @@ export class PortalClient {
     this.socket.on("connect",       () => { this.connected = true;  this._onConnectionChange("connected"); });
     this.socket.on("disconnect",    (reason) => { this.connected = false; this._onConnectionChange("disconnected", reason); });
     this.socket.on("connect_error", (err)    => { this.connected = false; this._onConnectionChange("error", err?.message); });
+
+    // The server tells this session its BRANCH (the left stance's
+    // branch — what every relative act lands on; mirrors the server's
+    // socket.currentBranch). Emitted at handshake and again after
+    // every BE switch. The portal renders the full address from it:
+    // @being#branch → reality#view/path.
+    this.currentBranch = this.currentBranch || null;
+    this.socket.on("branch", (p) => {
+      const branch = typeof p?.branch === "string" && p.branch.length ? p.branch : "0";
+      this.currentBranch = branch;
+      safeCall(this._onBranchChange, branch);
+    });
 
     // Single IBP wire event — one listener, route by envelope.verb.
     // Server-push envelopes:
@@ -193,7 +209,10 @@ export class PortalClient {
    * @param {string} address  position (or stance; @being is stripped server-side)
    * @param {string} action   registered op name ("create-space", "set-being", "end-matter", "plant", "<ext>:<action>", ...)
    * @param {object} [args]   op-specific arguments
-   * @param {object} [opts]   { correlation?: string, timeoutMs?: number }
+   * @param {object} [opts]   { correlation?: string, timeoutMs?: number,
+   *                            matterId?: string — target a MATTER at the
+   *                            addressed position (addresses name spaces
+   *                            and beings; matter rides this reserved key) }
    */
   async do(address, action, args = {}, opts = {}) {
     if (typeof action !== "string" || !action) {
@@ -215,7 +234,9 @@ export class PortalClient {
     });
 
     try {
-      const ack = await this._call("do", normalize(address), { action, args, correlation });
+      const payload = { action, args, correlation };
+      if (typeof opts.matterId === "string" && opts.matterId) payload.matterId = opts.matterId;
+      const ack = await this._call("do", normalize(address), payload);
       if (!ack || ack.status !== "accepted") {
         this._pendingMoments.delete(correlation);
         throw new Error(`ibp DO not accepted: ${JSON.stringify(ack)}`);

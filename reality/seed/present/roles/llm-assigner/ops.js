@@ -239,7 +239,11 @@ export function registerLlmAssignerOps() {
         "create-matter",
         {
           name:    "Setting up an LLM connection",
-          origin:  "web",
+          // The http matter type: the descriptor surfaces content.url
+          // as contentUrl plus the whole reference shape as
+          // `external`, and render.mode tells the portal to embed —
+          // the YouTube iframe loads from descriptor data alone.
+          type:    "http",
           content: {
             contentType: "video/youtube",
             url:         LLM_ASSIGNER_TUTORIAL_URL,

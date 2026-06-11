@@ -52,7 +52,6 @@ import log from "../../seedReality/log.js";
 import { IBP_ERR, IbpError } from "../../ibp/protocol.js";
 import { DELETED, HEAVEN_SPACE } from "./heavenSpaces.js";
 import { I_AM } from "../being/seedBeings.js";
-import { MATTER_ORIGIN } from "../matter/origins.js";
 
 // ─────────────────────────────────────────────────────────────────────────
 // VALIDATION
@@ -490,7 +489,6 @@ export async function createSpace({
 
   if (note?.trim()) {
     await createMatter({
-      origin: MATTER_ORIGIN.IBP,
       content: note,
       beingId: being._id,
       spaceId: newSpace._id,

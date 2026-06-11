@@ -68,23 +68,44 @@ let _state = {
   markAccumulator: 0,
 };
 
-// Tick cadence for the playback loop. Short enough that 8x feels
-// smooth, long enough that the rewind round-trip can keep up. Each
-// tick advances cursorMs by speedFactor * PLAYBACK_TICK_MS.
-const PLAYBACK_TICK_MS = 250;
+// ── Timeline tuning ─────────────────────────────────────────────────
+// One block, one place to tune. Read at module load; not user-
+// configurable. Anything magic-looking elsewhere in this file should
+// land here.
+const TIMELINE_CONFIG = Object.freeze({
+  // Cadence of the playback loop. Short enough that 8x feels smooth,
+  // long enough that the rewind round-trip can keep up. Each tick
+  // advances cursorMs by speedFactor * PLAYBACK_TICK_MS.
+  PLAYBACK_TICK_MS: 250,
 
-// Progressive mark loading. Initial fetch gets the most recent N
-// acts; as the user rewinds toward the earliest loaded mark, the
-// next batch loads in the background, anchored by the earliest's
-// stampedAt (server returns acts strictly older). Repeats until
-// describeActChain returns fewer than the batch size (= we've
-// reached the being's birth on this branch lineage).
-const INITIAL_MARK_BATCH = 500;
-const NEXT_MARK_BATCH = 500;
-// Trigger threshold: when the cursor is within this fraction of the
-// earliest loaded mark (in [firstTs, cursor]) → fetch next batch.
-// 0.1 = "within the leftmost 10% of the strip."
-const PREFETCH_THRESHOLD = 0.10;
+  // Progressive mark loading. Initial fetch gets the most recent N
+  // acts; as the user rewinds toward the earliest loaded mark, the
+  // next batch loads anchored by the earliest's stampedAt (server
+  // returns acts strictly older). Repeats until a batch comes back
+  // smaller than the batch size (= reached the being's birth on this
+  // branch lineage).
+  INITIAL_MARK_BATCH: 500,
+  NEXT_MARK_BATCH:    500,
+
+  // Trigger threshold: when the cursor is within this fraction of
+  // the leftmost end of the strip ([firstTs, cursor]) → fetch next
+  // batch. 0.1 = "within the leftmost 10%."
+  PREFETCH_THRESHOLD: 0.10,
+
+  // Empty-strip default window (used ONLY when the being has zero
+  // marks yet). 5 minutes from now. After that first mark lands the
+  // strip stretches back to it; this constant stops getting read.
+  EMPTY_WINDOW_MS: 5 * 60 * 1000,
+
+  // Live-strip refresh tick (the "now" line slides right + new marks
+  // pile up on the right edge as wall-clock advances).
+  LIVE_REFRESH_MS: 1000,
+});
+
+const PLAYBACK_TICK_MS    = TIMELINE_CONFIG.PLAYBACK_TICK_MS;
+const INITIAL_MARK_BATCH  = TIMELINE_CONFIG.INITIAL_MARK_BATCH;
+const NEXT_MARK_BATCH     = TIMELINE_CONFIG.NEXT_MARK_BATCH;
+const PREFETCH_THRESHOLD  = TIMELINE_CONFIG.PREFETCH_THRESHOLD;
 
 function _actToMark(a) {
   return {
@@ -186,11 +207,116 @@ function _speedLabel(tier) {
   return `${sign}${Math.abs(f)}x`;
 }
 
+// ── Branch switching: menus move the BEING, not just the view ──────
+//
+// Doctrine (Tabor, 2026-06-10): every branch jump from portal CHROME
+// (timeline clicks, create-branch, merge) SWITCHES the session — BE
+// switch seats the socket on the destination and the address follows,
+// so who-you-are and where-you-look stay the same branch. The ONLY
+// ways to act cross-branch are walking through an ibpa portal or
+// typing a different branch into the address yourself; then the
+// address line shows the split (@you#0 → reality#2/...) so you always
+// know exactly what's being sent on both sides.
+async function switchIntoBranch(branchPath) {
+  const signedIn = !!window.__state?.session?.token;
+  if (signedIn) {
+    // BE switch at the gate: seats socket.currentBranch on the
+    // destination and stamps the be:switch fact on the destination
+    // reel (your being's biography there records the arrival).
+    await _state.client.be("switch", `${_state.reality}/@cherub`, { branch: branchPath });
+  }
+  // Address follows the being — ALWAYS the explicit branch path. The
+  // bare `#<reality>/` form resolves through the #main POINTER, which
+  // is reassignable and may not be "0"; explicit paths can't drift.
+  location.hash = `#${_state.reality}#${branchPath}/`;
+  _updateAddressChip(window.__state?.descriptor || null);
+}
+
+// Pointer-truthful branch label: the canonical path, plus any named
+// pointers currently aimed at it ("#0 (main)", "#1a (prod)"). Never
+// hardcodes "0 = main" — pointers are reassignable; the catalog SEE
+// (_state.graph.pointers) is the live truth.
+function _branchLabel(path) {
+  const pointers = _state.graph?.pointers || {};
+  const aliases = Object.keys(pointers).filter((n) => pointers[n] === path).sort();
+  return `#${path}${aliases.length ? ` (${aliases.join(",")})` : ""}`;
+}
+
+// Post-create ask: "switch into your being on that branch?" Yes →
+// switch + go. No → stay put, with the two legitimate later routes
+// named (ibpa portal, timeline click).
+function _offerSwitchAfterBranch(path, note = "") {
+  const here = window.__state?.descriptor?.address?.branch || "0";
+  const hereLabel = _branchLabel(here);
+  const yes = window.confirm(
+    `Branch #${path} created${note}.\n\n` +
+    `Switch into your being on #${path}?\n\n` +
+    `OK — switch (you act on #${path}; your ${hereLabel} self stays where it is)\n` +
+    `Cancel — stay on ${hereLabel} (cross later via an ibpa portal, or click #${path} in the timeline)`,
+  );
+  if (yes) {
+    switchIntoBranch(path).catch((err) => {
+      _showBranchEvent(`switch failed: ${err?.message || err}`, { error: true });
+    });
+  } else {
+    _showBranchEvent(
+      `stayed on ${hereLabel} — form an ibpa portal to #${path}/ or switch from the timeline`,
+      { sticky: 3500 },
+    );
+  }
+}
+
+// ── Full-address chip ───────────────────────────────────────────────
+// Always-visible truth of both stances: @being#branch (who you are,
+// where your acts land) → reality#branch/path (what you're looking
+// at). Amber when they differ — the cross-branch acting state.
+function _createAddressChip() {
+  const el = document.createElement("div");
+  el.id = "branch-address-chip";
+  el.style.cssText = [
+    "position: fixed",
+    "top: 92px",
+    "left: 12px",
+    "z-index: 200",
+    "pointer-events: none",
+    "background: rgba(10, 13, 12, 0.85)",
+    "color: #c8d3cb",
+    "border: 1px solid #2c3a32",
+    "border-radius: 6px",
+    "padding: 4px 10px",
+    "font: 11px/1.4 ui-monospace, monospace",
+    "max-width: 46vw",
+    "overflow: hidden",
+    "text-overflow: ellipsis",
+    "white-space: nowrap",
+  ].join("; ");
+  return el;
+}
+
+function _updateAddressChip(desc) {
+  if (!_state.addressEl) return;
+  const me = window.__state?.session?.username || "anon";
+  const myBranch = _state.client?.currentBranch || "0";
+  const viewBranch = desc?.address?.branch || "0";
+  const path = desc?.address?.pathByNames || "/";
+  _state.addressEl.textContent =
+    `@${me}${_branchLabel(myBranch)} → ${_state.reality}${_branchLabel(viewBranch)}${path}`;
+  const crossed = myBranch !== viewBranch;
+  _state.addressEl.style.borderColor = crossed ? "#8a6d2f" : "#2c3a32";
+  _state.addressEl.style.color = crossed ? "#e2c574" : "#c8d3cb";
+  _state.addressEl.title = crossed
+    ? `cross-branch: your being is seated on ${_branchLabel(myBranch)} while viewing ${_branchLabel(viewBranch)} — acts from here land cross-branch`
+    : "your being and the view are on the same branch";
+}
+
 export function mountBranchBar({ client, reality }) {
   _state.client = client;
   _state.reality = reality;
   _state.buttonEl = _createBranchButton();
   document.body.appendChild(_state.buttonEl);
+  _state.addressEl = _createAddressChip();
+  document.body.appendChild(_state.addressEl);
+  _updateAddressChip(null);
   // Click outside the panel closes it. Bound once.
   document.addEventListener("click", (ev) => {
     if (!_state.panelOpen) return;
@@ -206,6 +332,10 @@ export function mountBranchBar({ client, reality }) {
   });
   return {
     update: (desc) => _update(desc),
+    // Repaint just the address chip (cheap) — main.js calls this on
+    // every server "branch" push so the left stance stays truthful
+    // without a full descriptor round-trip.
+    refreshAddress: () => _updateAddressChip(window.__state?.descriptor || null),
     // The portal swaps its PortalClient on sign-in / register / sign-out
     // (a new authenticated or anonymous socket). The bar captured the
     // boot-time client; without this, after a first registration it
@@ -215,6 +345,7 @@ export function mountBranchBar({ client, reality }) {
     setClient: (client, reality) => {
       _state.client = client;
       if (reality) _state.reality = reality;
+      _updateAddressChip(window.__state?.descriptor || null);
     },
   };
 }
@@ -799,11 +930,11 @@ async function _openTimeline(branchPath) {
   _renderSpeedDisplay();
   _renderModeDisplay();
 
-  // The doctrine: clicking a branch in the panel switches to that
-  // branch's live present AND opens its timeline. Branch-switching is
-  // a location.hash mutation; main.js's hashchange handler picks it
-  // up, fires navigate, and the resulting _update call refreshes
-  // this strip with marks for the new branch.
+  // The doctrine: clicking a branch in the panel SWITCHES YOUR BEING
+  // to that branch (BE switch seats the socket; the be:switch fact
+  // lands on the destination reel) and opens its timeline. View and
+  // seat move together — only ibpa portals and hand-typed addresses
+  // act cross-branch.
   //
   // We also kick a direct _update so the strip is populated immediately
   // without waiting for the navigate's after-call. Same-branch opens
@@ -811,8 +942,9 @@ async function _openTimeline(branchPath) {
   // (the marks fetch runs concurrent with navigate instead of after).
   const currentBranch = window.__state?.descriptor?.address?.branch || "0";
   if (currentBranch !== branchPath) {
-    const bq = branchPath === "0" ? "" : `#${branchPath}`;
-    location.hash = `#${_state.reality}${bq}/`;
+    switchIntoBranch(branchPath).catch((err) => {
+      _showBranchEvent(`switch failed: ${err?.message || err}`, { error: true });
+    });
   }
   if (window.__state?.descriptor) {
     _update(window.__state.descriptor);
@@ -851,6 +983,7 @@ async function _update(desc) {
   // panel/timeline isn't open, so opening either is instant.
   const branch = desc?.address?.branch || "0";
   _maybeSurfaceBranchSwitch(branch);
+  _updateAddressChip(desc);
   try {
     const r = await _state.client.see(`${_state.reality}/.branches/${branch}`);
     _state.graph = r?.branches || null;
@@ -900,11 +1033,12 @@ async function _update(desc) {
   // paused-in-past case (factor flips from 1 → 0 or vice versa).
   _emitCloudFactor();
 
-  // Address-branch is the source of truth (Tabor doctrine 2026-06-04):
-  // both stances always match. If an open timeline strip is bound to a
-  // different branch than the address, re-bind it. Without this, the
-  // strip stays labelled "main" while the IBP address shows #1, even
-  // though the user is acting on #1.
+  // Chrome jumps keep both stances together (menus SWITCH the being;
+  // the address chip shows the split when an ibpa portal or a
+  // hand-typed address diverges them — Tabor doctrine 2026-06-10).
+  // If an open timeline strip is bound to a different branch than the
+  // address, re-bind it. Without this, the strip stays labelled
+  // "main" while the IBP address shows #1.
   if (_state.timelineEl && _state.timelineBranch !== branch) {
     _state.timelineBranch = branch;
     _state.marks = [];
@@ -1498,9 +1632,9 @@ async function _branchHere() {
       console.warn("[branch-bar] create-branch returned no path:", result);
       return;
     }
-    _showBranchEvent(`✨ branched! now on #${r.path}`, { sticky: 2500 });
+    _showBranchEvent(`✨ branch #${r.path} created`, { sticky: 2500 });
     _closeTimeline();
-    location.hash = `#${_state.reality}#${r.path}/`;
+    _offerSwitchAfterBranch(r.path);
   } catch (err) {
     console.warn("[branch-bar] create-branch failed:", err?.message);
     _showBranchEvent(`branch failed: ${err?.message || err}`, { error: true });
@@ -1829,8 +1963,8 @@ function _openNewBranchDialog() {
       _closePanel();
       const scopeNote = args.scope ? ` (subtree ${args.scope})` : "";
       const ptrNote = (r.pointerAttached || (pointer && !r.pointerWarning)) ? ` · pointer "${pointer}"` : "";
-      _showBranchEvent(`✨ branched! now on #${r.path}${scopeNote}${ptrNote}`, { sticky: 2500 });
-      location.hash = `#${_state.reality}#${r.path}/`;
+      _showBranchEvent(`✨ branch #${r.path} created${scopeNote}${ptrNote}`, { sticky: 2500 });
+      _offerSwitchAfterBranch(r.path, scopeNote);
     } catch (err) {
       console.warn("[branch-bar] create-branch failed:", err);
       fail(err?.message || String(err));
@@ -2119,9 +2253,10 @@ function _openMergeDialog() {
         { sticky: 3500 },
       );
 
-      // Navigate to the merged branch so the conflict catalog (and
-      // any in-flight mediator messages) surface in the active view.
-      location.hash = `#${_state.reality}#${r.path}/`;
+      // Switch INTO the merged branch (being + view together) so the
+      // conflict catalog surfaces in the active view AND the relative
+      // mediator summon below rides the merged branch's socket seat.
+      await switchIntoBranch(r.path);
 
       if (summonMediator) {
         // Fire-and-forget. The mediator's first response arrives via
@@ -2526,8 +2661,7 @@ function _maybeSurfaceBranchSwitch(branch) {
   const prev = _lastSeenBranch;
   _lastSeenBranch = branch;
   if (prev === null) return; // first observation; not a switch
-  const label = branch === "0" ? "main" : `#${branch}`;
-  _showBranchEvent(`→ switched to ${label}`);
+  _showBranchEvent(`→ now viewing ${_branchLabel(branch)}`);
 }
 
 function _shortStamp(iso) {

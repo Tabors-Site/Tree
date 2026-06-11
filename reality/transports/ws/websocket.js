@@ -258,6 +258,13 @@ export function initWebSocketServer(httpServer, originPolicy) {
     const beingId = socket.beingId;
     log.debug("WS", `connected: ${socket.id} (being: ${beingId || "anon"})`);
 
+    // Tell the client its BRANCH. socket.currentBranch is the left
+    // stance's branch — the world every relative act lands on — and
+    // the client must be able to display the full address truthfully
+    // (@being#branch → reality#view/path). Re-emitted by the BE wire
+    // layer whenever a switch re-seats the socket.
+    socket.emit("branch", { branch: socket.currentBranch || "0" });
+
     if (beingId) addAuthSession(beingId, socket.id);
 
     // Auto-bind authenticated sockets. The stable

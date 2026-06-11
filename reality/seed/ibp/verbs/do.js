@@ -30,7 +30,6 @@ import {
 } from "../operations.js";
 import { emitFact } from "../../past/fact/facts.js";
 import { IbpError, IBP_ERR } from "../protocol.js";
-import { MATTER_ORIGIN } from "../../materials/matter/origins.js";
 import { isSourceSpaceId } from "../../materials/space/source.js";
 import { authorize } from "../authorize.js";
 import { assertVerbCaller, refuseHistoricalWrite, resolveBranchForFact } from "./_shared.js";
@@ -71,12 +70,37 @@ export async function doVerb(target, operation, params = {}, opts = {}) {
   // both are absent — silent default to "0" hid threading bugs.
   const branch = resolveBranchForFact(opts.summonCtx, opts.currentBranch, "do");
 
-  // Read-only origin gate. DO is always a write; if the target lives in
-  // a read-only realm (filesystem-origin matter, the .source self-tree),
-  // reject before the handler runs.
-  const denial = checkReadOnlyOrigin(target);
+  // Read-only source gate. DO is always a write; if the target is
+  // source matter (the seed's disk mirror) or anything under the
+  // .source self-tree, reject before the handler runs. Type-driven:
+  // typed {kind,id} matter targets are loaded and checked — the old
+  // check read `target.origin` off row-shaped targets, which typed
+  // identities never carry, so it had silently gone dead.
+  const denial = await checkReadOnlySource(target, branch);
   if (denial) {
-    throw new IbpError(IBP_ERR.ORIGIN_READ_ONLY, denial);
+    throw new IbpError(IBP_ERR.SOURCE_READ_ONLY, denial);
+  }
+
+  // Matter-type gate. An op that declares `matterTypes` applies only
+  // to matter of those types — the enforcement half of the type
+  // system (the type def's `ops` list is the advertisement half; see
+  // materials/matter/types.js). Cheap: only fires when the op opted
+  // in AND the target is matter.
+  if (op.matterTypes) {
+    const { detectTargetKind, targetIdOf } = await import("../../materials/_targetShape.js");
+    if (detectTargetKind(target) === "matter") {
+      const { loadOrFold } = await import("../../materials/projections.js");
+      const slot = await loadOrFold("matter", String(targetIdOf(target)), branch);
+      const matterType = slot?.state?.type || "generic";
+      if (!op.matterTypes.includes(matterType)) {
+        throw new IbpError(
+          IBP_ERR.INVALID_INPUT,
+          `DO ${operation}: this op applies to matter type(s) ` +
+          `${op.matterTypes.join(", ")} — target is "${matterType}"`,
+          { operation, matterType, applies: [...op.matterTypes] },
+        );
+      }
+    }
   }
 
   // Every DO act rides an open Act. assertVerbCaller above already
@@ -300,17 +324,27 @@ async function resolveAuthSpaceId(target, auditTarget, branch) {
 }
 
 /**
- * Returns null when the DO target is writable, or a reason string when
- * it sits in a read-only realm (filesystem/web origin matter, or
- * anything under the .source self-tree). The caller throws
- * IbpError(ORIGIN_READ_ONLY, reason).
+ * Returns null when the DO target is writable, or a reason string
+ * when it is read-only: matter of type "source" (the seed's disk
+ * mirror — bytes live in the repo checkout; an extension would have
+ * to register a write-through handler to change that), or anything
+ * under the .source self-tree. The caller throws
+ * IbpError(SOURCE_READ_ONLY, reason).
  */
-function checkReadOnlyOrigin(target) {
+async function checkReadOnlySource(target, branch) {
   if (!target || typeof target !== "object") return null;
 
-  // Direct matter target.
-  if (typeof target.origin === "string" && isReadMostlyOrigin(target.origin)) {
-    return `Cannot DO write on ${target.origin}-origin matter: this origin is read-only at the seed layer`;
+  // Typed matter target: load the row and check its type.
+  if (target.kind === "matter" && target.id != null) {
+    try {
+      const { loadOrFold } = await import("../../materials/projections.js");
+      const slot = await loadOrFold("matter", String(target.id), branch || "0");
+      if ((slot?.state?.type || "generic") === "source") {
+        return "Cannot DO write on source matter: the seed's disk mirror is read-only";
+      }
+    } catch {
+      // Unresolvable target — the handler's own not-found path owns it.
+    }
   }
 
   // Position target (or anything carrying a spaceId).
@@ -320,13 +354,6 @@ function checkReadOnlyOrigin(target) {
   }
 
   return null;
-}
-
-// Origins whose sync mode is read-only: filesystem (the bytes live on
-// disk; an extension would have to register a write-through handler
-// to change that) and web (mirrors remote content).
-function isReadMostlyOrigin(origin) {
-  return origin === MATTER_ORIGIN.FILESYSTEM || origin === MATTER_ORIGIN.WEB;
 }
 
 /**

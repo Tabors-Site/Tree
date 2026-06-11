@@ -281,6 +281,13 @@ export const CONFIG_DEFAULTS = {
   allowedMimeTypes: null,
   uploadEnabled: true,
   maxUploadBytes: 104857600,
+  // Content-store retention (matter/casSweep.js):
+  //   "all"    — keep every version's bytes while any fact names its
+  //              hash (full history; identical bytes still dedup)
+  //   "latest" — keep only bytes that some live projection's CURRENT
+  //              content references; old versions reclaim on sweep
+  // Targeted deletion is the purge-content op, not this policy.
+  contentRetention: "all",
   jwtExpiryDays: 30,
   cookieDomain: null,
 

@@ -73,6 +73,20 @@ export function remapRefs(value, mapper) {
 // Internal walkers
 // ─────────────────────────────────────────────────────────────────────
 
+// Built-in object types that DON'T expose their state through
+// Object.keys (Date, RegExp, BSON wrappers). Without these guards the
+// generic walker treats them as plain objects → _rewrite returns `{}`
+// for any Date and the substrate loses every timestamp it touches.
+// Same class of bug as the redactSecrets Date corruption that hid for
+// 5 days in the timeline. Kept in one helper here so both walkers
+// stay in sync.
+function _isOpaqueLeaf(value) {
+  if (value instanceof Date) return true;
+  if (value instanceof RegExp) return true;
+  if (typeof value._bsontype === "string" && typeof value.toJSON === "function") return true;
+  return false;
+}
+
 function _walk(value, onRef) {
   if (value == null) return;
   if (isRef(value)) {
@@ -88,6 +102,7 @@ function _walk(value, onRef) {
     return;
   }
   if (typeof value === "object") {
+    if (_isOpaqueLeaf(value)) return; // Date / RegExp / BSON → leaf
     // Plain object . iterate own enumerable keys
     for (const k of Object.keys(value)) _walk(value[k], onRef);
     return;
@@ -109,6 +124,7 @@ function _rewrite(value, mapper) {
     return next;
   }
   if (typeof value === "object") {
+    if (_isOpaqueLeaf(value)) return value; // Date / RegExp / BSON pass through
     const next = {};
     for (const k of Object.keys(value)) next[k] = _rewrite(value[k], mapper);
     return next;

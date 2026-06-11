@@ -87,7 +87,7 @@ import {
   getLoadedExtensionNames,
   getBootReport,
 } from "./extensions/loader.js";
-import { startUploadCleanup } from "./seed/materials/matter/uploadCleanup.js";
+import { startCasSweep } from "./seed/materials/matter/casSweep.js";
 import { getBlockedExtensionsAtSpace } from "./seed/materials/space/extensionScope.js";
 import { hooks } from "./seed/hooks.js";
 import { syncExtensionsToTree } from "./seed/sprout.js";
@@ -468,6 +468,15 @@ export async function genesis(app, opts = {}) {
   const { branchManagerRole } = await import("./seed/present/roles/branch-manager/role.js");
   registerRole("branch-manager", branchManagerRole, "seed");
 
+  // federation-manager: negotiates subtree exchange (push / pull) with
+  // peer realities. Operator triggers push-subtree or pull-subtree;
+  // the role's summon handler classifies incoming intents (offer-graft,
+  // accept-graft, deliver-bundle, etc.) from peer federation-managers.
+  // Clone and graft are the data primitives; this role is the social
+  // protocol on top of them. See protocols/ibp/FEDERATION.md.
+  const { federationManagerRole } = await import("./seed/present/roles/federation-manager/role.js");
+  registerRole("federation-manager", federationManagerRole, "seed");
+
   // role-finder: LLM helper that authors live roles from English.
   // Summon @role-finder, describe what a being should be able to do,
   // it surfaces matches in ./roles or drafts a new role via set-role.
@@ -692,6 +701,15 @@ export async function genesis(app, opts = {}) {
     await import("./seed/present/roles/branch-manager/ops.js");
   registerBranchManagerOps();
 
+  // federation-manager ops: push-subtree, pull-subtree, accept-offer,
+  // reject-offer, accept-request, reject-request. The substrate helpers
+  // (cloneSubtree, graftClone, crossRealityDispatch) do the heavy
+  // lifting; the ops are thin handlers that thread negotiation state
+  // through the federation-manager being's qualities.
+  const { registerFederationManagerOps } =
+    await import("./seed/present/roles/federation-manager/ops.js");
+  registerFederationManagerOps();
+
   // I hand my remembered settings (from ./config) down to the seed
   // modules that depend on them. Per-key failures are logged but
   // non-fatal. Sane defaults are baked in.
@@ -850,7 +868,18 @@ export async function genesis(app, opts = {}) {
   });
 
   await startExtensionJobs();
-  startUploadCleanup();
+  startCasSweep();
+
+  // The /skins model catalog — a normal root-child space every
+  // uploaded model matter (type "model") lands in, so the 3D portal
+  // can show the available bodies and beings pick by id. Idempotent;
+  // branches inherit main's catalog.
+  await withIAmAct("ensure skins catalog", async (ctx) => {
+    const { ensureSkinsSpace } = await import("./seed/materials/modelOp.js");
+    await ensureSkinsSpace("0", ctx);
+  }).catch((err) => {
+    log.warn("Genesis", `skins catalog ensure failed: ${err.message}`);
+  });
 
   // Gated by treeCircuitEnabled.
   const { startCircuitJob } =

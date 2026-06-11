@@ -3,20 +3,18 @@
 // `do form-portal` — create a portal Matter in the actor's current
 // space, pointing at a foreign IBPA address.
 //
-// A portal Matter is a normal Matter that carries `qualities.portal`:
+// A portal is matter of type "ibpa" (materials/matter/types.js) —
+// named for its reference kind, exactly like web matter is named for
+// the WWW. The two are COMPLETELY different reference worlds: web's
+// `{ url }` is an HTTP link (render only — iframes); ibpa's
+// `{ target }` is an IBP address BETWEEN worlds (four verbs — never
+// an iframe):
 //
-//   qualities.portal = {
-//     target:    "<reality>#<branch>/<position>"   // foreign IBPA
-//     createdBy: "<beingId>"
-//     createdAt: "<iso-timestamp>"
-//     expiresAt: "<iso-timestamp>" | null
-//   }
+//   content = { target: "<reality>#<branch>/<position>" }
 //
 // What each VIEWER experiences through the portal is emergent from
 // the foreign reality's stance auth for THEIR identity (per
-// CROSS-WORLD.md and the "portal == window == full" doctrine in
-// memory). The portal Matter doesn't pretend to know what each viewer
-// can do; it just points. The foreign substrate decides per-call:
+// CROSS-WORLD.md and the "portal == window == full" doctrine):
 //
 //   - foreign side grants SEE      → renders camera-through ("window")
 //   - foreign side grants SEE+DO   → can reach in and act ("portal")
@@ -25,9 +23,18 @@
 //   - foreign side grants nothing  → black window (matter visible
 //                                     locally, contents not)
 //
-// The 3D / flat portal extensions render this by issuing live verbs at
-// `qualities.portal.target` on behalf of the viewer — same canopy
-// dispatch path as any other cross-world verb.
+// Portals are NOT 3D furniture. The 3D portal renders the doorway
+// with a live SEE painted on the opening, but a headless being uses
+// the same matter the same way: read `external.target` off the
+// descriptor entry, then issue SEE/DO/SUMMON/BE at that address —
+// the normal canopy cross-world dispatch does the rest. The portal
+// matter is how beings move between realities, or act on one reality
+// from inside another, regardless of renderer.
+//
+// `qualities.portal` carries provenance (createdBy) and mirrors the
+// target for renderer back-compat. No expiry: wall-clock TTLs are
+// human time, which doesn't exist inside the reality — a portal ends
+// by `end-matter`, or by a future reality-time (moments) mechanism.
 
 import { registerOperation } from "../ibp/operations.js";
 import { IbpError, IBP_ERR } from "../ibp/protocol.js";
@@ -50,12 +57,14 @@ import { v4 as uuidv4 } from "uuid";
 // Accept the trailing-slash form `<reality>#<branch>/` as "the root
 // of that world" — same convention the resolver uses for bare-reality
 // addresses. `.*` after the slash allows either a named path or an
-// empty path (root).
-const IBPA_RE =
+// empty path (root). classify.js floor-matches the same shape (kept
+// in sync) so pasting an IBPA into the place composer previews
+// "will become: portal".
+export const IBPA_RE =
   /^(?:[a-zA-Z0-9.\-_]+(?:#[^/]+)?|#[^/]+)\/.*$/;
 
 async function formPortalHandler({ target, params, summonCtx, identity }) {
-  const { target: foreignAddress, name, expiresAt } = params || {};
+  const { target: foreignAddress, name } = params || {};
 
   if (typeof foreignAddress !== "string" || !foreignAddress.length) {
     throw new IbpError(
@@ -106,43 +115,14 @@ async function formPortalHandler({ target, params, summonCtx, identity }) {
     );
   }
 
-  // Optional TTL — accept ISO string or null.
-  let normalizedExpiresAt = null;
-  if (expiresAt != null) {
-    if (typeof expiresAt !== "string") {
-      throw new IbpError(
-        IBP_ERR.INVALID_INPUT,
-        "form-portal: `expiresAt` must be an ISO 8601 string",
-      );
-    }
-    const parsed = Date.parse(expiresAt);
-    if (Number.isNaN(parsed)) {
-      throw new IbpError(
-        IBP_ERR.INVALID_INPUT,
-        `form-portal: \`expiresAt\` is not a parseable date: "${expiresAt}"`,
-      );
-    }
-    normalizedExpiresAt = new Date(parsed).toISOString();
-  }
-
   const matterId = uuidv4();
   const branch = summonCtx?.targetBranch || summonCtx?.actorAct?.branch || "0";
-  const createdAt = new Date().toISOString();
 
-  // Portal qualities block. `target` is the foreign IBPA the portal
-  // points at; viewers' experience is gated by foreign-side stance
-  // auth at this target. createdBy + createdAt are forensic. expiresAt
-  // is an optional TTL the wake scheduler can fire delete on.
-  const portalQualities = {
-    target:    foreignAddress,
-    createdBy: actorBeingId,
-    createdAt,
-    expiresAt: normalizedExpiresAt,
-  };
-
-  // 1. Birth the matter with origin="cross-place" — its content lives
-  //    on the foreign reality, not on local disk or the local IBP
-  //    matter store.
+  // ONE fact births the typed portal whole: type, the content
+  // reference, and the qualities.portal provenance block all ride
+  // the create-matter params (applyCreateMatter copies qualities).
+  // The content lives on the foreign reality — the {target} reference
+  // shape says so; no separate origin tag.
   await emitFact(
     {
       verb: "do",
@@ -152,28 +132,19 @@ async function formPortalHandler({ target, params, summonCtx, identity }) {
       params: {
         spaceId,
         beingId: actorBeingId,
-        origin: "cross-place",
+        type: "ibpa",
+        content: { target: foreignAddress },
         name: name || `portal → ${foreignAddress}`,
         parentMatterId: null,
-      },
-      actId: summonCtx?.actId || null,
-      branch,
-    },
-    summonCtx,
-  );
-
-  // 2. Stamp the portal qualities namespace. Same moment, same
-  //    deltaF, atomically sealed with the create-matter fact.
-  await emitFact(
-    {
-      verb: "do",
-      action: "set-matter",
-      beingId: actorBeingId,
-      target: { kind: "matter", id: matterId },
-      params: {
-        field: "qualities.portal",
-        value: portalQualities,
-        merge: false,
+        qualities: {
+          // Renderer back-compat + provenance. `content.target` is
+          // canonical; qualities.portal.target mirrors it for the
+          // existing 3D portal-mesh keying.
+          portal: {
+            target:    foreignAddress,
+            createdBy: actorBeingId,
+          },
+        },
       },
       actId: summonCtx?.actId || null,
       branch,
@@ -186,7 +157,6 @@ async function formPortalHandler({ target, params, summonCtx, identity }) {
     matterId,
     spaceId,
     target: foreignAddress,
-    expiresAt: normalizedExpiresAt,
     _factTarget: { kind: "matter", id: matterId },
   };
 }
@@ -198,17 +168,12 @@ registerOperation("form-portal", {
   args: {
     target: {
       type: "text",
-      label: "Foreign IBPA (e.g. \"bing.com#0/library\")",
+      label: "Foreign IBPA (e.g. \"bing.com#0/library\" or \"#1a/<spaceId>\")",
       required: true,
     },
     name: {
       type: "text",
       label: "Portal name (optional)",
-      required: false,
-    },
-    expiresAt: {
-      type: "text",
-      label: "Expires at (ISO 8601, optional)",
       required: false,
     },
   },

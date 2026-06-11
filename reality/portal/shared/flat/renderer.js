@@ -585,7 +585,7 @@ function renderMatter(desc, { discovery } = {}) {
     name.textContent = m.name || "(unnamed)";
     meta.appendChild(name);
 
-    if (m.origin) meta.appendChild(badge(m.origin, "origin"));
+    if (m.type) meta.appendChild(badge(m.type, "type"));
     if (m.preview) {
       const prev = document.createElement("span");
       prev.className = "row-preview";
@@ -2042,7 +2042,7 @@ function renderMatterInspector(insp, m) {
   insp.appendChild(sub);
 
   const meta = section("meta");
-  if (m.origin)     meta.appendChild(kv("origin", m.origin));
+  if (m.type)       meta.appendChild(kv("type", m.type));
   if (m.byBeingId)  meta.appendChild(kv("written by", m.byBeingId));
   insp.appendChild(meta);
 

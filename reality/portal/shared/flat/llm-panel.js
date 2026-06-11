@@ -154,7 +154,7 @@ async function paintChain(holder, { reality, receiverBeingId, actorBeingId, posi
   holder.appendChild(noteRow("Loading chain…"));
   let result;
   try {
-    result = await flat.client.see("llm-chain", {
+    result = await flat.state.client.see("llm-chain", {
       args: {
         receiverBeingId,
         actorBeingId,
@@ -210,7 +210,7 @@ async function renderConnections(body, { refreshSelf, refreshChain } = {}) {
   body.appendChild(noteRow("Loading connections…"));
   let result;
   try {
-    result = await flat.client.see("llm-connections");
+    result = await flat.state.client.see("llm-connections");
   } catch (err) {
     body.innerHTML = "";
     body.appendChild(errorRow(`connections fetch failed: ${err?.message || err}`));
@@ -330,7 +330,7 @@ function renderAddConnection(body, { onResult }) {
 async function renderSlotsAssigner(body, { onAssign, afterChange }) {
   let conns = [];
   try {
-    const r = await flat.client.see("llm-connections");
+    const r = await flat.state.client.see("llm-connections");
     conns = Array.isArray(r?.connections) ? r.connections : [];
   } catch { /* fall through with empty list */ }
 

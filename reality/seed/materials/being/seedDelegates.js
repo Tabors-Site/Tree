@@ -146,6 +146,14 @@ export const SEED_DELEGATES = [
     description:
       "Creates and manages branches — divergent worlds forked from a past moment of an existing branch. Click @branch-manager at the reality root to mint a new branch, merge branches, or manage the named-pointer registry (set-pointer, delete-pointer).",
   },
+  {
+    name: "federation-manager",
+    role: "federation-manager",
+    cognition: "scripted",
+    invocableBy: "owner",
+    description:
+      "Negotiates subtree exchange with peer realities. Operator triggers push-subtree (offer one of our subtrees to a peer) or pull-subtree (ask a peer for one of theirs); the role handles incoming offer-graft / request-subtree / deliver-bundle SUMMONs from peers. Clone and graft are the data primitives; push and pull are the social verbs on top.",
+  },
 ];
 
 /**

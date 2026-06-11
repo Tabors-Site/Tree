@@ -43,6 +43,7 @@
 import { authApiRouter, authPageRouter } from "./auth.js";
 import ibp from "./api/ibp.js";
 import realityConfig from "./api/config.js";
+import content from "./api/content.js";
 
 import dbHealth from "./middleware/dbHealth.js";
 
@@ -92,8 +93,12 @@ export default function registerRoutes(app) {
   app.use("/api/v1", dbHealth);
   app.use("/", authPageRouter);
 
-  const uploadsDir = process.env.UPLOADS_DIR || path.join(__dirname, "../uploads");
-  app.use("/api/v1/uploads", express.static(uploadsDir));
+  // Content-addressable byte carrier (POST /content + GET /content/
+  // <hash>) — replaces the old static uploads mount. Bytes are
+  // addressed by hash; the hash is the protocol-level identity that
+  // rides inside IBP, these routes only move the bytes. See
+  // api/content.js.
+  app.use("/api/v1", content);
 
   app.use("/api/v1", authApiRouter);
   app.use("/api/v1", realityConfig);

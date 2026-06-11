@@ -296,7 +296,7 @@ const REALITY_HEAVEN_SPACES = [
   { name: "operations", heavenSpace: HEAVEN_SPACE.OPERATIONS },
   // source is read-only. Populated by seed/materials/space/source.js
   // as a filesystem mirror of reality/. DO writes against children
-  // reject with ORIGIN_READ_ONLY.
+  // reject with SOURCE_READ_ONLY.
   { name: "source", heavenSpace: HEAVEN_SPACE.SOURCE },
   // threads is a derived projection. Live rootCorrelation chains
   // surface as synthetic children at `<reality>/./threads/<id>`; the

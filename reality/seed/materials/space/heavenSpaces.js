@@ -121,7 +121,7 @@ export const HEAVEN_SPACE = Object.freeze({
   // The source self-tree. Seed walks its own place/ directory at boot
   // and plants a recursive filesystem-origin matter tree under this
   // space, mirroring the codebase as Mongo data. Read-only: DO writes
-  // on ./source matter reject with ORIGIN_READ_ONLY.
+  // on ./source matter reject with SOURCE_READ_ONLY.
   SOURCE: "source",
   // The threads space. A live tree of coordinated work (a
   // rootCorrelation chain) is addressable here as `./threads/<id>`. No

@@ -237,6 +237,10 @@ export async function handleBe(socket, env, ack) {
         // the branch instead of seating it.
         if (typeof result?.seatBranch === "string" && result.seatBranch.length > 0) {
           socket.currentBranch = result.seatBranch;
+          // Mirror the branch to the client so its address display
+          // stays truthful (the handshake emitted the initial branch;
+          // this keeps it current across switches).
+          try { socket.emit("branch", { branch: result.seatBranch }); } catch { /* fake sockets */ }
         }
         pushReply(buildTransportActReply({
           correlation: momentCorrelation,

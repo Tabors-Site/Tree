@@ -240,6 +240,24 @@ export async function runVerbAsForeignActor({ verb, address, payload, actor, car
     await sealFacts(summonCtx.deltaF);
   }
 
+  // Run afterSeal callbacks. summonByResolved queues `wake()` here when
+  // it enqueues a SUMMON onto a receiver's inbox (triggerOn:["message"]
+  // roles); without firing the callbacks, the receiver's runLoop never
+  // starts and the inbox entry sits forever. Same shape stamped.js
+  // uses to drain afterSeal at moment seal. This is the missing seam
+  // for cross-reality SUMMONs to actually deliver — the normal sealAct
+  // path wasn't entered (we have no local Act for the foreign actor),
+  // so the seam has to live here.
+  if (Array.isArray(summonCtx.afterSeal) && summonCtx.afterSeal.length > 0) {
+    for (const cb of summonCtx.afterSeal) {
+      try { await cb(); }
+      catch (err) {
+        const log = (await import("../seedReality/log.js")).default;
+        log.warn("CrossWorld", `afterSeal callback failed: ${err.message}`);
+      }
+    }
+  }
+
   // The descriptor IS the actor's inner face. For SEE the result IS
   // the descriptor; for other verbs we re-derive the descriptor at the
   // target so the actor's chain captures "what the world looked like

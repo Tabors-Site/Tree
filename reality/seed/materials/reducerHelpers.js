@@ -20,7 +20,15 @@ const QUALITIES_PREFIX = "qualities.";
 // land in applySetField / applySetQualities. The ops live in
 // materials/<kind>/ops.js; their factAction strings are what the
 // dispatcher stamps into each fact.
-const SET_ACTIONS = new Set(["set-space", "set-being", "set-matter"]);
+//
+// set-model stamps its own fact (action "set-model") with the same
+// {field, value, merge} params shape — its handler owns the
+// authorization (self/author/owner per target kind), so it can't
+// delegate to the set-<kind> trio without also requiring callers to
+// hold those grants wherever they happen to stand. To the reducer
+// it's one more qualities write; the target kind routes it to the
+// right aggregate's reel.
+const SET_ACTIONS = new Set(["set-space", "set-being", "set-matter", "set-model"]);
 const CREATE_ACTIONS = new Set(["create-space", "create-matter"]);
 
 // Plain scalar/array fields the `do:set` op writes on a single
@@ -608,14 +616,44 @@ export function applyCreateMatter(state, fact) {
     spaceId:        spec.spaceId ?? null,
     beingId:        spec.beingId ?? null,
     name:           spec.name ?? null,
+    // Content: a CAS ref object ({kind:"cas", hash, ...}) for owned
+    // bytes; reference types keep their reference shapes (http {url},
+    // ibpa {target}, source {path}). The reducer copies, never
+    // computes — preview rides on the fact.
     content:        spec.content ?? null,
-    origin:         spec.origin || "ibp",
+    // Registered matter type (materials/matter/types.js). Defaulted
+    // here too so pre-type facts fold deterministically.
+    type:           spec.type || "generic",
+    // Born-at-a-position. Validated (clamped-or-thrown) in the
+    // handler before the fact stamped; the reducer copies.
+    coord:          spec.coord ?? null,
     parentMatterId: spec.parentMatterId ?? null,
     qualities:      spec.qualities ?? {},
     children:       [],
     position:       spec.spaceId ?? null,
     createdAt:      fact.date,
     updatedAt:      fact.date,
+  };
+}
+
+/**
+ * do:purge-content — the bytes behind this matter's content hash were
+ * physically removed from the content store. The ref stays (the chain
+ * proves what the content WAS — hash, size, type); the projection
+ * marks it purged so readers return the purged marker instead of
+ * attempting a store read. Only flips when the fact's hash matches
+ * the CURRENT content — purging a historical version's hash doesn't
+ * touch the live ref.
+ */
+export function applyPurgeContent(state, fact) {
+  if (fact?.verb !== "do" || fact?.action !== "purge-content") return state;
+  if (fact?.target?.kind !== "matter") return state;
+  const hash = fact?.params?.hash;
+  if (!hash || !state?.content || typeof state.content !== "object") return state;
+  if (state.content.hash !== hash) return state;
+  return {
+    ...state,
+    content: { ...state.content, purged: true, preview: null },
   };
 }
 

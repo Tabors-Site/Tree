@@ -319,20 +319,37 @@ export async function cloneSubtree(scopeSpaceId, opts = {}) {
   }
 
   // ── 7. Capture matter ──
+  let casRefCount = 0;
   for (const matterId of capturedMatterIds) {
     const slot = await loadOrFold("matter", matterId, branch);
     if (!slot) continue;
     const state = slot.state || {};
+    if (state.content?.kind === "cas") casRefCount++;
     bundle.content.matter.push({
       sourceId:       matterId,
       name:           state.name || null,
       spaceId:        tagId("space", state.spaceId, { uncapturedSentinel: REF_INSERTION_POINT }),
       beingId:        tagId("being", state.beingId, { uncapturedSentinel: REF_GRAFT_INITIATOR }),
       parentMatterId: tagId("matter", state.parentMatterId, { uncapturedSentinel: null }),
-      origin:         state.origin || "ibp",
+      type:           state.type || "generic",
       content:        state.content || null,
       qualities:      redactSecrets(state.qualities || {}),
     });
+  }
+  if (casRefCount > 0) {
+    // Content bytes live in the content store, not the bundle. Until
+    // the casBlobs manifest lands (bundle as CAS object: hash
+    // manifest + inline blobs + peer fetch), grafting this bundle on
+    // another substrate leaves these refs dangling — visible, not
+    // silent.
+    const { default: log } = await import("../../seedReality/log.js");
+    log.warn(
+      "Clone",
+      `bundle carries ${casRefCount} content-store ref(s); the BYTES do not ` +
+      `travel yet. Grafting on this substrate works (the store is shared); ` +
+      `grafting elsewhere leaves their content unresolvable until casBlobs ` +
+      `bundling lands.`,
+    );
   }
 
   // ── 8. Manifest — what the receiver must have for this clone to

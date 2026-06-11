@@ -100,7 +100,7 @@ export function extractBeingQualifier(address) {
  *   - address is missing or empty
  *   - address shape violates the verb's address-kind contract
  */
-export function parseUnifiedEnvelope(msg) {
+export async function parseUnifiedEnvelope(msg) {
   if (!msg || typeof msg !== "object") {
     throw new IbpError(IBP_ERR.INVALID_INPUT, "ibp envelope must be an object");
   }
@@ -129,6 +129,22 @@ export function parseUnifiedEnvelope(msg) {
   // is a distinct semantic shape from "BE on the place root."
   // SUMMON requires a stance (@being qualifier) and rejects bare-
   // place outright; no normalization is meaningful.
+  // SEE-op names ride the SEE verb's address slot ("classify-matter",
+  // "clone-subtree", "<ext>:<name>"). They classify as "place" (no
+  // slash) but are NOT places — without this carve-out the place
+  // normalization below rewrites them to "<op>/" and the dispatcher
+  // walks them as positions (or worse, routes them as foreign
+  // domains). Registry membership is the test; the domain guard
+  // covers the pathological collision where an op shares the local
+  // reality's name.
+  if (verb === "see" && addressKind === "place") {
+    const { isSeeOpName } = await import("../../seed/ibp/seeOps.js");
+    const { getRealityDomain } = await import("../../seed/ibp/address.js");
+    if (isSeeOpName(address) && address !== getRealityDomain()) {
+      addressKind = "see-op";
+    }
+  }
+
   if ((verb === "see" || verb === "do") && addressKind === "place") {
     address     = `${address}/`;
     addressKind = "position";
@@ -136,7 +152,7 @@ export function parseUnifiedEnvelope(msg) {
 
   switch (verb) {
     case "see":
-      if (addressKind !== "position" && addressKind !== "stance") {
+      if (addressKind !== "position" && addressKind !== "stance" && addressKind !== "see-op") {
         throw new IbpError(
           IBP_ERR.INVALID_INPUT,
           `ibp SEE address must be a position or stance, e.g. "${address}/" ` +

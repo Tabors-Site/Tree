@@ -8,33 +8,37 @@
 // behind the seed's create-matter / edit-matter / delete-matter
 // verbs.
 //
-// I do not split Matter by what it carries. Text, a file, a URL, a
-// cross-place bridge — one schema for all of them. The `origin` field
-// names the realm the underlying content lives in (ibp, filesystem,
-// web, cross-place; see origins.js) and decides how that content is
-// fetched, addressed, and kept in sync. Adding a new origin extends
-// the enum and adds a bridging pattern; it does not change the shape
-// of Matter.
+// I do not split Matter's schema by what it carries. Text, a file,
+// an http link, an inter-reality doorway — one schema for all of
+// them. ONE field characterizes each piece:
+//
+//   type — what the matter IS (types.js): the registered matter
+//          type, the substrate's main extension point. The type's
+//          content shape says where bytes live (CAS ref = owned;
+//          {url}/{target}/{path} = referenced) — there is no
+//          separate origin tag to drift.
+//
+// Content is CONTENT-ADDRESSED. For owned bytes (text and
+// binary alike) the bytes live in the content store
+// (contentStore.js), hashed by SHA-256; facts and projections carry
+// the ref `{ kind:"cas", hash, size, mimeType, name, encoding,
+// preview }`, never raw bytes. Identical bytes store once; an edit
+// references a new hash; the retention sweeper (casSweep.js) and the
+// purge-content op manage old blobs.
 //
 // Hooks. beforeMatter and afterMatter fire on every write. Before
 // hooks can mutate the payload or cancel the create; after hooks run
 // in parallel for reactive work. Extensions characterize Matter
-// through hookData.qualities under their own namespace.
-//
-// Filesystem origin. Bytes live on disk in the place's uploads/
-// folder, separate from the Matter row that names them. The orphan
-// sweeper in uploadCleanup.js removes files whose Matter has been
-// retired.
+// through hookData.qualities under their own namespace. hookData.
+// content carries the CAS ref; a hook that replaces it with a string
+// gets the string re-hashed into the store transparently.
 //
 // Soft-delete. Retiring a Matter sets spaceId and beingId to the
 // DELETED sentinel; the row stays for audit but no longer lives in
-// the world.
+// the world. Bytes stay in the content store under retention policy.
 
 import log from "../../seedReality/log.js";
 import { getInternalConfigValue } from "../../internalConfig.js";
-import path from "path";
-import fs from "fs";
-import { fileURLToPath } from "url";
 import { v4 as uuidv4 } from "uuid";
 import Matter from "./matter.js";
 import Space from "../space/space.js";
@@ -44,19 +48,20 @@ import { getRealityConfigValue } from "../../realityConfig.js";
 import { resolveRootSpace } from "../space/spaces.js";
 import { getSpaceOwner } from "../space/members.js";
 import { hooks } from "../../hooks.js";
-import { MATTER_ORIGIN } from "./origins.js";
 import { DELETED } from "../space/heavenSpaces.js";
 import { IBP_ERR, IbpError } from "../../ibp/protocol.js";
-
-// `__dirname` resolves to seed/materials/matter/. Three ups reach the
-// place/ root where the uploads/ folder sits beside seed/.
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-const uploadsFolder = process.env.UPLOADS_DIR || path.join(__dirname, "../../../uploads");
-
-if (!fs.existsSync(uploadsFolder)) {
-  fs.mkdirSync(uploadsFolder);
-}
+import {
+  putContent,
+  getContentText,
+  hasContent,
+  isCasRef,
+  purgedMarker,
+} from "./contentStore.js";
+import {
+  getMatterType,
+  typeAllowsContentKind,
+  typeAllowsMime,
+} from "./types.js";
 
 // Place-config-driven knobs. Read at call time so config changes take
 // effect without restart.
@@ -64,23 +69,25 @@ function matterMaxChars()    { return Math.max(100, Number(getInternalConfigValu
 function maxMatterPerSpace() { return Math.max(1,   Number(getInternalConfigValue("maxMatterPerSpace")) || 1000); }
 function matterQueryLimit()  { return Math.max(1,   Math.min(Number(getInternalConfigValue("matterQueryLimit"))  || 5000, 50000)); }
 
-function isIbpOrigin(origin) {
-  return origin === MATTER_ORIGIN.IBP;
-}
 
-function isFilesystemOrigin(origin) {
-  return origin === MATTER_ORIGIN.FILESYSTEM;
+// Upload-policy knobs (reality config, same keys the upload route
+// honors). Read at call time.
+function maxUploadBytes() {
+  return Math.max(1024, Number(getRealityConfigValue("maxUploadBytes")) || 100 * 1024 * 1024);
 }
-
-// For ibp matter the textual content (if any) lives directly in
-// `content` as a string. For other origins, callers must derive a
-// human-readable representation from the structured content. This
-// helper returns the searchable / loggable text, or "" when there
-// is no text representation.
-function ibpText(matter) {
-  if (!matter) return "";
-  if (matter.origin !== MATTER_ORIGIN.IBP) return "";
-  return typeof matter.content === "string" ? matter.content : "";
+function allowedMimeTypes() {
+  const v = getRealityConfigValue("allowedMimeTypes");
+  return Array.isArray(v) && v.length > 0 ? v : null;
+}
+function mimeAllowedByReality(mimeType) {
+  const allow = allowedMimeTypes();
+  if (!allow) return true;
+  const bare = String(mimeType || "").split(";")[0].trim().toLowerCase();
+  return allow.some((p) => {
+    const pat = String(p).toLowerCase();
+    if (pat === bare) return true;
+    return pat.endsWith("/*") && bare.startsWith(pat.slice(0, -1));
+  });
 }
 
 // Size cap applies universally. Stance-auth-based exemptions can
@@ -110,21 +117,26 @@ function validateDateRange(startDate, endDate) {
 }
 
 async function createMatter({
-  origin = MATTER_ORIGIN.IBP,
+  type = "generic",
   content = null,
+  bytes = null,
+  mimeType = null,
+  fileName = null,
   beingId,
   spaceId,
-  file,
   actId = null,
   sessionId = null,
   initialQualities = {},
   summonCtx = null,
 }) {
-  if (!Object.values(MATTER_ORIGIN).includes(origin)) {
-    throw new Error(`Invalid matter origin: ${origin}`);
-  }
   if (!beingId || !spaceId) {
     throw new Error("Missing required fields: beingId, spaceId");
+  }
+  const typeDef = getMatterType(type);
+  if (!typeDef) {
+    throw new Error(
+      `Unknown matter type "${type}". Registered types: seed basics plus extension-registered "<ext>:<type>" names.`,
+    );
   }
   const branch = assertBranchOrThrow(summonCtx?.actorAct?.branch, "matters(summonCtx)");
 
@@ -150,33 +162,87 @@ async function createMatter({
     throw new Error(`Space has reached the maximum of ${max} matter entries. Delete old matter before adding new ones.`);
   }
 
-  // Build the content payload per-origin. Validates required structure
-  // and produces the storage shape.
+  // Build the content payload, shape-driven (no origin tag — the
+  // content's shape + the type's contentKinds decide). Owned bytes —
+  // text and binary alike — land in the content store and the fact
+  // carries the ref. The chain holds facts ABOUT content; the store
+  // holds the bytes (philosophy/OS/OS.md). The put happens BEFORE
+  // the fact seals: a crash in the gap leaves an unreferenced blob
+  // the sweeper's grace period owns. Never delete inline on error —
+  // that races deduplication. Reference shapes (http {url}, ibpa
+  // {target}, source {path}) ride as-is for types that carry no
+  // owned bytes.
   let finalContent = content;
-  if (isFilesystemOrigin(origin)) {
-    if (!file) throw new Error("File is required for filesystem origin");
-    finalContent = {
-      path:     file.filename,
-      size:     typeof file.size === "number" ? file.size : null,
-      mimeType: file.mimetype || null,
-      originalName: file.originalname || null,
-    };
-  } else if (isIbpOrigin(origin)) {
-    if (typeof finalContent === "string") {
-      await assertMatterTextWithinLimit(finalContent);
+  if (bytes != null) {
+    // Binary content (upload path).
+    const buf = Buffer.isBuffer(bytes) ? bytes : Buffer.from(bytes);
+    if (!typeAllowsContentKind(typeDef, "binary")) {
+      throw new Error(`Matter type "${type}" does not carry binary content`);
     }
-    // null is allowed: qualities-only object.
+    if (buf.length > maxUploadBytes()) {
+      throw new Error(`Content exceeds maxUploadBytes (${maxUploadBytes()} bytes)`);
+    }
+    const mt = mimeType || "application/octet-stream";
+    if (!mimeAllowedByReality(mt)) {
+      throw new Error(`MIME type "${mt}" is not allowed on this reality`);
+    }
+    if (!typeAllowsMime(typeDef, mt)) {
+      throw new Error(`MIME type "${mt}" is not allowed for matter type "${type}"`);
+    }
+    finalContent = await putContent(buf, { mimeType: mt, name: fileName });
+  } else if (typeof content === "string") {
+    if (!typeAllowsContentKind(typeDef, "text")) {
+      throw new Error(`Matter type "${type}" does not carry text content`);
+    }
+    await assertMatterTextWithinLimit(content);
+    finalContent = await putContent(content, { encoding: "utf8", name: fileName });
+  } else if (isCasRef(content)) {
+    // Two-step upload: the bytes were stored via POST /api/v1/content
+    // and the caller hands the ref. Verify the blob actually exists
+    // here so a fact never references bytes this store never held.
+    if (!(await hasContent(content.hash))) {
+      throw new Error(`Unknown content hash "${content.hash.slice(0, 12)}..." — upload the bytes first`);
+    }
+    const kind = content.encoding === "utf8" ? "text" : "binary";
+    if (!typeAllowsContentKind(typeDef, kind)) {
+      throw new Error(`Matter type "${type}" does not carry ${kind} content`);
+    }
+    if (!typeAllowsMime(typeDef, content.mimeType)) {
+      throw new Error(`MIME type "${content.mimeType}" is not allowed for matter type "${type}"`);
+    }
+    finalContent = content;
+  } else if (content && typeof content === "object") {
+    // A reference shape (http {url}, ibpa {target}, source {path},
+    // extension reference types). No owned bytes — legal for types
+    // declaring contentKind "none".
+    if (!typeAllowsContentKind(typeDef, "none")) {
+      throw new Error(`Matter type "${type}" does not carry reference content`);
+    }
+  } else if (content == null) {
+    if (!typeAllowsContentKind(typeDef, "none")) {
+      throw new Error(`Matter type "${type}" requires content`);
+    }
+    finalContent = null;
+  } else {
+    throw new Error(
+      "Invalid content: pass a string (text), bytes (Buffer), a cas content ref, a reference object, or null",
+    );
   }
-  // web / cross-place: content shape is the caller's responsibility.
 
   // ── HOOKS ────────────────────────────────────────
-  const hookData = { spaceId, content: finalContent, beingId, origin, qualities: { ...initialQualities } };
+  const hookData = { spaceId, content: finalContent, beingId, type, qualities: { ...initialQualities } };
   const hookResult = await hooks.run("beforeMatter", hookData);
   if (hookResult.cancelled) {
     const code = hookResult.timedOut ? IBP_ERR.HOOK_TIMEOUT : IBP_ERR.HOOK_CANCELLED;
     throw new IbpError(code, hookResult.reason || "Matter creation cancelled by extension");
   }
   finalContent = hookData.content;
+  // Compat shim: a before-hook that swaps in a raw string gets it
+  // hashed into the store — facts never carry loose bytes.
+  if (typeof finalContent === "string") {
+    await assertMatterTextWithinLimit(finalContent);
+    finalContent = await putContent(finalContent, { encoding: "utf8", name: fileName });
+  }
 
   // ── FACT-DRIVEN BIRTH (Slice C-matter-full, 2026-05-23) ──
   // Stamps a do:birth Fact on the new matter's reel; eager-fold's
@@ -193,7 +259,7 @@ async function createMatter({
     beingId: String(beingId),
     target:  { kind: "matter", id: matterId },
     params:  {
-      origin,
+      type,
       content:   finalContent,
       spaceId:   spaceIdBare,
       beingId:   String(beingId),
@@ -216,10 +282,8 @@ async function createMatter({
   // rule, the seed no longer maintains a being.qualities.storage cache
   // by direct incQuality; storage is a projection of the matter Facts.
   let sizeKB = 0;
-  if (isFilesystemOrigin(origin) && file?.size) {
-    sizeKB = Math.ceil(file.size / 1024);
-  } else if (isIbpOrigin(origin) && typeof finalContent === "string") {
-    sizeKB = Math.ceil(Buffer.byteLength(finalContent, "utf8") / 1024);
+  if (isCasRef(finalContent) && typeof finalContent.size === "number") {
+    sizeKB = Math.ceil(finalContent.size / 1024);
   }
 
   // Await the hook chain so reactive work (syntax validation, contract
@@ -230,7 +294,7 @@ async function createMatter({
   // the AI walk past blocking errors. After hooks run parallel so
   // awaiting the Promise.all adds no serialization latency beyond
   // the slowest single handler.
-  await hooks.run("afterMatter", { matter: newMatter, spaceId, beingId, origin, sizeKB, action: "create", actId, sessionId, branch }).catch((err) => {
+  await hooks.run("afterMatter", { matter: newMatter, spaceId, beingId, type, sizeKB, action: "create", actId, sessionId, branch }).catch((err) => {
     log.warn("Matter", `afterMatter hook chain failed: ${err?.message}`);
   });
 
@@ -253,11 +317,33 @@ async function editMatter({
   if (!_matterSlot) throw new Error("Matter not found");
   const matter = { _id: _matterSlot.id, ...(_matterSlot.state || {}) };
   if (String(matter.beingId) !== String(beingId)) throw new Error("Unauthorized");
-  if (!isIbpOrigin(matter.origin)) {
-    throw new Error(`Cannot edit matter with origin "${matter.origin}". Only ibp-origin matter has editable text content.`);
+  if ((matter.type || "generic") === "source") {
+    throw new Error("Cannot edit source matter: the seed's disk mirror is read-only");
+  }
+  const typeDef = getMatterType(matter.type || "generic");
+  if (typeDef && !typeAllowsContentKind(typeDef, "text")) {
+    throw new Error(`Matter type "${matter.type}" does not carry editable text content`);
   }
 
-  const oldContent = ibpText(matter);
+  // Resolve the current text through the content store. The
+  // projection carries the ref; the bytes live at the hash. Purged
+  // content refuses the edit honestly — there is nothing to splice.
+  let oldContent = "";
+  if (isCasRef(matter.content)) {
+    if (matter.content.encoding !== "utf8") {
+      throw new Error("Cannot text-edit binary content; create new matter or set-matter a fresh upload ref");
+    }
+    const text = await getContentText(matter.content.hash);
+    if (text == null) {
+      throw new Error(
+        `Content ${matter.content.hash.slice(0, 12)}... is no longer in the store (purged or reclaimed); cannot edit`,
+      );
+    }
+    oldContent = text;
+  } else if (typeof matter.content === "string") {
+    // Pre-CAS legacy row (dev DBs are wiped; this is belt-and-braces).
+    oldContent = matter.content;
+  }
   let newContent;
 
   if (lineStart !== null && lineEnd !== null) {
@@ -282,32 +368,43 @@ async function editMatter({
     return { message: "No changes", matter };
   }
 
-  let finalContent = newContent;
+  let finalText = newContent;
   {
-    const hookData = { spaceId: matter.spaceId, content: newContent, beingId, origin: matter.origin, qualities: {} };
+    // Hooks see the TEXT on the edit path — this is the text-editing
+    // surface, and validators (syntax checkers et al) want the words.
+    const hookData = { spaceId: matter.spaceId, content: newContent, beingId, type: matter.type || "generic", qualities: {} };
     await hooks.run("beforeMatter", hookData);
-    finalContent = hookData.content;
+    if (typeof hookData.content === "string") finalText = hookData.content;
   }
 
+  // New version → new hash. Identical bytes would have early-outed
+  // above; a hook mutation could still land on the same text, in
+  // which case putContent dedups to the same blob and the fact
+  // records the (unchanged) ref — harmless.
+  const newRef = await putContent(finalText, {
+    encoding: "utf8",
+    name: isCasRef(matter.content) ? matter.content.name : null,
+  });
+
   const oldSizeKB = Math.ceil(Buffer.byteLength(oldContent, "utf8") / 1024);
-  const newSizeKB = Math.ceil(Buffer.byteLength(typeof finalContent === "string" ? finalContent : "", "utf8") / 1024);
+  const newSizeKB = Math.ceil(newRef.size / 1024);
   const deltaKB = newSizeKB - oldSizeKB;
 
-  // Fact-driven content update (Slice C-matter-full, 2026-05-23).
-  // The reducer's applySetField writes state.content from the fact.
-  // emitFact path: when a summonCtx is threaded, the Fact joins the
-  // moment's ΔF; otherwise falls back to sealFacts singleton.
+  // Fact-driven content update. The reducer's applySetField writes
+  // state.content from the fact — the REF, never the bytes. The old
+  // version's blob stays in the store under retention policy; the
+  // old fact still names its hash, so history reads can resolve it.
   await emitFact({
     verb:    "do",
     action:  "set-matter",
     beingId: String(beingId),
     target:  { kind: "matter", id: String(matter._id) },
-    params:  { field: "content", value: finalContent },
+    params:  { field: "content", value: newRef },
     actId,
     sessionId,
     branch,
   }, summonCtx);
-  matter.content = finalContent;
+  matter.content = newRef;
 
   // deltaKB threads into afterMatter for downstream reactions. No
   // incQuality here: storage is a projection of the matter Facts,
@@ -316,7 +413,7 @@ async function editMatter({
   // Awaited: see comment in createMatter above. Callers (tool handlers
   // on the LLM path) need the syntax validator complete before they
   // return, or the next turn reads stale state.
-  await hooks.run("afterMatter", { matter, spaceId: matter.spaceId, beingId, origin: matter.origin, sizeKB: newSizeKB, deltaKB, action: "edit", actId, sessionId, branch }).catch((err) => {
+  await hooks.run("afterMatter", { matter, spaceId: matter.spaceId, beingId, type: matter.type || "generic", sizeKB: newSizeKB, deltaKB, action: "edit", actId, sessionId, branch }).catch((err) => {
     log.warn("Matter", `afterMatter hook chain failed: ${err?.message}`);
   });
 
@@ -359,7 +456,7 @@ async function getMatters({ spaceId, limit, offset, startDate, endDate, branch }
       const author = beingIdBare ? authorSlots.get(beingIdBare) : null;
       return {
         _id:        s.id,
-        origin:     m.origin,
+        type:       m.type || "generic",
         content:    m.content,
         name:       m.name ?? null,
         authorName: author?.state?.name ?? null,
@@ -393,31 +490,16 @@ async function deleteMatterAndFile({
 
   const fileOwnerId = matter.beingId;
   const { spaceId } = matter;
-  let fileDeleted = false;
-  let fileSizeKB = 0;
+  // No inline blob delete: bytes are content-addressed and possibly
+  // shared by other matter (dedup). The retention sweeper (casSweep)
+  // and the explicit purge-content op own blob lifecycle.
+  const fileSizeKB = isCasRef(matter.content) && typeof matter.content.size === "number"
+    ? Math.ceil(matter.content.size / 1024)
+    : 0;
 
-  if (isFilesystemOrigin(matter.origin) && matter.content?.path) {
-    const filePath = path.resolve(uploadsFolder, path.basename(matter.content.path));
-    if (filePath.startsWith(uploadsFolder) && fs.existsSync(filePath)) {
-      try {
-        const stats = fs.statSync(filePath);
-        fileSizeKB = Math.ceil(stats.size / 1024);
-        fs.unlinkSync(filePath);
-        fileDeleted = true;
-      } catch (fsErr) {
-        if (fsErr.code === "ENOENT") {
-          fileDeleted = true;
-        } else {
-          log.warn("Matter", `File delete failed: ${fsErr.message}`);
-        }
-      }
-    }
-    matter.content = { ...matter.content, path: null, deleted: true };
-  }
-  // Fact-driven soft-delete (Slice C-matter-full, 2026-05-23). Three
-  // do:set facts on the matter's reel: content (if filesystem origin
-  // got nulled above), spaceId=DELETED, beingId=DELETED. The per-reel
-  // append lock keeps them visible-together to a concurrent fold.
+  // Fact-driven soft-delete. Two do:set facts on the matter's reel:
+  // spaceId=DELETED, beingId=DELETED. The per-reel append lock keeps
+  // them visible-together to a concurrent fold.
   const setMatterField = (field, value) =>
     emitFact({
       verb:    "do",
@@ -429,9 +511,6 @@ async function deleteMatterAndFile({
       sessionId,
       branch,
     }, summonCtx);
-  if (isFilesystemOrigin(matter.origin)) {
-    await setMatterField("content", matter.content);
-  }
   await setMatterField("spaceId", DELETED);
   await setMatterField("beingId", DELETED);
   matter.spaceId = DELETED;
@@ -443,17 +522,13 @@ async function deleteMatterAndFile({
   if (fileOwnerId && fileOwnerId !== DELETED) {
     hooks.run("afterMatter", {
       matter, spaceId, beingId: fileOwnerId,
-      origin: matter.origin, fileSizeKB,
-      action: "delete", fileDeleted,
+      type: matter.type || "generic", fileSizeKB,
+      action: "delete", fileDeleted: false,
       actId, sessionId, branch,
     }).catch(() => {});
   }
 
-  return {
-    message: isFilesystemOrigin(matter.origin)
-      ? "File matter removed and underlying file deleted."
-      : "Matter removed.",
-  };
+  return { message: "Matter removed." };
 }
 
 async function transferMatter({
@@ -508,7 +583,7 @@ async function transferMatter({
 
 /**
  * List matter rows at a space, slim shape (matterId, name, beingId,
- * origin, content, qualities). Hits Matter directly so the returned
+ * type, content, qualities). Hits Matter directly so the returned
  * `name` is the matter's own — getMatters populates beingId and
  * overwrites name with the being's name, which the descriptor pass
  * specifically needs to avoid.
@@ -523,7 +598,7 @@ async function listMattersAt(spaceId, { limit = 50, branch } = {}) {
       matterId: String(s.id),
       name: m.name || null,
       beingId: m.beingId || null,
-      origin: m.origin || "ibp",
+      type: m.type || "generic",
       content: m.content || null,
       qualities: m.qualities instanceof Map
         ? Object.fromEntries(m.qualities)
@@ -590,8 +665,47 @@ async function getMatter(matterId, opts = {}) {
   return { _id: slot.id, ...(slot.state || {}) };
 }
 
+/**
+ * Read-through content resolver — matter's primitive for "give me
+ * the bytes/text behind this matter." Cognition + extension callers
+ * use this instead of touching contentStore directly or assuming
+ * content is a string.
+ *
+ * Returns:
+ *   { matter, ref, text }        ibp text content (utf8)
+ *   { matter, ref, buffer }      ibp binary content
+ *   { matter, ref, purged: true} bytes gone (purged / reclaimed)
+ *   { matter, ref: null }        no owned bytes (null content, or a
+ *                                web / cross-reality / filesystem
+ *                                reference shape — read matter.content
+ *                                directly for those)
+ *   null                         matter not found
+ */
+async function getMatterContent(matterId, opts = {}) {
+  const matter = await getMatter(matterId, opts);
+  if (!matter) return null;
+  const ref = isCasRef(matter.content) ? matter.content : null;
+  if (!ref) {
+    // Legacy inline string (pre-CAS row): surface it as text.
+    if (typeof matter.content === "string") {
+      return { matter, ref: null, text: matter.content };
+    }
+    return { matter, ref: null };
+  }
+  if (ref.encoding === "utf8") {
+    const text = await getContentText(ref.hash);
+    if (text == null) return { matter, ref, ...purgedMarker(ref) };
+    return { matter, ref, text };
+  }
+  const { getContent } = await import("./contentStore.js");
+  const buffer = await getContent(ref.hash);
+  if (buffer == null) return { matter, ref, ...purgedMarker(ref) };
+  return { matter, ref, buffer };
+}
+
 export {
-  createMatter, editMatter, getMatter, getMatters, deleteMatterAndFile,
+  createMatter, editMatter, getMatter, getMatters, getMatterContent,
+  deleteMatterAndFile,
   transferMatter,
   listMattersAt,
 };

@@ -47,6 +47,7 @@ import {
 import { getInboxSummary } from "../present/intake/inbox.js";
 import { getRole, listRoles } from "../present/roles/registry.js";
 import { listClones } from "../materials/publish/cloneRegistry.js";
+import { serializeTypeCatalog } from "../materials/matter/classify.js";
 import { listOperations } from "./operations.js";
 import { listBeOpNames, getBeOp } from "./beOps.js";
 import { findOpenForBeing, findLastSealedForBeing } from "../present/beats/2-fold/reelChains.js";
@@ -131,6 +132,18 @@ export function buildDiscovery() {
     // populate before the operator signs in. The list-clones DO op
     // returns the same data for callers who want a live refresh.
     clones: listClones(),
+    // The matter-type catalog (registry defs + their claims).
+    // Composers classify LOCALLY against this ("will become: web")
+    // with zero round-trips; the classify-matter SEE op gives the
+    // same answer authoritatively for non-discovery callers.
+    matterTypes: serializeTypeCatalog(),
+    // Upload policy caps so composers refuse oversized / disallowed
+    // files before POSTing bytes. The HTTP carrier re-enforces.
+    upload: {
+      enabled: getRealityConfigValue("uploadEnabled") !== false,
+      maxUploadBytes: Number(getRealityConfigValue("maxUploadBytes")) || 104857600,
+      allowedMimeTypes: getRealityConfigValue("allowedMimeTypes") || null,
+    },
     supportedVerbs: ["see", "do", "summon", "be"],
     capabilities: [],
   };
@@ -589,7 +602,13 @@ async function placeAtSpace(resolved, { identity, payload, until = null, branch 
   const children = space.heavenSpace === HEAVEN_SPACE.THREADS
     ? await synthesizeThreadChildren(space._id, pathByNames, payload)
     : await childrenOf(space._id, pathByNames, { until, branch });
-  const matters  = await mattersAt(space._id, { until, branch });
+  const matters  = await mattersAt(space._id, {
+    until, branch,
+    // The containing space's render block — carries per-type model
+    // defaults (qualities.render.matterModels.<type>) that matter
+    // entries fall back to when they carry no override of their own.
+    spaceRender: serializeQualities(space.qualities)?.render || null,
+  });
   const lineage  = buildLineage(resolved);
   const siblings = space.parent
     ? await childrenOf(space.parent, parentPath, { exclude: space._id, until, branch })
@@ -734,13 +753,22 @@ async function childrenOf(parentId, parentPath, opts = {}) {
   const folded = await Promise.all(rows.map((s) => foldRead("space", s._id, until, branch)));
   return rows.map((s, i) => {
     const f = folded[i] || s;
+    const qualities = serializeQualities(f.qualities ?? s.qualities);
     return {
       name: f.name || s.name,
       spaceId: s._id,
       type: f.type ?? s.type ?? null,
       coord: f.coord ?? s.coord ?? null,
       path: parentPath === "/" ? `/${s.name}` : `${parentPath}/${s.name}`,
-      qualities: serializeQualities(f.qualities ?? s.qualities),
+      // A child space's model is its body in THIS parent's scene —
+      // the pyramid you click to enter. The child carries its own
+      // render block (set-model writes it); the parent's descriptor
+      // reaches in here so the scene can place every doorway-body at
+      // its coord without extra SEEs.
+      model:    qualities?.render?.model || null,
+      scale:    qualities?.render?.scale ?? null,
+      rotation: qualities?.render?.rotation ?? null,
+      qualities,
     };
   });
 }
@@ -784,24 +812,100 @@ async function synthesizeThreadChildren(parentId, parentPath, payload) {
 // extra round-trip. Slice H completion (2026-05-23): each matter
 // folds before its qualities surface, same shape as the children
 // loop above.
-async function mattersAt(spaceId, { until = null, branch = "0" } = {}) {
+async function mattersAt(spaceId, { until = null, branch = "0", spaceRender = null } = {}) {
   if (!spaceId) return [];
   const rows = await listMattersAt(spaceId, { branch });
   const folded = await Promise.all(rows.map((m) => foldRead("matter", m.matterId, until, branch)));
+  const { getMatterType } = await import("../materials/matter/types.js");
+  const { getOperation } = await import("./operations.js");
+
+  // The matter's actions menu: the registered type advertises its DO
+  // ops; each resolves through the operation registry for label +
+  // args so the portal renders forms generically (mirrors the
+  // being-actions block built from canBe).
+  const buildMatterActions = (typeName) => {
+    const typeDef = getMatterType(typeName || "generic");
+    if (!typeDef || !typeDef.ops?.length) return [];
+    const actions = [];
+    for (const opName of typeDef.ops) {
+      const op = getOperation(opName);
+      if (!op) continue;
+      actions.push({
+        verb: "do",
+        action: opName,
+        label: opName,
+        args: op.args || null,
+      });
+    }
+    return actions;
+  };
+
   return rows.map((m, i) => {
     const f = folded[i] || {};
     const content = f.content ?? m.content;
-    const isText = typeof content === "string";
+    const type = f.type ?? m.type ?? "generic";
+    const typeDef = getMatterType(type);
+    const isLegacyText = typeof content === "string";
+    const isCas = !!(content && typeof content === "object" && content.kind === "cas");
+    const qualities = serializeQualities(f.qualities ?? m.qualities ?? {});
     return {
       matterId: m.matterId,
       name: f.name ?? m.name,
-      origin: f.origin ?? m.origin,
+      type,
       coord: f.coord ?? m.coord ?? null,
-      preview: isText ? content.slice(0, 400) : null,
-      previewBytes: isText ? Buffer.byteLength(content, "utf8") : 0,
-      totalBytes: isText ? Buffer.byteLength(content, "utf8") : 0,
+      // Preview rides on the content ref (computed at write time);
+      // legacy inline strings still slice. Zero store reads here —
+      // the descriptor stays hot-path cheap.
+      preview: isCas
+        ? (content.preview ?? null)
+        : (isLegacyText ? content.slice(0, 400) : null),
+      previewBytes: isCas
+        ? (content.preview ? Buffer.byteLength(content.preview, "utf8") : 0)
+        : (isLegacyText ? Buffer.byteLength(content, "utf8") : 0),
+      totalBytes: isCas
+        ? (content.size ?? 0)
+        : (isLegacyText ? Buffer.byteLength(content, "utf8") : 0),
+      mimeType: isCas
+        ? (content.mimeType || null)
+        : (content && typeof content === "object" ? content.contentType || null : null),
+      // The transport hint for fetching the bytes. The HASH is the
+      // protocol-level identity; the URL is today's byte carrier.
+      // http matter points straight at its external URL — the
+      // portal embeds/links it (render.mode says which).
+      contentUrl: isCas
+        ? (!content.purged ? `/api/v1/content/${content.hash}` : null)
+        : (content && typeof content === "object" && typeof content.url === "string"
+            ? content.url
+            : null),
+      // External reference shapes (web / cross-reality) are small
+      // structured pointers, not bytes — surface them whole so the
+      // portal gets videoId / title / matterRef without a second
+      // round-trip. CAS bytes never ride the descriptor.
+      external: !isCas && content && typeof content === "object" ? content : null,
+      purged: isCas ? content.purged === true : false,
+      render: typeDef?.render || null,
+      // This matter's 3D body, resolution order: the per-matter
+      // override (set-model by the author) wins; then the containing
+      // space's per-type default (set-model {forMatterType} on the
+      // space — "all notes here look like this"); then, for matter
+      // whose CONTENT IS a model (type render mode "model" — the
+      // /skins catalog rows), the matter displays AS its own glb; then
+      // the type's extension default (render.model on the type def).
+      model: qualities?.render?.model
+        || spaceRender?.matterModels?.[type]
+        || (typeDef?.render?.mode === "model" && isCas && !content.purged
+              ? {
+                  matterId: m.matterId,
+                  hash:     content.hash,
+                  url:      `/api/v1/content/${content.hash}`,
+                  name:     f.name ?? m.name ?? content.name ?? null,
+                }
+              : null)
+        || typeDef?.render?.model
+        || null,
+      actions: buildMatterActions(type),
       byBeingId: f.beingId ?? m.beingId,
-      qualities: serializeQualities(f.qualities ?? m.qualities ?? {}),
+      qualities,
     };
   });
 }
@@ -1071,6 +1175,10 @@ async function enrichBeings(spaceId, entries, opts = {}) {
       queueDepth:  inb.queueDepth,
       pendingFrom: inb.pendingFrom,
       coord:       (inboxKey && coordByBeing.get(inboxKey)) || null,
+      // The being's 3D body — a model matter block written by
+      // set-model ({ matterId, hash, url, name }; bytes load from
+      // /api/v1/content/<hash>). Null = portal default for the role.
+      model:       (inboxKey && qualitiesByBeing.get(inboxKey)?.render?.model) || null,
       qualities:   (inboxKey && qualitiesByBeing.get(inboxKey)) || {},
     };
   });

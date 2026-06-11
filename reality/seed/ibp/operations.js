@@ -164,6 +164,14 @@ export function registerOperation(name, spec) {
     // per-role. Open to extension ops the same way. Falls back to the
     // op name when absent or when the function returns nothing.
     authAction: typeof spec.authAction === "function" ? spec.authAction : null,
+    // Optional matter-type gate. An op declaring matterTypes refuses
+    // to run against matter of any other type (enforced in doVerb).
+    // The advertisement direction lives on the type def (its `ops`
+    // list → the descriptor's actions menu); this is the enforcement
+    // direction. See materials/matter/types.js.
+    matterTypes: Array.isArray(spec.matterTypes) && spec.matterTypes.length > 0
+      ? Object.freeze([...spec.matterTypes])
+      : null,
     ownerExtension,
   });
   log.verbose("Operations", `Registered: ${name} (${ownerExtension})`);

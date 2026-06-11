@@ -3,24 +3,26 @@
 // Matter. What fills a space.
 //
 // Space gives the world a where; matter gives it a what. I do not
-// split matter by what it carries — text, a file, a URL, a bridge
-// to another reality. One row, one schema, one set of operations. The
-// `origin` field names the realm the underlying content actually
-// lives in, and that decides how I fetch it, address it, and keep
-// it in sync. Adding a new origin is a bridging pattern, never a
-// schema change.
+// split matter by what it carries — text, a file, an http link, a
+// doorway to another reality. One row, one schema, one set of
+// operations. The TYPE (types.js registry) says what the matter IS,
+// which decides its content shape, where bytes live, and which DO
+// ops apply:
 //
-// The origins I know:
+//   generic — bare text (a context chunk) or qualities-only. Content
+//             is a CAS ref to owned bytes, or null.
+//   file    — bytes of any format. Content is a CAS ref.
+//   model   — a .glb body. Content is a CAS ref.
+//   http    — website content. Content is `{ url }` — the bytes live
+//             on the WWW.
+//   ibpa    — the inter-reality portal. Content is `{ target }` — an
+//             IBP address into another world.
+//   source  — the seed's read-only disk mirror. Content is
+//             `{ path, ... }` — bytes live in the repo checkout.
 //
-//   ibp        — I own the bytes. Content is a string (text) or
-//                null for a row carrying only qualities.
-//   filesystem — bridges to a file on disk. Content is { path, size,
-//                mimeType }. Bytes live outside me; the orphan
-//                sweeper retires unreferenced files.
-//   web        — bridges to a URL. Content is { url, fetchedAt?,
-//                cache? }. Live content lives on the web.
-//   cross-reality — bridges to Matter on another reality. Content is
-//                { place, matterRef }.
+// (There is no separate `origin` field — where content lives is
+// derivable from the type's reference shape, and a separate tag
+// drifted from reality the moment types landed.)
 //
 // Matter also forms a tree within its space (parentMatterId +
 // children[]). Folder-and-file structures, recursive emission
@@ -38,7 +40,6 @@
 
 import mongoose from "mongoose";
 import { v4 as uuidv4 } from "uuid";
-import { MATTER_ORIGIN } from "./origins.js";
 
 const MatterSchema = new mongoose.Schema({
   _id: { type: String, default: uuidv4 },
@@ -53,8 +54,8 @@ const MatterSchema = new mongoose.Schema({
   // creations) OR the DELETED sentinel for soft-deleted matter.
   beingId: { type: String, required: true },
 
-  // Optional human-readable label. Used by set-name and by
-  // filesystem-origin mirroring (the file's name).
+  // Optional human-readable label. Used by set-name and by the
+  // source mirror (the file's name).
   name: { type: String, default: null },
 
   // The matter tree at this space. Root matter has
@@ -62,17 +63,21 @@ const MatterSchema = new mongoose.Schema({
   parentMatterId: { type: String, ref: "Matter", default: null, index: true },
   children:       [{ type: String, ref: "Matter" }],
 
-  // Which realm the underlying content lives in. Required — origin
-  // determines fetching, sync mode, and addressing.
-  origin: {
-    type: String,
-    enum: Object.values(MATTER_ORIGIN),
-    default: MATTER_ORIGIN.IBP,
-    required: true,
-  },
+  // What this matter IS — its registered matter type (types.js).
+  // The type decides the content shape, where the bytes live, and
+  // which DO ops apply (the descriptor's actions menu, the
+  // role-walk's create-matter:<type> refinement). Seed basics:
+  // generic | file | model | http | ibpa | source; extensions
+  // register "<ext>:<type>".
+  type: { type: String, default: "generic", index: true },
 
-  // Shape varies by origin (see origins.js). May be null for a row
-  // carrying only qualities.
+  // Content. For owned bytes this is the CAS ref
+  // `{ kind:"cas", hash, size, mimeType, name, encoding, preview }` —
+  // the bytes themselves live in the content store
+  // (matter/contentStore.js), addressed by SHA-256. Reference types
+  // carry their reference shapes (http `{url}`, ibpa `{target}`,
+  // source `{path,...}`). May be null for a row carrying only
+  // qualities.
   content: { type: mongoose.Schema.Types.Mixed, default: null },
 
   // Coordinate inside spaceId. Null when the matter has no spatial
@@ -114,7 +119,6 @@ const MatterSchema = new mongoose.Schema({
 
 MatterSchema.index({ spaceId: 1, createdAt: -1 });
 MatterSchema.index({ beingId: 1, createdAt: -1 });
-MatterSchema.index({ origin: 1 });
 
 // Position index — what matter occupies a given space. Used by
 // foldPlace to find a space's matter-occupants.

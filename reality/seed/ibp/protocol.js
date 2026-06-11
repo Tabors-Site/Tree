@@ -39,7 +39,7 @@
 // `sendCaughtError` consults it; explicit `sendError(res, status,
 // ...)` callers still pass a status if they want to.
 //
-// Domain-specific enums (HEAVEN_SPACE, MATTER_ORIGIN, DELETED, I_AM)
+// Domain-specific enums (HEAVEN_SPACE, DELETED, I_AM)
 // live with their domain modules — not here.
 
 import log from "../seedReality/log.js";
@@ -103,7 +103,7 @@ export const IBP_ERR = Object.freeze({
   // matter whose origin's sync mode is read-only. Filesystem-origin
   // matter under .source is always read-only; the substrate cannot
   // mutate the seed's own source files through verbs.
-  ORIGIN_READ_ONLY: "ORIGIN_READ_ONLY",
+  SOURCE_READ_ONLY: "SOURCE_READ_ONLY",
 
   // Historical-read doctrine. SEE accepts an `at: { atSeq?, atTimestamp? }`
   // qualifier that returns the substrate's state as of a past point.
@@ -212,7 +212,7 @@ const STATUS_FOR_CODE = Object.freeze({
   EXTENSION_BLOCKED: 403,
   SESSION_EXPIRED: 403,
   UPLOAD_DISABLED: 403,
-  ORIGIN_READ_ONLY: 403,
+  SOURCE_READ_ONLY: 403,
   HISTORICAL_READ_ONLY: 403,
   CROSS_BRANCH_FORBIDDEN: 403,
   REALITY_PAUSED: 403,

@@ -3,7 +3,7 @@
 // My own source, as substrate.
 //
 // At boot I walk the place/ directory on disk and plant a recursive
-// filesystem-origin Matter tree under the `./source` Tier-3 seed
+// read-only Matter tree (type "source") under the `./source` Tier-3 seed
 // space. Each directory becomes a folder-Matter; each file becomes a
 // file-Matter; parentMatterId chains the tree so what's under
 // `./source` faithfully mirrors what's on the floor.
@@ -14,7 +14,7 @@
 // other position is substrate.
 //
 // One-way sync. Disk → substrate; never the other way. DO operations
-// against `./source` Matter reject with ORIGIN_READ_ONLY (gate in
+// against `./source` Matter reject with SOURCE_READ_ONLY (gate in
 // ibp/verbs/do.js). The reconciliation walk uses direct Matter
 // saves and bypasses the public createMatter path because that path
 // also (correctly) refuses to author into place heaven spaces.
@@ -26,7 +26,6 @@ import { fileURLToPath } from "url";
 import log from "../../seedReality/log.js";
 import Matter from "../matter/matter.js";
 import Space from "./space.js";
-import { MATTER_ORIGIN } from "../matter/origins.js";
 import { HEAVEN_SPACE } from "./heavenSpaces.js";
 import { I_AM } from "../being/seedBeings.js";
 
@@ -155,14 +154,14 @@ export async function syncSourceTree({
   const stats = { created: 0, updated: 0, removed: 0, kept: 0 };
 
   // Root matter for targetPath. Branch-aware via direct Projection query
-  // — the matter-by-spaceId + filesystem origin is a substrate-internal
+  // — the matter-by-spaceId + source type is a substrate-internal
   // lookup pattern, not a wire-facing one.
   const { default: ProjectionModel } = await import("../branch/projection.js");
   const _rootMatterSlot = await ProjectionModel.findOne({
     branch: "0", type: "matter",
     "state.spaceId": sourceSpaceId,
     "state.parentMatterId": null,
-    "state.origin": MATTER_ORIGIN.FILESYSTEM,
+    "state.type": "source",
     tombstoned: { $ne: true },
   }).lean();
   let rootMatter = _rootMatterSlot ? { _id: _rootMatterSlot.id, ...(_rootMatterSlot.state || {}) } : null;
@@ -256,7 +255,7 @@ async function reconcileChildren({
   const _existRows = await Projection.find({
     branch: "0", type: "matter",
     "state.parentMatterId": parentMatterId,
-    "state.origin": MATTER_ORIGIN.FILESYSTEM,
+    "state.type": "source",
     tombstoned: { $ne: true },
   }).lean();
   const existing = _existRows.map((s) => ({
@@ -446,7 +445,7 @@ async function createSourceMatter({
     parentMatterId: parentMatterId || null,
     beingId: I_AM,
     name,
-    origin: MATTER_ORIGIN.FILESYSTEM,
+    type: "source",
     content,
     qualities: new Map([["source", { readOnly: true }]]),
   });

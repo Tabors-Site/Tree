@@ -251,6 +251,7 @@ async function main() {
     onEnter: (target) => onEnter(target),
     onBeingProximity: (being, inRange, distance) => onBeingProximity(being, inRange, distance),
     onBeingActivate: (being) => onBeingActivate(being),
+    onMatterActivate: (matter) => onMatterActivate(matter),
     onMatterEnded: (info) => onMatterEnded(info),
     onMatterPlaybackTick: (info) => onMatterPlaybackTick(info),
     isInputBlocked: isGameplayInputBlocked,
@@ -487,10 +488,26 @@ async function refreshSeedCatalog() {
         action: "form-portal",
         description: "Form a portal at the current position. Prompts for a foreign IBPA target (e.g. \"localhost#1a/<spaceId>\" or \"bing.com/library\").",
         parameters: [
-          { name: "target",    description: "Foreign IBPA (e.g. \"bing.com#0/library\")" },
-          { name: "name",      description: "Portal name (optional)" },
-          { name: "expiresAt", description: "ISO timestamp for auto-removal (optional)" },
+          { name: "target", description: "Foreign IBPA (e.g. \"bing.com#0/library\")" },
+          { name: "name",   description: "Portal name (optional)" },
         ],
+      },
+      {
+        kind: "op",
+        name: "set-model",
+        label: "Space model",
+        action: "set-model",
+        description: "Set this space's 3D model (its body in the parent scene), or a default model for all matter of one type here. Pass a model matter id (browse /skins).",
+        parameters: [
+          { name: "modelMatterId", description: "Model matter id (copy one from /skins)" },
+          { name: "forMatterType", description: "Optional: apply as the default for all matter of this TYPE in the space (leave empty to set the space's own model)" },
+        ],
+      },
+      {
+        kind: "tool",
+        name: "upload-model",
+        label: "Upload model",
+        description: "Upload a .glb and wear it: the file lands in the /skins catalog as model matter, then sets your being's body.",
       },
       ...clones.map((c) => ({
         kind:        "clone",
@@ -549,6 +566,9 @@ async function connectAnonymous(placeUrl, useProxy) {
     onConnectionChange: (status) => setHud(`socket: ${status}`),
     onSummon: handleSummon,
     onDescriptorEvent: handleDescriptorEvent,
+    // Server "branch" pushes (handshake + every BE switch) keep the
+    // full-address chip's LEFT stance truthful.
+    onBranchChange: () => state.branchBar?.refreshAddress?.(),
   }));
   state.scene?.setClient?.(state.client);
   state.client.connect();
@@ -623,6 +643,9 @@ async function connectAndPlace(session) {
     onConnectionChange: (status) => setHud(`${session.username} | ${status}`),
     onSummon: handleSummon,
     onDescriptorEvent: handleDescriptorEvent,
+    // Server "branch" pushes (handshake + every BE switch) keep the
+    // full-address chip's LEFT stance truthful.
+    onBranchChange: () => state.branchBar?.refreshAddress?.(),
   }));
   state.scene?.setClient?.(state.client);
   state.client.connect();
@@ -1479,6 +1502,292 @@ async function doInhabit(b, address) {
   }
 }
 
+// ── Matter interaction ─────────────────────────────────────────────
+//
+// Clicking matter opens its action menu — the server-provided
+// actions[] (built from the matter's TYPE registry) plus three
+// synthetic entries:
+//   "Wear this model" — type=model matter only; set-model on your
+//                       own being (the skins-catalog click-to-wear).
+//   "Set model…"      — point THIS matter at a model matter id
+//                       (copy one from /skins).
+//   "Copy id"         — the matter's id to the clipboard, for
+//                       set-model on spaces/other matter.
+// Same renderer the being menus use; matter-targeted DOs ride the
+// space address with the reserved matterId payload key.
+
+function currentPositionAddress() {
+  const reality = state.discovery?.reality;
+  const path = state.descriptor?.address?.pathByNames || "/";
+  const branch = state.descriptor?.address?.branch || "0";
+  const bq = branch === "0" ? "" : `#${branch}`;
+  return `${reality}${bq}${path}`.replace(/\/+$/, "") || `${reality}${bq}`;
+}
+
+function selfBeingStance() {
+  if (state.session?.beingAddress) return state.session.beingAddress;
+  const reality = state.discovery?.reality;
+  const branch = state.descriptor?.address?.branch || "0";
+  const bq = branch === "0" ? "" : `#${branch}`;
+  return `${reality}${bq}/@${state.session?.username}`;
+}
+
+function onMatterActivate(m) {
+  const full = (state.descriptor?.matters || []).find(
+    (x) => String(x.matterId) === String(m.matterId),
+  );
+  openMatterActionMenu(full ? { ...m, ...full } : m);
+}
+
+function openMatterActionMenu(mt) {
+  const address = currentPositionAddress();
+  const serverActions = Array.isArray(mt.actions) ? mt.actions.slice() : [];
+
+  const entries = [...serverActions];
+  if ((mt.type || mt.matterType || "generic") === "model" && state.session?.token) {
+    entries.unshift({
+      verb:        "do",
+      action:      "set-model",
+      label:       "Wear this model",
+      description: "Set this model as your being's 3D body.",
+      args:        {},
+      __synthetic: "wear-model",
+    });
+  }
+  entries.push({
+    verb:        "do",
+    action:      "set-model",
+    label:       "Set model…",
+    description: "Give this matter a 3D body. Pass a model matter id (browse /skins, Copy id).",
+    args: {
+      modelMatterId: { type: "text", label: "Model matter id", required: false },
+      clear:         { type: "bool", label: "Remove the model", default: false, required: false },
+    },
+  });
+  // http matter navigation. The page on the walk-up screen is shared
+  // state: qualities.http.currentUrl, written as a normal set-matter
+  // fact, so beings navigate the web TOGETHER and the chain records
+  // where they went. content.url stays the immutable default; Reset
+  // clears the quality back to it.
+  if ((mt.type || "generic") === "http") {
+    entries.push({
+      verb:        "do",
+      action:      "set-matter",
+      label:       "Navigate page…",
+      description: "Move this screen to a different page (a fact — every being sees the same page).",
+      args: {
+        url: { type: "text", label: "https:// link to show", required: true },
+      },
+      __synthetic: "http-navigate",
+    });
+    if (mt.qualities?.http?.currentUrl) {
+      entries.push({
+        verb:        "do",
+        action:      "set-matter",
+        label:       "Reset page",
+        description: `Back to the default: ${mt.external?.url || "the original link"}`,
+        args:        {},
+        __synthetic: "http-reset",
+      });
+    }
+  }
+
+  // Presentation fallbacks. Frame-refusing sites and non-embeddable
+  // files (zips, binaries) still open: in a tab, or as a download.
+  const openUrl = mt.external?.url || mt.contentUrl || null;
+  if (openUrl) {
+    entries.push({
+      verb:        "do",
+      action:      "open-tab",
+      label:       "Open in new tab",
+      description: openUrl.length > 64 ? `${openUrl.slice(0, 64)}…` : openUrl,
+      args:        {},
+      __synthetic: "open-tab",
+    });
+  }
+  if (mt.contentUrl && String(mt.contentUrl).startsWith("/api/")) {
+    entries.push({
+      verb:        "do",
+      action:      "download",
+      label:       "Download",
+      description: "Save this matter's bytes to your device.",
+      args:        {},
+      __synthetic: "download",
+    });
+  }
+  entries.push({
+    verb:        "do",
+    action:      "copy-id",
+    label:       "Copy id",
+    description: "Copy this matter's id to the clipboard (use it with set-model anywhere).",
+    args:        {},
+    __synthetic: "copy-id",
+  });
+
+  showActionMenu(
+    { name: mt.name || mt.label || mt.type || "matter", actions: entries },
+    {
+      onActionPicked: async (action) => {
+        if (action.__synthetic === "copy-id") {
+          hideActionPanel();
+          try {
+            await navigator.clipboard.writeText(String(mt.matterId));
+            setHud(`copied ${String(mt.matterId).slice(0, 8)}… to clipboard`);
+          } catch {
+            setHud(`matter id: ${mt.matterId}`);
+          }
+          return;
+        }
+        if (action.__synthetic === "open-tab") {
+          hideActionPanel();
+          window.open(openUrl, "_blank", "noopener");
+          return;
+        }
+        if (action.__synthetic === "http-navigate") {
+          openMatterActionForm(mt, {
+            ...action,
+            __submitShape: (values) => ({
+              field: "qualities.http.currentUrl",
+              value: /^https?:\/\//i.test(values.url || "") ? values.url : `https://${values.url}`,
+            }),
+          }, address);
+          return;
+        }
+        if (action.__synthetic === "http-reset") {
+          hideActionPanel();
+          setHud("resetting page…");
+          try {
+            await state.client.do(address, "set-matter",
+              { field: "qualities.http.currentUrl", value: null },
+              { matterId: String(mt.matterId) });
+            setHud("page reset to default");
+            await navigate(address);
+          } catch (err) {
+            setHud(`reset failed: ${err.code || ""} ${err.message || ""}`);
+          }
+          return;
+        }
+        if (action.__synthetic === "download") {
+          hideActionPanel();
+          const a = document.createElement("a");
+          a.href = mt.contentUrl;
+          a.download = mt.name || "";
+          document.body.appendChild(a);
+          a.click();
+          a.remove();
+          return;
+        }
+        if (action.__synthetic === "wear-model") {
+          hideActionPanel();
+          if (!state.session?.token) { setHud("sign in first."); openAuthPanel(); return; }
+          setHud("wearing model…");
+          try {
+            await state.client.do(selfBeingStance(), "set-model", { modelMatterId: String(mt.matterId) });
+            setHud(`now wearing "${mt.name || "model"}"`);
+            await navigate(address);
+          } catch (err) {
+            setHud(`set-model failed: ${err.code || ""} ${err.message || ""}`);
+          }
+          return;
+        }
+        openMatterActionForm(mt, action, address);
+      },
+      onClose: () => {},
+    },
+  );
+}
+
+// Form + dispatch for matter-targeted DO ops. Mirrors openActionForm
+// but every dispatch carries opts.matterId so the wire DO handler
+// retargets from the space to this matter. An action may carry
+// __submitShape(values) to reshape the form's values into the op's
+// real args (the http Navigate form asks for a url, the set-matter
+// op wants field/value).
+function openMatterActionForm(mt, action, address, { error = null } = {}) {
+  showActionForm(action, {
+    error,
+    onCancel: () => openMatterActionMenu(mt),
+    onSubmit: async (values) => {
+      showActionForm(action, { busy: true, error: null });
+      try {
+        if (action.verb !== "do") throw new Error(`matter actions are DO ops (got "${action.verb}")`);
+        const args = typeof action.__submitShape === "function" ? action.__submitShape(values) : values;
+        await state.client.do(address, action.action, args, { matterId: String(mt.matterId) });
+        hideActionPanel();
+        setHud(`${action.action} ok`);
+        await navigate(address);
+      } catch (err) {
+        openMatterActionForm(mt, action, address, {
+          error: `${err.code || "error"}: ${err.message || "submit failed"}`,
+        });
+      }
+    },
+  });
+}
+
+// ── Upload model ───────────────────────────────────────────────────
+//
+// The hotbar's "Upload model" tool. Three steps, all existing
+// surfaces: bytes → POST /api/v1/content (the byte carrier, no
+// facts); ref → DO create-matter {type:"model"} into the /skins
+// catalog; then set-model on your own being so the upload IS the
+// new body. The model stays in /skins for anyone to wear.
+let _modelFileInput = null;
+function uploadModelFlow() {
+  return new Promise((resolve) => {
+    if (!_modelFileInput) {
+      _modelFileInput = document.createElement("input");
+      _modelFileInput.type = "file";
+      _modelFileInput.accept = ".glb,.gltf,model/gltf-binary,model/gltf+json";
+      _modelFileInput.style.display = "none";
+      document.body.appendChild(_modelFileInput);
+    }
+    _modelFileInput.onchange = async () => {
+      const file = _modelFileInput.files?.[0];
+      _modelFileInput.value = "";
+      if (!file) return resolve(null);
+      setHud(`uploading ${file.name}…`);
+      try {
+        const form = new FormData();
+        form.append("file", file);
+        const res = await fetch("/api/v1/content", {
+          method: "POST",
+          headers: { Authorization: `Bearer ${state.session.token}` },
+          body: form,
+        });
+        const body = await res.json().catch(() => null);
+        if (!res.ok || !body?.content?.hash) {
+          throw new Error(body?.error || `upload failed (${res.status})`);
+        }
+
+        // Mint the model matter into the /skins catalog (reality root).
+        const reality = state.discovery.reality;
+        const branch = state.descriptor?.address?.branch || "0";
+        const bq = branch === "0" ? "" : `#${branch}`;
+        const skinsAddress = `${reality}${bq}/skins`;
+        const made = await state.client.do(skinsAddress, "create-matter", {
+          type:    "model",
+          name:    file.name.replace(/\.(glb|gltf)$/i, ""),
+          content: body.content,
+        });
+        const modelMatterId = made?.matterId || made?.matter?._id || made?.id;
+        if (!modelMatterId) throw new Error("create-matter returned no matterId");
+
+        // Wear it.
+        setHud("upload stored — setting your body…");
+        await state.client.do(selfBeingStance(), "set-model", { modelMatterId: String(modelMatterId) });
+        setHud(`now wearing "${file.name}" (saved in /skins)`);
+        await navigate(currentPositionAddress());
+        resolve(modelMatterId);
+      } catch (err) {
+        setHud(`upload model failed: ${err.code || ""} ${err.message || err}`);
+        resolve(null);
+      }
+    };
+    _modelFileInput.click();
+  });
+}
+
 // Generic action menu + form. Reads the being's `actions[]` from the
 // descriptor; user picks one, fills the form, submit dispatches the
 // verb. Substrate-driven . the portal doesn't know what cherub is or
@@ -1745,6 +2054,17 @@ async function attemptPlant() {
   const item = state.hotbar?.getSelected();
   if (!item) {
     setHud("hotbar slot is empty. select a clone (1-9).");
+    return;
+  }
+  // Upload-model tool: file picker → bytes to the content store →
+  // create-matter (type model) into /skins → set-model on self.
+  if (item.kind === "tool" && item.name === "upload-model") {
+    if (!state.session?.token) {
+      setHud("sign in first.");
+      openAuthPanel();
+      return;
+    }
+    await uploadModelFlow();
     return;
   }
   if (item.kind !== "clone" && item.kind !== "op") {

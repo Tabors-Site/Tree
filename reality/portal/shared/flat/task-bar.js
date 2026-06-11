@@ -21,6 +21,7 @@ import { renderOpForm } from "../op-form.js";
 import { renderRolesPanel } from "./roles-panel.js";
 import { renderLlmPanel } from "./llm-panel.js";
 import { renderInboxPanel } from "./inbox-panel.js";
+import { renderMatterComposer } from "./matter-composer.js";
 
 // One outside-click listener at a time. The bar re-renders on every SEE;
 // we drop the previous listener before wiring a new one so they can't
@@ -146,6 +147,9 @@ function openAction(action, opByName) {
 
   if (action.special === "edit-space") {
     return renderEditSpace(body, action);
+  }
+  if (action.special === "create-matter") {
+    return renderMatterComposer(body, action, { refreshView });
   }
   if (action.special === "clone") {
     return renderClone(body, action, opByName);
@@ -476,7 +480,11 @@ function placeActions(address, desc) {
   return [
     { label: "+ create child space", op: "create-space", address },
     { label: "edit this space", special: "edit-space", address, values: { name: desc.address?.leafName || "" } },
-    { label: "+ create matter", op: "create-matter", address },
+    // The PLACE flow — drop a file / paste a URL / type text, live
+    // "will become: <type>" preview, one create-matter DO. The
+    // composer panel replaces the generic op form (which still
+    // exists for any op without a special).
+    { label: "+ create matter", special: "create-matter", op: "create-matter", address },
     // be:birth on self. The actor becomes mother of a new child
     // being on this reality. Solo birth — no father; child's identity
     // chain traces only through the actor. The current path routes

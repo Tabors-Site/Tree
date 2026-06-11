@@ -172,6 +172,20 @@ export async function authorizeViaRoles(args) {
     };
   }
 
+  // Cross-reality fallback. A canopy-verified foreign actor has an
+  // identity (the verified beingId on their home reality) but no local
+  // grants here (their being row doesn't exist on this reality). Fall
+  // through to the arrival floor so they can at least reach what every
+  // anonymous visitor can . SUMMON @cherub:mate (cross-world
+  // citizenship via vessel), SUMMON @federation-manager (initiate a
+  // negotiation), arrival-view SEE. Without this fallthrough, any
+  // peer reality's outbound SUMMON to @federation-manager would deny
+  // because the local grants table has no record of the remote
+  // federation-manager being.
+  if (identity?.canopyVerifiedSender || identity?.reality) {
+    return await checkArrivalFloor({ verb, target, action, intent, operation, seeOp, branch });
+  }
+
   return {
     ok: false,
     reason: `no granted role permits ${verb}` +

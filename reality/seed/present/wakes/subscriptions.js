@@ -788,7 +788,7 @@ function _matchesFilter(filter, payload) {
 }
 
 // Dot-path read so filters can reach into nested payload fields
-// (e.g. "content.origin" to match a matter's origin).
+// (e.g. "content.mimeType" to match a matter's mime).
 function _readPath(obj, path) {
   if (!obj || typeof obj !== "object" || !path) return undefined;
   if (!path.includes(".")) return obj[path];
@@ -819,7 +819,6 @@ function _renderTriggerContent(eventName, payload) {
   if (payload?.beingId) out.actorBeingId = String(payload.beingId);
   if (payload?.action) out.action = payload.action;
   if (payload?.matter?._id) out.matterId = String(payload.matter._id);
-  if (payload?.matter?.origin) out.matterOrigin = payload.matter.origin;
   if (payload?.origin) out.origin = payload.origin;
   if (payload?.extName) out.extName = payload.extName;
   if (payload?.fromStatus) out.fromStatus = payload.fromStatus;

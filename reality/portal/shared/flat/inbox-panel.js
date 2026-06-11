@@ -46,7 +46,7 @@ export async function renderInboxPanel(body, action, opByName, { refreshView } =
 
   let result;
   try {
-    result = await flat.client.see("my-inbox");
+    result = await flat.state.client.see("my-inbox");
   } catch (err) {
     header.appendChild(errorRow(`failed to load inbox: ${err?.message || err}`));
     return;
@@ -177,9 +177,29 @@ async function handleRoleRequestApprove(entry, { reality, refresh, btn }) {
     btn.textContent = "missing role/anchor/asker fields";
     return;
   }
-  // Step 1: grant the role on the asker's reel.
+  // Step 1: grant the role on the asker's reel. Resolve their stance:
+  // prefer the askerName recorded in the request; fall back to the
+  // public directory if we only have an id (mirrors the summoner
+  // resolution path).
+  let askerStance = null;
+  if (c.askerName) {
+    askerStance = `${reality}/@${c.askerName}`;
+  } else if (c.askerBeingId) {
+    try {
+      const dir = await flat.state.client.see(`${reality}/.beings/${c.askerBeingId}`);
+      const name = dir?.directoryEntry?.name || dir?.name || dir?.being?.name;
+      if (name) askerStance = `${reality}/@${name}`;
+    } catch (err) {
+      console.warn("[inbox-panel] asker directory SEE failed:", err?.message || err);
+    }
+  }
+  if (!askerStance) {
+    btn.textContent = "asker not addressable";
+    btn.disabled = false;
+    return;
+  }
   try {
-    await flat.doOp(`${reality}/@${c.askerName || c.askerBeingId}`, "grant-role", {
+    await flat.doOp(askerStance, "grant-role", {
       role:          c.role,
       anchorSpaceId: c.anchorSpaceId,
       anchorBeingId: null,
@@ -200,25 +220,16 @@ async function handleRoleRequestApprove(entry, { reality, refresh, btn }) {
 // closes the row.
 async function replyAndRefresh(entry, content, { reality, refresh, btn }) {
   if (btn) btn.disabled = true;
-  // Target the summoner. If we have a name, use the @-stance form.
-  // Otherwise fall back to the inboxSpaceId path (less precise but
-  // still routes to a place the summoner can read).
-  let target = null;
-  if (entry.summonerName) {
-    target = `${reality}/@${entry.summonerName}`;
-  } else if (entry.summoner) {
-    // Future: a @-by-id form. For now, drop the row without a reply
-    // by leaving target null — the substrate can't address an
-    // unnamed being.
-    target = null;
-  }
+  const target = await resolveSummonerStance(entry, reality);
   if (!target) {
-    if (btn) btn.textContent = "no addressable summoner";
-    refresh();
+    if (btn) {
+      btn.textContent = "no addressable summoner";
+      btn.disabled = false;
+    }
     return;
   }
   try {
-    await flat.client.summon(target, {
+    await flat.state.client.summon(target, {
       content,
       inReplyTo: entry.correlation,
     });
@@ -229,6 +240,30 @@ async function replyAndRefresh(entry, content, { reality, refresh, btn }) {
       btn.disabled = false;
     }
   }
+}
+
+// Resolve a stance to address the summoner at, in priority order:
+//   1. summonerName from the inbox row (server-side resolution)
+//   2. public directory SEE on `<reality>/.beings/<id>` (no auth needed)
+//   3. null (un-resolvable; caller surfaces a failure)
+//
+// The public directory path is the substrate's federation-foundation
+// id→name lookup; it works even when the local projection slot hasn't
+// folded yet (the bug pattern that motivated this fallback). See
+// seed/ibp/verbs/see.js#publicDirectoryTargetFromPath.
+async function resolveSummonerStance(entry, reality) {
+  if (entry.summonerName) {
+    return `${reality}/@${entry.summonerName}`;
+  }
+  if (!entry.summoner) return null;
+  try {
+    const dir = await flat.state.client.see(`${reality}/.beings/${entry.summoner}`);
+    const name = dir?.directoryEntry?.name || dir?.name || dir?.being?.name;
+    if (name) return `${reality}/@${name}`;
+  } catch (err) {
+    console.warn("[inbox-panel] summoner directory SEE failed:", err?.message || err);
+  }
+  return null;
 }
 
 // ──────────────────────────────────────────────────────────────────

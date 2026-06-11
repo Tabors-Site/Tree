@@ -91,13 +91,123 @@ async function createMatterHandler(ctx) {
   const rawCreator = identity?.beingId || spec.beingId || null;
   const beingIdValue = rawCreator ? String(rawCreator) : null;
 
+  // Matter type: explicit when given, CLASSIFIED when omitted — "it
+  // just becomes whatever was uploaded." The classifier reads the
+  // content's own signals (a cas ref's mime/filename, a {url}
+  // object, bare text) and adopts the top candidate; the registry's
+  // contentKinds/mime enforcement below still gates the result.
+  const { getMatterType, typeAllowsContentKind, typeAllowsMime } =
+    await import("./types.js");
+  let matterType = typeof spec.type === "string" && spec.type.length
+    ? spec.type
+    : null;
+  const rawContent = spec.content ?? null;
+  if (!matterType) {
+    const { classifyMatter } = await import("./classify.js");
+    const { isCasRef } = await import("./contentStore.js");
+    const input = {};
+    if (typeof rawContent === "string") input.text = rawContent;
+    else if (isCasRef(rawContent)) {
+      input.mimeType = rawContent.mimeType || null;
+      input.fileName = rawContent.name || spec.name || null;
+    } else if (rawContent && typeof rawContent === "object" && typeof rawContent.url === "string") {
+      input.url = rawContent.url;
+    }
+    const top = classifyMatter(input)[0] || null;
+    matterType = top?.type || "generic";
+  }
+  const typeDef = getMatterType(matterType);
+  if (!typeDef) {
+    throw new IbpError(
+      IBP_ERR.INVALID_INPUT,
+      `create-matter: unknown matter type "${matterType}"`,
+    );
+  }
+
+  // Content through the store, shape-driven (no origin tag — the
+  // content's own shape plus the type's contentKinds decide). This
+  // wire path bypasses matters.createMatter, so the same rule
+  // applies here: facts carry CAS refs, never bytes. Strings hash
+  // in; a `{kind:"cas"}` ref (two-step upload via POST
+  // /api/v1/content) is verified to exist; reference objects
+  // (http `{url}`, ibpa `{target}`) ride as-is for types that carry
+  // no owned bytes.
+  let content = rawContent;
+  {
+    const { putContent, hasContent, isCasRef } = await import("./contentStore.js");
+    if (typeof content === "string") {
+      if (!typeAllowsContentKind(typeDef, "text")) {
+        throw new IbpError(IBP_ERR.INVALID_INPUT,
+          `create-matter: matter type "${matterType}" does not carry text content`);
+      }
+      content = await putContent(content, { encoding: "utf8", name: spec.name || null });
+    } else if (isCasRef(content)) {
+      if (!(await hasContent(content.hash))) {
+        throw new IbpError(IBP_ERR.INVALID_INPUT,
+          `create-matter: unknown content hash "${content.hash.slice(0, 12)}..." — upload the bytes first`);
+      }
+      const kind = content.encoding === "utf8" ? "text" : "binary";
+      if (!typeAllowsContentKind(typeDef, kind)) {
+        throw new IbpError(IBP_ERR.INVALID_INPUT,
+          `create-matter: matter type "${matterType}" does not carry ${kind} content`);
+      }
+      if (!typeAllowsMime(typeDef, content.mimeType)) {
+        throw new IbpError(IBP_ERR.INVALID_INPUT,
+          `create-matter: MIME "${content.mimeType}" is not allowed for matter type "${matterType}"`);
+      }
+    } else if (content && typeof content === "object") {
+      // A reference shape — no owned bytes; legal for types declaring
+      // contentKind "none".
+      if (!typeAllowsContentKind(typeDef, "none")) {
+        throw new IbpError(IBP_ERR.INVALID_INPUT,
+          `create-matter: matter type "${matterType}" does not carry reference content`);
+      }
+    } else if (content == null) {
+      if (!typeAllowsContentKind(typeDef, "none")) {
+        throw new IbpError(IBP_ERR.INVALID_INPUT,
+          `create-matter: matter type "${matterType}" requires content`);
+      }
+    } else {
+      throw new IbpError(IBP_ERR.INVALID_INPUT,
+        "create-matter: content must be a string, a cas content ref, a reference object, or null");
+    }
+  }
+
+  // Name: default from the content's own filename so uploads aren't
+  // nameless ("report.pdf" arrives named "report.pdf").
+  const name = (typeof spec.name === "string" && spec.name.length)
+    ? spec.name
+    : (content && typeof content === "object" && typeof content.name === "string" && content.name.length
+        ? content.name
+        : spec.name);
+
+  // Coord at birth: matter can be born at a position. Same clamp
+  // doctrine as set-matter's coord write (throw, never silently
+  // clamp); validated against the destination space's size.
+  let coord = null;
+  if (spec.coord && typeof spec.coord === "object" && !Array.isArray(spec.coord)) {
+    coord = await assertMatterCoordInBounds(
+      { spaceId },
+      spec.coord,
+      summonCtx?.actorAct?.branch || "0",
+    );
+  }
+
   const enrichedSpec = {
     ...spec,
+    name,
     spaceId,
     parentMatterId,
     beingId: beingIdValue,
-    origin: spec.origin || "ibp",
+    type: matterType,
+    content,
   };
+  // Only the VALIDATED coord rides the fact (a malformed spec.coord
+  // must not leak through the spread into the reducer). Stray origin
+  // tags from old callers are dropped — the field is retired.
+  delete enrichedSpec.coord;
+  delete enrichedSpec.origin;
+  if (coord && Object.keys(coord).length > 0) enrichedSpec.coord = coord;
   const actorBeingId = identity?.beingId || null;
   if (!actorBeingId) {
     throw new IbpError(
@@ -256,6 +366,112 @@ async function endMatterHandler({ target, identity, summonCtx }) {
 }
 
 // ─────────────────────────────────────────────────────────────────────
+// purge-content
+// ─────────────────────────────────────────────────────────────────────
+//
+// Physically delete the bytes behind a matter's content hash from the
+// content store. The fact chain is append-only — the facts naming the
+// hash remain, the projection marks the ref purged, and reads return
+// the purged marker. This is the "I accidentally posted that"
+// scalpel; background reclamation is casSweep's retention policy.
+//
+// Dedup makes purge a shared-fate decision: identical bytes are ONE
+// blob, so other matter referencing the same hash goes dark too. The
+// handler refuses when other live referents exist unless force=true —
+// explicit, never silent.
+//
+// Auth: the role-walk gates canDo "purge-content" (advertised on the
+// file/model types); the handler additionally enforces
+// author-or-root-owner, same shape as deleteMatterAndFile.
+
+async function purgeContentHandler({ target, params, identity, summonCtx }) {
+  const matterId = targetIdOf(target);
+  if (!matterId) throw new IbpError(IBP_ERR.INVALID_INPUT, "purge-content: matter target required");
+  if (!identity?.beingId) {
+    throw new IbpError(IBP_ERR.UNAUTHORIZED, "purge-content: identity required");
+  }
+  const branch = summonCtx?.actorAct?.branch || "0";
+
+  const { loadOrFold } = await import("../projections.js");
+  const slot = await loadOrFold("matter", String(matterId), branch);
+  if (!slot) throw new IbpError(IBP_ERR.INVALID_INPUT, "purge-content: matter not found");
+  const matter = { _id: slot.id, ...(slot.state || {}) };
+
+  const { isCasRef } = await import("./contentStore.js");
+  const hash = typeof params?.hash === "string" && params.hash.length
+    ? params.hash
+    : (isCasRef(matter.content) ? matter.content.hash : null);
+  if (!hash) {
+    throw new IbpError(IBP_ERR.INVALID_INPUT, "purge-content: matter has no stored content (pass `hash` for a historical version)");
+  }
+
+  // Owner gate: the matter's author or the tree's root owner.
+  const { resolveRootSpace } = await import("../space/spaces.js");
+  const { getSpaceOwner } = await import("../space/members.js");
+  const rootSpace = matter.spaceId && matter.spaceId !== "deleted"
+    ? await resolveRootSpace(matter.spaceId)
+    : null;
+  const isAuthor = String(matter.beingId) === String(identity.beingId);
+  const isRootOwner = rootSpace
+    ? String(getSpaceOwner(rootSpace) || "") === String(identity.beingId)
+    : false;
+  if (!isAuthor && !isRootOwner) {
+    throw new IbpError(
+      IBP_ERR.FORBIDDEN,
+      "purge-content: only the matter author or the tree owner can purge its content",
+    );
+  }
+
+  // Shared-fate refcount: other live matter (any branch) whose CURRENT
+  // content is this hash. Purging would blind them — refuse without
+  // force.
+  const force = params?.force === true || params?.force === "true";
+  const { default: Projection } = await import("../branch/projection.js");
+  const others = await Projection.find({
+    type: "matter",
+    "state.content.hash": hash,
+    tombstoned: { $ne: true },
+    id: { $ne: String(matterId) },
+  }).select("id branch").lean();
+  if (others.length > 0 && !force) {
+    throw new IbpError(
+      IBP_ERR.RESOURCE_CONFLICT,
+      `purge-content: ${others.length} other matter row(s) reference these same bytes ` +
+      `(content is deduplicated by hash). Pass force=true to purge anyway — ` +
+      `their content goes dark too.`,
+      { referents: others.map((o) => ({ matterId: o.id, branch: o.branch })) },
+    );
+  }
+
+  // Fact first — the chain explains the missing bytes. The physical
+  // delete runs after the moment seals (afterSeal) so a refused seal
+  // never leaves bytes gone without a fact; standalone callers (no
+  // moment) emit-and-commit immediately, then delete.
+  const { emitFact: _emit } = await import("../../past/fact/facts.js");
+  await _emit({
+    verb:    "do",
+    action:  "purge-content",
+    beingId: String(identity.beingId),
+    target:  { kind: "matter", id: String(matterId) },
+    params:  { hash, force, referents: others.length },
+    actId:   summonCtx?.actId || null,
+    branch,
+  }, summonCtx);
+
+  const doDelete = async () => {
+    const { deleteContent } = await import("./contentStore.js");
+    await deleteContent(hash);
+  };
+  if (summonCtx?.afterSeal) {
+    summonCtx.afterSeal.push(doDelete);
+  } else {
+    await doDelete();
+  }
+
+  return { purged: true, matterId: String(matterId), hash, sharedReferents: others.length };
+}
+
+// ─────────────────────────────────────────────────────────────────────
 // Registration
 // ─────────────────────────────────────────────────────────────────────
 
@@ -265,16 +481,19 @@ registerOperation("create-matter", {
   factAction: "create-matter",
   skipAudit: true,
   args: {
-    name: { type: "text", label: "Name", required: false },
-    origin: {
-      type: "select",
-      label: "Origin",
-      enum: ["ibp", "filesystem", "web", "cross-place"],
-      default: "ibp",
-      required: false,
-    },
-    content: { type: "multiline", label: "Content (optional)", required: false },
+    name: { type: "text", label: "Name (defaults to the uploaded filename)", required: false },
+    type: { type: "text", label: "Matter type (omit to classify from the content)", required: false },
+    content: { type: "multiline", label: "Content (text, a cas ref from upload, or a reference object like {url}; optional)", required: false },
+    coord: { type: "json", label: "Position {x,y,z?} inside the space (optional)", required: false },
   },
+  // The role-walk sees `create-matter:<type>` so roles can scope
+  // which matter types they may bring into the world — bare
+  // `create-matter` entries keep matching (namespace semantics, same
+  // shape as grant-role:<role>).
+  authAction: ({ params }) =>
+    typeof params?.type === "string" && params.type.length
+      ? `create-matter:${params.type}`
+      : "create-matter",
   handler: createMatterHandler,
 });
 
@@ -299,4 +518,18 @@ registerOperation("end-matter", {
   factAction: "end-matter",
   args: {},
   handler: endMatterHandler,
+});
+
+registerOperation("purge-content", {
+  targets: ["matter"],
+  ownerExtension: "seed",
+  factAction: "purge-content",
+  // The handler stamps the purge fact itself (fact-first, delete on
+  // afterSeal); a second auto-fact would double-record the act.
+  skipAudit: true,
+  args: {
+    hash:  { type: "text", label: "Content hash (defaults to the matter's current content)", required: false },
+    force: { type: "bool", label: "Purge even when other matter shares these bytes", default: false, required: false },
+  },
+  handler: purgeContentHandler,
 });

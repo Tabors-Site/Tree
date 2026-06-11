@@ -1616,6 +1616,11 @@ export async function uninstallExtension(name) {
       unregisterClonesFromExtension(name);
     } catch {}
     try {
+      const { unregisterMatterTypesFromExtension } =
+        await import("../seed/materials/matter/types.js");
+      unregisterMatterTypesFromExtension(name);
+    } catch {}
+    try {
       const { clearToolOwnersForExtension } =
         await import("../seed/materials/space/extensionScope.js");
       clearToolOwnersForExtension(name);

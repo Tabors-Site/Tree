@@ -87,12 +87,25 @@ export async function getExtensionManifest(extName) {
 }
 
 /**
- * Resolve a model id ("ext:name") to its URL. Returns null when the
- * extension isn't installed, has no manifest, or doesn't declare the
- * named asset.
+ * Resolve a model reference to its URL. Three shapes:
+ *
+ *   "ext:name"            — extension asset; resolved via the
+ *                           extension's /assets manifest (legacy).
+ *   "/api/v1/content/..." — direct URL (any "/..." or "http..."
+ *                           string passes through).
+ *   { url, hash, ... }    — a model MATTER block (set-model writes
+ *                           these; bytes live in the content store,
+ *                           served immutable by hash).
+ *
+ * Returns null when unresolvable.
  */
-export async function resolveModelUrl(modelId) {
-  const parsed = parseAssetId(modelId);
+export async function resolveModelUrl(modelRef) {
+  if (modelRef && typeof modelRef === "object") {
+    return typeof modelRef.url === "string" && modelRef.url ? modelRef.url : null;
+  }
+  if (typeof modelRef !== "string" || !modelRef) return null;
+  if (modelRef.startsWith("/") || modelRef.startsWith("http")) return modelRef;
+  const parsed = parseAssetId(modelRef);
   if (!parsed) return null;
   const manifest = await getExtensionManifest(parsed.ext);
   const filename = manifest?.models?.[parsed.name];
@@ -224,8 +237,9 @@ export async function preloadModels(modelIds, { timeoutMs = 3000 } = {}) {
 
   const skipped = sized.filter((s) => s.skip && s.size);
   for (const s of skipped) {
+    const label = typeof s.id === "string" ? s.id : (s.url || s.id?.url || "model");
     console.warn(
-      `[assetResolver] preload skipping ${s.id} (${(s.size / 1024 / 1024).toFixed(1)} MB > 20 MB threshold); will lazy-load on demand`,
+      `[assetResolver] preload skipping ${label} (${(s.size / 1024 / 1024).toFixed(1)} MB > 20 MB threshold); will lazy-load on demand`,
     );
   }
 
@@ -319,18 +333,28 @@ export function collectSoundIds(desc) {
 }
 
 /**
- * Walk a descriptor and collect every model id declared on a render
- * block. Used by the first-load preload pass.
+ * Walk a descriptor and collect every model reference declared on a
+ * render block or on the resolved `model` field (beings / children /
+ * matter entries carry it server-resolved). String refs dedupe by
+ * value; object refs (model matter blocks) dedupe by url. Used by
+ * the first-load preload pass; preloadModels resolves each through
+ * resolveModelUrl, so both shapes flow.
  */
 export function collectModelIds(desc) {
   if (!desc || typeof desc !== "object") return [];
-  const out = new Set();
+  const out = new Map(); // key → ref
+  const add = (ref) => {
+    if (typeof ref === "string" && ref) out.set(ref, ref);
+    else if (ref && typeof ref === "object" && typeof ref.url === "string") out.set(ref.url, ref);
+  };
   const walk = (entry) => {
-    const id = entry?.qualities?.render?.model;
-    if (typeof id === "string" && id) out.add(id);
+    add(entry?.qualities?.render?.model);
+    add(entry?.model);
   };
   (desc.beings || []).forEach(walk);
+  (desc.residents || []).forEach(walk);
   (desc.matter || []).forEach(walk);
+  (desc.matters || []).forEach(walk);
   (desc.children || []).forEach(walk);
-  return [...out];
+  return [...out.values()];
 }

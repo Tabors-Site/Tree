@@ -72,13 +72,26 @@ function validateRenderBlock(input) {
   const block = {};
 
   if (input.model !== undefined) {
-    if (typeof input.model !== "string" || !input.model) {
+    // Two model shapes:
+    //   string — legacy extension-asset reference
+    //            ("<ext>:<asset-name>" → /assets/<ext>/<file>)
+    //   object — a model MATTER block { matterId, hash, url, name }
+    //            (the canonical shape set-model writes; bytes live in
+    //            the content store). Callers writing the object
+    //            directly need at least one resolvable pointer.
+    if (typeof input.model === "string" && input.model) {
+      block.model = input.model;
+    } else if (
+      input.model && typeof input.model === "object" && !Array.isArray(input.model) &&
+      (typeof input.model.matterId === "string" || typeof input.model.url === "string")
+    ) {
+      block.model = input.model;
+    } else {
       throw new IbpError(
         IBP_ERR.INVALID_INPUT,
-        "set-render: model must be a non-empty string",
+        "set-render: model must be a non-empty string (asset ref) or an object with matterId/url (model matter; prefer the set-model op)",
       );
     }
-    block.model = input.model;
   }
 
   if (input.scale !== undefined) {

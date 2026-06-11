@@ -36,7 +36,9 @@ export const globalRole = Object.freeze({
   triggerOn: ["message"],
   // Baseline perceptions. Add SEE op names as the operator extends
   // the surface (e.g. `["place", "library", "directory"]`).
-  canSee: ["place"],
+  // classify-matter is the pure "what type would this become?" read
+  // every being needs before placing matter.
+  canSee: ["place", "classify-matter"],
   // Baseline mutations. Move yourself, update your own coord, walk
   // to another space, petition for additional roles. The petition
   // ops (ask-role / take-role) MUST live here because the role-walk
@@ -50,6 +52,13 @@ export const globalRole = Object.freeze({
     { action: "set-being:position",  description: "walk to another space" },
     { action: "ask-role",            description: "request acquisition of a role from its host" },
     { action: "take-role",           description: "walk in and take a role with acquisition.grabbed=true" },
+    // The skins catalog (/skins at the reality root) is everyone's:
+    // upload a model there, wear any model from it. set-model's own
+    // handler enforces self/author/owner per target, so the floor
+    // grant is safe — you still can't set models on things that
+    // aren't yours.
+    { action: "create-matter:model", description: "upload a 3D model into the /skins catalog" },
+    { action: "set-model",           description: "wear a model from /skins (or set one on things you own)" },
   ],
   // Anyone can address the gate.
   canSummon: [

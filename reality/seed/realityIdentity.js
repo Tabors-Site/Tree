@@ -161,22 +161,29 @@ export async function verifyCanopyToken(token, remoteRealityPublicKey) {
 
 /**
  * Sign arbitrary data with this reality's private key.
+ *
+ * Ed25519 uses the one-shot crypto.sign() with algorithm=null, not
+ * the streaming createSign API. Node 24+ throws "algorithm argument
+ * must be of type string" when createSign() is called with undefined,
+ * and ed25519 has no algorithm string to pass anyway — the curve IS
+ * the algorithm. This matches the supported Node API for the ed25519
+ * keys generated in this same file.
  */
 export function signData(data) {
   const identity = getRealityIdentity();
-  const sign = crypto.createSign(undefined);
-  sign.update(typeof data === "string" ? data : JSON.stringify(data));
-  return sign.sign(identity.privateKey, "base64");
+  const buf = Buffer.from(typeof data === "string" ? data : JSON.stringify(data), "utf8");
+  return crypto.sign(null, buf, identity.privateKey).toString("base64");
 }
 
 /**
- * Verify signed data from a remote place.
+ * Verify signed data from a remote place. Same ed25519 one-shot path
+ * as signData.
  */
 export function verifySignedData(data, signature, remoteRealityPublicKey) {
   try {
-    const verify = crypto.createVerify(undefined);
-    verify.update(typeof data === "string" ? data : JSON.stringify(data));
-    return verify.verify(remoteRealityPublicKey, signature, "base64");
+    const buf = Buffer.from(typeof data === "string" ? data : JSON.stringify(data), "utf8");
+    const sigBuf = Buffer.from(signature, "base64");
+    return crypto.verify(null, buf, remoteRealityPublicKey, sigBuf);
   } catch {
     return false;
   }

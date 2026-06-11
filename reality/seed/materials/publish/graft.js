@@ -229,6 +229,15 @@ export async function graftClone(bundle, targetParentSpaceId, opts = {}) {
       return paramTable.get(name);
     }
     if (Array.isArray(value)) return value.map(substituteParams);
+    // Built-in object types that don't expose their state through
+    // Object.entries (Date, RegExp, BSON wrappers). Same defensive
+    // guards as redactSecrets — without these, a Date would flatten
+    // to `{}` and corrupt the bundle silently. Bundles come from JSON
+    // in practice so these are unlikely paths, but the guard is cheap
+    // and aligns the recursive-walker discipline across the codebase.
+    if (value instanceof Date) return value;
+    if (value instanceof RegExp) return value;
+    if (typeof value._bsontype === "string" && typeof value.toJSON === "function") return value;
     // Plain objects (including Ref shapes) — recurse into values.
     // Ref objects (`{__ref, id}`) have `id: string` not `id: "$name"`,
     // so the Ref id passes through this walker untouched and remapRefs
@@ -371,7 +380,7 @@ export async function graftClone(bundle, targetParentSpaceId, opts = {}) {
     const newId = remapTable.get(m.sourceId);
     const spec = {
       name:           remapInBundleField(m.name),
-      origin:         remapInBundleField(m.origin || "ibp"),
+      type:           m.type || "generic",
       content:        remapInBundleField(m.content),
       spaceId:        remapInBundleField(m.spaceId),
       beingId:        remapInBundleField(m.beingId),

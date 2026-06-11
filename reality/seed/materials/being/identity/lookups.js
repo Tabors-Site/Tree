@@ -62,6 +62,7 @@ const SEED_SYSTEM_BEING_NAMES = [
   "llm-assigner",
   "reality-manager",
   "branch-manager",
+  "federation-manager",
 ];
 
 /**

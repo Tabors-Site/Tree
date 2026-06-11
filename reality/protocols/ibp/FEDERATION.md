@@ -246,6 +246,156 @@ Resolved: option (c) from the old plan — each reality owns its branch namespac
 
 This drops out for free because the cross-world envelope carries the target address verbatim (including its `#branch`), and `actorBranch` is sent as a separate field — they're independent fields on the wire, independently routed.
 
+## Subtree exchange: push and pull
+
+Clone and graft are the substrate's data primitives for subtree transport:
+
+- `cloneSubtree(spaceId, opts)` → bundle (chain + extensionData + manifest)
+- `graftClone(bundle, targetParentSpaceId, opts)` → grafts the bundle, with manifest gate (refuse on missing extensions, warn on missing roles)
+
+Push and pull are the **social verbs** layered on top of these. They are negotiations between sovereign realities about who initiated a transfer and whether the receiver consented. The actual data movement is still clone → transport → graft; push and pull only frame the conversation around that movement.
+
+The whole protocol rides on SUMMON. There is no new envelope shape, no new transport, no new auth concept. A push is `summon(<peer>/@federation-manager, {intent:"offer-graft", ...})`; a pull is `summon(<peer>/@federation-manager, {intent:"request-subtree", ...})`. The substrate's existing cross-world dispatch (canopy + `runVerbAsForeignActor`) carries them like any other SUMMON.
+
+### The role
+
+`@federation-manager` is a scripted-cognition seed delegate at the reality root. Five facts about it:
+
+- **Operator-facing DO ops**: `push-subtree`, `pull-subtree`, `accept-offer`, `reject-offer`, `accept-request`, `reject-request`. The operator drives all outbound negotiation by addressing `@federation-manager` with one of these.
+- **Peer-facing summon classifier**: incoming SUMMONs from peer federation-managers carry a `message.intent` field; `role.summon()` routes by intent name to the matching handler.
+- **Negotiation state in qualities**: `qualities.federation.{pendingIncomingOffers, pendingIncomingRequests, pendingOutbound, completed}` records every step. Each negotiation has a UUID; reviewing pending negotiations is just a SEE on the role's own qualities.
+- **Cached bundles**: outbound pushes cache the cloned bundle in `qualities.federation.bundleCache[id]` until the peer's `accept-graft` arrives. v1 inlines bundles in qualities; large bundles will move to matter-keyed cache as a follow-up.
+- **Operator policy via roleFlow**: auto-accept particular peers, throttle pulls, route incoming offers to specific subtrees. The role's roleFlow on the federation-manager being is the policy surface — same authoring shape as every other being's behavior. No federation-specific policy DSL.
+
+### The six intents
+
+| Intent | Direction | Payload | Response |
+|---|---|---|---|
+| `offer-graft` | sender → peer | `{negotiationId, manifest, label?, sourceSubtreePath?}` | `{kind:"pending-review", negotiationId}` (operator decides) |
+| `accept-graft` | peer → sender | `{negotiationId}` | `{kind:"acknowledged"}`; sender then sends `deliver-bundle` |
+| `reject-graft` | peer → sender | `{negotiationId, reason?}` | `{kind:"acknowledged"}` (sender seals negotiation) |
+| `deliver-bundle` | sender → peer | `{negotiationId, bundle}` | `{kind:"graft-result", success, summary, error?}` |
+| `request-subtree` | puller → offerer | `{negotiationId, subtreePath, label?}` | `{kind:"pending-review", negotiationId}` (operator decides) |
+| `graft-result` | peer → sender | `{negotiationId, success, summary?, error?}` | `{kind:"acknowledged"}` (terminal) |
+
+### Push flow (worked example)
+
+Operator on `tabors.site` wants to offer `/lab` to `bing.com`:
+
+```
+1. Operator: SUMMON localhost/@federation-manager
+            { do: push-subtree, args: { peer: "bing.com", subtreePath: "/lab" } }
+
+2. push-subtree handler:
+   a. cloneSubtree("/lab", { branch: "0" }) → bundle (with manifest)
+   b. uuidv4() → negotiationId
+   c. cache bundle in qualities.federation.bundleCache[id]
+   d. crossRealityDispatch({ verb:"summon",
+                              address:"bing.com/@federation-manager",
+                              payload: { message: { intent:"offer-graft",
+                                                    negotiationId,
+                                                    manifest,
+                                                    label, ... } } })
+   e. write qualities.federation.pendingOutbound[id] = { ..., lastStep:"offer-sent" }
+
+3. (canopy forwards to bing.com)
+
+4. bing.com's @federation-manager.summon() reads intent="offer-graft":
+   a. writes qualities.federation.pendingIncomingOffers[id] = { sender, manifest, ... }
+   b. returns { kind:"pending-review", negotiationId }
+
+5. (response flows back; tabors.site logs it on the actor's Act inner face)
+
+6. bing.com's operator reviews + decides. Say accept:
+   SUMMON localhost/@federation-manager
+          { do: accept-offer, args: { negotiationId } }
+
+7. accept-offer handler:
+   a. read qualities.federation.pendingIncomingOffers[id] (manifest, sender)
+   b. crossRealityDispatch({ verb:"summon",
+                              address:"tabors.site/@federation-manager",
+                              payload: { message: { intent:"accept-graft",
+                                                    negotiationId } } })
+
+8. tabors.site's @federation-manager.summon() reads intent="accept-graft":
+   a. reads bundleCache[id] + pendingOutbound[id]
+   b. crossRealityDispatch intent="deliver-bundle", payload={ negotiationId, bundle }
+      to bing.com/@federation-manager (one-way; the SUMMON return path
+      only carries the receiver's descriptor as inner face, not the
+      result value, so graft outcome flows back via a separate SUMMON)
+   c. writes pendingOutbound[id].lastStep = "delivered"
+   d. clears bundleCache[id]
+   e. returns { kind:"acknowledged" }
+
+9. bing.com's @federation-manager.summon() reads intent="deliver-bundle":
+   a. graftClone(bundle, placeRoot) — manifest gate handles missing
+      extensions
+   b. seals pendingIncomingOffers[id] into completed[id]
+   c. crossRealityDispatch intent="graft-result", payload={ success,
+      summary, error } back at tabors.site
+   d. returns { kind:"acknowledged" }
+
+10. tabors.site's @federation-manager.summon() reads intent="graft-result":
+    a. seals pendingOutbound[id] into completed[id] with the outcome
+    b. returns { kind:"acknowledged" } (terminal)
+```
+
+The two cross-reality stages (accept-graft to deliver-bundle to graft-result) are independent one-way SUMMONs correlated by negotiationId. No sender awaits a value the wire can't carry; no handler holds its incoming SUMMON open across a foreign round trip.
+
+### Pull flow (mirror)
+
+A pull is a request that, if accepted, triggers a push back at the requester:
+
+```
+1. tabors.site operator: SUMMON @federation-manager
+   { do: pull-subtree, args: { peer: "bing.com", subtreePath: "/library" } }
+
+2. tabors.site sends intent="request-subtree" to bing.com.
+
+3. bing.com's @federation-manager records pendingIncomingRequests[id].
+
+4. bing.com operator reviews + accepts:
+   SUMMON @federation-manager { do: accept-request, args: { negotiationId } }
+
+5. accept-request handler:
+   a. cloneSubtree(request.subtreePath) → bundle
+   b. crossRealityDispatch intent="offer-graft" to tabors.site
+   c. (tabors.site is now on the offer-graft path of step 4 onward in the push flow)
+```
+
+Pull collapses into push at step 5. The same code on the receiving side runs whether the push was operator-initiated on the sender or pull-driven by the requester. One protocol, two operator-experience surfaces.
+
+### Authority asymmetry
+
+Push and pull have different security shapes:
+
+- **Push**: receiver is in control. They see the manifest before committing (they choose whether to send `accept-graft`). Safest direction.
+- **Pull**: offerer is being asked to leak subtree state. Needs harder receiver-side auth — only specific roles should be able to fulfill pulls. Default policy: no pulls without explicit operator approval (v1 default routes every incoming `request-subtree` to `pendingIncomingRequests` for operator review; no auto-fulfillment).
+
+The role-walk on the federation-manager handles both directions uniformly: the operator's `canDo` on the federation-manager role licenses `push-subtree`, `pull-subtree`, `accept-offer`, etc.; an operator who shouldn't be able to push or pull just doesn't get those canDo entries. The operator-policy surface is the role's roleFlow.
+
+### What you get for free because it's all SUMMONs
+
+- **Audit trail**. Every push/pull negotiation step is a Fact on each side's reel (the outbound SUMMON's actor Act lives on the sender's reality; the receiving handler's qualities write lives on the receiver's). "I asked bing.com for /library on T; they declined" is forensically permanent on both sides, viewable via the normal reel / acts surfaces.
+- **Cross-world identity verification**. A federation-manager doing a cross-reality SUMMON identifies itself with its home-reality tuple, vouched by canopy. No new identity story.
+- **Replay determinism**. Federation history reconstructs from the fact chain alone. Replay the chain → you see every negotiation in order, with the same outcomes (assuming external state like peer availability is the same).
+- **Mediation by named roles**. An operator can author a federation-policy role and grant it to specific beings, giving fine-grained control over who can push/pull what. Expressed in normal roleFlow, no special vocabulary.
+
+### What this layer is NOT
+
+- **NOT a sync protocol**. Push and pull are one-shot. "Mirror my /lab subtree continuously" is a different shape — ongoing fact-stream replication. The negotiation primitive for it (`request-subscription`, `accept-subscription`, `cancel-subscription`) would map to SUMMON the same way, but the implementation is the next layer up.
+- **NOT a discovery protocol**. The operator knows what peer they want to push to or pull from. Discovery of "what subtrees does this peer offer?" is, again, the next layer (a SEE op or a manifest-listing SUMMON intent on @federation-manager).
+- **NOT inventing new substrate**. Every piece — clone, graft, SUMMON, role, canopy — already exists. Federation is a deliberate composition of substrate primitives, expressed entirely in seed code (one role + handlers + ops + delegate row). The substrate doesn't grow to support it; the role registry does.
+
+### Files
+
+- `seed/present/roles/federation-manager/role.js` — role spec (scripted cognition, summon classifier)
+- `seed/present/roles/federation-manager/handlers.js` — six intent handlers
+- `seed/present/roles/federation-manager/ops.js` — six operator-facing DO ops
+- `seed/materials/being/seedDelegates.js` — @federation-manager delegate row
+- `seed/materials/being/identity/lookups.js` — federation-manager listed as a seed delegate name
+- `genesis.js` — registerRole + registerFederationManagerOps wiring
+
 ## What's NOT built / remaining work
 
 ### 1. The mate / vessel implementation

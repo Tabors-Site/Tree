@@ -16,7 +16,7 @@
 // this; until then the projection's `position` matches the matter's
 // `spaceId` field on creation.
 
-import { applySetQualities, applySetField, applyCreateMatter, applyMove } from "../reducerHelpers.js";
+import { applySetQualities, applySetField, applyCreateMatter, applyMove, applyPurgeContent } from "../reducerHelpers.js";
 
 /**
  * Empty initial state. Today: empty — the fold derives qualities +
@@ -51,6 +51,10 @@ export function reduce(state, fact) {
   // do:move — picks up a matter and puts it in a new space.
   // Updates both spaceId and position; one fact, one intent recorded.
   next = applyMove(next, fact);
+
+  // do:purge-content — the bytes behind the current content hash were
+  // physically removed from the content store; mark the ref purged.
+  next = applyPurgeContent(next, fact);
 
   // Position change.
   const explicit = fact?.params?.toPosition ?? fact?.params?.spaceId;

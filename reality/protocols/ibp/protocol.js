@@ -59,7 +59,7 @@ export async function dispatchIbp(carrier, msg, ack) {
   // 1. Parse + validate the envelope against the per-verb address contract.
   let env;
   try {
-    env = parseUnifiedEnvelope(msg);
+    env = await parseUnifiedEnvelope(msg);
   } catch (err) {
     if (isIbpError(err)) {
       return ackError(ack, id, err.code, err.message, err.detail);
@@ -74,7 +74,7 @@ export async function dispatchIbp(carrier, msg, ack) {
   //    attempt, forwards via canopy with the actor's identity tuple,
   //    applies the peer's response back to the Act (status transition +
   //    inner face attachment). See seed/CROSS-WORLD.md.
-  if (!carrier?.canopyVerifiedSender) {
+  if (!carrier?.canopyVerifiedSender && env.addressKind !== "see-op") {
     const foreign = getForeignTargetDomain(env.address);
     if (foreign) {
       // Caller's home identity. beingId from the carrier; branch from

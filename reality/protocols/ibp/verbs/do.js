@@ -203,12 +203,23 @@ export async function handleDo(socket, env, ack) {
       target = resolved;
     }
 
+    // Matter targeting. Addresses name positions and beings — matter
+    // has no address grammar of its own, so a matter-targeted DO
+    // (set-matter, set-model, purge-content, end-matter, typed ext
+    // ops) rides the containing space's address with the matter id on
+    // the reserved `matterId` payload key. The auth space still
+    // resolves from the matter's position downstream
+    // (resolveAuthSpaceId), so the role-walk gates at the right place.
+    if (typeof payload.matterId === "string" && payload.matterId.length > 0) {
+      target = { kind: "matter", id: payload.matterId };
+    }
+
     // Resolve operation args. Canonical: payload.args. Fallback: every
     // payload field except reserved keys.
     const args = payload.args !== undefined
       ? payload.args
       : (() => {
-          const { action: _a, identity: _i, correlation: _c, ...rest } = payload;
+          const { action: _a, identity: _i, correlation: _c, matterId: _m, ...rest } = payload;
           return rest;
         })();
 
