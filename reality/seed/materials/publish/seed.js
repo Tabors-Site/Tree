@@ -145,6 +145,48 @@ export async function captureSeed(opts = {}) {
     log.warn("Seed", `extension-collection sweep failed: ${err.message}. Core chain still captured.`);
   }
 
+  // ── 5b. CAS blobs — the genome includes the BYTES ──
+  // The chain holds facts ABOUT content; the bytes live in the
+  // content store. A seed that travels to another machine must carry
+  // them or the planted reality's matter resolves to nothing. Every
+  // cas hash referenced by any fact travels (subject to caps, with
+  // an honest omission ledger — no silent truncation). Plant puts
+  // each blob and verifies its recomputed hash before the chain
+  // inserts.
+  const casBlobs = {};
+  const casManifest = { included: [], omitted: [] };
+  {
+    const maxBlobBytes  = Number(opts.maxCasBlobBytes)  > 0 ? Number(opts.maxCasBlobBytes)  : 64 * 1024 * 1024;
+    const maxTotalBytes = Number(opts.maxCasTotalBytes) > 0 ? Number(opts.maxCasTotalBytes) : 512 * 1024 * 1024;
+    const hashes = new Set();
+    const HASH_RE = /^[0-9a-f]{64}$/;
+    for (const f of facts) {
+      const c = f?.params?.content;
+      if (c?.kind === "cas" && HASH_RE.test(c.hash || "")) hashes.add(c.hash);
+      const v = f?.params?.value;
+      if (v?.kind === "cas" && HASH_RE.test(v.hash || "")) hashes.add(v.hash);
+    }
+    if (hashes.size > 0) {
+      const { getContent } = await import("../matter/contentStore.js");
+      let total = 0;
+      for (const hash of hashes) {
+        try {
+          const buf = await getContent(hash);
+          if (!buf) { casManifest.omitted.push({ hash, reason: "bytes not in local store (purged/reclaimed)" }); continue; }
+          if (buf.length > maxBlobBytes) { casManifest.omitted.push({ hash, size: buf.length, reason: `exceeds per-blob cap ${maxBlobBytes}` }); continue; }
+          if (total + buf.length > maxTotalBytes) { casManifest.omitted.push({ hash, size: buf.length, reason: `seed cas budget ${maxTotalBytes} exhausted` }); continue; }
+          casBlobs[hash] = buf.toString("base64");
+          casManifest.included.push({ hash, size: buf.length });
+          total += buf.length;
+        } catch (err) {
+          casManifest.omitted.push({ hash, reason: err?.message || "read failed" });
+        }
+      }
+      log.info("Seed", `captured ${casManifest.included.length}/${hashes.size} content blob(s)` +
+        (casManifest.omitted.length ? ` — ${casManifest.omitted.length} omitted (see casManifest)` : ""));
+    }
+  }
+
   // ── 6. Record the loaded extensions ──
   // The reality's behavior depends on which extensions are awake
   // (their roles, ops, schedules, collections). The receiving
@@ -205,6 +247,8 @@ export async function captureSeed(opts = {}) {
     branches,
     reelHeads,
     extensionData,
+    casBlobs,
+    casManifest,
   };
 
   const elapsedMs = Date.now() - startedAt;
@@ -307,6 +351,34 @@ export async function plantSeed(bundle) {
 
   log.info("Seed", "planting reality genome...");
   const startedAt = Date.now();
+
+  // ── 1b. CAS blobs land FIRST ──
+  // Bytes before facts: by the time the chain inserts, every
+  // travelling content ref resolves locally. Each blob's recomputed
+  // hash MUST equal its claimed hash — a lying blob refuses the
+  // plant cold (nothing inserted yet). Omitted blobs (see
+  // casManifest) warn: their matter resolves to the purged marker
+  // until the bytes arrive another way.
+  if (bundle.casBlobs && typeof bundle.casBlobs === "object" && Object.keys(bundle.casBlobs).length > 0) {
+    const { putContent } = await import("../matter/contentStore.js");
+    let stored = 0;
+    for (const [hash, b64] of Object.entries(bundle.casBlobs)) {
+      const buf = Buffer.from(String(b64), "base64");
+      const ref = await putContent(buf, { mimeType: "application/octet-stream" });
+      if (ref.hash !== hash) {
+        throw new Error(
+          `plantSeed: CAS BLOB INTEGRITY FAILED — bundle claims ${String(hash).slice(0, 16)}… but the ` +
+          `bytes hash to ${ref.hash.slice(0, 16)}…. Refusing before any chain inserts.`,
+        );
+      }
+      stored++;
+    }
+    log.info("Seed", `planted ${stored} content blob(s), hash-verified`);
+  }
+  if (Array.isArray(bundle.casManifest?.omitted) && bundle.casManifest.omitted.length > 0) {
+    log.warn("Seed", `seed omitted ${bundle.casManifest.omitted.length} content blob(s) at capture — ` +
+      `their refs plant but the bytes are not here.`);
+  }
 
   // ── 2. Branches first ──
   // Plant order matters for foreign-key-like references inside the
@@ -414,9 +486,41 @@ export async function plantSeed(bundle) {
       if (rootVerified) {
         log.info("Seed", `chain root VERIFIED: ${actualRoot.slice(0, 16)}… — this reality is the captured reality`);
       } else {
-        log.warn("Seed", `chain root MISMATCH: expected ${expectedRoot.slice(0, 16)}…, got ${actualRoot.slice(0, 16)}… — the planted chain differs from the capture`);
+        // ── UNPLANT ──
+        // The planted chain does not reproduce the captured root: the
+        // bundle was altered or determinism broke. Plant runs against
+        // an EMPTY substrate (gated above), so "back to before the
+        // attempt" is emptiness — remove everything this plant
+        // inserted, loudly, and refuse. (This is the plant-time
+        // sibling of graft's compensating rollback: graft unstamps
+        // into a LIVING chain with end-X facts; plant restores the
+        // void it started from. No pre-existing chain is touched —
+        // there wasn't one.)
+        log.warn("Seed", `chain root MISMATCH: expected ${expectedRoot.slice(0, 16)}…, got ${actualRoot.slice(0, 16)}… — UNPLANTING`);
+        try {
+          const db = mongoose.connection.db;
+          const toClear = ["facts", "acts", "branches", "reelHeads"];
+          for (const name of Object.keys(bundle.extensionData || {})) {
+            if (!name.startsWith("system.")) toClear.push(name);
+          }
+          for (const name of toClear) {
+            try { await db.collection(name).deleteMany({}); } catch { /* collection may not exist */ }
+          }
+          const { invalidateBranchCache } = await import("../branch/branches.js");
+          invalidateBranchCache(null);
+          log.warn("Seed", `unplanted ${toClear.length} collection(s); the substrate is empty again. ` +
+            `Planted content blobs stay in the store under their true hashes (the retention sweeper owns orphans).`);
+        } catch (unplantErr) {
+          log.error("Seed", `UNPLANT FAILED: ${unplantErr.message} — the substrate may hold a partial, ` +
+            `unverified chain. Wipe the DB before booting.`);
+        }
+        throw new Error(
+          `plantSeed: chain root mismatch (expected ${expectedRoot.slice(0, 16)}…, got ${actualRoot.slice(0, 16)}…). ` +
+          `The plant was rolled back; the substrate is empty.`,
+        );
       }
     } catch (err) {
+      if (/chain root mismatch/.test(err?.message || "")) throw err;
       log.warn("Seed", `chain root verification failed to run: ${err.message}`);
     }
   }

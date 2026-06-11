@@ -336,20 +336,64 @@ export async function cloneSubtree(scopeSpaceId, opts = {}) {
       qualities:      redactSecrets(state.qualities || {}),
     });
   }
-  if (casRefCount > 0) {
-    // Content bytes live in the content store, not the bundle. Until
-    // the casBlobs manifest lands (bundle as CAS object: hash
-    // manifest + inline blobs + peer fetch), grafting this bundle on
-    // another substrate leaves these refs dangling — visible, not
-    // silent.
-    const { default: log } = await import("../../seedReality/log.js");
-    log.warn(
-      "Clone",
-      `bundle carries ${casRefCount} content-store ref(s); the BYTES do not ` +
-      `travel yet. Grafting on this substrate works (the store is shared); ` +
-      `grafting elsewhere leaves their content unresolvable until casBlobs ` +
-      `bundling lands.`,
-    );
+  // ── 7b. CAS blobs — the BYTES travel with the bundle ──
+  // Every cas ref in captured matter gets its bytes inlined (base64)
+  // under `casBlobs`, capped so one mp4 doesn't make every clone
+  // gigantic. `casManifest` is the honest ledger: which hashes are
+  // included, which were omitted (and why) — no silent truncation.
+  // The graft side puts each blob through the content store and
+  // verifies the recomputed hash equals the claimed hash BEFORE any
+  // fact stamps; a lying blob refuses the whole graft cold.
+  {
+    const maxBlobBytes  = Number(opts.maxCasBlobBytes)  > 0 ? Number(opts.maxCasBlobBytes)  : 8 * 1024 * 1024;
+    const maxTotalBytes = Number(opts.maxCasTotalBytes) > 0 ? Number(opts.maxCasTotalBytes) : 32 * 1024 * 1024;
+    const wanted = new Map(); // hash → size
+    for (const m of bundle.content.matter) {
+      const c = m.content;
+      if (c && typeof c === "object" && c.kind === "cas" && c.hash && !c.purged) {
+        wanted.set(c.hash, typeof c.size === "number" ? c.size : null);
+      }
+    }
+    bundle.casBlobs = {};
+    bundle.casManifest = { included: [], omitted: [] };
+    if (wanted.size > 0) {
+      const { getContent } = await import("../matter/contentStore.js");
+      let total = 0;
+      for (const [hash, size] of wanted) {
+        try {
+          const buf = await getContent(hash);
+          if (!buf) {
+            bundle.casManifest.omitted.push({ hash, reason: "bytes not in local store" });
+            continue;
+          }
+          if (buf.length > maxBlobBytes) {
+            bundle.casManifest.omitted.push({ hash, size: buf.length, reason: `exceeds per-blob cap ${maxBlobBytes}` });
+            continue;
+          }
+          if (total + buf.length > maxTotalBytes) {
+            bundle.casManifest.omitted.push({ hash, size: buf.length, reason: `bundle cas budget ${maxTotalBytes} exhausted` });
+            continue;
+          }
+          bundle.casBlobs[hash] = buf.toString("base64");
+          bundle.casManifest.included.push({ hash, size: buf.length });
+          total += buf.length;
+        } catch (err) {
+          bundle.casManifest.omitted.push({ hash, reason: err?.message || "read failed" });
+        }
+      }
+      const { default: log } = await import("../../seedReality/log.js");
+      if (bundle.casManifest.omitted.length > 0) {
+        log.warn(
+          "Clone",
+          `casBlobs: ${bundle.casManifest.included.length}/${wanted.size} blob(s) travel; ` +
+          `${bundle.casManifest.omitted.length} omitted — their refs graft but the bytes ` +
+          `stay unresolvable until fetched (federation hash-fetch follow-up). ` +
+          `Omissions: ${bundle.casManifest.omitted.map((o) => `${o.hash.slice(0, 12)}(${o.reason})`).join("; ")}`,
+        );
+      } else {
+        log.info("Clone", `casBlobs: all ${wanted.size} content blob(s) travel with the bundle`);
+      }
+    }
   }
 
   // ── 8. Manifest — what the receiver must have for this clone to
@@ -405,8 +449,44 @@ export async function cloneSubtree(scopeSpaceId, opts = {}) {
   bundle.manifest.roles = [...roleNames].sort();
   bundle.manifest.extensions = [...extNames].sort();
 
-  // ── 9. Stamp completion meta ──
+  // ── 9. Stamp completion meta + the bundle's own identity ──
   bundle.meta.createdAt = new Date().toISOString();
 
+  // The bundle hash: one digest over everything semantic — manifest,
+  // parameters, content, and the casManifest LEDGER (the blob bytes
+  // verify individually by their own hashes; hashing the ledger means
+  // omitting or substituting a blob still breaks the bundle hash).
+  // This is the offer-to-delivery integrity anchor: federation offers
+  // carry it in the manifest, deliver-bundle verifies the delivered
+  // bundle recomputes it, graft refuses cold on mismatch. A clone's
+  // identity IS its hash — same doctrine as facts and matter bytes.
+  bundle.meta.bundleHash = await computeBundleHash(bundle);
+
   return bundle;
+}
+
+/**
+ * Recompute a clone bundle's content hash. Pure — both sides of a
+ * transfer call this: capture stamps it into meta, graft verifies
+ * the received bundle reproduces it. Covers manifest + parameters +
+ * content + casManifest + the identifying meta (source reality /
+ * branch / scope, createdAt). Excludes casBlobs bytes (each blob is
+ * verified against its own hash at put time) and bundleHash itself.
+ */
+export async function computeBundleHash(bundle) {
+  const crypto = await import("crypto");
+  const { canonicalize } = await import("../../past/fact/hash.js");
+  const body = canonicalize({
+    bundleVersion: bundle.meta?.bundleVersion ?? bundle.bundleVersion ?? null,
+    sourceReality: bundle.meta?.sourceReality ?? null,
+    sourceBranch:  bundle.meta?.sourceBranch ?? null,
+    sourceScopeSpaceId: bundle.meta?.sourceScopeSpaceId ?? null,
+    sourceScopeName:    bundle.meta?.sourceScopeName ?? null,
+    createdAt:     bundle.meta?.createdAt ?? null,
+    manifest:      bundle.manifest ?? null,
+    parameters:    bundle.parameters ?? null,
+    content:       bundle.content ?? null,
+    casManifest:   bundle.casManifest ?? null,
+  });
+  return crypto.createHash("sha256").update(body).digest("hex");
 }

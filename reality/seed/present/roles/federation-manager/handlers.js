@@ -71,6 +71,10 @@ async function handleOfferGraft(message, ctx) {
   await writeNegotiation(ctx, "pendingIncomingOffers", negotiationId, {
     sender,
     manifest,
+    // The offered bundle's identity (meta.bundleHash). deliver-bundle
+    // must reproduce it or the graft refuses cold — what the operator
+    // reviewed is what lands, cryptographically.
+    bundleHash:         message?.bundleHash || null,
     label:              message?.label || null,
     sourceSubtreePath:  message?.sourceSubtreePath || null,
     receivedAt:         iso(ctx),
@@ -198,6 +202,24 @@ async function handleDeliverBundle(message, ctx) {
   let result = null;
   let error  = null;
   try {
+    // ── The accepted thing IS the delivered thing ──
+    // The offer carried the bundle's identity (meta.bundleHash); the
+    // operator reviewed THAT manifest. If the delivered bundle's hash
+    // doesn't match the pinned offer, someone swapped the bundle
+    // between review and delivery — refuse before graftClone runs
+    // (which would ALSO catch internal tampering via its own
+    // recompute; this pin catches wholesale substitution).
+    const offer = await readBucket(ctx, "pendingIncomingOffers", negotiationId);
+    if (offer?.bundleHash) {
+      const delivered = bundle?.meta?.bundleHash || null;
+      if (delivered !== offer.bundleHash) {
+        throw new Error(
+          `delivered bundle is not the offered bundle: offer pinned ` +
+          `${offer.bundleHash.slice(0, 16)}…, delivery carries ${String(delivered).slice(0, 16)}…`,
+        );
+      }
+    }
+
     const { graftClone } = await import("../../../materials/publish/graft.js");
     const targetParentSpaceId = await resolveDefaultGraftParent(ctx);
     // The local federation-manager being grafts on its own authority.
@@ -361,14 +383,18 @@ async function resolveDefaultGraftParent(ctx) {
 
 function summarizeGraftResult(result) {
   if (!result || typeof result !== "object") return null;
-  // graftClone's return shape is { graftedRootId, spaces, beings, matter, facts }
-  // (the count of items it stamped). Surface a compact summary.
+  // graftClone's return shape is { rootSpaceId, counts: { spaces,
+  // beings, matter, facts }, verified: { bundle, casBlobs, chain } }.
+  // Surface a compact summary including the verification verdicts so
+  // the sender's completed record shows the transfer was PROVEN, not
+  // just finished.
   return {
-    graftedRootId: result.graftedRootId || null,
-    spaces:        result.spaces        || 0,
-    beings:        result.beings        || 0,
-    matter:        result.matter        || 0,
-    facts:         result.facts         || 0,
+    graftedRootId: result.rootSpaceId || null,
+    spaces:        result.counts?.spaces || 0,
+    beings:        result.counts?.beings || 0,
+    matter:        result.counts?.matter || 0,
+    facts:         result.counts?.facts  || 0,
+    verified:      result.verified || null,
   };
 }
 

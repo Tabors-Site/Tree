@@ -57,6 +57,87 @@ export async function graftClone(bundle, targetParentSpaceId, opts = {}) {
   }
   const branch = opts.branch || "0";
 
+  // ── Bundle integrity gate (BEFORE anything stamps) ──
+  // A captured bundle carries its own identity: meta.bundleHash, the
+  // digest over manifest + parameters + content + casManifest. If the
+  // received bundle doesn't reproduce it, the bundle was altered in
+  // flight (or hand-edited) — refuse COLD, zero facts stamped, no
+  // rollback needed. Bundles from before the hash landed (no
+  // bundleHash) pass with a loud warning; federation's deliver path
+  // additionally pins the hash against the offered manifest.
+  let bundleVerified = null;
+  if (bundle.meta?.bundleHash) {
+    const { computeBundleHash } = await import("./clone.js");
+    const recomputed = await computeBundleHash(bundle);
+    bundleVerified = recomputed === bundle.meta.bundleHash;
+    if (!bundleVerified) {
+      throw new Error(
+        `graftClone: BUNDLE INTEGRITY FAILED — meta.bundleHash ${bundle.meta.bundleHash.slice(0, 16)}… ` +
+        `but the received content recomputes ${recomputed.slice(0, 16)}…. ` +
+        `The bundle was altered after capture. Refusing before any fact stamps.`,
+      );
+    }
+  } else {
+    log.warn("Graft", "bundle carries no meta.bundleHash (pre-integrity capture) — grafting unverified");
+  }
+
+  // ── CAS blobs land FIRST (still before any fact stamps) ──
+  // Each travelling blob goes through the content store, and the
+  // store's recomputed hash MUST equal the manifest's claimed hash.
+  // putContent stores by actual hash, so a lying blob can't poison
+  // the claimed address — it just proves the lie and refuses the
+  // graft cold. Facts carry refs, never bytes: by the time any
+  // create-matter stamps below, its ref resolves locally.
+  let casVerified = null;
+  {
+    const blobs = bundle.casBlobs && typeof bundle.casBlobs === "object" ? bundle.casBlobs : null;
+    if (blobs && Object.keys(blobs).length > 0) {
+      const { putContent } = await import("../matter/contentStore.js");
+      const claimedMeta = new Map(
+        (bundle.casManifest?.included || []).map((e) => [e.hash, e]),
+      );
+      // Mime/name ride the matter refs; index them so the store's
+      // sidecars land with honest metadata.
+      const refByHash = new Map();
+      for (const m of bundle.content.matter) {
+        const c = m.content;
+        if (c && typeof c === "object" && c.kind === "cas" && c.hash) refByHash.set(c.hash, c);
+      }
+      for (const [hash, b64] of Object.entries(blobs)) {
+        const buf = Buffer.from(String(b64), "base64");
+        const ref = refByHash.get(hash) || {};
+        const stored = await putContent(buf, {
+          mimeType: ref.mimeType || "application/octet-stream",
+          name: ref.name || null,
+          encoding: ref.encoding || null,
+        });
+        if (stored.hash !== hash) {
+          throw new Error(
+            `graftClone: CAS BLOB INTEGRITY FAILED — bundle claims ${hash.slice(0, 16)}… but the ` +
+            `bytes hash to ${stored.hash.slice(0, 16)}…. Refusing before any fact stamps. ` +
+            `(The mis-claimed bytes sit under their true hash; the retention sweeper owns them.)`,
+          );
+        }
+        if (claimedMeta.has(hash) && claimedMeta.get(hash).size !== buf.length) {
+          throw new Error(
+            `graftClone: casManifest size mismatch for ${hash.slice(0, 16)}… — refusing.`,
+          );
+        }
+      }
+      casVerified = true;
+      log.info("Graft", `casBlobs: ${Object.keys(blobs).length} blob(s) stored and hash-verified`);
+    }
+    const omitted = bundle.casManifest?.omitted || [];
+    if (omitted.length > 0) {
+      log.warn(
+        "Graft",
+        `bundle omitted ${omitted.length} content blob(s) at capture — their matter refs graft ` +
+        `but the bytes stay unresolvable here until fetched: ` +
+        omitted.map((o) => o.hash?.slice(0, 12)).join(", "),
+      );
+    }
+  }
+
   // ── Manifest gate ──
   // The bundle declares what it needs to FUNCTION here: the
   // extensions whose roles/ops/data the captured content references,
@@ -434,6 +515,26 @@ export async function graftClone(bundle, targetParentSpaceId, opts = {}) {
     counts.facts++;
   }
 
+  // ── 7b. VERIFY what landed (still inside the try — a failure here
+  // throws into the rollback below, which stamps the compensating
+  // end-X facts one act at a time until the destination is back to
+  // its pre-graft state). Every aggregate this graft created gets its
+  // reel walked: hash chain intact, identities recompute, no gaps.
+  // The graft isn't "done" because the loop finished — it's done
+  // because the chain PROVES it landed whole.
+  {
+    const { verifyReel } = await import("../../past/fact/verifyReel.js");
+    for (const { kind, id } of committed) {
+      const v = await verifyReel(kind, id, branch);
+      if (!v.ok) {
+        throw new Error(
+          `graftClone: POST-GRAFT CHAIN VERIFICATION FAILED on ${kind}:${id.slice(0, 8)} ` +
+          `(${v.reason} at seq ${v.brokenAt}) — rolling the graft back.`,
+        );
+      }
+    }
+  }
+
   // ── 8. Stamp a graft-completed meta-fact on the new root's reel. ──
   // Records provenance: where this came from, who applied it, what
   // counts landed. Rides the OUTER wire moment (opts.summonCtx) when
@@ -553,6 +654,15 @@ export async function graftClone(bundle, targetParentSpaceId, opts = {}) {
   return {
     rootSpaceId,
     counts,
+    // Verification verdicts: bundle integrity (meta.bundleHash
+    // recomputed; null = pre-integrity bundle), cas blob hashes
+    // (null = no blobs travelled), and the post-graft chain walk
+    // (always run; reaching here means it passed).
+    verified: {
+      bundle: bundleVerified,
+      casBlobs: casVerified,
+      chain: true,
+    },
     // remapTable converted to a plain object for the wire return.
     remapTable: Object.fromEntries(remapTable),
   };

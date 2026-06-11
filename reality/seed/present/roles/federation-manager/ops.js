@@ -113,23 +113,32 @@ registerOperation("push-subtree", {
     await cacheBundle(ctx, negotiationId, bundle);
 
     const manifest = bundle?.manifest || null;
+    // The bundle's identity travels WITH the offer: the receiver pins
+    // it, and deliver-bundle later verifies the delivered bundle
+    // recomputes this exact hash. The accepted thing IS the delivered
+    // thing, cryptographically — no swap in flight, no bait-and-switch
+    // between review and delivery.
+    const bundleHash = bundle?.meta?.bundleHash || null;
     await writeNegotiation(ctx, "pendingOutbound", negotiationId, {
       direction:    "push",
       peer,
       subtreePath,
       label:        label || null,
       manifest,
+      bundleHash,
       startedAt:    iso(ctx),
       lastStep:     "offer-pending",
     });
 
     // 4. Send offer-graft to the peer's federation-manager. The
-    // payload carries only the manifest (cheap rejection step); the
-    // bundle ships later via deliver-bundle on accept.
+    // payload carries only the manifest + bundle hash (cheap
+    // rejection step); the bundle ships later via deliver-bundle on
+    // accept.
     await sendIntent(ctx, peer, {
       intent:             "offer-graft",
       negotiationId,
       manifest,
+      bundleHash,
       label:              label || null,
       sourceSubtreePath:  subtreePath,
     });
