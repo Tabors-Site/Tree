@@ -59,7 +59,11 @@ removed, reordered, or mutated. For all worlds `w` and times
 — where `i-1` is the prior fact in the *visible* reel, so the first
 divergent fact of a branch chains to its parent's fact at the branch
 point: one chain, linked across the fork. For `i = 1`: `p_1 = G`.
-The same law holds for act-chains over act openings.
+Act-chains obey the same per-position law over act openings, but do
+NOT link across forks: a being's first act on any branch chains from
+`G` (cross-branch biography continuity is the `be:switch` fact on the
+REEL, not the act-chain — actHash.js). Each per-branch act chain is
+complete from genesis, which is what Theorem 7's descent uses.
 
 **A3 (Collision resistance).** SHA-256 is collision resistant.
 Operationally: `SHA-256(x) = SHA-256(y)` implies `x = y` (with
@@ -74,19 +78,49 @@ identity commits to; **wall-clock witness fields (`date`,
 display helpers for humans filtering timelines, never truth. State
 equality throughout these theorems means equality of canonical
 content and its fold; witness fields ride beside the chain and may
-differ without the worlds differing.
+differ without the worlds differing. A4 carries one obligation on
+reducer authors: **a reducer must not depend on any feature
+canonical serialization erases** (raw Date objects vs ISO strings,
+undefined vs absent keys, empty objects, non-finite numbers) —
+otherwise two rows with equal canonical forms could fold
+differently while their identities verify equal. The seed's
+reducers honor this; it is a stated law, not an accident.
 
 **A5 (Genesis constant).** `G` is one fixed string (sixty-four
 zeros), identical across every world. `G` is formally a possible
 SHA-256 output; by A3's assumption the probability that any fact's
 identity equals `G` is negligible, and the proofs treat "prev = G"
 as identifying the genesis position. (The earlier claim that `G`
-lies outside SHA-256's codomain was false and is retired.)
+lies outside SHA-256's codomain was false and is retired.) One
+implementation honesty: the append path degrades `p` to `G` when
+the prior row is missing (a crash burned a seq, or a pre-CAS row) —
+so `p = G` at a non-genesis position is a *deterministic
+possibility* on a damaged reel, not only a hash accident. verifyReel
+reports such reels as broken (`seq-gap` / `unaddressed`) rather than
+intact; Theorem 1's guarantee is therefore stated for reels that
+VERIFY, and on a damaged reel it runs back to the nearest genesis
+link.
 
-**A6 (Single-writer).** For every fact `f` and reel `R_B^w`:
-`f ∈ R_B^w` implies `doer(f) = B`. The substrate refuses to seal
-any fact onto a reel whose owner is not the doer. (Enforced by the
-seal step's authorize check; the axiom states the result.)
+**A6 (Attribution + gated influence).** Three clauses, matching the
+implementation (math.md ATTRIBUTION):
+
+1. *Attribution is unforgeable.* Every fact's `doer` is the
+   authenticated actor — the verb layer sets it from the verified
+   identity and accepts no override. No being can produce a fact
+   claiming another being acted.
+2. *Self-acts come only from self.* BE facts (birth, connect,
+   release, switch, death) on `R_B` carry `doer = B`, always.
+3. *Figure influence is gated and summons are inert.* Every fact
+   that mutates `figure_B` either has `doer = B` or passed the
+   role-walk (the single auth gate) as an authorized DO on `B`.
+   Summon facts land on the recipient's reel (target = recipient,
+   doer = summoner) and the reducer folds NO summon action —
+   a summon records the request and can never change what the
+   recipient is. Callers express; receivers decide.
+
+(The earlier form — "a being's reel holds only its own deeds" — was
+refuted by the 2026-06-03 summon retarget and is retired; this is
+the law the code actually enforces.)
 
 **A7 (Identity constancy).** Each being's identifier `id_B` is
 assigned at birth (by the `be:birth` fact) and is never the target
@@ -172,32 +206,52 @@ different heads imply different chains. The substrate gains
 verifiable replay, efficient federation, and a structural audit log
 from this one property.
 
-## Theorem 2. Single-writer prevents identity theft
+## Theorem 2. Attribution prevents identity theft
 
-**Statement.** Let `A` and `V` be distinct beings (`A ≠ V`).
-Suppose `A` attempts to write a fact `f` claiming `doer(f) = V`.
-Then `f` cannot appear in `R_V^w` for any world `w`. Therefore `f`
-cannot influence `biography_V^w` or `figure_V^w`.
+**Statement.** Let `A` and `V` be distinct beings (`A ≠ V`). Then:
 
-**Proof.** Suppose for contradiction that `f ∈ R_V^w` for some
-world `w`. By A6, `doer(f) = V`. But by hypothesis, `doer(f)` is
-the value `A` set when fabricating the fact, namely `A`. Therefore
-`V = A`, contradicting `A ≠ V`. So `f ∉ R_V^w`.
+1. `A` cannot produce any fact `f` with `doer(f) = V`
+   (impersonation is impossible).
+2. Every change to `figure_V^w` traces to `V`'s own acts or to
+   role-authorized acts on `V` — never to anything `A` does outside
+   the role-walk's grants.
+3. No summon `A` sends can change `figure_V^w` at all, even though
+   it lands on `V`'s reel.
 
-Since `figure_V^w = fold(σ_0, R_V^w)` ranges only over facts in
-`R_V^w`, and `f` is not among them, `f` does not appear in the
-fold's input. By A4, the fold's output is determined entirely by
-its input. Therefore the fold's output is unaffected by `f`. The
-attacker's forged fact has no influence on `V`'s biography. ∎
+**Proof.** (1) By A6.1, `doer(f)` is set by the verb layer from the
+authenticated identity of the sealer. `A` seals as `A`; the layer
+accepts no override. So every fact `A` produces carries
+`doer = A ≠ V`. ∎
 
-**Corollary 2.1.** A being's history can only be extended by
-itself. (Direct restatement: by A6, the only writer who can extend
-`R_V^w` is `V`.)
+(2) `figure_V^w = fold(σ_0, R_V^w)` (A4). By A6.2 and A6.3, the
+facts in `R_V^w` that the reducer folds into the figure are exactly:
+`V`'s own BE-acts, and DO facts on `V` that passed the role-walk.
+Any influence `A` has on `figure_V` therefore flowed through a
+grant `V`'s world explicitly extended (a role whose canDo reaches
+`V`) — gated influence, not theft. ∎
+
+(3) By A6.3, summon facts are figure-inert: the being reducer folds
+no summon action. `A`'s summon appears in `R_V^w` as the recorded
+knock — target `V`, doer `A` — and contributes nothing to the fold.
+`V`'s figure is unchanged unless `V` chooses to act. Callers
+express; receivers decide. ∎
+
+**Corollary 2.1.** A being's BECOMING is its own: every figure
+change is either the being's own act or an act the world's roles
+authorized — and the chain records which, by unforgeable
+attribution. Audit is reading, not forensics.
+
+**Corollary 2.2 (Sovereignty, formal).** The summon channel —
+the only way one being reaches another — cannot compel. It can
+only present. This is SUMMON.md's sovereignty principle as a
+consequence of the reducer's shape rather than a policy.
 
 **What this captures.** Identity theft is structurally impossible
-in the substrate. The attacker cannot reach into another being's
-chain to insert behavior. They can only produce facts on their own
-reel; nothing they author can appear in the victim's biography.
+in the substrate — not because reels are private (they are not;
+summons and authorized DOs land on them) but because attribution
+cannot be forged, influence is role-gated, and requests are inert
+until the receiver acts. The lock is on WHO ACTED and WHAT FOLDS,
+not on where facts may sit.
 
 ## Theorem 3. There is no global time
 
@@ -448,12 +502,30 @@ equal. Each equal act head invokes Corollary 1.3 likewise. Descent
 through three layers of canonical roll-up, each step protected by
 collision resistance, reaches every fact and every act. ∎
 
+**Scope.** The descent reaches content only through
+content-addressed heads. A pre-CAS reel (headHash never written) is
+committed in the roll-up by its *length* alone (`seq:N`), so the
+theorem's "identical end to end" holds for every reel and act-chain
+with a hash head and degrades to "identical length" on legacy
+reels. Dev substrates are wiped, so legacy heads are transient; the
+port inherits none. One operational footnote: a non-transactional
+append that crashes between the fact insert and the head update
+leaves headHash one fact behind until the next append self-heals —
+roots are functions of the rows fed to them, so during that window
+the root witnesses the lagging head, and verifyReel's walked head
+is the exact truth.
+
 **Corollary 7.1 (Provable replay).** A seed bundle carrying
-`root(𝓡)` at capture plants on an empty substrate and recomputes
-the root from what landed. Match ⟹ the planted reality IS the
-captured reality, by Theorem 7 — replay is proven, not hoped.
-Mismatch ⟹ the bundle was altered or determinism broke, and the
-plant restores the void it started from.
+`root(𝓡)` at capture plants on an empty substrate, recomputes the
+root from the landed head rows, AND walks every reel and act-chain
+end to end (verifyReel + verifyActChain at plant time). The root
+match alone proves only the *commitment structure* — the planted
+heads equal the captured ones; since heads plant verbatim, a bundle
+with tampered fact rows under original heads would pass that step.
+The chain walk closes the gap: every identity recomputes from its
+content, back to genesis. Match on both ⟹ the planted reality IS
+the captured reality. Failure of either ⟹ unplant — the substrate
+restores the void it started from.
 
 **Corollary 7.2 (Divergence localization).** If two roots differ,
 the descent in the proof runs forward as a search: compare branch
@@ -589,7 +661,9 @@ drummer, the beings will build every clock they need.
 Theorem 1 says the chain's head is a faithful commitment to its
 contents.
 
-Theorem 2 says no being can forge another being's chain.
+Theorem 2 says attribution cannot be forged, influence is
+role-gated, and summons cannot compel — identity theft is
+structurally impossible.
 
 Theorem 3 says time is local to each chain, not universal — and
 presents are per-world, coordinated only by messages.

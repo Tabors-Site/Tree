@@ -1,11 +1,11 @@
 // role-manager-panel.js — 3D portal frame around the shared
-// role-manager UI. The shared module (../../shared/role-manager-panel.js)
+// role-manager UI. The shared module (../shared/role-manager-panel.js)
 // renders the catalog + form + flow editor into whatever container we
 // hand it; this file owns the modal chrome (centered overlay, close
 // button, body scroll, dismiss-on-Escape) and the ctx adapter that
 // connects the panel to the 3D portal's state and WS client.
 
-import { renderRoleManagerPanel } from "../../shared/role-manager-panel.js";
+import { renderRoleManagerPanel } from "../shared/role-manager-panel.js";
 
 let _panelEl = null;
 let _onClose = null;

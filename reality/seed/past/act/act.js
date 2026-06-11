@@ -61,11 +61,11 @@ const ActSchema = new mongoose.Schema({
   inReplyTo:       { type: String, default: null, index: true },
   rootCorrelation: { type: String, default: null, index: true },
 
-  // Back-reference to the be:summon fact's correlation that this
-  // moment answered. SUMMON now stamps a be:summon Fact on the
-  // summoner's reel (single-writer: never on the recipient's), and
-  // the cross-cutting fold maintains InboxProjection from those
-  // facts. The scheduler picks an open InboxProjection row, hands
+  // Back-reference to the summon fact's correlation that this
+  // moment answered. SUMMON stamps a `summon` Fact on the
+  // RECIPIENT's reel (right stance, like DO; doer = summoner —
+  // 2026-06-03 retarget), and the cross-cutting fold maintains
+  // InboxProjection from those facts. The scheduler picks an open InboxProjection row, hands
   // the correlation to the moment via this `answers` field, and
   // the seal commits the Act with it set. On seal, the cross-
   // cutting fold sees Act-with-answers and evicts the matching

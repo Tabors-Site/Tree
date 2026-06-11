@@ -22,7 +22,7 @@
 //     is the verb that never stamps facts. Portals also classify
 //     locally from discovery's matterTypes catalog (zero round-trips
 //     per keystroke) using this same scoring table — keep the
-//     constants in sync with portal/shared/flat/matter-composer.js.
+//     constants in sync with portal/flat/matter-composer.js.
 //
 // Scoring (highest candidate wins; per-type claims.priority is a
 // flat bump for tiebreaks and opt-in overrides):

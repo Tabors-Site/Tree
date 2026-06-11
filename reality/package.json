@@ -5,9 +5,9 @@
   "scripts": {
     "start": "node plant.js",
     "test": "node --test --experimental-test-module-mocks test/*.test.js",
-    "build:portal": "cd portal/3d-app && npm install && npm run build",
-    "dev:portal": "cd portal/3d-app && npm run dev",
-    "postinstall": "cd portal/3d-app && npm install && npm run build"
+    "build:portal": "cd portal && npm install && npm run build",
+    "dev:portal": "cd portal && npm run dev",
+    "postinstall": "cd portal && npm install && npm run build"
   },
   "keywords": [
     "ibp",

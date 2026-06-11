@@ -19,9 +19,9 @@
 //   5. /api/v1/uploads — static serving of uploaded matter.
 //   6. /api/v1 authApiRouter — JSON auth.
 //   7. /api/v1 realityConfig — config read/write.
-//   8. Built 3D portal at / (fallthrough enabled so IBP/api/uploads
+//   8. Built portal at / (fallthrough enabled so IBP/api/uploads
 //      keep working; SPA fallback to index.html for client routes).
-//      Skipped when portal/3d-app/dist is absent.
+//      Skipped when portal/dist is absent.
 //   9. /ibp/:verb/<addr> — the single IBP HTTP adapter. Same
 //      dispatcher the WebSocket layer uses; every seed and
 //      extension operation is automatically callable here.
@@ -109,7 +109,7 @@ export default function registerRoutes(app) {
   // asset or another route. Skipped silently when the dist isn't built
   // (npm run build:portal); operators who don't need the bundled
   // client still get a working API.
-  const portalDist = path.resolve(__dirname, "../../portal/3d-app/dist");
+  const portalDist = path.resolve(__dirname, "../../portal/dist");
   if (fs.existsSync(path.join(portalDist, "index.html"))) {
     app.use("/", express.static(portalDist, { fallthrough: true, index: "index.html" }));
     app.get(/^\/(?!api\/|ibp\/|mcp\/?|\.well-known\/).*/, (req, res, next) => {

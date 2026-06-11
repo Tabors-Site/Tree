@@ -1,13 +1,13 @@
 // TreeOS Portal 3D — flat-panel.
 //
 // Toggleable text-mode overlay that takes over the viewport. Mounts
-// the shared flat renderer (portal/shared/flat/host.js) into an
-// overlay div, pauses the Three.js scene while up, and resumes it on
-// close. Both modes always render the same IBP address — the panel
-// reads L.state.descriptor and re-renders on the same descriptor
-// events the scene subscribes to, so they stay synced trivially.
+// the flat renderer (portal/flat/host.js) into an overlay div, pauses
+// the Three.js scene while up, and resumes it on close. Both modes
+// always render the same IBP address — the panel reads L.state
+// .descriptor and re-renders on the same descriptor events the scene
+// subscribes to, so they stay synced trivially.
 
-import { mountFlatView } from "../../shared/flat/host.js";
+import { mountFlatView } from "../flat/host.js";
 
 let _overlay = null;
 let _handle  = null;

@@ -17,7 +17,7 @@
 // returns FORBIDDEN; the bar steers, it doesn't pre-authorize.
 
 import { flat } from "./host.js";
-import { renderOpForm } from "../op-form.js";
+import { renderOpForm } from "../shared/op-form.js";
 import { renderRolesPanel } from "./roles-panel.js";
 import { renderLlmPanel } from "./llm-panel.js";
 import { renderInboxPanel } from "./inbox-panel.js";

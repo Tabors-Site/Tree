@@ -14,11 +14,11 @@
 import { flat } from "./host.js";
 import { openChatFor, isChatOpen, getChatBeing } from "./chat.js";
 import { showAuthOverlay } from "./identity.js";
-import { renderRoleManagerPanel } from "../role-manager-panel.js";
-import { renderBeingFlowPanel } from "../being-flow-panel.js";
+import { renderRoleManagerPanel } from "../shared/role-manager-panel.js";
+import { renderBeingFlowPanel } from "../shared/being-flow-panel.js";
 import { renderTimelineSection } from "./being-timeline.js";
-import { setPortalStatus } from "../portal-status.js";
-import { renderOpForm } from "../op-form.js";
+import { setPortalStatus } from "../shared/portal-status.js";
+import { renderOpForm } from "../shared/op-form.js";
 import { renderTaskBar } from "./task-bar.js";
 
 // ────────────────────────────────────────────────────────────────

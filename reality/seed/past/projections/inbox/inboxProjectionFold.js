@@ -5,15 +5,15 @@
 // handler runs once per fact applied (via dispatchCrossCutting in
 // foldEngine.js).
 //
-// Three handlers, one fact-action each. Per single-writer: the be:
-// facts here land on the ACTOR'S reel (summoner / severer). The
-// target on the fact is also the actor (the reel); the recipient
-// for a summon lives in params.recipient. The handlers read params,
-// not target, for cross-reel keys.
+// Three handlers, one fact-action each. Since the 2026-06-03
+// retarget, the summon fact lands on the RECIPIENT's reel
+// (target = recipient, right stance, like DO) with doer = summoner;
+// the recipient is read from fact.target. Summon facts are
+// figure-inert — the being reducer folds no summon action; this
+// cross-cutting handler is their only consumer.
 //
-//   be:summon   → upsert InboxProjection row keyed by params.correlation.
-//                 recipient = params.recipient. Fact lives on the
-//                 summoner's reel (target = summoner).
+//   summon      → upsert InboxProjection row keyed by params.correlation.
+//                 recipient = fact.target.id (the reel it lives on).
 //
 //   be:sever    → delete InboxProjection rows whose rootCorrelation
 //                 matches params.rootCorrelation. Fact lives on the

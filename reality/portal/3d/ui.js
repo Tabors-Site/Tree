@@ -3,7 +3,7 @@
 // Login menu (opened when you gaze at the cherub), gaze labels above
 // objects, and a small HUD line at the top of the screen.
 
-import { setPortalStatus } from "../../shared/portal-status.js";
+import { setPortalStatus } from "../shared/portal-status.js";
 
 const overlayRoot = () => document.getElementById("overlays");
 const hudTop = () => document.getElementById("hud-top");

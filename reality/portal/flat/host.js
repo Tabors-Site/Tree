@@ -484,7 +484,7 @@ function randomToken() {
   return `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
-// Re-exports so consumers in /shared/flat/ (chat.js, identity.js,
+// Re-exports so consumers in /portal/flat/ (chat.js, identity.js,
 // being-timeline.js) can `import { flat } from "./host.js"` and reach
 // the same shape they used to read from main.js.
 export { setStatus, clearDetail, setConnectionStatus, setLoading };

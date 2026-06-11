@@ -2,7 +2,7 @@
 
 > *"The role IS how the summon is handled. The being receives; the role decides."*
 
-This file pins the doctrine the SUMMON verb implements. It sits beside RolesAreAuth.md, FACTORY.md, and CROSS-WORLD.md as a primary reference. Read this before changing summon.js, the role registry, the intake path, the inbox panel, or any code that emits or routes summons.
+This file pins the doctrine the SUMMON verb implements. It sits beside RolesAreAuth.md, FACTORY.md, INTAKE.md, and CROSS-WORLD.md as a primary reference. Read this before changing summon.js, the role registry, the intake path, the inbox panel, or any code that emits or routes summons. See [INTAKE.md](INTAKE.md) for how a SUMMON becomes a pending row and how it closes.
 
 ## One sentence
 
@@ -170,3 +170,31 @@ Address routes; intent states purpose; content carries payload; receiver decides
 - **No envelope field can make a being do something its role did not choose to do.**
 
 When in doubt, check that the proposed change does not let the caller compel the receiver. If it does, it is drift.
+
+## Decided, not yet built: ref-boxed summon content (no semantic truncation)
+
+Pinned 2026-06-11 (Tabor). The summon's delivery IS a fact — the inbox
+is a projection of recipient-targeted summon facts — so message content
+lands inline in the fact's params, and the payload cap (capPayload)
+can today truncate oversized content with only a `truncated` flag.
+That is the wrong shape: **nothing should be truncated semantically.**
+
+The decided shape, to build later:
+
+- Content over a threshold ref-boxes into the content store: the
+  summon fact carries `content: { kind: "cas", hash, size, preview }`
+  — the chain holds facts ABOUT big content, uniformly with matter
+  bytes. Small content stays inline (chat ergonomics).
+- Resolution happens at the CONSUMPTION boundary (assign's
+  startMessage build), so the scheduler, prompt assembly, inbox
+  panels, and federation handlers all see resolved content and never
+  learn about refs individually.
+- capPayload remains only as an absolute backstop, never the
+  mechanism.
+- Cross-reality summons keep content inline until federation
+  fetch-by-hash lands — a foreign reality cannot resolve a ref
+  against a store it does not have (PORT-NOTES #12 owns that arc).
+
+Sovereignty unchanged: the ref is still just content; the receiver
+still decides. See philosophy/OS/PORT-NOTES.md #3 for the full
+build notes.

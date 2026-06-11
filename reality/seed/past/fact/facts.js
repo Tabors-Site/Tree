@@ -442,7 +442,7 @@ export async function logFact(input, opts = {}) {
         // non-reentrant; re-acquiring here would deadlock.
         await runAppend();
       } else {
-        await withReelLock(finalTarget.kind, finalTarget.id, runAppend);
+        await withReelLock(branch, finalTarget.kind, finalTarget.id, runAppend);
       }
     } catch (err) {
       log.error("DB", `Fact append failed (${action} on ${finalTarget.kind}:${finalTarget.id} branch=${branch}): ${err.message}`);
@@ -673,7 +673,7 @@ export async function withReelLocks(sortedReels, fn) {
   const acquire = async (i) => {
     if (i === sortedReels.length) return fn();
     const reel = sortedReels[i];
-    return withReelLock(reel.kind, reel.id, () => acquire(i + 1));
+    return withReelLock(reel.branch, reel.kind, reel.id, () => acquire(i + 1));
   };
   return acquire(0);
 }
@@ -907,7 +907,7 @@ export async function sealFacts(deltaF, opts = {}) {
       return { committed: 0, txn: false };
     }
     const reel = lockReels[0];
-    await withReelLock(reel.kind, reel.id, async () => {
+    await withReelLock(reel.branch, reel.kind, reel.id, async () => {
       for (const spec of reel.facts) {
         await logFact(spec, { lockHeldByCaller: true, skipEagerFold: true });
       }

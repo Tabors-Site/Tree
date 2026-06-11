@@ -3,7 +3,7 @@
 // Esc/× close, ctx adapter); the inner body is the shared
 // renderBeingFlowPanel.
 
-import { renderBeingFlowPanel } from "../../shared/being-flow-panel.js";
+import { renderBeingFlowPanel } from "../shared/being-flow-panel.js";
 
 let _panelEl = null;
 let _onClose = null;

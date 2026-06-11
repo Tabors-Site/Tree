@@ -81,3 +81,35 @@ export async function advanceActHead(branch, beingId, actId, { session = null } 
   if (session) update.session(session);
   await update;
 }
+
+/**
+ * Walk a being's act-chain backward from its head, verifying every
+ * act's identity recomputes from (p, opening) and every p resolves
+ * to a real act, down to GENESIS_PREV. The act-chain sibling of
+ * verifyReel — detection only, no repair.
+ *
+ * @returns {{ok:true, count:number, headHash:string|null} |
+ *           {ok:false, count:number, brokenAt:string, reason:string}}
+ */
+export async function verifyActChain(branch, beingId) {
+  const { default: Act } = await import("./act.js");
+  const head = await ActHead.findById(actHeadKey(branch, beingId))
+    .select("headHash").lean();
+  let h = head?.headHash || GENESIS_PREV;
+  let count = 0;
+  while (h !== GENESIS_PREV) {
+    const act = await Act.findById(h).lean();
+    if (!act) {
+      return { ok: false, count, brokenAt: h, reason: "missing-act" };
+    }
+    if (typeof act.p !== "string") {
+      return { ok: false, count, brokenAt: h, reason: "unaddressed" };
+    }
+    if (computeActId(act.p, contentOfAct(act)) !== act._id) {
+      return { ok: false, count, brokenAt: h, reason: "hash-mismatch" };
+    }
+    count++;
+    h = act.p;
+  }
+  return { ok: true, count, headHash: head?.headHash || null };
+}

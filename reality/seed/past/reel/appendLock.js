@@ -44,24 +44,36 @@
 
 const _tails = new Map(); // reelKey -> Promise (tail of the chain)
 
-function reelKey(type, id) {
-  return `${type}:${id}`;
+// Reel identity is (branch, kind, id) — the same key shape ReelHead
+// uses. Per the per-world-present doctrine (math.md PRESENT): sibling
+// branches are independent worlds whose shared prefix is FROZEN by
+// the branch point (ancestors append only above it, descendants read
+// only below it), so appends to the same aggregate on different
+// branches are different chains and never serialize against each
+// other. Everything inside the critical section is branch-scoped
+// already (per-branch ReelHead, per-branch unique index, lineage
+// reads of frozen data) — this key just stops over-serializing what
+// the model says is parallel.
+function reelKey(branch, type, id) {
+  return `${branch}:${type}:${id}`;
 }
 
 /**
- * Run `fn` while holding the per-reel append lock. Callers serialize
- * on a given reel; different reels run in parallel. The lock is
+ * Run `fn` while holding the per-world per-reel append lock. Callers
+ * serialize on a given (branch, reel); different reels — and the
+ * SAME reel on different branches — run in parallel. The lock is
  * release-on-return — `fn` runs to completion (resolves or rejects)
  * before the next waiter proceeds.
  *
  * @template T
+ * @param {string} branch  the world ("0" = main)
  * @param {"being"|"space"|"matter"} type
  * @param {string} id
  * @param {() => Promise<T>} fn  the critical section
  * @returns {Promise<T>}
  */
-export async function withReelLock(type, id, fn) {
-  const key = reelKey(type, id);
+export async function withReelLock(branch, type, id, fn) {
+  const key = reelKey(branch, type, id);
   const prev = _tails.get(key) || Promise.resolve();
   let release;
   const next = new Promise((resolve) => { release = resolve; });

@@ -509,7 +509,43 @@ export async function plantSeed(bundle) {
       rootVerified = actualRoot === expectedRoot;
       if (rootVerified) {
         log.info("Seed", `chain root VERIFIED: ${actualRoot.slice(0, 16)}… — this reality is the captured reality`);
-      } else {
+        // ── The root proves the COMMITMENT STRUCTURE; now prove the
+        // facts behind it. The planted head rows came verbatim from
+        // the bundle — a bundle with tampered fact rows but original
+        // heads would pass the root match alone. Walk every reel
+        // (hash chain end to end, branch-aware) and every act-chain
+        // back to genesis. Broken anywhere → unplant, same as a root
+        // mismatch. Skippable for very large genomes via
+        // opts-on-bundle escape; ON by default because "provable
+        // replay" should mean the proof actually ran.
+        if (bundle.skipChainWalk !== true) {
+          const { verifyReel } = await import("../../past/fact/verifyReel.js");
+          const { verifyActChain } = await import("../../past/act/actHash.js");
+          const broken = [];
+          let reelsWalked = 0;
+          let actsWalked = 0;
+          for (const rh of dbHeads) {
+            const v = await verifyReel(rh.type ?? rh._id?.split(":")[1], rh.id ?? rh._id?.split(":")[2], rh.branch || "0");
+            reelsWalked++;
+            if (!v.ok) broken.push({ kind: "reel", key: rh._id, reason: v.reason, at: v.brokenAt });
+          }
+          for (const ah of dbActHeads) {
+            const beingId = ah.beingId ?? ah._id?.split(":")[1];
+            const v = await verifyActChain(ah.branch || "0", beingId);
+            actsWalked++;
+            if (!v.ok) broken.push({ kind: "act-chain", key: ah._id, reason: v.reason, at: v.brokenAt });
+          }
+          if (broken.length > 0) {
+            rootVerified = false;
+            log.warn("Seed", `chain walk FAILED on ${broken.length} chain(s): ` +
+              broken.slice(0, 5).map((b) => `${b.kind}:${b.key}(${b.reason})`).join(", ") +
+              (broken.length > 5 ? ` …+${broken.length - 5}` : ""));
+          } else {
+            log.info("Seed", `chain walk VERIFIED: ${reelsWalked} reel(s) + ${actsWalked} act-chain(s) recompute end to end`);
+          }
+        }
+      }
+      if (!rootVerified) {
         // ── UNPLANT ──
         // The planted chain does not reproduce the captured root: the
         // bundle was altered or determinism broke. Plant runs against
@@ -520,7 +556,10 @@ export async function plantSeed(bundle) {
         // into a LIVING chain with end-X facts; plant restores the
         // void it started from. No pre-existing chain is touched —
         // there wasn't one.)
-        log.warn("Seed", `chain root MISMATCH: expected ${expectedRoot.slice(0, 16)}…, got ${actualRoot.slice(0, 16)}… — UNPLANTING`);
+        const why = actualRoot === expectedRoot
+          ? "chain walk found broken chains behind a matching root (tampered facts under original heads)"
+          : `chain root MISMATCH: expected ${expectedRoot.slice(0, 16)}…, got ${actualRoot.slice(0, 16)}…`;
+        log.warn("Seed", `${why} — UNPLANTING`);
         try {
           const db = mongoose.connection.db;
           const toClear = ["facts", "acts", "branches", "reelHeads", "actHeads"];
@@ -539,12 +578,12 @@ export async function plantSeed(bundle) {
             `unverified chain. Wipe the DB before booting.`);
         }
         throw new Error(
-          `plantSeed: chain root mismatch (expected ${expectedRoot.slice(0, 16)}…, got ${actualRoot.slice(0, 16)}…). ` +
+          `plantSeed: chain verification failed (${why}). ` +
           `The plant was rolled back; the substrate is empty.`,
         );
       }
     } catch (err) {
-      if (/chain root mismatch/.test(err?.message || "")) throw err;
+      if (/chain verification failed/.test(err?.message || "")) throw err;
       log.warn("Seed", `chain root verification failed to run: ${err.message}`);
     }
   }

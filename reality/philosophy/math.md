@@ -1,6 +1,6 @@
 # IBP MODEL — math
 
-_The shape of the system, minimal and internally consistent. Model: presentism + event sourcing + content addressing. Time is per-reel and local. Single-writer is strict. Identity is intrinsic._
+_The shape of the system, minimal and internally consistent. Model: presentism + event sourcing + content addressing. Time is per-reel and local. Attribution is unforgeable. Identity is intrinsic._
 
 ---
 
@@ -50,13 +50,19 @@ $$f = (\,t,\; a,\; n,\; w,\; p\,) \qquad\qquad \mathrm{id}(f) \;=\; H\big(\,p \;
 
 There is no assigned identifier and no separate self-hash field — **the fact's identity IS its content hash**. The same deed, in the same world, after the same history, _is_ the same fact: storage dedup, transport ("do you have this hash?"), and tamper-evidence are properties of the addressing scheme, not mechanisms layered on it. $\mathrm{canon}$ is the canonical serialization (sorted keys, stable forms) — a versioned wire format. The doer is carried by the act: $\mathrm{doer}(f) := \mathrm{doer}(a) \in \mathcal{B}$.
 
-### SINGLE-WRITER — _the law_
+### ATTRIBUTION — _the law_
 
-A being's reel holds only that being's own deeds:
+Every fact's doer is the **authenticated actor** — the verbs refuse to stamp a fact claiming anyone else. No being can act AS another:
 
-$$f \in R_b^w,\;\; b \in \mathcal{B} \quad\Longrightarrow\quad \mathrm{doer}(f) = b$$
+$$\mathrm{doer}(f) = \text{the identity that sealed } f \qquad \text{(unforgeable)}$$
 
-No such constraint on $R_s$ or $R_m$: a space/matter reel is written by whichever being acts on it. **Beings never write each other's reels.** One being reaches another only by summon.
+What may land on a being's reel $R_b^w$, and what it does there:
+
+- **BE facts** (self-acts: birth, connect, release, switch, death) — doer is $b$ itself, always. Identity transformations come only from the left stance.
+- **DO facts targeting $b$** — doer is whoever acted, and the act passed the role-walk (the single auth gate). Others CAN change your figure, exactly as far as roles permit (a grant, a set), never further.
+- **SUMMON facts naming $b$ as recipient** — doer is the summoner; the fact is the knock on the door, recorded on your reel. **Summon facts are figure-inert**: the reducer folds no summon action, so a summon can never mutate what you are. Callers express; receivers decide (SUMMON.md sovereignty, made structural).
+
+Space/matter reels are the commons: written by whichever being acts on them, every write role-gated. The law is not "only you touch your reel" — it is **no one can pretend to be you, and nothing changes your figure except your own acts and role-authorized acts.**
 
 ### MOMENT
 
@@ -123,13 +129,13 @@ Order holds _within_ a reel's view: $\;f_n \prec f_{n+1}\;$ in $\widehat{R}_e^{\
 
 ### SUMMON
 
-A summon is an act of one being toward another, $\;\mathrm{summon}:\mathcal{B}\to\mathcal{B}$. It stamps a fact on the summoner's **own** reel (single-writer holds):
+A summon is an act of one being toward another, $\;\mathrm{summon}:\mathcal{B}\to\mathcal{B}$. Like DO, it stamps its **target** with the right stance: the fact lands on the **recipient's** reel, attributed to the summoner (2026-06-03 retarget — summoning another being is not a self-act, so it left the BE namespace):
 
-$$f = (\,b_i,\;\; \mathrm{summon}(b_i \!\rightarrow\! b_j),\;\; n\,) \;\in\; R_{b_i}^w$$
+$$f = (\,t{=}b_j,\;\; \mathrm{doer}{=}b_i,\;\; n\,) \;\in\; \widehat{R}_{b_j}^{\,w}$$
 
-The recipient's reel is never written. It **sees** the summon by projection:
+The summon fact is **figure-inert** (ATTRIBUTION above): it records the request on the recipient's chain without mutating what the recipient is. The inbox is a projection over recipient-targeted summon facts:
 
-$$\mathrm{inbox}(b_j) = \{\, f \in \mathcal{W} \;:\; f.a \ \text{is a summon naming}\ b_j \,\}$$
+$$\mathrm{inbox}(b_j) = \{\, f \in \mathcal{W} \;:\; f \ \text{is a summon with target}\ b_j \,\}$$
 
 A projection — inbox, position index, lineage, the figure itself — is **derived**, never stored as truth.
 
@@ -167,7 +173,7 @@ $\mu_0$ is the one moment with no concurrency — before it the braid has not fo
 
 ### INVARIANTS — _the laws: behavior, not data_
 
-$$\textbf{SINGLE-WRITER}\qquad f \in R_b^w \Rightarrow \mathrm{doer}(f) = b$$
+$$\textbf{ATTRIBUTION}\qquad \mathrm{doer}(f) = \text{the authenticated actor; BE-facts on } R_b \text{ only from } b$$
 
 $$\textbf{ATOMIC SEAL}\qquad \mathrm{commit}(\Delta\mathcal{F}) \in \{\text{all},\,\text{nothing}\}$$
 
