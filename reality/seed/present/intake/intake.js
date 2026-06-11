@@ -192,6 +192,11 @@ export async function pickNextIntake(spaceId, beingId) {
       rootCorrelation: row.rootCorrelation,
       from:            row.sender,
       content:         row.content,
+      // Envelope intent. Surfaced here so the receiver's role handler
+      // (LLM cognition, scripted summon(), or the human inbox panel)
+      // can dispatch on the caller's stated purpose without re-reading
+      // the projection row. See seed/SUMMON.md.
+      intent:          row.intent || null,
       priority:        row.priority,
       activeRole:      row.activeRole,
       orientation:     row.orientation || "forward",

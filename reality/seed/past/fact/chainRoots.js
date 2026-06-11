@@ -86,10 +86,16 @@ export async function reelRoot(type, id, branch = "0") {
 
 // The ONE branch roll-up shape — DB reads and bundle parts both flow
 // through here, so a captured bundle and a live substrate with the
-// same chain produce byte-identical roots.
-function branchRollup(path, meta, reelRows) {
+// same chain produce byte-identical roots. Covers BOTH chain
+// families: the fact reels AND the act-chains (acts are content-
+// addressed too — Tabor 2026-06-11: "the reality root would
+// literally cover everything").
+function branchRollup(path, meta, reelRows, actRows) {
   const reels = (reelRows || [])
     .map((r) => [String(r._id), r.headHash || `seq:${r.head}`])
+    .sort((a, b) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0));
+  const acts = (actRows || [])
+    .map((r) => [String(r._id), r.headHash || null])
     .sort((a, b) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0));
   const branchPoint = meta?.branchPoint
     ? (meta.branchPoint instanceof Map
@@ -101,6 +107,7 @@ function branchRollup(path, meta, reelRows) {
     parent: meta?.parent ?? null,
     branchPoint,
     reels,
+    acts,
   });
 }
 
@@ -111,7 +118,7 @@ function branchRollup(path, meta, reelRows) {
  * plantSeed recomputes it over what landed. The live realityRoot()
  * below builds the same shapes from the DB.
  */
-export function realityRootFromParts({ reality, branches = [], reelHeads = [] }) {
+export function realityRootFromParts({ reality, branches = [], reelHeads = [], actHeads = [] }) {
   const metaByPath = new Map(
     branches.map((b) => [String(b._id ?? b.path), b]),
   );
@@ -121,11 +128,17 @@ export function realityRootFromParts({ reality, branches = [], reelHeads = [] })
     if (!rowsByBranch.has(b)) rowsByBranch.set(b, []);
     rowsByBranch.get(b).push(r);
   }
-  const paths = new Set(["0", ...metaByPath.keys(), ...rowsByBranch.keys()]);
+  const actsByBranch = new Map();
+  for (const r of actHeads) {
+    const b = String(r.branch ?? "0");
+    if (!actsByBranch.has(b)) actsByBranch.set(b, []);
+    actsByBranch.get(b).push(r);
+  }
+  const paths = new Set(["0", ...metaByPath.keys(), ...rowsByBranch.keys(), ...actsByBranch.keys()]);
   const out = [];
   for (const path of [...paths].sort()) {
     const meta = path === "0" ? null : metaByPath.get(path) || null;
-    out.push([path, branchRollup(path, meta, rowsByBranch.get(path) || [])]);
+    out.push([path, branchRollup(path, meta, rowsByBranch.get(path) || [], actsByBranch.get(path) || [])]);
   }
   return rollup({ reality: reality ?? null, branches: out });
 }
@@ -139,10 +152,13 @@ export function realityRootFromParts({ reality, branches = [], reelHeads = [] })
 export async function branchRoot(branchPath) {
   return memoized(`branch:${branchPath}`, async () => {
     const { loadBranch } = await import("../../materials/branch/branches.js");
+    const { default: ActHead } = await import("../act/actHead.js");
     const meta = branchPath === "0" ? null : await loadBranch(branchPath);
-    const rows = await ReelHead.find({ branch: branchPath })
-      .select("_id head headHash").lean();
-    return branchRollup(branchPath, meta, rows);
+    const [rows, actRows] = await Promise.all([
+      ReelHead.find({ branch: branchPath }).select("_id head headHash").lean(),
+      ActHead.find({ branch: branchPath }).select("_id headHash").lean(),
+    ]);
+    return branchRollup(branchPath, meta, rows, actRows);
   });
 }
 
@@ -153,15 +169,18 @@ export async function branchRoot(branchPath) {
 export async function realityRoot() {
   return memoized("reality", async () => {
     const { default: Branch } = await import("../../materials/branch/branch.js");
+    const { default: ActHead } = await import("../act/actHead.js");
     const { getRealityDomain } = await import("../../ibp/address.js");
-    const [branchRows, headRows] = await Promise.all([
+    const [branchRows, headRows, actHeadRows] = await Promise.all([
       Branch.find({}).lean(),
       ReelHead.find({}).select("_id branch head headHash").lean(),
+      ActHead.find({}).select("_id branch headHash").lean(),
     ]);
     return realityRootFromParts({
       reality: getRealityDomain(),
       branches: branchRows,
       reelHeads: headRows,
+      actHeads: actHeadRows,
     });
   });
 }

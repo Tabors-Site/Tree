@@ -126,12 +126,29 @@ export async function withIAmAct(sourceLabel, fn) {
   if (typeof fn !== "function") {
     throw new Error("withIAmAct: fn must be a function");
   }
-  const actId = uuidv4();
   const now = new Date();
 
   const { getRealityDomain } = await import("./ibp/address.js");
+  // Content-addressed like every act (past/act/actHash.js): identity
+  // = hash of the opening, chained to the I-Am's previous sealed act.
+  const { computeActId, readActHead } = await import("./past/act/actHash.js");
+  const opening = {
+    beingIn:  I_AM,
+    beingOut: I_AM,
+    ibpAddress:      null,
+    activeRole:      null,
+    inboxMessageId:  null,
+    inReplyTo:       null,
+    parentThread:    null,
+    startMessage: { content: sourceLabel || "I-Am acts.", source: "I-Am" },
+    reality: getRealityDomain(),
+    branch: "0",
+  };
+  const p = await readActHead("0", I_AM);
+  const actId = computeActId(p, opening);
   const plannedAct = {
     _id: actId,
+    p,
     beingIn:  I_AM,
     beingOut: I_AM,
     ibpAddress:      null,
@@ -206,12 +223,28 @@ export async function withBeingAct(beingId, sourceLabel, branch, fn) {
   if (typeof fn !== "function") {
     throw new Error("withBeingAct: fn must be a function");
   }
-  const actId = uuidv4();
   const now = new Date();
 
   const { getRealityDomain } = await import("./ibp/address.js");
+  // Content-addressed like every act (past/act/actHash.js).
+  const { computeActId, readActHead } = await import("./past/act/actHash.js");
+  const opening = {
+    beingIn:  beingId,
+    beingOut: beingId,
+    ibpAddress:      null,
+    activeRole:      null,
+    inboxMessageId:  null,
+    inReplyTo:       null,
+    parentThread:    null,
+    startMessage:    { content: sourceLabel || "graft act", source: beingId },
+    reality: getRealityDomain(),
+    branch,
+  };
+  const p = await readActHead(branch, beingId);
+  const actId = computeActId(p, opening);
   const plannedAct = {
     _id: actId,
+    p,
     beingIn:  beingId,
     beingOut: beingId,
     ibpAddress:      null,

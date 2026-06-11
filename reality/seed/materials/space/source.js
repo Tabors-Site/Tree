@@ -18,6 +18,16 @@
 // ibp/verbs/do.js). The reconciliation walk uses direct Matter
 // saves and bypasses the public createMatter path because that path
 // also (correctly) refuses to author into place heaven spaces.
+//
+// SANCTIONED DOCTRINE EXCEPTION — "the place is folded from facts"
+// does not apply to these rows. Source matter is a projection of the
+// DISK, not of any reel: its source of truth is the checkout, its
+// fold is this reconciliation walk, and it has no fact chain to
+// rebuild from by design (stamping a fact per file per sync would
+// bloat the chain with state the repo already versions). It is the
+// one aggregate family whose cache is disk-folded instead of
+// chain-folded. The OS port must keep this exception explicit or
+// move the mirror behind its own projection kind.
 
 import fs from "fs";
 import path from "path";

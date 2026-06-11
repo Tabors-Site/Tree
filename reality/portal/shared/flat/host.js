@@ -183,7 +183,17 @@ export function mountFlatView(rootContainer, ctx) {
     const username  = ctx.session?.username || "arrival";
     const from      = `${reality}/@${username}`;
     const correlation = `c-${randomToken()}`;
-    const message = { from, content, correlation, ...(opts.inReplyTo ? { inReplyTo: opts.inReplyTo } : {}) };
+    // Envelope intent rides at the top of the message per seed/SUMMON.md.
+    // Callers that previously stuffed intent inside content should pass
+    // it via opts.intent instead so the substrate's auth gate and the
+    // inbox renderer registry can see it.
+    const message = {
+      from,
+      content,
+      correlation,
+      ...(opts.intent    ? { intent:    opts.intent    } : {}),
+      ...(opts.inReplyTo ? { inReplyTo: opts.inReplyTo } : {}),
+    };
     const extra = opts.rootCorrelation ? { rootCorrelation: opts.rootCorrelation } : {};
     const reply = await ctx.client.summon(stance, message, extra);
     return { correlation, reply };

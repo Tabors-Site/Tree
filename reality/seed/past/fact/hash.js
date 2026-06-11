@@ -70,7 +70,13 @@ export function computeHash(prev, content) {
  */
 export function contentOf(fact) {
   const out = {
-    date:        fact.date,
+    // `date` is deliberately ABSENT. Human time is a display helper —
+    // beings filtering a timeline — never truth (Tabor doctrine
+    // 2026-06-11): ordering is seq, history is the chain, and the OS
+    // reads display time off the kernel clock. The field stays on the
+    // row as a witness; the identity does not commit to it, so the
+    // same deed replayed at a different wall-clock IS the same fact,
+    // and clock skew can never corrupt identity.
     beingId:     fact.beingId,
     verb:        fact.verb,
     action:      fact.action,

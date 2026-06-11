@@ -29,7 +29,6 @@
 // inbox / assign / sealAct flow (which already threads crossOrigin
 // correctly via summonCtx.targetBranch).
 
-import { v4 as uuidv4 } from "uuid";
 import Act from "../past/act/act.js";
 import { handleCrossWorldResponse } from "../past/act/crossWorldResponse.js";
 import { sealFacts } from "../past/fact/facts.js";
@@ -60,7 +59,6 @@ export async function crossRealityDispatch({ envelope, actor, identity } = {}) {
     throw new Error("crossRealityDispatch: actor.branch required");
   }
 
-  const actId = uuidv4();
   const now = new Date();
   const reality = getRealityDomain();
 
@@ -68,8 +66,40 @@ export async function crossRealityDispatch({ envelope, actor, identity } = {}) {
   // records "I attempted this cross-reality call." No facts attach
   // to it; deltaF stays empty because the consequences live on the
   // foreign substrate.
+  //
+  // SANCTIONED DOCTRINE EXCEPTION — assign.js is the one legitimate
+  // Stamp opener (presentism invariant), and this Act.create is the
+  // documented second site: a cross-reality attempt has no inbox
+  // entry and no scheduler pick to ride (the moment it frames runs
+  // on the FOREIGN substrate), so the local audit Act is opened
+  // directly. The OS port should either keep this exception explicit
+  // or give cross-world dispatch a synthetic assign path.
+  //
+  // Content-addressed like every act: identity = hash of the opening
+  // chained to the actor's previous sealed act; the head advances
+  // here because this open IS the row landing.
+  const { computeActId, readActHead, advanceActHead } =
+    await import("../past/act/actHash.js");
+  const opening = {
+    beingIn: actor.beingId,
+    beingOut: actor.beingId,
+    ibpAddress: envelope.address,
+    activeRole: null,
+    inboxMessageId: null,
+    inReplyTo: null,
+    parentThread: null,
+    startMessage: {
+      content: `cross-reality ${envelope.verb}`,
+      source: actor.beingId,
+    },
+    reality,
+    branch: actor.branch,
+  };
+  const p = await readActHead(actor.branch, actor.beingId);
+  const actId = computeActId(p, opening);
   await Act.create({
     _id: actId,
+    p,
     beingIn: actor.beingId,
     beingOut: actor.beingId,
     ibpAddress: envelope.address,
@@ -88,6 +118,7 @@ export async function crossRealityDispatch({ envelope, actor, identity } = {}) {
     branch: actor.branch,
     status: "attempted",
   });
+  await advanceActHead(actor.branch, actor.beingId, actId);
 
   // 2. Forward to peer with the actor's identity tuple. The
   // forwardToPeer import is lazy so this seed module doesn't pull

@@ -47,6 +47,7 @@ import { I_AM } from "../../materials/being/seedBeings.js";
 import { parseWithContext, expand, resolveBranchPointers, getRealityDomain } from "../address.js";
 import { resolveStance } from "../resolver.js";
 import { authorize } from "../authorize.js";
+import { permitsReceiverSummon } from "../roleAuth.js";
 import {
   threadIdFromPath,
   cutThread,
@@ -394,6 +395,14 @@ async function _dispatchSummon({
       activeRole,
       branch,
     },
+    // Envelope intent. Per seed/SUMMON.md, intent is the caller's
+    // stated purpose AND an auth predicate: canSummon entries can
+    // restrict by intent ({pattern: "@cherub", intent: "mate"}), and
+    // the role-walk in roleAuth.permitsSummon reads this to gate. Past
+    // omission of this line was the structural drift the SUMMON cleanup
+    // (2026-06-11) closed: intent declarations on canSummon entries
+    // were silent no-ops because the verb never plumbed it through.
+    intent: validatedMessage.intent || null,
     summonCtx,
     // The actor's branch, where their grants live. In-moment summons
     // ride summonCtx.actorAct.branch; wire summons thread the
@@ -410,6 +419,18 @@ async function _dispatchSummon({
       `SUMMON denied for actor "${decision.actor}": ${decision.reason}`,
       { actor: decision.actor },
     );
+  }
+
+  // Receiver-side acceptance. The other half of the post office check
+  // per seed/SUMMON.md: authorize() above gated the OUTGOING side
+  // (actor's role permits sending); this gates the INCOMING side
+  // (receiver's role accepts this intent). Progressive enhancement —
+  // roles with no `as: receiver` canSummon entries accept anything
+  // (current behavior); roles that declared receiver entries are
+  // strict-matched.
+  const accept = permitsReceiverSummon(role, validatedMessage.intent || null);
+  if (!accept.ok) {
+    throw new IbpError(IBP_ERR.FORBIDDEN, `SUMMON refused: ${accept.reason}`);
   }
 
   const inboxNodeId = resolved.spaceId || toBeing.homeSpace || null;
@@ -476,6 +497,13 @@ async function _dispatchSummon({
       inReplyTo:       validatedMessage.inReplyTo || null,
       sender:          validatedMessage.from,
       content:         validatedMessage.content,
+      // Envelope intent: the caller's stated purpose. Persisted on the
+      // Fact so the audit chain records WHAT THE CALLER SAID THEY WERE
+      // DOING, separately from the payload (content) and from what the
+      // receiver chose to do (later facts on the receiver's reel). Null
+      // when no intent was set; the receiver's role decides on the basis
+      // of (intent, content) together.
+      intent:          validatedMessage.intent || null,
       priority:        validatedMessage.priority || "INTERACTIVE",
       activeRole,
       orientation,
@@ -573,6 +601,19 @@ async function _dispatchSummon({
 /**
  * Validate a SUMMON envelope. Throws IbpError on a bad shape.
  * Normalizes orientation to a known value (defaults to "forward").
+ *
+ * Envelope shape per seed/SUMMON.md:
+ *   from        REQUIRED stance (position@being) the caller is acting from
+ *   content     REQUIRED payload the receiver's role handler reads
+ *   intent      OPTIONAL kebab-case label naming the caller's stated purpose;
+ *               read by the role-walk auth check (canSummon's intent gate)
+ *               and surfaced to the receiver's handler as an addressing hint.
+ *               Intent is auth and routing first, hint second; the receiver's
+ *               role decides what to do regardless.
+ *   priority    OPTIONAL enum (HUMAN | GATEWAY | INTERACTIVE | BACKGROUND)
+ *   orientation OPTIONAL enum (forward | half | inward) for self-summons
+ *   activeRole  OPTIONAL hint at which of the receiver's roles to wake
+ *   attachments OPTIONAL caller-side metadata; opaque to seed
  */
 function validateSummonMessage(message) {
   if (!message || typeof message !== "object") {
@@ -589,6 +630,23 @@ function validateSummonMessage(message) {
   }
   if (message.content === undefined || message.content === null) {
     throw new IbpError(IBP_ERR.INVALID_INPUT, "`message.content` is required");
+  }
+  // Intent: optional, but when present must be a non-empty kebab-case
+  // label. The auth gate (roleAuth.permitsSummon) matches it literally
+  // against canSummon entries' intent restrictions, so loose shapes
+  // (whitespace, capital letters, punctuation) would silently fail to
+  // match declared entries. Reject them at the perimeter.
+  if (message.intent !== undefined && message.intent !== null) {
+    if (typeof message.intent !== "string" || !message.intent.length) {
+      throw new IbpError(IBP_ERR.INVALID_INPUT, "`message.intent` must be a non-empty string");
+    }
+    if (!/^[a-z][a-z0-9-]*(?::[a-z][a-z0-9-]*)?$/.test(message.intent)) {
+      throw new IbpError(
+        IBP_ERR.INVALID_INPUT,
+        `\`message.intent\` "${message.intent}" must be kebab-case (lowercase, digits, dashes; ` +
+        `optional single namespace prefix via ":")`,
+      );
+    }
   }
   // Normalize priority. Legacy callers (wakeSchedule, subscriptions)
   // pass the numeric form 1..5 used by inbox queue ordering. The Act

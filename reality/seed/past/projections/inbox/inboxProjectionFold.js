@@ -67,6 +67,7 @@ async function handleSummon(fact /*, type, id*/) {
         content:         params.content ?? null,
         activeRole:      params.activeRole || null,
         attachments:     params.attachments || undefined,
+        intent:          params.intent || null,
         priority:        params.priority || "INTERACTIVE",
         orientation:     params.orientation || "forward",
         rootCorrelation: params.rootCorrelation || params.correlation,

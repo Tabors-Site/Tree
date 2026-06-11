@@ -416,11 +416,12 @@ function openIntentSummon(beingEntry, offer) {
   const userInput = window.prompt(promptText, "");
   if (userInput === null) return;
   const stance = beingEntry.stance || `@${beingEntry.being}`;
-  const message = {
-    intent: offer.intent,
-    ...(userInput.trim().length > 0 ? { name: userInput.trim() } : {}),
-  };
-  flat.sendSummon(stance, message)
+  // Intent rides on the envelope (per seed/SUMMON.md); only the
+  // intent-specific payload fields go in content.
+  const content = userInput.trim().length > 0
+    ? { name: userInput.trim() }
+    : {};
+  flat.sendSummon(stance, content, { intent: offer.intent })
     .then((res) => {
       const summary = res?.reply?.from
         ? `summoned @${beingEntry.being} (${offer.intent}); reply from ${res.reply.from}`

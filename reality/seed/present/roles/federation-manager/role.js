@@ -138,16 +138,24 @@ export const federationManagerRole = Object.freeze({
   // descriptor inner face when cross-reality, via the local SUMMON
   // return shape when same-reality).
   async summon(message, ctx) {
-    // Federation payload rides inside content (SUMMON envelope only
-    // preserves canonical fields through inbox enqueue). Pull the
-    // intent + negotiationId + manifest etc. from content.
+    // Federation payload still rides inside content for cross-reality
+    // SUMMONs (the canopy serializer hasn't been updated to carry
+    // envelope intent yet — see TODO in dispatchToPeer in ./handlers.js
+    // and ./ops.js). Pull the rest of the federation fields from
+    // content as before.
     const fedMessage = (typeof message?.content === "object" && message.content !== null
                        && message.content.kind === "federation")
       ? message.content
       : message;
-    const intent = (typeof fedMessage === "object" && fedMessage !== null)
-      ? (fedMessage.intent || fedMessage.kind || null)
-      : null;
+
+    // Envelope intent first (per seed/SUMMON.md). Fall back to
+    // content.intent / content.kind for legacy cross-reality envelopes
+    // that haven't migrated yet. Same-reality callers should use the
+    // envelope; cross-reality callers will follow when canopy carries it.
+    const intent = message?.intent
+      || ((typeof fedMessage === "object" && fedMessage !== null)
+            ? (fedMessage.intent || fedMessage.kind || null)
+            : null);
 
     if (!intent || intent === "federation") {
       log.warn("FederationManager",

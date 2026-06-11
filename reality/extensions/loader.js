@@ -1620,15 +1620,33 @@ export async function uninstallExtension(name) {
         await import("../seed/materials/matter/types.js");
       unregisterMatterTypesFromExtension(name);
     } catch {}
+    // Registry SYMMETRY: every register has an unregister, and unload
+    // calls them ALL. A removed extension must leave no callable
+    // surface behind — its DO ops and SEE ops come out here (these
+    // two were missing; stale ops used to survive uninstall and stay
+    // dispatchable forever).
+    try {
+      const { unregisterOperationsFromExtension } =
+        await import("../seed/ibp/operations.js");
+      unregisterOperationsFromExtension(name);
+    } catch {}
+    try {
+      const { unregisterSeeOperationsFromExtension } =
+        await import("../seed/ibp/seeOps.js");
+      unregisterSeeOperationsFromExtension(name);
+    } catch {}
     try {
       const { clearToolOwnersForExtension } =
         await import("../seed/materials/space/extensionScope.js");
       clearToolOwnersForExtension(name);
     } catch {}
-    // Default-permissions registry retired with roles-are-auth
-    // (seed/RolesAreAuth.md). On uninstall, the extension's roles
-    // remain in the role registry but are unregisterable via the
-    // role-registry's unregisterRole; ungranted roles are inert.
+    // DELIBERATE asymmetry, not an omission: the extension's ROLES
+    // stay registered on uninstall. Grants already given reference
+    // them by name; yanking the def mid-flight would orphan granted
+    // rows. Ungranted roles are inert; operators retire them
+    // explicitly via unregisterRole / delete-role. (The old default-
+    // permissions registry itself retired with roles-are-auth —
+    // seed/RolesAreAuth.md.)
   }
 
   // Refresh confined extensions set. The removed extension might have been

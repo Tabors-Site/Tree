@@ -49,7 +49,7 @@ import { fileURLToPath } from "url";
 // collections, the peer registry, whatever future modules store — and
 // the genome captures it verbatim (a seed is the WHOLE reality; an
 // extension's collection is as much its body as its facts are).
-const SEED_CORE_COLLECTIONS = new Set(["facts", "acts", "branches", "reelHeads"]);
+const SEED_CORE_COLLECTIONS = new Set(["facts", "acts", "branches", "reelHeads", "actHeads"]);
 const REGENERABLE_COLLECTIONS = new Set([
   // fold caches — plant cold-folds these back from the chain
   "projections", "inbox_projection", "threads_projection", "position_projection",
@@ -117,6 +117,14 @@ export async function captureSeed(opts = {}) {
   // breaking the hash chain continuity from the seed's facts.
   const reelHeads = await ReelHead.find({}).lean();
   log.info("Seed", `captured ${reelHeads.length} reel heads`);
+
+  // ── 4b. Collect every ActHead ──
+  // Per-being per-branch act-chain tips. Acts are content-addressed
+  // chains; the reality root covers them, so the heads are core
+  // genome, not extension luggage.
+  const { default: ActHead } = await import("../../past/act/actHead.js");
+  const actHeads = await ActHead.find({}).lean();
+  log.info("Seed", `captured ${actHeads.length} act heads`);
 
   // ── 5. Collect everything else — extension collections et al ──
   // The genome is the WHOLE reality. Extensions may keep their own
@@ -221,6 +229,7 @@ export async function captureSeed(opts = {}) {
         acts:      acts.length,
         branches:  branches.length,
         reelHeads: reelHeads.length,
+        actHeads:  actHeads.length,
         extensionCollections: Object.keys(extensionData).length,
       },
       // The captured reality's chain fingerprint — computed PURELY
@@ -237,6 +246,7 @@ export async function captureSeed(opts = {}) {
             reality: getRealityDomain() || null,
             branches,
             reelHeads,
+            actHeads,
           });
         } catch { return null; }
       })(),
@@ -246,6 +256,7 @@ export async function captureSeed(opts = {}) {
     acts,
     branches,
     reelHeads,
+    actHeads,
     extensionData,
     casBlobs,
     casManifest,
@@ -397,6 +408,16 @@ export async function plantSeed(bundle) {
     log.info("Seed", `planted ${bundle.reelHeads.length} reel heads`);
   }
 
+  // ── 3b. ActHeads ──
+  // Act-chain tips. Needed before any new moment seals so the next
+  // act chains from the planted biography, and before verification
+  // (the reality root covers act chains).
+  if (Array.isArray(bundle.actHeads) && bundle.actHeads.length > 0) {
+    const { default: ActHead } = await import("../../past/act/actHead.js");
+    await ActHead.insertMany(bundle.actHeads, { ordered: false });
+    log.info("Seed", `planted ${bundle.actHeads.length} act heads`);
+  }
+
   // ── 4. Facts ──
   // The substantive chain. Original _id, seq, branch, p/h hashes
   // preserved. The fold engine derives projections from these.
@@ -473,14 +494,17 @@ export async function plantSeed(bundle) {
   if (expectedRoot) {
     try {
       const { realityRootFromParts } = await import("../../past/fact/chainRoots.js");
-      const [dbBranches, dbHeads] = await Promise.all([
+      const { default: ActHead } = await import("../../past/act/actHead.js");
+      const [dbBranches, dbHeads, dbActHeads] = await Promise.all([
         Branch.find({}).lean(),
         ReelHead.find({}).select("_id branch head headHash").lean(),
+        ActHead.find({}).select("_id branch headHash").lean(),
       ]);
       const actualRoot = realityRootFromParts({
         reality: bundle.sourceReality || null,
         branches: dbBranches,
         reelHeads: dbHeads,
+        actHeads: dbActHeads,
       });
       rootVerified = actualRoot === expectedRoot;
       if (rootVerified) {
@@ -499,7 +523,7 @@ export async function plantSeed(bundle) {
         log.warn("Seed", `chain root MISMATCH: expected ${expectedRoot.slice(0, 16)}…, got ${actualRoot.slice(0, 16)}… — UNPLANTING`);
         try {
           const db = mongoose.connection.db;
-          const toClear = ["facts", "acts", "branches", "reelHeads"];
+          const toClear = ["facts", "acts", "branches", "reelHeads", "actHeads"];
           for (const name of Object.keys(bundle.extensionData || {})) {
             if (!name.startsWith("system.")) toClear.push(name);
           }

@@ -65,6 +65,17 @@ export const seedSummonTool = {
         "Correlation of a prior summon this reply threads off of. Defaults to " +
           "the correlation of the summon that opened this moment.",
       ),
+    intent: z
+      .string()
+      .optional()
+      .describe(
+        "Optional kebab-case label naming your stated purpose for this summon " +
+          "(e.g. 'role-request', 'offer-graft', 'mate'). The receiver's role " +
+          "uses it to route into the right handler arm; the auth gate uses it " +
+          "to match canSummon entries that restrict by intent. You cannot " +
+          "compel the receiver's response — intent is a stated purpose, not a " +
+          "contract.",
+      ),
     orientation: z
       .enum(["forward", "half", "inward"])
       .optional()
@@ -123,6 +134,12 @@ export const seedSummonTool = {
 
     const message = { from: fromStance, content };
     if (inReplyTo) message.inReplyTo = inReplyTo;
+    // Stated purpose. Optional; when present rides the envelope (not
+    // content). summonVerb plumbs it to the auth gate and persists it
+    // on the summon Fact + InboxProjection row. See seed/SUMMON.md.
+    if (typeof args?.intent === "string" && args.intent.length > 0) {
+      message.intent = args.intent;
+    }
     // Orientation rides on the envelope. summonVerb validates that
     // non-forward orientations are self-only (rejects half/inward on
     // cross-being summons). A being calling summon(target=self,

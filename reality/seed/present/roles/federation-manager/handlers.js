@@ -154,9 +154,11 @@ async function dispatchToPeer(ctx, peerReality, message) {
   if (!myBeingId) {
     throw new Error("dispatchToPeer: no actorAct in ctx");
   }
-  // Federation payload rides inside content (canonical SUMMON fields
-  // are the only ones preserved through inbox enqueue — see ops.js
-  // dispatchToPeer for the same shape).
+  // Envelope intent at the wire level (per seed/SUMMON.md). The other
+  // federation fields (negotiationId, bundle, summary, etc.) ride in
+  // content; the peer's federation-manager.summon reads envelope.intent
+  // first to dispatch.
+  const { intent: messageIntent, ...rest } = message || {};
   const envelope = {
     id:      uuidv4(),
     verb:    "summon",
@@ -164,7 +166,8 @@ async function dispatchToPeer(ctx, peerReality, message) {
     payload: {
       message: {
         from:    "/@federation-manager",
-        content: { kind: "federation", ...message },
+        intent:  messageIntent || null,
+        content: { kind: "federation", ...rest },
       },
     },
   };

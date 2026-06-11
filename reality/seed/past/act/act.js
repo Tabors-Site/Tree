@@ -26,12 +26,29 @@
 // Whatever the being did during the moment — every DO, every BE
 // — deposits a Fact carrying this Act's id. "What happened inside
 // this moment?" is Fact.find({ actId }).
+//
+// CONTENT-ADDRESSED. An Act's `_id` IS the hash of its OPENING:
+//
+//   _id = SHA-256(p | canonical(opening))     (past/act/actHash.js)
+//
+// chained per (branch, being) — `p` is the being's previous sealed
+// act's identity (ActHead). The identity is minted at assign so the
+// moment's Facts can carry actId; the closure fields below (status,
+// endMessage, facadeSnapshot, answers) are bookkeeping OUTSIDE the
+// digest — they mutate by design, and the truth of what happened is
+// the hash-chained Facts. Wall-clock fields (receivedAt, stampedAt)
+// are human-time display helpers, never identity (see hash.js).
 
 import mongoose from "mongoose";
-import { v4 as uuidv4 } from "uuid";
 
 const ActSchema = new mongoose.Schema({
-  _id: { type: String, default: uuidv4 },
+  // The act's content hash — supplied by planActRow / crossWorld,
+  // never defaulted. 64 hex chars.
+  _id: { type: String },
+
+  // The act-chain link: the being's previous sealed act's identity
+  // on this branch (GENESIS_PREV for the first).
+  p: { type: String, default: null },
 
   beingIn:  { type: String, ref: "Being", required: true, index: true },
   beingOut: { type: String, ref: "Being", default: null, index: true },

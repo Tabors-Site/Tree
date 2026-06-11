@@ -147,6 +147,11 @@ import {
   getMatterType as ibpGetMatterType,
   listMatterTypes as ibpListMatterTypes,
 } from "./materials/matter/types.js";
+import {
+  registerInboxRenderer as ibpRegisterInboxRenderer,
+  unregisterInboxRenderer as ibpUnregisterInboxRenderer,
+  listInboxRenderers as ibpListInboxRenderers,
+} from "./present/intake/inboxRenderers.js";
 
 // The four-verb dispatcher. The whole of my public surface for
 // operations on space, matter, and beings.
@@ -198,6 +203,14 @@ import "./present/roles/acquisitionOps.js";
 // to-summon op exists. Side effects on approve (e.g. role-request →
 // grant-role) are dispatched by the panel as separate substrate calls.
 import "./present/intake/inboxOps.js";
+// Side-effect import. Registers the seed-shipped inbox renderers
+// (currently "role-request"). The my-inbox SEE op above looks up the
+// renderer keyed by envelope intent and attaches the render spec to
+// each entry — the panel is then a dumb renderer. Extensions can
+// register their own renderers via reality.registerInboxRenderer.
+// See seed/SUMMON.md "the receiving handler" + seed/present/intake/
+// inboxRenderers.js for the spec shape.
+import "./present/intake/renderers/index.js";
 // Side-effect import. Registers the publish layer: replicate-subtree
 // (extract a subtree's current shape into a portable bundle) and
 // graft-replicate (apply a bundle into a target). The walker primitive
@@ -535,6 +548,19 @@ export function buildRealityServices({
       unregisterMatterType: ibpUnregisterMatterType,
       getMatterType: ibpGetMatterType,
       listMatterTypes: ibpListMatterTypes,
+
+      // Inbox renderers — the dumb-panel pattern from seed/SUMMON.md.
+      // For each envelope intent, register a server-side renderer
+      // that returns a JSON-serializable render spec; the my-inbox
+      // SEE op enriches each pending entry with the spec, and the
+      // inbox panel renders the spec without knowing the intent.
+      // Seed ships renderers for its own intents (role-request);
+      // extensions register renderers for their own intents the
+      // same way. See seed/present/intake/inboxRenderers.js for the
+      // spec shape.
+      registerInboxRenderer: ibpRegisterInboxRenderer,
+      unregisterInboxRenderer: ibpUnregisterInboxRenderer,
+      listInboxRenderers: ibpListInboxRenderers,
     },
 
     // --- Response protocol (shapes, error codes, event types) ---

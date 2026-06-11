@@ -6,7 +6,6 @@
 // set-being:coord; the dancer refaces to the secondary axis.
 
 import log from "../../../seed/seedReality/log.js";
-import { readPositionsInSpace } from "../../../seed/past/projections/position/positionProjectionFold.js";
 
 const DEFAULT_GRID_W = 10;
 const DEFAULT_GRID_H = 10;
@@ -40,9 +39,11 @@ export const dancerTowardRole = Object.freeze({
 
     let positions;
     try {
-      positions = await readPositionsInSpace(gridSpaceId);
+      // Public surface: the moment ctx's projection read. No seed-
+      // internal imports — extensions consume the protocol.
+      positions = (await ctx.read("positions", gridSpaceId)) || [];
     } catch (err) {
-      log.warn("Dancer", `readPositionsInSpace failed: ${err.message}`);
+      log.warn("Dancer", `positions read failed: ${err.message}`);
       return { ok: false, shape: "internal", reason: err.message };
     }
 

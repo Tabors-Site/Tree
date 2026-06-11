@@ -6,22 +6,26 @@
 // fold closes the original row when the reply lands. No separate
 // "respond" op; the substrate's summon machinery is what closes loops.
 //
-// Per-intent UIs render different action surfaces. Each surface
-// ultimately:
-//   1. (optionally) dispatches a side-effect DO (e.g. grant-role)
-//   2. summons the original sender back with the response content +
-//      inReplyTo set to the inbox row's correlation
+// Per seed/SUMMON.md, this panel is a DUMB RENDERER. It does not
+// switch on intent. For each entry, the server-side `my-inbox` SEE op
+// attaches an `entry.render` spec (built by the inbox renderer registry
+// keyed by envelope intent). The panel renders the spec; the role —
+// through its registered renderer — decided what the spec contains.
 //
-//   intent: "role-request"  → approve / deny
-//                             approve does TWO acts: do(grant-role) +
-//                             summon(reply, {result:"approved"})
-//                             deny does ONE act: summon(reply, {result:"denied"})
+// Spec shape (see seed/present/intake/inboxRenderers.js for full doc):
+//   {
+//     shape:        "action-buttons" | "free-text",
+//     body?:        { html?: string, text?: string },
+//     buttons?:     [{ label, kind: "ok"|"warn"|"neutral",
+//                      ops?: [{target, action, args}],
+//                      reply?: {content},
+//                      disabled?: string }],
+//     placeholder?: string,
+//     allowDismiss?: boolean,
+//   }
 //
-//   intent: "yes-no"        → yes / no
-//                             both do ONE act: summon(reply,
-//                             {result:"yes"|"no"})
-//
-//   intent: "(anything else)" → free-text reply / dismiss
+// When `entry.render` is null (no renderer for the intent), the panel
+// uses a default free-text reply + dismiss surface.
 
 import { flat } from "./host.js";
 
@@ -94,16 +98,25 @@ function renderEntry(parent, entry, { reality, refresh }) {
 }
 
 function renderContentBody(card, entry) {
-  const c = entry.content || {};
   const block = document.createElement("div");
   block.className = "inbox-body";
 
-  if (entry.intent === "role-request") {
-    block.innerHTML =
-      `wants <strong>${escapeHtml(c.role || "?")}</strong> ` +
-      `at <span class="muted">${escapeHtml(String(c.anchorSpaceId || "?")).slice(0, 12)}…</span>` +
-      (c.reason ? `<div class="dim">reason: ${escapeHtml(c.reason)}</div>` : "");
-  } else if (typeof c === "string" && c.length) {
+  // Renderer-provided body override always wins.
+  const bodySpec = entry.render?.body || null;
+  if (bodySpec && typeof bodySpec.html === "string") {
+    block.innerHTML = bodySpec.html;
+    card.appendChild(block);
+    return;
+  }
+  if (bodySpec && typeof bodySpec.text === "string") {
+    block.textContent = bodySpec.text;
+    card.appendChild(block);
+    return;
+  }
+
+  // Default content rendering.
+  const c = entry.content || {};
+  if (typeof c === "string" && c.length) {
     block.textContent = c;
   } else if (c && typeof c.message === "string") {
     block.textContent = c.message;
@@ -116,108 +129,85 @@ function renderContentBody(card, entry) {
 function renderResponseSurface(card, entry, { reality, refresh }) {
   const row = document.createElement("div");
   row.className = "inbox-actions";
+  const spec = entry.render;
 
-  if (entry.intent === "role-request") {
-    const approve = makeButton("approve", "btn-ok");
-    const deny    = makeButton("deny",    "btn-warn");
-    approve.addEventListener("click", () =>
-      handleRoleRequestApprove(entry, { reality, refresh, btn: approve }));
-    deny.addEventListener("click", () =>
-      replyAndRefresh(entry, { result: "denied", intent: "role-request" }, { reality, refresh, btn: deny }));
-    row.appendChild(approve);
-    row.appendChild(deny);
+  if (spec?.shape === "action-buttons" && Array.isArray(spec.buttons)) {
+    for (const btnSpec of spec.buttons) {
+      const btn = makeButtonFromSpec(btnSpec);
+      if (!btnSpec.disabled) {
+        btn.addEventListener("click", () =>
+          executeButton(entry, btnSpec, { reality, refresh, btn }));
+      }
+      row.appendChild(btn);
+    }
     card.appendChild(row);
     return;
   }
 
-  if (entry.intent === "yes-no") {
-    const yes = makeButton("yes", "btn-ok");
-    const no  = makeButton("no",  "btn-warn");
-    yes.addEventListener("click", () =>
-      replyAndRefresh(entry, { result: "yes", intent: "yes-no" }, { reality, refresh, btn: yes }));
-    no.addEventListener("click", () =>
-      replyAndRefresh(entry, { result: "no",  intent: "yes-no" }, { reality, refresh, btn: no }));
-    row.appendChild(yes);
-    row.appendChild(no);
-    card.appendChild(row);
-    return;
-  }
+  // Default free-text surface (shape="free-text" or no spec at all).
+  const placeholder = (spec && typeof spec.placeholder === "string")
+    ? spec.placeholder
+    : "type a reply…";
+  const allowDismiss = !spec || spec.allowDismiss !== false;
 
-  // Generic free-text reply.
   const input = document.createElement("input");
   input.type = "text";
   input.className = "inbox-reply";
-  input.placeholder = "type a reply…";
+  input.placeholder = placeholder;
   row.appendChild(input);
+
   const send = makeButton("reply", "btn-ok");
   send.addEventListener("click", () => {
     const msg = input.value.trim();
     if (!msg) return;
     replyAndRefresh(entry, { message: msg }, { reality, refresh, btn: send });
   });
-  const dismiss = makeButton("dismiss", "btn-warn");
-  dismiss.addEventListener("click", () =>
-    replyAndRefresh(entry, { result: "dismissed" }, { reality, refresh, btn: dismiss }));
   row.appendChild(send);
-  row.appendChild(dismiss);
+
+  if (allowDismiss) {
+    const dismiss = makeButton("dismiss", "btn-warn");
+    dismiss.addEventListener("click", () =>
+      replyAndRefresh(entry, { result: "dismissed" }, { reality, refresh, btn: dismiss }));
+    row.appendChild(dismiss);
+  }
   card.appendChild(row);
 }
 
 // ──────────────────────────────────────────────────────────────────
-// Response orchestration
+// Button execution
 // ──────────────────────────────────────────────────────────────────
 
-// Approve a role-request: TWO acts — grant-role on the asker, then a
-// reply summon that closes the original inbox row. The grant lands on
-// the asker's reel; the reply lands as a summon back at them.
-async function handleRoleRequestApprove(entry, { reality, refresh, btn }) {
+// Run a button spec end-to-end:
+//   1. for each entry in ops: flat.doOp(target, action, args)
+//   2. if reply: summon target=summoner with content + inReplyTo
+//   3. refresh inbox view
+async function executeButton(entry, btnSpec, { reality, refresh, btn }) {
   btn.disabled = true;
-  const c = entry.content || {};
-  if (!c.role || !c.anchorSpaceId || !c.askerBeingId) {
-    btn.textContent = "missing role/anchor/asker fields";
-    return;
-  }
-  // Step 1: grant the role on the asker's reel. Resolve their stance:
-  // prefer the askerName recorded in the request; fall back to the
-  // public directory if we only have an id (mirrors the summoner
-  // resolution path).
-  let askerStance = null;
-  if (c.askerName) {
-    askerStance = `${reality}/@${c.askerName}`;
-  } else if (c.askerBeingId) {
+  const ops = Array.isArray(btnSpec.ops) ? btnSpec.ops : [];
+  for (const op of ops) {
+    if (!op || typeof op !== "object") continue;
+    const { target, action, args } = op;
+    if (!target || !action) continue;
     try {
-      const dir = await flat.state.client.see(`${reality}/.beings/${c.askerBeingId}`);
-      const name = dir?.directoryEntry?.name || dir?.name || dir?.being?.name;
-      if (name) askerStance = `${reality}/@${name}`;
+      await flat.doOp(target, action, args || {});
     } catch (err) {
-      console.warn("[inbox-panel] asker directory SEE failed:", err?.message || err);
+      btn.textContent = `${action} failed: ${err?.message || err}`.slice(0, 80);
+      btn.disabled = false;
+      return;
     }
   }
-  if (!askerStance) {
-    btn.textContent = "asker not addressable";
-    btn.disabled = false;
+  if (btnSpec.reply) {
+    await replyAndRefresh(entry, btnSpec.reply.content || {}, { reality, refresh, btn });
     return;
   }
-  try {
-    await flat.doOp(askerStance, "grant-role", {
-      role:          c.role,
-      anchorSpaceId: c.anchorSpaceId,
-      anchorBeingId: null,
-    });
-  } catch (err) {
-    btn.textContent = `grant failed: ${err?.message || err}`.slice(0, 80);
-    btn.disabled = false;
-    return;
-  }
-  // Step 2: reply summon — closes the inbox row via inReplyTo + the
-  // fold handler.
-  await replyAndRefresh(entry, { result: "approved", intent: "role-request" }, { reality, refresh, btn });
+  // No reply specified — just refresh.
+  refresh();
 }
 
 // Send a reply summon back at the original summoner. The reply
-// carries the user's response content + inReplyTo pointing at the
-// inbox row's correlation. The inboxProjectionFold's reply-sweep
-// closes the row.
+// carries the response content + inReplyTo pointing at the inbox
+// row's correlation. The closeInboxOnAnswer hook closes the row when
+// the reply's Act seals.
 async function replyAndRefresh(entry, content, { reality, refresh, btn }) {
   if (btn) btn.disabled = true;
   const target = await resolveSummonerStance(entry, reality);
@@ -303,6 +293,18 @@ function makeButton(label, cls) {
   return b;
 }
 
+function makeButtonFromSpec(btnSpec) {
+  const kind = btnSpec.kind || "neutral";
+  const cls = kind === "ok" ? "btn-ok" : kind === "warn" ? "btn-warn" : "btn-neutral";
+  const b = makeButton(btnSpec.label || "?", cls);
+  if (btnSpec.disabled) {
+    b.disabled = true;
+    b.title = btnSpec.disabled;
+    b.classList.add("btn-disabled");
+  }
+  return b;
+}
+
 function escapeHtml(s) {
   return String(s || "")
     .replace(/&/g, "&amp;")
@@ -323,8 +325,10 @@ function injectStyles() {
     .inbox-body pre.inbox-json { max-height: 200px; overflow: auto; padding: 4px; background: #0a0a0a; border: 1px solid #222; font-size: 11px; }
     .inbox-actions { display: flex; gap: 6px; align-items: center; margin-top: 6px; flex-wrap: wrap; }
     .inbox-reply { flex: 1; min-width: 120px; background: #0c0c0c; color: #ccc; border: 1px solid #333; padding: 3px 6px; font-size: 12px; }
-    .btn-ok   { background: #2a6e3a; color: #fff; border: 0; cursor: pointer; }
-    .btn-warn { background: #6e2a2a; color: #fff; border: 0; cursor: pointer; }
+    .btn-ok      { background: #2a6e3a; color: #fff; border: 0; cursor: pointer; }
+    .btn-warn    { background: #6e2a2a; color: #fff; border: 0; cursor: pointer; }
+    .btn-neutral { background: #444;    color: #fff; border: 0; cursor: pointer; }
+    .btn-disabled { opacity: 0.5; cursor: not-allowed; }
   `;
   document.head.appendChild(s);
 }

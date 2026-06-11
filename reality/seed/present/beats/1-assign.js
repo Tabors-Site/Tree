@@ -54,7 +54,6 @@
 
 import log from "../../seedReality/log.js";
 import { getInternalConfigValue } from "../../internalConfig.js";
-import { v4 as uuidv4 } from "uuid";
 import Being from "../../materials/being/being.js";
 import { loadProjection, loadOrFold, assertBranchOrThrow } from "../../materials/projections.js";
 import Act from "../../past/act/act.js";
@@ -329,6 +328,16 @@ export async function assign({ beingId, spaceId, entry, handoff = null, signal =
     // `ctx.toBeing` (id baked in as `_id`, state fields flattened).
     read: async (kind, id) => {
       if (!id) return null;
+      // "positions" reads the per-space position projection (who
+      // stands where) — the public surface for code-cognition roles
+      // that used to reach into seed/past/projections directly.
+      // Projections are caches of the fold; this is a READ, never a
+      // write path.
+      if (kind === "positions") {
+        const { readPositionsInSpace } =
+          await import("../../past/projections/position/positionProjectionFold.js");
+        return readPositionsInSpace(String(id));
+      }
       const { loadOrFold } = await import("../../materials/projections.js");
       const slot = await loadOrFold(kind, String(id), branch);
       if (!slot) return null;
@@ -588,9 +597,12 @@ async function planActRow(opts = {}) {
     }
   }
 
-  const actId = uuidv4();
-  // A summon with no parent IS its own root.
-  if (!resolvedRoot) resolvedRoot = actId;
+  // Identity placeholder — computed below once the full opening is
+  // assembled (the act's _id IS the hash of its opening; see
+  // past/act/actHash.js). rootCorrelation may equal the act's own id
+  // (a parentless summon is its own root), which is exactly why the
+  // digest excludes rootCorrelation — no circularity.
+  let actId = null;
 
   // Spawn-lineage. When the asker is currently acting under another
   // rootCorrelation (running inside thread A) and emits a fresh
@@ -629,12 +641,36 @@ async function planActRow(opts = {}) {
   // here so Facts emitted during the moment can carry actId; the
   // Act row doesn't exist until seal materializes it.
   //
+  // CONTENT-ADDRESSED: the _id is the hash of the OPENING, chained
+  // to the being's previous sealed act (ActHead read here; advanced
+  // only at seal so crashed moments never enter the chain). See
+  // past/act/actHash.js for what the digest covers and excludes.
+  //
   // Identity tuple (reality, branch, beingIn, _id) lives on this row.
   // Everything downstream (Facts in deltaF, inner face attachment,
   // crossOrigin derivation) reads from here. See CROSS-WORLD.md.
   const { getRealityDomain } = await import("../../ibp/address.js");
+  const { computeActId, readActHead } = await import("../../past/act/actHash.js");
+  const opening = {
+    beingIn,
+    beingOut: beingOut || null,
+    ibpAddress,
+    activeRole,
+    inboxMessageId,
+    inReplyTo,
+    parentThread: resolvedParentThread,
+    startMessage: { content: safeMessage, source },
+    reality: getRealityDomain(),
+    branch,
+  };
+  const p = await readActHead(branch, beingIn);
+  actId = computeActId(p, opening);
+  // A summon with no parent IS its own root.
+  if (!resolvedRoot) resolvedRoot = actId;
+
   return {
     _id: actId,
+    p,
     beingIn,
     beingOut: beingOut || null,
     ibpAddress,

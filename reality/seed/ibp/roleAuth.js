@@ -298,9 +298,9 @@ function permitsDo(spec, action) {
 //
 // Authorization here checks the CALLER'S role, so only entries with
 // `as: "actor"` (or absent — the legacy/default sense) count.
-// Receiver-side acceptance is the role's own `summon()` cognition;
-// the `as: "receiver"` entries are pure declaration consumed by UI
-// discovery + symmetric auth checks elsewhere. See FEDERATION.md.
+// Receiver-side acceptance is checked separately at the summon verb
+// via `permitsReceiverSummon` below (the "other half of the post
+// office check" per seed/SUMMON.md).
 function permitsSummon(spec, targetBeing, intent) {
   if (!Array.isArray(spec.canSummon)) return false;
   for (const entry of spec.canSummon) {
@@ -314,6 +314,59 @@ function permitsSummon(spec, targetBeing, intent) {
     }
   }
   return false;
+}
+
+/**
+ * Receiver-side acceptance check. Asks the RECEIVER'S role spec
+ * whether it accepts a summon with the given intent. Per seed/SUMMON.md
+ * this is the second half of the post office check — the actor's
+ * authorize() gates the OUTGOING side; this gates the INCOMING side.
+ *
+ * Progressive enhancement (the safe shape): a role with NO `as: receiver`
+ * canSummon entries is unrestricted and accepts any incoming summon.
+ * A role with at least one `as: receiver` entry has DECLARED its
+ * accepted intents; the receiver check then becomes strict — the
+ * envelope intent must match an entry's intent (or wildcard "*"), or
+ * the summon refuses with a "role X does not accept intent Y" reason.
+ *
+ * @param {object} role     receiver's role spec (from registry.getRole)
+ * @param {string} intent   envelope intent (null/undefined allowed)
+ * @returns {{ok: true} | {ok: false, reason: string}}
+ */
+export function permitsReceiverSummon(role, intent) {
+  if (!role || typeof role !== "object") {
+    return { ok: false, reason: "receiver role missing" };
+  }
+  const receiverEntries = Array.isArray(role.canSummon)
+    ? role.canSummon.filter((e) => typeof e === "object" && e?.as === "receiver")
+    : [];
+  if (receiverEntries.length === 0) {
+    // No declared receiver entries → role accepts anything. Current
+    // behavior for roles that haven't yet declared their accepted
+    // intents; preserves cross-reality summons and all legacy paths
+    // until each role authors its receiver list.
+    return { ok: true };
+  }
+  // Role HAS declared receiver entries → intent is required and must
+  // match one of them. A summon without intent to a role with
+  // declared receiver entries refuses; omitting intent can't be used
+  // to bypass the receiver gate.
+  if (!intent) {
+    const declared = receiverEntries.map((e) => e?.intent || "(any)").join(", ");
+    return {
+      ok: false,
+      reason: `role "${role.name}" declares accepted intents [${declared}] but the summon carried no intent`,
+    };
+  }
+  for (const entry of receiverEntries) {
+    const want = entry?.intent;
+    if (!want || want === "*" || want === intent) return { ok: true };
+  }
+  const declared = receiverEntries.map((e) => e?.intent || "(any)").join(", ");
+  return {
+    ok: false,
+    reason: `role "${role.name}" does not accept intent "${intent}" (accepts: ${declared})`,
+  };
 }
 
 function permitsBe(spec, operation) {

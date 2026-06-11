@@ -36,7 +36,7 @@ What a world **sees** of a reel is the union of lineage segments, each ancestor 
 
 $$\widehat{R}_e^{\,w} \;=\; \bigcup_{i} \; R_e^{L_i(w)}\big[\, \beta_{L_i}(e) < n \le \beta_{L_{i+1}}(e) \,\big] \qquad (\text{leaf unbounded above})$$
 
-One reel, one chain, read across worlds. Every **being** also has an **act-chain** $A_b$ per world. Spaces and matter have reels only — they are acted upon, never act.
+One reel, one chain, read across worlds. Every **being** also has an **act-chain** $A_b$ per world — hash-linked like a reel: an act's identity is the hash of its _opening_ chained to the being's previous sealed act, $\mathrm{id}(a) = H(p_a \| \mathrm{canon}(\mathrm{opening}))$; the closure (status, the sealing utterance) is bookkeeping outside the identity, because what HAPPENED is the facts the act produced. Spaces and matter have reels only — they are acted upon, never act.
 
 ### FACT — _identity is intrinsic_
 
@@ -106,12 +106,12 @@ Growth is monotonic; nothing is ever removed.
 
 ### PRESENT
 
-The **present** is the engine that runs moments and applies seals. It runs many at once:
+The **present** is the engine that runs moments and applies seals — **one present per world** ($w$): a reality hosts many branches, each with its own present; a computer hosts one reality. Within a world's present:
 
-- per being — **serial** (one live moment per being)
+- per being — **serial** (one live moment per $(b, w)$)
 - across beings — **parallel**
 
-There is no global tick coordinating them. The present is the only place a moment exists.
+Across worlds, presents are independent — the branch point freezes the shared prefix (ancestors append only above it, descendants read only below it), so no coordination exists between them except **messages**: acting into another world (sibling branch or foreign reality, same shape) is a request delivered to that world's present. There is no global tick coordinating anything. The present is the only place a moment exists.
 
 ### TIME
 
@@ -201,7 +201,7 @@ The head fact's identity already commits to everything behind it, so each scale 
 
 $$\mathrm{root}(R_e^w) = \mathrm{id}(f_{T}) \qquad \text{(the reel root — rolling, by construction)}$$
 
-$$\mathrm{root}(w) = H\big(\mathrm{canon}(\,w,\; \mathrm{parent}(w),\; \beta_w,\; \{(e,\,\mathrm{root}(R_e^w))\}_{\text{sorted}}\,)\big)$$
+$$\mathrm{root}(w) = H\big(\mathrm{canon}(\,w,\; \mathrm{parent}(w),\; \beta_w,\; \{(e,\,\mathrm{root}(R_e^w))\}_{\text{sorted}},\; \{(b,\,\mathrm{root}(A_b^w))\}_{\text{sorted}}\,)\big)$$
 
 $$\mathrm{root}(\mathcal{R}) = H\big(\mathrm{canon}(\,\text{domain},\; \{(w,\,\mathrm{root}(w))\}_{\text{sorted}}\,)\big)$$
 

@@ -426,12 +426,14 @@ async function sendIntent(ctx, peerReality, message) {
     throw new IbpError(IBP_ERR.INTERNAL, "sendIntent: no actor beingId in ctx");
   }
 
-  // SUMMON envelope only preserves canonical message fields
-  // (from/content/correlation/etc.) at the inbox enqueue. Custom
-  // application fields are stripped. So we pack the federation payload
-  // into content (which accepts arbitrary objects, the same pattern
-  // birther's summon:mate uses). The role's summon handler reads
-  // message.content.intent to dispatch.
+  // Envelope intent is canonical (per seed/SUMMON.md): the auth gate
+  // and the receiver's permitsReceiverSummon both read it from the
+  // envelope. crossRealityDispatch passes payload.message straight
+  // through to summonVerb, so envelope.intent on the wire is the same
+  // envelope.intent the local verb stamps onto the summon Fact. The
+  // rest of the federation fields (negotiationId, manifest, bundle,
+  // etc.) ride inside content as before.
+  const { intent: messageIntent, ...rest } = message || {};
   const envelope = {
     id:      uuidv4(),
     verb:    "summon",
@@ -439,7 +441,8 @@ async function sendIntent(ctx, peerReality, message) {
     payload: {
       message: {
         from:    "/@federation-manager",
-        content: { kind: "federation", ...message },
+        intent:  messageIntent || null,
+        content: { kind: "federation", ...rest },
       },
     },
   };

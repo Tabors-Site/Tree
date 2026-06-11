@@ -148,13 +148,13 @@ registerOperation("ask-role", {
         ownerStance,
         {
           from:    askerStance,
-          // Generic envelope `content` shape:
-          //   { intent, ...intentSpecificFields }
-          // The inbox panel renders different action surfaces per
-          // intent. "role-request" gets approve/deny buttons that
-          // resolve via grant-role + reply-summon.
+          // Envelope intent: the caller's stated purpose. Read by the
+          // auth gate (canSummon entries with intent: "role-request"),
+          // routed by multi-role receivers, and surfaced by the inbox
+          // panel as the dispatch key for its render surface.
+          // See seed/SUMMON.md.
+          intent:  "role-request",
           content: {
-            intent:        "role-request",
             role:          roleName,
             anchorSpaceId: foundHost,
             askerBeingId:  String(identity.beingId),

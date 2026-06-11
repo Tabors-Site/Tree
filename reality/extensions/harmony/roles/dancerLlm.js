@@ -12,10 +12,6 @@
 // structured world face. The seed enforces grid bounds via
 // Space.size at set-being:coord time.
 
-// TODO(substrate-clean): readPositionsInSpace is still imported from seed
-// internals — the substrate doesn't expose a list-by-space helper yet.
-// Tracked in EXTENSION_FORMAT.md follow-ups.
-import { readPositionsInSpace } from "../../../seed/past/projections/position/positionProjectionFold.js";
 import log from "../../../seed/seedReality/log.js";
 
 const DIRS = [
@@ -46,7 +42,9 @@ export const neighborsSeeResolver = async (ctx) => {
 
   let positions, bounds;
   try {
-    positions = await readPositionsInSpace(gridSpaceId);
+    // Public surface: ctx.read("positions", spaceId) — the moment
+    // ctx's projection read. No seed-internal imports.
+    positions = (await ctx.read("positions", gridSpaceId)) || [];
     // Branch comes from the moment ctx — extensions never assume a
     // particular branch, just thread whatever's live.
     const grid = await ctx.read("space", gridSpaceId);

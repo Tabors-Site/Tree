@@ -218,8 +218,17 @@ export async function sealAct(plannedAct, { content = null, deltaF = [], afterSe
     try {
       inserted = await Act.create(actDoc);
     } catch (err) {
-      log.error("Stamped", `sealAct insert failed (actId=${String(plannedAct._id).slice(0, 8)}): ${err.message}`);
-      return null;
+      // Duplicate IDENTITY (same opening at the same chain position)
+      // is dedup semantics under content addressing — the act sealed
+      // once already; this is a replay.
+      if (err?.code === 11000) {
+        inserted = await Act.findById(actDoc._id).lean();
+        log.debug("Stamped", `act replay deduped (${String(actDoc._id).slice(0, 8)})`);
+      }
+      if (!inserted) {
+        log.error("Stamped", `sealAct insert failed (actId=${String(plannedAct._id).slice(0, 8)}): ${err.message}`);
+        return null;
+      }
     }
   } else {
     // ── ΔF≥1: atomic commit of ΔF + Act inside one transaction. ──
@@ -267,6 +276,18 @@ export async function sealAct(plannedAct, { content = null, deltaF = [], afterSe
   }
 
   if (!inserted) return null;
+
+  // Advance the being's act-chain head — ONLY here, where the Act row
+  // actually landed (and in crossWorld's documented direct open).
+  // Crashed moments never reach this line, so the chain only ever
+  // points at acts that exist. The head feeds the NEXT act's `p`
+  // (assign reads it) and the branch/reality roots (chainRoots).
+  try {
+    const { advanceActHead } = await import("../../past/act/actHash.js");
+    await advanceActHead(actDoc.branch || "0", actDoc.beingIn, actDoc._id);
+  } catch (err) {
+    log.warn("Stamped", `actHead advance failed: ${err.message} (next act re-chains from the prior head)`);
+  }
 
   // Status transition: attempted → landed. For same-world and
   // same-reality cross-branch moments the local Stamper IS the
