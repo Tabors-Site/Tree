@@ -22,6 +22,8 @@ const NEW_ROUTES = [
   "/factory",               // FactoryOverview (in FactoryLayout)
   "/factory/being-types",
   "/factory/roles",
+  "/factory/branches",
+  "/factory/integrity",
   "/factory/intake",
   "/factory/assign",
   "/factory/fold",
@@ -122,6 +124,14 @@ const PAGE_META = {
   "/factory/roles": {
     title: "Roles . The Factory",
     description: "Roles are the IDE for building in reality. Extensions ship the parts (matter types, world signals, role definitions); operators mix them in role-manager. Stack them per moment via roleFlow conditions on the world.",
+  },
+  "/factory/branches": {
+    title: "Branches . The Factory",
+    description: "TreeOS treats reality as branchable. Past moments aren't gone, they're forkable. Branches run as live parallel worlds, share identity across forks, and merge through conversational reconciliation.",
+  },
+  "/factory/integrity": {
+    title: "Content as Identity . The Factory",
+    description: "TreeOS identifies content by what it is, not where it sits. Cryptographic hashes give the substrate verifiable replay, efficient federation, automatic deduplication, and tamper evident history. The same root hash means the same state.",
   },
   "/factory/intake": {
     title: "Intake . Beat 1 . The Factory",

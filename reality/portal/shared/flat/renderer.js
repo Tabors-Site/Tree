@@ -1241,7 +1241,8 @@ function renderReelExplorer(pane, reel, discovery) {
 }
 
 // Walk the fact array (newest-first) and check each block's prev-hash
-// against the next-older block's self-hash. Returns:
+// against the next-older block's identity (its _id IS its content
+// hash under full CAS). Returns:
 //   { ok: bool, verified: N, broken: M, perBlock: ["ok" | "genesis" | "edge" | "broken"] }
 function verifyChain(facts) {
   const out = { ok: true, verified: 0, broken: 0, perBlock: [] };
@@ -1250,7 +1251,8 @@ function verifyChain(facts) {
     // The older neighbor in the window (if present).
     const older = facts[i + 1];
     if (older) {
-      if (f.p && older.h && String(f.p) === String(older.h)) {
+      const olderId = older._id || older.h;
+      if (f.p && olderId && String(f.p) === String(olderId)) {
         out.verified++;
         out.perBlock.push("ok");
       } else {
@@ -1332,8 +1334,9 @@ function renderFactBlock(f, discovery, chainStatus = "edge") {
 
   const hash = document.createElement("code");
   hash.className = "block-hash";
-  hash.textContent = `h:${short(f.h, 10)}`;
-  hash.title = f.h ? `full: ${f.h}\nprev: ${f.p || "(genesis)"}` : "(no hash)";
+  // The fact's identity IS its content hash (_id) under full CAS.
+  hash.textContent = `#${short(f._id, 10)}`;
+  hash.title = f._id ? `identity: ${f._id}\nprev: ${f.p || "(genesis)"}` : "(no identity)";
   summary.appendChild(hash);
 
   const toggle = document.createElement("button");
@@ -1360,8 +1363,7 @@ function renderFactBlock(f, discovery, chainStatus = "edge") {
   const detail = document.createElement("div");
   detail.className = "block-detail hidden";
 
-  detail.appendChild(kvBlock("fact id", f._id, { mono: true }));
-  detail.appendChild(kvBlock("h (self)", f.h || "(none)", { mono: true }));
+  detail.appendChild(kvBlock("identity (hash)", f._id || "(none)", { mono: true }));
   detail.appendChild(kvBlock("p (prev)", f.p || "(genesis)", { mono: true }));
   if (f.actId) detail.appendChild(kvBlock("act id", f.actId, { mono: true, link: discovery && f.beingId ? `#${discovery.reality}/.acts/${f.beingId}` : null }));
   if (f.params != null) detail.appendChild(jsonKv("params", f.params));

@@ -28,12 +28,26 @@
 // pre-being scaffold flows (boot, migrations, first-time-boot
 // writes). Once a being is on the place, the being's id is what the
 // row carries.
+//
+// CONTENT-ADDRESSED. A fact's `_id` IS its hash:
+//
+//   _id = SHA-256(p | canonical(content incl branch))
+//
+// The same deed, in the same world, after the same history, IS the
+// same fact — identity is intrinsic, not assigned. No random ids;
+// the stamper computes the identity at seal time (past/fact/hash.js
+// owns the digest; facts.js logFact is the only minting path —
+// plantSeed re-inserts rows verbatim WITH their identities, which is
+// what content addressing makes safe). Storage dedup, transport
+// ("do you have this hash?"), and tamper-evidence are properties of
+// the addressing scheme, not separate mechanisms.
 
 import mongoose from "mongoose";
-import { v4 as uuidv4 } from "uuid";
 
 const FactSchema = new mongoose.Schema({
-  _id:  { type: String, default: uuidv4 },
+  // The fact's content hash — supplied by the stamper, never
+  // defaulted. 64 hex chars.
+  _id:  { type: String },
   date: { type: Date,   default: Date.now },
 
   // The actor. I am the actor only when no being yet exists
@@ -86,24 +100,26 @@ const FactSchema = new mongoose.Schema({
 
   // INTEGRITY — per-reel hash chain.
   //
-  //   p — prev-hash: the previous fact's `h` on the same reel
-  //       (GENESIS_PREV at seq=1). Folds the entire history behind
-  //       this fact into its hash.
-  //   h — self-hash: SHA-256(p || canonical(content)). Set inside
-  //       the seal so the fact and its correct hash land together.
+  //   p   — prev-hash: the previous fact's `_id` on the same reel
+  //         (lineage-aware on branches: the first divergent fact
+  //         chains to the parent's fact at the branchPoint;
+  //         GENESIS_PREV at seq=1). Folds the entire history behind
+  //         this fact into its identity.
+  //   _id — the self-hash (see header). There is no separate `h`.
   //
-  // Per-reel, not global. Each (target.kind, target.id) reel is its
-  // own chain. The chain DETECTS tampering — alter any past fact and
-  // its `h` changes, breaking the `p` link of the next. The chain
-  // does not REPAIR. Repair is replication's job (a clean copy from
-  // another node). Logical "wrong-but-honest" facts are handled by
-  // appending a correction fact, never by rewriting the chain.
+  // Per-reel, not global. Each (branch, target.kind, target.id) reel
+  // is its own chain. The chain DETECTS tampering — alter any past
+  // fact and its recomputed identity changes, breaking the `p` link
+  // of the next. The chain does not REPAIR. Repair is replication's
+  // job (a clean copy from another node). Logical "wrong-but-honest"
+  // facts are handled by appending a correction fact, never by
+  // rewriting the chain.
   //
   // Non-reel-bearing facts (target.kind ∈ {place, stance} or
-  // target-less) carry p=h=null and stay outside the verification
-  // model. They have no reel to chain against. See verifyReel.js.
+  // target-less) carry p=GENESIS_PREV and a content-hash _id like
+  // every other fact — they have identity without a chain; only
+  // reel verification skips them. See verifyReel.js.
   p: { type: String, default: null },
-  h: { type: String, default: null },
 
   // PARALLEL FACTS — stale-detection key (see
   // [seed/philosophy/extensions/0-PARALLEL-FACTS.md](../../philosophy/extensions/0-PARALLEL-FACTS.md)).

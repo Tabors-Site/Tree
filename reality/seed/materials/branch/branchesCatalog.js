@@ -91,11 +91,25 @@ export async function describeBranchesCatalog(branchPath = MAIN) {
   // aimed here." Surfaced for the full "see branch" info view.
   const pointers = await readPointers().catch(() => ({}));
 
+  // Chain fingerprints (past/fact/chainRoots.js): this branch's root
+  // hash and the whole reality's root. Same root = same chain state;
+  // two substrates compare worlds in one number. TTL-memoized inside
+  // chainRoots so this stays cheap on the hot SEE path.
+  let rootHash = null;
+  let chainRealityRoot = null;
+  try {
+    const { branchRoot, realityRoot } = await import("../../past/fact/chainRoots.js");
+    rootHash = await branchRoot(isMainPath ? MAIN : path);
+    chainRealityRoot = await realityRoot();
+  } catch { /* fingerprints are additive — never block the catalog */ }
+
   return {
     current,
     lineage,
     children,
     pointers,
+    rootHash,
+    realityRoot: chainRealityRoot,
   };
 }
 

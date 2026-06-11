@@ -1,8 +1,8 @@
 // TreeOS Seed . AGPL-3.0 . https://treeos.ai . Tabor Holly
 //
 // verifyReel — walk a reel-bearing aggregate's facts in seq order,
-// recompute each fact's h from its p+content, and confirm the chain
-// holds end-to-end.
+// BRANCH-AWARE, recompute each fact's identity from its p+content,
+// and confirm the chain holds end-to-end.
 //
 // Per math.md INTEGRITY: the chain DETECTS tampering. It does not
 // repair. A failed verify says "this reel has been altered or its
@@ -10,14 +10,19 @@
 // caller decides what to do — fetch a clean copy from replication,
 // quarantine the reel, raise an alert.
 //
-// The walk reads every reel-bearing fact (seq is numeric). Non-
-// reel facts (target.kind ∈ {place,stance} or target-less) carry
-// p=h=null and are excluded; they have no chain to verify.
+// Branch-aware: a reel on branch #1a is the UNION of main's facts up
+// to #1's branchPoint, #1's facts up to #1a's branchPoint, and #1a's
+// own divergence — exactly the ranges the fold reads
+// (foldEngine.readReelBetween). The chain links ACROSS each
+// branchPoint boundary: the first fact after a boundary carries
+// p = the prior range's last fact's identity. One chain, one walk,
+// across worlds. (The old verifier was branch-blind — on branched
+// reels it read every branch's facts interleaved and reported false
+// breaks. Retired with the lineage walk.)
 //
-// Pre-backfill legacy rows (h missing) are reported as "unhashed"
-// rather than "broken." After the INTEGRITY backfill migration
-// runs, every existing reel-bearing fact has p+h and unhashed rows
-// indicate a real bug.
+// Under content addressing the fact's `_id` IS its hash; "unhashed"
+// became "unaddressed" (a row whose _id doesn't verify as a content
+// hash — pre-CAS rows or foreign inserts).
 
 import Fact from "./fact.js";
 import { computeHash, contentOf, GENESIS_PREV } from "./hash.js";
@@ -25,43 +30,58 @@ import { computeHash, contentOf, GENESIS_PREV } from "./hash.js";
 const REEL_KINDS = new Set(["being", "space", "matter"]);
 
 /**
- * Walk a reel and verify its hash chain. Detects four break shapes:
+ * Walk a reel and verify its hash chain on one branch's view.
+ * Detects four break shapes:
  *
- *   - `unhashed`     — fact missing p or h (pre-INTEGRITY row that
- *                      slipped past the backfill).
+ *   - `unaddressed`  — fact missing p, or its _id is not a 64-hex
+ *                      content hash shape (pre-CAS row).
  *   - `seq-gap`      — facts present at seq=N and seq=N+2 but not
- *                      N+1. Indicates either a crashed mid-seal (an
- *                      allocSeq with no insert) or a post-facto
- *                      deletion. The chain links forward fine
- *                      (because the burned-seq fact was never
- *                      written, so its successor's p references the
- *                      pre-gap fact's h), but data is missing.
- *   - `prev-mismatch`— f.p doesn't equal the prior fact's h. Catches
- *                      Case B from verify-tamper: someone re-hashed
- *                      a mutated middle fact but the next fact's p
- *                      still points at the original h.
- *   - `hash-mismatch`— f.h doesn't equal computeHash(f.p, content).
- *                      Catches Case A: content mutated without
- *                      touching p/h.
+ *                      N+1 within the branch's visible ranges.
+ *   - `prev-mismatch`— f.p doesn't equal the prior fact's identity
+ *                      (including across a branchPoint boundary).
+ *   - `hash-mismatch`— f._id doesn't equal computeHash(f.p, content).
  *
  * @param {"being"|"space"|"matter"} targetKind
  * @param {string} targetId
+ * @param {string} [branch="0"]
  * @returns {Promise<
- *   { ok: true,  count: number }
+ *   { ok: true,  count: number, headHash: string|null }
  * | { ok: false, count: number, brokenAt: number, reason: string, expected: string|number, actual: string|number|null }
  * >}
  */
-export async function verifyReel(targetKind, targetId) {
+export async function verifyReel(targetKind, targetId, branch = "0") {
   if (!REEL_KINDS.has(targetKind)) {
-    throw new Error(`verifyReel: targetKind must be being/space/matter, got "${targetKind}"`);
+    throw new Error(`verifyReel: targetKind must be being|space|matter (got "${targetKind}")`);
   }
-  if (!targetId) throw new Error("verifyReel: targetId required");
+  const id = String(targetId);
+  const { isMain, resolveBranchLineage, getBranchPoint } =
+    await import("../../materials/branch/branches.js");
 
-  const facts = await Fact.find({
-    "target.kind": targetKind,
-    "target.id":   String(targetId),
-    seq:           { $type: "number" },
-  }).sort({ seq: 1 }).lean();
+  // The branch's visible ranges, identical logic to readReelBetween:
+  // lineage[i] owns (floor(lineage[i]), floor(lineage[i+1])]; the
+  // leaf is unbounded above. Main's floor is 0.
+  const lineage = isMain(branch) ? ["0"] : await resolveBranchLineage(branch);
+  const ranges = [];
+  for (let i = 0; i < lineage.length; i++) {
+    const here = lineage[i];
+    const next = lineage[i + 1] || null;
+    const lower = isMain(here) ? 0 : (await getBranchPoint(here, targetKind, id)) || 0;
+    const upper = next ? ((await getBranchPoint(next, targetKind, id)) || 0) : null;
+    if (upper != null && upper <= lower) continue;
+    ranges.push({ branch: here, lower, upper });
+  }
+
+  const orClauses = ranges.map(({ branch: b, lower, upper }) => {
+    const seqFilter = { $type: "number", $gt: lower };
+    if (upper != null) seqFilter.$lte = upper;
+    const branchClause = isMain(b)
+      ? { $or: [{ branch: "0" }, { branch: { $exists: false } }] }
+      : { branch: b };
+    return { "target.kind": targetKind, "target.id": id, seq: seqFilter, ...branchClause };
+  });
+  if (orClauses.length === 0) return { ok: true, count: 0, headHash: null };
+
+  const facts = await Fact.find({ $or: orClauses }).sort({ seq: 1 }).lean();
 
   let expectedPrev = GENESIS_PREV;
   let expectedSeq  = 1;
@@ -69,52 +89,39 @@ export async function verifyReel(targetKind, targetId) {
   for (const f of facts) {
     count++;
     if (f.seq !== expectedSeq) {
-      // Reel has facts at expectedSeq=N but the next fact is at N+k>N.
-      // Mid-seal crash burned the seq, or someone deleted the fact at
-      // expectedSeq. Either way: data missing.
       return {
-        ok:       false,
-        count,
-        brokenAt: expectedSeq,
-        reason:   "seq-gap",
-        expected: expectedSeq,
-        actual:   f.seq,
+        ok: false, count, brokenAt: expectedSeq,
+        reason: "seq-gap", expected: expectedSeq, actual: f.seq,
       };
     }
-    if (typeof f.h !== "string" || typeof f.p !== "string") {
+    if (typeof f.p !== "string" || typeof f._id !== "string" || !/^[0-9a-f]{64}$/.test(f._id)) {
       return {
-        ok:       false,
-        count,
-        brokenAt: f.seq,
-        reason:   "unhashed",
-        expected: expectedPrev,
-        actual:   f.p ?? null,
+        ok: false, count, brokenAt: f.seq,
+        reason: "unaddressed", expected: expectedPrev, actual: f.p ?? null,
       };
     }
     if (f.p !== expectedPrev) {
       return {
-        ok:       false,
-        count,
-        brokenAt: f.seq,
-        reason:   "prev-mismatch",
-        expected: expectedPrev,
-        actual:   f.p,
+        ok: false, count, brokenAt: f.seq,
+        reason: "prev-mismatch", expected: expectedPrev, actual: f.p,
       };
     }
-    const expectedH = computeHash(f.p, contentOf(f));
-    if (f.h !== expectedH) {
+    const expectedId = computeHash(f.p, contentOf(f));
+    if (f._id !== expectedId) {
       return {
-        ok:       false,
-        count,
-        brokenAt: f.seq,
-        reason:   "hash-mismatch",
-        expected: expectedH,
-        actual:   f.h,
+        ok: false, count, brokenAt: f.seq,
+        reason: "hash-mismatch", expected: expectedId, actual: f._id,
       };
     }
-    expectedPrev = f.h;
+    expectedPrev = f._id;
     expectedSeq  = f.seq + 1;
   }
 
-  return { ok: true, count };
+  return {
+    ok: true,
+    count,
+    // The reel's root: the head fact's identity (GENESIS_PREV walked
+    // forward through every fact). Null for an empty reel.
+    headHash: count > 0 ? expectedPrev : null,
+  };
 }

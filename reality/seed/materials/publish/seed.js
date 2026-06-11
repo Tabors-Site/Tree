@@ -181,6 +181,23 @@ export async function captureSeed(opts = {}) {
         reelHeads: reelHeads.length,
         extensionCollections: Object.keys(extensionData).length,
       },
+      // The captured reality's chain fingerprint — computed PURELY
+      // over the captured arrays (not the live DB, which keeps
+      // moving while capture runs). A seed's identity IS this root:
+      // any substrate planting these parts must recompute the same
+      // root, or determinism broke — plantSeed verifies and reports.
+      // Reproducible realities by construction.
+      realityRoot: await (async () => {
+        try {
+          const { realityRootFromParts } =
+            await import("../../past/fact/chainRoots.js");
+          return realityRootFromParts({
+            reality: getRealityDomain() || null,
+            branches,
+            reelHeads,
+          });
+        } catch { return null; }
+      })(),
     },
 
     facts,
@@ -371,6 +388,39 @@ export async function plantSeed(bundle) {
     }
   }
 
+  // ── 8. Provable replay ──
+  // Recompute the planted chain's reality root over what LANDED
+  // (branch + reelHead rows read straight back from the DB) and
+  // compare to the bundle's captured fingerprint. Match = this
+  // reality IS the captured reality, mathematically. Mismatch =
+  // determinism broke (or the bundle was altered) — warn loudly,
+  // never silently. Anchored to the bundle's sourceReality so the
+  // same chain verifies regardless of the host's own domain.
+  let rootVerified = null;
+  const expectedRoot = bundle.meta?.realityRoot || null;
+  if (expectedRoot) {
+    try {
+      const { realityRootFromParts } = await import("../../past/fact/chainRoots.js");
+      const [dbBranches, dbHeads] = await Promise.all([
+        Branch.find({}).lean(),
+        ReelHead.find({}).select("_id branch head headHash").lean(),
+      ]);
+      const actualRoot = realityRootFromParts({
+        reality: bundle.sourceReality || null,
+        branches: dbBranches,
+        reelHeads: dbHeads,
+      });
+      rootVerified = actualRoot === expectedRoot;
+      if (rootVerified) {
+        log.info("Seed", `chain root VERIFIED: ${actualRoot.slice(0, 16)}… — this reality is the captured reality`);
+      } else {
+        log.warn("Seed", `chain root MISMATCH: expected ${expectedRoot.slice(0, 16)}…, got ${actualRoot.slice(0, 16)}… — the planted chain differs from the capture`);
+      }
+    } catch (err) {
+      log.warn("Seed", `chain root verification failed to run: ${err.message}`);
+    }
+  }
+
   const elapsedMs = Date.now() - startedAt;
   log.info("Seed", `genome planted in ${elapsedMs}ms`);
 
@@ -382,5 +432,7 @@ export async function plantSeed(bundle) {
       reelHeads: bundle.reelHeads.length,
       extensionCollections,
     },
+    rootVerified,
+    expectedRoot,
   };
 }

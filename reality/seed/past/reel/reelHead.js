@@ -35,6 +35,12 @@ const ReelHeadSchema = new mongoose.Schema({
   type:   { type: String, required: true, enum: ["being", "space", "matter"] },
   id:     { type: String, required: true },
   head:   { type: Number, required: true, default: 0 },
+  // The reel's ROOT HASH: the head fact's identity (`_id`), which
+  // commits to every prior fact on the reel. Written by the stamper
+  // in the same locked append as the fact insert. Null until the
+  // first post-CAS fact lands (allocSeq never touches it). Branch /
+  // reality roots roll up from these — see past/fact/chainRoots.js.
+  headHash: { type: String, default: null },
 });
 
 // Sparse compound index for the common branch-scoped lookup. The _id

@@ -1,24 +1,39 @@
 // TreeOS Seed . AGPL-3.0 . https://treeos.ai . Tabor Holly
 //
-// Hash utility for per-reel Fact chains (INTEGRITY).
+// Hash utility for content-addressed Facts (INTEGRITY + IDENTITY).
 //
-// Each reel-bearing Fact carries two hash fields:
-//   p — prev-hash. The previous fact's `h` on the same reel.
-//   h — self-hash. SHA-256 of (p || canonical(content)).
+// A fact's hash IS its identity: `_id = SHA-256(p | canonical(content))`.
+// There is no separate `h` field and no random id — the same deed,
+// in the same world, after the same history, IS the same fact.
+// `p` is the chain link: the previous fact's `_id` on the same reel
+// (GENESIS_PREV for the first). `p` folds in the previous fact's
+// identity, so every fact is bound to the whole history behind it.
+// Alter any past fact and its identity changes, breaking the `p`
+// link of the next fact, and the next. The reel fails verification
+// at the altered position — and because the head fact's identity
+// commits to everything before it, the head IS the reel's root hash.
 //
-// `p` folds in the previous fact's hash, so every fact is bound to
-// the whole history behind it. Alter any past fact and its `h`
-// changes, breaking the `p` link of the next fact, and the next.
-// The reel fails verification at the altered position.
+// Three layered identity systems, composing (the OS doctrine):
+//   semantic   — IBP addresses (where in the world; navigation)
+//   historical — (reel, seq) ordering + p links (what came before)
+//   storage    — the content hash (what this exactly IS; dedup,
+//                transport, verification)
+// Content addressing operates on STORAGE UNITS: reel (root = head
+// fact's _id), branch, reality — each with a primary root hash (see
+// chainRoots.js). A being's complete biography across branches and
+// realities is a DERIVED VIEW composed from multiple reels —
+// hashable per query, never a primary identity.
 //
-// Per-reel, not global. There is no global chain. Genesis prev is
-// a fixed sentinel — used for the first fact on every reel.
+// `branch` is part of the hashed content: a fact is an event IN A
+// WORLD, and sibling branches may lawfully hold the same (reel, seq)
+// with identical params — without the branch in the digest those
+// would collide into one row that only one branch's reads could see.
+// Cross-branch prefix sharing is already structural (branches don't
+// copy facts; lineage reads union them), so nothing real is lost.
 //
 // Canonical content includes every Fact field that defines the deed
-// and excludes `p`/`h` themselves (folded in separately). Reels
-// composed of `_id`, `seq`, target, params, result, actor, verb,
-// action, etc. — every datum a future reader would need to recover
-// the fact.
+// and excludes `p` itself (folded in separately) and the identity
+// (which is the digest's output, not its input).
 
 import crypto from "crypto";
 
@@ -42,26 +57,26 @@ export function computeHash(prev, content) {
 }
 
 /**
- * Extract the hashable content from a Fact row. Excludes `p`, `h`,
- * and mongoose internals (`__v`). Includes every domain field so the
- * digest captures the whole deed.
+ * Extract the hashable content from a Fact row. Excludes `p` (folded
+ * in separately by computeHash), the identity itself (`_id` is the
+ * digest's OUTPUT — including it would be circular), and mongoose
+ * internals (`__v`). Includes every domain field so the digest
+ * captures the whole deed, INCLUDING `branch` (the world the deed
+ * happened in; normalized so an absent field hashes like main).
  *
  * `foldSeq` (PARALLEL FACTS §1.3) is included WHEN PRESENT so the
- * chain commits to the stale-detection key. Pre-PARALLEL-FACTS rows
- * have foldSeq null and the key is omitted (matching the digest they
- * originally landed with). New facts with a numeric foldSeq include
- * the key; mutating that value on a stored row breaks `h` and
- * verifyReel trips.
+ * chain commits to the stale-detection key. Mutating that value on a
+ * stored row changes the recomputed identity and verifyReel trips.
  */
 export function contentOf(fact) {
   const out = {
-    _id:         fact._id,
     date:        fact.date,
     beingId:     fact.beingId,
     verb:        fact.verb,
     action:      fact.action,
     target:      fact.target,
     seq:         fact.seq,
+    branch:      typeof fact.branch === "string" && fact.branch.length ? fact.branch : "0",
     params:      fact.params,
     result:      fact.result,
     truncated:   fact.truncated,

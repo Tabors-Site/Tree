@@ -163,6 +163,10 @@ import "./materials/matter/ops.js";
 // registry-driven "what matter type would this become?" read the
 // place flow previews with. See materials/matter/classify.js.
 import "./materials/matter/classify.js";
+// Side-effect import. Registers the chain SEE ops — `verify-reel`
+// (walk a reel's hash chain, branch-aware) and `chain-root` (the
+// branch / reality root fingerprints). See past/fact/chainRoots.js.
+import "./past/fact/chainRoots.js";
 // Side-effect import. Registers the unified `do move` op (relocates
 // a space or a matter into a new destination space). The cross-kind
 // shape doesn't belong in any single material's ops file; it lives

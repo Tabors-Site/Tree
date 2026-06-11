@@ -18,6 +18,7 @@ const CHAPTERS = [
   { to: "/factory/being-types", label: "Being types"         },
   { to: "/factory/roles",       label: "Roles"               },
   { to: "/factory/branches",    label: "Branches"            },
+  { to: "/factory/integrity",   label: "Integrity"           },
   { to: "/factory/intake",      label: "1. Intake"           },
   { to: "/factory/assign",      label: "2. Assign"           },
   { to: "/factory/fold",        label: "3. Fold"             },

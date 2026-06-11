@@ -37,8 +37,10 @@ export const globalRole = Object.freeze({
   // Baseline perceptions. Add SEE op names as the operator extends
   // the surface (e.g. `["place", "library", "directory"]`).
   // classify-matter is the pure "what type would this become?" read
-  // every being needs before placing matter.
-  canSee: ["place", "classify-matter"],
+  // every being needs before placing matter. verify-reel /
+  // chain-root are the chain's verification + fingerprint reads —
+  // anyone may check that the world's history is intact.
+  canSee: ["place", "classify-matter", "verify-reel", "chain-root"],
   // Baseline mutations. Move yourself, update your own coord, walk
   // to another space, petition for additional roles. The petition
   // ops (ask-role / take-role) MUST live here because the role-walk

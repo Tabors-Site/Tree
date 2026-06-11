@@ -26,7 +26,7 @@ const VALID_TYPES = new Set(["being", "space", "matter"]);
 // branch don't need an OR-with-$exists clause for the head doc. (The
 // equivalent clause IS still needed on Fact reads where legacy data
 // exists without the field.)
-function reelKey(branch, type, id) {
+export function reelKey(branch, type, id) {
   return `${branch}:${type}:${id}`;
 }
 

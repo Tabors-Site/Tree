@@ -30,10 +30,11 @@
 
 import mongoose from "mongoose";
 import log from "../../seedReality/log.js";
-import { v4 as uuidv4 } from "uuid";
 import { getInternalConfigValue } from "../../internalConfig.js";
 import Fact from "./fact.js";
 import { computeHash, contentOf, GENESIS_PREV } from "./hash.js";
+import ReelHead from "../reel/reelHead.js";
+import { reelKey } from "../reel/reelHeads.js";
 import { hooks } from "../../hooks.js";
 import { IBP_ERR, IbpError } from "../../ibp/protocol.js";
 import { getRealityConfigValue } from "../../realityConfig.js";
@@ -331,6 +332,10 @@ export async function logFact(input, opts = {}) {
   const incomingCrossOrigin = hookData.params?.crossOrigin || cappedParams.value?.crossOrigin;
   if (incomingCrossOrigin?.actId && finalTarget) {
     const existing = await Fact.findOne({
+      // Branch-scoped: the delivery targets a specific world; a
+      // sibling branch holding the same crossOrigin tuple is a
+      // different reel and must not suppress this stamp.
+      branch,
       "target.kind": finalTarget.kind,
       "target.id":   finalTarget.id,
       "params.crossOrigin.actId":   incomingCrossOrigin.actId,
@@ -368,7 +373,7 @@ export async function logFact(input, opts = {}) {
   // appenders can't both read the same `prev` and fork the chain.
   //
   // Target-less or place/stance facts skip the lock — they have no
-  // reel and stay outside the fold model. They carry p=h=null.
+  // reel; they still get a content-hash identity (p = GENESIS_PREV).
   if (finalTarget && REEL_KINDS.has(finalTarget.kind) && finalTarget.id) {
     const { session = null, skipEagerFold = false } = opts;
     // Critical section: allocSeq + prev-hash read + insert, all
@@ -380,41 +385,52 @@ export async function logFact(input, opts = {}) {
     const runAppend = async () => {
       const seq = await allocSeq(finalTarget.kind, finalTarget.id, { session, branch });
 
-      // INTEGRITY chain: read prev fact's h. seq is monotonic per
-      // reel; under this lock, prev sits at exactly seq-1. A missing
-      // prev (legacy pre-INTEGRITY row, or a true gap from a crashed
-      // alloc) falls back to GENESIS_PREV.
-      //
-      // Pass 3 territory: when non-main branches start writing facts,
-      // this lookup needs to filter the prev by branch lineage — the
-      // first divergent fact in branch X has prev pointing at the
-      // parent's fact at branchPoint, not at an X-local fact. For
-      // Pass 2 only main exists at runtime, so the unbranded query
-      // resolves correctly (every fact in the DB carries branch="0"
-      // or no field, which is also main).
-      let p = GENESIS_PREV;
-      if (seq > 1) {
-        let prevQuery = Fact.findOne(
-          { "target.kind": finalTarget.kind, "target.id": finalTarget.id, seq: seq - 1 },
-          { h: 1 },
-        ).lean();
-        if (session) prevQuery = prevQuery.session(session);
-        const prev = await prevQuery;
-        if (prev?.h) p = prev.h;
+      // INTEGRITY chain: read the prev fact's identity, LINEAGE-
+      // AWARE. seq is monotonic per reel; under this lock, prev sits
+      // at exactly seq-1 — but on a non-main branch, seq-1 may be
+      // owned by an ANCESTOR (the first divergent fact chains to the
+      // parent's fact at the branchPoint, linking the chain ACROSS
+      // the fork). The old unbranded lookup could match a SIBLING
+      // branch's fact at the same seq — the chain-corruption bug
+      // this lineage walk retires. A missing prev (a true gap from
+      // a crashed alloc) falls back to GENESIS_PREV.
+      const p = await prevHashAt(finalTarget.kind, finalTarget.id, seq - 1, branch, session);
+
+      // The identity IS the hash. Computed over the full content
+      // (including branch and seq) chained to p; no random ids.
+      const fullDoc = { ...baseDoc, seq, p };
+      const _id = computeHash(p, contentOf(fullDoc));
+      try {
+        if (session) {
+          // Mongoose: insert-with-session requires the array form.
+          await Fact.create([{ ...fullDoc, _id }], { session });
+        } else {
+          await Fact.create({ ...fullDoc, _id });
+        }
+      } catch (err) {
+        // Duplicate IDENTITY (same content, same world, same
+        // history) is dedup semantics under content addressing —
+        // the fact already exists; this stamp is a replay. Only the
+        // _id collision is dedup; a seq collision on
+        // branch_target_seq_unique stays a REAL error (two different
+        // contents fighting for one slot).
+        if (err?.code === 11000 && /_id_?\b/.test(err?.message || "")) {
+          log.debug("DB", `Fact replay deduped (${branch}:${finalTarget.kind}:${finalTarget.id} seq=${seq})`);
+          return;
+        }
+        throw err;
       }
 
-      // Mint _id explicitly so it lands in the hashed content; the
-      // schema default would generate it inside Mongoose, too late
-      // for inclusion in the digest.
-      const _id = uuidv4();
-      const fullDoc = { ...baseDoc, _id, seq, p };
-      const h = computeHash(p, contentOf(fullDoc));
-      if (session) {
-        // Mongoose: insert-with-session requires the array form.
-        await Fact.create([{ ...fullDoc, h }], { session });
-      } else {
-        await Fact.create({ ...fullDoc, h });
-      }
+      // The reel's ROOT HASH is its head fact's identity (every _id
+      // commits to all priors). Denormalized onto the ReelHead in
+      // the same lock/session so branch/reality roll-ups are one
+      // collection scan (chainRoots.js).
+      const headUpdate = ReelHead.updateOne(
+        { _id: reelKey(branch, finalTarget.kind, finalTarget.id) },
+        { $set: { headHash: _id } },
+      );
+      if (session) headUpdate.session(session);
+      await headUpdate;
     };
     try {
       if (session || opts.lockHeldByCaller) {
@@ -475,18 +491,71 @@ export async function logFact(input, opts = {}) {
       }
     }
   } else {
-    // Non-reel-bearing path: simple insert, seq stays null.
+    // Non-reel-bearing path: no chain (no reel), but every fact gets
+    // a content-hash identity. p = GENESIS_PREV; identical content in
+    // the same world dedups to one row (correct under CAS).
     try {
+      const fullDoc = { ...baseDoc, seq: null, p: GENESIS_PREV };
+      const _id = computeHash(GENESIS_PREV, contentOf(fullDoc));
       if (opts.session) {
-        await Fact.create([{ ...baseDoc, seq: null }], { session: opts.session });
+        await Fact.create([{ ...fullDoc, _id }], { session: opts.session });
       } else {
-        await Fact.create({ ...baseDoc, seq: null });
+        await Fact.create({ ...fullDoc, _id });
       }
     } catch (err) {
+      if (err?.code === 11000 && /_id_?\b/.test(err?.message || "")) {
+        log.debug("DB", `Fact replay deduped (non-reel ${action})`);
+        return;
+      }
       log.error("DB", `Fact save failed (${action}): ${err.message}`);
       throw new Error("Failed to stamp Fact");
     }
   }
+}
+
+/**
+ * The previous fact's identity for an append at `prevSeq + 1`,
+ * lineage-aware. On main (or when prevSeq sits past this branch's
+ * own branchPoint) the prev lives on the SAME branch. Otherwise it
+ * lives on whichever lineage ancestor owns prevSeq — walking
+ * leaf-to-root, the first branch whose floor sits below prevSeq is
+ * the owner (main's floor is 0). The first divergent fact on a
+ * branch therefore chains to the PARENT's fact at the branchPoint:
+ * one chain across the fork, exactly like the read path's
+ * range-union (foldEngine.readReelBetween).
+ *
+ * prevSeq <= 0 → GENESIS_PREV. Missing prev row (a true gap from a
+ * crashed alloc, or pre-CAS rows) → GENESIS_PREV, same fallback as
+ * the old stamper.
+ */
+async function prevHashAt(kind, id, prevSeq, branch, session = null) {
+  if (!(prevSeq > 0)) return GENESIS_PREV;
+
+  const { isMain, resolveBranchLineage, getBranchPoint } =
+    await import("../../materials/branch/branches.js");
+
+  let owner = branch;
+  if (!isMain(branch)) {
+    const lineage = await resolveBranchLineage(branch); // main → leaf
+    owner = null;
+    for (let i = lineage.length - 1; i >= 0; i--) {
+      const here = lineage[i];
+      const floor = isMain(here) ? 0 : await getBranchPoint(here, kind, id);
+      if (prevSeq > (floor || 0)) { owner = here; break; }
+    }
+    if (!owner) return GENESIS_PREV;
+  }
+
+  const branchClause = isMain(owner)
+    ? { $or: [{ branch: "0" }, { branch: { $exists: false } }] }
+    : { branch: owner };
+  let q = Fact.findOne(
+    { "target.kind": kind, "target.id": id, seq: prevSeq, ...branchClause },
+    { _id: 1 },
+  ).lean();
+  if (session) q = q.session(session);
+  const prev = await q;
+  return prev?._id || GENESIS_PREV;
 }
 
 // ─────────────────────────────────────────────────────────────────────
@@ -1030,6 +1099,7 @@ export async function describeReel(targetKind, targetId, opts = {}) {
 
 function serializeFactForReel(f) {
   return {
+    // The fact's identity IS its content hash; p is the chain link.
     _id:       String(f._id),
     seq:       f.seq,
     verb:      f.verb,
@@ -1038,7 +1108,6 @@ function serializeFactForReel(f) {
     params:    f.params,
     result:    f.result,
     p:         f.p,
-    h:         f.h,
     date:      f.date,
     beingId:   f.beingId?._id ? String(f.beingId._id)
                : (f.beingId ? String(f.beingId) : null),

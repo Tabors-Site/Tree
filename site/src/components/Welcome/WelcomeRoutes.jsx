@@ -17,6 +17,7 @@ import FactoryStamped from "./FactoryStamped.jsx";
 import FactoryBeingTypes from "./FactoryBeingTypes.jsx";
 import FactoryRoles from "./FactoryRoles.jsx";
 import FactoryBranches from "./FactoryBranches.jsx";
+import FactoryIntegrity from "./FactoryIntegrity.jsx";
 
 // Blog stays at root (/blog and /blog/:slug). The component crossed
 // the rebuild seam unchanged; we just import it from where it now
@@ -67,6 +68,7 @@ const WelcomeRoutes = () => {
         <Route path="being-types" element={<FactoryBeingTypes />} />
         <Route path="roles"       element={<FactoryRoles />} />
         <Route path="branches"    element={<FactoryBranches />} />
+        <Route path="integrity"   element={<FactoryIntegrity />} />
       </Route>
 
       {/* Blog at root level (stayed at /blog/* across the rebuild) */}

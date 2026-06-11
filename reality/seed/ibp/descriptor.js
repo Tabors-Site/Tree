@@ -108,9 +108,20 @@ export const IBP_PROTOCOL_VERSION = "1.0";
 // payload.
 const SYSTEM_BE_BEINGS = ["cherub", "llm-assigner"];
 
-export function buildDiscovery() {
+export async function buildDiscovery() {
   const realityUrl = getRealityUrl();
   const wsUrl = realityUrl.replace(/^http/, "ws");
+
+  // The chain fingerprint: one hash summarizing the whole substrate's
+  // chain state (TTL-memoized in chainRoots.js — discovery is fetched
+  // on every portal connect). Two realities compare state in a single
+  // round-trip; on mismatch, walk chain-root → reel heads → facts to
+  // the exact divergence.
+  let chainRealityRoot = null;
+  try {
+    const { realityRoot } = await import("../past/fact/chainRoots.js");
+    chainRealityRoot = await realityRoot();
+  } catch { /* additive — discovery never blocks on the fingerprint */ }
 
   // Merge two sources: the live role registry (SUMMON-honoring roles
   // registered by the seed + extensions) and the canonical system
@@ -144,6 +155,8 @@ export function buildDiscovery() {
       maxUploadBytes: Number(getRealityConfigValue("maxUploadBytes")) || 104857600,
       allowedMimeTypes: getRealityConfigValue("allowedMimeTypes") || null,
     },
+    // The chain fingerprint (see above).
+    chain: { realityRoot: chainRealityRoot },
     supportedVerbs: ["see", "do", "summon", "be"],
     capabilities: [],
   };
