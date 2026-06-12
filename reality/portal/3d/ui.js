@@ -4,7 +4,6 @@
 // objects, and a small HUD line at the top of the screen.
 
 import { setPortalStatus } from "../shared/portal-status.js";
-import { initStanceBar, placeStanceBar, updateStanceBar } from "../shared/stance-bar.js";
 
 const overlayRoot = () => document.getElementById("overlays");
 const hudTop = () => document.getElementById("hud-top");
@@ -29,83 +28,10 @@ export function setHudBottom(text) {
   setHud(text);
 }
 
-// ── Address bar ────────────────────────────────────────────────────
-
-let _addressApi = null;
-
-export function initAddressBar({ onNavigate, onSwitchBranch, onBack, onForward, onToggleFlatPanel }) {
-  const navBack = document.getElementById("nav-back");
-  const navForward = document.getElementById("nav-forward");
-  const navPlace = document.getElementById("nav-place");
-  const navHome = document.getElementById("nav-home");
-  const navRoot = document.getElementById("nav-root");
-  const navText = document.getElementById("nav-text");
-
-  // THE address bar: the shared stance bar (actor :: receiving),
-  // one node for both portals — the flat overlay re-parents the same
-  // element so the two views can never disagree.
-  initStanceBar({ onNavigate, onSwitchBranch });
-  placeStanceBar(document.getElementById("stance-slot"));
-
-  navBack.addEventListener("click",    () => onBack?.());
-  navForward.addEventListener("click", () => onForward?.());
-  navPlace.addEventListener("click", () => onNavigate("/"));
-  navHome.addEventListener("click", () => onNavigate("/~"));
-  navRoot.addEventListener("click", () => {
-    if (_addressApi.treeRootPath) onNavigate(_addressApi.treeRootPath);
-  });
-  // "text" button toggles the flat-renderer overlay. The button may
-  // be absent (older HTML) — guard. Keyboard shortcut (\) covers the
-  // same toggle independently.
-  if (navText) {
-    navText.addEventListener("click", () => onToggleFlatPanel?.());
-  }
-
-  _addressApi = {
-    navBack, navForward, navPlace, navHome, navRoot, navText,
-    treeRootPath: null,
-  };
-  return _addressApi;
-}
-
-export function setHistoryButtonsEnabled({ back, forward }) {
-  if (!_addressApi) return;
-  _addressApi.navBack.disabled = !back;
-  _addressApi.navForward.disabled = !forward;
-}
-
-export function updateAddressBar({ username, placeDomain, pathByNames, chain, isAuthenticated, branch, actorBranch, being }) {
-  if (!_addressApi) return;
-  // The shared stance bar renders both sides; this function just
-  // feeds it the view side (and whatever else the caller knows) and
-  // keeps the nav-button enablement logic.
-  updateStanceBar({
-    reality: placeDomain || "",
-    username: username || null,
-    signedIn: !!isAuthenticated,
-    viewBranch: branch || "0",
-    path: pathByNames || "/",
-    being: being || null,
-    ...(actorBranch ? { actorBranch } : {}),
-  });
-
-  // Tree root computation: walk the chain past the optional ~user segment.
-  let rootPath = null;
-  if (Array.isArray(chain) && chain.length) {
-    const first = chain[0]?.name || "";
-    const idx = first.startsWith("~") ? 1 : 0;
-    if (chain.length > idx) {
-      const segs = chain.slice(0, idx + 1).map((c) => c.name);
-      rootPath = "/" + segs.join("/");
-    }
-  }
-  _addressApi.treeRootPath = rootPath;
-  _addressApi.navRoot.disabled = !rootPath;
-  _addressApi.navHome.disabled = !isAuthenticated;
-}
-
-// toggleIdentityChip retired with the identity chip: the actor stance
-// is now always fully visible on the left side of the stance bar.
+// The address bar moved to the shell (core/shell.js): the stance bar,
+// nav buttons, and history enablement are chrome shared by every
+// view, not 3D furniture. initAddressBar / updateAddressBar /
+// setHistoryButtonsEnabled retired with the move.
 
 export function showLabel(text, x, y) {
   if (!labelEl) {

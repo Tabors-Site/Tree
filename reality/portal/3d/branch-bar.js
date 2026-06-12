@@ -333,7 +333,8 @@ function _createBranchButton() {
   // this the user can't open the timeline when the flat-panel is up.
   b.style.cssText = [
     "position: fixed",
-    "top: 56px",
+    // Below the shell chrome: IBPA topbar (~42px) + being tabs (~28px).
+    "top: 80px",
     "left: 12px",
     "z-index: 200",
     "pointer-events: auto",

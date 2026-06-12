@@ -21,7 +21,6 @@
 // }
 
 import "./style.css";
-import { placeStanceBar } from "../shared/stance-bar.js";
 import {
   renderDescriptor,
   setStatus,
@@ -79,7 +78,7 @@ const FLAT_DOM = `
       <span class="conn-text">live</span>
     </div>
     <nav id="breadcrumb"></nav>
-    <div id="stance-slot-flat" style="display:flex; flex:1; min-width:0;"></div>
+    <div style="flex:1; min-width:0;"></div>
     <nav id="quick-nav">
       <a class="qn-chip" data-tag="home" title="reality root">/</a>
       <a class="qn-chip" data-tag="beings" title=".beings . every being">. beings</a>
@@ -91,7 +90,7 @@ const FLAT_DOM = `
     <button id="inbox-chip" type="button" title="your inbox — pending summons addressed to you" style="display:none;background:transparent;color:#c8d3cb;border:1px solid #2c3a32;border-radius:4px;padding:3px 8px;font-family:inherit;font-size:11px;cursor:pointer;margin-left:4px;">inbox <span id="inbox-count" class="dim">·</span></button>
     <div id="identity-chip" title="signed-in identity"></div>
     <button id="flat-timeline-btn" type="button" title="branches and timeline">🌿 timeline</button>
-    <button id="flat-close-btn" type="button" title="close text mode (Esc)">close</button>
+    <button id="flat-close-btn" type="button" title="back to the 3D view (Esc)">3d</button>
   </header>
   <div id="task-menubar"></div>
   <main id="middle">
@@ -144,14 +143,10 @@ export function mountFlatView(rootContainer, ctx) {
   if (!rootContainer) throw new Error("mountFlatView: rootContainer required");
   if (!ctx?.client) throw new Error("mountFlatView: ctx.client required");
 
-  // Inject DOM.
+  // Inject DOM. The stance bar (IBPA) is shell chrome now — always
+  // visible above every view — so the flat header no longer hosts it.
   rootContainer.innerHTML = FLAT_DOM;
   const root = rootContainer.querySelector("#flat-app");
-
-  // THE address bar: re-parent the shared stance bar into the flat
-  // header. Same DOM node as the 3D top bar — the two views cannot
-  // disagree. dispose() hands it back.
-  placeStanceBar(root.querySelector("#stance-slot-flat"));
 
   // Populate singleton state.
   _state.client         = ctx.client;
@@ -271,9 +266,7 @@ export function mountFlatView(rootContainer, ctx) {
       detachKeys();
       closeChat?.();
       hideAuthOverlay?.();
-      // Hand the shared stance bar back to the 3D top bar BEFORE the
-      // flat DOM (its current parent) is torn down.
-      placeStanceBar(document.getElementById("stance-slot"));
+      if (_inboxPollHandle) { clearInterval(_inboxPollHandle); _inboxPollHandle = null; }
       rootContainer.innerHTML = "";
       _state.client         = null;
       _state.descriptor     = null;
@@ -288,8 +281,8 @@ export function mountFlatView(rootContainer, ctx) {
 // Local wiring helpers
 // ──────────────────────────────────────────────────────────────────
 
-// wireAddressForm retired: the shared stance bar (placed into
-// #stance-slot-flat above) owns address input + navigation.
+// wireAddressForm retired: the shell's stance bar owns address input
+// + navigation for every view.
 
 function wireQuickNav(root, _ctx) {
   const reality = _state.discovery?.reality;

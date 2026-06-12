@@ -39,6 +39,15 @@ export function initHotbar(parent, { onSelectionChange, isInputBlocked } = {}) {
   _onChange = typeof onSelectionChange === "function" ? onSelectionChange : () => {};
   if (typeof isInputBlocked === "function") _isInputBlocked = isInputBlocked;
 
+  // Idempotent re-mount: the 3D view unmounts and remounts as the
+  // user switches views. Drop the prior DOM + window listeners so a
+  // second init doesn't double-fire selection changes.
+  if (_root) {
+    try { _root.remove(); } catch {}
+    window.removeEventListener("keydown", _onKeyDown);
+    window.removeEventListener("wheel", _onWheel);
+  }
+
   _root = document.createElement("div");
   _root.id = "hotbar";
   _root.setAttribute("aria-label", "Hotbar");
@@ -109,6 +118,14 @@ export function setSelectedIndex(i) {
 
 export function hide() { if (_root) _root.style.display = "none"; }
 export function show() { if (_root) _root.style.display = "flex"; }
+
+/** Unmount entirely (view destroy). initHotbar re-creates cleanly. */
+export function destroyHotbar() {
+  if (_root) { try { _root.remove(); } catch {} _root = null; }
+  _slotsDom = [];
+  window.removeEventListener("keydown", _onKeyDown);
+  window.removeEventListener("wheel", _onWheel);
+}
 
 // ────────────────────────────────────────────────────────────────
 // Internals

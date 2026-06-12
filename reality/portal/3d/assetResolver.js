@@ -27,6 +27,7 @@ import * as THREE from "three";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { DRACOLoader } from "three/examples/jsm/loaders/DRACOLoader.js";
 import { clone as cloneSkinned } from "three/examples/jsm/utils/SkeletonUtils.js";
+import { assetUrl } from "../core/assets.js";
 
 // Wire DRACOLoader so glTFs compressed with Draco mesh compression
 // (the standard size-reduction step for Mixamo characters, Sketchfab
@@ -68,7 +69,7 @@ export async function getExtensionManifest(extName) {
 
   const promise = (async () => {
     try {
-      const res = await fetch(`/assets/${extName}/manifest.json`);
+      const res = await fetch(assetUrl(`/assets/${extName}/manifest.json`));
       if (!res.ok) return null;
       const json = await res.json();
       if (!json || typeof json !== "object") return null;
@@ -101,16 +102,16 @@ export async function getExtensionManifest(extName) {
  */
 export async function resolveModelUrl(modelRef) {
   if (modelRef && typeof modelRef === "object") {
-    return typeof modelRef.url === "string" && modelRef.url ? modelRef.url : null;
+    return typeof modelRef.url === "string" && modelRef.url ? assetUrl(modelRef.url) : null;
   }
   if (typeof modelRef !== "string" || !modelRef) return null;
-  if (modelRef.startsWith("/") || modelRef.startsWith("http")) return modelRef;
+  if (modelRef.startsWith("/") || modelRef.startsWith("http")) return assetUrl(modelRef);
   const parsed = parseAssetId(modelRef);
   if (!parsed) return null;
   const manifest = await getExtensionManifest(parsed.ext);
   const filename = manifest?.models?.[parsed.name];
   if (!filename || typeof filename !== "string") return null;
-  return `/assets/${parsed.ext}/${filename}`;
+  return assetUrl(`/assets/${parsed.ext}/${filename}`);
 }
 
 /**
@@ -122,7 +123,7 @@ export async function resolveSoundUrl(soundId) {
   const manifest = await getExtensionManifest(parsed.ext);
   const filename = manifest?.sounds?.[parsed.name];
   if (!filename || typeof filename !== "string") return null;
-  return `/assets/${parsed.ext}/${filename}`;
+  return assetUrl(`/assets/${parsed.ext}/${filename}`);
 }
 
 /**

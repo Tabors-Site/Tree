@@ -1,0 +1,90 @@
+/* TreeOS Portal — explorer view.
+ *
+ * A tree over the kernel's primitives: spaces expand into children,
+ * matter and beings hang as leaves, an inspector pane shows whatever
+ * is selected. The conventional file-manager shape over the
+ * projection of the chain. */
+
+#explorer-view {
+  position: absolute; inset: 0;
+  display: flex;
+  background: #0a0d0c; color: #c8d3cb;
+  font: 12px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+#explorer-tree {
+  flex: 0 0 44%;
+  min-width: 260px; max-width: 60%;
+  overflow: auto;
+  padding: 10px 8px;
+  border-right: 1px solid #1f2a23;
+}
+
+.ex-node { user-select: none; }
+.ex-row {
+  display: flex; align-items: center; gap: 6px;
+  padding: 2px 6px; border-radius: 3px;
+  cursor: pointer; white-space: nowrap;
+}
+.ex-row:hover { background: #101713; }
+.ex-row.selected { background: #16241c; }
+.ex-twist {
+  width: 12px; text-align: center;
+  color: #5a6e62; flex: none;
+}
+.ex-kind {
+  flex: none; font-size: 9px; letter-spacing: 0.06em;
+  color: #5a6e62; min-width: 42px; text-transform: uppercase;
+}
+.ex-kind.being { color: #8fbf9f; }
+.ex-kind.matter { color: #b8a26b; }
+.ex-name { overflow: hidden; text-overflow: ellipsis; }
+.ex-dim { color: #6b7d72; font-size: 10px; }
+.ex-children { margin-left: 16px; }
+.ex-empty { color: #4a5e51; font-size: 11px; padding: 2px 6px 2px 24px; }
+.ex-loading { color: #4a5e51; font-size: 11px; padding: 2px 6px 2px 24px; }
+
+#explorer-inspector {
+  flex: 1; min-width: 0;
+  overflow: auto;
+  padding: 14px 18px;
+}
+.exi-empty { color: #4a5e51; }
+.exi-title { font-size: 14px; color: #c8d3cb; margin: 0 0 2px 0; }
+.exi-sub { color: #6b7d72; font-size: 11px; margin-bottom: 14px; }
+.exi-section { margin-bottom: 14px; }
+.exi-section h4 {
+  margin: 0 0 4px 0; font-size: 10px; color: #5a6e62;
+  text-transform: uppercase; letter-spacing: 0.06em;
+}
+.exi-kv { margin: 0; }
+.exi-kv div { display: flex; gap: 10px; padding: 1px 0; }
+.exi-kv dt { color: #6b7d72; min-width: 110px; flex: none; }
+.exi-kv dd { margin: 0; word-break: break-word; }
+.exi-pre {
+  margin: 0; padding: 8px 10px;
+  background: #0e1311; border: 1px solid #1f2a23; border-radius: 3px;
+  overflow-x: auto; font-size: 11px; color: #9ab0a3;
+  white-space: pre-wrap; word-break: break-word;
+}
+.exi-actions { display: flex; gap: 6px; flex-wrap: wrap; }
+.exi-btn {
+  background: #131a17; color: #c8d3cb;
+  border: 1px solid #2c3a32; border-radius: 3px;
+  font-family: inherit; font-size: 11px;
+  padding: 4px 10px; cursor: pointer;
+}
+.exi-btn:hover { border-color: #8fbf9f; color: #8fbf9f; }
+.exi-summon { display: flex; gap: 6px; margin-top: 6px; }
+.exi-summon input {
+  flex: 1; min-width: 0; padding: 5px 8px;
+  background: #0a0d0c; color: #c8d3cb;
+  border: 1px solid #2c3a32; border-radius: 3px;
+  font-family: inherit; font-size: 12px;
+}
+.exi-summon input:focus { outline: none; border-color: #8fbf9f; }
+.exi-reply {
+  margin-top: 8px; padding: 8px 10px;
+  border-left: 2px solid #2f6b48;
+  color: #9ab0a3; white-space: pre-wrap;
+}

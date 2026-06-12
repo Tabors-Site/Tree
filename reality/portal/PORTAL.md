@@ -20,10 +20,22 @@ Each view shows the same thing because they all read from one in-memory model th
 | ------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------- | -------- |
 | **3D**       | Spatial scene: spaces as rooms, children as doorways and trees, beings as figures, matter as objects in the world                                                                                                                                                                                                           | **None.** A new surface; the closest pre-existing thing is a video-game world, not anything from a conventional OS. A 3D place to represent the data. | Built    |
 | **Text**     | Document layout: descriptor fields as panels, lists, forms, breadcrumbs. HTML-native. Matter that ships as HTML (web-style content, embedded apps, rich docs) renders directly through iframes; the kernel speaks IBP, the text view speaks HTML on top of it.                                                              | Traditional GUI / desktop / window manager / web browser collapsed into one surface | Built    |
-| **Console**  | A stance-anchored verb prompt. The user types verbs (see, do, summon, be) against the current address; results stream back as structured blocks. More freeform than today's IBP console (which is a debug panel); the canonical view for scripting, remote work over slow links, and any user who prefers reading sentences | Terminal / shell                | Sketched |
-| **Explorer** | A tree over the kernel's primitives — spaces, matter, beings. Same data the console emits, rendered as a tree the user can navigate. Click a space to expand its children; double-click a matter to inspect; right-click a being to summon. Built off the projection folds (see "What the views read from" below), the same way a conventional file manager is built off the filesystem. | File manager / Finder   | Sketched |
+| **Console**  | A stance-anchored verb prompt. The user types verbs (see, do, summon, be) against the current address; results stream back as structured blocks. More freeform than the backtick IBP console (which is a debug panel); the canonical view for scripting, remote work over slow links, and any user who prefers reading sentences | Terminal / shell                | Built (DOM) |
+| **Explorer** | A tree over the kernel's primitives — spaces, matter, beings. Same data the console emits, rendered as a tree the user can navigate. Click a space to expand its children; click matter or a being to inspect (the being inspector carries a summon box). Built off the projection folds (see "What the views read from" below), the same way a conventional file manager is built off the filesystem. | File manager / Finder   | Built (DOM) |
 
 A view is NOT a separate app. The user's session, address, identity, branch, and pending state belong to the portal; the view is one window into that. Four views over the same address show the same beings, the same matter, the same pending inbox count, in their own visual language.
+
+### The shell chrome — IBPA on top, tabs per being
+
+The frame around the views is fixed and view-independent:
+
+- **The IBPA stance bar is pinned to the very top, always visible, on every view.** `actor :: receiving`, both sides editable, cross-branch state always amber, a send arrow on its right, then `/` (reality root) and `~` (home). No view hides or re-hosts it; it is shell chrome (shared/stance-bar.js placed by core/shell.js), so the four views can never disagree about where the user is.
+- **The view switcher sits beside it.** Four entries, one per view (Alt+1..4; `\` flips 3d↔text). Switching is a render swap against the shared model, never a refetch.
+- **The being tab strip rides directly under the IBPA bar** and also never hides, on any view — one tab can sit in 3D while another tab is in text as another being.
+- **The whole user space is tabbed per being.** Each shell tab is one PortalContext — its own IBP client, session, and state model. One being per tab; switch tabs and you switch beings; each tab remembers its own active view and address. Inhabiting a lineage being opens the borrowed body as a new tab. This is the portal-scale prototype of the OS shell's multi-context surface (Phase 5's "multi-window, multi-context").
+- **The branch/timeline bar is chrome too.** Branches and rewind apply to every view (the ghost-view guard blocks writes regardless of renderer), so the bar mounts at shell level and the active view only renders the consequences.
+
+One language rule for the console view: its navigation words are the Linux ones — `cd` moves between spaces (spaces ARE the directories), `ls` lists what's here, `pwd` prints the address — and the ONLY new words are the four verbs. That's the learnability claim made concrete: everything a terminal user knows carries over; what's new is exactly what TreeOS adds.
 
 ### Why these four
 
@@ -116,79 +128,53 @@ Across every phase, these stay fixed. They are the contract that lets the portal
 
 Everything below changes. Everything above does not.
 
-## Phase 0 — what exists today
+## Phase 0 — the foundation passes (LANDED)
 
 ```
 portal/
-├── package.json + vite.config.js      Vite build, Three.js, socket.io
-├── index.html                         entry; loads /3d/main.js
+├── package.json + vite.config.js      Vite build; three.js lazy, socket.io
+├── index.html / text.html             two entries, both load core/boot.js
 ├── dist/                              built bundle (served by transports/http)
-├── core/
-│   ├── client.js                      Socket.IO IBP client
-│   └── config.js                      single place-URL resolver
-├── 3d/                                Three.js renderer (the default mode)
-├── flat/                              DOM renderer (mounted as overlay)
-├── shared/                            cross-mode panels (op-form, role-manager, ...)
-└── styles/                            8 css files, imported via Vite
+├── core/                              the spine (see Phase 1/2 below)
+├── 3d/  flat/  console/  explorer/    the four views, each behind view.js
+├── shared/                            cross-view chrome + panels
+└── styles/                            css per surface, imported via Vite
 ```
 
-What's been done so far (the foundation passes that make the next phases possible):
+The foundation passes that made the later phases possible:
 
 - `core/` separated from renderers (no DOM in `core/client.js` or `core/config.js`).
 - All inline `injectStyles()` swept into `styles/` so the renderer surface is data + CSS, not data + CSS-as-JS-string.
 - Single config resolver for the place URL (no more `defaultPlaceUrl()` scattered).
-- Flat and 3d render the same descriptor, both go through `flat.state.descriptor` / `state.descriptor`.
+- Flat and 3d render the same descriptor through one model.
 
-What still lives in the web assumption today:
+What still lives in the web assumption: transport is Socket.IO over WebSocket dialed from `window.location` or config; styles, assets, and bundling assume a browser; HTML hosts the shell. Phases 3+ loosen those.
 
-- The Three.js bundle is the entry; flat is a sub-renderer.
-- Transport is Socket.IO over WebSocket, dialed from `window.location` or a config.
-- Styles, assets, and bundling all assume a browser context.
-- HTML is the host. The `index.html` boots the JS.
+## Phase 1 — solidify the seam (LANDED 2026-06-11)
 
-Each phase below loosens one assumption.
+Goal: every renderer reads from the same in-memory model and reacts to the same events. No renderer reaches around the model. This is the structural pass that made "swap the renderer" a one-line decision instead of a refactor.
 
-## Phase 1 — solidify the seam
+What landed:
 
-Goal: every renderer reads from the same in-memory model and reacts to the same events. No renderer reaches around the model. This is the structural pass that makes "swap the renderer" a one-line decision instead of a refactor.
+- **`core/state.js`.** THE single subscribable model: `{ session, discovery, descriptor, currentAddress, actorBranch, selectedBeing, history, ... }`. The two former singletons (`flat.state` in `flat/host.js`, `state` in `3d/main.js`) collapsed into it. `3d/main.js` is gone; the `flat` object survives only as a mount-scoped adapter the text view populates FROM the model on each mount.
+- **`core/navigation.js`.** The `navigate(address)` flow lives once: branch stickiness, history push/replace, hash sync, live re-subscribe, the per-navigate position fact, rewind/return-to-now, stale-session and branch-gone recovery, anonymous/authenticated landing.
+- **The view contract** (`core/views.js`): `{ mount(rootEl, ctx), onDescriptor(desc, meta), onSelection(sel), destroy() }`. `3d/view.js` and `flat/view.js` implement it; a registry maps view name → lazy module.
+- **`PortalContext`** (`core/context.js`). Per-tab bundle of client + session + state + navigation. No module-level singletons; several contexts coexist in one shell — which is exactly what makes being-tabs possible.
 
-Work:
+Exit criterion met: the text entry boots and runs without Three.js ever loading; the 3D view is an optional lazy module.
 
-- **`core/state.js`.** Single in-memory model: `{ session, discovery, descriptor, currentAddress, currentBranch, selectedBeing, lineage }`. Subscribable. The two singletons (`flat.state` in `flat/host.js`, `state` in `3d/main.js`) become one. Renderers read; they don't own.
-- **`core/navigation.js`.** The `navigate(address)` flow lives once. Branch stickiness, history push/replace, live-resubscribe, descriptor preloading, error handling — all in one place. 3d and flat both call this.
-- **`core/view.js`.** The contract a view implements:
-  ```js
-  {
-    mount(rootEl, ctx),         // hand it a root to draw into + a PortalContext
-    onDescriptor(desc),         // descriptor arrived or changed
-    onSelection(beingOrMatter), // user picked something
-    showOverlay(spec),
-    closeOverlay(),
-    destroy(),
-  }
-  ```
-  3d/main.js becomes the 3D view. flat/host.js becomes the text view. A registry maps view name → view module; the entry picks a default and mounts; the user's keybind or button swaps in another.
-- **`PortalContext`.** Per-instance state holder. No more module-level singletons. The same JS could mount two portals in two tabs without leaking.
+## Phase 2 — split the entry, drop the HTML-first assumption (LANDED 2026-06-11)
 
-What stays the same: the panels, the scene, every UI surface. This pass is just the lines around them.
+Goal: the text view boots without Three.js. The portal stops being "a 3D app with a text overlay" and becomes "an IBP client with a view registry."
 
-Exit criterion: dropping `import "./scene.js"` from `3d/main.js` doesn't break the text view. The 3D view becomes an optional module that the portal mounts when the user picks it; the text view stands on its own.
+What landed:
 
-## Phase 2 — split the entry, drop the HTML-first assumption
+- **Two Vite entries.** `index.html` boots 3D-default; `text.html` boots text-first (`?view=` overrides either). Both load the same `core/boot.js`.
+- **Three.js lazy load.** The 3D view module (and only it) imports Three.js; the registry imports views on first activation. Text-first sessions never fetch the ~700KB chunk (verified in the headless smoke test).
+- **In-session view swap.** The old text-mode overlay became a real view swap (destroy active, mount next) through the registry; address, identity, and pending state ride the shared model across the swap. The console and explorer views landed alongside (DOM-rendered, per the phase table).
+- **`core/assets.js`.** Asset-URL seam; the glTF/sound resolver routes through it so a native shell can later resolve from a local matter store instead of the HTTP origin.
 
-Goal: the text view boots without Three.js. Three.js loads only when the 3D view is the entry. The portal stops being "a 3D app with a text overlay" and becomes "an IBP client with a view registry."
-
-Work:
-
-- **Two Vite entries.** `index.html` boots with the 3D view as default; `text.html` boots text-first. Same `core/` + `shared/` + `styles/`; different entry script.
-- **Three.js lazy load.** The 3D view loads its module on first activation. Text-first sessions never pay for it. Saves ~500KB+ uncached.
-- **In-session view swap.** Today's "text mode" toggle from 3D becomes a real view swap (destroy active view, mount the other) rather than an overlay. The view registry handles the lifecycle; the user keeps their address, identity, and pending state across the swap.
-- **Asset abstraction.** Today the portal asks for asset URLs from `discovery.reality` + `/assets/...`. Move asset resolution into `core/assets.js` so a future native shell can resolve from a local matter store instead of an HTTP origin.
-- **View registry.** A small map of `name → viewModule`, lazy-loaded. Adding a third view later (audio, map, timeline) is one entry in the registry plus the view module itself.
-
-What stays the same: the descriptor protocol, the IBP transport, the panel shapes that views compose.
-
-Exit criterion: someone running an accessibility-focused tool, a CI smoke test, or a low-power device launches the text entry, never loads Three.js, and gets full functionality; and a user in 3D presses Tab and is in the text view instantly.
+Exit criterion met: a CI smoke test launches the text entry headless, never loads Three.js, and exercises full functionality; a user in 3D presses `\` (or Alt+2) and is in the text view instantly.
 
 ## Phase 3 — Tauri shell, install like a browser
 
@@ -276,10 +262,10 @@ The reason this trajectory is feasible is that each phase changes one layer and 
 | Transport            | Socket.IO/WS   | Socket.IO/WS    | Rust WS client           | In-process IBP           |
 | 3D view              | Three.js       | Three.js        | wgpu native              | wgpu native              |
 | Text view            | DOM + iframes  | DOM + iframes   | embedded webview         | TreeOS HTML renderer     |
-| Console view         | (sketched)     | DOM             | native emitter           | native emitter           |
-| Explorer view        | (sketched)     | DOM             | native tree              | native tree              |
+| Console view         | DOM            | DOM             | native emitter           | native emitter           |
+| Explorer view        | DOM            | DOM             | native tree              | native tree              |
 | Host shell           | browser        | Tauri webview   | native window            | TreeOS itself            |
-| Entry                | index.html     | Tauri main      | Rust main                | TreeOS boot              |
+| Entry                | index/text.html | Tauri main     | Rust main                | TreeOS boot              |
 
 The four views are the user space at every phase. Console and explorer land alongside 3D and text along the way; what changes through phases is the rendering technology underneath each view, not the set. The text view keeps an HTML renderer through every phase because HTML is the right substrate for that view's content (iframes, embedded matter, rich docs); the other three go fully native by Phase 4. Users never lose the ability to switch instantly between any two views.
 
@@ -310,4 +296,6 @@ These capabilities aren't bolted on; they fall out of the kernel's commitments. 
 
 ## What to do now
 
-Phase 1 (solidify the seam) is the next concrete pass. `core/state.js` + `core/navigation.js` + `core/renderer.js` interface + retiring the two singletons. Roughly a day of focused work. After that the renderer becomes pluggable, Phase 2 (split entry, drop HTML-first) becomes mechanical, and Tauri (Phase 3) becomes a separable engineering project that doesn't block the kernel's evolution.
+Phases 0 through 2 are landed (2026-06-11): the seam is solid, the entry is split, all four views exist over one state, and the shell carries the IBPA bar, the view switcher, and being tabs. The portal folder is self-contained (no imports reaching into seed/ or transports/) — exportable as the client.
+
+Next concrete pass: **Phase 3 (Tauri shell)**. It is a separable engineering project that doesn't block the kernel's evolution: a thin Cargo crate around the existing dist, the `ibp://` protocol handler, keychain-backed session storage behind a `core/native.js` bridge that no-ops in the browser, and per-platform installers. Alongside it, the console and explorer views grow vocabulary as the kernel's response enriches — that's normal usage growth, not a phase.

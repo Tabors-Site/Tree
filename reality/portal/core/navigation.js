@@ -1,0 +1,429 @@
+// TreeOS Portal . core/navigation.js
+//
+// The one navigate(address) flow. Branch stickiness, history
+// push/replace, hash sync, live re-subscribe, descriptor publication,
+// stale-session and branch-gone recovery, the rewind/return-to-now
+// pair, and the per-navigate set-being:position emit all live here —
+// once. Views never SEE-and-render on their own; they subscribe to
+// the state model and render what navigation publishes.
+//
+// Publication meta (the second argument views receive):
+//   { reason: "navigate", resetCamera: true }   a real move
+//   { reason: "live",     resetCamera: false }  debounced live refetch
+//   { reason: "rewind",   resetCamera: false }  historical SEE (at:)
+//   { reason: "now",      resetCamera: false }  back to live, camera kept
+
+// Error codes that mean "this saved pointer no longer corresponds to
+// real substrate" — operator reset the DB, deleted being, tombstoned
+// home, JWT rotation, deleted branch.
+export const STALE_SESSION_CODES = new Set([
+  "UNAUTHORIZED",
+  "FORBIDDEN",
+  "NODE_NOT_FOUND",
+  "BEING_NOT_FOUND",
+  "SPACE_NOT_FOUND",
+  "BRANCH_NOT_FOUND",
+  "CROSS_BRANCH_FORBIDDEN",
+]);
+
+// Heaven children — catalogs (`./beings`, `./operations`, ...) and
+// dot-prefixed synthetic views (`/.acts/<id>`, `/.branches`) — are
+// addresses the 3D scene has nothing meaningful to render at. The
+// text/console/explorer views walk them happily; navigation tracks
+// the last NON-heaven address so the 3D view can restore on activate.
+export function isHeavenChildAddress(address) {
+  if (typeof address !== "string" || address.length === 0) return false;
+  const noBranch = address.replace(/#[^/]+/, "");
+  const slash = noBranch.indexOf("/");
+  const path = slash >= 0 ? noBranch.slice(slash) : noBranch;
+  return path.startsWith("/.");
+}
+
+export function createNavigation(ctx) {
+  const { state, events } = ctx;
+
+  let _refetchTimer = null;
+  let _recoveringBranch = false;
+
+  // ── Address shaping ─────────────────────────────────────────────
+
+  // Branch stickiness. Doctrine (2026-06-04): the address bar IS the
+  // source of truth — a FULL typed address without `#` means main.
+  // Only relative shorthands ("/foo", "~") inherit the active branch.
+  function withActiveBranch(address) {
+    if (typeof address !== "string" || !address) return address;
+    if (address.includes("#")) return address;
+    const activeBranch = state.get("descriptor")?.address?.branch || "0";
+    if (activeBranch === "0") return address;
+    const reality = state.get("discovery")?.reality;
+    if (!reality) return address;
+    if (address.startsWith(reality)) return address;
+    if (address.startsWith("/") || address.startsWith("~")) {
+      return `${reality}#${activeBranch}${address === "/" ? "/" : address}`;
+    }
+    return address;
+  }
+
+  // Resolve a console/explorer-style input into a dispatchable
+  // address. "@being" targets a being at the current position;
+  // bare "/path" and "~" ride branch stickiness; full addresses
+  // pass through.
+  function resolveAddressInput(raw) {
+    if (typeof raw !== "string" || !raw) return raw;
+    const trimmed = raw.trim();
+    if (trimmed.startsWith("@")) {
+      const desc = state.get("descriptor");
+      const reality = state.get("discovery")?.reality || desc?.address?.place || "";
+      const branch = desc?.address?.branch || "0";
+      const bq = branch === "0" ? "" : `#${branch}`;
+      const path = desc?.address?.pathByNames || "/";
+      return `${reality}${bq}${path}${trimmed}`.replace(/\/+@/, "/@");
+    }
+    return withActiveBranch(trimmed);
+  }
+
+  // The current position as a full dispatchable address, and the
+  // signed-in being's own stance. Shared by every view that emits.
+  function currentPositionAddress() {
+    const desc = state.get("descriptor");
+    const reality = state.get("discovery")?.reality || "";
+    const path = desc?.address?.pathByNames || "/";
+    const branch = desc?.address?.branch || "0";
+    const bq = branch === "0" ? "" : `#${branch}`;
+    return `${reality}${bq}${path}`.replace(/\/+$/, "") || `${reality}${bq}`;
+  }
+
+  function selfStance() {
+    const session = state.get("session");
+    if (session?.beingAddress) return session.beingAddress;
+    const reality = state.get("discovery")?.reality || "";
+    const branch = state.get("descriptor")?.address?.branch || "0";
+    const bq = branch === "0" ? "" : `#${branch}`;
+    const name = session?.username || "arrival";
+    return `${reality}${bq}/@${name}`;
+  }
+
+  // ── Hash sync ───────────────────────────────────────────────────
+
+  function restoreAddressFromHash() {
+    const raw = (typeof location !== "undefined" ? location.hash : "").replace(/^#/, "");
+    if (!raw) return null;
+    if (raw.startsWith("inhabit=")) return null;
+    return raw;
+  }
+
+  function syncLocationHash(desc) {
+    if (typeof location === "undefined") return;
+    const existing = location.hash.replace(/^#/, "");
+    if (existing.startsWith("inhabit=")) return;
+    const reality = desc?.address?.place || state.get("discovery")?.reality || "";
+    if (!reality) return;
+    const branch = desc?.address?.branch || "0";
+    const path = desc?.address?.pathByNames || "/";
+    const bq = branch === "0" ? "" : `#${branch}`;
+    const next = `${reality}${bq}${path === "/" ? "/" : path}`;
+    if (existing !== next) {
+      try { history.replaceState(null, "", `${location.pathname}#${next}`); } catch {}
+    }
+  }
+
+  function clearLocationHash() {
+    try { history.replaceState(null, "", location.pathname); } catch {}
+  }
+
+  // ── navigate ────────────────────────────────────────────────────
+
+  async function navigate(address, { fromHistory = false } = {}) {
+    const client = ctx.client;
+    if (!client) return;
+    try {
+      address = withActiveBranch(address);
+      // Subscribe live: every change to this position arrives as a
+      // descriptor event we refetch on. "/~" resolves server-side to
+      // the caller's Being.homeSpace.
+      const desc = await client.see(address, { live: true });
+
+      // Stale-session mid-flight: the operator dropped the DB while
+      // the page was open. Drop the session and reconnect anonymously
+      // before any DO fires and bounces with BEING_NOT_FOUND.
+      if (desc?.identity?.stale === true && state.get("session")) {
+        await ctx.dropStaleSessionAndReconnect();
+        return;
+      }
+
+      // Clear selectedBeing when the SPACE changed — focus was
+      // contextual to the previous position. Same-space refreshes
+      // keep it so a live event doesn't blow away the selection.
+      const priorSpaceId = state.get("descriptor")?.address?.spaceId || null;
+      const nextSpaceId = desc?.address?.spaceId || null;
+      const partial = { descriptor: desc, currentAddress: address };
+      if (priorSpaceId && nextSpaceId && priorSpaceId !== nextSpaceId) {
+        partial.selectedBeing = null;
+      }
+      if (!isHeavenChildAddress(address)) {
+        partial.lastNonHeavenAddress = address;
+      }
+
+      // History push unless we're stepping through it. Store the FULL
+      // IBP-form address (reality + branch + path) so back/forward
+      // restores the exact view even after branch hops.
+      if (!fromHistory) {
+        const reality = desc?.address?.place || state.get("discovery")?.reality || "";
+        const branch = desc?.address?.branch || "0";
+        const path = desc?.address?.pathByNames || "/";
+        const bq = branch === "0" ? "" : `#${branch}`;
+        const canonical = reality
+          ? `${reality}${bq}${path === "/" ? "/" : path}`
+          : (desc?.address?.pathByNames || address);
+        const history = state.get("history");
+        const historyIndex = state.get("historyIndex");
+        if (history[historyIndex] !== canonical) {
+          const trimmed = history.slice(0, historyIndex + 1);
+          trimmed.push(canonical);
+          partial.history = trimmed;
+          partial.historyIndex = trimmed.length - 1;
+        }
+      }
+
+      state.set(partial, { reason: "navigate", resetCamera: true });
+      syncLocationHash(desc);
+
+      // Two-humans-walking: mark this space as my position so other
+      // sessions' descriptors show me here. Live navigation only —
+      // a rewind must never write our LIVE position to a past space.
+      if (
+        !desc?.isHistorical &&
+        desc?.identity?.beingId && desc?.address?.spaceId
+      ) {
+        const stance = `${desc.address.pathByNames}@${desc.identity.name}`;
+        client.do(stance, "set-being", {
+          field: "position",
+          value: desc.address.spaceId,
+        }).catch((err) => {
+          // Surface the failure — this is the seam where every navigate
+          // stamps a position fact; a silent bounce here reads as "the
+          // portal isn't tracking my walks."
+          const msg = `${err?.code || ""} ${err?.message || err}`.trim();
+          console.warn("[portal:nav] set-being:position failed:", msg);
+          events.emit("status", `position write failed: ${msg}`);
+        });
+      }
+      events.emit("navigated", { address, descriptor: desc });
+      return desc;
+    } catch (err) {
+      events.emit("status", `see failed: ${err.code || ""} ${err.message || ""}`);
+      // A navigate to a branch that no longer exists self-heals to
+      // main rather than stranding the client on the previous
+      // descriptor (where the self-position loop would storm the
+      // gone branch). Re-entry guard stops a loop if main fails too.
+      if ((err?.code === "BRANCH_NOT_FOUND" || err?.code === "CROSS_BRANCH_FORBIDDEN") && !_recoveringBranch) {
+        _recoveringBranch = true;
+        clearLocationHash();
+        try {
+          await navigate(`${state.get("discovery")?.reality || ""}/`);
+          return;
+        } catch (err2) {
+          console.warn("[portal:nav] branch-gone recovery to main failed:", err2?.message || err2);
+        } finally {
+          _recoveringBranch = false;
+        }
+      }
+      throw err;
+    }
+  }
+
+  // ── History ─────────────────────────────────────────────────────
+
+  function back() {
+    const i = state.get("historyIndex");
+    if (i <= 0) return;
+    state.set({ historyIndex: i - 1 });
+    navigate(state.get("history")[i - 1], { fromHistory: true });
+  }
+
+  function forward() {
+    const i = state.get("historyIndex");
+    const history = state.get("history");
+    if (i >= history.length - 1) return;
+    state.set({ historyIndex: i + 1 });
+    navigate(history[i + 1], { fromHistory: true });
+  }
+
+  // ── Rewind / return-to-now ─────────────────────────────────────
+  //
+  // Rewinding is "same place, different time," not a navigate: the
+  // camera keeps its angle, the descriptor goes historical, and the
+  // ghost guard (context) blocks every DO/SUMMON/BE until "now".
+
+  async function rewindTo(atTimestamp) {
+    const client = ctx.client;
+    const address = state.get("currentAddress");
+    if (!client || !address || !atTimestamp) return;
+    try {
+      const desc = await client.see(address, { at: { atTimestamp } });
+      state.set({ descriptor: desc }, { reason: "rewind", resetCamera: false });
+      events.emit("status", `rewound to ${atTimestamp}`);
+    } catch (err) {
+      console.warn("[portal:nav] rewind failed:", err?.message);
+    }
+  }
+
+  async function returnToNow({ preserveCamera = false } = {}) {
+    const client = ctx.client;
+    const address = state.get("currentAddress");
+    if (!address) return;
+    if (preserveCamera && client) {
+      // Fast-forward playback caught up to present — keep the angle
+      // the user was watching from.
+      try {
+        const desc = await client.see(address);
+        state.set({ descriptor: desc }, { reason: "now", resetCamera: false });
+      } catch (err) {
+        console.warn("[portal:nav] resume-live (preserveCamera) failed:", err?.message);
+      }
+      return;
+    }
+    await navigate(address);
+  }
+
+  // ── Live descriptor events ──────────────────────────────────────
+  //
+  // "position" / "fact" deltas pass straight through to whichever
+  // view subscribes (the 3D scene applies them without a refetch).
+  // Everything else triggers a debounced full-descriptor refetch —
+  // the fat fallback covering create/delete, qualities writes,
+  // ownership changes.
+
+  function handleDescriptorEvent(event) {
+    if (!state.get("currentAddress")) return;
+    if (state.get("debugLiveEvents")) {
+      console.log("[portal:nav] live event:", event?.kind, event?.spaceId?.slice(0, 8));
+    }
+    // Ghost-view guard: while rewound, live events must not replace
+    // the descriptor — the user is observing a frozen past moment.
+    // The branch/timeline chrome still refreshes (shell listens for
+    // this) so history visibly accumulates beyond the cursor.
+    if (state.get("descriptor")?.isHistorical) {
+      events.emit("live-while-historical", event);
+      return;
+    }
+    if (event?.kind === "position" || event?.kind === "fact") {
+      events.emit(`live-${event.kind}`, event);
+      return;
+    }
+    if (_refetchTimer) return;
+    _refetchTimer = setTimeout(async () => {
+      _refetchTimer = null;
+      if (state.get("descriptor")?.isHistorical) return;
+      const client = ctx.client;
+      const address = state.get("currentAddress");
+      if (!client || !address) return;
+      try {
+        const desc = await client.see(address);
+        state.set({ descriptor: desc }, { reason: "live", resetCamera: false });
+      } catch (err) {
+        console.warn("[portal:nav] live refetch failed:", err);
+      }
+    }, 100);
+  }
+
+  // ── Landing flows ──────────────────────────────────────────────
+  //
+  // Where to land right after a socket connects. Anonymous: the URL
+  // hash if present, else "/", with substrate-gone and FORBIDDEN
+  // fallbacks (a stale hash pointing at a private tree must not
+  // strand arrival on a deny screen). Authenticated: hash first,
+  // then the being's server-tracked position, then home, then the
+  // being stance, then "/".
+
+  async function landAnonymous() {
+    const fallbackCodes = new Set([...STALE_SESSION_CODES, "FORBIDDEN"]);
+    const restored = restoreAddressFromHash() || "/";
+    try {
+      await navigate(restored);
+    } catch (err) {
+      if (fallbackCodes.has(err?.code) && restored !== "/") {
+        clearLocationHash();
+        try { await navigate("/"); } catch {}
+      }
+    }
+  }
+
+  async function landAuthenticated(session) {
+    const client = ctx.client;
+    const discovery = state.get("discovery");
+    const beingAddress = session.beingAddress
+      || (session.username && discovery?.reality
+        ? `${discovery.reality}/@${session.username}`
+        : null);
+
+    let landingAddress = restoreAddressFromHash() || "/";
+    const landingFromHash = !!landingAddress && landingAddress !== "/";
+    if (beingAddress) {
+      try {
+        const desc = await client.see(beingAddress);
+        // Stale-token check: the wire decodes the JWT but the world
+        // has no row for that beingId (DB reset, ended being).
+        if (desc?.identity?.stale === true) {
+          await ctx.dropStaleSessionAndReconnect();
+          return false;
+        }
+        if (!landingFromHash) {
+          // position (server-tracked) → homeSpace → session.homeSpaceId
+          // (race-proof for a being who JUST registered) → stance.
+          const pos = desc?.identity?.position || null;
+          const home = desc?.identity?.homeSpace || null;
+          const targetSpace = pos || home || session.homeSpaceId || null;
+          landingAddress = targetSpace && discovery?.reality
+            ? `${discovery.reality}/${targetSpace}`
+            : beingAddress;
+        }
+      } catch (err) {
+        if (STALE_SESSION_CODES.has(err?.code)) {
+          await ctx.dropStaleSessionAndReconnect();
+          return false;
+        }
+        // Network/timeout — fall through to landing.
+      }
+    }
+
+    try {
+      await navigate(landingAddress);
+    } catch (err) {
+      if (STALE_SESSION_CODES.has(err?.code)) {
+        clearLocationHash();
+        try { await navigate(beingAddress || "/"); }
+        catch (err2) {
+          if (STALE_SESSION_CODES.has(err2?.code)) {
+            await ctx.dropStaleSessionAndReconnect();
+            return false;
+          }
+        }
+      }
+    }
+    return true;
+  }
+
+  function destroy() {
+    if (_refetchTimer) { clearTimeout(_refetchTimer); _refetchTimer = null; }
+  }
+
+  return {
+    navigate,
+    back,
+    forward,
+    rewindTo,
+    returnToNow,
+    withActiveBranch,
+    resolveAddressInput,
+    currentPositionAddress,
+    selfStance,
+    isHeavenChildAddress,
+    handleDescriptorEvent,
+    restoreAddressFromHash,
+    clearLocationHash,
+    landAnonymous,
+    landAuthenticated,
+    destroy,
+  };
+}

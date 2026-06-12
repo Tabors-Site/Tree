@@ -14,9 +14,12 @@ const VERBS = ["see", "do", "summon", "be"];
 
 const BE_OPS = ["birth", "connect", "release"];
 
-export function mountIbpConsole({ root, client, getPlace }) {
+export function mountIbpConsole({ root, client, getClient, getPlace }) {
   if (!root) throw new Error("mountIbpConsole: { root } required (DOM container)");
-  if (!client) throw new Error("mountIbpConsole: { client } required (PortalClient)");
+  // Accept a live accessor so the console keeps working after a
+  // sign-in reconnect swaps the PortalClient under it.
+  const resolveClient = typeof getClient === "function" ? getClient : () => client;
+  if (!resolveClient()) throw new Error("mountIbpConsole: a client (or getClient) is required");
 
   const panel = buildPanel();
   root.appendChild(panel);
@@ -67,7 +70,7 @@ export function mountIbpConsole({ root, client, getPlace }) {
     const t0 = performance.now();
 
     try {
-      const data = await runVerb(client, verb, address, payload);
+      const data = await runVerb(resolveClient(), verb, address, payload);
       const ms = Math.round(performance.now() - t0);
       const ack = { id: envelope.id, status: "ok", data };
       els.ack.textContent = JSON.stringify(ack, null, 2);
@@ -99,18 +102,26 @@ export function mountIbpConsole({ root, client, getPlace }) {
   }
 
   // Backtick toggles. Ignored when typing in another input.
-  window.addEventListener("keydown", (e) => {
+  const onToggleKey = (e) => {
     if (e.key !== "`") return;
     const t = e.target;
     const inField = t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable);
     if (inField && !panel.contains(t)) return;
     e.preventDefault();
     toggle();
-  });
+  };
+  window.addEventListener("keydown", onToggleKey);
 
   toggle(false);
 
-  return { toggle, panel };
+  return {
+    toggle,
+    panel,
+    destroy() {
+      window.removeEventListener("keydown", onToggleKey);
+      panel.remove();
+    },
+  };
 }
 
 // ────────────────────────────────────────────────────────────────────

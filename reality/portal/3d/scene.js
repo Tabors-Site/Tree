@@ -479,6 +479,19 @@ export class Scene {
     this.clock.getDelta(); // same drain on the resume side
   }
 
+  // Full teardown for view unmount (the shell swapping to another
+  // view). Stops the render loop, releases the GL context, removes
+  // the CSS renderer's body-level element. The scene object is dead
+  // after this; mounting the 3D view again constructs a fresh Scene.
+  dispose() {
+    this._disposed = true;
+    this._paused = true;
+    if (this._rafId) { cancelAnimationFrame(this._rafId); this._rafId = null; }
+    try { this.flushPlaybackTicks?.(); } catch {}
+    try { this.cssRenderer?.domElement?.remove(); } catch {}
+    try { this.renderer?.dispose(); } catch {}
+  }
+
   // Glide camera over a being's current cell. Called on text-mode
   // close so the user lands where the interaction was. beingId comes
   // from L.state.selectedBeing.
@@ -521,6 +534,7 @@ export class Scene {
   }
 
   _onResize() {
+    if (this._disposed) return; // stale listener from a prior mount
     const w = window.innerWidth;
     const h = window.innerHeight;
     this.camera.aspect = w / h;

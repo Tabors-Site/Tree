@@ -214,36 +214,9 @@ body {
 #identity-chip .chip:hover { border-color: var(--accent); color: var(--accent); }
 #identity-chip .chip-authed { background: #0f201a; color: var(--accent); border-color: #2f6b48; }
 
-/* The shared stance bar spans row 2 left of quick-nav. */
-#stance-slot-flat {
-  grid-area: addr;
-  display: flex;
-  min-width: 0;
-}
-#stance-slot-flat #stance-actor {
-  background: var(--bg);
-  border: 1px solid var(--border);
-  border-radius: 3px;
-  padding: 7px 10px;
-  font-size: 12px;
-}
-#address-input {
-  width: 100%;
-  box-sizing: border-box;
-  background: var(--bg);
-  color: var(--fg);
-  border: 1px solid var(--border);
-  border-radius: 3px;
-  padding: 7px 10px;
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 12px;
-  transition: border-color 80ms ease;
-}
-#address-input:focus {
-  outline: none;
-  border-color: var(--accent);
-}
-#address-input::placeholder { color: var(--fg-faint); }
+/* The stance bar (and its #address-input) moved to the shell topbar
+   (styles/shell.css); the flat header no longer hosts an address
+   input. */
 
 /* Quick-nav row 2 right. */
 #quick-nav {
