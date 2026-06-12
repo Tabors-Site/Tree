@@ -25,7 +25,7 @@ const REGISTRY = {
   // The fifth surface (added 2026-06-12): the machine as its own
   // biography. Chains the kernel already keeps, rendered as a feed;
   // click a moment and every view folds to it.
-  "time":     () => import("../time/view.js"),
+  "history":  () => import("../history/view.js"),
 };
 
 export const VIEW_NAMES = Object.keys(REGISTRY);

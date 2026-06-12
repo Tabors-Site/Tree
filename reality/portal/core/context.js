@@ -273,6 +273,10 @@ export function createPortalContext({ id = "main", persist = true, session = nul
       token: result.identityToken,
       username: result.name || fallbackName,
       beingAddress: result.beingAddress,
+      // The being's permanent identity: its ed25519 public key (the
+      // z... did:key value). The name above is the contextual label;
+      // this id never changes.
+      beingId: result.beingId || null,
       // Home space the new being was placed in — lands the camera at
       // home right after register, before identity.position/homeSpace
       // fold into the descriptor.

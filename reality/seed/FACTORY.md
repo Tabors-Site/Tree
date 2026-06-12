@@ -281,7 +281,7 @@ present/
 ├── session.js           per-being-presence session bookkeeping
 ├── cognition/llm/          LLM cognition apparatus (separate from beats)
 │   ├── runTurn.js          orchestration entry points (stepTurn, runTurn)
-│   ├── loop.js             the Phase 5 iteration (callLLM, finalizeResponse)
+│   ├── loop.js             the iteration (callLLM, finalizeResponse)
 │   ├── tools.js            tool registry + per-position resolution + dispatch
 │   ├── connect.js          per-being LLM connection hub + client cache
 │   ├── resolution.js       four-layer LLM-connection chain walk
@@ -1001,10 +1001,8 @@ The word is Plato's. ποιότης (poiótēs), coined in _Theaetetus_. Cicero
 calqued it to Latin `qualitas` (from _qualis_, "of what kind"). The
 field is named for exactly what it does.
 
-**Writes go through DO.** Per Slice 3 (2026-05-23) the legacy
-`qualities.{being,space,matter}.setQuality/...` direct-write API
-retired. Every quality write now stamps a material-scoped `do:set-<kind>`
-Fact:
+**Writes go through DO.** Every quality write stamps a
+material-scoped `do:set-<kind>` Fact:
 
 ```js
 await reality.do(target, "set-space", { field: "qualities.<ns>", value }, opts);
@@ -1024,9 +1022,7 @@ await reality.do(
 
 The reducer's `applySetQualities` derives the new state; the fold
 engine writes the projection under the per-reel append lock. One
-writer (fold), one source of truth (facts). The tombstone methods on
-`qualities.{being,space,matter}.setQuality` throw a migration error
-directing callers at `reality.do(...)`.
+writer (fold), one source of truth (facts).
 
 **Reads still go through `qualities`.** Two methods stayed:
 `getQuality(doc, key)` (returns `{}` when unset) and
@@ -1043,11 +1039,10 @@ indexability and query performance.
 
 `name`, `parent`, `rootOwner`, `contributors[]`, `heavenSpace`, `type`,
 `llmDefault`, `dateCreated`, `qualities` (Map), `foldedSeq`,
-`position`. Plus standard timestamps. `Space.children[]` retired
-(2026-05-23); `parent` is the only relation direction; readers query
-by parent. The `position` field is reducer output, kept current by
-eager-fold; `findByPosition(spaceId)` returns every aggregate
-(being / space / matter) at that position.
+`position`. Plus standard timestamps. `parent` is the only relation
+direction; readers query by parent. The `position` field is reducer
+output, kept current by eager-fold; `findByPosition(spaceId)` returns
+every aggregate (being / space / matter) at that position.
 
 ### Being
 
@@ -1142,13 +1137,13 @@ by markThreadSevered when a cut runs through this Act's rootCorrelation),
 the same transaction that commits the moment's ΔF. Every Fact emitted
 during the moment carries this Act's `_id` as `actId`.
 
-**The Act row materializes only on `ok:true`.** Per the Round 5
-restructure, a failed cognition (`ok:false`) leaves zero trace: no
-Act row, no inbox close, no projection bump. The being's reel and
-act-chain are byte-identical to before the failed moment. The seal
-is gated on the CognitionResult discriminated type
-([cognitionResult.js](present/cognition/cognitionResult.js)); failure is
-structurally unreachable at the seal site.
+**The Act row materializes only on `ok:true`.** A failed cognition
+(`ok:false`) leaves zero trace: no Act row, no inbox close, no
+projection bump. The being's reel and act-chain are byte-identical
+to before the failed moment. The seal is gated on the
+CognitionResult discriminated type
+([cognitionResult.js](present/cognition/cognitionResult.js));
+failure is structurally unreachable at the seal site.
 
 ### LlmConnection (per-being LLM config)
 
@@ -1548,11 +1543,11 @@ identity. New code uses the verbs.
 
 ### Qualities (`reality.qualities.{being, space, matter}`)
 
-Read-only after Slice 3 (2026-05-23). `getQuality(doc, key)` returns
-the namespace data (`{}` when unset). `readQualityNamespace(doc, key)`
-returns null when unset. Write tombstones throw with migration
-message; use `reality.do(target, "set-<kind>", { field: "qualities.<ns>", value })`
-where `<kind>` is space, being, or matter to match the target.
+Read-only. `getQuality(doc, key)` returns the namespace data (`{}`
+when unset). `readQualityNamespace(doc, key)` returns null when
+unset. Writes go through `reality.do(target, "set-<kind>",
+{ field: "qualities.<ns>", value })` where `<kind>` is space, being,
+or matter to match the target.
 
 ### Space CRUD (`reality.space`)
 
@@ -1563,7 +1558,7 @@ mutation. All routes write Facts internally.
 ### Matter CRUD (`reality.matters`)
 
 `createMatter`, `editMatter`, `deleteMatterAndFile`, `transferMatter`,
-`getMatters`. All fact-driven (Slice C-matter-full, 2026-05-23).
+`getMatters`. All fact-driven.
 
 ### Extension scope (`reality.scope`)
 

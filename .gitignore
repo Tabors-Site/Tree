@@ -12,6 +12,8 @@ reality/.env
 reality/extensions/.disabled
 reality/.place/
 reality/oldExtensions/
+reality/.oldExtensions/
+reality/.test/
 
 create-treeos/template/uploads
 create-treeos/template/.env

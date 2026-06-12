@@ -286,5 +286,9 @@ function serializeAct(a) {
     // being's cognition. Null on legacy acts predating the field. Clients
     // render it as the act's "what I saw and could do" record.
     facadeSnapshot:  a.facadeSnapshot || null,
+    // Seal-signature presence. The full sig (incl. value) stays on the
+    // row; the wire carries who signed and the scheme so clients can
+    // badge signed acts. by is a key id (self-certifying) or "i-am".
+    sig: a.sig?.value ? { alg: a.sig.alg || null, by: a.sig.by || null } : null,
   };
 }

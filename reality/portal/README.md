@@ -1,6 +1,6 @@
 # TreeOS Portal
 
-The client. Speaks IBP (the four verbs: SEE, DO, SUMMON, BE) over WebSocket and hosts FOUR views over the same IBP state: 3d, text, console, explorer. The shell chrome (being tabs, the IBPA stance bar, the view switcher, the branch/timeline bar) stays up no matter which view is mounted. Bundled into the reality server's `/` route at boot via `npm run build:portal`.
+The client. Speaks IBP (the four verbs: SEE, DO, SUMMON, BE) over WebSocket and hosts FIVE views over the same IBP state: 3d, text, console, explorer, history. The shell chrome (being tabs, the IBPA stance bar, the view switcher, the branch/timeline bar) stays up no matter which view is mounted. Bundled into the reality server's `/` route at boot via `npm run build:portal`.
 
 Read [PORTAL.md](PORTAL.md) for the trajectory (web bundle today → TreeOS native shell at the OS); this README is the folder map.
 
@@ -44,6 +44,8 @@ portal/
 │   └── view.js
 ├── explorer/              the explorer view — tree over spaces/matter/beings
 │   └── view.js
+├── history/               the history view — fact chains + act chains as a
+│   └── view.js            feed; click a moment and the whole portal rewinds there
 ├── shared/                cross-view chrome + panels
 │   ├── stance-bar.js      THE IBPA address bar (actor :: receiving)
 │   ├── portal-status.js   body-level status toast
@@ -55,7 +57,7 @@ portal/
 
 - **One state.** `core/state.js` is the single subscribable model (session, discovery, descriptor, address, selection, history). Views read it and react to its change events; none owns a copy.
 - **One navigate.** `core/navigation.js` owns `navigate(address)` — branch stickiness, history, hash sync, live re-subscribe, the per-navigate position fact, rewind/return-to-now, stale-session recovery.
-- **Views are a closed set.** `core/views.js` maps name → lazy module; each implements `{ mount, onDescriptor, onSelection, destroy }`. Switching is a render swap, not a refetch. Alt+1..4 switches; `\` flips 3d↔text.
+- **Views are a closed set.** `core/views.js` maps name → lazy module; each implements `{ mount, onDescriptor, onSelection, destroy }`. Switching is a render swap, not a refetch. Alt+1..5 switches; `\` flips 3d↔text.
 - **Tabs are beings.** Each shell tab is one `PortalContext` — its own client, session, state. Inhabit opens the borrowed being as a new tab. The whole user space is tabbed per being.
 - **Exportable.** Nothing in this folder imports from `seed/`, `transports/`, or anywhere outside `portal/`. The portal reaches a reality only through IBP (plus the one `/.well-known/treeos-portal` bootstrap and the `/api/v1/content` byte carrier).
 
