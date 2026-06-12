@@ -199,6 +199,12 @@ export function mountFlatView(rootContainer, ctx) {
     if (!ctx.client) throw new Error("flat.doOp: no client");
     return ctx.client.do(address, name, args);
   };
+  // Raw SEE without moving the portal (panels reading synthetic
+  // addresses like .discovery; navigation stays the mover).
+  flat.see = async (address, opts = {}) => {
+    if (!ctx.client) throw new Error("flat.see: no client");
+    return ctx.client.see(address, opts);
+  };
   flat.beOp = async (op, address, payload = {}) => {
     if (!ctx.client) throw new Error("flat.beOp: no client");
     if ((op === "birth" || op === "connect") && typeof ctx.onSignIn === "function") {

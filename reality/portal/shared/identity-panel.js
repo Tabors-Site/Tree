@@ -139,10 +139,18 @@ function noteLine(parent, text, cls = "idp-note") {
 }
 
 // Render the reality-provenance block (shared by panel + overlay).
-function provenanceSection(parent, discovery) {
-  const chain = discovery?.chain;
+// The bootstrap discovery is slim; the chain block rides the full
+// socket-side `.discovery`, so fetch it through `see` when missing.
+async function provenanceSection(parent, discovery, see) {
   const s = section(parent, "reality");
   s.appendChild(el("div", "idp-label", discovery?.reality || "(unknown)"));
+  let chain = discovery?.chain;
+  if (!chain?.realityId && see && discovery?.reality) {
+    try {
+      const full = await see(`${discovery.reality}/.discovery`);
+      chain = full?.chain;
+    } catch { /* provenance stays absent */ }
+  }
   if (!chain?.realityId) {
     noteLine(s, "no signed chain root in discovery (older reality)");
     return;
@@ -274,7 +282,7 @@ function credentialSection(parent, { doOp, stance }) {
  * @param {HTMLElement} body
  * @param {{ state: object, doOp?: Function, signOut?: Function, being?: object }} opts
  */
-export function renderIdentityPanel(body, { state, doOp, signOut, being = null }) {
+export function renderIdentityPanel(body, { state, doOp, see, signOut, being = null }) {
   body.innerHTML = "";
   const wrap = el("div", "identity-panel");
   body.appendChild(wrap);
@@ -287,7 +295,7 @@ export function renderIdentityPanel(body, { state, doOp, signOut, being = null }
       keyRow(s, String(being.beingId));
       if (String(being.beingId) === "i-am") {
         noteLine(s, "the I-Am names itself \"i-am\" from inside; its key identity IS the reality key below");
-        provenanceSection(wrap, state?.discovery);
+        provenanceSection(wrap, state?.discovery, see);
       }
     } else {
       noteLine(s, "(no id on this entry)");
@@ -318,7 +326,7 @@ export function renderIdentityPanel(body, { state, doOp, signOut, being = null }
     credentialSection(wrap, { doOp, stance });
   }
 
-  provenanceSection(wrap, state?.discovery);
+  provenanceSection(wrap, state?.discovery, see);
 
   if (session?.token && signOut) {
     const s = section(wrap, "session");

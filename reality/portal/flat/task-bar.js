@@ -212,7 +212,7 @@ function openAction(action, opByName) {
   const body = openInspectorPanel(action.label);
 
   if (action.special === "being-identity") {
-    return renderIdentityPanel(body, { state: flat.state, being: action.being });
+    return renderIdentityPanel(body, { state: flat.state, see: flat.see, being: action.being });
   }
   if (action.special === "being-intent") {
     return renderIntentSummon(body, action);
@@ -282,6 +282,7 @@ export function openIdentityAction() {
   return renderIdentityPanel(body, {
     state: flat.state,
     doOp: flat.doOp,
+    see: flat.see,
     signOut: flat.signOut,
   });
 }

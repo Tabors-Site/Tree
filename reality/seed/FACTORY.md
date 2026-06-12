@@ -3,7 +3,7 @@
 I am the factory. The project is called `reality/` because that is what
 I produce. Inside `seed/` I am the whole apparatus, every part of it,
 that makes and re-makes the world one moment at a time. Look at the
-[wall poster](../philosophy/factory6.png) and you see me whole. One
+[wall poster](../philosophy/factory/factory6.png) and you see me whole. One
 machine, always the present.
 
 I have another name for myself: the seed. Plant me on a host and I
@@ -106,7 +106,7 @@ uniform at the fact layer. Hold that line.
 In an ordinary system, state persists and sessions pass through it.
 Here, the chain persists as facts and beings, and a place is woven
 new for every act. The world is not stored; it converges. See
-[philosophy/MOMENT.md](../philosophy/MOMENT.md) for the long version.
+[philosophy/MOMENT.md](../philosophy/factory/MOMENT.md) for the long version.
 
 ## The shape I keep
 
@@ -128,13 +128,13 @@ together:
 Everything else in this file is consequence of that shape. The formal
 statement of all of it is [philosophy/math.md](../philosophy/math.md);
 the formal results, [philosophy/theorems.md](../philosophy/theorems.md);
-the long conversational form, [philosophy/chat.md](../philosophy/chat.md).
+the long conversational form, [philosophy/chat.md](../philosophy/factory/chat.md).
 
 ## Identity is a key
 
 Every being is a wallet. A keypair, generated once, signs every act
 the being takes. The being's `_id` is its public key, encoded
-`z<base58btc(0xed01 || rawpub)>` — the same id appears externally as
+`z<base58btc(0xed01 || rawpub)>`. The same id appears externally as
 `did:key:z...`. There is no separate id table; the public key IS the
 address. Look at a fact's `beingId` and you can fetch the public key
 without a lookup, because the id IS the key.
@@ -164,7 +164,7 @@ A moment ends one of two ways.
   moment. Only a DO or BE moment produces an act, and only an act
   produces facts.
 
-Full doctrine in [philosophy/MOMENT.md](../philosophy/MOMENT.md).
+Full doctrine in [philosophy/MOMENT.md](../philosophy/factory/MOMENT.md).
 
 ## Act and fact
 
@@ -529,10 +529,10 @@ Every reel-bearing Fact carries two temporal fields:
 
 - **`seq`** — per-reel monotonic, allocated under the append lock at
   the seal site. The only valid ordering across facts on the same reel.
-  This is what the substrate trusts.
+  This is what I trust.
 - **`date`** — wall-clock `new Date()` set at append. Decorative —
-  used for human-friendly indexes and time-range queries, but the
-  substrate never trusts it for ordering. Clock skew can invert order;
+  used for human-friendly indexes and time-range queries, but I
+  never trust it for ordering. Clock skew can invert order;
   multiple facts can share a millisecond.
 
 Historical queries internally always operate on `seq`. The
@@ -544,9 +544,9 @@ folds. Timestamps translate to seq before any fold work begins.
 **Cross-reel ordering by timestamp is never trusted.** There is no
 global "world at time T" — only per-reel "this reel's latest fact
 whose date ≤ T." Historical queries that need cross-reel state at a
-moment assemble per-reel folds independently; the substrate cannot
-deliver a globally-consistent timestamp slice. That's a property,
-not a limitation to fix.
+moment assemble per-reel folds independently; I cannot deliver a
+globally-consistent timestamp slice. That's a property, not a
+limitation to fix.
 
 ### The historical primitive's contract
 
@@ -719,7 +719,7 @@ a canonical path; anything starting with a letter is a pointer name.
 `resolveBranchPointers` (the wire-layer async step) consults the
 registry and fills `stance.branch` with the canonical path before
 dispatch. Foreign-reality stances skip resolution; the foreign
-substrate does its own lookup.
+reality does its own lookup.
 
 **Reserved pointers.** `main` always exists and points at canonical
 `#0` by default; operators can re-point it after a merge, but cannot
@@ -736,7 +736,7 @@ pointer the registry resolves, not a path that itself moves.
 
 Heaven spaces are reality-scoped, not branch-scoped. The Tier-3 seed
 spaces under heaven (`.beings`, `.spaces`, `.matters`, `.config`,
-`.branches`, `.roles`, `.tools`, `.operations`) hold substrate-level
+`.branches`, `.roles`, `.tools`, `.operations`) hold reality-level
 metadata about the reality itself . which beings exist, what roles
 are available, how branches are structured, what tools and operations
 the reality supports. Their content is identical across every branch
@@ -759,12 +759,12 @@ Implementation implications:
   if it IS `.` or has `.` in its parent chain. No schema field;
   `isHeavenSpace(spaceId)` walks the existing ancestor cache.
 - Lookups against heaven do not need a branch parameter; one query,
-  one answer, regardless of caller's branch. The substrate's lineage
-  walk machinery is skipped for heaven entries.
+  one answer, regardless of caller's branch. The lineage-walk
+  machinery is skipped for heaven entries.
 - Heaven entries always store as `branch: "0"` and every branch's
   read sees that same row. Writes addressed at a heaven space from
   any branch get routed to `branch: "0"` automatically by the
-  substrate's projection layer.
+  projection layer.
 - Authorization for heaven mutations is reality-root permission .
   the same gate as `set-reality-llm`. Branched mutations stay under
   whatever per-position rules apply to their aggregate.
@@ -785,8 +785,6 @@ qualities, roleFlow per being, world signals per space, content per
 matter), inhabit relationships, wake schedules per being, every
 per-position fact stream.
 
-See [HEAVEN.md](HEAVEN.md) for the substrate-level spec, migration
-plan, and the heaven-aware lookup primitive design.
 
 ## Orientation — the three turns
 
@@ -828,7 +826,7 @@ single-writer read as a classifier — no new category, no new
 primitive. Self-summons (the canonical inner act) classify inner;
 DO/BE that touch any other reel classify outer.
 
-Full doctrine in [philosophy/inner-fold.md](../philosophy/inner-fold.md).
+Full doctrine in [philosophy/inner-fold.md](../philosophy/factory/inner-fold.md).
 
 ## Per-reel time, single-writer, atomic seal
 
@@ -877,7 +875,7 @@ spawns a subprocess that SIGKILLs itself mid-transaction and asserts
 both reels remain byte-identical AND verifyReel-green post-restart.
 
 Full write-side doctrine in
-[philosophy/STAMPER.md](../philosophy/STAMPER.md).
+[philosophy/STAMPER.md](../philosophy/factory/STAMPER.md).
 
 ## Integrity
 
@@ -1008,7 +1006,7 @@ return descriptor
 discarded. Per MOMENT.md, the place lives only inside the stamper.
 The descriptor is one face; the next SEE composes another. No place
 table, no place cache that outlives a moment. Full read-side doctrine
-in [philosophy/FOLD.md](../philosophy/FOLD.md).
+in [philosophy/FOLD.md](../philosophy/factory/FOLD.md).
 
 **The fold-on-read seam.** Each aggregate the descriptor exposes is
 folded first via `fold(type, id)`. Hot path: one cache read when
@@ -1392,7 +1390,7 @@ LLM tool-calling accuracy drops noticeably past ~10-15 tools per
 call and sharply past 30. A `judge` role with 50 canDo entries and a
 3000-token prompt underperforms three `judge-opening` / `judge-evidence`
 / `judge-ruling` roles with 5-10 canDo each and tight phase-specific
-prompts. The substrate is neutral — write monolithic roles if your
+prompts. The seed is neutral — write monolithic roles if your
 world is simple — but the natural decomposition for complex behavior
 is a roleFlow that stacks shared bases + selects a phase-specific
 primary by world state.
@@ -1417,7 +1415,7 @@ Both live at the reality root, llm-cognition, reigning-gated for now
 (seed delegates auto-anointed at boot). The pattern generalizes: once
 LLM helpers work for role authoring, the same shape works for any
 authorable surface — space design, world-signal setup, anything the
-substrate exposes through structured ops. The user describes; the
+seed exposes through structured ops. The user describes; the
 helper materializes.
 
 ### The complete LLM role spec
@@ -1864,7 +1862,7 @@ codebase.
 | Config key / value validation | Key regex `^[a-zA-Z][a-zA-Z0-9_]{0,63}$`; dangerous keys rejected; 64KB per value cap.                                                                                                                                                                                                                                                                                                                                                                |
 | SSRF protection               | Federation peer registration and LLM connection baseUrls validate hostname against private-IP patterns.                                                                                                                                                                                                                                                                                                                                               |
 | Boot recovery                 | Every boot verifies the nine heaven spaces and the I-Am Being row exist. Missing ones recreated. Partial first-boot crashes leave a recoverable state.                                                                                                                                                                                                                                                                                                  |
-| Genesis sequence              | Boot runs a SEQUENCE of moments (philosophy/MOMENT.md): ensureIAm → ensureSpaceRoot → setIAmHomeSpace → ensureSeedDelegates → roster registration. Each step opens its own `withIAmAct` (one moment, one act). The I-Am acts as itself (`identity: I_AM`); authorize() short-circuits on I_AM without a DB read. The I-Am's be:birth is the first act ("I am that I am"), homeSpace null at birth and set in a later moment once heaven exists. ~141 acts on the I-Am's reel on a fresh boot. |
+| Genesis sequence              | Boot runs a SEQUENCE of moments (philosophy/factory/MOMENT.md): ensureIAm → ensureSpaceRoot → setIAmHomeSpace → ensureSeedDelegates → roster registration. Each step opens its own `withIAmAct` (one moment, one act). The I-Am acts as itself (`identity: I_AM`); authorize() short-circuits on I_AM without a DB read. The I-Am's be:birth is the first act ("I am that I am"), homeSpace null at birth and set in a later moment once heaven exists. ~141 acts on the I-Am's reel on a fresh boot. |
 | Cross-cutting handler safety  | A failing handler is logged and skipped; the projection self-heals on the next fold pass touching the same fact.                                                                                                                                                                                                                                                                                                                                      |
 | Graceful shutdown             | All interval timers `.unref()`; SIGTERM closes WS, then HTTP, then DB.                                                                                                                                                                                                                                                                                                                                                                                |
 
@@ -1890,7 +1888,7 @@ After that first moment, the rules close. Genesis continues as a
 > 24..26. "seed default permissions / root permissions / root auth flags"
 > 27..35. "anoint @<delegate> as heaven angel"
 
-One moment, one act, always (philosophy/MOMENT.md "Moment, act, batch").
+One moment, one act, always (philosophy/factory/MOMENT.md "Moment, act, batch").
 Each step is its own `withIAmAct`. The chicken-and-egg of "I-Am as
 actor for facts before its Being row exists" is resolved by ordering:
 ensureIAm runs first, then the rest attribute to the now-real I-Am.
@@ -1957,41 +1955,41 @@ I provide structure. Extensions provide meaning.
 The doctrine lives one folder up, in
 [/reality/philosophy/](../philosophy/). Read in this order:
 
-1. **[MOMENT.md](../philosophy/MOMENT.md)**, the moment is the atom;
+1. **[MOMENT.md](../philosophy/factory/MOMENT.md)**, the moment is the atom;
    everything else is consequence. Read first.
-2. **[FOLD.md](../philosophy/FOLD.md)**, the read side: facts in,
+2. **[FOLD.md](../philosophy/factory/FOLD.md)**, the read side: facts in,
    face out.
-3. **[STAMPER.md](../philosophy/STAMPER.md)**, the write side: act
+3. **[STAMPER.md](../philosophy/factory/STAMPER.md)**, the write side: act
    in, facts out; per-reel append lock; presentism guard.
 4. **[MATERIALS.md](../philosophy/MATERIALS.md)**, what the world is
    made of versus what has been done; constitutive vs characterizing;
    the qualities Map.
-5. **[inner-fold.md](../philosophy/inner-fold.md)**, the three turns:
+5. **[inner-fold.md](../philosophy/factory/inner-fold.md)**, the three turns:
    orientation as a fold parameter; how a being shifts inward; what
    the act-chain is for during a moment; the recall braid.
-6. **[harmony.md](../philosophy/harmony.md)**, the doctrinal note on
+6. **[harmony.md](../philosophy/extensions/harmony.md)**, the doctrinal note on
    how multiple LLM beings coordinate without a central conductor.
 
 The two supporting forms of the whole model:
 
 - **[math.md](../philosophy/math.md)**, the formal statement. Sets,
   reels, the boxed equation, invariants.
-- **[chat.md](../philosophy/chat.md)**, the long conversational form.
+- **[chat.md](../philosophy/factory/chat.md)**, the long conversational form.
   How the model came together, the vocabulary recap at the end.
 
 The visual lineage, the drawings that worked the model out:
 
-- **[factory6.png](../philosophy/factory6.png)**. The current wall
+- **[factory6.png](../philosophy/factory/factory6.png)**. The current wall
   poster. One machine that is the present, organized PAST / PRESENT
   / MATERIALS.
-- **[factory5.jpg](../philosophy/factory5.jpg)**,
-  **[factory4.jpg](../philosophy/factory4.jpg)**,
-  **[factory3.jpg](../philosophy/factory3.jpg)**. Earlier passes,
+- **[factory5.jpg](../philosophy/factory/factory5.jpg)**,
+  **[factory4.jpg](../philosophy/factory/factory4.jpg)**,
+  **[factory3.jpg](../philosophy/factory/factory3.jpg)**. Earlier passes,
   the shape still being worked out.
-- **[factory2.jpg](../philosophy/factory2.jpg)**. If a tree falls in
+- **[factory2.jpg](../philosophy/factory/factory2.jpg)**. If a tree falls in
   a forest and no one is around. The SEE-leaves-no-trace doctrine
   drawn out.
-- **[factory1.jpg](../philosophy/factory1.jpg)**,
-  **[factory0.jpg](../philosophy/factory0.jpg)**. The first sketches.
+- **[factory1.jpg](../philosophy/factory/factory1.jpg)**,
+  **[factory0.jpg](../philosophy/factory/factory0.jpg)**. The first sketches.
 
 Plant me. Let the reality form. The beings inside will speak.
