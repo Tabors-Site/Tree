@@ -376,7 +376,209 @@ I_AM signs every Merkle root from genesis onward
       </section>
 
       {/* ────────────────────────────────────────────────────────── */}
-      {/* SECTION 8 . SELF CERTIFYING ACROSS REALITIES                */}
+      {/* SECTION 8 . BRANCHES AND THE KEY                            */}
+      {/* ────────────────────────────────────────────────────────── */}
+      <section>
+        <h2>Branches and the key</h2>
+        <p>
+          Inside one reality the chain can fork. A canonical IBP
+          address carries the fork on its face, between the reality
+          and the position:
+        </p>
+
+        <pre className="ns-code">{`<reality>#<branch>/<path>@<being>
+
+example:
+treeos.ai#main/library@taborTHEGREAT
+`}</pre>
+
+        <p>
+          Four parts, read left to right. <code>{`<reality>`}</code>{" "}
+          names the world (the domain answering for that I_AM key).{" "}
+          <code>{`#<branch>`}</code> names the timeline inside that
+          world. Canonical paths look like <code>#0</code>,{" "}
+          <code>#1</code>, <code>#1a</code>, <code>#1a1</code>. Pointer
+          names like <code>#main</code> resolve to a canonical path
+          through a per reality pointer registry, so{" "}
+          <code>treeos.ai#main/library</code> and{" "}
+          <code>treeos.ai#0/library</code> can name the same place
+          today and a different place tomorrow if the pointer is
+          moved. <code>{`/<path>`}</code> names the position in the
+          space tree at that branch. <code>{`@<being>`}</code> names
+          the actor. The full breakdown lives at{" "}
+          <Link to="/factory/branches" className="ns-inline-link">
+            /factory/branches
+          </Link>
+          .
+        </p>
+
+        <p>
+          The key part does not change as you cross the{" "}
+          <code>#</code> part. A being's keypair is the same on every
+          branch of every reality the being has ever been in. Forking
+          a branch does not fork the keypair. Merging branches does
+          not merge keypairs. The keypair is the identity; the branch
+          is the timeline. The reality's I_AM keypair is also branch
+          agnostic. There is one I_AM per reality, signing for the
+          whole world, whether the chain has one branch or two
+          hundred. Branches multiply the chain. They do not multiply
+          the cryptographic root.
+        </p>
+
+        <p>
+          What does vary per branch is everything that folds from
+          facts. A being's position, qualities (including display
+          name), inhabit state, and role flow are each per branch on
+          that being's reel. A space's children, a matter's content,
+          every aggregate's current state can differ between{" "}
+          <code>#main</code> and <code>#1</code>. Heaven (the reality's
+          bookkeeping region) does not branch, so the catalog of
+          beings, the role registry, and the pointer registry are
+          shared across every branch. The signing payload that seals
+          each act commits to a <code>branch</code> field beside the{" "}
+          <code>beingId</code> and <code>realityId</code>, so a
+          verifier can tell which timeline the signature is for
+          without trusting the chain that carried it. A signature on a{" "}
+          <code>#main</code> act cannot be replayed as a <code>#1</code>{" "}
+          act, because the signed payload pins the branch.
+        </p>
+
+        <aside className="ns-doc-aside">
+          <p>
+            <strong>The chain forks. The identity does not.</strong> A{" "}
+            <code>#main</code> version of you acting in production and
+            a <code>#1</code> version of you running an experiment are
+            the same being with one keypair signing on both branches.
+          </p>
+        </aside>
+      </section>
+
+      {/* ────────────────────────────────────────────────────────── */}
+      {/* SECTION 9 . SOVEREIGN HOSTING                               */}
+      {/* ────────────────────────────────────────────────────────── */}
+      <section>
+        <h2>Sovereign hosting</h2>
+        <p>
+          The full shape of beings as wallets and realities as wallets
+          arrives when a person runs their own reality on their own
+          machine. The I_AM keypair generated at first boot is theirs.
+          They are I_AM of that world. Every being they ever birth
+          from that reality gets a keypair generated locally and
+          stored locally. The private keys never have to leave the
+          machine. This is the configuration the design is built to
+          take, and what the rest of this section describes.
+        </p>
+        <p className="ns-small">
+          Status. The keypair generation, signing, and cross reality
+          verification primitives just landed. The full sovereign loop
+          (your reality booted on your own laptop, your beings
+          federating into other realities, your private key never
+          leaving your device) is what those primitives build toward,
+          not what runs end to end today. The current ceiling is still
+          custodial signing inside a reality you trust, named in the
+          open question section below. Easy first boot on a personal
+          machine, identity discovery across the network, and paper
+          phrase recovery onto new hardware are extensions of what is
+          already there, not separate projects.
+        </p>
+
+        <p>
+          The network has a shape. Not one large reality with many
+          accounts. Not a handful of provider realities competing for
+          users. A population of small realities, most of them one
+          person each. Personal realities run on a laptop or a home
+          server. Community realities (a study group, a small company)
+          federate among the personal ones. Service realities (a
+          marketplace, a wiki) sit beside them. Every node is its own
+          trust anchor. The federation is not a service running
+          somewhere central. It is the verifiable handshake sovereign
+          realities exchange directly.
+        </p>
+
+        <aside className="ns-doc-aside">
+          <p>
+            <strong>The federation is not a place. It is the shape
+            sovereign realities make when they verify each other
+            directly.</strong>
+          </p>
+        </aside>
+
+        <p>
+          In this configuration, when one of your beings acts in a
+          foreign reality, the act is signed on your machine by your
+          being's private key, the envelope is signed on your reality
+          by your I_AM, and the foreign reality records both. Two
+          layers of math, both checkable locally. The foreign reality
+          stores a copy of what happened. The keys that authored it
+          stay at home.
+        </p>
+
+        <p>
+          The consequences fall out of the math, not out of policy. A
+          foreign reality can refuse to host your being, but it cannot
+          take your identity, because nothing it holds is the source.
+          A community reality can ban your being, but it cannot
+          impersonate the same being elsewhere, because forging the
+          signature would require the private key, which is on your
+          machine. A service reality can lose its disks and what it
+          stored about you is gone from there, but the being who acted
+          still exists at home and still verifies against the same
+          public key in every reality that has met it. Deplatforming
+          becomes refusal of service. It does not become loss of
+          identity.
+        </p>
+
+        <p>
+          One I_AM is built to birth many beings. The architecture
+          treats personae as first class. One being federates into the
+          work reality, another into a club, another stays for family,
+          another carries a name only specific friends know. Each has
+          its own keypair, its own chain, its own reputation in the
+          realities it has visited. The mapping from one I_AM to many
+          beings is observable on the home reality and is not revealed
+          anywhere else. This is the shape one I_AM is built to take,
+          not a workflow that is widely populated today.
+        </p>
+
+        <p>
+          The machine can be replaced. The key export operation that
+          already landed is what makes this possible. A private key
+          exported under user encryption, plus a paper phrase recovery
+          form to be implemented next, is enough to bring up the same
+          I_AM on a new machine. The reality that boots there resumes
+          the same chain it was always signing. The same realityId.
+          The same beings. The same provenance back to genesis. The
+          hardware turns over. The chain does not.
+        </p>
+
+        <ul className="ns-list">
+          <li>
+            Not a service. There is no central party who can shut your
+            reality off.
+          </li>
+          <li>
+            Not a platform. Other realities are peers, not hosts you
+            depend on.
+          </li>
+          <li>
+            Not a blockchain. Each reality keeps its own chain, signed
+            by its own key, verifiable on demand. No shared ledger, no
+            consensus ritual.
+          </li>
+        </ul>
+
+        <p>
+          The closest analogies each capture one face. Email federates
+          without proving who sent a message. Mastodon federates with
+          authentication but ties your identity to one server's
+          hostname. A personal blockchain captures cryptographic self
+          sufficiency but misses that the point here is social, not
+          financial. The overlap is the shape of sovereign hosting.
+        </p>
+      </section>
+
+      {/* ────────────────────────────────────────────────────────── */}
+      {/* SECTION 10 . SELF CERTIFYING ACROSS REALITIES               */}
       {/* ────────────────────────────────────────────────────────── */}
       <section>
         <h2>Self certifying across realities</h2>
@@ -418,7 +620,7 @@ I_AM signs every Merkle root from genesis onward
       </section>
 
       {/* ────────────────────────────────────────────────────────── */}
-      {/* SECTION 8 . WHAT THIS ENABLES                               */}
+      {/* SECTION 11 . WHAT THIS ENABLES                              */}
       {/* ────────────────────────────────────────────────────────── */}
       <section>
         <h2>What this enables</h2>
@@ -459,7 +661,7 @@ I_AM signs every Merkle root from genesis onward
       </section>
 
       {/* ────────────────────────────────────────────────────────── */}
-      {/* SECTION 9 . ONE OPEN QUESTION                               */}
+      {/* SECTION 12 . ONE OPEN QUESTION                              */}
       {/* ────────────────────────────────────────────────────────── */}
       <section>
         <h2>One open question, named honestly</h2>
@@ -493,7 +695,7 @@ I_AM signs every Merkle root from genesis onward
       </section>
 
       {/* ────────────────────────────────────────────────────────── */}
-      {/* SECTION 10 . THE UNIFIED PRINCIPLE                          */}
+      {/* SECTION 13 . THE UNIFIED PRINCIPLE                          */}
       {/* ────────────────────────────────────────────────────────── */}
       <section>
         <h2>The unified principle</h2>
