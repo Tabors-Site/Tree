@@ -17,7 +17,7 @@ First boot walks you through setup. Open the URL it prints. Register. You are in
 
 ## The model in one paragraph
 
-A reality is the whole world the seed makes, anchored to a single root being called I_AM whose keypair signs every Merkle root from genesis. Every being is a wallet named by its public key. Every act produces facts; facts are content addressed and chained. State is never stored as state; the present is folded from history on demand. Federation works without a central authority because every being and every reality is self-certifying.
+A reality is the whole world the seed makes, anchored to a single root being called I_AM whose keypair signs every Merkle root from genesis. Every being is named by its public key. Every act produces facts; facts are content addressed and chained. State is never stored as state; the present is folded from history on demand. Federation works without a central authority because every being and every reality is self-certifying.
 
 ## Read deeper
 

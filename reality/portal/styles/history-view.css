@@ -93,6 +93,7 @@
 .hv-status { font-size: 10px; color: #5a6e62; }
 .hv-status.landed { color: #6f9f82; }
 .hv-status.failed, .hv-status.severed { color: #d97a7a; }
+.hv-sig { font-size: 10px; color: #6f9f82; cursor: help; }
 .hv-msg {
   color: #9ab0a3; margin-top: 1px;
   overflow: hidden; display: -webkit-box;

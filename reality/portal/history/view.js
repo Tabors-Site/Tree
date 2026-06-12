@@ -201,6 +201,8 @@ export function createView() {
       verb: null,
       branch: a.branch || null,
       status: a.status || null,
+      // Seal signature presence (older realities omit it on the wire).
+      sig: a.sig?.by ? { alg: a.sig.alg || "ed25519", by: a.sig.by } : null,
       facts: facts.map((f) => `${f.verb}:${f.action}`),
     };
   }
@@ -329,6 +331,15 @@ export function createView() {
       s.className = `hv-status ${e.status}`;
       s.textContent = e.status;
       head.appendChild(s);
+    }
+    if (e.sig) {
+      // Signed at the seal: the signature commits the act + its facts.
+      // "i-am" = the reality key itself; otherwise the signer's key id.
+      const g = document.createElement("span");
+      g.className = "hv-sig";
+      g.textContent = e.sig.by === "i-am" ? "✓ reality-signed" : "✓ signed";
+      g.title = `sealed with ${e.sig.alg} by ${e.sig.by}`;
+      head.appendChild(g);
     }
     body.appendChild(head);
 

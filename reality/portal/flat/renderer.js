@@ -19,7 +19,7 @@ import { renderBeingFlowPanel } from "../shared/being-flow-panel.js";
 import { renderTimelineSection } from "./being-timeline.js";
 import { setPortalStatus } from "../shared/portal-status.js";
 import { renderOpForm } from "../shared/op-form.js";
-import { renderTaskBar } from "./task-bar.js";
+import { renderTaskBar, openIdentityAction } from "./task-bar.js";
 
 // ────────────────────────────────────────────────────────────────
 // Public surface
@@ -124,10 +124,10 @@ function renderIdentityChip(session, discovery) {
   chip.className = "chip" + (session?.token ? " chip-authed" : "");
   chip.textContent = session?.token ? `@${username}` : `@arrival`;
   chip.title = session?.token
-    ? `signed in as @${username}\nbeing: ${session.beingAddress || "(unknown)"}\nclick to sign out`
+    ? `signed in as @${username}\nbeing: ${session.beingAddress || "(unknown)"}\nid: ${session.beingId || "(not in session)"}\nclick for identity (key, export, sign out)`
     : "click to claim or register";
   chip.onclick = () => {
-    if (session?.token) flat.signOut();
+    if (session?.token) openIdentityAction();
     else showAuthOverlay(reality);
   };
   idEl.appendChild(chip);
@@ -1758,6 +1758,14 @@ function renderBeingInspector(insp, b) {
   sub.className = "sub";
   sub.textContent = stance;
   insp.appendChild(sub);
+
+  // ─── Identity: the permanent id (the ed25519 pubkey) under the
+  //     contextual name. The id never changes; the name can.
+  if (b.beingId) {
+    const idSec = section("identity");
+    idSec.appendChild(kv("id (public key)", String(b.beingId)));
+    insp.appendChild(idSec);
+  }
 
   // ─── State badges (live face of this being right now)
   const state = section("state");

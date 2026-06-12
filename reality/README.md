@@ -34,24 +34,24 @@ Read [`philosophy/I_AM.md`](philosophy/I_AM.md) for the cryptographic root, [`ph
 
 Every act inside the reality is one verb at one IBP address (`<reality>/<path>@<being>`).
 
-| Verb | Acts on | What it does |
-| --- | --- | --- |
-| SEE | right (target) | Read a position, return a descriptor. Writes nothing. |
-| DO | right (target) | Mutate the target via a registered operation. Stamps a fact. |
-| SUMMON | right (target) | Deliver a message to a being's inbox. Stamps a fact. |
-| BE | left (actor) | Change the actor's identity binding. Stamps a fact on the actor's reel. |
+| Verb   | Acts on        | What it does                                                            |
+| ------ | -------------- | ----------------------------------------------------------------------- |
+| SEE    | right (target) | Read a position, return a descriptor. Writes nothing.                   |
+| DO     | right (target) | Mutate the target via a registered operation. Stamps a fact.            |
+| SUMMON | right (target) | Deliver a message to a being's inbox. Stamps a fact.                    |
+| BE     | left (actor)   | Change the actor's identity binding. Stamps a fact on the actor's reel. |
 
 BE is the one verb where the actor IS the target. Its five ops are birth, connect, release, switch, death.
 
 ## The five primitives
 
-| Primitive | What it is |
-| --- | --- |
-| Being | An identity. A keypair, a wallet. Humans, LLM beings, scripted beings. The reality itself is a being: I_AM. |
-| Space | A position in the tree. Holds matter, hosts beings, owns quality namespaces. |
-| Matter | Stuff inside a space. Types declare what it IS (file, model, http, ibpa, source, and extension types). |
-| Fact | One recorded change. Content addressed; chained through prev-hashes; signed at the seal step. |
-| Act | One sealed moment of one being. Every fact carries the actId of its act. |
+| Primitive | What it is                                                                                                  |
+| --------- | ----------------------------------------------------------------------------------------------------------- |
+| Being     | An identity. A keypair, a wallet. Humans, LLM beings, scripted beings. The reality itself is a being: I_AM. |
+| Space     | A position in the tree. Holds matter, hosts beings, owns quality namespaces.                                |
+| Matter    | Stuff inside a space. Types declare what it IS (file, model, http, ibpa, source, and extension types).      |
+| Fact      | One recorded change. Content addressed; chained through prev-hashes; signed at the seal step.               |
+| Act       | One sealed moment of one being. Every fact carries the actId of its act.                                    |
 
 Seed schemas never change. Everything an extension defines lives in the `qualities` Map on the relevant primitive.
 
@@ -87,7 +87,7 @@ sudo systemctl restart mongod
 mongosh --eval 'rs.initiate()'
 ```
 
-After this, `mongodb://localhost:27017/reality` just works.
+After this, `mongodb://localhost:27017/reality` should works.
 
 ## Read deeper
 

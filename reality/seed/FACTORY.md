@@ -127,7 +127,26 @@ together:
 
 Everything else in this file is consequence of that shape. The formal
 statement of all of it is [philosophy/math.md](../philosophy/math.md);
-the long conversational form is [philosophy/chat.md](../philosophy/chat.md).
+the formal results, [philosophy/theorems.md](../philosophy/theorems.md);
+the long conversational form, [philosophy/chat.md](../philosophy/chat.md).
+
+## Identity is a key
+
+Every being is a wallet. A keypair, generated once, signs every act
+the being takes. The being's `_id` is its public key, encoded
+`z<base58btc(0xed01 || rawpub)>` — the same id appears externally as
+`did:key:z...`. There is no separate id table; the public key IS the
+address. Look at a fact's `beingId` and you can fetch the public key
+without a lookup, because the id IS the key.
+
+This makes federation work without a central authority. Two
+realities can verify each other's beings by reading the id off the
+wire; the math is local. The same property holds for the reality
+itself: the reality's id is I-Am's public key, and the reality is
+the wallet that signs every Merkle root from genesis. See
+[philosophy/I_AM.md](../philosophy/I_AM.md) for why the reality has
+exactly one cryptographic root and why that root is structural
+rather than personal.
 
 ## The moment is the atom
 
@@ -170,23 +189,24 @@ called a stamp. The sealed act is the act.
 A fact is not a truth. It is only the deed. Truth is the plural fold
 of facts, and it is many; the fact is one, and shared.
 
-## The six primitives I form the world from
+## The five primitives I form the world from
 
-Everything inside the world I form is one of six things. The schemas
+Everything inside the world I form is one of five things. The schemas
 are mine alone. Extensions extend through the qualities Map, not
 through new fields.
 
-| Primitive         | What it is                                                                                                                                         | Schema                                                   |
-| ----------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------- |
-| **Being**         | An identity instance. Humans, AI, scripted code, future composites. The I-Am is the first Being.                                                   | [materials/being/being.js](materials/being/being.js)     |
-| **Space**         | A position in the tree. Holds matter, hosts beings, owns quality namespaces.                                                                       | [materials/space/space.js](materials/space/space.js)     |
-| **Matter**        | Stuff inside a space. `origin` names where the underlying content lives (ibp, filesystem, web, cross-place).                                       | [materials/matter/matter.js](materials/matter/matter.js) |
-| **Fact**          | A thing done. The storage atom. One recorded change to a being / space / matter. A chain of facts, folded, is Truth.                               | [past/fact/fact.js](past/fact/fact.js)                   |
-| **Act**           | One sealed moment of one being, the doer's committed deed. Opened in assign, sealed in stamped. Every Fact carries the `actId` of the Act it rode. | [past/act/act.js](past/act/act.js)                       |
-| **LlmConnection** | Per-being LLM client config (URL, key, model). Stored as entries under `Being.qualities.llmConnections`.                                           | (no separate schema; lives on Being qualities)           |
+| Primitive  | What it is                                                                                                                                         | Schema                                                   |
+| ---------- | -------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------- |
+| **Being**  | An identity. A keypair. Humans, LLM beings, scripted code, future composites. The I-Am is the first Being and its key roots the reality.           | [materials/being/being.js](materials/being/being.js)     |
+| **Space**  | A position in the tree. Holds matter, hosts beings, owns quality namespaces.                                                                       | [materials/space/space.js](materials/space/space.js)     |
+| **Matter** | Stuff inside a space. `type` says what it IS; owned bytes live content-addressed in the CAS store, the row carries the reference.                  | [materials/matter/matter.js](materials/matter/matter.js) |
+| **Fact**   | One recorded change. Content addressed; chained through prev-hashes; signed at seal. A chain of facts, folded, is Truth.                           | [past/fact/fact.js](past/fact/fact.js)                   |
+| **Act**    | One sealed moment of one being, the doer's committed deed. Opened in assign, sealed in stamped. Every Fact carries the `actId` of the Act it rode. | [past/act/act.js](past/act/act.js)                       |
 
 Being, Space, and Matter carry the qualities Map. Fact and Act are
-fixed shapes (the audit and the moment-frame don't grow).
+fixed shapes (the audit and the moment-frame don't grow). Per-being
+LLM connection config lives under `Being.qualities.llmConnections`,
+not as a separate primitive.
 
 Two cache collections sit alongside the primitives in `past/act/`.
 They are projection caches, fact-derived, rebuildable, not new
@@ -532,7 +552,7 @@ not a limitation to fix.
 
 ```
 foldAt(type, id, until)
-  until = { atSeq?: number, atTimestamp?: Date|string, branch?: "0" }
+  until = { atSeq?: number, atTimestamp?: Date|string, branch?: string }
 ```
 
 | Outcome                         | Trigger                                                                                                                           |
@@ -546,12 +566,10 @@ Callers who want graceful "didn't exist" handling catch
 specifically — the named class distinguishes "this thing did not
 exist yet" from any other failure.
 
-The `branch` parameter is forward-compatible. Today only `"0"` (main)
-exists; the read path is single-branch. When the branch storage layer
-lands (see [timeline.md](timeline.md)), the signature stays — only the
-body grows to walk inherited facts from parent branches up to the
-branch point, then divergent facts from the current branch. Callers
-don't need to change.
+The `branch` parameter walks lineage. `#0` is main; derived branches
+(`#1`, `#1a`, `#1a1`) inherit through the parent reel up to their
+branchPoint, then divergent facts. The read path is lineage-aware
+across forks; see the Branches section below for the doctrine.
 
 ### loadProjection vs loadOrFold — the two flavors of "read a slot"
 
@@ -865,17 +883,26 @@ Full write-side doctrine in
 
 The past is fixed as a rule. Integrity is what makes it verifiable.
 
-Each reel is its own **hash chain**. Every fact carries the hash of
-the fact before it (`p`, the prev-hash) and the hash of its own
-content folded with that prev-hash (`h`, the self-hash). Alter any
-past fact and its `h` changes, breaking the `p` link of the next
-fact, and the next. The break propagates forward and the reel fails
-verification at the altered fact. The past cannot be quietly edited;
-it can only be visibly broken.
+**Content addressing all the way down.** Every fact's `_id` is its
+own SHA-256, computed under the per-reel append lock so the fact and
+its hash land together. A fact carries the hash of the fact before
+it on the same reel (`p`, the prev-hash); altering any past fact
+changes its hash, breaking the `p` link of every fact after it on
+that reel. The past cannot be quietly edited; it can only be visibly
+broken.
+
+The per-reel chain rolls up: reels into branches, branches into the
+reality. Every level produces a hash, and the reality root hash is
+one 32-byte fingerprint identifying the world's whole state. Two
+realities exchange root hashes first and only transfer what differs.
+Matter follows the same principle: owned bytes are stored once under
+their SHA-256 in the CAS store, and the matter row carries the
+reference. Same content, same address, always.
 
 Three distinct tools, never confused:
 
-- **Hash chain.** Detects byte-tampering. Per-reel, not global.
+- **Hash chain.** Detects byte-tampering. Per-reel rolling into
+  branches into the reality root.
 - **Replication.** Repairs a corrupted reel from a good copy on
   another node. The hash chain detects; it does not repair.
 - **Correction facts.** Handle wrong-but-honest data, a fact intact
@@ -1046,68 +1073,72 @@ every aggregate (being / space / matter) at that position.
 
 ### Being
 
-`name`, `operatingMode` (`human` | `llm` | `scripted` | `mixed`),
-`password` (bcrypt-hashed, no longer required), `roles[]`,
-`defaultRole`, `parentBeingId`, `homeSpace`, `currentSpace`,
+`_id` (the being's public key, encoded `z<base58btc(0xed01 || rawpub)>`;
+the same key id is also `did:key:z...` externally), `name`,
+`password` (bcrypt-hashed; optional, only humans authenticate by it),
+`defaultRole`, `parentBeingId`, `homeSpace`, `homeBranch`, `coord`,
 `llmDefault`, `isRemote`, `homeReality`, `qualities` (Map),
-`foldedSeq`, `position`. `Being.children[]` retired (2026-05-23);
-downward walks query by `parentBeingId`. The pre-save bcrypt hook
-retired in Slice E (2026-05-23); the verb handler hashes before
-stamping the `be:register` Fact, and `applyProjection`'s `$set` skips
-pre-save hooks.
+`foldedSeq`, `position`.
 
-`operatingMode`: `"human"` authenticates with a password and is
-driven by input; `"llm"` is driven by an LLM through summons;
-`"scripted"` is code-cognition with no LLM in the loop (cherub,
-llm-assigner); `"mixed"` covers composites.
-
-`roles[]` is the set of templates this being may be summoned in.
-`defaultRole` is which one I use when SUMMON does not specify.
-`parentBeingId` points to the being that planted this one; mine is
-`null`.
+A being's identity IS its keypair. The `_id` above is the public
+key. Every fact the being stamps is signed at seal time and verifies
+against this same key. Cognition is read from
+`qualities.cognition.defaultKind` (`"human" | "llm" | "scripted"`)
+and overridden per-moment by the inhabit projection at
+`qualities.connection.inhabitedBy`. `defaultRole` is which template
+I use when SUMMON does not specify. `parentBeingId` points to the
+being that planted this one; mine is `null`. Wearable roles are
+the union of every role the being's `qualities.roleFlow` can reach
+plus its `defaultRole`. Downward walks query by `parentBeingId`.
 
 ### Matter
 
-`spaceId`, `parentMatterId`, `beingId`, `origin` (`ibp` | `filesystem`
-| `web` | `cross-place`), `content` (shape varies by origin),
-`qualities` (Map), `foldedSeq`, `position`, `createdAt`, `updatedAt`.
+`_id` (content-addressed: the hash of the matter's birth identity,
+minted by the fact-driven create path), `spaceId`, `parentMatterId`,
+`beingId`, `name`, `type`, `content`, `qualities` (Map), `foldedSeq`,
+`position`, `createdAt`, `updatedAt`.
 
-Origin determines content shape and sync behavior:
+`type` is the matter's registered type (types.js). The type decides
+the content shape, where the bytes live, and which DO ops apply.
+Seed basics:
 
-- `ibp`, TreeOS-native. `content` is a string or null.
-- `filesystem`, bridges to a file on disk. `content` is
-  `{ path, size, mimeType, originalName }`.
-- `web`, bridges to a URL. `content` is `{ url, fetchedAt?, cache? }`.
-- `cross-place`, bridges to a matter on another reality. `content` is
-  `{ place, matterRef }`.
+- `generic`, bare text or qualities-only. Content is a CAS ref to
+  owned bytes (`{ kind: "cas", hash, size, mimeType, name, ... }`)
+  or null.
+- `file`, bytes of any format. Content is a CAS ref.
+- `model`, a `.glb` body. Content is a CAS ref.
+- `http`, website content. Content is `{ url }`; bytes live on the
+  WWW.
+- `ibpa`, the inter-reality portal. Content is `{ target }`, an IBP
+  address into another world.
+- `source`, the seed's read-only disk mirror. Content is
+  `{ path, ... }`; bytes live in the repo checkout.
 
-`parentMatterId` lets matters form recursive trees inside a space.
+Extensions register `"<ext>:<type>"`. Owned bytes are stored once
+under their SHA-256 in `materials/matter/contentStore.js`; the row
+carries the reference, never the bytes. `parentMatterId` lets matters
+form recursive trees inside a space.
 
 ### Fact (one stamped act)
 
-`_id` (uuid, minted inside the seal so it lands in the hashed
-content), `date`, `verb` (`"do"|"be"`), `action`, `beingId` (the
-actor), `target` (`{ kind, id }`, the reel this fact rides),
-`params`, `result`, `truncated` (size-cap flag), `actId` (the
-moment-frame; null for genesis scaffold and for the be:summon
-fact stamped OUTSIDE a moment by enqueueIntake), `sessionId`,
-`seq` (per-reel monotonic, allocated under the per-reel append
-lock), `homeReality` + `wasRemote` (federation provenance), and
-INTEGRITY chain fields:
+`_id` (SHA-256 of `prev-hash || canonicalized content`, computed
+under the per-reel append lock so the fact and its own address land
+together — content addressed all the way down), `date`, `verb`
+(`"do"|"be"`), `action`, `beingId` (the actor), `target`
+(`{ kind, id }`, the reel this fact rides), `params`, `result`,
+`truncated` (size-cap flag), `actId` (the moment-frame; null for
+genesis scaffold and for the be:summon fact stamped OUTSIDE a moment
+by enqueueIntake), `sessionId`, `seq` (per-reel monotonic, allocated
+under the per-reel append lock), `branch`, `homeReality` +
+`wasRemote` (federation provenance), and the chain field:
 
-- **`p`** — prev-hash: the previous fact's `h` on the same reel
+- **`p`** . prev-hash: the previous fact's `_id` on the same reel
   (`GENESIS_PREV` at seq=1). Set inside the seal under the per-reel
   lock so concurrent appenders can't both read the same prev.
-- **`h`** — self-hash: SHA-256(`p || canonical(content)`). Set
-  inside the seal so the fact and its correct hash land together.
 
-The hash chain is per-reel, not global. It DETECTS tampering — alter
-any past fact and its `h` changes, breaking the next fact's `p` link
-and propagating forward. The chain does not REPAIR; repair is
-replication's job. Wrong-but-honest data gets a correction fact, never
-an edit to the old one. Non-reel-bearing facts (target.kind ∈
-{place, stance} or target-less) carry `p=h=null` and stay outside
-verification — they have no reel to chain against.
+Non-reel-bearing facts (target.kind ∈ {place, stance} or
+target-less) carry `p=null` and stay outside verification . they
+have no reel to chain against.
 
 Every DO and BE stamps one Fact; SUMMON stamps a `be:summon` Fact on
 the summoner's reel (with `params.orientation` carrying the INNER-FOLD
@@ -1116,8 +1147,9 @@ reel. The append IS the commit.
 
 ### Act (one sealed moment of one being)
 
-`_id` (uuid, minted in assign so DO/BE Facts emitted during the moment
-can already carry it as `actId`), `beingIn` (the asker / caller),
+`_id` (SHA-256 of the act's OPENING — `p || canonical(opening)` —
+minted under the per-being act-chain lock so the act and its address
+land together), `beingIn` (the asker / caller),
 `beingOut` (the responder; equal to beingIn for self-summons and
 transport-acts), `ibpAddress` (canonical stance pair the moment
 crossed), `activeRole`, `inboxMessageId` (the InboxProjection
@@ -1145,11 +1177,12 @@ CognitionResult discriminated type
 ([cognitionResult.js](present/cognition/cognitionResult.js));
 failure is structurally unreachable at the seal site.
 
-### LlmConnection (per-being LLM config)
+### LLM connections (on Being qualities)
 
-Stored as entries in `Being.qualities.llmConnections`, keyed by
-connection uuid. Each entry: `{ name, baseUrl, encryptedApiKey, model,
-createdAt, lastUsedAt }`. AES-256-CBC at rest;
+Per-being LLM client configs are entries under
+`Being.qualities.llmConnections`, keyed by connection uuid. Each
+entry: `{ name, baseUrl, encryptedApiKey, model, createdAt,
+lastUsedAt }`. Encrypted at rest;
 [ssrf.js](present/cognition/llm/ssrf.js) gates the baseUrl against
 private IPs and blocked hosts (DNS-resolved at registration time).
 
@@ -1470,9 +1503,9 @@ child perceptions have a bare name. Roles can declare `canSee:
 | `extensions` | The extension catalog at `<reality>/./extensions`.            |
 
 Each foundational see wraps `seeVerb` on the corresponding heaven
-address. The content is identical to the legacy `./X` address form;
-the name swap is doctrinal . roles declare perceptions by name, not
-by walking the address grammar.
+address. The content is identical to the `./X` address form; the
+name swap is doctrinal . roles declare perceptions by name, not by
+walking the address grammar.
 
 #### Authoring a see (registerSeeOperation)
 
@@ -1717,7 +1750,7 @@ has write access.
 
 Five ownership mutation functions in
 [materials/space/ownership.js](materials/space/ownership.js), all
-chain-validated, all fact-driven (Slice F-ownership):
+chain-validated, all fact-driven:
 
 | Function            | Rule                                                                                                 |
 | ------------------- | ---------------------------------------------------------------------------------------------------- |
@@ -1737,11 +1770,14 @@ chicken-and-egg dissolves because the Fact's `beingId` field is a
 string reference, not a foreign key, and the fold materializes the
 row.
 
-I am `operatingMode: "scripted"`. I cannot be summoned interactively,
-claimed, or impersonated. My password is randomly generated (and
-bcrypt-hashed before the Fact stamps) and never used; my identity
-comes from being the running Node process. The constant is in
-[materials/being/seedBeings.js](materials/being/seedBeings.js).
+My cognition is scripted. I cannot be summoned interactively,
+claimed, or impersonated. My keypair is the reality's keypair: my
+public key IS this reality's id. Every Merkle root signed with that
+key was signed by me. The keypair is generated once at first boot
+and stored in `.reality/`; the seed reads it back on every later
+boot. The being-row constants are in
+[materials/being/seedBeings.js](materials/being/seedBeings.js); the
+keypair lives in [realityIdentity.js](realityIdentity.js).
 
 Every other being descends from me. The being-tree (via
 `parentBeingId`) records who created whom. Humans register through
@@ -1761,7 +1797,7 @@ config key per Map entry. Two stores:
   session caches, scheduler backpressure, hook timeouts, fold limits).
 
 Both stores write to the same underlying `./config` space's qualities
-Map through fact-driven `do:set` (Slice F-config). Reads through
+Map through fact-driven `do:set`. Reads through
 `getRealityConfigValue(key)` / `getInternalConfigValue(key)` return a
 deep copy so callers cannot pollute my cache.
 
@@ -1781,8 +1817,8 @@ Fact reel (DO emissions with `result.error`) scoped to this tree's
 spaces.
 
 State stored on the tree root: `qualities.circuit = { tripped, reason, timestamp, scores }`.
-One Fact (Slice F-circuit) records the trip. Extensions read it; only
-the tree owner can revive.
+One Fact records the trip. Extensions read it; only the tree owner
+can revive.
 
 Defaults to off (`treeCircuitEnabled: false`). The code is in
 [materials/space/spaceCircuit.js](materials/space/spaceCircuit.js).
@@ -1800,11 +1836,8 @@ version in order. Migrations live in
 migration fails, the stored version does not advance; next boot
 retries from the failure point.
 
-The migrations directory holds only the runner today; the prior
-0.1.0–0.27.0 history was struck after the Round 5 / Phase 2
-restructure left a clean schema with no live consumers of any
-backward-compatibility hop. Future schema changes start a fresh
-migration ladder from 0.1.0.
+The migrations directory holds only the runner today; the schema is
+clean and no live consumers depend on any backward-compatibility hop.
 
 ## Safety
 
@@ -1831,7 +1864,7 @@ codebase.
 | Config key / value validation | Key regex `^[a-zA-Z][a-zA-Z0-9_]{0,63}$`; dangerous keys rejected; 64KB per value cap.                                                                                                                                                                                                                                                                                                                                                                |
 | SSRF protection               | Federation peer registration and LLM connection baseUrls validate hostname against private-IP patterns.                                                                                                                                                                                                                                                                                                                                               |
 | Boot recovery                 | Every boot verifies the nine heaven spaces and the I-Am Being row exist. Missing ones recreated. Partial first-boot crashes leave a recoverable state.                                                                                                                                                                                                                                                                                                  |
-| Genesis sequence              | Boot runs a SEQUENCE of moments (philosophy/MOMENT.md, seed/done/IamToActs.md): ensureIAm → ensureSpaceRoot → setIAmHomeSpace → ensureSeedDelegates → roster registration. Each step opens its own `withIAmAct` (one moment, one act). The I-Am acts as itself (`identity: I_AM`); authorize() short-circuits on I_AM without a DB read. The I-Am's be:birth is the first act ("I am that I am"), homeSpace null at birth and set in a later moment once heaven exists. ~141 acts on the I-Am's reel on a fresh boot. The earlier `withBootMoment`/`{ scaffold: true }` shapes retired 2026-06-07. |
+| Genesis sequence              | Boot runs a SEQUENCE of moments (philosophy/MOMENT.md): ensureIAm → ensureSpaceRoot → setIAmHomeSpace → ensureSeedDelegates → roster registration. Each step opens its own `withIAmAct` (one moment, one act). The I-Am acts as itself (`identity: I_AM`); authorize() short-circuits on I_AM without a DB read. The I-Am's be:birth is the first act ("I am that I am"), homeSpace null at birth and set in a later moment once heaven exists. ~141 acts on the I-Am's reel on a fresh boot. |
 | Cross-cutting handler safety  | A failing handler is logged and skipped; the projection self-heals on the next fold pass touching the same fact.                                                                                                                                                                                                                                                                                                                                      |
 | Graceful shutdown             | All interval timers `.unref()`; SIGTERM closes WS, then HTTP, then DB.                                                                                                                                                                                                                                                                                                                                                                                |
 
@@ -1865,11 +1898,9 @@ The I-Am is born with `homeSpace: null`; setIAmHomeSpace points it at
 heaven once heaven materializes.
 
 **Genesis-era writes act as the I-Am.** Every verb call rides a being
-— there is no scaffold path that acts without one. The I-Am is its
+. there is no scaffold path that acts without one. The I-Am is its
 own identity: seed-internal flows pass `identity: I_AM`; authorize()
-short-circuits on `identity?.name === I_AM` without a DB read. The
-earlier `{ scaffold: true }` flag retired 2026-06-07 in favor of the
-identity contract.
+short-circuits on `identity?.name === I_AM` without a DB read.
 
 A freshly-booted reality has ~141 acts on the I-Am's reel — the
 chain of be:birth / do:create-space / do:set-space facts that built
@@ -1885,9 +1916,9 @@ moment, rides a real Act.
 A seventh, doctrinal rule rides on this: **every state change is a
 Fact.** Direct writes to Space, Being, or Matter bypass the fold and
 corrupt the projection. The one exception is genesis. Everything
-else routes through `emitFact` (the Phase 2 single entry point that
-either pushes onto the moment's ΔF or commits via `sealFacts`
-singleton when standalone).
+else routes through `emitFact`, the single entry point that either
+pushes onto the moment's ΔF or commits via `sealFacts` singleton when
+standalone.
 
 ## What is NOT in seed
 

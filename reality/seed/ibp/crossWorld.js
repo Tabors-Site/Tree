@@ -81,6 +81,11 @@ export async function crossRealityDispatch({ envelope, actor, identity } = {}) {
   const { computeActId, readActHead, advanceActHead } =
     await import("../past/act/actHash.js");
   const { withActChainLock } = await import("../past/act/actChainLock.js");
+  const { loadSigningKey, signActDoc, signEnvelopeBeingSig } =
+    await import("../past/act/actSig.js");
+  // Load the actor's key once. The home reality holds it custodially; for
+  // a being running its OWN reality, the custodian is the being itself.
+  const signingPem = await loadSigningKey(actor.beingId, actor.branch);
   const opening = {
     beingIn: actor.beingId,
     beingOut: actor.beingId,
@@ -101,6 +106,16 @@ export async function crossRealityDispatch({ envelope, actor, identity } = {}) {
   const actId = await withActChainLock(actor.branch, actor.beingId, async () => {
     const p = await readActHead(actor.branch, actor.beingId);
     const id = computeActId(p, opening);
+    // Sign the attempt act too. This is the one act path that bypasses
+    // sealAct (the documented Stamp-opener exception above), so the
+    // signature has to be attached here to keep "every act is signed"
+    // true. ΔF is empty (the consequences land on the foreign chain), so
+    // factIds = [].
+    const sig = await signActDoc(
+      { _id: id, p, beingIn: actor.beingId, beingOut: actor.beingId, reality, branch: actor.branch },
+      [],
+      signingPem,
+    );
     await Act.create({
       _id: id,
       p,
@@ -121,6 +136,7 @@ export async function crossRealityDispatch({ envelope, actor, identity } = {}) {
       reality,
       branch: actor.branch,
       status: "attempted",
+      sig,
     });
     await advanceActHead(actor.branch, actor.beingId, id, { expectPrev: p });
     return id;
@@ -144,11 +160,29 @@ export async function crossRealityDispatch({ envelope, actor, identity } = {}) {
   // forwardToPeer import is lazy so this seed module doesn't pull
   // protocols/ at module-load time.
   const { forwardToPeer } = await import("../../protocols/ibp/canopy.js");
+  // Sign the deed with the actor's own key: this verb, on this address,
+  // with this payload, tied to the home act just opened. The receiving
+  // reality verifies it self-certifyingly against actor.beingId — no
+  // callback home. Null when the actor has no local key (anonymous /
+  // keyless); the call still forwards under the reality-level canopy sig.
+  const beingSig = await signEnvelopeBeingSig(
+    {
+      verb: envelope.verb,
+      address: envelope.address,
+      payload: envelope.payload,
+      beingId: actor.beingId,
+      actId,
+      branch: actor.branch,
+      reality,
+    },
+    signingPem,
+  );
   const peerAck = await forwardToPeer({
     ...envelope,
     identity: identity || { beingId: actor.beingId, name: null },
     actorBranch: actor.branch,
     actorActId: actId,
+    beingSig,
   });
 
   // 3. Map the peerAck shape to the cross-world response shape and
@@ -216,6 +250,34 @@ export async function runVerbAsForeignActor({ verb, address, payload, actor, car
     throw new Error(
       "runVerbAsForeignActor: actor must carry { reality, branch, beingId, actId }",
     );
+  }
+
+  // Cross-reality being-sig gate, BEFORE any verb work or seal. If the
+  // envelope carries the actor's own signature over { verb, address,
+  // payload, beingId, actId, branch, reality }, verify it against the
+  // actor's beingId (which IS the pubkey) — self-certifying, no callback
+  // to the actor's home reality. A present-but-invalid sig is a hard
+  // refusal; an absent sig is accepted (the reality-level canopy sig that
+  // got us here already vouched, and peers may not sign yet).
+  {
+    const { verifyEnvelopeBeingSig } = await import("../past/act/actSig.js");
+    const v = await verifyEnvelopeBeingSig(
+      {
+        verb,
+        address,
+        payload,
+        beingId: actor.beingId,
+        actId: actor.actId,
+        branch: actor.branch,
+        reality: actor.reality,
+      },
+      actor.beingSig,
+    );
+    if (!v.ok) {
+      throw new Error(
+        `runVerbAsForeignActor: cross-reality being-sig verification failed (${v.reason})`,
+      );
+    }
   }
 
   // Synthetic actorAct. NOT a Mongoose row on this substrate. emitFact

@@ -59,9 +59,23 @@ Two layers of proof stack cleanly:
 
 Both are checkable, so a foreign reality cannot forge acts attributed to its own users without their key.
 
-## Rotation
+The being signature travels with the cross reality envelope and commits to exactly the deed: this verb, on this address, with this payload, tied to your home act. The receiving reality verifies it against your `beingId` before it does anything, with no callback to your home reality. A present signature that fails is refused hard; an absent one is accepted under the canopy domain signature (so peers that do not sign yet still work). This is the self certifying floor under everything below.
 
-Your `beingId` (the original identity public key) is permanent. Operational signing keys rotate underneath it via a `be:rotate-key` fact on your own reel. The identity key signs a delegation for the new operational key, so a verifier who trusts your `beingId` can validate the chain to your current key without a directory. Each act records which key signed it (`sig.pubkeyId`), so a verifier confirms that key was valid at the act's time. The home reality assists rotation; full decentralized revocation is deferred.
+## Sovereign self hosting dissolves the custodial gap
+
+The one true red flag below is custodial signing: when a reality holds your key, it can technically forge your acts. There is a clean way out that needs no new code, only a topology. Run your OWN reality. Be I_AM of it. Birth your being from yourself. Now the custodian is you, and "the host can forge your acts" becomes "you can forge your own acts," which is not a threat.
+
+This is why client side edge signing was never strictly required to close the gap. Your home reality IS the edge. The machine running your instance is the wallet; a hardware wallet or a backup laptop is just another place that instance can live. Self hosting and edge signing are the same act. You then visit other realities as VENUES: your being acts there, the facts land on their chain with crossOrigin pointing home, but your act, your deed, your biography stays on your chain, signed by your key. They verify you self certifyingly and accept or refuse by policy. They can refuse you. They cannot become you, hold your identity hostage, or deplatform you out of existence, because you still hold your keys, your chain, and every other venue.
+
+Hosted users still accept the custodial boundary below; sovereign self hosters dissolve it entirely. The same protocol serves both, and the cross reality being signature is what makes the sovereign case work without trusting any reality in the middle.
+
+## No rotation, only succession
+
+There is no key rotation, and the reason is exact. A being has ONE keypair; the id IS the public key. You cannot swap the key underneath the id, because the key and the id are the same object. And you cannot revoke a key globally: `be:close` is local to one reality (it stops THAT reality from honoring the being), but the private key still produces valid signatures, and because every reality verifies self certifyingly against the id with no callback, there is no revocation list to push anywhere. You cannot un publish a public key.
+
+So a stolen key cannot be rotated away. What a stolen key forges is a HOLLOW being: a valid signature with none of the history, relationships, or lineage the real being accumulated. Identity here is "key plus chain," and the chain does not travel with the key.
+
+Recovery is SUCCESSION, and it needs no new primitive. You birth a new being (`be:birth` already mints a fresh keypair, so a fresh `beingId`), copy over from the old one whatever you want to carry forward (relationships, matter, a reference to the old chain), and `be:close` the old being on the realities you control. The new being is a clean cryptographic identity; the old one is marked closed wherever you have reach. "Make a new being and copy what you want" is the whole recovery story. The frontend can wrap that sequence in one "succeed this being" gesture, but underneath it is only birth plus ordinary acts.
 
 ## The genesis root: I_AM is the reality
 
@@ -98,9 +112,9 @@ What it CLOSES:
 - Portability and recovery: you can export your key and prove ownership anywhere, even if your home reality is offline.
 
 What it does NOT close:
-- **Custodial signing (the one true red flag).** The home reality holds every hosted being's private key, so it CAN technically forge any act by any of its non founder beings. The signature proves "this reality vouches for this being's act," not "this being personally pressed the button." Only non custodial edge signing (the key lives only in your client and signs before the act reaches the reality) closes this fully, and that is out of scope for now. The secondary unlock and the full Merkle audit trail are the primary mitigations: they raise the bar and make tampering attributable. This is acceptable because most users will either run their own reality or only join realities they trust.
-- No client side (edge) signing for now.
+- **Custodial signing (the one true red flag, for HOSTED beings only).** When a reality holds a being's private key, it CAN technically forge any act by that being. The signature proves "this reality vouches for this being's act," not "this being personally pressed the button." This bites ONLY when you let someone else's reality hold your key. Running your own reality dissolves it entirely (see "Sovereign self hosting" above): the custodian becomes you, and no edge signing is needed. For genuinely hosted beings the mitigations are the secondary unlock and the full Merkle audit trail, which raise the bar and make tampering attributable. Acceptable because a user who wants the guarantee can always self host, and most others either do that or only join realities they trust.
+- No client side (edge) signing as a separate feature, because self hosting already provides it: your own reality is your edge.
 - Role and rule content addressing is deferred (authority retroactivity: a content addressed role is immutable per hash, which fights in place role editing).
-- Full decentralized key rotation and revocation is deferred.
+- No key rotation by design (see "No rotation, only succession" above): a key cannot be revoked globally, so recovery is succession to a new being, not rotation of an existing one.
 
-Net: identity, content, and reality provenance become mathematically provable, and every id unifies around hash or key. It does not make a malicious HOST honest about the beings it custodially signs for. That is the inherent ceiling of custodial signing, mitigated by secondary unlock plus auditability, and the only open item left in this category.
+Net: identity, content, and reality provenance become mathematically provable, and every id unifies around hash or key. It does not make a malicious HOST honest about the beings it custodially signs for, but a sovereign self hoster has no such host. That is the whole shape of the remaining boundary.

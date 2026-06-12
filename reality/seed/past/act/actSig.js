@@ -142,3 +142,82 @@ export async function verifyActSig(act, { localReality = null } = {}) {
   }
   return { ok: false, reason: "unknown-signer" };
 }
+
+// ── cross-reality envelope signature ──
+//
+// Where the act-sig above proves a being authored an act WITH its facts on
+// its home chain, the envelope-sig proves the being authored the cross-
+// reality REQUEST it sends to a foreign reality: exactly this verb, on this
+// address, with this payload, tied to its home act. The receiving reality
+// verifies it self-certifyingly against the actor's beingId (which IS the
+// pubkey), with NO callback to the actor's home reality. That self-
+// certification is what lets a being run its own tiny reality, hold its own
+// key, and act anywhere: every venue proves it is them without asking home.
+//
+// The wire body is ALSO signed at the reality level (canopy X-Canopy-
+// Signature over the raw bytes), so a present-but-absent envelope-sig can't
+// be stripped by a man-in-the-middle without breaking the reality sig. An
+// absent envelope-sig therefore means "the home reality vouched but did not
+// supply the being's own sig" — accepted in advisory mode for peers that
+// don't sign yet; a PRESENT sig that fails is a hard refusal.
+
+/**
+ * The canonical bytes a cross-reality envelope-sig attests to. `kind`
+ * domain-separates it from an act-sig so neither can be replayed as the
+ * other. Same serializer both sides use.
+ */
+export function buildEnvelopeSigPayload({ verb, address, payload, beingId, actId, branch, reality }) {
+  return {
+    kind:    "cross-reality-envelope",
+    verb:    verb || null,
+    address: address || null,
+    payload: payload ?? null,
+    beingId: beingId || null,
+    actId:   actId || null,
+    branch:  normBranch(branch),
+    reality: reality || null,
+  };
+}
+
+/**
+ * Sign a cross-reality envelope with the actor's preloaded key (from
+ * loadSigningKey). Returns { alg, by, value } or null (keyless/anonymous
+ * actor — the call still forwards, accepted under the reality-level canopy
+ * sig). Never throws: an unsignable cross-call must not be blocked.
+ *
+ * @param {object} env  { verb, address, payload, beingId, actId, branch, reality }
+ * @param {string|null} pem  the actor's private key PEM (preloaded)
+ */
+export async function signEnvelopeBeingSig(env, pem) {
+  if (pem === undefined) pem = await loadSigningKey(env.beingId, env.branch);
+  if (!pem) return null;
+  try {
+    const { signAsBeing } = await import("../../materials/being/identity/beingKeys.js");
+    const value = signAsBeing(pem, buildEnvelopeSigPayload(env));
+    return { alg: "ed25519", by: env.beingId, value };
+  } catch (err) {
+    log.warn("CrossWorld", `envelope signing failed for ${String(env?.beingId || "").slice(0, 10)}: ${err.message}`);
+    return null;
+  }
+}
+
+/**
+ * Verify a cross-reality envelope-sig self-certifyingly. The actor tuple's
+ * beingId is the source of truth (it also drives crossOrigin), so the sig
+ * is checked against env.beingId, NOT against beingSig.by — the sig must be
+ * the actor's own. Returns { ok, reason }:
+ *   - no sig         → ok:true  "unsigned-advisory"   (reality sig vouched)
+ *   - non-key actor  → ok:true  "non-key-signer"      (i-am / anon; reality sig vouches)
+ *   - key actor      → verified against env.beingId
+ * A PRESENT sig that fails is a hard ok:false.
+ *
+ * @param {object} env       same shape as signEnvelopeBeingSig's env
+ * @param {object|null} beingSig  { alg, by, value }
+ */
+export async function verifyEnvelopeBeingSig(env, beingSig) {
+  if (!beingSig?.value) return { ok: true, reason: "unsigned-advisory" };
+  const { isKeyId, verifyBeingSig } = await import("../../materials/being/identity/beingKeys.js");
+  const by = env?.beingId;
+  if (!isKeyId(by)) return { ok: true, reason: "non-key-signer" };
+  return { ok: verifyBeingSig(by, buildEnvelopeSigPayload(env), beingSig.value), reason: "being" };
+}

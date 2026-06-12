@@ -866,6 +866,13 @@ export function createView() {
             if (isCherubAuthFlow && (action.action === "birth" || action.action === "connect")) {
               hideActionPanel();
               await ctx.adoptSession(result, values.name);
+              // Fresh birth = fresh keypair: surface the permanent id
+              // + key backup (body-level, survives the remount).
+              if (action.action === "birth" && result?.beingId) {
+                import("../shared/identity-panel.js")
+                  .then((m) => m.showBirthIdentityOverlay(ctx, result))
+                  .catch(() => {});
+              }
               return;
             }
             if (isCherubAuthFlow && action.action === "release") {

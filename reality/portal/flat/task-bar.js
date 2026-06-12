@@ -27,6 +27,7 @@ import { renderRolesPanel } from "./roles-panel.js";
 import { renderLlmPanel } from "./llm-panel.js";
 import { renderInboxPanel } from "./inbox-panel.js";
 import { renderMatterComposer } from "./matter-composer.js";
+import { renderIdentityPanel } from "../shared/identity-panel.js";
 
 // One outside-click listener at a time. The bar re-renders on every SEE;
 // we drop the previous listener before wiring a new one so they can't
@@ -210,6 +211,9 @@ function openAction(action, opByName) {
 
   const body = openInspectorPanel(action.label);
 
+  if (action.special === "being-identity") {
+    return renderIdentityPanel(body, { state: flat.state, being: action.being });
+  }
   if (action.special === "being-intent") {
     return renderIntentSummon(body, action);
   }
@@ -266,6 +270,19 @@ export function openInboxAction() {
   const body = openInspectorPanel("your inbox");
   return renderInboxPanel(body, { label: "your inbox" }, new Map(), {
     refreshView: () => {},
+  });
+}
+
+// External opener for the identity panel. The identity chip in the
+// header mounts it directly: your name (the label), your key (the
+// permanent id), key export, password ops, reality provenance, and
+// sign-out (which moved here off the chip).
+export function openIdentityAction() {
+  const body = openInspectorPanel("your identity");
+  return renderIdentityPanel(body, {
+    state: flat.state,
+    doOp: flat.doOp,
+    signOut: flat.signOut,
   });
 }
 
@@ -579,6 +596,7 @@ function beingActions(entry, stance) {
     });
   }
   if (entry.beingId) {
+    items.push({ label: "identity (key)", special: "being-identity", being: entry });
     items.push({ label: "view facts (reel)", special: "being-facts", being: entry });
     items.push({ label: "view acts (chain)", special: "being-acts", being: entry });
   }

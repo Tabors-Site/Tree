@@ -259,6 +259,14 @@ export function createPortalContext({ id = "main", persist = true, session = nul
     if (!reality) throw new Error("signIn: no reality");
     const result = await ctx.client.be(op, reality, { name, password });
     await adoptSession(result, name);
+    // A birth minted a fresh keypair: show the permanent identity and
+    // offer the key backup right away. Body-level overlay (lazy module)
+    // so the view remount that followed the reconnect can't wipe it.
+    if (op === "birth" && result?.beingId) {
+      import("../shared/identity-panel.js")
+        .then((m) => m.showBirthIdentityOverlay(ctx, result))
+        .catch(() => {});
+    }
     return result;
   }
 

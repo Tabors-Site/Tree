@@ -173,6 +173,12 @@ export async function forwardToPeer(envelope) {
     identity:    envelope.identity || null,
     actorBranch: envelope.actorBranch || null,
     actorActId:  envelope.actorActId  || null,
+    // The actor's OWN signature over the deed (verb/address/payload tied
+    // to the home act). Distinct from the reality-level X-Canopy-Signature
+    // below: that proves "this reality sent this body"; beingSig proves
+    // "this being authored this request", verified self-certifyingly
+    // against the actor's beingId. Null when the actor is keyless/anon.
+    beingSig:    envelope.beingSig || null,
     // Replay-protection. The receiver enforces a freshness window
     // against this timestamp (default 60s). Captured envelopes lose
     // their window quickly. See verifyIncoming's freshness check.
@@ -294,14 +300,15 @@ export async function verifyIncoming(req, res, next) {
  * Stamper to attach crossOrigin correctly.
  *
  * @param {object} req  Express request, post verifyIncoming
- * @returns {{ reality: string, branch: string, beingId: string, actId: string }|null}
+ * @returns {{ reality: string, branch: string, beingId: string, actId: string, beingSig: object|null }|null}
  */
 export function actorTupleFromRequest(req) {
   if (!req?.canopySender) return null;
   const body = req.body || {};
-  const beingId = body?.identity?.beingId || null;
-  const branch  = body?.actorBranch || null;
-  const actId   = body?.actorActId  || null;
+  const beingId  = body?.identity?.beingId || null;
+  const branch   = body?.actorBranch || null;
+  const actId    = body?.actorActId  || null;
+  const beingSig = body?.beingSig    || null;
 
   // Identity-forgery defense: if the envelope claims an explicit
   // actorReality (which we don't require — canopySender is the
@@ -327,6 +334,7 @@ export function actorTupleFromRequest(req) {
     branch,
     beingId,
     actId,
+    beingSig,
   };
 }
 
