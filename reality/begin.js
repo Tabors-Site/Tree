@@ -325,10 +325,7 @@ initIBPWS(wsServer);
 const PORT = process.env.PORT || 80;
 server.listen(PORT, "0.0.0.0", () => {
   try {
-    noteHttpListening({
-      port: Number(PORT),
-      routes: ["/health", "/api/v1", "/ibp", "/api/v1/content", "portal-static"],
-    });
+    noteHttpListening({ port: Number(PORT) });
   } catch { /* observation only */ }
   printReady();
 });

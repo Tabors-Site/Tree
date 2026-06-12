@@ -15,9 +15,13 @@
 //
 // One-way sync. Disk → substrate; never the other way. DO operations
 // against `./source` Matter reject with SOURCE_READ_ONLY (gate in
-// ibp/verbs/do.js). The reconciliation walk uses direct Matter
-// saves and bypasses the public createMatter path because that path
-// also (correctly) refuses to author into place heaven spaces.
+// ibp/verbs/do.js). The reconciliation walk writes the matter
+// PROJECTION slots directly (initProjection / tombstoneProjection in
+// the projections collection, the same store every read path consults)
+// and bypasses the public create-matter verb because that verb also
+// (correctly) refuses to author into place heaven spaces. The walk
+// reads and writes the one store, so what it plants is what SEE shows
+// and what the next reconcile finds (idempotent, no duplication).
 //
 // SANCTIONED DOCTRINE EXCEPTION — "the place is folded from facts"
 // does not apply to these rows. Source matter is a projection of the
@@ -26,18 +30,21 @@
 // rebuild from by design (stamping a fact per file per sync would
 // bloat the chain with state the repo already versions). It is the
 // one aggregate family whose cache is disk-folded instead of
-// chain-folded. The OS port must keep this exception explicit or
-// move the mirror behind its own projection kind.
+// chain-folded: the walk writes the slot directly, the way a normal
+// fold writes a slot after replaying a reel. The OS port must keep
+// this exception explicit or move the mirror behind its own
+// projection kind.
 
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
+import { v4 as uuidv4 } from "uuid";
 
 import log from "../../seedReality/log.js";
-import Matter from "../matter/matter.js";
-import Space from "./space.js";
 import { HEAVEN_SPACE } from "./heavenSpaces.js";
 import { I_AM } from "../being/seedBeings.js";
+import { initProjection, tombstoneProjection } from "../projections.js";
+import ProjectionModel, { projectionKey } from "../branch/projection.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -104,6 +111,9 @@ export async function ensureSourceTree(opts = {}) {
   const ignore = opts.ignore || DEFAULT_IGNORE;
   const detached = opts.detached !== false;
 
+  // Branch is pinned to main ("0") throughout this file by design: the
+  // ./source mirror is a heaven region, and heaven spaces live only on
+  // main (one canonical projection per reality, no per-branch fork).
   const { findByHeavenSpace } = await import("../projections.js");
   const _sourceSlot = await findByHeavenSpace(HEAVEN_SPACE.SOURCE, "0");
   const sourceSpace = _sourceSlot ? { _id: _sourceSlot.id } : null;
@@ -166,7 +176,6 @@ export async function syncSourceTree({
   // Root matter for targetPath. Branch-aware via direct Projection query
   // — the matter-by-spaceId + source type is a substrate-internal
   // lookup pattern, not a wire-facing one.
-  const { default: ProjectionModel } = await import("../branch/projection.js");
   const _rootMatterSlot = await ProjectionModel.findOne({
     branch: "0", type: "matter",
     "state.spaceId": sourceSpaceId,
@@ -190,14 +199,11 @@ export async function syncSourceTree({
     rootMatter.content?.path !== targetPath ||
     rootMatter.name !== rootName
   ) {
-    // Source root moved on disk or renamed; update in place.
-    rootMatter.name = rootName;
-    rootMatter.content = {
-      ...rootMatter.content,
-      path: targetPath,
-      kind: "directory",
-    };
-    await rootMatter.save();
+    // Source root moved on disk or renamed; update the slot in place.
+    await patchSourceMatter(rootMatter._id, {
+      name: rootName,
+      content: { ...rootMatter.content, path: targetPath, kind: "directory" },
+    });
     stats.updated++;
   } else {
     stats.kept++;
@@ -261,8 +267,7 @@ async function reconcileChildren({
   }
 
   // Existing mirrored children for this parent.
-  const { default: Projection } = await import("../branch/projection.js");
-  const _existRows = await Projection.find({
+  const _existRows = await ProjectionModel.find({
     branch: "0", type: "matter",
     "state.parentMatterId": parentMatterId,
     "state.type": "source",
@@ -305,14 +310,9 @@ async function reconcileChildren({
       } else {
         // Refresh path if the rootPath shifted under us.
         if (ex.content?.path !== full) {
-          await Matter.updateOne(
-            { _id: ex._id },
-            {
-              $set: {
-                content: { ...ex.content, path: full, kind: "directory" },
-              },
-            },
-          );
+          await patchSourceMatter(ex._id, {
+            content: { ...ex.content, path: full, kind: "directory" },
+          });
           stats.updated++;
         } else {
           stats.kept++;
@@ -376,10 +376,7 @@ async function reconcileChildren({
       });
       stats.created++;
     } else if (contentChanged(ex.content, desiredContent)) {
-      await Matter.updateOne(
-        { _id: ex._id },
-        { $set: { content: desiredContent } },
-      );
+      await patchSourceMatter(ex._id, { content: desiredContent });
       stats.updated++;
     } else {
       stats.kept++;
@@ -394,14 +391,12 @@ async function reconcileChildren({
 }
 
 async function removeMatterSubtree(rootId, stats) {
-  const { default: Projection } = await import("../branch/projection.js");
-  const { tombstoneProjection } = await import("../projections.js");
   const toDelete = [];
   const stack = [String(rootId)];
   while (stack.length) {
     const id = stack.pop();
     toDelete.push(id);
-    const kids = await Projection.find({
+    const kids = await ProjectionModel.find({
       branch: "0", type: "matter",
       "state.parentMatterId": id,
     }).select("id").lean();
@@ -430,7 +425,10 @@ function contentChanged(prev, next) {
 }
 
 // ────────────────────────────────────────────────────────────────────
-// AUTHORING (seed-internal; bypasses createMatter's system-space gate)
+// AUTHORING (seed-internal; writes the matter PROJECTION slot directly,
+// bypassing the create-matter verb's system-space gate. The slot shape
+// mirrors what the matter reducer's applyCreateMatter folds, so SEE and
+// the descriptor read these exactly like chain-folded matter.)
 // ────────────────────────────────────────────────────────────────────
 
 async function createSourceMatter({
@@ -450,25 +448,47 @@ async function createSourceMatter({
   if (mimeType != null) content.mimeType = mimeType;
   if (oversize) content.oversize = true;
 
-  const matter = new Matter({
+  const matterId = uuidv4();
+  const parent = parentMatterId ? String(parentMatterId) : null;
+  const state = {
     spaceId,
-    parentMatterId: parentMatterId || null,
+    parentMatterId: parent,
     beingId: I_AM,
     name,
     type: "source",
     content,
-    qualities: new Map([["source", { readOnly: true }]]),
-  });
-  await matter.save();
+    qualities: { source: { readOnly: true } },
+    children: [],
+    position: spaceId,
+  };
+  // Disk-folded: no reel, so foldedSeq is a constant. The slot IS the
+  // fold of the disk entry.
+  await initProjection("matter", matterId, "0", { state, foldedSeq: 0, position: spaceId });
 
-  if (parentMatterId) {
-    await Matter.updateOne(
-      { _id: parentMatterId },
-      { $addToSet: { children: matter._id } },
+  if (parent) {
+    await ProjectionModel.updateOne(
+      { _id: projectionKey("0", "matter", parent) },
+      { $addToSet: { "state.children": matterId } },
     );
   }
 
-  return matter;
+  return { _id: matterId, ...state };
+}
+
+// Patch fields on an existing source-matter slot (rename, content
+// refresh). Reads the slot, merges the patch into state, and writes it
+// back through initProjection so the slot stays the authoritative fold
+// of the disk entry.
+async function patchSourceMatter(matterId, patch) {
+  const key = projectionKey("0", "matter", String(matterId));
+  const slot = await ProjectionModel.findById(key).lean();
+  if (!slot) return;
+  const state = { ...(slot.state || {}), ...patch };
+  await initProjection("matter", String(matterId), "0", {
+    state,
+    foldedSeq: slot.foldedSeq ?? 0,
+    position: state.position ?? state.spaceId ?? null,
+  });
 }
 
 // ────────────────────────────────────────────────────────────────────

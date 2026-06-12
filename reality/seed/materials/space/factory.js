@@ -336,12 +336,9 @@ export async function describeStamperSpace(being, { limit = 100, before = null }
       path,
       being: null,
       spaceId: `stamper:${beingId}`, // the live-subscription key
-      beingId,
-      chain: [],
       pathByNames: path,
-      pathByIds: path,
-      leafName: name,
-      leafId: `stamper:${beingId}`,
+      // Heaven pin, not a default: factory spaces live in heaven,
+      // which stays on branch 0 by doctrine.
       branch: "0",
     },
     isSpaceRoot: false,
@@ -356,7 +353,6 @@ export async function describeStamperSpace(being, { limit = 100, before = null }
     matters,
     children: [],
     residents: [],
-    siblings: [],
     lineage: [],
     beingLineage: null,
     qualities: {},
@@ -365,7 +361,6 @@ export async function describeStamperSpace(being, { limit = 100, before = null }
       window: { limit: cap, before: before || null },
     },
     identity: null,
-    _meta: { readOnly: true, synthetic: true },
   };
 }
 

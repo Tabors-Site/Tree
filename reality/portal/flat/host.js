@@ -57,6 +57,9 @@ export const flat = {
   doOp:                    async () => {},
   beOp:                    async () => {},
   operationsForTarget:     () => [],
+  // Interacting with a being selects it portal-wide (the IBPA's right
+  // stance gains @<being>). Bound by mountFlatView from ctx.
+  selectBeing:             () => {},
 };
 
 // ──────────────────────────────────────────────────────────────────
@@ -89,7 +92,6 @@ const FLAT_DOM = `
     </nav>
     <button id="inbox-chip" type="button" title="your inbox — pending summons addressed to you" style="display:none;background:transparent;color:#c8d3cb;border:1px solid #2c3a32;border-radius:4px;padding:3px 8px;font-family:inherit;font-size:11px;cursor:pointer;margin-left:4px;">inbox <span id="inbox-count" class="dim">·</span></button>
     <div id="identity-chip" title="signed-in identity"></div>
-    <button id="flat-timeline-btn" type="button" title="branches and timeline">🌿 timeline</button>
     <button id="flat-close-btn" type="button" title="back to the 3D view (Esc)">3d</button>
   </header>
   <div id="task-menubar"></div>
@@ -221,12 +223,17 @@ export function mountFlatView(rootContainer, ctx) {
     if (!kind) return [];
     return _state.operations.filter((op) => Array.isArray(op.targets) && op.targets.includes(kind));
   };
+  flat.selectBeing = (beingId, name) => {
+    _state.selectedBeing = beingId
+      ? { beingId: String(beingId), name: name || null }
+      : null;
+    if (typeof ctx.onSelectBeing === "function") ctx.onSelectBeing(beingId, name);
+  };
 
-  // Wire local UI: address form, quick-nav chips, close button,
-  // keyboard shortcuts.
+  // Wire local UI: quick-nav chips, close button, keyboard shortcuts.
+  // (Branches/timeline moved to the shell topbar — chrome on all views.)
   wireQuickNav(root, ctx);
   wireCloseButton(root, ctx);
-  wireTimelineButton(root);
   wireInboxChip(root);
   const detachKeys = wireKeyboardShortcuts(ctx);
 
@@ -359,21 +366,6 @@ function wireCloseButton(root, ctx) {
   if (!btn) return;
   btn.addEventListener("click", () => {
     if (typeof ctx.onClose === "function") ctx.onClose();
-  });
-}
-
-// Timeline access from inside the flat panel. The 3D portal's
-// floating 🌿 button is hidden while the flat panel is open (its
-// position covered the address bar), so we surface the same toggle
-// inside the top-bar here. Dispatches a click on the floating
-// button's element so the branch-bar module stays the single source
-// of truth for what the toggle does (open / close the branch panel).
-function wireTimelineButton(root) {
-  const btn = root.querySelector("#flat-timeline-btn");
-  if (!btn) return;
-  btn.addEventListener("click", () => {
-    const target = document.getElementById("branch-tree-button");
-    if (target) target.click();
   });
 }
 

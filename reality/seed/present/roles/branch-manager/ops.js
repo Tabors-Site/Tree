@@ -128,10 +128,32 @@ registerOperation("create-branch", {
         "create-branch: provide atSeq or atTimestamp to anchor the branch point");
     }
 
-    const scopePath = params?.scope ? String(params.scope).trim() : null;
+    let scopePath = params?.scope ? String(params.scope).trim() : null;
     if (scopePath && !scopePath.startsWith("/")) {
       throw new IbpError(IBP_ERR.INVALID_INPUT,
         `create-branch: scope must be a path starting with "/" (e.g. "/library"); got "${scopePath}"`);
+    }
+    // "~" is the caller's home — a self-relative alias. The scope
+    // walker (resolvePathToSpaceId) resolves real space NAMES from the
+    // reality root and can't see aliases, and the scope locks at
+    // creation, so the stored path must be canonical. Swap the alias
+    // for the home space's real path before resolution.
+    if (scopePath && (scopePath === "/~" || scopePath.startsWith("/~/"))) {
+      if (!identity?.beingId) {
+        throw new IbpError(IBP_ERR.UNAUTHORIZED,
+          `create-branch: scope "~" is self-relative and needs a caller identity to resolve a home`);
+      }
+      const { resolveStance } = await import("../../../ibp/resolver.js");
+      const home = await resolveStance(
+        { reality: null, path: "/~", being: null, branch: parent },
+        { identity },
+      );
+      const homeName = home?.leafSpace?.name;
+      if (!homeName) {
+        throw new IbpError(IBP_ERR.SPACE_NOT_FOUND,
+          `create-branch: could not resolve "~" to your home space`);
+      }
+      scopePath = `/${homeName}${scopePath.slice(2)}`;
     }
 
     // Pointer-collision check BEFORE we create the branch, so a taken

@@ -103,6 +103,32 @@ export function createNavigation(ctx) {
     return `${reality}${bq}/@${name}`;
   }
 
+  // THE target-stance builder: the current position with a being as
+  // the @qualifier. This is what the IBPA's right side shows when a
+  // being is selected, and what SUMMON/DO/BE dispatch against — the
+  // IBPA is the source of truth, so views call this instead of
+  // hand-rolling `${reality}${path}@${being}` strings.
+  function stanceFor(beingName) {
+    const desc = state.get("descriptor");
+    const reality = state.get("discovery")?.reality || desc?.address?.place || "";
+    const branch = desc?.address?.branch || "0";
+    const bq = branch === "0" ? "" : `#${branch}`;
+    const path = desc?.address?.pathByNames || "/";
+    return `${reality}${bq}${path}@${beingName}`.replace(/\/+@/, "/@");
+  }
+
+  // Select a being as the interaction target. The selection IS an
+  // address refinement: the IBPA's right stance gains the @qualifier,
+  // every view sees the same focus, and dispatches read stanceFor().
+  // Pass null to clear. Cleared automatically on a space change.
+  function selectBeing(beingId, name) {
+    state.set({
+      selectedBeing: beingId
+        ? { beingId: String(beingId), name: name || null, lastSetAt: new Date().toISOString() }
+        : null,
+    });
+  }
+
   // ── Hash sync ───────────────────────────────────────────────────
 
   function restoreAddressFromHash() {
@@ -160,8 +186,12 @@ export function createNavigation(ctx) {
       if (priorSpaceId && nextSpaceId && priorSpaceId !== nextSpaceId) {
         partial.selectedBeing = null;
       }
-      if (!isHeavenChildAddress(address)) {
-        partial.lastNonHeavenAddress = address;
+      // The left stance ALWAYS follows where the being is. A live
+      // navigate moves the being (the set-being:position fact below),
+      // so the actor's position tracks the view; only ghost view
+      // leaves it behind (observing the past moves nobody).
+      if (!desc?.isHistorical) {
+        partial.actorPosition = desc?.address?.pathByNames || "/";
       }
 
       // History push unless we're stepping through it. Store the FULL
@@ -349,7 +379,7 @@ export function createNavigation(ctx) {
     }
   }
 
-  async function landAuthenticated(session) {
+  async function landAuthenticated(session, { ignoreHash = false } = {}) {
     const client = ctx.client;
     const discovery = state.get("discovery");
     const beingAddress = session.beingAddress
@@ -357,7 +387,14 @@ export function createNavigation(ctx) {
         ? `${discovery.reality}/@${session.username}`
         : null);
 
-    let landingAddress = restoreAddressFromHash() || "/";
+    // Hash priority is for MID-SESSION RELOADS (restore the exact
+    // view). On a fresh sign-in/register the hash still holds where
+    // the ANONYMOUS arrival was browsing — landing there would yank
+    // the new being away from its home/position AND write that yank
+    // as a position fact. Fresh sign-ins drop the stale hash and land
+    // where the being IS.
+    if (ignoreHash) clearLocationHash();
+    let landingAddress = (ignoreHash ? null : restoreAddressFromHash()) || "/";
     const landingFromHash = !!landingAddress && landingAddress !== "/";
     if (beingAddress) {
       try {
@@ -418,6 +455,8 @@ export function createNavigation(ctx) {
     resolveAddressInput,
     currentPositionAddress,
     selfStance,
+    stanceFor,
+    selectBeing,
     isHeavenChildAddress,
     handleDescriptorEvent,
     restoreAddressFromHash,

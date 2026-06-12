@@ -18,13 +18,17 @@
 //   4. authPageRouter — HTML form login / register / logout.
 //   5. /api/v1/uploads — static serving of uploaded matter.
 //   6. /api/v1 authApiRouter — JSON auth.
-//   7. /api/v1 realityConfig — config read/write.
-//   8. Built portal at / (fallthrough enabled so IBP/api/uploads
+//   7. Built portal at / (fallthrough enabled so IBP/api/uploads
 //      keep working; SPA fallback to index.html for client routes).
 //      Skipped when portal/dist is absent.
-//   9. /ibp/:verb/<addr> — the single IBP HTTP adapter. Same
+//   8. /ibp/:verb/<addr> — the single IBP HTTP adapter. Same
 //      dispatcher the WebSocket layer uses; every seed and
 //      extension operation is automatically callable here.
+//
+// World-state never rides bare HTTP: the retired /api/v1/reality/root
+// shim (the last REST world read) folded into `ibp:see <reality>/`
+// on 2026-06-11. HTTP serves bootstrap, bytes, auth, and the IBP
+// adapter — nothing descriptor-shaped outside IBP.
 //
 // The protocol IS the API. Cross-place federation flows through
 // /ibp/ with canopy-signed envelopes (canopy itself is just the
@@ -42,7 +46,6 @@
 
 import { authApiRouter, authPageRouter } from "./auth.js";
 import ibp from "./api/ibp.js";
-import realityConfig from "./api/config.js";
 import content from "./api/content.js";
 
 import dbHealth from "./middleware/dbHealth.js";
@@ -101,7 +104,6 @@ export default function registerRoutes(app) {
   app.use("/api/v1", content);
 
   app.use("/api/v1", authApiRouter);
-  app.use("/api/v1", realityConfig);
 
   // Built 3D portal at /. Static files first (fallthrough: true lets
   // /ibp, /api, /.well-known, etc. pass through to their handlers);

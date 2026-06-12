@@ -220,7 +220,7 @@ async function stampRollingCounter() {
 }
 
 // ── lifecycle facts (target the http SPACE — its reel stays small) ──
-export function noteHttpListening({ port, routes } = {}) {
+export function noteHttpListening({ port } = {}) {
   try {
     if (!httpBeingId || !enqueue) return;
     enqueue(httpBeingId, `http: listening on :${port}`, async (ctx) => {
@@ -229,7 +229,9 @@ export function noteHttpListening({ port, routes } = {}) {
         verb: "do", action: "http-listening",
         beingId: httpBeingId,
         target: { kind: "space", id: httpSpaceId },
-        params: { port: port ?? null, routes: routes || [], at: new Date().toISOString() },
+        // The port IS the listener's identity. Route lists are
+        // middleware furniture; the moment is the fact's own date.
+        params: { port: port ?? null },
         actId: ctx.actId, branch: "0",
       }, ctx);
     });

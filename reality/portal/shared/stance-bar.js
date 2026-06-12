@@ -31,6 +31,10 @@ let _ctx = {
   username: null,
   signedIn: false,
   actorBranch: "0",
+  // Where the being IS (its position path — follows every live
+  // navigate's set-being:position). The left stance renders from
+  // this, so left and right match unless the view diverges.
+  actorPath: "/",
   viewBranch: "0",
   path: "/",
   being: null,
@@ -46,7 +50,8 @@ function _branchAliases(path) {
 
 function _actorValue() {
   const name = _ctx.signedIn ? (_ctx.username || "you") : "arrival";
-  return `${_ctx.reality || ""}#${_ctx.actorBranch}/@${name}`;
+  const p = _ctx.actorPath || "/";
+  return `${_ctx.reality || ""}#${_ctx.actorBranch}${p === "/" ? "/" : p}@${name}`;
 }
 
 function _viewValue() {

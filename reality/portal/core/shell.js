@@ -35,6 +35,7 @@ const SHELL_DOM = `
     <button class="nav-btn" id="nav-send"  title="Go to the typed address (Enter)">&#10132;</button>
     <button class="nav-btn" id="nav-place" title="Reality root">/</button>
     <button class="nav-btn" id="nav-home"  title="Your home" disabled>~</button>
+    <span id="branch-button-slot" style="display:flex"></span>
     <nav id="view-switcher" title="views (Alt+1..4)"></nav>
   </header>
   <div id="portal-tabs"></div>
@@ -88,8 +89,13 @@ export function mountShell({ rootEl, primaryCtx, defaultView = "3d" }) {
       signedIn:   !!m.session?.token,
       viewBranch: m.descriptor?.address?.branch || "0",
       path:       m.descriptor?.address?.pathByNames || "/",
-      being:      m.descriptor?.address?.being || null,
+      // The right stance's @qualifier: an explicitly-navigated stance
+      // address wins; otherwise the selected being (clicking a being
+      // in ANY view refines the IBPA — the address is the truth every
+      // dispatch reads).
+      being:      m.descriptor?.address?.being || m.selectedBeing?.name || null,
       actorBranch: m.actorBranch || "0",
+      actorPath:   m.actorPosition || "/",
     });
     els.back.disabled    = !(m.historyIndex > 0);
     els.forward.disabled = !(m.historyIndex < m.history.length - 1);
@@ -143,6 +149,9 @@ export function mountShell({ rootEl, primaryCtx, defaultView = "3d" }) {
     branchBar = mountBranchBar({
       client:  activeCtx.client,
       reality: activeCtx.state.get("discovery")?.reality || "treeos.ai",
+      // Topbar-hosted: branches/timeline are chrome, present on all
+      // four views equally (rewind state rides the shared model).
+      buttonHost: rootEl.querySelector("#branch-button-slot"),
     });
     const desc = activeCtx.state.get("descriptor");
     if (desc) branchBar.update(desc);

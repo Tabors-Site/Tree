@@ -17,7 +17,6 @@
 //   actorBranch     the session's seated branch (server "branch" pushes)
 //   selectedBeing   { beingId, name, lastSetAt } | null — cross-view focus
 //   history / historyIndex   portal-internal navigation history
-//   lastNonHeavenAddress     last address the 3D scene can render
 //   connection      "idle" | "connected" | "disconnected" | "error"
 //   activeView      registry name of the mounted view
 //   pendingSummons  Map(correlation -> being) — async summon bookkeeping
@@ -36,8 +35,12 @@ export function createPortalState(initial = {}) {
     descriptor: null,
     currentAddress: null,
     actorBranch: "0",
+    // The being's CURRENT POSITION path — where the per-navigate
+    // set-being:position fact landed. The left stance renders from
+    // this: it always follows where the being is, so left and right
+    // match unless the view diverges (ghost view, portals).
+    actorPosition: "/",
     selectedBeing: null,
-    lastNonHeavenAddress: null,
     history: [],
     historyIndex: -1,
     connection: "idle",

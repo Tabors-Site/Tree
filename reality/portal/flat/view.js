@@ -27,6 +27,7 @@ export function createView() {
       onNavigate: (address) => {
         ctx.navigation.navigate(address).catch(() => {});
       },
+      onSelectBeing: (beingId, name) => ctx.navigation.selectBeing(beingId, name),
       onSignIn: (op, name, password) => ctx.signIn(op, name, password),
       onSignOut: () => ctx.signOut(),
       onClose: () => ctx.shell?.switchView("3d"),

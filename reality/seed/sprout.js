@@ -704,9 +704,8 @@ export async function ensureIAm() {
         // to the place root (or treating the being as unhomed).
         homeSpace: null,
         position: null,
-        llmDefault: null,
-        isRemote: false,
-        homeReality: null,
+        // Optional traits (llmDefault / isRemote / homeReality) ride
+        // birth facts only when set — the reducer defaults absence.
         qualities,
       },
       actId: ctx.actId,

@@ -2490,7 +2490,13 @@ export class Scene {
       ctx.fillStyle = "#8fbf9f";
       ctx.font = "20px monospace";
       ctx.textAlign = "center";
-      const name = descriptor?.address?.leafName || descriptor?.address?.pathByNames || target;
+      // leafName retired from the local descriptor; kept as first read
+      // for older federated seeds whose foreign descriptors still
+      // carry it. Local descriptors derive the leaf from pathByNames.
+      const name = descriptor?.address?.leafName
+        || (descriptor?.address?.pathByNames || "").split("/").filter(Boolean).pop()
+        || descriptor?.address?.pathByNames
+        || target;
       ctx.fillText(name, W / 2, 50);
       ctx.font = "13px monospace";
       ctx.fillStyle = "#c8d3cb";

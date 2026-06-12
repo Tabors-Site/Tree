@@ -42,7 +42,7 @@ import { getInternalConfigValue } from "../../internalConfig.js";
 import { v4 as uuidv4 } from "uuid";
 import Matter from "./matter.js";
 import Space from "../space/space.js";
-import { loadProjection, loadOrFold, assertBranchOrThrow } from "../projections.js";
+import { loadProjection, loadOrFold, assertBranchOrThrow, listMatterNamesInFolder } from "../projections.js";
 import { emitFact, sealFacts } from "../../past/fact/facts.js";
 import { getRealityConfigValue } from "../../realityConfig.js";
 import { resolveRootSpace } from "../space/spaces.js";
@@ -90,6 +90,70 @@ function mimeAllowedByReality(mimeType) {
   });
 }
 
+// ── Naming ──────────────────────────────────────────────────────
+//
+// Every matter ends up named, the same guarantee spaces and beings
+// already carry. The name comes from, in order: what the caller asked
+// for, the filename of the bytes it carries (an upload of "report.pdf"
+// arrives named "report.pdf"), and only when neither exists, a
+// generated `<type><n>` that is unique within the folder. Names are
+// labels inside a container, not addresses, so they pass through
+// verbatim (a filename keeps its dots and spaces); only the generated
+// floor is sanitized to a clean prefix.
+
+function escapeRegex(s) {
+  return String(s).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+/**
+ * Pick the next free `<type><n>` within a folder. Mirrors the being
+ * name generator (identity/birth.js) but scoped to (space, parent).
+ *
+ * @param {string} type            the matter type, used as the prefix
+ * @param {object} opts
+ * @param {string} [opts.branch="0"]
+ * @param {string} opts.spaceId
+ * @param {string|null} [opts.parentMatterId=null]
+ * @returns {Promise<string>}
+ */
+export async function generateUniqueMatterName(type, { branch = "0", spaceId, parentMatterId = null } = {}) {
+  const safe = String(type || "matter").replace(/[^A-Za-z0-9_-]/g, "") || "matter";
+  const pattern = new RegExp(`^${escapeRegex(safe)}[0-9]*$`, "i");
+  const existing = await listMatterNamesInFolder(branch, spaceId, parentMatterId, pattern);
+  const taken = new Set(existing.map((n) => n.toLowerCase()));
+  let n = existing.length;
+  for (let i = 0; i < 10000; i++) {
+    const candidate = `${safe}${n}`;
+    if (!taken.has(candidate.toLowerCase())) return candidate;
+    n++;
+  }
+  // Astronomically unreachable; fall back to a uuid suffix rather than
+  // loop forever.
+  return `${safe}-${uuidv4().slice(0, 8)}`;
+}
+
+/**
+ * Resolve the name a matter will be born with. Explicit wins; then the
+ * filename carried by the content (cas ref `name`); then a generated
+ * floor unique to the folder. Returns a string, never null.
+ *
+ * @param {object} args
+ * @param {string|null} [args.name]    explicit caller name
+ * @param {*}           [args.content] resolved content (cas ref or shape)
+ * @param {string}      args.type
+ * @param {string}      [args.branch="0"]
+ * @param {string}      args.spaceId
+ * @param {string|null} [args.parentMatterId=null]
+ * @returns {Promise<string>}
+ */
+export async function resolveMatterName({ name, content, type, branch = "0", spaceId, parentMatterId = null }) {
+  if (typeof name === "string" && name.trim().length) return name.trim();
+  if (content && typeof content === "object" && typeof content.name === "string" && content.name.length) {
+    return content.name;
+  }
+  return generateUniqueMatterName(type, { branch, spaceId, parentMatterId });
+}
+
 // Size cap applies universally. Stance-auth-based exemptions can
 // hang here later if a use case warrants them.
 async function assertMatterTextWithinLimit(content) {
@@ -118,12 +182,14 @@ function validateDateRange(startDate, endDate) {
 
 async function createMatter({
   type = "generic",
+  name = null,
   content = null,
   bytes = null,
   mimeType = null,
   fileName = null,
   beingId,
   spaceId,
+  parentMatterId = null,
   actId = null,
   sessionId = null,
   initialQualities = {},
@@ -249,6 +315,17 @@ async function createMatter({
   // applyCreateMatter + initProjection materializes the row. No more
   // direct Matter.save() — the fact is the commit.
   const matterId = uuidv4();
+  // Every matter is named: explicit → filename it carries → a generated
+  // floor unique within this folder. The same guarantee the verb-path
+  // handler gives, so both create paths land named rows.
+  const resolvedName = await resolveMatterName({
+    name,
+    content: finalContent,
+    type,
+    branch,
+    spaceId: spaceIdBare,
+    parentMatterId,
+  });
   // Eager singleton commit: the next line reads Matter.findById, so
   // the Fact must have committed (the eager-fold materializes the
   // Matter row only on commit). Same read-back constraint as
@@ -260,8 +337,10 @@ async function createMatter({
     target:  { kind: "matter", id: matterId },
     params:  {
       type,
+      name:      resolvedName,
       content:   finalContent,
       spaceId:   spaceIdBare,
+      parentMatterId: parentMatterId ? String(parentMatterId) : null,
       beingId:   String(beingId),
       qualities: hookData.qualities || {},
     },

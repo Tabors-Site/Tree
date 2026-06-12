@@ -577,6 +577,37 @@ export async function findByNamePattern(type, pattern, branch) {
 }
 
 /**
+ * List the names of matter in one FOLDER — the (space, parent-matter)
+ * pair that scopes matter-name uniqueness. Optionally filtered to names
+ * matching a regex (used by the generated-name floor to find the next
+ * free `<type><n>`). Branch-local: matter uniqueness keys on branch, so
+ * inherited matter in a parent branch never collides with a fresh slot
+ * here. parentMatterId null means top-level matter directly under the
+ * space.
+ *
+ * @param {string} branch
+ * @param {string} spaceId
+ * @param {string|null} parentMatterId
+ * @param {RegExp} [pattern]
+ * @returns {Promise<string[]>}
+ */
+export async function listMatterNamesInFolder(branch, spaceId, parentMatterId, pattern) {
+  assertBranch(branch);
+  if (!spaceId) return [];
+  const where = {
+    branch, type: "matter",
+    "state.spaceId": String(spaceId),
+    "state.parentMatterId": parentMatterId ? String(parentMatterId) : null,
+    tombstoned: { $ne: true },
+  };
+  if (pattern instanceof RegExp) {
+    where["state.name"] = { $regex: pattern.source, $options: pattern.flags };
+  }
+  const rows = await Projection.find(where).select("state.name").lean();
+  return rows.map((r) => r.state?.name).filter((n) => typeof n === "string");
+}
+
+/**
  * Count aggregates of a type in a branch.
  *
  * @param {"being"|"space"|"matter"} type

@@ -331,7 +331,12 @@ function renderBeings(desc, { session, discovery }) {
     const inspectBtn = document.createElement("button");
     inspectBtn.textContent = "inspect";
     inspectBtn.className = "btn-sm";
-    inspectBtn.onclick = () => showInspector({ kind: "being", entry: b });
+    inspectBtn.onclick = () => {
+      // Interacting with a being refines the IBPA: the right stance
+      // gains @<being>; every view shows the same focus.
+      flat.selectBeing?.(b.beingId, b.being);
+      showInspector({ kind: "being", entry: b });
+    };
     actions.appendChild(inspectBtn);
 
     const chatBtn = document.createElement("button");
@@ -339,7 +344,10 @@ function renderBeings(desc, { session, discovery }) {
     chatBtn.className = "btn-sm btn-primary";
     chatBtn.disabled = !session?.token;
     chatBtn.title = session?.token ? "summon this being" : "claim an identity first";
-    chatBtn.onclick = () => openChatFor(b);
+    chatBtn.onclick = () => {
+      flat.selectBeing?.(b.beingId, b.being);
+      openChatFor(b);
+    };
     actions.appendChild(chatBtn);
 
     // Per-intent summon buttons. Driven by the receiver's role

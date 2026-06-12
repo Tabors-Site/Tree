@@ -31,7 +31,11 @@ const HELP_LINES = [
   ["summon <@being> <message>", "engage a being's cognition"],
   ["be <op> [address] [{json}]", "identity: connect / release / switch ..."],
   ["clear", "wipe the scrollback"],
+  ["TAB", "complete the current word — child spaces, beings, verbs, ops"],
 ];
+
+const COMMANDS = ["cd", "ls", "pwd", "see", "do", "summon", "be", "help", "clear"];
+const BE_OPS = ["connect", "release", "birth", "switch", "death"];
 
 export function createView() {
   let ctx = null;
@@ -40,6 +44,10 @@ export function createView() {
   const history = [];
   let historyIndex = -1;
   const teardowns = [];
+  // id ↔ name, learned from every descriptor we pass through. Lets the
+  // user paste a raw spaceId where a name is expected (it resolves to
+  // the name behind the scenes) and lets output render names for ids.
+  const nameById = new Map();
 
   // ── Mount ───────────────────────────────────────────────────────
 
@@ -80,8 +88,30 @@ export function createView() {
     els.input.focus();
   }
 
-  function onDescriptor() {
+  function onDescriptor(desc) {
+    learnNames(desc || ctx.state.get("descriptor"));
     paintStance();
+  }
+
+  // Remember the ids ↔ names visible at this position so a later
+  // command can translate either way without a round-trip.
+  function learnNames(desc) {
+    if (!desc) return;
+    for (const c of desc.children || []) {
+      if (c.spaceId && c.name) nameById.set(c.spaceId, c.name);
+    }
+    for (const b of desc.beings || []) {
+      const n = b.being || b.name;
+      if (b.beingId && n) nameById.set(b.beingId, n);
+    }
+    for (const mt of desc.matters || []) {
+      if (mt.matterId && mt.name) nameById.set(mt.matterId, mt.name);
+    }
+    const here = desc.address;
+    if (here?.spaceId && here?.pathByNames) {
+      const leaf = here.pathByNames.split("/").filter(Boolean).pop();
+      if (leaf) nameById.set(here.spaceId, leaf);
+    }
   }
 
   function destroy() {
@@ -105,6 +135,11 @@ export function createView() {
   }
 
   function onKey(e) {
+    if (e.key === "Tab") {
+      e.preventDefault();
+      completeInput();
+      return;
+    }
     if (e.key === "Enter") {
       const raw = els.input.value.trim();
       els.input.value = "";
@@ -129,6 +164,95 @@ export function createView() {
         e.preventDefault();
       }
     }
+  }
+
+  // ── Tab completion ──────────────────────────────────────────────
+  //
+  // Complete the word under the caret against what's actually here:
+  // child space names for `cd`, beings for `summon`/`@`, the verbs
+  // themselves at the head, BE ops after `be`. One match fills in and
+  // adds a space; several share a prefix as far as it goes, then list.
+
+  function childNames() {
+    return (ctx.state.get("descriptor")?.children || [])
+      .map((c) => c.name).filter(Boolean);
+  }
+
+  function beingTokens() {
+    return (ctx.state.get("descriptor")?.beings || [])
+      .map((b) => `@${b.being || b.name || ""}`).filter((t) => t.length > 1);
+  }
+
+  // Candidates for the token at `idx` (0 = the verb itself).
+  function completionCandidates(tokens, idx, partial) {
+    if (partial.startsWith("@")) return beingTokens();
+    if (idx === 0) return COMMANDS;
+    const verb = (tokens[0] || "").toLowerCase();
+    switch (verb) {
+      case "cd":
+        return idx === 1 ? [...childNames(), "..", "~", "/"] : [];
+      case "see":
+        return idx === 1 ? [...childNames(), ...beingTokens(), "--live"] : ["--live"];
+      case "do":
+        return idx === 1 ? [...childNames(), ...beingTokens()] : [];
+      case "summon":
+        return idx === 1 ? beingTokens() : [];
+      case "be":
+        if (idx === 1) return BE_OPS;
+        if (idx === 2) return [...childNames(), ...beingTokens()];
+        return [];
+      default:
+        return [];
+    }
+  }
+
+  function completeInput() {
+    if (!els) return;
+    const line = els.input.value;
+    // Only complete at the end of the line — mid-line edits stay put.
+    if (els.input.selectionStart !== line.length) return;
+    const endsWithSpace = line.length > 0 && /\s$/.test(line);
+    const tokens = line.split(/\s+/).filter(Boolean);
+    const idx = endsWithSpace ? tokens.length : Math.max(0, tokens.length - 1);
+    const partial = endsWithSpace ? "" : (tokens[tokens.length - 1] || "");
+
+    const candidates = [...new Set(completionCandidates(tokens, idx, partial))];
+    if (!candidates.length) return;
+    const lp = partial.toLowerCase();
+    const matches = candidates.filter((c) => c.toLowerCase().startsWith(lp));
+    if (!matches.length) return;
+
+    if (matches.length === 1) {
+      applyCompletion(line, partial, endsWithSpace, matches[0], true);
+      return;
+    }
+    const common = commonPrefix(matches);
+    if (common.length > partial.length) {
+      applyCompletion(line, partial, endsWithSpace, common, false);
+    } else {
+      const items = matches
+        .map((m) => `<span class="cv-complete-item">${escapeHtml(m)}</span>`)
+        .join("");
+      block(`<div class="cv-result"><div class="cv-complete">${items}</div></div>`);
+    }
+  }
+
+  function applyCompletion(line, partial, endsWithSpace, replacement, addSpace) {
+    const base = endsWithSpace ? line : line.slice(0, line.length - partial.length);
+    els.input.value = base + replacement + (addSpace ? " " : "");
+    els.input.focus();
+  }
+
+  function commonPrefix(strings) {
+    if (!strings.length) return "";
+    let p = strings[0];
+    for (const s of strings.slice(1)) {
+      let i = 0;
+      while (i < p.length && i < s.length && p[i].toLowerCase() === s[i].toLowerCase()) i++;
+      p = p.slice(0, i);
+      if (!p) break;
+    }
+    return p;
   }
 
   // ── Output blocks ───────────────────────────────────────────────
@@ -212,8 +336,13 @@ export function createView() {
         target.startsWith(ctx.state.get("discovery")?.reality || " ")) {
       return ctx.navigation.resolveAddressInput(target);
     }
-    // Bare name → child of the current space.
-    const childPath = `${path === "/" ? "" : path}/${target}`;
+    // Bare name → child of the current space. A raw spaceId pasted
+    // here resolves to its name first (ids translate to names behind
+    // the scenes), so the walk stays a name-path the server resolves.
+    const child = (ctx.state.get("descriptor")?.children || [])
+      .find((c) => c.spaceId === target);
+    const leaf = child?.name || nameById.get(target) || target;
+    const childPath = `${path === "/" ? "" : path}/${leaf}`;
     return ctx.navigation.resolveAddressInput(childPath);
   }
 
@@ -352,7 +481,8 @@ export function createView() {
       rows.push(`<li><span class="cv-kind">being</span><span class="cv-name">@${escapeHtml(b.being || b.name || "?")}</span>${b.role ? ` <span class="cv-dim">${escapeHtml(String(b.role))}</span>` : ""}${b.activity ? ` <span class="cv-dim">· ${escapeHtml(String(b.activity).slice(0, 80))}</span>` : ""}</li>`);
     }
     for (const mt of desc.matters || []) {
-      rows.push(`<li><span class="cv-kind">matter</span><span class="cv-name">${escapeHtml(mt.name || mt.matterId?.slice(0, 8) || "?")}</span> <span class="cv-dim">${escapeHtml(mt.type || "generic")}</span></li>`);
+      const label = mt.name || nameById.get(mt.matterId) || mt.matterId?.slice(0, 8) || "?";
+      rows.push(`<li><span class="cv-kind">matter</span><span class="cv-name">${escapeHtml(label)}</span> <span class="cv-dim">${escapeHtml(mt.type || "generic")}</span></li>`);
     }
     if (!rows.length) return `<span class="cv-summary">empty — nothing here yet</span>`;
     return `<ul class="cv-list">${rows.join("")}</ul>`;

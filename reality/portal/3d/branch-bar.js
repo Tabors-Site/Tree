@@ -279,11 +279,11 @@ function _syncStanceBar() {
   });
 }
 
-export function mountBranchBar({ client, reality }) {
+export function mountBranchBar({ client, reality, buttonHost = null }) {
   _state.client = client;
   _state.reality = reality;
-  _state.buttonEl = _createBranchButton();
-  document.body.appendChild(_state.buttonEl);
+  _state.buttonEl = _createBranchButton({ hosted: !!buttonHost });
+  (buttonHost || document.body).appendChild(_state.buttonEl);
   _syncStanceBar();
   // Click outside the panel closes it. Bound once.
   document.addEventListener("click", (ev) => {
@@ -322,44 +322,49 @@ export function mountBranchBar({ client, reality }) {
 // TOP-LEFT BUTTON
 // ─────────────────────────────────────────────────────────────────────
 
-function _createBranchButton() {
+function _createBranchButton({ hosted = false } = {}) {
   const b = document.createElement("button");
   b.id = "branch-tree-button";
   b.type = "button";
   b.title = "branches & timeline";
-  b.textContent = "Branches";
-  // Z-index 200 sits above the flat-panel overlay (z=100), so the
-  // button + its popups stay reachable from text mode too. Without
-  // this the user can't open the timeline when the flat-panel is up.
-  b.style.cssText = [
-    "position: fixed",
-    // Below the shell chrome: IBPA topbar (~42px) + being tabs (~28px).
-    "top: 80px",
-    "left: 12px",
-    "z-index: 200",
-    "pointer-events: auto",
-    "background: rgba(10, 13, 12, 0.85)",
-    "color: #c8d3cb",
-    "border: 1px solid #2c3a32",
-    "border-radius: 6px",
-    "padding: 6px 10px",
-    "font-family: ui-monospace, monospace",
-    "font-size: 14px",
-    "cursor: pointer",
-    "transition: border-color 80ms, color 80ms",
-  ].join(";");
+  if (hosted) {
+    // Shell-hosted: a normal topbar button, present on all four views.
+    // The panel + timeline it opens are fixed overlays, so the same
+    // branch/rewind surface tracks every view equally.
+    b.className = "nav-btn";
+    b.textContent = "branches";
+  } else {
+    // Legacy floating placement (no shell handed us a host).
+    b.textContent = "Branches";
+    b.style.cssText = [
+      "position: fixed",
+      "top: 80px",
+      "left: 12px",
+      "z-index: 200",
+      "pointer-events: auto",
+      "background: rgba(10, 13, 12, 0.85)",
+      "color: #c8d3cb",
+      "border: 1px solid #2c3a32",
+      "border-radius: 6px",
+      "padding: 6px 10px",
+      "font-family: ui-monospace, monospace",
+      "font-size: 14px",
+      "cursor: pointer",
+      "transition: border-color 80ms, color 80ms",
+    ].join(";");
+    b.addEventListener("mouseenter", () => {
+      b.style.borderColor = "#8fbf9f";
+      b.style.color = "#8fbf9f";
+    });
+    b.addEventListener("mouseleave", () => {
+      b.style.borderColor = "#2c3a32";
+      b.style.color = "#c8d3cb";
+    });
+  }
   b.addEventListener("click", (ev) => {
     ev.stopPropagation();
     if (_state.panelOpen) _closePanel();
     else _openPanel();
-  });
-  b.addEventListener("mouseenter", () => {
-    b.style.borderColor = "#8fbf9f";
-    b.style.color = "#8fbf9f";
-  });
-  b.addEventListener("mouseleave", () => {
-    b.style.borderColor = "#2c3a32";
-    b.style.color = "#c8d3cb";
   });
   return b;
 }

@@ -60,23 +60,61 @@ ProjectionSchema.index(
   { sparse: true },
 );
 
-// Name uniqueness PER-BRANCH. Tombstoned slots are excluded via partial
-// filter so a being's name becomes available again after it's released
-// in that branch. Same-name beings in different branches are allowed by
-// construction (the index key includes branch).
+// Name uniqueness, scoped to the level the name actually addresses.
+// Three type-scoped unique indexes, one doctrine: a name is unique over
+// exactly the set it must disambiguate among.
 //
-// The tombstone exclusion is EQUALITY on false, not `$ne: true` —
-// Mongo partial indexes don't support $not/$ne and the index silently
-// never built with that spec (so per-branch name uniqueness was never
-// actually enforced). Equality is safe because every write path sets
+//   • BEING — the one global handle. A being name IS a branch-wide
+//     address (`@dancer3`), unique across the whole branch.
+//   • SPACE — a folder among its siblings. Unique per PARENT, so the
+//     same name lives in different scopes (`/home/love/love` is legal);
+//     you address a space by its full path, which the resolver walks
+//     segment by segment matching (parent, name). Mirrors what
+//     createSpace already enforces (assertNameAvailableAt).
+//   • MATTER — a file inside its folder. Unique per (space, parent
+//     matter), so two `index.js` coexist in different folders the way a
+//     real filesystem allows. The tree extending past space into matter.
+//
+// Each index is partial on its own `type` (equality is legal in a
+// partial filter) so the three never overlap. Tombstoned slots are
+// excluded so a name frees up when its slot is released in the branch.
+// The tombstone exclusion is EQUALITY on false, not `$ne: true` — Mongo
+// partial indexes don't support $not/$ne and the index silently never
+// builds with that spec. Equality is safe because every write path sets
 // the field explicitly: initProjection lands tombstoned:false on every
-// slot, tombstoneProjection flips it true (leaving the index, freeing
-// the name), and the schema defaults false.
+// slot, tombstoneProjection flips it true (freeing the name), schema
+// defaults false.
 ProjectionSchema.index(
   { branch: 1, type: 1, "state.name": 1 },
   {
     unique: true,
+    name: "name_unique_being",
     partialFilterExpression: {
+      type: "being",
+      "state.name": { $exists: true, $type: "string" },
+      tombstoned:   false,
+    },
+  },
+);
+ProjectionSchema.index(
+  { branch: 1, type: 1, "state.parent": 1, "state.name": 1 },
+  {
+    unique: true,
+    name: "name_unique_space",
+    partialFilterExpression: {
+      type: "space",
+      "state.name": { $exists: true, $type: "string" },
+      tombstoned:   false,
+    },
+  },
+);
+ProjectionSchema.index(
+  { branch: 1, type: 1, "state.spaceId": 1, "state.parentMatterId": 1, "state.name": 1 },
+  {
+    unique: true,
+    name: "name_unique_matter",
+    partialFilterExpression: {
+      type: "matter",
       "state.name": { $exists: true, $type: "string" },
       tombstoned:   false,
     },

@@ -325,8 +325,6 @@ export function initWebSocketServer(httpServer, originPolicy) {
       socketId: socket.id,
       beingId: socket.beingId || null,
       name: socket.name || null,
-      clientKind: socket.clientKind || null,
-      clientInstance: socket.clientInstance || null,
       branch: socket.currentBranch || "0",
     });
 

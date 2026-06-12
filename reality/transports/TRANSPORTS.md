@@ -32,8 +32,9 @@ ws/
 
 http/
   handler.js            Route mounting + boot ordering. Mounts auth,
-                        the unified IBP HTTP adapter, the legacy
-                        /place/root, MCP, the uploads static.
+                        the unified IBP HTTP adapter, the content
+                        byte carrier, the built portal. World-state
+                        never rides bare HTTP — SEE goes through IBP.
   dispatch.js           Shared HTTP → IBP helpers used by every route
                         file that translates a request into an envelope.
                         makeHttpCarrier, dispatchAndWait, sendAck.
@@ -51,10 +52,8 @@ http/
                         registered operation — seed or extension —
                         is callable through it. No per-feature route
                         files.
-    config.js           Deferred surface: GET /api/v1/place/root with
-                        visibility filtering. Folds into ibp:see on
-                        <place> once stance authorization gates per-stance
-                        visibility.
+    (config.js retired 2026-06-11 — the GET /api/v1/reality/root shim
+    folded into `ibp:see <reality>/`; no callers remained.)
   middleware/
     authenticate.js     JWT (cookie or Bearer) + extension auth
                         strategies. Sets req.beingId / req.name.

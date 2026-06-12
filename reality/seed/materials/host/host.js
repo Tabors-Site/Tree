@@ -113,11 +113,10 @@ export async function initHostRuntime() {
       beingId: ids.mongoBeing,
       target: { kind: "space", id: ids.mongoSpace },
       params: {
+        // Witness fields only. Pool sizing / replica topology are ops
+        // tuning, not world truth — they live in env, not the chain.
         dbName: mongoose.connection?.name || null,
         host: redactMongoHost(process.env.MONGODB_URI || ""),
-        replicaSet: !!mongoose.connection?.client?.options?.replicaSet,
-        maxPoolSize: Number(process.env.MONGO_MAX_POOL_SIZE) || 50,
-        minPoolSize: Number(process.env.MONGO_MIN_POOL_SIZE) || 5,
       },
       actId: ctx.actId,
       branch: "0",
@@ -201,18 +200,20 @@ export async function reconcileStaleConnections() {
 }
 
 // ── websocket notifiers ─────────────────────────────────────────────
-export function noteSocketConnected({ socketId, beingId, name, clientKind, clientInstance, branch } = {}) {
+export function noteSocketConnected({ socketId, beingId, name, branch } = {}) {
   try {
     if (!ready || shuttingDown || !socketId) return;
     if (getRealityConfigValue("hostConnectionFacts") === false) return;
     if (!isDbHealthy()) return;
     const qualities = {
       connection: {
+        // World-meaningful identity only: which socket (the pool's
+        // join key), who it carries, where it's seated. Client kind /
+        // instance are runtime hints the pool reads off the live
+        // socket object, never off the row — they stay out of facts.
         socketId,
         beingId: beingId || null,
         name: name || null,
-        clientKind: clientKind || null,
-        clientInstance: clientInstance || null,
         branch: branch || "0",
         connectedAt: new Date().toISOString(),
         // No token, no raw IP — connection rows are visible matter.
@@ -297,8 +298,8 @@ export function noteMongoReconnected() {
         beingId: ids.mongoBeing,
         target: { kind: "space", id: ids.mongoSpace },
         params: {
-          disconnectedAt: downAt ? downAt.toISOString() : null,
-          reconnectedAt: upAt.toISOString(),
+          // The gap IS the information; the moment it healed is the
+          // fact's own date. No duplicate timestamps in params.
           gapMs: downAt ? (upAt - downAt) : null,
         },
         actId: ctx.actId,

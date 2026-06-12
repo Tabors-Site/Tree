@@ -479,7 +479,7 @@ function _renderBranchInfoFields(container, path, graph, err) {
 function placeActions(address, desc) {
   return [
     { label: "+ create child space", op: "create-space", address },
-    { label: "edit this space", special: "edit-space", address, values: { name: desc.address?.leafName || "" } },
+    { label: "edit this space", special: "edit-space", address, values: { name: (desc.address?.pathByNames || "").split("/").filter(Boolean).pop() || "" } },
     // The PLACE flow — drop a file / paste a URL / type text, live
     // "will become: <type>" preview, one create-matter DO. The
     // composer panel replaces the generic op form (which still

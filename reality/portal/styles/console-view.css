@@ -48,6 +48,13 @@
 .cv-list .cv-dim { color: #6b7d72; }
 .cv-list .cv-link { color: #8fbf9f; cursor: pointer; text-decoration: underline; }
 
+/* Tab-completion candidates, when several share a prefix. */
+.cv-complete {
+  display: flex; flex-wrap: wrap; gap: 4px 14px;
+  color: #9ab0a3;
+}
+.cv-complete-item { color: #8fbf9f; }
+
 #console-prompt {
   display: flex; align-items: center; gap: 8px;
   padding: 10px 16px;

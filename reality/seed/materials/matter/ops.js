@@ -19,6 +19,7 @@ import Space from "../space/space.js";
 import { I_AM } from "../being/seedBeings.js";
 import { v4 as uuidv4 } from "uuid";
 import { detectTargetKind, targetIdOf, loadTargetRow } from "../_targetShape.js";
+import { resolveMatterName } from "./matters.js";
 
 const COORD_AXES = ["x", "y", "z"];
 
@@ -80,13 +81,20 @@ async function createMatterHandler(ctx) {
 
   const matterId = uuidv4();
 
-  const spaceId = targetKind === "space"
-    ? targetIdOf(target)
-    : (spec.spaceId || null);
-
   const parentMatterId = targetKind === "matter"
     ? targetIdOf(target)
     : (spec.parentMatterId || null);
+
+  // Space: a space target IS the space; a matter target (building the
+  // matter tree) lands the child in its parent's space, so targeting a
+  // folder-matter "just works" without restating the space. Explicit
+  // spec.spaceId is the last resort.
+  let spaceId = targetKind === "space" ? targetIdOf(target) : (spec.spaceId || null);
+  if (!spaceId && parentMatterId) {
+    const { loadOrFold } = await import("../projections.js");
+    const parentSlot = await loadOrFold("matter", String(parentMatterId), summonCtx?.actorAct?.branch || "0");
+    spaceId = parentSlot?.state?.spaceId || null;
+  }
 
   const rawCreator = identity?.beingId || spec.beingId || null;
   const beingIdValue = rawCreator ? String(rawCreator) : null;
@@ -173,13 +181,18 @@ async function createMatterHandler(ctx) {
     }
   }
 
-  // Name: default from the content's own filename so uploads aren't
-  // nameless ("report.pdf" arrives named "report.pdf").
-  const name = (typeof spec.name === "string" && spec.name.length)
-    ? spec.name
-    : (content && typeof content === "object" && typeof content.name === "string" && content.name.length
-        ? content.name
-        : spec.name);
+  // Name: explicit → the filename of the bytes it carries ("report.pdf"
+  // arrives named "report.pdf") → a generated `<type><n>` unique within
+  // this folder (space + parent matter). Matter is always named, the
+  // same guarantee spaces and beings carry.
+  const name = await resolveMatterName({
+    name: spec.name,
+    content,
+    type: matterType,
+    branch: summonCtx?.actorAct?.branch || "0",
+    spaceId,
+    parentMatterId,
+  });
 
   // Coord at birth: matter can be born at a position. Same clamp
   // doctrine as set-matter's coord write (throw, never silently

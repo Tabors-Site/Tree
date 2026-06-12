@@ -500,6 +500,12 @@ export async function addLlmConnection(
     lastUsedAt:      null,
   };
 
+  // This set-being fact carries the connection object — encrypted key
+  // included — BY DESIGN. Qualities are a fold of facts: if the value
+  // didn't ride the fact, rebuild-from-reel couldn't reproduce
+  // qualities.llmConnections. The chain holds ciphertext only
+  // (encrypt() above), and redact.js strips llmConnections from every
+  // wire surface, so nothing readable ever leaves the reel.
   const { doVerb } = await import("../../../ibp/verbs/do.js");
   await doVerb(
     { kind: "being", id: String(being._id) },

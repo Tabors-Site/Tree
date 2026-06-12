@@ -309,12 +309,7 @@ export async function seeVerb(target, opts = {}) {
         path: `/./threads/${targetThreadId}`,
         being: null,
         spaceId: threadsSpaceId,
-        beingId: null,
-        chain: [],
         pathByNames: `/./threads/${targetThreadId}`,
-        pathByIds: `/./threads/${targetThreadId}`,
-        leafName: targetThreadId,
-        leafId: targetThreadId,
       },
       isSpaceRoot: false,
       isHomeRoot: false,
@@ -380,12 +375,7 @@ export async function seeVerb(target, opts = {}) {
         path: `/.reel/${reelTarget.kind}/${reelTarget.id}`,
         being: null,
         spaceId: null,
-        beingId: null,
-        chain: [],
         pathByNames: `/.reel/${reelTarget.kind}/${reelTarget.id}`,
-        pathByIds: `/.reel/${reelTarget.kind}/${reelTarget.id}`,
-        leafName: reel.target.name || reelTarget.id,
-        leafId: reelTarget.id,
       },
       isSpaceRoot: false,
       isHomeRoot: false,
@@ -413,12 +403,7 @@ export async function seeVerb(target, opts = {}) {
         path: `/./beings`,
         being: null,
         spaceId: null,
-        beingId: null,
-        chain: [],
         pathByNames: `/./beings`,
-        pathByIds: `/./beings`,
-        leafName: "beings",
-        leafId: null,
       },
       isSpaceRoot: false,
       isHomeRoot: false,
@@ -472,12 +457,7 @@ export async function seeVerb(target, opts = {}) {
         path: `/.${publicTarget.kind === "being" ? "beings" : "spaces"}/${publicTarget.id}`,
         being: null,
         spaceId: null,
-        beingId: publicTarget.kind === "being" ? publicTarget.id : null,
-        chain: [],
         pathByNames: `/.${publicTarget.kind === "being" ? "beings" : "spaces"}/${publicTarget.id}`,
-        pathByIds: `/.${publicTarget.kind === "being" ? "beings" : "spaces"}/${publicTarget.id}`,
-        leafName: slot.state?.name || publicTarget.id,
-        leafId: publicTarget.id,
       },
       publicDirectoryEntry: {
         kind: publicTarget.kind,
@@ -540,12 +520,7 @@ export async function seeVerb(target, opts = {}) {
         path: pathSuffix,
         being: null,
         spaceId: null,
-        beingId: null,
-        chain: [],
         pathByNames: pathSuffix,
-        pathByIds: pathSuffix,
-        leafName: isConflictsView ? "conflicts" : ".branches",
-        leafId: null,
         branch: branchesTarget.branchPath,
       },
       isSpaceRoot: false,
@@ -591,12 +566,7 @@ export async function seeVerb(target, opts = {}) {
         path: `/.acts/${actChainBeingId}`,
         being: null,
         spaceId: null,
-        beingId: actChainBeingId,
-        chain: [],
         pathByNames: `/.acts/${actChainBeingId}`,
-        pathByIds: `/.acts/${actChainBeingId}`,
-        leafName: chain.being.name || actChainBeingId,
-        leafId: actChainBeingId,
       },
       isSpaceRoot: false,
       isHomeRoot: false,
@@ -1004,15 +974,21 @@ async function _redirectResolvedToSpace(resolved, positionRow) {
   const Space = (await import("../../materials/space/space.js")).default;
   // Walk parents to build the chain. Stop at the place root (parent
   // === null). The chain rendered into the descriptor's `pathByNames`
-  // / `pathByIds` mirrors the live resolver's output.
+  // mirrors the live resolver's output.
+  //
+  // Branch comes from the resolved stance — never a literal "0".
+  // loadOrFold (not loadProjection) so a sub-branch whose ancestors
+  // were planted on a parent branch still walks the lineage.
+  const { getDefaultBranch } = await import("../../materials/branch/branchRegistry.js");
+  const walkBranch = resolved.branch || await getDefaultBranch();
   const chain = [];
   let cursor = positionRow;
   while (cursor) {
     chain.unshift({ name: cursor.name, id: cursor._id });
     if (!cursor.parent) break;
-    const { loadProjection: _lP } =
+    const { loadOrFold: _lP } =
       await import("../../materials/projections.js");
-    const _cSlot = await _lP("space", cursor.parent, "0");
+    const _cSlot = await _lP("space", cursor.parent, walkBranch);
     cursor = _cSlot
       ? {
           _id: _cSlot.id,

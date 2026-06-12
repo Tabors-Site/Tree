@@ -454,9 +454,14 @@ export async function birthBeing({ spec, identity, summonCtx = null, branch = nu
     homeBranch: branch,
     position,
     ...(resolvedCoord ? { coord: resolvedCoord } : {}),
-    llmDefault: spec.llmDefault || null,
-    isRemote: spec.isRemote || false,
-    homeReality: spec.homeReality || null,
+    // Optional traits ride the fact only when SET. The reducer
+    // (applyCreateBeing) defaults absent llmDefault → null,
+    // isRemote → false, homeReality → null, so omission folds
+    // identically and the chain stops carrying null/false noise on
+    // every plain birth.
+    ...(spec.llmDefault ? { llmDefault: spec.llmDefault } : {}),
+    ...(spec.isRemote ? { isRemote: true } : {}),
+    ...(spec.homeReality ? { homeReality: spec.homeReality } : {}),
     qualities,
   };
 

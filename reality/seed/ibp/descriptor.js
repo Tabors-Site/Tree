@@ -78,7 +78,7 @@ import { BE_OPS } from "./beOps.js";
 // Returns null when the aggregate doesn't exist (live) or hadn't
 // existed yet (historical); descriptor callers guard with
 // `?.qualities` so missing data degrades to {} cleanly.
-async function foldRead(type, id, until = null, branch = "0") {
+async function foldRead(type, id, until = null, branch) {
   if (!id) return null;
   try {
     if (until) {
@@ -215,7 +215,7 @@ function beingsAtSpace(space, { writeAllowed, authorizedHere }) {
 // since walked away won't appear; a being who walked IN after the
 // past point will appear (with their pre-arrival state). Documented
 // here so the next slice knows what to fix.
-async function occupantsByPosition(spaceId, existing, branch = "0") {
+async function occupantsByPosition(spaceId, existing, branch) {
   if (!spaceId) return [];
   const seen = new Set();
   for (const e of existing) {
@@ -363,7 +363,7 @@ async function summonToActivity(summon, opts = {}) {
 // pre-resolve the recipient name so the portal can render `→@<name>`
 // without a second roundtrip. Returns null on miss (the portal falls
 // back to role / beingId prefix).
-async function _lookupBeingName(beingId, branch = "0") {
+async function _lookupBeingName(beingId, branch) {
   try {
     // loadOrFold (not loadProjection): the recipient being may live
     // inherited from a parent branch. Without the lineage walk the
@@ -448,7 +448,7 @@ export async function buildPlaceDescriptor(resolved, opts = {}) {
   return placeAtSpace(resolved, branchedOpts);
 }
 
-async function placeAtSpaceRoot(resolved, { identity, until = null, branch = "0" } = {}) {
+async function placeAtSpaceRoot(resolved, { identity, until = null, branch } = {}) {
   const realityDomain = getRealityDomain();
   const spaceRootId = getSpaceRootId();
   const isRegistered = (beingName) => !!getRole(beingName);
@@ -545,12 +545,7 @@ async function placeAtSpaceRoot(resolved, { identity, until = null, branch = "0"
       path: "/",
       being: resolved.being || null,
       spaceId: spaceRootId || null,
-      beingId: null,
-      chain: [],
       pathByNames: "/",
-      pathByIds: "/",
-      leafName: null,
-      leafId: null,
       // Branch this descriptor was folded for. The portal's branch
       // chip reads this to decide whether to surface the `#<branch>`
       // qualifier in the address bar. `branch` was already resolved
@@ -573,13 +568,12 @@ async function placeAtSpaceRoot(resolved, { identity, until = null, branch = "0"
     place: {
       name: getRealityConfigValue("REALITY_NAME") || "Unnamed Place",
     },
-    identity: await identityBlock(identity, { authorizedHere: true, writeAllowed: false, until, branch }),
+    identity: await identityBlock(identity, { until, branch }),
     ...(until ? { isHistorical: true, asOf: serializeAsOf(until) } : {}),
-    _meta: meta(),
   };
 }
 
-async function placeAtSpace(resolved, { identity, payload, until = null, branch = "0" } = {}) {
+async function placeAtSpace(resolved, { identity, payload, until = null, branch } = {}) {
   const realityDomain = getRealityDomain();
   if (!resolved.leafSpace) throw new Error("Resolved space missing leafSpace reference");
 
@@ -603,8 +597,6 @@ async function placeAtSpace(resolved, { identity, payload, until = null, branch 
     : resolved.leafSpace;
 
   const pathByNames = "/" + resolved.chain.map((c) => c.name).join("/");
-  const pathByIds   = "/" + resolved.chain.map((c) => c.id).join("/");
-  const parentPath  = pathByNames.replace(/\/[^/]+$/, "") || "/";
 
   // .threads has no persisted children; the live forest is projected
   // on demand from Act records keyed by rootCorrelation. The SEE
@@ -638,9 +630,8 @@ async function placeAtSpace(resolved, { identity, payload, until = null, branch 
     spaceRender: serializeQualities(space.qualities)?.render || null,
   });
   const lineage  = buildLineage(resolved);
-  const siblings = space.parent
-    ? await childrenOf(space.parent, parentPath, { exclude: space._id, until, branch })
-    : [];
+  // (siblings retired 2026-06-11: a full childrenOf sweep of the
+  // parent ran on every SEE and nothing ever read the result.)
 
   // Access for the asker. Used for descriptor enrichment only —
   // role-walk gating runs in authorize() upstream and downstream,
@@ -713,12 +704,7 @@ async function placeAtSpace(resolved, { identity, payload, until = null, branch 
       path: pathByNames,
       being: resolved.being || null,
       spaceId: space._id,
-      beingId: resolved.beingId || null,
-      chain: resolved.chain,
       pathByNames,
-      pathByIds,
-      leafName: resolved.leafName,
-      leafId: resolved.leafId,
       // Branch this descriptor was folded for. `branch` was resolved
       // upstream through the `#main` pointer registry; resolved.branch
       // is the post-canonicalization value from resolveBranchPointers.
@@ -737,16 +723,14 @@ async function placeAtSpace(resolved, { identity, payload, until = null, branch 
     matters,
     lineage,
     beingLineage,
-    siblings,
     size: space.size || null,
     qualities: serializeQualities(space.qualities),
     // The structural owner at this position (null when unowned at this
     // node and the ancestor walk inherits). Operator surfaces like the
     // portal's Roles panel use this to label "this is the owner."
     owner: space.owner ? String(space.owner) : null,
-    identity: await identityBlock(identity, { authorizedHere, writeAllowed, until, branch }),
+    identity: await identityBlock(identity, { until, branch }),
     ...(until ? { isHistorical: true, asOf: serializeAsOf(until) } : {}),
-    _meta: meta(writeAllowed ? [] : ["read-only"]),
   };
 }
 
@@ -776,9 +760,17 @@ function serializeAsOf(until) {
 // in-flight fold-engine append lock + reducer keep each well-
 // bounded.
 async function childrenOf(parentId, parentPath, opts = {}) {
-  const { until = null, branch = "0" } = opts;
-  const rows = await listSpaceChildren(parentId, opts);
-  const folded = await Promise.all(rows.map((s) => foldRead("space", s._id, until, branch)));
+  const { until = null, branch } = opts;
+  let rows = await listSpaceChildren(parentId, opts);
+  let folded = await Promise.all(rows.map((s) => foldRead("space", s._id, until, branch)));
+  // Historical SEE: null fold = the child space didn't exist yet at
+  // `until` — exclude it rather than render its live state (same rule
+  // as mattersAt).
+  if (until) {
+    const keep = rows.map((_, i) => !!folded[i]);
+    rows = rows.filter((_, i) => keep[i]);
+    folded = folded.filter((_, i) => keep[i]);
+  }
   return rows.map((s, i) => {
     const f = folded[i] || s;
     const qualities = serializeQualities(f.qualities ?? s.qualities);
@@ -889,10 +881,21 @@ async function synthesizeReelChildren(payload) {
 // extra round-trip. Slice H completion (2026-05-23): each matter
 // folds before its qualities surface, same shape as the children
 // loop above.
-async function mattersAt(spaceId, { until = null, branch = "0", spaceRender = null } = {}) {
+async function mattersAt(spaceId, { until = null, branch, spaceRender = null } = {}) {
   if (!spaceId) return [];
-  const rows = await listMattersAt(spaceId, { branch });
-  const folded = await Promise.all(rows.map((m) => foldRead("matter", m.matterId, until, branch)));
+  let rows = await listMattersAt(spaceId, { branch });
+  let folded = await Promise.all(rows.map((m) => foldRead("matter", m.matterId, until, branch)));
+  // Historical SEE: a null fold means this matter had NO facts at or
+  // before `until` — it did not exist yet at that moment. Falling back
+  // to the live row would haunt the rewound scene with future matter,
+  // so it drops instead. (The converse gap — matter ENDED since the
+  // rewind point is absent from the live list and can't reappear —
+  // needs historical row discovery from facts; documented, unbuilt.)
+  if (until) {
+    const keep = rows.map((_, i) => !!folded[i]);
+    rows = rows.filter((_, i) => keep[i]);
+    folded = folded.filter((_, i) => keep[i]);
+  }
   const { getMatterType } = await import("../materials/matter/types.js");
   const { getOperation } = await import("./operations.js");
 
@@ -993,7 +996,7 @@ async function mattersAt(spaceId, { until = null, branch = "0", spaceRender = nu
 // affordance: name, beingId, cognition, defaultRole. Cap at 200 to
 // stay bounded for prolific parents; deeper inspection happens via
 // dedicated SEE on each child stance.
-async function listBeingChildren(parentBeingId, { until = null, branch = "0" } = {}) {
+async function listBeingChildren(parentBeingId, { until = null, branch } = {}) {
   if (!parentBeingId) return [];
   const { beingCognition } = await import("../materials/being/identity/lookups.js");
   const rows = await Being
@@ -1183,6 +1186,19 @@ async function enrichBeings(spaceId, entries, opts = {}) {
   const foldedBeings = await Promise.all(
     beingIds.map((id) => foldRead("being", id, until, branch)),
   );
+  // Historical SEE: a being whose reel had no facts at or before
+  // `until` did not exist yet at that moment — drop its entry rather
+  // than render a future being into the rewound room. (Same rule as
+  // mattersAt/childrenOf. Entries without a _beingId — registered
+  // names that never resolved — keep their live behavior.)
+  if (until) {
+    const existedAt = new Set(
+      beingIds.filter((id, i) => !!foldedBeings[i]).map(String),
+    );
+    entries = entries.filter(
+      (e) => !e._beingId || existedAt.has(String(e._beingId)),
+    );
+  }
   // Pair folded states with their being ids by index (foldRead may
   // return a state without _id when historical). We track ids
   // explicitly so historical fold results map back to the right row.
@@ -1347,7 +1363,7 @@ function catalogBeOps() {
 
 // ── Wire-shape helpers ──
 
-async function identityBlock(identity, { authorizedHere, writeAllowed, until = null, branch = "0" }) {
+async function identityBlock(identity, { until = null, branch } = {}) {
   if (!identity) return null;
   // Position + coord are server-side state on the Being row. Surface
   // them on every authenticated SEE so the portal can resume the
@@ -1450,18 +1466,7 @@ async function identityBlock(identity, { authorizedHere, writeAllowed, until = n
     // then renders far outside the much larger root grid.
     homeSpace,
     coord,
-    authorizedHere,
-    writeAllowed,
     stale,
-  };
-}
-
-function meta(renderHints = []) {
-  return {
-    descriptorVersion: DESCRIPTOR_VERSION,
-    serverVersion:     process.env.REALITY_VERSION || "treeos-reality",
-    generatedAt:       new Date().toISOString(),
-    renderHints,
   };
 }
 

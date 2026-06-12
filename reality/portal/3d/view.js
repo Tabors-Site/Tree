@@ -76,11 +76,9 @@ export function createView() {
   const isAuthed = () => !!ctx.state.get("session")?.token;
 
   function setSelectedBeing(beingId, name) {
-    ctx.state.set({
-      selectedBeing: beingId
-        ? { beingId: String(beingId), name: name || null, lastSetAt: new Date().toISOString() }
-        : null,
-    });
+    // Selection rides the shared model: the IBPA's right stance gains
+    // @<name>, every other view sees the same focus.
+    ctx.navigation.selectBeing(beingId, name);
   }
 
   function formatLocation(desc) {
@@ -195,17 +193,12 @@ export function createView() {
     });
     refreshSeedCatalog();
 
-    // Heaven children are text-mode surfaces; the 3D scene has nothing
-    // to render there. If the view activates on one (e.g. the user
-    // browsed ./operations in text mode, then switched), restore the
-    // last real place.
-    const addr = state().currentAddress;
-    const lastReal = state().lastNonHeavenAddress;
-    if (addr && ctx.navigation.isHeavenChildAddress(addr) && lastReal && lastReal !== addr) {
-      ctx.navigation.navigate(lastReal).catch((err) => {
-        console.warn("[3D] heaven-child restore failed:", err?.message);
-      });
-    }
+    // No address adjustment on mount. The IBP address is shared truth
+    // across all four views — switching views NEVER moves you. If the
+    // current position is a heaven catalog the scene renders what the
+    // descriptor gives it; the user walks out the same way they walked
+    // in. (The old flat-panel overlay used to "restore" to the last
+    // non-heaven address here; retired with the view-switcher model.)
   }
 
   // ── Descriptor rendering ────────────────────────────────────────
@@ -486,16 +479,17 @@ export function createView() {
   // ── Being action menus ──────────────────────────────────────────
 
   function beingAddress(b, { rootDelegate = false } = {}) {
+    // Reality-root identity delegates address as `<reality>/@<name>`
+    // (bare-place stance); everyone else dispatches against the IBPA
+    // stance — the same string the right side of the bar shows.
+    if (!rootDelegate) return ctx.navigation.stanceFor(b.being);
     const reality = state().discovery?.reality;
-    const path = state().descriptor?.address?.pathByNames || "/";
     // Branch qualifier matters: acting on a being from a non-main
     // branch must carry `#<branch>` or the server's cross-branch gate
     // refuses (expand() defaults a bare typed reality to #main).
     const branch = state().descriptor?.address?.branch || "0";
     const bq = branch === "0" ? "" : `#${branch}`;
-    return rootDelegate
-      ? `${reality}${bq}/@${b.being}`
-      : `${reality}${bq}${path}@${b.being}`.replace(/\/+@/, "/@");
+    return `${reality}${bq}/@${b.being}`;
   }
 
   function openBeingActionMenu(b) {
@@ -901,6 +895,7 @@ export function createView() {
   function openRoleManagerPanel(b) {
     if (!isAuthed()) { bounceToAuth(); return; }
     const rmEntry = (state().descriptor?.beings || []).find((bb) => bb.being === "role-manager") || b;
+    setSelectedBeing(rmEntry.beingId, rmEntry.being);
     showRoleManagerPanel({ state: panelState(), beingEntry: rmEntry, onClose: () => {} });
   }
 

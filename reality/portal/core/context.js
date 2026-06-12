@@ -218,7 +218,7 @@ export function createPortalContext({ id = "main", persist = true, session = nul
     events.emit("connected", { anonymous: true });
   }
 
-  async function connectAndPlace(sess) {
+  async function connectAndPlace(sess, { freshSignIn = false } = {}) {
     const client = buildClient({
       placeUrl: sess.placeUrl || config.placeUrl,
       token: sess.token,
@@ -226,7 +226,9 @@ export function createPortalContext({ id = "main", persist = true, session = nul
     });
     client.connect();
     await waitForConnect(client);
-    const landed = await ctx.navigation.landAuthenticated(sess);
+    // Fresh sign-ins ignore the pre-auth hash: land where the being
+    // is (position → home), not where arrival happened to be browsing.
+    const landed = await ctx.navigation.landAuthenticated(sess, { ignoreHash: freshSignIn });
     if (landed) events.emit("connected", { anonymous: false });
   }
 
@@ -278,7 +280,7 @@ export function createPortalContext({ id = "main", persist = true, session = nul
     };
     saveSession(sess);
     try { ctx.client?.disconnect(); } catch {}
-    await connectAndPlace(sess);
+    await connectAndPlace(sess, { freshSignIn: true });
     return sess;
   }
 

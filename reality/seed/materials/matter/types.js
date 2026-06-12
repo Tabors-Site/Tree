@@ -313,7 +313,7 @@ registerMatterType("connection", {
     "connect, updates qualities.connection.branch on a branch " +
     "reseat, and ends it on disconnect. qualities.connection " +
     "carries the socket identity (socketId, beingId, name, " +
-    "clientKind, clientInstance, branch, connectedAt). The pool's " +
+    "branch, connectedAt). The pool's " +
     "act-chain is the connection log; the row is the live state.",
   contentKinds: ["none"],
   ops: ["set-matter", "end-matter"],
