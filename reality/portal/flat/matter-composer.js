@@ -19,6 +19,7 @@
 // discovery, so drift is bounded to the weights).
 
 import { flat } from "./host.js";
+import { assetUrl } from "../core/assets.js";
 
 const SCORE = {
   MIME_EXACT: 100,
@@ -391,7 +392,9 @@ export function renderMatterComposer(body, action, { refreshView } = {}) {
         const fd = new FormData();
         fd.append("file", f);
         const token = flat.state?.session?.token;
-        const res = await fetch("/api/v1/content", {
+        // Through the asset seam: a native shell remaps the byte
+        // carrier endpoint; the web bundle resolves it identity.
+        const res = await fetch(assetUrl("/api/v1/content"), {
           method: "POST",
           headers: token ? { Authorization: `Bearer ${token}` } : {},
           body: fd,

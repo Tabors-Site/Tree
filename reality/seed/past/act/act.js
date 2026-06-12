@@ -183,6 +183,21 @@ const ActSchema = new mongoose.Schema({
     enum: ["attempted", "landed", "denied", "timeout", "unreachable", "malformed"],
     index: true,
   },
+
+  // The actor's signature over this act and exactly its facts (actSig.js
+  // buildActSigPayload: actId, opening fields, p, sorted factIds, time).
+  // A CLOSURE field — NOT part of contentOfAct, so it does not change
+  // act._id and replay/dedup is unaffected. Custodially produced at seal
+  // by the reality holding the being's key. `by` is the signer id (a
+  // being key id, or "i-am" for the reality key); null on the row when
+  // the actor has no local key (a foreign cross-reality actor). The
+  // value is a public signature, safe on the chain.
+  sig: {
+    alg:   { type: String, default: null },   // "ed25519"
+    by:    { type: String, default: null },   // signer id (key id or "i-am")
+    value: { type: String, default: null },   // base64 signature
+    _id: false,
+  },
 });
 
 // All Acts under one chain (rootCorrelation walk).

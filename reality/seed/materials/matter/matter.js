@@ -39,10 +39,12 @@
 // Deliberately deferred, not unprincipled.
 
 import mongoose from "mongoose";
-import { v4 as uuidv4 } from "uuid";
 
 const MatterSchema = new mongoose.Schema({
-  _id: { type: String, default: uuidv4 },
+  // Content-addressed: the id is the hash of the matter's birth identity
+  // (matterId.js), supplied by the fact-driven create path. No random
+  // default — a matter is never minted without its derived id.
+  _id: { type: String },
 
   // Matter does not exist outside a position. The DELETED sentinel
   // on spaceId / beingId marks soft-deleted matter.

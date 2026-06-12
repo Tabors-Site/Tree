@@ -53,6 +53,8 @@ import {
   withReelLocks,
 } from "../../past/fact/facts.js";
 import { hooks } from "../../hooks.js";
+import { loadSigningKey, signActDoc } from "../../past/act/actSig.js";
+import Fact from "../../past/fact/fact.js";
 import log from "../../seedReality/log.js";
 
 function MAX_CHAT_CONTENT_BYTES() {
@@ -209,6 +211,12 @@ export async function sealAct(plannedAct, { content = null, deltaF = [], afterSe
     status: "attempted",
   };
 
+  // Preload the actor's signing key BEFORE the seal so the transaction
+  // stays lean (the key never changes during the moment). Null for a
+  // foreign cross-reality actor or a missing key — the act then seals
+  // unsigned. The key lives only here, never on the row.
+  const signingPem = await loadSigningKey(actDoc.beingIn, actDoc.branch);
+
   let inserted = null;
   let sortedReels = [];
   let wasReplay = false;
@@ -216,6 +224,9 @@ export async function sealAct(plannedAct, { content = null, deltaF = [], afterSe
   // ── ΔF=0: pure single-doc Act insert. No transaction needed. ──
   if (!Array.isArray(deltaF) || deltaF.length === 0) {
     try {
+      // Content-only act: sign over an empty fact set (the actId already
+      // commits the opening). Attach BEFORE the create — the only write.
+      actDoc.sig = await signActDoc(actDoc, [], signingPem);
       inserted = await Act.create(actDoc);
     } catch (err) {
       // Duplicate IDENTITY (same opening at the same chain position)
@@ -258,6 +269,17 @@ export async function sealAct(plannedAct, { content = null, deltaF = [], afterSe
             // 1. Append every Fact in ΔF (caller holds the locks).
             const result = await appendDeltaFInSession(deltaF, session);
             sortedReels = result.sortedReels;
+
+            // 1b. Sign the act over exactly the facts that just landed.
+            // logFact does not surface the computed fact ids, so read
+            // them back in-session (they committed above). Recomputed
+            // every attempt — withTransaction may retry, and a retry
+            // re-appends with fresh ids. Sorted for determinism; the
+            // verifier sorts the same way.
+            const factRows = await Fact.find({ actId: actDoc._id })
+              .select("_id").session(session).lean();
+            const sortedFactIds = factRows.map((f) => String(f._id)).sort();
+            actDoc.sig = await signActDoc(actDoc, sortedFactIds, signingPem);
 
             // 2. Insert the Act row in the same session.
             const docs = await Act.create([actDoc], { session });

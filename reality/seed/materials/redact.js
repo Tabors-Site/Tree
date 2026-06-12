@@ -35,6 +35,7 @@ const SECRET_KEYS = new Set([
   "encryptedApiKey",
   "apiKey",
   "credentialPlain",
+  "privateKeyEnc",
   "password",
 ]);
 
@@ -47,7 +48,8 @@ function isSecretFieldPath(field) {
     field.startsWith("qualities.llmConnections") ||
     field.startsWith("qualities.auth") ||
     field.endsWith(".encryptedApiKey") ||
-    field.endsWith(".credentialPlain")
+    field.endsWith(".credentialPlain") ||
+    field.endsWith(".privateKeyEnc")
   );
 }
 

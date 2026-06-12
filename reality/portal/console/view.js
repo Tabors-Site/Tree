@@ -79,6 +79,14 @@ export function createView() {
         run(`cd ${link.dataset.address}`);
         return;
       }
+      // Click on a being: select it portal-wide (IBPA right stance
+      // gains @<being>) and pre-fill a summon at the prompt.
+      if (link?.dataset.being) {
+        ctx.navigation.selectBeing(link.dataset.beingId || link.dataset.being, link.dataset.being);
+        els.input.value = `summon @${link.dataset.being} `;
+        els.input.focus();
+        return;
+      }
       // Clicking anywhere non-interactive focuses the prompt.
       if (!ev.target.closest("a, details, summary, input")) els.input.focus();
     });
@@ -408,6 +416,12 @@ export function createView() {
   async function runSummon(raw, rest) {
     if (!rest.length) { resultBlock(raw, "summon whom? — summon &lt;@being&gt; &lt;message&gt;", undefined, { error: true }); return; }
     const stance = ctx.navigation.resolveAddressInput(rest[0]);
+    // Summoning IS interacting: reflect the target into the IBPA.
+    if (rest[0].startsWith("@")) {
+      const bn = rest[0].slice(1);
+      const entry = (ctx.state.get("descriptor")?.beings || []).find((b) => (b.being || b.name) === bn);
+      ctx.navigation.selectBeing(entry?.beingId || bn, bn);
+    }
     const content = rest.slice(1).join(" ");
     if (!content) { resultBlock(raw, "say something — summon &lt;@being&gt; &lt;message&gt;", undefined, { error: true }); return; }
     const m = ctx.state.get();
@@ -478,7 +492,10 @@ export function createView() {
       rows.push(`<li><span class="cv-kind">space</span><span class="cv-link" data-address="${escapeHtml(String(addr))}">${escapeHtml(ch.name || addr)}</span></li>`);
     }
     for (const b of desc.beings || []) {
-      rows.push(`<li><span class="cv-kind">being</span><span class="cv-name">@${escapeHtml(b.being || b.name || "?")}</span>${b.role ? ` <span class="cv-dim">${escapeHtml(String(b.role))}</span>` : ""}${b.activity ? ` <span class="cv-dim">· ${escapeHtml(String(b.activity).slice(0, 80))}</span>` : ""}</li>`);
+      const bn = b.being || b.name || "?";
+      // Clicking a being SELECTS it: the IBPA's right stance gains
+      // @<being> and the prompt pre-fills a summon at it.
+      rows.push(`<li><span class="cv-kind">being</span><span class="cv-link" data-being="${escapeHtml(bn)}" data-being-id="${escapeHtml(String(b.beingId || ""))}">@${escapeHtml(bn)}</span>${b.role ? ` <span class="cv-dim">${escapeHtml(String(b.role))}</span>` : ""}${b.activity ? ` <span class="cv-dim">· ${escapeHtml(String(b.activity).slice(0, 80))}</span>` : ""}</li>`);
     }
     for (const mt of desc.matters || []) {
       const label = mt.name || nameById.get(mt.matterId) || mt.matterId?.slice(0, 8) || "?";

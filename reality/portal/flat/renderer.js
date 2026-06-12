@@ -12,7 +12,6 @@
 // Chat opens via chat.js#openChatFor.
 
 import { flat } from "./host.js";
-import { updateStanceBar } from "../shared/stance-bar.js";
 import { openChatFor, isChatOpen, getChatBeing } from "./chat.js";
 import { showAuthOverlay } from "./identity.js";
 import { renderRoleManagerPanel } from "../shared/role-manager-panel.js";
@@ -79,7 +78,6 @@ export function renderDescriptor(desc, { session, discovery }) {
   restoreNormalLayout();
   renderBeings(desc, { session, discovery });
   renderMatter(desc, { session, discovery });
-  renderChildren(desc, { discovery });
   renderLineage(desc, { session, discovery });
   renderCounts(desc);
   // If chat is open, re-render it against the latest beings[] state so
@@ -108,112 +106,13 @@ function restoreNormalLayout() {
 // ────────────────────────────────────────────────────────────────
 
 function renderTopBar(desc, { session, discovery }) {
-  renderBreadcrumb(desc, discovery);
-  renderQuickNav(desc, discovery);
   renderIdentityChip(session, discovery);
-  // The shared stance bar (one node, both portals) gets the view
-  // side; the actor side rides the "branch" socket push and the
-  // 3D chrome, merged inside the bar.
-  updateStanceBar({
-    reality: discovery?.reality || "",
-    username: session?.username || null,
-    signedIn: !!session?.token,
-    viewBranch: desc.address?.branch || "0",
-    path: desc.address?.pathByNames || "/",
-    being: desc.address?.being || null,
-  });
-}
-
-// renderBranchChip retired: the branch travels in the stance bar's
-// receiving side (explicit #branch, pointer aliases in the tooltip).
-
-// Lineage breadcrumb — clickable trail from reality root → current
-// position. Replaces the single ↑ parent link. Each segment navigates.
-// Also surfaces a "⛓ facts" link beside the leaf for the space-reel
-// explorer when a real spaceId is present (i.e. on normal positions,
-// not on synthetic .reel/.acts/.beings views).
-function renderBreadcrumb(desc, discovery) {
-  const bc = document.getElementById("breadcrumb");
-  bc.innerHTML = "";
-  const reality = discovery?.reality || "?";
-  // Preserve the active branch qualifier across crumb clicks so walking
-  // up the tree stays in the same divergent world. The branch chip is
-  // the explicit way back to main.
-  const branch = desc.address?.branch || "0";
-  const bq = branch === "0" ? "" : `#${branch}`;
-
-  // Reality root segment — always clickable.
-  bc.appendChild(crumbLink(reality, `${reality}${bq}/`, { home: true }));
-
-  const path = desc.address?.pathByNames || "/";
-  if (path && path !== "/" && path !== "") {
-    const parts = path.split("/").filter(Boolean);
-    let accum = "";
-    for (const seg of parts) {
-      accum += "/" + seg;
-      const sep = document.createElement("span");
-      sep.className = "crumb-sep dim";
-      sep.textContent = "/";
-      bc.appendChild(sep);
-      // Decorate system segments differently.
-      const isSystem = seg.startsWith(".");
-      bc.appendChild(crumbLink(seg, `${reality}${bq}${accum}`, { system: isSystem }));
-    }
-  }
-
-  // If on a normal position with a spaceId, surface a small ⛓ facts
-  // link beside the breadcrumb for the space-reel explorer.
-  const spaceId = desc.address?.spaceId;
-  if (spaceId && !desc.isReel && !desc.isActChain && !desc.isBeingsCatalog) {
-    const reel = document.createElement("a");
-    reel.href = `#${reality}${bq}/.reel/space/${spaceId}`;
-    reel.className = "breadcrumb-side";
-    reel.textContent = "⛓ facts";
-    reel.title = "view this space's fact reel";
-    bc.appendChild(reel);
-  }
-}
-
-function crumbLink(text, address, { home = false, system = false } = {}) {
-  const a = document.createElement("a");
-  a.className = "crumb" + (home ? " crumb-home" : "") + (system ? " crumb-system" : "");
-  a.href = "#" + address;
-  a.textContent = text;
-  return a;
-}
-
-// Quick-nav chips — jump to system spaces and synthetic catalogs.
-// Each chip's data-tag determines its href.
-function renderQuickNav(desc, discovery) {
-  const reality = discovery?.reality;
-  if (!reality) return;
-  // Quick-nav stays inside the active branch — clicking "ops" on `#1a`
-  // takes you to `#1a/./operations`, not back to main. The branch chip
-  // is the explicit return to main.
-  const branch = desc.address?.branch || "0";
-  const bq = branch === "0" ? "" : `#${branch}`;
-  const QN = {
-    home:       `${reality}${bq}/`,
-    beings:     `${reality}${bq}/./beings`,
-    operations: `${reality}${bq}/./operations`,
-    roles:      `${reality}${bq}/./roles`,
-    threads:    `${reality}${bq}/./threads`,
-    extensions: `${reality}${bq}/./extensions`,
-  };
-  for (const chip of document.querySelectorAll("#quick-nav .qn-chip")) {
-    const tag = chip.dataset.tag;
-    if (QN[tag]) chip.href = "#" + QN[tag];
-    // Mark active if current address matches.
-    const here = (desc.address?.pathByNames || "/");
-    let active = false;
-    if (tag === "home"       && here === "/") active = true;
-    else if (tag === "beings"     && /^\/\.\/beings\b/.test(here))   active = true;
-    else if (tag === "operations" && /^\/\.operations\b/.test(here)) active = true;
-    else if (tag === "roles"      && /^\/\.roles\b/.test(here))      active = true;
-    else if (tag === "threads"    && /^\/\.threads\b/.test(here))    active = true;
-    else if (tag === "extensions" && /^\/\.extensions\b/.test(here)) active = true;
-    chip.classList.toggle("active", active);
-  }
+  // Breadcrumb + quick-nav retired with the action-center pass: the
+  // shell IBPA, explorer, and console own movement; this view's header
+  // is just identity. The stance bar is SHELL chrome (core/shell.js
+  // repaints it from the shared model, including the selected being's
+  // @qualifier) — the pre-shell push from here is retired too; it
+  // raced the shell and stomped the selection with address.being:null.
 }
 
 function renderIdentityChip(session, discovery) {
@@ -1804,30 +1703,14 @@ function renderFace(snapshot, discovery) {
   return wrap;
 }
 
-function renderChildren(desc, { discovery }) {
-  const ul = document.getElementById("children-list");
-  ul.innerHTML = "";
-  const children = desc.children || [];
-  if (children.length === 0) {
-    const li = document.createElement("li");
-    li.className = "dim";
-    li.textContent = "(no children)";
-    ul.appendChild(li);
-    return;
-  }
-  for (const c of children) {
-    const li = document.createElement("li");
-    const addr = `${discovery.reality}${c.path}`;
-    li.appendChild(navLink(`↓ ${c.name}`, addr));
-    ul.appendChild(li);
-  }
-}
+// renderChildren retired with the action-center pass — child browsing
+// belongs to the explorer view; this view is the work surface.
 
 // ────────────────────────────────────────────────────────────────
 // Inspector — full descriptor surface + invocable BE/DO ops
 // ────────────────────────────────────────────────────────────────
 
-function showInspector({ kind, entry }) {
+export function showInspector({ kind, entry }) {
   const empty = document.getElementById("empty-detail");
   const chat  = document.getElementById("chat-panel");
   const insp  = document.getElementById("inspector");

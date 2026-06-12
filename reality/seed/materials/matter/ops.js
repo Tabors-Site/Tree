@@ -17,9 +17,9 @@ import { emitFact } from "../../past/fact/facts.js";
 import Matter from "./matter.js";
 import Space from "../space/space.js";
 import { I_AM } from "../being/seedBeings.js";
-import { v4 as uuidv4 } from "uuid";
 import { detectTargetKind, targetIdOf, loadTargetRow } from "../_targetShape.js";
 import { resolveMatterName } from "./matters.js";
+import { matterContentId } from "./matterId.js";
 
 const COORD_AXES = ["x", "y", "z"];
 
@@ -78,8 +78,6 @@ async function createMatterHandler(ctx) {
   const { target, params, identity, summonCtx } = ctx;
   const spec = params || {};
   const targetKind = detectTargetKind(target);
-
-  const matterId = uuidv4();
 
   const parentMatterId = targetKind === "matter"
     ? targetIdOf(target)
@@ -228,6 +226,10 @@ async function createMatterHandler(ctx) {
       "create-matter requires an identified actor",
     );
   }
+  // Content-addressed id: derive it from the finalized birth spec (the
+  // self is never inside its own hash), then carry it as target.id. The
+  // same matter born the same way gets the same id.
+  const matterId = matterContentId(enrichedSpec);
   await emitFact(
     {
       verb: "do",

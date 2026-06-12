@@ -37,6 +37,7 @@ import {
 } from "./identity/credentials.js";
 import { hasCredentialAuthority } from "./identity/lineage.js";
 import { doVerb } from "../../ibp/verbs/do.js";
+import { emitFact } from "../../past/fact/facts.js";
 
 function targetBeingIdOf(target) {
   if (target && typeof target === "object" && target.kind === "being" && target.id) {
@@ -58,6 +59,66 @@ function readCredentialPlainFromBeing(being) {
   const auth = q instanceof Map ? q.get("auth") : q.auth;
   return auth?.credentialPlain || null;
 }
+
+function readPrivateKeyEncFromBeing(being) {
+  const q = being?.qualities;
+  if (!q) return null;
+  const auth = q instanceof Map ? q.get("auth") : q.auth;
+  return auth?.privateKeyEnc || null;
+}
+
+// key-export. Return the being's PRIVATE KEY (decrypted PEM) to the
+// authorized owner. The wallet "back up your key" / "take your identity
+// to another reality" path. The key NEVER leaves the reality except
+// through this explicit, auth-gated, owner-initiated op: it is redacted
+// out of every descriptor, fact, and clone bundle (qualities.auth.*),
+// and never the JWT. Returned only on the direct DO response channel.
+//
+// skipAudit: the normal auto-audit copies the handler's RESULT into the
+// stored fact (summarizeAuditResult), which would persist the key. So
+// this op opts out and stamps its OWN audit fact recording WHO exported
+// WHOSE key WHEN, with the key nowhere in it.
+registerOperation("key-export", {
+  targets: ["being"],
+  ownerExtension: "seed",
+  factAction: "key-export",
+  skipAudit: true,
+  handler: async ({ target, identity, summonCtx }) => {
+    const targetBeingId = targetBeingIdOf(target);
+    const askerBeingId = askerBeingIdOf(identity);
+    const ok = await hasCredentialAuthority(askerBeingId, targetBeingId);
+    if (!ok) {
+      throw new IbpError(
+        IBP_ERR.FORBIDDEN,
+        "Asker has no authority to export this being's key",
+        { askerBeingId, targetBeingId },
+      );
+    }
+    const { loadTargetRow } = await import("../_targetShape.js");
+    const beingRow = await loadTargetRow(target, "being", { summonCtx });
+    const blob = readPrivateKeyEncFromBeing(beingRow);
+    const privateKeyPem = blob ? decryptCredential(blob) : null;
+
+    // Audit fact on the asker's reel: who exported whose key. Never the
+    // key. Branch threaded from the moment, never defaulted.
+    await emitFact({
+      verb:    "do",
+      action:  "key-export",
+      beingId: askerBeingId,
+      target:  { kind: "being", id: askerBeingId },
+      params:  { exportedBeingId: targetBeingId },
+      actId:   summonCtx?.actId || null,
+      branch:  summonCtx?.actorAct?.branch,
+    }, summonCtx);
+
+    return {
+      targetBeingId,
+      beingId: targetBeingId,       // the public key / wallet address
+      hasKey: privateKeyPem !== null,
+      privateKeyPem,                // the owner's signing key (PEM)
+    };
+  },
+});
 
 // credential-read. Return the auto-generated plaintext (if any) to
 // the authorized asker. The Fact written by the dispatcher carries

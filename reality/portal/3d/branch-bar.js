@@ -219,7 +219,7 @@ function _speedLabel(tier) {
 // address line shows the split (@you#0 → reality#2/...) so you always
 // know exactly what's being sent on both sides.
 export async function switchIntoBranch(branchPath) {
-  const signedIn = !!window.__state?.session?.token;
+  const signedIn = !!_portalState()?.session?.token;
   if (signedIn) {
     // BE switch at the gate: seats socket.currentBranch on the
     // destination and stamps the be:switch fact on the destination
@@ -247,7 +247,7 @@ function _branchLabel(path) {
 // switch + go. No → stay put, with the two legitimate later routes
 // named (ibpa portal, timeline click).
 function _offerSwitchAfterBranch(path, note = "") {
-  const here = window.__state?.descriptor?.address?.branch || "0";
+  const here = _portalState()?.descriptor?.address?.branch || "0";
   const hereLabel = _branchLabel(here);
   const yes = window.confirm(
     `Branch #${path} created${note}.\n\n` +
@@ -279,27 +279,52 @@ function _syncStanceBar() {
   });
 }
 
-export function mountBranchBar({ client, reality, buttonHost = null }) {
+// Shared-model accessor. The shell injects getState (the active
+// PortalContext's raw model — repointed on being-tab switches);
+// window.__state stays as the legacy fallback so the bar still works
+// mounted without a shell. The native port supplies getState only.
+function _portalState() {
+  return _state.getState?.()
+    || (typeof window !== "undefined" ? window.__state : null)
+    || {};
+}
+
+export function mountBranchBar({ client, reality, buttonHost = null, getState = null }) {
   _state.client = client;
   _state.reality = reality;
+  _state.getState = typeof getState === "function" ? getState : null;
   _state.buttonEl = _createBranchButton({ hosted: !!buttonHost });
   (buttonHost || document.body).appendChild(_state.buttonEl);
   _syncStanceBar();
-  // Click outside the panel closes it. Bound once.
-  document.addEventListener("click", (ev) => {
+  // Click outside the panel closes it. Stored so destroy() can remove.
+  _state.onDocClick = (ev) => {
     if (!_state.panelOpen) return;
     if (_state.panelEl?.contains(ev.target)) return;
     if (_state.buttonEl?.contains(ev.target)) return;
     _closePanel();
-  });
+  };
+  document.addEventListener("click", _state.onDocClick);
   // Esc closes whichever overlay is open (panel first, then timeline).
-  window.addEventListener("keydown", (ev) => {
+  _state.onKeydown = (ev) => {
     if (ev.key !== "Escape") return;
     if (_state.panelOpen) { _closePanel(); return; }
     if (_state.timelineEl) { _closeTimeline(); }
-  });
+  };
+  window.addEventListener("keydown", _state.onKeydown);
   return {
     update: (desc) => _update(desc),
+    // Full unmount: listeners off, chrome down. The web shell never
+    // calls this today (the bar lives as long as the page); the
+    // multi-window native shell will.
+    destroy: () => {
+      document.removeEventListener("click", _state.onDocClick);
+      window.removeEventListener("keydown", _state.onKeydown);
+      try { _closePanel(); } catch {}
+      try { _closeTimeline(); } catch {}
+      _state.buttonEl?.remove();
+      _state.buttonEl = null;
+      _state.getState = null;
+    },
     // Repaint the actor side of the stance bar (cheap) — main.js
     // calls this on every server "branch" push so the left stance
     // stays truthful without a full descriptor round-trip.
@@ -630,7 +655,7 @@ async function _togglePauseBranch(branch) {
   // If the user just paused (or unpaused) the branch they themselves
   // are currently on, flip the grayscale chrome immediately so the
   // visual cue matches the new reality without waiting for navigate.
-  const myBranch = window.__state?.descriptor?.address?.branch || "0";
+  const myBranch = _portalState()?.descriptor?.address?.branch || "0";
   if (branch.path === myBranch) {
     window.dispatchEvent(new CustomEvent("branchbar:paused-self", {
       detail: { paused: branch.paused },
@@ -914,14 +939,14 @@ async function _openTimeline(branchPath) {
   // without waiting for the navigate's after-call. Same-branch opens
   // need it (no navigate fires); different-branch opens benefit from it
   // (the marks fetch runs concurrent with navigate instead of after).
-  const currentBranch = window.__state?.descriptor?.address?.branch || "0";
+  const currentBranch = _portalState()?.descriptor?.address?.branch || "0";
   if (currentBranch !== branchPath) {
     switchIntoBranch(branchPath).catch((err) => {
       _showBranchEvent(`switch failed: ${err?.message || err}`, { error: true });
     });
   }
-  if (window.__state?.descriptor) {
-    _update(window.__state.descriptor);
+  if (_portalState()?.descriptor) {
+    _update(_portalState().descriptor);
   }
 }
 
@@ -1774,8 +1799,8 @@ function _openNewBranchDialog() {
     .filter((b) => !b.deleted)
     .sort((a, b) => a.path.localeCompare(b.path));
 
-  const curBranch = window.__state?.descriptor?.address?.branch || "0";
-  const curPath = window.__state?.descriptor?.address?.pathByNames || "/";
+  const curBranch = _portalState()?.descriptor?.address?.branch || "0";
+  const curPath = _portalState()?.descriptor?.address?.pathByNames || "/";
   const atRoot = curPath === "/" || curPath === "";
 
   const opt = (b) => {
@@ -2001,7 +2026,7 @@ function _closeNewBranchDialog() {
 // live).
 
 function _currentAddressPath() {
-  return window.__state?.descriptor?.address?.pathByNames || null;
+  return _portalState()?.descriptor?.address?.pathByNames || null;
 }
 
 async function _downloadClone() {
@@ -2009,13 +2034,13 @@ async function _downloadClone() {
   if (!addr) {
     throw new Error("no current address to copy from");
   }
-  const spaceId = window.__state?.descriptor?.address?.spaceId
-    || window.__state?.descriptor?.position?.spaceId
+  const spaceId = _portalState()?.descriptor?.address?.spaceId
+    || _portalState()?.descriptor?.position?.spaceId
     || null;
   if (!spaceId) {
     throw new Error("no spaceId on current descriptor to clone from");
   }
-  const placeName = window.__state?.descriptor?.address?.spaceName || "place";
+  const placeName = _portalState()?.descriptor?.address?.spaceName || "place";
   _showBranchEvent(`copying ${placeName}…`);
   const result = await _state.client.see("clone-subtree", {
     args: { spaceId, name: placeName },

@@ -43,6 +43,7 @@ import {
 } from "./being-flow-panel.js";
 import { ensureUnlockOverlay, preloadSounds } from "./audioPlayer.js";
 import { createFactDispatcher } from "./factDispatcher.js";
+import { assetUrl } from "../core/assets.js";
 
 const VIEW_DOM = `
 <canvas id="scene"></canvas>
@@ -797,7 +798,9 @@ export function createView() {
         try {
           const form = new FormData();
           form.append("file", file);
-          const res = await fetch("/api/v1/content", {
+          // Through the asset seam: a native shell remaps the byte
+          // carrier endpoint; the web bundle resolves it identity.
+          const res = await fetch(assetUrl("/api/v1/content"), {
             method: "POST",
             headers: { Authorization: `Bearer ${state().session.token}` },
             body: form,

@@ -1,22 +1,27 @@
-// task-bar.js — the position-aware action bar.
+// task-bar.js — THE action menubar (the text view's main feature).
 //
-// A row of context tabs that update with the right stance. Each tab opens
-// a dropdown of DO actions; clicking one mounts a directed form (op-form.js)
-// in the detail pane. Three tabs today:
+// Window-menu style: a row of context tabs keyed off the IBPA. Each
+// tab opens a dropdown; clicking an action mounts its form/panel in
+// the work area (the detail pane). Scope runs broadest → narrowest:
 //
-//   Place    — what acts on the space/matter you're standing in
-//              (create child space, create matter, move, plant, roles,
-//              render, permissions, delete) + a prefilled "edit this space".
-//   Branch   — the branch lifecycle (fork, merge, pause, pointers) plus
-//              clone (download) and graft (paste-in).
-//   Reality  — what affects the whole reality / server (form seed, config,
-//              close reality).
+//   Reality  — what affects the whole reality / server (form seed,
+//              config, close reality).
+//   Branch   — the branch lifecycle (fork, merge, pause, pointers)
+//              plus clone (download) and graft (paste-in).
+//   Place    — what acts on the space you're standing in (create
+//              space/matter, move, plant, roles, render, delete).
+//   @being   — appears when the IBPA's right stance carries a being
+//              (clicked in ANY view): chat, inspect, the being's
+//              summon intents, and its role's verb actions.
+//
+// The inbox (your work queue) rides the right edge of the bar.
 //
 // Built as a small registry so more tabs/actions can be added later. The
 // server auth-gates every op, so an action a viewer can't perform simply
 // returns FORBIDDEN; the bar steers, it doesn't pre-authorize.
 
-import { flat } from "./host.js";
+import { flat, refreshInboxCount } from "./host.js";
+import { openChatFor } from "./chat.js";
 import { renderOpForm } from "../shared/op-form.js";
 import { renderRolesPanel } from "./roles-panel.js";
 import { renderLlmPanel } from "./llm-panel.js";
@@ -61,6 +66,26 @@ export function renderTaskBar(container, { descriptor, discovery, session } = {}
     { id: "place", label: "Place", actions: placeActions(positionAddress, desc) },
   ];
 
+  // The @being menu — narrowest scope, keyed off the IBPA's right
+  // stance. A being selected in ANY view (or an explicitly navigated
+  // stance address) puts its menu here; the dispatch stance is the
+  // same string the bar shows.
+  const selName = flat.state?.selectedBeing?.name || desc.address?.being || null;
+  const beingEntry = selName
+    ? (desc.beings || []).find((b) => (b.being || b.name) === selName)
+      || (desc.residents || []).find((b) => (b.being || b.name) === selName)
+    : null;
+  if (beingEntry) {
+    const branch = desc.address?.branch || "0";
+    const bq = branch === "0" ? "" : `#${branch}`;
+    const stance = `${reality}${bq}${path}@${selName}`.replace(/\/+@/, "/@");
+    tabs.push({
+      id: "being",
+      label: `@${selName}`,
+      actions: beingActions(beingEntry, stance),
+    });
+  }
+
   const bar = document.createElement("div");
   bar.className = "task-bar";
 
@@ -98,6 +123,26 @@ export function renderTaskBar(container, { descriptor, discovery, session } = {}
     btn.dataset.tab = tab.id;
     tabRow.appendChild(btn);
   }
+
+  // The inbox — your work queue — rides the right edge of the bar.
+  // The badge elements re-render with the bar; host.js's poll keeps
+  // the count fresh by id.
+  const spacer = document.createElement("div");
+  spacer.className = "task-spacer";
+  tabRow.appendChild(spacer);
+  const inboxBtn = document.createElement("button");
+  inboxBtn.type = "button";
+  inboxBtn.id = "inbox-chip";
+  inboxBtn.className = "task-tab task-inbox";
+  inboxBtn.title = "your inbox — pending summons addressed to you";
+  inboxBtn.innerHTML = `inbox <span id="inbox-count" class="dim">·</span>`;
+  inboxBtn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    closeDropdown();
+    openInboxAction();
+  });
+  tabRow.appendChild(inboxBtn);
+  refreshInboxCount?.();
 
   container.appendChild(bar);
 
@@ -143,8 +188,34 @@ function renderDropdown(dropdown, tab, opByName, opsLoaded, closeDropdown) {
 // ── action handlers ────────────────────────────────────────────────
 
 function openAction(action, opByName) {
+  // Being actions that own their panel (chat) or navigate — handled
+  // before the generic inspector panel opens.
+  if (action.special === "being-chat") {
+    return openChatFor(action.being);
+  }
+  if (action.special === "being-inspect") {
+    // Dynamic import: renderer.js statically imports this file; a
+    // static back-import would be a cycle.
+    return import("./renderer.js").then((m) => m.showInspector({ kind: "being", entry: action.being }));
+  }
+  if (action.special === "being-facts" || action.special === "being-acts") {
+    const reality = flat.state?.discovery?.reality || "";
+    const branch = flat.state?.descriptor?.address?.branch || "0";
+    const bq = branch === "0" ? "" : `#${branch}`;
+    const id = action.being?.beingId;
+    if (!id) return;
+    const path = action.special === "being-facts" ? `/.reel/being/${id}` : `/.acts/${id}`;
+    return flat.navigate(`${reality}${bq}${path}`);
+  }
+
   const body = openInspectorPanel(action.label);
 
+  if (action.special === "being-intent") {
+    return renderIntentSummon(body, action);
+  }
+  if (action.special === "being-verb") {
+    return renderBeingVerb(body, action, opByName);
+  }
   if (action.special === "edit-space") {
     return renderEditSpace(body, action);
   }
@@ -472,6 +543,95 @@ function _renderBranchInfoFields(container, path, graph, err) {
   };
   container.appendChild(rawBtn);
   container.appendChild(pre);
+}
+
+// ── being actions (the @being menu) ────────────────────────────────
+//
+// World-driven, same rule as the 3D action menu: the portal doesn't
+// know what a being does — it renders the summon intents the role
+// declares (canSummon as:"receiver") and the verb actions[] the
+// descriptor carries, plus the universal four: chat, inspect, facts,
+// acts. Dispatch is against the IBPA stance the bar shows.
+
+function beingActions(entry, stance) {
+  const items = [
+    { label: "chat (summon)", special: "being-chat", being: entry },
+    { label: "inspect", special: "being-inspect", being: entry },
+  ];
+  for (const offer of (Array.isArray(entry.canSummon) ? entry.canSummon : [])) {
+    if (offer && offer.as === "receiver" && offer.intent) {
+      items.push({
+        label: `summon: ${offer.intent}`,
+        special: "being-intent",
+        being: entry,
+        intent: offer.intent,
+        address: stance,
+      });
+    }
+  }
+  for (const a of (Array.isArray(entry.actions) ? entry.actions : [])) {
+    items.push({
+      label: a.label || `${a.verb} ${a.action}`,
+      special: "being-verb",
+      being: entry,
+      beingAction: a,
+      address: stance,
+    });
+  }
+  if (entry.beingId) {
+    items.push({ label: "view facts (reel)", special: "being-facts", being: entry });
+    items.push({ label: "view acts (chain)", special: "being-acts", being: entry });
+  }
+  return items;
+}
+
+// Intent-qualified summon: one content field, dispatched with the
+// envelope intent the receiver's role declared.
+function renderIntentSummon(body, action) {
+  const op = {
+    name: `summon (${action.intent})`,
+    args: { content: { type: "multiline", label: "message", required: true } },
+  };
+  renderOpForm(body, {
+    op,
+    address: action.address,
+    submitLabel: `summon: ${action.intent}`,
+    doOp: async (_addr, _name, payload) => {
+      const { correlation, reply } = await flat.sendSummon(
+        action.address, payload.content || "", { intent: action.intent },
+      );
+      return { sent: true, correlation, reply: reply?.status || reply || null };
+    },
+  });
+}
+
+// A verb action from the being's descriptor actions[] block. DO renders
+// the registered op form at the being's stance; BE dispatches through
+// flat.beOp; SUMMON falls back to chat.
+function renderBeingVerb(body, action, opByName) {
+  const a = action.beingAction;
+  if (a.verb === "summon") {
+    return openChatFor(action.being);
+  }
+  if (a.verb === "be") {
+    const op = { name: `be:${a.action}`, args: a.args || {} };
+    return renderOpForm(body, {
+      op,
+      address: action.address,
+      submitLabel: a.label || a.action,
+      doOp: (_addr, _name, payload) => flat.beOp(a.action, action.address, payload),
+    });
+  }
+  // DO — prefer the registered op's arg schema; fall back to the
+  // action's own.
+  const op = opByName.get(a.action) || { name: a.action, args: a.args || null };
+  renderOpForm(body, {
+    op,
+    address: action.address,
+    submitLabel: a.label || "run",
+    doOp: flat.doOp,
+    onResult: (err) => { if (!err) refreshView(); },
+  });
 }
 
 // ── tab → action definitions ───────────────────────────────────────

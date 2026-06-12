@@ -38,9 +38,8 @@
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
-import { v4 as uuidv4 } from "uuid";
-
 import log from "../../seedReality/log.js";
+import { matterContentId } from "../matter/matterId.js";
 import { HEAVEN_SPACE } from "./heavenSpaces.js";
 import { I_AM } from "../being/seedBeings.js";
 import { initProjection, tombstoneProjection } from "../projections.js";
@@ -448,8 +447,15 @@ async function createSourceMatter({
   if (mimeType != null) content.mimeType = mimeType;
   if (oversize) content.oversize = true;
 
-  const matterId = uuidv4();
+  // Content-addressed id from the STABLE identity (where it lives + what
+  // it is), not the mutable bytes (size/mtime), so the same disk entry
+  // reproduces the same id every mirror and a content change patches in
+  // place rather than re-creating.
   const parent = parentMatterId ? String(parentMatterId) : null;
+  const matterId = matterContentId({
+    spaceId, parentMatterId: parent, name, type: "source",
+    content: { path: diskPath, kind }, beingId: I_AM,
+  });
   const state = {
     spaceId,
     parentMatterId: parent,

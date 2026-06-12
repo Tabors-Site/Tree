@@ -152,6 +152,9 @@ export function mountShell({ rootEl, primaryCtx, defaultView = "3d" }) {
       // Topbar-hosted: branches/timeline are chrome, present on all
       // four views equally (rewind state rides the shared model).
       buttonHost: rootEl.querySelector("#branch-button-slot"),
+      // The bar reads the ACTIVE tab's model through this accessor —
+      // no window.__state dependency (kept only as legacy fallback).
+      getState: () => activeCtx?.state.raw,
     });
     const desc = activeCtx.state.get("descriptor");
     if (desc) branchBar.update(desc);
@@ -356,12 +359,18 @@ export function mountShell({ rootEl, primaryCtx, defaultView = "3d" }) {
   // ── Window-level wiring ─────────────────────────────────────────
 
   // Branch-tree clicks set location.hash; turn that into a navigate.
+  const windowListeners = []; // [target, type, fn] — removed by destroy()
+  const listen = (target, type, fn) => {
+    target.addEventListener(type, fn);
+    windowListeners.push([target, type, fn]);
+  };
+
   const onHashChange = () => {
     const raw = location.hash.replace(/^#/, "");
     if (!raw || raw.startsWith("inhabit=")) return;
     activeCtx?.navigation.navigate(raw).catch(() => {});
   };
-  window.addEventListener("hashchange", onHashChange);
+  listen(window, "hashchange", onHashChange);
 
   // Rewind / return / pause events from the branch bar flow through
   // the active context's navigation.
@@ -375,9 +384,9 @@ export function mountShell({ rootEl, primaryCtx, defaultView = "3d" }) {
   const onPaused = (ev) => {
     document.body.classList.toggle("paused-branch", !!ev?.detail?.paused);
   };
-  window.addEventListener("branchbar:rewind", onRewind);
-  window.addEventListener("branchbar:now", onNow);
-  window.addEventListener("branchbar:paused-self", onPaused);
+  listen(window, "branchbar:rewind", onRewind);
+  listen(window, "branchbar:now", onNow);
+  listen(window, "branchbar:paused-self", onPaused);
 
   // Alt+1..4 switch views; backslash flips 3d <-> text (back-compat).
   const onKeydown = (e) => {
@@ -393,11 +402,11 @@ export function mountShell({ rootEl, primaryCtx, defaultView = "3d" }) {
       switchView(viewHost.activeName === "text" ? "3d" : "text");
     }
   };
-  window.addEventListener("keydown", onKeydown);
+  listen(window, "keydown", onKeydown);
 
   // In-app inherited tabs release on page close, like browser-tab
   // inheriters do.
-  window.addEventListener("pagehide", () => {
+  listen(window, "pagehide", () => {
     for (const t of tabs.slice(1)) {
       const sess = t.ctx.state.get("session");
       if (!sess?.inherited) continue;
@@ -432,6 +441,24 @@ export function mountShell({ rootEl, primaryCtx, defaultView = "3d" }) {
       await primaryCtx.start();
       await ensureBranchBar();
       repaintChrome();
+    },
+    // Full shell teardown. The web page never calls this (the shell
+    // lives as long as the document); the multi-window native shell
+    // will. Removes every window listener, unmounts the active view,
+    // the branch bar, and destroys every tab's context.
+    destroy() {
+      for (const [target, type, fn] of windowListeners.splice(0)) {
+        try { target.removeEventListener(type, fn); } catch {}
+      }
+      try { branchBar?.destroy?.(); } catch {}
+      branchBar = null;
+      viewHost.destroy();
+      for (const t of tabs.splice(0)) {
+        for (const u of t.unsubs) { try { u(); } catch {} }
+        try { t.ctx.destroy(); } catch {}
+      }
+      activeCtx = null;
+      rootEl.innerHTML = "";
     },
   };
 }

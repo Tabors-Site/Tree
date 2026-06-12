@@ -68,6 +68,12 @@ export const flat = {
 // inject the same tree into the host container.
 // ──────────────────────────────────────────────────────────────────
 
+// The text view is the ACTION CENTER: not a desktop, not a browser —
+// the place work gets done fast, graphically. The task menubar is the
+// main feature (window-menu style, context keyed off the IBPA right
+// stance); choosing an action opens it in the work area. Navigation
+// furniture (breadcrumb, quick-nav, children footer) retired — the
+// shell IBPA, explorer, and console own movement.
 const FLAT_DOM = `
 <div id="flat-app" class="flat-root">
   <header id="top-bar">
@@ -76,23 +82,8 @@ const FLAT_DOM = `
       <span class="brand-name">treeos</span>
       <span class="brand-tag dim">. text</span>
     </div>
-    <div id="connection-pill" title="socket">
-      <span class="conn-dot conn-pending"></span>
-      <span class="conn-text">live</span>
-    </div>
-    <nav id="breadcrumb"></nav>
     <div style="flex:1; min-width:0;"></div>
-    <nav id="quick-nav">
-      <a class="qn-chip" data-tag="home" title="reality root">/</a>
-      <a class="qn-chip" data-tag="beings" title=".beings . every being">. beings</a>
-      <a class="qn-chip" data-tag="operations" title="./operations . DO registry">ops</a>
-      <a class="qn-chip" data-tag="roles" title="./roles . role registry">roles</a>
-      <a class="qn-chip" data-tag="threads" title="./threads . live coordination chains">threads</a>
-      <a class="qn-chip" data-tag="extensions" title="./extensions . installed extensions">ext</a>
-    </nav>
-    <button id="inbox-chip" type="button" title="your inbox — pending summons addressed to you" style="display:none;background:transparent;color:#c8d3cb;border:1px solid #2c3a32;border-radius:4px;padding:3px 8px;font-family:inherit;font-size:11px;cursor:pointer;margin-left:4px;">inbox <span id="inbox-count" class="dim">·</span></button>
     <div id="identity-chip" title="signed-in identity"></div>
-    <button id="flat-close-btn" type="button" title="back to the 3D view (Esc)">3d</button>
   </header>
   <div id="task-menubar"></div>
   <main id="middle">
@@ -117,20 +108,16 @@ const FLAT_DOM = `
     </section>
     <section id="detail-pane">
       <div id="empty-detail" class="empty">
-        <div class="empty-title">no selection</div>
-        <div class="empty-hint">click <code>inspect</code> on a being or matter to see verbs + permissions, or <code>chat</code> on a being to summon it.</div>
+        <div class="empty-title">pick an action</div>
+        <div class="empty-hint">the menu bar above is the work surface: <code>Reality</code> / <code>Branch</code> / <code>Place</code> menus act on where you are; select a being (here or in any view) and its <code>@being</code> menu appears. Forms open in this pane.</div>
         <div class="empty-shortcuts">
-          <kbd>/</kbd> focus address . <kbd>Esc</kbd> close text mode . <kbd>g h</kbd> home
+          <kbd>/</kbd> focus address . <kbd>g h</kbd> home
         </div>
       </div>
       <div id="inspector" class="hidden"></div>
       <div id="chat-panel" class="hidden"></div>
     </section>
   </main>
-  <footer id="bottom-bar">
-    <div class="bb-label dim">children</div>
-    <ul id="children-list"></ul>
-  </footer>
   <div id="status-line"></div>
   <div id="loading-bar" class="hidden"></div>
   <div id="auth-overlay" class="hidden"></div>
@@ -230,11 +217,11 @@ export function mountFlatView(rootContainer, ctx) {
     if (typeof ctx.onSelectBeing === "function") ctx.onSelectBeing(beingId, name);
   };
 
-  // Wire local UI: quick-nav chips, close button, keyboard shortcuts.
-  // (Branches/timeline moved to the shell topbar — chrome on all views.)
-  wireQuickNav(root, ctx);
-  wireCloseButton(root, ctx);
-  wireInboxChip(root);
+  // Wire local UI: the inbox count poll + keyboard shortcuts. (Quick-nav
+  // chips, close button, breadcrumb, children footer all retired — the
+  // shell IBPA / explorer / console own movement; the menubar is the
+  // work surface and carries the inbox.)
+  wireInboxPoll();
   const detachKeys = wireKeyboardShortcuts(ctx);
 
   // Initial render. Operations load async (a SEE on .operations); the
@@ -269,6 +256,12 @@ export function mountFlatView(rootContainer, ctx) {
         discovery: _state.discovery,
       });
     },
+    // Cross-view selection sync (the IBPA's @being). Writes the local
+    // mirror WITHOUT echoing back through ctx.onSelectBeing — the
+    // shared model already changed; an echo would loop.
+    setSelection(sel) {
+      _state.selectedBeing = sel || null;
+    },
     dispose() {
       detachKeys();
       closeChat?.();
@@ -289,59 +282,25 @@ export function mountFlatView(rootContainer, ctx) {
 // ──────────────────────────────────────────────────────────────────
 
 // wireAddressForm retired: the shell's stance bar owns address input
-// + navigation for every view.
+// + navigation for every view. wireQuickNav / wireCloseButton retired
+// with the action-center pass — movement belongs to the shell IBPA,
+// explorer, and console; the menubar is the work surface.
 
-function wireQuickNav(root, _ctx) {
-  const reality = _state.discovery?.reality;
-  if (!reality) return;
-  root.querySelectorAll(".qn-chip").forEach((el) => {
-    el.addEventListener("click", (ev) => {
-      ev.preventDefault();
-      const tag = el.getAttribute("data-tag");
-      const branch = _state.descriptor?.address?.branch || "0";
-      const bq = branch === "0" ? "" : `#${branch}`;
-      let path = "/";
-      if (tag === "beings")     path = "/./beings";
-      else if (tag === "operations") path = "/./operations";
-      else if (tag === "roles")      path = "/./roles";
-      else if (tag === "threads")    path = "/./threads";
-      else if (tag === "extensions") path = "/./extensions";
-      flat.navigate(`${reality}${bq}${path}`);
-    });
-  });
-}
-
-// Inbox chip in the header — visible only when signed in. Click opens
-// the inbox panel; a periodic SEE on `my-inbox` keeps the pending
-// count fresh. Polled rather than push-driven because the inbox state
-// is per-being and we don't subscribe to it via the descriptor.
+// The inbox lives IN the menubar (task-bar.js renders the button +
+// count badge — the work queue belongs on the work surface). The poll
+// keeps the badge fresh; elements are looked up per tick because the
+// menubar re-renders on every SEE. Polled rather than push-driven
+// because the inbox is per-being and not subscribed via the descriptor.
 let _inboxPollHandle = null;
-function wireInboxChip(root) {
-  const chip = root.querySelector("#inbox-chip");
-  if (!chip) return;
-  // Render visibility based on session state.
-  const updateVisibility = () => {
-    const signedIn = !!_state.session?.token;
-    chip.style.display = signedIn ? "" : "none";
-  };
-  updateVisibility();
-  chip.addEventListener("click", async (ev) => {
-    ev.preventDefault();
-    // Lazy-import to keep the host bundle lean.
-    const { openInboxAction } = await import("./task-bar.js");
-    openInboxAction();
-  });
-  // Update count periodically. The chip stays visible the whole time;
-  // the badge just changes.
+function wireInboxPoll() {
   if (_inboxPollHandle) clearInterval(_inboxPollHandle);
   _inboxPollHandle = setInterval(refreshInboxCount, 15000);
   refreshInboxCount();
 }
 
-async function refreshInboxCount() {
-  const root = document;
-  const chip = root.querySelector("#inbox-chip");
-  const badge = root.querySelector("#inbox-count");
+export async function refreshInboxCount() {
+  const chip = document.querySelector("#inbox-chip");
+  const badge = document.querySelector("#inbox-count");
   if (!chip || !badge) return;
   if (!_state.session?.token || !_state.client?.see) {
     chip.style.display = "none";
@@ -361,24 +320,14 @@ async function refreshInboxCount() {
   }
 }
 
-function wireCloseButton(root, ctx) {
-  const btn = root.querySelector("#flat-close-btn");
-  if (!btn) return;
-  btn.addEventListener("click", () => {
-    if (typeof ctx.onClose === "function") ctx.onClose();
-  });
-}
-
 function wireKeyboardShortcuts(ctx) {
   let gFollow = false;
   let gTimer  = null;
   const handler = (ev) => {
     const target = ev.target;
     const inForm = target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable);
-    if (ev.key === "Escape") {
-      if (typeof ctx.onClose === "function") ctx.onClose();
-      return;
-    }
+    // (Esc-to-3D retired: views are peers behind the shell switcher,
+    // and Esc should never yank the user out of the work surface.)
     if (inForm) return;
     if (ev.key === "/") {
       ev.preventDefault();

@@ -58,9 +58,12 @@ export function createView() {
     handle?.update(desc);
   }
 
-  function onSelection() {
-    // The flat renderer reads selectedBeing at render; the next
-    // descriptor update repaints with the new focus.
+  function onSelection(sel) {
+    // Selection changed (here or in another view): mirror it and
+    // repaint so the menubar's @being menu appears/retargets.
+    handle?.setSelection?.(sel);
+    const desc = ctx.state.get("descriptor");
+    if (desc) handle?.update(desc);
   }
 
   function destroy() {

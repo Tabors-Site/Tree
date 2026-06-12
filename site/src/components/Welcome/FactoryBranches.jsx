@@ -430,7 +430,8 @@ const FactoryBranches = () => {
           <div className="ns-grammar-row">
             <code className="ns-grammar-form">Identity is per-file</code>
             <span className="ns-grammar-meaning">
-              Identity (<code>_id</code>) persists across all branches
+              A being's identity is its public key; it persists across
+              every branch and every reality
             </span>
           </div>
         </div>

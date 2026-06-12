@@ -776,7 +776,10 @@ kbd {
 .task-tabs {
   display: flex;
   gap: 2px;
+  align-items: center;
 }
+.task-spacer { flex: 1; }
+.task-inbox { white-space: nowrap; }
 .task-tab {
   background: transparent;
   color: var(--fg-dim);

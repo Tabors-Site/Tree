@@ -212,7 +212,10 @@ export function createView() {
   }
   function pickBeing(b) {
     select(beingKey(b));
-    setStatus(`@${beingName(b)} — interacting with beings is coming soon. For now, summon from the console (summon @${beingName(b)} …) or the text view.`);
+    // Selection refines the IBPA: the right stance gains @<being>,
+    // shared by every view — summons dispatch against that stance.
+    ctx.navigation.selectBeing(b.beingId || beingName(b), beingName(b));
+    setStatus(`@${beingName(b)} is in the IBPA — summon from the console (summon @${beingName(b)} …) or chat in the text view.`);
   }
   function pickMatter(mt) {
     select(matterKey(mt));

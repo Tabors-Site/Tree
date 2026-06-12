@@ -43,6 +43,7 @@ import { v4 as uuidv4 } from "uuid";
 import Matter from "./matter.js";
 import Space from "../space/space.js";
 import { loadProjection, loadOrFold, assertBranchOrThrow, listMatterNamesInFolder } from "../projections.js";
+import { matterContentId } from "./matterId.js";
 import { emitFact, sealFacts } from "../../past/fact/facts.js";
 import { getRealityConfigValue } from "../../realityConfig.js";
 import { resolveRootSpace } from "../space/spaces.js";
@@ -314,7 +315,6 @@ async function createMatter({
   // Stamps a do:birth Fact on the new matter's reel; eager-fold's
   // applyCreateMatter + initProjection materializes the row. No more
   // direct Matter.save() — the fact is the commit.
-  const matterId = uuidv4();
   // Every matter is named: explicit → filename it carries → a generated
   // floor unique within this folder. The same guarantee the verb-path
   // handler gives, so both create paths land named rows.
@@ -326,6 +326,19 @@ async function createMatter({
     spaceId: spaceIdBare,
     parentMatterId,
   });
+  const matterParams = {
+    type,
+    name:      resolvedName,
+    content:   finalContent,
+    spaceId:   spaceIdBare,
+    parentMatterId: parentMatterId ? String(parentMatterId) : null,
+    beingId:   String(beingId),
+    qualities: hookData.qualities || {},
+  };
+  // Content-addressed id from the finalized spec (the self is never in
+  // its own hash), then carried as target.id. Same recipe as the verb
+  // handler so both paths land deterministic, verifiable ids.
+  const matterId = matterContentId(matterParams);
   // Eager singleton commit: the next line reads Matter.findById, so
   // the Fact must have committed (the eager-fold materializes the
   // Matter row only on commit). Same read-back constraint as
@@ -335,15 +348,7 @@ async function createMatter({
     action:  "create-matter",
     beingId: String(beingId),
     target:  { kind: "matter", id: matterId },
-    params:  {
-      type,
-      name:      resolvedName,
-      content:   finalContent,
-      spaceId:   spaceIdBare,
-      parentMatterId: parentMatterId ? String(parentMatterId) : null,
-      beingId:   String(beingId),
-      qualities: hookData.qualities || {},
-    },
+    params:  matterParams,
     actId,
     sessionId,
     branch,

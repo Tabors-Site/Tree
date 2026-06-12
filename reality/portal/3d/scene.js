@@ -99,6 +99,13 @@ const PORTAL_CONFIG = Object.freeze({
   CAMERA_HEIGHT_OFFSET: 2.5,           // additional height above offsetY
   DEPTH_OFFSET_SCALE:   0.5,           // how much player distance contributes to depth
   DEPTH_OFFSET_MAX:     8,             // clamp on depth contribution
+  // How long a fetched foreign descriptor stays fresh. Local
+  // re-renders within the TTL reuse the cached mini-scene instead of
+  // re-firing a SEE at the foreign side.
+  DESCRIPTOR_TTL_MS: 15000,
+  // Max real glTF models loaded into one portal's mini-scene. The
+  // rest stay primitive markers.
+  MINI_MODEL_BUDGET: 12,
 });
 
 // ── Cloud drift ─────────────────────────────────────────────────────
@@ -260,6 +267,21 @@ export class Scene {
     // opening surface shows a live 3D view of the foreign side instead
     // of static canvas text. See _makePortalMesh + _renderActivePortals.
     this._activePortals = new Set();
+    // Portal RUNTIME cache, keyed by matterId. _clearWorld rebuilds the
+    // world on every navigate/live-rerender; without this cache each
+    // rebuild re-allocated a GPU render target + canvas, rebuilt the
+    // mini-scene, and re-fired a foreign SEE PER PORTAL — the dominant
+    // cost when several portal matter share a position. The runtime
+    // (render target, mini scene/world/camera, canvas, fetched
+    // descriptor) survives rebuilds; eviction happens when the matter
+    // disappears from the descriptor (renderDescriptor end) or on
+    // dispose().
+    this._portalRuntimes = new Map();
+    // CSS3D bookkeeping: the CSS renderer walks the whole scene graph
+    // every frame even with zero DOM objects mounted — count them and
+    // skip the pass when there are none.
+    this._cssCount = 0;
+    this._cssWasActive = false;
 
     // Player state.
     this.keys = new Set();
@@ -293,10 +315,16 @@ export class Scene {
       // frame stale.
       this._renderActivePortals();
       this.renderer.render(this.scene, this.camera);
-      this.cssRenderer.render(this.scene, this.camera);
+      // CSS3D pass only while DOM objects exist (plus one trailing
+      // render so removed iframes leave the DOM).
+      if (this._cssCount > 0 || this._cssWasActive) {
+        this.cssRenderer.render(this.scene, this.camera);
+        this._cssWasActive = this._cssCount > 0;
+      }
     };
     loop();
-    window.addEventListener("resize", () => this._onResize());
+    this._onResizeBound = () => this._onResize();
+    window.addEventListener("resize", this._onResizeBound);
   }
 
   // Render-to-texture pass for open portals. Each portal renders its
@@ -488,6 +516,20 @@ export class Scene {
     this._paused = true;
     if (this._rafId) { cancelAnimationFrame(this._rafId); this._rafId = null; }
     try { this.flushPlaybackTicks?.(); } catch {}
+    // Window/document listeners registered in start() + _bindInput().
+    // Without removal they accumulate one zombie set per view mount.
+    try {
+      if (this._onResizeBound)      window.removeEventListener("resize", this._onResizeBound);
+      if (this._onKeyDownBound)     removeEventListener("keydown", this._onKeyDownBound);
+      if (this._onKeyUpBound)       removeEventListener("keyup", this._onKeyUpBound);
+      if (this._onMouseMoveBound)   removeEventListener("mousemove", this._onMouseMoveBound);
+      if (this._onPointerLockBound) document.removeEventListener("pointerlockchange", this._onPointerLockBound);
+      if (this._onCanvasClickBound) this.canvas?.removeEventListener("click", this._onCanvasClickBound);
+    } catch {}
+    // Cached portal runtimes hold GPU render targets — release them.
+    try {
+      for (const rt of [...this._portalRuntimes.values()]) this._disposePortalRuntime(rt);
+    } catch {}
     try { this.cssRenderer?.domElement?.remove(); } catch {}
     try { this.renderer?.dispose(); } catch {}
   }
@@ -973,6 +1015,14 @@ export class Scene {
       }
     }
     this._applyLook();
+
+    // Portal runtime eviction: drop cached render targets / mini
+    // scenes for portal matter that no longer exists at this position.
+    const keepIds = new Set();
+    for (const m of (desc?.matters || [])) {
+      if (this._portalTargetOf(m)) keepIds.add(String(m.matterId || m.id || m._id));
+    }
+    this._evictPortalRuntimes(keepIds);
   }
 
   // Apply one PositionProjection delta from the live SEE channel.
@@ -1730,6 +1780,8 @@ export class Scene {
     // tore down. New meshes get fresh mixers when renderDescriptor
     // walks the next descriptor and calls _swapToModel again.
     this._entityMixers.clear();
+    // Every CSS3D object lived in the world we just cleared.
+    this._cssCount = 0;
   }
 
   /**
@@ -2255,70 +2307,88 @@ export class Scene {
     lintel.position.set(0, H + 0.4 - 0.16, 0);
     group.add(lintel);
 
-    // Canvas texture for status states (loading / refused / unreachable).
-    const canvas = document.createElement("canvas");
-    canvas.width = 512;
-    canvas.height = 768;
-    const ctx = canvas.getContext("2d");
-    this._paintPortalCanvas(ctx, canvas, { state: "loading", target });
-    const canvasTex = new THREE.CanvasTexture(canvas);
-    canvasTex.minFilter = THREE.LinearFilter;
+    // Runtime: reuse the cached one when this matter was already a
+    // portal with the same target (the common case — _clearWorld
+    // rebuilds the world far more often than portals change). A fresh
+    // runtime allocates the GPU render target, canvas, and mini-scene
+    // exactly once per portal lifetime.
+    const matterId = String(matter?.matterId || matter?.id || matter?._id || target);
+    let rt = this._portalRuntimes.get(matterId);
+    if (rt && rt.target !== target) {
+      this._disposePortalRuntime(rt);
+      rt = null;
+    }
+    if (!rt) {
+      // Canvas texture for status states (loading / refused / unreachable).
+      const canvas = document.createElement("canvas");
+      canvas.width = 512;
+      canvas.height = 768;
+      const ctx = canvas.getContext("2d");
+      this._paintPortalCanvas(ctx, canvas, { state: "loading", target });
+      const canvasTex = new THREE.CanvasTexture(canvas);
+      canvasTex.minFilter = THREE.LinearFilter;
 
-    // Render target for the live 3D view. Dimensions in PORTAL_CONFIG.
-    // The heavy lifting on cost comes from the throttle + distance/
-    // direction culling, not pixel count, so we use generous dims for
-    // sharpness.
-    const renderTarget = new THREE.WebGLRenderTarget(
-      PORTAL_CONFIG.RT_WIDTH,
-      PORTAL_CONFIG.RT_HEIGHT,
-      {
-        minFilter: THREE.LinearFilter,
-        magFilter: THREE.LinearFilter,
-        depthBuffer: true,
-        stencilBuffer: false,
-      },
-    );
+      // Render target for the live 3D view. Dimensions in PORTAL_CONFIG.
+      const renderTarget = new THREE.WebGLRenderTarget(
+        PORTAL_CONFIG.RT_WIDTH,
+        PORTAL_CONFIG.RT_HEIGHT,
+        {
+          minFilter: THREE.LinearFilter,
+          magFilter: THREE.LinearFilter,
+          depthBuffer: true,
+          stencilBuffer: false,
+        },
+      );
 
-    // Mini-scene that gets rendered into the FBO. Populated from the
-    // foreign descriptor in _populatePortalMiniScene.
-    const miniScene = new THREE.Scene();
-    // Twilight-blue sky matching the main scene's tone — once
-    // populated, the ground hue overrides nothing but sits against
-    // this color, giving the portal a "world under sky" feel.
-    miniScene.background = new THREE.Color(0x1a2a3a);
-    // Push the fog far back so the scene reads as open space, not a
-    // claustrophobic box. Fog still hides the horizon but doesn't eat
-    // the foreground content.
-    miniScene.fog = new THREE.Fog(0x1a2a3a, 25, 80);
-    // Brighter lighting so the objects pop — the main scene is dark,
-    // so the portal looking BRIGHTER reads as "another world."
-    miniScene.add(new THREE.AmbientLight(0xffffff, 0.85));
-    const sun = new THREE.DirectionalLight(0xffffff, 1.1);
-    sun.position.set(8, 14, 6);
-    miniScene.add(sun);
-    // Rim light from below to lift the bottoms of objects so they
-    // don't look pasted on the ground.
-    const fill = new THREE.DirectionalLight(0x88aacc, 0.35);
-    fill.position.set(-4, 2, -3);
-    miniScene.add(fill);
+      // Mini-scene that gets rendered into the FBO. Populated from the
+      // foreign descriptor in _populatePortalMiniScene.
+      const miniScene = new THREE.Scene();
+      miniScene.background = new THREE.Color(0x1a2a3a);
+      miniScene.fog = new THREE.Fog(0x1a2a3a, 25, 80);
+      // Brighter lighting so the objects pop — the main scene is dark,
+      // so the portal looking BRIGHTER reads as "another world."
+      miniScene.add(new THREE.AmbientLight(0xffffff, 0.85));
+      const sun = new THREE.DirectionalLight(0xffffff, 1.1);
+      sun.position.set(8, 14, 6);
+      miniScene.add(sun);
+      const fill = new THREE.DirectionalLight(0x88aacc, 0.35);
+      fill.position.set(-4, 2, -3);
+      miniScene.add(fill);
 
-    // Camera for the mini-scene. Position is updated each frame in
-    // _renderActivePortals for a gentle orbit until parallax-from-
-    // viewer-position lands.
-    const miniCamera = new THREE.PerspectiveCamera(
-      60,
-      PORTAL_CONFIG.RT_WIDTH / PORTAL_CONFIG.RT_HEIGHT,
-      0.1,
-      100,
-    );
-    miniCamera.position.set(0, 5, 12);
-    miniCamera.lookAt(0, 0, 0);
+      const miniCamera = new THREE.PerspectiveCamera(
+        60,
+        PORTAL_CONFIG.RT_WIDTH / PORTAL_CONFIG.RT_HEIGHT,
+        0.1,
+        100,
+      );
+      miniCamera.position.set(0, 5, 12);
+      miniCamera.lookAt(0, 0, 0);
 
-    // Opening — starts on the canvas texture (loading state). When the
-    // descriptor arrives, we swap the map to renderTarget.texture and
-    // the render-to-texture pass takes over.
+      // Container for descriptor-driven mini-scene content (so we can
+      // clear and rebuild on refresh without disturbing lights).
+      const miniWorld = new THREE.Group();
+      miniScene.add(miniWorld);
+
+      rt = {
+        target,
+        matterId,
+        state: "loading",
+        canvas, ctx, canvasTexture: canvasTex,
+        renderTarget,
+        miniScene,
+        miniCamera,
+        miniWorld,
+        cameraRadius: 12,
+        fetchedAt: 0,
+        contentSig: null,
+      };
+      this._portalRuntimes.set(matterId, rt);
+    }
+
+    // Opening — per-mesh material over the shared runtime textures.
+    // Starts on whichever texture matches the runtime's state.
     const openingMat = new THREE.MeshBasicMaterial({
-      map: canvasTex,
+      map: rt.state === "open" ? rt.renderTarget.texture : rt.canvasTexture,
       side: THREE.DoubleSide,
     });
     const opening = new THREE.Mesh(
@@ -2327,36 +2397,50 @@ export class Scene {
     );
     opening.position.set(0, H / 2, 0);
     group.add(opening);
-
-    // Container for descriptor-driven mini-scene content (so we can
-    // clear and rebuild on refresh without disturbing lights).
-    const miniWorld = new THREE.Group();
-    miniScene.add(miniWorld);
+    rt.openingMat = openingMat;
 
     group.userData = {
       ...(group.userData || {}),
-      portal: {
-        target,
-        // Matter id keys the per-portal walk-through cooldown so two
-        // portals at different positions track independent timers.
-        matterId: matter?.id || matter?._id || target,
-        state: "loading",
-        // Status-text canvas (loading / refused / unreachable).
-        canvas, ctx, canvasTexture: canvasTex,
-        // Live 3D view.
-        openingMat,
-        renderTarget,
-        miniScene,
-        miniCamera,
-        miniWorld,
-        cameraRadius: 12,
-      },
+      portal: rt,
     };
 
     this._activePortals.add(group);
-    this._fetchPortalDescriptor(target, group);
+    // Foreign SEE only when the cached descriptor is stale — a local
+    // re-render must not storm the foreign reality.
+    if (!rt.fetchedAt || (Date.now() - rt.fetchedAt) > PORTAL_CONFIG.DESCRIPTOR_TTL_MS) {
+      this._fetchPortalDescriptor(target, group);
+    }
 
     return group;
+  }
+
+  // Dispose one cached portal runtime (GPU target, textures, mini
+  // world). Model groups inside the mini world share geometry with the
+  // glTF cache, so those are removed, not disposed.
+  _disposePortalRuntime(rt) {
+    if (!rt) return;
+    rt.renderTarget?.dispose?.();
+    rt.canvasTexture?.dispose?.();
+    if (rt.miniWorld) {
+      for (const c of [...rt.miniWorld.children]) {
+        rt.miniWorld.remove(c);
+        if (c.userData?._sharedAssets) continue;
+        c.geometry?.dispose?.();
+        const mm = c.material;
+        if (Array.isArray(mm)) mm.forEach((x) => x.dispose?.());
+        else mm?.dispose?.();
+      }
+    }
+    this._portalRuntimes.delete(rt.matterId);
+  }
+
+  // Drop cached runtimes whose matter no longer exists at the rendered
+  // position. Called at the end of renderDescriptor with the current
+  // portal matter ids.
+  _evictPortalRuntimes(keepIds) {
+    for (const [id, rt] of this._portalRuntimes) {
+      if (!keepIds.has(String(id))) this._disposePortalRuntime(rt);
+    }
   }
 
   // Build the foreign-side mini-scene from a descriptor. Called once
@@ -2370,9 +2454,31 @@ export class Scene {
     const p = group.userData?.portal;
     if (!p) return;
 
-    // Clear previous content (but keep lights).
+    // Content signature: identical foreign shape → keep the existing
+    // mini-world (models included) instead of rebuilding geometry and
+    // re-streaming glTFs on every refresh.
+    const refKey = (m) => m?.hash || m?.url || (typeof m === "string" ? m : "");
+    const entSig = (arr, key) => (arr || []).slice(0, 32)
+      .map((e) => `${e?.[key] || e?.name || ""}@${e?.coord?.x ?? ""},${e?.coord?.y ?? ""}~${refKey(e?.model)}`)
+      .join("|");
+    const contentSig = [
+      JSON.stringify(descriptor?.space?.size || descriptor?.size || null),
+      entSig(descriptor?.children, "spaceId"),
+      entSig(descriptor?.beings, "beingId"),
+      entSig(descriptor?.matter || descriptor?.matters, "matterId"),
+    ].join("||");
+    if (p.state === "open" && p.contentSig === contentSig) {
+      p.openingMat.map = p.renderTarget.texture;
+      p.openingMat.needsUpdate = true;
+      return;
+    }
+    p.contentSig = contentSig;
+
+    // Clear previous content (but keep lights). Model holders share
+    // geometry with the glTF cache — remove, don't dispose.
     while (p.miniWorld.children.length) {
       const c = p.miniWorld.children.pop();
+      if (c.userData?._sharedAssets) continue;
       if (c.geometry) c.geometry.dispose?.();
       if (c.material) {
         const m = c.material;
@@ -2409,6 +2515,12 @@ export class Scene {
       return { x, z };
     };
 
+    // Primitive markers first (instant), then the REAL other side:
+    // entities that carry a render model get their glTF streamed in
+    // (budgeted) and swapped over the marker — the opening shows the
+    // foreign world's actual bodies, not stand-ins.
+    const modelCandidates = [];
+
     // Children — beige cylinders.
     const childMat = new THREE.MeshStandardMaterial({ color: 0xc0b090, roughness: 0.7 });
     for (const child of (descriptor.children || []).slice(0, 32)) {
@@ -2416,6 +2528,9 @@ export class Scene {
       const cy = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.5, 1.6, 12), childMat);
       cy.position.set(x, 0.8, z);
       p.miniWorld.add(cy);
+      if (child.model) {
+        modelCandidates.push({ prim: cy, ref: child.model, rotation: child.rotation, targetH: 2.4 });
+      }
     }
 
     // Beings — emissive spheres (light blue, glowing).
@@ -2427,6 +2542,9 @@ export class Scene {
       const sphere = new THREE.Mesh(new THREE.SphereGeometry(0.45, 12, 12), beingMat);
       sphere.position.set(x, 1.2, z);
       p.miniWorld.add(sphere);
+      if (being.model) {
+        modelCandidates.push({ prim: sphere, ref: being.model, targetH: 1.7 });
+      }
     }
 
     // Matter — small purple cubes.
@@ -2436,6 +2554,18 @@ export class Scene {
       const cube = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.4, 0.4), matterMat);
       cube.position.set(x, 0.5, z);
       p.miniWorld.add(cube);
+      if (m.model) {
+        modelCandidates.push({ prim: cube, ref: m.model, rotation: m.render?.rotation, targetH: 1.0 });
+      }
+    }
+
+    // Stream the real models in (async, budgeted). loadModel caches by
+    // URL globally and returns null on a miss — a cross-reality model
+    // whose bytes aren't reachable from this origin simply keeps its
+    // marker. Same-reality / cross-branch portals (the common case)
+    // resolve from the shared content store and show the real world.
+    for (const cand of modelCandidates.slice(0, PORTAL_CONFIG.MINI_MODEL_BUDGET)) {
+      this._swapMiniModel(p, cand);
     }
 
     // Swap the opening material to the render target texture so the
@@ -2443,6 +2573,42 @@ export class Scene {
     p.openingMat.map = p.renderTarget.texture;
     p.openingMat.needsUpdate = true;
     p.state = "open";
+  }
+
+  // Load one foreign entity's glTF into the portal mini-scene, ground
+  // it at its marker's spot, and retire the marker. Static pose only —
+  // no AnimationMixer through the window (the RTT pass renders at half
+  // rate; idle animation isn't worth the mixer bookkeeping). Honest
+  // fallback: any failure leaves the primitive marker in place.
+  async _swapMiniModel(p, { prim, ref, rotation = null, targetH = 1.6 }) {
+    try {
+      const result = await loadModel(ref);
+      if (!result?.scene) return;
+      // The mini-world may have been rebuilt or evicted mid-stream.
+      if (!p.miniWorld || prim.parent !== p.miniWorld) return;
+      const model = result.scene;
+      if (rotation && typeof rotation === "object") {
+        model.rotation.set(rotation.x || 0, rotation.y || 0, rotation.z || 0);
+      }
+      const bbox = new THREE.Box3().setFromObject(model);
+      const h = Math.max(0.001, bbox.max.y - bbox.min.y);
+      model.scale.setScalar(targetH / h);
+      const b2 = new THREE.Box3().setFromObject(model);
+      const holder = new THREE.Group();
+      // Geometry/materials are shared with the glTF cache — eviction
+      // and rebuild must remove, never dispose.
+      holder.userData = { _sharedAssets: true };
+      model.position.set(
+        -(b2.min.x + b2.max.x) / 2,
+        -b2.min.y,
+        -(b2.min.z + b2.max.z) / 2,
+      );
+      holder.add(model);
+      holder.position.set(prim.position.x, 0, prim.position.z);
+      p.miniWorld.add(holder);
+      p.miniWorld.remove(prim);
+      prim.geometry?.dispose?.(); // marker materials are shared — keep them
+    } catch { /* marker stays */ }
   }
 
   _paintPortalCanvas(ctx, canvas, { state, target, descriptor, errorMessage }) {
@@ -2542,24 +2708,16 @@ export class Scene {
   }
 
   // Walk a removed object (and its descendants) for portal groups;
-  // when found, drop from the active set and dispose owned resources.
+  // when found, DETACH from the active set. The runtime (render
+  // target, mini-scene, fetched descriptor) stays in _portalRuntimes —
+  // _clearWorld rebuilds are routine and the next _makePortalMesh
+  // reattaches it. Actual disposal happens at eviction
+  // (_evictPortalRuntimes when the matter is gone) or dispose().
   _disposePortalGroup(obj) {
     const visit = (node) => {
       const p = node.userData?.portal;
       if (p && this._activePortals?.has(node)) {
         this._activePortals.delete(node);
-        p.renderTarget?.dispose?.();
-        p.canvasTexture?.dispose?.();
-        // Dispose mini-scene meshes (the GroundPlane + child cylinders
-        // + being spheres + matter cubes).
-        if (p.miniWorld) {
-          for (const c of p.miniWorld.children) {
-            c.geometry?.dispose?.();
-            const mm = c.material;
-            if (Array.isArray(mm)) mm.forEach((x) => x.dispose?.());
-            else mm?.dispose?.();
-          }
-        }
       }
       for (const child of (node.children || [])) visit(child);
     };
@@ -2577,6 +2735,7 @@ export class Scene {
     try {
       const descriptor = await this._client.see(target);
       if (!group.userData?.portal) return;
+      group.userData.portal.fetchedAt = Date.now();
       this._populatePortalMiniScene(group, descriptor || {});
     } catch (err) {
       const u = group.userData?.portal;
@@ -2652,6 +2811,7 @@ export class Scene {
     iframe.src = url;
 
     const css = new CSS3DObject(iframe);
+    this._cssCount++; // the render loop skips the CSS3D pass at zero
     const scale = W / 1920;
     css.scale.set(scale, scale, scale);
     css.position.y = H / 2 + 0.4;
@@ -2908,13 +3068,12 @@ export class Scene {
   }
 
   _bindInput() {
-    addEventListener("resize", () => {
-      this.renderer.setSize(window.innerWidth, window.innerHeight);
-      this.camera.aspect = window.innerWidth / window.innerHeight;
-      this.camera.updateProjectionMatrix();
-    });
-
-    addEventListener("keydown", (e) => {
+    // Handlers are stored so dispose() can remove them — the view
+    // unmounts and remounts as the user switches views, and zombie
+    // listeners on window/document otherwise accumulate per mount.
+    // (The old second resize listener here was subsumed by _onResize,
+    // which already sizes renderer + camera + cssRenderer.)
+    this._onKeyDownBound = (e) => {
       this.keys.add(e.code);
       // One-shot gameplay actions that should fire on press, not while held.
       if (this.isInputBlocked()) return;
@@ -2935,25 +3094,31 @@ export class Scene {
           this.velocityY = JUMP_V;
         }
       }
-    });
-    addEventListener("keyup",   (e) => this.keys.delete(e.code));
+    };
+    addEventListener("keydown", this._onKeyDownBound);
 
-    this.canvas.addEventListener("click", () => {
+    this._onKeyUpBound = (e) => this.keys.delete(e.code);
+    addEventListener("keyup", this._onKeyUpBound);
+
+    this._onCanvasClickBound = () => {
       if (!this.pointerLocked) this.canvas.requestPointerLock?.();
       else this._tryActivate();
-    });
+    };
+    this.canvas.addEventListener("click", this._onCanvasClickBound);
 
-    document.addEventListener("pointerlockchange", () => {
+    this._onPointerLockBound = () => {
       this.pointerLocked = document.pointerLockElement === this.canvas;
-    });
+    };
+    document.addEventListener("pointerlockchange", this._onPointerLockBound);
 
-    addEventListener("mousemove", (e) => {
+    this._onMouseMoveBound = (e) => {
       if (!this.pointerLocked) return;
       this.yaw -= e.movementX * LOOK_SENSITIVITY;
       this.pitch -= e.movementY * LOOK_SENSITIVITY;
       this.pitch = Math.max(-Math.PI / 2 + 0.05, Math.min(Math.PI / 2 - 0.05, this.pitch));
       this._applyLook();
-    });
+    };
+    addEventListener("mousemove", this._onMouseMoveBound);
   }
 
   _applyLook() {

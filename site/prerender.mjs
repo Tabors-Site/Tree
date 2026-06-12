@@ -24,6 +24,7 @@ const NEW_ROUTES = [
   "/factory/roles",
   "/factory/branches",
   "/factory/integrity",
+  "/factory/identity",
   "/factory/intake",
   "/factory/assign",
   "/factory/fold",
@@ -132,6 +133,10 @@ const PAGE_META = {
   "/factory/integrity": {
     title: "Content as Identity . The Factory",
     description: "TreeOS identifies content by what it is, not where it sits. Cryptographic hashes give the substrate verifiable replay, efficient federation, automatic deduplication, and tamper evident history. The same root hash means the same state.",
+  },
+  "/factory/identity": {
+    title: "Beings and Realities as Wallets . The Factory",
+    description: "Beings and realities are named by their public key. Creating a being is creating a wallet: a global identity that works in any reality, signs its own acts, and verifies without directories. Same principle as content addressing, applied to agents.",
   },
   "/factory/intake": {
     title: "Intake . Beat 1 . The Factory",

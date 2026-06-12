@@ -35,8 +35,17 @@ const FactoryIntegrity = () => {
           thing is derived from the thing itself, and that changes what
           the substrate can do.
         </p>
+        <p className="ns-small">
+          Status: matter content addressing and per-fact hash chains
+          ship today. Per-reel, per-branch, and per-reality Merkle
+          roots are in the substrate; the operator-facing federation
+          flows around root-hash exchange are still landing.
+        </p>
       </header>
 
+      {/* ────────────────────────────────────────────────────────── */}
+      {/* SECTION 1 . THE QUESTION                                    */}
+      {/* ────────────────────────────────────────────────────────── */}
       <section>
         <p>
           Conventional storage uses locations. The file at{" "}
@@ -57,6 +66,26 @@ const FactoryIntegrity = () => {
           remembers, verifies, deduplicates, and transports everything
           it holds, from a being's avatar texture to the chain of every
           act every being ever took.
+        </p>
+      </section>
+
+      {/* ────────────────────────────────────────────────────────── */}
+      {/* WHY THIS MATTERS . FOR NON-TECHNICAL READERS                */}
+      {/* ────────────────────────────────────────────────────────── */}
+      <section>
+        <h2>Why this matters</h2>
+        <p>
+          You don't have to trust an administrator to know the system
+          is being honest with you. You don't have to trust a backup
+          tool to know your backup is intact. If two parties have the
+          same fingerprint, they have the same thing. If they don't,
+          the math tells them exactly where they disagree.
+        </p>
+        <p>
+          That is the difference between "we believe this is intact"
+          and "we can prove it is intact." Conventional systems offer
+          the first. TreeOS offers the second, structurally, for every
+          file, every act, and every history it holds.
         </p>
       </section>
 
@@ -410,6 +439,41 @@ storage identity (CAS)        what content exactly, by fingerprint
       </section>
 
       {/* ────────────────────────────────────────────────────────── */}
+      {/* SECTION 9 . CONTENT IS NOT THE WHOLE PICTURE                */}
+      {/* ────────────────────────────────────────────────────────── */}
+      <section>
+        <h2>One thing hashes do not name</h2>
+        <p>
+          A hash answers "is this the same content?" It does not answer
+          "is this the same actor?" Two beings can hash the same bytes
+          and produce the same fingerprint, but they are still two
+          different beings. For content the question is identity by
+          equality, and a hash is the right primitive. For agents,
+          beings and the realities they live in, the question is
+          identity by authorship, and TreeOS uses a different primitive
+          to answer it: a public key.
+        </p>
+        <p>
+          The principle stays the same. A public key is itself the
+          content address of a secret, so content and agents share one
+          rule: every TreeOS identifier is a cryptographic value of
+          what it is. The mechanics of how that plays out for beings
+          and realities (wallets, signing, the encoding, and I_AM as
+          the reality's own keypair) are the next page.
+        </p>
+
+        <aside className="ns-doc-aside">
+          <p>
+            Continue at{" "}
+            <Link to="/factory/identity" className="ns-inline-link">
+              /factory/identity
+            </Link>
+            . Beings and realities as wallets.
+          </p>
+        </aside>
+      </section>
+
+      {/* ────────────────────────────────────────────────────────── */}
       {/* CLOSING NAV                                                 */}
       {/* ────────────────────────────────────────────────────────── */}
       <nav className="ns-doc-aside">
@@ -421,11 +485,11 @@ storage identity (CAS)        what content exactly, by fingerprint
           . How TreeOS treats time and possibility from the bottom up.
           <br />
           Next.{" "}
-          <Link to="/factory/intake" className="ns-inline-link">
-            1. Intake
+          <Link to="/factory/identity" className="ns-inline-link">
+            Identity
           </Link>
-          . A summon arrives in the being's inbox and the cycle
-          begins.
+          . Beings and realities named by public key, the other half of
+          the same principle.
         </p>
       </nav>
     </article>

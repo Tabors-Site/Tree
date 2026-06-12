@@ -36,12 +36,12 @@
 //
 // Validation lives here because it's only called from this file.
 
-import { v4 as uuidv4 } from "uuid";
 import { escapeRegex } from "../../../utils.js";
 import { IBP_ERR, IbpError } from "../../../ibp/protocol.js";
 import log from "../../../seedReality/log.js";
 import { emitFact } from "../../../past/fact/facts.js";
-import { mintCredentialSpec } from "./credentials.js";
+import { mintCredentialSpec, encryptCredential } from "./credentials.js";
+import { generateBeingKeypair } from "./beingKeys.js";
 import { I_AM } from "../seedBeings.js";
 import { getRealityDomain } from "../../../ibp/address.js";
 
@@ -382,17 +382,32 @@ export async function birthBeing({ spec, identity, summonCtx = null, branch = nu
     } catch { /* defensive: any lookup failure leaves coord null */ }
   }
 
+  // ── Identity keypair (the being is a wallet) ──
+  // beingId IS the public key; the private key signs the being's acts.
+  // The reality holds it encrypted (custodial, qualities.auth.privateKeyEnc)
+  // and the owner can export it (the key-export op). I_AM is the one
+  // exception (ensureIAm in sprout.js): its id is the literal "i-am" and
+  // its signing key is the reality key. Every other being, including the
+  // seed delegates, gets its own independent keypair here.
+  const keypair = generateBeingKeypair();
+  const id = keypair.beingId;
+
   // ── Credentials ──
   const credential = await mintCredentialSpec(spec.password || null);
 
   // ── Qualities ──
   // Caller-provided initial qualities deep-merge with the seeds
-  // (auth.credentialPlain, cognition.defaultKind, optional roleFlow).
+  // (auth.credentialPlain, auth.privateKeyEnc, cognition.defaultKind,
+  // optional roleFlow).
   const qualities = (spec.qualities && typeof spec.qualities === "object")
     ? { ...spec.qualities }
     : {};
+  qualities.auth = {
+    ...(qualities.auth || {}),
+    privateKeyEnc: encryptCredential(keypair.privateKeyPem),
+  };
   if (credential.plain) {
-    qualities.auth = { ...(qualities.auth || {}), credentialPlain: credential.plain };
+    qualities.auth.credentialPlain = credential.plain;
   }
   qualities.cognition = { ...(qualities.cognition || {}), defaultKind: cognition };
   if (Array.isArray(spec.roleFlow)) {
@@ -431,13 +446,15 @@ export async function birthBeing({ spec, identity, summonCtx = null, branch = nu
   // (no separate being-parent-side audit fact).
   //
   // parentBeingId in the stamped fact is the Ref (typed identity
-  const id = uuidv4();
   const factSpec = {
     name,
     password: credential.hash,
     defaultRole,
     parentBeingId,
     homeSpace: homeId,
+    // Key scheme descriptor for cross-reality importers and rotation.
+    // The public key IS target.id, so the raw key is not duplicated here.
+    identity: { alg: "ed25519", keyEnc: "did:key:ed25519-multibase", v: 1 },
     // The being's home branch = the stamper's branch (the branch THIS
     // be:birth fact is being stamped on). Everything is relative: a
     // being birthed on #7a owns #7a as their present; BE:connect/
