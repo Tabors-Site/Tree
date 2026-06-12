@@ -36,10 +36,13 @@ const SHELL_DOM = `
     <button class="nav-btn" id="nav-place" title="Reality root">/</button>
     <button class="nav-btn" id="nav-home"  title="Your home" disabled>~</button>
     <span id="branch-button-slot" style="display:flex"></span>
-    <nav id="view-switcher" title="views (Alt+1..4)"></nav>
+    <nav id="view-switcher" title="views (Alt+1..5)"></nav>
+    <span id="conn-dot" class="conn-idle" title="socket"></span>
   </header>
   <div id="portal-tabs"></div>
-  <main id="view-root"></main>
+  <main id="view-root">
+    <div class="view-boot"><span class="vb-pulse"></span>finding your place…</div>
+  </main>
   <div id="overlays"></div>
 </div>
 `.trim();
@@ -100,6 +103,15 @@ export function mountShell({ rootEl, primaryCtx, defaultView = "3d" }) {
     els.back.disabled    = !(m.historyIndex > 0);
     els.forward.disabled = !(m.historyIndex < m.history.length - 1);
     els.home.disabled    = !m.session?.token;
+    // Socket health dot — reads the live connection state the context
+    // already tracks.
+    const dot = rootEl.querySelector("#conn-dot");
+    if (dot) {
+      dot.className = m.connection === "connected" ? "conn-ok"
+        : (m.connection === "error" || m.connection === "disconnected") ? "conn-err"
+        : "conn-idle";
+      dot.title = `socket: ${m.connection || "idle"}`;
+    }
     // Ghost cue follows the active tab's descriptor.
     document.body.classList.toggle("ghost-view", !!m.descriptor?.isHistorical);
     repaintSwitcher();
@@ -388,10 +400,10 @@ export function mountShell({ rootEl, primaryCtx, defaultView = "3d" }) {
   listen(window, "branchbar:now", onNow);
   listen(window, "branchbar:paused-self", onPaused);
 
-  // Alt+1..4 switch views; backslash flips 3d <-> text (back-compat).
+  // Alt+1..5 switch views; backslash flips 3d <-> text (back-compat).
   const onKeydown = (e) => {
     if (e.altKey && !e.ctrlKey && !e.metaKey) {
-      const i = ["1", "2", "3", "4"].indexOf(e.key);
+      const i = ["1", "2", "3", "4", "5"].indexOf(e.key);
       if (i >= 0 && VIEW_NAMES[i]) { e.preventDefault(); switchView(VIEW_NAMES[i]); return; }
     }
     if (e.code === "Backslash") {

@@ -79,9 +79,16 @@ export function isKeyId(s) {
   return typeof s === "string" && s.length > 1 && s[0] === ID_PREFIX;
 }
 
+// A valid id is "z" + base58btc(2-byte multicodec + 32-byte key) ~= 48
+// chars. Cap before decoding: b58decode is O(n^2), and isKeyId only
+// checks the leading "z", so an oversized sig.by on an act row would
+// otherwise force quadratic CPU per verification (a cheap DoS).
+const MAX_KEY_ID_LEN = 64;
+
 /** Recover a public KeyObject from a key id. Self-certifying. */
 export function keyIdToPublicKey(keyId) {
   if (!isKeyId(keyId)) throw new Error(`keyIdToPublicKey: not a key id: ${keyId}`);
+  if (keyId.length > MAX_KEY_ID_LEN) throw new Error("keyIdToPublicKey: id too long");
   const decoded = b58decode(keyId.slice(1));
   if (decoded[0] !== 0xed || decoded[1] !== 0x01) {
     throw new Error("keyIdToPublicKey: not an ed25519 multicodec key");

@@ -117,10 +117,10 @@ export async function buildDiscovery() {
   // on every portal connect). Two realities compare state in a single
   // round-trip; on mismatch, walk chain-root → reel heads → facts to
   // the exact divergence.
-  let chainRealityRoot = null;
+  let chainBlock = { realityRoot: null, realityId: null, sig: null };
   try {
-    const { realityRoot } = await import("../past/fact/chainRoots.js");
-    chainRealityRoot = await realityRoot();
+    const { signedRealityRoot } = await import("../past/fact/chainRoots.js");
+    chainBlock = await signedRealityRoot();
   } catch { /* additive — discovery never blocks on the fingerprint */ }
 
   // Merge two sources: the live role registry (SUMMON-honoring roles
@@ -155,8 +155,10 @@ export async function buildDiscovery() {
       maxUploadBytes: Number(getRealityConfigValue("maxUploadBytes")) || 104857600,
       allowedMimeTypes: getRealityConfigValue("allowedMimeTypes") || null,
     },
-    // The chain fingerprint (see above).
-    chain: { realityRoot: chainRealityRoot },
+    // The chain fingerprint, SIGNED by the reality (= I_AM) key. A peer
+    // given realityId (which IS the reality public key), realityRoot,
+    // and sig verifies the whole chain's provenance self-certifyingly.
+    chain: chainBlock,
     supportedVerbs: ["see", "do", "summon", "be"],
     capabilities: [],
   };

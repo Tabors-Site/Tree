@@ -164,10 +164,18 @@ export function createNavigation(ctx) {
     if (!client) return;
     try {
       address = withActiveBranch(address);
+      // Ghost walk: while a rewind anchor is set, every navigate
+      // carries the SAME `at:` qualifier — the user walks around in
+      // the past, and all four views render the fold at that moment.
+      // (live and at are mutually exclusive on the wire; a historical
+      // SEE never subscribes.) Return-to-now clears the anchor.
+      const anchor = state.get("historicalAnchor");
       // Subscribe live: every change to this position arrives as a
       // descriptor event we refetch on. "/~" resolves server-side to
       // the caller's Being.homeSpace.
-      const desc = await client.see(address, { live: true });
+      const desc = anchor
+        ? await client.see(address, { at: anchor })
+        : await client.see(address, { live: true });
 
       // Stale-session mid-flight: the operator dropped the DB while
       // the page was open. Drop the session and reconnect anonymously
@@ -291,7 +299,13 @@ export function createNavigation(ctx) {
     if (!client || !address || !atTimestamp) return;
     try {
       const desc = await client.see(address, { at: { atTimestamp } });
-      state.set({ descriptor: desc }, { reason: "rewind", resetCamera: false });
+      // Pin the ghost-walk anchor: subsequent navigates (a doorway in
+      // 3D, a folder in explorer, `cd` in console) stay at this
+      // moment until return-to-now.
+      state.set(
+        { descriptor: desc, historicalAnchor: { atTimestamp } },
+        { reason: "rewind", resetCamera: false },
+      );
       events.emit("status", `rewound to ${atTimestamp}`);
     } catch (err) {
       console.warn("[portal:nav] rewind failed:", err?.message);
@@ -302,6 +316,7 @@ export function createNavigation(ctx) {
     const client = ctx.client;
     const address = state.get("currentAddress");
     if (!address) return;
+    state.set({ historicalAnchor: null });
     if (preserveCamera && client) {
       // Fast-forward playback caught up to present — keep the angle
       // the user was watching from.
@@ -367,6 +382,7 @@ export function createNavigation(ctx) {
   // being stance, then "/".
 
   async function landAnonymous() {
+    state.set({ historicalAnchor: null }); // fresh connection lands in the present
     const fallbackCodes = new Set([...STALE_SESSION_CODES, "FORBIDDEN"]);
     const restored = restoreAddressFromHash() || "/";
     try {
@@ -380,6 +396,7 @@ export function createNavigation(ctx) {
   }
 
   async function landAuthenticated(session, { ignoreHash = false } = {}) {
+    state.set({ historicalAnchor: null }); // fresh connection lands in the present
     const client = ctx.client;
     const discovery = state.get("discovery");
     const beingAddress = session.beingAddress

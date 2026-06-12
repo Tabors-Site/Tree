@@ -185,6 +185,46 @@ export async function realityRoot() {
   });
 }
 
+/**
+ * The reality root, SIGNED by the reality (= I_AM) key. A peer given
+ * only `realityId` (which IS the reality public key) plus `realityRoot`
+ * and `sig` can verify the root self-certifyingly, with no directory:
+ * decode the key from realityId, check the signature over the root.
+ * This is the federation provenance — "this whole chain is what the
+ * holder of this key is vouching for, signed since genesis."
+ *
+ * @returns {Promise<{realityRoot: string, realityId: string, sig: string|null}>}
+ */
+export async function signedRealityRoot() {
+  // Memoized (same short TTL as realityRoot) so a hot SEE path does not
+  // re-sign every call; ed25519 over the same root is deterministic.
+  return memoized("reality-signed", async () => {
+    const root = await realityRoot();
+    const { getRealityIdentity, signData } = await import("../../realityIdentity.js");
+    const id = getRealityIdentity();
+    return {
+      realityRoot: root,
+      realityId: id.realityId,
+      sig: root ? signData(root) : null,
+    };
+  });
+}
+
+/**
+ * Verify a signed reality root against the realityId (the public key).
+ * Self-certifying: the verifier needs nothing but these three values.
+ */
+export async function verifyRealityRootSig(realityRoot, realityId, sig) {
+  if (!realityRoot || !sig) return false;
+  try {
+    const { keyIdToPublicKey } = await import("../../materials/being/identity/beingKeys.js");
+    const pub = keyIdToPublicKey(realityId);
+    return crypto.verify(null, Buffer.from(String(realityRoot), "utf8"), pub, Buffer.from(sig, "base64"));
+  } catch {
+    return false;
+  }
+}
+
 // ── SEE ops ──────────────────────────────────────────────────────────
 // Pure reads over the chain — verification and fingerprints. SEE is
 // the verb that never stamps facts; these are the wire form of "is

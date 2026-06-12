@@ -620,7 +620,6 @@ export class Scene {
     }
     this._lastRenderSig = sig;
 
-    this._clearWorld();
     const isPlaceRoot = !!desc?.isPlaceRoot;
     const arrival    = isPlaceRoot && !isAuthenticated;
 
@@ -640,12 +639,6 @@ export class Scene {
         z: (c.y - (gridSize.y - 1) / 2) * CELL,
       };
     };
-    // Cache for live deltas. applyPositionDelta runs outside the
-    // renderDescriptor scope and needs the same mapping.
-    this._gridSize = gridSize;
-    this._gridCell = CELL;
-    this._beingMeshesById.clear();
-    this._beingLastMoveSeq.clear();
 
     // Pick the visual mode. Arrival overrides everything. Otherwise the
     // descriptor's resolved scene.sceneType picks a preset; unknown or
@@ -660,6 +653,42 @@ export class Scene {
     } else if (desc?.scene?.sceneType === "pyramid-interior") {
       visualMode = VISUAL_PYRAMID;
     }
+
+    // ── Incremental path ─────────────────────────────────────────
+    // Same space, same mode, same grid: diff the entity set instead
+    // of tearing the world down. Unchanged entities keep their meshes
+    // (and AnimationMixers); changed ones rebuild individually. This
+    // is what makes timeline SCRUBBING and busy-position live updates
+    // cheap — the old full rebuild re-cloned every glTF per tick.
+    const spaceKey = JSON.stringify([
+      desc?.address?.spaceId || null,
+      desc?.address?.branch || null,
+      !!isAuthenticated,
+      desc?.identity?.beingId || null,
+      isPlaceRoot,
+      gridSize,
+      desc?.heavenSpace || null,
+      visualMode === VISUAL_DEFAULT ? "default" : "other",
+    ]);
+    if (
+      this._lastSpaceKey === spaceKey &&
+      !arrival && !isHeaven && visualMode === VISUAL_DEFAULT &&
+      this._tryIncrementalRender(desc, { coordToWorld })
+    ) {
+      this._gridSize = gridSize;
+      this._gridCell = CELL;
+      this._applyBeingActivity(desc?.beings || []);
+      return;
+    }
+    this._lastSpaceKey = spaceKey;
+
+    this._clearWorld();
+    // Cache for live deltas. applyPositionDelta runs outside the
+    // renderDescriptor scope and needs the same mapping.
+    this._gridSize = gridSize;
+    this._gridCell = CELL;
+    this._beingMeshesById.clear();
+    this._beingLastMoveSeq.clear();
     this._applyVisualMode(visualMode);
 
     const beings = desc?.beings || [];
@@ -708,42 +737,12 @@ export class Scene {
         );
       }
     } else {
-      const beingRadius = 6;
       beingsToRender.forEach((b, i) => {
         // First-person: skip your own avatar in your own tab. You
         // ARE the camera; the mesh would clip the lens and double-
         // render whatever the other tabs see for you.
         if (this._selfBeingId && b.beingId === this._selfBeingId) return;
-        // Prefer the being's coord field (the seed's spatial schema
-        // field, written through set-being:coord and clamped to
-        // space.size). When the space has a declared size, map the
-        // grid coord into world units. Fall back to an arc spread for
-        // beings outside a sized space.
-        let x, z;
-        const world = coordToWorld(b.coord);
-        if (world) {
-          x = world.x;
-          z = world.z;
-        } else {
-          const angle = (i / Math.max(1, beingsToRender.length)) * Math.PI - Math.PI / 2;
-          x = Math.cos(angle) * beingRadius;
-          z = -Math.sin(angle) * beingRadius;
-        }
-        const mesh = this._makeBeingMesh(b);
-        mesh.position.set(x, 0.7, z);
-        // Stash the default coord. Activity-driven movement (Phase D in
-        // the plan) will animate the mesh between this default and a
-        // target coord while a chainstep is active; on release it
-        // returns to default.
-        mesh.userData = { ...beingUserData(b), defaultCoord: { x, z } };
-        this.world.add(mesh);
-        this._beingMeshes.set(b.being, mesh);
-        if (b.beingId) this._beingMeshesById.set(b.beingId, mesh);
-        this._swapToModel(
-          mesh,
-          b.qualities?.render,
-          b.beingId ? { kind: "being", id: b.beingId } : null,
-        );
+        this._placeBeingDefault(b, i, beingsToRender.length, coordToWorld);
       });
     }
 
@@ -798,42 +797,7 @@ export class Scene {
       //   3. Hash-derived position so children without a coord (never
       //      moved, parent unsized) get a stable layout instead of
       //      stacking at the origin.
-      childrenToRender.forEach((child) => {
-        const key = child.id || child.path || child.name;
-        const h = hashKey(key);
-        let x, z;
-        const childCoordWorld = coordToWorld(child.coord);
-        const legacyCoords = child.position?.coords;
-        if (childCoordWorld) {
-          x = childCoordWorld.x;
-          z = childCoordWorld.z;
-        } else if (legacyCoords && typeof legacyCoords.x === "number") {
-          x = legacyCoords.x;
-          z = legacyCoords.y;
-        } else {
-          const angle = (h % 360) * (Math.PI / 180);
-          const radius = 22 + ((h >> 9) % 120) * 0.45; // 22..76
-          x = Math.cos(angle) * radius;
-          z = Math.sin(angle) * radius;
-        }
-        const sizeHint = estimateSizeHint(child, h);
-        const mesh = this._makeChildMesh(child, sizeHint);
-        mesh.position.set(x, 0, z);
-        mesh.userData = {
-          kind: "child",
-          label: child.name,
-          address: child.path,
-          spaceId: child.spaceId || null,
-          type: child.type,
-          isDoorway: true,
-        };
-        this.world.add(mesh);
-        this._swapToModel(
-          mesh,
-          child.qualities?.render,
-          child.spaceId ? { kind: "space", id: child.spaceId } : null,
-        );
-      });
+      childrenToRender.forEach((child) => this._placeChildDefault(child, coordToWorld));
     }
 
     // Place matter (notes, plan emissions, etc.) at their server
@@ -843,68 +807,7 @@ export class Scene {
     this._matterMeshes = new Map();
     const matters = desc?.matters || [];
     if (!arrival) {
-      matters.forEach((mt, i) => {
-        const id = mt.matterId || `mt-${i}`;
-        const isVideo = mt?.content?.contentType === "video/youtube";
-        // Screens (video, web embeds, embeddable files) share the
-        // video mesh's placement + model-swap exemptions: the CSS3D
-        // iframe IS the presentation; a glTF would clobber it.
-        const isScreen = isVideo || !!this._embedUrlFor(mt);
-        let x, z;
-        const world = coordToWorld(mt.coord);
-        if (world) {
-          x = world.x;
-          z = world.z;
-        } else if (isScreen) {
-          // Screens get a stable, prominent spot in front of the
-          // arrival camera — close enough to read, far enough to walk
-          // around. Z is negative so the screen faces -Z (camera looks
-          // toward -Z at arrival). Multiple screens fan out along X.
-          x = (i % 5) * 7 - 14;
-          z = -6;
-        } else {
-          const h = hashKey(id);
-          const angle = (h % 360) * (Math.PI / 180);
-          const radius = 5 + ((h >> 9) % 80) * 0.08;
-          x = Math.cos(angle) * radius;
-          z = Math.sin(angle) * radius;
-        }
-        const mesh = this._makeMatterMesh(mt);
-        mesh.position.set(x, 0, z);
-        // Preserve existing userData (the video mesh has iframe + ids).
-        mesh.userData = Object.assign({
-          kind: "matter",
-          matterKind: isVideo ? "video" : (mt.kind || "ibp"),
-          matterType: mt.type || "generic",
-          ref: id,
-          matterId: id,
-          label: matterLabel(mt),
-          preview: mt.preview || "",
-          fullContentRef: mt.fullContentRef || null,
-        }, mesh.userData || {});
-        this.world.add(mesh);
-        this._matterMeshes.set(id, mesh);
-        // Skip the model swap for screen matter (video / web embed /
-        // embeddable file) . its CSS3DObject placement is intrinsic
-        // to the iframe wrapper and a glTF would clobber the live
-        // surface. Other matter kinds receive their declared model
-        // normally. The model ref is the SERVER-RESOLVED `mt.model`
-        // (per-matter override → space per-type default → matter-type
-        // extension default), with the raw render block's model as
-        // the legacy fallback; scale/rotation still ride the matter's
-        // own render block.
-        if (!isScreen) {
-          const renderBlock = {
-            ...(mt.qualities?.render || {}),
-            model: mt.model || mt.qualities?.render?.model || null,
-          };
-          this._swapToModel(
-            mesh,
-            renderBlock.model ? renderBlock : mt.qualities?.render,
-            id ? { kind: "matter", id } : null,
-          );
-        }
-      });
+      matters.forEach((mt, i) => this._placeMatterDefault(mt, i, coordToWorld));
     }
 
     // Sized-space land. When the descriptor declares a size, the
@@ -1023,6 +926,292 @@ export class Scene {
       if (this._portalTargetOf(m)) keepIds.add(String(m.matterId || m.id || m._id));
     }
     this._evictPortalRuntimes(keepIds);
+  }
+
+  // ── Entity placement (shared by full build + incremental diff) ──
+
+  // Per-entity "would the mesh look different" signatures. Coord is
+  // EXCLUDED — a pure move repositions the existing group instead of
+  // rebuilding it (beings additionally move via live deltas).
+  _beingSigNC(b) {
+    return JSON.stringify([
+      b?.beingId || b?.being || null,
+      b?.qualities?.render?.model?.hash || b?.qualities?.render?.model || null,
+      b?.qualities?.render?.scale ?? null,
+    ]);
+  }
+  _childSigNC(c) {
+    return JSON.stringify([
+      c?.spaceId || c?.name || null, c?.name || null, c?.type || null,
+      c?.qualities?.render?.model?.hash || c?.qualities?.render?.model || null,
+      c?.qualities?.render?.scale ?? null,
+    ]);
+  }
+  _matterSigNC(m) {
+    const model = m?.model || m?.qualities?.render?.model || null;
+    return JSON.stringify([
+      m?.matterId || m?.name || null, m?.type || null,
+      model?.hash || model?.url || model || null,
+      m?.qualities?.render?.scale ?? null,
+      this._embedUrlFor(m) || null,
+      m?.content?.contentType === "video/youtube",
+      this._portalTargetOf(m) || null,
+    ]);
+  }
+
+  // Default-layout being placement: grid coord when sized, arc spread
+  // otherwise. Used by the full build and the incremental diff.
+  _placeBeingDefault(b, i, count, coordToWorld) {
+    const beingRadius = 6;
+    let x, z;
+    const world = coordToWorld(b.coord);
+    if (world) {
+      x = world.x;
+      z = world.z;
+    } else {
+      const angle = (i / Math.max(1, count)) * Math.PI - Math.PI / 2;
+      x = Math.cos(angle) * beingRadius;
+      z = -Math.sin(angle) * beingRadius;
+    }
+    const mesh = this._makeBeingMesh(b);
+    mesh.position.set(x, 0.7, z);
+    // Stash the default coord. Activity-driven movement animates the
+    // mesh between this default and a target coord while a chainstep
+    // is active; on release it returns to default.
+    mesh.userData = { ...beingUserData(b), defaultCoord: { x, z }, _sigNC: this._beingSigNC(b) };
+    this.world.add(mesh);
+    this._beingMeshes.set(b.being, mesh);
+    if (b.beingId) this._beingMeshesById.set(b.beingId, mesh);
+    this._swapToModel(
+      mesh,
+      b.qualities?.render,
+      b.beingId ? { kind: "being", id: b.beingId } : null,
+    );
+    return mesh;
+  }
+
+  // Default-layout child placement. Three layouts, in priority order:
+  //   1. parent sized + child coord → grid mapping
+  //   2. legacy position.coords
+  //   3. hash-derived stable ring (deterministic per id — safe to
+  //      recompute incrementally)
+  _placeChildDefault(child, coordToWorld) {
+    const key = child.id || child.path || child.name;
+    const h = hashKey(key);
+    let x, z;
+    const childCoordWorld = coordToWorld(child.coord);
+    const legacyCoords = child.position?.coords;
+    if (childCoordWorld) {
+      x = childCoordWorld.x;
+      z = childCoordWorld.z;
+    } else if (legacyCoords && typeof legacyCoords.x === "number") {
+      x = legacyCoords.x;
+      z = legacyCoords.y;
+    } else {
+      const angle = (h % 360) * (Math.PI / 180);
+      const radius = 22 + ((h >> 9) % 120) * 0.45; // 22..76
+      x = Math.cos(angle) * radius;
+      z = Math.sin(angle) * radius;
+    }
+    const sizeHint = estimateSizeHint(child, h);
+    const mesh = this._makeChildMesh(child, sizeHint);
+    mesh.position.set(x, 0, z);
+    mesh.userData = {
+      kind: "child",
+      label: child.name,
+      address: child.path,
+      spaceId: child.spaceId || null,
+      type: child.type,
+      isDoorway: true,
+      _sigNC: this._childSigNC(child),
+    };
+    this.world.add(mesh);
+    this._swapToModel(
+      mesh,
+      child.qualities?.render,
+      child.spaceId ? { kind: "space", id: child.spaceId } : null,
+    );
+    return mesh;
+  }
+
+  // Default-layout matter placement: grid coord → screen fan → hash
+  // ring. Screens (video / web embeds / embeddable files) keep their
+  // CSS3D iframe as the presentation; everything else gets its model.
+  _placeMatterDefault(mt, i, coordToWorld) {
+    const id = mt.matterId || `mt-${i}`;
+    const isVideo = mt?.content?.contentType === "video/youtube";
+    const isScreen = isVideo || !!this._embedUrlFor(mt);
+    let x, z;
+    const world = coordToWorld(mt.coord);
+    if (world) {
+      x = world.x;
+      z = world.z;
+    } else if (isScreen) {
+      // Screens get a stable, prominent spot in front of the arrival
+      // camera; multiple screens fan out along X.
+      x = (i % 5) * 7 - 14;
+      z = -6;
+    } else {
+      const h = hashKey(id);
+      const angle = (h % 360) * (Math.PI / 180);
+      const radius = 5 + ((h >> 9) % 80) * 0.08;
+      x = Math.cos(angle) * radius;
+      z = Math.sin(angle) * radius;
+    }
+    const mesh = this._makeMatterMesh(mt);
+    mesh.position.set(x, 0, z);
+    // Preserve existing userData (the video mesh has iframe + ids).
+    mesh.userData = Object.assign({
+      kind: "matter",
+      matterKind: isVideo ? "video" : (mt.kind || "ibp"),
+      matterType: mt.type || "generic",
+      ref: id,
+      matterId: id,
+      label: matterLabel(mt),
+      preview: mt.preview || "",
+      fullContentRef: mt.fullContentRef || null,
+      _sigNC: this._matterSigNC(mt),
+    }, mesh.userData || {});
+    this.world.add(mesh);
+    this._matterMeshes.set(id, mesh);
+    // Skip the model swap for screen matter — the CSS3D iframe IS the
+    // presentation. Model ref precedence: server-resolved mt.model →
+    // raw render block (legacy).
+    if (!isScreen) {
+      const renderBlock = {
+        ...(mt.qualities?.render || {}),
+        model: mt.model || mt.qualities?.render?.model || null,
+      };
+      this._swapToModel(
+        mesh,
+        renderBlock.model ? renderBlock : mt.qualities?.render,
+        id ? { kind: "matter", id } : null,
+      );
+    }
+    return mesh;
+  }
+
+  // Remove ONE entity group with the full teardown _clearWorld would
+  // have given it: iframe/playback/yt teardown, portal detach, mixer
+  // drop, bookkeeping maps.
+  _removeEntityObject(obj) {
+    const ud = obj.userData || {};
+    const iframe = ud.iframe;
+    if (iframe) {
+      const player = ud.ytPlayer;
+      if (player) this._emitPlaybackTick(obj, player);
+      this._stopPlaybackTick(obj);
+      iframe.remove();
+      const id = ud.iframeId;
+      if (id && this._ytPlayers.has(id)) {
+        try { this._ytPlayers.get(id)?.destroy?.(); } catch {}
+        this._ytPlayers.delete(id);
+      }
+      this._cssCount = Math.max(0, this._cssCount - 1);
+    }
+    this._disposePortalGroup(obj);
+    this.world.remove(obj);
+    obj.geometry?.dispose?.();
+    if (Array.isArray(obj.material)) obj.material.forEach((m) => m.dispose?.());
+    else obj.material?.dispose?.();
+    const mixerKey =
+      ud.kind === "being" && ud.beingId ? `being:${ud.beingId}` :
+      ud.kind === "child" && ud.spaceId ? `space:${ud.spaceId}` :
+      ud.kind === "matter" && ud.matterId ? `matter:${ud.matterId}` : null;
+    if (mixerKey) this._entityMixers.delete(mixerKey);
+    if (ud.kind === "being") {
+      if (ud.being) {
+        this._beingMeshes.delete(ud.being);
+        this._lastBeingInRange.delete(ud.being);
+      }
+      if (ud.beingId) this._beingMeshesById.delete(ud.beingId);
+    }
+    if (ud.kind === "matter" && ud.matterId) this._matterMeshes?.delete(ud.matterId);
+  }
+
+  // The diff itself. Pre-gated by renderDescriptor (same space, same
+  // grid, default visual mode, same identity). Returns true when the
+  // update was applied incrementally; false defers to the full build.
+  _tryIncrementalRender(desc, { coordToWorld }) {
+    if (!this.world) return false;
+
+    // Index the existing entity groups. Non-entity furniture (land,
+    // grid, frame, home, labels) is untouched by the diff.
+    const existing = new Map();
+    for (const obj of [...this.world.children]) {
+      const ud = obj.userData || {};
+      if (ud.address === "/~") continue; // the synthesized home house
+      if (ud.kind === "being" && ud.being) existing.set(`being:${ud.being}`, obj);
+      else if (ud.kind === "child" && (ud.spaceId || ud.address)) existing.set(`child:${ud.spaceId || ud.address}`, obj);
+      else if (ud.kind === "matter" && ud.matterId) existing.set(`matter:${ud.matterId}`, obj);
+    }
+
+    const kept = new Set();
+    const selfId = desc?.identity?.beingId || null;
+    this._selfBeingId = selfId;
+    const beings = desc?.beings || [];
+    this._selfBeing = selfId ? beings.find((b) => b.beingId === selfId) || null : null;
+    this._selfName = desc?.identity?.name || this._selfBeing?.name || null;
+
+    beings.forEach((b, i) => {
+      if (selfId && b.beingId === selfId) return;
+      const key = `being:${b.being}`;
+      const prev = existing.get(key);
+      if (prev && prev.userData?._sigNC === this._beingSigNC(b)) {
+        kept.add(key);
+        // Position is owned by live deltas / activity animation —
+        // leave the mesh where it is.
+        return;
+      }
+      if (prev) this._removeEntityObject(prev);
+      this._placeBeingDefault(b, i, beings.length, coordToWorld);
+      kept.add(key);
+    });
+
+    for (const child of (desc?.children || [])) {
+      const key = `child:${child.spaceId || child.path}`;
+      const prev = existing.get(key);
+      if (prev && prev.userData?._sigNC === this._childSigNC(child)) {
+        kept.add(key);
+        const w = coordToWorld(child.coord);
+        if (w) prev.position.set(w.x, prev.position.y, w.z);
+        continue;
+      }
+      if (prev) this._removeEntityObject(prev);
+      this._placeChildDefault(child, coordToWorld);
+      kept.add(key);
+    }
+
+    (desc?.matters || []).forEach((mt, i) => {
+      const id = mt.matterId || `mt-${i}`;
+      const key = `matter:${id}`;
+      const prev = existing.get(key);
+      if (prev && prev.userData?._sigNC === this._matterSigNC(mt)) {
+        kept.add(key);
+        const w = coordToWorld(mt.coord);
+        if (w) prev.position.set(w.x, 0, w.z);
+        // Keep gaze metadata fresh (label/preview aren't in the sig).
+        prev.userData.label = matterLabel(mt);
+        prev.userData.preview = mt.preview || "";
+        return;
+      }
+      if (prev) this._removeEntityObject(prev);
+      this._placeMatterDefault(mt, i, coordToWorld);
+      kept.add(key);
+    });
+
+    // Anything left wasn't in the new descriptor.
+    for (const [key, obj] of existing) {
+      if (!kept.has(key)) this._removeEntityObject(obj);
+    }
+
+    // Portal runtime eviction mirrors the full build's.
+    const keepIds = new Set();
+    for (const m of (desc?.matters || [])) {
+      if (this._portalTargetOf(m)) keepIds.add(String(m.matterId || m.id || m._id));
+    }
+    this._evictPortalRuntimes(keepIds);
+    return true;
   }
 
   // Apply one PositionProjection delta from the live SEE channel.

@@ -5,7 +5,7 @@ import crypto from "crypto";
 import fs from "fs";
 import path from "path";
 import { SignJWT, jwtVerify, importPKCS8, importSPKI } from "jose";
-import { v4 as uuidv4 } from "uuid";
+import { keyIdFromPublicKeyPem } from "./materials/being/identity/beingKeys.js";
 
 const ALGORITHM = "Ed25519";
 const TOKEN_EXPIRY = "5m";
@@ -46,14 +46,11 @@ export function getRealityIdentity() {
     fs.mkdirSync(keyDir, { recursive: true });
   }
 
-  let privateKey, publicKey, realityId;
+  let privateKey, publicKey;
 
   if (fs.existsSync(privateKeyPath) && fs.existsSync(publicKeyPath)) {
     privateKey = fs.readFileSync(privateKeyPath, "utf8");
     publicKey = fs.readFileSync(publicKeyPath, "utf8");
-    realityId = fs.existsSync(idPath)
-      ? fs.readFileSync(idPath, "utf8").trim()
-      : uuidv4();
   } else {
     const keypair = crypto.generateKeyPairSync("ed25519", {
       publicKeyEncoding: { type: "spki", format: "pem" },
@@ -62,14 +59,20 @@ export function getRealityIdentity() {
 
     privateKey = keypair.privateKey;
     publicKey = keypair.publicKey;
-    realityId = uuidv4();
 
     fs.writeFileSync(privateKeyPath, privateKey, { mode: 0o600 });
     fs.writeFileSync(publicKeyPath, publicKey, { mode: 0o644 });
-    fs.writeFileSync(idPath, realityId, { mode: 0o644 });
 
-    log.verbose("Reality", "Generated new canopy keypair for this reality");
+    log.verbose("Reality", "Generated new keypair for this reality");
   }
+
+  // The reality is a wallet: its id IS its public key, encoded the same
+  // z... way as a being id (this reality's I_AM shares this exact key,
+  // so realityId === I_AM's key id). Derived from the keypair, not a
+  // random uuid — the old reality.id token is retired. Written to disk
+  // for operator visibility only; the public key is the source of truth.
+  const realityId = keyIdFromPublicKeyPem(publicKey);
+  try { fs.writeFileSync(idPath, realityId, { mode: 0o644 }); } catch { /* visibility only */ }
 
   realityIdentity = {
     realityId,

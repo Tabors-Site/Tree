@@ -10,9 +10,20 @@ Read alongside [philosophy/OS/OSV2.md](../philosophy/OS/OSV2.md) (the OS vision:
 
 **The portal is a client for IBP that hosts one or more VIEWS over the same IBP state; everything else (transport, host shell, asset pipeline) can change without changing what a portal IS.**
 
+## The endgame is IBPA only (pinned 2026-06-12)
+
+The web bundle, the HTTP origin, and every `/api` path are a TEMPORARY
+stage. The destination is a portal that is fully IBPA: one address bar,
+one protocol, no HTTP wrapping anywhere. HTML may survive past that
+point only as a legacy access path (people who still want to reach the
+system through a browser) and as matter-side content rendering, and
+even the access path is expected to migrate away. Every seam built in
+the web stage (core/assets.js, the content-carrier fetches, hash sync,
+storage) exists so that removal is a resolver swap, not a rewrite.
+
 ## The four views — TreeOS user space
 
-A **view** is a way of rendering the current IBP state. The portal hosts FOUR views, and together they ARE the user space of TreeOS. Every other "kind of app" that conventional OSes ship (desktop, file manager, terminal, document viewer, dashboard, control panel) collapses into one of these four. The four are not modes the portal offers; they are the canonical surfaces a user inhabits the kernel through.
+A **view** is a way of rendering the current IBP state. The portal hosts FIVE views (the fifth, Time, added 2026-06-12 by Tabor's call), and together they ARE the user space of TreeOS. Every other "kind of app" that conventional OSes ship (desktop, file manager, terminal, document viewer, dashboard, control panel, history browser) collapses into one of these. They are not modes the portal offers; they are the canonical surfaces a user inhabits the kernel through.
 
 Each view shows the same thing because they all read from one in-memory model that mirrors the kernel's response to the current address. Switching views is instant and stateless: the user flips between any two without re-fetching, re-authenticating, or losing pending state.
 
@@ -22,6 +33,7 @@ Each view shows the same thing because they all read from one in-memory model th
 | **Text**     | The ACTION CENTER — where work gets done fast, graphically. Its main feature is the task menubar (window-menu style, scope broadest→narrowest: Reality / Branch / Place / @being); choosing an action opens its form or panel in the work area. The @being menu appears whenever the IBPA's right stance carries a being (selected in any view) — chat, inspect, the role's summon intents, its verb actions. The inbox (your work queue) rides the bar's right edge. HTML-native: matter that ships as HTML renders through iframes; the kernel speaks IBP, this view speaks HTML on top of it. Navigation furniture deliberately absent — the shell IBPA, explorer, and console own movement. | **None exactly.** Closest: a menu-bar app + control panel + inbox fused — not a desktop (3D is the place), not a browser (explorer browses). | Built    |
 | **Console**  | A stance-anchored verb prompt. The user types verbs (see, do, summon, be) against the current address; results stream back as structured blocks. More freeform than the backtick IBP console (which is a debug panel); the canonical view for scripting, remote work over slow links, and any user who prefers reading sentences | Terminal / shell                | Built (DOM) |
 | **Explorer** | A file browser over the kernel's primitives. The address bar IS the IBP address; the right stance is "the open folder," and inside it you see only what's here: spaces (the folders), beings (a new kind of inhabitant), matter (the files). Clicking a space walks into it, which actually MOVES you (every view follows, navigation is shared). Matter shows a type true preview (image renders, model gets a solid, doorway gets the portal mark, web link embeds the site, text shows its first lines, else a file icon). Clicking a being or matter is a "coming soon" for now; interaction stays in the console and text views. Built off the projection folds, the same way a conventional file manager is built off the filesystem. | File manager / Finder   | Built (DOM) |
+| **Time**     | The machine as its own biography (added 2026-06-12). A chronological feed over the chains the kernel already keeps: the current space's fact reel, your act chain, or the IBPA-selected being's chain — actor, action, branch, the moment's facts, progressively loading older history. Click any moment's timestamp and the whole portal folds to it: the ghost-walk anchor pins navigation at that instant, so 3D, text, console, and explorer all show what was there. No conventional OS can offer this surface because no conventional OS remembers. | **None.** The closest things — a shell history, a git log, a backup browser — each cover a sliver of one program; this is the whole world's history as a first-class surface. | Built (DOM) |
 
 A view is NOT a separate app. The user's session, address, identity, branch, and pending state belong to the portal; the view is one window into that. Four views over the same address show the same beings, the same matter, the same pending inbox count, in their own visual language.
 
@@ -34,17 +46,19 @@ The frame around the views is fixed and view-independent:
 - **The being tab strip rides directly under the IBPA bar** and also never hides, on any view — one tab can sit in 3D while another tab is in text as another being.
 - **The whole user space is tabbed per being.** Each shell tab is one PortalContext — its own IBP client, session, and state model. One being per tab; switch tabs and you switch beings; each tab remembers its own active view and address. Inhabiting a lineage being opens the borrowed body as a new tab. This is the portal-scale prototype of the OS shell's multi-context surface (Phase 5's "multi-window, multi-context").
 - **The branch/timeline bar is chrome too.** Branches and rewind apply to every view (the ghost-view guard blocks writes regardless of renderer), so the bar mounts at shell level and the active view only renders the consequences.
+- **Rewind is PORTAL state, not view state.** A timeline rewind pins a historical anchor on the shared model; every navigate carries the same `at:` qualifier until return-to-now, so the user WALKS AROUND IN THE PAST — doorways in 3D, folders in explorer, `cd` in console all stay at that moment, and all four views render the fold at T. The console and text views still SHOW the past even though they are act surfaces: acts are simply refused while rewound (the ghost guard), reading is always allowed. Fresh connections always land in the present.
 
 One language rule for the console view: its navigation words are the Linux ones — `cd` moves between spaces (spaces ARE the directories), `ls` lists what's here, `pwd` prints the address — and the ONLY new words are the four verbs. That's the learnability claim made concrete: everything a terminal user knows carries over; what's new is exactly what TreeOS adds.
 
 ### Why these four
 
-The four cover the four legible ways humans interact with structured data. The mapping is about how each view FEELS to use, not about which verbs it can call:
+The set covers the legible ways humans interact with structured data — space, work, language, hierarchy, and time. The mapping is about how each view FEELS to use, not about which verbs it can call:
 
 - **3D → inhabit.** The user is INSIDE the structure, walking around in it.
 - **Text → operate.** The user WORKS the structure — menus, forms, inbox; actions fire fast.
 - **Console → instruct.** The user EMITS into the structure, verbing at it directly.
 - **Explorer → navigate.** The user TRAVERSES the structure, drilling in and out.
+- **Time → remember.** The user REVISITS the structure — the chain rendered as a life, any moment one click from being re-inhabited.
 
 **Every view exposes all four verbs.** SEE, DO, SUMMON, BE all work in 3D, text, console, and explorer. The 3D view is not the "BE view." The console is not the "DO view." A user in 3D can SEE just as fluently as someone in text; a user in console can BE somewhere just as fluently as someone in 3D. The interaction style differs — clicking a doorway, reading a panel, typing a verb, expanding a node — but the verb surface underneath is the same.
 
@@ -62,7 +76,7 @@ This is also why "portal" is the right name and not "browser" or "shell." A brow
 
 1. **Synced.** Every view reads from the same in-memory model. A descriptor update from the kernel updates every mounted view in the same frame. Switching views is a render swap, not a data refetch.
 2. **Switchable.** Views mount and unmount cheaply. Keyboard shortcut, button, or programmatic call swaps the active view. The address bar, identity, and pending state outside the view stay constant.
-3. **Closed set.** The protocol does not grow new views. Extensions don't add views. The four ARE the surfaces; growth happens by enriching the kernel's response and letting all four views show the new content in their own language.
+3. **Closed set.** The protocol does not grow new views and extensions don't add views — only doctrine does (Time joined 2026-06-12 because TIME is a legible axis the other four can't carry). The five ARE the surfaces; growth happens by enriching the kernel's response and letting every view show the new content in its own language.
 
 A registry maps view name → view module; switching is the user picking a different entry. The kernel doesn't know which view is active.
 

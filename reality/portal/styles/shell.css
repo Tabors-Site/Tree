@@ -36,6 +36,7 @@ html, body {
   border-radius: 0 0 5px 5px;
   font-family: inherit; font-size: 11px;
   cursor: pointer; user-select: none; white-space: nowrap;
+  transition: color 80ms ease, background 120ms ease;
 }
 .ptab:hover { color: #9ab0a3; }
 .ptab.active {
@@ -78,9 +79,26 @@ html, body {
   border: 1px solid #2c3a32; border-radius: 3px;
   font-family: ui-monospace, monospace; font-size: 11px;
   padding: 4px 10px; cursor: pointer; text-transform: lowercase;
+  transition: border-color 80ms ease, color 80ms ease;
 }
 #portal-topbar .nav-btn:hover { border-color: #8fbf9f; color: #8fbf9f; }
 #portal-topbar .nav-btn:disabled { opacity: 0.35; cursor: not-allowed; }
+
+/* Socket health — one quiet dot, fed by the context's connection state. */
+#conn-dot {
+  flex: none; width: 7px; height: 7px; border-radius: 50%;
+  transition: background 200ms ease, box-shadow 200ms ease;
+}
+#conn-dot.conn-ok   { background: #4f8a5f; box-shadow: 0 0 5px rgba(79,138,95,0.7); }
+#conn-dot.conn-err  { background: #a04545; box-shadow: 0 0 5px rgba(160,69,69,0.7); }
+#conn-dot.conn-idle { background: #3a4a40; }
+
+/* Keyboard focus — visible, consistent, professional. */
+#portal-shell button:focus-visible,
+#portal-shell input:focus-visible {
+  outline: 1px solid #8fbf9f;
+  outline-offset: 1px;
+}
 
 #view-switcher {
   display: flex; gap: 2px;
@@ -92,6 +110,7 @@ html, body {
   border: none; border-right: 1px solid #1f2a23;
   font-family: inherit; font-size: 11px;
   padding: 5px 10px; cursor: pointer; text-transform: lowercase;
+  transition: color 80ms ease, background 120ms ease;
 }
 #view-switcher button:last-child { border-right: none; }
 #view-switcher button:hover { color: #c8d3cb; }
@@ -105,6 +124,22 @@ html, body {
   position: relative;
   flex: 1; min-height: 0;
   overflow: hidden;
+}
+
+/* Boot placeholder — shown until the first view mounts. */
+.view-boot {
+  position: absolute; inset: 0;
+  display: flex; align-items: center; justify-content: center; gap: 10px;
+  color: #5a6e62; font-size: 12px; letter-spacing: 0.04em;
+}
+.vb-pulse {
+  width: 8px; height: 8px; border-radius: 50%;
+  background: #2f6b48;
+  animation: vb-pulse 1.2s ease-in-out infinite;
+}
+@keyframes vb-pulse {
+  0%, 100% { opacity: 0.35; transform: scale(0.85); }
+  50%      { opacity: 1;    transform: scale(1.15); box-shadow: 0 0 8px rgba(143,191,159,0.5); }
 }
 
 /* ── Shared overlay surfaces (planter, prompts, shell dialogs) ───── */

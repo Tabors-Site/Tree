@@ -40,6 +40,11 @@ export function createPortalState(initial = {}) {
     // this: it always follows where the being is, so left and right
     // match unless the view diverges (ghost view, portals).
     actorPosition: "/",
+    // Ghost-walk anchor. Non-null while the portal is rewound:
+    // { atTimestamp } (or { atSeq }). Navigation carries it on every
+    // SEE so the user can WALK AROUND IN THE PAST — all four views
+    // render the fold at that moment until return-to-now clears it.
+    historicalAnchor: null,
     selectedBeing: null,
     history: [],
     historyIndex: -1,
